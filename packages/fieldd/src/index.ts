@@ -100,6 +100,12 @@ export {
   type UpstreamLink,
 } from "./federated-subs";
 export { OutboundLaneIdAllocator } from "./lane-id";
+export {
+  type BoardProjection,
+  type LocalBoard,
+  MeshBoard,
+  type MeshBoardOptions,
+} from "./mesh-board";
 export { MeshClient, type ServeSpec, type ServeState } from "./mesh-client";
 export { MeshLaneLink, type MeshLaneLinkOptions } from "./mesh-lane";
 export { NativeLink, RpcCallError } from "./native-link";

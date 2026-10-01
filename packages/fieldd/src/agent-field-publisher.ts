@@ -28,6 +28,16 @@ import { RpcCallError } from "./native-link";
 //     empty rows with the clock already past. A reader drops what it cannot
 //     see refreshed, so a desktop that was unplugged mid-sentence fades instead
 //     of haunting every phone with rows that will never change again.
+//
+// RETIRING (2026-09-30, DS-D14 RULED `retire`): this carrier has no reader left
+// once the mesh board lands — `agent.subscribe {scope: "mesh"}` (DS-3,
+// `mesh-board.ts`) answers every self desktop's board through ONE door, the
+// desktop's Godview reads it, and the phone homes to a desktop and reads the
+// same door (DS-D13). It stays standing through DS-3 on purpose: the phone
+// still folds this slice in beside the door leg until it re-homes (DS-8), and
+// the retirement is the lead's act AFTER DS-3 lands, not this lane's. When it
+// goes, `STORES.AGENT_FIELD`, the daemon's wiring and the kit's store reader
+// go with it (GM-D4(c) revisited).
 
 export interface AgentFieldPublisherOptions {
   /** the C2 store facade (`MeshClient`), structurally typed so the publisher

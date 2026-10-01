@@ -747,9 +747,29 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     const field = (await win.call("agent.subscribe", {
       projection: "field",
       minIntervalMs: 250,
-    })) as { subId: string; snapshot: { revision: number; rows: unknown[] } };
-    expect(field.snapshot).toEqual({ revision: 0, rows: [] });
+    })) as { subId: string; snapshot: { epoch?: string; revision: number; rows: unknown[] } };
+    // DS-3 — on its own chain, named by this boot and the chain's ordinal
+    expect(field.snapshot).toEqual({ epoch: expect.any(String), revision: 0, rows: [] });
+    expect(field.snapshot.epoch?.startsWith(`${daemon.bootId}.`)).toBe(true);
     expect(field.subId).not.toBe(full.subId);
+    // and a second subscription is a second chain, never comparable with the first
+    const again = (await win.call("agent.subscribe", { projection: "field" })) as {
+      snapshot: { epoch?: string };
+    };
+    expect(again.snapshot.epoch).not.toBe(field.snapshot.epoch);
+
+    // DS-3 — the desk board: the field row plus what a person reads a run by,
+    // at its own floor, and a heartbeat asked of it is honoured
+    const desk = (await win.call("agent.subscribe", {
+      projection: "desk",
+      heartbeatMs: 1_000,
+    })) as { snapshot: { epoch?: string; revision: number; rows: unknown[] } };
+    expect(desk.snapshot).toMatchObject({ revision: 0, rows: [] });
+    // a cadence or a heartbeat asked of the full fold is refused, as ever
+    for (const params of [{ heartbeatMs: 1_000 }, { projection: "full", heartbeatMs: 1_000 }]) {
+      const refused = (await win.callErr("agent.subscribe", params)) as RpcErrorShape;
+      expect(refused.data?.kind, JSON.stringify(params)).toBe("PRECONDITION_FAILED");
+    }
 
     // a tolerant reader still refuses an option it cannot honour, rather than
     // silently serving a cadence nobody asked for

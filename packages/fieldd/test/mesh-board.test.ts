@@ -1,0 +1,485 @@
+import { EventEmitter } from "node:events";
+import {
+  type AgentFieldDelta,
+  type AgentFieldRow,
+  type AgentMeshFrame,
+  CONTRACTS_VERSION,
+  type DeviceInfo,
+} from "@vibefield/contracts";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MeshBoard } from "../src/mesh-board";
+import { RpcCallError } from "../src/native-link";
+
+// DS-3 (DS-D4) — the mesh board's multiplexer against fakes: the roster
+// (DeviceService's `list` + "changed"), the links (PeerLink's `linkState` +
+// "link-changed") and the upstreams (the federated manager's `attach`). The
+// two-daemon witness is `mesh-board.e2e.test.ts`; this file pins the rules one
+// at a time, with the clock in hand.
+
+const SELF = "dev-self";
+
+const capabilities = { terminalHost: true, docHost: true, push: false };
+
+function desktop(deviceId: string, over: Partial<DeviceInfo> = {}): DeviceInfo {
+  return {
+    deviceId,
+    name: deviceId,
+    platform: "darwin",
+    self: false,
+    online: true,
+    lastSeenAt: Date.parse("2026-09-30T20:00:00.000Z"),
+    capabilities,
+    bootId: `boot-${deviceId}`,
+    contractsVersion: CONTRACTS_VERSION,
+    fielddVersion: "0.1.0",
+    ...over,
+  };
+}
+
+const selfRow: DeviceInfo = {
+  deviceId: SELF,
+  name: "here",
+  platform: "darwin",
+  self: true,
+  online: true,
+  lastSeenAt: 0,
+  capabilities,
+};
+
+/** A phone: a self node the roster lists from the tailnet's registry, with no
+ * device slice behind it — so no `docHost`, and no dial. */
+const phone: DeviceInfo = {
+  deviceId: "dev-phone",
+  name: "phone",
+  self: false,
+  online: true,
+  lastSeenAt: 0,
+};
+
+function row(runtimeRunId: string, device: string, revision = 1): AgentFieldRow {
+  return {
+    runtimeRunId,
+    revision,
+    kind: "claude",
+    label: "Claude Code",
+    tier: "managed",
+    device,
+    status: "working",
+    statusSince: "2026-09-30T21:00:00.000Z",
+    stateChangedAt: "2026-09-30T21:00:00.000Z",
+    createdAt: "2026-09-30T20:00:00.000Z",
+    alive: true,
+    blockers: [],
+  };
+}
+
+class FakeRoster extends EventEmitter {
+  rows: DeviceInfo[] = [];
+  list(): DeviceInfo[] {
+    return this.rows;
+  }
+  set(rows: DeviceInfo[]): void {
+    this.rows = rows;
+    this.emit("changed", rows);
+  }
+}
+
+class FakeLinks extends EventEmitter {
+  readonly states = new Map<string, "connected" | "dialing" | "incompatible">();
+  linkState(deviceId: string) {
+    return this.states.get(deviceId);
+  }
+  pin(deviceId: string): void {
+    this.states.set(deviceId, "incompatible");
+    this.emit("link-changed", { deviceId, state: "incompatible" });
+  }
+}
+
+interface Attach {
+  device: string;
+  method: string;
+  params: unknown;
+  emit: (payload: unknown, kind?: "delta" | "snapshot") => void;
+  resolve: (value: { snapshot: unknown; dispose: () => void }) => void;
+  reject: (error: unknown) => void;
+  disposed: boolean;
+}
+
+class FakeUpstreams {
+  readonly attaches: Attach[] = [];
+  attach(
+    device: string,
+    method: string,
+    params: unknown,
+    emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
+  ): Promise<{ snapshot: unknown; dispose: () => void }> {
+    return new Promise((resolve, reject) => {
+      this.attaches.push({ device, method, params, emit, resolve, reject, disposed: false });
+    });
+  }
+  /** answer an attach with the peer's snapshot; the dispose marks it closed */
+  answer(attach: Attach, snapshot: unknown): void {
+    attach.resolve({
+      snapshot,
+      dispose: () => {
+        attach.disposed = true;
+      },
+    });
+  }
+  standing(): Attach[] {
+    return this.attaches.filter((attach) => !attach.disposed);
+  }
+}
+
+/** Let the attach's `.then` run. */
+async function tick(): Promise<void> {
+  for (let i = 0; i < 10; i += 1) await Promise.resolve();
+}
+
+interface Harness {
+  board: MeshBoard;
+  roster: FakeRoster;
+  links: FakeLinks;
+  upstreams: FakeUpstreams;
+  local: { emit: ((delta: AgentFieldDelta) => void) | null; opened: number; disposed: number };
+}
+
+function harness(rows: DeviceInfo[]): Harness {
+  const roster = new FakeRoster();
+  roster.rows = rows;
+  const links = new FakeLinks();
+  const upstreams = new FakeUpstreams();
+  const local: Harness["local"] = { emit: null, opened: 0, disposed: 0 };
+  const board = new MeshBoard({
+    selfDevice: () => SELF,
+    roster,
+    links,
+    upstreams,
+    openLocal: (_projection, _floor, emit) => {
+      local.emit = emit;
+      local.opened += 1;
+      return {
+        snapshot: { epoch: "self-boot.1", revision: 1, rows: [row("run-here", SELF)] },
+        dispose: () => {
+          local.disposed += 1;
+        },
+      };
+    },
+  });
+  return { board, roster, links, upstreams, local };
+}
+
+/** A reader, and the frames it has heard. */
+function reader(h: Harness, projection: "field" | "desk" = "desk", floor = 100) {
+  const frames: AgentMeshFrame[] = [];
+  const opened = h.board.open(projection, floor, (frame) => frames.push(frame));
+  return { ...opened, frames };
+}
+
+const peerSnapshot = (revision = 41) => ({
+  epoch: "boot-dev-b.3",
+  revision,
+  rows: [row("run-b", "dev-b", 7)],
+});
+
+describe("the mesh board — one door for every self desktop (DS-D4)", () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(Date.parse("2026-09-30T21:00:00.000Z"));
+  });
+  afterEach(() => vi.useRealTimers());
+
+  it("lists this desktop live with its board, every desktop peer, and no phone", () => {
+    const h = harness([selfRow, desktop("dev-b"), desktop("dev-c", { online: false }), phone]);
+    const r = reader(h);
+    expect(r.open.devices.map((entry) => [entry.device, entry.state])).toEqual([
+      [SELF, "live"],
+      ["dev-b", "stale"], // online, not yet heard
+      ["dev-c", "asleep"],
+    ]);
+    expect(r.open.devices[0]?.snapshot).toEqual({
+      epoch: "self-boot.1",
+      revision: 1,
+      rows: [row("run-here", SELF)],
+    });
+    // asleep is listed with nothing invented for it
+    expect(r.open.devices[2]?.snapshot).toBeUndefined();
+    // ONE upstream: the awake desktop, asked for its own board at the reader's
+    // floor, with a heartbeat — never the asleep one, never the phone
+    expect(
+      h.upstreams.attaches.map((attach) => [attach.device, attach.method, attach.params]),
+    ).toEqual([
+      ["dev-b", "agent.subscribe", { projection: "desk", minIntervalMs: 100, heartbeatMs: 1_000 }],
+    ]);
+    r.dispose();
+  });
+
+  it("relays a peer's frames VERBATIM: its epoch, its revisions, its rows", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    expect(r.frames).toEqual([
+      { device: "dev-b", snapshot: peerSnapshot() },
+      { device: "dev-b", state: "live", asOf: "2026-09-30T21:00:00.000Z" },
+    ]);
+    const delta = {
+      epoch: "boot-dev-b.3",
+      since: 41,
+      revision: 42,
+      upserts: [{ ...row("run-b", "dev-b", 8), status: "blocked" }],
+      removed: [],
+    };
+    attach.emit(delta, "delta");
+    // nothing renumbered: the owner's since and revision, the owner's row stamp
+    expect(r.frames.at(-1)).toEqual({ device: "dev-b", delta });
+    // a reader who arrives now is answered from the held copy, at the owner's revision
+    const late = reader(h);
+    expect(late.open.devices.find((entry) => entry.device === "dev-b")).toEqual({
+      device: "dev-b",
+      state: "live",
+      asOf: "2026-09-30T21:00:00.000Z",
+      snapshot: {
+        epoch: "boot-dev-b.3",
+        revision: 42,
+        rows: [{ ...row("run-b", "dev-b", 8), status: "blocked" }],
+      },
+    });
+    late.dispose();
+    r.dispose();
+  });
+
+  it("a heartbeat keeps a quiet desktop live and reaches no reader; silence makes it stale and keeps its board", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    const heard = r.frames.length;
+    for (let beat = 0; beat < 5; beat += 1) {
+      vi.advanceTimersByTime(1_000);
+      attach.emit({ epoch: "boot-dev-b.3", since: 41, revision: 41, upserts: [], removed: [] });
+    }
+    expect(r.frames).toHaveLength(heard); // five beats, nothing for a reader to apply
+    // the beats stop: three missed, and the board says so — and only so
+    vi.advanceTimersByTime(3_000);
+    expect(r.frames.length).toBe(heard);
+    vi.advanceTimersByTime(1_000);
+    expect(r.frames.slice(heard)).toEqual([
+      { device: "dev-b", state: "stale", asOf: "2026-09-30T21:00:09.000Z" },
+    ]);
+    const late = reader(h);
+    expect(late.open.devices.find((entry) => entry.device === "dev-b")).toMatchObject({
+      state: "stale",
+      snapshot: peerSnapshot(),
+    });
+    late.dispose();
+    r.dispose();
+  });
+
+  it("offline in the roster is asleep: the upstream closes, the board stays, no rows are sent; awake again, it resets", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    const before = r.frames.length;
+    h.roster.set([selfRow, desktop("dev-b", { online: false })]);
+    expect(r.frames.slice(before)).toEqual([
+      { device: "dev-b", state: "asleep", asOf: "2026-09-30T20:00:00.000Z" },
+    ]);
+    expect(attach.disposed).toBe(true);
+    const late = reader(h);
+    expect(late.open.devices.find((entry) => entry.device === "dev-b")).toMatchObject({
+      state: "asleep",
+      snapshot: peerSnapshot(),
+    });
+    late.dispose();
+
+    h.roster.set([selfRow, desktop("dev-b")]);
+    const again = h.upstreams.attaches[1];
+    if (again === undefined) throw new Error("no second upstream");
+    h.upstreams.answer(again, { epoch: "boot-dev-b.4", revision: 1, rows: [] });
+    await tick();
+    expect(r.frames.slice(-3)).toEqual([
+      { device: "dev-b", state: "stale", asOf: "2026-09-30T21:00:00.000Z" },
+      { device: "dev-b", snapshot: { epoch: "boot-dev-b.4", revision: 1, rows: [] } },
+      { device: "dev-b", state: "live", asOf: "2026-09-30T21:00:00.000Z" },
+    ]);
+    r.dispose();
+  });
+
+  it("a desktop that leaves the roster keeps its last board, asleep", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    h.roster.set([selfRow]);
+    expect(r.frames.at(-1)).toMatchObject({ device: "dev-b", state: "asleep" });
+    expect(attach.disposed).toBe(true);
+    const late = reader(h);
+    expect(late.open.devices.map((entry) => entry.device)).toEqual([SELF, "dev-b"]);
+    late.dispose();
+    r.dispose();
+  });
+
+  it("a door that REFUSES the board reads incompatible, and is asked again only when the peer changes", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    h.upstreams.attaches[0]?.reject(
+      new RpcCallError("FORBIDDEN_SCOPE", "agent.subscribe is local to its device", false),
+    );
+    await tick();
+    expect(r.frames.at(-1)).toMatchObject({ device: "dev-b", state: "incompatible" });
+    vi.advanceTimersByTime(120_000);
+    h.roster.set([selfRow, desktop("dev-b")]); // the same facts: still not asked
+    expect(h.upstreams.attaches).toHaveLength(1);
+    h.roster.set([selfRow, desktop("dev-b", { bootId: "boot-dev-b-upgraded" })]);
+    expect(h.upstreams.attaches).toHaveLength(2);
+    expect(r.frames.at(-1)).toMatchObject({ device: "dev-b", state: "stale" });
+    r.dispose();
+  });
+
+  it("a transport failure is retried with backoff while the desktop stays awake", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const unreachable = () =>
+      new RpcCallError("UNAVAILABLE", "peer unreachable", true, {
+        device: "dev-b",
+        state: "unreachable",
+      });
+    h.upstreams.attaches[0]?.reject(unreachable());
+    await tick();
+    expect(r.open.devices.find((entry) => entry.device === "dev-b")?.state).toBe("stale");
+    vi.advanceTimersByTime(999);
+    expect(h.upstreams.attaches).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    expect(h.upstreams.attaches).toHaveLength(2);
+    h.upstreams.attaches[1]?.reject(unreachable());
+    await tick();
+    vi.advanceTimersByTime(1_999);
+    expect(h.upstreams.attaches).toHaveLength(2);
+    vi.advanceTimersByTime(1);
+    expect(h.upstreams.attaches).toHaveLength(3);
+    r.dispose();
+  });
+
+  it("another contracts major and a pinned link are incompatible, and a pinned link's upstream closes", async () => {
+    const h = harness([selfRow, desktop("dev-b"), desktop("dev-d", { contractsVersion: "9.0.0" })]);
+    const r = reader(h);
+    expect(r.open.devices.find((entry) => entry.device === "dev-d")?.state).toBe("incompatible");
+    // DS-L9 — another major is not asked
+    expect(h.upstreams.attaches.map((attach) => attach.device)).toEqual(["dev-b"]);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    h.links.pin("dev-b");
+    expect(attach.disposed).toBe(true);
+    expect(r.frames.at(-1)).toMatchObject({ device: "dev-b", state: "incompatible" });
+    r.dispose();
+  });
+
+  it("a gap in the owner's chain is a reset, never a repair", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    const before = r.frames.length;
+    // a delta that does not start where the held copy is
+    attach.emit({ epoch: "boot-dev-b.3", since: 45, revision: 46, upserts: [], removed: ["x"] });
+    expect(r.frames).toHaveLength(before); // nothing a reader cannot follow is relayed
+    expect(attach.disposed).toBe(true);
+    vi.advanceTimersByTime(1_000);
+    const again = h.upstreams.attaches[1];
+    if (again === undefined) throw new Error("no re-ask");
+    h.upstreams.answer(again, { epoch: "boot-dev-b.5", revision: 3, rows: [] });
+    await tick();
+    expect(r.frames.slice(before)).toEqual([
+      { device: "dev-b", snapshot: { epoch: "boot-dev-b.5", revision: 3, rows: [] } },
+    ]);
+    r.dispose();
+  });
+
+  it("a board with no epoch (a fieldd older than DS-3) is incompatible: an epoch invented here would be a renumbering", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, { revision: 4, rows: [] });
+    await tick();
+    expect(r.frames).toEqual([
+      { device: "dev-b", state: "incompatible", asOf: "2026-09-30T21:00:00.000Z" },
+    ]);
+    expect(attach.disposed).toBe(true);
+    r.dispose();
+  });
+
+  it("relays this desktop's own deltas on its own chain", () => {
+    const h = harness([selfRow]);
+    const r = reader(h);
+    const delta = {
+      epoch: "self-boot.1",
+      since: 1,
+      revision: 2,
+      upserts: [],
+      removed: ["run-here"],
+    };
+    h.local.emit?.(delta);
+    expect(r.frames).toEqual([{ device: SELF, delta }]);
+    r.dispose();
+  });
+
+  it("readers of one question share its upstreams; the last one out closes every one", async () => {
+    const h = harness([selfRow, desktop("dev-b"), desktop("dev-c")]);
+    const first = reader(h);
+    const second = reader(h);
+    expect(h.upstreams.attaches.map((attach) => attach.device)).toEqual(["dev-b", "dev-c"]);
+    expect(h.local.opened).toBe(1);
+    for (const attach of h.upstreams.attaches) h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    first.dispose();
+    expect(h.upstreams.standing()).toHaveLength(2);
+    expect(h.board.size).toBe(1);
+    second.dispose();
+    expect(h.upstreams.standing()).toHaveLength(0);
+    expect(h.local.disposed).toBe(1);
+    expect(h.board.size).toBe(0);
+    // another cadence is another question: its own hub, its own upstreams
+    const slow = reader(h, "desk", 500);
+    const field = reader(h, "field", 250);
+    expect(h.board.size).toBe(2);
+    expect(h.upstreams.standing().map((attach) => attach.params)).toEqual([
+      { projection: "desk", minIntervalMs: 500, heartbeatMs: 1_000 },
+      { projection: "desk", minIntervalMs: 500, heartbeatMs: 1_000 },
+      { projection: "field", minIntervalMs: 250, heartbeatMs: 1_000 },
+      { projection: "field", minIntervalMs: 250, heartbeatMs: 1_000 },
+    ]);
+    slow.dispose();
+    field.dispose();
+    expect(h.board.size).toBe(0);
+    // those four were still in flight: each is closed the moment it answers
+    for (const attach of h.upstreams.standing()) h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    expect(h.upstreams.standing()).toHaveLength(0);
+  });
+
+  it("an attach answered after its reader left is closed at once", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    r.dispose();
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    expect(attach.disposed).toBe(true);
+  });
+});

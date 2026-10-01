@@ -1,5 +1,7 @@
 import {
   AGENT_FIELD,
+  type AgentDeskBlocker,
+  type AgentDeskMessage,
   type AgentFieldBlocker,
   type AgentFieldDelta,
   AgentFieldRow,
@@ -193,6 +195,92 @@ export function projectFieldRow(summary: AgentSessionSummary): ProjectedFieldRow
   };
 }
 
+/** A text cut to a bound a person can read in one line, by CODE POINT (never
+ * through a surrogate pair), with an ellipsis where it was cut. The desk row's
+ * bound is `AGENT_FIELD.DESK_TEXT_CHARS`; the whole text is History's (DS-7). */
+export function boundText(text: string, chars: number): string {
+  if (text.length <= chars) return text;
+  // at most two UTF-16 units per code point: this head holds every point the
+  // bound can keep, without walking a reply that may run to megabytes
+  const long = text.length > chars * 2;
+  const points = Array.from(long ? text.slice(0, chars * 2) : text);
+  if (!long && points.length <= chars) return text;
+  return `${points.slice(0, chars - 1).join("")}…`;
+}
+
+/** What a row is projected by: the field's (content-free) or the desk's. */
+export type RowProjector = (summary: AgentSessionSummary) => ProjectedFieldRow;
+
+/** The run's latest reply as the desk carries it: puppeteer's
+ * `MonitorAssistantMessageState` read tolerantly off the open mirror object,
+ * its text bounded. No text, no line — never an empty one. */
+function deskMessage(summary: AgentSessionSummary, chars: number): AgentDeskMessage | undefined {
+  const message = objectAt(summary.monitor, "lastAssistantMessage");
+  const text = stringAt(message, "text");
+  if (text === undefined) return undefined;
+  const at = stringAt(message, "at");
+  const final = message?.["final"];
+  return {
+    text: boundText(text, chars),
+    ...(at !== undefined ? { at } : {}),
+    ...(typeof final === "boolean" ? { final } : {}),
+  };
+}
+
+/** A question blocker's first prompt (puppeteer's `questions[0].prompt`),
+ * bounded — what the run is asking, in its own words. */
+function blockerQuestion(blocker: unknown, chars: number): string | undefined {
+  if (typeof blocker !== "object" || blocker === null) return undefined;
+  const questions = (blocker as Record<string, unknown>)["questions"];
+  if (!Array.isArray(questions)) return undefined;
+  const prompt = stringAt(
+    typeof questions[0] === "object" && questions[0] !== null
+      ? (questions[0] as Record<string, unknown>)
+      : undefined,
+    "prompt",
+  );
+  return prompt === undefined ? undefined : boundText(prompt, chars);
+}
+
+/**
+ * DS-3 — the DESK row: the field row plus the reply line, the blocker's
+ * question and the cost (DS-D4; `AgentDeskRow` in the contract). Content is
+ * allowed here because the desk's audience is this person's own desktops —
+ * the mesh board's upstreams are self peers, and the door refuses `desk` to a
+ * phone (which reads `field`, SP-L4). Everything the field row says is said
+ * the same way, from `projectFieldRow`, so the two cannot drift.
+ */
+export function projectDeskRow(
+  summary: AgentSessionSummary,
+  chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
+): ProjectedFieldRow {
+  const field = projectFieldRow(summary);
+  const message = deskMessage(summary, chars);
+  const mirrorBlockers = summary.monitor?.blockers ?? [];
+  const blockers: AgentDeskBlocker[] = field.blockers.map((blocker, index) => {
+    const question = blockerQuestion(mirrorBlockers[index], chars);
+    return question === undefined ? blocker : { ...blocker, question };
+  });
+  // the cost, in puppeteer's own words: an estimate of API-equivalent USD for
+  // observed work, never an invoice, and how much of the work was priced
+  const usage = summary.monitor?.usage as Record<string, unknown> | undefined;
+  const costUsd = typeof usage?.["costUsd"] === "number" ? usage["costUsd"] : undefined;
+  const costCoverage = stringAt(usage, "costCoverage");
+  const cost =
+    costUsd !== undefined || costCoverage !== undefined
+      ? {
+          ...(costUsd !== undefined ? { costUsd } : {}),
+          ...(costCoverage !== undefined ? { costCoverage } : {}),
+        }
+      : undefined;
+  return {
+    ...field,
+    blockers,
+    ...(cost !== undefined ? { usage: { ...field.usage, ...cost } } : {}),
+    ...(message !== undefined ? { lastAssistantMessage: message } : {}),
+  };
+}
+
 /** Upserts and removals between two projected boards, by (runtimeRunId,
  * revision). A row whose revision is unchanged is not sent again. */
 export function diffFieldRows(
@@ -221,6 +309,11 @@ export class FieldProjection {
   private readonly stamps = new Map<string, string>();
   private boardRevision = 0;
 
+  /** DS-3 — the projector decides WHICH board this is (`projectFieldRow`, the
+   * default and the store's, or `projectDeskRow`); the revision machinery is
+   * the same for both. */
+  constructor(private readonly project: RowProjector = projectFieldRow) {}
+
   /** The board as it stands. */
   snapshot(): AgentFieldSnapshot {
     return { revision: this.boardRevision, rows: this.rows.map((row) => ({ ...row })) };
@@ -240,7 +333,7 @@ export class FieldProjection {
     const previous = new Map(this.rows.map((row) => [row.runtimeRunId, row]));
 
     for (const summary of result.sessions) {
-      const projected = projectFieldRow(summary);
+      const projected = this.project(summary);
       const id = projected.runtimeRunId;
       seen.add(id);
       const stamp = JSON.stringify(projected);
@@ -312,6 +405,24 @@ export interface FieldSubscriptionOptions {
   /** per-subscriber trailing-edge floor */
   minIntervalMs?: number;
   /**
+   * DS-3 (DS-L3) — this subscription's revision CHAIN, stamped on its snapshot
+   * and on every delta. The daemon mints one per subscription (its boot id and
+   * the chain's ordinal, `daemon.ts` `nextBoardEpoch`): two subscriptions in
+   * one boot are two chains, and a reader must never compare a revision of one
+   * with a revision of the other. Absent (unit rows that only care about the
+   * fold): frames carry none, exactly as before DS-3.
+   */
+  epoch?: string;
+  /** DS-3 — which board: `projectFieldRow` (default) or `projectDeskRow`. */
+  project?: RowProjector;
+  /**
+   * DS-3 — after this long with no frame, an EMPTY delta (`since === revision`,
+   * nothing upserted or removed): the mesh board's upstreams ask for it so a
+   * quiet desktop and a dead stream stop looking alike (DS-L8). Absent: no
+   * heartbeat — a local window and the phone's field are exactly as before.
+   */
+  heartbeatMs?: number;
+  /**
    * TM-2 (F-M4) — are this device's terminal doors published on the tailnet?
    * The SAME gate the store publisher applies, so the two carriers of one board
    * cannot promise different things about the same row. Default `true` keeps
@@ -344,12 +455,41 @@ export interface FieldSubscription {
  * asking for 250 ms therefore costs at most four frames a second no matter how
  * loudly the mirrors revise, and nothing at all while the projection is still. */
 export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSubscription {
-  const projection = new FieldProjection();
+  const projection = new FieldProjection(opts.project);
   const floor = opts.minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS;
   const published = (): boolean => opts.terminalPublished?.() ?? true;
+  const stamp = opts.epoch === undefined ? {} : { epoch: opts.epoch };
   projection.apply(opts.list());
   let timer: NodeJS.Timeout | null = null;
+  let beat: NodeJS.Timeout | null = null;
   let disposed = false;
+
+  const send = (delta: AgentFieldDelta): void => {
+    try {
+      opts.emit(delta);
+    } catch (error) {
+      opts.onError?.(error);
+    }
+    armBeat();
+  };
+
+  /** The heartbeat is re-armed by every frame, so it only ever speaks into
+   * silence: a board that is moving never carries one. Its `since` and
+   * `revision` are the revision this subscriber was last SENT, which is the
+   * projection's own — a fold change still waiting out the floor has not
+   * moved it yet. */
+  function armBeat(): void {
+    const every = opts.heartbeatMs;
+    if (every === undefined || disposed) return;
+    if (beat !== null) clearTimeout(beat);
+    beat = setTimeout(() => {
+      beat = null;
+      if (disposed) return;
+      const revision = projection.revision;
+      send({ ...stamp, since: revision, revision, upserts: [], removed: [] });
+    }, every);
+    beat.unref?.();
+  }
 
   const flush = (): void => {
     timer = null;
@@ -362,11 +502,7 @@ export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSu
       return;
     }
     if (delta === null) return;
-    try {
-      opts.emit({ ...delta, upserts: attachableRows(delta.upserts, published()) });
-    } catch (error) {
-      opts.onError?.(error);
-    }
+    send({ ...stamp, ...delta, upserts: attachableRows(delta.upserts, published()) });
   };
 
   const unsubscribe = opts.subscribe(() => {
@@ -376,13 +512,18 @@ export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSu
   });
 
   const snapshot = projection.snapshot();
+  armBeat();
   return {
-    snapshot: { ...snapshot, rows: attachableRows(snapshot.rows, published()) },
+    snapshot: { ...stamp, ...snapshot, rows: attachableRows(snapshot.rows, published()) },
     dispose: () => {
       disposed = true;
       if (timer !== null) {
         clearTimeout(timer);
         timer = null;
+      }
+      if (beat !== null) {
+        clearTimeout(beat);
+        beat = null;
       }
       unsubscribe();
     },

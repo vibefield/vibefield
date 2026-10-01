@@ -7,7 +7,10 @@ import { join } from "node:path";
 import { PROTOCOL_VERSION as ROSETTA_PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
   AGENT_CATALOG,
+  AGENT_FIELD,
   AgentCatalogParams,
+  type AgentFieldDelta,
+  type AgentFieldSnapshot,
   AgentInterruptParams,
   AgentResumeParams,
   AgentSpawnParams,
@@ -133,7 +136,7 @@ import {
   pluginLogProvenance,
 } from "@vibefield/logging";
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
-import { createFieldSubscription } from "./agent-field";
+import { createFieldSubscription, projectDeskRow, projectFieldRow } from "./agent-field";
 import { AgentFieldPublisher } from "./agent-field-publisher";
 import {
   type AgentGatewayOptions,
@@ -163,6 +166,7 @@ import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
+import { type BoardProjection, MeshBoard } from "./mesh-board";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import { MeshClient, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
@@ -413,6 +417,9 @@ export interface FielddDaemon {
   /** C6-5/D35 — the federated subscription proxy (tests drive it directly;
    * the product path is a `device?` on any subscribe method). */
   federatedSubs: FederatedSubscriptionManager;
+  /** DS-3 — the mesh board (`agent.subscribe {scope: "mesh"}`); tests read
+   * how many hubs, and so how many sets of upstreams, are standing. */
+  meshBoard: MeshBoard;
   /** C6-6 — the artifact hub (registry over the mesh serve facade). */
   artifacts: ArtifactService;
   plugins: PluginRegistryService;
@@ -2061,52 +2068,144 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     });
     api.register("agent.list", () => agents.list());
-    // MF-1 (§5, §10.2) — one door, two projections. Absent params or
-    // `projection: "full"` is the subscription the desktop has always had,
-    // unchanged: whole `AgentListResult` frames at the fold's own 16 ms tick,
-    // which the renderer reads as whole `rows` arrays. `projection: "field"`
-    // answers the content-free board — a snapshot, then deltas at this
-    // subscriber's own trailing-edge floor — which is what a phone on the
-    // tailnet can afford.
-    api.registerSubscription("agent.subscribe", (_ctx, params, emit) => {
-      const parsed = AgentSubscribeParams.safeParse(params ?? {});
-      if (!parsed.success)
-        throw new RpcCallError(
-          "PRECONDITION_FAILED",
-          'expected { projection?: "full" | "field", minIntervalMs?: number }',
-          false,
-        );
-      if (parsed.data.projection !== "field") {
-        // MF-1h — an option that cannot be honoured is refused, not ignored: a
-        // caller that asked for a cadence and silently got the desktop's 16 ms
-        // tick would have no way to learn it asked the wrong question.
-        if (parsed.data.minIntervalMs !== undefined)
-          throw new RpcCallError(
-            "PRECONDITION_FAILED",
-            "minIntervalMs applies to the field projection",
-            false,
-          );
-        const dispose = agents.subscribe((rows) => emit(rows));
-        return { snapshot: agents.list(), dispose };
-      }
-      const field = createFieldSubscription({
+    // DS-3 (DS-L3) — every field and desk subscription is its own revision
+    // CHAIN, and its epoch says which: this boot plus the chain's ordinal. Two
+    // subscriptions in one boot never share an epoch, so no reader can mistake
+    // a revision of one chain for a revision of another.
+    let boardChains = 0;
+    const nextBoardEpoch = (): string => `${bootId}.${++boardChains}`;
+    /** One board of THIS device at a projection and a floor: a snapshot on its
+     * own chain, then deltas through `emit` (`createFieldSubscription`). */
+    const openLocalBoard = (
+      projection: BoardProjection,
+      minIntervalMs: number,
+      emit: (delta: AgentFieldDelta) => void,
+      heartbeatMs?: number,
+    ): { snapshot: AgentFieldSnapshot & { epoch: string }; dispose: () => void } => {
+      const epoch = nextBoardEpoch();
+      const board = createFieldSubscription({
         list: () => agents.list(),
         subscribe: (fn) => agents.subscribe(fn),
-        emit: (delta) => emit(delta),
+        emit,
+        epoch,
+        project: projection === "desk" ? projectDeskRow : projectFieldRow,
+        minIntervalMs,
+        ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
         // TM-2 (F-M4) — the SAME gate the store publisher applies below. The
         // two carriers serve one board, and a row that promises a tap over one
         // leg while refusing it over the other is the false positive MF-1l
         // exists to prevent — the phone folds both legs into one card.
         terminalPublished: () => native.terminalMeshPublished(),
-        ...(parsed.data.minIntervalMs !== undefined
-          ? { minIntervalMs: parsed.data.minIntervalMs }
-          : {}),
         onError: (error) =>
           logger.warn("fieldd.agents.field_frame_failed", "A field subscriber's frame failed", {
             error: error instanceof Error ? error.message : String(error),
           }),
       });
-      return { snapshot: field.snapshot, dispose: field.dispose };
+      return { snapshot: { ...board.snapshot, epoch }, dispose: board.dispose };
+    };
+    /** DS-3 — the mesh board; built once PeerLink and the federated manager
+     * exist (below). Null only in the window before that. */
+    let meshBoard: MeshBoard | null = null;
+    // MF-1 (§5, §10.2) — one door, three projections. Absent params or
+    // `projection: "full"` is the subscription the desktop has always had,
+    // unchanged: whole `AgentListResult` frames at the fold's own 16 ms tick,
+    // which the renderer reads as whole `rows` arrays. `projection: "field"`
+    // answers the content-free board — a snapshot, then deltas at this
+    // subscriber's own trailing-edge floor — which is what a phone on the
+    // tailnet can afford. DS-3: `projection: "desk"` is the field row plus the
+    // reply line, the blocker's question and the cost (windows, 100 ms floor),
+    // and `scope: "mesh"` answers every self desktop's board through this one
+    // door (`mesh-board.ts`, DS-D4).
+    api.registerSubscription("agent.subscribe", (ctx, params, emit) => {
+      const parsed = AgentSubscribeParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'expected { projection?: "full" | "field" | "desk", scope?: "local" | "mesh", minIntervalMs?: number, heartbeatMs?: number }',
+          false,
+        );
+      const { minIntervalMs, heartbeatMs } = parsed.data;
+      const projection = parsed.data.projection ?? "full";
+      const scope = parsed.data.scope ?? "local";
+      const principal = ctx.principal.kind;
+      if (projection === "full") {
+        // DS-D4 — the whole fold row stays on its device. The door became
+        // `stream` for the board's sake (a peer daemon asks it), so the wall
+        // that used to refuse a peer outright is this line for `full`.
+        if (principal === "peer-fieldd")
+          throw new RpcCallError(
+            "FORBIDDEN_SCOPE",
+            "the full projection is local to its device; a peer reads field or desk (DS-D4)",
+            false,
+            { projection },
+          );
+        if (scope === "mesh")
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            "the mesh board is the field or desk projection; full is local to its device",
+            false,
+          );
+        // MF-1h — an option that cannot be honoured is refused, not ignored: a
+        // caller that asked for a cadence and silently got the desktop's 16 ms
+        // tick would have no way to learn it asked the wrong question.
+        if (minIntervalMs !== undefined || heartbeatMs !== undefined)
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            `${minIntervalMs !== undefined ? "minIntervalMs" : "heartbeatMs"} applies to the field projection and the desk projection`,
+            false,
+          );
+        const dispose = agents.subscribe((rows) => emit(rows));
+        return { snapshot: agents.list(), dispose };
+      }
+      // SP-L4 — every subscription a phone opens is content-free. The desk's
+      // content is for this person's DESKTOPS: a window here, or a self peer
+      // daemon relaying its board to a window there. Decided by the
+      // principal's kind, never by its transport.
+      if (projection === "desk" && principal === "tailnet")
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "the desk projection carries content for this person's desktops; a phone reads field (SP-L4)",
+          false,
+          { projection },
+        );
+      const floor =
+        projection === "desk"
+          ? Math.max(
+              minIntervalMs ?? AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+              AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+            )
+          : (minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS);
+      if (scope === "mesh") {
+        // DS-L4 — a peer reads a device's OWN board; aggregation is for this
+        // device's clients. A peer asking for the mesh would be one daemon
+        // aggregating another's aggregate, and two desktops asking each other
+        // would loop.
+        if (principal === "peer-fieldd")
+          throw new RpcCallError(
+            "FORBIDDEN_SCOPE",
+            "a peer reads a desktop's own board; the mesh board is this desktop's clients' (DS-L4)",
+            false,
+            { scope },
+          );
+        if (heartbeatMs !== undefined)
+          throw new RpcCallError(
+            "PRECONDITION_FAILED",
+            "heartbeatMs is asked of one desktop's board; the mesh board states each desktop's liveness itself",
+            false,
+          );
+        if (meshBoard === null)
+          throw new RpcCallError("UNAVAILABLE", "the mesh board is not ready yet", true, {
+            service: "mesh-board",
+            state: "starting",
+          });
+        // `.snapshot` carries the whole mesh (the open, and the client's own
+        // replay after a reconnect); `.delta` carries every per-device frame —
+        // a device's delta, a device's reset, a device's state.
+        const reader = meshBoard.open(projection, floor, (frame) => emit(frame, "delta"));
+        return { snapshot: reader.open, dispose: reader.dispose };
+      }
+      const board = openLocalBoard(projection, floor, (delta) => emit(delta), heartbeatMs);
+      return { snapshot: board.snapshot, dispose: board.dispose };
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own
@@ -3963,6 +4062,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return receipt;
     });
 
+    // DS-3 (DS-D4) — the mesh board: every self desktop's agents through this
+    // one door, multiplexed per device over the federated manager above, each
+    // desktop's chain relayed as its owner numbered it (`mesh-board.ts`).
+    const board = new MeshBoard({
+      selfDevice: () => devices.currentDeviceId(),
+      roster: devices,
+      links: peers,
+      upstreams: federatedSubs,
+      openLocal: (projection, minIntervalMs, emit) =>
+        openLocalBoard(projection, minIntervalMs, emit),
+      logger,
+    });
+    meshBoard = board;
+
     // AH-1 — the artifact serving foundation. Constructed HERE (before the supersession
     // closure below references it — a superseding takeover can fire before
     // bootstrap's tail runs); its serves are declared later via start(), once
@@ -4191,6 +4304,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         laneLink.close();
         docs.dispose();
         const artifactDrain = artifacts.dispose();
+        board.dispose(); // DS-3 — its hubs' upstreams close before the manager goes
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         // MF-1 — withdraw this device's field before the mesh goes: a reader
@@ -4236,6 +4350,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       laneLink.close();
       docs.dispose();
       const artifactDrain = artifacts.dispose();
+      board.dispose();
       federatedSubs.dispose();
       peers.dispose();
       // MF-1h — the rollback disposes every neighbour and used to walk past
@@ -4590,6 +4705,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           laneLink.close();
           docs.dispose();
           const artifactDrain = artifacts.dispose();
+          board.dispose(); // DS-3 — its hubs' upstreams close before the manager goes
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
@@ -4637,6 +4753,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       peers,
       egressRoutes,
       federatedSubs,
+      meshBoard: board,
       artifacts,
       plugins,
       services,
