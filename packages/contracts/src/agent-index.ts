@@ -1017,6 +1017,73 @@ export function remoteIndexEndpointsFor(
   });
 }
 
+/** `index.openTicket`'s params: the session whose transcript to open, at the
+ * device that holds it. `device` is the `device?` convention (design-04 §6):
+ * absent or this desktop's own id = this desktop's rosettad; a foreign id
+ * forwards the call WHOLE to the owner (the method is `federate`), which
+ * answers from its own rule. */
+export const IndexOpenTicketParams = z
+  .object({
+    sessionId: z.string().min(1),
+    device: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type IndexOpenTicketParams = z.infer<typeof IndexOpenTicketParams>;
+
+/** SP-3 — the door's honest refusal until DS-7 (`UnavailableDetails`, retryable
+ * false: nothing a retry can change until a pin move). Declared here so a
+ * client branches on a contract string rather than a sentence. */
+export const INDEX_TICKET = {
+  /** `UnavailableDetails.service` on the refusal */
+  SERVICE: "index",
+  /** The direct plane is not built: the pinned rosettad verifies no grant
+   * (RO-1/RO-10 unmerged), so there is nothing to mint and nothing a ticket
+   * could honestly name. A CAPABILITY fact for the daemon's life — a reader
+   * falls back to the door's own reads (SP-D5) instead of retrying. */
+  STATE_UNBUILT: "direct-plane-unbuilt",
+} as const;
+
+/** The refusal's details, as a reader recognizes them. */
+export const IndexTicketUnavailableDetails = z
+  .object({
+    service: z.literal(INDEX_TICKET.SERVICE),
+    state: z.literal(INDEX_TICKET.STATE_UNBUILT),
+  })
+  .passthrough();
+export type IndexTicketUnavailableDetails = z.infer<typeof IndexTicketUnavailableDetails>;
+
+/**
+ * SP-3 — what `index.openTicket` will answer at DS-7: the template's ticket
+ * anatomy (`TerminalOpenTicket`'s) for rosettad — the endpoint set and, BESIDE
+ * it, the one grant rosetta verifies. DECLARED, NEVER ANSWERED until DS-7
+ * mints the grant at rosetta's pin move; DS-7 may amend it, and the golden
+ * (`index-open-ticket.valid.json`) is the thing to amend with it.
+ *
+ *  - `device`: the desktop whose rosettad holds the session — the cache key's
+ *    first part (`{device, session, stamp}`, thinking-sync-planes §5.4).
+ *  - `endpoints`: `RemoteIndexEndpointSet`, one leg.
+ *  - `grant`: rosetta's RO-10 grant, OPAQUE to a client —
+ *    `base64url(JCS {cid, exp, scope, sid, v}) "." base64url(HMAC-SHA256)`,
+ *    exact `sid`, `scope: ["read"]` (rosetta AUTH.md §5; at most 4,096 bytes,
+ *    its verifier's bound). Carried as `Authorization: Rosetta-Grant <grant>`
+ *    or, from a browser, the subprotocol pair `rosetta`, `rosetta.grant.<grant>`
+ *    — never in the URL. (§5.4, written before RO-10 was built, called it
+ *    `transportGrant` after the cell's; rosetta's is one per-session string,
+ *    nearer the cell's attach grant, so it is `grant`.)
+ *  - `expiresAt`: the grant's `exp` (ms, the owner's clock) — an ESTABLISHMENT
+ *    deadline, as the cell's is: an open socket is not re-checked and outlives
+ *    it (AUTH.md §3); a reconnect after it asks for a fresh ticket.
+ */
+export const IndexOpenTicket = z
+  .object({
+    device: z.string().min(1),
+    endpoints: RemoteIndexEndpointSet,
+    grant: z.string().min(1).max(4096),
+    expiresAt: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type IndexOpenTicket = z.infer<typeof IndexOpenTicket>;
+
 // ── agents.* (the distribution and persona doors; handlers land at AR-2 with
 // puppeteer's first import — these rows are the contract they will satisfy) ──
 

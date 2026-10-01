@@ -1,6 +1,13 @@
-import { PORTS, type RemoteIndexEndpointSet, remoteIndexEndpointsFor } from "@vibefield/contracts";
+import {
+  INDEX_TICKET,
+  IndexOpenTicketParams,
+  PORTS,
+  type RemoteIndexEndpointSet,
+  remoteIndexEndpointsFor,
+} from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
 import type { ServeSpec, ServeState } from "./mesh-client";
+import { RpcCallError } from "./native-link";
 import {
   publishedServe,
   RouteServeDriver,
@@ -145,4 +152,32 @@ export function indexEndpointsFrom(
   if (port === undefined || serve.target.kind !== "port" || serve.target.port !== port)
     return undefined;
   return remoteIndexEndpointsFor(serve.url, sessionId);
+}
+
+/**
+ * SP-3 — `index.openTicket`, DECLARED and answered honestly (declared ==
+ * shipped, D36): the ask is checked first, so a malformed one is the caller's
+ * to fix; then UNAVAILABLE {service: "index", state: "direct-plane-unbuilt"},
+ * retryable false, whatever the flag above says. A ticket is the set AND the
+ * grant beside it, and until DS-7 mints rosetta's grant (RO-10, at the pin
+ * move) there is no grant — the pinned rosettad verifies none — so there is no
+ * ticket to hand out, only half of one, which the template never mints.
+ * Reached by a foreign `device` too: the method is `federate`, so the asker's
+ * daemon forwards it keyed and THIS answer travels back untouched (PeerLink
+ * passes an owner's coded reply through).
+ */
+export function indexOpenTicket(params: unknown): never {
+  const parsed = IndexOpenTicketParams.safeParse(params ?? {});
+  if (!parsed.success)
+    throw new RpcCallError(
+      "PRECONDITION_FAILED",
+      "expected { sessionId: string, device?: string }",
+      false,
+    );
+  throw new RpcCallError(
+    "UNAVAILABLE",
+    "index.openTicket is declared and not served yet: the direct plane needs rosetta's per-session grant (RO-10), which arrives with its pin move (DS-7)",
+    false,
+    { service: INDEX_TICKET.SERVICE, state: INDEX_TICKET.STATE_UNBUILT },
+  );
 }

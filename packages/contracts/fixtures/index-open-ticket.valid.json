@@ -1,0 +1,8 @@
+{
+  "device": "dev-01HQ8ZK4M7",
+  "endpoints": {
+    "sessionUrl": "ws://studio-mbp.tail9f2c.ts.net:9424/ws/sessions/s1"
+  },
+  "grant": "eyJjaWQiOiJmaWVsZGQvd2luZG93LTEiLCJleHAiOjE3OTAwMDAwNjAwMDAsInNjb3BlIjpbInJlYWQiXSwic2lkIjoiczEiLCJ2IjoxfQ.KhNxqADtPdBGQ6BLRua1sYTUpb6xXmxub2iYQ4mwjzQ",
+  "expiresAt": 1790000060000
+}

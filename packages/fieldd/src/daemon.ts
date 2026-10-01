@@ -176,7 +176,7 @@ import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
-import { INDEX_SERVE_ID, IndexServeDriver } from "./index-serve";
+import { INDEX_SERVE_ID, IndexServeDriver, indexOpenTicket } from "./index-serve";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import { DocHoldersService, LibraryDocService, systemAccount, systemDocId } from "./library-doc";
@@ -1715,6 +1715,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       return await index.recent(parsed.data);
     });
+    // SP-3 — the direct plane's door, declared (methods.ts; index-serve.ts):
+    // checks the ask, then says honestly that the grant half is DS-7's
+    api.register("index.openTicket", (_ctx, params) => indexOpenTicket(params));
     // DS-6 — the history catalog, as rows (DS-L3): the PEER replication door.
     // A self peer's daemon lists once and watches from its cursor; nothing else
     // is admitted — a window or the phone pages the merged replica through the

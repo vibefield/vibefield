@@ -1653,6 +1653,26 @@ export const METHODS: MethodDef[] = [
     idempotent: true, // retiring a retired runtime is a no-op
     locality: "local",
   }),
+  // SP-3 (thinking-sync-planes.md §5.4, §6; thinking-desktop-sync-plane.md
+  // §6.4; design-06 §6, §8) — the DIRECT PLANE's door, DECLARED: a session's
+  // transcript read at the OWNER's rosettad, as rosetta's own stream, with
+  // fieldd out of the byte path. `{sessionId, device?}` → `IndexOpenTicket`
+  // (agent-index.ts: the endpoint set — the ticket template's second instance —
+  // and rosetta's grant beside it). `federate`: a foreign `device` forwards the
+  // call WHOLE and the owner mints from its own rule (DS-D5's road). NOT
+  // idempotent: every answer is a fresh grant (`terminal.openTicket`'s
+  // precedent), so a routed one is keyed (DS-D15). `index.read`, the scope
+  // H-D1 gave the phone's history reads. Until DS-7 mints RO-10's grant at
+  // rosetta's pin move the door answers UNAVAILABLE {service: "index", state:
+  // "direct-plane-unbuilt"} (`INDEX_TICKET`), retryable false — declared ==
+  // shipped (D36): the row and its honest handler land together.
+  defineMethod({
+    surface: "product",
+    method: "index.openTicket",
+    scope: "index.read",
+    idempotent: false,
+    locality: "federate",
+  }),
   // ── agents.* (AR-1 — the contract; handlers land with puppeteer's first
   // import at AR-2, until when the dispatcher answers NOT_FOUND for them) ──
   // Distribution is MACHINE scope (AR-D15/D16): the installs puppeteer

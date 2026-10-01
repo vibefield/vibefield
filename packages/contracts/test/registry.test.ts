@@ -2,9 +2,11 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
+import { IndexOpenTicketParams } from "../src/agent-index";
 import { ARTIFACT_LIMITS } from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
 import { RpcNotification } from "../src/envelope";
+import { KEYED_FORWARD_METHODS } from "../src/forwarding";
 import {
   defineMethod,
   LOCALITIES,
@@ -601,5 +603,41 @@ describe("DS-4 — the terminal doors routable to the owner", () => {
         device: "dev-a",
       }).device,
     ).toBe("dev-a");
+  });
+});
+
+// SP-3 (thinking-sync-planes.md §5.4, §6; design-06 §6, §8) — the direct
+// plane's door, DECLARED: its handler answers `direct-plane-unbuilt` until DS-7
+// mints rosetta's grant (RO-10) at the pin move.
+describe("SP-3 — index.openTicket, declared", () => {
+  it("is a mint at the owner — index.read, federate, not idempotent — so a routed one is keyed", () => {
+    const def = METHODS.find((m) => m.method === "index.openTicket");
+    expect(def).toEqual({
+      surface: "product",
+      method: "index.openTicket",
+      scope: "index.read",
+      idempotent: false,
+      locality: "federate",
+    });
+    // DS-D15 — the client mints one key per logical call and the owner
+    // journals its receipt under it
+    expect(KEYED_FORWARD_METHODS.has("index.openTicket")).toBe(true);
+    // reachable from the tailnet — the phone's preset and a peer daemon's both
+    // hold index.read, and `federate` crosses devices by definition — and NOT
+    // a subscription, so SP-1's descriptor rule has nothing to ask of it
+    expect(TAILNET_SCOPES).toContain("index.read");
+    expect(PEER_FIELDD_SCOPES).toContain("index.read");
+    expect(reachableFromTailnet(def!)).toBe(true);
+    expect(def?.subscription).toBeUndefined();
+  });
+
+  it("takes a session and the device? that holds it", () => {
+    expect(IndexOpenTicketParams.parse({ sessionId: "s1", device: "dev-a" })).toEqual({
+      sessionId: "s1",
+      device: "dev-a",
+    });
+    expect(IndexOpenTicketParams.safeParse({ sessionId: "" }).success).toBe(false);
+    expect(IndexOpenTicketParams.safeParse({ device: "dev-a" }).success).toBe(false);
+    expect(IndexOpenTicketParams.safeParse({ sessionId: "s1", device: "" }).success).toBe(false);
   });
 });

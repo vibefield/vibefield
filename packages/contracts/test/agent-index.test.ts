@@ -78,6 +78,16 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       { method: "index.recent", scope: "index.search", idempotent: true, locality: "local" },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
+      // SP-3 — the direct plane's door, declared (it answers
+      // `direct-plane-unbuilt` until DS-7): a MINT at the owner, so not
+      // idempotent, and it leaves the device by definition — a transcript is
+      // read at the OWNER's rosettad. index.read: H-D1's scope for history reads
+      {
+        method: "index.openTicket",
+        scope: "index.read",
+        idempotent: false,
+        locality: "federate",
+      },
     ]);
   });
 
@@ -268,6 +278,8 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       "index.projects",
       "index.catalog.subscribe",
       "index.changes.subscribe",
+      // SP-3 — the direct plane's door: the transcript is the owner's to open
+      "index.openTicket",
     ]);
     for (const m of METHODS.filter(
       (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),

@@ -4,17 +4,23 @@
 // verifies. The template generalizes the first half from the cell's pair
 // (TM-2): the cell's set is its first instance, byte for byte, and rosettad's
 // session socket (the direct plane, DS-7/SP-7) its second.
+import { createHmac } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
+  INDEX_TICKET,
+  IndexOpenTicket,
+  IndexOpenTicketParams,
+  IndexTicketUnavailableDetails,
   REMOTE_INDEX_SESSION_PATH_PREFIX,
   RemoteIndexEndpointSet,
   remoteIndexEndpointsFor,
   remoteIndexSessionPath,
 } from "../src/agent-index";
 import { CellEndpointSet } from "../src/envelope";
+import { ErrorData } from "../src/errors";
 import {
   composeRemoteEndpoints,
   REMOTE_ENDPOINT_LEG,
@@ -210,5 +216,77 @@ describe("rosettad's direct plane — the template's second instance (one leg)",
     expect(remoteIndexEndpointsFor("ftp://desk.ts.net", "s1")).toBeUndefined();
     expect(remoteIndexEndpointsFor("not a url", "s1")).toBeUndefined();
     expect(remoteIndexEndpointsFor("http://desk.ts.net:9424", "")).toBeUndefined();
+  });
+});
+
+// SP-3 — `index.openTicket`, DECLARED: until DS-7 it answers the refusal below;
+// at DS-7 it answers the ticket below (which DS-7 may amend, golden and all).
+describe("the index ticket — the template's anatomy for rosettad", () => {
+  const golden = fixture("index-open-ticket.valid.json");
+
+  it("is the set and, BESIDE it, the one grant rosetta verifies", () => {
+    const ticket = IndexOpenTicket.parse(golden);
+    expect(RemoteIndexEndpointSet.parse(ticket.endpoints)).toEqual(ticket.endpoints);
+    expect(RemoteEndpointSet.safeParse(ticket.endpoints).success).toBe(true);
+    expect(Object.keys(ticket)).toEqual(["device", "endpoints", "grant", "expiresAt"]);
+  });
+
+  it("carries a REAL rosetta grant for the session its URL names, expiring when it says", () => {
+    // rosetta's first valid grant vector (feat/direct-plane-grants 6e0ba56,
+    // crates/server/tests/fixtures/grants.json — written by a stdlib Python
+    // generator independent of both of rosetta's implementations): key bytes
+    // 00..1f. The grant is opaque to a client; this row holds the GOLDEN to the
+    // invariants DS-7's mint must keep — `sid` is the URL's session, `exp` is
+    // `expiresAt`, the scope is read — and to a MAC that really verifies.
+    const ticket = IndexOpenTicket.parse(golden);
+    const [payloadPart, macPart] = ticket.grant.split(".");
+    const payload = Buffer.from(payloadPart ?? "", "base64url");
+    const sessionUrl = ticket.endpoints.sessionUrl;
+    const sid = decodeURIComponent(sessionUrl.slice(sessionUrl.lastIndexOf("/") + 1));
+    expect(JSON.parse(payload.toString("utf8"))).toEqual({
+      cid: "fieldd/window-1",
+      exp: ticket.expiresAt,
+      scope: ["read"],
+      sid,
+      v: 1,
+    });
+    const key = Buffer.from(Array.from({ length: 32 }, (_, i) => i));
+    expect(createHmac("sha256", key).update(payload).digest("base64url")).toBe(macPart);
+  });
+
+  it("is never half a ticket, and never a loopback one", () => {
+    const { grant: _g, ...noGrant } = golden;
+    expect(IndexOpenTicket.safeParse(noGrant).success).toBe(false);
+    const { expiresAt: _e, ...noExpiry } = golden;
+    expect(IndexOpenTicket.safeParse(noExpiry).success).toBe(false);
+    expect(
+      IndexOpenTicket.safeParse({
+        ...golden,
+        endpoints: { sessionUrl: "ws://127.0.0.1:9424/ws/sessions/s1" },
+      }).success,
+    ).toBe(false);
+    // rosetta's verifier refuses a grant past 4,096 bytes; so does the shape
+    expect(IndexOpenTicket.safeParse({ ...golden, grant: "g".repeat(4097) }).success).toBe(false);
+  });
+
+  it("is asked for by session, at the device that holds it", () => {
+    expect(IndexOpenTicketParams.parse(fixture("index-open-ticket-params.valid.json"))).toEqual({
+      device: "dev-01HQ8ZK4M7",
+      sessionId: "s1",
+    });
+  });
+
+  it("until DS-7 the door answers a contract string, not a sentence — retryable false", () => {
+    expect(INDEX_TICKET).toEqual({ SERVICE: "index", STATE_UNBUILT: "direct-plane-unbuilt" });
+    const data = ErrorData.parse(fixture("error-data.index-direct-plane-unbuilt.json"));
+    expect(data).toMatchObject({ kind: "UNAVAILABLE", retryable: false });
+    expect(IndexTicketUnavailableDetails.parse(data.details)).toEqual({
+      service: INDEX_TICKET.SERVICE,
+      state: INDEX_TICKET.STATE_UNBUILT,
+    });
+    // a different service's refusal is not this one
+    expect(
+      IndexTicketUnavailableDetails.safeParse({ service: "index", state: "rebuilding" }).success,
+    ).toBe(false);
   });
 });

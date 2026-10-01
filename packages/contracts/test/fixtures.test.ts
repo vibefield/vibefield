@@ -42,6 +42,8 @@ import {
   IndexChangesSubscribeParams,
   IndexDiscovery,
   IndexEnrollmentRecord,
+  IndexOpenTicket,
+  IndexOpenTicketParams,
   IndexProjectsResult,
   IndexRecentParams,
   IndexRecentResult,
@@ -266,6 +268,12 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "index-catalog-delta": IndexCatalogDelta,
   "index-projects": IndexProjectsResult,
   "index-changes-subscribe-params": IndexChangesSubscribeParams,
+  // SP-3 — the direct plane's door, declared: the ask, and the ticket DS-7 will
+  // answer (rosettad's endpoint set beside rosetta's own grant — the grant is
+  // rosetta's first valid vector). Until DS-7 it answers
+  // `error-data.index-direct-plane-unbuilt` (the ErrorData prefix).
+  "index-open-ticket-params": IndexOpenTicketParams,
+  "index-open-ticket": IndexOpenTicket,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
