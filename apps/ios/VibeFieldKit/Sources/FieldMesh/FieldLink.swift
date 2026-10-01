@@ -1085,10 +1085,15 @@ public final class FieldLink {
   /// The board over the door.
   ///
   /// Through UA-P-1b this was the ONLY leg, because no desktop published a
-  /// board. Under UA-P-5 the store is back on a gated node, and the check
-  /// below is the hybrid §5 describes: a live slice for a door-confirmed
-  /// device outranks a subscription, and the door still carries every board
-  /// the store cannot.
+  /// board. Under UA-P-5 the store came back on a gated node, and a live slice
+  /// for a door-confirmed device used to OUTRANK the subscription — the door
+  /// was not even asked while one was live.
+  ///
+  /// SP-2 (f), 2026-10-01 — reversed, because under SP-D3's trim the slice is
+  /// PRESENCE and the door is the content (`thinking-sync-planes.md` §1.9 item
+  /// 7): once the door has answered hello, it is subscribed whatever the bus
+  /// holds, and the fold prefers its board (`refold`). The slice still draws
+  /// a desktop whose door is asleep, and one whose board has not arrived yet.
   ///
   /// Once open it STAYS open. A slice that expires and returns would otherwise
   /// tear the subscription down and build it up on the store's own heartbeat,
@@ -1107,7 +1112,6 @@ public final class FieldLink {
     // storm, on a metered radio.
     guard !arming.contains(deviceId) else { return }
     guard case .ready = client.state else { return }
-    guard liveSlice(for: deviceId) == nil else { return }
     arming.insert(deviceId)
 
     Task { @MainActor [weak self] in
@@ -1258,13 +1262,16 @@ public final class FieldLink {
     }
 
     for deviceId in known.sorted() {
-      if let slice = liveSlice(for: deviceId) {
+      // SP-2 (f) — THE DOOR OUTRANKS THE SLICE once it has hello'd and sent
+      // its board. The slice draws what the door cannot: a desktop whose door is
+      // asleep, or one whose board has not arrived yet — never a blank.
+      if doorBoards[deviceId] != nil {
+        doorOnly.append(deviceId)
+      } else if let slice = liveSlice(for: deviceId) {
         slices.append(slice)
         // Re-armed on every board, so a heartbeat that moves `expiresAt`
         // moves the timer with it.
         armExpiry(for: deviceId, at: slice.expiresAt)
-      } else if doorBoards[deviceId] != nil {
-        doorOnly.append(deviceId)
       }
     }
 
@@ -1377,12 +1384,11 @@ public final class FieldLink {
     }
   }
 
+  /// Which leg this desktop's bodies came from — the door first (SP-2 f).
   private func feed(of deviceId: String, doorOnly: Set<String>? = nil) -> FieldFeedSource {
+    if doorOnly?.contains(deviceId) ?? (doorBoards[deviceId] != nil) { return .door }
     if liveSlice(for: deviceId) != nil { return .store }
-    if let doorOnly {
-      return doorOnly.contains(deviceId) ? .door : FieldFeedSource.none
-    }
-    return doorBoards[deviceId] != nil ? .door : FieldFeedSource.none
+    return FieldFeedSource.none
   }
 
   private func note(_ line: String) {

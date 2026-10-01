@@ -1980,3 +1980,36 @@ private func stuckLink(
       ])
   }
 }
+
+// MARK: - SP-2 (f): the door outranks the slice once hello'd
+
+@MainActor
+@Suite struct FieldLinkDoorOutranksSliceTests {
+  /// Under SP-D3's trim the slice is presence, and the door is the content: a
+  /// desktop whose door has answered hello and sent its board is drawn FROM
+  /// THE DOOR even while a live, unexpired slice sits on the bus — the door is
+  /// subscribed regardless of the slice, and the fold prefers its board. Until
+  /// the door's board arrives the slice still draws (never a blank).
+  @Test func aHelloedDoorOutranksALiveSlice() async throws {
+    let snapshot = snapshotFrame(revision: 5, rows: [boardRow(id: "door-run")])
+    let (link, mesh, door, _) = try await storeBusLink(
+      probe: LinkProbe(),
+      script: { method, id, _ in
+        switch method {
+        case "system.hello": return [frame(id: id, ack)]
+        case "device.list": return [frame(id: id, deviceListResult([deviceRow(name: "studio")]))]
+        case "agent.subscribe":
+          return [frame(id: id, .object(["subId": .string("s1"), "snapshot": snapshot]))]
+        default: return []
+        }
+      })
+    defer { link.stop() }
+
+    await publishBoard(mesh, board(rows: [boardRow(id: "slice-run")]))
+    try await waitUntil("the door's board on the field") {
+      link.agents.map(\.id) == ["door-run"]
+    }
+    #expect(link.desktops.first?.feed == .door)
+    #expect(await door.latest?.methods.contains("agent.subscribe") == true)
+  }
+}
