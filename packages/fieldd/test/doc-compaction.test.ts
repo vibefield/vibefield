@@ -7,15 +7,16 @@
 // "from" below the root starts AT the root, and an op whose base lies below
 // the root PANICS the doc it is imported into.
 import { randomUUID } from "node:crypto";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DOC_SYNC_RECORD, type DocSyncMeta } from "@vibefield/contracts";
-import { LoroDoc, type VersionVector } from "loro-crdt";
+import { decodeImportBlobMeta, LoroDoc, VersionVector } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
 import { DocumentService, type DocumentServiceOptions } from "../src/doc-service";
 import { liftIce1, wrapIce1 } from "../src/ice1-envelope";
-import { EMPTY_VERSION, loroBlobMode } from "../src/loro-host";
+import { LibraryDocService, systemAccount, systemDocId } from "../src/library-doc";
+import { decodeVersion, EMPTY_VERSION, loroBlobMode } from "../src/loro-host";
 import { HEADER, Renderer, replay } from "./loro-renderer";
 
 let dirs: string[] = [];
@@ -260,5 +261,247 @@ describe("DS-5d — an import that panics Loro is contained", () => {
     expect((await replay(docs, docId)).board()).toEqual({ base: "b", z: "Z", kept: "yes" });
     expect(await docs.hostVersion(docId)).not.toBeNull(); // still in Loro custody
     docs.dispose();
+  });
+});
+
+// ---- the epoch bump ----
+
+const ACCOUNT = systemAccount("james@example.com", "fuid-a");
+const DAY = 86_400_000;
+
+const json = (v: VersionVector): Record<string, number> =>
+  Object.fromEntries([...v.toJSON()].map(([p, c]) => [String(p), c]));
+
+async function withLibrary(dir: string, docs: DocumentService): Promise<LibraryDocService> {
+  const library = new LibraryDocService({ dataDir: dir, docId: systemDocId("library", ACCOUNT) });
+  await library.ready();
+  await docs.attachLibrary(library);
+  return library;
+}
+
+async function until(predicate: () => boolean | Promise<boolean>, label: string): Promise<void> {
+  for (let i = 0; i < 600; i++) {
+    if (await predicate()) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error(`timed out waiting for: ${label}`);
+}
+
+/** The root a stored base trims to (its history starts AT it). */
+function rootOf(envelope: Uint8Array): Record<string, number> {
+  const base = new LoroDoc();
+  base.import(payloadOf(envelope));
+  return json(base.frontiersToVV(base.shallowSinceFrontiers()));
+}
+
+/** A canvas with a checkpoint and a journal of three updates; the versions
+ * the window held along the way. */
+async function journaled(docs: DocumentService): Promise<{
+  docId: string;
+  w: Renderer;
+  atCheckpoint: VersionVector;
+  low: VersionVector;
+  high: VersionVector;
+}> {
+  const { docId } = await docs.create("board");
+  const w = new Renderer(1n);
+  w.edit("a", "1");
+  await put(docs, docId, "checkpoint", w.checkpoint());
+  const atCheckpoint = w.doc.oplogVersion();
+  await put(docs, docId, "update", w.edit("b", "2"));
+  const low = w.doc.oplogVersion();
+  await put(docs, docId, "update", w.edit("c", "3"));
+  const high = w.doc.oplogVersion();
+  await put(docs, docId, "update", w.edit("d", "4"));
+  return { docId, w, atCheckpoint, low, high };
+}
+
+describe("DS-5d — the epoch bump", () => {
+  it("past the journal threshold the host compacts AT the watermark: one shallow base, the epoch bumped in the registry, the stored revision and the library", async () => {
+    const dir = dataDir();
+    const docs = service(dir, { compaction: { records: 4 } });
+    const library = await withLibrary(dir, docs);
+    const moves: Array<[string, string]> = [];
+    docs.onEpochChanged((docId, why) => moves.push([docId, why]));
+    const { docId } = await docs.create("board");
+    const w = new Renderer(1n);
+    w.edit("a", "1");
+    await put(docs, docId, "checkpoint", w.checkpoint());
+    await put(docs, docId, "update", w.edit("b", "2"));
+    await put(docs, docId, "update", w.edit("c", "3"));
+    const studioAck = w.doc.oplogVersion();
+    docs.setAcknowledgements(() => [{ device: "studio", ack: studioAck, seenAt: Date.now() }]);
+    await put(docs, docId, "update", w.edit("d", "4"));
+    expect(docs.list()[0]?.baseEpoch).toBe(0); // three records: under the threshold
+    await put(docs, docId, "update", w.edit("e", "5")); // the fourth
+    // The event fires last — after the stored revision, the registry and the library.
+    await until(() => moves.length === 1, "the epoch bump");
+
+    const stored = await docs.readDoc(docId);
+    expect(stored?.updates).toEqual([]); // the journal is folded into the base
+    expect(decodeImportBlobMeta(payloadOf(stored?.bytes as Uint8Array), false).mode).toBe(
+      "shallow-snapshot",
+    );
+    // Trimmed exactly to the studio's acknowledgement — below it, never past.
+    expect(rootOf(stored?.bytes as Uint8Array)).toEqual(json(studioAck));
+    expect((await replay(docs, docId)).board()).toEqual({ a: "1", b: "2", c: "3", d: "4", e: "5" });
+    expect(stored?.meta.baseEpoch).toBe(1);
+    expect(library.get(docId)?.baseEpoch).toBe(1);
+    expect(await docs.hostVersion(docId)).toMatchObject({ baseEpoch: 1, hasCheckpoint: true });
+    expect(moves).toEqual([[docId, "compacted"]]);
+    docs.dispose();
+  });
+
+  it("waits for every KNOWN holder: the lowest acknowledgement holds the root, one unseen thirty-one days is not waited for", async () => {
+    const docs = service(undefined, { compaction: false });
+    const { docId, atCheckpoint, low, high } = await journaled(docs);
+    const now = Date.now();
+    docs.setAcknowledgements(() => [
+      { device: "studio", ack: high, seenAt: now },
+      // offline ten days: remembered, and waited for
+      { device: "laptop", ack: low, seenAt: now - 10 * DAY },
+      // unseen past DS-D17's horizon: not waited for
+      { device: "attic", ack: atCheckpoint, seenAt: now - 31 * DAY },
+    ]);
+    const outcome = await docs.compact(docId);
+    expect(outcome).toMatchObject({
+      compacted: true,
+      baseEpoch: 1,
+      counted: ["laptop", "studio"],
+      retired: ["attic"],
+    });
+    expect(rootOf((await docs.readDoc(docId))?.bytes as Uint8Array)).toEqual(json(low));
+    docs.dispose();
+  });
+
+  it("a holder that acknowledges nothing, or more than this desktop holds, BLOCKS the trim: no epoch, no write", async () => {
+    const docs = service(undefined, { compaction: false });
+    const { docId, high } = await journaled(docs);
+    const before = await docs.readDoc(docId);
+    const now = Date.now();
+    docs.setAcknowledgements(() => [
+      { device: "studio", ack: high, seenAt: now },
+      { device: "laptop", ack: null, seenAt: now - 3 * DAY },
+    ]);
+    expect(await docs.compact(docId)).toEqual({
+      compacted: false,
+      reason: "unacknowledged",
+      device: "laptop",
+    });
+    const ahead = [...high.toJSON()].map(([peer, counter]) => [peer, counter + 5] as const);
+    docs.setAcknowledgements(() => [
+      { device: "studio", ack: VersionVector.parseJSON(new Map(ahead)), seenAt: now },
+    ]);
+    expect(await docs.compact(docId)).toEqual({
+      compacted: false,
+      reason: "ahead-of-here",
+      device: "studio",
+    });
+    const after = await docs.readDoc(docId);
+    expect(docs.list()[0]?.baseEpoch).toBe(0);
+    expect(after?.updates).toHaveLength(3);
+    expect(Buffer.compare(Buffer.from(after?.bytes ?? []), Buffer.from(before?.bytes ?? []))).toBe(
+      0,
+    );
+    docs.dispose();
+  });
+
+  it("a window open on the canvas holds the compaction; it runs when the window closes", async () => {
+    const docs = service(undefined, { compaction: { records: 2 } });
+    const { docId } = await docs.create("board");
+    const w = new Renderer(1n);
+    w.edit("a", "1");
+    await put(docs, docId, "checkpoint", w.checkpoint());
+    docs.writerAttached(docId);
+    await put(docs, docId, "update", w.edit("b", "2"));
+    await put(docs, docId, "update", w.edit("c", "3")); // past the threshold, window open
+    expect(await docs.compact(docId)).toEqual({ compacted: false, reason: "window-open" });
+    expect(docs.list()[0]?.baseEpoch).toBe(0);
+    docs.writerDetached(docId);
+    await until(() => docs.list()[0]?.baseEpoch === 1, "the compaction once the window closed");
+    expect((await replay(docs, docId)).board()).toEqual({ a: "1", b: "2", c: "3" });
+    docs.dispose();
+  });
+
+  it("a base that would not load is never written: a held op concurrent with the watermark refuses the trim", async () => {
+    // Measured (loro-crdt 1.13.8): the shallow export succeeds and writes a
+    // base no doc can import. The trial is what stands between that and disk.
+    const docs = service(undefined, { compaction: false });
+    const { docId } = await docs.create("board");
+    const one = new LoroDoc();
+    one.setPeerId(1n);
+    one.getMap("board").set("base", "b");
+    one.commit();
+    await put(docs, docId, "checkpoint", wrapIce1(HEADER, one.export({ mode: "snapshot" })));
+    const two = new LoroDoc();
+    two.setPeerId(2n);
+    two.import(one.export({ mode: "snapshot" }));
+    const oneBefore = one.oplogVersion();
+    const twoBefore = two.oplogVersion();
+    one.getMap("board").set("z", "Z");
+    one.commit();
+    two.getMap("board").set("x", "X"); // concurrent with z
+    two.commit();
+    for (const payload of [
+      one.export({ mode: "update", from: oneBefore }),
+      two.export({ mode: "update", from: twoBefore }),
+    ]) {
+      expect(
+        (await docs.applyRemoteRecord(docId, { kind: DOC_SYNC_RECORD.UPDATE, meta: META, payload }))
+          .applied,
+      ).toBe(true);
+    }
+    const before = await docs.readDoc(docId);
+    // The studio holds base + z, not x: the meet puts z in and x out.
+    docs.setAcknowledgements(() => [
+      { device: "studio", ack: one.oplogVersion(), seenAt: Date.now() },
+    ]);
+    expect(await docs.compact(docId)).toMatchObject({ compacted: false, reason: "unloadable" });
+    const after = await docs.readDoc(docId);
+    expect(docs.list()[0]?.baseEpoch).toBe(0);
+    expect(after?.updates).toHaveLength(before?.updates.length ?? -1);
+    expect((await replay(docs, docId)).board()).toEqual({ base: "b", z: "Z", x: "X" });
+    // Once the studio holds x too, nothing held is concurrent with the meet.
+    const head = decodeVersion((await docs.hostVersion(docId))?.version ?? new Uint8Array());
+    if (head === null) throw new Error("no head version");
+    docs.setAcknowledgements(() => [{ device: "studio", ack: head, seenAt: Date.now() }]);
+    expect(await docs.compact(docId)).toMatchObject({ compacted: true, baseEpoch: 1 });
+    expect((await replay(docs, docId)).board()).toEqual({ base: "b", z: "Z", x: "X" });
+    docs.dispose();
+  });
+
+  it("a restart after compaction loads the base and answers; current.json is the truth for the epoch", async () => {
+    const dir = dataDir();
+    const docs = service(dir, { compaction: false });
+    const { docId, low } = await journaled(docs);
+    docs.setAcknowledgements(() => [{ device: "studio", ack: low, seenAt: Date.now() }]);
+    expect(await docs.compact(docId)).toMatchObject({ compacted: true, baseEpoch: 1 });
+    // A second pass has nothing below the watermark left to trim.
+    expect(await docs.compact(docId)).toEqual({ compacted: false, reason: "nothing-to-trim" });
+    docs.dispose();
+
+    const again = service(dir, { compaction: false });
+    expect(again.list()[0]?.baseEpoch).toBe(1);
+    expect(await again.hostVersion(docId)).toMatchObject({ baseEpoch: 1, hasCheckpoint: true });
+    const answer = await again.hostAnswer(docId, {
+      version: EMPTY_VERSION().encode(),
+      hasCheckpoint: false,
+      baseEpoch: 1,
+    });
+    const fresh = new Renderer(9n);
+    fresh.apply(payloadOf(answer?.snapshot as Uint8Array));
+    if (answer?.update) fresh.apply(answer.update);
+    expect(fresh.board()).toEqual({ a: "1", b: "2", c: "3", d: "4" });
+    again.dispose();
+
+    // A crash between the stored revision and the registry write: the
+    // registry still says 0, the revision says 1 — the revision wins.
+    const registryPath = join(dir, "registries", "field.docs.v1.json");
+    const registry = JSON.parse(readFileSync(registryPath, "utf8"));
+    registry[0].baseEpoch = 0;
+    writeFileSync(registryPath, JSON.stringify(registry));
+    const third = service(dir, { compaction: false });
+    expect(third.list()[0]?.baseEpoch).toBe(1);
+    third.dispose();
   });
 });

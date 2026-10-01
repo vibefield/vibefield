@@ -24,11 +24,12 @@ import {
   type Logger,
 } from "@vibefield/logging";
 import type { LoroDoc } from "loro-crdt";
-import { hasIce1Magic, liftIce1 } from "./ice1-envelope";
+import { hasIce1Magic, liftIce1, wrapIce1 } from "./ice1-envelope";
 import {
   covers,
   decodeVersion,
   EMPTY_VERSION,
+  type HolderAck,
   HostedDoc,
   type HostImport,
   isLoroPanic,
@@ -36,6 +37,7 @@ import {
   LoroHost,
   snapshotVersion,
   versionToBase64,
+  watermark,
 } from "./loro-host";
 import { RpcCallError } from "./native-link";
 
@@ -136,9 +138,60 @@ export interface DocLibraryPort {
   /** DS-5c — `home`: the desktop a `local` canvas now lives on (DS-D7). */
   setSyncIntent(docId: string, intent: DocSyncIntent, by: string, home?: string): Promise<void>;
   tombstone(docId: string, at: number, by: string): Promise<void>;
+  /** DS-5d — the content columns alone (the epoch a compaction bumped), so a
+   * concurrent rename or intent on another desktop is never written over. */
+  setColumns(
+    docId: string,
+    columns: { engineSchema: number | null; baseEpoch: number },
+    by: string,
+  ): Promise<void>;
   on(event: "changed", fn: (change: { origin: "local" | "remote" }) => void): unknown;
   off(event: "changed", fn: (change: { origin: "local" | "remote" }) => void): unknown;
 }
+
+/** DS-5d — what one compaction attempt did. Held is an ordinary outcome, not
+ * a failure: the watermark waits for holders, and a window open on the canvas
+ * waits for it to close. */
+export type CompactOutcome =
+  | {
+      compacted: true;
+      /** The epoch the trimmed base opens. */
+      baseEpoch: number;
+      bytesBefore: number;
+      bytesAfter: number;
+      /** Holders the watermark waited for, and the ones past DS-D17's horizon. */
+      counted: string[];
+      retired: string[];
+    }
+  | {
+      compacted: false;
+      reason:
+        | "unknown-doc"
+        | "system-doc"
+        /** Not in Loro custody: no version to trim at. */
+        | "opaque"
+        /** A window holds the canvas (the writer lock). */
+        | "window-open"
+        /** The host holds ops pending their base — disk does not. */
+        | "pending"
+        /** The watermark's two holds (loro-host.ts `watermark`). */
+        | "unacknowledged"
+        | "ahead-of-here"
+        /** The watermark is at or below the current root. */
+        | "nothing-to-trim"
+        /** The trial: a base no doc could load, or one that lost ops. */
+        | "unloadable"
+        | "lost-ops"
+        | "not-held"
+        | "storage";
+      /** The holder a watermark hold names. */
+      device?: string;
+    };
+
+/** DS-5d — why a canvas's epoch moved here, or is behind: `compacted` (this
+ * host trimmed it), `rebootstrapped` (taken from a fresher holder, S4),
+ * `behind` (the library names a newer epoch than this desktop holds). */
+export type EpochMove = "compacted" | "rebootstrapped" | "behind";
 
 /** DS-5 — what a library reconcile did to this device's catalog. */
 export interface CatalogChange {
@@ -194,6 +247,12 @@ export interface DocumentServiceOptions {
    * what tells a canvas living elsewhere apart. Absent or undefined: no canvas
    * reads as living elsewhere — the pre-DS-5c behaviour. */
   selfDevice?: () => string | undefined;
+  /** DS-5d — compaction: a hosted canvas whose journal reaches `records`
+   * (DOC_HOST.COMPACT_RECORDS) or `journalBytes` (COMPACT_JOURNAL_BYTES) is
+   * compacted at the watermark; holders unseen past `retirementMs`
+   * (RETIREMENT_MS) are not waited for. `false`: never on its own — `compact`
+   * still runs when asked. */
+  compaction?: { records?: number; journalBytes?: number; retirementMs?: number } | false;
 }
 
 /** doc.open's return: the caller pairs the ticket with laneUrl before dialing. */
@@ -307,6 +366,26 @@ export class DocumentService {
   private readonly idleMs: number;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
   private readonly selfDevice: () => string | undefined;
+  /** DS-5d — compaction's thresholds and horizon; `on` false means only `compact`. */
+  private readonly compaction: {
+    on: boolean;
+    records: number;
+    journalBytes: number;
+    retirementMs: number;
+  };
+  /** DS-5d — every OTHER holder of a canvas, as the holders slice and its
+   * ledger know them (DocHoldersService). None until wired: a desktop alone
+   * waits for nobody. */
+  private acknowledgements: (docId: string) => HolderAck[] = () => [];
+  /** DS-5d — canvases past a threshold whose compaction is held (a window, a
+   * holder); retried on the next append and when the window closes. */
+  private readonly wantsCompaction = new Set<string>();
+  private readonly compacting = new Set<string>();
+  /** DS-5d — the watermark a trial last found unloadable, per canvas: the
+   * host's oplog only grows, so the same watermark fails the same way until
+   * the acknowledgements move it — no second O(doc) export for nothing. */
+  private readonly failedTrims = new Map<string, string>();
+  private readonly epochListeners = new Set<(docId: string, why: EpochMove) => void>();
 
   constructor(opts: DocumentServiceOptions) {
     this.dataDir = opts.dataDir;
@@ -316,6 +395,16 @@ export class DocumentService {
     this.onCommit = opts.onCommit;
     this.host = opts.host ?? new LoroHost();
     this.selfDevice = opts.selfDevice ?? (() => undefined);
+    const compaction = opts.compaction ?? {};
+    this.compaction = {
+      on: compaction !== false,
+      records: (compaction === false ? undefined : compaction.records) ?? DOC_HOST.COMPACT_RECORDS,
+      journalBytes:
+        (compaction === false ? undefined : compaction.journalBytes) ??
+        DOC_HOST.COMPACT_JOURNAL_BYTES,
+      retirementMs:
+        (compaction === false ? undefined : compaction.retirementMs) ?? DOC_HOST.RETIREMENT_MS,
+    };
     this.docsDir = join(this.dataDir, ...LAYOUT.DOCS_DIR);
     this.registryDir = join(this.dataDir, ...LAYOUT.REGISTRIES_DIR);
     this.registryFile = `${STORES.DOCS}.json`;
@@ -499,6 +588,8 @@ export class DocumentService {
       throw this.storageError("delete", err);
     }
     this.host.delete(docId);
+    this.wantsCompaction.delete(docId);
+    this.failedTrims.delete(docId);
     await this.toLibrary("delete", (library) => library.tombstone(docId, deletedAt, "delete"));
     return tombstoned;
   }
@@ -836,6 +927,8 @@ export class DocumentService {
 
   writerDetached(docId: string): void {
     this.writers.delete(docId);
+    // DS-5d — a compaction the window held runs now that it has closed.
+    if (this.wantsCompaction.has(docId)) this.requestCompaction(docId);
   }
 
   // ---- payload ----
@@ -1326,6 +1419,9 @@ export class DocumentService {
       meta: committed,
       baseEpoch: entry.baseEpoch,
     });
+    // DS-5d — the journal is the history this host keeps: past a threshold,
+    // the canvas is offered for an epoch bump (queued behind this write).
+    if (this.overThreshold(next)) this.requestCompaction(docId);
     return committed;
   }
 
@@ -1642,6 +1738,220 @@ export class DocumentService {
     return imported.pending ? { applied: true, meta, pending: true } : { applied: true, meta };
   }
 
+  // ---- compaction (DS-5d, design-06 §4) ----
+
+  /** The holders the watermark waits for: every OTHER desktop holding a
+   * canvas, with what it acknowledged and when it was last heard. */
+  setAcknowledgements(source: (docId: string) => HolderAck[]): void {
+    this.acknowledgements = source;
+  }
+
+  /** Fires when a canvas's epoch moved here, or the library says it should. */
+  onEpochChanged(fn: (docId: string, why: EpochMove) => void): () => void {
+    this.epochListeners.add(fn);
+    return () => this.epochListeners.delete(fn);
+  }
+
+  private emitEpoch(docId: string, why: EpochMove): void {
+    for (const fn of this.epochListeners) {
+      try {
+        fn(docId, why);
+      } catch (error) {
+        this.logger.warn("fieldd.docs.epoch_listener_failed", "An epoch listener threw", {
+          docId,
+          why,
+          error: String(error),
+        });
+      }
+    }
+  }
+
+  /** Compact a canvas NOW, if the watermark allows (on its per-doc chain). */
+  compact(docId: string): Promise<CompactOutcome> {
+    return this.serialize(docId, () => this.compactNow(docId));
+  }
+
+  /** Has this journal grown past either threshold? */
+  private overThreshold(current: CurrentRevision): boolean {
+    if (!this.compaction.on) return false;
+    const bytes = current.updates.reduce((total, update) => total + update.byteLength, 0);
+    return (
+      current.updates.length >= this.compaction.records || bytes >= this.compaction.journalBytes
+    );
+  }
+
+  /** Queue an attempt behind whatever the canvas's chain is doing. A hold
+   * keeps the canvas WANTED: the next append past the threshold and the close
+   * of the window that held it both ask again. */
+  private requestCompaction(docId: string): void {
+    if (!this.compaction.on) return;
+    this.wantsCompaction.add(docId);
+    if (this.compacting.has(docId) || this.writers.has(docId)) return;
+    this.compacting.add(docId);
+    void this.serialize(docId, () => this.compactNow(docId))
+      .then((outcome) => {
+        if (
+          outcome.compacted ||
+          outcome.reason === "unknown-doc" ||
+          outcome.reason === "system-doc" ||
+          outcome.reason === "opaque"
+        ) {
+          this.wantsCompaction.delete(docId);
+          return;
+        }
+        this.logger.child({ docId }).debug("fieldd.docs.compaction_held", "A compaction is held", {
+          reason: outcome.reason,
+          ...(outcome.device !== undefined ? { device: outcome.device } : {}),
+        });
+      })
+      .catch((error: unknown) => {
+        this.logger.child({ docId }).warn("fieldd.docs.compaction_failed", "A compaction failed", {
+          error: String(error),
+        });
+      })
+      .finally(() => this.compacting.delete(docId));
+  }
+
+  /** THE EPOCH BUMP (design-06 §4). On the per-doc chain. The base becomes a
+   * Loro shallow snapshot AT the watermark — the meet of this desktop's
+   * version and every known holder's acknowledgement (a holder past DS-D17's
+   * horizon is not waited for) — framed by the ICE1 rule under the header of
+   * the newest checkpoint, with an EMPTY journal: everything above the
+   * watermark is the base's own history. The oplog below it is gone, here
+   * and in memory (the trial doc becomes the host). The epoch bumps in the
+   * stored revision (the commit point), the registry and the library — one
+   * library write, converging like any other — and a holder at an older epoch
+   * re-bootstraps from a fresh one (S4, doc-sync's answer). */
+  private async compactNow(docId: string): Promise<CompactOutcome> {
+    const entry = this.registry.get(docId);
+    if (entry === undefined || entry.deletedAt !== undefined) {
+      return { compacted: false, reason: "unknown-doc" };
+    }
+    if (this.system.has(docId)) return { compacted: false, reason: "system-doc" };
+    // A window holds the canvas: it appends against the epoch it read, and
+    // the base it read is the one a compaction would replace under it.
+    if (this.writers.has(docId)) return { compacted: false, reason: "window-open" };
+    const hosted = await this.hostedNow(docId);
+    if (hosted === null) return { compacted: false, reason: "opaque" };
+    // Ops pending their base are the one thing a host holds that disk does not.
+    if (hosted.hasPending()) return { compacted: false, reason: "pending" };
+    let current: CurrentRevision | null;
+    let checkpoint: Uint8Array;
+    try {
+      current = await this.readCurrent(docId);
+      if (current === null) return { compacted: false, reason: "opaque" };
+      checkpoint = new Uint8Array(await readFile(join(this.revisionsDir(docId), current.file)));
+    } catch (error) {
+      this.logger.child({ docId }).warn("fieldd.docs.compaction_unreadable", "No base to compact", {
+        error: String(error),
+      });
+      return { compacted: false, reason: "storage" };
+    }
+    const framed = liftIce1(checkpoint);
+    if (!framed.ok) return { compacted: false, reason: "opaque" };
+    const mark = watermark(
+      hosted.version(),
+      this.acknowledgements(docId),
+      this.now(),
+      this.compaction.retirementMs,
+    );
+    if (!mark.ok) return { compacted: false, reason: mark.reason, device: mark.device };
+    if (covers(hosted.rootVersion(), mark.version)) {
+      return { compacted: false, reason: "nothing-to-trim" };
+    }
+    const key = versionToBase64(mark.version);
+    if (this.failedTrims.get(docId) === key) return { compacted: false, reason: "unloadable" };
+    const trimmed = hosted.compactTo(mark.version);
+    if (!trimmed.ok) {
+      if (trimmed.reason === "unloadable") this.failedTrims.set(docId, key);
+      this.logger
+        .child({ docId })
+        .info("fieldd.docs.compaction_refused", "A compacted base failed its trial", {
+          reason: trimmed.reason,
+          ...(trimmed.detail !== undefined ? { detail: trimmed.detail } : {}),
+        });
+      return { compacted: false, reason: trimmed.reason };
+    }
+    this.failedTrims.delete(docId);
+
+    const envelope = wrapIce1(framed.header, trimmed.bytes);
+    const baseEpoch = entry.baseEpoch + 1;
+    const revisionId = randomUUID();
+    const next: CurrentRevision = {
+      revisionId,
+      file: `${revisionId}.ice1`,
+      contentId: contentIdOf(envelope),
+      // Not a content change: the explorer orders canvases by content recency
+      // (`updatedAt` follows this), and a background trim must not reorder it.
+      committedAt: current.committedAt,
+      engineSchema: current.engineSchema,
+      savedAt: current.savedAt,
+      byteLength: envelope.byteLength,
+      baseEpoch,
+      updates: [],
+    };
+    const dir = join(this.docsDir, docId);
+    const revisions = this.revisionsDir(docId);
+    try {
+      await atomicWrite(revisions, next.file, envelope);
+      // `current.json` is the commit point: until it lands, the old base stands.
+      await atomicWrite(dir, "current.json", `${JSON.stringify(next, null, 2)}\n`);
+    } catch (error) {
+      void rm(join(revisions, next.file), { force: true }).catch(() => {});
+      this.logger
+        .child({ docId })
+        .error("fieldd.docs.compaction_write_failed", "A compacted base was not written", error);
+      return { compacted: false, reason: "storage" };
+    }
+    // From here the trimmed base IS the canvas — on disk and in the host.
+    this.host.set(new HostedDoc(docId, trimmed.doc));
+    this.touch(docId);
+    this.registry.set(docId, {
+      ...(this.registry.get(docId) ?? entry),
+      baseEpoch,
+      sizeBytes: storedSize(next),
+    });
+    try {
+      await this.persistRegistry();
+    } catch (error) {
+      // The revision is committed; boot reconciliation takes the epoch from it.
+      this.logger.error(
+        "fieldd.docs.compaction_registry_failed",
+        "The registry did not record a compaction; the stored revision did",
+        error,
+      );
+    }
+    for (const file of [current.file, ...current.updates.map((update) => update.file)]) {
+      if (file === next.file) continue;
+      void rm(join(revisions, file), { force: true }).catch(() => {});
+    }
+    // The library carries the epoch to every desktop. Never backwards: a
+    // desktop that compacted further first already wrote a higher one.
+    await this.toLibrary("compact", async (library) => {
+      const row = library.get(docId);
+      if (row !== undefined && row.baseEpoch >= baseEpoch) return;
+      await library.setColumns(docId, { engineSchema: current.engineSchema, baseEpoch }, "compact");
+    });
+    const bytesBefore = storedSize(current);
+    this.logger.child({ docId }).info("fieldd.docs.compacted", "A canvas was compacted", {
+      baseEpoch,
+      bytesBefore,
+      bytesAfter: next.byteLength,
+      records: current.updates.length,
+      counted: mark.counted.length,
+      retired: mark.retired.length,
+    });
+    this.emitEpoch(docId, "compacted");
+    return {
+      compacted: true,
+      baseEpoch,
+      bytesBefore,
+      bytesAfter: next.byteLength,
+      counted: mark.counted,
+      retired: mark.retired,
+    };
+  }
+
   // ---- open windows (DS-5, §1.2 defect 2) ----
 
   /** Fires after a peer's bytes changed a canvas — what an open window on
@@ -1922,16 +2232,21 @@ export class DocumentService {
       if (!existsSync(path)) continue;
       try {
         const current = parseCurrentRevision(JSON.parse(readFileSync(path, "utf8")), docId);
+        // DS-5d — the epoch too: a compaction commits it in `current.json`
+        // first, so a crash before the registry write must not boot the
+        // canvas at the epoch it left.
         if (
           entry.updatedAt !== current.committedAt ||
           entry.engineSchema !== current.engineSchema ||
-          entry.sizeBytes !== storedSize(current)
+          entry.sizeBytes !== storedSize(current) ||
+          entry.baseEpoch !== current.baseEpoch
         ) {
           this.registry.set(docId, {
             ...entry,
             updatedAt: current.committedAt,
             engineSchema: current.engineSchema,
             sizeBytes: storedSize(current),
+            baseEpoch: current.baseEpoch,
           });
           changed = true;
         }

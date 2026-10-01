@@ -235,6 +235,13 @@ describe("the epoch fence (S4)", () => {
     const registry = JSON.parse(readFileSync(registryPath, "utf8"));
     registry[0].baseEpoch = 1; // as a compaction would leave it
     writeFileSync(registryPath, JSON.stringify(registry));
+    // *DS-5d (2026-10-01):* compaction exists now, and it commits the epoch in
+    // the stored revision FIRST — boot takes the registry's epoch from there,
+    // so a synthesized compaction has to leave both as a real one does.
+    const currentPath = join(dataDir, "docs", docId, "current.json");
+    const current = JSON.parse(readFileSync(currentPath, "utf8"));
+    current.baseEpoch = 1;
+    writeFileSync(currentPath, JSON.stringify(current));
 
     const reopened = new DocumentService({ dataDir });
     expect(reopened.list()[0]?.baseEpoch).toBe(1);
