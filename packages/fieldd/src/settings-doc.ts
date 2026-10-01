@@ -1,11 +1,12 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { readFile, rename } from "node:fs/promises";
+import { join } from "node:path";
 import { InstallSetEntry, LAYOUT, SETTINGS_DOC_SECTIONS } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, UndoManager } from "loro-crdt";
 import type { SystemDocOwner } from "./doc-service";
+import { SystemDocFile } from "./system-doc-file";
 
 // SettingsDocService (D29′, P7): fieldd's FIRST live Loro doc — the system
 // settings doc. One doc, three section families (contracts
@@ -143,6 +144,10 @@ export class SettingsDocService extends EventEmitter {
   private readonly undoMgr: UndoManager;
   private readonly log: Logger;
   private readonly docPath: string;
+  /** DS-5c (DS wave 2 landing) — one writer, fsync'd, the last good copy kept:
+   * the host's merge persist and a local write's persist never interleave, and
+   * a torn file is no longer first boot (system-doc-file.ts, the library's). */
+  private readonly file: SystemDocFile;
   private readonly legacyUserPath: string;
   private readyPromise: Promise<void> | null = null;
   private disposed = false;
@@ -151,6 +156,11 @@ export class SettingsDocService extends EventEmitter {
     super();
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "plugin.settings.doc" });
     this.docPath = join(cfg.dataDir, ...LAYOUT.SETTINGS_DOC);
+    this.file = new SystemDocFile({
+      path: this.docPath,
+      snapshot: () => this.doc.export({ mode: "snapshot" }),
+      logger: this.log,
+    });
     this.legacyUserPath = join(cfg.dataDir, "fieldd", "plugins", "settings-user.json");
     this.undoMgr = new UndoManager(this.doc, {
       // law 2 — install-set/grant mutations and the one-time migrations are
@@ -188,12 +198,12 @@ export class SettingsDocService extends EventEmitter {
   }
 
   private async init(): Promise<void> {
-    try {
-      const bytes = await readFile(this.docPath);
-      this.doc.import(new Uint8Array(bytes));
-    } catch {
-      // first boot — an empty doc is the honest starting state
-    }
+    // "none" is first boot — an empty doc is the honest starting state. DS-5c: a
+    // torn file is no longer one (the last good copy loads; the torn file is
+    // kept aside as evidence) — every revocation stamp DS-5b counts survives.
+    await this.file.load((bytes) => {
+      this.doc.import(bytes);
+    });
     await this.migrateLegacyUserFile();
     await this.migrateLegacyInstallSet();
   }
@@ -545,21 +555,22 @@ export class SettingsDocService extends EventEmitter {
     return { applied: true };
   }
 
-  // --- persistence (full-history snapshot; EAGER tmp+rename — settings write
+  // --- persistence (full-history snapshot through the shared system-document
   // at user-action rate, so durability beats a debounce: a write that
   // returned is a write that survives a crash) -------------------------------
 
   private async persistNow(): Promise<void> {
     if (this.disposed) return;
-    const bytes = this.doc.export({ mode: "snapshot" });
-    await mkdir(dirname(this.docPath), { recursive: true });
-    const tmp = `${this.docPath}.tmp`;
-    await writeFile(tmp, Buffer.from(bytes));
-    await rename(tmp, this.docPath);
+    // DS-5c — through the file's ONE writer queue: a local commit's persist and
+    // the host's merge persist (`hostOwner().persist`) never interleave, and the
+    // snapshot is taken when the write runs.
+    await this.file.persist();
   }
 
   async dispose(): Promise<void> {
     this.disposed = true;
     this.removeAllListeners();
+    // DS-5c — a write already asked for lands before the daemon goes.
+    await this.file.drained();
   }
 }
