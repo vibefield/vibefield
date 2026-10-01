@@ -631,9 +631,11 @@ public final class RoutedTerminalClient {
     if let holder = refusal.currentHolder,
       !holder.isClaimant(clientId: ticket.clientId, viewId: options.viewId)
     {
-      sendTransfer(sessionId: ask.sessionId, from: holder, grid: grid, revision: revision, retried: true)
+      sendTransfer(
+        sessionId: ask.sessionId, from: holder, grid: grid, revision: revision, retried: true)
     } else {
-      sendClaim(sessionId: ask.sessionId, grid: grid, revision: revision, intent: .take, retried: true)
+      sendClaim(
+        sessionId: ask.sessionId, grid: grid, revision: revision, intent: .take, retried: true)
     }
   }
 
@@ -687,8 +689,8 @@ public final class RoutedTerminalClient {
     // leg budget WAITS for a slot: a second attachment's legs open only once
     // the first's are torn down.
     legGrantTask = Task { [weak self] in
-      guard let grant = try? await ledger.acquire(.terminalLegs, count: RoutedChannel.allCases.count)
-      else { return }
+      let legs = RoutedChannel.allCases.count
+      guard let grant = try? await ledger.acquire(.terminalLegs, count: legs) else { return }
       guard let self, token == self.generation, !self.closed else {
         ledger.release(grant)
         return

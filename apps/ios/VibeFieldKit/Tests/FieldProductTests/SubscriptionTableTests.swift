@@ -332,7 +332,9 @@ private func describe(delta payload: JSONValue) -> String {
     // A rows table's epoch IS its identity: an absent one continues nothing.
     #expect(held.after(delta: fieldDelta(since: 5, revision: 6, epoch: nil), kind: .rows) == nil)
     #expect(held.after(delta: .object(["revision": .int(6)]), kind: .snapshotDelta) == nil)
-    #expect(SubscriptionCursor.of(snapshot: fieldSnapshot(revision: 9)) == SubscriptionCursor(epoch: fieldEpoch, revision: 9))
+    #expect(
+      SubscriptionCursor.of(snapshot: fieldSnapshot(revision: 9))
+        == SubscriptionCursor(epoch: fieldEpoch, revision: 9))
     #expect(SubscriptionCursor.of(snapshot: .object(["rows": .array([])])) == nil)
   }
 }

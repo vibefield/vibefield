@@ -134,9 +134,10 @@ private func seatTakenByTheDesk(
     let golden = try Vector.json("tp-transfer-geometry.valid")
     var sent = transfer.objectValue ?? [:]
     sent["type"] = nil
-    #expect(Set(sent.keys) == Set(golden.objectValue?.keys ?? [:].keys))
-    #expect(Set(sent["from"]?.objectValue?.keys ?? [:].keys) == Set(golden["from"]?.objectValue?.keys ?? [:].keys))
-    #expect(Set(sent["to"]?.objectValue?.keys ?? [:].keys) == Set(golden["to"]?.objectValue?.keys ?? [:].keys))
+    func keys(_ value: JSONValue?) -> Set<String> { Set(value?.objectValue?.keys ?? [:].keys) }
+    #expect(Set(sent.keys) == keys(golden))
+    #expect(keys(sent["from"]) == keys(golden["from"]))
+    #expect(keys(sent["to"]) == keys(golden["to"]))
 
     try await control.deliver(
       .geometryCommitted,
