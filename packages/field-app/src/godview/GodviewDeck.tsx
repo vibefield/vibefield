@@ -23,6 +23,7 @@ import {
 import { AgentInterruptResult, AgentListResult, AgentSpawnResult } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
+  type ComponentProps,
   type CSSProperties,
   type ReactElement,
   useCallback,
@@ -83,6 +84,7 @@ import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
+import { deckFocusRuntime } from "./terminal-focus-take";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -127,6 +129,15 @@ import "@vibecook/ghosttea-react/workspace.css";
  * R6 reserves for contracts — GT-0 caught a storage key squatting there, and
  * R6 catches this comment too if it spells the prefix out. */
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
+
+/** DS-4 — the pane the person focused last takes the geometry seat (DS-D5's
+ * note; `terminal-focus-take.ts` says how). ghosttea's workspace prop
+ * `takeGeometryOnFocus` (gt-take `a24a28d`) lets each SURFACE take on its own
+ * focus; the pinned workspace predates it and ignores it, so it rides through a
+ * cast until the pin moves — the one-line cleanup then. */
+const TAKE_GEOMETRY_ON_FOCUS = { takeGeometryOnFocus: true } as unknown as Partial<
+  ComponentProps<typeof GhostteaWorkspace>
+>;
 
 /** The terminal's cell grid, in ghosttea's own fixed metrics: the pitch the
  * launch draws its dots on (QL-2, `pane-launcher.css` "the launch"), so the
@@ -307,6 +318,13 @@ export function GodviewDeck({
   const error: TerminalFault | null = pool.fault;
   // A runtime replacement loses its input history; keep earlier shells conservatively.
   const unusedPanes = useMemo(() => new UnusedPaneSessions<SessionSummary>(), [runtime]);
+  /** DS-4 — what the workspace's surfaces hold: the runtime itself once it can
+   * take a seat, until then a facade that re-claims a controller's seat on
+   * focus. One per runtime, so the surfaces' effects see a stable object. */
+  const deckRuntime = useMemo(
+    () => (runtime === null ? null : deckFocusRuntime(runtime)),
+    [runtime],
+  );
   /** Published by the sidebar probe. Read only to REPORT what the deck holds
    * (the marker below); the deck does not drive panes through it any more —
    * that was the adopt sweep GT-2e deleted. */
@@ -1886,7 +1904,7 @@ export function GodviewDeck({
   }
 
   return (
-    <GhostteaProvider key={generation} runtime={runtime}>
+    <GhostteaProvider key={generation} runtime={deckRuntime ?? runtime}>
       {/* The zoom host wraps the workspace and the chrome that acts on it: it
           carries the gesture's phase attributes, and it clips the morph, which
           by design overflows the deck. (The zoomed pane itself resolves against
@@ -1962,6 +1980,7 @@ export function GodviewDeck({
           showTitlebar={false}
           active={active}
           paneVisibility={paneVisibility}
+          {...TAKE_GEOMETRY_ON_FOCUS}
         />
         {/* The frames follow the panes ghosttea laid out (GT-6). Mounted
             inside the zoom host so a zoomed pane keeps its frame through the
