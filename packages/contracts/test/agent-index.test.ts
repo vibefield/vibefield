@@ -45,8 +45,11 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
     // two consent ACTS stay local — consent is the person's act at this device.
     // Scopes are unchanged by the reclassification.
     expect(rows("index.")).toEqual([
-      { method: "index.discoveries", scope: "index.read", idempotent: true, locality: "federate" },
-      { method: "index.status", scope: "index.read", idempotent: true, locality: "federate" },
+      // landing 2026-10-01 — DS-2 had made every index read `federate`; DS-6's
+      // doors are the index rows that leave the device, so the census, the
+      // status and the launcher's list (`index.recent`) stay `local`
+      { method: "index.discoveries", scope: "index.read", idempotent: true, locality: "local" },
+      { method: "index.status", scope: "index.read", idempotent: true, locality: "local" },
       // AR-5e — the find sheet's doors, reads like the two above
       // AR-5b: the sheet's CONTENT reads ride their own scope — a plugin holding
       // index.read for the roll call must not gain transcript search on an upgrade
@@ -72,7 +75,7 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         locality: "stream",
       },
       // QL — the launcher's list is the same content, so the same consent
-      { method: "index.recent", scope: "index.search", idempotent: true, locality: "federate" },
+      { method: "index.recent", scope: "index.search", idempotent: true, locality: "local" },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
     ]);

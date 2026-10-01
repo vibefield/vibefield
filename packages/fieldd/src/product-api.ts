@@ -120,7 +120,10 @@ export type DeviceForwarder = (
   method: string,
   params: unknown,
   ctx: CallerContext,
-  envelope: OutboundEnvelope,
+  /** Optional at the type since the landing of 2026-10-01: a wrapper (DS-4's
+   * `forwardVia`) or a test may invoke a forwarder with no envelope, and
+   * `withEnvelope` already takes `undefined` as "nothing to add". */
+  envelope?: OutboundEnvelope,
 ) => Promise<unknown>;
 
 /** C6-5/D35 — the subscription half of the `device?` convention: installs a
