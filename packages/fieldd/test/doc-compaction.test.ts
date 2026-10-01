@@ -693,3 +693,64 @@ describe("DS-5d — the stored base of a compacted canvas stays compacted", () =
     docs.dispose();
   });
 });
+
+describe("DS-5d — an epoch is bumped only for real progress", () => {
+  it("a watermark with two concurrent heads trims to their common ancestor once, and a second pass bumps nothing", async () => {
+    // Measured: Loro roots a shallow snapshot at the common ancestor of the
+    // requested frontier's heads. The first compaction trims below that
+    // ancestor; asked again at the same watermark, the export would land on
+    // the same root — and an epoch bump that trims nothing still sends every
+    // holder through S4.
+    const docs = service(undefined, { compaction: false });
+    const { docId } = await docs.create("board");
+    const line = new Renderer(1n);
+    line.edit("a", "1");
+    await put(docs, docId, "checkpoint", line.checkpoint());
+    for (const [key, value] of [
+      ["b", "2"],
+      ["c", "3"],
+    ] as const) {
+      await put(docs, docId, "update", line.edit(key, value));
+    }
+    // Two writers on top of the same op: two concurrent heads.
+    const left = new Renderer(2n);
+    left.apply(line.doc.export({ mode: "snapshot" }));
+    const right = new Renderer(3n);
+    right.apply(line.doc.export({ mode: "snapshot" }));
+    const leftEdit = (() => {
+      const before = left.doc.oplogVersion();
+      left.doc.getMap("board").set("left", "L");
+      left.doc.commit();
+      return left.doc.export({ mode: "update", from: before });
+    })();
+    const rightEdit = (() => {
+      const before = right.doc.oplogVersion();
+      right.doc.getMap("board").set("right", "R");
+      right.doc.commit();
+      return right.doc.export({ mode: "update", from: before });
+    })();
+    for (const payload of [leftEdit, rightEdit]) {
+      expect(
+        (await docs.applyRemoteRecord(docId, { kind: DOC_SYNC_RECORD.UPDATE, meta: META, payload }))
+          .applied,
+      ).toBe(true);
+    }
+    const head = decodeVersion((await docs.hostVersion(docId))?.version ?? new Uint8Array());
+    if (head === null) throw new Error("no head");
+    docs.setAcknowledgements(() => [{ device: "studio", ack: head, seenAt: Date.now() }]);
+    expect(await docs.compact(docId)).toMatchObject({ compacted: true, baseEpoch: 1 });
+    // The root fell back to the common ancestor — below the watermark.
+    expect(rootOf((await docs.readDoc(docId))?.bytes as Uint8Array)).not.toEqual(json(head));
+    // Same watermark, nothing new to trim: no second epoch.
+    expect(await docs.compact(docId)).toEqual({ compacted: false, reason: "nothing-to-trim" });
+    expect(docs.list()[0]?.baseEpoch).toBe(1);
+    expect((await replay(docs, docId)).board()).toEqual({
+      a: "1",
+      b: "2",
+      c: "3",
+      left: "L",
+      right: "R",
+    });
+    docs.dispose();
+  });
+});

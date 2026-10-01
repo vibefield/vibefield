@@ -409,10 +409,14 @@ export class DocumentService {
    * holder); retried on the next append and when the window closes. */
   private readonly wantsCompaction = new Set<string>();
   private readonly compacting = new Set<string>();
-  /** DS-5d — the watermark a trial last found unloadable, per canvas: the
-   * host's oplog only grows, so the same watermark fails the same way until
-   * the acknowledgements move it — no second O(doc) export for nothing. */
-  private readonly failedTrims = new Map<string, string>();
+  /** DS-5d — the watermark whose trial last came to nothing, per canvas (a
+   * base no doc could load, or one no higher than the current root): the
+   * host's oplog only grows, so the same watermark comes to the same thing
+   * until the acknowledgements move it — no second O(doc) export for it. */
+  private readonly failedTrims = new Map<
+    string,
+    { key: string; reason: "unloadable" | "nothing-to-trim" }
+  >();
   private readonly epochListeners = new Set<(docId: string, why: EpochMove) => void>();
   /** DS-5d — per canvas with a window open, what this desktop can PROVE the
    * window holds: what its read served, raised by every save it makes (the
@@ -2023,10 +2027,13 @@ export class DocumentService {
       return { compacted: false, reason: "nothing-to-trim" };
     }
     const key = versionToBase64(mark.version);
-    if (this.failedTrims.get(docId) === key) return { compacted: false, reason: "unloadable" };
+    const failed = this.failedTrims.get(docId);
+    if (failed?.key === key) return { compacted: false, reason: failed.reason };
     const trimmed = hosted.compactTo(mark.version);
     if (!trimmed.ok) {
-      if (trimmed.reason === "unloadable") this.failedTrims.set(docId, key);
+      if (trimmed.reason === "unloadable") {
+        this.failedTrims.set(docId, { key, reason: "unloadable" });
+      }
       this.logger
         .child({ docId })
         .info("fieldd.docs.compaction_refused", "A compacted base failed its trial", {
@@ -2034,6 +2041,15 @@ export class DocumentService {
           ...(trimmed.detail !== undefined ? { detail: trimmed.detail } : {}),
         });
       return { compacted: false, reason: trimmed.reason };
+    }
+    // Loro roots a shallow snapshot at the common ancestor of the watermark's
+    // heads (measured), so the root can sit BELOW the watermark — and a second
+    // pass at the same watermark lands on the same root. A base no higher than
+    // the current one trims nothing: no epoch for it (an epoch sends every
+    // holder through S4).
+    if (covers(hosted.rootVersion(), new HostedDoc(docId, trimmed.doc).rootVersion())) {
+      this.failedTrims.set(docId, { key, reason: "nothing-to-trim" });
+      return { compacted: false, reason: "nothing-to-trim" };
     }
     this.failedTrims.delete(docId);
 
