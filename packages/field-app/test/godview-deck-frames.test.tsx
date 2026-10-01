@@ -411,7 +411,10 @@ vi.mock("@vibefield/fieldd-client/react", () => ({
  * transport is not this fixture's subject. */
 function foldDoor(): MonitorDoor {
   return {
-    listHosts: vi.fn(async () => []),
+    observeMesh: vi.fn(({ onOpen }) => {
+      onOpen({ devices: [] });
+      return () => undefined;
+    }),
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
     observe: ({ onFrame }) => {
       foldFrame = onFrame;

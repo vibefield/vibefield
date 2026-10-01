@@ -60,7 +60,10 @@ function foldDoor(initial: readonly AgentSessionSummary[] = []): FoldDoor {
     frame: (rows) => onFrame?.(rows),
     fail: (reason) => onError?.(reason),
     disposed: () => disposals,
-    listHosts: vi.fn(async () => []),
+    observeMesh: vi.fn(({ onOpen }) => {
+      onOpen({ devices: [] });
+      return () => undefined;
+    }),
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),

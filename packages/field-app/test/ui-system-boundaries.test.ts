@@ -184,7 +184,8 @@ describe("UI system ownership boundaries", () => {
     const paneFrame = source("design-system/PaneFramePreview.tsx");
     const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}`;
+    const deviceFilter = source("design-system/DeviceFilterPreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -226,6 +227,9 @@ describe("UI system ownership boundaries", () => {
       "PaneFrameChrome",
       "PaneLauncherPreview",
       "PaneLauncherChrome",
+      // DS-3 — the device filter's shipping chip, on fixtures, never a copy
+      "DeviceFilterPreview",
+      "DeviceFilterChip",
     ]) {
       expect(catalog).toContain(productionView);
     }

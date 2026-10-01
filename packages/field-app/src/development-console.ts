@@ -181,15 +181,19 @@ export interface GodviewMonitorFacts {
    */
   localState: string;
   localReason?: string;
+  /** Other desktops' runs on the stage (DS-3: off the mesh board). */
   remoteSessions: number;
-  /** Online peers behind those remote rows. */
+  /** The other desktops behind those rows. */
   remoteHosts: number;
   /**
    * The remote field's honest state, which is the fact a harness needs BEFORE
    * it can judge an empty mesh: `no-door` (no deck, so nobody was asked),
-   * `serving` (the floor answered — zero rows then means an empty mesh), and
-   * `unavailable` (the ask failed, and `remoteReason` carries the floor's own
-   * words). Without it, "no peers" and "never asked" are the same empty line.
+   * `serving` (the board answered — zero rows then means no other desktop is
+   * running anything, or this desktop is alone), and `unavailable` (the board
+   * could not be read, and `remoteReason` carries fieldd's own words). Without
+   * it, "no peers" and "never asked" are the same empty line. *DS-3
+   * (2026-09-30):* the words are the mesh board's now; they were ghosttea's
+   * host poll's, which under the routed runtime only ever said `unavailable`.
    */
   remoteState: string;
   remoteReason?: string;

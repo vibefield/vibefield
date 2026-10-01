@@ -26,11 +26,18 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AccountUsageBatch } from "@vibecook/puppeteer-core";
-import type { AgentProfileSet } from "@vibefield/contracts";
+import type {
+  AgentMeshFrame,
+  AgentMeshOpen,
+  AgentProfileSet,
+  DeviceInfo,
+} from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   type DoorClient,
+  devicesPortOver,
   historyPortOver,
+  meshBoardOver,
   profileSetsPortOver,
   toAccountUsageBatch,
   usagePortOver,
@@ -542,10 +549,10 @@ function subscribingClient(): {
   client: DoorClient;
   resolve(snapshot: unknown): void;
   reject(reason: Error): void;
-  frame(payload: unknown): void;
+  frame(payload: unknown, kind?: "snapshot" | "delta"): void;
   unsubscribes: number;
 } {
-  let onFrame: ((payload: unknown) => void) | undefined;
+  let onFrame: ((payload: unknown, kind?: "snapshot" | "delta") => void) | undefined;
   let settle: ((value: { snapshot: unknown; unsubscribe: () => void }) => void) | undefined;
   let fail: ((reason: Error) => void) | undefined;
   const facts = {
@@ -555,7 +562,7 @@ function subscribingClient(): {
       subscribe: (
         _method: string,
         _params: Record<string, unknown>,
-        handler: (payload: unknown) => void,
+        handler: (payload: unknown, kind?: "snapshot" | "delta") => void,
       ) => {
         onFrame = handler;
         return new Promise<{ snapshot: unknown; unsubscribe: () => void }>((done, no) => {
@@ -573,7 +580,7 @@ function subscribingClient(): {
       });
     },
     reject: (reason: Error): void => fail?.(reason),
-    frame: (payload: unknown): void => onFrame?.(payload),
+    frame: (payload: unknown, kind?: "snapshot" | "delta"): void => onFrame?.(payload, kind),
   };
   return facts;
 }
@@ -693,5 +700,101 @@ describe("the profiles port over fieldd's profile-sets feed (AR-S5)", () => {
     await settle();
     expect(seen).toEqual([]);
     expect(() => dispose()).not.toThrow();
+  });
+});
+
+describe("DS-3 — the mesh board over fieldd's own door", () => {
+  const OPEN = fixture("agent-mesh-open.valid.json");
+  const FRAMES = fixture("agent-mesh-frames.valid.json") as unknown[];
+
+  function listen() {
+    const opens: AgentMeshOpen[] = [];
+    const frames: AgentMeshFrame[] = [];
+    const errors: string[] = [];
+    return {
+      opens,
+      frames,
+      errors,
+      listener: {
+        onOpen: (open: AgentMeshOpen) => opens.push(open),
+        onFrame: (frame: AgentMeshFrame) => frames.push(frame),
+        onError: (reason: string) => errors.push(reason),
+      },
+    };
+  }
+
+  it("asks for the desk board at the mesh scope, and reads the open, then every frame", async () => {
+    const door = subscribingClient();
+    const subscribe = vi.spyOn(door.client, "subscribe");
+    const seen = listen();
+    const dispose = meshBoardOver(door.client)(seen.listener);
+    expect(subscribe.mock.calls[0]?.slice(0, 2)).toEqual([
+      "agent.subscribe",
+      { projection: "desk", scope: "mesh" },
+    ]);
+    door.resolve(OPEN);
+    await settle();
+    expect(seen.opens.map((open) => open.devices.map((entry) => entry.state))).toEqual([
+      ["live", "live", "asleep", "stale"],
+    ]);
+    for (const frame of FRAMES) door.frame(frame, "delta");
+    expect(seen.frames).toHaveLength(FRAMES.length);
+    // the client's replay after a reconnect is a WHOLE board, and replaces
+    door.frame(OPEN, "snapshot");
+    expect(seen.opens).toHaveLength(2);
+    expect(seen.errors).toEqual([]);
+    dispose();
+    expect(door.unsubscribes).toBe(1);
+  });
+
+  it("an unreadable frame is a reason, never a blank; a refused board says why", async () => {
+    const door = subscribingClient();
+    const seen = listen();
+    meshBoardOver(door.client)(seen.listener);
+    door.resolve(OPEN);
+    await settle();
+    door.frame({ device: "", delta: {} }, "delta");
+    expect(seen.errors[0]).toMatch(/^the mesh board sent an unreadable frame/);
+
+    const refused = subscribingClient();
+    const told = listen();
+    meshBoardOver(refused.client)(told.listener);
+    refused.reject(new Error("FORBIDDEN_SCOPE: requires agent.observe"));
+    await settle();
+    expect(told.errors).toEqual(["FORBIDDEN_SCOPE: requires agent.observe"]);
+  });
+
+  it("unsubscribes on arrival when the stage closed first", async () => {
+    const late = subscribingClient();
+    const seen = listen();
+    meshBoardOver(late.client)(seen.listener)();
+    late.resolve(OPEN);
+    await settle();
+    expect(late.unsubscribes).toBe(1);
+    expect(seen.opens).toEqual([]);
+  });
+});
+
+describe("DS-3 — the roster port over device.subscribe", () => {
+  it("delivers whole lists and drops one it cannot read", async () => {
+    const door = subscribingClient();
+    const seen: (readonly DeviceInfo[])[] = [];
+    const dispose = devicesPortOver(door.client).subscribe((devices) => seen.push(devices));
+    door.resolve([
+      {
+        deviceId: "dev-a",
+        name: "pro",
+        platform: "darwin",
+        self: true,
+        online: true,
+        lastSeenAt: 1,
+      },
+    ]);
+    await settle();
+    expect(seen.at(-1)?.map((device) => device.name)).toEqual(["pro"]);
+    door.frame({ devices: "not a list" });
+    expect(seen).toHaveLength(1);
+    dispose();
+    expect(door.unsubscribes).toBe(1);
   });
 });

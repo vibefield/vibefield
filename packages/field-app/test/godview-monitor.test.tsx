@@ -161,7 +161,10 @@ interface FakeDoor extends MonitorDoor {
 function fakeDoor(rows: readonly AgentSessionSummary[] = ROWS): FakeDoor {
   let publish: ((rows: readonly AgentSessionSummary[]) => void) | null = null;
   return {
-    listHosts: vi.fn(async () => []),
+    observeMesh: vi.fn(({ onOpen }) => {
+      onOpen({ devices: [] });
+      return () => undefined;
+    }),
     attach: vi.fn(async () => ({ state: "attached" as const, sessionId: "r", readWrite: true })),
     observe: vi.fn(({ onFrame }) => {
       publish = onFrame;

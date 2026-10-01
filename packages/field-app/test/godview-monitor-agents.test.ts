@@ -309,7 +309,7 @@ describe("monitor agent assembly", () => {
     // The mirror rides along verbatim for a view that wants the rest, at the
     // generation the contract pins (`AGENT_MONITOR_SCHEMA_VERSION`, 3 at AR-5).
     expect(agent?.agent?.monitor?.schemaVersion).toBe(3);
-    expect(agent?.agent?.summary.monitor?.schemaVersion).toBe(3);
+    expect(agent?.agent?.summary?.monitor?.schemaVersion).toBe(3);
     // The provider-native id is the find sheet's join key, whatever its basis.
     expect(agent?.agent?.nativeSessionId).toBe("run-1-native");
   });
@@ -354,14 +354,14 @@ describe("monitor agent assembly", () => {
       PURE,
     );
     expect(pending).toMatchObject({ status: "idle", detail: "unobserved · resumes when idle" });
-    expect(pending?.agent?.summary.continuation?.pending).toBe("resume-when-idle");
+    expect(pending?.agent?.summary?.continuation?.pending).toBe("resume-when-idle");
     // re-attached across a restart: the same row as before the restart
     const reattached = monitorAgentFromManaged(
       { summary: managedSummary({ reattached: true, lastAssistantText: "done" }) },
       PURE,
     );
     expect(reattached).toMatchObject({ status: "idle", detail: "done" });
-    expect(reattached?.agent?.summary.continuation?.reattached).toBe(true);
+    expect(reattached?.agent?.summary?.continuation?.reattached).toBe(true);
     // resumed into a new PTY: the row's id is still the RUN, the new floor
     // session is the join, and the old one rides along for the pane hand-over
     const resumed = monitorAgentFromManaged(
@@ -376,8 +376,8 @@ describe("monitor agent assembly", () => {
     );
     expect(resumed?.id).toBe("run-2");
     expect(resumed?.agent?.runtimeRunId).toBe("run-2");
-    expect(resumed?.agent?.summary.terminal?.runtimeSessionId).toBe("pty-2");
-    expect(resumed?.agent?.summary.terminal?.replaced).toBe("pty-1");
+    expect(resumed?.agent?.summary?.terminal?.runtimeSessionId).toBe("pty-2");
+    expect(resumed?.agent?.summary?.terminal?.replaced).toBe("pty-1");
   });
 
   it("AR-4: a pending row whose mirror says the run is gone is not a row at all", () => {

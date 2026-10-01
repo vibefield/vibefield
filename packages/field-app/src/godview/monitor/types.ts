@@ -3,6 +3,7 @@ import type {
   MonitorAgent as ViewsMonitorAgent,
   MonitorAgentFacet as ViewsMonitorAgentFacet,
 } from "@vibecook/puppeteer-views";
+import type { AgentFieldRow } from "@vibefield/contracts";
 import type { AgentSessionSummary, AgentTier } from "./facet-types";
 
 // THE ROW, since AR-5: the views package's `MonitorAgent` — the one shape
@@ -40,10 +41,31 @@ export interface MonitorAgentFacet extends ViewsMonitorAgentFacet {
   /** AR-S5 — the Agent Profile the run was born under, when fieldd knows it */
   profileSet?: string;
   /** Core's projection, the mirror the fold carries verbatim; absent only
-   * before the first monitor state (a starting row). */
+   * before the first monitor state (a starting row) — and always on another
+   * desktop's run, whose mirror never crosses (DS-3: its desk row does). */
   monitor?: AgentMonitorState;
-  /** The fold's row, verbatim, for a reader that wants the rest. */
-  summary: AgentSessionSummary;
+  /** The fold's row, verbatim, for a reader that wants the rest. A run on THIS
+   * desktop carries it; one on another desktop carries `remoteRow` instead. */
+  summary?: AgentSessionSummary;
+  /** DS-3 — another desktop's run as its owner sent it on the mesh board: a
+   * field row (the contract the board validates), which on the desk board also
+   * carries the reply line, the blocker's question and the cost
+   * (`AgentDeskRow`'s extras, read tolerantly by `mesh-rows.ts`). */
+  remoteRow?: AgentFieldRow;
+}
+
+/** DS-3 — where a row LIVES: the device facet the views take beside `remote`
+ * (pu-device's `MonitorAgent.device`, consumed at the next pin move; the shape
+ * is the same so the swap is a type change, not a mapping). VibeField maps it
+ * from the roster (`devices.ts`); the views draw it as the OS's mark. */
+export interface MonitorDeviceFacet {
+  id: string;
+  /** the roster's name for it (a machine's own name) */
+  name: string;
+  /** its OS, from the roster's `platform`; `unknown` when the roster has none */
+  os: "macos" | "windows" | "linux" | "unknown";
+  /** this is the desktop the window is on */
+  here: boolean;
 }
 
 export interface MonitorAgent extends Omit<ViewsMonitorAgent, "agent"> {
@@ -54,4 +76,7 @@ export interface MonitorAgent extends Omit<ViewsMonitorAgent, "agent"> {
    * summary, and for a row read off `terminal.roster` it does not (no cwd, no
    * activity, no birth time). Views ignore this; the door's select reads it. */
   floorSessionId?: string;
+  /** DS-3 — the desktop this row lives on; every row carries one once the
+   * roster has answered (this desktop's rows say `here`). */
+  device?: MonitorDeviceFacet;
 }

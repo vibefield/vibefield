@@ -21,8 +21,9 @@ import {
 } from "./agent-status";
 import type { AgentSessionSummary } from "./facet-types";
 import { folderName } from "./folder-name";
-import { type RemoteSessionRow, remoteRowId } from "./remote-door";
-import type { MonitorAgent } from "./types";
+import { classifyRemoteStatus, type MonitorMeshRecord, remoteDetail } from "./mesh-rows";
+import { remoteRowId } from "./remote-door";
+import type { MonitorAgent, MonitorDeviceFacet } from "./types";
 
 /** A managed session as fieldd's fold reports it (AR-3), and the floor
  * summary of its PTY when the deck holds one (a pane is showing it). */
@@ -70,12 +71,7 @@ export interface MonitorFloorRecord {
   spawnHint?: { x: number; y: number };
 }
 
-/** A peer's session, and where it landed here if it has (GT-D17). */
-export interface MonitorRemoteRecord {
-  row: RemoteSessionRow;
-  /** The local replica's id, when this row is currently showing in a pane. */
-  localSessionId?: string;
-}
+export type { MonitorMeshRecord } from "./mesh-rows";
 
 /** The theme's tint for project colours and the ramp for rows with no project (record §02). */
 export interface MonitorColours {
@@ -91,9 +87,13 @@ export interface AssembleMonitorAgentsInput {
    * roster that could not be read means no rows from here and never fewer
    * pane rows, so a floor the deck cannot ask still shows what it can see. */
   floor?: readonly MonitorFloorRecord[];
-  /** The mesh's half of the field. Empty is the honest answer with no floor
-   * serving — there are no placeholder peers and no invented hosts. */
-  remotes?: readonly MonitorRemoteRecord[];
+  /** DS-3 — other desktops' runs, off the mesh board. Empty is the honest
+   * answer on a desktop alone — there are no placeholder peers. */
+  mesh?: readonly MonitorMeshRecord[];
+  /** DS-3 — this desktop, as the roster names it: every local row carries it
+   * as its `device`. Absent until the roster (or the board) has said which
+   * desktop this is; the rows then carry none rather than a guess. */
+  here?: MonitorDeviceFacet;
   /** SB-3 — which shells were born under which Agent Profile (session id →
    * set id): the pool's record, fieldd's words — its create answers and its
    * roster. A terminal row carries its shell's; a shell under none carries none. */
@@ -293,61 +293,88 @@ export function monitorAgentFromFloor(
 }
 
 /**
- * A peer's session as a monitor citizen (GT-D17).
+ * DS-3 — another desktop's run as a monitor citizen, off the mesh board.
  *
- * Everything here comes from what the peer reported, and the two fields it did
- * NOT report are absent rather than guessed: there is no `session` (no local
- * session exists until this row is attached) and no `cwd` (the peer's path is a
- * label, kept under `remote.cwdLabel` where nothing will try to spawn in it).
- * It belongs to no project this device has dealt a colour, so it wears the ramp.
+ * Everything here is what its OWNER said, and what the owner did not send is
+ * absent rather than guessed: no `session` (no local terminal exists until the
+ * row is attached), no `cwd` (only the folder's NAME crosses — EL7 B1 — kept
+ * under `remote.cwdLabel` where nothing will try to spawn in it), no mirror and
+ * no usage ledger (a mirror never crosses desktops; the desk row is the
+ * board's whole account of a run). It is an AGENT row — the owner's fold
+ * derived its status, so it can be blocked, and the counters count it — and
+ * it belongs to no project this desktop has dealt a colour, so it wears the
+ * ramp. A desktop that is not `live` greys its rows and keeps them (DS-L8).
  *
- * The status classifier is the unclaimed terminal's, deliberately: a peer sends
- * terminal activity, not agent state, so a remote row can be working or idle
- * and never `blocked` — that word means an agent is asking for something, and
- * no agent has spoken here.
+ * Undefined for a run its owner says is not alive.
  */
-export function monitorAgentFromRemote(
-  record: MonitorRemoteRecord,
+export function monitorAgentFromMesh(
+  record: MonitorMeshRecord,
   colours: MonitorColours,
-): MonitorAgent {
-  const { host, session } = record.row;
-  const id = remoteRowId(host.deviceId, session.sessionId);
+): MonitorAgent | undefined {
+  const { row, device, state } = record;
+  const status = classifyRemoteStatus(row);
+  if (status === undefined) return undefined;
+  const live = state === "live";
+  const folder = row.project?.name;
+  const createdAtMs = Date.parse(row.createdAt);
+  const branch = row.project?.branch ?? undefined;
+  const model = row.model?.displayName || row.model?.id;
   return {
-    id,
-    createdAtMs: session.createdAtMs,
+    id: remoteRowId(device.id, row.runtimeRunId),
+    createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : 0,
     tier: "remote",
-    status: classifyTerminalStatus(session.activity),
-    project: folderName(session.cwdLabel, session.title || "remote"),
-    // The host is in the detail as well as in the facet, because the detail is
-    // what the swarm puts in a tooltip and the list prints as its own column: a
-    // path with no machine attached to it is exactly the confusion GT-3's
-    // finding warned of.
-    detail: session.cwdLabel ? `${host.deviceName} · ${session.cwdLabel}` : host.deviceName,
+    status,
+    project: folder ?? providerLabel(row),
+    // The desktop's NAME leads the line, as the PJ design's second line does
+    // ("another desktop's name", §6.0): at the pinned views (a4b5290) an agent
+    // body and an agent's list row draw no host of their own, so this line is
+    // the only text that says where the run lives. pu-device's views draw the
+    // OS mark and the name on the body; at that pin move the prefix goes.
+    detail: `${device.name} · ${remoteDetail(row, status)}`,
     color: colours.neutral,
+    ...(live ? {} : { stale: true }),
     active: false,
     remote: {
-      deviceId: host.deviceId,
-      deviceName: host.deviceName,
-      remoteSessionId: session.sessionId,
-      attachable: session.attachable,
-      // Renamed on the way in, deliberately: what the peer advertises is one
-      // boolean for the whole HOST, and carrying it under a per-viewer name is
-      // how the views came to draw it as one.
-      hostWritable: session.readWrite,
-      cwdLabel: session.cwdLabel,
+      deviceId: device.id,
+      deviceName: device.name,
+      // the run's PTY on ITS floor when the owner named one, the run otherwise
+      remoteSessionId: row.terminal?.runtimeSessionId ?? row.runtimeRunId,
+      // DS-4 — honest `false` until the terminal path across desktops lands
+      // (forwarded tickets, the egress route, the take): nothing here can open
+      // another desktop's terminal yet, and nothing may say this host lets
+      // anyone type before a window could.
+      attachable: false,
+      hostWritable: false,
+      cwdLabel: folder ?? null,
       ...(record.localSessionId !== undefined ? { localSessionId: record.localSessionId } : {}),
+    },
+    device,
+    agent: {
+      provider: { id: row.kind, label: providerLabel(row) },
+      kind: row.kind,
+      tier: row.tier,
+      runtimeRunId: row.runtimeRunId,
+      ...(row.profileId !== undefined ? { profileId: row.profileId } : {}),
+      ...(model ? { model } : {}),
+      ...(branch ? { branch } : {}),
+      // no evidence clock crosses desktops: unknown while the desktop answers,
+      // stale once it does not
+      recency: live ? "unknown" : "stale",
+      remoteRow: row,
     },
   };
 }
 
 /**
  * The one projection every view consumes: managed agents first in launch order,
- * then the terminals no agent has claimed, then the mesh's own (GT-D17). Pure,
- * so the seam is testable without a renderer.
+ * then the terminals no agent has claimed, then other desktops' runs off the
+ * mesh board (DS-3). Pure, so the seam is testable without a renderer.
  *
  * The remotes come LAST and as their own segment because the order on this
- * stage is a claim about locality — a peer's session is a guest, and the list
- * view's own ordering rules run over the result anyway.
+ * stage is a claim about locality — another desktop's run is a guest, and the
+ * list view's own ordering rules run over the result anyway. Every row says
+ * which desktop it lives on (`device`): this one's when the roster has named
+ * it (`input.here`), the board's owner on a remote row.
  */
 export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readonly MonitorAgent[] {
   const agents = input.managed
@@ -368,7 +395,7 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
   // for a shell nobody opened, in the gap between the resume and the remount.
   const claimed = new Set<string>();
   for (const agent of agents) {
-    const terminal = agent.agent?.summary.terminal;
+    const terminal = agent.agent?.summary?.terminal;
     if (terminal?.runtimeSessionId !== undefined) claimed.add(terminal.runtimeSessionId);
     if (terminal?.replaced !== undefined) claimed.add(terminal.replaced);
   }
@@ -402,9 +429,13 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
   const floor = (input.floor ?? [])
     .filter((row) => !paned.has(row.sessionId) && !claimed.has(row.sessionId))
     .map((row) => monitorAgentFromFloor({ ...row, ...bornUnder(row.sessionId) }, input.colours));
-  const remotes = (input.remotes ?? []).map((record) =>
-    monitorAgentFromRemote(record, input.colours),
-  );
+  const remotes = (input.mesh ?? [])
+    .map((record) => monitorAgentFromMesh(record, input.colours))
+    .filter((agent): agent is MonitorAgent => agent !== undefined);
+  // this desktop's rows say so (DS-3); a remote row already carries its owner
+  const here = input.here;
+  const placed = (agent: MonitorAgent): MonitorAgent =>
+    here === undefined || agent.remote !== undefined ? agent : { ...agent, device: here };
 
   const visuals = new Set<string>();
   return [...agents, ...terminals, ...floor, ...remotes]
@@ -415,12 +446,12 @@ export function assembleMonitorAgents(input: AssembleMonitorAgentsInput): readon
       const localId =
         agent.session?.id ??
         agent.remote?.localSessionId ??
-        agent.agent?.summary.terminal?.runtimeSessionId ??
+        agent.agent?.summary?.terminal?.runtimeSessionId ??
         agent.floorSessionId;
       const attachment = localId === undefined ? undefined : input.attachments?.get(localId);
       const mounted = localId !== undefined && input.activeSessionId === localId;
       return {
-        ...agent,
+        ...placed(agent),
         visualId:
           (localId === undefined ? undefined : input.visualIds?.get(localId)) ??
           input.previousVisualIds?.get(agent.id) ??
@@ -448,7 +479,14 @@ export function nextMonitorAgentForStatus(
   status: AgentVisualStatus,
   currentId: string | undefined,
 ): MonitorAgent | undefined {
-  const matching = agents.filter((agent) => agent.agent && agent.status === status);
+  // DS-3: a ring acts on the ACTIVE pane, so it cycles the runs a pane here can
+  // take — another desktop's run joins the rings when DS-4 makes it attachable
+  const matching = agents.filter(
+    (agent) =>
+      agent.agent &&
+      agent.status === status &&
+      (agent.remote === undefined || agent.remote.attachable),
+  );
   if (matching.length === 0) return undefined;
   const currentIndex =
     currentId === undefined ? -1 : matching.findIndex((agent) => agent.id === currentId);

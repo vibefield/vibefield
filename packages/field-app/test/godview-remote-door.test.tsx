@@ -1,38 +1,40 @@
 // @vitest-environment happy-dom
 /**
- * THE DOOR, MOUNTED (GT-4, GT-D17; widened at AR-3).
+ * THE MESH HALF, MOUNTED (GT-D17's door; DS-3's board since 2026-09-30).
  *
  * The stage fixture beside this one (`godview-monitor.test.tsx`) proves the
  * local half: the fold's rows appear, select mounts, create spawns. This one
- * holds the REMOTE half beside it — a fake door standing in for the deck's
- * runtime and workspace, because that pair needs Electron and this claim does
- * not: what is under test is the ROUTING, which is ours.
+ * holds the OTHER desktops' half beside it — the mesh board, read through a
+ * fake door standing in for the deck's fieldd client, because that client
+ * needs a daemon and this claim does not: what is under test is the
+ * projection, the routing and the device filter, which are ours.
  *
  * What it holds:
- *   1. a peer's sessions become rows, beside the local ones and attributed
- *   2. the two claims stay in their own chips
- *   3. clicking a remote row asks the door to attach — with the right session
- *   4. clicking a local row asks the door to MOUNT, never to attach (the
- *      split-routing test)
- *   5. every outcome the door can answer with is said out loud, honestly
- *   6. no door ⇒ no rows at all; a refusing mesh ⇒ local rows still, the
- *      reason on screen
- *   7. PF6: the poll dies with the stage
+ *   1. another desktop's agents become rows, beside the local ones, attributed
+ *   2. the claim chip reads the desktop's NAME (DS §11's witness)
+ *   3. a frame moves a row; a gap re-subscribes; an asleep desktop's rows stay
+ *   4. selecting another desktop's run says what this desktop cannot do yet
+ *      (DS-4) and asks the door for nothing; a local row still mounts
+ *   5. the device filter: a dropdown that narrows the rows handed to the view
+ *   6. no door ⇒ no rows; a board that cannot be read ⇒ local rows still, the
+ *      reason on screen; PF6: the board is closed with the stage
  *
- * AR-5 moved the views upstream, and the rows are read off the LIST view here
- * for it: the swarm paints its bodies on WebGPU, which happy-dom does not have,
- * so the only DOM it leaves is its keyboard list. The list lays out the same
- * `MonitorAgent[]` in flow, which is what the row-level claims below need. The
- * routing itself is view-independent and always was — it is ours, not a view's.
+ * The rows are read off the LIST view (the swarm paints on WebGPU, which
+ * happy-dom does not have); the routing is view-independent.
  */
 
-import type { RemoteHostSummary, SharedSessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   type AccountUsagePort,
   type HistoryPort,
   monitorParameterDefaults,
   monitorViewFor,
 } from "@vibecook/puppeteer-views";
+import type {
+  AgentFieldRow,
+  AgentMeshFrame,
+  AgentMeshOpen,
+  DeviceInfo,
+} from "@vibefield/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -40,24 +42,17 @@ import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
-import type { MonitorDoor, RemoteAttachOutcome } from "../src/godview/monitor/remote-door";
+import type { MeshBoardListener, MonitorDoor } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { managedSummary } from "./managed-session-fixture";
 import { useInlineSwarmPhysics } from "./swarm-physics-inline";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-// GT-3c: happy-dom has no `Worker`, so the swarm is told to simulate in-thread.
-// Not a mock — the package's own inline driver, the same host and world the
-// worker runs.
 useInlineSwarmPhysics();
 
-/** The view every row-level claim below is read off; see the file header. */
 const ROW_VIEW = "list";
 
-/** §2.5 and record §02's tint, live on the document — see the stage fixture's
- * note: a project's colour is DEALT and drawn at these, and the palette's
- * fallback for the pair is black. */
 const TOKENS: Record<string, string> = {
   "--tint-l": "0.6",
   "--tint-c": "0.15",
@@ -67,53 +62,64 @@ const TOKENS: Record<string, string> = {
   "--vf-card-deep": "#000000",
 };
 
+const HERE = "dev-here";
+const STUDIO = "dev-studio";
+const AT = "2026-09-30T21:00:00.000Z";
+
 /** The two managed rows the fold puts on the stage in every row below. */
 const LOCAL_ROWS: readonly AgentSessionSummary[] = [
   managedSummary({ runtimeRunId: "run-a", kind: "claude", label: "Claude", status: "working" }),
   managedSummary({ runtimeRunId: "run-b", kind: "codex", label: "Codex", status: "idle" }),
 ];
 
-let root: Root | null = null;
-let container: HTMLElement | null = null;
-let markers: GodviewMonitorFacts[] = [];
-let openedIntervals: number[] = [];
-let clearedIntervals: number[] = [];
-
-function shared(
-  sessionId: string,
-  overrides: Partial<SharedSessionSummary> = {},
-): SharedSessionSummary {
+function deskRow(
+  runtimeRunId: string,
+  overrides: Partial<AgentFieldRow> & Record<string, unknown> = {},
+): AgentFieldRow {
   return {
-    sessionId,
-    title: "zsh",
-    cwdLabel: "/Users/peer/src/truffle",
-    running: true,
-    attachable: true,
-    readWrite: true,
-    createdAtMs: 10,
-    activity: { kind: "shell-idle" },
+    runtimeRunId,
+    revision: 1,
+    kind: "agent-a",
+    label: "Agent A",
+    tier: "managed",
+    device: STUDIO,
+    status: "working",
+    statusSince: AT,
+    stateChangedAt: AT,
+    createdAt: AT,
+    alive: true,
+    blockers: [],
+    project: { name: "rosetta" },
     ...overrides,
-  } as SharedSessionSummary;
+  } as AgentFieldRow;
 }
 
-function host(deviceId: string, sessions: SharedSessionSummary[]): RemoteHostSummary {
+const ROSTER: DeviceInfo[] = [
+  { deviceId: HERE, name: "pro", platform: "darwin", self: true, online: true, lastSeenAt: 0 },
+  { deviceId: STUDIO, name: "studio", platform: "linux", self: false, online: true, lastSeenAt: 0 },
+];
+
+function board(rows: AgentFieldRow[] = [deskRow("run-s1"), deskRow("run-s2")]): AgentMeshOpen {
   return {
-    deviceId,
-    deviceName: deviceId,
-    online: true,
-    protocolMajor: 1,
-    protocolMinor: 13,
-    hostInstanceId: `${deviceId}-instance`,
-    sessions,
-  } as RemoteHostSummary;
+    devices: [
+      {
+        device: HERE,
+        state: "live",
+        asOf: AT,
+        snapshot: { epoch: "here.1", revision: 1, rows: [] },
+      },
+      {
+        device: STUDIO,
+        state: "live",
+        asOf: AT,
+        snapshot: { epoch: "studio.1", revision: 5, rows },
+      },
+    ],
+  };
 }
 
 const CHECKED_AT = "2026-09-13T00:00:00.000Z";
 
-/** AR-5's two ports, as honest fakes: an index nobody can reach, and a usage
- * feed with nothing in it. Neither is this fixture's subject — the adapters
- * that build the real ones have their own (`godview-monitor-doors.test.ts`) —
- * but a door without them is not the door the stage is handed. */
 function unreachableHistory(): HistoryPort {
   const status = { reachable: false, detail: "no index in this fixture", checkedAt: CHECKED_AT };
   return {
@@ -132,19 +138,37 @@ function emptyUsage(): AccountUsagePort {
 
 interface FakeDoor extends MonitorDoor {
   attach: ReturnType<typeof vi.fn>;
-  listHosts: ReturnType<typeof vi.fn>;
   mountLocal: ReturnType<typeof vi.fn>;
   createTerminal: ReturnType<typeof vi.fn>;
+  /** push a per-device frame to the newest board listener */
+  push(frame: AgentMeshFrame): void;
+  /** how many boards were opened, and closed */
+  opened(): number;
+  closed(): number;
 }
 
-function fakeDoor(
-  hosts: RemoteHostSummary[],
-  outcome: RemoteAttachOutcome = { state: "attached", sessionId: "replica-1", readWrite: true },
-  rows: readonly AgentSessionSummary[] = LOCAL_ROWS,
-): FakeDoor {
+function fakeDoor(open: AgentMeshOpen | Error = board(), rows = LOCAL_ROWS): FakeDoor {
+  let listener: MeshBoardListener | null = null;
+  let opened = 0;
+  let closed = 0;
   return {
-    listHosts: vi.fn(async () => hosts),
-    attach: vi.fn(async () => outcome),
+    observeMesh: (next) => {
+      opened += 1;
+      listener = next;
+      if (open instanceof Error) next.onError(open.message);
+      else next.onOpen(open);
+      return () => {
+        closed += 1;
+        if (listener === next) listener = null;
+      };
+    },
+    devices: {
+      subscribe: (deliver) => {
+        deliver(ROSTER);
+        return () => undefined;
+      },
+    },
+    attach: vi.fn(async () => ({ state: "no-pane" as const })),
     observe: vi.fn(({ onFrame }) => {
       onFrame(rows);
       return () => undefined;
@@ -153,13 +177,18 @@ function fakeDoor(
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: unreachableHistory(),
     usage: emptyUsage(),
+    push: (frame) => listener?.onFrame(frame),
+    opened: () => opened,
+    closed: () => closed,
   };
 }
 
+let root: Root | null = null;
+let container: HTMLElement | null = null;
+let markers: GodviewMonitorFacts[] = [];
+
 beforeEach(() => {
   markers = [];
-  openedIntervals = [];
-  clearedIntervals = [];
   localStorage.clear();
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
@@ -169,17 +198,6 @@ beforeEach(() => {
       markers.push(JSON.parse(line.slice("GODVIEW_MONITOR ".length)) as GodviewMonitorFacts);
     }
   });
-  const realSetInterval = window.setInterval.bind(window);
-  const realClearInterval = window.clearInterval.bind(window);
-  vi.spyOn(window, "setInterval").mockImplementation(((...args: Parameters<typeof setInterval>) => {
-    const id = realSetInterval(...args) as unknown as number;
-    openedIntervals.push(id);
-    return id;
-  }) as typeof window.setInterval);
-  vi.spyOn(window, "clearInterval").mockImplementation(((id?: number) => {
-    if (id !== undefined) clearedIntervals.push(id);
-    realClearInterval(id);
-  }) as typeof window.clearInterval);
 });
 
 afterEach(() => {
@@ -191,14 +209,11 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/** Mount the stage and let the first ask of the mesh settle — the field asks
- * once immediately, so a single flush is the whole of the wait. */
 async function mountMonitor(
   door: MonitorDoor | null,
-  viewId: string = ROW_VIEW,
   panes: MonitorPaneFacts = { sessionIds: [] },
 ): Promise<HTMLElement> {
-  const view = monitorViewFor(viewId);
+  const view = monitorViewFor(ROW_VIEW);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -217,300 +232,223 @@ async function mountMonitor(
   return container;
 }
 
-/** Take the stage down between two mounts in ONE test. A tree left mounted
- * keeps its 2 s mesh poll alive for the rest of the file and fires its marker
- * into later tests' arrays — the gate's "with NO door" red under load, which
- * the repo had filed as early sampling (AR-5b: the tests lens found the mount). */
-function unmountMonitor(): void {
-  act(() => root?.unmount());
-  container?.remove();
-  root = null;
-  container = null;
-}
-
 const latest = (): GodviewMonitorFacts => markers[markers.length - 1] as GodviewMonitorFacts;
 const rows = (host: HTMLElement): HTMLButtonElement[] => [
   ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row"),
 ];
-/**
- * A peer's rows, picked out by the detail line, which a remote row builds from
- * its peer's name (`agents.ts` — "the host is in the detail as well as in the
- * facet"). The package's list draws the host chip again since `5389449`; the
- * two rows at the end of the first describe assert on THAT, and this picker
- * stays on the detail so it does not depend on what it is testing.
- */
-const remoteRows = (host: HTMLElement, deviceName: string): HTMLButtonElement[] =>
-  rows(host).filter((row) =>
-    row.querySelector(".vf-monitor-list-detail")?.textContent?.includes(deviceName),
-  );
-const localRows = (host: HTMLElement, deviceName = "mini"): HTMLButtonElement[] =>
-  rows(host).filter(
-    (row) => !row.querySelector(".vf-monitor-list-detail")?.textContent?.includes(deviceName),
-  );
+const remoteRows = (host: HTMLElement): HTMLButtonElement[] =>
+  rows(host).filter((row) => row.classList.contains("is-remote"));
+const localRows = (host: HTMLElement): HTMLButtonElement[] =>
+  rows(host).filter((row) => !row.classList.contains("is-remote"));
 const ackText = (host: HTMLElement): string =>
   host.querySelector(".vf-monitor-ack")?.textContent ?? "";
 
-describe("remote sessions as monitor citizens", () => {
-  it("puts a peer's sessions on the stage beside the local ones", async () => {
-    const view = await mountMonitor(fakeDoor([host("mini", [shared("s1"), shared("s2")])]));
-    expect(rows(view).length).toBe(LOCAL_ROWS.length + 2);
-    expect(latest().agents).toBe(LOCAL_ROWS.length + 2);
+describe("another desktop's agents as monitor citizens (DS-3)", () => {
+  it("puts them on the stage beside the local ones", async () => {
+    const view = await mountMonitor(fakeDoor());
+    expect(rows(view)).toHaveLength(LOCAL_ROWS.length + 2);
+    expect(remoteRows(view)).toHaveLength(2);
     expect(latest().localAgents).toBe(LOCAL_ROWS.length);
     expect(latest().remoteSessions).toBe(2);
     expect(latest().remoteHosts).toBe(1);
     expect(latest().remoteState).toBe("serving");
   });
 
-  it("keeps a peer's row attributed to the peer it came from", async () => {
-    // What survives AR-5 of "unmistakable": the row's own detail names the
-    // machine the session is on, and no local row does. It is the join the
-    // routing below depends on, and the only one the package's list draws.
-    const view = await mountMonitor(fakeDoor([host("mini", [shared("s1")])]));
-    const remote = remoteRows(view, "mini");
-    expect(remote).toHaveLength(1);
-    expect(remote[0]?.querySelector(".vf-monitor-list-detail")?.textContent).toBe(
-      "mini · /Users/peer/src/truffle",
-    );
-    expect(localRows(view)).toHaveLength(LOCAL_ROWS.length);
-    // It is not drawn as one of OUR unclaimed terminals either: a remote row
-    // has no agent facet, but it is not a bare local shell.
-    expect(remote[0]?.getAttribute("aria-label")).toContain("mini");
+  it("keeps each row attributed to the desktop it lives on", async () => {
+    const view = await mountMonitor(fakeDoor());
+    const [first] = remoteRows(view);
+    // the views name the desktop first for a screen reader…
+    expect(first?.getAttribute("aria-label")).toMatch(/^on studio, rosetta/);
+    // …and the detail line leads with it until the views draw its mark (pu-device)
+    expect(first?.querySelector(".vf-monitor-list-detail")?.textContent).toBe("studio · working");
+    for (const local of localRows(view)) {
+      expect(local.getAttribute("aria-label")).not.toContain("studio");
+    }
   });
 
-  it("keeps the two claims in their own chips, each in its own words", async () => {
-    const view = await mountMonitor(fakeDoor([host("mini", [shared("s1")])]));
+  it("the claim chip reads the desktop's NAME — never 'mesh unavailable'", async () => {
+    const view = await mountMonitor(fakeDoor());
     expect(view.querySelector(".vf-monitor-local-chip")?.textContent).toBe("2 managed agents");
-    expect(latest().localClaim).toBe("2 managed agents");
-    expect(view.querySelector(".vf-monitor-remote-chip")?.textContent).toBe(
-      "1 remote session · 1 peer",
+    expect(view.querySelector(".vf-monitor-remote-chip")?.textContent).toBe("2 agents on studio");
+    expect(view.querySelector(".vf-monitor-remote-chip .vf-os-mark")?.getAttribute("data-os")).toBe(
+      "linux",
     );
+    expect(view.querySelector(".vf-monitor-remote-unavailable-chip")).toBeNull();
   });
 
-  it("says only the local claim when the mesh has nothing", async () => {
-    const view = await mountMonitor(fakeDoor([]));
+  it("a desktop alone: only the local claim, and no device chip (one desktop is no choice)", async () => {
+    const view = await mountMonitor(
+      fakeDoor({ devices: [{ device: HERE, state: "live", asOf: AT }] }),
+    );
     expect(view.querySelector(".vf-monitor-local-chip")?.textContent).toBe("2 managed agents");
     expect(view.querySelector(".vf-monitor-remote-chip")).toBeNull();
-    expect(latest().remoteSessions).toBe(0);
+    expect(view.querySelector(".vf-device-filter")).toBeNull();
     expect(latest().remoteState).toBe("serving");
   });
 
-  /**
-   * AR-5's one regression, recorded and then fixed upstream (`5389449`).
-   *
-   * Both rows below passed before the views moved into
-   * `@vibecook/puppeteer-views`, and for one commit no view read
-   * `MonitorRemoteFacet` (`deviceName`, `hostWritable`, `attachable`): the host
-   * eyebrow that made a peer's row unmistakable, and GT-5c's writability word,
-   * had no surface, and a peer's session drew exactly like a local terminal
-   * except for a name buried in its detail line. The rows were `it.skip` for
-   * that commit and are LIVE again: the package's list carries the host chip
-   * (`.vf-monitor-list-host`, the peer's name and the policy in both
-   * directions), the swarm's label leads with the peer, the rain's stream names
-   * it first. They are the specification they always were.
-   */
-  it("marks them so they cannot be read as one of the local ones", async () => {
-    const view = await mountMonitor(fakeDoor([host("mini", [shared("s1")])]));
-    const remote = remoteRows(view, "mini");
-    expect(remote).toHaveLength(1);
-    // The host eyebrow is the distinction, and no local row has one.
-    expect(remote[0]?.querySelector(".vf-monitor-list-host")?.textContent).toContain("mini");
-    expect(view.querySelectorAll(".vf-monitor-list-host").length).toBe(1);
+  it("a frame moves its row: the owner's delta, applied on its chain", async () => {
+    const door = fakeDoor();
+    const view = await mountMonitor(door);
+    await act(async () => {
+      door.push({
+        device: STUDIO,
+        delta: {
+          epoch: "studio.1",
+          since: 5,
+          revision: 6,
+          upserts: [
+            deskRow("run-s1", {
+              status: "blocked",
+              blockers: [{ id: "q", kind: "question", since: AT, question: "Keep it greyed?" }],
+            }),
+          ],
+          removed: ["run-s2"],
+        },
+      });
+    });
+    expect(remoteRows(view)).toHaveLength(1);
+    expect(remoteRows(view)[0]?.classList.contains("is-blocked")).toBe(true);
+    expect(remoteRows(view)[0]?.querySelector(".vf-monitor-list-detail")?.textContent).toBe(
+      "studio · Keep it greyed?",
+    );
   });
 
-  it("words a row's write policy as the HOST property it is, in both directions", async () => {
-    // GT-5c / the review's 2b. What arrives is `allow_tailnet_write ||
-    // capability.is_some()` — one boolean for the whole peer — and WHO gets
-    // write is settled at attach. So a row may say what the host permits and
-    // nothing about this viewer, and it must say it when the answer is yes as
-    // well as when it is no: marking only refusal made silence mean "you can
-    // type", which is the claim this row cannot make.
-    const refusing = await mountMonitor(
-      fakeDoor([host("mini", [shared("s1", { readWrite: false })])]),
-    );
-    const refusingRow = remoteRows(refusing, "mini")[0];
-    expect(refusingRow?.querySelector(".vf-monitor-list-host em")?.textContent).toBe(
-      "read-only host",
-    );
-    expect(refusingRow?.getAttribute("aria-label")).toContain("read-only host");
+  it("a gap in the owner's chain re-subscribes, and the fresh board replaces the copy", async () => {
+    const door = fakeDoor();
+    await mountMonitor(door);
+    expect(door.opened()).toBe(1);
+    await act(async () => {
+      door.push({
+        device: STUDIO,
+        delta: { epoch: "studio.1", since: 9, revision: 10, upserts: [], removed: [] },
+      });
+    });
+    expect(door.closed()).toBe(1);
+    expect(door.opened()).toBe(2);
+  });
 
-    unmountMonitor();
-    const permitting = await mountMonitor(
-      fakeDoor([host("mini", [shared("s1", { readWrite: true })])]),
-    );
-    const permittingRow = remoteRows(permitting, "mini")[0];
-    expect(permittingRow?.querySelector(".vf-monitor-list-host em")?.textContent).toBe(
-      "writable host",
-    );
-    // …and it does not upgrade a host property into a promise to the viewer.
-    expect(permittingRow?.textContent).not.toContain("you");
+  it("an asleep desktop keeps its rows, greyed — asleep is a state, not an absence", async () => {
+    const door = fakeDoor();
+    const view = await mountMonitor(door);
+    await act(async () => {
+      door.push({ device: STUDIO, state: "asleep", asOf: "2026-09-30T21:10:00.000Z" });
+    });
+    expect(remoteRows(view)).toHaveLength(2);
+    expect(remoteRows(view).every((row) => row.classList.contains("is-stale"))).toBe(true);
   });
 });
 
 describe("select routes by source", () => {
-  it("a REMOTE row asks the door to attach — with that peer's session", async () => {
-    const door = fakeDoor([host("mini", [shared("s1"), shared("s2")])]);
+  it("another desktop's run says what this desktop cannot do yet, and asks the door nothing", async () => {
+    const door = fakeDoor();
     const view = await mountMonitor(door);
-    const target = remoteRows(view, "mini")[1];
-
-    await act(async () => target?.click());
-
-    expect(door.attach).toHaveBeenCalledTimes(1);
-    // The request identifies the session. The destination pane owns its colour;
-    // the monitor must not send a competing per-session accent to the deck.
-    expect(door.attach.mock.calls[0]?.[0]).toEqual({
-      deviceId: "mini",
-      deviceName: "mini",
-      remoteSessionId: "s2",
-    });
+    await act(async () => remoteRows(view)[0]?.click());
+    expect(door.attach).not.toHaveBeenCalled();
     expect(door.mountLocal).not.toHaveBeenCalled();
-    expect(ackText(view)).toContain("attached from mini");
+    expect(ackText(view)).toBe(
+      "rosetta runs on studio — its terminal cannot be opened from here yet",
+    );
   });
 
   it("a LOCAL row asks the door to MOUNT its PTY — never to attach (the split-routing test)", async () => {
-    // The other half of GT-D17, as AR-3 made it real: a managed agent's row
-    // goes through the local verb with the floor session id the fold named.
-    const door = fakeDoor([host("mini", [shared("s1")])]);
+    const door = fakeDoor();
     const view = await mountMonitor(door);
-    const local = localRows(view)[0];
-
-    await act(async () => local?.click());
-
+    await act(async () => localRows(view)[0]?.click());
     expect(door.attach).not.toHaveBeenCalled();
     expect(door.mountLocal).toHaveBeenCalledTimes(1);
     expect(["run-a-pty", "run-b-pty"]).toContain(door.mountLocal.mock.calls[0]?.[0]);
     expect(ackText(view)).toContain("mounted in the active pane");
   });
+});
 
-  it("says view-only in the same breath as the success, not as a failure", async () => {
-    const door = fakeDoor([host("mini", [shared("s1", { readWrite: false })])], {
-      state: "attached",
-      sessionId: "replica-1",
-      readWrite: false,
-    });
-    const view = await mountMonitor(door);
-
-    await act(async () => remoteRows(view, "mini")[0]?.click());
-
-    expect(door.attach).toHaveBeenCalledTimes(1);
-    expect(ackText(view)).toContain("view only");
-    expect(ackText(view)).toContain("attached");
+describe("the device filter — one dropdown, before the profile tabs", () => {
+  it("offers every desktop as its mark and its name, here first, all by default", async () => {
+    const view = await mountMonitor(fakeDoor());
+    const chip = view.querySelector<HTMLButtonElement>(".vf-device-filter-chip");
+    expect(chip?.textContent).toBe("All desktops");
+    expect(chip?.getAttribute("aria-haspopup")).toBe("listbox");
+    await act(async () => chip?.click());
+    const options = [...view.querySelectorAll<HTMLButtonElement>(".vf-device-filter-row")];
+    expect(options.map((option) => option.getAttribute("data-device"))).toEqual(["", HERE, STUDIO]);
+    expect(options[1]?.textContent).toContain("here");
+    expect(options[2]?.querySelector(".vf-os-mark")?.getAttribute("data-os")).toBe("linux");
+    expect(options[0]?.getAttribute("aria-selected")).toBe("true");
   });
 
-  it("a deck with no panes is told so, and nothing pretends otherwise", async () => {
-    const door = fakeDoor([host("mini", [shared("s1")])], { state: "no-pane" });
-    const view = await mountMonitor(door);
+  it("narrows the rows handed to the view, and widens back to all", async () => {
+    const view = await mountMonitor(fakeDoor());
+    const chip = (): HTMLButtonElement | null =>
+      view.querySelector<HTMLButtonElement>(".vf-device-filter-chip");
+    await act(async () => chip()?.click());
+    await act(async () =>
+      view
+        .querySelector<HTMLButtonElement>(`.vf-device-filter-row[data-device="${STUDIO}"]`)
+        ?.click(),
+    );
+    expect(rows(view)).toHaveLength(2);
+    expect(remoteRows(view)).toHaveLength(2);
+    expect(chip()?.textContent).toBe("studio");
+    expect(view.querySelector(".vf-device-filter-menu")).toBeNull();
+    expect(latest().shownAgents).toBe(2);
 
-    await act(async () => remoteRows(view, "mini")[0]?.click());
+    await act(async () => chip()?.click());
+    await act(async () =>
+      view
+        .querySelector<HTMLButtonElement>(`.vf-device-filter-row[data-device="${HERE}"]`)
+        ?.click(),
+    );
+    expect(rows(view)).toHaveLength(LOCAL_ROWS.length);
+    expect(remoteRows(view)).toHaveLength(0);
 
-    expect(ackText(view)).toContain("no pane");
-    expect(view.querySelector(".vf-monitor-list-row.is-linked")).toBeNull();
+    await act(async () => chip()?.click());
+    await act(async () =>
+      view.querySelector<HTMLButtonElement>('.vf-device-filter-row[data-device=""]')?.click(),
+    );
+    expect(rows(view)).toHaveLength(LOCAL_ROWS.length + 2);
   });
 
-  it("carries the floor's own words when an attach fails", async () => {
-    const door = fakeDoor([host("mini", [shared("s1")])], {
-      state: "failed",
-      reason: "peer refused the ticket",
-    });
-    const view = await mountMonitor(door);
-
-    await act(async () => remoteRows(view, "mini")[0]?.click());
-
-    expect(ackText(view)).toContain("peer refused the ticket");
-  });
-
-  it("refuses an unshared session without asking the door at all", async () => {
-    const door = fakeDoor([host("mini", [shared("s1", { attachable: false })])]);
-    const view = await mountMonitor(door);
-
-    await act(async () => remoteRows(view, "mini")[0]?.click());
-
-    expect(door.attach).not.toHaveBeenCalled();
-    expect(ackText(view)).toContain("not sharing");
-  });
-
-  it("links the row to the pane it landed in, and unlinks when that pane goes", async () => {
-    // `PaneAttachment`, alive for the first time. It is a live pane FACT, so
-    // the same row with the pane gone is no longer linked — a row that
-    // remembered an attach would be reporting an event, not a state.
-    const door = fakeDoor([host("mini", [shared("s1")])]);
-    // AR-5 — an attachment is built from the PANES, not from the session ids
-    // alone: a pane owns a colour and the session wears it while mounted there
-    // (record §02), so the deck publishes the two lists in parallel.
-    const view = await mountMonitor(door, ROW_VIEW, {
-      sessionIds: ["replica-1"],
-      paneIds: ["pane-1"],
-      activeSessionId: "replica-1",
-      activePaneId: "pane-1",
-    });
-
-    await act(async () => remoteRows(view, "mini")[0]?.click());
-    expect(remoteRows(view, "mini")[0]?.classList.contains("is-linked")).toBe(true);
-    expect(remoteRows(view, "mini")[0]?.getAttribute("aria-current")).toBe("true");
-
+  it("closes on Escape and hands the focus back to the chip", async () => {
+    const view = await mountMonitor(fakeDoor());
+    const chip = view.querySelector<HTMLButtonElement>(".vf-device-filter-chip");
+    await act(async () => chip?.click());
+    const menu = view.querySelector<HTMLElement>(".vf-device-filter-menu");
+    expect(document.activeElement?.getAttribute("data-device")).toBe("");
     await act(async () => {
-      root?.render(
-        <GodviewAgentsProvider door={door}>
-          <GodviewMonitor
-            view={monitorViewFor(ROW_VIEW)}
-            parameters={monitorParameterDefaults(monitorViewFor(ROW_VIEW).parameterGroups)}
-            door={door}
-            panes={{ sessionIds: [] }}
-          />
-        </GodviewAgentsProvider>,
-      );
+      menu?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
     });
-    expect(remoteRows(view, "mini")[0]?.classList.contains("is-linked")).toBe(false);
+    expect(document.activeElement?.getAttribute("data-device")).toBe(HERE);
+    await act(async () => {
+      menu?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(view.querySelector(".vf-device-filter-menu")).toBeNull();
+    expect(document.activeElement).toBe(chip);
   });
 });
 
-describe("the field without a floor", () => {
+describe("the board without a floor", () => {
   it("with NO door: no rows at all, and both states say nobody was asked", async () => {
     const view = await mountMonitor(null);
     expect(rows(view)).toHaveLength(0);
-    expect(remoteRows(view, "mini")).toHaveLength(0);
     expect(latest().remoteState).toBe("no-door");
     expect(latest().localState).toBe("no-door");
-    expect(view.querySelector(".vf-monitor-local-chip")).toBeNull();
   });
 
-  it("with a REFUSING mesh: the local rows stand, no invented peers, and the reason ON THE SCREEN", async () => {
-    const door: MonitorDoor = {
-      ...fakeDoor([]),
-      listHosts: vi.fn(async () => {
-        throw new Error("terminal mesh is not configured");
-      }),
-    };
-    const view = await mountMonitor(door);
-    expect(remoteRows(view, "mini")).toHaveLength(0);
+  it("a board that cannot be read: the local rows stand, no invented desktops, the reason ON SCREEN", async () => {
+    const view = await mountMonitor(fakeDoor(new Error("FORBIDDEN_SCOPE: requires agent.observe")));
+    expect(remoteRows(view)).toHaveLength(0);
     expect(localRows(view)).toHaveLength(LOCAL_ROWS.length);
     expect(latest().remoteState).toBe("unavailable");
-    expect(latest().remoteReason).toContain("mesh is not configured");
-    expect(view.querySelector(".vf-monitor-remote-unavailable-chip")?.textContent).toContain(
-      "mesh unavailable",
+    expect(view.querySelector(".vf-monitor-remote-unavailable-chip")?.textContent).toBe(
+      "mesh unavailable · FORBIDDEN_SCOPE: requires agent.observe",
     );
   });
 
-  it("with a REFUSING fold: no local rows, no invented ones, and fieldd's reason ON THE SCREEN", async () => {
-    const door: MonitorDoor = {
-      ...fakeDoor([]),
-      observe: vi.fn(({ onError }) => {
-        onError("FORBIDDEN_SCOPE: agent.observe");
-        return () => undefined;
-      }),
-    };
-    const view = await mountMonitor(door);
-    expect(localRows(view)).toHaveLength(0);
-    expect(latest().localState).toBe("unavailable");
-    expect(latest().localReason).toContain("FORBIDDEN_SCOPE");
-    expect(latest().localClaim).toBeNull();
-    expect(view.textContent).toContain("agents unavailable · FORBIDDEN_SCOPE");
-  });
-
-  it("PF6: the mesh poll dies with the stage", async () => {
-    await mountMonitor(fakeDoor([]));
-    expect(openedIntervals.length).toBeGreaterThan(0);
+  it("PF6: the board is closed with the stage", async () => {
+    const door = fakeDoor();
+    await mountMonitor(door);
+    expect(door.opened()).toBe(1);
     act(() => root?.unmount());
     root = null;
-    for (const id of openedIntervals) expect(clearedIntervals).toContain(id);
+    expect(door.closed()).toBe(1);
   });
 });

@@ -21,13 +21,17 @@ import {
   assembleMonitorAgents,
   type MonitorFloorRecord,
   type MonitorManagedRecord,
-  type MonitorRemoteRecord,
+  type MonitorMeshRecord,
   type MonitorTerminalRecord,
   managedRowId,
 } from "./agents";
+import { type DeviceChoice, deviceChoices } from "./device-filter";
+import { deviceFacet, useDeviceRoster } from "./devices";
 import type { AgentSessionSummary } from "./facet-types";
 import { useAgentFold } from "./GodviewAgentsProvider";
 import type { LocalFieldState } from "./local-agent-field";
+import { type MeshFieldState, useMeshField } from "./mesh-field";
+import { meshHere, meshRecords } from "./mesh-rows";
 import {
   dealProjectSeqs,
   loadProjectLedger,
@@ -35,7 +39,6 @@ import {
   saveProjectLedger,
 } from "./project-ledger";
 import { type LocalMountOutcome, type MonitorDoor, remoteRowId } from "./remote-door";
-import { useRemoteSessionField } from "./remote-session-field";
 import { targetsHere } from "./spawn-menu";
 import type { MonitorActions, MonitorAgent, MonitorSpawnTarget } from "./types";
 import { createUsageHistoryCache } from "./usage-history-cache";
@@ -89,19 +92,25 @@ const USAGE_CACHE_KEY = "vf-godview-usage-history-v1";
  *     were invented went with it. Since GT-6 the stream itself belongs to
  *     `GodviewAgentsProvider` one level up, because the deck's pane frames read
  *     the same rows; this hook consumes the fold and stays a projection.
- *   · `RemoteSessionField` — REAL sessions on real peers, read from the mesh
- *     through the deck's own control connection, and mountable for real.
+ *   · THE MESH BOARD (DS-3, `mesh-field.ts`) — every OTHER self desktop's
+ *     runs, through this window's one door to its own fieldd, which
+ *     multiplexes each desktop's board as its owner numbered it (DS-D4). It
+ *     replaced GT-D17's two-second host poll on 2026-09-30, which had been dark
+ *     since the routed runtime (its ask threw). The roster (`devices.ts`) names
+ *     each desktop, so every row says where it lives.
  *
  * Beside them, the deck's own panes: a pane no agent has claimed is an
  * unclaimed terminal row, the deck's fact and the deck's summary.
  *
  * Every verb goes through the DOOR the deck built (`MonitorDoor`): a local
- * row's select mounts its PTY in the active pane, a remote row's select
- * attaches the peer's session there, and create opens an empty terminal in it. The views still see actions; the source sees promises.
+ * row's select mounts its PTY in the active pane, a remote row's select would
+ * attach its terminal there — DS-4's, refused honestly until it lands — and
+ * create opens an empty terminal in it. The views still see actions; the
+ * source sees promises.
  *
- * PF6: the subscription and the poll are opened on mount and closed on
- * unmount, and the stage that owns this hook is mounted ONLY while the overlay
- * is open. A closed Godview therefore holds no monitor subscription at all.
+ * PF6: every subscription is opened on mount and closed on unmount, and the
+ * stage that owns this hook is mounted ONLY while the overlay is open. A
+ * closed Godview therefore holds no monitor subscription at all.
  */
 
 export interface UseMonitorAgentsOptions {
@@ -155,6 +164,9 @@ export interface MonitorAgentsResult {
    * the stage; carried here because the actions are what produce it. */
   acknowledgement: MonitorAcknowledgement | null;
   clearAcknowledgement(): void;
+  /** DS-3 — every desktop on the mesh board, this one first, each with its
+   * standing and how many agents it runs: the device filter's choices. */
+  devices: readonly DeviceChoice[];
 }
 
 export interface MonitorSourceCounts {
@@ -162,15 +174,15 @@ export interface MonitorSourceCounts {
   local: number;
   /** The deck's panes no agent has claimed. */
   terminals: number;
+  /** Other desktops' runs the mesh board contributed (DS-3). */
   remote: number;
-  /** Online peers behind the remote rows. */
+  /** The other desktops behind those rows. */
   hosts: number;
   /** The local field's honest state — `unavailable` carries fieldd's own reason. */
   localState: LocalFieldState;
   localReason?: string;
-  /** The remote field's honest state — `unavailable` carries the floor's own
-   * reason, which is the ordinary answer from a floor serving no mesh. */
-  remoteState: "no-door" | "serving" | "unavailable";
+  /** The mesh board's honest state — `unavailable` carries fieldd's own reason. */
+  remoteState: MeshFieldState;
   remoteReason?: string;
 }
 
@@ -284,7 +296,15 @@ export function useMonitorAgents({
    * `GodviewAgentsProvider` so the deck's pane frames read the same rows in the
    * same tick, and what stays here is the monitor's pure projection of them. */
   const localField = useAgentFold();
-  const remoteField = useRemoteSessionField({ door });
+  /** DS-3 — the mesh board and the roster that names its desktops, both held
+   * only while this stage is (PF6). */
+  const meshField = useMeshField({ door });
+  const roster = useDeviceRoster(door?.devices);
+  const hereId = meshHere(meshField, roster);
+  const here = useMemo(
+    () => (hereId === undefined ? undefined : deviceFacet(hereId, roster.byId, hereId)),
+    [hereId, roster],
+  );
 
   /** GT-3p's damage gate, kept: the projection's INPUTS as JSON. A frame
    * that changed nothing anybody renders still arrives as a new object; the
@@ -452,14 +472,14 @@ export function useMonitorAgents({
   /** A pane link is only true while a pane is actually showing the replica: the
    * user can close that pane, and a bubble still drawn as linked would be the
    * monitor remembering an event instead of reporting a state. */
-  const remotes = useMemo<readonly MonitorRemoteRecord[]>(
+  const remotes = useMemo<readonly MonitorMeshRecord[]>(
     () =>
-      remoteField.rows.map((row) => {
-        const link = links.get(remoteRowId(row.host.deviceId, row.session.sessionId));
-        if (link === undefined || !paneSessionIds.has(link.localSessionId)) return { row };
-        return { row, localSessionId: link.localSessionId };
+      meshRecords(meshField, roster).map((record) => {
+        const link = links.get(remoteRowId(record.device.id, record.row.runtimeRunId));
+        if (link === undefined || !paneSessionIds.has(link.localSessionId)) return record;
+        return { ...record, localSessionId: link.localSessionId };
       }),
-    [remoteField.rows, links, paneSessionIds],
+    [meshField, roster, links, paneSessionIds],
   );
 
   const managed = useMemo<readonly MonitorManagedRecord[]>(
@@ -543,7 +563,8 @@ export function useMonitorAgents({
       managed,
       terminals,
       floor,
-      remotes,
+      mesh: remotes,
+      ...(here !== undefined ? { here } : {}),
       colours: { tint: palette.tint, neutral: palette.neutral },
       projectSeqs: projectLedger.seqByKey,
       usage: usage.histories,
@@ -588,6 +609,7 @@ export function useMonitorAgents({
     terminals,
     floor,
     remotes,
+    here,
     sessions,
     attachments,
     panes.activeSessionId,
@@ -680,7 +702,12 @@ export function useMonitorAgents({
         return;
       }
       if (!remote.attachable) {
-        announce(`${remote.deviceName} is not sharing ${agent.project} for attachment`);
+        // DS-3 — every run off the mesh board says `attachable: false` until
+        // DS-4 lands the terminal path across desktops. The honest sentence is
+        // about THIS desktop's reach, never a claim the other one is refusing.
+        announce(
+          `${agent.project} runs on ${remote.deviceName} — its terminal cannot be opened from here yet`,
+        );
         return;
       }
       const outcome = await door.attach({
@@ -729,7 +756,7 @@ export function useMonitorAgents({
       const sessionId =
         agent.session?.id ??
         agent.floorSessionId ??
-        agent.agent?.summary.terminal?.runtimeSessionId;
+        agent.agent?.summary?.terminal?.runtimeSessionId;
       if (sessionId === undefined) {
         announce(`${agent.project} has no terminal here to mount`);
         return;
@@ -849,18 +876,26 @@ export function useMonitorAgents({
     () => ({
       // Counted off the ASSEMBLED rows rather than the field's records: the
       // projection drops an exited run, and a claim of N agents over N-1 drawn
-      // ones would be its own small dishonesty.
-      local: agents.filter((agent) => agent.agent !== undefined).length,
+      // ones would be its own small dishonesty. Another desktop's run is an
+      // agent row too (DS-3), and it is not one of the fold's.
+      local: agents.filter((agent) => agent.agent !== undefined && agent.remote === undefined)
+        .length,
       terminals: agents.filter((agent) => agent.agent === undefined && agent.remote === undefined)
         .length,
-      remote: remotes.length,
-      hosts: remoteField.hosts,
+      remote: agents.filter((agent) => agent.remote !== undefined).length,
+      hosts: new Set(
+        agents.flatMap((agent) => (agent.remote === undefined ? [] : [agent.remote.deviceId])),
+      ).size,
       localState: localField.state,
       ...(localField.reason !== undefined ? { localReason: localField.reason } : {}),
-      remoteState: remoteField.state,
-      ...(remoteField.reason !== undefined ? { remoteReason: remoteField.reason } : {}),
+      remoteState: meshField.state,
+      ...(meshField.reason !== undefined ? { remoteReason: meshField.reason } : {}),
     }),
-    [agents, remotes, remoteField, localField],
+    [agents, meshField, localField],
+  );
+  const devices = useMemo(
+    () => deviceChoices(meshField, roster, agents),
+    [meshField, roster, agents],
   );
 
   return {
@@ -869,5 +904,6 @@ export function useMonitorAgents({
     sources,
     acknowledgement,
     clearAcknowledgement,
+    devices,
   };
 }

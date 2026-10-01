@@ -1,6 +1,10 @@
-import type { RemoteHostSummary, SharedSessionSummary } from "@vibecook/ghosttea-protocol";
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
-import type { AgentProfileSet } from "@vibefield/contracts";
+import type {
+  AgentMeshFrame,
+  AgentMeshOpen,
+  AgentProfileSet,
+  DeviceInfo,
+} from "@vibefield/contracts";
 import type { AgentSessionSummary } from "./facet-types";
 
 export type MonitorFeedState =
@@ -33,13 +37,31 @@ export interface MonitorUsagePort extends AccountUsagePort {
  * should. Widening this file is deliberate each time, and reviewed as such:
  * AR-3 is the second widening, and it is the one GT-D17 named as coming. The
  * spawn bloom (SB-3) is the third: `createTerminal` takes the Agent Profile a
- * shell is born under — a set id, a noun of fieldd's, never a binding.
+ * shell is born under — a set id, a noun of fieldd's, never a binding. DS-3 is
+ * the fourth: the mesh board replaced GT-D17's host poll (`listHosts`, retired
+ * 2026-09-30 — under the routed runtime it threw on every ask), and the roster
+ * came in beside it, so a row can say which desktop it lives on.
  */
 export interface MonitorDoor {
-  /** The mesh as the floor currently sees it. Rejects when the floor cannot be
-   * asked at all — which the field renders as UNAVAILABLE, never as emptiness. */
-  listHosts(): Promise<readonly RemoteHostSummary[]>;
-  /** Open the peer's session and mount it in the ACTIVE pane. */
+  /**
+   * DS-3 — THE MESH BOARD (`agent.subscribe {projection: "desk", scope:
+   * "mesh"}`, DS-D4): every self desktop's agents through this window's ONE
+   * door, multiplexed by its own fieldd (DS-L4 — the window merges nothing).
+   * `onOpen` receives every WHOLE board — the open answer, and the client's
+   * own re-snapshot after a reconnect — and the reader REPLACES what it held;
+   * `onFrame` every per-device frame (a delta, a device's reset, a device's
+   * state); `onError` why the board could not be opened, or a frame could not
+   * be read. Returns the dispose.
+   */
+  observeMesh(listener: MeshBoardListener): () => void;
+  /** DS-3 — the roster (`device.subscribe`): names and platforms, so a row
+   * can say which desktop it lives on. Optional, and deliberately: a door
+   * without it names each desktop by its id and draws no OS. */
+  devices?: DevicesPort;
+  /** Open the peer's session and mount it in the ACTIVE pane. Unreachable
+   * from the mesh board's rows until DS-4 lands the terminal path across
+   * desktops (every remote row says `attachable: false` until then); the
+   * verb stays for that slice to rewire. */
   attach(request: RemoteAttachRequest): Promise<RemoteAttachOutcome>;
   /**
    * AR-3 — fieldd's fold (`agent.subscribe`): a snapshot, then full frames.
@@ -75,6 +97,19 @@ export interface MonitorDoor {
  * last one they drew. */
 export interface ProfileSetsPort {
   subscribe(listener: (sets: readonly AgentProfileSet[]) => void): () => void;
+}
+
+/** DS-3 — the mesh board's listener (`MonitorDoor.observeMesh`). */
+export interface MeshBoardListener {
+  onOpen(open: AgentMeshOpen): void;
+  onFrame(frame: AgentMeshFrame): void;
+  onError(reason: string): void;
+}
+
+/** DS-3 — the roster as whole lists, the door's own parse applied. Returns
+ * the dispose; an unreadable list is dropped and the last one stands. */
+export interface DevicesPort {
+  subscribe(listener: (devices: readonly DeviceInfo[]) => void): () => void;
 }
 
 /** SB-3 — what a new terminal is born under. */
@@ -143,53 +178,22 @@ export type RemoteAttachOutcome =
   | { state: "no-pane" }
   | { state: "failed"; reason: string };
 
-/** A peer's identity, carried beside every session it owns. */
-export interface RemoteHostIdentity {
-  deviceId: string;
-  deviceName: string;
-}
-
-/** One attachable thing on the mesh: the peer, and the peer's own summary of
- * the session. The two travel together because a session id is only unique
- * WITHIN a peer — a row that lost its host would be a session nobody owns. */
-export interface RemoteSessionRow {
-  host: RemoteHostIdentity;
-  session: SharedSessionSummary;
-}
-
 /**
- * A monitor row id for a peer's session.
+ * A monitor row id for another desktop's run, keyed `{device, runtimeRunId}`
+ * as the mesh board keys it (DS-L2: a row's key says who owns it).
  *
  * Prefixed and device-qualified because the monitor's ids are a flat namespace
- * shared with local sessions: two peers can each have a session `1`, and one of
- * them can collide with ours. The prefix also makes a remote id recognizable in
- * a marker line, which is how the smoke tells the two apart.
+ * shared with local rows: two desktops can each have a run with one id, and
+ * one of them can collide with ours. The prefix also makes a remote id
+ * recognizable in a marker line, which is how the smoke tells the two apart.
  */
-export function remoteRowId(deviceId: string, sessionId: string): string {
-  return `remote:${deviceId}:${sessionId}`;
+export function remoteRowId(deviceId: string, runtimeRunId: string): string {
+  return `remote:${deviceId}:${runtimeRunId}`;
 }
 
-/**
- * The mesh's hosts, flattened into rows.
- *
- * ONLINE hosts only: an offline peer's session list is a claim about a machine
- * we currently cannot reach, and a bubble the user cannot open is a control
- * that does nothing. Sessions that have STOPPED running are dropped for the
- * same reason. `attachable: false` is kept and shown, because that one IS a
- * fact about a live session the peer is deliberately not sharing — the row
- * says so and refuses honestly rather than vanishing.
- */
-export function remoteSessionRows(
-  hosts: readonly RemoteHostSummary[],
-): readonly RemoteSessionRow[] {
-  return hosts
-    .filter((host) => host.online)
-    .flatMap((host) =>
-      host.sessions
-        .filter((session) => session.running)
-        .map((session) => ({
-          host: { deviceId: host.deviceId, deviceName: host.deviceName },
-          session,
-        })),
-    );
-}
+// RETIRED 2026-09-30 (DS-3): `RemoteHostIdentity`, `RemoteSessionRow` and
+// `remoteSessionRows` — GT-D17's mesh half, which flattened ghosttea's
+// `runtime.listRemoteHosts()` into rows every two seconds. Under the routed
+// runtime that ask THREW ("Remote-host discovery is not part of the routed
+// host contract"), so the half had been dark since TP-S3e; the mesh board
+// (`mesh-field.ts`) is what a desktop reads another desktop's agents from now.

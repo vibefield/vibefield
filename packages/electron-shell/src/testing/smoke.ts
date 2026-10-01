@@ -5781,6 +5781,14 @@ export async function runSmokeGodview(opts: {
     //      "no peer was staged" but "nothing is left to answer" — still honest,
     //      still never a silent pass, and still REPORTED rather than asserted.
     //      The call site carries the same date and the reason it stays.
+    //      *Correction 2026-09-30 (DS-3):* the monitor's remote rows come from
+    //      the MESH BOARD now (`agent.subscribe {scope: "mesh"}` through the
+    //      deck's fieldd client), not `listRemoteHosts`, which is gone from the
+    //      deck. On a single-desktop smoke the board answers with this desktop
+    //      alone, so `remoteSessions` is 0 and this row still reports
+    //      `unavailable` (no peer staged). A board row is not attachable until
+    //      DS-4 lands; were one staged, the click below would be answered with
+    //      that sentence and no attach — this row must learn DS-4's path first.
     const monitorNow = monitorWatch.current();
     verdict["remoteState"] = monitorNow?.remoteState ?? "unreported";
     verdict["remoteSessions"] = monitorNow?.remoteSessions ?? 0;

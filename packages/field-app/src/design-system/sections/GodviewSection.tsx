@@ -1,6 +1,8 @@
 import { type ReactElement, useMemo } from "react";
 import { Section, Specimen } from "../catalog-ui";
+import { DeviceFilterPreview } from "../DeviceFilterPreview";
 import { GodviewPreview } from "../GodviewPreview";
+import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
 import { PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
@@ -11,6 +13,7 @@ import { TerminalSessionPickerPreview } from "../TerminalSessionPickerPreview";
 
 export function GodviewSection(): ReactElement {
   const profilesDoor = useMemo(() => profileTabsDoor(), []);
+  const meshDoor = useMemo(() => meshBoardDoor(), []);
   return (
     <Section
       id="godview"
@@ -30,6 +33,22 @@ export function GodviewSection(): ReactElement {
         <div data-godview-profiles-catalog="">
           <GodviewPreview door={profilesDoor} />
         </div>
+      </Specimen>
+      <Specimen
+        title="Mesh board — every self desktop's agents on one stage, an asleep one greyed"
+        source="godview/monitor/mesh-field.ts"
+        bleed
+      >
+        <div data-godview-mesh-catalog="">
+          <GodviewPreview door={meshDoor} />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Device filter — open on every desktop, and at rest on one"
+        source="godview/DeviceFilterChip.tsx"
+        bleed
+      >
+        <DeviceFilterPreview />
       </Specimen>
       <Specimen
         title="Spawn bloom — hold empty ground, reach a profile, let go"

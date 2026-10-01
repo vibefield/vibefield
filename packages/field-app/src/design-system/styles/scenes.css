@@ -869,6 +869,31 @@
   inset: auto;
 }
 
+/* DS-3 — the device filter's chip in its states (`DeviceFilterPreview.tsx`):
+   the shipping chip inside a Godview root of the catalog's own, as the swarm
+   bodies are. These rules only undo the overlay geometry and leave the menu
+   room to open. */
+.vf-ds-device-filter-catalog.vf-godview {
+  position: relative;
+  z-index: auto;
+  width: 100%;
+  height: 260px;
+  min-height: 0;
+  overflow: visible;
+  background: var(--monitor-bg);
+  opacity: 1;
+  transform: none;
+  visibility: visible;
+  pointer-events: auto;
+  transition: none;
+  inset: auto;
+}
+
+.vf-ds-device-filter-gap {
+  width: 260px;
+  flex: none;
+}
+
 .vf-ds-swarm-bodies-toolbar {
   position: relative;
   z-index: 10;

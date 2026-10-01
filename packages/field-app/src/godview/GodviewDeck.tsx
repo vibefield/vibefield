@@ -72,7 +72,13 @@ import {
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import type { MonitorFloorRecord } from "./monitor/agents";
-import { historyPortOver, profileSetsPortOver, usagePortOver } from "./monitor/doors";
+import {
+  devicesPortOver,
+  historyPortOver,
+  meshBoardOver,
+  profileSetsPortOver,
+  usagePortOver,
+} from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
@@ -1048,38 +1054,25 @@ export function GodviewDeck({
       subscribe: (
         method: string,
         params: Record<string, unknown>,
-        onFrame: (payload: unknown) => void,
+        onFrame: (payload: unknown, kind?: "snapshot" | "delta") => void,
       ) => fieldd.subscribe(method, params, onFrame),
     };
     return {
-      // `enableRemoteSessions={false}` below turns off upstream's palette and
-      // its ⌘⇧O binding — it does NOT gate these calls, which live on the
-      // runtime and speak to the floor's control connection directly. That is
-      // exactly what GT-D7's amendment asked for: their door closed, ours open.
-      // R-L8 (TM review, 2026-09-14) — THIS QUESTION HAS HAD NO ANSWERER SINCE
-      // TM-1, and it is left standing deliberately. `listRemoteHosts` is
-      // ghosttea's mesh-runtime ask, and TM-1 deleted the VibeField server that
-      // used to answer it: the in-process serve, `services/terminal_mesh.rs`,
-      // the `ghosttea-truffle` dependency, the TSP1 ports and
-      // `STORES.TERMINAL_HOSTS` all went, and the phone became a routed T1
-      // client of a cell's own door instead. So this door reports zero hosts on
-      // every poll, and the monitor's remote half can only ever be `serving`
-      // with nothing in it.
-      // *Correction 2026-09-30 (SB §9):* under the routed runtime ghosttea's
-      // `listRemoteHosts` THROWS ("Remote-host discovery is not part of the
-      // routed host contract", ghosttea-react runtime.ts) rather than answering
-      // zero hosts, and `openRemoteSession` throws likewise, so `door.attach`
-      // is dead in production.
-      //
-      // NOT DELETED HERE, because it is not a contained deletion. Behind it are
-      // `monitor/remote-session-field.ts`, `monitor/remote-door.ts` and their
-      // composition into `useMonitorAgents` — a documented state machine
-      // (`no-door` versus an EMPTY `serving`, the two-failure tolerance, the 2 s
-      // cadence) spanning eight source files and eight test files. Removing it
-      // is a DESIGN decision about the deck's mesh half and what replaces it
-      // (the routed T1 client is the obvious candidate), which is not a review
-      // hygiene pass's to make.
-      listHosts: () => runtime.listRemoteHosts(),
+      // DS-3 (2026-09-30, DS-D4) — THE MESH HALF IS THE MESH BOARD. Other
+      // desktops' agents arrive through this window's one door to its own
+      // fieldd (`agent.subscribe {projection: "desk", scope: "mesh"}`), which
+      // multiplexes every self desktop's board (`monitor/mesh-field.ts`). It
+      // replaced `listHosts: () => runtime.listRemoteHosts()` — ghosttea's
+      // mesh-runtime ask, which had no answerer since TM-1 deleted VibeField's
+      // in-process serve, and which under the routed runtime THREW on every
+      // two-second poll ("Remote-host discovery is not part of the routed host
+      // contract"): the SB §9 correction that stood here. Its poll
+      // (`remote-session-field.ts`) retired with it. `attach` below still
+      // speaks ghosttea's remote palette and still throws under the routed
+      // runtime; DS-4 rewires it (a forwarded ticket over an egress route), and
+      // until then every board row says it cannot be attached.
+      observeMesh: meshBoardOver(doorClient),
+      devices: devicesPortOver(doorClient),
       // AR-5 — the find sheet's daemon questions and the usage column's feed,
       // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
       // The views never dial rosettad; the daemon's origin stays in fieldd.

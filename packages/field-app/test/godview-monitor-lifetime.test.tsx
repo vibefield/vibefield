@@ -35,7 +35,10 @@ vi.mock("../src/godview/GodviewDeck", async () => {
   const checkedAt = "2026-09-13T00:00:00.000Z";
   const status = { reachable: false, detail: "no index in this fixture", checkedAt };
   const door = {
-    listHosts: async () => [],
+    observeMesh: ({ onOpen }: { onOpen: (open: { devices: never[] }) => void }) => {
+      onOpen({ devices: [] });
+      return () => undefined;
+    },
     attach: async () => ({ state: "no-pane" as const }),
     observe: ({ onFrame }: { onFrame: (rows: unknown[]) => void }) => {
       doorFacts.observeCalls += 1;

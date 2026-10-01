@@ -16,12 +16,21 @@ import type {
 import {
   AgentAccountUsageBatch,
   type AgentAccountUsageEntry,
+  AgentMeshFrame,
+  AgentMeshOpen,
   AgentsProfileSetsListResult,
+  DeviceInfo,
   IndexSearchResult,
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
-import type { MonitorFeedState, MonitorUsagePort, ProfileSetsPort } from "./remote-door";
+import type {
+  DevicesPort,
+  MeshBoardListener,
+  MonitorFeedState,
+  MonitorUsagePort,
+  ProfileSetsPort,
+} from "./remote-door";
 
 // THE TWO PORTS (AR-5, D14): the find sheet and the usage column reach fieldd
 // only through the deck's door, and the deck builds these over its own
@@ -30,13 +39,15 @@ import type { MonitorFeedState, MonitorUsagePort, ProfileSetsPort } from "./remo
 // origin, and nothing here reaches a window bridge. The reference app's ports
 // are its preload; these are ours.
 
-/** The one call shape both ports need: a request through the deck's client. */
+/** The one call shape both ports need: a request through the deck's client.
+ * `kind` is the client's own word for a frame — a `.snapshot` (a whole board:
+ * the open, or the re-snapshot after a reconnect) or a `.delta`. */
 export interface DoorClient {
   request(method: string, params: Record<string, unknown>): Promise<unknown>;
   subscribe(
     method: string,
     params: Record<string, unknown>,
-    onFrame: (payload: unknown) => void,
+    onFrame: (payload: unknown, kind?: "snapshot" | "delta") => void,
   ): Promise<{ snapshot: unknown; unsubscribe: () => void }>;
 }
 
@@ -346,6 +357,91 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
  * Whole snapshots; the tolerant reader drops a frame it cannot parse, and a
  * subscription that cannot be opened leaves the bar without tabs rather than
  * inventing any. */
+/* ── DS-3: the mesh board and the roster ───────────────────────────────── */
+
+/** The board every self desktop's agents arrive on (`agent.subscribe
+ * {projection: "desk", scope: "mesh"}`, DS-D4), read through the deck's own
+ * client: a `.snapshot` is a whole board (the open, and the client's replay
+ * after a reconnect), a `.delta` one device's frame. The tolerant reader: a
+ * frame that does not parse is a reason (`onError`), never a blank. */
+export function meshBoardOver(client: DoorClient): (listener: MeshBoardListener) => () => void {
+  return ({ onOpen, onFrame, onError }) => {
+    let cancelled = false;
+    let unsubscribe: (() => void) | null = null;
+    const deliverOpen = (payload: unknown): void => {
+      const parsed = AgentMeshOpen.safeParse(payload);
+      if (parsed.success) onOpen(parsed.data);
+      else
+        onError(
+          `the mesh board answered an unreadable board: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+        );
+    };
+    const deliverFrame = (payload: unknown): void => {
+      const parsed = AgentMeshFrame.safeParse(payload);
+      if (parsed.success) onFrame(parsed.data);
+      else
+        onError(
+          `the mesh board sent an unreadable frame: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+        );
+    };
+    void client
+      .subscribe("agent.subscribe", { projection: "desk", scope: "mesh" }, (payload, kind) => {
+        if (cancelled) return;
+        if (kind === "snapshot") deliverOpen(payload);
+        else deliverFrame(payload);
+      })
+      .then((subscription) => {
+        if (cancelled) {
+          subscription.unsubscribe();
+          return;
+        }
+        unsubscribe = subscription.unsubscribe;
+        deliverOpen(subscription.snapshot);
+      })
+      .catch((cause: unknown) => {
+        if (!cancelled) onError(cause instanceof Error ? cause.message : String(cause));
+      });
+    return () => {
+      cancelled = true;
+      unsubscribe?.();
+    };
+  };
+}
+
+const RosterList = DeviceInfo.array();
+
+/** The roster (`device.subscribe`): whole lists, the newest one standing. An
+ * unreadable list is dropped and the last good one stays. */
+export function devicesPortOver(client: DoorClient): DevicesPort {
+  return {
+    subscribe: (listener) => {
+      let cancelled = false;
+      let unsubscribe: (() => void) | null = null;
+      const deliver = (payload: unknown): void => {
+        const parsed = RosterList.safeParse(payload);
+        if (parsed.success) listener(parsed.data);
+      };
+      void client
+        .subscribe("device.subscribe", {}, (payload) => {
+          if (!cancelled) deliver(payload);
+        })
+        .then((subscription) => {
+          if (cancelled) {
+            subscription.unsubscribe();
+            return;
+          }
+          unsubscribe = subscription.unsubscribe;
+          deliver(subscription.snapshot);
+        })
+        .catch(() => undefined);
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    },
+  };
+}
+
 export function profileSetsPortOver(client: DoorClient): ProfileSetsPort {
   return {
     subscribe: (listener) => {

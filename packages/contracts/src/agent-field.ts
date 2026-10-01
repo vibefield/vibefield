@@ -242,7 +242,9 @@ export type AgentFieldDelta = z.infer<typeof AgentFieldDelta>;
  * `{epoch, revision}`. Rows are keyed `{device, runtimeRunId}`. The daemon
  * MULTIPLEXES and never re-folds: a peer's revisions arrive as the peer
  * numbered them. A `desk` board's rows are `AgentDeskRow`s, which parse here
- * as field rows with the rest passed through. */
+ * as field rows with the rest passed through. The ANSWERING desktop is listed
+ * first — always present, always `live` — so a reader without a roster still
+ * knows which board is its own. */
 export const AgentMeshOpen = meshRowsOpen(AgentFieldRow);
 /** One device's entry in the open. Written out rather than inferred: the
  * passthrough inference gives every arm a string index signature, and a

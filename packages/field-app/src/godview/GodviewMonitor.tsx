@@ -27,8 +27,10 @@ import {
   useState,
 } from "react";
 import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
+import { DeviceFilterChip } from "./DeviceFilterChip";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { managedRowId, monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
+import { type DeviceChoice, filterByDevice, standingChoice } from "./monitor/device-filter";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
 import {
@@ -52,6 +54,7 @@ import {
   type MonitorSourceCounts,
   useMonitorAgents,
 } from "./monitor/useMonitorAgents";
+import { OsMark } from "./os-marks";
 import {
   createSwarmPhysicsDriver,
   currentSwarmPhysicsMode,
@@ -83,13 +86,26 @@ export function localUnavailableClaim(sources: MonitorSourceCounts): string | nu
     : `agents unavailable · ${sources.localReason}`;
 }
 
-/** The real rows, counted with their peers. No chip at all when there are
- * none — DESIGN.md's sync law, that quiet is the honesty when there are no
- * facts, rather than a vacuous "no peers". */
-export function remoteClaim(sources: MonitorSourceCounts): string | null {
+/** The desktops other than this one that are running agents on the stage. */
+export function otherDesktops(devices: readonly DeviceChoice[]): readonly DeviceChoice[] {
+  return devices.filter((device) => !device.here && device.agents > 0);
+}
+
+/** Other desktops' agents, counted where they live (DS-3): the desktop's NAME
+ * when there is one (DS §11's witness — "the chip reads a device name"),
+ * how many desktops when there are several, and the chip draws their marks
+ * before the words. No chip at all when there are none — DESIGN.md's sync
+ * law, that quiet is the honesty when there are no facts. */
+export function remoteClaim(
+  sources: MonitorSourceCounts,
+  devices: readonly DeviceChoice[] = [],
+): string | null {
   if (sources.remote === 0) return null;
-  const sessions = `${sources.remote} remote session${sources.remote === 1 ? "" : "s"}`;
-  return `${sessions} · ${sources.hosts} peer${sources.hosts === 1 ? "" : "s"}`;
+  const agents = `${sources.remote} agent${sources.remote === 1 ? "" : "s"}`;
+  const others = otherDesktops(devices);
+  const [only] = others;
+  if (others.length === 1 && only !== undefined) return `${agents} on ${only.name}`;
+  return `${agents} on ${sources.hosts} desktop${sources.hosts === 1 ? "" : "s"}`;
 }
 
 /**
@@ -109,6 +125,13 @@ export function remoteClaim(sources: MonitorSourceCounts): string | null {
  *
  * `no-door` says nothing, deliberately: nobody has been asked yet, and a deck
  * that has not finished coming up is not a mesh that is down.
+ *
+ * *Correction 2026-09-30 (DS-3):* "the ordinary state on a machine whose mesh
+ * flag is off" was the poll's — ghosttea's host ask, refused or thrown. The
+ * mesh board is this desktop's own fieldd answering, and a desktop alone
+ * answers it with itself: no claim at all. This sentence now speaks only when
+ * the board could not be READ — the daemon refused it, or a frame did not
+ * parse — and the reason is fieldd's or the reader's own.
  */
 export function remoteUnavailableClaim(sources: MonitorSourceCounts): string | null {
   if (sources.remoteState !== "unavailable") return null;
@@ -235,12 +258,26 @@ export function GodviewMonitor({
   const showTabs = showsProfileTabs(profileSets);
   const chosen = useMemo(() => chosenProfile(profileSets, profileTab), [profileSets, profileTab]);
 
-  const { agents, actions, sources, acknowledgement, clearAcknowledgement } = useMonitorAgents({
-    palette,
-    door,
-    ...(panes ? { panes } : {}),
-    profiles: profileSets,
-  });
+  const { agents, actions, sources, acknowledgement, clearAcknowledgement, devices } =
+    useMonitorAgents({
+      palette,
+      door,
+      ...(panes ? { panes } : {}),
+      profiles: profileSets,
+    });
+  // DS-3 — THE DEVICE FILTER: one desktop's rows, or every desktop's (the
+  // default). A desktop that leaves the board falls back to all. The chip is
+  // drawn only when there is a choice to make — two desktops or more — and
+  // while its menu is open the stage holds the keys (QL-D2, as the find sheet
+  // does), so a launcher in the focused pane never takes its ⎋.
+  const [deviceChoice, setDeviceChoice] = useState<string | null>(null);
+  const deviceChosen = standingChoice(devices, deviceChoice);
+  const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  useEffect(() => {
+    if (!deviceMenuOpen) return;
+    setMonitorHoldsKeys(true);
+    return () => setMonitorHoldsKeys(false);
+  }, [deviceMenuOpen]);
   const chromeRef = useRef<HTMLDivElement>(null);
   const usagePort = door?.usage;
   const [usageState, setUsageState] = useState<MonitorFeedState>({ state: "no-door" });
@@ -276,12 +313,18 @@ export function GodviewMonitor({
   /** SB-3 — every row says the profile it runs under (`profileSet`), the set
    * the tabs compute: the spawn bloom lights the rows under what it points at. */
   const rows = useMemo(() => withProfileSets(agents, personas), [agents, personas]);
+  /** DS-3 — the chosen desktop's rows (all of them by default): the device
+   * filter NARROWS what the swarm and the list are handed. */
+  const placed = useMemo(() => filterByDevice(rows, deviceChosen), [rows, deviceChosen]);
   /** The rows as the stage draws them: every one, the chosen profile's as
    * they are and the rest receded — still in the physics, in their places. */
-  const staged = useMemo(() => recedeOutside(rows, chosenId, personas), [rows, chosenId, personas]);
+  const staged = useMemo(
+    () => recedeOutside(placed, chosenId, personas),
+    [placed, chosenId, personas],
+  );
   const shown = useMemo(
-    () => (chosenId === undefined ? rows : staged.filter((agent) => agent.receded !== true)),
-    [rows, chosenId, staged],
+    () => (chosenId === undefined ? placed : staged.filter((agent) => agent.receded !== true)),
+    [placed, chosenId, staged],
   );
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
   // AR-7 — the fold's rows for the marker, handed on as the SAME object until
@@ -558,15 +601,27 @@ export function GodviewMonitor({
             </span>
           </>
         }
-        {...(showTabs
+        {...(showTabs || devices.length > 1
           ? {
               centre: (
-                <ProfileTabs
-                  tabs={tabs}
-                  selected={chosenId ?? null}
-                  onSelect={setProfileTab}
-                  shortcuts
-                />
+                <>
+                  {devices.length > 1 ? (
+                    <DeviceFilterChip
+                      devices={devices}
+                      selected={deviceChosen}
+                      onSelect={setDeviceChoice}
+                      onOpenChange={setDeviceMenuOpen}
+                    />
+                  ) : null}
+                  {showTabs ? (
+                    <ProfileTabs
+                      tabs={tabs}
+                      selected={chosenId ?? null}
+                      onSelect={setProfileTab}
+                      shortcuts
+                    />
+                  ) : null}
+                </>
               ),
             }
           : {})}
@@ -654,8 +709,13 @@ export function GodviewMonitor({
               {localUnavailableClaim(sources)}
             </span>
           ) : null}
-          {remoteClaim(sources) !== null ? (
-            <span className="vf-monitor-remote-chip">{remoteClaim(sources)}</span>
+          {remoteClaim(sources, devices) !== null ? (
+            <span className="vf-monitor-remote-chip">
+              {otherDesktops(devices).map((device) => (
+                <OsMark key={device.id} os={device.os} size={8} />
+              ))}
+              {remoteClaim(sources, devices)}
+            </span>
           ) : null}
           {remoteUnavailableClaim(sources) !== null ? (
             <span
