@@ -576,6 +576,33 @@ describe("doc.rename (product WS)", () => {
   });
 });
 
+describe("doc.delete (DS-5, product WS)", () => {
+  it("tombstones the canvas: gone from doc.list, refused by doc.open, NOT_FOUND twice", async () => {
+    const { daemon } = await setup();
+    const rpc = await productRpc(daemon);
+    const kept = (await rpc.call("doc.create", { name: "Kept" })) as DocRegistryEntry;
+    const made = (await rpc.call("doc.create", { name: "Doomed" })) as DocRegistryEntry;
+    const gone = (await rpc.call("doc.delete", { docId: made.docId })) as DocRegistryEntry;
+    expect(DocRegistryEntry.safeParse(gone).success).toBe(true);
+    expect(gone.deletedAt).toBeGreaterThan(0);
+    const listed = (await rpc.call("doc.list", {})) as { docs: DocRegistryEntry[] };
+    expect(listed.docs.map((d) => d.docId)).toContain(kept.docId);
+    expect(listed.docs.map((d) => d.docId)).not.toContain(made.docId);
+    expect((await rpc.callErr("doc.open", { docId: made.docId })).data?.kind).toBe("NOT_FOUND");
+    expect((await rpc.callErr("doc.delete", { docId: made.docId })).data?.kind).toBe("NOT_FOUND");
+  });
+
+  it("a token without doc.write is FORBIDDEN_SCOPE", async () => {
+    const { daemon } = await setup();
+    const owner = await productRpc(daemon);
+    const made = (await owner.call("doc.create", { name: "Board" })) as DocRegistryEntry;
+    const reader = await productRpc(daemon, daemon.tokens.mint(["doc.read"], "reader").token);
+    expect((await reader.callErr("doc.delete", { docId: made.docId })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+  });
+});
+
 describe("doc.setSyncIntent (UA-D7)", () => {
   it("records the intent on the entry and hands it back through doc.list", async () => {
     const { daemon } = await setup();

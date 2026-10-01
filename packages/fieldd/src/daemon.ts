@@ -54,6 +54,7 @@ import {
   createAgentCatalogReaders,
   DeviceGetParams,
   DocCreateParams,
+  DocDeleteParams,
   type DocListResult,
   DocOpenParams,
   type DocOpenResult,
@@ -170,6 +171,7 @@ import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
+import { DocHoldersService, LibraryDocService, systemAccount, systemDocId } from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
 import { type BoardProjection, MeshBoard } from "./mesh-board";
@@ -811,6 +813,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // stays null and every commit takes the same path it always did.
     let docSync: DocSyncService | null = null;
     let presenceRooms: PresenceRoomRouter | null = null;
+    // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
+    let docHolders: DocHoldersService | null = null;
     // UA-D7 — the user's posture, CACHED because the three sync gates ask
     // synchronously (a commit hook cannot await a settings-document read) and
     // because the settings doc is constructed further down. It starts at the
@@ -821,7 +825,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const docs = new DocumentService({
       dataDir: config.dataDir,
       logger: logger.child({ component: "docs.service" }),
-      onCommit: (commit) => docSync?.onCommit(commit),
+      onCommit: (commit) => {
+        docSync?.onCommit(commit);
+        docHolders?.schedule();
+      },
     });
     const laneLink = new MeshLaneLink({
       // WIN-D1, same law as the mgmt dial above: field-native binds this lane
@@ -1026,6 +1033,57 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (event.section === "app") void refreshSyncPosture();
     });
     await refreshSyncPosture();
+    // DS-5 (DS-D6, DS-D18) — the SYSTEM documents join the Loro-level host: the
+    // settings document and the library, under well-known ids derived from the
+    // ACCOUNT (the linked login, else this user root), so every desktop of one
+    // account names the same two documents and no two accounts do. They sync
+    // among the account's desktops by law, never by intent (the posture lives
+    // in one of them). A relink is a new account: both are re-mounted under the
+    // new ids, and the library for the new account is seeded from this
+    // device's canvases (UA-D7: what the link carries is the posture's call).
+    let systemDocs: {
+      account: string;
+      library: LibraryDocService;
+      unregister: Array<() => void>;
+    } | null = null;
+    const mountSystemDocs = async (): Promise<void> => {
+      const account = systemAccount(links.status().link?.login ?? null, config.userId);
+      if (systemDocs?.account === account) return;
+      if (systemDocs !== null) {
+        for (const off of systemDocs.unregister) off();
+        await systemDocs.library.dispose();
+      }
+      const library = new LibraryDocService({
+        dataDir: config.dataDir,
+        docId: systemDocId("library", account),
+        logger: logger.child({ component: "docs.library" }),
+      });
+      await library.ready();
+      systemDocs = {
+        account,
+        library,
+        unregister: [
+          docs.registerSystemDoc(
+            systemDocId("settings", account),
+            "Settings",
+            settingsDoc.hostDoc(),
+            settingsDoc.hostOwner(),
+          ),
+          docs.registerSystemDoc(library.docId, "Library", library.doc, library.hostOwner()),
+        ],
+      };
+      await docs.attachLibrary(library, (entry) =>
+        resolveSyncIntent(entry.syncIntent, syncPosture),
+      );
+    };
+    await mountSystemDocs();
+    links.on("changed", () => {
+      void mountSystemDocs().catch((error) =>
+        logger.warn("fieldd.docs.system_remount_failed", "System documents were not re-mounted", {
+          error: String(error),
+        }),
+      );
+    });
     // P5 — settings + KV storage (§16.2/§16.3); user scope rides the doc
     const settings = new PluginSettingsService({
       dataDir: config.dataDir,
@@ -2629,7 +2687,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     api.register("doc.list", (ctx) => {
       requireLocalDocumentCaller(ctx);
-      const result: DocListResult = { docs: docs.list() };
+      // DS-5 (DS-D7) — `elsewhere`: library canvases held only on another
+      // desktop (a `local` canvas lives on its own), listed, not openable here.
+      const elsewhere = docs.elsewhere();
+      const result: DocListResult = {
+        docs: docs.list(),
+        ...(elsewhere.length > 0 ? { elsewhere } : {}),
+      };
       return result;
     });
     api.register("doc.open", (ctx, params) => {
@@ -2657,6 +2721,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       // label-only edit — docCount is unchanged, so no emitHealth here
       return docs.rename(parsed.data.docId, parsed.data.name);
+    });
+    // DS-5 (DS-D6) — a tombstone in the library: the canvas leaves every
+    // desktop's list and its lanes stop; its bytes stay on disk.
+    api.register("doc.delete", async (ctx, params) => {
+      requireLocalDocumentCaller(ctx);
+      const parsed = DocDeleteParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { docId: uuid }", false);
+      const entry = await docs.delete(parsed.data.docId);
+      emitHealth(); // docCount moved
+      return entry;
     });
     // UA-D7 — "may this doc leave the device?". The registry write is the whole
     // mutation: the three sync gates read the resolver on every decision, so
@@ -2808,6 +2883,30 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         return () => devices.off("changed", cb);
       },
     });
+    // DS-5 (DS-D6) — the holders slice, `field.docs.v1`, device-owned: what this
+    // desktop holds (with the host's version — the compaction watermark's input,
+    // DS §5.3) and, from the other slices, where a canvas held only elsewhere
+    // lives. `fresh` is the sync fold's own word: nothing known un-synced.
+    const holders = new DocHoldersService({
+      mesh,
+      deviceId: () => devices.list().find((d) => d.self)?.deviceId ?? "",
+      holdings: () =>
+        docs.holdings((docId) => {
+          const standing = docSync?.statuses().find((s) => s.docId === docId);
+          return standing === undefined || standing.state === "in-step";
+        }),
+      logger: logger.child({ component: "docs.holders" }),
+    });
+    docHolders = holders;
+    docs.setHomes((docId) => holders.homesOf(docId));
+    docs.onCatalogChanged(() => holders.schedule());
+    if (MESH_BUS_CARRIES_CONTENT) {
+      void holders.start().catch((error) =>
+        logger.info("fieldd.docs.holders_unavailable", "The holders slice is not live yet", {
+          error: String(error),
+        }),
+      );
+    }
     api.register("device.list", () => ({ devices: devices.list() }));
     api.register("device.get", (_ctx, params) => {
       const parsed = DeviceGetParams.safeParse(params);
@@ -4907,6 +5006,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           endpoints.dispose();
           mcp.dispose();
           await settingsDoc.dispose(); // D29′ — the doc's writes are already durable
+          docHolders?.stop(); // DS-5 — the slice expires with its publisher
+          for (const off of systemDocs?.unregister ?? []) off();
+          await systemDocs?.library.dispose(); // DS-5 — every library write is durable
           api.close();
           docLane.close();
           await presenceRooms?.stop();

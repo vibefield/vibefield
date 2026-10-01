@@ -323,6 +323,9 @@ export class DocSyncService {
     const out: DocSyncStatus[] = [];
     for (const [docId, facts] of this.#facts) {
       if (this.#isLocal(docId)) continue;
+      // DS-5 — system documents (settings, library) sync with the canvases and
+      // are not canvases: the renderer's sync rows and pill dots key canvases.
+      if (this.#docs.isSystemDoc(docId)) continue;
       out.push({
         docId,
         // null is the honest unknown-doc face: a peer syncs a doc this device

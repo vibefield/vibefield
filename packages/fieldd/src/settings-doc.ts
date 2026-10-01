@@ -4,6 +4,7 @@ import { dirname, join } from "node:path";
 import { InstallSetEntry, LAYOUT, SETTINGS_DOC_SECTIONS } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, UndoManager } from "loro-crdt";
+import type { SystemDocOwner } from "./doc-service";
 
 // SettingsDocService (D29′, P7): fieldd's FIRST live Loro doc — the system
 // settings doc. One doc, three section families (contracts
@@ -28,6 +29,15 @@ import { LoroDoc, UndoManager } from "loro-crdt";
 // it joins field.docs.v1 (system:true) and rides the doc-sync lanes when that
 // track lands; today it persists locally like every other doc (recorded
 // delta, thinking-p7).
+//
+// CORRECTED 2026-09-30 (DS-5, DS-D18): it rides the lanes now, though not as a
+// field.docs.v1 row — DocumentService.registerSystemDoc hands THIS LoroDoc to
+// the Loro-level host under a well-known id derived from the account, and the
+// host merges a peer desktop's settings into it (`hostOwner`: persist, then
+// every section is announced as changed — the posture, the app preferences,
+// and the install-set the reconciler applies). Undo stays this device's: the
+// UndoManager tracks local ops only, so a merged peer edit is never undone by
+// ⌘Z here (law 2 holds across devices too).
 
 export interface SettingsDocConfig {
   dataDir: string;
@@ -53,6 +63,26 @@ export class SettingsDocService extends EventEmitter {
       // OUTSIDE the undo stack, by origin prefix
       excludeOriginPrefixes: ["no-undo:", "migrate:"],
     });
+  }
+
+  /** DS-5 — the document the Loro-level host merges into. */
+  hostDoc(): LoroDoc {
+    return this.doc;
+  }
+
+  /** DS-5 — what the host needs after merging a peer's settings: persist (never
+   * before this device's own file has loaded — a merge must not be written over
+   * a doc that has not read its disk yet), then tell every section's listeners. */
+  hostOwner(): SystemDocOwner {
+    return {
+      persist: async () => {
+        await this.ready();
+        await this.persistNow();
+      },
+      merged: () => {
+        for (const section of ["app", "settings", "installSet"]) this.emit("changed", { section });
+      },
+    };
   }
 
   /** Lazy one-time load + legacy migration; every public method awaits it. */

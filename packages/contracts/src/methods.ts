@@ -542,6 +542,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "sync",
   }),
+  // DS-5 (DS-D6) — a tombstone in the library: the canvas leaves every desktop's
+  // list and its lanes stop; the bytes stay on disk (deleting is an act).
+  defineMethod({
+    surface: "product",
+    method: "doc.delete",
+    scope: "doc.write",
+    idempotent: false,
+    locality: "sync",
+  }),
   // UA-D7 — may this doc leave this device? `local` locality is the honest
   // class and not a shortcut: the answer is this device's own, held in this
   // device's registry, and it does not replicate (the C6-4 doc-existence debt).

@@ -4,6 +4,9 @@ import { mkdir, open, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
   DOC_SYNC_RECORD,
+  type DocElsewhere,
+  type DocHolding,
+  type DocLibraryEntry,
   DocMeta,
   DocRegistryEntry,
   type DocSyncIntent,
@@ -19,6 +22,7 @@ import {
   durableRenameSync,
   type Logger,
 } from "@vibefield/logging";
+import type { LoroDoc } from "loro-crdt";
 import { hasIce1Magic, liftIce1 } from "./ice1-envelope";
 import {
   covers,
@@ -29,6 +33,7 @@ import {
   LoroHost,
   loroBlobMode,
   snapshotVersion,
+  versionToBase64,
 } from "./loro-host";
 import { RpcCallError } from "./native-link";
 
@@ -99,6 +104,41 @@ export type RemoteRecordOutcome =
         /** DS-5 — bytes the host could not read as Loro at all. */
         | "undecodable";
     };
+
+/** DS-5 — what the host needs from the service that OWNS a system document
+ * (settings, library): the owner persists and reacts; the host merges. */
+export interface SystemDocOwner {
+  /** Persist the document after a peer's bytes were merged into it. */
+  persist(): Promise<void>;
+  /** The document changed under its owner (a merge): refresh what derives. */
+  merged?(): void;
+}
+
+/** DS-5 (DS-D6) — the library, as the catalog reads and writes it. */
+export interface DocLibraryPort {
+  entries(): DocLibraryEntry[];
+  upsert(entry: DocLibraryEntry, by: string): Promise<void>;
+  rename(docId: string, name: string, by: string): Promise<void>;
+  setSyncIntent(docId: string, intent: DocSyncIntent, by: string): Promise<void>;
+  tombstone(docId: string, at: number, by: string): Promise<void>;
+  on(event: "changed", fn: (change: { origin: "local" | "remote" }) => void): unknown;
+  off(event: "changed", fn: (change: { origin: "local" | "remote" }) => void): unknown;
+}
+
+/** DS-5 — what a library reconcile did to this device's catalog. */
+export interface CatalogChange {
+  /** Canvases another desktop created, now held (empty) here for replication. */
+  adopted: string[];
+  /** Canvases a tombstone removed from this device's list. */
+  removed: string[];
+}
+
+interface SystemDoc {
+  name: string;
+  hosted: HostedDoc;
+  owner: SystemDocOwner;
+  unsubscribe: () => void;
+}
 
 /** DS-5 — the host's standing for one doc, for a VERSION record. */
 export interface HostVersion {
@@ -223,6 +263,16 @@ export class DocumentService {
   /** DS-5 — docs whose current checkpoint the frame rule cannot lift: opaque
    * custody, remembered so a HAVE does not re-read the file every time. */
   private readonly opaque = new Set<string>();
+  /** DS-5 — system documents (settings, library), merged here, owned elsewhere. */
+  private readonly system = new Map<string, SystemDoc>();
+  /** DS-5 (DS-D6) — the library this catalog derives from, once attached. */
+  private library: DocLibraryPort | null = null;
+  private libraryIntent: (entry: DocLibraryEntry) => DocSyncIntent = (entry) =>
+    entry.syncIntent ?? "sync";
+  private detachLibrary: (() => void) | null = null;
+  private catalogChain: Promise<void> = Promise.resolve();
+  private readonly catalogListeners = new Set<(change: CatalogChange) => void>();
+  private homesOf: (docId: string) => string[] = () => [];
 
   constructor(opts: DocumentServiceOptions) {
     this.dataDir = opts.dataDir;
@@ -255,13 +305,15 @@ export class DocumentService {
 
   async create(name: string): Promise<DocRegistryEntry> {
     const docId = randomUUID();
+    const createdAt = this.now();
     const entry: DocRegistryEntry = {
       docId,
       name,
-      updatedAt: this.now(),
+      updatedAt: createdAt,
       baseEpoch: 0,
       engineSchema: null,
       sizeBytes: 0,
+      createdAt,
     };
     try {
       await mkdir(join(this.docsDir, docId), { recursive: true });
@@ -271,11 +323,50 @@ export class DocumentService {
       this.registry.delete(docId);
       throw this.storageError("create", err);
     }
+    // DS-5 (DS-D6) — the canvas EXISTS for every desktop of the account from here.
+    await this.toLibrary("create", (library) =>
+      library.upsert({ docId, name, createdAt, engineSchema: null, baseEpoch: 0 }, "create"),
+    );
     return entry;
   }
 
+  /** This device's canvases — a tombstoned one is gone from every list. */
   list(): DocRegistryEntry[] {
-    return [...this.registry.values()];
+    return [...this.registry.values()].filter((entry) => entry.deletedAt === undefined);
+  }
+
+  /** DS-5 (DS-D7) — canvases the library lists that this device does not hold:
+   * a `local` canvas living on another desktop. Listed, never openable here. */
+  elsewhere(): DocElsewhere[] {
+    if (this.library === null) return [];
+    const out: DocElsewhere[] = [];
+    for (const entry of this.library.entries()) {
+      if (entry.tombstone !== undefined || this.registry.has(entry.docId)) continue;
+      out.push({ docId: entry.docId, name: entry.name, homes: this.homesOf(entry.docId) });
+    }
+    return out;
+  }
+
+  /** DS-5 — doc.delete: a TOMBSTONE, in the registry and the library, so the
+   * canvas leaves every desktop's list and its lanes stop. The bytes stay on
+   * disk — deleting is an act, and no settings undo can reach it (D29′). */
+  async delete(docId: string): Promise<DocRegistryEntry> {
+    const entry = this.registry.get(docId);
+    if (!entry || entry.deletedAt !== undefined) {
+      throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
+    }
+    const deletedAt = this.now();
+    const tombstoned: DocRegistryEntry = { ...entry, deletedAt };
+    this.registry.set(docId, tombstoned);
+    try {
+      await this.persistRegistry();
+    } catch (err) {
+      this.registry.set(docId, entry);
+      throw this.storageError("delete", err);
+    }
+    this.host.delete(docId);
+    await this.toLibrary("delete", (library) => library.tombstone(docId, deletedAt, "delete"));
+    return tombstoned;
   }
 
   /** Relabels a doc in place. Deliberately does NOT bump updatedAt: recency means
@@ -292,6 +383,7 @@ export class DocumentService {
       this.registry.set(docId, entry);
       throw this.storageError("rename", err);
     }
+    await this.toLibrary("rename", (library) => library.rename(docId, name, "rename"));
     return renamed;
   }
 
@@ -314,6 +406,12 @@ export class DocumentService {
       this.registry.set(docId, entry);
       throw this.storageError("setSyncIntent", err);
     }
+    // DS-5 — the intent converges across desktops with the canvas's library row
+    // (UA-D7's named follow-up); this device's registry answers first, so the
+    // gates move the instant the local write is durable.
+    await this.toLibrary("setSyncIntent", (library) =>
+      library.setSyncIntent(docId, intent, "setSyncIntent"),
+    );
     return next;
   }
 
@@ -321,14 +419,235 @@ export class DocumentService {
    * caller folds in the user's posture (fieldd's `resolveSyncIntent`), because
    * the posture is a settings-document fact this service knows nothing about. */
   syncIntentOf(docId: string): DocSyncIntent | undefined {
-    return this.registry.get(docId)?.syncIntent;
+    // DS-5 — system documents sync among the account's desktops by law, never
+    // by intent; a tombstoned canvas's content stops travelling.
+    if (this.system.has(docId)) return "sync";
+    const entry = this.registry.get(docId);
+    if (entry?.deletedAt !== undefined) return "local";
+    return entry?.syncIntent;
+  }
+
+  // ---- system documents and the library (DS-5, DS-D6) ----
+
+  /** Register a SYSTEM document (settings, library): owned and persisted by its
+   * service, merged by the host, synced among the account's desktops, never
+   * subject to per-document intent, never listed or openable. Its local
+   * commits are announced exactly like a canvas's. Returns the unregister. */
+  registerSystemDoc(docId: string, name: string, doc: LoroDoc, owner: SystemDocOwner): () => void {
+    this.system.get(docId)?.unsubscribe();
+    const hosted = new HostedDoc(docId, doc);
+    const unsubscribe = doc.subscribeLocalUpdates((bytes) => {
+      this.announce({
+        docId,
+        origin: "local",
+        kind: "update",
+        payload: bytes,
+        meta: {
+          engineSchema: null,
+          savedAt: this.now(),
+          byteLength: bytes.byteLength,
+          baseEpoch: 0,
+        },
+        baseEpoch: 0,
+      });
+    });
+    this.system.set(docId, { name, hosted, owner, unsubscribe });
+    return () => {
+      const held = this.system.get(docId);
+      if (held?.hosted !== hosted) return;
+      held.unsubscribe();
+      this.system.delete(docId);
+    };
+  }
+
+  isSystemDoc(docId: string): boolean {
+    return this.system.has(docId);
+  }
+
+  systemDocIds(): string[] {
+    return [...this.system.keys()];
+  }
+
+  /** Attach the library this catalog derives from (DS-D6). `resolveIntent`
+   * folds a row's own intent with the user's posture — a canvas another
+   * desktop made is held here only when it resolves to `sync`. */
+  async attachLibrary(
+    library: DocLibraryPort,
+    resolveIntent?: (entry: DocLibraryEntry) => DocSyncIntent,
+  ): Promise<void> {
+    this.detachLibrary?.();
+    this.library = library;
+    if (resolveIntent !== undefined) this.libraryIntent = resolveIntent;
+    const onChanged = (change: { origin: "local" | "remote" }): void => {
+      if (change.origin === "remote") void this.reconcileLibrary();
+    };
+    library.on("changed", onChanged);
+    this.detachLibrary = () => {
+      library.off("changed", onChanged);
+      if (this.library === library) this.library = null;
+    };
+    await this.reconcileLibrary();
+  }
+
+  /** Where another device's holders slice says a canvas lives. */
+  setHomes(homesOf: (docId: string) => string[]): void {
+    this.homesOf = homesOf;
+  }
+
+  /** Fires after a library reconcile changed this device's catalog. */
+  onCatalogChanged(fn: (change: CatalogChange) => void): () => void {
+    this.catalogListeners.add(fn);
+    return () => this.catalogListeners.delete(fn);
+  }
+
+  /** The library → catalog fold, on its own chain. Local rows the library
+   * lacks are SEEDED into it (canvases older than the library, or made while
+   * it was away); library rows this device lacks are ADOPTED when they resolve
+   * to `sync` (an empty holding the version exchange fills); a tombstone
+   * removes; a name or intent the library changed is taken. The library is
+   * the truth for existence, names and intent — the registry is this device's
+   * derived cache plus the content columns only it can know. */
+  reconcileLibrary(): Promise<void> {
+    const run = this.catalogChain.catch(() => {}).then(() => this.reconcileLibraryNow());
+    this.catalogChain = run;
+    return run;
+  }
+
+  private async reconcileLibraryNow(): Promise<void> {
+    const library = this.library;
+    if (library === null) return;
+    const known = new Map(library.entries().map((entry) => [entry.docId, entry]));
+    for (const entry of [...this.registry.values()]) {
+      if (known.has(entry.docId) || entry.deletedAt !== undefined || entry.system === true)
+        continue;
+      await this.toLibrary("seed", (lib) =>
+        lib.upsert(
+          {
+            docId: entry.docId,
+            name: entry.name,
+            createdAt: entry.createdAt ?? entry.updatedAt,
+            engineSchema: entry.engineSchema,
+            baseEpoch: entry.baseEpoch,
+            ...(entry.syncIntent !== undefined ? { syncIntent: entry.syncIntent } : {}),
+          },
+          "seed",
+        ),
+      );
+    }
+    const change: CatalogChange = { adopted: [], removed: [] };
+    let dirty = false;
+    for (const row of known.values()) {
+      const local = this.registry.get(row.docId);
+      if (row.tombstone !== undefined) {
+        if (local !== undefined && local.deletedAt === undefined) {
+          this.registry.set(row.docId, { ...local, deletedAt: row.tombstone });
+          this.host.delete(row.docId);
+          change.removed.push(row.docId);
+          dirty = true;
+        }
+        continue;
+      }
+      if (local === undefined) {
+        if (this.libraryIntent(row) !== "sync") continue; // lives elsewhere: listed, not held
+        try {
+          await mkdir(join(this.docsDir, row.docId), { recursive: true });
+        } catch (err) {
+          this.logger
+            .child({ docId: row.docId })
+            .warn("fieldd.docs.adopt_failed", "A library canvas could not be held here", {
+              error: errMsg(err),
+            });
+          continue;
+        }
+        this.registry.set(row.docId, {
+          docId: row.docId,
+          name: row.name,
+          updatedAt: row.createdAt,
+          baseEpoch: row.baseEpoch,
+          engineSchema: row.engineSchema,
+          sizeBytes: 0,
+          createdAt: row.createdAt,
+          ...(row.syncIntent !== undefined ? { syncIntent: row.syncIntent } : {}),
+        });
+        change.adopted.push(row.docId);
+        dirty = true;
+        continue;
+      }
+      if (local.deletedAt !== undefined) continue;
+      const name = row.name !== local.name ? row.name : local.name;
+      const syncIntent = row.syncIntent ?? local.syncIntent;
+      if (name !== local.name || syncIntent !== local.syncIntent) {
+        this.registry.set(row.docId, {
+          ...local,
+          name,
+          ...(syncIntent !== undefined ? { syncIntent } : {}),
+        });
+        dirty = true;
+      }
+    }
+    if (!dirty) return;
+    try {
+      await this.persistRegistry();
+    } catch (err) {
+      this.logger.error(
+        "fieldd.docs.library_reconcile_persist_failed",
+        "The library-derived registry could not be persisted",
+        err,
+      );
+    }
+    for (const fn of this.catalogListeners) {
+      try {
+        fn(change);
+      } catch (error) {
+        this.logger.warn("fieldd.docs.catalog_listener_failed", "A catalog listener threw", {
+          error: String(error),
+        });
+      }
+    }
+  }
+
+  /** What this device holds, for its holders slice (`field.docs.v1`). */
+  async holdings(isFresh: (docId: string) => boolean): Promise<DocHolding[]> {
+    const out: DocHolding[] = [];
+    for (const entry of this.list()) {
+      if (!this.hasStoredDoc(entry.docId)) continue;
+      const hosted = this.host.get(entry.docId);
+      out.push({
+        docId: entry.docId,
+        baseEpoch: entry.baseEpoch,
+        ...(hosted !== undefined ? { headVersion: versionToBase64(hosted.version()) } : {}),
+        fresh: isFresh(entry.docId),
+        heldSince: entry.createdAt ?? entry.updatedAt,
+      });
+    }
+    return out;
+  }
+
+  /** A library write that fails is LOGGED, never thrown into the catalog
+   * write that caused it: this device's registry is already durable, and the
+   * next reconcile seeds whatever the library missed. */
+  private async toLibrary(
+    op: string,
+    write: (library: DocLibraryPort) => Promise<void>,
+  ): Promise<void> {
+    const library = this.library;
+    if (library === null) return;
+    try {
+      await write(library);
+    } catch (error) {
+      this.logger.warn("fieldd.docs.library_write_failed", "A library write failed", {
+        op,
+        error: String(error),
+      });
+    }
   }
 
   // ---- lane admission ----
 
   /** Mints a one-shot lane ticket, or refuses if a writer already holds the doc. */
   open(docId: string): DocOpenGrant {
-    if (!this.registry.has(docId))
+    const listed = this.registry.get(docId);
+    if (listed === undefined || listed.deletedAt !== undefined)
       throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
     if (this.writers.has(docId))
       throw new RpcCallError("PRECONDITION_FAILED", "another writer holds the doc lane", false, {
@@ -942,7 +1261,58 @@ export class DocumentService {
    * the host and the journal together, and a write arriving between the two
    * halves would persist a delta computed against a state that no longer is. */
   applyRemoteRecord(docId: string, record: DocSyncRecord): Promise<RemoteRecordOutcome> {
+    const system = this.system.get(docId);
+    if (system !== undefined) {
+      return this.serialize(docId, () => this.mergeSystemNow(system, record));
+    }
     return this.serialize(docId, () => this.applyRemoteRecordNow(docId, record));
+  }
+
+  /** DS-5 — a peer's update to a SYSTEM document: merged into the owner's own
+   * LoroDoc, persisted by the owner, and the owner told (settings refresh their
+   * posture and plugin set; the library reconciles the catalog). Never
+   * announced — a peer's record is never sent back. */
+  private async mergeSystemNow(
+    system: SystemDoc,
+    record: DocSyncRecord,
+  ): Promise<RemoteRecordOutcome> {
+    if (record.kind !== DOC_SYNC_RECORD.UPDATE) return { applied: false, reason: "unknown-kind" };
+    if (record.meta.baseEpoch !== 0) return { applied: false, reason: "epoch-mismatch" };
+    let imported: HostImport;
+    try {
+      imported = system.hosted.import(record.payload);
+    } catch {
+      return { applied: false, reason: "undecodable" };
+    }
+    if (!imported.changed) {
+      return { applied: false, reason: imported.pending ? "pending" : "already-held" };
+    }
+    try {
+      await system.owner.persist();
+    } catch (error) {
+      // The merge stands in memory; the owner's next write persists it. Said,
+      // because a lost persist is a lost merge across a restart.
+      this.logger.warn(
+        "fieldd.docs.system_persist_failed",
+        "A system document merged a peer's update but could not persist it",
+        { docId: system.hosted.docId, error: String(error) },
+      );
+    }
+    try {
+      system.owner.merged?.();
+    } catch (error) {
+      this.logger.warn("fieldd.docs.system_listener_failed", "A system document owner threw", {
+        docId: system.hosted.docId,
+        error: String(error),
+      });
+    }
+    const meta: DocMeta = {
+      engineSchema: null,
+      savedAt: record.meta.savedAt,
+      byteLength: record.payload.byteLength,
+      baseEpoch: 0,
+    };
+    return imported.pending ? { applied: true, meta, pending: true } : { applied: true, meta };
   }
 
   private async applyRemoteRecordNow(
@@ -1074,6 +1444,14 @@ export class DocumentService {
    * exchange cannot speak for it — an unknown doc, or one in opaque custody
    * (the legacy HAVE speaks for that one). */
   hostVersion(docId: string): Promise<HostVersion | null> {
+    const system = this.system.get(docId);
+    if (system !== undefined) {
+      return Promise.resolve({
+        version: system.hosted.encodedVersion(),
+        hasCheckpoint: true,
+        baseEpoch: 0,
+      });
+    }
     return this.serialize(docId, async () => {
       const entry = this.registry.get(docId);
       if (entry === undefined) return null;
@@ -1101,6 +1479,16 @@ export class DocumentService {
    * nothing to say: an unknown or opaque doc, another epoch (S4 — never answer
    * across a compaction), or a version the bytes do not decode to. */
   hostAnswer(docId: string, theirs: HostVersion): Promise<HostAnswer | null> {
+    const system = this.system.get(docId);
+    if (system !== undefined) {
+      const version = theirs.baseEpoch === 0 ? decodeVersion(theirs.version) : null;
+      if (version === null) return Promise.resolve(null);
+      return Promise.resolve({
+        meta: { baseEpoch: 0, engineSchema: null, savedAt: this.now() },
+        snapshot: null,
+        update: system.hosted.isAheadOf(version) ? system.hosted.exportSince(version) : null,
+      });
+    }
     return this.serialize(docId, async () => {
       const entry = this.registry.get(docId);
       if (entry === undefined || theirs.baseEpoch !== entry.baseEpoch) return null;
@@ -1136,6 +1524,11 @@ export class DocumentService {
   /** Does this device's host hold everything `version` names? False for a doc
    * outside Loro custody — nothing can be claimed about it. */
   hostCovers(docId: string, version: Uint8Array): Promise<boolean> {
+    const system = this.system.get(docId);
+    if (system !== undefined) {
+      const theirs = decodeVersion(version);
+      return Promise.resolve(theirs !== null && covers(system.hosted.version(), theirs));
+    }
     return this.serialize(docId, async () => {
       const hosted = await this.hostedNow(docId);
       const theirs = decodeVersion(version);
