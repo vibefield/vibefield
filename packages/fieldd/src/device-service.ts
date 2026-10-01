@@ -4,6 +4,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { dirname, join } from "node:path";
 import {
+  CONTRACTS_VERSION,
   DEVICE_LIMITS,
   type DeviceInfo,
   DeviceSlice,
@@ -116,24 +117,50 @@ interface PeerLinkView {
   /** DS-L8 — the peer's door as last heard (PeerLink.doorState). Optional so
    * a view that cannot say leaves every online peer `awake`. */
   doorState?(deviceId: string): "answers" | "silent" | "incompatible" | undefined;
+  /** S6 (the landing review, 2026-10-01) — forget a door's silence
+   * (PeerLink.clearSilent). Called when the tailnet flips the node's `online`:
+   * silence heard before a node slept says nothing about the daemon it wakes
+   * with. Optional, like `doorState`. */
+  clearSilent?(deviceId: string): void;
   on(event: "link-changed" | "door-changed", fn: (ev: unknown) => void): unknown;
 }
 
+const contractsMajor = (version: string): string => version.split(".")[0] ?? version;
+
+/** DS-L9 — is a contracts version a device PUBLISHED another major than ours?
+ * The door's own rule (`product-api.ts`'s hello compares the first dotted
+ * part), applied to the version a peer's slice states, so the roster says
+ * `incompatible` before anything is asked of the peer rather than after a
+ * forward is refused. One helper for the roster (`deviceState`) and the mesh
+ * board (`mesh-board.ts`), so the two cannot disagree (the landing review, S6,
+ * 2026-10-01). No version — a peer row with no slice yet — is no verdict. */
+export function isAnotherContractsMajor(published: string | undefined): boolean {
+  if (published === undefined) return false;
+  return contractsMajor(published) !== contractsMajor(CONTRACTS_VERSION);
+}
+
 /** DS-L8 — the roster's state for one row. Self is awake (it is this
- * process); a peer whose door refused our contracts major is `incompatible`
- * whatever else is true (it is not asked until this daemon restarts); a node
- * the tailnet does not list online is `asleep`; a node it does list whose door
- * last went unanswered is `restarting` (field-native outlives fieldd — the
- * node's `online` is not the daemon's); everything else is `awake`, including
- * a peer never dialled: no answer yet is not silence. */
+ * process); a peer whose door refused our contracts major — or whose slice
+ * PUBLISHES another major (DS-L9: not asked; S6, 2026-10-01) — is
+ * `incompatible` whatever else is true (it is not asked until this daemon
+ * restarts); a node the tailnet does not list online is `asleep`; a node it
+ * does list whose door last went unanswered is `restarting` (field-native
+ * outlives fieldd — the node's `online` is not the daemon's); everything else
+ * is `awake`, including a peer never dialled: no answer yet is not silence. */
 export function deviceState(
   self: boolean,
   online: boolean,
   door: "answers" | "silent" | "incompatible" | undefined,
   link: "connected" | "dialing" | "incompatible" | undefined,
+  contractsVersion?: string | undefined,
 ): DeviceState {
   if (self) return "awake";
-  if (door === "incompatible" || link === "incompatible") return "incompatible";
+  if (
+    door === "incompatible" ||
+    link === "incompatible" ||
+    isAnotherContractsMajor(contractsVersion)
+  )
+    return "incompatible";
   if (!online) return "asleep";
   if (door === "silent") return "restarting";
   return "awake";
@@ -161,6 +188,13 @@ export class DeviceService extends EventEmitter {
   /** UA-P-0e — the self-peer set, keyed by the roster ULID. Rebuilt whole on
    * every peer refresh; a peer that leaves the set leaves the roster. */
   private selfPeers = new Map<string, SelfPeer>();
+  /** S6 (the landing review, 2026-10-01) — each correlated peer's `online` as
+   * the last registry pass read it, keyed by the roster ULID (PeerLink's
+   * keyspace). A FLIP clears the door's silent mark (`clearSilent`), or a
+   * desktop that slept and woke read `restarting` until some call to it
+   * happened to succeed. Kept across passes, bounded by this account's
+   * devices. */
+  private lastOnline = new Map<string, boolean>();
   private storeSubscribed = false;
   private storeOff: (() => void) | null = null;
   /** UA-P-0e — the roster is built from the tailnet's peer registry now, so a
@@ -342,6 +376,7 @@ export class DeviceService extends EventEmitter {
     this.tsByUlid.clear();
     this.dnsByUlid.clear();
     this.selfPeers.clear();
+    const flipped: string[] = [];
     for (const p of raw) {
       const parsed = PeerInfo.safeParse(p);
       if (!parsed.success) continue; // tolerant: a malformed peer never breaks the roster
@@ -353,6 +388,10 @@ export class DeviceService extends EventEmitter {
       // a peer without a published ULID stays uncorrelated — its slice (if
       // any) reads offline honestly rather than joining on a guessed key
       if (parsed.data.deviceId === undefined) continue;
+      // S6 — the node's `online` moved since the last pass (slept, or woke)
+      const was = this.lastOnline.get(parsed.data.deviceId);
+      this.lastOnline.set(parsed.data.deviceId, parsed.data.online);
+      if (was !== undefined && was !== parsed.data.online) flipped.push(parsed.data.deviceId);
       this.tsByUlid.set(parsed.data.deviceId, parsed.data.id);
       const dnsName = canonicalTailnetDnsName(parsed.data.whois?.deviceName);
       if (dnsName !== undefined) this.dnsByUlid.set(parsed.data.deviceId, dnsName);
@@ -377,6 +416,12 @@ export class DeviceService extends EventEmitter {
         ...(dnsName !== undefined ? { dnsName } : {}),
       });
     }
+    // S6 (the landing review, 2026-10-01) — a node that went offline or came
+    // back online forgets what its door last said: silence heard before it
+    // slept is not the daemon it woke with (DS-L8's `restarting` is a silent
+    // door on a LIVE node). After the pass, so the roster a `door-changed`
+    // re-emits is already whole.
+    for (const deviceId of flipped) this.peers?.clearSilent?.(deviceId);
   }
 
   /** UA-P-0e (D2) — the peers this account owns, in the DIAL keyspace. The one
@@ -574,6 +619,9 @@ export class DeviceService extends EventEmitter {
           self ? true : (live?.online ?? false),
           self ? undefined : this.peers?.doorState?.(deviceId),
           link,
+          // DS-L9 (S6) — the major the peer's slice PUBLISHES: another one
+          // reads `incompatible` before anything is asked of it
+          self ? undefined : slice.contractsVersion,
         ),
         lastSeenAt: Math.max(slice.publishedAt, live?.lastSeen ?? 0),
         ...(tailscaleId !== undefined ? { tailscaleId } : {}),

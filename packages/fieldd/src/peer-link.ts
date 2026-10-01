@@ -522,6 +522,17 @@ export class PeerLink extends EventEmitter {
     if (this.silentSince.delete(deviceId)) this.emit("door-changed", { deviceId, door: "answers" });
   }
 
+  /** S6 (the landing review, 2026-10-01) — forget that the door went silent.
+   * The roster calls it when the tailnet flips the node's `online`
+   * (`device-service.ts`): silence heard before a node slept says nothing
+   * about the daemon it woke with, and the mark used to survive the cycle, so
+   * a desktop that slept and woke read `restarting` until some call to it
+   * happened to succeed. Nothing is known afterwards (`doorState` reads
+   * `undefined` unless a live link says otherwise) — not "answers". */
+  clearSilent(deviceId: string): void {
+    if (this.silentSince.delete(deviceId)) this.emit("door-changed", { deviceId, door: undefined });
+  }
+
   private pinIncompatible(deviceId: string): void {
     this.incompatible.add(deviceId);
     this.dropLink(deviceId, "incompatible");

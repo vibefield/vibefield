@@ -2,9 +2,10 @@
 // (PeerLink.doorState), which the roster turns into `awake` / `restarting` /
 // `asleep` / `incompatible` (device-service `deviceState`). A real PeerLink
 // against a scripted door: answered, cut, dead, refused, skewed.
+import { CONTRACTS_VERSION } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { deviceState } from "../src/device-service";
+import { deviceState, isAnotherContractsMajor } from "../src/device-service";
 import { PeerLink } from "../src/peer-link";
 import { answer, refuse, scriptedDoor } from "./scripted-door";
 import { until } from "./ws-rpc";
@@ -46,6 +47,39 @@ describe("the roster's state (deviceState)", () => {
     expect(deviceState(false, true, "answers", "connected")).toBe("awake");
     // never dialled is not silent
     expect(deviceState(false, true, undefined, undefined)).toBe("awake");
+  });
+
+  // S6 (the landing review, 2026-10-01) — DS-L9: another major is not asked,
+  // and the roster says so from the version the peer's slice PUBLISHES.
+  it("a peer that publishes another contracts major is incompatible whatever else is true", () => {
+    const [ours] = CONTRACTS_VERSION.split(".");
+    const next = `${Number(ours) + 1}.0.0`;
+    expect(isAnotherContractsMajor(next)).toBe(true);
+    expect(isAnotherContractsMajor(`${ours}.42.7`)).toBe(false); // a minor is not a major
+    expect(isAnotherContractsMajor(CONTRACTS_VERSION)).toBe(false);
+    expect(isAnotherContractsMajor(undefined)).toBe(false); // no slice yet: no verdict
+    expect(deviceState(false, true, undefined, undefined, next)).toBe("incompatible");
+    expect(deviceState(false, false, "silent", undefined, next)).toBe("incompatible");
+    expect(deviceState(false, true, "answers", "connected", `${ours}.9.9`)).toBe("awake");
+    // self is self, whatever it says
+    expect(deviceState(true, true, undefined, undefined, next)).toBe("awake");
+  });
+});
+
+describe("PeerLink.clearSilent (S6)", () => {
+  it("forgets a silent door — no evidence after, not 'answers' — and announces it once", async () => {
+    const { link, doors } = linkTo("ws://127.0.0.1:1/", { callTimeoutMs: 300 });
+    await expect(link.request("dev-b", "device.list", {})).rejects.toMatchObject({
+      details: { state: "unreachable" },
+    });
+    expect(link.doorState("dev-b")).toBe("silent");
+    link.clearSilent("dev-b");
+    expect(link.doorState("dev-b")).toBeUndefined();
+    expect(doors).toEqual(["silent", undefined]);
+    // nothing to forget is nothing to announce
+    link.clearSilent("dev-b");
+    link.clearSilent("dev-never");
+    expect(doors).toEqual(["silent", undefined]);
   });
 });
 

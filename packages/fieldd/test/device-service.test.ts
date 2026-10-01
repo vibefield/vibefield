@@ -732,4 +732,104 @@ describe("DS-L8 — the roster's states", () => {
       ),
     );
   });
+
+  // S6 (the landing review, 2026-10-01) — DS-L9 says another contracts major
+  // is `incompatible` and NOT ASKED. The roster read only door and link pins,
+  // so a peer publishing another major read `awake` until a forward to it was
+  // refused; its slice already said so.
+  it("a peer whose slice publishes another contracts major reads incompatible before anything is asked of it", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-next", deviceId: "dev-next", login: ACCOUNT, name: "next" }),
+      tailnetPeer({ id: "node-same", deviceId: "dev-same", login: ACCOUNT, name: "same" }),
+    ];
+    const slice = (deviceId: string, contractsVersion: string) => ({
+      deviceId,
+      name: deviceId,
+      platform: "darwin",
+      headless: false,
+      fielddVersion: "0.1.0",
+      contractsVersion,
+      capabilities: { terminalHost: true, docHost: true, push: false },
+      bootId: `boot-${deviceId}`,
+      publishedAt: Date.now(),
+    });
+    const [ours] = CONTRACTS_VERSION.split(".");
+    mock.storeSlices.set("dev-next", slice("dev-next", `${Number(ours) + 1}.0.0`));
+    mock.storeSlices.set("dev-same", slice("dev-same", `${ours}.99.0`));
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    const roster = await pollDevices(rpc, (d) =>
+      d.some((x) => x.deviceId === "dev-next" && x.contractsVersion !== undefined),
+    );
+    const row = (id: string) => roster.find((d) => d.deviceId === id) as DeviceInfo;
+    // online, never dialled, no pin — and still not asked: its slice says why
+    expect(row("dev-next")).toMatchObject({ state: "incompatible", online: true });
+    expect(row("dev-next").link).toBeUndefined();
+    // another MINOR is the same major: awake
+    expect(row("dev-same")).toMatchObject({ state: "awake", online: true });
+  });
+
+  // S6 (the landing review, 2026-10-01) — the silent mark survived a node's
+  // offline/online cycle, so a desktop that slept and woke read `restarting`
+  // until some call to it happened to succeed. The roster is what sees the
+  // flip, and clears the mark on it (PeerLink.clearSilent — its own row is in
+  // peer-door.test.ts).
+  it("a node that sleeps and wakes forgets its door's silence: restarting → asleep → awake", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    const quiet = (online: boolean) =>
+      tailnetPeer({
+        id: "node-quiet",
+        deviceId: "dev-quiet",
+        login: ACCOUNT,
+        name: "quiet",
+        online,
+      });
+    mock.meshPeers = [quiet(true)];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-quiet"));
+
+    // what PeerLink holds, scripted: the door went silent on a call
+    const silent = new Set<string>(["dev-quiet"]);
+    const cleared: string[] = [];
+    const view = Object.assign(new EventEmitter(), {
+      linkState: (_id: string) => undefined,
+      doorState: (id: string) => (silent.has(id) ? ("silent" as const) : undefined),
+      clearSilent: (id: string) => {
+        cleared.push(id);
+        if (silent.delete(id)) view.emit("door-changed", { deviceId: id });
+      },
+    });
+    daemon.devices.attachPeerLink(view);
+    view.emit("door-changed", {});
+    await pollDevices(
+      rpc,
+      (d) => d.find((x) => x.deviceId === "dev-quiet")?.state === "restarting",
+    );
+
+    // it sleeps: the tailnet says so, and asleep outranks the silence
+    mock.meshPeers = [quiet(false)];
+    mock.pushPeersDelta({ kind: "peerUpdated" });
+    await pollDevices(rpc, (d) => d.find((x) => x.deviceId === "dev-quiet")?.state === "asleep");
+    expect(cleared).toEqual(["dev-quiet"]);
+
+    // it wakes: no call has succeeded, and it is awake — not restarting
+    mock.meshPeers = [quiet(true)];
+    mock.pushPeersDelta({ kind: "peerUpdated" });
+    const woke = await pollDevices(
+      rpc,
+      (d) => d.find((x) => x.deviceId === "dev-quiet")?.online === true,
+    );
+    expect(woke.find((x) => x.deviceId === "dev-quiet")?.state).toBe("awake");
+    expect(cleared).toEqual(["dev-quiet", "dev-quiet"]);
+  });
 });

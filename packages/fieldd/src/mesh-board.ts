@@ -6,11 +6,11 @@ import {
   type AgentMeshDevice,
   type AgentMeshFrame,
   type AgentMeshOpen,
-  CONTRACTS_VERSION,
   type DeviceInfo,
   type RowsDeviceState,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { isAnotherContractsMajor } from "./device-service";
 import { RpcCallError } from "./native-link";
 
 // DS-3 — THE MESH BOARD (`thinking-desktop-sync-plane.md` §6.2, DS-D4 RULED
@@ -42,6 +42,12 @@ import { RpcCallError } from "./native-link";
 //     major, or the peer's door refused the board (a fieldd older than DS-3).
 //     DS-2's roster `state` (`awake | restarting | asleep`, lane ds-b) replaces
 //     the `online` reading here when both land; the stream-liveness half stays.
+//     LANDED 2026-10-01 (the landing review, S6; the 23:25 mid-wave ruling):
+//     the roster's `state` is read now, not `online` — `asleep` and
+//     `incompatible` are the roster's; an `awake` OR `restarting` desktop is
+//     dialled (dialling is what heals a silent door), and a `restarting` one
+//     reads `stale` while it sends no frames. The contracts-major test is the
+//     roster's own helper (`isAnotherContractsMajor`), so the two agree.
 //
 // Upstreams are the existing federated subscriptions (C6-5, `federated-subs.ts`):
 // one per awake desktop per {projection, floor}, reference-counted there AND
@@ -153,9 +159,6 @@ interface Peer {
   inRoster: boolean;
 }
 
-const majorOf = (version: string): string => version.split(".")[0] ?? version;
-const OUR_MAJOR = majorOf(CONTRACTS_VERSION);
-
 /** The roster facts a refusal is remembered under: a peer that restarts (a new
  * boot) or upgrades is asked again. */
 const refusalKey = (row: DeviceInfo): string =>
@@ -220,7 +223,14 @@ const copyOf = (board: HeldBoard): HeldBoard => ({
 class BoardHub {
   readonly #members = new Set<Member>();
   readonly #peers = new Map<string, Peer>();
-  readonly #self: { device: string; asOf: number; board: HeldBoard };
+  /** This desktop's own board. Its DEVICE id is read per answer and per frame
+   * (`opts.selfDevice()`), never pinned here: DeviceService swaps its persisted
+   * fallback id for the mesh identity on its first sync, and a hub that opened
+   * before that named this desktop by the fallback forever — double rows once
+   * the roster used the real one (the landing review, S6, 2026-10-01). A
+   * reader that holds the old name hears the next frame under the new one as
+   * a gap and re-opens (SP-L4). */
+  readonly #self: { asOf: number; board: HeldBoard };
   readonly #local: LocalBoard;
   readonly #sweeper: ReturnType<typeof setInterval>;
   readonly #onRoster = (): void => this.#reconcile();
@@ -233,11 +243,10 @@ class BoardHub {
     private readonly kept: KeptBoards,
     private readonly onClosed: () => void,
   ) {
-    const device = opts.selfDevice();
     // This desktop's own board, on its own chain; it is always `live` (the
     // daemon answering IS its liveness) and needs no heartbeat.
     this.#local = opts.openLocal(projection, floor, (delta) => this.#onLocal(delta));
-    this.#self = { device, asOf: opts.now(), board: held(this.#local.snapshot) };
+    this.#self = { asOf: opts.now(), board: held(this.#local.snapshot) };
     opts.roster.on("changed", this.#onRoster);
     opts.links.on("link-changed", this.#onRoster);
     this.#sweeper = setInterval(() => this.#sweep(), opts.heartbeatMs);
@@ -283,7 +292,7 @@ class BoardHub {
   #openAnswer(): AgentMeshOpen {
     const devices: AgentMeshDevice[] = [
       {
-        device: this.#self.device,
+        device: this.opts.selfDevice(),
         state: "live",
         asOf: iso(this.#self.asOf),
         snapshot: snapshotOf(this.#self.board),
@@ -318,7 +327,7 @@ class BoardHub {
     if (this.#disposed || isHeartbeat(delta)) return;
     const board = this.#self.board;
     apply(board, delta);
-    this.#broadcast({ device: this.#self.device, delta: { ...delta, epoch: board.epoch } });
+    this.#broadcast({ device: this.opts.selfDevice(), delta: { ...delta, epoch: board.epoch } });
   }
 
   // ---- the device set ----
@@ -358,9 +367,15 @@ class BoardHub {
         peer.refusedUnder = null;
         peer.backoffMs = this.opts.retryMinMs;
       }
+      // S6 (the 23:25 mid-wave ruling) — the roster's STATE, not its `online`:
+      // one desktop must not read `restarting` on the roster and `live` here.
+      // A row that carries no state (a reader older than DS-2) falls back to
+      // `online`, which is all it says.
+      const rosterState = row.state ?? (row.online ? "awake" : "asleep");
       const incompatible =
+        rosterState === "incompatible" ||
         this.opts.links.linkState(row.deviceId) === "incompatible" ||
-        (row.contractsVersion !== undefined && majorOf(row.contractsVersion) !== OUR_MAJOR) ||
+        isAnotherContractsMajor(row.contractsVersion) ||
         peer.refusedUnder !== null;
       if (incompatible) {
         // DS-L9 — another major is not asked
@@ -368,7 +383,7 @@ class BoardHub {
         this.#setState(peer, "incompatible");
         continue;
       }
-      if (!row.online) {
+      if (rosterState === "asleep") {
         // DS-L8 — asleep is a state: the board stays, the upstream closes
         this.#close(peer);
         const now = this.opts.now();
@@ -376,6 +391,9 @@ class BoardHub {
         this.#setState(peer, "asleep", lastSeen);
         continue;
       }
+      // `awake` and `restarting` are both dialled — a dial that answers is
+      // what heals a silent door — and a `restarting` desktop reads `stale`
+      // for as long as it sends no frames
       if (peer.upstream === null && !peer.attaching && peer.retry === null) this.#attach(peer);
       this.#setState(peer, this.#heard(peer) ? "live" : "stale");
     }

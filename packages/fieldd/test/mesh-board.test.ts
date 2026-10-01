@@ -144,14 +144,14 @@ interface Harness {
   local: { emit: ((delta: AgentFieldDelta) => void) | null; opened: number; disposed: number };
 }
 
-function harness(rows: DeviceInfo[]): Harness {
+function harness(rows: DeviceInfo[], selfDevice: () => string = () => SELF): Harness {
   const roster = new FakeRoster();
   roster.rows = rows;
   const links = new FakeLinks();
   const upstreams = new FakeUpstreams();
   const local: Harness["local"] = { emit: null, opened: 0, disposed: 0 };
   const board = new MeshBoard({
-    selfDevice: () => SELF,
+    selfDevice,
     roster,
     links,
     upstreams,
@@ -507,5 +507,88 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     h.upstreams.answer(attach, peerSnapshot());
     await tick();
     expect(attach.disposed).toBe(true);
+  });
+
+  // S6 (the landing review, 2026-10-01; the 23:25 mid-wave ruling) — the
+  // roster's `state` replaces its `online` here, so one desktop never reads
+  // one thing on the roster and another on the board.
+  it("the roster's STATE decides, not its online: asleep and incompatible are the roster's word", async () => {
+    const h = harness([
+      selfRow,
+      // the node is up, the roster says asleep: the roster wins
+      desktop("dev-b", { online: true, state: "asleep" }),
+      // the roster says incompatible (its slice's major, a door's refusal):
+      // not asked, with no link pin and an even contracts version on the row
+      desktop("dev-c", { online: true, state: "incompatible" }),
+      desktop("dev-d", { online: true, state: "awake" }),
+    ]);
+    const r = reader(h);
+    expect(r.open.devices.map((entry) => [entry.device, entry.state])).toEqual([
+      [SELF, "live"],
+      ["dev-b", "asleep"],
+      ["dev-c", "incompatible"],
+      ["dev-d", "stale"],
+    ]);
+    expect(h.upstreams.attaches.map((attach) => attach.device)).toEqual(["dev-d"]);
+    // the roster's verdict moves, and the board follows it: incompatible no more
+    h.roster.set([selfRow, desktop("dev-b"), desktop("dev-c", { state: "awake" })]);
+    expect(h.upstreams.attaches.map((attach) => attach.device).sort()).toEqual([
+      "dev-b",
+      "dev-c",
+      "dev-d",
+    ]);
+    r.dispose();
+  });
+
+  it("another major on the row reads incompatible even with no roster state (the roster's own helper)", () => {
+    const [ours] = CONTRACTS_VERSION.split(".");
+    const h = harness([
+      selfRow,
+      desktop("dev-b", { contractsVersion: `${Number(ours) + 1}.0.0` }),
+      desktop("dev-c", { contractsVersion: `${ours}.7.0` }),
+    ]);
+    const r = reader(h);
+    expect(r.open.devices.map((entry) => [entry.device, entry.state])).toEqual([
+      [SELF, "live"],
+      ["dev-b", "incompatible"],
+      ["dev-c", "stale"],
+    ]);
+    expect(h.upstreams.attaches.map((attach) => attach.device)).toEqual(["dev-c"]);
+    r.dispose();
+  });
+
+  it("a RESTARTING desktop is still dialled — a dial is what heals a silent door — and reads stale until it sends frames", async () => {
+    const h = harness([selfRow, desktop("dev-b", { state: "restarting" })]);
+    const r = reader(h);
+    expect(r.open.devices.find((entry) => entry.device === "dev-b")?.state).toBe("stale");
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("a restarting desktop was not dialled");
+    expect(attach.device).toBe("dev-b");
+    // its door answers: frames arrive, and the board says live
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    expect(r.frames).toContainEqual({ device: "dev-b", state: "live", asOf: expect.any(String) });
+    r.dispose();
+  });
+
+  it("names this desktop per answer: a hub opened before the mesh identity speaks it once it lands", () => {
+    // DeviceService answers its persisted fallback id until its first sync
+    let self = "local-1234";
+    const h = harness([{ ...selfRow, deviceId: self }, desktop("dev-b")], () => self);
+    const early = reader(h);
+    expect(early.open.devices[0]).toMatchObject({ device: "local-1234", state: "live" });
+    // the mesh identity lands: the roster's self row moves, and so does the hub
+    self = SELF;
+    h.roster.set([selfRow, desktop("dev-b")]);
+    const late = reader(h); // the SAME hub (same projection and floor)
+    expect(h.board.size).toBe(1);
+    expect(late.open.devices.map((entry) => entry.device)).toEqual([SELF, "dev-b"]);
+    // and this desktop's next delta goes out under its real name — a gap for a
+    // reader that still holds the fallback, which re-opens
+    h.local.emit?.({ since: 1, revision: 2, upserts: [row("run-here", SELF, 2)], removed: [] });
+    expect(late.frames.at(-1)).toMatchObject({ device: SELF });
+    expect(early.frames.at(-1)).toMatchObject({ device: SELF });
+    early.dispose();
+    late.dispose();
   });
 });
