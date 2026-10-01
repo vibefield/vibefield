@@ -104,6 +104,42 @@ async function open(probe: Probe, peer: bigint): Promise<Renderer> {
   return window;
 }
 
+/** GET, read EXACTLY as fieldd-client reads it (`doGetSnapshot`): the DOC frame
+ * and then as many DOC_UPDATE frames as HELLO_OK's `journalEntries` counted —
+ * the client's `initialUpdateCount`. A DOC_UPDATE beyond the count has no
+ * reply waiter on the client and is dropped there; it is dropped here too. */
+async function openAsClient(
+  probe: Probe,
+  peer: bigint,
+): Promise<{ window: Renderer; served: number; counted: number }> {
+  const hello = decodeJsonPayload(
+    probe.frames.find((f) => f.kind === LANE_FRAME.HELLO_OK)?.payload ?? new Uint8Array(),
+  ) as { meta?: { journalEntries?: number } };
+  const counted = hello.meta?.journalEntries ?? 0;
+  const before = probe.frames.length;
+  probe.send(encodeLaneFrame(LANE_FRAME.GET, 0, new Uint8Array()));
+  await probe.until((f) => f.slice(before).some((x) => x.kind === LANE_FRAME.DOC), "DOC");
+  await probe.until(
+    (f) => f.slice(before).filter((x) => x.kind === LANE_FRAME.DOC_UPDATE).length >= counted,
+    "the counted journal",
+  );
+  await new Promise((r) => setTimeout(r, 50)); // anything trailing the counted frames
+  const got = probe.frames.slice(before);
+  const at = got.findIndex((f) => f.kind === LANE_FRAME.DOC);
+  const lifted = liftIce1(got[at]?.payload ?? new Uint8Array());
+  if (!lifted.ok) throw new Error("GET returned no envelope");
+  const window = new Renderer(peer);
+  window.apply(lifted.payload);
+  let taken = 0;
+  for (const frame of got.slice(at + 1)) {
+    if (frame.kind !== LANE_FRAME.DOC_UPDATE || taken >= counted) continue;
+    window.apply(frame.payload);
+    taken += 1;
+  }
+  const served = got.filter((f) => f.kind === LANE_FRAME.DOC_UPDATE).length;
+  return { window, served, counted };
+}
+
 async function putUpdate(probe: Probe, docs: DocumentService, docId: string, bytes: Uint8Array) {
   const before = probe.frames.length;
   probe.send(
@@ -184,6 +220,54 @@ describe("DS-5 — the open window is pushed what a peer merged", () => {
     // Exported from the PROVEN version: the first edit is not sent again.
     const lone = new Renderer(9n);
     expect(() => lone.apply(second)).toThrow(/pending/);
+  });
+
+  it("DS-5c — a peer merge between HELLO_OK and GET: GET serves what HELLO_OK counted, and no push omits a record", async () => {
+    // The review's HELLO/GET race: the proof was the host's version AT GET while
+    // the client reads only HELLO_OK's journal count, so a merge landing between
+    // the two frames was proven and never read — the next push omitted it and a
+    // strata store quarantined on the pending import, until reopen.
+    const { docs, port } = await stack();
+    const { docId, peer } = await seeded(docs);
+    await docs.applyRemoteRecord(docId, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: META,
+      payload: peer.edit("before", "journaled"),
+    });
+    const probe = await attach(port, docs, docId);
+    // A peer desktop's edit lands BETWEEN HELLO_OK and GET.
+    await docs.applyRemoteRecord(docId, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: META,
+      payload: peer.edit("between", "the frames"),
+    });
+    const { window, served, counted } = await openAsClient(probe, 2n);
+    // GET's journal is exactly the one HELLO_OK counted — no frame the client drops.
+    expect(served).toBe(counted);
+    // And a later edit's push applies with nothing pending, carrying the record
+    // the window never read.
+    await docs.applyRemoteRecord(docId, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: META,
+      payload: peer.edit("after", "GET"),
+    });
+    await probe.until(() => {
+      const probeWindow = new Renderer(5n);
+      probeWindow.apply(window.doc.export({ mode: "snapshot" }));
+      try {
+        for (const push of probe.pushes()) probeWindow.apply(push);
+      } catch {
+        return false;
+      }
+      return probeWindow.board()["after"] === "GET";
+    }, "a push that reaches the latest edit");
+    for (const push of probe.pushes()) window.apply(push); // throws on a pending import, as strata would
+    expect(window.board()).toEqual({
+      base: "here",
+      before: "journaled",
+      between: "the frames",
+      after: "GET",
+    });
   });
 
   it("a window that did not declare push is never pushed — a pre-DS-5 client's waiter stays its own", async () => {

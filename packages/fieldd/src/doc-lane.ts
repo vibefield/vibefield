@@ -41,6 +41,16 @@ import { RpcCallError } from "./native-link";
 // push it applied comes back as proof). Never from what was merely sent — a
 // push lost on a dropped socket must cost size, never completeness, because a
 // window that imports a record whose base it lacks is quarantined for good.
+//
+// DS-5c (2026-10-01, the DS wave 1 review's HELLO/GET race) — HELLO_OK and GET
+// describe ONE read. The client reads GET's journal by HELLO_OK's count
+// (fieldd-client's `initialUpdateCount`), so the proof used to overstate it
+// whenever a peer merge landed between the two frames: GET served (and proved)
+// a record the client dropped as a frame with no waiter, the next push omitted
+// it, and strata quarantined the board until reopen. Now the window's read is
+// taken ONCE, at HELLO, on the per-doc chain; HELLO_OK counts it, GET serves
+// it, and its version is the proof. What merged after HELLO is pushed right
+// after GET, exported from that proof.
 
 const WS_OPEN = 1;
 const HELLO_TIMEOUT_MS = 10_000;
@@ -76,7 +86,16 @@ interface LaneConn {
   room: DocumentPresenceRoomHandle | null;
   /** DS-5 — the client declared it takes DOC_PUSH frames. */
   pushes: boolean;
+  /** DS-5c — the read HELLO_OK described (a new window's), kept until the GET
+   * it is for or the first save, whichever comes first. */
+  frozen: WindowRead | null;
+  /** DS-5c — the journal count HELLO_OK announced: how many DOC_UPDATE frames
+   * the client reads behind GET's DOC frame. */
+  announced: number;
 }
+
+/** A window's read, as `DocumentService.readDocForWindow` takes it. */
+type WindowRead = NonNullable<Awaited<ReturnType<DocumentService["readDocForWindow"]>>>;
 
 export class DocLane {
   private wss: WebSocketServer | null = null;
@@ -113,6 +132,8 @@ export class DocLane {
       chain: Promise.resolve(),
       room: null,
       pushes: false,
+      frozen: null,
+      announced: 0,
       helloTimer: setTimeout(() => {
         if (!conn.docId) ws.close(1008, "no hello");
       }, HELLO_TIMEOUT_MS),
@@ -148,6 +169,7 @@ export class DocLane {
           if (docId) this.opts.docs.writerDetached(docId);
           conn.docId = null;
           conn.pendingMeta = null;
+          conn.frozen = null;
         }
       });
     });
@@ -202,9 +224,12 @@ export class DocLane {
 
     switch (frame.kind) {
       case LANE_FRAME.GET:
-        await this.onGet(ws, conn.docId);
+        await this.onGet(ws, conn, conn.docId);
         return;
       case LANE_FRAME.PUT_META:
+        // The window is saving: it holds what it read, and the read HELLO_OK
+        // described is no longer anything a later GET could be about.
+        conn.frozen = null;
         this.onPutMeta(ws, conn, frame.payload);
         return;
       case LANE_FRAME.PUT:
@@ -281,7 +306,18 @@ export class DocLane {
       conn.room = null;
     }
 
-    const meta = await this.opts.docs.readDocMeta(redeemed.docId);
+    // DS-5c — a NEW window reads what GET will serve NOW, on the per-doc chain,
+    // and HELLO_OK counts that read — the one the client will act on. A
+    // resuming window never GETs (re-attach is PUT-only), so it is told the
+    // meta alone, as before.
+    let meta: Awaited<ReturnType<DocumentService["readDocMeta"]>>;
+    if (hello.resume === true) {
+      meta = await this.opts.docs.readDocMeta(redeemed.docId);
+    } else {
+      conn.frozen = await this.opts.docs.readDocForWindow(redeemed.docId);
+      meta = conn.frozen?.meta ?? null;
+    }
+    conn.announced = meta?.journalEntries ?? 0;
     const helloOk: LaneHelloOk = {
       docId: redeemed.docId,
       hasDoc: meta !== null,
@@ -291,19 +327,36 @@ export class DocLane {
     this.sendFrame(ws, encodeJsonFrame(LANE_FRAME.HELLO_OK, 0, helloOk));
   }
 
-  private async onGet(ws: WebSocket, docId: string): Promise<void> {
-    const read = await this.opts.docs.readDocForWindow(docId);
+  private async onGet(ws: WebSocket, conn: LaneConn, docId: string): Promise<void> {
+    // DS-5c — the read HELLO_OK counted, when there is one; otherwise (a
+    // resumed window that GETs, a second GET) a fresh read, served only when
+    // its journal is still the length HELLO_OK announced — a GET answer the
+    // client would read short is refused, never served.
+    const read = conn.frozen ?? (await this.opts.docs.readDocForWindow(docId));
+    conn.frozen = null;
     if (!read) {
       this.sendErr(ws, "NOT_FOUND", "no doc bytes yet");
+      return;
+    }
+    if (read.updates.length !== conn.announced) {
+      this.sendErr(
+        ws,
+        "PRECONDITION_FAILED",
+        "the document moved since HELLO; re-attach to read it whole",
+      );
       return;
     }
     this.sendFrame(ws, encodeLaneFrame(LANE_FRAME.DOC, 0, read.bytes));
     for (const update of read.updates) {
       this.sendFrame(ws, encodeLaneFrame(LANE_FRAME.DOC_UPDATE, 0, update));
     }
-    // DS-5 — what was just served is the window's first proven version.
+    // DS-5 — what was just served is the window's first proven version. DS-5c:
+    // exactly what was served, never the host's version at GET.
     const served = read.version === null ? null : decodeVersion(read.version);
     if (served !== null) this.proven.set(docId, served);
+    // DS-5c — whatever a peer merged after the read (between HELLO and GET, or
+    // while the window opened) is pushed now, exported from that proof.
+    if (served !== null && conn.pushes) this.queuePush(ws, conn, docId);
   }
 
   /** DS-5 — a window's own PUT proves what it holds: a checkpoint its whole
@@ -325,16 +378,20 @@ export class DocLane {
    * what it lacks, in order behind whatever its socket is already doing. */
   private onPeerMerged(docId: string): void {
     for (const { ws, conn } of this.open.get(docId) ?? []) {
-      if (!conn.pushes) continue;
-      conn.chain = conn.chain
-        .then(() => this.push(ws, conn, docId))
-        .catch((error: unknown) => {
-          this.logger.warn("fieldd.doclane.push_failed", "A live update could not be pushed", {
-            docId,
-            error: String(error),
-          });
-        });
+      if (conn.pushes) this.queuePush(ws, conn, docId);
     }
+  }
+
+  /** A push, in order behind whatever the socket is already doing. */
+  private queuePush(ws: WebSocket, conn: LaneConn, docId: string): void {
+    conn.chain = conn.chain
+      .then(() => this.push(ws, conn, docId))
+      .catch((error: unknown) => {
+        this.logger.warn("fieldd.doclane.push_failed", "A live update could not be pushed", {
+          docId,
+          error: String(error),
+        });
+      });
   }
 
   private async push(ws: WebSocket, conn: LaneConn, docId: string): Promise<void> {
