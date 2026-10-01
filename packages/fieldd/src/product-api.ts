@@ -1037,32 +1037,16 @@ export class ProductApi extends EventEmitter {
         }
         // device === self: strip the routing key, serve locally
         const { device: _self, ...rest } = callParams as Record<string, unknown>;
-        await this.execute(
-          ws,
-          state,
-          callCtx,
-          id,
-          method,
-          rest,
-          handler,
-          subHandler,
-          reply,
-          receiptKey,
-        );
+        await this.execute(ws, state, id, method, rest, handler, subHandler, reply, {
+          ctx: callCtx,
+          ...(receiptKey !== undefined ? { receiptKey } : {}),
+        });
         return;
       }
-      await this.execute(
-        ws,
-        state,
-        callCtx,
-        id,
-        method,
-        callParams,
-        handler,
-        subHandler,
-        reply,
-        receiptKey,
-      );
+      await this.execute(ws, state, id, method, callParams, handler, subHandler, reply, {
+        ctx: callCtx,
+        ...(receiptKey !== undefined ? { receiptKey } : {}),
+      });
     } catch (e) {
       if (e instanceof RpcCallError) {
         reply(this.err(id, e.kind as ErrorKind, e.message, e.retryable, e.details));
@@ -1078,15 +1062,21 @@ export class ProductApi extends EventEmitter {
   private async execute(
     ws: WebSocket,
     state: ConnState,
-    ctx: CallerContext,
     id: unknown,
     method: string,
     params: unknown,
     handler: Handler | undefined,
     subHandler: SubscriptionHandler | undefined,
     reply: (v: unknown) => void,
-    receiptKey?: string,
+    // DS-2 — this CALL's context (a peer's recorded provenance rides it; the
+    // connection's own context otherwise) and, for a peer's keyed mutation,
+    // the key its receipt is journaled under. Trailing, so the positional
+    // shape the lifecycle tests drive stays as it was.
+    call: { ctx?: CallerContext; receiptKey?: string } = {},
   ): Promise<void> {
+    const ctx = call.ctx ?? state.ctx;
+    if (!ctx) return; // unreachable past the authed gate; keeps the type honest
+    const receiptKey = call.receiptKey;
     if (subHandler) {
       const refusal = this.subscriptionBudgetRefusal(state, id);
       if (refusal !== null) {

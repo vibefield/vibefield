@@ -97,6 +97,12 @@ interface Link {
    * members is PINNED against the idle sweep — quiet is not the same as
    * unused when a subscription is standing on it. */
   subs: Set<{ unsubscribe: () => void; onDrop: () => void }>;
+  /** DS-2 — requests and subscribes in flight on this link (absent = none).
+   * A link with one in flight is IN USE: the idle sweep used to drop a link
+   * whose dial or answer outlasted the idle window — a cut it then reported as
+   * the peer's silence, and for a keyed mutation an outcome-unknown of our
+   * own making. */
+  inflight?: number;
 }
 
 /** http(s) capability URL → the ws(s) dial URL (already-ws passes through). */
@@ -154,13 +160,15 @@ export class PeerLink extends EventEmitter {
       return await this.requestKeyed(deviceId, method, params, envelope, key);
     const wire = withEnvelope(params, envelope);
     const link = this.ensureLink(deviceId);
-    link.lastUsed = this.now();
+    this.useLink(link);
     try {
       const result = await this.withDeadline(link.client.request(method, wire), deviceId);
       this.markAnswered(deviceId);
       return result;
     } catch (e) {
       throw this.mapPeerError(e, deviceId);
+    } finally {
+      this.releaseLink(link);
     }
   }
 
@@ -188,17 +196,19 @@ export class PeerLink extends EventEmitter {
       ...(envelope.onBehalfOf !== undefined ? { onBehalfOf: envelope.onBehalfOf } : {}),
     });
     let sent = false;
+    let link: Link | undefined;
     try {
-      const link = this.ensureLink(deviceId);
-      link.lastUsed = this.now();
+      link = this.ensureLink(deviceId);
+      this.useLink(link);
+      const held = link;
       const result = await this.withDeadline(
         (async () => {
-          await link.client.ready();
+          await held.client.ready();
           // from here the request is on the wire within the same microtask
           // chain — the deadline (a timer) cannot fall between the two
           sent = true;
           attempt.sent();
-          return await link.client.request(method, wire);
+          return await held.client.request(method, wire);
         })(),
         deviceId,
         this.opts.forwardTimeoutMs ?? FORWARDING.FORWARD_TIMEOUT_MS,
@@ -223,6 +233,8 @@ export class PeerLink extends EventEmitter {
         true,
         { device: deviceId, state: "outcome-unknown", idempotencyKey: key },
       );
+    } finally {
+      if (link !== undefined) this.releaseLink(link);
     }
   }
 
@@ -306,12 +318,14 @@ export class PeerLink extends EventEmitter {
       });
     const wire = withEnvelope(params, envelope);
     const link = this.ensureLink(deviceId);
-    link.lastUsed = this.now();
+    this.useLink(link);
     let upstream: { snapshot: unknown; unsubscribe: () => void };
     try {
       upstream = await this.withDeadline(link.client.subscribe(method, wire, onEvent), deviceId);
     } catch (e) {
       throw this.mapPeerError(e, deviceId);
+    } finally {
+      this.releaseLink(link);
     }
     this.markAnswered(deviceId);
     const member = {
@@ -477,10 +491,23 @@ export class PeerLink extends EventEmitter {
     this.emit("link-changed", { deviceId, ...(nextState ? { state: nextState } : {}) });
   }
 
+  /** DS-2 — a request or subscribe is in flight on `link` (the sweep skips it). */
+  private useLink(link: Link): void {
+    link.inflight = (link.inflight ?? 0) + 1;
+    link.lastUsed = this.now();
+  }
+
+  /** …and is over: the idle clock starts at the ANSWER, not at the ask. */
+  private releaseLink(link: Link): void {
+    link.inflight = Math.max(0, (link.inflight ?? 1) - 1);
+    link.lastUsed = this.now();
+  }
+
   private sweepIdle(): void {
     const cutoff = this.now() - this.idleCloseMs;
     for (const [id, link] of this.links) {
       if (link.subs.size > 0) continue; // pinned: a standing subscription is use
+      if ((link.inflight ?? 0) > 0) continue; // DS-2 — and so is a request in flight
       if (link.lastUsed < cutoff) this.dropLink(id); // dial-on-demand: quiet links close
     }
   }

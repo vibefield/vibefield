@@ -60,6 +60,20 @@ describe("PeerLink.doorState", () => {
     expect(link.doorState("dev-b")).toBeUndefined(); // it answered; quiet is not silent
   });
 
+  it("a request in flight is use: an answer slower than the idle window is not cut by the sweep", async () => {
+    // the sweep runs every idle window and used to drop a link whose ask had
+    // outlasted it — a loaded host's dial, or a slow owner — and report the
+    // cut as the peer's silence
+    const d = await door((msg, ws) => {
+      setTimeout(() => answer(ws, msg.id, { devices: [] }), 400);
+    });
+    const { link } = linkTo(d.url, { idleCloseMs: 60 });
+    await expect(link.request("dev-b", "device.list", {})).resolves.toEqual({ devices: [] });
+    expect(link.doorState("dev-b")).toBe("answers");
+    // and once it is over, quiet is idle again
+    await until(() => link.linkState("dev-b") === undefined, 3_000);
+  });
+
   it("a forward the door cut leaves it silent; the next answer clears it, and each move is announced", async () => {
     const d = await door((msg, ws, n) => {
       if (n === 1) ws.terminate();

@@ -252,7 +252,10 @@ async function scriptedDoor(
   return door;
 }
 
-function linkTo(url: string | undefined, forwardTimeoutMs = 250): PeerLink {
+// A generous default: on a loaded host a DIAL can outlast a short deadline, and
+// a forward that never left is (rightly) not an unknown. Rows that time out on
+// purpose warm the link first and pass their own.
+function linkTo(url: string | undefined, forwardTimeoutMs = 4_000): PeerLink {
   const link = new PeerLink({
     ownDeviceId: () => "dev-a",
     endpointFor: () => url,
@@ -268,10 +271,16 @@ const behalf = { clientKind: "renderer", deviceId: "dev-a", windowId: "window-7"
 
 describe("PeerLink's keyed forwards (the caller's half)", () => {
   it("no answer within the deadline reads outcome-unknown; the retry with the same key reads the owner's answer", async () => {
-    const door = await scriptedDoor((msg, ws, n) => {
-      if (n >= 2) answer(ws, msg.id, { accepted: true }); // the first is never answered
+    let asked = 0;
+    const door = await scriptedDoor((msg, ws) => {
+      if (msg.method !== "agent.interrupt") return answer(ws, msg.id, { devices: [] });
+      asked += 1;
+      if (asked >= 2) answer(ws, msg.id, { accepted: true }); // the first is never answered
     });
-    const link = linkTo(door.url);
+    const link = linkTo(door.url, 1_000);
+    // the link is READY before the keyed forward, so its deadline measures the
+    // missing answer and never the dial
+    await link.request("dev-b", "device.list", {});
     const cut = await link
       .request("dev-b", "agent.interrupt", RUN, { onBehalfOf: behalf, idempotencyKey: KEY })
       .catch((e: unknown) => e);
@@ -283,6 +292,7 @@ describe("PeerLink's keyed forwards (the caller's half)", () => {
     });
     expect(link.receipts.get(KEY)).toMatchObject({ state: "outcome-unknown", device: "dev-b" });
 
+    await link.request("dev-b", "device.list", {}); // the deadline dropped the link: re-dial
     const retried = await link.request("dev-b", "agent.interrupt", RUN, {
       onBehalfOf: behalf,
       idempotencyKey: KEY,
@@ -290,7 +300,7 @@ describe("PeerLink's keyed forwards (the caller's half)", () => {
     expect(retried).toEqual({ accepted: true });
     expect(link.receipts.get(KEY)).toMatchObject({ state: "applied" });
     // both attempts carried the SAME key and who they were for, beside the params
-    expect(door.seen.map((s) => s.params)).toEqual([
+    expect(door.seen.filter((s) => s.method === "agent.interrupt").map((s) => s.params)).toEqual([
       { ...RUN, forward: { onBehalfOf: behalf, idempotencyKey: KEY } },
       { ...RUN, forward: { onBehalfOf: behalf, idempotencyKey: KEY } },
     ]);
