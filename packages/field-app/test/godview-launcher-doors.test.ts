@@ -472,6 +472,126 @@ describe("the verbs", () => {
       expect(place).not.toHaveBeenCalled();
     }
   });
+
+  // DS-D15's client half (DS wave 2, 2026-10-01) — "a window echoes the key
+  // from an outcome-unknown". A launch or resume carried to its owner whose
+  // answer was lost may have run: retried under a fresh key it would run twice,
+  // reported as refused it would lie. It is asked ONCE more with the key the
+  // failure named, and the owner answers from its receipt.
+  const outcomeUnknown = (key: string): Error =>
+    Object.assign(new Error("the forward was cut before an answer; its outcome is unknown"), {
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "peer-link", state: "outcome-unknown", idempotencyKey: key },
+      forward: { idempotencyKey: key },
+    });
+
+  it("DS-D15: a launch whose outcome is unknown is asked once more with the SAME key, and placed once", async () => {
+    let asked = 0;
+    const {
+      deps: port,
+      request,
+      place,
+    } = deps({
+      "agent.spawn": () => {
+        asked += 1;
+        if (asked === 1) throw outcomeUnknown("wk_launch_1");
+        return SPAWNED;
+      },
+    });
+    const outcome = await launcherPortOver(port).launch({
+      paneId: "pane-1",
+      sessionId: "shell-1",
+      providerId: "claude",
+      cwd: "/repo",
+    });
+    expect(outcome).toEqual({ accepted: true });
+    expect(request.mock.calls).toEqual([
+      ["agent.spawn", { provider: "claude", cwd: "/repo" }],
+      ["agent.spawn", { provider: "claude", cwd: "/repo" }, { idempotencyKey: "wk_launch_1" }],
+    ]);
+    expect(place).toHaveBeenCalledTimes(1);
+  });
+
+  it("DS-D15: a resume is resolved the same way; a second unknown and a lost answer are said, never retried again", async () => {
+    let resumes = 0;
+    const answers: Array<() => unknown> = [
+      () => {
+        throw outcomeUnknown("wk_resume_1");
+      },
+      () => SPAWNED,
+    ];
+    const {
+      deps: port,
+      request,
+      place,
+    } = deps({
+      "index.recent": RECENT,
+      "index.status": READY_STATUS,
+      "agent.resume": () => {
+        const next = answers[resumes];
+        resumes += 1;
+        if (next === undefined) throw new Error("asked too often");
+        return next();
+      },
+    });
+    const launcher = launcherPortOver(port);
+    const { sessions } = await launcher.recent({ cwd: "/pane", scope: "here" });
+    const codex = sessions[1];
+    if (codex === undefined) throw new Error("fixture has rows");
+    const where = { paneId: "p", sessionId: "shell-1", session: codex, cwd: "/pane" };
+    expect(await launcher.resume(where)).toEqual({ accepted: true });
+    const resumed = request.mock.calls.filter(([method]) => method === "agent.resume");
+    expect(resumed.map((call) => call[2])).toEqual([undefined, { idempotencyKey: "wk_resume_1" }]);
+    expect(place).toHaveBeenCalledTimes(1);
+
+    // unknown twice: said as unknown — it may be running — and not asked a third time
+    answers.splice(
+      0,
+      answers.length,
+      ...[
+        () => {
+          throw outcomeUnknown("wk_resume_2");
+        },
+        () => {
+          throw outcomeUnknown("wk_resume_2");
+        },
+      ],
+    );
+    resumes = 0;
+    expect(await launcher.resume(where)).toEqual({
+      accepted: false,
+      reason: "it may have started — its answer was lost; look before trying again",
+    });
+    expect(resumes).toBe(2);
+
+    // the retry answered with the owner's RECEIPT in place of the result: it
+    // ran, and what it answered is gone — said, and not asked again
+    answers.splice(
+      0,
+      answers.length,
+      ...[
+        () => {
+          throw outcomeUnknown("wk_resume_3");
+        },
+        () => ({
+          idempotencyKey: "wk_resume_3",
+          method: "agent.resume",
+          device: "dev-b",
+          state: "applied",
+          at: 1,
+          resultOmitted: true,
+        }),
+      ],
+    );
+    resumes = 0;
+    expect(await launcher.resume(where)).toEqual({
+      accepted: false,
+      reason: "it started, and its answer was lost; look before trying again",
+    });
+    expect(resumes).toBe(2);
+    expect(place).toHaveBeenCalledTimes(1);
+  });
 });
 
 describe("the agents", () => {

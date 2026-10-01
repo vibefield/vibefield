@@ -21,6 +21,7 @@ import {
   TerminalTerminateResult,
 } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
+import { requestResolvingOutcome } from "../../forwarded-call";
 import { createRoutedInputEncoder } from "./encode-input";
 
 /** The hello advertisement for the window runtime (TP-D25): ghosttea's own
@@ -340,7 +341,16 @@ export function createRoutedTerminalHost(
         options.onTicket?.(sessionId, primed);
         return asRoutedTicket(primed);
       }
-      const raw = await options.fieldd.request("terminal.openTicket", { sessionId });
+      // DS-D15 — one logical mint: an outcome-unknown (a ticket forwarded to
+      // its owner, its answer lost) is asked once more with its key, and a
+      // receipt in place of the ticket is asked ANEW — a second ticket is
+      // harmless, the lost one expires. A local mint never fails that way.
+      const raw = await requestResolvingOutcome(
+        options.fieldd,
+        "terminal.openTicket",
+        { sessionId },
+        "ask-anew",
+      );
       const ticket = requireDirectTicket(sessionId, raw);
       custodians.set(sessionId, ticket.route.cellBootId);
       options.onTicket?.(sessionId, ticket);

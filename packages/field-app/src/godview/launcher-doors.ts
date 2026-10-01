@@ -18,6 +18,12 @@ import {
   IndexSearchResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import {
+  AnswerLostError,
+  type KeyedCallClient,
+  outcomeUnknownKey,
+  requestResolvingOutcome,
+} from "../forwarded-call";
 import { NATIVE_PROFILE } from "./monitor/profile-tabs";
 
 // THE EMPTY PANE LAUNCHER'S PORT (QL-1, thinking-ql-empty-pane-launcher.md),
@@ -30,9 +36,15 @@ import { NATIVE_PROFILE } from "./monitor/profile-tabs";
 // or a workspace. No agent id is compared to a literal (R23b): a provider is
 // an opaque string the rows carry and the doors take back.
 
-/** The one call shape the port needs: a request through the deck's client. */
-export interface LauncherDoorClient {
-  request(method: string, params: Record<string, unknown>): Promise<unknown>;
+/** The one call shape the port needs: a request through the deck's client
+ * (the FielddClient itself — DS-D15: the key a resolved retry echoes rides
+ * its third argument). */
+export interface LauncherDoorClient extends KeyedCallClient {
+  request(
+    method: string,
+    params: Record<string, unknown>,
+    opts?: { idempotencyKey?: string | undefined },
+  ): Promise<unknown>;
 }
 
 export interface LauncherPortDeps {
@@ -289,6 +301,14 @@ export interface LaunchUnder {
  * sign-in", in the catalog's label.
  */
 export function refusalReason(cause: unknown, under?: LaunchUnder): string {
+  // DS-D15 — not refusals: the act ran, or may have (`requestResolvingOutcome`
+  // asked once more and still could not tell). Said as such, never as "no".
+  if (cause instanceof AnswerLostError) {
+    return "it started, and its answer was lost; look before trying again";
+  }
+  if (outcomeUnknownKey(cause) !== undefined) {
+    return "it may have started — its answer was lost; look before trying again";
+  }
   const refusal = refusalOf(cause);
   const details = refusal.details ?? {};
   if (refusal.kind === "PRECONDITION_FAILED") {
@@ -444,7 +464,10 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
       const profileSet = deps.profileSetOf?.(request.sessionId);
       let answered: unknown;
       try {
-        answered = await deps.client.request("agent.spawn", {
+        // DS-D15 — one logical launch: an outcome-unknown is asked once more
+        // with its key (today only a launch routed to another desktop is keyed;
+        // a local one never fails that way, so this is one request)
+        answered = await requestResolvingOutcome(deps.client, "agent.spawn", {
           provider: request.providerId,
           ...(request.cwd !== undefined ? { cwd: request.cwd } : {}),
           ...(profileSet !== undefined ? { profileSet } : {}),
@@ -471,7 +494,7 @@ export function launcherPortOver(deps: LauncherPortDeps): LauncherPort {
       const cwd = request.session.cwd ?? request.cwd;
       let answered: unknown;
       try {
-        answered = await deps.client.request("agent.resume", {
+        answered = await requestResolvingOutcome(deps.client, "agent.resume", {
           provider: known.provider,
           nativeSessionId: known.nativeSessionId,
           ...(cwd !== undefined ? { cwd } : {}),
