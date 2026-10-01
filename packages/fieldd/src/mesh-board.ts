@@ -199,6 +199,22 @@ const REFUSALS = new Set(["INCOMPATIBLE", "FORBIDDEN_SCOPE", "PRECONDITION_FAILE
 
 type Member = (frame: AgentMeshFrame) => void;
 
+/** Each desktop's LAST board at one projection, beyond any one hub's life
+ * (DS-L8): a reader who arrives after the last one left — Godview reopened
+ * while a laptop sleeps — is still answered with that desktop's board, greyed
+ * by its state, never with an absence. Held by `MeshBoard`; a hub writes
+ * through on every change and seeds a desktop it has not met from here. */
+interface KeptBoards {
+  get(device: string): HeldBoard | undefined;
+  set(device: string, board: HeldBoard): void;
+}
+
+const copyOf = (board: HeldBoard): HeldBoard => ({
+  epoch: board.epoch,
+  revision: board.revision,
+  rows: new Map(board.rows),
+});
+
 /** One board per {projection, floor}: the readers that asked the same
  * question share its upstreams and its held boards. */
 class BoardHub {
@@ -214,6 +230,7 @@ class BoardHub {
     private readonly opts: Resolved,
     private readonly projection: BoardProjection,
     private readonly floor: number,
+    private readonly kept: KeptBoards,
     private readonly onClosed: () => void,
   ) {
     const device = opts.selfDevice();
@@ -316,11 +333,14 @@ class BoardHub {
       seen.add(row.deviceId);
       let peer = this.#peers.get(row.deviceId);
       if (peer === undefined) {
+        // DS-L8 — the last board this daemon held for it, if any: shown with
+        // the desktop's state until its own board answers afresh
+        const kept = this.kept.get(row.deviceId);
         peer = {
           device: row.deviceId,
           state: null,
           asOf: this.opts.now(),
-          board: null,
+          board: kept === undefined ? null : copyOf(kept),
           lastHeard: 0,
           upstream: null,
           generation: 0,
@@ -521,6 +541,7 @@ class BoardHub {
       }
       const snapshot = { ...parsed.data, epoch };
       peer.board = held(snapshot);
+      this.kept.set(peer.device, peer.board);
       peer.lastHeard = now;
       this.#broadcast({ device: peer.device, snapshot });
       this.#setState(peer, "live");
@@ -545,6 +566,7 @@ class BoardHub {
     peer.lastHeard = now;
     if (!isHeartbeat(delta)) {
       apply(board, delta);
+      this.kept.set(peer.device, board);
       this.#broadcast({ device: peer.device, delta: { ...delta, epoch: board.epoch } });
     }
     this.#setState(peer, "live");
@@ -559,6 +581,8 @@ class BoardHub {
 export class MeshBoard {
   readonly #opts: Resolved;
   readonly #hubs = new Map<string, BoardHub>();
+  /** each desktop's last board, by projection (`KeptBoards`) */
+  readonly #kept = new Map<BoardProjection, Map<string, HeldBoard>>();
   #disposed = false;
 
   constructor(opts: MeshBoardOptions) {
@@ -587,7 +611,19 @@ export class MeshBoard {
     const key = `${projection}|${minIntervalMs}`;
     let hub = this.#hubs.get(key);
     if (hub === undefined) {
-      const created: BoardHub = new BoardHub(this.#opts, projection, minIntervalMs, () => {
+      let boards = this.#kept.get(projection);
+      if (boards === undefined) {
+        boards = new Map();
+        this.#kept.set(projection, boards);
+      }
+      const kept = boards;
+      const keeper: KeptBoards = {
+        get: (device) => kept.get(device),
+        set: (device, board) => {
+          kept.set(device, board);
+        },
+      };
+      const created: BoardHub = new BoardHub(this.#opts, projection, minIntervalMs, keeper, () => {
         if (this.#hubs.get(key) === created) this.#hubs.delete(key);
       });
       hub = created;

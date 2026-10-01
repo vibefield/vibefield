@@ -472,6 +472,32 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     expect(h.upstreams.standing()).toHaveLength(0);
   });
 
+  it("a desktop's last board outlives its readers: Godview reopened while it sleeps still shows it", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const first = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    h.upstreams.answer(attach, peerSnapshot());
+    await tick();
+    first.dispose(); // the last reader leaves: the hub and its upstreams close
+    expect(h.board.size).toBe(0);
+    expect(attach.disposed).toBe(true);
+    // the desktop falls asleep while nobody is watching
+    h.roster.rows = [selfRow, desktop("dev-b", { online: false })];
+    const later = reader(h);
+    expect(later.open.devices.find((entry) => entry.device === "dev-b")).toMatchObject({
+      state: "asleep",
+      snapshot: peerSnapshot(),
+    });
+    // DS-L8: its board, greyed by its state — and nothing is asked of it asleep
+    expect(h.upstreams.attaches).toHaveLength(1);
+    // another projection keeps its own: a field reader never sees a desk board
+    const field = reader(h, "field", 250);
+    expect(field.open.devices.find((entry) => entry.device === "dev-b")?.snapshot).toBeUndefined();
+    field.dispose();
+    later.dispose();
+  });
+
   it("an attach answered after its reader left is closed at once", async () => {
     const h = harness([selfRow, desktop("dev-b")]);
     const r = reader(h);
