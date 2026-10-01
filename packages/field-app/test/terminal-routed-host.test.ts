@@ -526,3 +526,247 @@ describe("createRoutedTerminalHost — TP-S3f routed session events (G24)", () =
     expect(applySessionEvent).toHaveBeenCalledTimes(2);
   });
 });
+
+// DS-4e (2026-10-01; thinking-desktop-sync-plane.md §6.3 steps 1, 5 and 6) — a
+// session that lives on ANOTHER desktop. The pane asks its own daemon, naming
+// the owner (`device`); the daemon forwards, the owner mints, and the daemon
+// answers a ticket whose doors it re-homed onto a loopback egress route — which
+// the routed runtime dials exactly as it dials a local cell. Renewal and the
+// kill take the same road; the owner's inventory (the only answer carrying its
+// engine `handle`) is read by the same `device`.
+describe("createRoutedTerminalHost — a session on another desktop (DS-4e)", () => {
+  const OWNER = "dev-studio";
+  const OWNER_CELL = "cell-studio-boot-7";
+  /** The pair this desktop's daemon answered: the owner's paths on a loopback
+   * listener of its own (fieldd `remote-cell-rewriter.ts`). */
+  const LOOPBACK = {
+    controlUrl: `ws://127.0.0.1:61234/cell/${OWNER_CELL}/control`,
+    framesUrl: `ws://127.0.0.1:61234/cell/${OWNER_CELL}/frames`,
+  };
+  const context = {
+    cellBootId: OWNER_CELL,
+    connectionSetId: "connection-r",
+    channel: "control" as const,
+  };
+  const ownersSummary = {
+    ...summary,
+    id: "pane-r",
+    handle: "41",
+    cwd: "file://studio.local/Users/peer/src",
+  };
+
+  function ownersTicket(sessionId = "pane-r"): TerminalOpenTicket {
+    const t = ticket();
+    t.route.cellBootId = OWNER_CELL;
+    t.endpoints = { ...LOOPBACK };
+    t.transportGrant.protected.kid.cellBootId = OWNER_CELL;
+    t.transportGrant.claims.audienceCellBootId = OWNER_CELL;
+    t.attachGrant.protected.kid.cellBootId = OWNER_CELL;
+    t.attachGrant.claims.audienceCellBootId = OWNER_CELL;
+    t.attachGrant.claims.sessionId = sessionId;
+    return t;
+  }
+
+  function outcomeUnknown(key: string): FielddRpcError {
+    const error = new FielddRpcError(
+      "UNAVAILABLE",
+      "the call was cut before an answer; its outcome is unknown",
+      true,
+      { service: "fieldd", state: "outcome-unknown", idempotencyKey: key },
+    );
+    error.forward = { idempotencyKey: key };
+    return error;
+  }
+
+  function scripted(answers: Array<() => unknown>) {
+    return vi.fn(async (_method: string, _params?: unknown, _opts?: unknown) => {
+      const next = answers.shift();
+      if (next === undefined) throw new Error("asked too often");
+      return next();
+    });
+  }
+
+  function runtimeStub() {
+    const applySessionEvent = vi.fn();
+    const runtime = Object.assign(new EventTarget(), { applySessionEvent });
+    return { runtime: runtime as unknown as GhostteaTerminalRuntime, applySessionEvent };
+  }
+
+  it("asks the OWNER for a remote session's ticket, renewal and kill — and hands back the loopback pair its daemon answered", async () => {
+    const opened = ownersTicket();
+    const requests = vi.fn(async (method: string, _params?: unknown) => {
+      if (method === "terminal.openTicket") return opened;
+      if (method === "terminal.renewAttach") return { attachGrant: opened.attachGrant };
+      if (method === "terminal.terminate") return { terminated: true };
+      throw new Error(`unexpected ${method}`);
+    });
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    binding.placeRemote("pane-r", OWNER);
+
+    const minted = await binding.host.openTicket("pane-r", { reason: "mount" });
+    // dialled as a local cell's: the routed ticket carries the loopback pair whole
+    expect(minted.endpoints).toEqual(LOOPBACK);
+    expect(minted.route.cellBootId).toBe(OWNER_CELL);
+    await binding.host.renewAttach?.({
+      sessionId: "pane-r",
+      expectGeneration: 5,
+      requestId: "renew-r",
+    });
+    await binding.host.terminate?.("pane-r", "user");
+
+    expect(requests.mock.calls).toEqual([
+      ["terminal.openTicket", { device: OWNER, sessionId: "pane-r" }],
+      [
+        "terminal.renewAttach",
+        { sessionId: "pane-r", expectGeneration: 5, requestId: "renew-r", device: OWNER },
+      ],
+      ["terminal.terminate", { sessionId: "pane-r", device: OWNER }],
+    ]);
+  });
+
+  it("leaves a LOCAL session's asks exactly as they were — `{sessionId}`, no device", async () => {
+    const requests = vi.fn(async (method: string, _params?: unknown) => {
+      if (method === "terminal.openTicket") return ticket();
+      throw new Error(`unexpected ${method}`);
+    });
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    // another session's placement changes nothing for this one
+    binding.placeRemote("pane-r", OWNER);
+    await binding.host.openTicket("sess-1");
+    expect(requests.mock.calls).toEqual([["terminal.openTicket", { sessionId: "sess-1" }]]);
+  });
+
+  it("asks an outcome-unknown mint once more with ITS key, and a receipt in place of the ticket ANEW", async () => {
+    const requests = scripted([
+      () => {
+        throw outcomeUnknown("wk_attach_1");
+      },
+      () => ownersTicket(),
+    ]);
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    binding.placeRemote("pane-r", OWNER);
+
+    await expect(binding.host.openTicket("pane-r")).resolves.toMatchObject({ endpoints: LOOPBACK });
+    expect(requests.mock.calls).toEqual([
+      ["terminal.openTicket", { device: OWNER, sessionId: "pane-r" }],
+      [
+        "terminal.openTicket",
+        { device: OWNER, sessionId: "pane-r" },
+        { idempotencyKey: "wk_attach_1" },
+      ],
+    ]);
+
+    // The retry answered with the owner's RECEIPT (the ticket applied, its
+    // answer too large to journal): a ticket is harmless to mint twice, so it
+    // is a NEW logical call — no key, a fresh ticket, the lost one expires.
+    const again = scripted([
+      () => {
+        throw outcomeUnknown("wk_attach_2");
+      },
+      () => ({
+        idempotencyKey: "wk_attach_2",
+        method: "terminal.openTicket",
+        device: OWNER,
+        state: "applied",
+        at: 1,
+        resultOmitted: true,
+      }),
+      () => ownersTicket(),
+    ]);
+    const asked = createRoutedTerminalHost({
+      fieldd: { request: again } as unknown as FielddClient,
+    });
+    asked.placeRemote("pane-r", OWNER);
+    await expect(asked.host.openTicket("pane-r")).resolves.toMatchObject({ endpoints: LOOPBACK });
+    expect(again.mock.calls.map((call) => call[2])).toEqual([
+      undefined,
+      { idempotencyKey: "wk_attach_2" },
+      undefined,
+    ]);
+    expect(again.mock.calls.map((call) => call[1])).toEqual([
+      { device: OWNER, sessionId: "pane-r" },
+      { device: OWNER, sessionId: "pane-r" },
+      { device: OWNER, sessionId: "pane-r" },
+    ]);
+  });
+
+  it("reconciles a remote cell's resync against the OWNER's inventory — never against this desktop's", async () => {
+    const requests = vi.fn(async (method: string, params?: unknown) => {
+      if (method !== "terminal.sessions") throw new Error(`unexpected ${method}`);
+      // this desktop's floor knows nothing of the owner's sessions
+      return (params as { device?: string } | undefined)?.device === OWNER
+        ? { sessions: [ownersSummary] }
+        : { sessions: [] };
+    });
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    const { runtime, applySessionEvent } = runtimeStub();
+    binding.bind(runtime);
+    binding.placeRemote("pane-r", OWNER);
+    binding.placeRemote("pane-gone", OWNER);
+    binding.primeTicket("pane-r", ownersTicket("pane-r"));
+    binding.primeTicket("pane-gone", ownersTicket("pane-gone"));
+
+    binding.host.onExtensionMessage?.({ type: "SessionEvent", event: { kind: "resync" } }, context);
+
+    await vi.waitFor(() => {
+      expect(applySessionEvent).toHaveBeenCalledWith({ type: "updated", session: ownersSummary });
+      expect(applySessionEvent).toHaveBeenCalledWith({ type: "removed", sessionId: "pane-gone" });
+    });
+    expect(applySessionEvent).toHaveBeenCalledTimes(2);
+    expect(requests.mock.calls).toEqual([["terminal.sessions", { device: OWNER }]]);
+  });
+
+  it("refreshes a remote pane's summary from the OWNER's inventory — one read per desktop per turn", async () => {
+    const requests = vi.fn(async (method: string, params?: unknown) => {
+      if (method !== "terminal.sessions") throw new Error(`unexpected ${method}`);
+      return (params as { device?: string } | undefined)?.device === OWNER
+        ? { sessions: [ownersSummary] }
+        : { sessions: [summary] };
+    });
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+    binding.placeRemote("pane-r", OWNER);
+
+    const [remote, local, again] = await Promise.all([
+      binding.host.getSession?.("pane-r"),
+      binding.host.getSession?.("sess-1"),
+      binding.host.getSession?.("pane-r"),
+    ]);
+    expect(remote).toEqual(ownersSummary);
+    expect(local).toEqual(summary);
+    expect(again).toEqual(ownersSummary);
+    expect(requests.mock.calls).toEqual([
+      ["terminal.sessions", { device: OWNER }],
+      ["terminal.sessions", {}],
+    ]);
+  });
+
+  it("reads the owner's exact summary for a mount, and null for a session the owner does not list", async () => {
+    const requests = vi.fn(async (method: string, params?: unknown) => {
+      if (method !== "terminal.sessions") throw new Error(`unexpected ${method}`);
+      return (params as { device?: string } | undefined)?.device === OWNER
+        ? { sessions: [ownersSummary] }
+        : { sessions: [summary] };
+    });
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+    });
+
+    await expect(binding.readRemoteSession(OWNER, "pane-r")).resolves.toEqual(ownersSummary);
+    // a mount reads FRESH: the summary it mounts is the owner's now
+    await expect(binding.readRemoteSession(OWNER, "pane-elsewhere")).resolves.toBeNull();
+    expect(requests.mock.calls).toEqual([
+      ["terminal.sessions", { device: OWNER }],
+      ["terminal.sessions", { device: OWNER }],
+    ]);
+  });
+});

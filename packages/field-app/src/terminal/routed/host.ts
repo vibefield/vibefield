@@ -64,6 +64,17 @@ export interface RoutedTerminalHostBinding {
   readonly host: GhostteaRoutedHost;
   /** Seed the first activation with the ticket returned atomically by create. */
   primeTicket(sessionId: string, ticket: TerminalOpenTicketValue): void;
+  /** DS-4e — this session lives on ANOTHER desktop (`device`, the owner's
+   * roster id): from here every ask for it — the ticket, its renewal, the kill,
+   * the inventory its pane is refreshed and reconciled from — names the owner,
+   * and this window's daemon forwards it (`thinking-desktop-sync-plane.md`
+   * §6.3). A session never placed is this desktop's, asked as it always was. */
+  placeRemote(sessionId: string, device: string): void;
+  /** DS-4e — the owner's EXACT engine summary for one of its sessions
+   * (`terminal.sessions {device}`, read fresh), which is what a pane mounts by:
+   * the decimal `handle` exists in no other answer. Null when the owner does
+   * not list the session. */
+  readRemoteSession(device: string, sessionId: string): Promise<SessionSummary | null>;
   /** Install the activation-lifecycle inverse after the runtime exists. */
   bind(runtime: GhostteaTerminalRuntime): void;
   dispose(): void;
@@ -148,12 +159,17 @@ function isUnobservedInventory(cause: unknown): boolean {
 
 /** Preserve fieldd's honest observation gate without turning its startup race
  * into a permanent failed Workspace initialization. Other failures propagate
- * immediately; only the explicitly retryable `unobserved` state is awaited. */
-async function listRuntimeSessions(fieldd: FielddClient): Promise<SessionSummary[]> {
+ * immediately; only the explicitly retryable `unobserved` state is awaited.
+ * DS-4e: with a `device`, the OWNER's inventory — the same read, forwarded. */
+async function listRuntimeSessions(
+  fieldd: FielddClient,
+  device?: string,
+): Promise<SessionSummary[]> {
   const deadline = Date.now() + RUNTIME_SESSION_OBSERVATION_TIMEOUT_MS;
+  const params = device === undefined ? {} : { device };
   for (;;) {
     try {
-      return asSessionSummaries(await fieldd.request("terminal.sessions", {}));
+      return asSessionSummaries(await fieldd.request("terminal.sessions", params));
     } catch (cause) {
       if (!isUnobservedInventory(cause) || Date.now() >= deadline) throw cause;
       await new Promise((resolve) => setTimeout(resolve, RUNTIME_SESSION_OBSERVATION_RETRY_MS));
@@ -175,6 +191,15 @@ export function createRoutedTerminalHost(
   const exitApplied = new Set<string>();
   /** `removed` events held awaiting their kill's `exited` (see the hold const). */
   const heldRemovals = new Map<string, ReturnType<typeof setTimeout>>();
+  /** DS-4e — sessionId → the desktop that OWNS it, for a session this window
+   * shows from another desktop (`placeRemote`). Absent: this desktop's own. */
+  const remotes = new Map<string, string>();
+  /** The params of a session-scoped ask: the owner named when it is another
+   * desktop's, exactly `{sessionId}` when it is this one's. */
+  const routed = <T extends { sessionId: string }>(params: T): T | (T & { device: string }) => {
+    const device = remotes.get(params.sessionId);
+    return device === undefined ? params : { ...params, device };
+  };
   let boundRuntime: GhostteaTerminalRuntime | null = null;
   let disposed = false;
 
@@ -191,51 +216,77 @@ export function createRoutedTerminalHost(
     boundRuntime?.applySessionEvent({ type: "removed", sessionId });
     custodians.delete(sessionId);
     exitApplied.delete(sessionId);
+    remotes.delete(sessionId);
     options.onTerminated?.(sessionId);
   };
 
-  // All panes share one short-lived inventory, including staggered refreshes.
-  // Lifecycle resync bypasses it: authoritative absence must never be cached.
-  let inventoryRead: Promise<Map<string, SessionSummary>> | null = null;
-  let inventory: Map<string, SessionSummary> | null = null;
-  let inventoryAt = 0;
+  // All panes share one short-lived inventory PER DESKTOP, including staggered
+  // refreshes: this desktop's own (the key "") and, for a pane showing another
+  // desktop's session, its OWNER's (DS-4e — the same read, forwarded by
+  // `device`). Lifecycle resync bypasses it: authoritative absence must never
+  // be cached.
+  interface InventoryReader {
+    read: Promise<Map<string, SessionSummary>> | null;
+    inventory: Map<string, SessionSummary> | null;
+    at: number;
+  }
+  const readers = new Map<string, InventoryReader>();
   let inventoryGeneration = 0;
   const invalidateInventory = (): void => {
-    inventory = null;
-    inventoryRead = null;
+    readers.clear();
     inventoryGeneration += 1;
   };
-  const readInventory = (fresh = false): Promise<Map<string, SessionSummary>> => {
-    if (!fresh && inventory !== null && Date.now() - inventoryAt < 200) {
-      return Promise.resolve(inventory);
+  const readInventory = (fresh = false, device?: string): Promise<Map<string, SessionSummary>> => {
+    const key = device ?? "";
+    let reader = readers.get(key);
+    if (reader === undefined) {
+      reader = { read: null, inventory: null, at: 0 };
+      readers.set(key, reader);
     }
-    if (inventoryRead === null) {
-      const generation = inventoryGeneration;
-      const read = listRuntimeSessions(options.fieldd)
-        .then((sessions) => {
-          if (generation !== inventoryGeneration) return readInventory();
-          inventory = new Map(sessions.map((session) => [session.id, session]));
-          inventoryAt = Date.now();
-          return inventory;
-        })
-        .finally(() => {
-          if (inventoryRead === read) inventoryRead = null;
-        });
-      inventoryRead = read;
+    if (!fresh && reader.inventory !== null && Date.now() - reader.at < 200) {
+      return Promise.resolve(reader.inventory);
     }
-    return inventoryRead;
+    if (reader.read !== null) return reader.read;
+    const generation = inventoryGeneration;
+    const current = reader;
+    const read = listRuntimeSessions(options.fieldd, device)
+      .then((sessions) => {
+        if (generation !== inventoryGeneration) return readInventory(false, device);
+        const inventory = new Map(sessions.map((session) => [session.id, session]));
+        current.inventory = inventory;
+        current.at = Date.now();
+        return inventory;
+      })
+      .finally(() => {
+        if (current.read === read) current.read = null;
+      });
+    current.read = read;
+    return read;
   };
 
   /** The G24 lag answer: the cell's bounded lifecycle bus dropped events, so
    * deltas can no longer be trusted — reconcile THIS cell's tracked sessions
    * against the authoritative inventory: present ids get their full summary
-   * re-applied, absent ids are removals the bus lost. */
+   * re-applied, absent ids are removals the bus lost. DS-4e: the inventory is
+   * the OWNER's for a session another desktop holds — its absence from THIS
+   * desktop's floor says nothing, and reading it there would unregister every
+   * remote pane on the first resync its cell sent. */
   const resyncCustody = async (cellBootId: string): Promise<void> => {
     invalidateInventory();
-    const inventory = await readInventory(true);
+    const owners = new Set<string | undefined>();
+    for (const [sessionId, custodian] of custodians) {
+      if (custodian === cellBootId) owners.add(remotes.get(sessionId));
+    }
+    // nothing tracked in this cell: this desktop's own read, as it always was
+    if (owners.size === 0) owners.add(undefined);
+    const inventories = new Map<string | undefined, Map<string, SessionSummary>>();
+    for (const owner of owners) inventories.set(owner, await readInventory(true, owner));
     if (disposed) return;
     for (const [sessionId, custodian] of [...custodians]) {
       if (custodian !== cellBootId) continue;
+      // a session placed on another desktop meanwhile has no read here: left standing
+      const inventory = inventories.get(remotes.get(sessionId));
+      if (inventory === undefined) continue;
       const summary = inventory.get(sessionId);
       if (summary === undefined) {
         // Authoritative absence outranks any held ordering repair.
@@ -345,10 +396,15 @@ export function createRoutedTerminalHost(
       // its owner, its answer lost) is asked once more with its key, and a
       // receipt in place of the ticket is asked ANEW — a second ticket is
       // harmless, the lost one expires. A local mint never fails that way.
+      //
+      // DS-4e — a session another desktop owns names it (`routed`): this
+      // window's daemon forwards the mint, and its answer's doors are already
+      // a loopback pair here (the rewriter's egress route), dialled exactly as
+      // a local cell's.
       const raw = await requestResolvingOutcome(
         options.fieldd,
         "terminal.openTicket",
-        { sessionId },
+        routed({ sessionId }),
         "ask-anew",
       );
       const ticket = requireDirectTicket(sessionId, raw);
@@ -357,8 +413,9 @@ export function createRoutedTerminalHost(
       return asRoutedTicket(ticket);
     },
     renewAttach: async (params) => {
+      // DS-4e §6.3 step 6 — a forwarded ticket is renewed by the same road
       const renewed = TerminalRenewAttachResult.parse(
-        await options.fieldd.request("terminal.renewAttach", params),
+        await options.fieldd.request("terminal.renewAttach", routed(params)),
       );
       return { attachGrant: asAttachGrant(renewed.attachGrant) };
     },
@@ -367,14 +424,15 @@ export function createRoutedTerminalHost(
     // 200ms cadence from routed frame commits and asks HERE; the coalescer
     // makes N concurrent asks one wire read. `null` = no update, never an
     // invented removal (absence from a snapshot is the RESYNC path's fact to
-    // assert, not a refresh's).
-    getSession: async (sessionId) => (await readInventory()).get(sessionId) ?? null,
+    // assert, not a refresh's). DS-4e: a remote pane refreshes from its OWNER.
+    getSession: async (sessionId) =>
+      (await readInventory(false, remotes.get(sessionId))).get(sessionId) ?? null,
     onExtensionMessage: applyWireSessionEvent,
     ...(options.createSession === undefined ? {} : { createSession: options.createSession }),
     terminate: async (sessionId) => {
       try {
         TerminalTerminateResult.parse(
-          await options.fieldd.request("terminal.terminate", { sessionId }),
+          await options.fieldd.request("terminal.terminate", routed({ sessionId })),
         );
         options.onTerminated?.(sessionId);
       } finally {
@@ -383,6 +441,7 @@ export function createRoutedTerminalHost(
         custodians.delete(sessionId);
         input.releaseSession(sessionId);
         activations.delete(sessionId);
+        remotes.delete(sessionId);
       }
     },
     encodeInput: input.encodeInput,
@@ -390,6 +449,12 @@ export function createRoutedTerminalHost(
 
   return {
     host,
+    placeRemote: (sessionId, device) => {
+      if (disposed) throw new Error("the routed terminal host is disposed");
+      remotes.set(sessionId, device);
+    },
+    readRemoteSession: async (device, sessionId) =>
+      (await readInventory(true, device)).get(sessionId) ?? null,
     primeTicket: (sessionId, ticket) => {
       if (disposed) throw new Error("the routed terminal host is disposed");
       const parsed = requireDirectTicket(sessionId, ticket);
@@ -415,6 +480,7 @@ export function createRoutedTerminalHost(
       primedTickets.clear();
       custodians.clear();
       exitApplied.clear();
+      remotes.clear();
       for (const held of heldRemovals.values()) clearTimeout(held);
       heldRemovals.clear();
       input.dispose();
