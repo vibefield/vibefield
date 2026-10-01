@@ -111,8 +111,12 @@ export function isSelfPrincipal(principal: GrantPrincipal): boolean {
  *
  * This is the principal's IDENTITY. The id a grant CARRIES is `mintedClientId`
  * — this, scoped to the minting fieldd's epoch — because a stable identity is
- * exactly what TP-R21 cannot survive across a fieldd restart. */
-export function clientIdFor(principal: GrantPrincipal): string {
+ * exactly what TP-R21 cannot survive across a fieldd restart.
+ *
+ * `forwardedFor` (the owner's `ctx.onBehalfOf`) is read by ONE arm, a peer
+ * daemon's: DS-4c keys its forward by the window behind it (below). It names
+ * an identity, never a right — `rightsFor` alone decides what a key may do. */
+export function clientIdFor(principal: GrantPrincipal, forwardedFor?: ForwardedFor): string {
   const rp = principal.rendererParticipant;
   if (rp !== undefined) return `win:${rp.participantId}#${rp.incarnation}`;
   // TM-2: `tailnet` joins the login-keyed family. It was missing, and the
@@ -153,13 +157,42 @@ export function clientIdFor(principal: GrantPrincipal): string {
   // routable to the owner, so a forwarding daemon IS minted here. One id per
   // peer daemon is still one client for EVERY window behind it — two windows on
   // desktop B attaching one session of A's would share a connection set and an
-  // attach ledger, the E-F2 ping-pong again. The fix keys this arm on the window
-  // behind the call (`onBehalfOf.windowId`), which reaches the owner with DS-2
-  // (lane ds-b); one window per session per peer is exact until then.
-  if (principal.kind === "peer-fieldd" && principal.deviceId !== undefined)
-    return `peer-fieldd:${principal.deviceId}`;
+  // attach ledger, the E-F2 ping-pong again.
+  // *DS-4c (2026-10-01) is the fix:* a forward names the window behind it
+  // (`onBehalfOf.windowId` — the renderer participant, else the product
+  // connection; DS-2 carries it to the owner on every forwarded call), so a
+  // forward is keyed by that window: `peer-fieldd:<daemon>#<window>`, and two
+  // windows behind one daemon are two clients — two connection sets on a cell,
+  // two attach ledgers here. The daemon on its own account, and a forward that
+  // names no window, keep the daemon's key. The device is the AUTHENTICATED
+  // carrier's (the principal's, correlated to the roster at the door — D1); a
+  // window relayed from another of this person's desktops is named with its
+  // home too (`#<home>/<window>`), since two homes may each have a "p-1". Both
+  // restated ids are opaque, so they are percent-encoded: no separator inside
+  // one can alias another key.
+  if (principal.kind === "peer-fieldd" && principal.deviceId !== undefined) {
+    const daemon = `peer-fieldd:${encodeURIComponent(principal.deviceId)}`;
+    const window = forwardedWindowKey(principal.deviceId, forwardedFor);
+    return window === undefined ? daemon : `${daemon}#${window}`;
+  }
   if (principal.tokenId !== undefined) return `${principal.kind}:${principal.tokenId}`;
   return principal.kind;
+}
+
+/** DS-4c — the window a peer daemon's forward is FOR, as a key segment:
+ * percent-encoded, and prefixed with the window's home device when that is not
+ * the carrier itself (a relay restates the original provenance —
+ * `forward-envelope.ts` `forwardProvenance`). Undefined when the forward names
+ * no window. */
+function forwardedWindowKey(
+  carrierDeviceId: string,
+  forwardedFor: ForwardedFor | undefined,
+): string | undefined {
+  if (forwardedFor?.windowId === undefined) return undefined;
+  const window = encodeURIComponent(forwardedFor.windowId);
+  return forwardedFor.deviceId === carrierDeviceId
+    ? window
+    : `${encodeURIComponent(forwardedFor.deviceId)}/${window}`;
 }
 
 /** Rights per principal (spec §5.1). Every SELF principal (`isSelfPrincipal`)
@@ -271,9 +304,14 @@ export interface RenewAttachInput extends Omit<MintTicketInput, "doors"> {
 const RENEWAL_MEMORY = 8;
 
 /** TP-R21 — the clientId a grant CARRIES: the principal's identity, scoped to
- * the minting fieldd's epoch. See `TerminalGrantMinter` for why. */
-export function mintedClientId(principal: GrantPrincipal, epoch: string): string {
-  return `${clientIdFor(principal)}~${epoch}`;
+ * the minting fieldd's epoch. See `TerminalGrantMinter` for why. DS-4c — a
+ * peer daemon's forward is keyed by the window it is for (`clientIdFor`). */
+export function mintedClientId(
+  principal: GrantPrincipal,
+  epoch: string,
+  forwardedFor?: ForwardedFor,
+): string {
+  return `${clientIdFor(principal, forwardedFor)}~${epoch}`;
 }
 
 /** A fresh epoch: one per minter, which is one per fieldd boot. */
@@ -312,9 +350,15 @@ export class TerminalGrantMinter {
   ) {}
 
   /** Every ticket carries a FRESH transport grant (spec §5.1 — fieldd cannot
-   * know another process's socket state; an optional grant is a TOCTOU). */
-  mintTransport(key: CellGrantKey, principal: GrantPrincipal): CellTransportGrant {
-    const clientId = mintedClientId(principal, this.epoch);
+   * know another process's socket state; an optional grant is a TOCTOU).
+   * DS-4c — `forwardedFor` keys a peer daemon's forward by its window, so each
+   * window behind one daemon holds its OWN connection set on the cell. */
+  mintTransport(
+    key: CellGrantKey,
+    principal: GrantPrincipal,
+    forwardedFor?: ForwardedFor,
+  ): CellTransportGrant {
+    const clientId = mintedClientId(principal, this.epoch, forwardedFor);
     const ledgerKey = `${clientId}|${key.cellBootId}`;
     const generation = (this.transportGenerations.get(ledgerKey) ?? 0) + 1;
     this.transportGenerations.set(ledgerKey, generation);
@@ -338,7 +382,7 @@ export class TerminalGrantMinter {
    * newest it accepts, so an older in-flight grant becomes a rollback — the
    * newest wins, which is the semantics a re-open wants. */
   mintAttach(input: MintTicketInput): SessionAttachGrant {
-    const clientId = mintedClientId(input.principal, this.epoch);
+    const clientId = mintedClientId(input.principal, this.epoch, input.forwardedFor);
     const generation = this.bumpAttachGeneration(clientId, input.sessionId);
     return this.attachGrantAt(input, clientId, generation);
   }
@@ -351,7 +395,7 @@ export class TerminalGrantMinter {
     return {
       route: input.route,
       endpoints: input.doors,
-      transportGrant: this.mintTransport(input.key, input.principal),
+      transportGrant: this.mintTransport(input.key, input.principal, input.forwardedFor),
       attachGrant: this.mintAttach(input),
     };
   }
@@ -362,7 +406,7 @@ export class TerminalGrantMinter {
    * CONFLICT (the caller re-reads what it holds); a repeated requestId returns
    * the grant it already got, generation untouched. */
   renewAttach(input: RenewAttachInput): SessionAttachGrant {
-    const clientId = mintedClientId(input.principal, this.epoch);
+    const clientId = mintedClientId(input.principal, this.epoch, input.forwardedFor);
     const ledgerKey = `${clientId}|${input.sessionId}`;
     const remembered = this.renewals.get(ledgerKey)?.get(input.requestId);
     if (remembered !== undefined) return remembered;
@@ -389,9 +433,15 @@ export class TerminalGrantMinter {
     return grant;
   }
 
-  /** The generation a {client, session} pair currently holds (0 = never minted). */
-  attachGeneration(principal: GrantPrincipal, sessionId: string): number {
-    return this.attachGenerations.get(`${mintedClientId(principal, this.epoch)}|${sessionId}`) ?? 0;
+  /** The generation a {client, session} pair currently holds (0 = never minted).
+   * A peer daemon's forward is its window's client (DS-4c), so name the window. */
+  attachGeneration(
+    principal: GrantPrincipal,
+    sessionId: string,
+    forwardedFor?: ForwardedFor,
+  ): number {
+    const clientId = mintedClientId(principal, this.epoch, forwardedFor);
+    return this.attachGenerations.get(`${clientId}|${sessionId}`) ?? 0;
   }
 
   private bumpAttachGeneration(clientId: string, sessionId: string): number {

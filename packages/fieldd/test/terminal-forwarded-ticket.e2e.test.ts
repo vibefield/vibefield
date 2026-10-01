@@ -216,8 +216,27 @@ describe("DS-4 — a window's ticket to a session on another desktop", () => {
     expect(ticket.route).toEqual({ cellBootId: "cell-b", routeRevision: 7 });
     expect(ticket.attachGrant.claims.audienceCellBootId).toBe("cell-b");
     expect(ticket.attachGrant.claims.rights).toEqual(["geometry", "input", "read"]);
-    expect(ticket.attachGrant.claims.clientId).toMatch(/^peer-fieldd:dev-a~/);
+    // DS-4c — the grants name the WINDOW behind the forward (`onBehalfOf
+    // .windowId`; this token names no renderer participant, so it is the
+    // product connection's id), not A's daemon alone
+    expect(ticket.attachGrant.claims.clientId).toMatch(/^peer-fieldd:dev-a#[^~]+~/);
     expect(ticket.transportGrant.claims.clientId).toBe(ticket.attachGrant.claims.clientId);
+
+    // …so a SECOND window on A attaching the same session of B's is a second
+    // client on B's cell — its own connection set, its own attach ledger —
+    // where one key per daemon made the two windows supersede each other's legs
+    const second = await openRpc(A.controlPort);
+    await helloAs(second, A.tokens.mint(["terminal.attach"], "ds4-window-2").token);
+    const secondTicket = TerminalOpenTicketResult.parse(
+      await second.call("terminal.openTicket", { device: "dev-b", sessionId: "pane-b" }),
+    );
+    expect(secondTicket.attachGrant.claims.clientId).toMatch(/^peer-fieldd:dev-a#[^~]+~/);
+    expect(secondTicket.attachGrant.claims.clientId).not.toBe(ticket.attachGrant.claims.clientId);
+    expect(secondTicket.transportGrant.claims.connectionSetId).not.toBe(
+      ticket.transportGrant.claims.connectionSetId,
+    );
+    expect(ticket.attachGrant.claims.grantGeneration).toBe(1);
+    expect(secondTicket.attachGrant.claims.grantGeneration).toBe(1);
 
     // D2 (the landing review, 2026-10-01) — the same door asked by A's daemon
     // on its OWN account (no envelope: nobody behind the call) is a peer daemon
@@ -226,6 +245,8 @@ describe("DS-4 — a window's ticket to a session on another desktop", () => {
       await A.peers.request("dev-b", "terminal.openTicket", { sessionId: "pane-b" }),
     );
     expect(own.attachGrant.claims.rights).toEqual(["read"]);
+    // …under the daemon's own key, a client apart from every window it carries
+    expect(own.attachGrant.claims.clientId).toMatch(/^peer-fieldd:dev-a~/);
 
     // the take's product door (the phone's, DS-4b) is declared and honest
     const take = await window.callErr("terminal.takeGeometry", { sessionId: "pane-b" });

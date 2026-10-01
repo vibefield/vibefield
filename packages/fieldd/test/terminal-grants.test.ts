@@ -130,13 +130,15 @@ describe("clientId and rights derive from the principal, never from the caller's
     expect(minter.mintTicket(base).attachGrant.claims.rights).toEqual(["read"]);
     const forwarded = minter.mintTicket({ ...base, forwardedFor: FOR_A_WINDOW });
     expect(forwarded.attachGrant.claims.rights).toEqual(["geometry", "input", "read"]);
-    const generation = minter.attachGeneration(daemon, "s-1");
+    // DS-4c — the window's forwards and the daemon's own account are two
+    // clients now, so each renews against its OWN ledger (this row used to
+    // read one shared generation for both)
     const renewed = minter.renewAttach({
       key: KEY,
       principal: daemon,
       sessionId: "s-1",
       route: ROUTE,
-      expectGeneration: generation,
+      expectGeneration: minter.attachGeneration(daemon, "s-1", FOR_A_WINDOW),
       requestId: "r-1",
       forwardedFor: FOR_A_WINDOW,
     });
@@ -146,10 +148,12 @@ describe("clientId and rights derive from the principal, never from the caller's
       principal: daemon,
       sessionId: "s-1",
       route: ROUTE,
-      expectGeneration: generation + 1,
+      expectGeneration: minter.attachGeneration(daemon, "s-1"),
       requestId: "r-2",
     });
     expect(ownAccount.claims.rights).toEqual(["read"]);
+    expect(ownAccount.claims.clientId).toBe("peer-fieldd:dev-b~epochA");
+    expect(renewed.claims.clientId).toBe("peer-fieldd:dev-b#p-77~epochA");
   });
 
   it("every self principal gets exactly one set, and nobody gets geometryAdmin", () => {
@@ -245,6 +249,42 @@ describe("clientId and rights derive from the principal, never from the caller's
     // and a peer with no deviceId at all still gets the honest bare answer
     expect(clientIdFor({ kind: "peer-fieldd" })).toBe("peer-fieldd");
   });
+
+  // DS-4c (the wave-1 review's DS-4 finding) — one peer daemon carries EVERY
+  // window of its desktop, so keying its forwards by the daemon made two
+  // windows on desktop B attaching one session of A's ONE client: one
+  // connection set (the second window's legs superseded the first's — E-F2's
+  // ping-pong, between two windows) and one attach ledger. A forward names the
+  // window behind it (`onBehalfOf.windowId`, DS-2), so that is the key.
+  it("keys a peer daemon's FORWARD by the window behind it — two windows are two clients", () => {
+    const daemon = { kind: "peer-fieldd", deviceId: "dev-b" };
+    const first = { clientKind: "renderer", deviceId: "dev-b", windowId: "p-1" };
+    const second = { clientKind: "renderer", deviceId: "dev-b", windowId: "p-2" };
+    expect(clientIdFor(daemon, first)).toBe("peer-fieldd:dev-b#p-1");
+    expect(clientIdFor(daemon, second)).toBe("peer-fieldd:dev-b#p-2");
+    expect(connectionSetIdFor(clientIdFor(daemon, first), "cell-boot-A")).not.toBe(
+      connectionSetIdFor(clientIdFor(daemon, second), "cell-boot-A"),
+    );
+    // the daemon on its own account, and a forward that names no window, keep
+    // the daemon's own key (and `rightsFor` decides what each may do)
+    expect(clientIdFor(daemon)).toBe("peer-fieldd:dev-b");
+    expect(clientIdFor(daemon, { clientKind: "shell-main", deviceId: "dev-b" })).toBe(
+      "peer-fieldd:dev-b",
+    );
+    // a window relayed through this daemon from ANOTHER desktop is that desktop's
+    // window — two homes' "p-1" are two windows
+    expect(clientIdFor(daemon, { ...first, deviceId: "dev-c" })).toBe(
+      "peer-fieldd:dev-b#dev-c/p-1",
+    );
+    // the restated ids are opaque: a separator inside one cannot alias another key
+    expect(clientIdFor(daemon, { ...first, windowId: "p#1/x" })).toBe(
+      "peer-fieldd:dev-b#p%231%2Fx",
+    );
+    // only a peer daemon's key reads the restatement — a window HERE and a self
+    // peer keep their own, whatever a call restates
+    expect(clientIdFor(WINDOW, first)).toBe("win:p-3c4d#doc-2");
+    expect(clientIdFor(SELF, first)).toBe(clientIdFor(SELF));
+  });
 });
 
 describe("the minter — fresh transport grants, monotonic attach generations, verifiable MACs", () => {
@@ -260,6 +300,81 @@ describe("the minter — fresh transport grants, monotonic attach generations, v
     // the cell's high-water past every grant the phone still held.
     expect(phone.claims.transportGrantGeneration).toBe(1);
     expect(ipad.claims.transportGrantGeneration).toBe(1);
+  });
+
+  // DS-4c — the same fix for two WINDOWS behind one peer daemon, seen through
+  // the minter: what a forwarded attach is keyed by is its ledger.
+  const DAEMON = { kind: "peer-fieldd", deviceId: "dev-b" };
+  const FIRST = { clientKind: "renderer", deviceId: "dev-b", windowId: "p-1" };
+  const SECOND = { clientKind: "renderer", deviceId: "dev-b", windowId: "p-2" };
+  const RENEW = { key: KEY, principal: DAEMON, sessionId: "s-1", route: ROUTE };
+  const FORWARD = { ...RENEW, doors: DOORS };
+
+  it("gives two windows behind ONE peer daemon two connection sets and two attach ledgers, each moving on its own", () => {
+    const minter = new TerminalGrantMinter(() => 1_000_000, "E1");
+    const first = minter.mintTicket({ ...FORWARD, forwardedFor: FIRST });
+    const second = minter.mintTicket({ ...FORWARD, forwardedFor: SECOND });
+    expect(first.transportGrant.claims.clientId).toBe("peer-fieldd:dev-b#p-1~E1");
+    expect(second.transportGrant.claims.clientId).toBe("peer-fieldd:dev-b#p-2~E1");
+    expect(first.attachGrant.claims.clientId).toBe(first.transportGrant.claims.clientId);
+    expect(second.attachGrant.claims.clientId).toBe(second.transportGrant.claims.clientId);
+    // two connection sets on one cell: neither window's legs supersede the other's
+    expect(first.transportGrant.claims.connectionSetId).not.toBe(
+      second.transportGrant.claims.connectionSetId,
+    );
+    // two ledgers, each from 1 — one shared ledger handed the second window
+    // generation 2 and raised the cell's high-water past the first's grant
+    expect(first.transportGrant.claims.transportGrantGeneration).toBe(1);
+    expect(second.transportGrant.claims.transportGrantGeneration).toBe(1);
+    expect(first.attachGrant.claims.grantGeneration).toBe(1);
+    expect(second.attachGrant.claims.grantGeneration).toBe(1);
+    expect(minter.attachGeneration(DAEMON, "s-1", FIRST)).toBe(1);
+    expect(minter.attachGeneration(DAEMON, "s-1", SECOND)).toBe(1);
+    // each moves on its own: the first window re-opens and renews…
+    expect(
+      minter.mintTicket({ ...FORWARD, forwardedFor: FIRST }).attachGrant.claims.grantGeneration,
+    ).toBe(2);
+    const renewedFirst = minter.renewAttach({
+      ...RENEW,
+      expectGeneration: 2,
+      requestId: "r-1",
+      forwardedFor: FIRST,
+    });
+    expect(renewedFirst.claims.grantGeneration).toBe(3);
+    // …and the second's grant is exactly where it was: it renews at ITS generation
+    const renewedSecond = minter.renewAttach({
+      ...RENEW,
+      expectGeneration: 1,
+      requestId: "r-2",
+      forwardedFor: SECOND,
+    });
+    expect(renewedSecond.claims.grantGeneration).toBe(2);
+    expect(renewedSecond.claims.clientId).toBe("peer-fieldd:dev-b#p-2~E1");
+    // the daemon's own account is a third ledger, never touched by its windows
+    expect(minter.attachGeneration(DAEMON, "s-1")).toBe(0);
+  });
+
+  it("refuses a window's stale renewal for THAT window — never for the other window behind the same daemon", () => {
+    const minter = new TerminalGrantMinter(() => 1_000_000, "E1");
+    // the first window's pane opened twice (a re-open: generation 2); the second once
+    minter.mintTicket({ ...FORWARD, forwardedFor: FIRST });
+    minter.mintTicket({ ...FORWARD, forwardedFor: FIRST });
+    minter.mintTicket({ ...FORWARD, forwardedFor: SECOND });
+    // the first window renewing a grant it no longer holds is refused — its own fence
+    let refused: unknown;
+    try {
+      minter.renewAttach({ ...RENEW, expectGeneration: 1, requestId: "r-1", forwardedFor: FIRST });
+    } catch (error) {
+      refused = error;
+    }
+    expect(refused).toBeInstanceOf(RpcCallError);
+    expect((refused as RpcCallError).kind).toBe("CONFLICT");
+    expect((refused as RpcCallError).message).toContain("the current one is 2");
+    // …and the second window, at the generation it holds, is not refused for it
+    expect(
+      minter.renewAttach({ ...RENEW, expectGeneration: 1, requestId: "r-2", forwardedFor: SECOND })
+        .claims.grantGeneration,
+    ).toBe(2);
   });
 
   it("mints a ticket whose grants parse, verify against the cell key, and bind audience/client/session", () => {
