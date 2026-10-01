@@ -1529,7 +1529,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       if (parsed.data.scope === "mesh" && ctx.principal.kind !== "peer-fieldd")
         return await requireMesh().search(parsed.data);
-      return await index.search(parsed.data);
+      if (ctx.principal.kind !== "peer-fieldd") return await index.search(parsed.data);
+      // a peer's ask is answered, never refused UNAVAILABLE: its PeerLink
+      // would read that as a dead transport and drop the shared link. An index
+      // that is not up is the honest `answered: false` (its source: building).
+      try {
+        return await index.search(parsed.data);
+      } catch (error) {
+        if (!(error instanceof RpcCallError) || error.kind !== "UNAVAILABLE") throw error;
+        return {
+          answered: false,
+          state: { readiness: "unknown", detail: "this desktop's index is not up" },
+          hits: [],
+          clipped: false,
+        };
+      }
     });
     api.register("index.projects", (ctx, params) => {
       const parsed = IndexProjectsParams.safeParse(params ?? {});
@@ -1593,15 +1607,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           'expected { table: "projects" | "sessions", since?: {epoch, revision}, minIntervalMs? }',
           false,
         );
+      // NOT `UNAVAILABLE`, deliberately: this door's only caller is a peer's
+      // PeerLink, which reads a remote UNAVAILABLE as a dead transport and
+      // DROPS the shared link — every standing subscription and call on it
+      // with it — and the replica asks again on its backoff. A typed,
+      // retryable refusal that names the index's state passes through intact.
       if (!indexCatalog.ready)
         throw new RpcCallError(
-          "UNAVAILABLE",
+          "PRECONDITION_FAILED",
           "the history catalog has not read the index yet",
           true,
-          {
-            service: "index",
-            state: indexCatalog.phase,
-          },
+          { service: "index", state: indexCatalog.phase },
         );
       const pump = indexCatalog.pump(parsed.data.table, {
         since: parsed.data.since,

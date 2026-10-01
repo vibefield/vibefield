@@ -95,7 +95,6 @@ import {
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
-import { WebSocketServer } from "ws";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -478,8 +477,17 @@ if (mode === "silent") {
   });
   // DS-6 — `/ws/meta`, the topology stream (see the header)
   const metaSockets = new Set();
-  const wss = new WebSocketServer({ noServer: true });
-  wss.on("headers", (headers) => headers.push(`x-rosetta-protocol-version: ${protocol}`));
+  // the WebSocket server loads on the FIRST upgrade: a test that never opens
+  // the stream (the supervisor's kill matrix) starts the fake as fast as ever
+  let wss = null;
+  const metaServer = async () => {
+    if (wss === null) {
+      const { WebSocketServer } = await import("ws");
+      wss = new WebSocketServer({ noServer: true });
+      wss.on("headers", (headers) => headers.push(`x-rosetta-protocol-version: ${protocol}`));
+    }
+    return wss;
+  };
   const mirror = () => ({
     runtimes: runtimeRows(),
     projects: projectRows(),
@@ -554,15 +562,17 @@ if (mode === "silent") {
     }
     // the stream is a socket, not a READ: it never enters the request log
     // (a test that counts the reads a door made must not count the follower)
-    wss.handleUpgrade(req, socket, head, (ws) => {
-      const state = mirror();
-      ws.send(JSON.stringify({ frame: "hello", protocol_version: protocol, stamp: null }));
-      ws.send(JSON.stringify({ frame: "meta_snapshot", ...state }));
-      if (metaSockets.size === 0) lastMirror = keyed(state);
-      metaSockets.add(ws);
-      ws.on("close", () => metaSockets.delete(ws));
-      ws.on("error", () => metaSockets.delete(ws));
-    });
+    void metaServer().then((meta) =>
+      meta.handleUpgrade(req, socket, head, (ws) => {
+        const state = mirror();
+        ws.send(JSON.stringify({ frame: "hello", protocol_version: protocol, stamp: null }));
+        ws.send(JSON.stringify({ frame: "meta_snapshot", ...state }));
+        if (metaSockets.size === 0) lastMirror = keyed(state);
+        metaSockets.add(ws);
+        ws.on("close", () => metaSockets.delete(ws));
+        ws.on("error", () => metaSockets.delete(ws));
+      }),
+    );
   });
 
   server.listen(0, "127.0.0.1", () => {

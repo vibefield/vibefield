@@ -1,5 +1,5 @@
 import { once } from "node:events";
-import { CONTRACTS_VERSION, TAILNET_SCOPES } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, PEER_FIELDD_SCOPES, TAILNET_SCOPES } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
 import { ProductApi } from "../src/product-api";
@@ -177,12 +177,14 @@ describe("UA-4 — the self/guest door", () => {
     expect(errKind(await wire.next())).toBe("FORBIDDEN_SCOPE");
   });
 
-  it("a self peer-fieldd keeps its device identity and grant unchanged", async () => {
+  it("a self peer-fieldd keeps its device identity and its grant — the peer preset", async () => {
     const port = await boot(() => "me@github");
     const wire = await dial(port, `/t/${SECRET}`, { "tailscale-user-login": "me@github" });
 
+    // DS-D8: a self peer daemon is minted the PEER preset (the tailnet preset
+    // plus `index.search`, so one desktop can ask another's history)
     wire.send(hello(1, "peer-fieldd", { deviceId: "01MYOTHERDEVICEAAAAAAAAAAA" }));
-    expect(result(await wire.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
+    expect(result(await wire.next())["grantedScopes"]).toEqual([...PEER_FIELDD_SCOPES]);
     wire.send(call(2, "device.list"));
     expect(result(await wire.next())["principal"]).toEqual({
       kind: "peer-fieldd",
