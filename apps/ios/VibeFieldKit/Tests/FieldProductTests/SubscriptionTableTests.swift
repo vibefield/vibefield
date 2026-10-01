@@ -289,6 +289,34 @@ private func describe(delta payload: JSONValue) -> String {
     handle.cancel()
   }
 
+  /// A door whose open answer names NO revision gives the table nothing to
+  /// continue from. Its frames pass through untracked — the owner's own checks
+  /// stand — and the table never re-subscribes on every frame of a door that
+  /// will never name one (a storm on a metered radio).
+  @Test func aSnapshotNamingNoRevisionPassesFramesThroughInsteadOfStorming() async throws {
+    let script = TableScript(open: .object(["rows": .array([])]))
+    let door = try tableDoor(script)
+    let client = tableClient(door)
+    defer { client.close() }
+    let seen = Seen()
+    let handle = try await client.subscribe(
+      "agent.subscribe", params: nil, shape: .snapshotDelta(),
+      onSnapshot: { seen.add(describe(snapshot: $0)) }, onDelta: { seen.add(describe(delta: $0)) })
+    #expect(handle.cursor == nil)
+    for since in Int64(1)...3 {
+      await door.latest?.deliver(
+        Frame.subscriptionEvent(
+          method: "agent.subscribe.delta", subId: "sub-1",
+          payload: fieldDelta(since: since, revision: since + 1)))
+    }
+    try await waitUntil("three frames through") { seen.events.count == 4 }
+    try await Task.sleep(for: .milliseconds(30))
+    #expect(script.subscribes.count == 1)
+    #expect(handle.resnapshots == 0)
+    #expect(client.tolerantNotes.contains { $0.contains("names no revision") })
+    handle.cancel()
+  }
+
   /// The pure half: when a delta continues a cursor, and when it is a gap.
   @Test func theCursorContinuesOnlyWhatItHolds() {
     let held = SubscriptionCursor(epoch: "e1", revision: 5)

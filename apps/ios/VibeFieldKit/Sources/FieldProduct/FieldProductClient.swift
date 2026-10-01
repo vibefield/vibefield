@@ -476,11 +476,22 @@ public final class FieldProductClient {
     case (.rows, .snapshot):
       applyRowsPage(payload, key: key)
     case (.snapshotDelta, .delta), (.rows, .delta):
-      guard entry.paging == nil, let next = entry.cursor?.after(delta: payload, kind: entry.shape.kind)
-      else {
+      if entry.paging != nil {
+        resnapshot(key: key, because: "a delta arrived inside a paged snapshot")
+        return
+      }
+      guard let held = entry.cursor else {
+        // The open answer named no revision: there is nothing to continue
+        // from. The frame passes through untracked — the owner's own checks
+        // stand — rather than a re-subscribe on every frame of a door that will
+        // never name one (a storm, on a metered radio).
+        note("\(entry.method) names no revision — its frames pass through untracked")
+        entry.onDelta(payload)
+        return
+      }
+      guard let next = held.after(delta: payload, kind: entry.shape.kind) else {
         let since = payload["since"]?.intValue.map(String.init) ?? "?"
-        let held = entry.cursor.map { String($0.revision) } ?? "nothing"
-        resnapshot(key: key, because: "a delta since \(since) does not continue \(held)")
+        resnapshot(key: key, because: "a delta since \(since) does not continue \(held.revision)")
         return
       }
       entry.cursor = next
