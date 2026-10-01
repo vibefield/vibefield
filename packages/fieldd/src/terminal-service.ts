@@ -76,11 +76,72 @@ import {
 
 /** DS-4 — the doors a forwarding daemon refuses to carry for a caller it
  * would itself mint read-only: they MINT, and the owner mints for the
- * forwarding daemon, not for the window behind it (`forwardVia`). */
+ * forwarding daemon, not for the window behind it (`forwardVia`).
+ *
+ * The landing review (S1, 2026-10-01) added the two BIRTHS: DS-2 made
+ * `agent.spawn` and `agent.resume` `federate`, and each answers the ticket its
+ * pane mounts (`AgentSpawnResult.terminal`), minted by the owner like any
+ * other — so a plugin's spawn carried to a peer would have come back with the
+ * self set this daemon would never mint it. */
 const FORWARDED_MINTS: ReadonlySet<string> = new Set([
   "terminal.openTicket",
   "terminal.renewAttach",
+  "agent.spawn",
+  "agent.resume",
 ]);
+
+/** S1 — the forwarded answers that carry a run's row AND its pane's ticket
+ * (`AgentSpawnResult`); the ticket's doors are adopted like `openTicket`'s. */
+const FORWARDED_BIRTHS: ReadonlySet<string> = new Set(["agent.spawn", "agent.resume"]);
+
+/**
+ * S1 (the landing review, 2026-10-01) — a run was BORN and the ticket its pane
+ * mounts could not be made: minted on the owner (`agent-runtime.ts`
+ * `ticketed()`), or adopted on the desktop that forwarded the birth
+ * (`forwardVia`). Either way the agent is running, so the answer must not read
+ * as a failed spawn. No contract change: `AgentSpawnResult.terminal` is
+ * required, so this stays an error, and it says what is true —
+ *
+ *  · the inner error's kind and its `{service, state, device?}` ride through
+ *    (an UNAVAILABLE stays the honest state a reader's face already knows),
+ *    and `reason` restates them;
+ *  · `runtimeRunId` and `session` name the run that was born — `agent.list`
+ *    lists it, and `terminal.openTicket` mints for its session once the
+ *    cause clears;
+ *  · NEVER retryable, whatever the inner error said: a retried spawn births a
+ *    second agent.
+ */
+export function bornWithoutTicket(
+  error: unknown,
+  born: { runtimeRunId: string; session: unknown },
+): RpcCallError {
+  const inner = error instanceof RpcCallError ? error : undefined;
+  const kind = inner?.kind ?? "INTERNAL";
+  const said =
+    inner?.details !== null && typeof inner?.details === "object" && !Array.isArray(inner.details)
+      ? (inner.details as Record<string, unknown>)
+      : {};
+  const text = (key: string): string | undefined =>
+    typeof said[key] === "string" ? (said[key] as string) : undefined;
+  const service = text("service");
+  const state = text("state");
+  const device = text("device");
+  return new RpcCallError(
+    kind,
+    `the agent was born (${born.runtimeRunId}) and its terminal ticket could not be minted: ${
+      error instanceof Error ? error.message : String(error)
+    }`,
+    false,
+    {
+      service: service ?? "agents",
+      state: state ?? "ticket_unminted",
+      ...(device !== undefined ? { device } : {}),
+      runtimeRunId: born.runtimeRunId,
+      session: born.session,
+      reason: { kind, ...(state !== undefined ? { state } : {}) },
+    },
+  );
+}
 
 // TerminalService (fieldd — NF-3, native-floor spec §6): the thin product seam
 // over the terminal floor. It owns NO sessions and NO bytes — field-native's
@@ -674,6 +735,11 @@ export class TerminalService {
    *  · AFTER it, a ticket's doors are adopted for the caller
    *    (`adoptForwardedTicket`). `terminate` and a renewal carry no doors and
    *    pass through as the owner answered.
+   *
+   * S1 (the landing review, 2026-10-01): a forwarded BIRTH (`agent.spawn`,
+   * `agent.resume`) mints a ticket too, so it is a mint on both counts — refused
+   * before the forward for a caller this daemon would mint read-only, and its
+   * `terminal` adopted on the way back (`adoptForwardedBirth`).
    */
   forwardVia(inner: DeviceForwarder): DeviceForwarder {
     return async (device, method, params, ctx, envelope) => {
@@ -685,9 +751,43 @@ export class TerminalService {
           { method, device },
         );
       const answer = await inner(device, method, params, ctx, envelope);
-      if (method !== "terminal.openTicket") return answer;
-      return await this.adoptForwardedTicket(device, ctx.principal, answer);
+      if (method === "terminal.openTicket")
+        return await this.adoptForwardedTicket(device, ctx.principal, answer);
+      if (FORWARDED_BIRTHS.has(method))
+        return await this.adoptForwardedBirth(device, ctx.principal, answer);
+      return answer;
     };
+  }
+
+  /**
+   * S1 — a forwarded birth's answer, the owner's `AgentSpawnResult`: the run's
+   * row rides through untouched and its `terminal` is adopted exactly as a
+   * forwarded `terminal.openTicket` is. Read for `terminal` alone (tolerant
+   * reader): a `session` this build would parse differently must not cost a
+   * window the doors it can dial. An answer with no `terminal` passes through
+   * as the owner gave it. The run is already born when adoption fails, so that
+   * failure says so (`bornWithoutTicket`) rather than reading as a failed spawn.
+   */
+  private async adoptForwardedBirth(
+    device: string,
+    principal: GrantPrincipal,
+    answer: unknown,
+  ): Promise<unknown> {
+    if (answer === null || typeof answer !== "object" || Array.isArray(answer)) return answer;
+    const birth = answer as { terminal?: unknown; session?: unknown };
+    if (birth.terminal === undefined) return answer;
+    try {
+      return {
+        ...birth,
+        terminal: await this.adoptForwardedTicket(device, principal, birth.terminal),
+      };
+    } catch (error) {
+      const runtimeRunId = (birth.session as { runtimeRunId?: unknown } | undefined)?.runtimeRunId;
+      throw bornWithoutTicket(error, {
+        runtimeRunId: typeof runtimeRunId === "string" ? runtimeRunId : "unknown",
+        session: birth.session,
+      });
+    }
   }
 
   /**
@@ -707,8 +807,9 @@ export class TerminalService {
    *    egress route of this device's sidecar, or the answer is UNAVAILABLE
    *    `egress_unavailable`.
    *
-   * Public because a forwarded BIRTH carries a ticket too (`agent.spawn`'s and
-   * `agent.resume`'s `terminal`, should DS-2 make them routable).
+   * A forwarded BIRTH carries a ticket too (`agent.spawn`'s and
+   * `agent.resume`'s `terminal`, routable since DS-2): `adoptForwardedBirth`
+   * hands it here (S1, 2026-10-01).
    */
   async adoptForwardedTicket(
     device: string,

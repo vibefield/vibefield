@@ -290,6 +290,131 @@ describe("TerminalService.forwardVia — the forwarded ticket on the caller's de
   });
 });
 
+// S1 (the landing review, 2026-10-01) — DS-2 made the two BIRTHS `federate`,
+// and each answers the ticket its pane mounts, minted by the owner. So a birth
+// is a mint at the forwarding door (refused for a caller this daemon would
+// mint read-only), and its `terminal` is adopted on the way back exactly as a
+// forwarded `terminal.openTicket` is.
+describe("TerminalService.forwardVia — a forwarded BIRTH (agent.spawn, agent.resume)", () => {
+  /** A row as the owner summarizes it — opaque here: forwardVia never reads it. */
+  const SESSION = { runtimeRunId: "run-a", tier: "managed", kind: "scripted", device: OWNER };
+
+  /** What A's daemon answers a forwarded birth: the run's row and the ticket
+   * for its pane, minted for B's daemon on A's tailnet doors. */
+  function ownersBirth() {
+    return {
+      session: SESSION,
+      terminal: {
+        sessionId: "pane-a",
+        session: { id: "pane-a", title: "agent" },
+        ...ownersTicket(),
+      },
+    };
+  }
+
+  it("refuses to carry a birth for a caller it would mint read-only — before anything is forwarded", async () => {
+    const inner = vi.fn<DeviceForwarder>(async () => ownersBirth());
+    const forward = service(fakeEgress().rewriter).forwardVia(inner);
+    const asks: Array<[string, Record<string, unknown>]> = [
+      ["agent.spawn", { device: OWNER, provider: "scripted" }],
+      ["agent.resume", { device: OWNER, runtimeRunId: "run-old" }],
+    ];
+    for (const [method, params] of asks) {
+      const error = await refusal(forward(OWNER, method, params, ctx(PLUGIN)));
+      expect(error.kind, method).toBe("FORBIDDEN_SCOPE");
+      expect(error.details, method).toEqual({ method, device: OWNER });
+    }
+    // an agent's own token is no self principal either
+    const agent = await refusal(
+      forward(
+        OWNER,
+        "agent.spawn",
+        { device: OWNER, provider: "scripted" },
+        ctx({ kind: "mcp-agent", tokenId: "tok-a" }),
+      ),
+    );
+    expect(agent.kind).toBe("FORBIDDEN_SCOPE");
+    expect(inner).not.toHaveBeenCalled();
+  });
+
+  it("adopts a window's birth ticket onto an egress route — the owner's grants and row untouched", async () => {
+    const { rewriter, routes } = fakeEgress();
+    const owner = ownersBirth();
+    for (const method of ["agent.spawn", "agent.resume"]) {
+      const answer = (await service(rewriter).forwardVia(async () => owner)(
+        OWNER,
+        method,
+        { device: OWNER, provider: "scripted" },
+        ctx(WINDOW),
+      )) as { session: unknown; terminal: Record<string, unknown> };
+      expect(answer.session, method).toBe(SESSION); // the row, as the owner gave it
+      const ticket = TerminalOpenTicketResult.parse(answer.terminal);
+      expect(ticket.endpoints, method).toEqual({
+        controlUrl: `ws://${LISTEN}/cell/cell-a/control`,
+        framesUrl: `ws://${LISTEN}/cell/cell-a/frames`,
+      });
+      expect(ticket.attachGrant, method).toEqual(owner.terminal.attachGrant);
+      expect(ticket.transportGrant, method).toEqual(owner.terminal.transportGrant);
+      // the create-result half of the ticket rides through too
+      expect(answer.terminal["sessionId"], method).toBe("pane-a");
+      expect(answer.terminal["session"], method).toEqual({ id: "pane-a", title: "agent" });
+    }
+    expect(routes).toEqual([
+      { deviceId: OWNER, target: "desk-a.tail1234.ts.net:9422" },
+      { deviceId: OWNER, target: "desk-a.tail1234.ts.net:9422" },
+    ]);
+  });
+
+  it("answers a born run with no reachable doors honestly: UNAVAILABLE egress_unavailable, the run named, never retryable", async () => {
+    // the default rewriter: no egress route can be placed yet
+    const error = await refusal(
+      service().forwardVia(async () => ownersBirth())(
+        OWNER,
+        "agent.spawn",
+        { device: OWNER, provider: "scripted" },
+        ctx(WINDOW),
+      ),
+    );
+    expect(error.kind).toBe("UNAVAILABLE");
+    // the agent IS running on the owner: a retried spawn would birth another
+    expect(error.retryable).toBe(false);
+    expect(error.message).toContain("born (run-a)");
+    expect(error.details).toEqual({
+      service: "terminal",
+      state: "egress_unavailable",
+      device: OWNER,
+      runtimeRunId: "run-a",
+      session: SESSION,
+      reason: { kind: "UNAVAILABLE", state: "egress_unavailable" },
+    });
+  });
+
+  it("hands the phone the owner's tailnet doors on a birth, as on a ticket", async () => {
+    const { rewriter, routes } = fakeEgress();
+    const answer = (await service(rewriter).forwardVia(async () => ownersBirth())(
+      OWNER,
+      "agent.spawn",
+      { device: OWNER, provider: "scripted" },
+      ctx(PHONE),
+    )) as { terminal: unknown };
+    expect(TerminalOpenTicketResult.parse(answer.terminal).endpoints).toEqual(OWNER_DOORS);
+    expect(routes).toEqual([]);
+  });
+
+  it("passes a birth answer that carries no terminal through unchanged", async () => {
+    const bare = { session: SESSION };
+    const forward = service().forwardVia(async () => bare);
+    expect(
+      await forward(OWNER, "agent.spawn", { device: OWNER, provider: "scripted" }, ctx(WINDOW)),
+    ).toBe(bare);
+    // and an answer that is not an object at all
+    const odd = service().forwardVia(async () => null);
+    expect(
+      await odd(OWNER, "agent.resume", { device: OWNER, runtimeRunId: "r" }, ctx(WINDOW)),
+    ).toBeNull();
+  });
+});
+
 // The same wrap installed where the daemon installs it: ProductApi's `device?`
 // routing. What this adds over the rows above is the REGISTRY — the terminal
 // doors are `federate` now, so a foreign `device` forwards instead of being

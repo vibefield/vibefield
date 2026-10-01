@@ -110,7 +110,7 @@ import { RpcCallError } from "./native-link";
 import { createDarwinSecretStore, type SecretStore } from "./plugin-settings";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 import type { GrantPrincipal } from "./terminal-grants";
-import type { TerminalService } from "./terminal-service";
+import { bornWithoutTicket, type TerminalService } from "./terminal-service";
 
 // The agent runtime THROUGH fieldd (AR-2; thinking-ar-data-topology.md §2–§4,
 // AR-D15/D16/D19/D22): puppeteer's first import. One runtime per fieldd, built
@@ -2186,7 +2186,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   }
 
   /** The door's answer for a run born THIS call: the row, and the same routed
-   * ticket `terminal.create` answers, minted from the host's birth facts. */
+   * ticket `terminal.create` answers, minted from the host's birth facts.
+   *
+   * S1 (the landing review, 2026-10-01) — the mint runs AFTER the birth, so its
+   * failure (`doorsFor`'s `doors_not_published`, a keyless or gone cell) used
+   * to read as a failed spawn while the agent ran. It answers what is true
+   * now: the run was born, here is its row, its ticket could not be minted
+   * (`bornWithoutTicket`, never retryable — a retried spawn births another). */
   private ticketed(
     entry: ManagedEntry,
     principal: GrantPrincipal,
@@ -2201,10 +2207,27 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         { runtimeRunId: entry.info.runtimeRunId },
       );
     }
-    return {
-      session: this.summarize(entry),
-      terminal: terminals.createOpenResult(principal, born),
-    };
+    const session = this.summarize(entry);
+    try {
+      return { session, terminal: terminals.createOpenResult(principal, born) };
+    } catch (error) {
+      const refusal = bornWithoutTicket(error, {
+        runtimeRunId: entry.info.runtimeRunId,
+        session,
+      });
+      // the reason, never the row (a title and a cwd are not log content)
+      this.logger.warn(
+        "fieldd.agents.born_without_ticket",
+        "An agent was born and its terminal ticket could not be minted",
+        {
+          runtimeRunId: entry.info.runtimeRunId,
+          terminalSessionId: entry.info.terminalSessionId,
+          principal: principal.kind,
+          reason: (refusal.details as { reason?: unknown }).reason,
+        },
+      );
+      throw refusal;
+    }
   }
 
   /** `runtime.resume` from a record: a new run in a new PTY with its own

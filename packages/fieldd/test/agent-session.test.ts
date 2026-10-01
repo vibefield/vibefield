@@ -74,9 +74,10 @@ import {
   SOCKETS,
   type TerminalInfo,
 } from "@vibefield/contracts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
+import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
@@ -2164,6 +2165,67 @@ describe("AR-6-0 — the stop verb (agent.interrupt)", () => {
     // (a real floor, two spawns' worth of ladders and an explicit reap: this
     // row outgrew the 5 s default the day MF-1g gave it a pane to close)
   }, 120_000);
+});
+
+// S1 (the landing review, 2026-10-01) — the ticket is minted AFTER the birth,
+// so a mint that fails (`doorsFor`'s `doors_not_published` for a caller this
+// desktop does not publish its doors to, a keyless or vanished cell) used to
+// answer a FAILED spawn while the agent ran. The fault is placed at the seam the
+// owner mints through (the same TerminalService the runtime holds): a real
+// birth on the real floor, then a mint that refuses.
+describe("S1 — a run born whose ticket cannot be minted", () => {
+  it("answers the run it birthed — named, listed, never retryable — and its session mints once the doors answer", async () => {
+    const { daemon, envOut } = await setup({ floor: "real" });
+    const win = await window(daemon, DECK, "s1");
+    const mint = vi.spyOn(daemon.terminals, "createOpenResult").mockImplementation(() => {
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "this device is not publishing its terminal doors on the tailnet",
+        true,
+        { service: "terminal", state: "doors_not_published" },
+      );
+    });
+    cleanup.push(() => mint.mockRestore());
+
+    const refused = await win.callErr("agent.spawn", { provider: "scripted", cwd: envOut });
+    expect(mint).toHaveBeenCalledTimes(1); // the birth happened; its mint refused
+    expect(refused.data?.kind).toBe("UNAVAILABLE");
+    // the agent is running: a retried spawn would birth a second one
+    expect(refused.data?.retryable).toBe(false);
+    const details = refused.data?.details as {
+      service: string;
+      state: string;
+      runtimeRunId: string;
+      session: { runtimeRunId: string; tier: string; kind: string; terminal?: unknown };
+      reason: unknown;
+    };
+    // the honest state the reader's face already knows, plus the run
+    expect(details.service).toBe("terminal");
+    expect(details.state).toBe("doors_not_published");
+    expect(details.reason).toEqual({ kind: "UNAVAILABLE", state: "doors_not_published" });
+    expect(details.session).toMatchObject({
+      runtimeRunId: details.runtimeRunId,
+      tier: "managed",
+      kind: "scripted",
+    });
+    expect(refused.message).toContain(`born (${details.runtimeRunId})`);
+
+    // The run is real: the fold lists it, and once its session is tagged with
+    // its cell, a ticket for it mints like any other when the doors answer.
+    mint.mockRestore();
+    const row = await poll(async () => {
+      const { sessions } = (await win.call("agent.list", {})) as AgentListResult;
+      const listed = sessions.find((s) => s.runtimeRunId === details.runtimeRunId);
+      return listed?.terminal?.cellBootId !== undefined ? listed : undefined;
+    }, 10_000);
+    const sessionId = (row.terminal as { runtimeSessionId: string }).runtimeSessionId;
+    const ticket = (await win.call("terminal.openTicket", { sessionId })) as {
+      endpoints: { controlUrl: string };
+      attachGrant: unknown;
+    };
+    expect(ticket.endpoints.controlUrl).toMatch(/^ws:/);
+    expect(ticket).toHaveProperty("attachGrant");
+  }, 60_000);
 });
 
 describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
