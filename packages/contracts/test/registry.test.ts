@@ -364,6 +364,16 @@ describe("port registry", () => {
     const values = Object.values(PORTS);
     expect(new Set(values).size).toBe(values.length);
   });
+
+  it("SP-3 — rosettad's serve has its own listener beside the cells' and the door's", () => {
+    // design-06 §8 reserved the name for DS-7; SP-3 assigns the number so the
+    // ticket template's second instance has a listener to name. Fixed, like
+    // its two neighbours: a peer DERIVES the coordinate, it never learns it.
+    expect(PORTS.INDEX_SERVE).toBe(9424);
+    expect([PORTS.TERMINAL_CELLS_SERVE, PORTS.FIELDD_PRODUCT_SERVE, PORTS.INDEX_SERVE]).toEqual([
+      9422, 9423, 9424,
+    ]);
+  });
 });
 
 describe("mesh control limits", () => {

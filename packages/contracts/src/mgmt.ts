@@ -605,7 +605,10 @@ export const MESH_EGRESS = {
    * target: doors that demand their own grant. A terminal cell verifies a MAC
    * on its first frame; the product door trusts the node's login and is
    * reached only through the authenticated proxy (E1), never through a route.
-   * A new row here is a claim about a door's authentication, made in review. */
+   * A new row here is a claim about a door's authentication, made in review.
+   * (SP-3, 2026-10-01: `PORTS.INDEX_SERVE` is deliberately absent — the pinned
+   * rosettad verifies no credential; it is the claim DS-7's pin move makes,
+   * when rosettad starts with RO-1's bearer and RO-10's grant key.) */
   ROUTABLE_PORTS: [PORTS.TERMINAL_CELLS_SERVE],
 } as const;
 

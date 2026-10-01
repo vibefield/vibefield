@@ -86,6 +86,28 @@ export const PORTS = {
    * OWN truffle node with its own tailnet address, and the sidecar's listener
    * binds there — the same reason `TERMINAL_CELLS_SERVE` above can be fixed. */
   FIELDD_PRODUCT_SERVE: 9423,
+  /** SP-3 (thinking-sync-planes.md §5.4, §6; thinking-desktop-sync-plane.md
+   * §6.4) — the tailnet listener carrying rosettad's loopback HTTP/WS: ONE serve
+   * per desktop, the whole listener onto the daemon's ephemeral loopback port
+   * with nothing stripped, so a client dials rosetta's own routes at the root
+   * (`/ws/sessions/<id>` — the ticket template's second instance,
+   * `RemoteIndexEndpointSet`). design-06 §8 named it and left the number to
+   * DS-7; it is assigned at SP-3 so the template has a listener to name. Fixed
+   * for the reason its two neighbours are: a peer DERIVES the coordinate.
+   *
+   * ITS OWN PORT for the cells' reason: truffle's proxy has `add` and `remove`
+   * and no update, so re-aiming a serve is remove-then-add, and rosettad's port
+   * moves on every restart. On 9422 that would drop every live terminal leg; on
+   * 9423, every door.
+   *
+   * PUBLISHED ONLY BEHIND fieldd's `indexDirectPlane` flag, OFF: the pinned
+   * rosettad verifies no credential (RO-1's bearer and RO-10's grants are built
+   * on rosetta's `feat/direct-plane-grants`, unmerged), so until DS-7's pin
+   * move a serve here would put every transcript one same-login node away. And
+   * for the same reason NOT in `MESH_EGRESS.ROUTABLE_PORTS` (DS-L6: a loopback
+   * egress route may target only a door that demands its own grant); it joins
+   * that list at the pin move, in review. */
+  INDEX_SERVE: 9424,
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
   DOC_SYNC_QUIC: 9440,
   /** presence + device heartbeats (UDP, lossy). */

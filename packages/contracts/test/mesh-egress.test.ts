@@ -176,6 +176,12 @@ describe("DS-1 — the registry", () => {
     // same-uid process (EL7's adversary) the peer's whole door.
     expect(MESH_EGRESS.ROUTABLE_PORTS).toEqual([PORTS.TERMINAL_CELLS_SERVE]);
     expect(MESH_EGRESS.ROUTABLE_PORTS).not.toContain(PORTS.FIELDD_PRODUCT_SERVE);
+    // SP-3 — rosettad's serve is not a door that demands a grant YET: the
+    // pinned rosettad verifies no credential (RO-1/RO-10 are unmerged
+    // upstream), so a route to it would hand a same-uid process every
+    // transcript. It joins this list at DS-7's pin move, in review.
+    expect(PORTS.INDEX_SERVE).toBeTypeOf("number");
+    expect(MESH_EGRESS.ROUTABLE_PORTS).not.toContain(PORTS.INDEX_SERVE);
   });
 
   it("declares the six facade verbs as local mgmt methods", () => {
