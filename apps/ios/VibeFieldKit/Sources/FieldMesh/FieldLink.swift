@@ -300,6 +300,10 @@ public final class FieldLink {
   /// SP-2 (c) — each desktop's window on the way back from the background. A
   /// desktop with one pending is HELD: nothing re-subscribes it until it opens.
   @ObservationIgnored private var resumeSlots: [String: Task<Void, Never>] = [:]
+  /// Bumped by every pause (and by `stop`): an arm started before it is never
+  /// KEPT after it, however quickly the app came back — a pause flag read after
+  /// the subscribe's await cannot see a pause that was already undone.
+  @ObservationIgnored private var armEpoch = 0
 
   @ObservationIgnored private var clients: [String: FieldProductClient] = [:]
   @ObservationIgnored private var subscriptions: [String: ProductSubscription] = [:]
@@ -419,6 +423,7 @@ public final class FieldLink {
   public func pause() {
     guard started, !isPaused else { return }
     isPaused = true
+    armEpoch &+= 1
     for (_, subscription) in subscriptions { subscription.cancel() }
     subscriptions.removeAll()
     // SP-2 (c) — the keepalive's clocks stop with the app: a deadline measured
@@ -477,6 +482,7 @@ public final class FieldLink {
   public func stop() {
     started = false
     isPaused = false
+    armEpoch &+= 1
     for (_, slot) in resumeSlots { slot.cancel() }
     resumeSlots.removeAll()
     for (_, subscription) in subscriptions { subscription.cancel() }
@@ -1195,6 +1201,7 @@ public final class FieldLink {
     guard !arming.contains(deviceId) else { return }
     guard case .ready = client.state else { return }
     arming.insert(deviceId)
+    let epoch = armEpoch
 
     Task { @MainActor [weak self] in
       guard let self else { return }
@@ -1224,9 +1231,11 @@ public final class FieldLink {
         // And the PAUSE (2026-10-01, found by SP-2 c's stagger row under
         // load): a subscribe asked before the app went away and answered after
         // it survived the pause — a backgrounded phone kept a live
-        // subscription, and the resume could not re-arm the full slot.
-        guard self.started, !self.isPaused, self.clients[deviceId] === client,
-          self.subscriptions[deviceId] == nil
+        // subscription, and the resume could not re-arm the full slot. The
+        // EPOCH, not the flag: a pause and a resume can both land inside one
+        // answer, and the flag reads "not paused" again by then.
+        guard self.started, !self.isPaused, self.armEpoch == epoch,
+          self.clients[deviceId] === client, self.subscriptions[deviceId] == nil
         else {
           subscription.cancel()
           return

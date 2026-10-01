@@ -174,6 +174,9 @@ private actor LinkConnection: ProductConnection {
   private var waiter: CheckedContinuation<String, any Error>?
   private var failure: (any Error)?
   private var sentMethods: [String] = []
+  /// Every request, as `(method, id, params)` — for the rows that must name
+  /// WHICH subscription a later frame was about.
+  private(set) var requests: [(method: String, id: Int64, params: JSONValue)] = []
 
   init(script: @escaping LinkDoor.Script, answerDelay: Duration = .zero) {
     self.script = script
@@ -187,6 +190,7 @@ private actor LinkConnection: ProductConnection {
     else { return }
     sentMethods.append(method)
     let id = value["id"]?.intValue ?? -1
+    requests.append((method, id, value["params"] ?? .null))
     // A door that answers a SUBSCRIBE slowly. The arming window is between the
     // ask and the answer, and a door that replies instantly closes it before a
     // burst can walk through — which is how a storm test passes without the
@@ -2163,6 +2167,23 @@ private final class ResumeGate: @unchecked Sendable {
   }
 }
 
+
+/// The first request of `method` a door's latest connection received.
+@MainActor
+private func settledRequest(_ door: LinkDoor, _ method: String) async throws
+  -> (method: String, id: Int64, params: JSONValue)
+{
+  let deadline = ContinuousClock.now.advanced(by: .seconds(5))
+  while ContinuousClock.now < deadline {
+    if let found = await door.latest?.requests.first(where: { $0.method == method }) {
+      return found
+    }
+    try await Task.sleep(for: .milliseconds(5))
+  }
+  Issue.record("timed out waiting for a \(method) request")
+  throw CancellationError()
+}
+
 // MARK: - A subscribe in flight at pause does not survive it (found by SP-2 c)
 
 @MainActor
@@ -2200,5 +2221,56 @@ private final class ResumeGate: @unchecked Sendable {
       await (door.latest?.methods.filter { $0 == "agent.subscribe" }.count ?? 0) == 2
     }
     try await waitUntil("the board back") { link.agents.map(\.id) == ["run-1"] }
+  }
+
+  /// The same race with the pause AND the resume inside the window — an app
+  /// switch quicker than the door's answer. A pause check after the await
+  /// cannot see a pause that has already been undone, so the pre-pause
+  /// subscription was KEPT, and the resume's own window then found the slot
+  /// full: the board stayed on its pre-pause chain and nothing came back
+  /// fresh. Nothing armed before a pause is kept after it, however quickly the
+  /// phone came back. Deterministic: the window opens only after the pre-pause
+  /// answer has landed — the order a loaded scheduler produced in the stagger
+  /// row's bundle runs.
+  @Test func aPauseAndResumeInsideTheAnswerStillComeBackFresh() async throws {
+    let snapshot = snapshotFrame(revision: 1, rows: [boardRow(id: "run-1")])
+    let mesh = MeshRehearsal()
+    await mesh.set(peers: [studio])
+    let door = LinkDoor(answerDelay: .milliseconds(150)) { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.subscribe":
+        return [frame(id: id, .object(["subId": .string("s\(id)"), "snapshot": snapshot]))]
+      default: return []
+      }
+    }
+    let gate = ResumeGate()
+    let link = FieldLink(
+      storeDoors: await mesh.doors(), transport: door, probe: LinkProbe(),
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
+      magicDNSSuffix: rehearsalSuffix, schedule: briskSchedule,
+      resumeTiming: FieldResumeTiming(jitter: { 0.5 }, sleep: gate.sleep),
+      now: { Date(timeIntervalSince1970: 1_757_808_001) })
+    link.start()
+    defer {
+      link.stop()
+      gate.releaseAll()
+    }
+    let first = try await settledRequest(door, "agent.subscribe")
+    link.pause()
+    link.resume()
+    try await waitUntil("the window parked") { gate.parked == 1 }
+    try await waitUntil("the pre-pause answer landed") { link.agents.map(\.id) == ["run-1"] }
+    try await Task.sleep(for: .milliseconds(60))  // its arm's continuation has run
+
+    gate.releaseNext()
+    try await waitUntil("a fresh subscribe in the window") {
+      await (door.latest?.methods.filter { $0 == "agent.subscribe" }.count ?? 0) == 2
+    }
+    try await waitUntil("the pre-pause subscription let go") {
+      await door.latest?.requests.contains {
+        $0.method == "system.unsubscribe" && $0.params["subId"]?.stringValue == "s\(first.id)"
+      } == true
+    }
   }
 }
