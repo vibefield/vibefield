@@ -307,11 +307,18 @@ private func clockedLink(
   /// thirty seconds would be a tailnet full of pointless requests.
   @Test func aRefusedLoginIsAskedAgainOnlyAfterMinutes() async throws {
     let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
-    let probe = LinkProbe(answers: [studioDoorHost: .status(403)])
+    let probe = LinkProbe(
+      answers: [studioDoorHost: .status(403)], answerDelay: .milliseconds(150))
     let (link, mesh, counter) = await clockedLink(clock: clock, probe: probe)
     defer { link.stop() }
 
     try await waitUntil("the first ask") { await probe.asks >= 1 }
+    // The VERDICT, applied, before the clock moves: the window is stamped from
+    // the clock when the answer lands, not when the ask was recorded, and a
+    // clock moved in between pushed the deadline past this row's next step —
+    // the "timed out waiting for the second ask" these rows were known for under
+    // load (2026-10-01: reproduced every time with a 150 ms probe answer).
+    try await waitUntil("the refusal applied") { link.foreignDoors["dev-studio"] != nil }
 
     // PIN THE PRECONDITION: a pass RAN inside the window and chose not to ask.
     // Without the pass, "it was not asked again" is equally true of a sweep
@@ -328,11 +335,14 @@ private func clockedLink(
   /// A door that did not answer is weather, and weather is asked about often.
   @Test func anUnreachableDoorIsAskedAgainSoon() async throws {
     let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
-    let probe = LinkProbe(fallback: .unreachable("connection refused"))
+    let probe = LinkProbe(
+      fallback: .unreachable("connection refused"), answerDelay: .milliseconds(150))
     let (link, mesh, counter) = await clockedLink(clock: clock, probe: probe)
     defer { link.stop() }
 
     try await waitUntil("the first ask") { await probe.asks >= 1 }
+    // The verdict, applied, before the clock moves — see the row above.
+    try await waitUntil("the verdict applied") { link.desktops.first?.state == .noDoor }
 
     clock.advance(10)
     try await sweepNow(mesh, counter)

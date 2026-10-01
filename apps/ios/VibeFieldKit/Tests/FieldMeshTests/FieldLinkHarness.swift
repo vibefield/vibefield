@@ -169,18 +169,25 @@ func homeDoor(
 actor LinkProbe: ProductDoorProbe {
   private var answers: [String: DoorProbeOutcome]
   private let fallback: DoorProbeOutcome
+  /// How long an answer takes after the ask is RECORDED — a radio's round
+  /// trip. The gap between "asked" and "the verdict applied" is real, and a row
+  /// that moves a clock inside it is measuring the wrong instant.
+  private let answerDelay: Duration
   private(set) var asked: [URL] = []
 
   init(
     answers: [String: DoorProbeOutcome] = [:],
-    fallback: DoorProbeOutcome = .status(400)
+    fallback: DoorProbeOutcome = .status(400),
+    answerDelay: Duration = .zero
   ) {
     self.answers = answers
     self.fallback = fallback
+    self.answerDelay = answerDelay
   }
 
   func probe(_ url: URL) async -> DoorProbeOutcome {
     asked.append(url)
+    if answerDelay > .zero { try? await Task.sleep(for: answerDelay) }
     return answers[url.host ?? ""] ?? fallback
   }
 

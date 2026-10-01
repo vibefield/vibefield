@@ -255,33 +255,35 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
 @Suite struct FieldLinkRehomeTests {
   /// THE HOME'S LOSS. Its socket drops and its door answers no more dials: the
   /// phone sweeps the roster — every candidate asked afresh — and homes to the
-  /// first that answers, in the pass the loss itself asked for (the tick here is
+  /// first that answers, in the ONE pass the loss itself asked for: the laptop
+  /// is asked exactly once, and that answer moves the field (the tick here is
   /// two minutes and never comes). The field is resnapshotted from the new home
   /// and nothing is drawn twice.
+  ///
+  /// The pass is counted by the laptop's PROBE, not by peer-list reads: the
+  /// dropped home's own client reads the roster before every re-dial (SP-2 d),
+  /// so a read count measures its ladder, not the sweeps (this row's first cut
+  /// counted reads and went red at 3 under load).
   @Test func theHomesLossRehomesWithinOneSweep() async throws {
     let door = LinkDoor(script: selfDoor)
     await door.route(studioDoorHost, homeDoor(studioBoard))
     await door.route(laptopDoorHost, homeDoor(laptopBoard))
-    let counter = SweepCounter()
+    let probe = LinkProbe()
     let memory = scratchHomeMemory()
     let (link, _) = try await homedLink(
-      door: door, memory: memory, schedule: idleSchedule, counter: counter)
+      probe: probe, door: door, memory: memory, schedule: idleSchedule)
     defer { link.stop() }
     try await waitUntil("the field through the studio") {
       link.home == "dev-studio" && link.agents.count == 2
     }
-    let before = await counter.count
+    let asked = await probe.asks(of: laptopDoorHost)
 
     await door.refuse(studioDoorHost)
     await door.latest(to: studioDoorHost)?.drop()
-    var passes: Int?
-    try await waitUntil("re-homed to the laptop") {
-      guard link.home == "dev-laptop" else { return false }
-      passes = await counter.count - before
-      return true
-    }
-    let swept = try #require(passes)
-    #expect(swept >= 1 && swept <= 2, "the pass the loss asked for (\(swept))")
+    try await waitUntil("re-homed to the laptop") { link.home == "dev-laptop" }
+    #expect(
+      await probe.asks(of: laptopDoorHost) - asked == 1,
+      "one pass: the laptop asked once, and its answer moved the field")
 
     try await waitUntil("the laptop's board") { status(of: "l-1", in: link) == .idle }
     #expect(link.agents.map(\.id) == ["l-1", "s-1"], "nothing drawn twice")
