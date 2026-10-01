@@ -16,6 +16,21 @@ public enum FieldProductContract {
   /// `ClientKind.ios` (`envelope.ts`). A CLAIM, and restrict-only: it can
   /// narrow what this connection may do and can never widen it.
   public static let clientKind = "ios"
+  /// SP-1/SP-2 — the door's keepalive NOTIFICATION (no `id`):
+  /// `{method: "system.tick", params: {at, intervalMs}}`, sent on every hello'd
+  /// connection every `intervalMs`.
+  public static let tickMethod = "system.tick"
+  /// The door's tick interval until its first `system.tick` names one —
+  /// `PRODUCT_API_LIMITS.TICK_INTERVAL_MS` in `registries.ts` (SP-1's row, built
+  /// by its own lane). `pnpm check:ios-fixtures` arms its pin on this literal the
+  /// day that row is readable, and prints a NOTICE until then.
+  public static let doorTickIntervalMs: Int64 = 120_000
+}
+
+/// A connection that cannot send a WebSocket ping says so — it never reports a
+/// pong it did not hear.
+public struct ProductPingUnsupported: Error, Sendable, Equatable {
+  public init() {}
 }
 
 /// One live socket to a product door.
@@ -29,6 +44,25 @@ public protocol ProductConnection: Sendable {
   /// learns to re-dial; it never returns a sentinel for "closed".
   func receive() async throws -> String
   func close() async
+  /// SP-2 (b) — one WebSocket protocol PING, returning when its PONG arrives
+  /// and throwing if the socket fails first.
+  ///
+  /// The phone's half of the keepalive. The sidecar that serves a desktop's
+  /// door reaps each DIRECTION of a served WebSocket after ten silent minutes
+  /// (truffle `sidecar-slim` `idleCopy`, fixed for served sockets), so a phone
+  /// whose board is idle — and which therefore sends nothing — loses its half
+  /// even while the door ticks. A ping is bytes in the phone's direction and its
+  /// pong is bytes in the door's, and fieldd's server answers every ping on its
+  /// own (`ws` `autoPong`), so the door needs no method for it.
+  func ping() async throws
+}
+
+extension ProductConnection {
+  /// A connection with no ping of its own. The client treats this as "no pong
+  /// to count", never as a broken socket.
+  public func ping() async throws {
+    throw ProductPingUnsupported()
+  }
 }
 
 public protocol ProductTransport: Sendable {
@@ -123,5 +157,20 @@ private actor WebSocketConnection: ProductConnection {
     closed = true
     task.cancel(with: .goingAway, reason: nil)
     session.invalidateAndCancel()
+  }
+
+  /// SP-2 (b) — RFC 6455's PING. The system calls the handler exactly once:
+  /// with nothing when the PONG arrives, with an error when the connection is
+  /// lost first — so a closed socket answers at once and never strands this.
+  func ping() async throws {
+    try await withCheckedThrowingContinuation { (pong: CheckedContinuation<Void, any Error>) in
+      task.sendPing { error in
+        if let error {
+          pong.resume(throwing: error)
+        } else {
+          pong.resume()
+        }
+      }
+    }
   }
 }

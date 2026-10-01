@@ -163,6 +163,30 @@ function phoneBudgetPin(key, swiftName) {
   };
 }
 
+/**
+ * SP-2 (b) — the door's tick interval, which the phone's receive deadline is
+ * measured in until the door's first `system.tick` names its own (2.5 × it).
+ *
+ * SELF-ARMING, like `productServePin` below, and for a stated reason: the row
+ * is SP-1's (`PRODUCT_API_LIMITS.TICK_INTERVAL_MS`, built by a sibling lane in
+ * DS wave 2), and the kit's literal landed first. Until the row is readable
+ * this prints a NOTICE instead of a red; the day it is, the pin arms itself and
+ * a disagreement is a red like every other.
+ */
+const doorTickPin = {
+  name: "TICK_INTERVAL_MS",
+  origin: {
+    file: REGISTRIES,
+    pattern: /^ {2}TICK_INTERVAL_MS: ([0-9_]+),$/m,
+    label: "PRODUCT_API_LIMITS.TICK_INTERVAL_MS",
+  },
+  copy: {
+    file: "apps/ios/VibeFieldKit/Sources/FieldProduct/ProductTransport.swift",
+    pattern: /^ {2}public static let doorTickIntervalMs: Int64 = ([0-9_]+)$/m,
+    label: "FieldProductContract.doorTickIntervalMs",
+  },
+};
+
 const productServePin = {
   name: "FIELDD_PRODUCT_SERVE",
   origin: {
@@ -239,6 +263,18 @@ if (pinned(productServePin.origin) !== null) {
       `${productServePin.copy.label} is UNPINNED (UA-P-1a)\n` +
       "  the row landed at UA-P-0e, so this means it was renamed or removed — the phone\n" +
       "  is dialing a number nothing agrees with. Fix the row, or move this pattern to it.",
+  );
+}
+
+// The tick's pin, armed or announced. See `doorTickPin` above.
+if (pinned(doorTickPin.origin) !== null) {
+  pins.push(doorTickPin);
+} else {
+  notices.push(
+    `${doorTickPin.origin.label} is unreadable, so ${doorTickPin.copy.label} is UNPINNED ` +
+      "(SP-2)\n" +
+      "  the row is SP-1's and lands with that lane; until then the phone's default tick\n" +
+      "  interval is a literal nothing agrees with. When it lands, this pin arms itself.",
   );
 }
 

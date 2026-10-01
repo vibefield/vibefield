@@ -16,12 +16,19 @@ actor FakeDoor: ProductTransport {
   typealias Script = @Sendable (_ method: String, _ id: Int64, _ params: JSONValue) -> [String]
 
   private let script: Script
+  private let clock: ManualProductClock?
+  private let answersPings: Bool
   private var connections: [FakeConnection] = []
   private var dialFailures = 0
   private var dialAttempts = 0
 
-  init(script: @escaping Script) {
+  /// `clock` stamps each direction's traffic the way the sidecar's idle reap
+  /// sees it (SP-2); `answersPings: false` is a door whose pongs never come — a
+  /// dead path, or a socket that is open and going nowhere.
+  init(clock: ManualProductClock? = nil, answersPings: Bool = true, script: @escaping Script) {
     self.script = script
+    self.clock = clock
+    self.answersPings = answersPings
   }
 
   func connect(to url: URL) async throws -> any ProductConnection {
@@ -30,7 +37,7 @@ actor FakeDoor: ProductTransport {
       dialFailures -= 1
       throw FakeDoorError.refused
     }
-    let connection = FakeConnection(script: script)
+    let connection = FakeConnection(script: script, clock: clock, answersPings: answersPings)
     connections.append(connection)
     return connection
   }
@@ -60,13 +67,26 @@ enum FakeDoorError: Error, Equatable {
 
 actor FakeConnection: ProductConnection {
   private let script: FakeDoor.Script
+  private let clock: ManualProductClock?
+  private let answersPings: Bool
   private var queue: [String] = []
   private var waiter: CheckedContinuation<String, any Error>?
   private var failure: (any Error)?
   private var sentFrames: [String] = []
+  private var unansweredPings: [CheckedContinuation<Void, any Error>] = []
+  /// Protocol pings this connection was sent.
+  private(set) var pings = 0
+  /// The sidecar's view of the socket: when each DIRECTION last carried bytes.
+  private(set) var lastFromPhone: Duration = .zero
+  private(set) var lastFromDoor: Duration = .zero
 
-  init(script: @escaping FakeDoor.Script) {
+  init(script: @escaping FakeDoor.Script, clock: ManualProductClock? = nil, answersPings: Bool = true) {
     self.script = script
+    self.clock = clock
+    self.answersPings = answersPings
+    let opened = clock?.now() ?? .zero
+    lastFromPhone = opened
+    lastFromDoor = opened
   }
 
   // MARK: ProductConnection
@@ -74,6 +94,7 @@ actor FakeConnection: ProductConnection {
   func send(_ text: String) async throws {
     if let failure { throw failure }
     sentFrames.append(text)
+    lastFromPhone = clock?.now() ?? .zero
     guard let value = try? JSONValue.parse(Data(text.utf8)),
       let method = value["method"]?.stringValue
     else { return }
@@ -93,11 +114,31 @@ actor FakeConnection: ProductConnection {
     drop(FakeDoorError.dropped)
   }
 
+  func ping() async throws {
+    if let failure { throw failure }
+    pings += 1
+    lastFromPhone = clock?.now() ?? .zero
+    guard answersPings else {
+      // Never answered: the continuation waits for the socket to die.
+      try await withCheckedThrowingContinuation { unansweredPings.append($0) }
+      return
+    }
+    lastFromDoor = clock?.now() ?? .zero
+  }
+
+  /// The longest a DIRECTION of this socket has been silent — what the
+  /// sidecar's per-direction idle reap measures (ten minutes, fixed for served
+  /// WebSockets).
+  func longestSilence(at now: Duration) -> Duration {
+    max(now - lastFromPhone, now - lastFromDoor)
+  }
+
   // MARK: The test's side
 
   /// Push a frame the client did not ask for — a delta, or a snapshot the
   /// server re-sent of its own accord.
   func deliver(_ text: String) {
+    lastFromDoor = clock?.now() ?? .zero
     if let waiter {
       self.waiter = nil
       waiter.resume(returning: text)
@@ -114,7 +155,12 @@ actor FakeConnection: ProductConnection {
       self.waiter = nil
       waiter.resume(throwing: error)
     }
+    let pings = unansweredPings
+    unansweredPings = []
+    for ping in pings { ping.resume(throwing: error) }
   }
+
+  var isDropped: Bool { failure != nil }
 
   /// Every request frame this connection was sent, as methods.
   var methods: [String] {

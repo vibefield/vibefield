@@ -33,12 +33,15 @@ private actor LoopbackDoor {
     self.script = script
   }
 
-  func start() async throws -> UInt16 {
+  /// `autoReplyPing` answers every protocol ping with its pong, as fieldd's
+  /// server does (`ws` `autoPong`, on by default and not overridden there).
+  func start(autoReplyPing: Bool = false) async throws -> UInt16 {
     let parameters = NWParameters.tcp
     parameters.allowLocalEndpointReuse = true
     parameters.requiredInterfaceType = .loopback
-    parameters.defaultProtocolStack.applicationProtocols.insert(
-      NWProtocolWebSocket.Options(), at: 0)
+    let websocket = NWProtocolWebSocket.Options()
+    websocket.autoReplyPing = autoReplyPing
+    parameters.defaultProtocolStack.applicationProtocols.insert(websocket, at: 0)
 
     let listener = try NWListener(using: parameters)
     self.listener = listener
@@ -212,6 +215,32 @@ private func waitUntil(
     await door.stop()
   }
 
+  /// SP-2 (b) — the phone's half of the keepalive is a real RFC 6455 PING from
+  /// the real transport, and a door that answers pings (fieldd's does, on its
+  /// own) sends the PONG that `ping()` returns on. Bytes in both directions,
+  /// which is what keeps the sidecar's per-direction idle reap away.
+  @Test func theRealTransportPingsAndTheDoorAnswers() async throws {
+    let door = LoopbackDoor { _, _, _ in [] }
+    let port = try await door.start(autoReplyPing: true)
+    let connection = try await URLSessionProductTransport(timeout: 10).connect(
+      to: URL(string: "ws://127.0.0.1:\(port)/t/a-secret-path")!)
+
+    let pong = PongBox()
+    let pinging = Task {
+      do {
+        try await connection.ping()
+        pong.set("answered")
+      } catch {
+        pong.set("failed: \(error)")
+      }
+    }
+    try await waitUntil("the pong") { pong.value != nil }
+    #expect(pong.value == "answered")
+    await connection.close()
+    _ = await pinging.value
+    await door.stop()
+  }
+
   /// A door that is not there at all. The honest answer is `reconnecting` with
   /// the system's own words — never a hang, and never a fabricated "empty".
   @Test func aDoorThatIsNotThereFailsHonestlyAndKeepsTrying() async throws {
@@ -228,6 +257,15 @@ private func waitUntil(
     #expect(client.lastError?.retryable == true)
     #expect(client.state == .reconnecting)
   }
+}
+
+/// What a ping came back with, written from the pinging task and read by the
+/// main-actor wait.
+private final class PongBox: @unchecked Sendable {
+  private let lock = NSLock()
+  private var stored: String?
+  var value: String? { lock.withLock { stored } }
+  func set(_ text: String) { lock.withLock { stored = text } }
 }
 
 @MainActor

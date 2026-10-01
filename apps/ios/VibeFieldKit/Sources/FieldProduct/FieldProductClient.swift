@@ -100,19 +100,27 @@ public final class FieldProductClient {
     /// phone is authenticated by WhoIs and a token there would be wrong, not
     /// merely absent (C5).
     public var credential: String
+    /// SP-2 (b) — the keepalive's numbers.
+    public var keepalive: ProductKeepalive
+    /// SP-2 — the clock every keepalive timer reads. Tests drive a manual one.
+    public var clock: any ProductClock
 
     public init(
       maxBackoff: Duration = .seconds(10),
       callTimeout: Duration = .seconds(20),
       deviceId: String? = nil,
       userId: String? = nil,
-      credential: String = ""
+      credential: String = "",
+      keepalive: ProductKeepalive = .init(),
+      clock: any ProductClock = SystemProductClock()
     ) {
       self.maxBackoff = maxBackoff
       self.callTimeout = callTimeout
       self.deviceId = deviceId
       self.userId = userId
       self.credential = credential
+      self.keepalive = keepalive
+      self.clock = clock
     }
   }
 
@@ -123,6 +131,13 @@ public final class FieldProductClient {
   /// The tolerant reader's other half, bounded: fields the door sent that this
   /// build does not read. Not an error, never fatal, and never silent.
   public private(set) var tolerantNotes: [String] = []
+  /// SP-2 (b) — the interval the door last announced in `system.tick`, or nil
+  /// before its first tick (the registry's interval stands in until then).
+  @ObservationIgnored public private(set) var doorTickIntervalMs: Int64?
+  /// Diagnostics, never a state: protocol pings sent, and doors the receive
+  /// deadline closed for silence.
+  @ObservationIgnored public private(set) var pingsSent = 0
+  @ObservationIgnored public private(set) var silentDoorCloses = 0
 
   /// The dial target. NOT public and NOT observable: it carries the C3
   /// capability secret in its path, and a public property on an `@Observable`
@@ -156,6 +171,13 @@ public final class FieldProductClient {
   /// superseded while an await was in flight can never write to this client —
   /// the NativeLink lesson the TypeScript client carries as `if (this.ws !== ws)`.
   @ObservationIgnored private var generation = 0
+  // SP-2 (b) — the keepalive's state, per socket. Both instants are on
+  // `options.clock`'s timeline, and both timers exist only while a socket does.
+  @ObservationIgnored private var lastInboundAt: Duration = .zero
+  @ObservationIgnored private var lastSentAt: Duration = .zero
+  @ObservationIgnored private var watchdogTask: Task<Void, Never>?
+  @ObservationIgnored private var pingTask: Task<Void, Never>?
+  @ObservationIgnored private var keepalivePaused = false
   /// Which dial's refusal `lastError` is holding.
   ///
   /// A door that refuses a hello then drops the socket says TWO things, a
@@ -196,6 +218,7 @@ public final class FieldProductClient {
   /// a fresh dial, and reusing a corpse would carry its subscriptions' ghosts.
   public func close() {
     closedByUser = true
+    stopKeepalive()
     reconnectTask?.cancel()
     reconnectTask = nil
     dialTask?.cancel()
@@ -328,6 +351,168 @@ public final class FieldProductClient {
     }
   }
 
+  // MARK: - The keepalive (SP-2 b)
+
+  /// SP-2 (c) — the app went away: the keepalive's clocks stop with it.
+  ///
+  /// A suspended app reads no frames and sends no pings, so a deadline measured
+  /// across a suspension would call a healthy door dead on the way back — and
+  /// every desktop's door at the same instant, which is the herd SP-L7 forbids.
+  /// The socket is left alone, as `FieldLink.pause` leaves it.
+  public func pauseKeepalive() {
+    guard !keepalivePaused else { return }
+    keepalivePaused = true
+    stopKeepalive()
+  }
+
+  /// Back: a FRESH deadline, because a suspension is not silence, and one ping
+  /// at once, so a socket that died while the phone was away is found by asking
+  /// rather than by waiting out the deadline.
+  public func resumeKeepalive() {
+    guard keepalivePaused else { return }
+    keepalivePaused = false
+    guard connection != nil else { return }
+    let token = generation
+    lastInboundAt = options.clock.now()
+    armWatchdog(token: token)
+    armPing(token: token)
+    ping(token: token)
+  }
+
+  /// Both timers start with a socket: the hello itself is the first traffic
+  /// in each direction, so both instants start NOW.
+  private func startKeepalive(token: Int) {
+    let now = options.clock.now()
+    lastInboundAt = now
+    lastSentAt = now
+    guard !keepalivePaused else { return }
+    armWatchdog(token: token)
+    armPing(token: token)
+  }
+
+  private func stopKeepalive() {
+    watchdogTask?.cancel()
+    watchdogTask = nil
+    pingTask?.cancel()
+    pingTask = nil
+  }
+
+  /// ANY inbound frame is liveness — a result, an event, a tick, a notification
+  /// this build has never heard of, a frame it cannot even read, a pong.
+  private func noteInbound(token: Int) {
+    guard token == generation else { return }
+    lastInboundAt = options.clock.now()
+  }
+
+  private var receiveDeadline: Duration {
+    options.keepalive.receiveDeadline(intervalMs: doorTickIntervalMs)
+  }
+
+  /// The receive deadline's timer. It sleeps until the deadline the LAST frame
+  /// set, wakes, and either finds a newer frame moved it (and sleeps again) or
+  /// calls the door dead — one timer per socket, never one per frame.
+  private func armWatchdog(token: Int) {
+    watchdogTask?.cancel()
+    let clock = options.clock
+    watchdogTask = Task { [weak self] in
+      while !Task.isCancelled {
+        // Read through the weak reference and let go of it before sleeping, so
+        // a parked timer never keeps a client alive.
+        guard let deadline = self?.watchdogDeadline(token: token) else { return }
+        if clock.now() >= deadline {
+          self?.doorWentSilent(token: token)
+          return
+        }
+        do { try await clock.sleep(until: deadline) } catch { return }
+      }
+    }
+  }
+
+  /// When this socket's door is dead if nothing arrives first — nil once the
+  /// socket is not the live one, which ends its timer.
+  private func watchdogDeadline(token: Int) -> Duration? {
+    guard token == generation, connection != nil, !keepalivePaused else { return nil }
+    return lastInboundAt + receiveDeadline
+  }
+
+  /// The phone's own half: a protocol ping after `pingAfter` with nothing sent.
+  private func armPing(token: Int) {
+    pingTask?.cancel()
+    let clock = options.clock
+    pingTask = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let due = self?.pingDue(token: token) else { return }
+        if clock.now() >= due {
+          self?.ping(token: token)
+          continue
+        }
+        do { try await clock.sleep(until: due) } catch { return }
+      }
+    }
+  }
+
+  private func pingDue(token: Int) -> Duration? {
+    guard token == generation, connection != nil, !keepalivePaused else { return nil }
+    return lastSentAt + options.keepalive.pingAfter
+  }
+
+  /// One ping, fired and not awaited by the timer: a pong that never comes is
+  /// the receive deadline's to judge, and the timer must not stall behind it.
+  private func ping(token: Int) {
+    guard token == generation, let connection else { return }
+    lastSentAt = options.clock.now()
+    pingsSent += 1
+    Task { [weak self] in
+      do {
+        try await connection.ping()
+        self?.noteInbound(token: token)
+      } catch is ProductPingUnsupported {
+        // A transport with no ping: no pong to count. The deadline still stands.
+      } catch {
+        // The socket refused a ping, which only a dead socket does. The re-dial
+        // is in charge from here — the same single road every drop takes.
+        self?.socketDown(token: token, error: error)
+      }
+    }
+  }
+
+  /// The receive deadline passed with nothing heard: close, and dial again.
+  private func doorWentSilent(token: Int) {
+    guard token == generation, connection != nil else { return }
+    silentDoorCloses += 1
+    let quiet = Self.wholeSeconds(options.clock.now() - lastInboundAt)
+    let refusal = FieldProductError(
+      kind: "UNAVAILABLE",
+      message: "the door said nothing for \(quiet) s — closing it and dialing again",
+      retryable: true,
+      details: .object(["service": .string("product"), "state": .string("silent")]))
+    note(refusal.message)
+    record(refusal, for: token)
+    socketDown(token: token, error: refusal)
+  }
+
+  /// SP-1's tick: liveness is already counted (any frame is), and the tick also
+  /// says how often the next one comes — which is what the deadline is
+  /// measured in from now on.
+  private func applyTick(_ params: JSONValue) {
+    guard let interval = params["intervalMs"]?.intValue,
+      ProductKeepalive.acceptedIntervalsMs.contains(interval)
+    else {
+      note(
+        "system.tick named an interval this client cannot measure — the deadline stays "
+          + "\(Self.wholeSeconds(receiveDeadline)) s")
+      return
+    }
+    guard interval != doorTickIntervalMs else { return }
+    doorTickIntervalMs = interval
+    // A shorter interval must bite on time, not at the old deadline.
+    if watchdogTask != nil { armWatchdog(token: generation) }
+  }
+
+  static func wholeSeconds(_ duration: Duration) -> Int64 {
+    duration.components.seconds
+  }
+
   // MARK: - Backoff (pure — pinned by tests, no clock)
 
   /// The TypeScript client's own ladder: 500 ms doubling to a ceiling. Attempt
@@ -389,6 +574,7 @@ public final class FieldProductClient {
           return
         }
         self.connection = connection
+        self.startKeepalive(token: token)
         self.startReceiving(connection, token: token)
         await self.hello(connection, token: token)
       } catch {
@@ -404,6 +590,7 @@ public final class FieldProductClient {
         do {
           let text = try await connection.receive()
           guard let self, token == self.generation else { return }
+          self.noteInbound(token: token)
           self.handle(frame: RpcCodec.decode(text))
         } catch {
           self?.socketDown(token: token, error: error)
@@ -522,10 +709,12 @@ public final class FieldProductClient {
       case .delta: entry.onDelta(payload)
       }
 
-    case .notification:
-      // Server-originated control notifications have no consumer on the phone
-      // yet. Ignoring one is the tolerant reader's answer, not a defect.
-      break
+    case .notification(let method, let params):
+      // SP-2 (b) — the door's keepalive tick. Every OTHER server notification
+      // still has no consumer on the phone, and ignoring one is the tolerant
+      // reader's answer, not a defect: an unknown notification is a FRAME (its
+      // liveness was counted on arrival) and never an error.
+      if method == FieldProductContract.tickMethod { applyTick(params) }
 
     case .unreadable(let reason):
       note("unreadable frame: \(reason)")
@@ -543,6 +732,8 @@ public final class FieldProductClient {
     nextId += 1
     let text = try RpcCodec.request(id: id, method: method, params: params)
     let callTimeout = options.callTimeout
+    // Bytes in the phone's direction: the ping is owed only after this long.
+    lastSentAt = options.clock.now()
 
     return try await withCheckedThrowingContinuation { continuation in
       let deadline = Task { [weak self] in
@@ -579,6 +770,7 @@ public final class FieldProductClient {
 
   private func socketDown(token: Int, error: any Error) {
     guard token == generation else { return }  // a stale socket's last word
+    stopKeepalive()
     // CLOSE WHAT YOU WALK AWAY FROM. The real transport's `connect` never
     // throws — it builds a URLSession and hands back a task at once — so a
     // dial that never reaches a door still leaves a live session behind, and
@@ -628,6 +820,7 @@ public final class FieldProductClient {
     lastError = error
     let connection = self.connection
     self.connection = nil  // detach first: this socket's close is now stale
+    stopKeepalive()
     generation &+= 1
     dialTask?.cancel()
     dialTask = nil
