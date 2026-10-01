@@ -585,6 +585,10 @@ export class RowsCopy<Row> {
     return [...this.#rows.values()];
   }
 
+  get(key: string): Row | undefined {
+    return this.#rows.get(key);
+  }
+
   get size(): number {
     return this.#rows.size;
   }

@@ -61,7 +61,9 @@ import {
   DocSetSyncIntentParams,
   IdempotencyKey,
   IndexCatalogSubscribeParams,
+  IndexChangesSubscribeParams,
   IndexEnrollParams,
+  IndexProjectsParams,
   IndexRecentParams,
   IndexRetireParams,
   IndexSearchParams,
@@ -165,6 +167,7 @@ import { EgressRoutes, resolveEgressPath } from "./egress";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { IndexCatalog } from "./index-catalog";
+import { IndexMesh } from "./index-mesh";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import { LinkService, otherUserLinks } from "./link-service";
@@ -270,6 +273,17 @@ export interface FielddConfig {
    * re-snapshot and batch windows, the reconnect backoff, the journal and page
    * budgets) and the digest heartbeat its peer subscribers hear. Production
    * takes INDEX_MESH's and ROWS' numbers. */
+  /** DS-6 test seams: the aggregator's cadences (the search fan-out budget,
+   * the stale horizon, the persist debounce, the replica's re-attach backoff,
+   * the change pings' floor). Production takes INDEX_MESH's numbers. */
+  indexMesh?: {
+    searchTimeoutMs?: number;
+    staleAfterMs?: number;
+    persistDebounceMs?: number;
+    retryMinMs?: number;
+    retryMaxMs?: number;
+    changesMinIntervalMs?: number;
+  };
   indexCatalog?: {
     epoch?: string;
     resnapshotMs?: number;
@@ -470,6 +484,9 @@ export interface FielddDaemon {
    * two rows tables (`projects`, `sessions`) the peers replicate. Tests read
    * its tables and drive `resnapshot` directly. */
   indexCatalog: IndexCatalog;
+  /** DS-6 — the aggregator: every self peer's catalog replicated (persisted
+   * under `mesh/catalog`), the merged doors and search by asking. */
+  indexMesh: IndexMesh;
   /** AR-2 — the agent runtime (puppeteer) and the service behind the
    * agents.* doors; tests read its runtime directly. */
   agents: AgentRuntimeService;
@@ -651,6 +668,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ...catalogCadences(config.indexCatalog),
     logger,
   });
+  // DS-6 — the aggregator needs the roster and the peer link, which are built
+  // further down; the doors registered before them read it through this ref
+  // (every door is reachable only after the API listens, when it is bound).
+  let indexMesh: IndexMesh | null = null;
+  const requireMesh = (): IndexMesh => {
+    if (indexMesh === null)
+      throw new RpcCallError("UNAVAILABLE", "the history mesh is not up yet", true, {
+        service: "index",
+        state: "starting",
+      });
+    return indexMesh;
+  };
   // AR-2 — the agent runtime (puppeteer's first import): one per fieldd, its
   // registry and managed roots under THIS user's root, its update transcripts
   // under the machine scope. Constructed here so the reconcile can subscribe
@@ -1466,25 +1495,65 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // Projections like the two above: no origin, no enrolled root's path. A
     // daemon that cannot answer a search says so in the answer's state rather
     // than claiming the history holds no matches.
-    api.register("index.sessions", async (_ctx, params) => {
-      const parsed = IndexSessionsParams.safeParse(params);
-      if (!parsed.success || parsed.data.nativeSessionIds === undefined)
+    // DS-6 — two questions on `index.sessions`: the LOOKUP by native id (as
+    // ever), and with no ids the LISTING — a keyset page of this desktop's
+    // catalog (`scope: "local"`, the default) or of the merged replica of every
+    // self desktop (`scope: "mesh"`, DS-D10's one row per native session).
+    // `index.search {scope: "mesh"}` ASKS every awake self desktop (DS-D8). A
+    // peer daemon's call is always answered from THIS desktop's own index — a
+    // mesh question never fans out twice.
+    api.register("index.sessions", async (ctx, params) => {
+      const parsed = IndexSessionsParams.safeParse(params ?? {});
+      if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { nativeSessionIds: string[] } (1..256)",
+          'expected { nativeSessionIds: string[] (1..256) } or { scope?: "local" | "mesh", family?, devices?, projectId?, cursor?, limit? }',
           false,
         );
-      return await index.sessions(parsed.data.nativeSessionIds);
+      if (parsed.data.nativeSessionIds !== undefined)
+        return await index.sessions(parsed.data.nativeSessionIds);
+      return requireMesh().sessions({
+        ...parsed.data,
+        scope: ctx.principal.kind === "peer-fieldd" ? "local" : parsed.data.scope,
+      });
     });
-    api.register("index.search", async (_ctx, params) => {
+    api.register("index.search", async (ctx, params) => {
       const parsed = IndexSearchParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { q, nativeSessionIds?, afterMs?, limit?, prefix?, kind? }",
+          'expected { q, nativeSessionIds?, afterMs?, limit?, prefix?, kind?, scope?: "local" | "mesh", devices? }',
           false,
         );
+      if (parsed.data.scope === "mesh" && ctx.principal.kind !== "peer-fieldd")
+        return await requireMesh().search(parsed.data);
       return await index.search(parsed.data);
+    });
+    api.register("index.projects", (ctx, params) => {
+      const parsed = IndexProjectsParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'expected { scope?: "local" | "mesh", family?, devices?, cursor?, limit? (1..500) }',
+          false,
+        );
+      return requireMesh().projects({
+        ...parsed.data,
+        scope: ctx.principal.kind === "peer-fieldd" ? "local" : parsed.data.scope,
+      });
+    });
+    // DS-6 — a visible History page's invalidation pings (rows always empty,
+    // the revision moves when the scope's catalog or a desktop's standing does)
+    api.registerSubscription("index.changes.subscribe", (_ctx, params, emit) => {
+      const parsed = IndexChangesSubscribeParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'expected { scope?: "local" | "mesh", since?: {epoch, revision}, minIntervalMs? }',
+          false,
+        );
+      const pings = requireMesh().changes(parsed.data, emit);
+      return { snapshot: pings.open, dispose: pings.dispose, start: pings.start };
     });
     // QL (QL-D9) — the empty pane launcher's list: a folder's past sessions
     // (its rosetta project) or every project's. A projection like the two
@@ -4179,6 +4248,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger,
     });
     meshBoard = board;
+    // DS-6 — history across desktops: every self peer's catalog replicated,
+    // the merged doors, search by asking. Started once boot commits.
+    indexMesh = new IndexMesh({
+      local: indexCatalog,
+      roster: devices,
+      link: peers,
+      searchLocal: (question) => index.search(question),
+      dir: join(config.dataDir, ...LAYOUT.MESH_CATALOG_DIR),
+      ...(config.indexMesh ?? {}),
+      logger,
+    });
 
     // AH-1 — the artifact serving foundation. Constructed HERE (before the supersession
     // closure below references it — a superseding takeover can fire before
@@ -4410,6 +4490,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         docs.dispose();
         const artifactDrain = artifacts.dispose();
         board.dispose(); // DS-3 — its hubs' upstreams close before the manager goes
+        indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
         // MF-1 — withdraw this device's field before the mesh goes: a reader
@@ -4457,6 +4538,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const artifactDrain = artifacts.dispose();
       board.dispose();
       indexCatalog.dispose();
+      indexMesh?.dispose();
       federatedSubs.dispose();
       peers.dispose();
       // MF-1h — the rollback disposes every neighbour and used to walk past
@@ -4782,6 +4864,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       }
     }
     indexCatalog.start(); // DS-6 — follows the daemon's transitions from its first
+    indexMesh?.start(); // DS-6 — the replicas load, then follow the roster
     void rosettad?.start();
     let stopPromise: Promise<void> | null = null;
     const stop = (): Promise<void> => {
@@ -4814,6 +4897,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           docs.dispose();
           const artifactDrain = artifacts.dispose();
           board.dispose(); // DS-3 — its hubs' upstreams close before the manager goes
+          indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
           terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
@@ -4877,6 +4961,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       enrollment,
       index,
       indexCatalog,
+      indexMesh: indexMesh as IndexMesh,
       agents,
       agentUsage,
       agentGateway: gateway,
