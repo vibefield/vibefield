@@ -11,6 +11,13 @@ import {
   type AgentSubscribeParams,
 } from "@vibefield/contracts";
 import { RpcCallError } from "./native-link";
+import {
+  diffRows,
+  projectRows,
+  RevisionedSubscription,
+  type RowsProjection,
+  snapshotDeltaView,
+} from "./projection";
 
 /** `agent.subscribe`'s answer to params that do not parse — the handler's, and
  * the subscription forwarder's for a routed ask (`refuseBoardAsk`). */
@@ -378,18 +385,19 @@ export function projectDeskRow(
 }
 
 /** Upserts and removals between two projected boards, by (runtimeRunId,
- * revision). A row whose revision is unchanged is not sent again. */
+ * revision). A row whose revision is unchanged is not sent again. SP-1: the
+ * keyed diff is `projection.ts`'s; this is the board's key and its notion of
+ * "unchanged". */
 export function diffFieldRows(
   prev: readonly AgentFieldRow[],
   next: readonly AgentFieldRow[],
 ): { upserts: AgentFieldRow[]; removed: string[] } {
-  const before = new Map(prev.map((row) => [row.runtimeRunId, row.revision]));
-  const upserts: AgentFieldRow[] = [];
-  for (const row of next) {
-    if (before.get(row.runtimeRunId) !== row.revision) upserts.push(row);
-    before.delete(row.runtimeRunId);
-  }
-  return { upserts, removed: [...before.keys()] };
+  return diffRows(
+    prev,
+    next,
+    (row) => row.runtimeRunId,
+    (before, after) => before.revision === after.revision,
+  );
 }
 
 /** The fold's rows as a field board, with the revisions that make deltas
@@ -398,60 +406,46 @@ export function diffFieldRows(
  * One instance per consumer (a subscriber, the store publisher): the revision
  * chain is per-reader, so nothing has to reason about what a second reader has
  * already seen. Rows keep their own counters across `apply` calls; the board's
- * counter bumps once per frame that actually carries a change. */
+ * counter bumps once per frame that actually carries a change.
+ *
+ * SP-1 (2026-10-01): the machinery is `projection.ts`'s `projectRows`, keyed by
+ * the run id; a row's own counter is written INTO the row (`revision`), which is
+ * what the field's wire has always carried. */
 export class FieldProjection {
-  private rows: AgentFieldRow[] = [];
-  /** the projected JSON each row's revision was last stamped for */
-  private readonly stamps = new Map<string, string>();
-  private boardRevision = 0;
+  readonly #rows: RowsProjection<AgentSessionSummary, ProjectedFieldRow, AgentFieldRow>;
 
   /** DS-3 — the projector decides WHICH board this is (`projectFieldRow`, the
    * default and the store's, or `projectDeskRow`); the revision machinery is
    * the same for both. */
-  constructor(private readonly project: RowProjector = projectFieldRow) {}
+  constructor(project: RowProjector = projectFieldRow) {
+    this.#rows = projectRows({
+      project,
+      keyOf: (row: ProjectedFieldRow) => row.runtimeRunId,
+      stamp: (row: ProjectedFieldRow, revision: number): AgentFieldRow => ({ ...row, revision }),
+    });
+  }
 
   /** The board as it stands. */
   snapshot(): AgentFieldSnapshot {
-    return { revision: this.boardRevision, rows: this.rows.map((row) => ({ ...row })) };
+    const table = this.#rows.snapshot();
+    return { revision: table.revision, rows: table.rows };
   }
 
   get revision(): number {
-    return this.boardRevision;
+    return this.#rows.revision;
   }
 
   /** Fold in a fresh `agent.list`/publish. Answers the delta when the
    * PROJECTION moved and `null` when it did not — the whole reason an idle
    * board (or one whose only news is a usage sample) sends nothing. */
   apply(result: AgentListResult): AgentFieldDelta | null {
-    const since = this.boardRevision;
-    const next: AgentFieldRow[] = [];
-    const seen = new Set<string>();
-    const previous = new Map(this.rows.map((row) => [row.runtimeRunId, row]));
-
-    for (const summary of result.sessions) {
-      const projected = this.project(summary);
-      const id = projected.runtimeRunId;
-      seen.add(id);
-      const stamp = JSON.stringify(projected);
-      const prior = previous.get(id);
-      if (prior !== undefined && this.stamps.get(id) === stamp) {
-        next.push(prior);
-        continue;
-      }
-      this.stamps.set(id, stamp);
-      next.push({ ...projected, revision: (prior?.revision ?? 0) + 1 });
-    }
-    for (const id of this.stamps.keys()) if (!seen.has(id)) this.stamps.delete(id);
-
-    const diff = diffFieldRows(this.rows, next);
-    this.rows = next;
-    if (diff.upserts.length === 0 && diff.removed.length === 0) return null;
-    this.boardRevision = since + 1;
+    const change = this.#rows.apply(result.sessions);
+    if (change === null) return null;
     return {
-      since,
-      revision: this.boardRevision,
-      upserts: diff.upserts.map((row) => ({ ...row })),
-      removed: diff.removed,
+      since: change.since,
+      revision: change.revision,
+      upserts: change.upserts,
+      removed: change.removed,
     };
   }
 }
@@ -549,79 +543,33 @@ export interface FieldSubscription {
  * is never dropped, only held to the end of its window, and several changes in
  * one window collapse into the one frame that carries them all. A subscriber
  * asking for 250 ms therefore costs at most four frames a second no matter how
- * loudly the mirrors revise, and nothing at all while the projection is still. */
+ * loudly the mirrors revise, and nothing at all while the projection is still.
+ *
+ * SP-1 (2026-10-01): the subscriber is `projection.ts`'s
+ * `RevisionedSubscription` over the board's `snapshotDeltaView`. The
+ * heartbeat is re-armed by every frame, so it only ever speaks into silence,
+ * and its `since` and `revision` are the projection's own — a fold change still
+ * waiting out the floor has not moved it yet. A lost frame stays the READER's
+ * gap (the view has no `reset`): the field's wire has never carried a
+ * mid-stream snapshot, and the tolerant reader re-subscribes on a `since` it
+ * does not hold. */
 export function createFieldSubscription(opts: FieldSubscriptionOptions): FieldSubscription {
   const projection = new FieldProjection(opts.project);
-  const floor = opts.minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS;
   const published = (): boolean => opts.terminalPublished?.() ?? true;
-  const stamp = opts.epoch === undefined ? {} : { epoch: opts.epoch };
   projection.apply(opts.list());
-  let timer: NodeJS.Timeout | null = null;
-  let beat: NodeJS.Timeout | null = null;
-  let disposed = false;
-
-  const send = (delta: AgentFieldDelta): void => {
-    try {
-      opts.emit(delta);
-    } catch (error) {
-      opts.onError?.(error);
-    }
-    armBeat();
-  };
-
-  /** The heartbeat is re-armed by every frame, so it only ever speaks into
-   * silence: a board that is moving never carries one. Its `since` and
-   * `revision` are the revision this subscriber was last SENT, which is the
-   * projection's own — a fold change still waiting out the floor has not
-   * moved it yet. */
-  function armBeat(): void {
-    const every = opts.heartbeatMs;
-    if (every === undefined || disposed) return;
-    if (beat !== null) clearTimeout(beat);
-    beat = setTimeout(() => {
-      beat = null;
-      if (disposed) return;
-      const revision = projection.revision;
-      send({ ...stamp, since: revision, revision, upserts: [], removed: [] });
-    }, every);
-    beat.unref?.();
-  }
-
-  const flush = (): void => {
-    timer = null;
-    if (disposed) return;
-    let delta: AgentFieldDelta | null;
-    try {
-      delta = projection.apply(opts.list());
-    } catch (error) {
-      opts.onError?.(error);
-      return;
-    }
-    if (delta === null) return;
-    send({ ...stamp, ...delta, upserts: attachableRows(delta.upserts, published()) });
-  };
-
-  const unsubscribe = opts.subscribe(() => {
-    if (disposed || timer !== null) return;
-    timer = setTimeout(flush, floor);
-    timer.unref?.();
+  const subscriber = new RevisionedSubscription({
+    view: snapshotDeltaView<AgentFieldRow>({
+      table: () => projection.snapshot(),
+      apply: () => projection.apply(opts.list()),
+      revision: () => projection.revision,
+      ...(opts.epoch !== undefined ? { epoch: opts.epoch } : {}),
+      present: (rows) => attachableRows(rows, published()),
+    }),
+    subscribe: (onChange) => opts.subscribe(() => onChange()),
+    emit: (frame) => opts.emit(frame as AgentFieldDelta),
+    minIntervalMs: opts.minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS,
+    ...(opts.heartbeatMs !== undefined ? { heartbeatMs: opts.heartbeatMs } : {}),
+    ...(opts.onError !== undefined ? { onError: opts.onError } : {}),
   });
-
-  const snapshot = projection.snapshot();
-  armBeat();
-  return {
-    snapshot: { ...stamp, ...snapshot, rows: attachableRows(snapshot.rows, published()) },
-    dispose: () => {
-      disposed = true;
-      if (timer !== null) {
-        clearTimeout(timer);
-        timer = null;
-      }
-      if (beat !== null) {
-        clearTimeout(beat);
-        beat = null;
-      }
-      unsubscribe();
-    },
-  };
+  return { snapshot: subscriber.snapshot, dispose: () => subscriber.dispose() };
 }
