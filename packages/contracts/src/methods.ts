@@ -2089,6 +2089,9 @@ export const METHODS: MethodDef[] = [
   // byte for byte, `{projection: "field"}` answers the content-free projection
   // as a snapshot plus deltas at a per-subscriber floor. One door, one scope —
   // a phone watching the field is watching the fold, at a phone's cadence.
+  // Corrected 2026-10-01 (DS wave 2 landing, SP-L4): a `tailnet` principal's
+  // bare ask — the FULL fold at the 16 ms tick — is REFUSED (FORBIDDEN_SCOPE,
+  // `refuseBoardAsk`); the phone asks `{projection: "field"}` and does.
   // DS-3 (2026-09-30, DS-D4) — `stream`, not `local`: the mesh board's
   // upstreams are this very door on each self desktop, asked by a PEER daemon
   // (`peer-fieldd`), which the D36 wall refuses on a `local` method. What stays

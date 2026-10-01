@@ -41,6 +41,15 @@ import {
 } from "../src/terminal";
 import { TerminalRenewAttachParams } from "../src/terminal-pipeline";
 
+describe("PRODUCT_API_LIMITS — the door's inbound cap is a registry number (DS wave 3 landing)", () => {
+  it("names the 4 MiB inbound cap the door enforces, beside the outbound pair in MESH_CONTROL_LIMITS", () => {
+    expect(PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES).toBe(4 * 1024 * 1024);
+    expect(PRODUCT_API_LIMITS.WS_MAX_INBOUND_BYTES).toBeLessThan(
+      MESH_CONTROL_LIMITS.PRODUCT_FRAME_BYTES,
+    );
+  });
+});
+
 describe("method registry lint (design-01 §9.2 + D36)", () => {
   it("every method is fully declared", () => {
     for (const m of METHODS) {

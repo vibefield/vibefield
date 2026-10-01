@@ -194,6 +194,12 @@ export const PRODUCT_API_LIMITS = {
    * silent for 2.5 × the interval it was told dead — five minutes, well under
    * the reap. */
   TICK_INTERVAL_MS: 120_000,
+  /** The largest frame the product door accepts INBOUND, in bytes (`ws`'s
+   * `maxPayload`); a larger one closes the connection 1013. The outbound pair
+   * lives in `MESH_CONTROL_LIMITS` (`PRODUCT_FRAME_BYTES`, `PRODUCT_QUEUED_BYTES`).
+   * DS wave 3 landing (2026-10-01): it was a fieldd literal (`product-api.ts:62`)
+   * that the corpus cited as a registry number — now it is one. */
+  WS_MAX_INBOUND_BYTES: 4 * 1024 * 1024,
 } as const;
 
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
