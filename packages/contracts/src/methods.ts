@@ -1273,19 +1273,27 @@ export const METHODS: MethodDef[] = [
   // root is the OS user's own home. Every answer is a projection: the daemon's
   // loopback origin never crosses this surface (EL7), and an enrolled root's
   // path stays inside fieldd (the persona is named by profile id).
+  // *DS-2 (2026-09-30 — DS-D1 ruled; thinking-desktop-sync-plane.md §6.1,
+  // design-04 §7's census):* the five READS federate now — `discoveries`,
+  // `status`, `sessions`, `search`, `recent` are queried on demand at the
+  // device that owns the index (a foreign `device` forwards the call whole; a
+  // peer daemon may call them). The two consent ACTS, `enroll` and `retire`,
+  // stay `local`: consent is still an act of the person at this device.
+  // Scopes do not move — `index.search` is in no tailnet preset here, so a
+  // peer is still refused the content reads at the scope gate.
   defineMethod({
     surface: "product",
     method: "index.discoveries",
     scope: "index.read",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   defineMethod({
     surface: "product",
     method: "index.status",
     scope: "index.read",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   // AR-5e — the find sheet's two questions: `sessions` is what the index
   // knows about the live runs (by provider-native id) and `search` is one
@@ -1297,32 +1305,35 @@ export const METHODS: MethodDef[] = [
   // not the census scope `index.read` a plugin may hold for the roll call —
   // a search over every consented transcript is a different consent.
   // locality "local" like the rest of the family — the history a person can
-  // search is the one indexed on the device in front of them.
+  // search is the one indexed on the device in front of them. *DS-2
+  // (2026-09-30): `federate` — each device's history is searched where it is
+  // indexed, by asking it (DS-D8); the scope above is unchanged.*
   defineMethod({
     surface: "product",
     method: "index.sessions",
     scope: "index.search",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   defineMethod({
     surface: "product",
     method: "index.search",
     scope: "index.search",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   // QL (thinking-ql-empty-pane-launcher.md, QL-D9) — the empty pane
   // launcher's list: a folder's past sessions (its rosetta project) or every
   // project's, newest first. The same consent as the two above — titles,
   // summaries and each session's cwd are the history's content — so the same
-  // scope, and the same locality: the history is the device's own.
+  // scope, and the same locality: the history is the device's own. *DS-2
+  // (2026-09-30): `federate`, like the two above.*
   defineMethod({
     surface: "product",
     method: "index.recent",
     scope: "index.search",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   defineMethod({
     surface: "product",
@@ -1650,30 +1661,42 @@ export const METHODS: MethodDef[] = [
   // tier's rows reach the deck through the mesh's own roster today — the
   // `device?` federation of `agent.list`/`agent.subscribe` (D35) is a later
   // widening of the locality column, not a new door.
+  // *DS-2 (2026-09-30 — DS-D1 ruled; thinking-desktop-sync-plane.md §6.1):
+  // that widening, made. The ACTS (`spawn`, `resume`, `interrupt`) are
+  // `federate`: executed only on the device that owns the floor and the run,
+  // reached by routing — a foreign `device` forwards the call whole, the owner
+  // authorizes it as the peer daemon under its own rule, records the window
+  // behind it (DS-L7) and answers a retry from its receipt
+  // (forward-receipts.ts). The fold's READS are `stream` (`list`, `subscribe`
+  // — the board), the owner's offer lists `federate` (`providers`,
+  // `catalog`). Scopes do not move; `agents.*` (machine distribution) stays
+  // local.*
   defineMethod({
     surface: "product",
     method: "agent.providers",
     scope: "agent.spawn",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   // AC-1 (thinking-ar-agent-catalog.md) — the catalog: the visible rows with
   // `surfaces` applied for the caller; `declined` rows never leave fieldd.
   // Read-only and content-free like `agent.list`, hence `agent.observe` and the
   // same locality — the phone's link calls it the way it calls `agent.list`.
+  // *DS-2 (2026-09-30): `federate` — another device's catalog is asked of it,
+  // while `agent.list` reads the fold (`stream`).*
   defineMethod({
     surface: "product",
     method: "agent.catalog",
     scope: "agent.observe",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   defineMethod({
     surface: "product",
     method: "agent.spawn",
     scope: "agent.spawn",
     idempotent: false,
-    locality: "local",
+    locality: "federate",
   }),
   // Scope exception, stated (2026-09-13, AR-4b): `agent.resume` rides
   // `agent.spawn` although it now TERMINATES a live PTY — the pending run's —
@@ -1699,7 +1722,7 @@ export const METHODS: MethodDef[] = [
     method: "agent.resume",
     scope: "agent.spawn",
     idempotent: false,
-    locality: "local",
+    locality: "federate",
   }),
   // AR-6-0 (MF-1 §10.2) — the stop verb: interrupt what a run is doing without
   // ending it, the ⎋ a person at the keyboard would press. Scope is
@@ -1714,19 +1737,22 @@ export const METHODS: MethodDef[] = [
   // *Correction 2026-09-30 (SB §9):* since AR-4b (2026-09-13) the product API REFUSES a foreign
   // `device` on every `local` method before the forwarder (product-api.ts, D36), so nothing here is
   // reached by routing today; a routable birth is the sync plane's to add (DS-2, the spawn bloom's SB-6).
+  // *DS-2 (2026-09-30): added — `federate` is that routing: a foreign `device`
+  // forwards the interrupt whole to the run's owner, which reaches the PTY
+  // through ITS record and journals a receipt so a retry stops it once.*
   defineMethod({
     surface: "product",
     method: "agent.interrupt",
     scope: "agent.control",
     idempotent: false,
-    locality: "local",
+    locality: "federate",
   }),
   defineMethod({
     surface: "product",
     method: "agent.list",
     scope: "agent.observe",
     idempotent: true,
-    locality: "local",
+    locality: "stream",
   }),
   // MF-1 — the row is unchanged; its PARAMS are now `AgentSubscribeParams`
   // (agent-field.ts): absent or `{projection: "full"}` is today's subscription
@@ -1738,7 +1764,7 @@ export const METHODS: MethodDef[] = [
     method: "agent.subscribe",
     scope: "agent.observe",
     idempotent: true,
-    locality: "local",
+    locality: "stream",
     subscription: true,
   }),
 ];

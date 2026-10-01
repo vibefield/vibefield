@@ -35,13 +35,18 @@ describe("agent.* registry rows (AR-3)", () => {
       subscription: m.subscription ?? false,
     }));
 
-  it("births on agent.spawn, reads on agent.observe, steers on agent.control; all local in v1", () => {
+  it("births on agent.spawn, reads on agent.observe, steers on agent.control; acts federate, the fold streams (DS-2)", () => {
+    // DS-2 (2026-09-30, DS-D1 — thinking-desktop-sync-plane.md §6.1): "local in
+    // v1" ended here. The ACTS federate — executed only on the device that owns
+    // the floor and the run, reached by routing with `device` — the fold's
+    // reads stream, and the owner's offer lists (providers, catalog) federate.
+    // Scopes and idempotency are unchanged.
     expect(rows("agent.")).toEqual([
       {
         method: "agent.providers",
         scope: "agent.spawn",
         idempotent: true,
-        locality: "local",
+        locality: "federate",
         subscription: false,
       },
       // AC-1 — the catalog: read-only and content-free, so it reads on
@@ -50,21 +55,21 @@ describe("agent.* registry rows (AR-3)", () => {
         method: "agent.catalog",
         scope: "agent.observe",
         idempotent: true,
-        locality: "local",
+        locality: "federate",
         subscription: false,
       },
       {
         method: "agent.spawn",
         scope: "agent.spawn",
         idempotent: false,
-        locality: "local",
+        locality: "federate",
         subscription: false,
       },
       {
         method: "agent.resume",
         scope: "agent.spawn",
         idempotent: false,
-        locality: "local",
+        locality: "federate",
         subscription: false,
       },
       // AR-6-0 (MF-1) — the stop verb, and the first door on `agent.control`:
@@ -74,21 +79,21 @@ describe("agent.* registry rows (AR-3)", () => {
         method: "agent.interrupt",
         scope: "agent.control",
         idempotent: false,
-        locality: "local",
+        locality: "federate",
         subscription: false,
       },
       {
         method: "agent.list",
         scope: "agent.observe",
         idempotent: true,
-        locality: "local",
+        locality: "stream",
         subscription: false,
       },
       {
         method: "agent.subscribe",
         scope: "agent.observe",
         idempotent: true,
-        locality: "local",
+        locality: "stream",
         subscription: true,
       },
     ]);

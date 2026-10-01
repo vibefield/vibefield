@@ -191,15 +191,23 @@ describe("the device? routing hook (C5/D35)", () => {
   });
 
   it("D36 (AR-4b): a peer-fieldd principal cannot call a LOCAL method at all, whatever the tailnet preset grants", async () => {
-    // the tailnet preset grants every TAILNET_SCOPE, and `agent.spawn` is one
-    // of them — the locality column, not the scope, is what keeps a peer from
-    // spawning an agent (or resuming one, which terminates a PTY) here
+    // the tailnet preset grants every TAILNET_SCOPE, `agent.spawn` among them —
+    // the locality column, not the scope, is what keeps a peer from a door that
+    // is this device's alone. DS-2 (2026-09-30): this row used agent.spawn as
+    // that door; agent ACTS federate now (executed by the device that owns the
+    // floor, reached by routing), so it uses agents.profiles.list — the same
+    // scope, machine-scope distribution, local forever.
     const { a, port } = await api();
     a.register("system.health", () => ({ ok: true }));
-    let spawned = 0;
-    a.register("agent.spawn", () => {
-      spawned += 1;
+    let listed = 0;
+    a.register("agents.profiles.list", () => {
+      listed += 1;
       return {};
+    });
+    let spawned = 0;
+    a.register("agent.spawn", (ctx) => {
+      spawned += 1;
+      return { principal: ctx.principal };
     });
     const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
     await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
@@ -208,14 +216,21 @@ describe("the device? routing hook (C5/D35)", () => {
     };
     expect(health.error.data.kind).toBe("FORBIDDEN_SCOPE");
     expect(health.error.data.details).toMatchObject({ method: "system.health", locality: "local" });
-    const spawn = (await call(ws, 3, "agent.spawn", { provider: "scripted" })) as {
-      error: { data: { kind: string } };
+    const profiles = (await call(ws, 3, "agents.profiles.list", {})) as {
+      error: { data: { kind: string; details: Record<string, unknown> } };
     };
-    expect(spawn.error.data.kind).toBe("FORBIDDEN_SCOPE");
-    expect(spawned).toBe(0);
+    expect(profiles.error.data.kind).toBe("FORBIDDEN_SCOPE");
+    expect(profiles.error.data.details).toMatchObject({ locality: "local" });
+    expect(listed).toBe(0);
     // a federating method is still the peer's to call
     const probe = (await call(ws, 4, "device.list", {})) as { result: { principal: unknown } };
     expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-peer-a" });
+    // DS-2 — and so, now, is an agent act: executed here, as the peer daemon
+    const spawn = (await call(ws, 5, "agent.spawn", { provider: "scripted" })) as {
+      result: { principal: unknown };
+    };
+    expect(spawn.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-peer-a" });
+    expect(spawned).toBe(1);
   });
 
   it("device on a subscription refuses honestly while the sub half is UN-armed", async () => {

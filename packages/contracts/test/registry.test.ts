@@ -115,6 +115,33 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
       ).toBe(true);
     }
   });
+
+  // DS-2 (2026-09-30, DS-D1 — thinking-desktop-sync-plane.md §6.1; design-04
+  // §7's census): agent and index reads/acts left `local`. Two walls must not
+  // move with them, and a new row is held to them here rather than by review.
+  it("DS-2: a guest reaches nothing that leaves its device — every guestOk row is local", () => {
+    for (const m of METHODS.filter((m) => m.guestOk === true))
+      expect(m.locality, `${m.method}: guestOk ⇒ local`).toBe("local");
+  });
+
+  it("DS-2: tokens, native, plugins, diagnostics and audit stay local on the product surface", () => {
+    const localForever = new Set([
+      "tokens.mint",
+      "native.admin",
+      "plugins.read",
+      "plugins.manage",
+      "plugins.serve",
+      "diagnostics.read",
+      "diagnostics.manage",
+      "audit.append",
+    ]);
+    for (const m of METHODS.filter((m) => m.surface === "product")) {
+      if (m.scope !== null && localForever.has(m.scope))
+        expect(m.locality, `${m.method} (${m.scope})`).toBe("local");
+      // the receipt door reads THIS daemon's journal of its own forwards
+      if (m.method.startsWith("forward.")) expect(m.locality, m.method).toBe("local");
+    }
+  });
 });
 
 describe("port registry", () => {
@@ -247,7 +274,7 @@ describe("logging registries (LOG-43/LOG-44)", () => {
 });
 
 describe("MF-1 — the field's two new doors and its store (§10.1)", () => {
-  it("declares agent.interrupt as a control act on this device's own run", () => {
+  it("declares agent.interrupt as a control act on the run's own device", () => {
     expect(METHODS.find((method) => method.method === "agent.interrupt")).toEqual({
       surface: "product",
       method: "agent.interrupt",
@@ -255,7 +282,9 @@ describe("MF-1 — the field's two new doors and its store (§10.1)", () => {
       scope: "agent.control",
       // a second interrupt is a second act, never a replay of the first
       idempotent: false,
-      locality: "local",
+      // DS-2 (2026-09-30): executed only on the device that owns the run,
+      // reached by routing — it was `local`, which refused the routing
+      locality: "federate",
     });
     // and it is reachable from the phone: agent.control is in the tailnet preset
     expect(TAILNET_SCOPES).toContain("agent.control");

@@ -34,16 +34,20 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
     }));
 
   it("index.*: census reads on index.read, content reads on index.search, mutations on the local-only index.manage", () => {
+    // DS-2 (2026-09-30, DS-D1 — thinking-desktop-sync-plane.md §6.1): the five
+    // READS federate (each device's index is asked where it lives, DS-D8); the
+    // two consent ACTS stay local — consent is the person's act at this device.
+    // Scopes are unchanged by the reclassification.
     expect(rows("index.")).toEqual([
-      { method: "index.discoveries", scope: "index.read", idempotent: true, locality: "local" },
-      { method: "index.status", scope: "index.read", idempotent: true, locality: "local" },
+      { method: "index.discoveries", scope: "index.read", idempotent: true, locality: "federate" },
+      { method: "index.status", scope: "index.read", idempotent: true, locality: "federate" },
       // AR-5e — the find sheet's doors, reads like the two above
       // AR-5b: the sheet's CONTENT reads ride their own scope — a plugin holding
       // index.read for the roll call must not gain transcript search on an upgrade
-      { method: "index.sessions", scope: "index.search", idempotent: true, locality: "local" },
-      { method: "index.search", scope: "index.search", idempotent: true, locality: "local" },
+      { method: "index.sessions", scope: "index.search", idempotent: true, locality: "federate" },
+      { method: "index.search", scope: "index.search", idempotent: true, locality: "federate" },
       // QL — the launcher's list is the same content, so the same consent
-      { method: "index.recent", scope: "index.search", idempotent: true, locality: "local" },
+      { method: "index.recent", scope: "index.search", idempotent: true, locality: "federate" },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
     ]);
@@ -226,11 +230,20 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
     ]);
   });
 
-  it("none of the rows federates or admits a guest; only the feeds subscribe", () => {
+  it("only the index READS federate (DS-2); none of the rows admits a guest; only the feeds subscribe", () => {
+    // DS-2 (2026-09-30): the index reads moved to `federate`; the consent acts
+    // and every agents.* row (machine-scope distribution) stay local
+    const indexReads = new Set([
+      "index.discoveries",
+      "index.status",
+      "index.sessions",
+      "index.search",
+      "index.recent",
+    ]);
     for (const m of METHODS.filter(
       (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),
     )) {
-      expect(m.locality, m.method).toBe("local");
+      expect(m.locality, m.method).toBe(indexReads.has(m.method) ? "federate" : "local");
       expect(m.guestOk ?? false, m.method).toBe(false);
       // AR-5d widened this family by exactly one subscription (the usage
       // column's feed), the Agents settings section by one more (an update's

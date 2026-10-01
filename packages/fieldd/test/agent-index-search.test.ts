@@ -617,9 +617,12 @@ describe("the doors' posture", () => {
   });
 
   it("D36: a peer-fieldd principal cannot call either door, whatever the tailnet preset grants", async () => {
-    // the locality column, not the scope, is what keeps a peer out: the
-    // history a person can search is the one indexed on the device in front
-    // of them (the harness device-routing.test.ts uses for agent.spawn)
+    // the SCOPE keeps a peer out: no tailnet preset carries `index.search`
+    // (the harness device-routing.test.ts uses for its local-door row).
+    // DS-2 (2026-09-30): the locality column no longer stands behind it — the
+    // three are `federate` now (each device's history is searched where it is
+    // indexed, by asking it); a peer daemon reaches them only when its preset
+    // grants the content scope (ds-f's PEER_FIELDD_SCOPES).
     const secret = "3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM";
     const api = new ProductApi({
       port: 0,
@@ -675,9 +678,7 @@ describe("the doors' posture", () => {
       };
       expect(res.error.data.kind, method).toBe("FORBIDDEN_SCOPE");
       // AR-5b: the tailnet preset carries no content scope at all, so the scope
-      // wall fires before the locality wall for a peer; the locality column
-      // still stands behind it (the census reads on index.read exercise it),
-      // and the handler ran for neither door either way
+      // wall refuses the peer; the handler ran for none of the doors
       expect(res.error.data.details).toMatchObject({ required: "index.search" });
     }
     expect(called).toBe(0);

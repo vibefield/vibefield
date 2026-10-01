@@ -143,13 +143,16 @@ describe("the agent catalog (AC-1)", () => {
     expect(() => AgentCatalogEntry.parse({ ...rows[0], offers: { spawn: true } })).toThrow();
   });
 
-  it("agent.catalog is a product door on agent.observe, local like agent.list", () => {
+  it("agent.catalog is a product door on agent.observe, asked of the device that owns it (DS-2)", () => {
+    // DS-2 (2026-09-30): `federate` — another desktop's catalog is asked of
+    // that desktop; it was `local` like agent.list, which now reads the fold
+    // (`stream`)
     const door = METHODS.find((m) => m.method === "agent.catalog");
     expect(door).toMatchObject({
       surface: "product",
       scope: "agent.observe",
       idempotent: true,
-      locality: "local",
+      locality: "federate",
     });
   });
 
