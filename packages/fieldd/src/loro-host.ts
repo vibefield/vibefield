@@ -14,6 +14,18 @@ import { decodeImportBlobMeta, LoroDoc, VersionVector } from "loro-crdt";
 // can FERRY a checkpoint and cannot MERGE one, so a checkpoint whose edits live
 // in no journal record never reached a desktop that already held content
 // (§1.2 defect 1). A host imports it and keeps both sides' work.
+//
+// DS-5d (2026-10-01) — compaction's Loro, MEASURED on loro-crdt 1.13.8 (the
+// probes under test/, the facts recorded in the DS-5d commits): a doc loaded
+// from a shallow snapshot exports only shallow snapshots; a shallow export is
+// rooted at the common ancestor of the requested frontier's heads, so the
+// actual root can sit below the watermark (never above it); an export "from"
+// below the root starts AT the root; a shallow export taken while the doc holds
+// an op concurrent with the trim point writes a base no doc can import; and an
+// op whose base lies below a shallow root PANICS the doc it is imported into
+// (that doc then throws on every call; others stay usable). Hence the trial
+// (compactTo), the answer guard (canAnswer), the throwaway carry (rebaseOnto),
+// and the containment in doc-service.ts.
 
 /** What one import did to a hosted document. */
 export interface HostImport {

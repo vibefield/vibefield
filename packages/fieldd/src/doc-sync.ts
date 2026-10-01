@@ -76,6 +76,17 @@ import { DEFAULT_SEND_MAX_BUFFERED_BYTES as SEND_WATERMARK_BYTES } from "./mesh-
 // rides the CHUNK path, and every whole send waits (bounded) for room under
 // it — a refused send used to throw, forget the lane, and leave the canvas
 // pending until a liveness flip that might never come.
+//
+// DS-5d (2026-10-01, design-06 §4) — S4 IS ANSWERED. Two desktops a compaction
+// parts used to stand at `epoch-stale` for good: neither answered across the
+// epoch. Now the side holding the NEWER epoch answers an older VERSION with
+// its base, marked `rebootstrap`, and the records since — never a delta
+// across the boundary — and the older side re-bootstraps from it
+// (DocumentService.rebootstrapNow). The older side's own VERSION is the ask;
+// a record declined across an epoch greets the pair (behind, it asks; ahead,
+// it tells), once per answer timeout per pair; an epoch move here (a
+// compaction, a re-bootstrap, the library naming a newer one) greets every
+// peer of the canvas at once.
 
 /** Lane LIFECYCLE, over the mgmt channel. Bytes never come through here (D5). */
 export interface LaneControl {
