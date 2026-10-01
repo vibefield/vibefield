@@ -171,6 +171,7 @@ import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { DocSyncService, docHostPeers, type LaneInfo } from "./doc-sync";
 import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
+import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { IndexCatalog } from "./index-catalog";
@@ -199,7 +200,7 @@ import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
-import type { RemoteCellRewriter } from "./remote-cell-rewriter";
+import { NO_EGRESS, type RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
   ROSETTAD_UNCONFIGURED,
   type RosettadHealth,
@@ -251,8 +252,10 @@ export interface FielddConfig {
   terminalBirthWaitMs?: number;
   /** DS-4 seam: how a terminal ticket forwarded from another desktop becomes
    * doors a window here dials (`TerminalServiceOptions.remoteCellRewriter`).
-   * Absent = `NO_EGRESS` (UNAVAILABLE `egress_unavailable`) — production's
-   * answer until the egress facade (DS-1) plugs a route per owner serve. */
+   * Absent = production's `EgressCellRewriter` (DS-1b, 2026-10-01): one egress
+   * route per owner desktop to its cell serve, both doors re-homed onto its
+   * loopback listener; it answers UNAVAILABLE `egress_unavailable` while the
+   * floor's sidecar predates RFC 026. (Before DS-1b, absent was `NO_EGRESS`.) */
   terminalRemoteCellRewriter?: RemoteCellRewriter;
   /** AR-7d test seam: what a free shell this daemon births adds to its
    * environment (`TerminalServiceOptions.shellIntegration`). Production
@@ -1327,15 +1330,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // — a daemon booting through that window had a dead inventory forever
     // (list = [], every openTicket NOT_FOUND). Re-arming on every "connected"
     // keeps trying until it takes; once armed, NativeLink's own replay owns it.
+    // DS-1b — the production rewriter is built beside the egress routes it
+    // rides (below PeerLink); this service is built long before them, so it
+    // holds a delegate that reads the rewriter once it exists (NO_EGRESS's
+    // honest refusal until then). A test seam's rewriter outranks both.
+    let egressCellRewriter: EgressCellRewriter | undefined;
     const terminals = new TerminalService({
       link: native,
       logger: logger.child({ component: "terminal.service" }),
       ...(config.terminalBirthWaitMs !== undefined
         ? { birthWaitMs: config.terminalBirthWaitMs }
         : {}),
-      ...(config.terminalRemoteCellRewriter !== undefined
-        ? { remoteCellRewriter: config.terminalRemoteCellRewriter }
-        : {}),
+      remoteCellRewriter: config.terminalRemoteCellRewriter ?? {
+        rewrite: (deviceId, endpoints) =>
+          (egressCellRewriter ?? NO_EGRESS).rewrite(deviceId, endpoints),
+      },
       // TM-2 (TM-D2) — the doors a TAILNET self peer is told to dial, read off
       // the LIVE terminal serve (`publishedTerminalServe` above) plus one
       // condition only this caller has: THIS cell's route is in the published
@@ -4343,6 +4352,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       },
       logger: logger.child({ component: "mesh.egress" }),
     });
+    // DS-1b — the production rewriter over that port: a window's forwarded
+    // ticket rides ONE route per owner desktop to its cell serve, both doors
+    // re-homed onto the route's loopback listener (egress-cell-rewriter.ts)
+    if (config.terminalRemoteCellRewriter === undefined) {
+      egressCellRewriter = new EgressCellRewriter({
+        routes: egressRoutes,
+        logger: logger.child({ component: "terminal.egress" }),
+      });
+    }
     // C6-5/D35 — the subscription half: one ref-counted upstream per
     // {device, method, params}, re-snapshot on recovery; quiet during an
     // outage (the roster carries liveness, the topic stream never lies).
@@ -4653,6 +4671,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
+        // DS-1b — a superseded daemon KEEPS its egress routes: the floor answers
+        // only the successor now, which re-answers each route by its id
+        egressCellRewriter?.dispose({ keepFloorRoutes: true });
         // MF-1 — withdraw this device's field before the mesh goes: a reader
         // should lose us now, not in thirty seconds on the expiry clock
         terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
@@ -4701,6 +4722,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       indexMesh?.dispose();
       federatedSubs.dispose();
       peers.dispose();
+      egressCellRewriter?.dispose(); // DS-1b — the last release takes each route off the floor
+      void egressRoutes.dispose();
       // MF-1h — the rollback disposes every neighbour and used to walk past
       // this one: a boot that failed after the publisher started left its
       // timers armed and its slice standing.
@@ -5063,6 +5086,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
+          // DS-1b — the egress routes this daemon placed come off the floor
+          // while the mgmt link still stands: the rewriter gives back its
+          // references (the last release removes each route), and the port
+          // waits, bounded, for the floor to answer the removals
+          egressCellRewriter?.dispose();
+          await Promise.race([
+            egressRoutes.dispose(),
+            new Promise<void>((resolve) => setTimeout(resolve, 2_000).unref()),
+          ]);
           terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
           await agentField.dispose(); // MF-1 — the field is withdrawn, not left to expire
           devices.dispose();

@@ -61,7 +61,12 @@ export function egressUnavailable(
 
 /** The default, and the truth until DS-1: fieldd has no egress facade to ask,
  * so every forwarded ticket for a window here is UNAVAILABLE rather than a
- * pair of doors nothing on this machine answers. */
+ * pair of doors nothing on this machine answers.
+ *
+ * DS-1b (2026-10-01): the DAEMON no longer uses it. Production wires
+ * `EgressCellRewriter` (`egress-cell-rewriter.ts`) over the egress routes; this
+ * stays `TerminalService`'s default for a composition with no daemon behind it
+ * (unit rows, a service built alone). */
 export const NO_EGRESS: RemoteCellRewriter = {
   rewrite: async (deviceId) => egressUnavailable(deviceId),
 };
@@ -87,15 +92,23 @@ export function egressTarget(endpoints: RemoteCellEndpointSet): string | undefin
  * with its path intact (E2). The loopback leg is plain `ws`: whatever the
  * tailnet leg's scheme, the listener is this machine's and the route carries
  * the rest. Undefined when the result would not be a valid `CellEndpointSet`
- * (a listener that is not loopback, a path that does not parse). */
+ * (a listener that is not loopback, a path that does not parse).
+ *
+ * DS-1b (2026-10-01) — and its QUERY: only the authority changes. Both endpoint
+ * contracts refuse a query today (`REMOTE_WS`, `LOOPBACK_WS`), so for every
+ * pair a ticket can carry this is the path alone; what keeping it buys is that
+ * a query is never STRIPPED in silence (a pair carrying one is refused whole
+ * by the loopback contract, where it used to come back without it). */
 export function loopbackCellEndpoints(
   endpoints: RemoteCellEndpointSet,
   listen: string,
 ): CellEndpointSet | undefined {
   try {
+    const control = new URL(endpoints.controlUrl);
+    const frames = new URL(endpoints.framesUrl);
     const parsed = CellEndpointSet.safeParse({
-      controlUrl: `ws://${listen}${new URL(endpoints.controlUrl).pathname}`,
-      framesUrl: `ws://${listen}${new URL(endpoints.framesUrl).pathname}`,
+      controlUrl: `ws://${listen}${control.pathname}${control.search}`,
+      framesUrl: `ws://${listen}${frames.pathname}${frames.search}`,
     });
     return parsed.success ? parsed.data : undefined;
   } catch {

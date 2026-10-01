@@ -6,10 +6,20 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { PORTS, SOCKETS } from "@vibefield/contracts";
+import {
+  PORTS,
+  type RemoteCellEndpointSet,
+  remoteCellEndpointsFor,
+  SOCKETS,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocketServer } from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
+import {
+  type CellGrantKey,
+  type GrantPrincipal,
+  TerminalGrantMinter,
+} from "../src/terminal-grants";
 import { MockMgmtServer, mockEgress } from "../src/testing/mock-mgmt";
 import { writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
@@ -172,6 +182,47 @@ describe("DS-1 — the daemon's dial and routes ride the floor's egress", () => 
     await until(() => proxy.requests.length === 4);
     expect(await A.peers.request("dev-b", "device.list", {})).toEqual(reached);
     expect(asks(), "a new floor boot is asked again").toBe(2);
+  }, 30_000);
+
+  it("wires the production rewriter: a window's forwarded ticket rides the egress route, and a clean stop takes it off the floor (DS-1b)", async () => {
+    const { A, mock } = await daemonWithPeer();
+    const egress = mockEgress();
+    mock.egress = egress;
+    // what B's daemon answers a forwarded `terminal.openTicket`: minted for A's
+    // daemon, its cell's TAILNET doors (terminal-forwarded-ticket.test.ts)
+    const key: CellGrantKey = { cellBootId: "cell-b", keyHex: "5e".repeat(32), keyGeneration: 1 };
+    const doors = remoteCellEndpointsFor(
+      `http://${PEER_HOST}:${PORTS.TERMINAL_CELLS_SERVE}`,
+      "cell-b",
+    ) as RemoteCellEndpointSet;
+    const minted = new TerminalGrantMinter(() => 1_000_000, "epochB").mintTicket({
+      key,
+      principal: { kind: "peer-fieldd", deviceId: "dev-a" },
+      sessionId: "pane-b",
+      route: { cellBootId: "cell-b", routeRevision: 4 },
+      doors,
+      forwardedFor: { clientKind: "renderer", deviceId: "dev-a", windowId: "p-1" },
+    });
+    const window: GrantPrincipal = {
+      kind: "local-token",
+      tokenId: "tok-w",
+      rendererParticipant: { participantId: "p-1", incarnation: "doc-1" },
+    };
+    const adopted = await A.terminals.adoptForwardedTicket("dev-b", window, {
+      ...minted,
+      endpoints: doors,
+    });
+    expect(adopted.endpoints).toEqual({
+      controlUrl: "ws://127.0.0.1:53000/cell/cell-b/control",
+      framesUrl: "ws://127.0.0.1:53000/cell/cell-b/frames",
+    });
+    expect(egress.adds).toEqual([
+      { id: "egress-dev-b-9422", target: `${PEER_HOST}:${PORTS.TERMINAL_CELLS_SERVE}` },
+    ]);
+    await A.stop();
+    expect(egress.removed, "the route left the floor with the daemon").toEqual([
+      "egress-dev-b-9422",
+    ]);
   }, 30_000);
 
   it("exposes the routes port, aimed at the roster's tailnet name", async () => {

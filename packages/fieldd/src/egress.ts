@@ -562,6 +562,8 @@ export function egressRouteId(peerDeviceId: string, port: number): string {
 
 export class EgressRoutes implements EgressRoutesPort {
   private readonly entries = new Map<string, RouteEntry>();
+  /** removals sent and not yet answered, for `dispose` to wait on */
+  private readonly removals = new Set<Promise<void>>();
   private readonly listeners = new Set<(drop: EgressRouteDrop) => void>();
   private readonly logger: Logger;
   private readonly stopRoster: () => void;
@@ -649,17 +651,22 @@ export class EgressRoutes implements EgressRoutesPort {
     }
   }
 
-  /** Stop listening and take every route this daemon placed off the floor. */
-  dispose(): void {
-    if (this.disposed) return;
-    this.disposed = true;
-    this.stopRoster();
-    this.stopTable?.();
-    for (const entry of this.entries.values()) {
-      if (entry.bound !== undefined) void this.removeOnFloor(entry.id);
+  /** Stop listening and take every route this daemon placed off the floor.
+   * Resolves when every removal it (or an earlier last release) sent has been
+   * answered or refused, so a stopping daemon can wait for them before its
+   * mgmt link closes (DS-1b); it never rejects. */
+  dispose(): Promise<void> {
+    if (!this.disposed) {
+      this.disposed = true;
+      this.stopRoster();
+      this.stopTable?.();
+      for (const entry of this.entries.values()) {
+        if (entry.bound !== undefined) void this.removeOnFloor(entry.id);
+      }
+      this.entries.clear();
+      this.listeners.clear();
     }
-    this.entries.clear();
-    this.listeners.clear();
+    return Promise.allSettled([...this.removals]).then(() => undefined);
   }
 
   // ---- internals ----
@@ -826,7 +833,13 @@ export class EgressRoutes implements EgressRoutesPort {
     if (entry.bound !== undefined) void this.removeOnFloor(entry.id);
   }
 
-  private async removeOnFloor(id: string): Promise<void> {
+  private removeOnFloor(id: string): Promise<void> {
+    const removal = this.sendRemove(id).finally(() => this.removals.delete(removal));
+    this.removals.add(removal);
+    return removal;
+  }
+
+  private async sendRemove(id: string): Promise<void> {
     try {
       await this.opts.facade.egressRouteRemove(id);
     } catch (error) {
