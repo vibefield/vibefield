@@ -107,6 +107,8 @@ export class InstallSetReconciler {
   }
 
   private async applyOnce(): Promise<void> {
+    // never apply a document older than this device's own acts (see `publishing`)
+    while (this.publishing.size > 0) await Promise.allSettled([...this.publishing]);
     const desired = await this.cfg.settingsDoc.installSet();
     for (const entry of Object.values(desired)) {
       try {
@@ -275,16 +277,35 @@ export class InstallSetReconciler {
    * (§16.6). Fire-and-forget by contract — a failed write logs and parks; it
    * must never surface as an unhandled rejection from a handler. */
   async publish(record: PluginRecord, action: PublishAction, act?: GrantAct): Promise<void> {
+    const run = (async () => {
+      try {
+        await this.publishInner(record, action, act);
+      } catch (e) {
+        this.log.warn(
+          "fieldd.install_reconciler.publish_parked",
+          "An install-set publication failed; the next mutation republishes",
+          { pluginId: record.id, error: e instanceof Error ? e.message : String(e) },
+        );
+      }
+    })();
+    this.publishing.add(run);
     try {
-      await this.publishInner(record, action, act);
-    } catch (e) {
-      this.log.warn(
-        "fieldd.install_reconciler.publish_parked",
-        "An install-set publication failed; the next mutation republishes",
-        { pluginId: record.id, error: e instanceof Error ? e.message : String(e) },
-      );
+      await run;
+    } finally {
+      this.publishing.delete(run);
     }
   }
+
+  /** DS wave 2 landing (2026-10-01) — this device's LOCAL publications still in
+   * flight. A local act mutates the registry first and reaches the document
+   * after (commit → persist → `changed`), so while one is in flight the
+   * document is OLDER than this device's own truth. `applyOnce` waits for them:
+   * a disable's late persist (fsync'd since DS-5c) used to raise `changed`
+   * after a re-enable had already run, and the reconciler, reading the still-
+   * disabled entry, tore the re-enabled plugin down — its fresh leases with it
+   * (plugin-settings.test.ts "disable keeps settings/KV on disk; re-enable
+   * restores read access": `invalid token` at the fresh principal's hello). */
+  private readonly publishing = new Set<Promise<void>>();
 
   private async publishInner(
     record: PluginRecord,
