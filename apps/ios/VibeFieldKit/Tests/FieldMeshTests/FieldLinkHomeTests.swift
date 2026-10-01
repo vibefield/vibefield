@@ -31,12 +31,13 @@ private func homedLink(
   options: FieldProductClient.Options = .init(
     maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
   budget: PhoneConnectionBudget? = nil,
-  counter: SweepCounter? = nil
+  counter: SweepCounter? = nil,
+  clock: MovableClock? = nil
 ) async throws -> (FieldLink, MeshRehearsal) {
   memory.record("dev-studio", login: alice)
   let (link, mesh, _, _) = try await standingLink(
     peers: peers, probe: probe, selfLogin: alice, door: door, homeMemory: memory,
-    schedule: schedule, options: options, budget: budget, counter: counter)
+    schedule: schedule, options: options, budget: budget, counter: counter, clock: clock)
   return (link, mesh)
 }
 
@@ -307,6 +308,13 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     try await waitUntil("the field through the studio") {
       link.home == "dev-studio" && link.agents.count == 2
     }
+    // The LAST frame the home sends before going quiet — its roster's answer —
+    // landed: any frame is liveness, so one arriving after the clock moved
+    // would restart the deadline from 301 s and it would never fire (this
+    // row's first cut raced it and went red under load).
+    try await waitUntil("the home's roster answered") {
+      link.notes.contains { $0.contains("dev-studio named no device of its own") }
+    }
     let silent = try #require(link.client(for: "dev-studio"))
 
     await door.refuse(studioDoorHost)
@@ -341,6 +349,38 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
       link.desktops.first { $0.deviceId == "dev-studio" }?.state
         == .failed("contracts 0.1.0 vs 0.2.0"))
     try await waitUntil("the laptop remembered") { memory.lastHome(for: alice) == "dev-laptop" }
+  }
+
+  /// A desktop that stopped this phone says so for as long as its backoff
+  /// runs — and no longer: it holds no door once it is not the home, so
+  /// nothing would ever clear the word, and a desktop upgraded since would
+  /// read "refused" forever. Past the backoff its word is its probe's again,
+  /// and it is a candidate for the next re-home.
+  @Test func aStoppedDesktopsWordLastsAsLongAsItsBackoff() async throws {
+    let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
+    let counter = SweepCounter()
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost) { method, id, _ in
+      method == "system.hello"
+        ? [failureFrame(id: id, kind: "INCOMPATIBLE", message: "contracts 0.1.0 vs 0.2.0")] : []
+    }
+    await door.route(
+      laptopDoorHost,
+      homeDoor([MeshEntry(device: "dev-laptop", rows: [boardRow(id: "l-1", device: "dev-laptop")])]))
+    let (link, mesh) = try await homedLink(door: door, counter: counter, clock: clock)
+    defer { link.stop() }
+    try await waitUntil("homed to the laptop, the studio refused") {
+      link.home == "dev-laptop"
+        && link.desktops.first { $0.deviceId == "dev-studio" }?.state
+          == .failed("contracts 0.1.0 vs 0.2.0")
+    }
+
+    clock.advance(35)  // past the first rung of the ladder (30 s)
+    try await sweepNow(mesh, counter, peer: mine(studio))
+    try await waitUntil("the studio's word is its probe's again") {
+      link.desktops.first { $0.deviceId == "dev-studio" }?.state == .ready
+    }
+    #expect(link.home == "dev-laptop", "a re-home only on the home's loss")
   }
 }
 

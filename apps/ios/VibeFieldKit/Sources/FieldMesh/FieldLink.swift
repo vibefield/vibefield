@@ -1517,7 +1517,9 @@ public final class FieldLink {
   /// desktop holds no door (DS-8), so its word is its probe's: answering reads
   /// `ready` (its door answers, and its board arrives through the home), a
   /// silent door `noDoor`, and a door that stopped this phone its own words
-  /// until its backoff passes.
+  /// for as long as its backoff runs — and no longer: no door to it is open to
+  /// clear the word, so a desktop upgraded since would otherwise read
+  /// "refused" until it next became the home.
   private func state(of deviceId: String, entry: Found) -> FieldDesktop.State {
     if let refusal = endpointRefusals[deviceId] { return .refusedDoor(refusal) }
     if deviceId == home, let homeClient {
@@ -1529,7 +1531,9 @@ public final class FieldLink {
       case .closed: return .noDoor
       }
     }
-    if let stopped = entry.stopped, entry.stuckRetryAt != nil { return .failed(stopped) }
+    if let stopped = entry.stopped, let retryAt = entry.stuckRetryAt, retryAt > now() {
+      return .failed(stopped)
+    }
     switch entry.admission {
     case nil: return .connecting
     case .answering: return .ready

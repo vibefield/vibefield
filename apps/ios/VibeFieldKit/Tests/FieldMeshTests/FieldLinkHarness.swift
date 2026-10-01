@@ -412,7 +412,8 @@ func standingLink(
   options: FieldProductClient.Options = .init(
     maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
   budget: PhoneConnectionBudget? = nil,
-  counter: SweepCounter? = nil
+  counter: SweepCounter? = nil,
+  clock: MovableClock? = nil
 ) async throws -> (FieldLink, MeshRehearsal, LinkDoor, LinkProbe) {
   let mesh = MeshRehearsal()
   await mesh.set(peers: peers)
@@ -434,7 +435,7 @@ func standingLink(
     selfLogin: selfLogin,
     budget: budget,
     homeMemory: homeMemory,
-    now: { now })
+    now: { clock?.now ?? now })
   link.start()
   return (link, mesh, door, probe)
 }
