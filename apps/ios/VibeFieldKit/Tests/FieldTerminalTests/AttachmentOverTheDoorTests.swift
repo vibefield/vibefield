@@ -256,6 +256,69 @@ import Testing
     await attachment.detach()
   }
 
+  /// DS-4b — the pane takes the seat when it gains FOCUS (presented and
+  /// active): once when it is presented, and once more each time the app comes
+  /// back to it — never on a mere resize of a pane that does not hold the
+  /// seat. The take carries the grid the surface measured, not the 80 × 24
+  /// the attach started with.
+  @MainActor
+  @Test func theFocusedPaneTakesTheSeatOncePerGain() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let session = "sess-01J8Z3K9"
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(), appearance: .default,
+      door: { _ in try Self.ticketJSON(port: port, sessionId: session) })
+
+    attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
+    attachment.setViewport(cols: 60, rows: 30)  // the surface measures before the leg attaches
+    let control = try await Self.value("the control leg to attach") { await door.controlAttach }
+    await door.send(
+      .controlLegAttached,
+      Script.controlAttached(
+        session: session, activation: control.activationId, rights: ["geometry", "input", "read"]),
+      on: .control)
+    let take = try await Self.value("the take on focus") { await door.geometryVerbs.first }
+    #expect(take["type"]?.stringValue == "ClaimGeometry")
+    #expect(take["cols"]?.intValue == 60)
+    #expect(take["rows"]?.intValue == 30)
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(await door.geometryVerbs.count == 1, "once per gain")
+
+    attachment.setViewport(cols: 70, rows: 30)
+    try await Task.sleep(for: .milliseconds(80))
+    #expect(await door.geometryVerbs.count == 1, "a resize is not a take")
+
+    attachment.resumeFromForeground()
+    try await Self.until("the second gain's take") { await door.geometryVerbs.count == 2 }
+    await attachment.detach()
+  }
+
+  /// DS-4b — a grant without `geometry` sends no lease verb on focus.
+  @MainActor
+  @Test func aPaneWithoutTheGeometryRightTakesNothing() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let session = "sess-01J8Z3K9"
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(), appearance: .default,
+      door: { _ in try Self.ticketJSON(port: port, sessionId: session) })
+    attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
+    let control = try await Self.value("the control leg to attach") { await door.controlAttach }
+    await door.send(
+      .controlLegAttached,
+      Script.controlAttached(
+        session: session, activation: control.activationId, rights: ["input", "read"]),
+      on: .control)
+    _ = try await Self.value("the frames leg to attach") { await door.framesAttach }
+    attachment.resumeFromForeground()
+    try await Task.sleep(for: .milliseconds(120))
+    #expect(await door.geometryVerbs.isEmpty)
+    await attachment.detach()
+  }
+
   /// SP-2 (g) — an attachment's two legs count against the phone's budget from
   /// the dial to the detach, so a second attachment's legs wait for these.
   @MainActor

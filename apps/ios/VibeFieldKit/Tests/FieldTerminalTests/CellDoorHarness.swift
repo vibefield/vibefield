@@ -51,6 +51,8 @@ actor CellDoorHarness {
   private(set) var credits: [JSONValue] = []
   private(set) var sceneApplied: [JSONValue] = []
   private(set) var inputs: [JSONValue] = []
+  /// DS-4b — every `ClaimGeometry` and `TransferGeometry`, tag included.
+  private(set) var geometryVerbs: [JSONValue] = []
   private(set) var controlAttach: Attach?
   /// P0-C — EVERY `AttachControlLeg`, in order, whole: a renewal rides the same
   /// message at a higher generation, so the last one alone cannot tell a
@@ -245,6 +247,8 @@ actor CellDoorHarness {
       sceneApplied.append(value)
     case "SendInput":
       inputs.append(value)
+    case "ClaimGeometry", "TransferGeometry":
+      geometryVerbs.append(value)
     default:
       break
     }

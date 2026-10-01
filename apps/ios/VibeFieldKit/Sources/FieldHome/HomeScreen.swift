@@ -1719,6 +1719,9 @@ public struct HomeScreen: View {
       // `[input, read]` and holds no geometry lease (TM-D3). Corrected
       // 2026-09-30 (DS-4): the phone IS minted `geometry` now, and it still
       // shapes nothing because this kit speaks no lease verb until DS-4b.
+      // Corrected 2026-10-01 (DS-4b): the attachment TAKES the seat on focus
+      // with the grid the surface measures, so the desktop's PTY is sized to
+      // this pane while it is the one focused last.
       // The device NAME rides along so a refusal can say "studio is not
       // publishing its terminal doors" rather than naming a ULID at the user.
       attachment.attach(

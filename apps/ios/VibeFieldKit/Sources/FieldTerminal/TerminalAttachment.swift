@@ -85,6 +85,13 @@ public struct TerminalBanner: Sendable, Equatable {
 /// for every self principal, the phone included — the pane focused last takes
 /// the seat on any device. What is still true is the behaviour: this kit speaks
 /// no lease verb yet (DS-4b), so the phone never claims and never resizes.
+///
+/// Corrected 2026-10-01 (DS-4b BUILT): the phone's pane TAKES the seat when it
+/// gains focus — presented and active: once at the attach, once more each time
+/// the app comes back to it — through `RoutedTerminalClient.takeGeometry`,
+/// which owns the one retry. While it holds the seat its resizes size the PTY;
+/// once another pane takes it, it renders what that pane sized and never
+/// claims on a mere resize. A grant without `geometry` sends no verb.
 @MainActor
 @Observable
 public final class TerminalAttachment {
@@ -356,6 +363,10 @@ public final class TerminalAttachment {
     self.sessionID = sessionID
     localPhase = nil
     client.open(ticket)
+    // DS-4b — presented on an active app: the pane has FOCUS, and the pane
+    // focused last takes the seat. The client holds the take until the control
+    // leg attaches, with whatever grid the surface has measured by then.
+    takeSeat()
     // `open` is synchronous and can refuse before a socket is spent — a grant
     // outside its window earns a SILENT `1008` at the real door, so the client
     // names it here rather than dialing to be told nothing. A refusal it cannot
@@ -432,8 +443,21 @@ public final class TerminalAttachment {
   /// minted `[geometry, input, read]` — but not for this kit, which has no
   /// lease verb to claim with until DS-4b; so the sentence above is now an
   /// omission, named.
+  /// Corrected 2026-10-01 (DS-4b): the omission is closed. The grid is handed
+  /// to the client, which RESIZES the seat while this pane holds it and does
+  /// nothing once another pane has taken it (a mere resize never claims), and
+  /// a take still waiting for its leg goes with the newest grid.
   public func setViewport(cols: UInt16, rows: UInt16) {
     grid = GhostteaTerminalGridSize(columns: cols, rows: rows)
+    guard let client, let sessionID else { return }
+    client.resizeGeometry(cols: Int(cols), rows: Int(rows), for: sessionID)
+  }
+
+  /// DS-4b — this pane gained focus: take the seat, ONCE. The client owns the
+  /// one retry the cell's announcement may earn; the host never retries.
+  private func takeSeat() {
+    guard let client, let sessionID else { return }
+    client.takeGeometry(cols: Int(grid.columns), rows: Int(grid.rows), for: sessionID)
   }
 
   /// Ask for a fresh authoritative frame (the surface calls this when a frame
@@ -603,10 +627,15 @@ public final class TerminalAttachment {
   public func resumeFromForeground() {
     guard let sessionID else { return }
     if case .suspended = phase {
+      // The re-attach takes the seat itself (`open`).
       attach(sessionID: sessionID, cols: grid.columns, rows: grid.rows, deviceName: deviceName)
       return
     }
     requestFullRefresh()
+    // DS-4b — the app came back to this pane: a focus gain, so a take — the
+    // person may have worked at a desktop meanwhile, and the pane they focused
+    // last is this one again.
+    takeSeat()
   }
 
   /// §8.2's other half: an orderly suspend, not two sockets left to rot.
