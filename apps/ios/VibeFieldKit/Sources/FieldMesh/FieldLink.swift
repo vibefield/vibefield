@@ -115,6 +115,16 @@ public struct FieldDiscoverySchedule: Sendable, Equatable {
     self.unreachable = unreachable
     self.tick = tick
   }
+
+  /// SP-2 (e) — when a client the door STOPPED (`INCOMPATIBLE`, `UNAUTHORIZED`,
+  /// `PRECONDITION_FAILED`) is replaced, after `retries` replacements already:
+  /// the unreachable window, doubling, capped at the refusal window. Those
+  /// refusals change in minutes — a desktop upgraded, a login linked — never in
+  /// seconds, and never "not at all". Pure; pinned by tests.
+  public func stuckClientRetry(after retries: Int) -> Duration {
+    let doublings = min(max(retries, 0), 16)
+    return min(unreachable * (1 << doublings), notThisAccount)
+  }
 }
 
 /// The join (§10.3): the mesh, the doors on it, and the boards behind them, as
@@ -289,6 +299,10 @@ public final class FieldLink {
     var fieldRefusal: String?
     /// IOS-8c — the user ULID the door answered hello with.
     var userId: String?
+    /// SP-2 (e) — when the client the door STOPPED is replaced, and how many
+    /// replacements it has had since one last reached `ready`.
+    var stuckRetryAt: Date?
+    var stuckRetries = 0
   }
 
   /// One desktop's board as the door has told it: rows by run id, at a
@@ -638,6 +652,29 @@ public final class FieldLink {
       // worth re-arming — the call is idempotent and returns at once when one
       // is live — because a subscription can die without its client changing
       // state, and the sweep is the only thing that would notice.
+      if let client = clients[deviceId], case .failed = client.state {
+        // SP-2 (e) — THE STUCK CLIENT. A client stops for good on INCOMPATIBLE,
+        // UNAUTHORIZED or PRECONDITION_FAILED (asking again with the same
+        // version and the same absent token is told the same thing), and the
+        // branch below never replaced an open client — so it stayed stopped
+        // for the life of the link while its peer stayed online. Those answers
+        // CAN change, so it is replaced on a backoff: closed, the door asked
+        // again, and a fresh client dialled if the door still answers.
+        // The ladder starts when the client STOPPED (`trackClient` stamps it);
+        // the stamp here is only the belt for a stop no observation reported.
+        var stuck = found[deviceId] ?? entry
+        if stuck.stuckRetryAt == nil { stuck.stuckRetryAt = stuckRetryDeadline(stuck, from: at) }
+        if let retryAt = stuck.stuckRetryAt, retryAt <= at {
+          stuck.stuckRetries += 1
+          stuck.stuckRetryAt = nil
+          found[deviceId] = stuck
+          closeDoor(to: deviceId)
+          if let url = stuck.doorURL { due.append((deviceId, url)) }
+        } else {
+          found[deviceId] = stuck
+        }
+        continue
+      }
       if let client = clients[deviceId] {
         // SP-2 (d) — the roster says this peer is online, so a client the
         // roster parked (asleep between two sweeps) dials now. Idempotent for
@@ -783,6 +820,11 @@ public final class FieldLink {
     foreignDoors.removeValue(forKey: deviceId)
   }
 
+  /// SP-2 (e) — when a stopped client is next replaced, counted from `from`.
+  private func stuckRetryDeadline(_ entry: Found, from: Date) -> Date {
+    from.addingTimeInterval(seconds(schedule.stuckClientRetry(after: entry.stuckRetries)))
+  }
+
   private func seconds(_ duration: Duration) -> TimeInterval {
     let parts = duration.components
     return TimeInterval(parts.seconds) + TimeInterval(parts.attoseconds) / 1e18
@@ -894,6 +936,16 @@ public final class FieldLink {
           // IOS-8c — who this desktop serves. Decoded since UA-2 and read by
           // nothing until the corner needed a seed for the face.
           self.found[deviceId]?.userId = hello.userId
+          // SP-2 (e) — a client that reached ready starts the stuck ladder over.
+          self.found[deviceId]?.stuckRetries = 0
+          self.found[deviceId]?.stuckRetryAt = nil
+        }
+        // SP-2 (e) — the door STOPPED this client: the replacement ladder starts
+        // now, at the stop, not at whichever sweep happens to notice it.
+        if case .failed = client.state, let entry = self.found[deviceId],
+          entry.stuckRetryAt == nil
+        {
+          self.found[deviceId]?.stuckRetryAt = self.stuckRetryDeadline(entry, from: self.now())
         }
         self.armDoorSubscription(deviceId)
         self.askForDeviceRow(deviceId)

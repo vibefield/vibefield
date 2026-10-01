@@ -1892,3 +1892,91 @@ private let catalogWait: Duration = .seconds(20)
     try await waitUntil("ready again") { link.desktops.first?.state == .ready }
   }
 }
+
+// MARK: - SP-2 (e): the stuck client is retried while its peer stays online
+
+/// Whether the door refuses hello right now — flipped by the test, read by the
+/// script on whatever thread the door answers on.
+private final class HelloVerdict: @unchecked Sendable {
+  private let lock = NSLock()
+  private var refusing = true
+  func fix() { lock.withLock { refusing = false } }
+  var refuses: Bool { lock.withLock { refusing } }
+}
+
+@MainActor
+private func stuckLink(
+  clock: MovableClock, verdict: HelloVerdict
+) async -> (FieldLink, MeshRehearsal, SweepCounter, LinkDoor) {
+  let mesh = MeshRehearsal()
+  await mesh.set(peers: [studio])
+  let counter = SweepCounter()
+  var doors = await mesh.doors()
+  let peers = doors.onlinePeers
+  doors.onlinePeers = {
+    await counter.bump()
+    return await peers()
+  }
+  let door = LinkDoor { method, id, params in
+    if method == "system.hello", verdict.refuses {
+      return [
+        failureFrame(id: id, kind: "INCOMPATIBLE", message: "contracts 0.1.0 vs 0.2.0")
+      ]
+    }
+    return selfDoor(method, id, params)
+  }
+  let link = FieldLink(
+    storeDoors: doors, transport: door, probe: LinkProbe(),
+    options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
+    magicDNSSuffix: rehearsalSuffix, schedule: briskSchedule, storeBus: false,
+    now: { clock.now })
+  link.start()
+  return (link, mesh, counter, door)
+}
+
+@MainActor
+@Suite struct FieldLinkStuckClientTests {
+  /// A door that refused this client for good — INCOMPATIBLE here; UNAUTHORIZED
+  /// and PRECONDITION_FAILED stop it the same way — used to leave the client
+  /// failed for the life of the link while its peer stayed online, because the
+  /// sweep never replaces an open client. Those refusals can change (a desktop
+  /// upgraded, a login linked), so the sweep REPLACES a stopped client on a
+  /// backoff: the refused one is closed, the door asked again, a fresh client
+  /// dialled.
+  @Test func aClientTheDoorStoppedIsReplacedOnABackoffWhileItsPeerStaysOnline() async throws {
+    let clock = MovableClock(Date(timeIntervalSince1970: 1_757_808_001))
+    let verdict = HelloVerdict()
+    let (link, mesh, counter, door) = await stuckLink(clock: clock, verdict: verdict)
+    defer { link.stop() }
+
+    try await waitUntil("the door's refusal") {
+      if case .failed = link.desktops.first?.state { true } else { false }
+    }
+    #expect(await door.dials == 1)
+    verdict.fix()  // the desktop was upgraded
+
+    // PIN THE PRECONDITION: a pass RAN inside the backoff and did not replace it.
+    clock.advance(20)
+    try await sweepNow(mesh, counter)
+    try await sweepNow(mesh, counter)
+    #expect(await door.dials == 1, "not inside the backoff")
+
+    clock.advance(15)  // past thirty seconds
+    try await sweepNow(mesh, counter)
+    try await waitUntil("a fresh client dialled") { await door.dials == 2 }
+    try await waitUntil("the desktop ready again") { link.desktops.first?.state == .ready }
+  }
+
+  /// The backoff: the unreachable window doubling, capped at the refusal
+  /// window — a stopped client is weather that changes in minutes, never in
+  /// seconds, and never "not at all".
+  @Test func theStuckClientsBackoffDoublesUpToTheRefusalWindow() {
+    let schedule = FieldDiscoverySchedule()
+    let ladder = (0..<7).map { schedule.stuckClientRetry(after: $0) }
+    #expect(
+      ladder == [
+        .seconds(30), .seconds(60), .seconds(120), .seconds(240), .seconds(300), .seconds(300),
+        .seconds(300),
+      ])
+  }
+}
