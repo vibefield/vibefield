@@ -168,6 +168,9 @@ describe("TerminalService.forwardVia — the forwarded ticket on the caller's de
       "terminal.openTicket",
       { device: OWNER, sessionId: "pane-a" },
       expect.anything(),
+      // DS-2 landed beside DS-4 (2026-10-01): the forwarder carries a fifth argument,
+      // the forwarding envelope; this test invokes the wrapper without one.
+      undefined,
     );
     const ticket = TerminalOpenTicketResult.parse(answer);
     expect(ticket.endpoints).toEqual({
