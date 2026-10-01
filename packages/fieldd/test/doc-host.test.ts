@@ -351,3 +351,26 @@ describe("DS-5c — an idle document leaves memory and comes back on demand", ()
     docs.dispose();
   });
 });
+
+describe("DS-5c — the S4 fence holds on the checkpoint-merge path too", () => {
+  it("a peer's checkpoint from another epoch is not merged into a doc that holds content", async () => {
+    // The review: an UPDATE from another epoch was refused, but a SNAPSHOT
+    // merged into a doc holding content skipped the epoch check (latent until
+    // compaction bumps an epoch — and then it is a merge across the boundary).
+    const docs = service();
+    const { docId } = await docs.create("board");
+    const here = new Renderer(1n);
+    here.edit("mine", "kept");
+    await put(docs, docId, "checkpoint", here.checkpoint());
+    const otherLineage = new Renderer(2n);
+    otherLineage.edit("theirs", "compacted elsewhere");
+    expect(
+      await docs.applyRemoteRecord(docId, {
+        kind: DOC_SYNC_RECORD.SNAPSHOT,
+        meta: { ...META, baseEpoch: 1 },
+        payload: otherLineage.checkpoint(),
+      }),
+    ).toEqual({ applied: false, reason: "epoch-mismatch" });
+    expect((await replay(docs, docId)).board()).toEqual({ mine: "kept" });
+  });
+});

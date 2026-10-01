@@ -1428,6 +1428,15 @@ export class DocumentService {
       // and keeps exactly what it added. The record-level would-clobber below
       // survives only for the case the host cannot help — either side's
       // checkpoint outside the frame rule (opaque custody, B3 shape A).
+      //
+      // DS-5c — THE EPOCH FENCE (S4) holds here as it does for an UPDATE: a
+      // checkpoint from another epoch is another lineage, and merging it into
+      // content is exactly the across-the-boundary apply S4 forbids (latent
+      // until compaction bumps an epoch). A doc with NO content still takes
+      // one above — that is a (re-)bootstrap, which is what S4 asks for.
+      if (record.meta.baseEpoch !== entry.baseEpoch) {
+        return { applied: false, reason: "epoch-mismatch" };
+      }
       const lifted = liftIce1(record.payload);
       if (lifted.ok && loroBlobMode(lifted.payload) === "snapshot") {
         const hosted = await this.hostedNow(docId);
