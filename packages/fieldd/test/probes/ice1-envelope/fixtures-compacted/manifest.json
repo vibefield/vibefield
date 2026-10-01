@@ -1,0 +1,33 @@
+{
+  "probe": "DS-5d compacted ICE1 envelope, 2026-10-01",
+  "ice": "0.11.0",
+  "loro": "1.13.8",
+  "window1": {
+    "widgets": 4,
+    "puts": 1,
+    "appends": 4
+  },
+  "base": {
+    "file": "compacted-base.ice1",
+    "headerFrom": "the window's newest checkpoint",
+    "payloadMode": "shallow-snapshot",
+    "fullSnapshotExportMode": "shallow-snapshot"
+  },
+  "iceOpened": {
+    "ok": true,
+    "widgets": 4
+  },
+  "window2": {
+    "widgets": 6,
+    "checkpoint": {
+      "file": "window-checkpoint.ice1",
+      "payloadMode": "shallow-snapshot"
+    },
+    "appends": ["window-append-1.loro", "window-append-2.loro"]
+  },
+  "hostTakesWhatIceWrote": {
+    "windowCheckpoint": "applied",
+    "window-append-1.loro": "applied",
+    "window-append-2.loro": "applied"
+  }
+}

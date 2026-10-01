@@ -84,6 +84,18 @@ import { RpcCallError } from "./native-link";
 // save — for DOC_HOST.IDLE_MS is evicted by a sweep every DOC_HOST.SWEEP_MS,
 // and `hostedNow` reloads it on the next access. System documents are not
 // hosted here (their owners hold them) and are never evicted.
+//
+// DS-5d (2026-10-01, design-06 §4) — COMPACTION. A canvas whose journal passes
+// DOC_HOST.COMPACT_RECORDS / COMPACT_JOURNAL_BYTES is trimmed to a Loro
+// SHALLOW snapshot AT the watermark — the meet of every known holder's
+// acknowledgement (the holders ledger; DS-D17's thirty days) — trial-loaded
+// before it is kept, framed by the ICE1 rule, and the epoch bumps in the
+// stored revision, the registry and the library. A holder at an older epoch
+// is answered with a fresh holder's base and RE-BOOTSTRAPS (S4), carrying
+// over what the base can take. loro-crdt 1.13.8 panics a doc when an op whose
+// base lies below its shallow root is imported into it: every import into a
+// hosted canvas is CONTAINED (a throw drops the doc, rebuilt from disk), and
+// every carry is tried in throwaway docs (loro-host.ts `rebaseOnto`).
 
 /** A revision that actually landed. `origin` is load-bearing rather than
  * informational: cross-device sync broadcasts what it hears about, and a record

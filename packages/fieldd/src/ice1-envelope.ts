@@ -9,6 +9,15 @@
 //   [9..9+n)    header, UTF-8 JSON  (engineSchema, prefabVersions, savedAt)
 //   [9+n..end)  payload — a FULL Loro snapshot, nothing after it
 //
+// *Corrected 2026-10-01 (DS-5d):* "a FULL Loro snapshot" holds only for a
+// canvas never compacted. A compacted canvas's base is a Loro SHALLOW snapshot
+// (the host's compaction writes it under this same frame), loro-crdt 1.13.8
+// exports nothing else from a doc holding a shallow history, and ICE 0.11.0
+// opens such an envelope and, once its doc came from one, writes them too —
+// test/probes/ice1-envelope/ice1-compacted.test.ts, from fixtures ICE wrote
+// (generate-compacted.mjs). The frame rule is unchanged; the payload is a
+// snapshot of either species.
+//
 // fieldd reads the FRAME and never the header's meaning: the header rides
 // along as opaque bytes, and the payload is handed to Loro. A frame this rule
 // does not describe — another envelope version, a truncated header — is not an
@@ -54,7 +63,10 @@ export function liftIce1(bytes: Uint8Array): Ice1Lift {
 
 /** The inverse, byte for byte (the probe proves wrap(lift(x)) === x on real
  * checkpoints). Exported for tests and for a future host-side compaction; no
- * product path writes an envelope in DS-5. */
+ * product path writes an envelope in DS-5.
+ * *Corrected 2026-10-01 (DS-5d):* the host-side compaction is that product
+ * path now — a compacted base is its shallow snapshot wrapped here under the
+ * newest checkpoint's header (doc-service.ts `compactNow`). */
 export function wrapIce1(header: Uint8Array, payload: Uint8Array): Uint8Array {
   const out = new Uint8Array(ICE1_FRAME_BYTES + header.byteLength + payload.byteLength);
   out.set(ICE1_MAGIC, 0);
