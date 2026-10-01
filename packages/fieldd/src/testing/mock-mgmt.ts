@@ -181,7 +181,9 @@ export class MockMgmtServer {
   // RETIRED 2026-09-14 (TM-3): `mirrorWriteCapability` and `mirrorWriteAsks`,
   // the scripted MF-2a floor secret and the ask counter that proved the grant
   // door never cached it. The verb they answered is deleted on the floor.
-  /** MF-1 — the agent-field slices written into `field.agents.v1`, in order. */
+  /** MF-1 — the agent-field slices written into `field.agents.v1`, in order.
+   * DS-D14 (2026-10-01): no daemon writes that store any more, and this record
+   * is the witness that stays empty (`agent-field-daemon.test.ts`). */
   readonly agentFieldWrites: unknown[] = [];
   /** Schema-valid field-native ring used by LOG-L5 product projection tests. */
   diagnosticRecords: unknown[] = [];
@@ -687,9 +689,10 @@ export class MockMgmtServer {
         this.storeFor(storeId).set(this.meshDeviceId, p["data"]);
         if (storeId === STORES.DEVICES) this.storeWrites.push(p["data"]);
         if (storeId === STORES.ARTIFACTS) this.artifactStoreWrites.push(p["data"]);
-        // MF-1 — every agent-field slice this daemon published, in order: the
-        // witness that the DAEMON wired its publisher (the publisher's own
-        // suite builds one by hand and can say nothing about the wiring).
+        // MF-1 — every agent-field slice this daemon published, in order. It was
+        // the witness that the DAEMON wired its publisher; since DS-D14
+        // (2026-10-01) the publisher is deleted and it is the witness that the
+        // daemon writes nothing here, through every edge the publisher answered.
         if (storeId === STORES.AGENT_FIELD) this.agentFieldWrites.push(p["data"]);
         reply({ result: { storeId, version: ++this.storeVersion } });
         return;
