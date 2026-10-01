@@ -14,6 +14,7 @@ import { getRendererLogger } from "../../logging";
 import { registerTerminalPerfSource } from "../../perf/terminal-perf-source";
 import { terminalLinkOpener } from "../links";
 import { createRoutedTerminalHost, type RoutedTerminalHostBinding } from "../routed/host";
+import type { RemoteRefusal } from "../routed/remote-refusal";
 import {
   type CellBootId,
   type CellTransport,
@@ -146,6 +147,10 @@ export interface TerminalPoolSnapshot {
   readonly profileSets: ReadonlyMap<string, string>;
   /** Pending and accepted close intents, separate from the floor's still-live shutdown ladder. */
   readonly closingSessionIds: readonly string[];
+  /** DS-4e — why the latest ticket ask for ANOTHER desktop's session did not
+   * land (session id → the routed host's structured refusal): the pane's
+   * honest state. Absent once a ticket lands. The same object until it changes. */
+  readonly remoteRefusals: ReadonlyMap<string, RemoteRefusal>;
 }
 
 /** The stations the pool can stamp on a cold-open trace. Structural on purpose:
@@ -243,6 +248,27 @@ let profileSetsView: ReadonlyMap<string, string> = new Map();
  * lets a pane keep its own set while an agent runs in it. */
 const shellBirths = new Map<string, string | null>();
 
+/** DS-4e — the sessions this window shows from ANOTHER desktop: session id →
+ * the owner's roster id and its exact engine summary. A product record, kept
+ * across a runtime replacement (the retry ladder rebuilds the routed host,
+ * which is re-placed and the summary re-registered from here) and dropped
+ * with the session (`forgetRoutedSession`) or the pool. */
+const remoteSessions = new Map<string, { device: string; summary: SessionSummary }>();
+/** DS-4e — the routed host's refusals, by session; replaced, never mutated. */
+const remoteRefusals = new Map<string, RemoteRefusal>();
+let remoteRefusalsView: ReadonlyMap<string, RemoteRefusal> = new Map();
+
+/** The routed host's `onRemoteRefusal`: one session's honest state, or its end. */
+function recordRemoteRefusal(sessionId: string, refusal: RemoteRefusal | undefined): void {
+  if (refusal === undefined) {
+    if (!remoteRefusals.delete(sessionId)) return;
+  } else {
+    remoteRefusals.set(sessionId, refusal);
+  }
+  remoteRefusalsView = new Map(remoteRefusals);
+  publish();
+}
+
 /** Write one row of the record (undefined: the shell is under none). */
 function recordProfileSet(sessionId: string, profileSet: string | undefined): void {
   if (sessionProfileSets.get(sessionId) === profileSet) return;
@@ -305,6 +331,7 @@ function buildSnapshot(): TerminalPoolSnapshot {
     rosterState,
     profileSets: profileSetsView,
     closingSessionIds: [...closingSessionIds],
+    remoteRefusals: remoteRefusalsView,
   };
 }
 
@@ -564,6 +591,7 @@ function ensureRuntime(): GhostteaTerminalRuntime {
     createSession: createRoutedWorkspaceSession,
     onTicket: recordRoutedTicket,
     onTerminated: forgetRoutedSession,
+    onRemoteRefusal: recordRemoteRefusal,
   });
   // GT-8b: the same client carries ⌘-clicked links to fieldd's
   // `terminal.link.open` — one runtime per window, so one opener for every
@@ -573,6 +601,12 @@ function ensureRuntime(): GhostteaTerminalRuntime {
     { openLink: terminalLinkOpener(fieldd) },
   );
   routedHost.bind(runtime);
+  // DS-4e — a replaced runtime keeps showing the other desktops' sessions it
+  // showed: each is routed to its owner again, its summary registered again
+  for (const [sessionId, remote] of remoteSessions) {
+    routedHost.placeRemote(sessionId, remote.device);
+    runtime.registerSession(remote.summary);
+  }
   runtimeGeneration += 1;
   unregisterPerfSource = registerTerminalPerfSource(runtime);
   return runtime;
@@ -612,6 +646,11 @@ function disposeRuntime(): void {
   runtime?.dispose();
   runtime = null;
   routedCells.clear();
+  // the disposed host withdrew every parked ask: no honest state outlives it
+  if (remoteRefusals.size > 0) {
+    remoteRefusals.clear();
+    remoteRefusalsView = new Map();
+  }
 }
 
 /** G23's ticket callback: retain only transport-private route/grant state. */
@@ -637,6 +676,8 @@ function recordRoutedTicket(sessionId: string, ticket: TerminalOpenTicket): void
 /** Drop private records after a confirmed kill or authoritative removal. */
 function forgetRoutedSession(sessionId: string): void {
   createdSummaries.delete(sessionId);
+  remoteSessions.delete(sessionId);
+  if (remoteRefusals.delete(sessionId)) remoteRefusalsView = new Map(remoteRefusals);
   recordProfileSet(sessionId, undefined);
   shellBirths.delete(sessionId);
   const cell = placements.cellFor(sessionId);
@@ -939,6 +980,46 @@ export function adoptCreatedTerminal(raw: unknown): {
 }
 
 /**
+ * DS-4e — the OWNER's exact engine summary for a session another desktop
+ * holds (`terminal.sessions {device}`, read fresh through the routed host): what
+ * a pane mounts by, the decimal handle being in no other answer. Null when the
+ * owner does not list it. Builds the window's runtime if it has none (the
+ * host that reads is the runtime's).
+ */
+export async function readRemoteTerminalSession(
+  device: string,
+  sessionId: string,
+): Promise<SessionSummary | null> {
+  ensureRuntime();
+  const host = routedHost;
+  if (host === null) throw new Error("the routed terminal runtime has no host");
+  return await host.readRemoteSession(device, sessionId);
+}
+
+/**
+ * DS-4e — take ANOTHER desktop's session into this window (the remote half of
+ * `adoptCreatedTerminal`): from here every ask for it — its ticket, renewal,
+ * kill, refresh and resync — names its owner (`device`), and its summary is
+ * registered so the runtime can apply the owner's session events to the pane
+ * that mounts it. The pool decides nothing about attaching; the deck asked.
+ */
+export function adoptRemoteTerminalSession(device: string, summary: SessionSummary): void {
+  const target = ensureRuntime();
+  remoteSessions.set(summary.id, { device, summary });
+  routedHost?.placeRemote(summary.id, device);
+  target.registerSession(summary);
+}
+
+/**
+ * DS-4e — the roster's row for `device` flipped (its standing changed, as the
+ * monitor's device subscription read it): every ticket ask parked on that
+ * desktop is asked again, once. The only re-ask there is — never a timer.
+ */
+export function remoteTerminalDeviceFlipped(device: string): void {
+  routedHost?.deviceFlipped(device);
+}
+
+/**
  * Open a DORMANT pool's transport on one of these sessions.
  *
  * The lighter half of `retryTerminalPool`: a dormant pool has no transport to
@@ -1206,6 +1287,9 @@ export function disposeTerminalPool(): void {
   placements.clear();
   routedCells.clear();
   createdSummaries.clear();
+  remoteSessions.clear();
+  remoteRefusals.clear();
+  remoteRefusalsView = new Map();
   sessionProfileSets.clear();
   profileSetsView = new Map();
   shellBirths.clear();

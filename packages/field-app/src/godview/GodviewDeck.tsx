@@ -20,7 +20,12 @@ import {
   useMonitorPalette,
   zoomLayoutApplied,
 } from "@vibecook/puppeteer-views";
-import { AgentInterruptResult, AgentListResult, AgentSpawnResult } from "@vibefield/contracts";
+import {
+  AgentInterruptResult,
+  AgentListResult,
+  AgentSpawnResult,
+  type DeviceInfo,
+} from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type ComponentProps,
@@ -42,9 +47,12 @@ import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import {
   adoptCreatedTerminal,
+  adoptRemoteTerminalSession,
   createTerminalSession,
   openDormantTransport,
+  readRemoteTerminalSession,
   refreshTerminalRoster,
+  remoteTerminalDeviceFlipped,
   retryTerminalPool,
   type TerminalFault,
   type TerminalFaultPlane,
@@ -73,6 +81,7 @@ import {
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import type { MonitorFloorRecord } from "./monitor/agents";
+import { RosterFlips, teeDevicesPort } from "./monitor/devices";
 import {
   devicesPortOver,
   historyPortOver,
@@ -81,9 +90,16 @@ import {
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
-import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
+import type {
+  LocalMountOptions,
+  LocalMountOutcome,
+  MonitorDoor,
+  RemoteAttachOutcome,
+  RemoteAttachRequest,
+} from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
+import { RemotePaneState } from "./RemotePaneState";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -379,6 +395,19 @@ export function GodviewDeck({
    * from a path (GT-5c, the 2026-08-06 erratum). It is read by `paneMeta`, so a
    * ref so recording an origin does not reinitialize the workspace. */
   const remoteDevices = useRef(new Map<string, string>());
+  /** DS-4e — the roster as the deck last READ it, off the monitor's one
+   * subscription (the door's devices port, teed): each desktop's name, for a
+   * remote pane's honest state, and each row's standing, whose flip is the one
+   * signal a pane waiting on that desktop asks again on. Refs: the reads come
+   * through a port the door memo hands out, and must not rebuild it. */
+  const rosterNames = useRef(new Map<string, string>());
+  const rosterFlips = useRef(new RosterFlips());
+  const observeRoster = useCallback((devices: readonly DeviceInfo[]): void => {
+    for (const device of devices) rosterNames.current.set(device.deviceId, device.name);
+    for (const flipped of rosterFlips.current.observe(devices)) {
+      remoteTerminalDeviceFlipped(flipped);
+    }
+  }, []);
   /** Session id → the folder this deck BORN it in (PU-14b's `fallbackCwd`).
    *
    * A pane's badge is a folder name, and a freshly split shell has no cwd to
@@ -1099,12 +1128,13 @@ export function GodviewDeck({
       // in-process serve, and which under the routed runtime THREW on every
       // two-second poll ("Remote-host discovery is not part of the routed host
       // contract"): the SB §9 correction that stood here. Its poll
-      // (`remote-session-field.ts`) retired with it. `attach` below still
-      // speaks ghosttea's remote palette and still throws under the routed
-      // runtime; DS-4 rewires it (a forwarded ticket over an egress route), and
-      // until then every board row says it cannot be attached.
+      // (`remote-session-field.ts`) retired with it. DS-4e rewired `attach`
+      // below off ghosttea's remote palette onto the routed host.
       observeMesh: meshBoardOver(doorClient),
-      devices: devicesPortOver(doorClient),
+      // DS-4e — the monitor's ONE roster subscription, teed: the deck reads the
+      // same lists for the names a remote pane says and the flips it asks
+      // again on, and opens no second `device.subscribe` of its own
+      devices: teeDevicesPort(devicesPortOver(doorClient), observeRoster),
       // AR-5 — the find sheet's daemon questions and the usage column's feed,
       // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
       // The views never dial rosettad; the daemon's origin stays in fieldd.
@@ -1112,59 +1142,18 @@ export function GodviewDeck({
       usage: usagePortOver(doorClient),
       // The profile tabs filter existing sessions; terminal birth is independent.
       profiles: profileSetsPortOver(doorClient),
-      attach: async (request) => {
-        const active = workspaceRef.current?.activeSession;
-        if (active === undefined) return { state: "no-pane" };
-        try {
-          // Sized to the pane it is about to live in, like upstream's own
-          // palette open — a replica born at the wrong geometry redraws once
-          // and reflows the peer's screen for everyone watching it.
-          const session = await runtime.openRemoteSession(
-            request.deviceId,
-            request.remoteSessionId,
-            active.cols,
-            active.rows,
-            request.deviceName,
-          );
-          const context = workspaceRef.current;
-          if (context === undefined || context.activePaneId === undefined) {
-            // The pane went away while the mesh was answering. Upstream's own
-            // cleanup for this exact case, and the same call: for a session the
-            // local registry does not hold, ghosttea 0.9.1's `Terminate` routes
-            // to the MESH runtime's `close_session` (service.rs:2894-2909) —
-            // the replica layer, not the peer's PTY. Named residual: that
-            // trait method carries no doc comment and its implementation ships
-            // in `ghosttea-truffle`, so "it closes only our replica" is read
-            // from the routing, not from a contract test. Sub-millisecond
-            // window; the alternative is leaking a replica nothing can reach.
-            runtime.terminate(session.id);
-            return { state: "no-pane" };
-          }
-          // The locality record (GT-5c). This is the one moment the deck knows
-          // for certain that this pane holds a PEER'S session, and `paneMeta`
-          // stamps it into the persisted document so a later restore does not
-          // have to guess from a path.
-          remoteDevices.current.set(session.id, request.deviceName);
-          // THE MOUNT. `mountSession` puts a session in the ACTIVE pane and
-          // activates it — the workspace's own door (GT-D10), the same one the
-          // reference app's select flow drives. Note what it is not: `addSession`,
-          // which upstream's palette uses to SPLIT. GT-D17 says attach the pane
-          // the user is in, so the deck's shape is the user's, not ours.
-          //
-          // The session the pane was showing is detached, never killed: the
-          // pane leaf's session is replaced (pane-layout's `mountSessionInPane`)
-          // and nothing terminates it — GT-D5's close-detaches law, arriving
-          // here for free because the library obeys it too.
-          context.mountSession(session);
-          return { state: "attached", sessionId: session.id, readWrite: session.readWrite };
-        } catch (cause) {
-          // The floor's own words, carried whole. A mesh that refuses is a
-          // state to report, not an exception to swallow.
-          return {
-            state: "failed",
-            reason: cause instanceof Error ? cause.message : String(cause),
-          };
-        }
+      // DS-4e (2026-10-01; `thinking-desktop-sync-plane.md` §6.3) — ANOTHER
+      // desktop's session, mounted in the pane the user is in through the
+      // SAME routed host a local pane rides: never ghosttea's remote palette,
+      // which threw under the routed runtime (and whose replica no longer
+      // exists). Serialized with the local mounts (AR-4b): one active-pane slot.
+      attach: (request) => {
+        const run = mountQueue.current.then(() => attachRemoteNow(request));
+        mountQueue.current = run.then(
+          () => undefined,
+          () => undefined,
+        );
+        return run;
       },
       // ── AR-3: the local half — fieldd's fold, and the births into this deck ──
       observe: ({ onFrame, onError }) => {
@@ -1247,6 +1236,51 @@ export function GodviewDeck({
         return run;
       },
     };
+    /**
+     * DS-4e — the remote attach, in three steps, each the answer of its owner:
+     *
+     *   1. the OWNER's exact summary — `terminal.sessions {device}`, through
+     *      this window's daemon (the lead's ruling (B)): the pane mounts by the
+     *      session's engine handle, which no other answer carries;
+     *   2. the session ADOPTED as the owner's — from here the routed host asks
+     *      its ticket, renewal, kill and refresh by `device`, and the summary is
+     *      registered so the owner's session events reach the pane;
+     *   3. the MOUNT, in the active pane (GT-D17: attach the pane the user is
+     *      in; the session it showed is detached, never killed — GT-D5).
+     *
+     * The ticket is the runtime's to ask once the pane mounts: its answer is
+     * the loopback pair this desktop's daemon re-homed, dialled as a local
+     * cell's — or a refusal the pane says in its own words (`RemotePaneState`).
+     */
+    async function attachRemoteNow(request: RemoteAttachRequest): Promise<RemoteAttachOutcome> {
+      if (workspaceRef.current?.activePaneId === undefined) return { state: "no-pane" };
+      // the roster's name, or "that desktop" — never the id a row falls back to
+      const named =
+        request.deviceName !== "" && request.deviceName !== request.deviceId
+          ? request.deviceName
+          : "that desktop";
+      try {
+        const summary = await readRemoteTerminalSession(request.deviceId, request.remoteSessionId);
+        if (summary === null)
+          return { state: "failed", reason: `${named} does not list that session` };
+        adoptRemoteTerminalSession(request.deviceId, summary);
+        // The locality record (GT-5c). This is the one moment the deck knows
+        // for certain that this pane holds a PEER'S session, and `paneMeta`
+        // stamps it into the persisted document so a later restore does not
+        // have to guess from a path.
+        remoteDevices.current.set(summary.id, request.deviceName);
+        const mounted = await mountSummaryNow(summary, undefined);
+        if (mounted.state !== "mounted") return mounted;
+        return { state: "attached", sessionId: summary.id, readWrite: summary.readWrite };
+      } catch (cause) {
+        // The daemon's own words, carried whole: an owner that cannot be
+        // reached for its summary is a state to report, not a throw.
+        return {
+          state: "failed",
+          reason: cause instanceof Error ? cause.message : String(cause),
+        };
+      }
+    }
     async function mountLocalNow(
       sessionId: string,
       options: LocalMountOptions | undefined,
@@ -1266,7 +1300,7 @@ export function GodviewDeck({
         };
       }
     }
-  }, [runtime, fieldd, mountSummaryNow]);
+  }, [runtime, fieldd, mountSummaryNow, observeRoster]);
 
   useEffect(() => {
     onRemoteDoor?.(door);
@@ -1569,8 +1603,17 @@ export function GodviewDeck({
     () =>
       function GodviewPaneFrame({ paneId: _paneId, session, ...props }: DeckFrameSlotProps) {
         const remote = remoteDevices.current.get(session.id);
+        // DS-4e — a remote pane whose ticket did not come says why, by the
+        // desktop's NAME: the roster's, else the one the attach was given when
+        // that is a name (a row the roster had not named carries the id)
+        const nameOf = (device: string): string | undefined =>
+          rosterNames.current.get(device) ??
+          (remote !== undefined && remote !== device ? remote : undefined);
         return (
-          <PaneFrame session={session} {...props} {...(remote !== undefined ? { remote } : {})} />
+          <>
+            <PaneFrame session={session} {...props} {...(remote !== undefined ? { remote } : {})} />
+            <RemotePaneState pane={props.pane} sessionId={session.id} nameOf={nameOf} />
+          </>
         );
       },
     [],

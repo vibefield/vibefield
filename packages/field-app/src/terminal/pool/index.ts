@@ -2,6 +2,7 @@
 // here and never reach past it — placement, the transport table and the runtime
 // factory are the pool's own business (TP-L-C).
 
+export type { RemoteRefusal, RemoteRefusalState } from "../routed/remote-refusal";
 export type { CellBootId, TerminalShellPolicy } from "./cell-transport";
 export {
   LIVE_SOURCE_DEMAND,
@@ -20,6 +21,7 @@ export type {
 export { isSessionUnavailable } from "./session-grants";
 export {
   adoptCreatedTerminal,
+  adoptRemoteTerminalSession,
   bindTerminalSessionView,
   type CreatedTerminalSession,
   type CreateTerminalOptions,
@@ -30,7 +32,9 @@ export {
   openTerminalPool,
   type ProjectedSessionDemand,
   prewarmTerminalPool,
+  readRemoteTerminalSession,
   refreshTerminalRoster,
+  remoteTerminalDeviceFlipped,
   retryTerminalPool,
   subscribeTerminalPool,
   TERMINAL_PREWARM_TIMEOUT_MS,

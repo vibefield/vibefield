@@ -44,6 +44,12 @@ const workspaceMounts: Array<Record<string, unknown>> = [];
 const providerRuntimes: unknown[] = [];
 const runtimeObjects: unknown[] = [];
 const geometryCalls: unknown[][] = [];
+/** DS-4e — the options every runtime was minted with: the routed HOST the pool
+ * handed ghosttea rides in them, and a row asks it what the runtime would. */
+const runtimeOptionsSeen: Array<{ host?: import("@vibecook/ghosttea-react").GhostteaRoutedHost }> =
+  [];
+/** DS-4e — the palette's remote opener, which no attach may reach any more. */
+const paletteOpens: unknown[][] = [];
 
 vi.mock("@vibecook/ghosttea-react", () => ({
   // QL-2: the deck hands the launch ghosttea's fixed cell metrics.
@@ -51,7 +57,8 @@ vi.mock("@vibecook/ghosttea-react", () => ({
   LINE_HEIGHT: 19,
   ORIGIN_X: 2,
   ORIGIN_Y: 2,
-  createGhostteaTerminalRuntime: () => {
+  createGhostteaTerminalRuntime: (options: unknown) => {
+    runtimeOptionsSeen.push(options as (typeof runtimeOptionsSeen)[number]);
     const runtime = { id: runtimes.length, disposed: false };
     runtimes.push(runtime);
     const minted = {
@@ -87,8 +94,10 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       // the thing the deck has to remember the origin of (GT-5c).
       registerSession: () => undefined,
       listRemoteHosts: () => Promise.resolve([]),
-      openRemoteSession: (deviceId: string, remoteSessionId: string) =>
-        Promise.resolve({ id: `replica-${deviceId}-${remoteSessionId}`, readWrite: true }),
+      openRemoteSession: (deviceId: string, remoteSessionId: string) => {
+        paletteOpens.push([deviceId, remoteSessionId]);
+        return Promise.resolve({ id: `replica-${deviceId}-${remoteSessionId}`, readWrite: true });
+      },
       terminate: () => undefined,
       sessionCreatedHere: () => false,
       // DS-4 — the geometry verbs a surface sends, recorded rather than acted on
@@ -182,6 +191,19 @@ let markers: GodviewDeckFacts[] = [];
 /** What `terminal.list` answers. Set per test; the restore gate reads it. */
 let floor: Array<{ sessionId: string }> = [];
 let requests: string[] = [];
+/** DS-4e — every request with its params, in order. */
+let calls: Array<[string, unknown]> = [];
+/** DS-4e — ANOTHER desktop's floor, as its daemon answers `terminal.sessions
+ * {device}` through this window's (the owner's exact summaries), by device. */
+let ownerFloors: Record<string, unknown[]> = {};
+/** DS-4e — what a mint forwarded to the owner answers (this daemon re-homed
+ * the owner's doors onto a loopback pair before the window sees them). */
+let ownerMint: (device: string, sessionId: string) => Promise<unknown> = () =>
+  Promise.reject(new Error("no owner mint scripted"));
+/** DS-4e — the roster the door's `device.subscribe` answers, and the push of a
+ * later list onto the standing subscription. */
+let rosterList: unknown[] = [];
+let pushRoster: ((devices: unknown[]) => void) | null = null;
 let root: Root | null = null;
 let container: HTMLElement | null = null;
 
@@ -227,6 +249,18 @@ function installHost(): void {
 const fieldd = {
   request: (method: string, params?: unknown): Promise<unknown> => {
     requests.push(method);
+    calls.push([method, params]);
+    // DS-4e — a call routed to ANOTHER desktop: its daemon's answers
+    const device = (params as { device?: unknown } | undefined)?.device;
+    if (typeof device === "string") {
+      if (method === "terminal.sessions") {
+        return Promise.resolve({ sessions: ownerFloors[device] ?? [] });
+      }
+      if (method === "terminal.openTicket") {
+        return ownerMint(device, (params as { sessionId: string }).sessionId);
+      }
+      return Promise.reject(new Error(`unexpected routed method ${method}`));
+    }
     if (method === "terminal.openTicket") {
       const sessionId = (params as { sessionId: string }).sessionId;
       if (!floor.some((row) => row.sessionId === sessionId)) {
@@ -257,6 +291,24 @@ const fieldd = {
       });
     }
     return Promise.reject(new Error(`unexpected method ${method}`));
+  },
+  // DS-3/DS-4e — the roster the door reads (`device.subscribe`): a snapshot,
+  // then whatever list a row pushes onto the standing subscription
+  subscribe: (
+    method: string,
+    _params: unknown,
+    onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
+  ): Promise<{ snapshot: unknown; unsubscribe: () => void }> => {
+    if (method !== "device.subscribe") {
+      return Promise.reject(new Error(`unexpected subscription ${method}`));
+    }
+    pushRoster = (devices) => onEvent(devices, "delta");
+    return Promise.resolve({
+      snapshot: rosterList,
+      unsubscribe: () => {
+        pushRoster = null;
+      },
+    });
   },
 };
 
@@ -297,6 +349,13 @@ beforeEach(() => {
   geometryCalls.length = 0;
   markers = [];
   requests = [];
+  calls = [];
+  ownerFloors = {};
+  ownerMint = () => Promise.reject(new Error("no owner mint scripted"));
+  rosterList = [];
+  pushRoster = null;
+  runtimeOptionsSeen.length = 0;
+  paletteOpens.length = 0;
   floor = [];
   deviceWarm = () => Promise.resolve({ backend: "test" });
   localStorage.clear();
@@ -720,63 +779,39 @@ describe("paneMeta, the durable half of restore (GT-D8 as amended)", () => {
     expect(readDeviceHost()).toBe("jamess-macbook.local");
   });
 
-  it("STAMPS A REPLICA WITH ITS PEER, and that is what refuses the local spawn", async () => {
+  it("STAMPS A REMOTE PANE WITH ITS PEER, and that is what refuses the local spawn", async () => {
     // The worst finding of the GT review (2a), closed at the one moment the
     // answer is certain rather than reconstructed from a hostname later. The
-    // deck attached this replica; it knows whose it is.
-    let door: RemoteSessionDoor | null = null;
-    container = document.createElement("div");
-    document.body.appendChild(container);
-    root = createRoot(container);
-    await act(async () => {
-      root?.render(
-        <GodviewAgentsProvider door={null}>
-          <GodviewDeck
-            active
-            theme="light"
-            onRemoteDoor={(next) => {
-              door = next;
-            }}
-          />
-        </GodviewAgentsProvider>,
-      );
+    // deck attached this session; it knows whose it is. DS-4e: the pane holds
+    // the OWNER's own session — its id and its summary, read from the owner —
+    // where ghosttea's palette used to hand back a local replica.
+    ownerFloors = {
+      "studio-mini": [
+        bornSummary("s1", {
+          handle: "41",
+          cwd: "file://studio-mini.local/Users/peer/src",
+          title: "zsh",
+        }),
+      ],
+    };
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "local-1", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
     });
-    await settle();
-
-    // The workspace publishes its context through the sidebar slot, which is
-    // the only seam an embedder gets — and the door reads `activeSession` from
-    // it, so the attach needs a pane to land in.
-    const Sidebar = workspaceMounts[0]?.["sidebar"] as ComponentType<{ workspace: unknown }>;
-    const probe = document.createElement("div");
-    document.body.appendChild(probe);
-    const probeRoot = createRoot(probe);
-    await act(async () => {
-      probeRoot.render(
-        <Sidebar
-          workspace={{
-            activePaneId: "pane-1",
-            activeSession: { id: "local-1", cols: 100, rows: 30 },
-            panes: [{ id: "pane-1", session: { id: "local-1" } }],
-            sessions: [],
-            mountSession: () => undefined,
-          }}
-        />,
-      );
-    });
-    await settle();
+    const { door, dispose } = await mountDeckWithDoor(store);
 
     const outcome = await act(async () =>
-      door?.attach({
+      door.attach({
         deviceId: "studio-mini",
         deviceName: "studio-mini",
         remoteSessionId: "s1",
       }),
     );
-    expect(outcome).toMatchObject({ state: "attached" });
+    expect(outcome).toMatchObject({ state: "attached", sessionId: "s1" });
 
     const paneMeta = workspaceMounts[0]?.["paneMeta"] as (session: unknown) => unknown;
     const meta = paneMeta({
-      id: "replica-studio-mini-s1",
+      id: "s1",
       cwd: "file://studio-mini.local/Users/peer/src",
       title: "zsh",
     });
@@ -786,8 +821,7 @@ describe("paneMeta, the durable half of restore (GT-D8 as amended)", () => {
     // A peer's cwd must never be mistaken for this device's own name, either.
     expect(readDeviceHost()).not.toBe("studio-mini.local");
 
-    await act(async () => probeRoot.unmount());
-    probe.remove();
+    await dispose();
   });
 });
 
@@ -1448,5 +1482,195 @@ describe("the deck takes the geometry seat on focus (DS-4)", () => {
       ["claim", "h1", "view-1", 80, 24],
       ["focus", "h1", "view-1", true, 120, 40],
     ]);
+  });
+});
+
+// DS-4e (2026-10-01; thinking-desktop-sync-plane.md §6.3) — a terminal on
+// ANOTHER desktop, attached from Godview. The deck reads the OWNER's summary
+// (`terminal.sessions {device}` — the engine handle a pane mounts by is in no
+// other answer, the lead's ruling (B)), mounts it in the active pane, and from
+// there the window's ROUTED HOST asks every ticket of the owner by `device`: the
+// answer's doors are the loopback pair this desktop's daemon re-homed, dialled
+// as a local cell's. ghosttea's remote palette is not asked at all.
+describe("the remote attach rides the routed host (DS-4e)", () => {
+  const STUDIO = "dev-studio";
+  const LOOPBACK = {
+    controlUrl: "ws://127.0.0.1:61234/cell/cell-studio-boot-7/control",
+    framesUrl: "ws://127.0.0.1:61234/cell/cell-studio-boot-7/frames",
+  };
+  const ROSTER_AWAKE = [
+    {
+      deviceId: "dev-here",
+      name: "pro",
+      platform: "darwin",
+      self: true,
+      online: true,
+      lastSeenAt: 0,
+    },
+    {
+      deviceId: STUDIO,
+      name: "studio",
+      platform: "linux",
+      self: false,
+      online: true,
+      lastSeenAt: 0,
+      state: "awake",
+      link: "dialing",
+    },
+  ];
+  const ownersTicket = (sessionId: string) => ({ ...routedTicket(sessionId), endpoints: LOOPBACK });
+  const egress = (): FielddRpcError =>
+    new FielddRpcError(
+      "UNAVAILABLE",
+      "this desktop has no egress route to that desktop's terminal cells yet",
+      true,
+      { service: "terminal", state: "egress_unavailable", device: STUDIO },
+    );
+  const routedHost = () => {
+    const host = runtimeOptionsSeen.at(-1)?.host;
+    if (host === undefined) throw new Error("the pool minted no routed runtime");
+    return host;
+  };
+
+  /** A pane element where ghosttea would lay one out, under the deck the frames
+   * read panes from — put there BEFORE the attach, so the pane change that the
+   * attach makes is what finds it (no observer timing). */
+  function paneElement(paneId: string): HTMLElement {
+    const deck = container?.querySelector<HTMLElement>(".vf-deck-framed");
+    if (deck === null || deck === undefined) throw new Error("the deck element is not mounted");
+    const pane = document.createElement("div");
+    pane.className = "ghostty-pane";
+    pane.dataset.paneId = paneId;
+    deck.appendChild(pane);
+    return pane;
+  }
+
+  it("mounts the OWNER's summary, and the host asks its ticket by device — a local pane's ticket stays `{sessionId}`", async () => {
+    floor = [{ sessionId: "user-pty" }];
+    ownerFloors = { [STUDIO]: [bornSummary("pane-r", { handle: "41" })] };
+    ownerMint = (_device, sessionId) => Promise.resolve(ownersTicket(sessionId));
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { door, dispose } = await mountDeckWithDoor(store);
+
+    const outcome = await act(async () =>
+      door.attach({ deviceId: STUDIO, deviceName: "studio", remoteSessionId: "pane-r" }),
+    );
+    expect(outcome).toEqual({ state: "attached", sessionId: "pane-r", readWrite: true });
+    expect(store.showing("pane-1")).toBe("pane-r");
+    expect(calls).toContainEqual(["terminal.sessions", { device: STUDIO }]);
+    expect(paletteOpens).toEqual([]);
+
+    // the runtime's ask, as ghosttea makes it when the pane mounts
+    const ticket = await routedHost().openTicket("pane-r", { reason: "mount" });
+    expect(ticket.endpoints).toEqual(LOOPBACK);
+    expect(calls).toContainEqual(["terminal.openTicket", { device: STUDIO, sessionId: "pane-r" }]);
+
+    // a session on THIS desktop is asked exactly as it always was
+    await routedHost().openTicket("user-pty", { reason: "mount" });
+    expect(calls).toContainEqual(["terminal.openTicket", { sessionId: "user-pty" }]);
+    await dispose();
+  });
+
+  it("an owner that does not list the session is refused in the owner's NAME, and nothing is mounted", async () => {
+    ownerFloors = { [STUDIO]: [] };
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { door, dispose } = await mountDeckWithDoor(store);
+    expect(
+      await act(async () =>
+        door.attach({ deviceId: STUDIO, deviceName: "studio", remoteSessionId: "pane-gone" }),
+      ),
+    ).toEqual({ state: "failed", reason: "studio does not list that session" });
+    expect(store.showing("pane-1")).toBe("user-pty");
+    await dispose();
+  });
+
+  it("no road yet: the pane says so in the desktop's NAME, asks again ONCE on the roster's next flip for it — never on a timer", async () => {
+    ownerFloors = { [STUDIO]: [bornSummary("pane-r", { handle: "41" })] };
+    const mints: string[] = [];
+    ownerMint = (_device, sessionId) => {
+      mints.push(sessionId);
+      return mints.length === 1
+        ? Promise.reject(egress())
+        : Promise.resolve(ownersTicket(sessionId));
+    };
+    rosterList = ROSTER_AWAKE;
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    const { door, dispose } = await mountDeckWithDoor(store);
+    // the monitor's ONE roster subscription, held through the door the deck built
+    const seen: unknown[] = [];
+    const unsubscribe = door.devices?.subscribe((devices) => seen.push(devices));
+    await settle();
+    expect(seen).toHaveLength(1);
+    const pane = paneElement("pane-1");
+
+    await act(async () =>
+      door.attach({ deviceId: STUDIO, deviceName: "studio", remoteSessionId: "pane-r" }),
+    );
+    // every timer from the ask on is the test's: none of them may re-ask
+    vi.useFakeTimers();
+    try {
+      let minted: unknown;
+      const asking = routedHost()
+        .openTicket("pane-r", { reason: "mount" })
+        .then((ticket) => {
+          minted = ticket;
+          return ticket;
+        });
+      await settle();
+
+      // the honest state, IN the pane, by the roster's name for the desktop
+      const face = pane.querySelector(".vf-godview-remote-state");
+      expect(face?.getAttribute("role")).toBe("status");
+      expect(pane.querySelector(".vf-godview-remote-state-message")?.textContent).toBe(
+        "no road to studio yet",
+      );
+      const detail = pane.querySelector(".vf-godview-remote-state-detail");
+      expect(detail?.firstChild?.textContent).toBe(
+        "this desktop has no egress route to that desktop's terminal cells yet",
+      );
+      expect(detail?.querySelector("small")?.textContent).toBe(
+        "asks again when studio's status changes",
+      );
+      expect(pane.textContent).not.toContain(STUDIO);
+
+      // ten minutes pass and nothing is asked — the re-ask is not a timer's
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10 * 60_000);
+      });
+      expect(mints).toEqual(["pane-r"]);
+      expect(minted).toBeUndefined();
+
+      // the same list again is not a flip; the owner's row moving is
+      await act(async () => pushRoster?.(ROSTER_AWAKE));
+      expect(mints).toEqual(["pane-r"]);
+      await act(async () =>
+        pushRoster?.(
+          ROSTER_AWAKE.map((device) =>
+            device.deviceId === STUDIO ? { ...device, link: "connected" } : device,
+          ),
+        ),
+      );
+      await expect(asking).resolves.toMatchObject({ endpoints: LOOPBACK });
+      expect(mints).toEqual(["pane-r", "pane-r"]);
+      await settle();
+      // the road is open: the state leaves the pane
+      expect(pane.querySelector(".vf-godview-remote-state")).toBeNull();
+      // and the monitor's reader got every list the deck read
+      expect(seen).toHaveLength(3);
+    } finally {
+      vi.useRealTimers();
+    }
+
+    unsubscribe?.();
+    await dispose();
   });
 });

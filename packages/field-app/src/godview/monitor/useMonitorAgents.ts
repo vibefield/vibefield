@@ -702,12 +702,11 @@ export function useMonitorAgents({
         return;
       }
       if (!remote.attachable) {
-        // DS-3 — every run off the mesh board says `attachable: false` until
-        // DS-4 lands the terminal path across desktops. The honest sentence is
-        // about THIS desktop's reach, never a claim the other one is refusing.
-        announce(
-          `${agent.project} runs on ${remote.deviceName} — its terminal cannot be opened from here yet`,
-        );
+        // DS-4e — a run off the mesh board is attachable when its owner names
+        // its PTY; one that names none has nothing a pane can show. The
+        // sentence says what the row lacks, never that the other desktop is
+        // refusing.
+        announce(`${agent.project} runs on ${remote.deviceName} — it names no terminal to open`);
         return;
       }
       const outcome = await door.attach({

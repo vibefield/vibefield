@@ -259,7 +259,7 @@ describe("another desktop's runs, as rows", () => {
     expect(remoteDetail(row(STUDIO, "r", { lastAssistantMessage: 7 }), "idle")).toBe("idle");
   });
 
-  it("is an agent row of its owner's, honest about what this desktop cannot do yet (DS-4)", () => {
+  it("is an agent row of its owner's — and a run whose owner names no PTY has nothing to attach (DS-4e)", () => {
     const [record] = meshRecords(field, view);
     if (record === undefined) throw new Error("no record");
     const agent = monitorAgentFromMesh(record, COLOURS);
@@ -297,12 +297,57 @@ describe("another desktop's runs, as rows", () => {
     expect(greyed?.agent?.recency).toBe("stale");
   });
 
-  it("a ring cycles only what a pane here can take: another desktop's runs wait for DS-4", () => {
+  // DS-4e — the terminal path across desktops is built (forwarded tickets onto
+  // an egress route, the routed host asking the owner), so a run whose OWNER
+  // names its PTY (`terminal: {hosted: "local", runtimeSessionId}` — local to
+  // the owner) can be attached, and a window may type into it: the owner mints
+  // every self principal `[geometry, input, read]` (DS-D5), so the HOST allows
+  // writes. A run whose PTY the owner does not name, or names on a third
+  // desktop, has nothing a pane here can take.
+  it("a run whose owner names its PTY is attachable, and its host lets a window type (DS-4e)", () => {
+    const [record] = meshRecords(field, view);
+    if (record === undefined) throw new Error("no record");
+    const named = {
+      ...record,
+      row: row(STUDIO, "run-s1", { terminal: { hosted: "local", runtimeSessionId: "pty-s1" } }),
+    };
+    expect(monitorAgentFromMesh(named, COLOURS)?.remote).toMatchObject({
+      deviceId: STUDIO,
+      deviceName: "studio",
+      remoteSessionId: "pty-s1",
+      attachable: true,
+      hostWritable: true,
+    });
+    for (const terminal of [
+      { hosted: "none" },
+      { hosted: "remote", runtimeSessionId: "pty-elsewhere" },
+      { hosted: "local" },
+    ] as const) {
+      const unnamed = { ...record, row: row(STUDIO, "run-s1", { terminal }) };
+      expect(monitorAgentFromMesh(unnamed, COLOURS)?.remote, terminal.hosted).toMatchObject({
+        attachable: false,
+        hostWritable: false,
+      });
+    }
+  });
+
+  it("a ring cycles only what a pane here can take: an attachable run of another desktop's joins it", () => {
     const [record] = meshRecords(field, view);
     if (record === undefined) throw new Error("no record");
     const remote = monitorAgentFromMesh(record, COLOURS);
     if (remote === undefined) throw new Error("no row");
     expect(nextMonitorAgentForStatus([remote], "working", undefined)).toBeUndefined();
+    const attachable = monitorAgentFromMesh(
+      {
+        ...record,
+        row: row(STUDIO, "run-s1", { terminal: { hosted: "local", runtimeSessionId: "pty-s1" } }),
+      },
+      COLOURS,
+    );
+    if (attachable === undefined) throw new Error("no row");
+    expect(nextMonitorAgentForStatus([remote, attachable], "working", undefined)?.id).toBe(
+      attachable.id,
+    );
   });
 });
 

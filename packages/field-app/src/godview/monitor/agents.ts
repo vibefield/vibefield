@@ -319,6 +319,11 @@ export function monitorAgentFromMesh(
   const createdAtMs = Date.parse(row.createdAt);
   const branch = row.project?.branch ?? undefined;
   const model = row.model?.displayName || row.model?.id;
+  // DS-4e — the PTY the OWNER names for the run, on its own floor: what a pane
+  // here attaches (the deck reads the owner's summary; the routed host asks
+  // its ticket by device). A run whose PTY the owner does not name — none
+  // known, or one on a third desktop — has nothing a pane here can take.
+  const pty = row.terminal?.hosted === "local" ? row.terminal.runtimeSessionId : undefined;
   return {
     id: remoteRowId(device.id, row.runtimeRunId),
     createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : 0,
@@ -339,12 +344,12 @@ export function monitorAgentFromMesh(
       deviceName: device.name,
       // the run's PTY on ITS floor when the owner named one, the run otherwise
       remoteSessionId: row.terminal?.runtimeSessionId ?? row.runtimeRunId,
-      // DS-4 — honest `false` until the terminal path across desktops lands
-      // (forwarded tickets, the egress route, the take): nothing here can open
-      // another desktop's terminal yet, and nothing may say this host lets
-      // anyone type before a window could.
-      attachable: false,
-      hostWritable: false,
+      // DS-4e — the terminal path across desktops is built: a named PTY can be
+      // attached, and its host lets a window type — the owner mints every self
+      // principal `[geometry, input, read]` (DS-D5). Unnamed: neither, and
+      // nothing may say a window could type into what it cannot open.
+      attachable: pty !== undefined,
+      hostWritable: pty !== undefined,
       cwdLabel: folder ?? null,
       ...(record.localSessionId !== undefined ? { localSessionId: record.localSessionId } : {}),
     },
@@ -480,7 +485,8 @@ export function nextMonitorAgentForStatus(
   currentId: string | undefined,
 ): MonitorAgent | undefined {
   // DS-3: a ring acts on the ACTIVE pane, so it cycles the runs a pane here can
-  // take — another desktop's run joins the rings when DS-4 makes it attachable
+  // take — another desktop's run joins the rings once it is attachable (DS-4e:
+  // its owner names its PTY)
   const matching = agents.filter(
     (agent) =>
       agent.agent &&

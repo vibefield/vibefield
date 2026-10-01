@@ -314,6 +314,13 @@ let logged: Array<{ level: "info" | "error"; event: string; message: string }> =
 const fieldd = {
   request: (method: string, params?: unknown): Promise<unknown> => {
     requests.push({ method, params });
+    // DS-4e — another desktop's floor, as its daemon answers through this
+    // window's: the attach mounts the OWNER's own session by its summary
+    if (method === "terminal.sessions" && (params as { device?: unknown })?.device === "mini") {
+      return Promise.resolve({
+        sessions: [bornSummary("s1", { handle: "41", cwd: "/Users/peer/src/truffle" })],
+      });
+    }
     if (method === "terminal.roster") return Promise.resolve({ items: rosterRows });
     if (method === "terminal.terminate")
       return terminateAnswer ?? Promise.resolve({ terminated: true });
@@ -1251,7 +1258,9 @@ describe("the deck's pane frames", () => {
       });
     });
     await settle();
-    const frame = frameFor(host, "replica-mini-s1");
+    // DS-4e — the pane holds the OWNER's session (its own id), where ghosttea's
+    // palette used to hand back a local replica of it
+    const frame = frameFor(host, "s1");
     expect(frame).not.toBeNull();
     expect(frame?.style.getPropertyValue("--pane-color")).toBe(paneColor);
     expect(frame?.querySelector(".vf-pane-badge-name")?.getAttribute("title")).toContain("on mini");
@@ -1348,9 +1357,9 @@ describe("the empty pane launcher (QL-1)", () => {
       await deckDoor?.attach({ deviceId: "mini", deviceName: "mini", remoteSessionId: "s1" });
     });
     await settle();
-    // the replica is framed (so its pane is there) and shows no launcher
-    expect(frameFor(host, "replica-mini-s1")).not.toBeNull();
-    expect(launcherFor(host, "replica-mini-s1")).toBeNull();
+    // the owner's session is framed (so its pane is there) and shows no launcher
+    expect(frameFor(host, "s1")).not.toBeNull();
+    expect(launcherFor(host, "s1")).toBeNull();
     expect(launcherOwnsKeys()).toBe(false);
   });
 

@@ -892,6 +892,76 @@
   background: color-mix(in srgb, var(--ghostty-pane-color) 12%, transparent);
 }
 
+/* DS-4e — THE REMOTE PANE'S HONEST STATE (`RemotePaneState.tsx`): a pane given
+   another desktop's session whose ticket did not come says why, in the pane,
+   the way the launch's caption does (DESIGN.md §8, QL-2) — centred over the
+   terminal's ground, in the terminal's ink and nothing else. Not a `.vf-pane-*`
+   rule: the frame is the views package's, and this is the deck's own state,
+   portaled beside it. Never takes a click. */
+.vf-godview-remote-state {
+  position: absolute;
+  z-index: 5;
+  inset: 0;
+  display: grid;
+  align-content: center;
+  justify-items: center;
+  gap: 5px;
+  padding: 24px;
+  text-align: center;
+  pointer-events: none;
+  /* §6: the words' entrance — opacity and a 6px rise, 240ms plain ease — as an
+     entry transition; Godview runs no keyframe (GT-D15.1's audit) */
+  transition:
+    opacity 240ms ease,
+    transform 240ms ease;
+}
+
+@starting-style {
+  .vf-godview-remote-state {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+.vf-godview-remote-state-message {
+  margin: 0;
+  color: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 72%, transparent);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.vf-godview-remote-state-detail {
+  max-width: 52ch;
+  margin: 0;
+  color: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 42%, transparent);
+  font-size: 9.5px;
+}
+
+.vf-godview-remote-state-detail small {
+  display: block;
+  margin-top: 5px;
+  color: color-mix(in srgb, var(--vf-godview-terminal-ink, currentcolor) 32%, transparent);
+  font-size: 9.5px;
+}
+
+.vf-godview[data-godview-animations="off"] .vf-godview-remote-state {
+  transition: none;
+}
+
+/* M6: no rise — the fade alone, at half the duration */
+@media (prefers-reduced-motion: reduce) {
+  .vf-godview-remote-state {
+    transition: opacity 120ms ease;
+  }
+
+  @starting-style {
+    .vf-godview-remote-state {
+      opacity: 0;
+      transform: none;
+    }
+  }
+}
+
 .vf-godview-unavailable,
 .vf-godview-deck-fault {
   position: absolute;

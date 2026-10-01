@@ -62,6 +62,61 @@ export function rosterView(devices: readonly DeviceInfo[]): RosterView {
   return here === undefined ? { byId } : { byId, here };
 }
 
+/**
+ * DS-4e — a roster row's STANDING: what the desktop is (DS-L8's state, or the
+ * tailnet's `online` from an older peer), whether this daemon's link to it is
+ * up, and which boot of its daemon is answering. A FLIP is a change of any of
+ * them — the one signal a pane waiting on that desktop's terminal asks again
+ * on (a peer that comes online can be routed to; a reconnected link or a
+ * restarted daemon may serve what it refused). Names, versions and the rest of
+ * the row are not standing.
+ */
+export function rosterStanding(device: DeviceInfo): string {
+  return [
+    device.state ?? (device.online ? "awake" : "asleep"),
+    device.online ? "online" : "offline",
+    device.link ?? "",
+    device.bootId ?? "",
+  ].join("|");
+}
+
+/**
+ * DS-4e — which desktops' rows flipped between one roster list and the next.
+ * A desktop seen for the first time sets its baseline and is no flip (nothing
+ * was waiting on a standing nobody had read); a desktop that leaves the list
+ * keeps its last standing, so its return is compared, not re-baselined. The
+ * same list twice flips nothing — two readers of one subscription cost nothing.
+ */
+export class RosterFlips {
+  private readonly standing = new Map<string, string>();
+
+  observe(devices: readonly DeviceInfo[]): string[] {
+    const flipped: string[] = [];
+    for (const device of devices) {
+      const now = rosterStanding(device);
+      const before = this.standing.get(device.deviceId);
+      this.standing.set(device.deviceId, now);
+      if (before !== undefined && before !== now) flipped.push(device.deviceId);
+    }
+    return flipped;
+  }
+}
+
+/** DS-4e — the roster port as the monitor holds it, with a second reader of
+ * the SAME lists (the deck's: flips and names) — no second subscription. */
+export function teeDevicesPort(
+  port: DevicesPort,
+  observe: (devices: readonly DeviceInfo[]) => void,
+): DevicesPort {
+  return {
+    subscribe: (listener) =>
+      port.subscribe((devices) => {
+        observe(devices);
+        listener(devices);
+      }),
+  };
+}
+
 /** The roster while the stage holds a door that can read it. */
 export function useDeviceRoster(port: DevicesPort | undefined): RosterView {
   const [roster, setRoster] = useState<RosterView>(EMPTY_ROSTER);

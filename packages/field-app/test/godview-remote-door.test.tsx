@@ -359,15 +359,33 @@ describe("another desktop's agents as monitor citizens (DS-3)", () => {
 });
 
 describe("select routes by source", () => {
-  it("another desktop's run says what this desktop cannot do yet, and asks the door nothing", async () => {
+  it("another desktop's run that names no PTY says so, and asks the door nothing", async () => {
     const door = fakeDoor();
     const view = await mountMonitor(door);
     await act(async () => remoteRows(view)[0]?.click());
     expect(door.attach).not.toHaveBeenCalled();
     expect(door.mountLocal).not.toHaveBeenCalled();
-    expect(ackText(view)).toBe(
-      "rosetta runs on studio — its terminal cannot be opened from here yet",
+    expect(ackText(view)).toBe("rosetta runs on studio — it names no terminal to open");
+  });
+
+  // DS-4e — the terminal path across desktops is built: a run whose OWNER
+  // names its PTY is attached through the door (the deck reads the owner's
+  // summary and its routed host asks the ticket by device), with the desktop
+  // by its id for the routing and by its NAME for the words.
+  it("another desktop's run whose owner names its PTY asks the door to ATTACH it — never to mount it here", async () => {
+    const door = fakeDoor(
+      board([deskRow("run-s1", { terminal: { hosted: "local", runtimeSessionId: "pty-s1" } })]),
     );
+    door.attach.mockResolvedValueOnce({ state: "attached", sessionId: "pty-s1", readWrite: true });
+    const view = await mountMonitor(door);
+    await act(async () => remoteRows(view)[0]?.click());
+    expect(door.mountLocal).not.toHaveBeenCalled();
+    expect(door.attach).toHaveBeenCalledExactlyOnceWith({
+      deviceId: STUDIO,
+      deviceName: "studio",
+      remoteSessionId: "pty-s1",
+    });
+    expect(ackText(view)).toBe("rosetta attached from studio");
   });
 
   it("a LOCAL row asks the door to MOUNT its PTY — never to attach (the split-routing test)", async () => {

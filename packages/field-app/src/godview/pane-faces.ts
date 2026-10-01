@@ -1,4 +1,5 @@
 import type { GhostteaWorkspaceProps } from "@vibecook/ghosttea-react/workspace";
+import type { RemoteRefusal, RemoteRefusalState } from "../terminal/pool";
 
 /** Ghosttea's `SessionSummary`, taken from the prop that receives it rather
  * than imported: it lives in `@vibecook/ghosttea-protocol`, a transitive
@@ -41,4 +42,56 @@ export function describePane(session: DeckSession): PaneFace | undefined {
   }
   if (session.exitCode === 0) return { label: "exited" };
   return { label: `exited · ${session.exitCode}`, color: "var(--vf-red)" };
+}
+
+/**
+ * DS-4e — THE FACE OF A PANE WHOSE TERMINAL LIVES ON ANOTHER DESKTOP AND HAS
+ * NOT COME (`RemotePaneState`). The pane was given the owner's session; its
+ * ticket was refused (`RemoteRefusal`, the routed host's reading of what fieldd
+ * said), so no frame will arrive and the pane would otherwise be blank ground —
+ * DESIGN.md §8: a state is rendered, never blank space.
+ *
+ * The words (§9 — what happened, and what happens next, never more than we
+ * know): the desktop by its NAME, never its id — a desktop the roster has not
+ * named is "that desktop"; the refusing plane's own sentence as the detail
+ * line (§8's provenance, doc sync's "verbatim reason"); and, for a refusal
+ * that waits, the one thing that will happen — the pane asks again when that
+ * desktop's roster row next changes, and only then.
+ */
+export interface RemotePaneFace {
+  state: RemoteRefusalState;
+  /** the state, in the deck's words */
+  message: string;
+  /** the refusing plane's own words, carried whole */
+  detail: string;
+  /** what happens next, when something will */
+  next?: string;
+}
+
+/** What a pane says for a refused ticket to `deviceName`'s session
+ * (undefined: the roster has not named that desktop). */
+export function describeRemoteRefusal(
+  refusal: RemoteRefusal,
+  deviceName: string | undefined,
+): RemotePaneFace {
+  const name = deviceName === undefined || deviceName === "" ? "that desktop" : deviceName;
+  // the next step is said only when there IS one: a refusal that waits
+  const face = (message: string, next?: string): RemotePaneFace => ({
+    state: refusal.state,
+    message,
+    detail: refusal.reason,
+    ...(next !== undefined && refusal.waits ? { next } : {}),
+  });
+  switch (refusal.state) {
+    case "no-road":
+      return face(`no road to ${name} yet`, `asks again when ${name}'s status changes`);
+    case "asleep":
+      return face(`${name} is asleep`, `asks again when ${name} wakes`);
+    case "not-answering":
+      return face(`${name} is not answering`, `asks again when ${name}'s status changes`);
+    case "gone":
+      return face(`gone from ${name}`);
+    case "refused":
+      return face(`cannot open on ${name}`);
+  }
 }
