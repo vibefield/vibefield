@@ -114,12 +114,22 @@ export function covers(ours: VersionVector, theirs: VersionVector): boolean {
  * doc is only ever imported into and exported from. */
 export class HostedDoc {
   readonly doc: LoroDoc;
+  /** DS-5c — ops this doc holds PENDING (their causal base has not arrived):
+   * per peer, the counter its pending span ends at (exclusive, the version
+   * vector's own unit). The one thing a host holds that disk never does —
+   * nothing pending is persisted — so a doc holding any is never evicted. */
+  readonly #pending = new Map<`${number}`, number>();
 
   constructor(
     readonly docId: string,
     doc?: LoroDoc,
   ) {
     this.doc = doc ?? new LoroDoc();
+  }
+
+  /** DS-5c — does this doc hold ops whose base has not arrived? */
+  hasPending(): boolean {
+    return this.#pending.size > 0;
   }
 
   version(): VersionVector {
@@ -139,6 +149,17 @@ export class HostedDoc {
   import(bytes: Uint8Array): HostImport {
     const before = this.doc.oplogVersion();
     const status = this.doc.import(bytes);
+    for (const [peer, span] of status.pending ?? []) {
+      this.#pending.set(peer, Math.max(this.#pending.get(peer) ?? 0, span.end));
+    }
+    // Every import may resolve what an earlier one left pending (the base it
+    // waited for); the version says which spans are whole now.
+    if (this.#pending.size > 0) {
+      const version = this.doc.oplogVersion();
+      for (const [peer, end] of this.#pending) {
+        if ((version.get(peer) ?? 0) >= end) this.#pending.delete(peer);
+      }
+    }
     return {
       changed: this.doc.oplogVersion().compare(before) !== 0,
       pending: status.pending !== null,

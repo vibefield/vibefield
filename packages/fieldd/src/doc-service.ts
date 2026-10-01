@@ -3,6 +3,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync } from "node:fs";
 import { mkdir, open, readFile, rm, stat } from "node:fs/promises";
 import { join } from "node:path";
 import {
+  DOC_HOST,
   DOC_SYNC_RECORD,
   type DocElsewhere,
   type DocHolding,
@@ -66,6 +67,16 @@ import { RpcCallError } from "./native-link";
 // excepted: a record that cannot apply is never persisted, because a renderer
 // replaying it would quarantine). A checkpoint the rule cannot lift keeps the
 // opaque custody above, untouched.
+//
+// DS-5c (2026-10-01) — RESIDENCY. Because checkpoint + journal ARE the host's
+// state (every host mutation is followed by its durable write, and a failed
+// write drops the host to be rebuilt from disk), a hosted canvas can leave
+// memory with nothing to write: one with no open window, nothing on its
+// per-doc chain, no import pending its base (the one thing a host holds that
+// disk does not) and no host access — a VERSION, a record, a window's read or
+// save — for DOC_HOST.IDLE_MS is evicted by a sweep every DOC_HOST.SWEEP_MS,
+// and `hostedNow` reloads it on the next access. System documents are not
+// hosted here (their owners hold them) and are never evicted.
 
 /** A revision that actually landed. `origin` is load-bearing rather than
  * informational: cross-device sync broadcasts what it hears about, and a record
@@ -170,6 +181,10 @@ export interface DocumentServiceOptions {
   onCommit?: (commit: DocCommit) => void;
   /** DS-5 — the Loro-level host (a fresh one when absent). */
   host?: LoroHost;
+  /** DS-5c — residency: a hosted canvas idle `idleMs` (DOC_HOST.IDLE_MS) is
+   * evicted by a sweep every `sweepMs` (DOC_HOST.SWEEP_MS). `false`: never,
+   * and no timer. */
+  residency?: { idleMs?: number; sweepMs?: number } | false;
 }
 
 /** doc.open's return: the caller pairs the ticket with laneUrl before dialing. */
@@ -275,6 +290,13 @@ export class DocumentService {
   /** DS-5 — told after a PEER's bytes changed a canvas (the push trigger). */
   private readonly peerMergeListeners = new Set<(docId: string) => void>();
   private homesOf: (docId: string) => string[] = () => [];
+  /** DS-5c — when each hosted canvas was last asked for (this.now()). */
+  private readonly touched = new Map<string, number>();
+  /** DS-5c — the head version an evicted canvas held, for the holders slice:
+   * disk has not moved since (any change reloads it first). */
+  private readonly evictedHeads = new Map<string, string>();
+  private readonly idleMs: number;
+  private sweepTimer: ReturnType<typeof setInterval> | null = null;
 
   constructor(opts: DocumentServiceOptions) {
     this.dataDir = opts.dataDir;
@@ -301,6 +323,54 @@ export class DocumentService {
     }
     this.loadRegistry();
     this.reconcileRegistry();
+    const residency = opts.residency ?? {};
+    this.idleMs =
+      residency === false ? Number.POSITIVE_INFINITY : (residency.idleMs ?? DOC_HOST.IDLE_MS);
+    if (residency !== false) {
+      this.sweepTimer = setInterval(() => {
+        try {
+          this.evictIdle();
+        } catch (error) {
+          this.logger.warn("fieldd.docs.evict_failed", "The residency sweep did not run", {
+            error: String(error),
+          });
+        }
+      }, residency.sweepMs ?? DOC_HOST.SWEEP_MS);
+      this.sweepTimer.unref?.();
+    }
+  }
+
+  /** DS-5c — evict every hosted canvas idle past `idleMs`: no open window
+   * (the writer lock), nothing on its per-doc chain (a merge, a window's read,
+   * a push's export in flight), no import pending its base, and no host access
+   * since. Nothing is written — the bytes on disk ARE the host — and
+   * `hostedNow` reloads it on the next access. Returns what left. */
+  evictIdle(): string[] {
+    const now = this.now();
+    const evicted: string[] = [];
+    for (const docId of this.host.ids()) {
+      const hosted = this.host.get(docId);
+      if (hosted === undefined) continue;
+      if (this.writers.has(docId) || this.writes.has(docId) || hosted.hasPending()) continue;
+      if (now - (this.touched.get(docId) ?? now) < this.idleMs) continue;
+      this.evictedHeads.set(docId, versionToBase64(hosted.version()));
+      this.host.delete(docId);
+      this.touched.delete(docId);
+      evicted.push(docId);
+    }
+    if (evicted.length > 0) {
+      this.logger.debug("fieldd.docs.host_evicted", "Idle documents left memory", {
+        docs: evicted.length,
+        resident: this.host.ids().length,
+      });
+    }
+    return evicted;
+  }
+
+  /** DS-5c — a hosted canvas was asked for: its idle clock restarts. */
+  private touch(docId: string): void {
+    this.touched.set(docId, this.now());
+    this.evictedHeads.delete(docId);
   }
 
   // ---- catalog ----
@@ -614,10 +684,15 @@ export class DocumentService {
     for (const entry of this.list()) {
       if (!this.hasStoredDoc(entry.docId)) continue;
       const hosted = this.host.get(entry.docId);
+      // DS-5c — an evicted canvas still says what it holds: disk has not moved.
+      const head =
+        hosted !== undefined
+          ? versionToBase64(hosted.version())
+          : this.evictedHeads.get(entry.docId);
       out.push({
         docId: entry.docId,
         baseEpoch: entry.baseEpoch,
-        ...(hosted !== undefined ? { headVersion: versionToBase64(hosted.version()) } : {}),
+        ...(head !== undefined ? { headVersion: head } : {}),
         fresh: isFresh(entry.docId),
         heldSince: entry.createdAt ?? entry.updatedAt,
       });
@@ -924,6 +999,7 @@ export class DocumentService {
     }
     this.opaque.delete(docId);
     this.host.set(hosted);
+    this.touch(docId);
     return {
       residual: hosted.isAheadOf(version) ? hosted.exportSince(version) : null,
       delta: imported.changed ? hosted.exportSince(imported.before) : undefined,
@@ -936,7 +1012,10 @@ export class DocumentService {
    * one the frame rule cannot lift (opaque custody). Runs on the per-doc chain. */
   private async hostedNow(docId: string): Promise<HostedDoc | null> {
     const cached = this.host.get(docId);
-    if (cached !== undefined) return cached;
+    if (cached !== undefined) {
+      this.touch(docId);
+      return cached;
+    }
     if (this.opaque.has(docId)) return null;
     const revisions = this.revisionsDir(docId);
     let current: CurrentRevision | null;
@@ -970,6 +1049,7 @@ export class DocumentService {
       this.opaque.add(docId);
       return null;
     }
+    this.touch(docId);
     return this.host.set(hosted);
   }
 
@@ -1603,6 +1683,8 @@ export class DocumentService {
     // writes are per-call and already durable; only in-memory admission state to drop
     this.tickets.clear();
     this.writers.clear();
+    if (this.sweepTimer !== null) clearInterval(this.sweepTimer);
+    this.sweepTimer = null;
   }
 
   // ---- internals ----

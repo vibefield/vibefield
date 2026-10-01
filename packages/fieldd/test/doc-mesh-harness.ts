@@ -8,7 +8,7 @@
 // that preserves record boundaries. It does NOT prove the wire — that is
 // field-native's quic_lane_transport.rs, at its own seam.
 import { decodeDocSyncFrame, MESHDATA_INBOUND_LANE_ID_BASE } from "@vibefield/contracts";
-import { DocumentService } from "../src/doc-service";
+import { DocumentService, type DocumentServiceOptions } from "../src/doc-service";
 import {
   type DocSyncOptions,
   DocSyncService,
@@ -30,11 +30,17 @@ export class Device {
     dataDir: string,
     /** DS-5 — extra DocSyncService options (the chunking knobs). */
     syncOptions: Partial<DocSyncOptions> = {},
+    /** DS-5c — extra DocumentService options (a host to watch, a clock). */
+    docsOptions: Partial<DocumentServiceOptions> = {},
   ) {
     this.bytes = new RoutedBytes(name, mesh);
     this.control = new RoutedControl(name, mesh);
     let sync: DocSyncService | undefined;
-    this.docs = new DocumentService({ dataDir, onCommit: (c) => sync?.onCommit(c) });
+    this.docs = new DocumentService({
+      ...docsOptions,
+      dataDir,
+      onCommit: (c) => sync?.onCommit(c),
+    });
     let nextLaneId = 1;
     sync = new DocSyncService({
       docs: this.docs,

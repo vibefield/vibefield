@@ -271,11 +271,17 @@ export const FORWARDING = {
  * it (the answer was lost), or that a send could not reach while the roster
  * calls it online — each retry of one (doc, peer) pair waiting twice as long
  * as the last, up to REGREET_MAX_MS. A lost answer used to wait for a liveness
- * flip that might never come. */
+ * flip that might never come. RESIDENCY: a hosted canvas with no open window,
+ * nothing on its per-doc chain, no import pending its base and no lane or
+ * window touching it for IDLE_MS is evicted from memory (its bytes on disk
+ * ARE the host's state), swept every SWEEP_MS; the next VERSION, record or
+ * open reloads it. The design's DOC_HOST_IDLE_MS is IDLE_MS. */
 export const DOC_HOST = {
   BEAT_MS: 15_000,
   ANSWER_TIMEOUT_MS: 30_000,
   REGREET_MAX_MS: 10 * 60 * 1000,
+  IDLE_MS: 10 * 60 * 1000,
+  SWEEP_MS: 60_000,
 } as const;
 
 /** TC-S2 — the floor's supervision budget for a `field-terminal-host` cell

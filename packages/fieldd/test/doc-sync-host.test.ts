@@ -14,8 +14,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { DOC_SYNC_RECORD } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { DocumentService } from "../src/doc-service";
+import type { DocumentService, DocumentServiceOptions } from "../src/doc-service";
 import { type DocSyncOptions, docHostPeers } from "../src/doc-sync";
+import { LoroHost } from "../src/loro-host";
 import { Device, Mesh } from "./doc-mesh-harness";
 import { Renderer, replay } from "./loro-renderer";
 
@@ -39,7 +40,12 @@ async function until(predicate: () => boolean | Promise<boolean>, label: string)
  * seed it — doc-library tests prove that half) and only A holds content. */
 async function pair(
   syncOptions: Partial<DocSyncOptions> = {},
-  opts: { docs?: number; join?: "now" | "later" } = {},
+  opts: {
+    docs?: number;
+    join?: "now" | "later";
+    /** DS-5c — per-device DocumentService options. */
+    docsOptions?: (name: string) => Partial<DocumentServiceOptions>;
+  } = {},
 ): Promise<{ a: Device; b: Device; docId: string; docIds: string[]; mesh: Mesh }> {
   const mesh = new Mesh();
   const docIds = Array.from({ length: opts.docs ?? 1 }, () => randomUUID());
@@ -62,7 +68,7 @@ async function pair(
         })),
       ),
     );
-    devices.push(new Device(name, mesh, dataDir, syncOptions));
+    devices.push(new Device(name, mesh, dataDir, syncOptions, opts.docsOptions?.(name) ?? {}));
   }
   const [a, b] = devices as [Device, Device];
   mesh.devices.set("A", a);
@@ -250,6 +256,38 @@ describe("DS-5c — a lost answer is asked for again; a record past the send wat
     expect(fromA.filter((r) => r.kind === DOC_SYNC_RECORD.CHUNK).length).toBeGreaterThan(3);
     for (const r of fromA) expect(r.bytes).toBeLessThanOrEqual(4 * 1024 * 1024);
   }, 30_000);
+});
+
+describe("DS-5c — residency across desktops", () => {
+  it("idle → evicted → a late peer's VERSION reloads the canvas from disk and is answered", async () => {
+    const clock = { now: 1_800_000_000_000 };
+    const hostA = new LoroHost();
+    const { a, b, docId, mesh } = await pair(
+      {},
+      {
+        join: "later",
+        docsOptions: (name) =>
+          name === "A"
+            ? { host: hostA, now: () => clock.now, residency: { idleMs: 1_000, sweepMs: 10 } }
+            : {},
+      },
+    );
+    const wa = new Renderer(1n);
+    wa.edit("base", "A");
+    await put(a.docs, docId, "checkpoint", wa.checkpoint());
+    await put(a.docs, docId, "update", wa.edit("more", "A"));
+    expect(hostA.ids()).toContain(docId);
+    clock.now += 2_000;
+    await until(() => !hostA.ids().includes(docId), "A to evict the idle canvas");
+
+    await enter(mesh, b); // a desktop wakes and greets: A must answer from disk
+    await until(
+      async () => sameBoard(await boardOf(b, docId), wa.board()),
+      "B to converge on what A evicted",
+    );
+    expect(hostA.ids()).toContain(docId); // reloaded to answer
+    a.docs.dispose();
+  });
 });
 
 describe("DS-5 — the doc peer set is desktops only (DS-D7, UA-P-D5)", () => {

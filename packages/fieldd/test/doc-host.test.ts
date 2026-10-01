@@ -14,7 +14,7 @@ import { DOC_SYNC_RECORD, type DocSyncMeta } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { type DocCommit, DocumentService } from "../src/doc-service";
 import { liftIce1 } from "../src/ice1-envelope";
-import { EMPTY_VERSION, updateCarriesChanges } from "../src/loro-host";
+import { EMPTY_VERSION, LoroHost, updateCarriesChanges } from "../src/loro-host";
 import { Renderer, replay } from "./loro-renderer";
 
 let dirs: string[] = [];
@@ -48,6 +48,23 @@ async function put(
     byteLength: bytes.byteLength,
   });
 }
+
+/** DS-5c — a service whose host can be watched, on a clock the test moves. */
+function resident(clock: { now: number }): { docs: DocumentService; host: LoroHost } {
+  const dataDir = mkdtempSync(join(tmpdir(), "vf-host-evict-"));
+  dirs.push(dataDir);
+  const host = new LoroHost();
+  const docs = new DocumentService({
+    dataDir,
+    host,
+    now: () => clock.now,
+    residency: { idleMs: 1_000, sweepMs: 10 },
+  });
+  return { docs, host };
+}
+
+/** Long enough for several residency sweeps on a loaded machine. */
+const sweeps = (): Promise<void> => new Promise((r) => setTimeout(r, 150));
 
 const revisionFiles = (docs: DocumentService, docId: string): string[] =>
   readdirSync(join((docs as unknown as { docsDir: string }).docsDir, docId, "revisions")).filter(
@@ -251,5 +268,86 @@ describe("DS-5 — a doc in Loro custody", () => {
       baseEpoch: 0,
     });
     expect(updateCarriesChanges(partial?.update as Uint8Array)).toBe(true);
+  });
+});
+
+describe("DS-5c — an idle document leaves memory and comes back on demand", () => {
+  it("idle → evicted → a late VERSION reloads it from disk and answers exactly", async () => {
+    // The review: `loro-host.ts:170` never evicted — every greeted canvas's
+    // full history stayed resident for the daemon's life.
+    const clock = { now: 1_800_000_000_000 };
+    const { docs, host } = resident(clock);
+    const { docId } = await docs.create("board");
+    const w = new Renderer(1n);
+    w.edit("a", "1");
+    await put(docs, docId, "checkpoint", w.checkpoint());
+    await put(docs, docId, "update", w.edit("b", "2"));
+    expect(host.ids()).toContain(docId);
+    const heldVersion = (await docs.holdings(() => true))[0]?.headVersion;
+
+    clock.now += 2_000; // no window, nothing on its chain, no lane touching it
+    await sweeps();
+    expect(host.ids()).not.toContain(docId);
+    // The holders slice still says what this desktop holds.
+    expect((await docs.holdings(() => true))[0]?.headVersion).toBe(heldVersion);
+
+    // A peer that holds nothing greets: answered from disk, exactly.
+    const answer = await docs.hostAnswer(docId, {
+      version: EMPTY_VERSION().encode(),
+      hasCheckpoint: false,
+      baseEpoch: 0,
+    });
+    const lifted = liftIce1(answer?.snapshot ?? new Uint8Array());
+    if (!lifted.ok) throw new Error("the answer carried no checkpoint");
+    const fresh = new Renderer(5n);
+    fresh.apply(lifted.payload);
+    if (answer?.update) fresh.apply(answer.update);
+    expect(fresh.board()).toEqual({ a: "1", b: "2" });
+    expect(host.ids()).toContain(docId); // reloaded, resident again
+    docs.dispose();
+  });
+
+  it("an open window keeps it resident, and so does an import still pending its base", async () => {
+    const clock = { now: 1_800_000_000_000 };
+    const { docs, host } = resident(clock);
+    const { docId } = await docs.create("board");
+    const w = new Renderer(1n);
+    w.edit("a", "1");
+    await put(docs, docId, "checkpoint", w.checkpoint());
+
+    docs.writerAttached(docId); // a window holds the lane
+    clock.now += 2_000;
+    await sweeps();
+    expect(host.ids()).toContain(docId);
+    docs.writerDetached(docId);
+
+    // A peer's second edit arrives before its first: the host holds it PENDING —
+    // ops disk does not hold, which eviction would lose.
+    const peer = new Renderer(9n);
+    peer.apply(w.doc.export({ mode: "snapshot" }));
+    const first = peer.edit("p1", "x");
+    const second = peer.edit("p2", "y");
+    expect(
+      await docs.applyRemoteRecord(docId, {
+        kind: DOC_SYNC_RECORD.UPDATE,
+        meta: META,
+        payload: second,
+      }),
+    ).toMatchObject({ applied: false, reason: "pending" });
+    clock.now += 2_000;
+    await sweeps();
+    expect(host.ids()).toContain(docId);
+
+    // The base lands: both apply, both reach disk, and the doc may go.
+    await docs.applyRemoteRecord(docId, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: META,
+      payload: first,
+    });
+    clock.now += 2_000;
+    await sweeps();
+    expect(host.ids()).not.toContain(docId);
+    expect((await replay(docs, docId)).board()).toEqual({ a: "1", p1: "x", p2: "y" });
+    docs.dispose();
   });
 });

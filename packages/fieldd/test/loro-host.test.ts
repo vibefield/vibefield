@@ -144,3 +144,25 @@ describe("loro-host — versions, imports, exports", () => {
     expect(decodeVersion(new Uint8Array([0xff, 0xff, 0xff]))).toBeNull();
   });
 });
+
+describe("DS-5c — a hosted doc knows what it holds pending (eviction's guard)", () => {
+  it("holds a span pending until the base that resolves it lands", () => {
+    const writer = new LoroDoc();
+    writer.setPeerId(7n);
+    writer.getMap("m").set("x", 1);
+    writer.commit();
+    const v1 = writer.oplogVersion();
+    const first = writer.export({ mode: "update" });
+    writer.getMap("m").set("y", 2);
+    writer.commit();
+    const second = writer.export({ mode: "update", from: v1 });
+
+    const hosted = new HostedDoc("doc");
+    expect(hosted.hasPending()).toBe(false);
+    expect(hosted.import(second).pending).toBe(true);
+    expect(hosted.hasPending()).toBe(true);
+    hosted.import(first);
+    expect(hosted.hasPending()).toBe(false);
+    expect(hosted.doc.getMap("m").toJSON()).toEqual({ x: 1, y: 2 });
+  });
+});
