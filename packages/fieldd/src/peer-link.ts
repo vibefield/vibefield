@@ -1,6 +1,8 @@
 import { EventEmitter } from "node:events";
 import { FORWARDING } from "@vibefield/contracts";
 import { FielddClient, FielddRpcError, type WsCtor } from "@vibefield/fieldd-client";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { type EgressPath, egressWebSocket } from "./egress";
 import { type OutboundEnvelope, withEnvelope } from "./forward-envelope";
 import { CallerForwardJournal, forwardDigest } from "./forward-receipts";
 import { RpcCallError } from "./native-link";
@@ -61,7 +63,18 @@ export interface PeerLinkOptions {
   ownDeviceId: () => string;
   /** the peer's capability URL from its slice, or undefined = unpublished/offline */
   endpointFor: (deviceId: string) => string | undefined;
+  /** C5 test seam: a ws-ctor that plays the sidecar. When set it IS the dial,
+   * and `egress` is not consulted. */
   webSocket?: WsCtor;
+  /** DS-1 — how a dial reaches the tailnet, asked ONCE PER DIAL
+   * (`resolveEgressPath` over the floor's `native.mesh.egress.proxy`): the
+   * node's own SOCKS5 when the floor has egress, which makes the peer's
+   * sidecar see THIS desktop's node; else the OS network, today's dial,
+   * said once per link (`fieldd.mesh.egress.fallback_os_network`). A dial
+   * through the node that fails is never retried over the OS network.
+   * Absent = today's dial, unannounced. */
+  egress?: () => Promise<EgressPath>;
+  logger?: Logger;
   idleCloseMs?: number;
   callTimeoutMs?: number;
   /** DS-2 — the deadline of a KEYED forwarded mutation, after which a sent
@@ -128,9 +141,11 @@ export class PeerLink extends EventEmitter {
    * forward that failed at the transport), with when; cleared the moment the
    * door answers anything. The roster reads it through `doorState`. */
   private readonly silentSince = new Map<string, number>();
+  private readonly logger: Logger;
 
   constructor(private readonly opts: PeerLinkOptions) {
     super();
+    this.logger = opts.logger ?? createNoopLogger();
     this.now = opts.now ?? Date.now;
     this.idleCloseMs = opts.idleCloseMs ?? 300_000;
     this.callTimeoutMs = opts.callTimeoutMs ?? 8_000;
@@ -399,12 +414,13 @@ export class PeerLink extends EventEmitter {
         device: deviceId,
         state: "offline",
       });
+    const webSocket = this.opts.webSocket ?? this.egressDial(deviceId);
     const client = new FielddClient({
       url: toWsUrl(endpoint),
       token: "", // the tailnet door grants from WhoIs — a token would be wrong here
       clientKind: "peer-fieldd",
       deviceId: this.opts.ownDeviceId(),
-      ...(this.opts.webSocket !== undefined ? { webSocket: this.opts.webSocket } : {}),
+      ...(webSocket !== undefined ? { webSocket } : {}),
       maxBackoffMs: 5_000,
     });
     const link: Link = { client, state: "dialing", lastUsed: this.now(), subs: new Set() };
@@ -422,6 +438,49 @@ export class PeerLink extends EventEmitter {
     this.links.set(deviceId, link);
     this.emit("link-changed", { deviceId, state: "dialing" });
     return link;
+  }
+
+  /** DS-1 — this link's dial: the substrate is chosen per dial (see
+   * `PeerLinkOptions.egress`), and the record hears it once per link — again
+   * only if a later dial of the same link takes the other path. */
+  private egressDial(deviceId: string): WsCtor | undefined {
+    const egress = this.opts.egress;
+    if (egress === undefined) return undefined;
+    let said: EgressPath["kind"] | undefined;
+    let complained = false;
+    return egressWebSocket({
+      path: egress,
+      onPath: (path) => {
+        if (said === path.kind) return;
+        said = path.kind;
+        if (path.kind === "direct") {
+          this.logger.info(
+            "fieldd.mesh.egress.fallback_os_network",
+            "This peer link dials over the OS network; the node has no egress for it",
+            {
+              peer: deviceId,
+              state: path.state,
+              ...(path.detail !== undefined ? { detail: path.detail } : {}),
+            },
+          );
+        } else {
+          this.logger.info(
+            "fieldd.mesh.egress.dial_through_node",
+            "This peer link dials through the node's own proxy",
+            { peer: deviceId },
+          );
+        }
+      },
+      onDialError: (error) => {
+        if (complained) return;
+        complained = true;
+        this.logger.warn(
+          "fieldd.mesh.egress.dial_refused",
+          "A dial through the node's proxy failed; it is not retried over the OS network",
+          { peer: deviceId, reason: error instanceof Error ? error.message : String(error) },
+        );
+      },
+    });
   }
 
   private withDeadline<T>(p: Promise<T>, deviceId: string, ms = this.callTimeoutMs): Promise<T> {

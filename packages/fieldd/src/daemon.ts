@@ -156,6 +156,7 @@ import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { DocSyncService, type LaneInfo } from "./doc-sync";
+import { EgressRoutes, resolveEgressPath } from "./egress";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { InstallSetReconciler } from "./install-reconciler";
@@ -405,6 +406,10 @@ export interface FielddDaemon {
   docs: DocumentService;
   devices: DeviceService;
   peers: PeerLink;
+  /** DS-1 — the egress ROUTES port (E2): a loopback address that reaches a
+   * door on a peer through this desktop's node, ref-counted per {peer, port}.
+   * Built for the terminal rewriter (DS-4); `egress.ts` states its rules. */
+  egressRoutes: EgressRoutes;
   /** C6-5/D35 — the federated subscription proxy (tests drive it directly;
    * the product path is a `device?` on any subscribe method). */
   federatedSubs: FederatedSubscriptionManager;
@@ -3905,6 +3910,25 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // a peer the tailnet says shares this account.
       endpointFor: (deviceId) => devices.get(deviceId)?.productEndpoint?.url,
       ...(config.peerWebSocket !== undefined ? { webSocket: config.peerWebSocket } : {}),
+      // DS-1 — every dial asks the floor how to reach the tailnet: the node's
+      // own SOCKS5 when it has egress, else the OS network, said once per link
+      egress: () => resolveEgressPath(mesh),
+      logger: logger.child({ component: "peer.link" }),
+    });
+    // DS-1 — the egress ROUTES port (E2), for the terminal rewriter (DS-4).
+    // Idle until something ensures a route; its roster listener goes with
+    // `devices.dispose()`, and a route it placed outlives fieldd the way a
+    // serve does — the next fieldd's identical route id re-answers it.
+    const egressRoutes = new EgressRoutes({
+      facade: mesh,
+      roster: {
+        hostFor: (deviceId) => devices.get(deviceId)?.tailnetDnsName,
+        onChange: (listener) => {
+          devices.on("changed", listener);
+          return () => devices.off("changed", listener);
+        },
+      },
+      logger: logger.child({ component: "mesh.egress" }),
     });
     // C6-5/D35 — the subscription half: one ref-counted upstream per
     // {device, method, params}, re-snapshot on recovery; quiet during an
@@ -4611,6 +4635,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs,
       devices,
       peers,
+      egressRoutes,
       federatedSubs,
       artifacts,
       plugins,

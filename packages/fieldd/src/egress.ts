@@ -7,8 +7,11 @@ import {
   type MeshEgressRouteTable,
   MeshEgressUnavailableDetails,
 } from "@vibefield/contracts";
+import type { WsCtor, WsLike } from "@vibefield/fieldd-client";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import WebSocket from "ws";
 import { RpcCallError } from "./native-link";
+import { Socks5Agent } from "./socks5";
 
 // DS-1 — fieldd's face of EGRESS (design-02 §2.4's egress bullet; design-06
 // §3; petition T7 = truffle RFC 026). The floor asks the node's sidecar for
@@ -16,7 +19,9 @@ import { RpcCallError } from "./native-link";
 //
 //   · `resolveEgressPath` — "how does a dial reach the tailnet right now?":
 //     the node's own SOCKS5 (E1) when the floor has it, else the OS network
-//     with the floor's reason. PeerLink's dial reads it once per dial.
+//     with the floor's reason. PeerLink's dial reads it once per dial,
+//     through `egressWebSocket` — the WebSocket constructor FielddClient
+//     dials with.
 //   · `EgressRoutes` — the PORT lane ds-e's terminal rewriter consumes (E2): a
 //     loopback address that reaches a door on a peer, ref-counted per
 //     {peer, port}, dropped (and said so) when the peer leaves the roster or
@@ -87,6 +92,130 @@ export function egressRefusal(error: unknown): { state: string; detail?: string 
   }
   if (error.kind === "TIMEOUT") return { state: "native-timeout", detail: error.message };
   return { state: "egress-error", detail: `${error.kind}: ${error.message}` };
+}
+
+// ---- the dial (E1): a WebSocket constructor that asks first ----
+
+export interface EgressDialOptions {
+  /** Asked ONCE PER DIAL, reconnects included: a node rebuild rotates the
+   * proxy's credential, and a floor upgrade can turn the OS network into the
+   * node's own path between two dials of one link. */
+  path: () => Promise<EgressPath>;
+  /** The path a dial took (PeerLink says it once per link). */
+  onPath?: (path: EgressPath) => void;
+  /** A dial THROUGH THE NODE failed — the proxy refused the credential, the
+   * peer, or is gone. It fails CLOSED: never retried over the OS network,
+   * which would be a silent downgrade of the substrate (DS-L5). */
+  onDialError?: (error: unknown) => void;
+  /** Today's dial, for a floor with no egress (default: the host's global
+   * WebSocket — exactly what FielddClient used before DS-1). */
+  direct?: WsCtor;
+  /** the SOCKS5 handshake's budget (default 10 s) */
+  socksTimeoutMs?: number;
+}
+
+/** A WebSocket constructor for FielddClient that decides its substrate per
+ * dial: the node's SOCKS5 when `path()` names one (a `ws` client over a
+ * `Socks5Agent`, the door's MagicDNS name resolved BY THE PROXY, never the OS),
+ * else the direct dial. FielddClient constructs sockets synchronously, so the
+ * socket it holds is a stand-in that is CONNECTING until the path is known and
+ * then forwards every event of the real one. */
+export function egressWebSocket(opts: EgressDialOptions): WsCtor {
+  const open = async (url: string): Promise<WsLike> => {
+    const path = await opts.path();
+    opts.onPath?.(path);
+    if (path.kind === "direct") {
+      const Direct = opts.direct ?? (globalThis as { WebSocket?: WsCtor }).WebSocket;
+      if (Direct === undefined) throw new Error("no WebSocket implementation in this host");
+      return new Direct(url);
+    }
+    // The product door is plain HTTP inside WireGuard (`tls: false`); a TLS
+    // hop through the proxy would need an https agent nothing asks for yet.
+    if (!url.startsWith("ws://")) {
+      throw new Error(`egress: only a ws:// door rides the node's proxy (asked: ${url})`);
+    }
+    const agent = new Socks5Agent({
+      proxy: path.address,
+      username: path.username,
+      password: path.credential,
+      ...(opts.socksTimeoutMs !== undefined ? { timeoutMs: opts.socksTimeoutMs } : {}),
+    });
+    const socket = new WebSocket(url, { agent, perMessageDeflate: false });
+    socket.on("error", (error) => opts.onDialError?.(error));
+    return socket as unknown as WsLike;
+  };
+  return class EgressDialedSocket extends DeferredSocket {
+    constructor(url: string) {
+      super(url, open);
+    }
+  };
+}
+
+type WsEvent = "open" | "message" | "close" | "error";
+
+/** A socket that exists before the real one does: CONNECTING while the
+ * substrate is chosen, then a transparent forwarder. A `close()` before the
+ * real socket exists closes it the moment it arrives; a failure to open is the
+ * ordinary `error` then `close` a refused dial produces, so FielddClient's own
+ * reconnect law applies unchanged. */
+class DeferredSocket implements WsLike {
+  private inner: WsLike | null = null;
+  private closedEarly = false;
+  private readonly listeners: Record<WsEvent, Array<(ev: unknown) => void>> = {
+    open: [],
+    message: [],
+    close: [],
+    error: [],
+  };
+
+  constructor(url: string, open: (url: string) => Promise<WsLike>) {
+    open(url).then(
+      (inner) => {
+        if (this.closedEarly) {
+          inner.close();
+          return;
+        }
+        this.inner = inner;
+        for (const type of ["open", "message", "close", "error"] as const) {
+          inner.addEventListener(type, (ev) => this.dispatch(type, ev));
+        }
+      },
+      (error: unknown) => {
+        if (this.closedEarly) return;
+        this.closedEarly = true;
+        this.dispatch("error", { error });
+        this.dispatch("close", { code: 1006, reason: String(error) });
+      },
+    );
+  }
+
+  get readyState(): number {
+    if (this.inner !== null) return this.inner.readyState;
+    return this.closedEarly ? 3 : 0;
+  }
+
+  send(data: string): void {
+    if (this.inner === null) throw new Error("egress dial: the socket is not open");
+    this.inner.send(data);
+  }
+
+  close(code?: number, reason?: string): void {
+    if (this.inner !== null) {
+      this.inner.close(code, reason);
+      return;
+    }
+    if (this.closedEarly) return;
+    this.closedEarly = true;
+    queueMicrotask(() => this.dispatch("close", { code: code ?? 1000, reason: reason ?? "" }));
+  }
+
+  addEventListener(type: WsEvent, fn: (ev: unknown) => void): void {
+    this.listeners[type].push(fn);
+  }
+
+  private dispatch(type: WsEvent, ev: unknown): void {
+    for (const fn of [...this.listeners[type]]) fn(ev);
+  }
 }
 
 // ---- the EgressRoutes port (E2) ----
