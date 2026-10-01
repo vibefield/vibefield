@@ -30,6 +30,11 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // fieldd-PRIVATE directory under the user root (LAYOUT.INDEX_DAEMONS_DIR), never
 // rosetta's shared per-user directory, so no sibling app or same-uid agent is
 // pointed at the daemon; fieldd itself is that directory's only reader.
+// (Corrected 2026-10-01, D36: "every authenticated product client reads it"
+// stopped being true — the stream's handler now admits only this device's own
+// principals, a window, the shell, a plugin, and refuses the phone, guests and
+// peer daemons. The projection rule stands regardless: a local window is not
+// the daemon either.)
 //
 // Orphans: a fieldd that dies without its stop ladder (SIGKILL, a crash) leaves
 // its rosettad alive, holding rosetta's EXCLUSIVE projection lock (`<db>.lock`,

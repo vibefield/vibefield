@@ -268,23 +268,28 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
   it("keeps a census of the scope-null product subscriptions, whose reach is their handler's", () => {
     // `scope: null` passes every hello'd principal through the registry's
     // gate — a phone included — and only a handler can narrow it, which the
-    // registry cannot see. So each one is NAMED here with what decides its
-    // reach, and a new one fails this pin until somebody says.
-    //  · storage.settings.subscribe — `settingsCaller` (daemon.ts) admits a
-    //    plugin or a local window holding plugins.manage; a phone is refused
-    //  · process.subscribe — `processViewer` (daemon.ts), the same posture
-    //  · system.health.subscribe — NO handler gate: a phone can open it
-    //    (recorded 2026-10-01, SP-1; whole FielddHealth values on every
-    //    health change, no floor). Its `true` stands because the rule above
-    //    does not reach it; whether it gains a gate or a floor is a ruling,
-    //    not this lint's.
+    // registry cannot see. So each one is NAMED here with the GATE that decides
+    // its reach, and a new one fails this pin until somebody says what its gate
+    // is. fieldd's scope-null-gates.test.ts dials each one as the phone and
+    // proves the refusal at the real door.
+    const census: Record<string, string> = {
+      // D36 (2026-10-01, DS wave 3 — the finding SP-1 recorded here: "NO handler
+      // gate: a phone can open it"). The stream is this desktop's whole
+      // judgment of its own planes, so its handler admits this device's own
+      // principals only — a window, the shell, a plugin — and a tailnet,
+      // tailnet-guest or peer-fieldd principal reads FORBIDDEN_SCOPE. Its
+      // `true` stands: no tailnet principal can open it, so SP-1's rule above
+      // has nothing to say to it.
+      "system.health.subscribe": "this device's principals: local-token, shell-main, plugin",
+      // `settingsCaller` (daemon.ts) — a phone is refused
+      "storage.settings.subscribe":
+        "a plugin with storage.self, or a local window with plugins.manage",
+      // `processViewer` (daemon.ts) — the same posture
+      "process.subscribe": "a plugin, or a local window with plugins.manage",
+    };
     expect(
       subscriptions.filter((m) => m.scope === null).map((m) => [m.method, m.locality]),
-    ).toEqual([
-      ["system.health.subscribe", "local"],
-      ["storage.settings.subscribe", "local"],
-      ["process.subscribe", "local"],
-    ]);
+    ).toEqual(Object.keys(census).map((method) => [method, "local"]));
   });
 
   it("defineMethod refuses a descriptor it cannot honour", () => {

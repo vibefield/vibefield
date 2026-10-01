@@ -2534,7 +2534,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.register("system.capabilities", () => ({
       methods: METHODS.filter((m) => m.surface === "product").map((m) => m.method),
     }));
-    api.registerSubscription("system.health.subscribe", (_ctx, _params, emit) => {
+    // D36 (2026-10-01; DS wave 2's finding 02:15 (3), closed in wave 3) — the
+    // health stream is THIS desktop's whole judgment of its own planes (the
+    // floor, rosettad's phase, the doc host, plugins, logging): `local` by
+    // locality, yet `scope: null` let every hello'd principal open it, the phone
+    // included — the door's D36 wall refuses a `local` method to a PEER DAEMON
+    // only. So the handler admits the principals that ARE this device — a local
+    // window or shell (`local-token`, `shell-main`) and a plugin — and nothing
+    // that crossed the tailnet: `tailnet`, `tailnet-guest`, `peer-fieldd` read
+    // FORBIDDEN_SCOPE (the guest choke and the D36 wall already refuse the last
+    // two at the door; this is the only wall for the phone). WHO the caller is,
+    // never what it was granted: a window holding no scope still reads it.
+    // SP-1's census (contracts registry.test.ts) names this gate.
+    api.registerSubscription("system.health.subscribe", (ctx, _params, emit) => {
+      const kind = ctx.principal.kind;
+      if (kind !== "local-token" && kind !== "shell-main" && kind !== "plugin")
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "system.health.subscribe is local to its device (D36): this desktop's health streams to its own windows, shell and plugins",
+          false,
+          { method: "system.health.subscribe" },
+        );
       const fn = (h: FielddHealth) => emit(h);
       healthListeners.add(fn);
       return { snapshot: health(), dispose: () => healthListeners.delete(fn) };

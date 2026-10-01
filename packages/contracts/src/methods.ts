@@ -219,6 +219,9 @@ export const METHODS: MethodDef[] = [
   }),
 
   // Track A — walking skeleton (shell bootstrap + live health)
+  // D36 (2026-10-01): scope-null, and HANDLER-gated to this device's own
+  // principals (a window, the shell, a plugin — fieldd daemon.ts); a phone, a
+  // guest or a peer daemon reads FORBIDDEN_SCOPE. SP-1's census names the gate.
   defineMethod({
     surface: "product",
     method: "system.health.subscribe",
