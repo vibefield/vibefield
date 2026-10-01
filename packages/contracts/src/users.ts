@@ -36,7 +36,10 @@ export type UserFace = z.infer<typeof UserFace>;
  * (`fieldd/src/settings-doc.ts`), so until it does these fields are the only
  * copy, not a cache. *Still true at the landing of 2026-10-01: DS-5 put the
  * LIBRARY on the Loro host and held the settings document back until the
- * install set carries PA-32's revocation bias (DS-5b, design-06 §4).* */
+ * install set carries PA-32's revocation bias (DS-5b, design-06 §4).*
+ * *Corrected 2026-10-01 (DS-5b): the bias is built and the settings document
+ * now replicates among the account's desktops; UA-D18's move of `name` and
+ * `face` into it is still not built, so these fields remain the only copy.* */
 export const UserRecord = z
   .object({
     /** 26-char Crockford ULID — THE durable root identity; the tailscale link

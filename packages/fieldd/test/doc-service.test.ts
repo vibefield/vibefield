@@ -17,6 +17,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   CONTRACTS_VERSION,
+  DOC_SYNC_RECORD,
   type DocOpenResult,
   DocRegistryEntry,
   decodeJsonPayload,
@@ -31,13 +32,16 @@ import {
   LanePutOk,
   MESHDATA_FRAME,
   MeshDataFrameReader,
+  type Scope,
   SOCKETS,
 } from "@vibefield/contracts";
+import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, DocumentService, type FielddDaemon } from "../src/index";
+import { bootstrap, DocumentService, type FielddDaemon, verifyAuditSegment } from "../src/index";
 import { systemAccount, systemDocId } from "../src/library-doc";
 import { computeAckMac } from "../src/pairing";
+import { SettingsDocService } from "../src/settings-doc";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
@@ -713,14 +717,15 @@ describe("doc.setSyncIntent (UA-D7)", () => {
   });
 });
 
-// DS landing review B1 (2026-10-01) — the settings document does NOT ride the
-// Loro host until DS-5b builds PA-32's revocation stamps (design-06 §4: they are
-// the merge rule inside the install reconciler, and it has none yet). A linked
-// daemon with a docHost peer replicates its system documents the moment the
-// roster names that peer; the witness is the floor's own record of the lanes it
-// was asked for (`meshLaneOpens`) — a lane IS the announcement: the library's
-// opens toward the peer, the settings document's never does.
-describe("the system documents a linked desktop hosts (DS-5, the landing review B1)", () => {
+// DS landing review B1 (2026-10-01) held the settings document OFF the Loro
+// host until PA-32's revocation bias was the merge rule inside the install
+// reconciler (design-06 §4). DS-5b 2026-10-01: the bias is built; settings
+// cross. A linked daemon with a docHost peer replicates its system documents
+// the moment the roster names that peer; the witness is the floor's own record
+// of the lanes it was asked for (`meshLaneOpens`) — a lane IS the
+// announcement: the library's and the settings document's both open toward
+// the peer.
+describe("the system documents a linked desktop hosts (DS-5, DS-5b)", () => {
   /** The meshdata bridge field-native would be: it accepts fieldd's HELLO and
    * proves the pairing secret (WIN-10), so the daemon's doc sync starts. */
   async function meshDataBridge(dataDir: string): Promise<void> {
@@ -756,7 +761,7 @@ describe("the system documents a linked desktop hosts (DS-5, the landing review 
     });
   }
 
-  it("hosts the library alone — the settings document is never announced to a peer", async () => {
+  it("hosts the library AND the settings document — both announced to a docHost peer", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "vf-doc-sys-"));
     cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
     writeLinkFixture(dataDir); // a linked account: its system documents sync
@@ -796,21 +801,222 @@ describe("the system documents a linked desktop hosts (DS-5, the landing review 
     const libraryId = systemDocId("library", account);
     const settingsId = systemDocId("settings", account);
     await until(() => daemon.docs.systemDocIds().includes(libraryId), 8000);
-    expect(daemon.docs.systemDocIds()).toEqual([libraryId]);
-    expect(daemon.docs.isSystemDoc(settingsId)).toBe(false);
+    expect([...daemon.docs.systemDocIds()].sort()).toEqual([libraryId, settingsId].sort());
+    expect(daemon.docs.isSystemDoc(settingsId)).toBe(true);
 
-    // The replication pass ran toward the peer — the library's lane was asked
-    // for. A registered settings document rides the SAME pass, enqueued ahead
-    // of the library (registration order), so its lane would be on record by
-    // now; it is not, and never was.
-    await until(
-      () =>
-        mock.meshLaneOpens.some(
-          (lane) =>
-            lane.protocol === "doc-sync" && lane.peer === "node-b" && lane.docId === libraryId,
-        ),
-      8000,
+    // The replication pass ran toward the peer: a lane was asked for for each.
+    const announced = (docId: string) =>
+      mock.meshLaneOpens.some(
+        (lane) => lane.protocol === "doc-sync" && lane.peer === "node-b" && lane.docId === docId,
+      );
+    await until(() => announced(libraryId) && announced(settingsId), 8000);
+  }, 30_000);
+});
+
+// DS-5b (PA-32) — a peer desktop's settings on THIS daemon's host. The peer is
+// a SettingsDocService on its own disk, registered with its own
+// DocumentService under the account's settings id (what another desktop's
+// mountSystemDocs registers). A reconnect is the doc-sync VERSION exchange
+// against the daemon's own host: the receiver states its version
+// (`hostVersion`), the sender answers what it lacks (`hostAnswer`), and the
+// receiver's host merges it (`applyRemoteRecord`) — the entry points the
+// doc-sync lane drives, here without the lane.
+describe("a peer desktop's settings on the daemon's host (DS-5b, PA-32)", () => {
+  const FIXTURE_ID = "vibefield.fixture.pa32";
+  // Unlinked: the account is this user root's own (`local:default`).
+  const SETTINGS_ID = systemDocId("settings", systemAccount(null, undefined));
+
+  /** A daemon with one bundled renderer plugin requesting two capabilities
+   * (renderer-eligible, so both are granted by default). */
+  async function bootWithFixture(): Promise<{ dataDir: string; daemon: FielddDaemon }> {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-doc-pa32-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    mkdirSync(join(dataDir, "native", "run"), { recursive: true });
+    writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
+    const root = join(dataDir, "bundled");
+    mkdirSync(join(root, "pa32"), { recursive: true });
+    writeFileSync(join(root, "pa32", "renderer.js"), "export default {};\n");
+    writeFileSync(
+      join(root, "pa32", "vibefield.plugin.json"),
+      JSON.stringify({
+        manifestVersion: 1,
+        id: FIXTURE_ID,
+        version: "1.0.0",
+        title: "PA-32 fixture",
+        engines: { app: "*", contracts: "*" },
+        entries: { renderer: "./renderer.js" },
+        activation: [],
+        capabilities: ["storage.self", "canvas.read"],
+      }),
     );
-    expect(mock.meshLaneOpens.map((lane) => lane.docId)).not.toContain(settingsId);
+    const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+    await mock.start();
+    cleanup.push(() => mock.stop());
+    const daemon = await bootstrap({
+      dataDir,
+      controlPort: 0,
+      dataPort: 0,
+      pluginRoots: { bundled: [root] },
+    });
+    cleanup.push(() => daemon.stop());
+    return { dataDir, daemon };
+  }
+
+  /** Another desktop of this account: its settings, on its own host. */
+  async function peerDesktop(): Promise<{ settings: SettingsDocService; docs: DocumentService }> {
+    const dataDir = mkdtempSync(join(tmpdir(), "vf-doc-pa32-peer-"));
+    cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
+    const settings = new SettingsDocService({ dataDir });
+    await settings.ready();
+    cleanup.push(() => settings.dispose());
+    const docs = new DocumentService({ dataDir });
+    cleanup.push(() => docs.dispose());
+    docs.registerSystemDoc(SETTINGS_ID, "Settings", settings.hostDoc(), settings.hostOwner());
+    return { settings, docs };
+  }
+
+  /** `to` reconnects to `from`; true when something crossed and merged. */
+  async function exchange(from: DocumentService, to: DocumentService): Promise<boolean> {
+    const theirs = await to.hostVersion(SETTINGS_ID);
+    const answer = theirs === null ? null : await from.hostAnswer(SETTINGS_ID, theirs);
+    if (answer === null || answer.update === null) return false;
+    const outcome = await to.applyRemoteRecord(SETTINGS_ID, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: answer.meta,
+      payload: answer.update,
+    });
+    return outcome.applied;
+  }
+
+  async function eventually(
+    fn: () => boolean | Promise<boolean>,
+    label: string,
+    ms = 8000,
+  ): Promise<void> {
+    const deadline = Date.now() + ms;
+    while (!(await fn())) {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for: ${label}`);
+      await sleep(25);
+    }
+  }
+
+  async function connect(daemon: FielddDaemon, token: string, clientKind: string): Promise<WsRpc> {
+    const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}`);
+    cleanup.push(() => ws.close());
+    await new Promise<void>((resolve, reject) => {
+      ws.once("open", () => resolve());
+      ws.once("error", reject);
+    });
+    const rpc = new WsRpc(ws);
+    await helloAs(rpc, token, clientKind);
+    return rpc;
+  }
+
+  async function auditRecords(dataDir: string): Promise<AuditRecordV1[]> {
+    const root = join(dataDir, "audit");
+    const records: AuditRecordV1[] = [];
+    for (const name of readdirSync(root).filter((entry) => entry.endsWith(".jsonl"))) {
+      const verified = await verifyAuditSegment(join(root, name));
+      expect(verified.valid, `${name}: ${verified.reason}`).toBe(true);
+      records.push(...verified.records);
+    }
+    return records;
+  }
+
+  const revoked = (daemon: FielddDaemon, capability: string): boolean =>
+    daemon.plugins
+      .get(FIXTURE_ID)
+      ?.deniedCapabilities.some((d) => d.capability === capability && d.reason === "revoked") ===
+      true && !daemon.plugins.get(FIXTURE_ID)?.grantedCapabilities.includes(capability);
+
+  it("(d) a peer desktop's merged settings never re-grant a capability this desktop revoked", async () => {
+    const { dataDir, daemon } = await bootWithFixture();
+    expect(daemon.plugins.get(FIXTURE_ID)?.grantedCapabilities).toEqual(
+      expect.arrayContaining(["storage.self", "canvas.read"]),
+    );
+    const peer = await peerDesktop();
+
+    // The shared past: the peer's entry, both capabilities granted, crosses.
+    await peer.settings.setInstallSetEntry(
+      {
+        pluginId: FIXTURE_ID,
+        source: "bundled",
+        enabled: true,
+        grants: [
+          { capability: "storage.self", decision: "granted", at: 1 },
+          { capability: "canvas.read", decision: "granted", at: 1 },
+        ],
+      },
+      "seed",
+    );
+    expect(await exchange(peer.docs, daemon.docs), "the peer's settings crossed").toBe(true);
+
+    // The peer goes offline. Here, the user revokes storage.self.
+    const before = await daemon.docs.hostVersion(SETTINGS_ID);
+    const grantor = daemon.tokens.mint(["plugins.read", "plugins.manage"] as Scope[], "pa32");
+    const rpc = await connect(daemon, grantor.token, "renderer");
+    await rpc.call("plugins.grants.set", {
+      id: FIXTURE_ID,
+      capability: "storage.self",
+      granted: false,
+    });
+    expect(revoked(daemon, "storage.self")).toBe(true);
+    await eventually(async () => {
+      const now = await daemon.docs.hostVersion(SETTINGS_ID);
+      return (
+        Buffer.compare(Buffer.from(now?.version ?? []), Buffer.from(before?.version ?? [])) !== 0
+      );
+    }, "the revocation to be published");
+
+    // Offline, the peer never hears of it: it changes a preference twice and
+    // REWRITES its whole entry with storage.self granted (B1's write) while
+    // revoking canvas.read — its later writes carry the higher clock.
+    await peer.settings.setAppValue("mesh.syncPosture", "opt-in", "pane");
+    await peer.settings.setAppValue("desktop.showTray", false, "pane");
+    await peer.settings.setInstallSetEntry(
+      {
+        pluginId: FIXTURE_ID,
+        source: "bundled",
+        enabled: true,
+        grants: [
+          { capability: "storage.self", decision: "granted", at: 2 },
+          { capability: "canvas.read", decision: "revoked", at: 2 },
+        ],
+      },
+      "pane",
+    );
+
+    // Reconnected: this desktop merges the peer's offline writes.
+    expect(await exchange(peer.docs, daemon.docs), "the peer's writes crossed").toBe(true);
+    // The merged entry was applied — the peer's revocation of canvas.read
+    // landed here — and storage.self stayed revoked.
+    await eventually(() => revoked(daemon, "canvas.read"), "the peer's revocation to apply");
+    expect(revoked(daemon, "storage.self"), "storage.self re-granted").toBe(true);
+    const shell = await connect(daemon, daemon.shellToken, "shell-main");
+    expect(await shell.call("storage.appPreferences.get", {})).toMatchObject({
+      syncPosture: "opt-in",
+      showTray: false,
+    });
+    const regrants = (await auditRecords(dataDir)).filter(
+      (record) =>
+        record.action === "capability.grant" &&
+        record.target.id === "storage.self" &&
+        record.phase === "outcome",
+    );
+    expect(regrants, "a settings-doc re-grant of storage.self").toEqual([]);
+  }, 40_000);
+
+  it("(e) a spine preference set on this desktop reads on a peer's appValues() through the host", async () => {
+    const { daemon } = await bootWithFixture();
+    const peer = await peerDesktop();
+    const shell = await connect(daemon, daemon.shellToken, "shell-main");
+    await shell.call("storage.appPreferences.set", { key: "desktop.showTray", value: false });
+    await shell.call("storage.appPreferences.set", { key: "mesh.syncPosture", value: "opt-in" });
+
+    expect(await exchange(daemon.docs, peer.docs), "this desktop's settings crossed").toBe(true);
+    expect(await peer.settings.appValues()).toMatchObject({
+      "desktop.showTray": false,
+      "mesh.syncPosture": "opt-in",
+    });
   }, 30_000);
 });

@@ -34,12 +34,7 @@ import type { SystemDocOwner } from "./doc-service";
 // device's: the UndoManager tracks local ops only, so a merged peer edit is
 // never undone by ⌘Z here (law 2 holds across devices too).
 //
-// CORRECTED 2026-10-01 (the DS landing review, B1): it does NOT ride the lanes
-// yet. Design-06 §4 lets settings cross only with PA-32's revocation bias as
-// the merge rule inside the install reconciler. DS-5b builds that bias (the
-// install-set below, `install-reconciler.ts`); the daemon still registers only
-// the library with the host (`daemon.ts` mountSystemDocs) until the step that
-// registers this document.
+// DS-5b 2026-10-01: the bias is built; settings cross.
 //
 // THE INSTALL-SET (DS-5b, PA-32 — revocations propagate and win regardless of
 // last-writer-wins timing). P7 kept an entry as ONE map value, so a desktop
@@ -164,10 +159,9 @@ export class SettingsDocService extends EventEmitter {
     });
   }
 
-  /** DS-5 — the document the Loro-level host merges into. Registered only
-   * after `ready()`: the P7 migration must finish before any merge, so no
-   * whole entry ever crosses. The daemon does not register it yet (B1, the
-   * header note); `doc-library.test.ts` and the PA-32 rows do. */
+  /** DS-5 — the document the Loro-level host merges into. The daemon's
+   * mountSystemDocs registers it only after `ready()`: the P7 migration must
+   * finish before any merge, so no whole entry ever crosses. */
   hostDoc(): LoroDoc {
     return this.doc;
   }

@@ -1064,28 +1064,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (event.section === "app") void refreshSyncPosture();
     });
     await refreshSyncPosture();
-    // DS-5 (DS-D6, DS-D18) — the LIBRARY joins the Loro-level host as a SYSTEM
-    // document, under a well-known id derived from the ACCOUNT (the linked
-    // login, else this user root), so every desktop of one account names the
-    // same library and no two accounts do. It syncs among the account's
-    // desktops by law, never by intent. A relink is a new account: it is
-    // re-mounted under the new id, and the library for the new account is
-    // seeded from this device's canvases (UA-D7: what the link carries is the
-    // posture's call).
-    //
-    // HELD OFF 2026-10-01 (the DS landing review, B1): the SETTINGS document
-    // does not join the host yet. Design-06 §4 lets settings and the plugin set
-    // cross only with PA-32's revocation bias as the merge rule inside the
-    // install reconciler, and `install-reconciler.ts` still defers that bias
-    // ("lands with the doc-sync track"): an install-set entry is ONE
-    // last-writer-wins map value (`settings-doc.ts`), so a desktop that was
-    // offline while another revoked a capability could merge its whole entry
-    // back over the revocation, and the reconciler would re-grant it. DS-5b
-    // builds the per-capability revocation stamps a grant must postdate; then
-    // settings cross, registered here beside the library under
-    // `systemDocId("settings", account)` (`settingsDoc.hostDoc()` and
-    // `hostOwner()` wait on the service for exactly that). Until then the
-    // settings document — the sync posture with it — is this desktop's own.
+    // DS-5 (DS-D6, DS-D18) — the SETTINGS document and the LIBRARY join the
+    // Loro-level host as SYSTEM documents, under well-known ids derived from
+    // the ACCOUNT (the linked login, else this user root), so every desktop of
+    // one account names the same documents and no two accounts do. They sync
+    // among the account's desktops by law, never by intent. A relink is a new
+    // account: both are re-mounted under the new ids, and the library for the
+    // new account is seeded from this device's canvases (UA-D7: what the link
+    // carries is the posture's call). The settings document is ONE file per
+    // user root, so a relink carries its content to the new account's
+    // desktops; the library is one file per account.
+    // DS-5b 2026-10-01: the bias is built; settings cross.
     let systemDocs: {
       account: string;
       library: LibraryDocService;
@@ -1104,19 +1093,26 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger: logger.child({ component: "docs.library" }),
       });
       await library.ready();
+      // Registered only once loaded: its P7 install-set migrates in `ready()`,
+      // and no whole entry may cross before it has (`settings-doc.ts`).
+      await settingsDoc.ready();
       systemDocs = {
         account,
         library,
-        // The library only — the settings document waits on DS-5b (above).
         unregister: [
+          docs.registerSystemDoc(
+            systemDocId("settings", account),
+            "Settings",
+            settingsDoc.hostDoc(),
+            settingsDoc.hostOwner(),
+          ),
           docs.registerSystemDoc(library.docId, "Library", library.doc, library.hostOwner()),
         ],
       };
       await docs.attachLibrary(library, (entry) =>
         resolveSyncIntent(entry.syncIntent, syncPosture),
       );
-      // DS-5 (DS-D7) — the system documents (the library, today) toward every
-      // awake desktop now.
+      // DS-5 (DS-D7) — the system documents toward every awake desktop now.
       docSync?.replicate(docs.systemDocIds(), { regreet: true });
     };
     await mountSystemDocs();

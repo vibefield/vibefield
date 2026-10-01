@@ -26,8 +26,7 @@ import type { InstallIdentity, InstallSetChange, SettingsDocService } from "./se
 //     engine gates/quarantine remain local truths);
 //   - dev-linked/sideload NEVER enter the doc;
 //   - revocation wins (PA-32) — the bias is the merge rule here, as design-06
-//     §4 puts it. DS-5b 2026-10-01: the bias is built (the settings document
-//     joins the host in the step after it). A grant
+//     §4 puts it. DS-5b 2026-10-01: the bias is built; settings cross. A grant
 //     records the revocation generation it saw; a merged grant that saw fewer
 //     revocations than the entry holds missed one and is applied as REVOKED,
 //     audited `REVOCATION_BIAS` (contracts `standingDecision`). And publish()
