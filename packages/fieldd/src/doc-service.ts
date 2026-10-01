@@ -31,8 +31,9 @@ import {
   EMPTY_VERSION,
   HostedDoc,
   type HostImport,
+  isLoroPanic,
+  isSnapshotPayload,
   LoroHost,
-  loroBlobMode,
   snapshotVersion,
   versionToBase64,
 } from "./loro-host";
@@ -381,6 +382,26 @@ export class DocumentService {
   private touch(docId: string): void {
     this.touched.set(docId, this.now());
     this.evictedHeads.delete(docId);
+  }
+
+  /** DS-5d — an import into a hosted canvas THREW: the doc leaves the host and
+   * the next access rebuilds it from disk. Disk is never ahead of a failed
+   * import (every host mutation is followed by its durable write), and a PANIC
+   * — an op whose base lies below a compacted root, measured on loro-crdt
+   * 1.13.8 — leaves the doc holding its lock for good: kept, every later
+   * VERSION, window read and save on the canvas threw until fieldd restarted. */
+  private dropHosted(hosted: HostedDoc, during: string, error: unknown): void {
+    if (this.host.get(hosted.docId) === hosted) this.host.delete(hosted.docId);
+    const panicked = isLoroPanic(error);
+    this.logger
+      .child({ docId: hosted.docId })
+      .warn(
+        panicked ? "fieldd.docs.host_import_panicked" : "fieldd.docs.host_import_refused",
+        panicked
+          ? "An import panicked the document's host; the host is rebuilt from disk"
+          : "An import was refused; the document's host is rebuilt from disk",
+        { during, error: String(error) },
+      );
   }
 
   // ---- catalog ----
@@ -1043,11 +1064,35 @@ export class DocumentService {
       this.opaque.add(docId);
       return null;
     }
-    const hosted = (await this.hostedNow(docId)) ?? new HostedDoc(docId);
+    const prior = await this.hostedNow(docId);
+    const hosted = prior ?? new HostedDoc(docId);
+    // Read before the import: a doc an import panicked answers nothing after.
+    const compacted = prior?.isShallow() === true;
     let imported: HostImport;
     try {
       imported = hosted.import(lifted.payload);
     } catch (error) {
+      this.host.delete(docId);
+      // DS-5d — a COMPACTED host keeps no history below its root, so a
+      // checkpoint it cannot take was built across that root (a window that
+      // lagged the compaction). The opaque fallback below would store it AS
+      // the base — every edit the host held beyond it gone from disk, and the
+      // canvas merging nothing again. Refused; the window reopens on the base.
+      if (compacted) {
+        this.logger
+          .child({ docId })
+          .warn(
+            "fieldd.docs.checkpoint_across_root",
+            "A checkpoint built across this document's compacted base was refused",
+            { panicked: isLoroPanic(error), error: String(error) },
+          );
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "checkpoint was built across this document's compacted base; reopen the document",
+          false,
+          { docId, reason: "epoch-mismatch" },
+        );
+      }
       this.logger
         .child({ docId })
         .warn(
@@ -1055,7 +1100,6 @@ export class DocumentService {
           "A checkpoint's Loro payload could not be imported; the document stays in opaque custody",
           { error: String(error) },
         );
-      this.host.delete(docId);
       this.opaque.add(docId);
       return null;
     }
@@ -1090,7 +1134,10 @@ export class DocumentService {
       return null; // unreadable at-rest bytes: the next whole write repairs them
     }
     const lifted = liftIce1(checkpoint);
-    if (!lifted.ok || loroBlobMode(lifted.payload) !== "snapshot") {
+    // DS-5d — a shallow payload too: a compacted base, or the checkpoint of a
+    // window opened on one. Taking only full snapshots put a canvas in opaque
+    // custody on its first reload after a compaction.
+    if (!lifted.ok || !isSnapshotPayload(lifted.payload)) {
       this.opaque.add(docId);
       return null;
     }
@@ -1179,7 +1226,8 @@ export class DocumentService {
       let imported: HostImport;
       try {
         imported = hosted.import(bytes);
-      } catch {
+      } catch (error) {
+        this.dropHosted(hosted, "window-update", error);
         throw new RpcCallError(
           "PRECONDITION_FAILED",
           "journal update is not a Loro update this host can read",
@@ -1500,7 +1548,7 @@ export class DocumentService {
         return { applied: false, reason: "epoch-mismatch" };
       }
       const lifted = liftIce1(record.payload);
-      if (lifted.ok && loroBlobMode(lifted.payload) === "snapshot") {
+      if (lifted.ok && isSnapshotPayload(lifted.payload)) {
         const hosted = await this.hostedNow(docId);
         if (hosted !== null) return this.mergeNow(entry, hosted, lifted.payload, record.meta);
       }
@@ -1571,7 +1619,8 @@ export class DocumentService {
     let imported: HostImport;
     try {
       imported = hosted.import(bytes);
-    } catch {
+    } catch (error) {
+      this.dropHosted(hosted, "peer-record", error);
       return { applied: false, reason: "undecodable" };
     }
     if (!imported.changed) {
@@ -1641,6 +1690,17 @@ export class DocumentService {
       const hosted = await this.hostedNow(docId);
       const version = decodeVersion(known);
       if (hosted === null || version === null || !hosted.isAheadOf(version)) return null;
+      // DS-5d — never from below a compacted root: Loro would export FROM the
+      // root, and the window would hold the ops pending — quarantined.
+      if (!hosted.canAnswer(version)) {
+        this.logger
+          .child({ docId })
+          .warn(
+            "fieldd.docs.push_below_root",
+            "A window's proven version lies below the compacted base; it is not pushed",
+          );
+        return null;
+      }
       return hosted.exportSince(version);
     });
   }
@@ -1724,6 +1784,20 @@ export class DocumentService {
       const version = decodeVersion(theirs.version);
       if (version === null) return null;
       if (!hosted.isAheadOf(version)) return { meta, snapshot: null, update: null };
+      // DS-5d — a holder at this epoch that lacks the compacted root cannot be
+      // sent a delta (Loro would export it FROM the root: ops whose base the
+      // holder can never get). Same-epoch holders hold the root by
+      // construction; this is the guard that keeps a broken one from a
+      // broken answer.
+      if (!hosted.canAnswer(version)) {
+        this.logger
+          .child({ docId })
+          .warn(
+            "fieldd.docs.answer_below_root",
+            "A holder's version lies below the compacted base; it is not sent a delta",
+          );
+        return null;
+      }
       return { meta, snapshot: null, update: hosted.exportSince(version) };
     });
   }
