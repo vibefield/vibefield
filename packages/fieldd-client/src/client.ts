@@ -1,4 +1,9 @@
-import { type ClientKind, CONTRACTS_VERSION } from "@vibefield/contracts";
+import {
+  type ClientKind,
+  CONTRACTS_VERSION,
+  PRODUCT_NOTIFICATIONS,
+  SystemTick,
+} from "@vibefield/contracts";
 
 // @vibefield/fieldd-client — the isomorphic product-plane client (design-03
 // A6): runs in the Electron renderer, plugin workers, AND the shell main
@@ -72,6 +77,12 @@ export interface FielddClientOptions {
   userId?: string;
   webSocket?: WsCtor; // override for tests / exotic hosts
   maxBackoffMs?: number;
+  /** SP-1 / SP-L7 — the door's keepalive: every hello'd connection hears
+   * `system.tick {at, intervalMs}` (`PRODUCT_API_LIMITS.TICK_INTERVAL_MS`). A
+   * reader that keeps a dead-door deadline resets it here (any inbound frame is
+   * liveness; a door silent for 2.5 × intervalMs is dead). A tick whose params
+   * do not read is not a tick; without `onTick` the frame is taken quietly. */
+  onTick?: (tick: { at: number; intervalMs: number }) => void;
 }
 
 export interface Subscription {
@@ -400,6 +411,16 @@ export class FielddClient {
       const sub = key === undefined ? undefined : this.subs.get(key);
       sub?.onEvent(params.payload, method.endsWith(".snapshot") ? "snapshot" : "delta");
       return;
+    }
+    if (method === PRODUCT_NOTIFICATIONS.TICK && this.opts.onTick !== undefined) {
+      const tick = SystemTick.safeParse(msg["params"]);
+      if (tick.success) {
+        try {
+          this.opts.onTick({ at: tick.data.at, intervalMs: tick.data.intervalMs });
+        } catch {
+          // a consumer's bug never breaks response/subscription routing
+        }
+      }
     }
     if (method !== undefined) {
       for (const listener of [...(this.notificationListeners.get(method) ?? [])]) {
