@@ -133,6 +133,9 @@ public final class FieldProductClient {
     /// what this door is called in it (FieldLink passes the desktop's id).
     public var trafficLog: @Sendable (SubscriptionTraffic) -> Void
     public var logLabel: String?
+    /// SP-2 (g) — the phone's budget this door's socket counts against. Nil:
+    /// no budget (a loopback door, most tests).
+    public var doorBudget: ProductDoorBudget?
 
     public init(
       maxBackoff: Duration = .seconds(10),
@@ -144,7 +147,8 @@ public final class FieldProductClient {
       clock: any ProductClock = SystemProductClock(),
       mayDial: (@Sendable () async -> Bool)? = nil,
       trafficLog: @escaping @Sendable (SubscriptionTraffic) -> Void = SubscriptionTraffic.log,
-      logLabel: String? = nil
+      logLabel: String? = nil,
+      doorBudget: ProductDoorBudget? = nil
     ) {
       self.maxBackoff = maxBackoff
       self.callTimeout = callTimeout
@@ -156,6 +160,7 @@ public final class FieldProductClient {
       self.mayDial = mayDial
       self.trafficLog = trafficLog
       self.logLabel = logLabel
+      self.doorBudget = doorBudget
     }
   }
 
@@ -187,6 +192,8 @@ public final class FieldProductClient {
   @ObservationIgnored private let options: Options
 
   @ObservationIgnored private var connection: (any ProductConnection)?
+  /// SP-2 (g) — the budget slot `connection` holds, given back after its close.
+  @ObservationIgnored private var connectionGrant: PhoneConnectionBudget.Grant?
   @ObservationIgnored private var receiveTask: Task<Void, Never>?
   /// The dial in flight, held so `connect()` is idempotent across the await
   /// that precedes `connection` being assigned.
@@ -267,10 +274,8 @@ public final class FieldProductClient {
     dialTask = nil
     receiveTask?.cancel()
     receiveTask = nil
-    let connection = self.connection
-    self.connection = nil
+    retireConnection()
     generation &+= 1
-    Task { await connection?.close() }
     failPending(FieldProductError(kind: "UNAVAILABLE", message: "client closed"))
     subs.removeAll()
     subRoutes.removeAll()
@@ -403,9 +408,7 @@ public final class FieldProductClient {
         let refusal = Self.refusal(from: error)
         self.record(refusal, for: token)
         self.note("re-subscribing \(method) failed — re-dialing: \(refusal.message)")
-        let dying = self.connection
-        self.connection = nil
-        if let dying { Task { await dying.close() } }
+        self.retireConnection()
         self.socketDown(token: token, error: refusal)
       }
     }
@@ -833,17 +836,35 @@ public final class FieldProductClient {
           return
         }
       }
+      // SP-2 (g) — a dial beyond the budget WAITS for a slot (a replacement
+      // door to one desktop waits for its predecessor's socket to close). A
+      // close, or a newer dial, cancels the wait.
+      var grant: PhoneConnectionBudget.Grant?
+      let ledger = self.options.doorBudget?.ledger
+      if let budget = self.options.doorBudget {
+        guard let slot = try? await budget.ledger.acquire(.door(desktop: budget.desktop)) else {
+          return
+        }
+        guard token == self.generation else {
+          budget.ledger.release(slot)
+          return
+        }
+        grant = slot
+      }
       do {
         let connection = try await self.transport.connect(to: self.url)
         guard token == self.generation else {
           await connection.close()
+          if let grant { ledger?.release(grant) }
           return
         }
         self.connection = connection
+        self.connectionGrant = grant
         self.startKeepalive(token: token)
         self.startReceiving(connection, token: token)
         await self.hello(connection, token: token)
       } catch {
+        if let grant { ledger?.release(grant) }
         self.socketDown(token: token, error: error)
       }
     }
@@ -932,9 +953,7 @@ public final class FieldProductClient {
         let refusal = Self.refusal(from: error)
         record(refusal, for: token)
         note("replaying \(entry.method) failed — re-dialing: \(refusal.message)")
-        let dying = connection
-        connection = nil
-        if let dying { Task { await dying.close() } }
+        retireConnection()
         socketDown(token: token, error: refusal)
         return
       }
@@ -1046,9 +1065,7 @@ public final class FieldProductClient {
     // dial that never reaches a door still leaves a live session behind, and
     // only `close()` (`invalidateAndCancel`) ends one. Dropping the reference
     // alone leaked one session per backoff tick against a sleeping desktop.
-    let dying = connection
-    connection = nil
-    if let dying { Task { await dying.close() } }
+    retireConnection()
     receiveTask?.cancel()
     receiveTask = nil
     record(Self.refusal(from: error), for: token)
@@ -1078,6 +1095,23 @@ public final class FieldProductClient {
     flushReadyWaiters(refusal)
   }
 
+  /// Detach the live socket and its budget slot TOGETHER — every road that
+  /// walks away from a socket comes through here — close the socket, and give
+  /// the slot back once the close has finished, so a replacement door waits for
+  /// its predecessor's close rather than its predecessor's intention.
+  private func retireConnection() {
+    let dying = connection
+    let grant = connectionGrant
+    connection = nil
+    connectionGrant = nil
+    guard dying != nil || grant != nil else { return }
+    let ledger = options.doorBudget?.ledger
+    Task {
+      await dying?.close()
+      if let grant { ledger?.release(grant) }
+    }
+  }
+
   /// At most one reconnect is ever scheduled.
   private func scheduleReconnect() {
     guard !closedByUser, reconnectTask == nil, connection == nil else { return }
@@ -1105,8 +1139,7 @@ public final class FieldProductClient {
   private func fail(_ error: FieldProductError) {
     lastErrorGeneration = generation
     lastError = error
-    let connection = self.connection
-    self.connection = nil  // detach first: this socket's close is now stale
+    retireConnection()  // detach first: this socket's close is now stale
     stopKeepalive()
     generation &+= 1
     dialTask?.cancel()
@@ -1114,7 +1147,6 @@ public final class FieldProductClient {
     receiveTask?.cancel()
     receiveTask = nil
     state = .failed(error)
-    Task { await connection?.close() }
     failPending(error)
     flushReadyWaiters(error)
   }

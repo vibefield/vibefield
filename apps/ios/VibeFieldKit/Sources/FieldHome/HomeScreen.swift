@@ -1106,7 +1106,10 @@ public struct HomeScreen: View {
           probe: meshDoorProbe(node: node),
           magicDNSSuffix: suffix,
           storeBus: FieldStoreBus.enabledByDefault && gated,
-          selfLogin: login)
+          selfLogin: login,
+          // SP-2 (g) — the phone's ONE connection budget, shared with every
+          // terminal attachment (`beginAttachment`).
+          budget: .shared)
         opened.start()
         link = opened
       }
@@ -1702,7 +1705,9 @@ public struct HomeScreen: View {
           guard let link else { throw NoDesktopDoor() }
           return try await link.renewTerminalGrant(
             on: deviceID, sessionId: session, expectGeneration: generation, requestId: requestId)
-        })
+        },
+        // SP-2 (g) — the same ledger the link's doors count against.
+        budget: .shared)
       self.attachment = attachment
       attachedDeviceID = deviceID
       // --- IOS-5a ---

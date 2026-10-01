@@ -2013,3 +2013,27 @@ private func stuckLink(
     #expect(await door.latest?.methods.contains("agent.subscribe") == true)
   }
 }
+
+// MARK: - SP-2 (g): every door the link opens counts against the budget
+
+@MainActor
+@Suite struct FieldLinkBudgetTests {
+  /// One door per self desktop, held in the phone's ledger from the dial to the
+  /// close — so a replacement door (a moved address, a stopped client retried)
+  /// waits for its predecessor's socket.
+  @Test func eachDoorTheLinkOpensHoldsItsDesktopsSlot() async throws {
+    let ledger = PhoneConnectionBudget()
+    let mesh = MeshRehearsal()
+    await mesh.set(peers: [studio])
+    let link = FieldLink(
+      storeDoors: await mesh.doors(), transport: LinkDoor(script: selfDoor), probe: LinkProbe(),
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
+      magicDNSSuffix: rehearsalSuffix, schedule: briskSchedule, budget: ledger,
+      now: { Date(timeIntervalSince1970: 1_757_808_001) })
+    link.start()
+    try await waitUntil("the door ready") { link.desktops.first?.state == .ready }
+    #expect(ledger.inUse(.door(desktop: "dev-studio")) == 1)
+    link.stop()
+    try await waitUntil("the slot back") { ledger.inUse(.door(desktop: "dev-studio")) == 0 }
+  }
+}

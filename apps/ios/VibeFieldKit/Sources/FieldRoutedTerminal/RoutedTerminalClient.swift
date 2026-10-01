@@ -187,19 +187,24 @@ public final class RoutedTerminalClient {
     /// generation; the caller can only name itself.
     public var viewId: String
     public var capacities: RoutedReceiverCapacities
+    /// SP-2 (g) — the phone's budget the two legs count against
+    /// (`PhoneBudget.terminalLegs`). Nil: no budget.
+    public var legBudget: PhoneConnectionBudget?
 
     public init(
       ticketProvider: (@MainActor @Sendable (String) async throws -> RoutedTerminalTicket)? = nil,
       renewalProvider: (@MainActor @Sendable (RoutedRenewal) async throws -> RoutedGrant)? = nil,
       maxBackoff: Duration = .seconds(10),
       viewId: String = UUID().uuidString,
-      capacities: RoutedReceiverCapacities = .phone
+      capacities: RoutedReceiverCapacities = .phone,
+      legBudget: PhoneConnectionBudget? = nil
     ) {
       self.ticketProvider = ticketProvider
       self.renewalProvider = renewalProvider
       self.maxBackoff = maxBackoff
       self.viewId = viewId
       self.capacities = capacities
+      self.legBudget = legBudget
     }
   }
 
@@ -229,6 +234,9 @@ public final class RoutedTerminalClient {
   private var pumps: [Task<Void, Never>] = []
   /// "Re-mint once, then UNAVAILABLE" — the pre-authentication rule, counted.
   private var preAuthRetried = false
+  /// SP-2 (g) — the two legs' budget slots, and a dial waiting for them.
+  private var legGrant: PhoneConnectionBudget.Grant?
+  private var legGrantTask: Task<Void, Never>?
   private var closed = false
   private var generation = 0
 
@@ -484,6 +492,28 @@ public final class RoutedTerminalClient {
     teardownLegs()
     generation += 1
     state = .connecting
+    let token = generation
+    guard let ledger = options.legBudget else {
+      openLegs(ticket, token: token)
+      return
+    }
+    // SP-2 (g) — a connection SET is two legs, and a dial beyond the phone's
+    // leg budget WAITS for a slot: a second attachment's legs open only once
+    // the first's are torn down.
+    legGrantTask = Task { [weak self] in
+      guard let grant = try? await ledger.acquire(.terminalLegs, count: RoutedChannel.allCases.count)
+      else { return }
+      guard let self, token == self.generation, !self.closed else {
+        ledger.release(grant)
+        return
+      }
+      self.legGrantTask = nil
+      self.legGrant = grant
+      self.openLegs(ticket, token: token)
+    }
+  }
+
+  private func openLegs(_ ticket: RoutedTerminalTicket, token: Int) {
     let hello = { (channel: RoutedChannel) -> JSONValue in
       var body: [String: JSONValue] = [
         "protocolMajor": .int(Int64(RoutedTerminalContract.protocolMajor)),
@@ -509,7 +539,6 @@ public final class RoutedTerminalClient {
       return .object(body)
     }
 
-    let token = generation
     control = RoutedLeg(
       channel: .control, url: ticket.endpoints.controlUrl, transport: transport,
       callbacks: callbacks(for: .control, token: token))
@@ -1318,6 +1347,14 @@ public final class RoutedTerminalClient {
     frames?.close()
     control = nil
     frames = nil
+    // SP-2 (g) — the legs' slots go back with the legs, and a dial still
+    // waiting for slots stops waiting.
+    legGrantTask?.cancel()
+    legGrantTask = nil
+    if let grant = legGrant {
+      legGrant = nil
+      options.legBudget?.release(grant)
+    }
     controlAccepted = nil
     framesAccepted = nil
     pumps.forEach { $0.cancel() }

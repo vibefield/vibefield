@@ -151,6 +151,8 @@ public final class TerminalAttachment {
 
   @ObservationIgnored private let door: TicketDoor
   @ObservationIgnored private let renewal: RenewalDoor?
+  /// SP-2 (g) — the phone's budget this attachment's two legs count against.
+  @ObservationIgnored private let budget: PhoneConnectionBudget?
   @ObservationIgnored private let transport: any RoutedLegTransport
   @ObservationIgnored private var client: RoutedTerminalClient?
   @ObservationIgnored private var sink: RoutedTerminalFrameSink?
@@ -168,11 +170,12 @@ public final class TerminalAttachment {
     session: @escaping SessionProvider,
     appearance: TerminalAppearance,
     door: @escaping TicketDoor,
-    renewal: RenewalDoor? = nil
+    renewal: RenewalDoor? = nil,
+    budget: PhoneConnectionBudget? = nil
   ) {
     self.init(
       transport: URLSessionRoutedTransport(session: session), appearance: appearance, door: door,
-      renewal: renewal)
+      renewal: renewal, budget: budget)
   }
 
   /// The seam the tests hold: a transport with no sockets behind it. Every
@@ -183,12 +186,14 @@ public final class TerminalAttachment {
     transport: any RoutedLegTransport,
     appearance: TerminalAppearance,
     door: @escaping TicketDoor,
-    renewal: RenewalDoor? = nil
+    renewal: RenewalDoor? = nil,
+    budget: PhoneConnectionBudget? = nil
   ) {
     self.transport = transport
     self.appearance = appearance
     self.door = door
     self.renewal = renewal
+    self.budget = budget
     presentation = presentationConfig(for: appearance)
   }
 
@@ -343,7 +348,9 @@ public final class TerminalAttachment {
         // P0-C — the grant is renewed ahead of the cell's input margin, so a
         // long session keeps both its input and its activation.
         renewalProvider: Self.renewalProvider(renewal),
-        viewId: "phone-\(UUID().uuidString.lowercased())"))
+        viewId: "phone-\(UUID().uuidString.lowercased())",
+        // SP-2 (g) — the two legs count against the phone's budget.
+        legBudget: budget))
     self.sink = sink
     self.client = client
     self.sessionID = sessionID

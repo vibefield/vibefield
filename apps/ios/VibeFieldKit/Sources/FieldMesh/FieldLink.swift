@@ -252,6 +252,10 @@ public final class FieldLink {
   /// is called foreign on this evidence and the door probe remains the sole
   /// witness, exactly as it was through UA-P-1a.
   @ObservationIgnored private let selfLogin: String?
+  /// SP-2 (g) — the phone's connection budget every door this link opens
+  /// counts against (one door per self desktop). The app passes the phone's one
+  /// ledger; a link made with none gets its own.
+  @ObservationIgnored public let budget: PhoneConnectionBudget
 
   @ObservationIgnored private var clients: [String: FieldProductClient] = [:]
   @ObservationIgnored private var subscriptions: [String: ProductSubscription] = [:]
@@ -329,8 +333,10 @@ public final class FieldLink {
     // moment the flag flipped.
     storeBus: Bool = false,
     selfLogin: String? = nil,
+    budget: PhoneConnectionBudget? = nil,
     now: @escaping @MainActor () -> Date = { .now }
   ) {
+    self.budget = budget ?? PhoneConnectionBudget()
     devices = FieldStore(doors: storeDoors)
     boards = FieldStore(doors: storeDoors)
     doors = storeDoors
@@ -885,6 +891,9 @@ public final class FieldLink {
     // SP-2 (h) — each subscription's bytes-per-second line names the desktop
     // it came from by its durable id; never by its door's URL.
     options.logLabel = deviceId
+    // SP-2 (g) — one door per self desktop, held in the phone's ledger from the
+    // dial to the close: a replacement waits for its predecessor's socket.
+    options.doorBudget = ProductDoorBudget(ledger: budget, desktop: deviceId)
     let client = FieldProductClient(url: url, transport: transport, options: options)
     clients[deviceId] = client
     client.connect()

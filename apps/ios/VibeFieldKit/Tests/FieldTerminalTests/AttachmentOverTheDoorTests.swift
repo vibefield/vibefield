@@ -256,6 +256,26 @@ import Testing
     await attachment.detach()
   }
 
+  /// SP-2 (g) — an attachment's two legs count against the phone's budget from
+  /// the dial to the detach, so a second attachment's legs wait for these.
+  @MainActor
+  @Test func anAttachmentHoldsItsTwoLegsInThePhonesBudget() async throws {
+    let door = CellDoorHarness()
+    let port = try await door.start()
+    defer { Task { await door.stop() } }
+    let ledger = PhoneConnectionBudget()
+    let session = "sess-01J8Z3K9"
+    let attachment = TerminalAttachment(
+      transport: URLSessionRoutedTransport(), appearance: .default,
+      door: { _ in try Self.ticketJSON(port: port, sessionId: session) }, budget: ledger)
+
+    attachment.attach(sessionID: session, cols: 80, rows: 24, deviceName: "studio")
+    _ = try await Self.value("the control leg to attach") { await door.controlAttach }
+    #expect(ledger.inUse(.terminalLegs) == 2)
+    await attachment.detach()
+    #expect(ledger.inUse(.terminalLegs) == 0)
+  }
+
   @MainActor
   @Test func aClosedWriteGrantNamesTheActRatherThanPromisingARenewal() async throws {
     // TM-r3, K-M1. The attach grant runs ten minutes and both ends close input
