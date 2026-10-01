@@ -134,7 +134,9 @@ export function docHostPeers(
   roster: ReadonlyArray<DocHostRosterRow>,
   selfPeers: readonly SyncPeer[],
 ): SyncPeer[] {
-  return selfPeers.filter((peer) => isDocHostPeer(roster, peer.id));
+  const hosts = new Set<string>();
+  for (const row of roster) if (hostsDocs(row)) hosts.add(row.tailscaleId);
+  return selfPeers.filter((peer) => hosts.has(peer.id));
 }
 
 /** A roster row as the doc peer set reads it. */
@@ -150,10 +152,12 @@ export interface DocHostRosterRow {
  * filters the outbound fan-out with it; the inbound gate (`isDocHost`) asks it
  * of every lane a peer opens. A phone publishes no row, so it is never one. */
 export function isDocHostPeer(roster: ReadonlyArray<DocHostRosterRow>, peer: string): boolean {
-  for (const row of roster) {
-    if (!row.self && row.tailscaleId === peer && row.capabilities?.docHost === true) return true;
-  }
-  return false;
+  return roster.some((row) => hostsDocs(row) && row.tailscaleId === peer);
+}
+
+/** The row rule both halves share: another desktop, correlated, saying docHost. */
+function hostsDocs(row: DocHostRosterRow): row is DocHostRosterRow & { tailscaleId: string } {
+  return !row.self && row.tailscaleId !== undefined && row.capabilities?.docHost === true;
 }
 
 /** The roster view the daemon wires in post-construction (DeviceService is
