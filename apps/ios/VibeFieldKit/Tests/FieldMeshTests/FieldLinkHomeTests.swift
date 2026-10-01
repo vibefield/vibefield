@@ -439,7 +439,12 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
     await door.route(laptopDoorHost) { method, id, _ in
       method == "system.hello" ? [frame(id: id, ack)] : []  // tickets answered by hand
     }
-    let (link, _) = try await homedLink(door: door, budget: ledger)
+    // A call deadline long enough that the ticket this row holds open by hand
+    // is not raced by a TIMEOUT on a loaded host (the catalog rows' reason).
+    let (link, _) = try await homedLink(
+      door: door,
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(30)),
+      budget: ledger)
     defer { link.stop() }
     try await waitUntil("the field through the studio") { link.agents.count == 2 }
 
