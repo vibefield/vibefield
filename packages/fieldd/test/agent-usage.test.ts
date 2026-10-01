@@ -34,6 +34,7 @@ import {
   type AgentAccountUsageEntry,
   CONTRACTS_VERSION,
   LAYOUT,
+  PEER_FIELDD_SCOPES,
   SOCKETS,
 } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
@@ -45,6 +46,7 @@ import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { SCRIPTED_CATALOG } from "./agent-catalog-fixture";
 import { productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint, removeTempRoot, shortTmpRoot } from "./native-harness";
+import { desktopSlice, registryPeer } from "./peer-roster";
 import { helloAs, type RpcErrorShape, until, WsRpc } from "./ws-rpc";
 
 /** The env var naming the scripted provider's readings file. */
@@ -566,8 +568,26 @@ describe("the account usage doors (AR-5d)", () => {
     // own copy is what a caller playing the sidecar has to hold
     const secret = productPathSecret(mock);
     expect(secret).toBeTruthy();
+    // D1 (2026-10-01) — a peer DAEMON is the transport's to name: the registry
+    // vouches for its node, its slice says it is a desktop (`docHost`)
+    mock.meshPeers = [
+      registryPeer({
+        nodeId: "node-peer-a",
+        deviceId: "dev-peer-a",
+        name: "peer-a",
+        login: TEST_LOGIN,
+      }),
+    ];
+    mock.pushPeersDelta({ kind: "peerUpdated" });
+    mock.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-peer-a",
+      data: desktopSlice("dev-peer-a"),
+      version: 1,
+    });
+    await until(() => daemon.devices.isDocHost("dev-peer-a"), 8_000);
     const ws = new WebSocket(`ws://127.0.0.1:${daemon.controlPort}/t/${secret}`, {
-      headers: { "Tailscale-User-Login": TEST_LOGIN },
+      headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": "node-peer-a" },
     });
     cleanup.push(() => ws.close());
     await new Promise<void>((resolve, reject) => {
@@ -575,12 +595,15 @@ describe("the account usage doors (AR-5d)", () => {
       ws.once("error", reject);
     });
     const peer = new WsRpc(ws);
-    await peer.call("system.hello", {
+    const ack = (await peer.call("system.hello", {
       contractsVersion: CONTRACTS_VERSION,
       minCompatible: CONTRACTS_VERSION,
       clientKind: "peer-fieldd",
       deviceId: "dev-peer-a",
-    });
+    })) as { grantedScopes: string[] };
+    // it IS the peer daemon (the peer preset), so the refusal below is the
+    // peer's and not a demoted phone's
+    expect(ack.grantedScopes).toEqual([...PEER_FIELDD_SCOPES]);
     const refused = (await peer.callErr("agents.usage", {})) as RpcErrorShape;
     expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
     // AR-5b: the tailnet preset carries no agent.usage, so the scope wall fires

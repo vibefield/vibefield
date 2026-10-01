@@ -7,9 +7,14 @@ import WebSocket from "ws";
 import { RpcCallError } from "../src/native-link";
 import { ProductApi } from "../src/product-api";
 import { TEST_LOGIN } from "./link-fixture";
+import { peerRoster } from "./peer-roster";
 
 const SECRET = "3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM";
 const OWN_ID = "dev-self";
+/** D1 (2026-10-01) — what the peer's sidecar injects: the login AND its node
+ * id, which this door's roster correlates to a desktop (`dev-peer-a`). The
+ * peer kind is the transport's to give; a claim alone is the phone's. */
+const PEER_A_SIDECAR = { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": "node-peer-a" };
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -31,6 +36,8 @@ async function api(forwarder = vi.fn()) {
     // harness says which account this desktop is. Without it the door mints a
     // guest and every row below fails on the grant rather than the routing.
     getLinkedLogin: () => TEST_LOGIN,
+    // D1 — the roster facts the peer kind needs: node-peer-a is a desktop
+    ...peerRoster({ "node-peer-a": { deviceId: "dev-peer-a", docHost: true } }),
   });
   a.setDeviceRouting(() => OWN_ID, forwarder);
   a.register("device.list", (ctx, params) => ({
@@ -78,9 +85,9 @@ const hello = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("the peer-fieldd door branch (C5)", () => {
-  it("secret path + claim → {kind:'peer-fieldd', deviceId} with the peer preset", async () => {
+  it("secret path + a desktop's node → {kind:'peer-fieldd', deviceId} with the peer preset", async () => {
     const { port } = await api();
-    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
+    const ws = await dial(port, `/t/${SECRET}`, PEER_A_SIDECAR);
     const ack = (await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }))) as {
       result: { grantedScopes: string[] };
     };
@@ -92,7 +99,11 @@ describe("the peer-fieldd door branch (C5)", () => {
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; deviceId: string } };
     };
-    expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-peer-a" });
+    expect(probe.result.principal).toEqual({
+      kind: "peer-fieldd",
+      deviceId: "dev-peer-a",
+      tailscaleId: "node-peer-a",
+    });
   });
 
   it("the claim is IGNORED off the tailnet door — a token hello stays local-token", async () => {
@@ -213,7 +224,7 @@ describe("the device? routing hook (C5/D35)", () => {
       spawned += 1;
       return { principal: ctx.principal };
     });
-    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
+    const ws = await dial(port, `/t/${SECRET}`, PEER_A_SIDECAR);
     await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
     const health = (await call(ws, 2, "system.health", {})) as {
       error: { data: { kind: string; details: Record<string, unknown> } };
@@ -228,12 +239,20 @@ describe("the device? routing hook (C5/D35)", () => {
     expect(listed).toBe(0);
     // a federating method is still the peer's to call
     const probe = (await call(ws, 4, "device.list", {})) as { result: { principal: unknown } };
-    expect(probe.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-peer-a" });
+    expect(probe.result.principal).toEqual({
+      kind: "peer-fieldd",
+      deviceId: "dev-peer-a",
+      tailscaleId: "node-peer-a",
+    });
     // DS-2 — and so, now, is an agent act: executed here, as the peer daemon
     const spawn = (await call(ws, 5, "agent.spawn", { provider: "scripted" })) as {
       result: { principal: unknown };
     };
-    expect(spawn.result.principal).toEqual({ kind: "peer-fieldd", deviceId: "dev-peer-a" });
+    expect(spawn.result.principal).toEqual({
+      kind: "peer-fieldd",
+      deviceId: "dev-peer-a",
+      tailscaleId: "node-peer-a",
+    });
     expect(spawned).toBe(1);
   });
 
@@ -417,7 +436,7 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
 
   it("reads a peer's envelope tolerantly: a newer client kind is recorded, an unreadable restatement or key is refused", async () => {
     const { port } = await api();
-    const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
+    const ws = await dial(port, `/t/${SECRET}`, PEER_A_SIDECAR);
     await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
     const newer = (await call(ws, 2, "device.list", {
       forward: {

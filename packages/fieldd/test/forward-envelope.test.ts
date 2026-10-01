@@ -169,6 +169,8 @@ describe("PeerLink → a peer's door", () => {
       getLinkedLogin: () => TEST_LOGIN,
       // the node id the sidecar injects maps to the roster's device (T1 §1)
       correlateNodeId: (node) => (node === "node-a" ? "dev-a" : undefined),
+      // …whose row is a desktop's: the peer kind is the transport's (D1)
+      isDocHost: (deviceId) => deviceId === "dev-a",
     });
     door.register("device.list", (ctx, params) => {
       seen.push({ ctx, params });

@@ -265,6 +265,21 @@ export class DeviceService extends EventEmitter {
     return undefined;
   }
 
+  /** D1 (2026-10-01, the DS wave 1 review) — does the ROSTER row for this
+   * device say it hosts documents (`capabilities.docHost`: a DESKTOP, DS-D7)?
+   * The tailnet door's second fact for minting `peer-fieldd`, beside the node
+   * correlation above. Read off the roster, so it carries the roster's own law:
+   * a peer row exists only for a device the registry vouches for as this
+   * account's, and its capabilities only once its slice has arrived — a peer
+   * with no slice yet says nothing about itself, which is a no. Never true for
+   * THIS device: self is not a peer of itself, and a node that correlates to
+   * our own id is not one of our desktops dialling in. */
+  isDocHost(deviceId: string): boolean {
+    if (deviceId === this.deviceId) return false;
+    const row = this.get(deviceId);
+    return row !== undefined && !row.self && row.capabilities?.docHost === true;
+  }
+
   get(deviceId: string): DeviceInfo | undefined {
     return this.roster().find((d) => d.deviceId === deviceId);
   }

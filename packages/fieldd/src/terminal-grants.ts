@@ -69,6 +69,10 @@ export function isSelfTailnetPrincipal(principal: GrantPrincipal): boolean {
  * why this widens nothing: the same verified login may hello as `ios` and be a
  * `tailnet` self principal with the same rights, so kind is a label between
  * two claims of ONE transport identity, never a boundary.
+ * *Errata (2026-10-01, D1): the kind is no longer the hello's claim alone —
+ * the door mints it only when the sidecar's node id correlates to a roster
+ * row that hosts documents (a desktop); a claim without that is a `tailnet`
+ * principal. The rights below are unchanged by it.*
  *
  * design-06 §6 also says "a peer daemon acting for no one gets `[read]`".
  * Telling "for no one" from "for a window" needs `onBehalfOf` at the owner

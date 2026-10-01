@@ -37,6 +37,7 @@ import { ProductApi } from "../src/product-api";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { TEST_LOGIN, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
+import { peerRoster } from "./peer-roster";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-rosettad.mjs");
@@ -633,6 +634,9 @@ describe("the doors' posture", () => {
       // UA-P-0a — the row is about LOCALITY, so say which account this desktop
       // is; an account-less desktop refuses on the grant before locality runs.
       getLinkedLogin: () => TEST_LOGIN,
+      // D1 (2026-10-01) — the peer kind is the transport's: the peer's node
+      // correlates to a desktop on this roster
+      ...peerRoster({ "node-peer-a": { deviceId: "dev-peer-a", docHost: true } }),
     });
     let called = 0;
     for (const method of ["index.sessions", "index.search", "index.recent"]) {
@@ -645,7 +649,11 @@ describe("the doors' posture", () => {
     cleanup.push(() => api.close());
     const dial = async (clientKind: "peer-fieldd" | "ios") => {
       const ws = new WebSocket(`ws://127.0.0.1:${port}/t/${secret}`, {
-        headers: { "Tailscale-User-Login": TEST_LOGIN },
+        headers: {
+          "Tailscale-User-Login": TEST_LOGIN,
+          // the peer's sidecar names its node; the phone here names none
+          ...(clientKind === "peer-fieldd" ? { "Tailscale-Node-Id": "node-peer-a" } : {}),
+        },
       });
       cleanup.push(() => ws.close());
       await new Promise<void>((resolve, reject) => {

@@ -25,6 +25,8 @@ const LINKED = "me@jamesyong42.com";
 async function api(
   correlateNodeId?: (nodeId: string) => string | undefined,
   linkedLogin: string | null = LINKED,
+  // D1 (2026-10-01) — the second roster fact the peer kind needs
+  isDocHost?: (deviceId: string) => boolean,
 ): Promise<{ api: ProductApi; port: number }> {
   const a = new ProductApi({
     port: 0,
@@ -37,6 +39,7 @@ async function api(
     tailnetPathSecret: SECRET,
     getLinkedLogin: () => linkedLogin,
     ...(correlateNodeId ? { correlateNodeId } : {}),
+    ...(isDocHost ? { isDocHost } : {}),
   });
   // probe handlers on real registry methods: echo the caller's principal kind
   a.register("doc.list", (ctx) => ({ principal: ctx.principal, transport: ctx.transport }));
@@ -125,8 +128,14 @@ describe("the tailnet door (C3 provenance auth)", () => {
 
   it("T1: the v3 node-id header is the peer identity — a contradicting claim loses", async () => {
     // transport-derived beats claimed: the sidecar-injected node id correlates
-    // to the roster device, and the hello's own deviceId cannot move it.
-    const { port } = await api((nodeId) => (nodeId === "nQRJl4CNTRL" ? "dev-roster" : undefined));
+    // to the roster device, and the hello's own deviceId cannot move it. D1
+    // (2026-10-01): that roster row is a desktop's (`docHost`), which is what
+    // lets the kind be minted at all.
+    const { port } = await api(
+      (nodeId) => (nodeId === "nQRJl4CNTRL" ? "dev-roster" : undefined),
+      LINKED,
+      (deviceId) => deviceId === "dev-roster",
+    );
     const ws = await dial(port, {
       path: `/t/${SECRET}`,
       headers: {
@@ -147,11 +156,19 @@ describe("the tailnet door (C3 provenance auth)", () => {
     });
   });
 
-  it("T1: a correlation miss keeps the C5 claim fallback (mixed fleet)", async () => {
+  it("D1: a correlation miss is no peer — the C5 claim buys nothing (mixed fleet)", async () => {
     // the node id is present but the registry doesn't know it yet (roster
-    // stale / peer unpublished) — the claim stays the honest label until
-    // fleet-v3 retires it.
-    const { port } = await api(() => undefined);
+    // stale / peer unpublished). THE FLIP (D1, 2026-10-01): this row asserted
+    // the C5 claim stood in — `peer-fieldd {deviceId: "dev-claimed"}`, the
+    // peer preset for a device id the caller typed. The kind is the
+    // transport's to give now, so the caller is the phone's principal, the
+    // node recorded beside its login; the door asks it for a fresh hello once
+    // the roster can vouch for the node (guest-door.test.ts).
+    const { port } = await api(
+      () => undefined,
+      LINKED,
+      () => true,
+    );
     const ws = await dial(port, {
       path: `/t/${SECRET}`,
       headers: {
@@ -159,18 +176,37 @@ describe("the tailnet door (C3 provenance auth)", () => {
         "Tailscale-Node-Id": "nUNKNOWN01",
       },
     });
-    await call(ws, 1, "system.hello", { ...hello(), deviceId: "dev-claimed" });
+    const ack = (await call(ws, 1, "system.hello", { ...hello(), deviceId: "dev-claimed" })) as {
+      result: { grantedScopes: string[] };
+    };
+    expect(ack.result.grantedScopes).toEqual([...TAILNET_SCOPES]);
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; deviceId: string } };
     };
-    // DS-D15 — the claim labels the device, and the node the sidecar named is
-    // recorded beside it: a ledger reader can tell a claimed id from a
-    // correlated one by whether the node maps to it
     expect(probe.result.principal).toEqual({
-      kind: "peer-fieldd",
-      deviceId: "dev-claimed",
+      kind: "tailnet",
+      login: LINKED,
+      self: true,
       tailscaleId: "nUNKNOWN01",
     });
+  });
+
+  it("D1: a door told nothing about desktops mints no peer, even for a correlated node", async () => {
+    // `isDocHost` unset: no device is one (an embedded or unit door that wants
+    // a peer must say which devices are desktops)
+    const { port } = await api((nodeId) => (nodeId === "nQRJl4CNTRL" ? "dev-roster" : undefined));
+    const ws = await dial(port, {
+      path: `/t/${SECRET}`,
+      headers: {
+        "Tailscale-User-Login": LINKED,
+        "Tailscale-Node-Id": "nQRJl4CNTRL",
+      },
+    });
+    await call(ws, 1, "system.hello", hello());
+    const probe = (await call(ws, 2, "device.list", {})) as {
+      result: { principal: { kind: string } };
+    };
+    expect(probe.result.principal.kind).toBe("tailnet");
   });
 
   it("T1: the node id names the device, not the software — a non-fieldd caller stays tailnet", async () => {

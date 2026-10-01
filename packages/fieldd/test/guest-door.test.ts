@@ -2,7 +2,8 @@ import { once } from "node:events";
 import { CONTRACTS_VERSION, PEER_FIELDD_SCOPES, TAILNET_SCOPES } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
-import { ProductApi } from "../src/product-api";
+import { ProductApi, type ProductApiOptions } from "../src/product-api";
+import { captureLog, peerRoster } from "./peer-roster";
 
 // UA-4 — the self/guest door at the wire (spec §7.3, UA-D5/D13/D14): the
 // stored-login comparison decides self vs guest; a guest gets a polite hello
@@ -27,12 +28,16 @@ afterEach(() => {
   api = null;
 });
 
-async function boot(getLinkedLogin?: () => string | null): Promise<number> {
+async function boot(
+  getLinkedLogin?: () => string | null,
+  extra: Partial<ProductApiOptions> = {},
+): Promise<number> {
   api = new ProductApi({
     port: 0,
     tokens,
     tailnetPathSecret: SECRET,
     ...(getLinkedLogin !== undefined ? { getLinkedLogin } : {}),
+    ...extra,
   });
   // a real scope:null handler, echoing its CallerContext — lets a self
   // principal be seen SUCCEEDING and carries the minted principal back out
@@ -45,6 +50,7 @@ async function boot(getLinkedLogin?: () => string | null): Promise<number> {
 }
 
 interface Wire {
+  ws: WebSocket;
   send(frame: unknown): void;
   next(): Promise<Record<string, unknown>>;
 }
@@ -62,6 +68,7 @@ async function dial(port: number, path: string, headers: Record<string, string>)
   });
   await once(ws, "open");
   return {
+    ws,
     send: (frame) => ws.send(JSON.stringify(frame)),
     next: () => {
       const queued = queue.shift();
@@ -177,24 +184,6 @@ describe("UA-4 — the self/guest door", () => {
     expect(errKind(await wire.next())).toBe("FORBIDDEN_SCOPE");
   });
 
-  it("a self peer-fieldd keeps its device identity and its grant — the peer preset", async () => {
-    const port = await boot(() => "me@github");
-    const wire = await dial(port, `/t/${SECRET}`, { "tailscale-user-login": "me@github" });
-
-    // DS-D8: a self peer daemon is minted the PEER preset (the tailnet preset
-    // plus `index.search`, so one desktop can ask another's history)
-    wire.send(hello(1, "peer-fieldd", { deviceId: "01MYOTHERDEVICEAAAAAAAAAAA" }));
-    expect(result(await wire.next())["grantedScopes"]).toEqual([...PEER_FIELDD_SCOPES]);
-    wire.send(call(2, "device.list"));
-    expect(result(await wire.next())["principal"]).toEqual({
-      kind: "peer-fieldd",
-      deviceId: "01MYOTHERDEVICEAAAAAAAAAAA",
-    });
-    // …and the local-only door is closed to it whatever the preset grants (D36)
-    wire.send(call(3, "system.health"));
-    expect(errKind(await wire.next())).toBe("FORBIDDEN_SCOPE");
-  });
-
   it("the local token door never meets the comparison", async () => {
     const port = await boot(() => "me@github");
     const wire = await dial(port, "/", {});
@@ -206,5 +195,127 @@ describe("UA-4 — the self/guest door", () => {
     // the fake token carries no shellMain bit, so the principal is the plain
     // local grant — the point is the DOOR: no comparison, no guest arm
     expect(principal["kind"]).toBe("local-token");
+  });
+});
+
+// D1 (2026-10-01, the DS wave 1 review) — the peer daemon's KIND is the
+// transport's to give. This file used to pin the claim path: a self login that
+// helloed `peer-fieldd` with a device CLAIM and no node id was minted the peer
+// preset (PEER_FIELDD_SCOPES — `index.search`, the catalog door, the desk
+// board), so any self device could have it for the asking, the phone too. The
+// kind needs the sidecar's node id correlated to a roster row that hosts
+// documents now; a claim without both is the phone's principal — logged, never
+// refused — and a demoted connection is asked for a fresh hello once the
+// roster would admit it.
+describe("D1 — the peer daemon's kind is transport-derived", () => {
+  const DESK = "01MYOTHERDEVICEAAAAAAAAAAA";
+  const PHONE = "01MYPHONEAAAAAAAAAAAAAAAAA";
+
+  it("no node id: a peer-fieldd claim is the phone's principal and preset — logged once, never refused", async () => {
+    const log = captureLog();
+    const port = await boot(() => "me@github", {
+      // the claim even names a real desktop the roster knows: no node, no peer
+      ...peerRoster({ nTKSDESK: { deviceId: DESK, docHost: true } }),
+      logger: log.logger,
+    });
+    const wire = await dial(port, `/t/${SECRET}`, { "tailscale-user-login": "me@github" });
+
+    wire.send(hello(1, "peer-fieldd", { deviceId: DESK }));
+    expect(result(await wire.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
+    wire.send(call(2, "device.list"));
+    expect(result(await wire.next())["principal"]).toEqual({
+      kind: "tailnet",
+      login: "me@github",
+      self: true,
+    });
+    // a second hello on the connection is not a second line
+    wire.send(hello(3, "peer-fieldd", { deviceId: DESK }));
+    expect(result(await wire.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
+    expect(log.events("fieldd.product_api.peer_claim_demoted")).toEqual([
+      { reason: "no-node-id", claimedDeviceId: DESK },
+    ]);
+  });
+
+  it("a node the roster calls a phone is not a peer daemon, whatever its hello claims", async () => {
+    const log = captureLog();
+    const port = await boot(() => "me@github", {
+      ...peerRoster({ nTKSPHONE: { deviceId: PHONE, docHost: false } }),
+      logger: log.logger,
+    });
+    const wire = await dial(port, `/t/${SECRET}`, {
+      "tailscale-user-login": "me@github",
+      "tailscale-node-id": "nTKSPHONE",
+    });
+
+    wire.send(hello(1, "peer-fieldd", { deviceId: PHONE }));
+    expect(result(await wire.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
+    wire.send(call(2, "device.list"));
+    expect(result(await wire.next())["principal"]).toEqual({
+      kind: "tailnet",
+      login: "me@github",
+      self: true,
+      tailscaleId: "nTKSPHONE",
+    });
+    expect(log.events("fieldd.product_api.peer_claim_demoted")).toEqual([
+      { reason: "not-a-doc-host", claimedDeviceId: PHONE, nodeId: "nTKSPHONE", deviceId: PHONE },
+    ]);
+  });
+
+  it("a node that correlates to a desktop is the peer daemon: its preset, the DERIVED device id, the node beside it", async () => {
+    const log = captureLog();
+    const port = await boot(() => "me@github", {
+      ...peerRoster({ nTKSDESK: { deviceId: DESK, docHost: true } }),
+      logger: log.logger,
+    });
+    const wire = await dial(port, `/t/${SECRET}`, {
+      "tailscale-user-login": "me@github",
+      "tailscale-node-id": "nTKSDESK",
+    });
+
+    // DS-D8: the PEER preset (the tailnet preset plus `index.search`), and the
+    // claim cannot move the device the node correlates to
+    wire.send(hello(1, "peer-fieldd", { deviceId: "01SOMEONEELSEAAAAAAAAAAAAA" }));
+    expect(result(await wire.next())["grantedScopes"]).toEqual([...PEER_FIELDD_SCOPES]);
+    wire.send(call(2, "device.list"));
+    expect(result(await wire.next())["principal"]).toEqual({
+      kind: "peer-fieldd",
+      deviceId: DESK,
+      tailscaleId: "nTKSDESK",
+    });
+    // …and the local-only door is closed to it whatever the preset grants (D36)
+    wire.send(call(3, "system.health"));
+    expect(errKind(await wire.next())).toBe("FORBIDDEN_SCOPE");
+    expect(log.events("fieldd.product_api.peer_claim_demoted")).toEqual([]);
+  });
+
+  it("a demoted claim is closed for a fresh hello the moment the roster shows its node as a desktop", async () => {
+    // a desktop that re-dials before this daemon's roster has its slice
+    const rows: Record<string, { deviceId: string; docHost: boolean }> = {};
+    const log = captureLog();
+    const port = await boot(() => "me@github", { ...peerRoster(rows), logger: log.logger });
+    const headers = { "tailscale-user-login": "me@github", "tailscale-node-id": "nTKSLATE" };
+    const late = await dial(port, `/t/${SECRET}`, headers);
+    late.send(hello(1, "peer-fieldd", { deviceId: DESK }));
+    expect(result(await late.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
+    // a claim with no node at all can never be admitted: it is left alone
+    const bare = await dial(port, `/t/${SECRET}`, { "tailscale-user-login": "me@github" });
+    bare.send(hello(1, "peer-fieldd", { deviceId: DESK }));
+    expect(result(await bare.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
+    expect(api?.reconsiderPeerClaims()).toBe(0); // the roster cannot vouch for it yet
+
+    rows["nTKSLATE"] = { deviceId: DESK, docHost: true };
+    const closed = once(late.ws, "close");
+    expect(api?.reconsiderPeerClaims()).toBe(1);
+    const [code] = (await closed) as [number, Buffer];
+    expect(code).toBe(1012); // "service restart": the client's reconnect is the re-hello
+    expect(api?.reconsiderPeerClaims()).toBe(0); // one close per demotion
+    expect(bare.ws.readyState).toBe(WebSocket.OPEN);
+    expect(log.events("fieldd.product_api.peer_claim_rehello")).toEqual([
+      { nodeId: "nTKSLATE", deviceId: DESK },
+    ]);
+
+    const again = await dial(port, `/t/${SECRET}`, headers);
+    again.send(hello(1, "peer-fieldd", { deviceId: DESK }));
+    expect(result(await again.next())["grantedScopes"]).toEqual([...PEER_FIELDD_SCOPES]);
   });
 });

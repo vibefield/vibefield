@@ -61,7 +61,13 @@ export const Hello = z
     /** C5/D32 — the peer-fieldd identity CLAIM: honored ONLY on the tailnet
      * door (provenance + WhoIs-verified same-user domain) and only as a LABEL —
      * the grant stays the D32 preset either way, so the claim cannot escalate.
-     * Retires when the sidecar injects the node id (truffle petition). */
+     * Retires when the sidecar injects the node id (truffle petition).
+     * *Errata (2026-10-01, D1 of the DS wave 1 review): "cannot escalate"
+     * stopped being true when DS-D8 gave the peer kind more than the preset
+     * (PEER_FIELDD_SCOPES); since D1 it is true again for a different reason —
+     * the door mints `peer-fieldd` only for a sidecar node id that correlates
+     * to a roster desktop, and this claim names nothing (fieldd logs it when a
+     * claim is demoted). The field stays for the wire's tolerance.* */
     deviceId: z.string().optional(),
     /** UA-2 — the client's EXPECTATION of which user this daemon serves.
      * Restrict-only, like clientKind: a configured daemon refuses a mismatch

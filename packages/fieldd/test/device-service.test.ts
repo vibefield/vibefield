@@ -11,8 +11,10 @@ import {
   CONTRACTS_VERSION,
   type DeviceInfo,
   type DeviceListResult,
+  PEER_FIELDD_SCOPES,
   PORTS,
   SOCKETS,
+  TAILNET_SCOPES,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
@@ -20,6 +22,7 @@ import { bootstrap } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productPathSecret } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
+import { desktopSlice } from "./peer-roster";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -832,4 +835,99 @@ describe("DS-L8 — the roster's states", () => {
     expect(woke.find((x) => x.deviceId === "dev-quiet")?.state).toBe("awake");
     expect(cleared).toEqual(["dev-quiet", "dev-quiet"]);
   });
+});
+
+// D1 (2026-10-01, the DS wave 1 review) — the tailnet door's second fact for
+// minting `peer-fieldd`, beside the node correlation: does the ROSTER row say
+// this device hosts documents (`capabilities.docHost` — a desktop)? Read off
+// the roster, so it keeps the roster's law: the registry vouches for the peer,
+// its slice says what it is, and a device with no slice says nothing.
+describe("D1 — isDocHost reads the roster row", () => {
+  it("a self peer's desktop slice says yes; a phone's slice, a slice-less peer, an unlisted slice and this device say no", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-desk", deviceId: "dev-desk", login: ACCOUNT, name: "desk" }),
+      tailnetPeer({ id: "node-phone", deviceId: "dev-phone", login: ACCOUNT, name: "phone" }),
+      tailnetPeer({ id: "node-bare", deviceId: "dev-bare", login: ACCOUNT, name: "bare" }),
+    ];
+    mock.storeSlices.set("dev-desk", desktopSlice("dev-desk"));
+    mock.storeSlices.set("dev-phone", {
+      ...desktopSlice("dev-phone"),
+      platform: "ios",
+      capabilities: { terminalHost: false, docHost: false, push: true },
+    });
+    // a desktop slice no registry row vouches for: dropped from the roster
+    mock.storeSlices.set("dev-stranger", desktopSlice("dev-stranger"));
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    await until(() => daemon.devices.get("dev-desk")?.capabilities !== undefined, 8000);
+
+    expect(daemon.devices.deviceIdByNodeId("node-desk")).toBe("dev-desk");
+    expect(daemon.devices.isDocHost("dev-desk")).toBe(true);
+    expect(daemon.devices.isDocHost("dev-phone")).toBe(false);
+    // listed, no slice yet: a device that has not said what it is is no desktop
+    expect(daemon.devices.isDocHost("dev-bare")).toBe(false);
+    expect(daemon.devices.isDocHost("dev-stranger")).toBe(false);
+    expect(daemon.devices.isDocHost("dev-nobody")).toBe(false);
+    // self publishes `docHost: true` and is still no peer of itself
+    expect(daemon.devices.get(daemon.devices.currentDeviceId())?.capabilities?.docHost).toBe(true);
+    expect(daemon.devices.isDocHost(daemon.devices.currentDeviceId())).toBe(false);
+  }, 30_000);
+
+  it("a desktop that dialled before its slice arrived is asked to hello again once the roster has it — and is the peer then", async () => {
+    // a PeerLink re-dials within a second of this daemon's restart, often
+    // before the roster has the dialler's slice; the principal is fixed at
+    // hello, so the daemon's roster moves close the demoted connection
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-desk", deviceId: "dev-desk", login: ACCOUNT, name: "desk" }),
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    await until(
+      () => daemon.health().mesh.serves.some((x) => x.name === "product" && x.url !== undefined),
+      8000,
+    );
+    await until(() => daemon.devices.deviceIdByNodeId("node-desk") === "dev-desk", 8000);
+    const door = `ws://127.0.0.1:${daemon.controlPort}/t/${productPathSecret(mock)}`;
+    const headers = { "Tailscale-User-Login": ACCOUNT, "Tailscale-Node-Id": "node-desk" };
+    const hello = {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind: "peer-fieldd",
+      deviceId: "dev-desk",
+    };
+    const dialDoor = async (): Promise<WebSocket> => {
+      const ws = new WebSocket(door, { headers });
+      cleanup.push(() => ws.close());
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", () => resolve());
+        ws.once("error", reject);
+      });
+      return ws;
+    };
+
+    const early = await dialDoor();
+    const first = (await new WsRpc(early).call("system.hello", hello)) as {
+      grantedScopes: string[];
+    };
+    expect(first.grantedScopes).toEqual([...TAILNET_SCOPES]); // no slice yet: no desktop
+    const closed = new Promise<number>((resolve) => early.once("close", (code) => resolve(code)));
+    mock.pushStoreDelta({
+      kind: "peerUpdated",
+      deviceId: "dev-desk",
+      data: desktopSlice("dev-desk"),
+      version: 1,
+    });
+    expect(await closed).toBe(1012);
+
+    const again = (await new WsRpc(await dialDoor()).call("system.hello", hello)) as {
+      grantedScopes: string[];
+    };
+    expect(again.grantedScopes).toEqual([...PEER_FIELDD_SCOPES]);
+  }, 30_000);
 });

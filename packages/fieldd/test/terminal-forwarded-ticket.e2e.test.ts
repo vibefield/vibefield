@@ -24,6 +24,7 @@ import { TERMINAL_SERVE_ID } from "../src/terminal-serve";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productPathSecret, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
+import { desktopSlice, registryPeer } from "./peer-roster";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const LOGIN = "me@jamesyong42.com";
@@ -108,13 +109,15 @@ function floorB(mock: MockMgmtServer): void {
 
 /** The sidecar half of a dial (peer-link.e2e's sim): a tailnet coordinate for
  * B lands on B's loopback door with the route secret joined, and the WhoIs
- * login the caller cannot forge is injected. */
+ * login the caller cannot forge is injected — with (D1, 2026-10-01) A's node
+ * id, which B's roster correlates to A's desktop slice: the peer kind is the
+ * transport's to give. */
 function sidecar(loopback: () => string): WsCtor {
   class SidecarSim extends WebSocket {
     constructor(url: string) {
       const target = url.includes("device-b.tailnet.ts.net") ? loopback() : "ws://127.0.0.1:1/";
       super(url.includes(".ts.net") ? target : url, {
-        headers: { "Tailscale-User-Login": LOGIN },
+        headers: { "Tailscale-User-Login": LOGIN, "Tailscale-Node-Id": "node-a" },
       });
     }
   }
@@ -139,6 +142,12 @@ async function bootPair(): Promise<{
   const dirB = makeDataDir();
   const mockB = await startMock(dirB);
   floorB(mockB);
+  // D1 — B's roster vouches for A as a desktop: its registry row names A's
+  // node, its store holds A's slice
+  mockB.meshPeers = [
+    registryPeer({ nodeId: "node-a", deviceId: "dev-a", name: "device-a", login: LOGIN }),
+  ];
+  mockB.storeSlices = new Map<string, unknown>([["dev-a", desktopSlice("dev-a", "device-a")]]);
   const B = await bootstrap({ dataDir: dirB, controlPort: 0, dataPort: 0 });
   cleanup.push(() => B.stop());
   // B's doors are only mintable for a remote caller once its terminal serve is
@@ -155,6 +164,7 @@ async function bootPair(): Promise<{
 
   const dirA = makeDataDir();
   const mockA = await startMock(dirA);
+  mockA.meshDeviceId = "dev-a"; // A's own mesh identity, the one B's roster names
   mockA.meshPeers = [
     {
       id: "node-b",
@@ -178,6 +188,7 @@ async function bootPair(): Promise<{
   });
   cleanup.push(() => A.stop());
   await until(() => A.devices.get("dev-b") !== undefined, 4_000);
+  await until(() => B.devices.isDocHost("dev-a"), 4_000);
   return { A, B, routes };
 }
 
@@ -205,7 +216,7 @@ describe("DS-4 — a window's ticket to a session on another desktop", () => {
     expect(ticket.route).toEqual({ cellBootId: "cell-b", routeRevision: 7 });
     expect(ticket.attachGrant.claims.audienceCellBootId).toBe("cell-b");
     expect(ticket.attachGrant.claims.rights).toEqual(["geometry", "input", "read"]);
-    expect(ticket.attachGrant.claims.clientId).toMatch(/^peer-fieldd:dev-self~/);
+    expect(ticket.attachGrant.claims.clientId).toMatch(/^peer-fieldd:dev-a~/);
     expect(ticket.transportGrant.claims.clientId).toBe(ticket.attachGrant.claims.clientId);
 
     // D2 (the landing review, 2026-10-01) — the same door asked by A's daemon

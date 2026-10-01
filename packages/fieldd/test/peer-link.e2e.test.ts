@@ -18,6 +18,13 @@
 // A's product WS end to end (test 2): the scope check precedes device routing,
 // so B refuses mintWindowToken at its gate before any re-route. The A-side
 // `device?` routing hop itself is unit-tested in device-routing.test.ts.
+//
+// *D1 (2026-10-01): the divergence above is GONE — the two mocks pin distinct
+// identities now (A = dev-a, B = dev-b), because B's door mints the peer kind
+// only for A's NODE id correlated to a roster row of B's that hosts documents
+// (A's desktop slice), and a node that correlated to B's own id would be no
+// peer at all. The rows below still drive post-routing params, which B serves
+// as itself either way.*
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -29,6 +36,7 @@ import { bootstrap, type FielddDaemon, PeerLink } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productPathSecret, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
+import { desktopSlice, registryPeer } from "./peer-roster";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const LOGIN = "me@jamesyong42.com";
@@ -39,11 +47,13 @@ afterEach(async () => {
   cleanup = [];
 });
 
-/** A mock mgmt server on <dataDir>/native/run/mgmt.sock, bootstrap-ready. */
-async function startMock(dataDir: string): Promise<MockMgmtServer> {
+/** A mock mgmt server on <dataDir>/native/run/mgmt.sock, bootstrap-ready,
+ * pinning its daemon's OWN mesh identity (D30). */
+async function startMock(dataDir: string, deviceId: string): Promise<MockMgmtServer> {
   mkdirSync(join(dataDir, "native", "run"), { recursive: true });
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   const mock = new MockMgmtServer(nativeEndpoint(dataDir, SOCKETS.MGMT));
+  mock.meshDeviceId = deviceId;
   await mock.start();
   cleanup.push(() => mock.stop());
   return mock;
@@ -70,7 +80,9 @@ function makeDataDir(): string {
  *     never holds it). A's roster hands PeerLink `http://<magicdns>:<the
  *     registry's product serve port>` — a derived locator with no secret in it
  *     — and that is exactly the string a phone would dial.
- *  2. It injects the WhoIs login header, which a caller cannot forge.
+ *  2. It injects the WhoIs login header, which a caller cannot forge — and
+ *     (D1, 2026-10-01) the dialling node's id, A's: B mints the peer kind only
+ *     for a node its roster correlates to a desktop.
  *
  * The sim used to dial the URL unchanged, because the secret was already in it
  * — which was the defect D7 closed. Returns a dial counter so tests can assert
@@ -89,7 +101,9 @@ function sidecar(loopback: () => string): { ctor: WsCtor; dials: () => number } 
       // `wss`/`https` and let a `ws://<magicdns>` dial through to a listener that
       // does not exist (UA-P-0i; the first cut's `https` locator hid it).
       const forwarded = url.includes(".ts.net") ? target : url;
-      super(forwarded, { headers: { "Tailscale-User-Login": LOGIN } });
+      super(forwarded, {
+        headers: { "Tailscale-User-Login": LOGIN, "Tailscale-Node-Id": "node-a" },
+      });
     }
   }
   return { ctor: SidecarSim, dials: () => count };
@@ -137,7 +151,13 @@ async function bootPair(): Promise<Pair> {
   // B first — A needs B's loopback door (port + route secret) to play B's
   // sidecar for it.
   const dirB = makeDataDir();
-  const mockB = await startMock(dirB);
+  const mockB = await startMock(dirB, "dev-b");
+  // D1 — B's roster vouches for A the way a door needs before it mints a peer
+  // daemon: the registry names A's node, A's slice says it is a desktop
+  mockB.meshPeers = [
+    registryPeer({ nodeId: "node-a", deviceId: "dev-a", name: "device-a", login: LOGIN }),
+  ];
+  mockB.storeSlices = new Map<string, unknown>([["dev-a", desktopSlice("dev-a", "device-a")]]);
   const B = await bootstrap({ dataDir: dirB, controlPort: 0, dataPort: 0 });
   cleanup.push(() => B.stop());
   const secret = await capabilitySecret(B, mockB);
@@ -147,13 +167,14 @@ async function bootPair(): Promise<Pair> {
   // coordinate to B's real loopback door (UA-P-0d).
   const { ctor, dials } = sidecar(() => bEndpoint);
   const dirA = makeDataDir();
-  const mockA = await startMock(dirA);
+  const mockA = await startMock(dirA, "dev-a");
   // UA-P-0e — B reaches A's roster the way every peer does now: through the
   // TAILNET'S OWN REGISTRY, with the control plane's WhoIs saying B belongs to
   // this account. It used to reach it as a published SLICE naming its own URL,
   // which was a redirect primitive — a spoofed slice could name any endpoint
-  // and `endpointFor` would dial it. A DISTINCT device id is still required:
-  // both mocks report `dev-self`, so B's real id would collide with A's own.
+  // and `endpointFor` would dial it. The row names B by B's own id, `dev-b` —
+  // its mock's identity since D1 set the two apart (2026-10-01); both mocks
+  // reported `dev-self` before, which is why a distinct id was required here.
   mockA.meshPeers = [
     {
       id: "node-b",
@@ -167,6 +188,7 @@ async function bootPair(): Promise<Pair> {
   cleanup.push(() => A.stop());
 
   await until(() => A.devices.get("dev-b") !== undefined, 4000);
+  await until(() => B.devices.isDocHost("dev-a"), 4000);
   // the coordinate A will dial is DERIVED, and carries no secret
   const locator = A.devices.get("dev-b")?.productEndpoint?.url;
   if (locator === undefined || locator.includes("/t/"))

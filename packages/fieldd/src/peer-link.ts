@@ -18,6 +18,13 @@ import { RpcCallError } from "./native-link";
 // per D32's layering note — read through DeviceService's parsed roster to
 // avoid a second store subscription).
 //
+// D1 (2026-10-01, the DS wave 1 review) — the claim is not even a label at the
+// peer any more: the hello still says `clientKind: "peer-fieldd"` and this
+// device's id, but the peer's door mints the peer kind only when ITS sidecar's
+// node id for this desktop correlates to a roster row that hosts documents
+// (product-api's hello); without that this daemon is a `tailnet` principal
+// there, and the door asks it to hello again once its roster catches up.
+//
 // UA-P-0e (D2, 2026-09-15) — THE ENDPOINT IS DERIVED NOW, NOT PUBLISHED. With
 // nothing content-bearing on the bus there is no peer slice to read a URL out
 // of, so the roster's `productEndpoint.url` is a LOCATOR this device computed:

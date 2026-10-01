@@ -24,6 +24,7 @@ import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productPathSecret, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
+import { desktopSlice } from "./peer-roster";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const LOGIN = "me@jamesyong42.com";
@@ -101,6 +102,9 @@ async function bootPair(): Promise<Pair> {
       whois: { login: LOGIN, deviceName: "device-a.tailnet.ts.net" },
     },
   ];
+  // D1 (2026-10-01) — …and A's slice says it is a desktop (`docHost`): the
+  // node id alone no longer mints the peer kind
+  mockB.storeSlices = new Map<string, unknown>([["dev-a", desktopSlice("dev-a", "device-a")]]);
   const B = await bootstrap({ dataDir: dirB, controlPort: 0, dataPort: 0 });
   cleanup.push(() => B.stop());
   await until(
@@ -128,6 +132,7 @@ async function bootPair(): Promise<Pair> {
   await until(() => B.devices.currentDeviceId() === "dev-b", 8000);
   await until(() => A.devices.get("dev-b") !== undefined, 8000);
   await until(() => B.devices.deviceIdByNodeId("node-a") === "dev-a", 8000);
+  await until(() => B.devices.isDocHost("dev-a"), 8000);
 
   // B's runtime, scripted: count the interrupts that really ran; park them on
   // demand so a test can cut the forward while one is in flight

@@ -23,6 +23,7 @@ import {
   TAILNET_GUEST_SCOPES,
   TAILNET_SCOPES,
 } from "@vibefield/contracts";
+import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { type WebSocket, WebSocketServer } from "ws";
 import {
   forwardProvenance,
@@ -94,10 +95,20 @@ export interface ProductApiOptions {
   tailnetPathSecret?: string;
   /** T1 §1: map a sidecar-injected Tailscale node id (WhoIs `Node.StableID`)
    * to the roster's ULID deviceId — DeviceService's registry correlation.
-   * Unset, or a miss (peer not yet published / roster stale) ⇒ the C5 hello
-   * claim remains the peer label (the mixed-fleet fallback; it dies with
-   * fleet-v3). */
+   * *D1 (2026-10-01): unset, or a miss (peer not yet published / roster
+   * stale), no longer falls back to the C5 hello claim — a hello asking for
+   * the peer kind without a correlated node is admitted as `tailnet` (see the
+   * hello's self arm). The claim used to stand in for this here.* */
   correlateNodeId?: (nodeId: string) => string | undefined;
+  /** D1 (2026-10-01) — does the roster row of a CORRELATED device host
+   * documents (`capabilities.docHost`, a desktop: DeviceService.isDocHost)?
+   * The second transport fact `peer-fieldd` needs. Unset ⇒ no device is one,
+   * so no hello is minted the peer kind (an embedded or unit door that wants a
+   * peer says which devices are desktops). */
+  isDocHost?: (deviceId: string) => boolean;
+  /** the door's own lines (a demoted peer claim, a re-hello asked of one);
+   * absent ⇒ silent */
+  logger?: Logger;
   /** UA-2 — the user this daemon serves (users.json userId). Asserted in every
    * hello ack; a client hello carrying a DIFFERENT expectation is refused
    * INCOMPATIBLE. Unset for embedded/unit daemons (ack reports null). */
@@ -179,6 +190,12 @@ interface ConnState {
    * transport-derived DEVICE identity. null on the same door means an older
    * sidecar proxied the request, never an anonymous caller. */
   tailnetNodeId: string | null;
+  /** D1 (2026-10-01) — this connection's hello asked for the peer daemon's
+   * kind and was admitted as `tailnet` because the transport did not show it
+   * (no node id, an uncorrelated node, a row that is not a desktop). Logged
+   * once; `reconsiderPeerClaims` closes the connection for a fresh hello when
+   * the roster would admit it. */
+  peerClaimDemoted: boolean;
   /** DS-D15 — an opaque id for this connection, minted at upgrade: the window
    * a forwarded call names when the grant carries no renderer participant. */
   connectionId: string;
@@ -215,6 +232,37 @@ export class ProductApi extends EventEmitter {
       }
     }
     return dropped;
+  }
+
+  /** D1 (2026-10-01) — the roster moved: a connection whose hello asked for
+   * the peer kind and was demoted (`peerClaimDemoted`) is CLOSED when its node
+   * now correlates to a desktop (`correlateNodeId` + `isDocHost`), so its
+   * client dials again and its next hello is minted the peer it is. The race
+   * this closes: a desktop's PeerLink re-dials within a second of a restart,
+   * often before this daemon's roster has the dialler's slice, and the
+   * connection's principal is fixed at hello — demoted then, the link would
+   * stay `tailnet` (its forwards refused as a non-peer's envelope, its replays
+   * refused the peer's doors) for as long as it stood. A connection with no
+   * node id can never be admitted and is left alone. Returns how many closed;
+   * the daemon calls it on every roster change. */
+  reconsiderPeerClaims(): number {
+    let closed = 0;
+    for (const conn of [...this.liveConns]) {
+      const { state } = conn;
+      if (!state.peerClaimDemoted || state.tailnetNodeId === null) continue;
+      const derived = this.opts.correlateNodeId?.(state.tailnetNodeId);
+      if (derived === undefined || this.opts.isDocHost?.(derived) !== true) continue;
+      state.peerClaimDemoted = false; // one close per demotion, however often the roster moves
+      this.logger.info(
+        "fieldd.product_api.peer_claim_rehello",
+        "The roster now shows a demoted peer claim's node as a desktop; its connection closes for a fresh hello",
+        { nodeId: state.tailnetNodeId, deviceId: derived },
+      );
+      // 1012 "service restart": the client's reconnect is the re-hello
+      conn.ws.close(1012, "peer admitted: hello again");
+      closed += 1;
+    }
+    return closed;
   }
 
   /** A revoked window bearer must lose its already-authenticated socket too.
@@ -401,9 +449,11 @@ export class ProductApi extends EventEmitter {
   /** DS-2 — every keyed forwarded mutation this daemon OWNS runs through it:
    * applied once per {calling peer, key}; a retry reads the outcome. */
   private readonly ownerReceipts: OwnerForwardJournal;
+  private readonly logger: Logger;
 
   constructor(private readonly opts: ProductApiOptions) {
     super();
+    this.logger = opts.logger ?? createNoopLogger();
     this.ownerReceipts =
       opts.forwardReceipts ??
       new OwnerForwardJournal({ device: () => this.ownDeviceId?.() ?? "unknown" });
@@ -506,6 +556,7 @@ export class ProductApi extends EventEmitter {
       scopes: [],
       tailnetLogin: door?.login ?? null,
       tailnetNodeId: door?.nodeId ?? null,
+      peerClaimDemoted: false,
       connectionId: `conn_${randomBytes(9).toString("base64url")}`,
       subs: new Map(),
       abortController: new AbortController(),
@@ -695,23 +746,58 @@ export class ProductApi extends EventEmitter {
           // the sidecar-proxied door: identity is the WhoIs-verified login; the
           // grant is the D32 tailnet preset (design-04 — tokens.mint/native.*/
           // push.manage/plugins.manage never federate). The peer-fieldd device
-          // identity is TRANSPORT-DERIVED where the sidecar allows (T1 §1): a
-          // v3+ sidecar injects the WhoIs node id, and the registry correlation
-          // maps it to the roster deviceId — the caller's claim cannot move it
-          // (a contradicting claim loses silently; same grant either way, so
-          // nothing escalates). The C5 hello claim survives ONLY as the
-          // mixed-fleet fallback — an absent node header means an older sidecar
-          // proxied the hop, not an anonymous caller — and is deleted when the
-          // fleet is v3. clientKind still decides the KIND: the node id proves
-          // which device dialed, never what software did.
+          // identity is TRANSPORT-DERIVED (T1 §1): a v3+ sidecar injects the
+          // WhoIs node id, and the registry correlation maps it to the roster
+          // deviceId — the caller's claim cannot move it.
+          //
+          // D1 (2026-10-01, the DS wave 1 review) — AND SO IS THE KIND. The
+          // `peer-fieldd` principal carries more than the phone's preset (the
+          // `index.search` of PEER_FIELDD_SCOPES, the catalog door's admission,
+          // the desk board), and it used to be minted from the hello's
+          // self-declared `clientKind`, the C5 device claim standing in for a
+          // node the roster could not correlate — so a self-login phone that
+          // claimed the kind got what SP-D13 (open) and SP-L4 withhold. It is
+          // minted now only when the transport says so twice: the node id
+          // correlates to a roster device, AND that roster row hosts documents
+          // (`capabilities.docHost` — a desktop, DS-D7; DeviceService.isDocHost).
+          // The hello still has to ASK for the kind (a node names a device,
+          // never the software that dialled), but asking no longer buys it. A
+          // claim without both — no node header (an older sidecar proxied the
+          // hop: the mixed fleet the C5 claim covered), a node the roster cannot
+          // correlate yet, a node whose row is a phone — is admitted as the
+          // `tailnet` principal the phone gets: logged once for the connection,
+          // never refused, because the same login is still the person. The
+          // claimed device id names nothing any more; it rides that log line
+          // alone. A demoted connection is closed for a fresh hello the moment
+          // the roster would admit it (`reconsiderPeerClaims`), so a desktop
+          // that dialled before its slice arrived is not demoted for the life
+          // of its link.
           const claimRaw = parsed.data.deviceId;
           const claim = typeof claimRaw === "string" && claimRaw.length > 0 ? claimRaw : undefined;
           const derived =
             state.tailnetNodeId !== null
               ? this.opts.correlateNodeId?.(state.tailnetNodeId)
               : undefined;
-          const deviceId = derived ?? claim;
-          const peer = parsed.data.clientKind === "peer-fieldd" && deviceId !== undefined;
+          const asksPeer = parsed.data.clientKind === "peer-fieldd";
+          const peer = asksPeer && derived !== undefined && this.opts.isDocHost?.(derived) === true;
+          if (asksPeer && !peer && !state.peerClaimDemoted) {
+            this.logger.info(
+              "fieldd.product_api.peer_claim_demoted",
+              "A hello asked for the peer daemon's kind without the transport to show it; admitted as a tailnet principal",
+              {
+                reason:
+                  state.tailnetNodeId === null
+                    ? "no-node-id"
+                    : derived === undefined
+                      ? "node-not-in-roster"
+                      : "not-a-doc-host",
+                ...(claim !== undefined ? { claimedDeviceId: claim } : {}),
+                ...(state.tailnetNodeId !== null ? { nodeId: state.tailnetNodeId } : {}),
+                ...(derived !== undefined ? { deviceId: derived } : {}),
+              },
+            );
+          }
+          state.peerClaimDemoted = asksPeer && !peer;
           state.authed = true;
           // DS-D8 (search by asking) — a self peer DAEMON carries one scope the
           // phone's preset does not: `index.search`, so a person's desktops
@@ -722,7 +808,7 @@ export class ProductApi extends EventEmitter {
             principal: peer
               ? {
                   kind: "peer-fieldd",
-                  deviceId: deviceId as string,
+                  deviceId: derived as string,
                   // DS-D15 — the audit actor names the NODE: the id the
                   // sidecar injected, recorded beside the correlated device
                   ...(state.tailnetNodeId !== null ? { tailscaleId: state.tailnetNodeId } : {}),

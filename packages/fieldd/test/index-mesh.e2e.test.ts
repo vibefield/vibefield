@@ -34,6 +34,7 @@ import { bootstrap, type FielddDaemon } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productPathSecret, writeLinkFixture } from "./link-fixture";
 import { nativeEndpoint } from "./native-harness";
+import { desktopSlice } from "./peer-roster";
 import { helloAs, until, WsRpc } from "./ws-rpc";
 
 const LOGIN = "me@jamesyong42.com";
@@ -87,15 +88,19 @@ interface DeskScript {
   search?: { hits: unknown[] };
 }
 
-/** The sidecar both daemons dial through: a peer's derived coordinate →
- * that daemon's loopback door + route secret; the WhoIs login injected. */
-function sidecar(doors: Map<string, string>): WsCtor {
+/** The sidecar a daemon dials through: a peer's derived coordinate → that
+ * daemon's loopback door + route secret; the WhoIs login injected, and (D1,
+ * 2026-10-01) the DIALLING node's id — the other desk's roster correlates it
+ * to this desk's desktop slice before its door mints the peer kind. */
+function sidecar(doors: Map<string, string>, node: string): WsCtor {
   class SidecarSim extends WebSocket {
     constructor(url: string) {
       const host = new URL(url).hostname;
       const door = doors.get(host);
       // a coordinate with no door behind it is an unreachable peer
-      super(door ?? "ws://127.0.0.1:1/", { headers: { "Tailscale-User-Login": LOGIN } });
+      super(door ?? "ws://127.0.0.1:1/", {
+        headers: { "Tailscale-User-Login": LOGIN, "Tailscale-Node-Id": node },
+      });
     }
   }
   return SidecarSim as unknown as WsCtor;
@@ -128,6 +133,10 @@ async function startMock(
       whois: { login: LOGIN, deviceName: `device-${peer}.tailnet.ts.net` },
     },
   ];
+  // D1 — the other desk's slice: it hosts documents, so its node is a peer daemon
+  mock.storeSlices = new Map<string, unknown>([
+    [`dev-${peer}`, desktopSlice(`dev-${peer}`, `device-${peer}`)],
+  ]);
   await mock.start();
   cleanup.push(() => mock.stop());
   return mock;
@@ -200,14 +209,15 @@ async function doorOf(desk: Desk): Promise<string> {
 
 async function bootPair(scripts: { a: DeskScript; b: DeskScript }) {
   const doors = new Map<string, string>();
-  const ctor = sidecar(doors);
+  // each desk dials through its OWN sidecar: the node it names is its own
+  const ctors = { a: sidecar(doors, "node-a"), b: sidecar(doors, "node-b") };
   const preA = await prepareDesk("a", scripts.a);
   const preB = await prepareDesk("b", scripts.b);
-  const A: Desk = { ...preA, daemon: await bootDaemon(preA, ctor) };
-  const B: Desk = { ...preB, daemon: await bootDaemon(preB, ctor) };
+  const A: Desk = { ...preA, daemon: await bootDaemon(preA, ctors.a) };
+  const B: Desk = { ...preB, daemon: await bootDaemon(preB, ctors.b) };
   doors.set("device-a.tailnet.ts.net", await doorOf(A));
   doors.set("device-b.tailnet.ts.net", await doorOf(B));
-  return { A, B, doors, ctor };
+  return { A, B, doors, ctors };
 }
 
 async function windowOn(desk: Desk): Promise<WsRpc> {
@@ -391,7 +401,7 @@ describe("DS-6 — history across two real daemons", () => {
   }, 120_000);
 
   it("a restarted B lists A's history from its persisted replica before A ever answers", async () => {
-    const { A, B, ctor } = await bootPair({ a: SCRIPT_A, b: SCRIPT_B });
+    const { A, B, ctors } = await bootPair({ a: SCRIPT_A, b: SCRIPT_B });
     await until(() => B.daemon.indexMesh.replica("dev-a")?.sessions.length === 3, 30_000);
     // the replica is on disk (debounced), then both daemons go away
     await new Promise((resolve) => setTimeout(resolve, 300));
@@ -406,7 +416,7 @@ describe("DS-6 — history across two real daemons", () => {
         whois: { login: LOGIN, deviceName: "device-a.tailnet.ts.net" },
       },
     ];
-    const reborn: Desk = { ...B, daemon: await bootDaemon(B, ctor) };
+    const reborn: Desk = { ...B, daemon: await bootDaemon(B, ctors.b) };
     await until(() => reborn.daemon.indexCatalog.ready, 30_000);
     const win = await windowOn(reborn);
     const page = IndexSessionsResult.parse(

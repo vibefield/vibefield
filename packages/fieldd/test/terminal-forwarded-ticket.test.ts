@@ -31,6 +31,7 @@ import {
 } from "../src/terminal-grants";
 import { TerminalService } from "../src/terminal-service";
 import { TEST_LOGIN } from "./link-fixture";
+import { peerRoster } from "./peer-roster";
 import { WsRpc } from "./ws-rpc";
 
 const OWNER = "dev-a";
@@ -446,6 +447,8 @@ describe("the terminal doors ride the device? routing (DS-4)", () => {
       },
       tailnetPathSecret: SECRET,
       getLinkedLogin: () => TEST_LOGIN,
+      // D1 (2026-10-01) — the peer's node correlates to a desktop here
+      ...peerRoster({ "node-c": { deviceId: "dev-c", docHost: true } }),
     });
     a.setDeviceRouting(() => "dev-b", service(rewriter).forwardVia(forwarder));
     a.register("terminal.openTicket", (c, params) => ({
@@ -492,7 +495,10 @@ describe("the terminal doors ride the device? routing (DS-4)", () => {
 
   it("serves a self peer DAEMON the mint — and still refuses it a door that stayed local", async () => {
     const port = await api(vi.fn());
-    const rpc = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
+    const rpc = await dial(port, `/t/${SECRET}`, {
+      "Tailscale-User-Login": TEST_LOGIN,
+      "Tailscale-Node-Id": "node-c",
+    });
     await rpc.call("system.hello", {
       contractsVersion: CONTRACTS_VERSION,
       minCompatible: CONTRACTS_VERSION,
@@ -502,7 +508,7 @@ describe("the terminal doors ride the device? routing (DS-4)", () => {
     expect(await rpc.call("terminal.openTicket", { sessionId: "pane-b" })).toEqual(
       expect.objectContaining({
         served: "here",
-        principal: { kind: "peer-fieldd", deviceId: "dev-c" },
+        principal: { kind: "peer-fieldd", deviceId: "dev-c", tailscaleId: "node-c" },
       }),
     );
     const refused = await rpc.callErr("terminal.list", {});

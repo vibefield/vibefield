@@ -13,6 +13,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { PeerLink, ProductApi, TokenService } from "../src/index";
 import { RpcCallError } from "../src/native-link";
+import { peerRoster } from "./peer-roster";
 import { until } from "./ws-rpc";
 
 const LOGIN = "me@jamesyong42.com";
@@ -24,13 +25,15 @@ afterEach(async () => {
   cleanup = [];
 });
 
-/** The sidecar's half of a dial: the WhoIs login a caller cannot forge. */
+/** The sidecar's half of a dial: the WhoIs login a caller cannot forge, and
+ * (D1, 2026-10-01) the dialling node's id, which the door's roster must
+ * correlate to a desktop before it mints the peer kind. */
 function sidecar(): { ctor: WsCtor; dials: () => number } {
   let count = 0;
   class SidecarSim extends WebSocket {
     constructor(url: string) {
       count += 1;
-      super(url, { headers: { "Tailscale-User-Login": LOGIN } });
+      super(url, { headers: { "Tailscale-User-Login": LOGIN, "Tailscale-Node-Id": "node-a" } });
     }
   }
   return { ctor: SidecarSim, dials: () => count };
@@ -45,6 +48,7 @@ async function peerDoor(refusal: () => RpcCallError) {
     tokens: new TokenService(),
     tailnetPathSecret: SECRET,
     getLinkedLogin: () => LOGIN,
+    ...peerRoster({ "node-a": { deviceId: "dev-a", docHost: true } }),
   });
   const state = { ready: true, catalogAsks: [] as unknown[] };
   api.registerSubscription("device.subscribe", () => ({

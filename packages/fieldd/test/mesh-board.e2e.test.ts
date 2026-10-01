@@ -120,15 +120,17 @@ const registryPeer = (deviceId: string, host: string, online = true) => ({
 
 /** The sidecar, both halves (UA-P-0d): a TAILNET coordinate is terminated and
  * forwarded to the target's loopback door with its route secret, and the
- * WhoIs login is injected. `routes` resolves lazily: the doors exist only once
- * both daemons are up. */
-function sidecar(routes: Record<string, () => string>): WsCtor {
+ * WhoIs login is injected — with (D1, 2026-10-01) the DIALLING node's id,
+ * which the other desktop's registry row correlates to this desktop's slice:
+ * the peer kind is the transport's to give. `routes` resolves lazily: the
+ * doors exist only once both daemons are up. */
+function sidecar(routes: Record<string, () => string>, node: string): WsCtor {
   class SidecarSim extends WebSocket {
     constructor(url: string) {
       const host = Object.keys(routes).find((name) => url.includes(name));
       const target = host === undefined ? "ws://127.0.0.1:1/" : (routes[host]?.() ?? "");
       super(url.includes(".ts.net") ? target : url, {
-        headers: { "Tailscale-User-Login": TEST_LOGIN },
+        headers: { "Tailscale-User-Login": TEST_LOGIN, "Tailscale-Node-Id": node },
       });
     }
   }
@@ -174,7 +176,7 @@ async function bootSide(
     dataDir,
     controlPort: 0,
     dataPort: 0,
-    peerWebSocket: sidecar({ [`${peer.host}.tailnet.ts.net`]: route }),
+    peerWebSocket: sidecar({ [`${peer.host}.tailnet.ts.net`]: route }, `node-${deviceId}`),
   });
   cleanup.push(() => daemon.stop());
   return { daemon, mock, run, pane };

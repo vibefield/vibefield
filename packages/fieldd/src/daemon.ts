@@ -1462,6 +1462,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.allowedOrigins ? { allowedOrigins: config.allowedOrigins } : {}),
       tailnetPathSecret: servePathSecret,
       correlateNodeId: (nodeId) => devicesRef?.deviceIdByNodeId(nodeId),
+      // D1 (2026-10-01) — the peer KIND needs that device's roster row to be a
+      // desktop (`docHost`) as well; before the roster exists, nothing is one
+      isDocHost: (deviceId) => devicesRef?.isDocHost(deviceId) ?? false,
+      logger: logger.child({ component: "product.api" }),
       ...(config.userId !== undefined ? { userId: config.userId } : {}),
       // UA-4 — the door's comparison value (UA-D13): read fresh per hello, so
       // a capture landing mid-uptime activates the law without a restart
@@ -2794,6 +2798,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     devicesForAgents = devices;
     devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
+    // D1 (2026-10-01) — a peer that dialled before the roster could vouch for
+    // it was admitted as `tailnet`; once the roster shows its node as a
+    // desktop, its connection closes for a fresh hello (ProductApi)
+    devices.on("changed", () => api.reconsiderPeerClaims());
 
     // -- MF-1 (§10.2, D4's hybrid): the agent field's store carrier --
     // The same content-free rows `agent.subscribe {projection: "field"}`
