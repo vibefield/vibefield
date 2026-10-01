@@ -4,6 +4,7 @@ import { SendInput, type TerminalOpenTicket } from "@vibefield/contracts";
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { describe, expect, it, vi } from "vitest";
 import { createRoutedTerminalHost, ROUTED_CLIENT_CAPABILITIES } from "../src/terminal/routed/host";
+import { remoteRefusalOf } from "../src/terminal/routed/remote-refusal";
 
 const summary = {
   id: "sess-1",
@@ -768,5 +769,288 @@ describe("createRoutedTerminalHost — a session on another desktop (DS-4e)", ()
       ["terminal.sessions", { device: OWNER }],
       ["terminal.sessions", { device: OWNER }],
     ]);
+  });
+});
+
+// DS-4e — the HONEST answer when the owner's ticket does not come. The host
+// says why (`onRemoteRefusal`, structured: the pane words it), and a refusal
+// that may heal waits for the owner's NEXT roster flip — the device subscription
+// the monitor already holds — and is asked again then, once. Never on a timer.
+describe("createRoutedTerminalHost — when another desktop's ticket does not come (DS-4e)", () => {
+  const OWNER = "dev-studio";
+  const OWNER_CELL = "cell-studio-boot-7";
+  const LOOPBACK = {
+    controlUrl: `ws://127.0.0.1:61234/cell/${OWNER_CELL}/control`,
+    framesUrl: `ws://127.0.0.1:61234/cell/${OWNER_CELL}/frames`,
+  };
+  const NO_ROAD = "this desktop has no egress route to that desktop's terminal cells yet";
+
+  function ownersTicket(sessionId = "pane-r"): TerminalOpenTicket {
+    const t = ticket();
+    t.route.cellBootId = OWNER_CELL;
+    t.endpoints = { ...LOOPBACK };
+    t.transportGrant.protected.kid.cellBootId = OWNER_CELL;
+    t.transportGrant.claims.audienceCellBootId = OWNER_CELL;
+    t.attachGrant.protected.kid.cellBootId = OWNER_CELL;
+    t.attachGrant.claims.audienceCellBootId = OWNER_CELL;
+    t.attachGrant.claims.sessionId = sessionId;
+    return t;
+  }
+
+  /** fieldd's own refusal on this desktop (`remote-cell-rewriter.ts`). */
+  const egress = (): FielddRpcError =>
+    new FielddRpcError("UNAVAILABLE", NO_ROAD, true, {
+      service: "terminal",
+      state: "egress_unavailable",
+      device: OWNER,
+    });
+
+  function scripted(answers: Array<() => unknown>) {
+    return vi.fn(async (_method: string, _params?: unknown, _opts?: unknown) => {
+      const next = answers.shift();
+      if (next === undefined) throw new Error("asked too often");
+      return next();
+    });
+  }
+
+  function hostOver(requests: ReturnType<typeof scripted>) {
+    const onRemoteRefusal = vi.fn();
+    const binding = createRoutedTerminalHost({
+      fieldd: { request: requests } as unknown as FielddClient,
+      onRemoteRefusal,
+    });
+    binding.placeRemote("pane-r", OWNER);
+    return { binding, onRemoteRefusal };
+  }
+
+  it("classifies each refusal by what fieldd SAID, never by its words", () => {
+    const refusal = (kind: string, retryable: boolean, details?: unknown) =>
+      remoteRefusalOf(new FielddRpcError(kind, `the ${kind} words`, retryable, details), OWNER);
+    expect(
+      refusal("UNAVAILABLE", true, { service: "terminal", state: "egress_unavailable" }),
+    ).toEqual({ device: OWNER, state: "no-road", reason: "the UNAVAILABLE words", waits: true });
+    // a mesh that failed the dial closed, and an owner whose doors only its own
+    // machine can dial, are the same fact from here: no road yet
+    expect(refusal("UNAVAILABLE", true, { service: "mesh", state: "proxy-down" }).state).toBe(
+      "no-road",
+    );
+    expect(
+      refusal("UNAVAILABLE", true, { service: "terminal", state: "doors_not_published" }).state,
+    ).toBe("no-road");
+    expect(refusal("UNAVAILABLE", true, { service: "peer-link", state: "offline" })).toMatchObject({
+      state: "asleep",
+      waits: true,
+    });
+    expect(
+      refusal("UNAVAILABLE", true, { service: "peer-link", state: "unreachable" }),
+    ).toMatchObject({ state: "not-answering", waits: true });
+    // a second outcome-unknown the one retry could not resolve: not answered yet
+    expect(
+      refusal("UNAVAILABLE", true, { service: "fieldd", state: "outcome-unknown" }),
+    ).toMatchObject({ state: "not-answering", waits: true });
+    // final: what no second ask changes is said once and never asked again
+    expect(refusal("NOT_FOUND", false)).toMatchObject({ state: "gone", waits: false });
+    expect(refusal("FORBIDDEN_SCOPE", false, { required: "terminal.attach" })).toEqual({
+      device: OWNER,
+      state: "refused",
+      reason: "the FORBIDDEN_SCOPE words",
+      waits: false,
+    });
+    expect(
+      refusal("UNAVAILABLE", false, { service: "peer-link", state: "disposed" }),
+    ).toMatchObject({ state: "refused", waits: false });
+    // a throw that is not fieldd's (a contract break the parse caught) is final too
+    expect(remoteRefusalOf(new Error("the ticket names a different session"), OWNER)).toEqual({
+      device: OWNER,
+      state: "refused",
+      reason: "the ticket names a different session",
+      waits: false,
+    });
+  });
+
+  it("says `no-road` and waits for the owner's next flip — ten minutes of timers ask nothing, a flip asks once", async () => {
+    vi.useFakeTimers();
+    try {
+      const requests = scripted([
+        () => {
+          throw egress();
+        },
+        () => ownersTicket(),
+      ]);
+      const { binding, onRemoteRefusal } = hostOver(requests);
+      let minted: unknown;
+      const asking = binding.host.openTicket("pane-r").then((answer) => {
+        minted = answer;
+        return answer;
+      });
+      await vi.advanceTimersByTimeAsync(0);
+      expect(onRemoteRefusal).toHaveBeenLastCalledWith("pane-r", {
+        device: OWNER,
+        state: "no-road",
+        reason: NO_ROAD,
+        waits: true,
+      });
+
+      await vi.advanceTimersByTimeAsync(10 * 60_000);
+      expect(requests).toHaveBeenCalledTimes(1);
+      expect(minted).toBeUndefined();
+
+      // another desktop's row flipping is not this desktop's news
+      binding.deviceFlipped("dev-other");
+      await vi.advanceTimersByTimeAsync(0);
+      expect(requests).toHaveBeenCalledTimes(1);
+
+      binding.deviceFlipped(OWNER);
+      await expect(asking).resolves.toMatchObject({ endpoints: LOOPBACK });
+      expect(requests).toHaveBeenCalledTimes(2);
+      expect(requests.mock.calls[1]?.[1]).toEqual({ device: OWNER, sessionId: "pane-r" });
+      // the road is open: the honest state clears
+      expect(onRemoteRefusal).toHaveBeenLastCalledWith("pane-r", undefined);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("asks once per flip: refused again, it waits for the NEXT flip — and a flip that lands mid-ask earns its own ask", async () => {
+    let refuseSecond: (cause: unknown) => void = () => undefined;
+    const requests = scripted([
+      () => {
+        throw egress();
+      },
+      () =>
+        new Promise((_resolve, reject) => {
+          refuseSecond = reject;
+        }),
+      () => ownersTicket(),
+    ]);
+    const { binding } = hostOver(requests);
+    const asking = binding.host.openTicket("pane-r");
+    await vi.waitFor(() => expect(requests).toHaveBeenCalledTimes(1));
+
+    binding.deviceFlipped(OWNER);
+    await vi.waitFor(() => expect(requests).toHaveBeenCalledTimes(2));
+    // the owner flips again WHILE the second ask is out; then that ask is refused
+    binding.deviceFlipped(OWNER);
+    refuseSecond(egress());
+    // the flip it missed is not lost: asked a third time with no flip after
+    await expect(asking).resolves.toMatchObject({ endpoints: LOOPBACK });
+    expect(requests).toHaveBeenCalledTimes(3);
+  });
+
+  it("says the owner is asleep and waits too; a refusal no second ask changes is final — said, thrown, never asked again", async () => {
+    const asleep = scripted([
+      () => {
+        throw new FielddRpcError("UNAVAILABLE", "peer has no published endpoint", true, {
+          service: "peer-link",
+          device: OWNER,
+          state: "offline",
+        });
+      },
+      () => ownersTicket(),
+    ]);
+    const sleeping = hostOver(asleep);
+    const waking = sleeping.binding.host.openTicket("pane-r");
+    await vi.waitFor(() =>
+      expect(sleeping.onRemoteRefusal).toHaveBeenLastCalledWith(
+        "pane-r",
+        expect.objectContaining({ state: "asleep", waits: true }),
+      ),
+    );
+    sleeping.binding.deviceFlipped(OWNER);
+    await expect(waking).resolves.toMatchObject({ endpoints: LOOPBACK });
+
+    const forbidden = new FielddRpcError(
+      "FORBIDDEN_SCOPE",
+      "terminal.openTicket is forwarded to another desktop only for this person's own windows and devices",
+      false,
+      { method: "terminal.openTicket", device: OWNER },
+    );
+    const refused = scripted([
+      () => {
+        throw forbidden;
+      },
+    ]);
+    const refusing = hostOver(refused);
+    await expect(refusing.binding.host.openTicket("pane-r")).rejects.toBe(forbidden);
+    expect(refusing.onRemoteRefusal).toHaveBeenLastCalledWith("pane-r", {
+      device: OWNER,
+      state: "refused",
+      reason: forbidden.message,
+      waits: false,
+    });
+    refusing.binding.deviceFlipped(OWNER);
+    await Promise.resolve();
+    expect(refused).toHaveBeenCalledTimes(1);
+  });
+
+  it("withdraws a waiting ask when its activation ends, and every one at dispose — no ask after", async () => {
+    let refuseOut: (cause: unknown) => void = () => undefined;
+    const requests = scripted([
+      () => {
+        throw egress();
+      },
+      () =>
+        new Promise((_resolve, reject) => {
+          refuseOut = reject;
+        }),
+      () => {
+        throw egress();
+      },
+    ]);
+    const { binding, onRemoteRefusal } = hostOver(requests);
+    const runtime = new EventTarget();
+    binding.bind(runtime as GhostteaTerminalRuntime);
+    const ended = (): void => {
+      runtime.dispatchEvent(
+        new CustomEvent("routed-activation-state", {
+          detail: {
+            sessionId: "pane-r",
+            previous: { activationId: "act-r", phase: "unresolved" },
+            current: { activationId: "act-r", phase: "ended" },
+          },
+        }),
+      );
+    };
+
+    // PARKED: refused and waiting for the flip when the pane lets it go — a
+    // detach ends any activation — and the ask is withdrawn, its state cleared
+    const parked = binding.host.openTicket("pane-r");
+    await vi.waitFor(() =>
+      expect(onRemoteRefusal).toHaveBeenLastCalledWith(
+        "pane-r",
+        expect.objectContaining({ state: "no-road" }),
+      ),
+    );
+    ended();
+    await expect(parked).rejects.toThrow("withdrawn");
+    expect(onRemoteRefusal).toHaveBeenLastCalledWith("pane-r", undefined);
+    binding.deviceFlipped(OWNER);
+    await Promise.resolve();
+    expect(requests).toHaveBeenCalledTimes(1);
+
+    // OUT: the pane lets go while the ask is on the wire — its refusal, when it
+    // comes, is neither said nor parked
+    const out = binding.host.openTicket("pane-r");
+    await vi.waitFor(() => expect(requests).toHaveBeenCalledTimes(2));
+    const said = onRemoteRefusal.mock.calls.length;
+    ended();
+    refuseOut(egress());
+    await expect(out).rejects.toThrow(NO_ROAD);
+    expect(onRemoteRefusal.mock.calls.slice(said)).toEqual([]);
+    binding.deviceFlipped(OWNER);
+    await Promise.resolve();
+    expect(requests).toHaveBeenCalledTimes(2);
+
+    // DISPOSED: every parked ask goes with the host
+    const later = binding.host.openTicket("pane-r");
+    await vi.waitFor(() => expect(requests).toHaveBeenCalledTimes(3));
+    await vi.waitFor(() =>
+      expect(onRemoteRefusal).toHaveBeenLastCalledWith(
+        "pane-r",
+        expect.objectContaining({ state: "no-road" }),
+      ),
+    );
+    binding.dispose();
+    await expect(later).rejects.toThrow("withdrawn");
   });
 });

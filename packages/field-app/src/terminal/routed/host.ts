@@ -23,6 +23,7 @@ import {
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { requestResolvingOutcome } from "../../forwarded-call";
 import { createRoutedInputEncoder } from "./encode-input";
+import { type RemoteRefusal, remoteRefusalOf } from "./remote-refusal";
 
 /** The hello advertisement for the window runtime (TP-D25): ghosttea's own
  * default `resume` plus `session-events` (TP-S3f/G24) — the load-bearing gate
@@ -58,6 +59,10 @@ export interface RoutedTerminalHostOptions {
   readonly onTicket?: (sessionId: string, ticket: TerminalOpenTicketValue) => void;
   /** The product pool's inverse for birth-summary and placement ownership. */
   readonly onTerminated?: (sessionId: string) => void;
+  /** DS-4e — why the latest ask for ANOTHER desktop's session was not a
+   * ticket (`remote-refusal.ts`), for the pane to say; `undefined` when a
+   * ticket landed, or the ask was withdrawn — the honest state clears. */
+  readonly onRemoteRefusal?: (sessionId: string, refusal: RemoteRefusal | undefined) => void;
 }
 
 export interface RoutedTerminalHostBinding {
@@ -75,9 +80,20 @@ export interface RoutedTerminalHostBinding {
    * the decimal `handle` exists in no other answer. Null when the owner does
    * not list the session. */
   readRemoteSession(device: string, sessionId: string): Promise<SessionSummary | null>;
+  /** DS-4e — the roster's row for `device` flipped (its standing changed: the
+   * device subscription the monitor holds says so). Every ask waiting on that
+   * desktop is asked again, ONCE — the only re-ask there is: never a timer. */
+  deviceFlipped(device: string): void;
   /** Install the activation-lifecycle inverse after the runtime exists. */
   bind(runtime: GhostteaTerminalRuntime): void;
   dispose(): void;
+}
+
+/** DS-4e — one ask parked until its owner's roster row next flips. */
+interface FlipWait {
+  readonly sessionId: string;
+  wake(): void;
+  withdraw(cause: Error): void;
 }
 
 interface RoutedActivationStateLike {
@@ -200,6 +216,70 @@ export function createRoutedTerminalHost(
     const device = remotes.get(params.sessionId);
     return device === undefined ? params : { ...params, device };
   };
+  /** DS-4e — asks parked until their owner's roster row next flips, by owner. */
+  const flipWaits = new Map<string, Set<FlipWait>>();
+  /** DS-4e — how many flips each owner has had in this host's life: an ask
+   * refused after a flip landed WHILE it was out re-asks at once — the flip
+   * earned it — instead of waiting for one more. */
+  const flipCounts = new Map<string, number>();
+  /** DS-4e — bumped per session by a withdrawal, so an ask still OUT when its
+   * session was let go neither says its refusal nor parks itself afterwards. */
+  const askEpochs = new Map<string, number>();
+  const askEpoch = (sessionId: string): number => askEpochs.get(sessionId) ?? 0;
+  const nextFlip = (sessionId: string, device: string): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      const waits = flipWaits.get(device) ?? new Set<FlipWait>();
+      waits.add({ sessionId, wake: resolve, withdraw: reject });
+      flipWaits.set(device, waits);
+    });
+  /** Withdraw the parked asks for one session (every one, without an id): the
+   * session left, its activation ended, or the host is going. Each rejects —
+   * the runtime has nothing left to dial it for — and its honest state clears. */
+  const withdrawAsks = (sessionId?: string): void => {
+    if (sessionId !== undefined) askEpochs.set(sessionId, askEpoch(sessionId) + 1);
+    for (const [device, waits] of [...flipWaits]) {
+      for (const wait of [...waits]) {
+        if (sessionId !== undefined && wait.sessionId !== sessionId) continue;
+        waits.delete(wait);
+        wait.withdraw(new Error(`the ask for ${wait.sessionId} on ${device} was withdrawn`));
+        options.onRemoteRefusal?.(wait.sessionId, undefined);
+      }
+      if (waits.size === 0) flipWaits.delete(device);
+    }
+  };
+  /**
+   * DS-4e — one ticket from the OWNER (§6.3 steps 1–5). A refusal is said
+   * (`onRemoteRefusal`); one that may heal waits for the owner's next roster
+   * flip and is asked again then, once per flip; one that cannot is thrown,
+   * and the runtime ends the activation unavailable. Never a timer.
+   */
+  const askOwner = async (sessionId: string, device: string): Promise<TerminalOpenTicketValue> => {
+    const epoch = askEpoch(sessionId);
+    for (;;) {
+      const flipsBefore = flipCounts.get(device) ?? 0;
+      try {
+        // DS-D15 — one logical mint, its outcome resolved as for a local one
+        const raw = await requestResolvingOutcome(
+          options.fieldd,
+          "terminal.openTicket",
+          { device, sessionId },
+          "ask-anew",
+        );
+        const ticket = requireDirectTicket(sessionId, raw);
+        options.onRemoteRefusal?.(sessionId, undefined);
+        return ticket;
+      } catch (cause) {
+        // withdrawn or re-placed while the ask was out: not this ask's to say
+        if (disposed || askEpoch(sessionId) !== epoch || remotes.get(sessionId) !== device) {
+          throw cause;
+        }
+        const refusal = remoteRefusalOf(cause, device);
+        options.onRemoteRefusal?.(sessionId, refusal);
+        if (!refusal.waits) throw cause;
+        if ((flipCounts.get(device) ?? 0) === flipsBefore) await nextFlip(sessionId, device);
+      }
+    }
+  };
   let boundRuntime: GhostteaTerminalRuntime | null = null;
   let disposed = false;
 
@@ -217,6 +297,7 @@ export function createRoutedTerminalHost(
     custodians.delete(sessionId);
     exitApplied.delete(sessionId);
     remotes.delete(sessionId);
+    withdrawAsks(sessionId);
     options.onTerminated?.(sessionId);
   };
 
@@ -380,6 +461,9 @@ export function createRoutedTerminalHost(
     if (detail.current.phase === "ended") {
       input.releaseSession(detail.sessionId);
       activations.delete(detail.sessionId);
+      // DS-4e — the pane let it go (a detach ends any activation): an ask
+      // still parked for its owner's flip has nobody left to dial for
+      withdrawAsks(detail.sessionId);
     }
   };
 
@@ -397,17 +481,23 @@ export function createRoutedTerminalHost(
       // receipt in place of the ticket is asked ANEW — a second ticket is
       // harmless, the lost one expires. A local mint never fails that way.
       //
-      // DS-4e — a session another desktop owns names it (`routed`): this
-      // window's daemon forwards the mint, and its answer's doors are already
-      // a loopback pair here (the rewriter's egress route), dialled exactly as
-      // a local cell's.
-      const raw = await requestResolvingOutcome(
-        options.fieldd,
-        "terminal.openTicket",
-        routed({ sessionId }),
-        "ask-anew",
-      );
-      const ticket = requireDirectTicket(sessionId, raw);
+      // DS-4e — a session another desktop owns is asked of its OWNER
+      // (`askOwner`): this window's daemon forwards the mint, and its answer's
+      // doors are already a loopback pair here (the rewriter's egress route),
+      // dialled exactly as a local cell's.
+      const device = remotes.get(sessionId);
+      const ticket =
+        device === undefined
+          ? requireDirectTicket(
+              sessionId,
+              await requestResolvingOutcome(
+                options.fieldd,
+                "terminal.openTicket",
+                { sessionId },
+                "ask-anew",
+              ),
+            )
+          : await askOwner(sessionId, device);
       custodians.set(sessionId, ticket.route.cellBootId);
       options.onTicket?.(sessionId, ticket);
       return asRoutedTicket(ticket);
@@ -442,6 +532,7 @@ export function createRoutedTerminalHost(
         input.releaseSession(sessionId);
         activations.delete(sessionId);
         remotes.delete(sessionId);
+        withdrawAsks(sessionId);
       }
     },
     encodeInput: input.encodeInput,
@@ -455,6 +546,14 @@ export function createRoutedTerminalHost(
     },
     readRemoteSession: async (device, sessionId) =>
       (await readInventory(true, device)).get(sessionId) ?? null,
+    deviceFlipped: (device) => {
+      if (disposed) return;
+      flipCounts.set(device, (flipCounts.get(device) ?? 0) + 1);
+      const waits = flipWaits.get(device);
+      if (waits === undefined) return;
+      flipWaits.delete(device);
+      for (const wait of waits) wait.wake();
+    },
     primeTicket: (sessionId, ticket) => {
       if (disposed) throw new Error("the routed terminal host is disposed");
       const parsed = requireDirectTicket(sessionId, ticket);
@@ -480,6 +579,7 @@ export function createRoutedTerminalHost(
       primedTickets.clear();
       custodians.clear();
       exitApplied.clear();
+      withdrawAsks();
       remotes.clear();
       for (const held of heldRemovals.values()) clearTimeout(held);
       heldRemovals.clear();
