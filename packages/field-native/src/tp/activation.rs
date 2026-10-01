@@ -815,7 +815,10 @@ impl ActivationTable {
     /// resize, and a stale one is refused with the holder and revision a runtime
     /// needs to try once more (the cell announces a new holder to the CALLER
     /// only — `geometry_finalize` — so a displaced holder learns it from a
-    /// refusal like these, never from a push).
+    /// refusal like these, never from a push). The CAS holds at the ENGINE too
+    /// (DS-4d): the door runs this precheck, the engine claim and the finalize
+    /// inside the session's gate, so of two takes at once the second prechecks
+    /// against the first's commit.
     pub fn transfer_geometry(&mut self, leg: &LegRef, msg: TransferGeometry) -> GeometryDecision {
         // Phase 1 — the caller (its own control leg, this session) and its
         // standing. A caller with none of the three is refused BEFORE the
@@ -916,9 +919,18 @@ impl ActivationTable {
         })
     }
 
-    /// The door performed the engine op; commit (or refuse) the lease. The
-    /// revision CAS re-runs here in case a verb interleaved (they are serialized
-    /// per control leg, so this is the rare cross-client transfer race).
+    /// The door performed the engine op; commit (or refuse) the lease.
+    ///
+    /// No other geometry VERB of this session ran since the precheck: the door
+    /// holds the session's gate from the precheck to here, and the engine claim
+    /// was a compare-and-set on the control revision read beside it (DS-4d).
+    /// This comment used to call a cross-client interleaving "the rare transfer
+    /// race" — DS-4's take made cross-client verbs routine, and two takes at
+    /// once left the engine's controller with the loser. What can still move the
+    /// seat under a verb is the table's own auto-release (view detach, leg
+    /// loss, grant expiry, a renewal dropping `geometry`), which only ever
+    /// EMPTIES it: the revision CAS below refuses then, and the engine's
+    /// controller is this verb's, inert, as after any release.
     pub fn geometry_finalize(
         &mut self,
         leg: &LegRef,

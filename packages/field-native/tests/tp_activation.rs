@@ -25,7 +25,7 @@ mod tp_mint;
 use field_native::tp::crc32c::crc32c;
 use field_native::tp::door::{Door, DoorConfig};
 use field_native::tp::grant::{GrantKey, GrantValidityLimits, GrantVerifier};
-use field_native::tp::source::{DirectSessions, Trf1Header};
+use field_native::tp::source::{DirectSessions, SessionSource, Trf1Header};
 use field_native::tp::wire::{decode_envelope, JSON_MAX_SAFE_INTEGER};
 use futures_util::{SinkExt, StreamExt};
 use ghosttea::session::{Persistence, SpawnOptions};
@@ -109,6 +109,16 @@ async fn harness_with_source(
     source: Arc<DirectSessions>,
     configure: impl FnOnce(&mut DoorConfig),
 ) -> Harness {
+    harness_with_door_source(source.clone(), source, configure).await
+}
+
+/// A harness whose DOOR reads sessions through `door_source` (a wrapper such as
+/// `HoldingSource`) while the test spawns into `sessions`.
+async fn harness_with_door_source(
+    source: Arc<DirectSessions>,
+    door_source: Arc<dyn SessionSource>,
+    configure: impl FnOnce(&mut DoorConfig),
+) -> Harness {
     let minter = TestMinter::new(CELL);
     let verifier = GrantVerifier::new(
         GrantKey {
@@ -118,7 +128,7 @@ async fn harness_with_source(
         },
         GrantValidityLimits::default(),
     );
-    let mut config = DoorConfig::new(verifier, vec![]).with_source(source.clone());
+    let mut config = DoorConfig::new(verifier, vec![]).with_source(door_source);
     config.tick = Duration::from_millis(100);
     // the tests drive credit by hand on a loaded host; the convergence bound
     // must not race the test's own pacing (production keeps the registry
@@ -1015,6 +1025,250 @@ async fn a_take_without_the_geometry_right_is_refused_and_never_resizes() {
     assert_eq!((cols, rows), (100, 40));
     assert_eq!(epoch_after, epoch_held);
     assert_eq!(controller.expect("A still seated").client_id, "win:1#1");
+    h.door.shutdown().await;
+}
+
+/// DS-4d — a `SessionSource` that can hold ONE geometry verb in flight. The
+/// door looks the session up inside a geometry verb before it touches the
+/// engine, so a lookup held here is a verb in flight at a known point:
+/// deterministic where two real sockets racing would be a lottery. Armed for a
+/// session, the NEXT lookup of it says `reached` and blocks its caller (a door
+/// read task's thread) until `release`; everything else is `DirectSessions`'.
+struct HoldingSource {
+    inner: Arc<DirectSessions>,
+    hold: Mutex<Option<Hold>>,
+}
+
+struct Hold {
+    session_id: String,
+    reached: std::sync::mpsc::Sender<()>,
+    release: std::sync::mpsc::Receiver<()>,
+}
+
+impl SessionSource for HoldingSource {
+    fn session(&self, session_id: &str) -> Option<Arc<Session>> {
+        let hold = {
+            let mut hold = self.hold.lock().unwrap();
+            match hold.as_ref() {
+                Some(armed) if armed.session_id == session_id => hold.take(),
+                _ => None,
+            }
+        };
+        if let Some(hold) = hold {
+            let _ = hold.reached.send(());
+            // bounded, so a failing row can never hang the suite
+            let _ = hold.release.recv_timeout(Duration::from_secs(30));
+        }
+        self.inner.session(session_id)
+    }
+
+    fn frames(&self, session_id: &str) -> Option<FrameHub> {
+        self.inner.frames(session_id)
+    }
+
+    fn subscribe_lifecycle(
+        &self,
+    ) -> Option<tokio::sync::broadcast::Receiver<SessionLifecycleEvent>> {
+        self.inner.subscribe_lifecycle()
+    }
+}
+
+/// The next geometry VERDICT on a control leg — committed or refused — skipping
+/// the lease's own status traffic.
+async fn next_geometry_verdict(control: &mut Ws) -> Value {
+    loop {
+        match next_reply(control).await {
+            Reply::Text(v) if v["type"] == "CellActivationStatus" => continue,
+            Reply::Text(v)
+                if v["type"] == "GeometryCommitted" || v["type"] == "GeometryRefused" =>
+            {
+                return v;
+            }
+            other => panic!("expected a geometry verdict, got {other:?}"),
+        }
+    }
+}
+
+fn is_geometry_verdict(message: &Value) -> bool {
+    message["type"] == "GeometryCommitted" || message["type"] == "GeometryRefused"
+}
+
+/// DS-4d (the wave-1 review's DS-4 defect) — TWO TAKES AT ONCE against a live
+/// holder, over the real door and a REAL PTY. A holds the seat; B's host and
+/// C's host both take it, each built on the same holder and revision, and B's
+/// take is in flight when C's arrives. Exactly one commits; the ENGINE's
+/// controller is the lease's holder; the loser is refused with the winner and
+/// its revision (the announcement its runtime retries on); the winner's next
+/// resize commits. The defect this pins: a take's engine claim ran outside any
+/// ordering with the lease write (last writer wins), so the engine could keep
+/// the LOSER and every resize the holder sent read `VIEW_SUPERSEDED` until a
+/// retry or the next focus. The cure is one geometry verb per session at a
+/// time, precheck → engine → finalize — so C waits for B.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn two_takes_at_once_leave_the_engine_with_the_lease_holder_and_the_winner_resizes() {
+    let sessions = DirectSessions::new();
+    let holding = Arc::new(HoldingSource {
+        inner: sessions.clone(),
+        hold: Mutex::new(None),
+    });
+    let h = harness_with_door_source(sessions, holding.clone(), |config| {
+        // no tick during the race: the tick looks sessions up (its prune), and
+        // a hold must catch the take's lookup, nothing else
+        config.tick = Duration::from_secs(3_600);
+    })
+    .await;
+    let session = spawn_session(&h.source);
+    let session_id = session.id();
+    let full = ["geometry", "input", "read"];
+    let (mut control_a, frames_a) =
+        present_as(&h, "win:1#1", "set-xa", &session_id, "act-a", &full).await;
+    let (mut control_b, frames_b) =
+        present_as(&h, "win:2#1", "set-xb", &session_id, "act-b", &full).await;
+    let (mut control_c, frames_c) =
+        present_as(&h, "win:3#1", "set-xc", &session_id, "act-c", &full).await;
+
+    // A holds the seat.
+    send_json(
+        &mut control_a,
+        json!({
+            "type": "ClaimGeometry",
+            "sessionId": session_id, "activationId": "act-a", "leaseEpoch": 0,
+            "claimant": { "clientId": "win:1#1", "viewId": "mount-a" },
+            "cols": 100, "rows": 40, "expectRevision": 0,
+        }),
+    )
+    .await;
+    let held = next_geometry(&mut control_a, "GeometryCommitted").await;
+    let from = held["holder"].clone();
+    let revision = held["geometryRevision"].as_u64().unwrap();
+
+    // B's take goes in flight, and is held there.
+    let (reached_tx, reached_rx) = std::sync::mpsc::channel();
+    let (release_tx, release_rx) = std::sync::mpsc::channel();
+    *holding.hold.lock().unwrap() = Some(Hold {
+        session_id: session_id.clone(),
+        reached: reached_tx,
+        release: release_rx,
+    });
+    send_json(
+        &mut control_b,
+        json!({
+            "type": "TransferGeometry",
+            "sessionId": session_id, "activationId": "act-b", "leaseEpoch": 0,
+            "from": from,
+            "to": { "clientId": "win:2#1", "viewId": "mount-b" },
+            "expectRevision": revision, "cols": 90, "rows": 30,
+        }),
+    )
+    .await;
+    tokio::task::spawn_blocking(move || reached_rx.recv_timeout(Duration::from_secs(10)))
+        .await
+        .unwrap()
+        .expect("B's take reached the door's engine half");
+
+    // C's take arrives while B's is in flight — built on the SAME holder and
+    // revision (C focused just after B; neither has heard of the other).
+    send_json(
+        &mut control_c,
+        json!({
+            "type": "TransferGeometry",
+            "sessionId": session_id, "activationId": "act-c", "leaseEpoch": 0,
+            "from": from,
+            "to": { "clientId": "win:3#1", "viewId": "mount-c" },
+            "expectRevision": revision, "cols": 120, "rows": 50,
+        }),
+    )
+    .await;
+    let while_b_in_flight = drain_texts(&mut control_c, Duration::from_millis(600)).await;
+    release_tx.send(()).unwrap();
+    let verdict_b = next_geometry_verdict(&mut control_b).await;
+    let verdict_c = match while_b_in_flight.iter().find(|m| is_geometry_verdict(m)) {
+        Some(early) => early.clone(),
+        None => next_geometry_verdict(&mut control_c).await,
+    };
+
+    // Exactly ONE take commits…
+    let takes = [
+        (&verdict_b, "win:2#1", "act-b", "mount-b"),
+        (&verdict_c, "win:3#1", "act-c", "mount-c"),
+    ];
+    let committed: Vec<_> = takes
+        .iter()
+        .filter(|(verdict, ..)| verdict["type"] == "GeometryCommitted")
+        .collect();
+    assert_eq!(
+        committed.len(),
+        1,
+        "exactly one take commits — B: {verdict_b}, C: {verdict_c}"
+    );
+    let (winner, winner_client, winner_activation, winner_view) = *committed[0];
+    let loser = takes
+        .iter()
+        .find(|(verdict, ..)| verdict["type"] != "GeometryCommitted")
+        .expect("the other take")
+        .0;
+    // …and the loser is told the seat as it now is: the winner and its revision.
+    assert_eq!(loser["type"], "GeometryRefused", "{loser}");
+    assert_eq!(loser["currentHolder"], winner["holder"], "{loser}");
+    assert_eq!(
+        loser["geometryRevision"], winner["geometryRevision"],
+        "{loser}"
+    );
+
+    // THE ENGINE's controller is the lease's holder.
+    let (controller, cols, rows, _layout) = session.control_state();
+    let controller = controller.expect("the engine seats a controller");
+    assert_eq!(
+        (controller.client_id.as_str(), controller.view_id.as_str()),
+        (winner_client, winner_activation),
+        "the engine's controller is the lease's holder ({winner})"
+    );
+    assert_eq!(
+        (u64::from(cols), u64::from(rows)),
+        (
+            winner["cols"].as_u64().unwrap(),
+            winner["rows"].as_u64().unwrap()
+        ),
+        "the PTY is the winner's size"
+    );
+
+    // The winner's next resize commits — never VIEW_SUPERSEDED.
+    let winner_control = if winner_client == "win:2#1" {
+        &mut control_b
+    } else {
+        &mut control_c
+    };
+    send_json(
+        winner_control,
+        json!({
+            "type": "ClaimGeometry",
+            "sessionId": session_id, "activationId": winner_activation, "leaseEpoch": 0,
+            "claimant": { "clientId": winner_client, "viewId": winner_view },
+            "cols": 132, "rows": 50,
+            "expectRevision": winner["geometryRevision"].clone(),
+        }),
+    )
+    .await;
+    let resized = next_geometry_verdict(winner_control).await;
+    assert_eq!(
+        resized["type"], "GeometryCommitted",
+        "the holder resizes: {resized}"
+    );
+    assert_eq!(
+        resized["holder"]["holderGeneration"],
+        winner["holder"]["holderGeneration"]
+    );
+    let (_controller, cols, rows, _layout) = session.control_state();
+    assert_eq!((cols, rows), (132, 50));
+
+    // C waited for B: one geometry verb per session at a time, so nothing
+    // answered C while B's take was in flight.
+    assert!(
+        while_b_in_flight.iter().all(|m| !is_geometry_verdict(m)),
+        "C's take was answered while B's was in flight: {while_b_in_flight:?}"
+    );
+
+    drop((frames_a, frames_b, frames_c));
     h.door.shutdown().await;
 }
 

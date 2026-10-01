@@ -38,7 +38,10 @@
 //! transfer yields to an urgent incremental at chunk boundaries, and a bulk
 //! byte-semaphore bounds how far bulk runs ahead. One registry behind a std
 //! Mutex with short, await-free critical sections; superseding or shutting a
-//! leg down is a message to its read task.
+//! leg down is a message to its read task. A geometry verb also holds its
+//! SESSION's gate across its precheck, engine op and finalize (DS-4d,
+//! `GeometryGates`), so verbs of one session never interleave; the engine op
+//! itself stays outside the registry lock.
 
 use super::activation::{
     ActivationTable, AttachControlInput, AttachFramesInput, Effect, GeometryDecision, GeometryOp,
@@ -67,7 +70,7 @@ use ghosttea::{ControlClaim, Session, SessionLifecycleEvent, ViewAccess};
 use serde_json::json;
 use std::collections::{HashMap, VecDeque};
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex, Weak};
+use std::sync::{Arc, Mutex, PoisonError, Weak};
 use std::time::Duration;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::sync::{mpsc, Semaphore};
@@ -193,9 +196,60 @@ struct Registry {
     activations: ActivationTable,
 }
 
+/// DS-4d — one geometry verb per session at a time. A verb's three steps — the
+/// table's precheck (under the registry lock), the engine op (outside it: a PTY
+/// resize must never hold every session's registry) and `geometry_finalize`
+/// (under it again) — run inside the session's gate, so two verbs of one
+/// session never interleave in the cell. Before it, the engine op of one verb
+/// could land between another verb's precheck and its finalize: two takes at
+/// once committed one holder in the lease and left the ENGINE's controller with
+/// the other (last writer wins), and the holder's every resize then read
+/// `VIEW_SUPERSEDED`. Now the second verb prechecks against the first's commit
+/// and is refused with the seat as it is — the holder and revision its runtime
+/// retries on. Only the table's own auto-releases (detach, leg loss, grant
+/// expiry, a renewal dropping `geometry`) still move a seat under a verb, and
+/// they only ever EMPTY it (finalize's revision CAS). Lock order: gate →
+/// registry → ghosttea authority; nothing that holds the registry takes a gate.
+/// A gate lives only while a verb holds or awaits it.
+#[derive(Default)]
+struct GeometryGates {
+    gates: Mutex<HashMap<String, Arc<Mutex<()>>>>,
+}
+
+impl GeometryGates {
+    fn run<R>(&self, session_id: &str, verb: impl FnOnce() -> R) -> R {
+        let gate = self
+            .gates
+            .lock()
+            .unwrap()
+            .entry(session_id.to_string())
+            .or_default()
+            .clone();
+        let result = {
+            // the gate guards no data: a verb that panicked leaves nothing torn
+            let _held = gate.lock().unwrap_or_else(PoisonError::into_inner);
+            verb()
+        };
+        let mut gates = self.gates.lock().unwrap();
+        // every clone is taken under the map lock, so the map's and ours alone
+        // means no other verb holds or awaits this gate
+        if Arc::strong_count(&gate) == 2 {
+            gates.remove(session_id);
+        }
+        result
+    }
+
+    #[cfg(test)]
+    fn len(&self) -> usize {
+        self.gates.lock().unwrap().len()
+    }
+}
+
 struct DoorState {
     config: DoorConfig,
     registry: Mutex<Registry>,
+    /// DS-4d — the per-session gate every geometry verb runs inside
+    geometry_gates: GeometryGates,
     pumps: Mutex<HashMap<String, PumpHandle>>,
     /// the Arc of this very state — the pump host trait takes `&self` but a
     /// pump task needs an owned handle; set once by `Door::serve`
@@ -297,6 +351,7 @@ impl Door {
                 closed: false,
                 activations: ActivationTable::new(&cell_boot_id),
             }),
+            geometry_gates: GeometryGates::default(),
             pumps: Mutex::new(HashMap::new()),
             me: Mutex::new(Weak::new()),
         });
@@ -1371,31 +1426,32 @@ fn handle_text(
         (Channel::Control, "ClaimGeometry") => {
             let msg: ClaimGeometry =
                 serde_json::from_str(text).map_err(|e| format!("claim-geometry:{e}"))?;
-            let decision = {
-                let mut reg = state.registry.lock().unwrap();
-                reg.activations.claim_geometry(leg, msg)
-            };
-            handle_geometry(state, leg, decision);
+            let session_id = msg.session_id.clone();
+            handle_geometry(state, leg, &session_id, |table| {
+                table.claim_geometry(leg, msg)
+            });
             Ok(false)
         }
         (Channel::Control, "TransferGeometry") => {
             let msg: TransferGeometry =
                 serde_json::from_str(text).map_err(|e| format!("transfer-geometry:{e}"))?;
-            let decision = {
-                let mut reg = state.registry.lock().unwrap();
-                reg.activations.transfer_geometry(leg, msg)
-            };
-            handle_geometry(state, leg, decision);
+            let session_id = msg.session_id.clone();
+            handle_geometry(state, leg, &session_id, |table| {
+                table.transfer_geometry(leg, msg)
+            });
             Ok(false)
         }
         (Channel::Control, "ReleaseGeometry") => {
             let msg: ReleaseGeometry =
                 serde_json::from_str(text).map_err(|e| format!("release-geometry:{e}"))?;
-            // No engine round-trip: the holder yields the seat cell-side.
-            let effects = {
+            // No engine round-trip: the holder yields the seat cell-side — still
+            // inside the session's gate, so it lands before or after a verb in
+            // flight, never between its precheck and its finalize (DS-4d).
+            let session_id = msg.session_id.clone();
+            let effects = state.geometry_gates.run(&session_id, || {
                 let mut reg = state.registry.lock().unwrap();
                 reg.activations.release_geometry(leg, msg)
-            };
+            });
             perform(state, effects);
             Ok(false)
         }
@@ -1583,27 +1639,46 @@ fn attach_frames(state: &Arc<DoorState>, leg: &LegRef, set: &SetIdentity, msg: A
     perform(state, effects);
 }
 
-/// A geometry verb the table authorized (`GeometryDecision::Proceed`): run the
-/// engine op OUTSIDE the registry lock (the table is pure — it never touches the
-/// session), then `geometry_finalize` commits or refuses the lease. A refuse
-/// decision needs no engine call. Lock order is registry → ghosttea authority;
-/// ghosttea is a leaf and never re-enters this code, so the two never deadlock.
-fn handle_geometry(state: &Arc<DoorState>, leg: &LegRef, decision: GeometryDecision) {
-    let proceed = match decision {
-        GeometryDecision::Refuse(effects) => {
-            perform(state, effects);
-            return;
-        }
-        GeometryDecision::Proceed(proceed) => proceed,
-    };
-    let outcome = match state.config.source.session(&proceed.session_id) {
-        Some(session) => perform_geometry_op(&session, &proceed),
-        None => GeometryOutcome::EngineRefused,
-    };
-    let effects = {
+/// One geometry verb, start to finish, inside its session's gate (DS-4d):
+/// `decide` is the table's precheck, run under the registry lock — and, when it
+/// authorizes a CLAIM, the engine's control revision is read under that same
+/// lock, beside the lease state the precheck judged; the engine op runs OUTSIDE
+/// the registry lock (the table is pure — it never touches the session) as a
+/// compare-and-set on that revision; `geometry_finalize` commits or refuses.
+/// A refuse decision needs no engine call. Lock order: gate → registry →
+/// ghosttea authority; ghosttea is a leaf and never re-enters this code.
+fn handle_geometry(
+    state: &Arc<DoorState>,
+    leg: &LegRef,
+    session_id: &str,
+    decide: impl FnOnce(&mut ActivationTable) -> GeometryDecision,
+) {
+    let effects = state.geometry_gates.run(session_id, || {
+        let session = state.config.source.session(session_id);
+        let (decision, expected_control_revision) = {
+            let mut reg = state.registry.lock().unwrap();
+            let decision = decide(&mut reg.activations);
+            let expected = match (&decision, &session) {
+                (GeometryDecision::Proceed(proceed), Some(session))
+                    if matches!(proceed.op, GeometryOp::Claim { .. }) =>
+                {
+                    Some(session.control_snapshot().control_revision)
+                }
+                _ => None,
+            };
+            (decision, expected)
+        };
+        let proceed = match decision {
+            GeometryDecision::Refuse(effects) => return effects,
+            GeometryDecision::Proceed(proceed) => proceed,
+        };
+        let outcome = match &session {
+            Some(session) => perform_geometry_op(session, &proceed, expected_control_revision),
+            None => GeometryOutcome::EngineRefused,
+        };
         let mut reg = state.registry.lock().unwrap();
         reg.activations.geometry_finalize(leg, proceed, outcome)
-    };
+    });
     perform(state, effects);
 }
 
@@ -1611,7 +1686,21 @@ fn handle_geometry(state: &Arc<DoorState>, leg: &LegRef, decision: GeometryDecis
 /// re-establishes) the controller and returns ghosttea's freshly minted control
 /// epoch; a `Resize` reuses the held epoch. Both are fenced by the claimant
 /// view's attachment epoch — a superseded incarnation cannot resize.
-fn perform_geometry_op(session: &Session, proceed: &GeometryProceed) -> GeometryOutcome {
+///
+/// DS-4d — a `Claim` is a compare-and-set on `expected_control_revision`, the
+/// engine's control revision as the door read it beside the precheck (always
+/// `Some` for a claim). The gate keeps every other verb of this cell out of
+/// the window, so a miss means the engine moved for a reason the lease did not
+/// see — a view detached under the seat, or a claim on ghosttea's own client
+/// plane (`ServiceSessions` is shared) — and the claim is refused rather than
+/// overwriting a controller the lease never read (before DS-4d it was `None`,
+/// last writer wins). A `Resize` needs no revision: ghosttea fences it on the
+/// holder's own control epoch.
+fn perform_geometry_op(
+    session: &Session,
+    proceed: &GeometryProceed,
+    expected_control_revision: Option<u64>,
+) -> GeometryOutcome {
     match &proceed.op {
         GeometryOp::Claim { cols, rows } => match session.claim_control_checked(
             &proceed.ghosttea_view_id,
@@ -1619,14 +1708,26 @@ fn perform_geometry_op(session: &Session, proceed: &GeometryProceed) -> Geometry
             proceed.attachment_epoch,
             *cols,
             *rows,
-            None,
+            expected_control_revision,
         ) {
             Ok(ControlClaim::Granted(changed)) => GeometryOutcome::Claimed {
                 control_epoch: changed.controller.control_epoch,
                 cols: changed.cols,
                 rows: changed.rows,
             },
-            _ => GeometryOutcome::EngineRefused,
+            Ok(ControlClaim::Rejected(snapshot)) => {
+                tracing::info!(
+                    event = "field_native.tp.geometry.engine_moved",
+                    component = "terminal",
+                    session_id = %proceed.session_id,
+                    activation_id = %proceed.caller_activation_id,
+                    expected_control_revision,
+                    control_revision = snapshot.control_revision,
+                    "the engine's controller moved between the precheck and the claim; refused"
+                );
+                GeometryOutcome::EngineRefused
+            }
+            Err(_) => GeometryOutcome::EngineRefused,
         },
         GeometryOp::Resize {
             control_epoch,
@@ -1820,6 +1921,141 @@ async fn close_with(ws: &mut Ws, code: u16, reason: &str) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// DS-4d — the per-session geometry gate: a second verb of one session waits
+    /// for the first; another session's verb never waits on it; a gate nobody
+    /// holds or awaits is forgotten (the map does not grow with session ids).
+    #[test]
+    fn a_session_geometry_gate_admits_one_verb_at_a_time_and_is_forgotten_after() {
+        let gates = Arc::new(GeometryGates::default());
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let first = {
+            let gates = gates.clone();
+            std::thread::spawn(move || {
+                gates.run("s1", || {
+                    entered_tx.send(()).unwrap();
+                    release_rx.recv().unwrap();
+                })
+            })
+        };
+        entered_rx.recv().unwrap();
+
+        // another session's verb never waits on s1's
+        let mut ran = false;
+        gates.run("s2", || ran = true);
+        assert!(ran);
+
+        // s1's second verb waits for its first
+        let (second_tx, second_rx) = std::sync::mpsc::channel();
+        let second = {
+            let gates = gates.clone();
+            std::thread::spawn(move || gates.run("s1", || second_tx.send(()).unwrap()))
+        };
+        assert!(
+            second_rx.recv_timeout(Duration::from_millis(250)).is_err(),
+            "s1's second verb ran inside its first"
+        );
+        release_tx.send(()).unwrap();
+        second_rx
+            .recv_timeout(Duration::from_secs(10))
+            .expect("s1's second verb runs once the first is done");
+        first.join().unwrap();
+        second.join().unwrap();
+        assert_eq!(gates.len(), 0, "a gate nobody holds or awaits is forgotten");
+    }
+
+    /// A real session (`/bin/sh` on a PTY) for the engine-half rows below.
+    #[cfg(unix)]
+    fn real_session() -> Arc<Session> {
+        use ghosttea::session::{Persistence, SpawnOptions};
+        use ghosttea::{FrameHub, SessionEnvironment, SessionProgramKind, TextEngine};
+        Session::spawn(
+            SpawnOptions {
+                executable: "/bin/sh".into(),
+                args: vec![],
+                cwd: None,
+                env: HashMap::new(),
+                environment: Some(SessionEnvironment::Clean {
+                    variables: HashMap::from([
+                        ("PATH".into(), "/usr/bin:/bin".into()),
+                        ("TERM".into(), "xterm".into()),
+                    ]),
+                }),
+                cols: 80,
+                rows: 24,
+                persistence: Persistence::KeepUntilExit,
+                program_kind: SessionProgramKind::Application,
+                owner_id: None,
+                scrollback_bytes: None,
+            },
+            FrameHub::new(8),
+            Arc::new(std::sync::Mutex::new(
+                TextEngine::discover().expect("a monospace font"),
+            )),
+            Arc::new(|_, _| {}),
+        )
+        .expect("spawn the session")
+    }
+
+    /// DS-4d — the ENGINE half of the take's CAS: a claim is a compare-and-set
+    /// on the control revision the door read beside the precheck. When the
+    /// engine's controller moved after that read — a claim on ghosttea's own
+    /// client plane, a view detached under the seat — the claim is refused and
+    /// the controller and the size stay as they are; at the revision as it now
+    /// is, the same claim commits. (Under the old `None` the stale claim simply
+    /// overwrote whatever the engine held.)
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_engine_claim_is_a_compare_and_set_on_the_revision_read_with_the_precheck() {
+        let session = real_session();
+        let epoch_a = session
+            .attach_view_with_access("act-a", "win:a", ViewAccess::ReadWrite)
+            .expect("view a");
+        let epoch_b = session
+            .attach_view_with_access("act-b", "win:b", ViewAccess::ReadWrite)
+            .expect("view b");
+        // what the door read beside B's precheck…
+        let read = session.control_snapshot().control_revision;
+        // …and then the engine moves, outside anything the lease saw
+        session
+            .claim_control_checked("act-a", "win:a", epoch_a, 100, 40, None)
+            .expect("A's claim on the engine's own plane");
+        let take = GeometryProceed {
+            caller_activation_id: "act-b".into(),
+            session_id: session.id(),
+            client_id: "win:b".into(),
+            ghosttea_view_id: "act-b".into(),
+            attachment_epoch: epoch_b,
+            base_revision: 0,
+            claimant_view_id: "mount-b".into(),
+            op: GeometryOp::Claim { cols: 90, rows: 30 },
+        };
+        assert!(
+            matches!(
+                perform_geometry_op(&session, &take, Some(read)),
+                GeometryOutcome::EngineRefused
+            ),
+            "a claim at a stale control revision overwrote the engine's controller"
+        );
+        let (controller, cols, rows, _layout) = session.control_state();
+        assert_eq!(controller.expect("A still seated").client_id, "win:a");
+        assert_eq!((cols, rows), (100, 40), "a refused claim never resizes");
+
+        // at the revision as it now is, the same claim commits
+        let now = session.control_snapshot().control_revision;
+        assert!(matches!(
+            perform_geometry_op(&session, &take, Some(now)),
+            GeometryOutcome::Claimed {
+                cols: 90,
+                rows: 30,
+                ..
+            }
+        ));
+        let (controller, cols, rows, _layout) = session.control_state();
+        assert_eq!(controller.expect("B seated").client_id, "win:b");
+        assert_eq!((cols, rows), (90, 30));
+    }
 
     /// §8, TP-S3d — the writer's priority invariant: an urgent unit jumps EVERY
     /// queued bulk chunk, and each lane stays FIFO. This is the bulk-induced-HOL
