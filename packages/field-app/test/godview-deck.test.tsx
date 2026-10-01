@@ -44,8 +44,6 @@ const workspaceMounts: Array<Record<string, unknown>> = [];
 const providerRuntimes: unknown[] = [];
 const runtimeObjects: unknown[] = [];
 const geometryCalls: unknown[][] = [];
-/** DS-4 — whether the stub runtime offers gt-take's `takeResizeControl`. */
-let stubTakes = false;
 
 vi.mock("@vibecook/ghosttea-react", () => ({
   // QL-2: the deck hands the launch ghosttea's fixed cell metrics.
@@ -97,9 +95,6 @@ vi.mock("@vibecook/ghosttea-react", () => ({
       claimResizeControl: (...args: unknown[]) => geometryCalls.push(["claim", ...args]),
       releaseResizeControl: (...args: unknown[]) => geometryCalls.push(["release", ...args]),
       setFocused: (...args: unknown[]) => geometryCalls.push(["focus", ...args]),
-      ...(stubTakes
-        ? { takeResizeControl: (...args: unknown[]) => geometryCalls.push(["take", ...args]) }
-        : {}),
     };
     runtimeObjects.push(minted);
     return minted;
@@ -300,7 +295,6 @@ beforeEach(() => {
   providerRuntimes.length = 0;
   runtimeObjects.length = 0;
   geometryCalls.length = 0;
-  stubTakes = false;
   markers = [];
   requests = [];
   floor = [];
@@ -1426,35 +1420,23 @@ describe("the door's local mount, and the pane a replacement belongs in (AR-4 ·
 });
 
 // DS-4 — DS-D5's note, ruled 2026-09-30: "the latest focused pane takes full
-// control include resizing, LWW". The deck is the HOST that takes; these rows
-// play the surface against the runtime the deck hands its workspace.
+// control include resizing, LWW". The deck is the HOST that asks for the take;
+// each surface performs it (ghosttea's `takeGeometryOnFocus`, gt-take).
 describe("the deck takes the geometry seat on focus (DS-4)", () => {
   type GeometryVerbs = {
     claimResizeControl(handle: string, viewId: string, cols: number, rows: number): void;
     setFocused(handle: string, viewId: string, focused: boolean, cols: number, rows: number): void;
   };
 
-  it("asks every surface to take on focus, and re-claims a controller's seat on focus meanwhile", async () => {
+  it("asks every surface to take on focus, through the workspace", async () => {
     await mountDeck();
-    // the surfaces' own road, live from the ghosttea pin that has it (gt-take)
     expect(workspaceMounts[workspaceMounts.length - 1]!.takeGeometryOnFocus).toBe(true);
-    // the pinned stub cannot take, so the deck's road carries the focus
-    const held = providerRuntimes[providerRuntimes.length - 1] as GeometryVerbs;
-    expect(held).not.toBe(runtimeObjects[runtimeObjects.length - 1]);
-    held.claimResizeControl("h1", "view-1", 80, 24); // the surface's mount claim
-    held.setFocused("h1", "view-1", true, 120, 40); // its input gains focus
-    expect(geometryCalls).toEqual([
-      ["claim", "h1", "view-1", 80, 24],
-      ["focus", "h1", "view-1", true, 120, 40],
-      ["claim", "h1", "view-1", 120, 40],
-    ]);
-    // a mirror's shape — a view that never asked for control — takes nothing
-    held.setFocused("h1", "mirror-1", true, 80, 24);
-    expect(geometryCalls.filter(([verb]) => verb === "claim")).toHaveLength(2);
   });
 
-  it("hands a take-capable runtime to the workspace untouched — one take per focus, the surface's", async () => {
-    stubTakes = true;
+  it("sends no geometry verb of its own: the surfaces hold the runtime itself", async () => {
+    // The deck once re-sent a controller's claim on every focus edge for the
+    // pinned runtime, which cannot carry overlapping claims (GodviewDeck.tsx
+    // says why). This row keeps that road closed.
     await mountDeck();
     expect(providerRuntimes[providerRuntimes.length - 1]).toBe(
       runtimeObjects[runtimeObjects.length - 1],
@@ -1462,6 +1444,9 @@ describe("the deck takes the geometry seat on focus (DS-4)", () => {
     const held = providerRuntimes[providerRuntimes.length - 1] as GeometryVerbs;
     held.claimResizeControl("h1", "view-1", 80, 24);
     held.setFocused("h1", "view-1", true, 120, 40);
-    expect(geometryCalls.filter(([verb]) => verb === "claim")).toHaveLength(1);
+    expect(geometryCalls).toEqual([
+      ["claim", "h1", "view-1", 80, 24],
+      ["focus", "h1", "view-1", true, 120, 40],
+    ]);
   });
 });

@@ -84,7 +84,6 @@ import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
 import type { LocalMountOptions, LocalMountOutcome, MonitorDoor } from "./monitor/remote-door";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
 import { type DeckSession, describePane, type PaneFace } from "./pane-faces";
-import { deckFocusRuntime } from "./terminal-focus-take";
 import "@vibecook/ghosttea-react/styles.css";
 import "@vibecook/ghosttea-react/workspace.css";
 
@@ -130,11 +129,31 @@ import "@vibecook/ghosttea-react/workspace.css";
  * R6 catches this comment too if it spells the prefix out. */
 const DECK_STORAGE_KEY = "vf-godview-deck-v1";
 
-/** DS-4 — the pane the person focused last takes the geometry seat (DS-D5's
- * note; `terminal-focus-take.ts` says how). ghosttea's workspace prop
- * `takeGeometryOnFocus` (gt-take `a24a28d`) lets each SURFACE take on its own
- * focus; the pinned workspace predates it and ignores it, so it rides through a
- * cast until the pin moves — the one-line cleanup then. */
+/**
+ * DS-4 — THE DECK TAKES ON FOCUS. DS-D5, ruled 2026-09-30 with James's note:
+ * "the latest focused pane takes full control include resizing, LWW. no matter
+ * it is local pane, remote desktop pane or mobile pane" (TPv3 §6 amended the
+ * same day). The lease stays explicit (TP-D2) and the policy sits in the host:
+ * when a controller pane gains focus, it TAKES the seat — `ClaimGeometry` on an
+ * empty seat, else one `TransferGeometry` to itself, which the cell authorizes on
+ * the pane's own `geometry` right (field-native `activation.rs`). A mirror is
+ * `controlsResize:false` and never takes.
+ *
+ * The deck asks for it with ghosttea's workspace prop `takeGeometryOnFocus`
+ * (gt-take, `feat/geometry-take` `a24a28d`): each SURFACE takes on its own focus,
+ * because it owns the three facts a take needs — its view id, its grid, and
+ * whether its input has focus. The pinned workspace (ghosttea `8a0930e`)
+ * predates the prop and ignores it, so it rides through a cast until the pin
+ * moves; that move is the one-line cleanup.
+ *
+ * NO FALLBACK until then. A deck-side road that re-sent the controller's
+ * `claimResizeControl` on every focus edge was built and retired in DS-4: on the
+ * pinned runtime a surface's mount claim followed by its focus claim is exactly
+ * the overlapping-claims case gt-take fixed upstream (`5c9b533` — the pinned
+ * runtime re-sends no grid after a refused overlap, so a pane can stay at its
+ * first size), and a refused release loses the reply correlation every later
+ * claim depends on (`aa4f762`). The take waits for the runtime that fixes both.
+ */
 const TAKE_GEOMETRY_ON_FOCUS = { takeGeometryOnFocus: true } as unknown as Partial<
   ComponentProps<typeof GhostteaWorkspace>
 >;
@@ -318,13 +337,6 @@ export function GodviewDeck({
   const error: TerminalFault | null = pool.fault;
   // A runtime replacement loses its input history; keep earlier shells conservatively.
   const unusedPanes = useMemo(() => new UnusedPaneSessions<SessionSummary>(), [runtime]);
-  /** DS-4 — what the workspace's surfaces hold: the runtime itself once it can
-   * take a seat, until then a facade that re-claims a controller's seat on
-   * focus. One per runtime, so the surfaces' effects see a stable object. */
-  const deckRuntime = useMemo(
-    () => (runtime === null ? null : deckFocusRuntime(runtime)),
-    [runtime],
-  );
   /** Published by the sidebar probe. Read only to REPORT what the deck holds
    * (the marker below); the deck does not drive panes through it any more —
    * that was the adopt sweep GT-2e deleted. */
@@ -1904,7 +1916,7 @@ export function GodviewDeck({
   }
 
   return (
-    <GhostteaProvider key={generation} runtime={deckRuntime ?? runtime}>
+    <GhostteaProvider key={generation} runtime={runtime}>
       {/* The zoom host wraps the workspace and the chrome that acts on it: it
           carries the gesture's phase attributes, and it clips the morph, which
           by design overflows the deck. (The zoomed pane itself resolves against
