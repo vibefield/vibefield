@@ -142,6 +142,32 @@ private func soak(
     #expect(await socket.pings >= 5)
   }
 
+  /// DS wave 2 landing — the ping follows the door's OWN interval. A door that
+  /// announces a short tick (30 s) and then stops ticking is dead to the
+  /// receive deadline at 75 s; a ping fixed at 120 s would come too late, and
+  /// the client would close a door whose pong could have kept it. The ping
+  /// fires after `min(announced interval, 120 s)` — the cap stays, so a long
+  /// announced interval can never outlast the sidecar's ten minutes.
+  @Test func aDoorThatAnnouncesAShortIntervalThenGoesQuietIsKeptByThePing() async throws {
+    let clock = ManualProductClock()
+    let door = try idleBoardDoor(clock: clock)
+    let client = keptClient(door, clock: clock)
+    defer { client.close() }
+    client.connect()
+    try await waitUntil("ready") { if case .ready = client.state { true } else { false } }
+    let socket = try #require(await door.latest)
+    await socket.deliver(tick(intervalMs: 30_000))  // the door's one and only tick
+    await settle(clock, parked: 2)
+
+    let reapedAt = await soak(socket, clock: clock, for: .seconds(6 * 60))
+
+    #expect(reapedAt == nil, "the sidecar reaped a silent direction at \(String(describing: reapedAt))")
+    #expect(await door.dials == 1, "the door was closed between pings and dialled again")
+    #expect(client.silentDoorCloses == 0)
+    // one ping per 30 s of silence, not one per 120 s
+    #expect(await socket.pings >= 10)
+  }
+
   /// A door that goes quiet — no tick, no pong, nothing — is dead at two and a
   /// half intervals (2.5 × 120 s before the first tick names one), and the
   /// client closes it and dials again rather than sitting on a corpse until the
@@ -294,5 +320,10 @@ private func soak(
     #expect(keepalive.receiveDeadline(intervalMs: 20_000) == .seconds(50))
     #expect(keepalive.pingAfter == .seconds(120))
     #expect(keepalive.pingAfter < .seconds(600))
+    // the ping follows the door's own interval, capped at two minutes
+    #expect(keepalive.pingAfter(intervalMs: nil) == .seconds(120))
+    #expect(keepalive.pingAfter(intervalMs: 30_000) == .seconds(30))
+    #expect(keepalive.pingAfter(intervalMs: 120_000) == .seconds(120))
+    #expect(keepalive.pingAfter(intervalMs: 600_000) == .seconds(120))
   }
 }

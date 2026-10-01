@@ -660,7 +660,8 @@ public final class FieldProductClient {
 
   private func pingDue(token: Int) -> Duration? {
     guard token == generation, connection != nil, !keepalivePaused else { return nil }
-    return lastSentAt + options.keepalive.pingAfter
+    // the door's own interval, capped — see ProductKeepalive.pingAfter(intervalMs:)
+    return lastSentAt + options.keepalive.pingAfter(intervalMs: doorTickIntervalMs)
   }
 
   /// One ping, fired and not awaited by the timer: a pong that never comes is
@@ -712,8 +713,12 @@ public final class FieldProductClient {
     }
     guard interval != doorTickIntervalMs else { return }
     doorTickIntervalMs = interval
-    // A shorter interval must bite on time, not at the old deadline.
+    // A shorter interval must bite on time, not at the old deadline — and the
+    // ping must follow it too (DS wave 2 landing): a ping timer asleep until the
+    // old two-minute due would let the shortened deadline close a door whose
+    // pong could have kept it.
     if watchdogTask != nil { armWatchdog(token: generation) }
+    if pingTask != nil { armPing(token: generation) }
   }
 
   static func wholeSeconds(_ duration: Duration) -> Int64 {

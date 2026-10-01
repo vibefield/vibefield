@@ -44,6 +44,18 @@ public struct ProductKeepalive: Sendable, Equatable {
     return .milliseconds(Int64((interval * deadlineFactor).rounded()))
   }
 
+  /// How long the phone stays silent before it pings a door that ticks every
+  /// `intervalMs`: the door's OWN interval, capped at `pingAfter` (DS wave 2
+  /// landing, 2026-10-01). A door that announces a short tick and then stops is
+  /// dead to the receive deadline at 2.5 of ITS intervals — a ping fixed at two
+  /// minutes would come too late, and the client would close a door whose pong
+  /// could have kept it. The cap stays so a long announced interval can never
+  /// outlast the sidecar's ten minutes; `nil` (no tick yet) is the cap.
+  public func pingAfter(intervalMs: Int64?) -> Duration {
+    guard let intervalMs else { return pingAfter }
+    return min(pingAfter, .milliseconds(intervalMs))
+  }
+
   /// The interval a `system.tick` may set. Outside it the tick is NOTED and not
   /// applied — a door that says it ticks every millisecond, or every day, is
   /// saying something this client cannot measure a deadline in.
