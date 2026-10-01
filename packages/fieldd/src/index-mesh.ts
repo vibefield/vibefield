@@ -148,6 +148,9 @@ interface PeerTable<T extends IndexCatalogTable> {
    * re-attached from the drifted cursor and the replica froze) */
   forceReset: boolean;
   persist: ReturnType<typeof setTimeout> | null;
+  /** the `heardAt` its kept file holds (null: none written or read this boot)
+   * — dispose rewrites a table whose file is behind what was heard */
+  written: number | null;
 }
 
 interface Peer {
@@ -341,12 +344,15 @@ export class IndexMesh extends EventEmitter {
       for (const table of TABLES) {
         this.#detach(peer, table);
         const entry = this.#table(peer, table);
+        const pending = entry.persist !== null;
         if (entry.persist !== null) clearTimeout(entry.persist);
         entry.persist = null;
-        // what was heard is kept — EVERY table, not only one with a write
-        // pending (DS-6b, 2026-10-01): a heartbeat changes no row but moves
-        // `heardAt`, and the restarted replica's `asOf` read the last change
-        this.#persist(peer, table);
+        // what was heard is kept — every table whose file is BEHIND it, not
+        // only one with a write pending (DS-6b, 2026-10-01): a heartbeat
+        // changes no row but moves `heardAt`, and the restarted replica's
+        // `asOf` read the last change. A file already current is left alone
+        // (a shutdown never rewrites megabytes for nothing).
+        if (pending || entry.written !== peer.heardAt) this.#persist(peer, table);
       }
     }
     this.removeAllListeners();
@@ -816,6 +822,7 @@ export class IndexMesh extends EventEmitter {
       retryMs: this.#retryMinMs,
       forceReset: false,
       persist: null,
+      written: null,
     };
   }
 
@@ -1038,6 +1045,7 @@ export class IndexMesh extends EventEmitter {
         { mode: 0o600 },
       );
       durableRenameSync(tmp, target);
+      this.#table(peer, table).written = peer.heardAt;
     } catch (error) {
       this.#logger.warn("fieldd.index_mesh.persist_failed", "A replica could not be written", {
         device: peer.device,
@@ -1139,6 +1147,8 @@ export class IndexMesh extends EventEmitter {
             { epoch, revision, ...gate(parseSession, sessionKey) },
           );
         }
+        // what this file says was heard: dispose rewrites it only if behind
+        this.#table(peer, table).written = typeof heardAt === "number" ? heardAt : null;
       } catch (error) {
         this.#sayOnce(`kept:${name}`, "A kept replica could not be read; it is ignored", {
           file: name,

@@ -1,5 +1,13 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -775,6 +783,22 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
     aggregator.dispose();
     expect(kept("sessions").heardAt).toBe(2_000_000);
     expect(kept("projects").heardAt).toBe(2_000_000);
+
+    // …and a file already current is left alone: a replica that heard nothing
+    // new this boot (B asleep) rewrites nothing at shutdown — every write is a
+    // rename, so the same inode is the same file
+    const inode = (table: string) => statSync(join(dir, `dev-b.${table}.json`)).ino;
+    const before = { sessions: inode("sessions"), projects: inode("projects") };
+    const quiet = mesh({
+      self: a,
+      desktops: [a],
+      peers: [{ deviceId: "dev-b", online: false }],
+      dir,
+      now: () => clock,
+    });
+    expect(quiet.aggregator.replica("dev-b")?.sessions.map((row) => row.sessionId)).toEqual(["b1"]);
+    quiet.aggregator.dispose();
+    expect({ sessions: inode("sessions"), projects: inode("projects") }).toEqual(before);
   });
 
   it("DS-6b: a write that died midway leaves `<file>.<pid>.tmp` — start sweeps it, and nothing else", async () => {
