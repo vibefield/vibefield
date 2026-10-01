@@ -129,6 +129,10 @@ public final class FieldProductClient {
     /// listed offline is `asleep`, and one not listed is gone — neither is ever
     /// dialled. `nil` = no roster (a loopback door): always dial.
     public var mayDial: (@Sendable () async -> Bool)?
+    /// SP-2 (h) — where each subscription's bytes-per-second line goes, and
+    /// what this door is called in it (FieldLink passes the desktop's id).
+    public var trafficLog: @Sendable (SubscriptionTraffic) -> Void
+    public var logLabel: String?
 
     public init(
       maxBackoff: Duration = .seconds(10),
@@ -138,7 +142,9 @@ public final class FieldProductClient {
       credential: String = "",
       keepalive: ProductKeepalive = .init(),
       clock: any ProductClock = SystemProductClock(),
-      mayDial: (@Sendable () async -> Bool)? = nil
+      mayDial: (@Sendable () async -> Bool)? = nil,
+      trafficLog: @escaping @Sendable (SubscriptionTraffic) -> Void = SubscriptionTraffic.log,
+      logLabel: String? = nil
     ) {
       self.maxBackoff = maxBackoff
       self.callTimeout = callTimeout
@@ -148,6 +154,8 @@ public final class FieldProductClient {
       self.keepalive = keepalive
       self.clock = clock
       self.mayDial = mayDial
+      self.trafficLog = trafficLog
+      self.logLabel = logLabel
     }
   }
 
@@ -207,6 +215,9 @@ public final class FieldProductClient {
   @ObservationIgnored private var watchdogTask: Task<Void, Never>?
   @ObservationIgnored private var pingTask: Task<Void, Never>?
   @ObservationIgnored private var keepalivePaused = false
+  /// SP-2 (h) — ONE timer for every subscription's traffic window, armed only
+  /// while a window holds bytes: an idle board wakes nothing to say so.
+  @ObservationIgnored private var trafficTask: Task<Void, Never>?
   /// Which dial's refusal `lastError` is holding.
   ///
   /// A door that refuses a hello then drops the socket says TWO things, a
@@ -248,6 +259,8 @@ public final class FieldProductClient {
   public func close() {
     closedByUser = true
     stopKeepalive()
+    trafficTask?.cancel()
+    trafficTask = nil
     reconnectTask?.cancel()
     reconnectTask = nil
     dialTask?.cancel()
@@ -693,6 +706,56 @@ public final class FieldProductClient {
     duration.components.seconds
   }
 
+  // MARK: - Traffic (SP-2 h)
+
+  /// Count one frame against its subscription's open window, opening one (and
+  /// arming the shared timer) when none is open.
+  private func account(_ bytes: Int, to key: Int) {
+    guard var entry = subs[key] else { return }
+    if entry.windowStart == nil { entry.windowStart = options.clock.now() }
+    entry.windowBytes += bytes
+    entry.windowFrames += 1
+    subs[key] = entry
+    if trafficTask == nil { armTrafficTimer() }
+  }
+
+  /// Sleeps until the EARLIEST open window closes, writes every window that
+  /// has, and re-arms for the next — or ends, when nothing holds bytes.
+  private func armTrafficTimer() {
+    let clock = options.clock
+    trafficTask = Task { [weak self] in
+      while !Task.isCancelled {
+        guard let due = self?.nextTrafficDeadline() else { break }
+        if clock.now() < due {
+          do { try await clock.sleep(until: due) } catch { return }
+        }
+        self?.flushTraffic()
+      }
+      self?.trafficTask = nil
+    }
+  }
+
+  private func nextTrafficDeadline() -> Duration? {
+    subs.values.compactMap(\.windowStart).min().map { $0 + SubscriptionTraffic.window }
+  }
+
+  private func flushTraffic() {
+    let now = options.clock.now()
+    for key in subs.keys.sorted() {
+      guard var entry = subs[key], let start = entry.windowStart,
+        now >= start + SubscriptionTraffic.window
+      else { continue }
+      let traffic = SubscriptionTraffic(
+        label: options.logLabel, method: entry.method, subId: entry.subId,
+        bytes: entry.windowBytes, frames: entry.windowFrames, window: SubscriptionTraffic.window)
+      entry.windowStart = nil
+      entry.windowBytes = 0
+      entry.windowFrames = 0
+      subs[key] = entry
+      options.trafficLog(traffic)
+    }
+  }
+
   // MARK: - Backoff (pure — pinned by tests, no clock)
 
   /// The TypeScript client's own ladder: 500 ms doubling to a ceiling. Attempt
@@ -733,6 +796,10 @@ public final class FieldProductClient {
     var resnapshotting = false
     /// A paged rows snapshot being assembled: its cursor and the rows so far.
     var paging: (cursor: SubscriptionCursor, rows: [JSONValue])?
+    /// SP-2 (h) — the open traffic window: when it began, and what it holds.
+    var windowStart: Duration?
+    var windowBytes = 0
+    var windowFrames = 0
 
     init(
       method: String, params: JSONValue?, shape: SubscriptionShape,
@@ -790,7 +857,7 @@ public final class FieldProductClient {
           let text = try await connection.receive()
           guard let self, token == self.generation else { return }
           self.noteInbound(token: token)
-          self.handle(frame: RpcCodec.decode(text))
+          self.handle(frame: RpcCodec.decode(text), bytes: text.utf8.count)
         } catch {
           self?.socketDown(token: token, error: error)
           return
@@ -874,11 +941,13 @@ public final class FieldProductClient {
     }
   }
 
-  private func handle(frame: RpcFrame) {
+  private func handle(frame: RpcFrame, bytes: Int) {
     switch frame {
     case .result(let id, let result):
       guard let entry = pending.removeValue(forKey: id) else { return }
       entry.deadline?.cancel()
+      // SP-2 (h) — an open answer is its subscription's traffic too.
+      if let key = entry.subKey { account(bytes, to: key) }
       // Install the subscription route BEFORE resuming the caller: a delta can
       // land in the very next frame, and a route installed after an await is a
       // dropped first delta (the NativeLink lesson, kept on principle).
@@ -907,6 +976,7 @@ public final class FieldProductClient {
 
     case .subscriptionEvent(_, let subId, let kind, let payload):
       guard let key = subRoutes[subId], subs[key] != nil else { return }
+      account(bytes, to: key)
       deliverEvent(kind, payload, key: key)
 
     case .notification(let method, let params):

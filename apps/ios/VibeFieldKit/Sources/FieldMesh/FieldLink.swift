@@ -840,6 +840,9 @@ public final class FieldLink {
     options.mayDial = { [doors] in
       await doors.onlinePeers().contains { $0.deviceId == deviceId && $0.online }
     }
+    // SP-2 (h) — each subscription's bytes-per-second line names the desktop
+    // it came from by its durable id; never by its door's URL.
+    options.logLabel = deviceId
     let client = FieldProductClient(url: url, transport: transport, options: options)
     clients[deviceId] = client
     client.connect()
