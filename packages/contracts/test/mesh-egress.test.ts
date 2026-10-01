@@ -13,7 +13,9 @@ import {
   MeshEgressLoopbackAddress,
   MeshEgressProxy,
   MeshEgressRouteAddParams,
+  MeshEgressRouteBound,
   MeshEgressRouteId,
+  MeshEgressRouteTable,
   MeshEgressTarget,
   MeshEgressUnavailableDetails,
 } from "../src/mgmt";
@@ -104,6 +106,27 @@ describe("DS-1 — a route's id is the caller's key, in a charset the sidecar ca
     const base = { id: "r1", target: "studio.ts.net:9422" };
     expect(MeshEgressRouteAddParams.safeParse(base).success).toBe(true);
     expect(MeshEgressRouteAddParams.safeParse({ ...base, login: "" }).success).toBe(false);
+  });
+});
+
+describe("DS-1 — the table and a binding are ordered by the facade's revision", () => {
+  it("requires the revision on both, as a non-negative integer", () => {
+    // The table stream runs beside the handler: a table read just before an
+    // add can reach the reader after that add's answer. Without the revision a
+    // reader would take that stale table for "the route is gone".
+    const bound = { id: "r1", listen: "127.0.0.1:53211" };
+    expect(MeshEgressRouteBound.safeParse(bound).success).toBe(false);
+    expect(MeshEgressRouteBound.safeParse({ ...bound, revision: 3 }).success).toBe(true);
+    for (const revision of [-1, 1.5, "3"]) {
+      expect(MeshEgressRouteBound.safeParse({ ...bound, revision }).success, String(revision)).toBe(
+        false,
+      );
+    }
+    expect(MeshEgressRouteTable.safeParse({ routes: [] }).success).toBe(false);
+    const reset = MeshEgressRouteTable.parse(fixture("mesh-egress-route-table.reset.json"));
+    const bound3 = MeshEgressRouteBound.parse(fixture("mesh-egress-route-bound.valid.json"));
+    expect(reset.routes).toEqual([]);
+    expect(reset.revision).toBeGreaterThan(bound3.revision);
   });
 });
 

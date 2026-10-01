@@ -245,11 +245,23 @@ impl MeshHandle {
         self.shared.egress_changes.subscribe()
     }
 
-    /// DS-1 — the facade moved the table (an add or a remove took effect).
-    pub fn note_egress_changed(&self) {
-        self.shared
-            .egress_changes
-            .send_modify(|generation| *generation += 1);
+    /// DS-1 — the facade moved the table (an add, a remove, a reset took
+    /// effect). Returns the table's NEW revision, which an add's answer
+    /// carries so its reader can order it against the stream.
+    pub fn note_egress_changed(&self) -> u64 {
+        let mut revision = 0;
+        self.shared.egress_changes.send_modify(|current| {
+            *current += 1;
+            revision = *current;
+        });
+        revision
+    }
+
+    /// DS-1 — the table's current revision. A reader takes it BEFORE it reads
+    /// the table, so the table it then reads is at least that new — never
+    /// older than the revision it is stamped with.
+    pub fn egress_revision(&self) -> u64 {
+        *self.shared.egress_changes.borrow()
     }
 
     /// DS-1 TEST SEAM — install an egress arm, for tests only.

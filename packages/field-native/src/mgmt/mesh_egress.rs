@@ -46,13 +46,17 @@ pub async fn handle(
     }
     let node = state.mesh.node();
     let resp = match method {
-        "native.mesh.egress.route.list" => match egress.route_list(node.as_ref()).await {
-            Ok(routes) => ok(id, table_json(&routes)),
-            Err(e) => refusal(state, id, e),
-        },
+        "native.mesh.egress.route.list" => {
+            let revision = state.mesh.egress_revision();
+            match egress.route_list(node.as_ref()).await {
+                Ok(routes) => ok(id, table_json(&routes, revision)),
+                Err(e) => refusal(state, id, e),
+            }
+        }
         "native.mesh.egress.route.subscribe" => {
+            let revision = state.mesh.egress_revision();
             let snapshot = match egress.route_list(node.as_ref()).await {
-                Ok(routes) => table_json(&routes),
+                Ok(routes) => table_json(&routes, revision),
                 Err(e) => {
                     send(tx, refusal(state, id, e));
                     return;
@@ -169,7 +173,7 @@ async fn route_add(
         .await
     {
         Ok(route) => {
-            state.mesh.note_egress_changed();
+            let revision = state.mesh.note_egress_changed();
             tracing::info!(
                 event = "field_native.mesh.egress.route_bound",
                 component = "mesh",
@@ -178,7 +182,10 @@ async fn route_add(
                 listen = %route.listen,
                 "egress route bound"
             );
-            ok(id, json!({ "id": route.id, "listen": route.listen }))
+            ok(
+                id,
+                json!({ "id": route.id, "listen": route.listen, "revision": revision }),
+            )
         }
         Err(e) => refusal(state, id, e),
     }
@@ -255,12 +262,15 @@ fn grant_json(grant: &ProxyGrant) -> Value {
     json!({ "address": grant.address, "credential": grant.credential })
 }
 
-fn table_json(routes: &[EgressRoute]) -> Value {
+/// The table as the contract spells it, stamped with the revision the caller
+/// read BEFORE it listed, so the table is never older than its stamp.
+fn table_json(routes: &[EgressRoute], revision: u64) -> Value {
     json!({
         "routes": routes
             .iter()
             .map(|r| json!({ "id": r.id, "target": r.target, "listen": r.listen }))
-            .collect::<Vec<_>>()
+            .collect::<Vec<_>>(),
+        "revision": revision,
     })
 }
 
@@ -268,6 +278,8 @@ fn table_json(routes: &[EgressRoute]) -> Value {
 /// watch) re-reads the WHOLE table and pushes it as a `.snapshot` — the table
 /// is state, never an edge, so a reader replaces rather than merges. A
 /// teardown's reset arrives here as the empty table: the facade's `reset`.
+/// Each push carries its revision, because this task runs BESIDE the handler:
+/// a table read just before an add can land after that add's answer.
 fn spawn_route_forwarder(state: Arc<DaemonState>, tx: Tx, sub_id: String) {
     let mut changes = state.mesh.egress_changes();
     changes.borrow_and_update();
@@ -276,9 +288,12 @@ fn spawn_route_forwarder(state: Arc<DaemonState>, tx: Tx, sub_id: String) {
             if tx.is_closed() {
                 break;
             }
+            // the revision FIRST, then the table: a table can only be newer
+            // than its stamp, the one direction a reader can tolerate
+            let revision = *changes.borrow_and_update();
             let egress = state.mesh.egress();
             let payload = match egress.route_list(state.mesh.node().as_ref()).await {
-                Ok(routes) => table_json(&routes),
+                Ok(routes) => table_json(&routes, revision),
                 Err(_) => continue, // the arm cannot list right now; the next move re-reads
             };
             let note = json!({
@@ -337,15 +352,19 @@ mod tests {
 
     #[test]
     fn a_table_answer_is_the_golden_shape() {
-        let table = table_json(&[EgressRoute {
-            id: "egress-01ARZ3NDEKTSV4RRFFQ69G5FAV-9422".into(),
-            target: "truffle-vibefield-studio.tail1234.ts.net:9422".into(),
-            listen: "127.0.0.1:53211".into(),
-        }]);
+        let table = table_json(
+            &[EgressRoute {
+                id: "egress-01ARZ3NDEKTSV4RRFFQ69G5FAV-9422".into(),
+                target: "truffle-vibefield-studio.tail1234.ts.net:9422".into(),
+                listen: "127.0.0.1:53211".into(),
+            }],
+            4,
+        );
         let golden = golden("mesh-egress-route-table.valid.json");
         assert_eq!(table["routes"][0], golden["routes"][0]);
+        assert_eq!(table["revision"], golden["revision"]);
         assert_eq!(
-            table_json(&[]),
+            table_json(&[], 5),
             self::golden("mesh-egress-route-table.reset.json")
         );
     }

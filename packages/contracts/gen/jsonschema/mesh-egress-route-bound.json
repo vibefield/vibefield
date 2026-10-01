@@ -994,6 +994,10 @@
       "type": "string",
       "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
     },
+    "MeshEgressRevision": {
+      "type": "integer",
+      "minimum": 0
+    },
     "MeshEgressProxy": {
       "type": "object",
       "properties": {
@@ -1076,10 +1080,14 @@
           "items": {
             "$ref": "#/definitions/MeshEgressRoute"
           }
+        },
+        "revision": {
+          "$ref": "#/definitions/MeshEgressRevision"
         }
       },
       "required": [
-        "routes"
+        "routes",
+        "revision"
       ],
       "additionalProperties": true
     }

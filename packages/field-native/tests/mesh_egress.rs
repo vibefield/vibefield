@@ -288,6 +288,14 @@ async fn a_route_is_bound_listed_streamed_and_removed() {
     assert_eq!(note["params"]["subId"], sub_id);
     let streamed: MeshEgressRouteTable =
         serde_json::from_value(note["params"]["payload"].clone()).unwrap();
+    assert!(
+        streamed.revision.0 >= bound.revision.0,
+        "the push that carries a binding is stamped at or after it"
+    );
+    assert!(
+        bound.revision.0 > empty.revision.0,
+        "an add moves the revision"
+    );
     assert_eq!(streamed.routes.len(), 1);
     assert_eq!(streamed.routes[0].listen.as_str(), listen);
     assert_eq!(streamed.routes[0].target.as_str(), PEER_CELLS);
@@ -418,7 +426,7 @@ async fn without_a_node_the_acts_answer_mesh_down_and_the_table_reads_empty() {
         assert_eq!(reply["error"]["data"], down, "{method}: {reply}");
     }
     let listed = mgmt.call("native.mesh.egress.route.list", json!({})).await;
-    assert_eq!(listed["result"], json!({"routes": []}));
+    assert_eq!(listed["result"]["routes"], json!([]));
     drop(mgmt);
     daemon.shutdown().await;
 }
@@ -473,7 +481,8 @@ async fn a_node_teardown_resets_the_table_and_the_stream_says_so() {
             json!({"id": "r1", "target": PEER_CELLS}),
         )
         .await;
-    let listen = added["result"]["listen"].as_str().unwrap().to_owned();
+    let bound: MeshEgressRouteBound = serde_json::from_value(added["result"].clone()).unwrap();
+    let listen = bound.listen.as_str().to_owned();
     let first = mgmt.note("native.mesh.egress.route.snapshot").await;
     assert_eq!(first["params"]["payload"]["routes"][0]["id"], "r1");
 
@@ -484,11 +493,17 @@ async fn a_node_teardown_resets_the_table_and_the_stream_says_so() {
     let reset: MeshEgressRouteTable =
         serde_json::from_value(reset["params"]["payload"].clone()).unwrap();
     assert!(reset.routes.is_empty(), "the reset is the empty table");
+    assert!(
+        reset.revision.0 > bound.revision.0,
+        "a reader holding the binding can tell the reset is NEWER than it"
+    );
     assert_eq!(exchange(&listen, b"after").await, None);
     let listed = mgmt.call("native.mesh.egress.route.list", json!({})).await;
+    let listed: MeshEgressRouteTable = serde_json::from_value(listed["result"].clone()).unwrap();
+    assert!(listed.routes.is_empty());
     assert_eq!(
-        listed["result"],
-        golden("mesh-egress-route-table.reset.json")
+        listed.revision.0, reset.revision.0,
+        "nothing moved since the reset"
     );
     drop(mgmt);
     daemon.shutdown().await;

@@ -671,11 +671,22 @@ export const MeshEgressRouteAddParams = z
   .passthrough();
 export type MeshEgressRouteAddParams = z.infer<typeof MeshEgressRouteAddParams>;
 
-/** `route.add`'s answer: the loopback address a local process dials. */
+/** The table's REVISION: the facade's change counter, bumped by every add,
+ * remove and reset (TC-D15's discipline for route snapshots, reused). It
+ * orders an answer against the stream: the table stream's forwarder runs
+ * beside the handler, so a snapshot read just before an add can reach the
+ * reader AFTER that add's answer, and without an order it would read as
+ * "the route is gone". A snapshot whose revision is below the one a route was
+ * bound at says nothing about that route. */
+export const MeshEgressRevision = z.number().int().nonnegative();
+
+/** `route.add`'s answer: the loopback address a local process dials, and the
+ * table revision this binding is part of. */
 export const MeshEgressRouteBound = z
   .object({
     id: MeshEgressRouteId,
     listen: MeshEgressLoopbackAddress,
+    revision: MeshEgressRevision,
   })
   .passthrough();
 export type MeshEgressRouteBound = z.infer<typeof MeshEgressRouteBound>;
@@ -708,6 +719,8 @@ export type MeshEgressRoute = z.infer<typeof MeshEgressRoute>;
 export const MeshEgressRouteTable = z
   .object({
     routes: z.array(MeshEgressRoute),
+    /** the facade's revision this table was read at or after (never before) */
+    revision: MeshEgressRevision,
   })
   .passthrough();
 export type MeshEgressRouteTable = z.infer<typeof MeshEgressRouteTable>;
