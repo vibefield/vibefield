@@ -176,6 +176,7 @@ import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
+import { INDEX_SERVE_ID, IndexServeDriver } from "./index-serve";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import { DocHoldersService, LibraryDocService, systemAccount, systemDocId } from "./library-doc";
@@ -287,6 +288,15 @@ export interface FielddConfig {
   /** AR-1 test seam: the home rosettad's discovery scans (`--home`).
    * Production passes the OS user's own home, explicitly (topology R7). */
   rosettadHome?: string;
+  /** SP-3 — publish rosettad's loopback listener on the tailnet as ONE serve
+   * on `PORTS.INDEX_SERVE` (the route-per-process driver's second user,
+   * index-serve.ts). OFF unless set, and nothing sets it: bin.ts passes no
+   * value and no environment variable reaches it, because the pinned rosettad
+   * verifies no credential (RO-1/RO-10 unmerged) — a serve here would put every
+   * transcript one same-login node away. DS-7's pin move, which starts rosettad
+   * with RO-1's bearer and RO-10's grant key, turns it on by a code edit. Tests
+   * set it to witness the driver. */
+  indexDirectPlane?: boolean;
   /** DS-6 test seams: the history catalog's cadences (the epoch, the
    * re-snapshot and batch windows, the reconnect backoff, the journal and page
    * budgets) and the digest heartbeat its peer subscribers hear. Production
@@ -4543,11 +4553,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // held here because `setServes` replaces the DESIRED SET wholesale: every
     // declaration has to carry the whole set or it withdraws the rest.
     let lastTerminalServeSpec: ServeSpec | null = null;
+    // SP-3 — rosettad's serve, held for the same reason (index-serve.ts); null
+    // forever while `indexDirectPlane` is off, because nothing declares it
+    let lastIndexServeSpec: ServeSpec | null = null;
     const desiredServes = (): ServeSpec[] => {
       const product = productServeSpec();
       return [
         ...(product === null ? [] : [product]),
         ...(lastTerminalServeSpec === null ? [] : [lastTerminalServeSpec]),
+        ...(lastIndexServeSpec === null ? [] : [lastIndexServeSpec]),
         ...(lastArtifactServeSpecs ?? []),
       ];
     };
@@ -4620,6 +4634,46 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // event would have carried, and a second read is free (idempotent by
     // signature).
     void terminalServe.refresh();
+    // SP-3 — rosettad's serve on `PORTS.INDEX_SERVE`, the route driver's second
+    // user, driven off the supervisor's transitions (a restart is a new loopback
+    // port) and the link. BEHIND `indexDirectPlane`, OFF: with the flag off no
+    // driver exists and this daemon makes no index serve call at all; the
+    // pinned rosettad verifies no credential (index-serve.ts says why that
+    // decides it). The declaration is the terminal's remove-then-add, for the
+    // same truffle reason and with the same F-M5 answer.
+    const indexServe =
+      config.indexDirectPlane === true
+        ? new IndexServeDriver({
+            enabled: () => true,
+            origin: () => rosettad?.state().origin ?? null,
+            linkedLogin,
+            declare: async (spec) => {
+              try {
+                await mesh.removeServe(INDEX_SERVE_ID);
+              } catch (error) {
+                serveLog.debug(
+                  "fieldd.index_serve.remove_deferred",
+                  "The index listener could not be taken down; the previous target stays declared",
+                  { error: String(error) },
+                );
+                return false;
+              }
+              lastIndexServeSpec = spec;
+              const states = await mesh.setServes(desiredServes());
+              if (spec === null) return true;
+              const placed = states.find(
+                (state) => (state.serveId ?? state.name) === INDEX_SERVE_ID,
+              );
+              return placed?.status === "active";
+            },
+            logger: logger.child({ component: "index.serve" }),
+          })
+        : null;
+    if (indexServe !== null) {
+      rosettad?.on("transition", () => void indexServe.refresh());
+      links.on("changed", () => void indexServe.refresh());
+      void indexServe.refresh();
+    }
     const artifacts = new ArtifactService({
       dataDir: config.dataDir,
       // UA-P-0c (D6) — the account an artifact's audience defaults to. The same
@@ -4727,6 +4781,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
         federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
         peers.dispose();
+        indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
         // DS-1b — a superseded daemon KEEPS its egress routes: the floor answers
         // only the successor now, which re-answers each route by its id
         egressCellRewriter?.dispose({ keepFloorRoutes: true });
@@ -4778,6 +4833,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       indexMesh?.dispose();
       federatedSubs.dispose();
       peers.dispose();
+      indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
       egressCellRewriter?.dispose(); // DS-1b — the last release takes each route off the floor
       void egressRoutes.dispose();
       // MF-1h — the rollback disposes every neighbour and used to walk past
@@ -5150,6 +5206,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           indexMesh?.dispose(); // DS-6 — the replicas are written before the links go
           federatedSubs.dispose(); // before peers: a dying link must not trigger recovery
           peers.dispose();
+          indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
           // DS-1b — the egress routes this daemon placed come off the floor
           // while the mgmt link still stands: the rewriter gives back its
           // references (the last release removes each route), and the port
