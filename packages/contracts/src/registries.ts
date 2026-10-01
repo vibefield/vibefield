@@ -136,7 +136,17 @@ export const STORES = {
    * device: replication, catch-up on join and removal on leave, with no
    * fieldd in a reader's path. The product API serves the SAME rows as
    * `agent.subscribe {projection: "field"}` for a reader that prefers the
-   * door. */
+   * door.
+   *
+   * RETIRED 2026-10-01 (DS-D14, RULED `retire` 2026-09-30; DS wave 3): no
+   * daemon publishes this store and no phone reads it. The mesh board
+   * (`agent.subscribe {scope: "mesh"}`, DS-3) carries every self desktop's
+   * board through one door; the desktop's Godview reads it and the phone homes
+   * to one desktop and reads the same door (DS-8, DS-D13). The id STAYS
+   * because the floor's slice cap still names it (`MESH_CONTROL_LIMITS.
+   * AGENT_FIELD_SLICE_BYTES`, `field-native` `mgmt/mesh.rs` — an older desktop
+   * may still publish one) and fieldd's mock floor records writes to it (the
+   * row that pins that nothing is written). Never a new reader or writer. */
   AGENT_FIELD: "field.agents.v1",
 } as const;
 
@@ -227,6 +237,9 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * `expiresAt = now + STORE_EXPIRY_MS` and refreshes it every
  * STORE_HEARTBEAT_MS while it has rows. EXPIRY ≥ 3 × HEARTBEAT so two lost
  * heartbeats do not blank a live desktop's field on a reader.
+ * *Retired 2026-10-01 (DS-D14): the three STORE_* rows served the
+ * `field.agents.v1` publisher, which is deleted (`STORES.AGENT_FIELD`'s note).
+ * They stay, unread, as the record of what an older desktop's slice means.*
  *
  * DS-3 (the mesh board, DS-D4; design-06 §8 "the board's cadence floors") —
  * DESK_MIN_INTERVAL_MS is the desk projection's floor (windows; a caller may

@@ -19,6 +19,13 @@
  * agent's label, project, branch, model, effort and blocker tool, and every
  * artifact's title and URL.
  *
+ * *Corrected 2026-10-01 (DS-D14, DS wave 3): `field.agents.v1` is no longer
+ * published by any daemon and no longer read by any phone — the mesh board
+ * (`agent.subscribe {scope: "mesh"}`, DS-3) carries every self desktop's board
+ * through one door and the phone homes to a desktop to read it (DS-8). The two
+ * slices this constant still gates are `field.devices.v1` (presence) and
+ * `field.artifacts.v1`, plus the holders slice (`field.docs.v1`, DS-5).*
+ *
  * RFC 025 "login-scoped nodes" is the answer to that, and it is why this reads
  * `true` today. Three of its rulings carry the weight, and each closes one half
  * of what was wrong:

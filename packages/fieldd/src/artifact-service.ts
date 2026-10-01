@@ -99,8 +99,9 @@ export interface ArtifactServiceOptions {
    * silently choosing the widest one for them is what this closes. */
   linkedLogin: () => string | null;
   /** UA-P-0e TEST SEAM — drive the catalog's BUS legs (subscribe + publish)
-   * against a scripted bridge, the way `agent-field-publisher.test.ts` drives
-   * its publisher. Defaults to `MESH_BUS_CARRIES_CONTENT`, which UA-P-4 set
+   * against a scripted bridge, the way `agent-field-publisher.test.ts` drove
+   * its publisher (both retired 2026-10-01 with `field.agents.v1`, DS-D14).
+   * Defaults to `MESH_BUS_CARRIES_CONTENT`, which UA-P-4 set
    * back to `true`; the daemon never passes it, and a boundary a caller could
    * turn off would not be a boundary. It exists so a focused unit row can drive
    * the bus legs without a mesh, and it kept the code alive and typechecked

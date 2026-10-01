@@ -33,6 +33,11 @@ import {
 // and fieldd publishes the same rows into the `field.agents.v1` SyncedStore as
 // an `AgentFieldSlice` — replication, catch-up on join, removal on leave, with
 // no fieldd in the read path. A reader that can parse one can parse the other.
+// *Corrected 2026-10-01 (DS-D14, DS wave 3): ONE carrier now. The store
+// carrier retired — no daemon publishes `field.agents.v1` and no phone reads
+// it; the mesh board below (`scope: "mesh"`, DS-3) carries every self
+// desktop's rows through one door, and the phone homes to a desktop to read it
+// (DS-8). `AgentFieldSlice` stays as the record of an older desktop's slice.*
 
 /** One blocker, content-free: what KIND of thing the run is waiting on and,
  * for a permission, which tool asked — never the request itself.
@@ -279,7 +284,11 @@ export type AgentMeshFrame =
  * honesty clause: a desktop that dies without clearing its slice leaves rows a
  * reader must drop on the clock rather than believe forever. A live publisher
  * refreshes it every `AGENT_FIELD.STORE_HEARTBEAT_MS`; a graceful dispose
- * publishes empty rows with `expiresAt` already past. */
+ * publishes empty rows with `expiresAt` already past.
+ *
+ * RETIRED 2026-10-01 (DS-D14): nothing publishes or reads this slice any more
+ * (`STORES.AGENT_FIELD`'s note). The schema stays as the record of what an
+ * older desktop's slice says, pinned by its goldens. */
 export const AgentFieldSlice = z
   .object({
     v: z.literal(1),

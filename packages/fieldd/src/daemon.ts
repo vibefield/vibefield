@@ -148,7 +148,6 @@ import {
   projectFieldRow,
   refuseBoardAsk,
 } from "./agent-field";
-import { AgentFieldPublisher } from "./agent-field-publisher";
 import {
   type AgentGatewayOptions,
   AgentGatewayService,
@@ -2879,69 +2878,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // desktop, its connection closes for a fresh hello (ProductApi)
     devices.on("changed", () => api.reconsiderPeerClaims());
 
-    // -- MF-1 (§10.2, D4's hybrid): the agent field's store carrier --
-    // The same content-free rows `agent.subscribe {projection: "field"}`
-    // serves, published into `field.agents.v1` so a phone joining the tailnet
-    // reads every desktop's board from the mesh with no fieldd in its path.
-    //
-    // THE GATE: this device's product serve is active — the door a phone
-    // dials and the URL DeviceService advertises in `field.devices.v1`.
-    //
-    // TM-2 (MF-1l) closes what §10.2 actually asked for, "the floor's terminal
-    // mesh is SERVING", as a SECOND and finer gate: `terminalPublished` is the
-    // floor's own `terminalMesh` word off the hello, and it gates the rows'
-    // `terminal` JOIN rather than the board. The distinction is the point —
-    // the board is true either way, and only the join promises a tap.
-    //
-    // ERRATA (2026-09-13, EL7 M1): this comment used to call `field.devices.v1`
-    // a same-user-private store and lean on that as the precedent. It was not:
-    // truffle-core broadcast to every tailnet node whose hostname started with
-    // `truffle-vibefield-`, with no WhoIs and no login check on the store's own
-    // path, so same-user held by DEPLOYMENT and never by construction.
-    //
-    // RESOLVED (2026-09-16, UA-P-4): RFC 025 gates the node on the linked login,
-    // so both stores are same-account by construction (mesh-bus.ts carries the
-    // citations) and GM-D10 is closed by UA-P-D2. The erratum stays because the
-    // reasoning it corrected — "it is a store, therefore it is private" — is
-    // the reasoning that must not come back: what makes it private is the GATE,
-    // named and pinned, and a future store on an ungated node would be as open
-    // as this one was.
-    //
-    // It is a NEIGHBOURING consent, not the same one —
-    // a floor can serve terminals with the product serve down, and vice versa
-    // — and it is one call site to change the day the floor's hello grows a
-    // typed `terminalMesh` fact.
-    //
-    const agentField = new AgentFieldPublisher({
-      mesh,
-      deviceId: () => devices.currentDeviceId(),
-      list: () => agents.list(),
-      subscribe: (emit) => agents.subscribe(emit),
-      serving: () => mesh.serves().some((s) => s.name === "product" && s.status === "active"),
-      terminalPublished: () => native.terminalMeshPublished(),
-      logger: logger.child({ component: "agents.field" }),
-    });
-    // UA-P-4 (D2) — the field's STORE carrier is on again, scoped. UA-P-0e left
-    // this publisher CONSTRUCTED but never started, because `field.agents.v1`
-    // reached every VibeField node on the tailnet and carried every agent's
-    // label, project, branch, model, effort and blocker tool. RFC 025 gates the
-    // node on the linked login, so the store's audience is the account and the
-    // carrier is wired to the daemon's events again.
-    //
-    // TWO CARRIERS, ON PURPOSE. The same content-free rows also ride
-    // `agent.subscribe {projection: "field"}` over the product door, which is
-    // where the phone reads them and which compares the caller's WhoIs login to
-    // the stored link before it answers. The store carrier is what lets a phone
-    // that has joined the tailnet read every desktop's board with no fieldd in
-    // its path; the door carrier is what answers a reader that has one.
-    if (MESH_BUS_CARRIES_CONTENT) {
-      mesh.on("serves-changed", () => agentField.notifyServingChanged());
-      // TM-2 — the hello is where `terminalMesh` arrives and where it can change
-      // (a floor restart with the flag flipped), so a re-pair must republish the
-      // board with or without its attach joins.
-      native.on("terminal-endpoints", () => agentField.notifyServingChanged());
-      agentField.start();
-    }
+    // -- MF-1 (§10.2, D4's hybrid): the agent field's store carrier — RETIRED --
+    // DS-D14 (RULED `retire` 2026-09-30; built 2026-10-01, DS wave 3): this
+    // daemon no longer publishes `field.agents.v1`. The store carrier existed so
+    // a phone joining the tailnet could read every desktop's board with no
+    // fieldd in its path; the mesh board (DS-3, `agent.subscribe {scope:
+    // "mesh"}`, `mesh-board.ts`) answers every self desktop's board through ONE
+    // door, the desktop's Godview reads it, and the phone homes to one desktop
+    // and reads the same door (DS-8, DS-D13). The field's one carrier is
+    // `agent.subscribe` over the product door, which compares the caller's
+    // WhoIs login to the stored link before it answers. `STORES.AGENT_FIELD`
+    // stays in the registry, marked retired: the floor's slice cap names it
+    // (`field-native` `mgmt/mesh.rs`), and an older desktop may still publish
+    // one. `test/agent-field-daemon.test.ts` pins that nothing is written here.
     // NF-3: the terminalHost capability follows the hello — republish when the
     // floor appears or a new native boot rotates the endpoints.
     native.on("terminal-endpoints", () => void devices.sync());
@@ -4816,10 +4765,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // DS-1b — a superseded daemon KEEPS its egress routes: the floor answers
         // only the successor now, which re-answers each route by its id
         egressCellRewriter?.dispose({ keepFloorRoutes: true });
-        // MF-1 — withdraw this device's field before the mesh goes: a reader
-        // should lose us now, not in thirty seconds on the expiry clock
         terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
-        await agentField.dispose();
         devices.dispose();
         terminals.dispose();
         services.dispose();
@@ -4867,11 +4813,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       indexServe?.dispose(); // SP-3 — stop re-aiming rosettad's serve before the mesh goes
       egressCellRewriter?.dispose(); // DS-1b — the last release takes each route off the floor
       void egressRoutes.dispose();
-      // MF-1h — the rollback disposes every neighbour and used to walk past
-      // this one: a boot that failed after the publisher started left its
-      // timers armed and its slice standing.
       terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
-      await agentField.dispose();
       devices.dispose();
       terminals.dispose();
       services.dispose();
@@ -5248,7 +5190,6 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             new Promise<void>((resolve) => setTimeout(resolve, 2_000).unref()),
           ]);
           terminalServe.dispose(); // TM-2 — stop reconciling routes before the mesh goes
-          await agentField.dispose(); // MF-1 — the field is withdrawn, not left to expire
           devices.dispose();
           // The fatal and rollback ladders always dropped the terminal control
           // client; this one did not, so a cleanly stopping fieldd left its
