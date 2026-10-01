@@ -258,7 +258,13 @@ export const LanePutMeta = z
      * Optional only because `doc.compact` does not exist yet, so no doc has
      * ever left epoch 0. On a doc that HAS been compacted its absence is
      * refused — a client that cannot say which epoch it built on cannot be
-     * shown to be building on the current one. */
+     * shown to be building on the current one.
+     * *Corrected 2026-10-01 (DS-5d):* docs leave epoch 0 now (the host
+     * compacts them) and the renderer still declares nothing, so fieldd says
+     * it for the window: an undeclared update from the window that READ the
+     * doc is taken as composed against the epoch that read served — it cannot
+     * have read another. One that read nothing in the daemon's life is
+     * refused once the doc has been compacted, as this rule always said. */
     baseEpoch: z.number().int().nonnegative().optional(),
     engineSchema: z.number().int().nonnegative().nullable(),
     savedAt: z.number().int().nonnegative(),

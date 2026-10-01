@@ -23,7 +23,7 @@ import {
   durableRenameSync,
   type Logger,
 } from "@vibefield/logging";
-import type { LoroDoc } from "loro-crdt";
+import type { LoroDoc, VersionVector } from "loro-crdt";
 import { hasIce1Magic, liftIce1, wrapIce1 } from "./ice1-envelope";
 import {
   covers,
@@ -35,6 +35,9 @@ import {
   isLoroPanic,
   isSnapshotPayload,
   LoroHost,
+  meetVersions,
+  mergeVersions,
+  provenVersion,
   snapshotVersion,
   versionToBase64,
   watermark,
@@ -386,6 +389,17 @@ export class DocumentService {
    * the acknowledgements move it — no second O(doc) export for nothing. */
   private readonly failedTrims = new Map<string, string>();
   private readonly epochListeners = new Set<(docId: string, why: EpochMove) => void>();
+  /** DS-5d — per canvas with a window open, what this desktop can PROVE the
+   * window holds: what its read served, raised by every save it makes (the
+   * doc lane's push proof, kept here because it is also the holder's
+   * acknowledgement — a window's next edit descends from what it holds). */
+  private readonly windowFloors = new Map<string, VersionVector>();
+  /** DS-5d — the epoch each canvas's last window read was served at: a
+   * window's undeclared append was composed against it (it can have read
+   * nothing else), so the renderer, which declares none, keeps appending
+   * after a compaction. Kept across a window's reconnect, as the lane keeps
+   * its proof. */
+  private readonly servedEpoch = new Map<string, number>();
 
   constructor(opts: DocumentServiceOptions) {
     this.dataDir = opts.dataDir;
@@ -590,6 +604,7 @@ export class DocumentService {
     this.host.delete(docId);
     this.wantsCompaction.delete(docId);
     this.failedTrims.delete(docId);
+    this.servedEpoch.delete(docId);
     await this.toLibrary("delete", (library) => library.tombstone(docId, deletedAt, "delete"));
     return tombstoned;
   }
@@ -852,15 +867,32 @@ export class DocumentService {
         hosted !== undefined
           ? versionToBase64(hosted.version())
           : this.evictedHeads.get(entry.docId);
+      const ack = head === undefined ? undefined : this.acknowledged(entry.docId, hosted, head);
       out.push({
         docId: entry.docId,
         baseEpoch: entry.baseEpoch,
         ...(head !== undefined ? { headVersion: head } : {}),
+        ...(ack !== undefined ? { ackVersion: ack } : {}),
         fresh: isFresh(entry.docId),
         heldSince: entry.createdAt ?? entry.updatedAt,
       });
     }
     return out;
+  }
+
+  /** DS-5d — the version this desktop acknowledges for a canvas: the one
+   * below which it will never again produce an op. With no window open that
+   * is its head (fieldd itself never edits a canvas). With one open, the meet
+   * of the head and what this desktop can prove the window holds — a
+   * window's next edit descends from what it holds, and an edit it made
+   * before it held something is carried by the same save that proves it does.
+   * An open window it cannot vouch for (one that read nothing here)
+   * acknowledges NOTHING: the empty version, which holds every trim. */
+  private acknowledged(docId: string, hosted: HostedDoc | undefined, head: string): string {
+    if (!this.writers.has(docId)) return head;
+    const floor = this.windowFloors.get(docId);
+    if (floor === undefined || hosted === undefined) return versionToBase64(EMPTY_VERSION());
+    return versionToBase64(meetVersions(hosted.version(), floor));
   }
 
   /** A library write that fails is LOGGED, never thrown into the catalog
@@ -927,8 +959,18 @@ export class DocumentService {
 
   writerDetached(docId: string): void {
     this.writers.delete(docId);
-    // DS-5d — a compaction the window held runs now that it has closed.
+    // DS-5d — the window's floor leaves with it; a compaction it held runs.
+    this.windowFloors.delete(docId);
     if (this.wantsCompaction.has(docId)) this.requestCompaction(docId);
+  }
+
+  /** DS-5d — a window proved it holds `bytes`' version (a save it made). */
+  private raiseWindowFloor(docId: string, bytes: Uint8Array): void {
+    if (!this.writers.has(docId)) return;
+    const version = provenVersion(bytes);
+    if (version === null) return;
+    const floor = this.windowFloors.get(docId);
+    this.windowFloors.set(docId, floor === undefined ? version : mergeVersions(floor, version));
   }
 
   // ---- payload ----
@@ -1138,6 +1180,11 @@ export class DocumentService {
       baseEpoch: entry.baseEpoch,
       ...(folded?.delta !== undefined ? { delta: folded.delta } : {}),
     });
+    // DS-5d — a window's checkpoint proves it holds the whole of it.
+    if (origin === "local") {
+      const lifted = liftIce1(bytes);
+      if (lifted.ok) this.raiseWindowFloor(docId, lifted.payload);
+    }
     return meta;
   }
 
@@ -1278,7 +1325,16 @@ export class DocumentService {
     // after it would be interpreted against a base it was never built on. The
     // caller must re-bootstrap instead — silently appending is how a peer
     // diverges without either side noticing.
-    this.assertEpoch(entry, putMeta.baseEpoch);
+    //
+    // DS-5d — the renderer declares no epoch. The window that READ this doc
+    // composed against the epoch that read served (it can have read nothing
+    // else), so fieldd says it for the window; one that read nothing in this
+    // daemon's life is refused once the doc has been compacted, as before.
+    const declared =
+      putMeta.baseEpoch ?? (origin === "local" ? this.servedEpoch.get(docId) : undefined);
+    this.assertEpoch(entry, declared);
+    // DS-5d — what a window saves, it holds: its floor rises with every save.
+    if (origin === "local") this.raiseWindowFloor(docId, bytes);
     if (current.revisionId === putMeta.revisionId) {
       const last = current.updates.at(-1);
       if (last?.revisionId !== putMeta.revisionId || last.byteLength !== bytes.byteLength) {
@@ -1987,6 +2043,10 @@ export class DocumentService {
       const read = await this.readDoc(docId);
       if (read === null) return null;
       const hosted = await this.hostedNow(docId);
+      // DS-5d — the epoch this window builds on, and what it can be held to.
+      this.servedEpoch.set(docId, read.meta.baseEpoch);
+      if (hosted !== null && this.writers.has(docId))
+        this.windowFloors.set(docId, hosted.version());
       return { ...read, version: hosted?.encodedVersion() ?? null };
     });
   }

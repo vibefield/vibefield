@@ -505,3 +505,126 @@ describe("DS-5d — the epoch bump", () => {
     third.dispose();
   });
 });
+
+describe("DS-5d — a window on the compacted canvas", () => {
+  it("opens the shallow base framed by the ICE1 rule, and its undeclared appends land at the new epoch", async () => {
+    const docs = service(undefined, { compaction: false });
+    const { docId, low } = await journaled(docs);
+    docs.setAcknowledgements(() => [{ device: "studio", ack: low, seenAt: Date.now() }]);
+    expect(await docs.compact(docId)).toMatchObject({ compacted: true, baseEpoch: 1 });
+
+    // The window's open: HELLO takes the writer lock, then the one read.
+    docs.writerAttached(docId);
+    const read = await docs.readDocForWindow(docId);
+    const lifted = liftIce1(read?.bytes as Uint8Array);
+    expect(lifted.ok).toBe(true);
+    if (!lifted.ok) return;
+    // The probes' frame rule holds; the payload is the shallow base ICE opens
+    // (probes/ice1-envelope/compacted: ICE's own docs.open took one).
+    expect(
+      Buffer.compare(
+        Buffer.from(wrapIce1(lifted.header, lifted.payload)),
+        Buffer.from(read?.bytes as Uint8Array),
+      ),
+    ).toBe(0);
+    expect(loroBlobMode(lifted.payload)).toBe("shallow-snapshot");
+    expect(read?.updates).toEqual([]);
+    const w = new Renderer(3n);
+    w.apply(lifted.payload);
+    expect(w.board()).toEqual({ a: "1", b: "2", c: "3", d: "4" });
+
+    // The renderer declares no epoch on an append. The window READ epoch 1, so
+    // fieldd says it for the window — before DS-5d this was refused
+    // ("an update must declare baseEpoch") and every save fell back to a whole
+    // checkpoint.
+    await put(docs, docId, "update", w.edit("e", "from the window"));
+    expect((await docs.readDocMeta(docId))?.journalEntries).toBe(1);
+    // Its checkpoint is a shallow payload too, and it folds.
+    w.editUnsent("f", "folded");
+    await put(docs, docId, "checkpoint", w.checkpoint());
+    expect(await docs.hostVersion(docId)).toMatchObject({ baseEpoch: 1, hasCheckpoint: true });
+    expect((await replay(docs, docId)).board()).toMatchObject({
+      e: "from the window",
+      f: "folded",
+    });
+    docs.writerDetached(docId);
+    docs.dispose();
+  });
+
+  it("a window that read nothing in this daemon's life still cannot append undeclared after a compaction", async () => {
+    const dir = dataDir();
+    const docs = service(dir, { compaction: false });
+    const { docId, low, w } = await journaled(docs);
+    docs.setAcknowledgements(() => [{ device: "studio", ack: low, seenAt: Date.now() }]);
+    expect(await docs.compact(docId)).toMatchObject({ compacted: true });
+    docs.dispose();
+    const again = service(dir, { compaction: false });
+    await expect(put(again, docId, "update", w.edit("late", "edit"))).rejects.toMatchObject({
+      kind: "PRECONDITION_FAILED",
+    });
+    again.dispose();
+  });
+});
+
+describe("DS-5d — a holder's acknowledgement (the holders slice)", () => {
+  /** The slice's two strings, decoded — versions compare by content, never
+   * by the bytes one encoding happened to lay out. */
+  const ackOf = async (docs: DocumentService, docId: string) => {
+    const held = (await docs.holdings(() => true)).find((h) => h.docId === docId);
+    const decode = (text: string | undefined): Record<string, number> | undefined => {
+      if (text === undefined) return undefined;
+      const version = decodeVersion(new Uint8Array(Buffer.from(text, "base64")));
+      return version === null ? undefined : json(version);
+    };
+    return {
+      head: decode(held?.headVersion),
+      ack: decode(held?.ackVersion),
+      raw: held?.ackVersion,
+    };
+  };
+
+  it("is the head with no window open; with one open, the meet with what the window provably holds", async () => {
+    const docs = service(undefined, { compaction: false });
+    const { docId } = await journaled(docs);
+    const idle = await ackOf(docs, docId);
+    expect(idle.ack).toBeDefined();
+    expect(idle.ack).toEqual(idle.head);
+
+    // A window opens and reads: it holds what it was served.
+    docs.writerAttached(docId);
+    const servedBytes = (await docs.readDocForWindow(docId))?.version as Uint8Array;
+    const served = json(decodeVersion(servedBytes) ?? EMPTY_VERSION());
+    expect((await ackOf(docs, docId)).ack).toEqual(served);
+    // A peer's edit lands: the head moves, the window has not shown it holds it.
+    const peer = await replay(docs, docId, 7n);
+    await docs.applyRemoteRecord(docId, {
+      kind: DOC_SYNC_RECORD.UPDATE,
+      meta: META,
+      payload: peer.edit("peer", "edit"),
+    });
+    const moved = await ackOf(docs, docId);
+    expect(moved.head).not.toEqual(served);
+    expect(moved.ack).toEqual(served); // held at what the window provably holds
+    // The window saves — its update proves it holds the peer's edit too
+    // (ICE exports everything since its last send, remote ops included).
+    const w = await replay(docs, docId, 8n);
+    await put(docs, docId, "update", w.edit("mine", "now"));
+    const proven = await ackOf(docs, docId);
+    expect(proven.ack).toEqual(proven.head);
+    docs.writerDetached(docId);
+    docs.dispose();
+  });
+
+  it("an open window this desktop cannot vouch for (it never read here) acknowledges NOTHING", async () => {
+    const docs = service(undefined, { compaction: false });
+    const { docId } = await journaled(docs);
+    docs.writerAttached(docId); // a resumed window: no read in this daemon's life
+    const unvouched = await ackOf(docs, docId);
+    expect(unvouched.raw).toBe("AA=="); // the empty version
+    expect(unvouched.ack).toEqual({});
+    docs.writerDetached(docId);
+    const closed = await ackOf(docs, docId);
+    expect(closed.ack).toEqual(closed.head);
+    docs.dispose();
+  });
+});
