@@ -518,6 +518,12 @@ export class ProductApi extends EventEmitter {
       port: this.opts.port,
       host: "127.0.0.1",
       maxPayload: PRODUCT_WS_MAX_INBOUND_BYTES,
+      // SP-L7 (DS wave 2 landing, 2026-10-01): the keepalive is BIDIRECTIONAL —
+      // the sidecar reaps each direction of a served WebSocket on its own clock,
+      // so the door's `system.tick` keeps door→phone alive and the kit's
+      // protocol PING keeps phone→door alive. `ws` pongs by default; this is the
+      // explicit pin (door-tick.test.ts has the row that trips if it goes).
+      autoPong: true,
     });
     this.wss = wss;
     wss.on("connection", (ws, req) => this.onConnection(ws, req));

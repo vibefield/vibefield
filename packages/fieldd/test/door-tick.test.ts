@@ -130,6 +130,27 @@ describe("system.tick — the door's keepalive (SP-L7)", () => {
     expect(client.ticks().length).toBe(heard);
   });
 
+  it("answers a client's WebSocket ping with a pong (SP-L7's other half, DS wave 2 landing) — pinned, so a server swap cannot drop it", async () => {
+    // The sidecar reaps EACH DIRECTION of a served WebSocket on its own ten-minute
+    // clock (truffle sidecar-slim main.go idleCopy), so the door's tick keeps only
+    // door→phone alive; the kit sends a protocol PING after the tick interval when
+    // it has sent nothing, and the pong is its inbound liveness. `ws` auto-pongs by
+    // default; this row is the pin that a later server or option change trips.
+    const api = door(50);
+    const port = await api.listen();
+    const client = await dial(port, { path: `/t/${SECRET}`, login: LOGIN });
+    await client.hello();
+    const pong = new Promise<Buffer>((resolve) => client.ws.once("pong", resolve));
+    client.ws.ping(Buffer.from("sp-l7"));
+    const payload = await Promise.race([
+      pong,
+      sleep(2_000).then(() => {
+        throw new Error("no pong within 2 s");
+      }),
+    ]);
+    expect(payload.toString()).toBe("sp-l7");
+  });
+
   it("a tailnet connection hears it too — the phone's door and a guest's alike", async () => {
     const api = door(50);
     const port = await api.listen();
