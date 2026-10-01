@@ -14,6 +14,7 @@ import {
   NAMESPACES,
   PEER_FIELDD_SCOPES,
   PRODUCT_API_LIMITS,
+  PRODUCT_NOTIFICATIONS,
   type RendererParticipantIdentity,
   RPC_ERROR_CODES,
   type Scope,
@@ -120,6 +121,9 @@ export interface ProductApiOptions {
   /** DS-2 — the owner's receipt journal for keyed forwarded mutations; tests
    * inject one to read it, a daemon takes the default. */
   forwardReceipts?: OwnerForwardJournal;
+  /** SP-1 — the keepalive's interval (`system.tick`); tests shorten it. The
+   * registry's `PRODUCT_API_LIMITS.TICK_INTERVAL_MS` by default. */
+  tickIntervalMs?: number;
 }
 
 /** DS-L7/DS-D15 — `envelope` is what the forwarding hop adds beside the
@@ -203,6 +207,9 @@ interface ConnState {
   subs: Map<string, () => void>;
   abortController: AbortController;
   shellTransport: ShellProviderTransport;
+  /** SP-1 — this connection's keepalive (`system.tick`), armed by its first
+   * successful hello and cleared when it closes: one timer per connection. */
+  tick: ReturnType<typeof setInterval> | null;
 }
 
 export class ProductApi extends EventEmitter {
@@ -455,10 +462,14 @@ export class ProductApi extends EventEmitter {
    * applied once per {calling peer, key}; a retry reads the outcome. */
   private readonly ownerReceipts: OwnerForwardJournal;
   private readonly logger: Logger;
+  /** SP-1 — the keepalive's interval, and every live keepalive timer */
+  readonly tickIntervalMs: number;
+  private readonly ticks = new Set<ReturnType<typeof setInterval>>();
 
   constructor(private readonly opts: ProductApiOptions) {
     super();
     this.logger = opts.logger ?? createNoopLogger();
+    this.tickIntervalMs = opts.tickIntervalMs ?? PRODUCT_API_LIMITS.TICK_INTERVAL_MS;
     this.ownerReceipts =
       opts.forwardReceipts ??
       new OwnerForwardJournal({ device: () => this.ownDeviceId?.() ?? "unknown" });
@@ -566,6 +577,7 @@ export class ProductApi extends EventEmitter {
       subs: new Map(),
       abortController: new AbortController(),
       shellTransport,
+      tick: null,
     };
     const conn = { ws, state };
     this.liveConns.add(conn);
@@ -574,6 +586,7 @@ export class ProductApi extends EventEmitter {
     });
     ws.on("close", () => {
       this.liveConns.delete(conn);
+      this.disarmTick(state);
       state.abortController.abort();
       this.shellProvider.withdraw(state.shellTransport);
       for (const dispose of state.subs.values()) dispose();
@@ -858,6 +871,7 @@ export class ProductApi extends EventEmitter {
           ...(ackDevice !== undefined && ackDevice.length > 0 ? { deviceId: ackDevice } : {}),
         },
       });
+      this.armTick(ws, state);
       return;
     }
 
@@ -1266,6 +1280,42 @@ export class ProductApi extends EventEmitter {
     }
     const result = await run(ctx, params);
     reply({ jsonrpc: "2.0", id, result });
+  }
+
+  /** SP-1 / SP-L7 (`thinking-sync-planes.md` §1.9 item 1) — the door's
+   * keepalive. truffle's sidecar reaps a served WebSocket silent for ten
+   * minutes, and an idle board sends nothing by design, so every hello'd
+   * connection — loopback and tailnet alike, a guest's too — hears a
+   * `system.tick` NOTIFICATION (no `id`) every `tickIntervalMs`: `{at,
+   * intervalMs}`, the interval said so a reader sets its own dead-door
+   * deadline from this door. One timer per connection; a second hello on the
+   * same socket arms nothing; the close clears it. */
+  private armTick(ws: WebSocket, state: ConnState): void {
+    if (state.tick !== null || !state.authed) return;
+    const intervalMs = this.tickIntervalMs;
+    const tick = setInterval(() => {
+      this.sendBounded(ws, {
+        jsonrpc: "2.0",
+        method: PRODUCT_NOTIFICATIONS.TICK,
+        params: { at: Date.now(), intervalMs },
+      });
+    }, intervalMs);
+    tick.unref?.();
+    state.tick = tick;
+    this.ticks.add(tick);
+  }
+
+  private disarmTick(state: ConnState): void {
+    if (state.tick === null) return;
+    clearInterval(state.tick);
+    this.ticks.delete(state.tick);
+    state.tick = null;
+  }
+
+  /** How many keepalive timers are live — one per hello'd connection that has
+   * not closed (the witness that a timer dies with its connection). */
+  liveTicks(): number {
+    return this.ticks.size;
   }
 
   /** Bound both a single projection and the ws library's queued bytes. On

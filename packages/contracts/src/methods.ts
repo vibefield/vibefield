@@ -1,3 +1,4 @@
+import { z } from "zod";
 import {
   AGENT_FIELD,
   INDEX_MESH,
@@ -135,6 +136,50 @@ export function defineMethod(def: MethodDef): MethodDef {
   }
   return def;
 }
+
+/**
+ * Server-sent NOTIFICATIONS on the product door: frames a client receives
+ * without asking — no `id` (they answer no call) and no `subId` (they belong to
+ * no subscription). The JSON-RPC twin of the doc lane's unsolicited frames
+ * (`doclane.ts` `LANE_FRAME.PRESENCE_PUSH`, `DOC_PUSH`): a name, declared once
+ * here beside the methods, and the schema of what it carries. They are NOT
+ * METHODS rows — a row is something a client may call, and `system.capabilities`
+ * advertises every product row — and a subscription's own frames stay what
+ * they are, `<base>.delta` / `<base>.snapshot` derived from its `.subscribe`
+ * row. A client that does not know a name ignores the frame (the tolerant
+ * reader); a frame is liveness whatever its name.
+ */
+export const PRODUCT_NOTIFICATIONS = {
+  /** SP-L7's keepalive (SP-1): on every hello'd connection, loopback and
+   * tailnet alike, every `PRODUCT_API_LIMITS.TICK_INTERVAL_MS`; params
+   * `SystemTick`. */
+  TICK: "system.tick",
+} as const;
+export type ProductNotification =
+  (typeof PRODUCT_NOTIFICATIONS)[keyof typeof PRODUCT_NOTIFICATIONS];
+
+/** `system.tick`'s params: when the door sent it (ms since the epoch, the
+ * door's clock — a liveness beat, never a clock to sync to) and the interval it
+ * ticks at, so a reader sets its own dead-door deadline (2.5 × intervalMs)
+ * from what THIS door says rather than from a number it was built with. */
+export const SystemTick = z
+  .object({
+    at: z.number().int().nonnegative(),
+    intervalMs: z.number().int().positive(),
+  })
+  .passthrough();
+export type SystemTick = z.infer<typeof SystemTick>;
+
+/** The whole `system.tick` frame as a client receives it: a JSON-RPC
+ * notification (no `id`) carrying `SystemTick`. */
+export const SystemTickNotification = z
+  .object({
+    jsonrpc: z.literal("2.0"),
+    method: z.literal(PRODUCT_NOTIFICATIONS.TICK),
+    params: SystemTick,
+  })
+  .passthrough();
+export type SystemTickNotification = z.infer<typeof SystemTickNotification>;
 
 /** The whole-value stream every tailnet-reachable roster or catalog door
  * answers (SP-1): the current value, then the whole value again at most once

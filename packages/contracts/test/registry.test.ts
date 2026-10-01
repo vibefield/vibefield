@@ -1,7 +1,19 @@
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { ARTIFACT_LIMITS } from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
-import { defineMethod, LOCALITIES, METHODS, reachableFromTailnet, SURFACES } from "../src/methods";
+import { RpcNotification } from "../src/envelope";
+import {
+  defineMethod,
+  LOCALITIES,
+  METHODS,
+  PRODUCT_NOTIFICATIONS,
+  reachableFromTailnet,
+  SURFACES,
+  SystemTick,
+} from "../src/methods";
 import {
   AGENT_FIELD,
   DESKTOP_APP_ID,
@@ -300,6 +312,50 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
         },
       }),
     ).toThrow(/subscription floor on x\.stream \(\{fast: true\}\)/);
+  });
+});
+
+// SP-1 / SP-L7 (`thinking-sync-planes.md` §1.9 item 1) — the door's keepalive.
+// truffle's sidecar reaps a served WebSocket silent for ten minutes and an idle
+// board sends nothing, so the door ticks on every hello'd connection.
+describe("SP-1 — system.tick, the door's keepalive (SP-L7)", () => {
+  it("is a NOTIFICATION: named beside the methods, never a method a client could call", () => {
+    expect(PRODUCT_NOTIFICATIONS).toEqual({ TICK: "system.tick" });
+    const methods = new Set(METHODS.map((m) => m.method));
+    // a subscription's own frames are `<base>.delta` / `<base>.snapshot`
+    const frames = new Set(
+      METHODS.filter((m) => m.subscription !== undefined).flatMap((m) => {
+        const base = m.method.replace(/\.subscribe$/, "");
+        return [`${base}.delta`, `${base}.snapshot`];
+      }),
+    );
+    for (const name of Object.values(PRODUCT_NOTIFICATIONS)) {
+      expect(name).toMatch(/^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/);
+      expect(methods.has(name), `${name} is a METHODS row`).toBe(false);
+      expect(frames.has(name), `${name} is a subscription frame`).toBe(false);
+    }
+  });
+
+  it("ticks well under the sidecar's ten-minute reap, and so does a reader's dead-door deadline", () => {
+    expect(PRODUCT_API_LIMITS.TICK_INTERVAL_MS).toBe(120_000);
+    // a reader calls a door silent for 2.5 × the interval dead (w2-phone, SP-2)
+    expect(PRODUCT_API_LIMITS.TICK_INTERVAL_MS * 2.5).toBeLessThan(10 * 60_000);
+  });
+
+  it("parses the golden frame every side reads (EL9): no id, the tick's params", () => {
+    const fixtures = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
+    const raw = JSON.parse(readFileSync(join(fixtures, "system-tick.valid.json"), "utf8"));
+    const frame = RpcNotification.parse(raw);
+    expect(frame.method).toBe(PRODUCT_NOTIFICATIONS.TICK);
+    expect("id" in frame).toBe(false);
+    expect(SystemTick.parse(frame.params)).toEqual({
+      at: 1759312800000,
+      intervalMs: PRODUCT_API_LIMITS.TICK_INTERVAL_MS,
+    });
+    // tolerant of what a later door adds; strict about what a reader times by
+    expect(SystemTick.safeParse({ at: 1, intervalMs: 50, door: "next" }).success).toBe(true);
+    expect(SystemTick.safeParse({ at: "now", intervalMs: 50 }).success).toBe(false);
+    expect(SystemTick.safeParse({ at: 1, intervalMs: 0 }).success).toBe(false);
   });
 });
 

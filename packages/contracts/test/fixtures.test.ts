@@ -91,6 +91,7 @@ import {
 import { Hello, HelloAck, RpcRequest, RpcResponse, TerminalRouteSnapshot } from "../src/envelope";
 import { ErrorData } from "../src/errors";
 import { LoggingHealthV1, LogRecordV1 } from "../src/logging";
+import { SystemTickNotification } from "../src/methods";
 import {
   DesiredState,
   MeshEgressProxy,
@@ -158,6 +159,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "hello-ack": HelloAck,
   "rpc-request": RpcRequest,
   "rpc-response": RpcResponse,
+  // SP-1 — the door's keepalive notification, whole (no id)
+  "system-tick": SystemTickNotification,
   "error-data": ErrorData,
   "artifact-publish": ArtifactPublishV2Params,
   "artifact-intent": LocalArtifactIntent,

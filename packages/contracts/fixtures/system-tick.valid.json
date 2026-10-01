@@ -1,0 +1,8 @@
+{
+  "jsonrpc": "2.0",
+  "method": "system.tick",
+  "params": {
+    "at": 1759312800000,
+    "intervalMs": 120000
+  }
+}

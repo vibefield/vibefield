@@ -163,6 +163,15 @@ export const PRODUCT_API_LIMITS = {
    * churns costs one frame per window per subscriber instead of one per
    * change. The field board's number: a phone's radio budget, not a feeling. */
   STREAM_MIN_INTERVAL_MS: 250,
+  /** SP-1 / SP-L7 (`thinking-sync-planes.md` §1.9 item 1) — the door's
+   * keepalive: every hello'd connection, loopback and tailnet alike, hears a
+   * `system.tick` notification this often (`methods.ts` PRODUCT_NOTIFICATIONS).
+   * truffle's sidecar reaps a served WebSocket silent for ten minutes, and an
+   * idle board sends nothing by design, so without it a quiet phone's door died
+   * unseen. A client counts ANY inbound frame as liveness and calls a door
+   * silent for 2.5 × the interval it was told dead — five minutes, well under
+   * the reap. */
+  TICK_INTERVAL_MS: 120_000,
 } as const;
 
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
