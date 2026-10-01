@@ -5,16 +5,11 @@
   extension FieldStoreDoors {
     /// A store that has already been told one thing.
     ///
-    /// This is a FIXTURE STORE and not a demo path, and the difference is the
-    /// whole point: `FieldLink` runs its real reconcile over these doors, the
-    /// real `AgentFieldSlice` reader parses the real bytes, and the real fold
-    /// makes the bodies. What is fake is the MESH — one peer, one message,
-    /// never a second — so a screenshot run can put the swarm over
-    /// real-shaped rows in both themes without a desktop, a tailnet, or a
-    /// finger on the glass.
-    ///
-    /// It cannot exist in Release. A `full` is the message a node sends to a
-    /// peer that just joined, which is exactly what this phone would have
+    /// This is a FIXTURE STORE and not a demo path: `FieldLink` runs its real
+    /// reconcile over these doors and the real reader parses the real bytes.
+    /// What is fake is the MESH — one peer per slice, one message, never a
+    /// second. It cannot exist in Release. A `full` is the message a node sends
+    /// to a peer that just joined, which is exactly what this phone would have
     /// received.
     public static func fixture(
       slice: Data, deviceId: String = "dev-fixture", storeId: String
@@ -28,9 +23,8 @@
     ///
     /// Each slice is delivered as if by ITS OWN device — the sender's id and
     /// its addresses match what the payload claims — so the attribution
-    /// refusal and the endpoint pin see exactly what a well-behaved mesh looks
-    /// like. A fixture that could not pass its own checks would be testing a
-    /// different program.
+    /// refusal sees exactly what a well-behaved mesh looks like. A fixture that
+    /// could not pass its own checks would be testing a different program.
     public static func fixture(slices: [String: [String: Data]]) -> FieldStoreDoors {
       var byNamespace: [String: [FieldStoreInbound]] = [:]
       var peers: [FieldStorePeer] = []
@@ -57,14 +51,16 @@
           }
         }
       }
-      // Bound to `let`s before the closures capture them: a `var` reaching
-      // into concurrently-executing code is not sendable, and these are
-      // finished being built.
-      let inbox = byNamespace
-      let roster = peers
+      return fixture(peers: peers, inbox: byNamespace)
+    }
 
-      return FieldStoreDoors(
-        onlinePeers: { roster },
+    /// A mesh of `peers` and nothing else: the peer list, and a bus that
+    /// carries only what `inbox` says it already carried.
+    static func fixture(
+      peers: [FieldStorePeer], inbox: [String: [FieldStoreInbound]] = [:]
+    ) -> FieldStoreDoors {
+      FieldStoreDoors(
+        onlinePeers: { peers.filter(\.online) },
         // The reader asks; nothing is listening, and that is honest — the
         // answer was already delivered below.
         send: { _, _, _, _ in },
@@ -81,89 +77,179 @@
     /// A fixture device's hostname, which is also what its published door must
     /// name for the endpoint pin to accept it.
     static func fixtureHost(_ deviceId: String) -> String { "127.0.0.1" }
+  }
 
-    /// The contracts' own golden board, as it ships in this bundle.
+  extension FieldLink {
+    /// `-vf-demo-field-slice` (DS-8, 2026-10-01): the contracts' GOLDEN mesh
+    /// board through the REAL home path.
     ///
-    /// The JSON is `packages/contracts/fixtures/agent-field-slice.valid.json`
-    /// copied byte for byte, so the lab draws the same five rows the decoders
-    /// are tested against — one blocked on `Bash`, one working, one idle, one
-    /// pending, one exited. `publishedAt`/`expiresAt` are REWRITTEN to now, and
-    /// only that: a fixture minted in the past would be expired before it was
-    /// read, and the expiry rule is one of the things worth looking at.
-    public static func goldenBoard() -> FieldStoreDoors? {
+    /// The link discovers the peers, probes their doors, homes to the first
+    /// that answers, dials it, says hello, and reads the field through the
+    /// home's `agent.subscribe {projection: "field", scope: "mesh"}` — every
+    /// step the live phone takes. What is fake is the NETWORK: an in-process
+    /// door that answers the contracts' own bytes
+    /// (`agent-mesh-open.valid.json`, byte for byte under `Fixtures/`), so the
+    /// swarm and the corner can be photographed over real-shaped rows in both
+    /// themes with no desktop and no tailnet. The golden lists four desktops:
+    /// the home (`studio`, live), `laptop` (live), `air` (asleep — its kept
+    /// board draws GREYED, and the tailnet does not list it, so the corner
+    /// shows it only from memory) and `mini` (stale on the board, and its door
+    /// does not answer this phone: "not serving").
+    ///
+    /// Before DS-8 this mounted the golden `field.agents.v1` slice through the
+    /// store reader; that reader is retired (DS-D14).
+    public static func goldenFixture(
+      schedule: FieldDiscoverySchedule = .init()
+    ) -> FieldLink? {
       guard
         let url = Bundle.module.url(
-          forResource: "agent-field-slice.valid", withExtension: "json",
-          subdirectory: "Fixtures"),
+          forResource: "agent-mesh-open.valid", withExtension: "json", subdirectory: "Fixtures"),
         let data = try? Data(contentsOf: url),
-        var board = (try? JSONValue.parse(data))?.objectValue
+        let open = try? JSONValue.parse(data)
       else { return nil }
+      let peers = FixtureHome.desktops.map { desktop in
+        FieldStorePeer(
+          id: "node-\(desktop.deviceId)", deviceId: desktop.deviceId, online: desktop.online,
+          hostname: desktop.name, tailnetIPs: [desktop.address])
+      }
+      return FieldLink(
+        storeDoors: .fixture(peers: peers),
+        transport: FixtureHome(open: open),
+        probe: FixtureHome.Probe(),
+        options: .init(maxBackoff: .seconds(2), callTimeout: .seconds(5)),
+        schedule: schedule)
+    }
+  }
 
-      let now = Int64(Date().timeIntervalSince1970 * 1000)
-      board["publishedAt"] = .int(now)
-      board["expiresAt"] = .int(now + 30_000)
-      // The board names its own device; the devices store must agree, because
-      // the link keys both by the same id.
-      let boardDevice = board["deviceId"]?.stringValue ?? "dev-fixture"
-      guard let refreshed = try? JSONValue.object(board).encoded() else { return nil }
-
-      // THREE desktops, so every face the phone can draw has something to draw
-      // it from — and none of them needs a listener:
-      //   D1 the board's own device, serving a door at a dead loopback port —
-      //      the store feeds its field, the door dials forever;
-      //   D2 no product endpoint at all — `noDoor`, on the mesh and not
-      //      serving;
-      //   D3 an endpoint and no board — dialing forever (a closed port is
-      //      reconnecting, not refused).
-      // The ports are closed on purpose: the point is the FACES, and a fixture
-      // that stood up a listener would be claiming a desktop answered.
-      //
-      // Errata (2026-09-14): D1 read "the door dials and fails" and D3 read
-      // "dialing, then failed" until a simulator run watched them for half a
-      // minute. A closed port is refused at once and retried, which
-      // `FieldProductClient` carries as `.reconnecting` and never as
-      // `.failed` — so this fixture draws the "…" token and cannot draw the
-      // DOOR one. It cannot draw D2's "NO DOOR" either, because `linkLabel`
-      // ranks a dialing desktop above a door-less one and these two dial
-      // forever. Staging a refusal needs something that answers and says no.
-      let devices: [String: Data] = [
-        boardDevice: deviceSlice(
-          deviceId: boardDevice, name: "studio", url: "ws://127.0.0.1:9/t/fixture", now: now),
-        "dev-fixture-quiet": deviceSlice(
-          deviceId: "dev-fixture-quiet", name: "laptop", url: nil, now: now),
-        "dev-fixture-dialing": deviceSlice(
-          deviceId: "dev-fixture-dialing", name: "mini", url: "ws://127.0.0.1:9/t/fixture",
-          now: now),
-      ]
-      return fixture(slices: [
-        FieldStoreID.agents: [boardDevice: refreshed],
-        FieldStoreID.devices: devices,
-      ])
+  /// The fixture's in-process door: every desktop's door answers the same way
+  /// — hello as a self desktop, the golden's roster, and the golden mesh board
+  /// — because only the HOME is ever dialled for the field. Nothing else is
+  /// answered (NOT_FOUND), so an act on the fixture fails honestly rather than
+  /// pretending a desktop did something.
+  struct FixtureHome: ProductTransport {
+    struct Desktop: Sendable {
+      let deviceId: String
+      let name: String
+      let address: String
+      let online: Bool
+      let answers: Bool
     }
 
-    /// One device's `field.devices.v1` slice, in the contract's shape.
-    private static func deviceSlice(
-      deviceId: String, name: String, url: String?, now: Int64
-    ) -> Data {
-      var fields: [String: JSONValue] = [
-        "deviceId": .string(deviceId),
-        "name": .string(name),
-        "platform": .string("darwin"),
-        "headless": .bool(false),
-        "fielddVersion": .string("0.1.0"),
-        "contractsVersion": .string("0.1.0"),
-        "capabilities": .object([
-          "terminalHost": .bool(true), "docHost": .bool(true), "push": .bool(false),
-        ]),
-        "bootId": .string("fieldd-fixture"),
-        "publishedAt": .int(now),
-      ]
-      if let url {
-        fields["productEndpoint"] = .object([
-          "serve": .string("product"), "url": .string(url),
-        ])
+    /// The golden's four desktops, as the fixture's tailnet lists them.
+    static let desktops = [
+      Desktop(
+        deviceId: "dev-01HQ8ZK4M7", name: "studio", address: "100.64.0.11", online: true,
+        answers: true),
+      Desktop(
+        deviceId: "dev-01HQ9S7UD1", name: "laptop", address: "100.64.0.12", online: true,
+        answers: true),
+      Desktop(
+        deviceId: "dev-01HQA1RL4P", name: "air", address: "100.64.0.13", online: false,
+        answers: false),
+      Desktop(
+        deviceId: "dev-01HQB3M1N1", name: "mini", address: "100.64.0.14", online: true,
+        answers: false),
+    ]
+
+    let open: JSONValue
+
+    func connect(to url: URL) async throws -> any ProductConnection {
+      FixtureConnection(open: open)
+    }
+
+    /// The door's HTTP half: the desktops that answer, answer; the rest are
+    /// "not serving".
+    struct Probe: ProductDoorProbe {
+      func probe(_ url: URL) async -> DoorProbeOutcome {
+        let answering = FixtureHome.desktops.contains { $0.answers && $0.address == url.host }
+        return answering ? .status(400) : .unreachable("the fixture door is closed")
       }
-      return (try? JSONValue.object(fields).encoded()) ?? Data()
+    }
+  }
+
+  actor FixtureConnection: ProductConnection {
+    private let open: JSONValue
+    private var queue: [String] = []
+    private var waiter: CheckedContinuation<String, any Error>?
+    private var closed = false
+
+    init(open: JSONValue) { self.open = open }
+
+    func send(_ text: String) async throws {
+      guard !closed else { throw FieldProductError(kind: "UNAVAILABLE", message: "closed") }
+      guard let request = try? JSONValue.parse(Data(text.utf8)),
+        let id = request["id"]?.intValue, let method = request["method"]?.stringValue
+      else { return }
+      deliver(answer(id: id, method: method))
+    }
+
+    func receive() async throws -> String {
+      if !queue.isEmpty { return queue.removeFirst() }
+      if closed { throw FieldProductError(kind: "UNAVAILABLE", message: "closed") }
+      return try await withCheckedThrowingContinuation { waiter = $0 }
+    }
+
+    func close() {
+      closed = true
+      if let waiter {
+        self.waiter = nil
+        waiter.resume(throwing: FieldProductError(kind: "UNAVAILABLE", message: "closed"))
+      }
+    }
+
+    private func answer(id: Int64, method: String) -> String {
+      switch method {
+      case "system.hello":
+        return Self.frame(
+          id: id,
+          result: .object([
+            "contractsVersion": .string(FieldProductContract.contractsVersion),
+            "serverKind": .string("fieldd"),
+            "grantedScopes": .array([.string("agent.observe"), .string("terminal.attach")]),
+          ]))
+      case "device.list":
+        let home = FixtureHome.desktops[0].deviceId
+        return Self.frame(
+          id: id,
+          result: .object([
+            "devices": .array(
+              FixtureHome.desktops.map { desktop in
+                .object([
+                  "deviceId": .string(desktop.deviceId), "name": .string(desktop.name),
+                  "platform": .string("darwin"), "self": .bool(desktop.deviceId == home),
+                  "online": .bool(desktop.online),
+                ])
+              })
+          ]))
+      case "agent.subscribe":
+        return Self.frame(id: id, result: .object(["subId": .string("fixture"), "snapshot": open]))
+      default:
+        let error = JSONValue.object([
+          "jsonrpc": .string("2.0"), "id": .int(id),
+          "error": .object([
+            "code": .int(-32601),
+            "message": .string("the fixture door does not answer \(method)"),
+            "data": .object(["kind": .string("NOT_FOUND"), "retryable": .bool(false)]),
+          ]),
+        ])
+        return String(data: (try? error.encoded()) ?? Data(), encoding: .utf8) ?? ""
+      }
+    }
+
+    private static func frame(id: Int64, result: JSONValue) -> String {
+      let value = JSONValue.object([
+        "jsonrpc": .string("2.0"), "id": .int(id), "result": result,
+      ])
+      return String(data: (try? value.encoded()) ?? Data(), encoding: .utf8) ?? ""
+    }
+
+    private func deliver(_ text: String) {
+      if let waiter {
+        self.waiter = nil
+        waiter.resume(returning: text)
+      } else {
+        queue.append(text)
+      }
     }
   }
 #endif

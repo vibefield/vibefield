@@ -406,54 +406,11 @@ private func standingStore(
     #expect(all.failed[0].contains("dev-laptop"))
   }
 
-  /// The board, when it lands: `field.agents.v1` carries §10.1's slice.
-  ///
-  /// The payload here is deliberately MINIMAL and hand-built — what is under
-  /// test is the store carrying a board through, not the board's own shape.
-  /// The shape is pinned against the contracts' goldens in `FieldProductTests`,
-  /// which is where those files live; duplicating them into this bundle would
-  /// give one fixture two homes and one of them would go stale.
-  @Test func anAgentFieldSliceReadsAsABoardWithItsExpiry() async throws {
-    let (store, mesh) = try await standingStore(peers: [studio], storeId: "field.agents.v1")
-    defer { store.unsubscribe() }
-
-    let board = JSONValue.object([
-      "v": .int(1),
-      "deviceId": .string("dev-studio"),
-      "publishedAt": .int(1_757_808_000_000),
-      "expiresAt": .int(1_757_808_030_000),
-      "revision": .int(7),
-      "rows": .array([
-        .object([
-          "runtimeRunId": .string("run-1"), "revision": .int(2),
-          "kind": .string("claude"), "label": .string("Claude"),
-          "tier": .string("managed"), "device": .string("dev-studio"),
-          "status": .string("blocked"),
-          "statusSince": .string("2026-09-13T12:00:00.000Z"),
-          "stateChangedAt": .string("2026-09-13T12:00:00.000Z"),
-          "createdAt": .string("2026-09-13T11:00:00.000Z"),
-          "alive": .bool(true),
-          "blockers": .array([
-            .object([
-              "id": .string("permission-1"), "kind": .string("permission"),
-              "since": .string("2026-09-13T12:00:00.000Z"), "tool": .string("Bash"),
-            ])
-          ]),
-        ])
-      ]),
-    ])
-    await mesh.deliver(
-      inbound(
-        from: "node-studio", deviceId: "dev-studio", msgType: "update",
-        payload: sliceFrame("update", deviceId: "dev-studio", version: 9, data: board)))
-    try await waitUntil("the board") { store.slices["dev-studio"] != nil }
-
-    let decoded = try #require(store.slices["dev-studio"]).decode(AgentFieldSlice.self)
-    #expect(decoded.revision == 7)
-    #expect(decoded.rows.count == 1)
-    #expect(decoded.rows[0].blockers.first?.tool == "Bash")
-    #expect(decoded.expiresAt - decoded.publishedAt == 30_000)
-  }
+  // RETIRED 2026-10-01 (DS-D14): `anAgentFieldSliceReadsAsABoardWithItsExpiry`
+  // — `field.agents.v1` carrying §10.1's slice through this reader. No phone
+  // reads that store any more (the field is the home's mesh board, DS-8); the
+  // reader's slice decode stays pinned by the device rows above and by
+  // `FieldLinkScopedBusTests.theDeviceRowTheBusReadsIsTheContractsGolden`.
 }
 
 @MainActor

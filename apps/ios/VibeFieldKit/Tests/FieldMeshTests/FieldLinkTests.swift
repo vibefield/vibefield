@@ -18,69 +18,25 @@ import Testing
 // driver is truffle's PEER LIST. The rows below are the same rules asked of the
 // new first link: a peer arrives, its door is asked whether it admits this
 // login, and only the doors that say yes become desktops.
+//
+// **DS-8 rewrote what carries the field (2026-10-01).** The phone homes to ONE
+// desktop and reads every desktop's board through the home's mesh board
+// (`agent.subscribe {projection: "field", scope: "mesh"}`), so a door's field
+// answer below is a MESH open — here mostly the studio's own board, the studio
+// being both the only desktop and the home. The rows about which door is
+// dialled, re-homing and the owner's door are `FieldLinkHomeTests`. The
+// agents slice (`field.agents.v1`) is retired (DS-D14): the rows that drove its
+// reader are deleted with it, and one row pins that a gated link never listens
+// for it.
 
 private let devicesNamespace = FieldStore.namespace(for: FieldStoreID.devices)
-private let agentsNamespace = FieldStore.namespace(for: FieldStoreID.agents)
+/// The retired board store's namespace, spelled here only so a row can prove
+/// nothing listens on it (DS-D14). Test files may name it; product code no
+/// longer does.
+private let retiredAgentsNamespace = FieldStore.namespace(for: "field.agents.v1")
 
-/// The desktop's own row, as `device.list` answers it.
-private func deviceRow(
-  name: String, deviceId: String = "dev-studio", terminalMesh: Bool = true
-) -> JSONValue {
-  .object([
-    "deviceId": .string(deviceId),
-    "name": .string(name),
-    "platform": .string("darwin"),
-    "self": .bool(true),
-    "online": .bool(true),
-    "capabilities": .object([
-      "terminalHost": .bool(true), "terminalMesh": .bool(terminalMesh),
-      "docHost": .bool(true), "push": .bool(false),
-    ]),
-  ])
-}
-
-private func deviceListResult(_ rows: [JSONValue]) -> JSONValue {
-  .object(["devices": .array(rows)])
-}
-
-/// A desktop's `field.devices.v1` slice — the DORMANT leg (UA-P-1b), kept for
-/// the rows that exercise the reader deliberately.
-private func deviceSlice(name: String, url: String?) -> JSONValue {
-  var fields: [String: JSONValue] = [
-    "deviceId": .string("dev-studio"),
-    "name": .string(name),
-    "platform": .string("darwin"),
-    "headless": .bool(false),
-    "fielddVersion": .string("0.1.0"),
-    "contractsVersion": .string("0.1.0"),
-    "capabilities": .object([
-      "terminalHost": .bool(true), "docHost": .bool(true), "push": .bool(false),
-    ]),
-    "bootId": .string("fieldd-a1b2"),
-    "publishedAt": .int(1_757_808_000_000),
-  ]
-  if let url {
-    fields["productEndpoint"] = .object(["serve": .string("product"), "url": .string(url)])
-  }
-  return .object(fields)
-}
-
-private func boardRow(
-  id: String, status: String = "working", kind: String = "claude", label: String = "Claude Code"
-) -> JSONValue {
-  .object([
-    "runtimeRunId": .string(id), "revision": .int(1), "kind": .string(kind),
-    "label": .string(label), "tier": .string("managed"),
-    "device": .string("dev-studio"), "status": .string(status),
-    "statusSince": .string("2026-09-13T18:42:11.000Z"),
-    "stateChangedAt": .string("2026-09-13T18:42:11.000Z"),
-    "createdAt": .string("2026-09-13T18:03:52.000Z"),
-    "alive": .bool(true), "blockers": .array([]),
-    "project": .object(["name": .string("vibe-field")]),
-  ])
-}
-
-private func board(
+/// An agents SLICE, as an older desktop would still publish it.
+private func agentsSlice(
   rows: [JSONValue], device: String = "dev-studio", revision: Int64 = 1,
   published: Int64 = 1_757_808_000_000, expires: Int64 = 1_757_808_030_000
 ) -> JSONValue {
@@ -91,241 +47,22 @@ private func board(
   ])
 }
 
+/// The studio's own board, as the studio — the only desktop, so the home —
+/// serves it on its mesh board: one desktop, its board at `revision`.
 private func snapshotFrame(revision: Int64, rows: [JSONValue]) -> JSONValue {
-  .object(["revision": .int(revision), "rows": .array(rows)])
+  meshOpen([MeshEntry(device: "dev-studio", rows: rows, revision: revision)])
 }
 
+/// The studio's own board moving, as one mesh frame.
 private func deltaFrame(
   since: Int64, revision: Int64, upserts: [JSONValue], removed: [String]
 ) -> JSONValue {
-  .object([
-    "since": .int(since), "revision": .int(revision),
-    "upserts": .array(upserts), "removed": .array(removed.map(JSONValue.string)),
-  ])
+  meshDelta("dev-studio", since: since, revision: revision, upserts: upserts, removed: removed)
 }
 
-// MARK: - A scripted probe
-
-/// The door's HTTP half, scripted per host.
-///
-/// It records every URL it was asked, which is how the rows below prove WHAT
-/// the phone dialed — the registry port and the peer's own fully-qualified
-/// name, built here rather than read from anybody's slice.
-private actor LinkProbe: ProductDoorProbe {
-  private var answers: [String: DoorProbeOutcome]
-  private let fallback: DoorProbeOutcome
-  private(set) var asked: [URL] = []
-
-  init(
-    answers: [String: DoorProbeOutcome] = [:],
-    fallback: DoorProbeOutcome = .status(400)
-  ) {
-    self.answers = answers
-    self.fallback = fallback
-  }
-
-  func probe(_ url: URL) async -> DoorProbeOutcome {
-    asked.append(url)
-    return answers[url.host ?? ""] ?? fallback
-  }
-
-  var asks: Int { asked.count }
-}
-
-// MARK: - A scripted door
-
-private actor LinkDoor: ProductTransport {
-  typealias Script = @Sendable (_ method: String, _ id: Int64, _ params: JSONValue) -> [String]
-
-  private let script: Script
-  private let answerDelay: Duration
-  private var connections: [LinkConnection] = []
-  private(set) var dialed: [URL] = []
-
-  init(answerDelay: Duration = .zero, script: @escaping Script) {
-    self.script = script
-    self.answerDelay = answerDelay
-  }
-
-  func connect(to url: URL) async throws -> any ProductConnection {
-    dialed.append(url)
-    let connection = LinkConnection(script: script, answerDelay: answerDelay)
-    connections.append(connection)
-    return connection
-  }
-
-  var latest: LinkConnection? { connections.last }
-  var dials: Int { connections.count }
-
-  /// `agent.subscribe` requests across every connection this door served.
-  func subscribes() async -> Int {
-    var total = 0
-    for connection in connections {
-      total += await connection.methods.filter { $0 == "agent.subscribe" }.count
-    }
-    return total
-  }
-}
-
-private actor LinkConnection: ProductConnection {
-  private let script: LinkDoor.Script
-  private let answerDelay: Duration
-  private var queue: [String] = []
-  private var waiter: CheckedContinuation<String, any Error>?
-  private var failure: (any Error)?
-  private var sentMethods: [String] = []
-  /// Every request, as `(method, id, params)` — for the rows that must name
-  /// WHICH subscription a later frame was about.
-  private(set) var requests: [(method: String, id: Int64, params: JSONValue)] = []
-
-  init(script: @escaping LinkDoor.Script, answerDelay: Duration = .zero) {
-    self.script = script
-    self.answerDelay = answerDelay
-  }
-
-  func send(_ text: String) async throws {
-    if let failure { throw failure }
-    guard let value = try? JSONValue.parse(Data(text.utf8)),
-      let method = value["method"]?.stringValue
-    else { return }
-    sentMethods.append(method)
-    let id = value["id"]?.intValue ?? -1
-    requests.append((method, id, value["params"] ?? .null))
-    // A door that answers a SUBSCRIBE slowly. The arming window is between the
-    // ask and the answer, and a door that replies instantly closes it before a
-    // burst can walk through — which is how a storm test passes without the
-    // latch it was written for.
-    if answerDelay > .zero, method == "agent.subscribe" {
-      try? await Task.sleep(for: answerDelay)
-    }
-    for frame in script(method, id, value["params"] ?? .null) { deliver(frame) }
-  }
-
-  func receive() async throws -> String {
-    if let failure, queue.isEmpty { throw failure }
-    if !queue.isEmpty { return queue.removeFirst() }
-    return try await withCheckedThrowingContinuation { waiter = $0 }
-  }
-
-  func close() { failure = failure ?? LinkDoorError.closed }
-
-  /// The socket DROPS under a read in flight, as a dead radio's does: the
-  /// pending receive fails, so the client sees it and re-dials. `close()`
-  /// alone leaves a suspended read waiting forever.
-  func drop() {
-    failure = LinkDoorError.closed
-    if let waiter {
-      self.waiter = nil
-      waiter.resume(throwing: LinkDoorError.closed)
-    }
-  }
-
-  func deliver(_ text: String) {
-    if let waiter {
-      self.waiter = nil
-      waiter.resume(returning: text)
-    } else {
-      queue.append(text)
-    }
-  }
-
-  var methods: [String] { sentMethods }
-}
-
-private enum LinkDoorError: Error { case closed }
-
-private func frame(id: Int64, _ result: JSONValue) -> String {
-  let value = JSONValue.object([
-    "jsonrpc": .string("2.0"), "id": .int(id), "result": result,
-  ])
-  return String(data: (try? value.encoded()) ?? Data(), encoding: .utf8) ?? ""
-}
-
-private func failureFrame(
-  id: Int64, kind: String, message: String, retryable: Bool = false, details: JSONValue? = nil
-) -> String {
-  var data: [String: JSONValue] = ["kind": .string(kind), "retryable": .bool(retryable)]
-  if let details { data["details"] = details }
-  let value = JSONValue.object([
-    "jsonrpc": .string("2.0"), "id": .int(id),
-    "error": .object([
-      "code": .int(-32000), "message": .string(message), "data": .object(data),
-    ]),
-  ])
-  return String(data: (try? value.encoded()) ?? Data(), encoding: .utf8) ?? ""
-}
-
-private func event(method: String, subId: String, payload: JSONValue) -> String {
-  let value = JSONValue.object([
-    "jsonrpc": .string("2.0"), "method": .string(method),
-    "params": .object(["subId": .string(subId), "payload": payload]),
-  ])
-  return String(data: (try? value.encoded()) ?? Data(), encoding: .utf8) ?? ""
-}
-
-/// A SELF desktop's hello: a login the door's stored link names, so the preset
-/// grants something.
-private let ack = JSONValue.object([
-  "contractsVersion": .string("0.1.0"), "serverKind": .string("fieldd"),
-  "grantedScopes": .array([.string("agent.read"), .string("terminal.attach")]),
-])
-
-/// fieldd's `tailnet-guest`: the hello SUCCEEDS and grants nothing. The desktop
-/// lane is removing this case under the same ruling; the phone reads it anyway.
-private let guestAck = JSONValue.object([
-  "contractsVersion": .string("0.1.0"), "serverKind": .string("fieldd"),
-  "grantedScopes": .array([]),
-])
-
-/// The door a self desktop answers with: hello, its own row, and nothing else
-/// unless a row scripts more.
-private let selfDoor: LinkDoor.Script = { method, id, _ in
-  switch method {
-  case "system.hello": return [frame(id: id, ack)]
-  case "device.list": return [frame(id: id, deviceListResult([deviceRow(name: "studio")]))]
-  default: return []
-  }
-}
-
-// MARK: - The rig
-
-/// The tailnet's own spelling of the studio peer's door, as the phone must
-/// build it: the peer's fully-qualified MagicDNS name and the registry port.
-private let studioDoorHost = "studio.\(rehearsalSuffix)"
-
-/// A schedule with a fast tick, so a rehearsal does not wait ten seconds to
-/// see a sweep. The two WINDOWS keep their real lengths — they are what the
-/// schedule rows are about, and shortening them would prove a different rule.
-private let briskSchedule = FieldDiscoverySchedule(
-  notThisAccount: .seconds(300), unreachable: .seconds(30), tick: .milliseconds(20))
-
-@MainActor
-private func standingLink(
-  now: Date = Date(timeIntervalSince1970: 1_757_808_001),
-  peers: [FieldStorePeer] = [studio],
-  answerDelay: Duration = .zero,
-  probe: LinkProbe = LinkProbe(),
-  storeBus: Bool = false,
-  selfLogin: String? = nil,
-  script: @escaping LinkDoor.Script = selfDoor
-) async throws -> (FieldLink, MeshRehearsal, LinkDoor, LinkProbe) {
-  let mesh = MeshRehearsal()
-  await mesh.set(peers: peers)
-  let door = LinkDoor(answerDelay: answerDelay, script: script)
-  let link = FieldLink(
-    storeDoors: await mesh.doors(), transport: door, probe: probe,
-    options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
-    magicDNSSuffix: rehearsalSuffix,
-    schedule: briskSchedule,
-    storeBus: storeBus,
-    selfLogin: selfLogin,
-    now: { now })
-  link.start()
-  return (link, mesh, door, probe)
-}
-
-/// The dormant reader's rig: the same link with the bus ON, for the rows that
-/// exercise `FieldStore` deliberately (UA-P-1b).
+/// The presence reader's rig: the same link with the bus ON (a gated node), for
+/// the rows that exercise `FieldStore` deliberately. It listens for
+/// `field.devices.v1` and for nothing else (DS-D14).
 @MainActor
 private func storeBusLink(
   now: Date = Date(timeIntervalSince1970: 1_757_808_001),
@@ -336,10 +73,8 @@ private func storeBusLink(
 ) async throws -> (FieldLink, MeshRehearsal, LinkDoor, LinkProbe) {
   let rig = try await standingLink(
     now: now, peers: peers, probe: probe, storeBus: true, selfLogin: selfLogin, script: script)
-  try await waitUntil("both stores listening") {
-    let devicesUp = await rig.1.isListening(to: devicesNamespace)
-    let agentsUp = await rig.1.isListening(to: agentsNamespace)
-    return devicesUp && agentsUp
+  try await waitUntil("the presence store listening") {
+    await rig.1.isListening(to: devicesNamespace)
   }
   return rig
 }
@@ -355,13 +90,17 @@ private func publishDevice(_ mesh: MeshRehearsal, url: String?, version: Int64 =
     to: devicesNamespace)
 }
 
+/// An older desktop publishing its agents slice anyway — delivered to the
+/// retired namespace, where a listener would hear it if there were one.
 @MainActor
-private func publishBoard(_ mesh: MeshRehearsal, _ value: JSONValue, version: Int64 = 1) async {
+private func publishAgentsSlice(
+  _ mesh: MeshRehearsal, _ value: JSONValue, version: Int64 = 1
+) async {
   await mesh.deliver(
     inbound(
       from: "node-studio", deviceId: "dev-studio", msgType: "update",
       payload: sliceFrame("update", deviceId: "dev-studio", version: version, data: value)),
-    to: agentsNamespace)
+    to: retiredAgentsNamespace)
 }
 
 // MARK: - Discovery by the door (UA-P-1a)
@@ -538,27 +277,6 @@ private func publishBoard(_ mesh: MeshRehearsal, _ value: JSONValue, version: In
 
 // MARK: - The re-ask schedule (UA-P-1a)
 
-/// A clock a test can move. Both windows are about TIME, so proving them needs
-/// a clock that is not the wall's.
-@MainActor
-private final class MovableClock {
-  private(set) var now: Date
-  init(_ start: Date) { now = start }
-  func advance(_ seconds: TimeInterval) { now = now.addingTimeInterval(seconds) }
-}
-
-/// How many discovery passes have run.
-///
-/// The schedule rows need it to PIN THEIR PRECONDITION. "the probe was not
-/// asked again" is only evidence about the window if a sweep actually happened
-/// and chose not to ask — otherwise a sweep that simply had not run yet passes
-/// the same assertion, and the test proves nothing. Every pass reads the peer
-/// list exactly once, so counting that read counts passes.
-private actor SweepCounter {
-  private(set) var count = 0
-  func bump() { count += 1 }
-}
-
 @MainActor
 private func clockedLink(
   clock: MovableClock, probe: LinkProbe
@@ -580,23 +298,6 @@ private func clockedLink(
     now: { clock.now })
   link.start()
   return (link, mesh, counter)
-}
-
-/// Ask for a pass NOW rather than waiting on the ticker, and return once one
-/// has finished.
-///
-/// The rules these rows are about are the two WINDOWS, not the ticker's
-/// cadence. Leaning on the cadence made them fail under a loaded full-suite run
-/// and pass eight times out of eight alone — a timing dependency the rule does
-/// not have. A peer event is the same edge a live tailnet delivers, and it
-/// drives a pass directly.
-@MainActor
-private func sweepNow(
-  _ mesh: MeshRehearsal, _ counter: SweepCounter, file: String = #function
-) async throws {
-  let before = await counter.count
-  await mesh.emit(.upsert(studio))
-  try await waitUntil("a discovery pass") { await counter.count > before }
 }
 
 @MainActor
@@ -718,8 +419,9 @@ private func sweepNow(
 
 @MainActor
 @Suite struct FieldLinkFeedTests {
-  /// Since UA-P-1b the door is the ONLY leg, and it carries everything the
-  /// fold used to draw from the store.
+  /// Since UA-P-1b the door is the ONLY leg, and since DS-8 it is the HOME's
+  /// door: the studio is the only desktop, so it is the home, and its mesh
+  /// board carries its own rows.
   @Test func theDoorCarriesTheField() async throws {
     let snapshot = snapshotFrame(revision: 5, rows: [boardRow(id: "run-door")])
     let (link, _, _, _) = try await standingLink(script: { method, id, params in
@@ -728,6 +430,7 @@ private func sweepNow(
       case "device.list": return [frame(id: id, deviceListResult([deviceRow(name: "studio")]))]
       case "agent.subscribe":
         #expect(params["projection"]?.stringValue == "field")
+        #expect(params["scope"]?.stringValue == "mesh")
         #expect(params["minIntervalMs"] == .int(250))
         return [frame(id: id, .object(["subId": .string("s1"), "snapshot": snapshot]))]
       default: return []
@@ -791,8 +494,10 @@ private func sweepNow(
     try await waitUntil("a second subscribe") {
       await (door.latest?.methods.filter { $0 == "agent.subscribe" }.count ?? 0) >= 2
     }
-    // SP-2 (a), 2026-10-01: the gap is caught by the client's subscription
-    // table before the link sees the delta, so the note is the client's.
+    // DS-8: the mesh board carries a chain per desktop, so the gap is caught by
+    // the link's board copy; the repair is the client table's re-subscribe,
+    // and the table's own note says so.
+    #expect(link.notes.contains { $0.contains("does not continue") })
     #expect(
       link.client(for: "dev-studio")?.tolerantNotes.contains { $0.contains("re-subscribing") }
         == true)
@@ -1152,39 +857,44 @@ private final class Refusal: @unchecked Sendable {
     try await waitUntil("ready") { link.desktops.first?.state == .ready }
 
     #expect(await mesh.isListening(to: devicesNamespace) == false)
-    #expect(await mesh.isListening(to: agentsNamespace) == false)
+    #expect(await mesh.isListening(to: retiredAgentsNamespace) == false)
     #expect(link.devices.storeId == nil)
-    #expect(link.boards.storeId == nil)
   }
 
-  /// And a slice delivered to an UNGATED link changes nothing: the field is
-  /// the door's until the node can name the account it is on.
+  /// And a slice delivered to an UNGATED link changes nothing: nothing is
+  /// listening, and the desktop is named by its door alone.
   @Test func aSliceOnAnUngatedLinkDrawsNothing() async throws {
     let (link, mesh, _, _) = try await standingLink()
     defer { link.stop() }
     try await waitUntil("ready") { link.desktops.first?.state == .ready }
 
-    await publishBoard(mesh, board(rows: [boardRow(id: "run-from-store")]))
+    await publishAgentsSlice(mesh, agentsSlice(rows: [boardRow(id: "run-from-store")]))
     await publishDevice(mesh, url: "ws://studio.tail.ts.net/t/secret")
     try await Task.sleep(for: .milliseconds(120))
     #expect(link.agents.isEmpty)
-    #expect(link.boards.slices.isEmpty)
+    #expect(link.devices.slices.isEmpty)
     #expect(link.desktops.first?.feed == FieldFeedSource.none)
   }
 
-  /// THE READER, BACK. Everything the fold drew from the store draws again on
-  /// a gated link — which is what UA-P-1b's "dormant rather than deleted" was
-  /// for: turning it on is a one-word event and not an archaeology.
-  @Test func theReaderWorksAgainOnAGatedLink() async throws {
+  /// DS-D14 — a GATED link reads presence and never the board. The devices
+  /// slice names the desktop as it always did; an agents slice an older desktop
+  /// still publishes reaches no listener and draws nothing — the field is the
+  /// home's mesh board alone. (This row was "the reader, back" until the
+  /// reader retired.)
+  @Test func aGatedLinkReadsPresenceAndNeverTheBoard() async throws {
     let (link, mesh, _, _) = try await storeBusLink()
     defer { link.stop() }
 
     await publishDevice(mesh, url: nil)
-    await publishBoard(mesh, board(rows: [boardRow(id: "run-1"), boardRow(id: "run-2")]))
-    try await waitUntil("two bodies from the store") { link.agents.count == 2 }
-    #expect(link.agents.map(\.id) == ["run-1", "run-2"])
-    #expect(link.desktops.first?.feed == .store)
-    // And the slice's own name reaches the row, as it always did.
+    await publishAgentsSlice(
+      mesh, agentsSlice(rows: [boardRow(id: "run-1"), boardRow(id: "run-2")]))
+    try await waitUntil("the slice's own name on the row") {
+      link.devices.slices["dev-studio"] != nil
+    }
+    try await Task.sleep(for: .milliseconds(120))
+    #expect(await mesh.isListening(to: retiredAgentsNamespace) == false)
+    #expect(link.agents.isEmpty)
+    #expect(link.desktops.first?.feed == FieldFeedSource.none)
     #expect(link.desktops.first?.name == "studio")
   }
 
@@ -1204,86 +914,49 @@ private final class Refusal: @unchecked Sendable {
     #expect(link.devices.slices["dev-studio"] == nil)
   }
 
-  /// A board past its own expiry never reaches the field.
-  @Test func anExpiredBoardStaysOffTheField() async throws {
-    let published: Int64 = 1_757_808_000_000
-    let (link, mesh, _, _) = try await storeBusLink(
-      now: Date(timeIntervalSince1970: Double(published + 31_000) / 1000))
-    defer { link.stop() }
-
-    await publishDevice(mesh, url: nil)
-    await publishBoard(
-      mesh,
-      board(rows: [boardRow(id: "run-1")], published: published, expires: published + 30_000))
-    try await Task.sleep(for: .milliseconds(120))
-    #expect(link.agents.isEmpty)
-  }
+  // RETIRED 2026-10-01 (DS-D14): `anExpiredBoardStaysOffTheField` — the
+  // agents slice's own expiry, which left with its reader. A desktop's
+  // staleness is its STATE on the home's mesh board now (DS-L8), pinned by
+  // `FieldLinkHomeFieldTests.anAsleepDesktopsRowsStayGreyed`.
 }
 
 // MARK: - The golden fixture
 
 @MainActor
 @Suite struct GoldenFixtureStageTests {
-  /// `-vf-demo-field-slice` stages three desktops so the faces lane has
-  /// something to draw from, with no listener anywhere.
-  ///
-  /// **What it stages CHANGED at UA-P-1a**, and honestly so: the fixture's
-  /// published `productEndpoint.url`s are no longer what the phone dials —
-  /// nothing publishes one — so all three peers are probed at the registry
-  /// port with nothing behind it and all three wear `noDoor`. The BOARD still
-  /// arrives, over the dormant reader with the switch on, which is what this
-  /// row is really for: the fold, the projection and every face below them are
-  /// unchanged by the discovery rewrite.
-  @Test func theFixtureStagesItsDesktopsAndItsBoard() async throws {
-    let doors = try #require(FieldStoreDoors.goldenBoard())
-    let link = FieldLink(
-      storeDoors: doors,
-      probe: LinkProbe(fallback: .unreachable("nothing is listening")),
-      options: .init(maxBackoff: .milliseconds(20), callTimeout: .milliseconds(400)),
-      schedule: briskSchedule,
-      storeBus: true)
+  /// `-vf-demo-field-slice` (DS-8) stages the contracts' GOLDEN mesh board
+  /// through the real home path, with no listener anywhere: four desktops on
+  /// the fixture's tailnet (one asleep and not listed), the phone homing to
+  /// the first whose door answers, and the field read through its mesh board
+  /// — the sleeping desktop's kept board drawn greyed. It used to stage the
+  /// golden `field.agents.v1` slice through the store reader, retired by
+  /// DS-D14.
+  @Test func theFixtureStagesItsDesktopsAndTheGoldenMeshBoard() async throws {
+    let link = try #require(FieldLink.goldenFixture(schedule: briskSchedule))
     defer { link.stop() }
     link.start()
 
-    // The peers arrive on the first sweep and their NAMES a beat later, over
-    // the store — so the wait is for the names, not the count. A count that
-    // passed while a row still read `127.0.0.1` would be asserting the fixture
-    // had staged a desktop it has not finished staging.
+    try await waitUntil("the golden through the home") { link.agents.count == 3 }
+    #expect(link.home == "dev-01HQ8ZK4M7")
+    #expect(link.agents.map(\.id) == ["run-here-w", "run-studio-q", "run-air-i"])
+    #expect(link.agents.map { $0.join?.deviceLive } == [true, true, false])
+
+    // The names a beat later, from the home's roster.
     try await waitUntil("three named desktops") {
       link.desktops.map(\.name).sorted() == ["laptop", "mini", "studio"]
     }
-
-    // The golden board, through the real reader and the real fold: five rows
-    // in, four bodies out.
-    try await waitUntil("the golden board") { link.agents.count == 4 }
-
-    // D1 feeds its field from the store — the leg UA-P-4 brings back.
-    let boardDevice = try #require(link.desktops.first { $0.name == "studio" })
-    #expect(boardDevice.feed == .store)
-
-    // Nothing answered at any door, which is a state and never a refusal.
-    let quiet = try #require(link.desktops.first { $0.name == "laptop" })
+    let quiet = try #require(link.desktops.first { $0.name == "mini" })
     #expect(quiet.state == .noDoor)
-    #expect(quiet.feed == FieldFeedSource.none)
+    #expect(quiet.feed == FieldFeedSource.none, "listed stale on the board, with no board")
+    let laptopRow = try #require(link.desktops.first { $0.name == "laptop" })
+    #expect(laptopRow.state == .ready)
+    #expect(laptopRow.feed == .door)
     #expect(link.endpointRefusals.isEmpty)
     #expect(link.foreignDoors.isEmpty)
   }
 }
 
 // MARK: - Self and guest, by login (UA-P-5)
-
-/// The tailnet's own spelling of the laptop peer's door.
-private let laptopDoorHost = "laptop.\(rehearsalSuffix)"
-
-/// One peer, with a login on it. Layer 3 carries this now (RFC 025 §3.6, D7)
-/// and it is the account boundary itself.
-private func peer(
-  _ base: FieldStorePeer, login: String?
-) -> FieldStorePeer {
-  FieldStorePeer(
-    id: base.id, deviceId: base.deviceId, online: base.online, hostname: base.hostname,
-    tailnetIPs: base.tailnetIPs, loginName: login)
-}
 
 @MainActor
 @Suite struct FieldLinkAccountTests {
@@ -1381,42 +1054,11 @@ private func peer(
 
 @MainActor
 @Suite struct FieldLinkScopedBusTests {
-  /// **THE HOLE THIS CLOSES.** `refold` folds a board for every device id it
-  /// knows, while `refreshDesktops` drops a peer the door refused — so with
-  /// the bus on, a FOREIGN desktop's board put bodies on this person's field
-  /// while its own row was correctly hidden. Bodies with no desktop, from a
-  /// machine the phone had already established is somebody else's.
-  @Test func aRefusedPeersBoardIsHeldOffTheField() async throws {
-    // Neither door answers — the contrast this row is about is the VERDICT,
-    // not the socket: `studio` is asleep (this account's, drawable) and
-    // `laptop` refused (somebody else's, held).
-    let probe = LinkProbe(
-      answers: [laptopDoorHost: .status(403)], fallback: .unreachable("nothing there"))
-    let (link, mesh, _, _) = try await storeBusLink(peers: [studio, laptop], probe: probe)
-    defer { link.stop() }
-
-    try await waitUntil("the laptop refused") { link.foreignDoors["dev-laptop"] != nil }
-
-    // The refused peer publishes a board anyway. Nothing on this bus is
-    // forged — truffle authenticated the sender — and it is still not this
-    // phone's to draw.
-    await mesh.deliver(
-      inbound(
-        from: "node-laptop", deviceId: "dev-laptop", msgType: "update",
-        payload: sliceFrame(
-          "update", deviceId: "dev-laptop", version: 1,
-          data: board(rows: [boardRow(id: "run-not-mine")], device: "dev-laptop"))),
-      to: agentsNamespace)
-
-    // And this account's desktop publishes one at the same time, so the row is
-    // about the FILTER and not about a fold that draws nothing.
-    await publishBoard(mesh, board(rows: [boardRow(id: "run-mine")]))
-
-    try await waitUntil("this account's body") { link.agents.map(\.id) == ["run-mine"] }
-    try await Task.sleep(for: .milliseconds(80))
-    #expect(link.agents.map(\.id) == ["run-mine"])
-    #expect(!link.desktops.contains { $0.deviceId == "dev-laptop" })
-  }
+  // MOVED 2026-10-01 (DS-8, DS-D14): `aRefusedPeersBoardIsHeldOffTheField` —
+  // a desktop the phone established is somebody else's was held off the field
+  // when its agents SLICE arrived. The slice is retired; the same law now
+  // holds against the home's mesh board, pinned by
+  // `FieldLinkHomeFieldTests.aDesktopThisPhoneRefusedStaysOffTheFieldWhenTheHomeListsIt`.
 
   /// A device row from a refused peer is not read either — the store is not a
   /// second opinion that overrides a door.
@@ -1439,20 +1081,10 @@ private func peer(
     #expect(!link.desktops.contains { $0.name == "not-mine" })
   }
 
-  /// A SLEEPING door is not a refusal. The peer is one truffle's gate admitted,
-  /// so its slice is this account's by construction (RFC 025 §3.1) and the
-  /// board arrives with no connection open — which is the whole of what §5's
-  /// hybrid buys. Holding here would make the store leg a slower door.
-  @Test func aBoardStillArrivesWhileTheDoorIsAsleep() async throws {
-    let (link, mesh, door, _) = try await storeBusLink()
-    defer { link.stop() }
-
-    await publishBoard(mesh, board(rows: [boardRow(id: "run-1")]))
-    try await waitUntil("the body over the store") { link.agents.map(\.id) == ["run-1"] }
-    #expect(link.desktops.first?.feed == .store)
-    #expect(link.desktops.first?.state == .noDoor)
-    #expect(await door.dials == 0)
-  }
+  // RETIRED 2026-10-01 (DS-D14): `aBoardStillArrivesWhileTheDoorIsAsleep` —
+  // the store leg's whole reason (a board with no connection open). Its DS-8
+  // analogue is a desktop asleep keeping its rows because the HOME's replica
+  // answers for them: `FieldLinkHomeFieldTests.anAsleepDesktopsRowsStayGreyed`.
 
   /// THE GOLDEN, THROUGH THE LIVE READER. The device row the re-armed bus
   /// decodes is the contracts' own bytes — `device-slice.valid.json`, byte for
@@ -1484,23 +1116,6 @@ private func peer(
     #expect(row.publishesTerminalDoors == nil)  // the golden says nothing about it
   }
 
-}
-
-// MARK: - The contracts' own bytes, in this bundle
-
-enum MeshFixture {
-  static func json(_ name: String) throws -> JSONValue {
-    guard
-      let url = Bundle.module.url(
-        forResource: name, withExtension: "json", subdirectory: "Fixtures")
-    else { throw MissingFixture(name: name) }
-    return try JSONValue.parse(try Data(contentsOf: url))
-  }
-
-  struct MissingFixture: Error, CustomStringConvertible {
-    let name: String
-    var description: String { "fixture `\(name).json` is not in the FieldMeshTests bundle" }
-  }
 }
 
 // MARK: - IOS-8c: who the desktop serves
@@ -1593,11 +1208,6 @@ private func countedLink(
   link.start()
   return (link, mesh, door, counter)
 }
-
-/// A sweep that does not come round again inside any row's wait: after the
-/// first passes settle, nothing but the CLIENT's own state can ask the door.
-private let idleSchedule = FieldDiscoverySchedule(
-  notThisAccount: .seconds(300), unreachable: .seconds(30), tick: .seconds(120))
 
 /// The subscribe answer every row below uses: one Claude run, one agent a
 /// catalog may or may not have decided on, and one ACP run — a row the door
@@ -1834,13 +1444,16 @@ private let catalogWait: Duration = .seconds(20)
     #expect(link.desktops.isEmpty)
   }
 
-  /// A desktop that drops off the ONLINE list (a sleep: truffle keeps the peer
-  /// in its snapshot as `online: false` and never says `left`) takes its
-  /// bodies off the field too — the sweep that forgets it refolds, not only
-  /// the `.left` path (the review's finding: the sweep returned before its
-  /// refold when nothing else was due, and the vanished desktop's bodies
-  /// stayed, named by a catalog the link no longer held).
-  @Test func aDesktopThatGoesOfflineTakesItsBodiesOffTheField() async throws {
+  /// A HOME that drops off the ONLINE list (a sleep: truffle keeps the peer in
+  /// its snapshot as `online: false` and never says `left`) is forgotten — its
+  /// row and its catalog with it, the sweep refolding at once — and its bodies
+  /// STAY, GREYED: asleep is a state, not an absence (DS-L8), and with no home
+  /// answering nothing on the field is live. REWRITTEN 2026-10-01 (DS-8): the
+  /// row used to empty the field. The review's finding behind it was bodies
+  /// that stayed UNGREYED, named by a catalog the link no longer held; the
+  /// copy now says what it is, and each body is named by the word its row
+  /// carries once the catalog has gone.
+  @Test func theHomeGoingOfflineGreysItsBodiesAndForgetsItsCatalog() async throws {
     let golden = try MeshFixture.json("agent-catalog.valid")
     let (link, mesh, _, _) = await countedLink(script: { method, id, _ in
       switch method {
@@ -1855,14 +1468,18 @@ private let catalogWait: Duration = .seconds(20)
     try await waitUntil("the named field", timeout: catalogWait) {
       link.agents.count == 3 && !link.catalog.isEmpty
     }
-    let asleepStudio = FieldStorePeer(
-      id: studio.id, deviceId: studio.deviceId, online: false, hostname: studio.hostname,
-      tailnetIPs: studio.tailnetIPs)
-    await mesh.set(peers: [asleepStudio])
-    await mesh.emit(.upsert(asleepStudio))
-    try await waitUntil("the field emptied", timeout: catalogWait) { link.agents.isEmpty }
+    await mesh.set(peers: [asleepCopy(studio)])
+    await mesh.emit(.upsert(asleepCopy(studio)))
+    try await waitUntil("the field greyed", timeout: catalogWait) {
+      link.agents.count == 3 && link.agents.allSatisfy { $0.join?.deviceLive == false }
+    }
+    #expect(link.home == nil)
     #expect(link.desktops.isEmpty)
     #expect(link.catalog.isEmpty)
+    #expect(
+      link.agents.compactMap { fieldBubble(from: $0)?.agent?.providerName } == [
+        "Claude Code", "Zed", "ACP",
+      ])
   }
 }
 
@@ -1870,12 +1487,14 @@ private let catalogWait: Duration = .seconds(20)
 
 @MainActor
 @Suite struct FieldLinkRosterDialTests {
-  /// The tailnet says a desktop went to sleep, and no sweep has run since (the
-  /// tick is a minute here, so the window stays open): its socket drops, and
-  /// the client — asking the roster before the re-dial — parks instead of
-  /// climbing the backoff ladder against a machine that is not there. When the
-  /// roster says it woke, the link's sweep dials it again.
-  @Test func aDesktopTheTailnetCallsAsleepIsNotDialledAgainUntilItWakes() async throws {
+  /// The tailnet says the HOME went to sleep: its socket drops, the re-dial
+  /// asks the roster and parks instead of climbing the backoff ladder against
+  /// a machine that is not there, and the pass the drop asked for lets the home
+  /// go — the tailnet no longer lists it, and no other desktop takes the field.
+  /// When the roster says it woke, the phone homes to it again: one fresh dial,
+  /// never a ladder. (REWRITTEN for DS-8: the row waited for the desktop to
+  /// read `reconnecting`; a home the tailnet stops listing is let go instead.)
+  @Test func aHomeTheTailnetCallsAsleepIsNotDialledAgainUntilItWakes() async throws {
     let mesh = MeshRehearsal()
     await mesh.set(peers: [studio])
     let door = LinkDoor(script: selfDoor)
@@ -1890,12 +1509,9 @@ private let catalogWait: Duration = .seconds(20)
     defer { link.stop() }
     try await waitUntil("the door ready") { link.desktops.first?.state == .ready }
 
-    let asleepStudio = FieldStorePeer(
-      id: studio.id, deviceId: studio.deviceId, online: false, hostname: studio.hostname,
-      tailnetIPs: studio.tailnetIPs)
-    await mesh.set(peers: [asleepStudio])
+    await mesh.set(peers: [asleepCopy(studio)])
     await door.latest?.drop()
-    try await waitUntil("the drop heard") { link.desktops.first?.state == .reconnecting }
+    try await waitUntil("the home let go") { link.home == nil }
     try await Task.sleep(for: .milliseconds(150))  // thirty 5 ms rungs of the ladder
     #expect(await door.dials == 1)
 
@@ -1903,6 +1519,7 @@ private let catalogWait: Duration = .seconds(20)
     await mesh.emit(.upsert(studio))
     try await waitUntil("a dial after the wake") { await door.dials == 2 }
     try await waitUntil("ready again") { link.desktops.first?.state == .ready }
+    #expect(link.home == "dev-studio")
   }
 }
 
@@ -1994,38 +1611,10 @@ private func stuckLink(
   }
 }
 
-// MARK: - SP-2 (f): the door outranks the slice once hello'd
-
-@MainActor
-@Suite struct FieldLinkDoorOutranksSliceTests {
-  /// Under SP-D3's trim the slice is presence, and the door is the content: a
-  /// desktop whose door has answered hello and sent its board is drawn FROM
-  /// THE DOOR even while a live, unexpired slice sits on the bus — the door is
-  /// subscribed regardless of the slice, and the fold prefers its board. Until
-  /// the door's board arrives the slice still draws (never a blank).
-  @Test func aHelloedDoorOutranksALiveSlice() async throws {
-    let snapshot = snapshotFrame(revision: 5, rows: [boardRow(id: "door-run")])
-    let (link, mesh, door, _) = try await storeBusLink(
-      probe: LinkProbe(),
-      script: { method, id, _ in
-        switch method {
-        case "system.hello": return [frame(id: id, ack)]
-        case "device.list": return [frame(id: id, deviceListResult([deviceRow(name: "studio")]))]
-        case "agent.subscribe":
-          return [frame(id: id, .object(["subId": .string("s1"), "snapshot": snapshot]))]
-        default: return []
-        }
-      })
-    defer { link.stop() }
-
-    await publishBoard(mesh, board(rows: [boardRow(id: "slice-run")]))
-    try await waitUntil("the door's board on the field") {
-      link.agents.map(\.id) == ["door-run"]
-    }
-    #expect(link.desktops.first?.feed == .door)
-    #expect(await door.latest?.methods.contains("agent.subscribe") == true)
-  }
-}
+// RETIRED 2026-10-01 (DS-D14): SP-2 (f)'s `FieldLinkDoorOutranksSliceTests`
+// (`aHelloedDoorOutranksALiveSlice`) — there is no slice left to outrank. The
+// field is the home's mesh board alone, and a gated link never listens for
+// the agents slice (`FieldStoreBusTests.aGatedLinkReadsPresenceAndNeverTheBoard`).
 
 // MARK: - SP-2 (g): every door the link opens counts against the budget
 
@@ -2094,23 +1683,24 @@ private final class ResumeGate: @unchecked Sendable {
 
 @MainActor
 @Suite struct FieldLinkResumeStaggerTests {
-  /// SP-L7: subscriptions pause in the background and resnapshot on return —
-  /// and a phone with three desktops must not bring all three back in one
-  /// breath. Each desktop has its own window, in device order, jittered inside
-  /// it, so no two re-subscribe (or re-probe their sockets) together; the
-  /// sweep the resume starts holds every desktop until its window opens.
-  @Test func comingBackIsStaggeredAcrossDesktopsNeverAHerd() async throws {
-    let mini = FieldStorePeer(
-      id: "node-mini", deviceId: "dev-mini", online: true, hostname: "mini",
-      tailnetIPs: ["100.64.0.4"])
+  /// SP-L7: subscriptions pause in the background and resnapshot on return,
+  /// never in a herd. DS-8 makes the herd structural: a phone with three
+  /// desktops holds ONE door — the home's — so coming back is one window, one
+  /// re-subscribe, and nothing for the other two desktops to bring back; the
+  /// sweep the resume starts holds the home until its window opens.
+  /// (REWRITTEN for DS-8: the row staggered three doors, one per desktop.)
+  @Test func comingBackIsOneWindowForTheOneDoorNeverAHerd() async throws {
     let mesh = MeshRehearsal()
     await mesh.set(peers: [studio, laptop, mini])
-    let snapshot = snapshotFrame(revision: 1, rows: [])
+    let board = meshOpen([
+      MeshEntry(device: "dev-laptop"), MeshEntry(device: "dev-mini"),
+      MeshEntry(device: "dev-studio"),
+    ])
     let door = LinkDoor { method, id, _ in
       switch method {
       case "system.hello": return [frame(id: id, ack)]
       case "agent.subscribe":
-        return [frame(id: id, .object(["subId": .string("s\(id)"), "snapshot": snapshot]))]
+        return [frame(id: id, .object(["subId": .string("s\(id)"), "snapshot": board]))]
       default: return []
       }
     }
@@ -2129,28 +1719,27 @@ private final class ResumeGate: @unchecked Sendable {
       link.stop()
       gate.releaseAll()
     }
-    try await waitUntil("three desktops subscribed") { await door.subscribes() == 3 }
-    // Three BOARDS, not three requests: a subscribe asked but not yet answered
-    // is the pause race `FieldLinkPauseRaceTests` pins on its own.
+    // Three desktops' boards, over ONE door: the first that answers, in device
+    // order, is the home.
     try await waitUntil("three boards on the field") {
       link.desktops.count == 3 && link.desktops.allSatisfy { $0.feed == .door }
     }
+    #expect(link.home == "dev-laptop")
+    #expect(await door.dials == 1)
+    #expect(await door.subscribes() == 1)
 
     link.pause()
     link.resume()
-    try await waitUntil("three resume windows") { gate.parked == 3 }
-    #expect(gate.delays.sorted() == [.milliseconds(200), .milliseconds(600), .milliseconds(1000)])
+    try await waitUntil("one resume window") { gate.parked == 1 }
+    #expect(gate.delays == [.milliseconds(200)])
     try await Task.sleep(for: .milliseconds(80))  // the resumed sweep runs on its 20 ms tick
-    #expect(await door.subscribes() == 3, "nobody came back before its window")
+    #expect(await door.subscribes() == 1, "nobody came back before its window")
 
     gate.releaseNext()
-    try await waitUntil("the first window's desktop") { await door.subscribes() == 4 }
+    try await waitUntil("the home back") { await door.subscribes() == 2 }
     try await Task.sleep(for: .milliseconds(40))
-    #expect(await door.subscribes() == 4, "one desktop per window")
-    gate.releaseNext()
-    try await waitUntil("the second") { await door.subscribes() == 5 }
-    gate.releaseNext()
-    try await waitUntil("the third") { await door.subscribes() == 6 }
+    #expect(await door.subscribes() == 2, "one door, one re-subscribe")
+    #expect(await door.dials == 1)
   }
 
   /// The windows, pure: slot `i` comes back at (i + jitter) × the stagger, so a
@@ -2167,22 +1756,6 @@ private final class ResumeGate: @unchecked Sendable {
   }
 }
 
-
-/// The first request of `method` a door's latest connection received.
-@MainActor
-private func settledRequest(_ door: LinkDoor, _ method: String) async throws
-  -> (method: String, id: Int64, params: JSONValue)
-{
-  let deadline = ContinuousClock.now.advanced(by: .seconds(5))
-  while ContinuousClock.now < deadline {
-    if let found = await door.latest?.requests.first(where: { $0.method == method }) {
-      return found
-    }
-    try await Task.sleep(for: .milliseconds(5))
-  }
-  Issue.record("timed out waiting for a \(method) request")
-  throw CancellationError()
-}
 
 // MARK: - A subscribe in flight at pause does not survive it (found by SP-2 c)
 

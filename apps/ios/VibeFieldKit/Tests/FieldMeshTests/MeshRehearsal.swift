@@ -10,10 +10,12 @@ import Foundation
 /// drop when a peer leaves, ignore what does not parse — is a rule about
 /// MESSAGES, and none of them wants Tailscale to be running.
 ///
-/// It is namespace-aware because `FieldLink` reads TWO stores over ONE set of
-/// doors (`field.devices.v1` and `field.agents.v1`), which is exactly what the
-/// live node does: `onMessage(namespace:)` is per namespace, and a rehearsal
-/// that pooled them would let a devices message land on the agents store.
+/// It is namespace-aware because a node's `onMessage(namespace:)` is per
+/// namespace, and a rehearsal that pooled them would let one store's message
+/// land on another's. `FieldLink` reads ONE store since DS-D14
+/// (`field.devices.v1`; `field.agents.v1` retired 2026-10-01), and a row proves
+/// the retired namespace has no listener — which only a namespace-aware
+/// rehearsal can say.
 actor MeshRehearsal {
   struct Sent: Equatable {
     let peerId: String

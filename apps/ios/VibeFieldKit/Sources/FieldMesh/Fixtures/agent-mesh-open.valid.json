@@ -1,0 +1,141 @@
+{
+  "devices": [
+    {
+      "device": "dev-01HQ8ZK4M7",
+      "state": "live",
+      "asOf": "2026-09-30T21:00:00.000Z",
+      "snapshot": {
+        "epoch": "fieldd-5d1e2a7c90b3f418.2",
+        "revision": 4,
+        "rows": [
+          {
+            "runtimeRunId": "run-here-w",
+            "revision": 3,
+            "kind": "codex",
+            "label": "Codex",
+            "tier": "managed",
+            "device": "dev-01HQ8ZK4M7",
+            "status": "working",
+            "statusSince": "2026-09-30T21:12:30.000Z",
+            "stateChangedAt": "2026-09-30T21:12:30.000Z",
+            "createdAt": "2026-09-30T21:02:11.000Z",
+            "alive": true,
+            "blockers": [],
+            "lastAssistantMessage": {
+              "text": "Running the fieldd suite.",
+              "at": "2026-09-30T21:12:29.000Z",
+              "final": false
+            },
+            "usage": {
+              "cumulativeTokens": 88210,
+              "costUsd": 0.61,
+              "costCoverage": "partial"
+            },
+            "project": {
+              "name": "puppeteer",
+              "branch": null
+            }
+          }
+        ]
+      }
+    },
+    {
+      "device": "dev-01HQ9S7UD1",
+      "state": "live",
+      "asOf": "2026-09-30T21:10:05.000Z",
+      "snapshot": {
+        "epoch": "fieldd-9b04c1e27a6d5f30.7",
+        "revision": 40,
+        "rows": [
+          {
+            "runtimeRunId": "run-studio-q",
+            "revision": 9,
+            "kind": "claude",
+            "label": "Claude Code",
+            "tier": "managed",
+            "device": "dev-01HQ9S7UD1",
+            "status": "blocked",
+            "statusSince": "2026-09-30T21:14:02.000Z",
+            "stateChangedAt": "2026-09-30T21:14:02.000Z",
+            "createdAt": "2026-09-30T20:51:40.000Z",
+            "lastActivityAt": "2026-09-30T21:14:02.000Z",
+            "alive": true,
+            "blockers": [
+              {
+                "id": "q-7c1a",
+                "kind": "question",
+                "since": "2026-09-30T21:14:02.000Z",
+                "question": "Should the board keep a sleeping desktop greyed, or drop its rows after thirty days?"
+              }
+            ],
+            "lastAssistantMessage": {
+              "text": "I have the multiplexer relaying each desktop verbatim. Before I wire the filter: one question about sleeping desktops.",
+              "at": "2026-09-30T21:14:01.000Z",
+              "final": true
+            },
+            "usage": {
+              "cumulativeTokens": 412880,
+              "burnRatePerMin": 2210,
+              "costUsd": 4.04,
+              "costCoverage": "complete"
+            },
+            "context": {
+              "usedPercent": 41
+            },
+            "model": {
+              "id": "claude-opus-5",
+              "displayName": "Opus 5"
+            },
+            "project": {
+              "name": "vibe-field",
+              "branch": "ds/c"
+            },
+            "terminal": {
+              "hosted": "local",
+              "runtimeSessionId": "pty-s9",
+              "workloadClass": "agent"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "device": "dev-01HQA1RL4P",
+      "state": "asleep",
+      "asOf": "2026-09-30T18:41:10.000Z",
+      "snapshot": {
+        "epoch": "fieldd-1f2e3d4c5b6a7980.1",
+        "revision": 118,
+        "rows": [
+          {
+            "runtimeRunId": "run-air-i",
+            "revision": 14,
+            "kind": "claude",
+            "label": "Claude Code",
+            "tier": "managed",
+            "device": "dev-01HQA1RL4P",
+            "status": "idle",
+            "statusSince": "2026-09-30T18:40:00.000Z",
+            "stateChangedAt": "2026-09-30T18:40:00.000Z",
+            "createdAt": "2026-09-30T17:05:12.000Z",
+            "alive": true,
+            "blockers": [],
+            "lastAssistantMessage": {
+              "text": "Done: the rosetta grant is on its branch.",
+              "at": "2026-09-30T18:39:58.000Z",
+              "final": true
+            },
+            "project": {
+              "name": "rosetta"
+            }
+          }
+        ]
+      }
+    },
+    {
+      "device": "dev-01HQB3M1N1",
+      "state": "stale",
+      "asOf": "2026-09-30T21:13:58.000Z"
+    }
+  ]
+}

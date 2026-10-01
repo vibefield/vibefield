@@ -5,8 +5,10 @@ import Observation
 // The synced-store READER (§10.3). truffle's SyncedStore is namespaced JSON on
 // `ss:<storeId>`, and this is the half of it a phone needs: the phone owns no
 // slice, publishes nothing, and answers nobody's `request` — it asks, and it
-// listens. `field.devices.v1` is how it learns a desktop's door;
-// `field.agents.v1` is the board.
+// listens. `field.devices.v1` is a desktop's presence (UA-P-5, on a gated
+// node). *Corrected 2026-10-01 (DS-D14): `field.agents.v1` was "the board"
+// here; it is retired — the board is the home's mesh board over the door
+// (DS-8), and this reader is pointed at no other store.*
 //
 // **ERRATUM (2026-09-14, TM-5).** This list used to name `terminal.v1.hosts`
 // among the stores "a phone needs", as "the floor's advertised sessions". No
@@ -57,8 +59,7 @@ public struct FieldStoreSlice: Sendable, Equatable, Identifiable {
     self.sentFrom = sentFrom
   }
 
-  /// Read this slice as a shape of ours — `DeviceInfo` for `field.devices.v1`,
-  /// `AgentFieldSlice` for `field.agents.v1`.
+  /// Read this slice as a shape of ours — `DeviceInfo` for `field.devices.v1`.
   public func decode<T: Decodable>(_ type: T.Type) throws -> T {
     try data.decode(type)
   }

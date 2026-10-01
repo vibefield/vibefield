@@ -622,31 +622,25 @@ public struct HomeScreen: View {
           mockActive = true
           feed.start()
         }
-        // `-vf-demo-field-slice`: the contracts' golden board through the REAL
-        // path. A fixture STORE — three devices across two stores (the board's
-        // own device serving a door at a closed port, one with no endpoint at
-        // all, one with an endpoint and no board), the real `AgentFieldSlice`
-        // reader, the real fold — so the swarm AND the corner can be
-        // photographed over real-shaped rows in both themes with no desktop
-        // and no tailnet. It is not a demo path: nothing downstream of the
-        // store knows the difference, which is the point.
+        // `-vf-demo-field-slice`: the contracts' golden MESH board through the
+        // REAL home path (DS-8, 2026-10-01) — four desktops on the fixture's
+        // tailnet, the phone homing to the first whose door answers and reading
+        // the field through its `agent.subscribe {scope: "mesh"}`: the home's
+        // board, a live laptop's, a sleeping desktop's kept board GREYED, and a
+        // stale one with none. The network is an in-process door answering the
+        // contracts' own bytes, so the swarm AND the corner can be photographed
+        // over real-shaped rows in both themes with no desktop and no tailnet.
+        // It is not a demo path: nothing downstream of the door knows the
+        // difference, which is the point. (Before DS-8 this was the golden
+        // `field.agents.v1` slice through the store reader, retired by DS-D14.)
         //
         // `link == nil` because this whole block runs again on every return to
         // the view: without it a disappear/reappear built a SECOND fixture
-        // link — two more `FieldStore`s, two more readers — and stranded the
-        // first, which is the live path's own stranding bug wearing a fixture.
+        // link and stranded the first, which is the live path's own stranding
+        // bug wearing a fixture.
         if ProcessInfo.processInfo.arguments.contains("-vf-demo-field-slice"), link == nil,
-          let doors = FieldStoreDoors.goldenBoard()
+          let fixture = FieldLink.goldenFixture()
         {
-          // `storeBus: true` NAMED, and it has to be. The fixture IS a store —
-          // three devices' slices delivered the moment the reader listens —
-          // and `FieldLink`'s bus defaults to off (UA-P-5: a link reads a
-          // store only where its node is gated, and a fixture has no node).
-          // This line has been the difference between a lab and a blank screen
-          // since UA-P-1b turned the bus off under it, with nothing to notice:
-          // `GoldenFixtureStageTests` builds its own link and names the flag
-          // itself, so the test went on passing over a dead argument.
-          let fixture = FieldLink(storeDoors: doors, storeBus: true)
           fixture.start()
           link = fixture
           fixtureLink = true
@@ -1109,7 +1103,10 @@ public struct HomeScreen: View {
           selfLogin: login,
           // SP-2 (g) — the phone's ONE connection budget, shared with every
           // terminal attachment (`beginAttachment`).
-          budget: .shared)
+          budget: .shared,
+          // DS-8 — the desktop this login last read its field through: the
+          // home it prefers when that door answers (sign out forgets it).
+          homeMemory: HomeMemory())
         opened.start()
         link = opened
       }

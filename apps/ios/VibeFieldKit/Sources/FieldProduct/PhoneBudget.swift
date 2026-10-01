@@ -12,10 +12,13 @@ import Foundation
 /// warm), one web view — and when it rules, the registry moves and this file
 /// moves with it.
 public enum PhoneBudget {
-  /// One product-door WebSocket per self desktop. The phone dials every self
-  /// desktop its roster lists until DS-8 homes it to one, so the honest number
-  /// today is PER DESKTOP: a replacement door waits for its predecessor's
-  /// socket to close.
+  /// One product-door WebSocket per self desktop: a replacement door waits for
+  /// its predecessor's socket to close. *Corrected 2026-10-01 (DS-8): the
+  /// phone HOMES to one desktop now — it holds the home's door, and opens an
+  /// owner's door on demand for a ticket, a renewal or an act and lets it go
+  /// after — so at most one door per desktop still bounds it, and a second ask
+  /// to the same owner waits for the first's slot. The number stays per
+  /// desktop until SP-D12 rules.*
   public static let doorsPerDesktop = 1
   /// One attached terminal: its control leg and its frames leg.
   public static let terminalLegs = 2

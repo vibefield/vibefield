@@ -174,8 +174,9 @@ public enum MeshDisplay {
       if let refusal = desktop.fieldRefusal {
         return "\(desktop.name) — connected · the field was refused: \(refusal)"
       }
+      // RETIRED 2026-10-01 (DS-D14): "connected · field from the mesh", the
+      // store leg's sentence — no phone reads `field.agents.v1` any more.
       switch desktop.feed {
-      case .store: return "\(desktop.name) — connected · field from the mesh"
       case .door: return "\(desktop.name) — connected · field over the door"
       case .none: return "\(desktop.name) — connected · no field yet"
       }

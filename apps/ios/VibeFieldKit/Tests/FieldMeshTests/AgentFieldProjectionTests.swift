@@ -353,54 +353,43 @@ private func blocker(kind: String) -> JSONValue {
     #expect(projection.ended == 2)
   }
 
-  @Test func aBoardPastItsExpiryDoesNotDraw() throws {
-    let published: Int64 = 1_757_808_000_000
-    let slice = try sliceOf(rows: [rowJSON(id: "a")], published: published)
-    let alive = Date(timeIntervalSince1970: Double(published + 29_000) / 1000)
-    let stale = Date(timeIntervalSince1970: Double(published + 31_000) / 1000)
-    #expect(projectAgentSlices([slice], now: alive).agents.count == 1)
-    #expect(projectAgentSlices([slice], now: stale).agents.isEmpty)
+  /// DS-8 / DS-L8 — a board whose desktop is not live on the phone's home
+  /// keeps every row, each carrying that standing on its join (the field
+  /// greys it); a board with no standing named is live. REWRITTEN 2026-10-01
+  /// from `aBoardPastItsExpiryDoesNotDraw`: the slice's own expiry retired with
+  /// `field.agents.v1` (DS-D14), and a desktop's staleness is its STATE on the
+  /// home's mesh board.
+  @Test func aBoardWhoseDesktopIsNotLiveKeepsItsRowsAndSaysSo() throws {
+    let rows = [try row(id: "a"), try row(id: "b")]
+    let asleep = projectAgentField(rows: rows, device: "dev-air", deviceLive: false)
+    #expect(asleep.agents.map(\.id) == ["a", "b"])
+    #expect(asleep.agents.allSatisfy { $0.join?.deviceLive == false })
+    #expect(asleep.agents.allSatisfy { $0.join?.deviceID == "dev-air" })
+    let live = projectAgentField(rows: rows, device: "dev-air")
+    #expect(live.agents.allSatisfy { $0.join?.deviceLive == true })
   }
 
-  /// Device order, then the board's own: a field that reshuffled because a
-  /// dictionary rehashed would respawn every body on the screen.
-  @Test func slicesFoldInADeterministicOrder() throws {
-    let published: Int64 = 1_757_808_000_000
-    let now = Date(timeIntervalSince1970: Double(published + 1000) / 1000)
-    let first = try sliceOf(
-      rows: [rowJSON(id: "a"), rowJSON(id: "b")], device: "dev-a", published: published)
-    let second = try sliceOf(rows: [rowJSON(id: "c")], device: "dev-b", published: published)
-    #expect(projectAgentSlices([second, first], now: now).agents.map(\.id) == ["a", "b", "c"])
-    #expect(projectAgentSlices([first, second], now: now).agents.map(\.id) == ["a", "b", "c"])
+  /// A board draws in its OWN order — a field that reshuffled because a
+  /// dictionary rehashed would respawn every body. (REWRITTEN from
+  /// `slicesFoldInADeterministicOrder`: the order ACROSS desktops is the link's
+  /// fold over the home's board, by device id, pinned by
+  /// `FieldLinkHomeFieldTests.everyRowCarriesItsDesktopAndOnlyTheHomeIsDialled`.)
+  @Test func aBoardDrawsInItsOwnOrder() throws {
+    let rows = [try row(id: "c"), try row(id: "a"), try row(id: "b")]
+    #expect(projectAgentField(rows: rows).agents.map(\.id) == ["c", "a", "b"])
   }
 
-  /// AC-D9 — each board is named by ITS desktop's catalog, by device id; a
-  /// device with none is folded with none, and its bodies are their raw ids.
+  /// AC-D9 — each board is named by ITS desktop's catalog; a board folded with
+  /// none draws its raw ids. (REWRITTEN from the slice fold's version: the link
+  /// hands each desktop's board its own catalog.)
   @Test func eachBoardIsNamedByItsOwnDesktopsCatalog() throws {
-    let published: Int64 = 1_757_808_000_000
-    let now = Date(timeIntervalSince1970: Double(published + 1000) / 1000)
-    let named = try sliceOf(rows: [rowJSON(id: "a")], device: "dev-a", published: published)
-    let bare = try sliceOf(rows: [rowJSON(id: "b")], device: "dev-b", published: published)
     let catalog = AgentCatalog(entries: [
       AgentCatalogEntry(id: .claude, label: "Claude Code", status: "supported")
     ])
-    let agents = projectAgentSlices([named, bare], now: now, catalogs: ["dev-a": catalog]).agents
-    #expect(agents.map(\.id) == ["a", "b"])
-    #expect(agents.map { $0.catalogEntry?.label } == ["Claude Code", nil])
-  }
-
-  private func sliceOf(
-    rows: [JSONValue], device: String = "dev-01HQ8ZK4M7", published: Int64
-  ) throws -> AgentFieldSlice {
-    try AgentFieldSlice(
-      json: .object([
-        "v": .int(1),
-        "deviceId": .string(device),
-        "publishedAt": .int(published),
-        "expiresAt": .int(published + 30_000),
-        "revision": .int(1),
-        "rows": .array(rows),
-      ]))
+    let named = projectAgentField(rows: [try row(id: "a")], device: "dev-a", catalog: catalog)
+    let bare = projectAgentField(rows: [try row(id: "b")], device: "dev-b")
+    #expect(named.agents.map { $0.catalogEntry?.label } == ["Claude Code"])
+    #expect(bare.agents.map { $0.catalogEntry?.label } == [nil])
   }
 }
 

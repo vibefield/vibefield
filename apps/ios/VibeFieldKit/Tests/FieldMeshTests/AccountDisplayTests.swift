@@ -19,7 +19,10 @@ struct AccountDisplayTests {
   @Test("a desktop that answers and feeds needs no word")
   func quietWhenFeeding() {
     #expect(AccountDisplay.desktopWord(desktop(state: .ready, feed: .door), isHearing: true) == .quiet)
-    #expect(AccountDisplay.desktopWord(desktop(state: .ready, feed: .store), isHearing: true) == .quiet)
+    // DS-8 — a desktop whose own board is not on the home's mesh board yet,
+    // while the field IS hearing: quiet too (the store feed this row used to
+    // name retired with `field.agents.v1`, DS-D14).
+    #expect(AccountDisplay.desktopWord(desktop(state: .ready, feed: .none), isHearing: true) == .quiet)
   }
 
   @Test("a desktop that answered and sent nothing says so, quietly")

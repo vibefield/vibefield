@@ -39,14 +39,19 @@ public struct AgentFieldProjection: Sendable, Equatable {
 
 /// A whole board, named by `catalog` — the catalog of the desktop that
 /// published it (AC-D9). The default is no catalog, which draws every agent
-/// as its raw id and its letter.
+/// as its raw id and its letter. `deviceLive` is that desktop's standing on
+/// the phone's home (DS-8): false greys every row it carries (DS-L8).
 public func projectAgentField(
-  rows: [AgentFieldRow], device: String? = nil, catalog: AgentCatalog = .empty
+  rows: [AgentFieldRow], device: String? = nil, catalog: AgentCatalog = .empty,
+  deviceLive: Bool = true
 ) -> AgentFieldProjection {
   var agents: [AgentSnapshot] = []
   var ended = 0
   for row in rows {
-    guard let snapshot = agentSnapshot(from: row, device: device, catalog: catalog) else {
+    guard
+      let snapshot = agentSnapshot(
+        from: row, device: device, catalog: catalog, deviceLive: deviceLive)
+    else {
       ended += 1
       continue
     }
@@ -71,7 +76,8 @@ public func projectAgentField(
 /// catalog decides what a PHONE may offer; it never decides what a field may
 /// show, so a desktop-only agent (`surfaces.phone == false`) still draws here.
 public func agentSnapshot(
-  from row: AgentFieldRow, device: String? = nil, catalog: AgentCatalog = .empty
+  from row: AgentFieldRow, device: String? = nil, catalog: AgentCatalog = .empty,
+  deviceLive: Bool = true
 ) -> AgentSnapshot? {
   let provider = AgentProvider(rawValue: row.kind)
 
@@ -175,10 +181,10 @@ public func agentSnapshot(
     project: row.projectName.flatMap { $0.isEmpty ? nil : $0 } ?? row.label,
     state: state,
     createdAt: parseWireDate(row.createdAt) ?? .now,
-    // G3's join. The DEVICE is the publisher's — the slice's key, or the
-    // desktop whose door answered — and not the row's own `device` field:
-    // this id has to be the one a product client and the devices store are
-    // filed under, and only the caller knows which desktop it heard this from.
+    // G3's join. The DEVICE is the caller's — since DS-8 the desktop the
+    // home's mesh board filed this row under — and not the row's own `device`
+    // field: this id has to be the one the link's asks and the devices store
+    // are keyed by, and only the caller knows which board it read this from.
     // The row's own word is the fallback for a caller that did not say.
     join: AgentJoin(
       deviceID: device ?? row.device,
@@ -187,36 +193,16 @@ public func agentSnapshot(
       pending: parked,
       // MF-1f's row: the process ended and the pane is still on the floor. A
       // PENDING row is not this — it is live and merely unobserved.
-      exited: !row.alive && !parked),
+      exited: !row.alive && !parked,
+      deviceLive: deviceLive),
     catalogEntry: catalog.entry(for: provider))
 }
 
-/// Every live board the phone can hear, folded into one field.
-///
-/// Rows past their slice's `expiresAt` are dropped: a desktop that stopped
-/// refreshing is a desktop whose board is no longer true, and the store's
-/// heartbeat is what says so. The reader's clock is its own, which is why this
-/// takes `now` rather than reading it — a test should not need to wait 30 s to
-/// watch a board go stale.
-///
-/// `catalogs` names each board by its own desktop's catalog, by device id; a
-/// device with none there is folded with no catalog.
-public func projectAgentSlices(
-  _ slices: [AgentFieldSlice], now: Date = .now, catalogs: [String: AgentCatalog] = [:]
-) -> AgentFieldProjection {
-  var agents: [AgentSnapshot] = []
-  var ended = 0
-  // Device order, then the board's own order: a field that reshuffles because
-  // a dictionary rehashed would respawn every body.
-  for slice in slices.sorted(by: { $0.deviceId < $1.deviceId }) {
-    guard !slice.isExpired(at: now) else { continue }
-    let projected = projectAgentField(
-      rows: slice.rows, device: slice.deviceId, catalog: catalogs[slice.deviceId] ?? .empty)
-    agents.append(contentsOf: projected.agents)
-    ended += projected.ended
-  }
-  return AgentFieldProjection(agents: agents, ended: ended)
-}
+// RETIRED 2026-10-01 (DS-D14): `projectAgentSlices` — the fold of
+// `field.agents.v1` slices, each dropped past its own `expiresAt`. No desktop
+// publishes that store and the phone no longer reads it: the field is the
+// home's mesh board (`FieldLink`, `MeshBoardCopy`), and a desktop's staleness
+// is its STATE on that board (DS-L8), never a clock on a slice.
 
 /// Core's usage as the row carries it: the tokens, and — D-i18 — the USD lane
 /// when fieldd's projection carries one. A coverage word this build has no

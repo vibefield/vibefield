@@ -78,15 +78,17 @@ public struct FieldDesktop: Identifiable, Sendable, Equatable {
   }
 }
 
-/// Which leg of the hybrid a desktop's board arrived on (§5).
+/// Whether a desktop's board is on the field, and over what.
+///
+/// RETIRED 2026-10-01 (DS-D14): `store`, the `field.agents.v1` leg — no desktop
+/// publishes that slice and this phone no longer reads it. Every desktop's
+/// board arrives over ONE door since DS-8: the home's mesh board.
 public enum FieldFeedSource: String, Sendable, Equatable {
   /// Nothing yet.
   case none
-  /// `field.agents.v1` — the floor's own publication, no connection needed.
-  /// Dormant through UA-P-1b and live again under UA-P-5, on a gated node and
-  /// for a door-confirmed device. See `FieldStoreBus`.
-  case store
-  /// `agent.subscribe {projection: "field"}` over the door.
+  /// Over the home's door: `agent.subscribe {projection: "field", scope:
+  /// "mesh"}` (DS-8) — this desktop's own board, on its own chain, relayed by
+  /// the home (the home's own board included).
   case door
 }
 
@@ -181,22 +183,38 @@ public struct FieldResumeTiming: Sendable {
 ///   the mesh node is up → truffle's peer list names every `truffle-vibefield-`
 ///   node → the phone BUILDS each peer's door address from the peer's own
 ///   MagicDNS name and the registry port → one plain request asks whether that
-///   door admits this login → the doors that do get a `FieldProductClient`,
-///   hello with NO token (WhoIs is the grant) → `agent.subscribe {projection:
-///   "field"}` carries the board.
+///   door admits this login → the doors that do are this account's desktops.
 ///
 /// Nothing the phone dials is a string somebody else wrote any more, and no
 /// secret is on the wire for it to have read: the sidecar adds the capability
 /// path on forward, and what admits this phone is its WhoIs login.
 ///
-/// **UA-P-5 put the store back in front of it (2026-09-16), scoped.** truffle
-/// gates a node by login now (RFC 025), so on a GATED node every store is this
-/// account's by construction and the two slices are subscribed again. They do
-/// not replace the chain above — they FUSE with it, by device id, and the door
-/// keeps the last word: a slice for a device the probe has not confirmed is
-/// held rather than drawn, because the gate says whose ACCOUNT a node is on
-/// and the door says whether that desktop is serving this phone anything. On
-/// an ungated node — the pre-login window — nothing is subscribed at all.
+/// **DS-8 (2026-10-01, DS-D13) — the phone HOMES to one of those desktops.**
+/// Its home is the last home (`HomeMemory`, per login) when that door answers,
+/// else the first self desktop whose door answers, in device order. The field
+/// is read through the home ALONE: one `FieldProductClient`, one
+/// `agent.subscribe {projection: "field", scope: "mesh"}` — every self
+/// desktop's board, multiplexed by the home on each desktop's own chain
+/// (`MeshBoardCopy`), the merge written once, in fieldd (DS-L4). A desktop
+/// asleep keeps its rows on the field, greyed, because the home's replica
+/// answers for them (DS-L8). On the home's loss — its door's deadline, a
+/// close, `INCOMPATIBLE` — the phone re-homes by sweeping the roster: every
+/// candidate is asked afresh and the first that answers becomes the home, its
+/// open the field's fresh snapshot. Terminal tickets, renewals and acts still
+/// go to the desktop that OWNS the session or run, over a door opened for the
+/// ask and let go after (`ownerDoor`) — the phone has its own node, and bytes
+/// and acts never pass through the home. Option (c), a second door kept open
+/// when the home calls a desktop unreachable that the roster calls online, is
+/// named in DS-D13 and NOT built.
+///
+/// **UA-P-5 put the store back in front of it (2026-09-16), scoped — and
+/// DS-D14 took the board off it again (2026-10-01).** On a GATED node the
+/// devices slice (`field.devices.v1`) is read for presence: a desktop's own
+/// name and capabilities, fused by device id, held for a device the door has
+/// refused. The agents slice (`field.agents.v1`) is RETIRED — no desktop
+/// publishes it and this phone never reads it; the field is the home's mesh
+/// board alone. On an ungated node — the pre-login window — nothing is
+/// subscribed at all.
 ///
 /// It lives in FieldMesh, not FieldHome, for the reason `remoteSessionRows`
 /// does: this is the one module that sees both the wire vocabulary and the
@@ -208,9 +226,9 @@ public struct FieldResumeTiming: Sendable {
 public final class FieldLink {
   // MARK: What a screen reads
 
-  /// The field, folded from every live board. Ordered by device then by the
-  /// board's own order — a field that reshuffled because a dictionary rehashed
-  /// would respawn every body.
+  /// The field, folded from the home's mesh board. Ordered by device then by
+  /// each board's own order — a field that reshuffled because a dictionary
+  /// rehashed would respawn every body.
   public private(set) var agents: [AgentSnapshot] = []
   /// THIS ACCOUNT'S desktops. A peer whose door refused this login is not here
   /// — it is somebody else's machine, which is an ordinary thing for a tailnet
@@ -236,23 +254,23 @@ public final class FieldLink {
   /// verdicts below apply: a peer whose Layer 3 login differs from this node's
   /// (UA-P-5, and no socket is spent on it), or a door that answered 403 or
   /// granted nothing (UA-P-1a).
-  ///
-  /// So the optional "N other accounts' desktops on this tailnet" line KEEPS
-  /// its fact rather than being deleted: it can still be non-zero, in exactly
-  /// one window, and a count that is always zero afterwards is the honest
-  /// report of a mesh that is finally scoped.
   public private(set) var foreignDoors: [String: String] = [:]
 
   /// AC-D9 — VibeField's agent catalog, as this phone's desktops have told it:
-  /// every door's answer to `agent.catalog`, merged in device order, the first
-  /// desktop's row kept where two name one agent. It is what a list on the
-  /// phone reads (`phoneRoster`); the FIELD is named per desktop in the fold,
-  /// each board by its own door's answer first.
+  /// the home's answer to `agent.catalog` (and any earlier home's, kept until
+  /// that desktop is forgotten), merged in device order, the first desktop's
+  /// row kept where two name one agent. It is what a list on the phone reads
+  /// (`phoneRoster`); each board on the field is named by its own desktop's
+  /// answer first, when the phone has one.
   ///
-  /// Empty is a state, never a breakage: nothing is connected yet, or every
-  /// desktop is a build from before the door (it answers NOT_FOUND). The field
-  /// draws exactly as it did then — every agent as its raw id and its letter.
+  /// Empty is a state, never a breakage: nothing is connected yet, or the home
+  /// is a build from before the door (it answers NOT_FOUND). The field draws
+  /// exactly as it did then — every agent by the label its row carries.
   public private(set) var catalog: AgentCatalog = .empty
+
+  /// DS-8 — the self desktop this phone reads its field through, by durable
+  /// device id, or nil while it has none.
+  public private(set) var home: String?
 
   /// Whether anything at all is being heard. `false` with `desktops` non-empty
   /// is the honest "they are there and saying nothing" that a blank field must
@@ -261,12 +279,10 @@ public final class FieldLink {
 
   // MARK: The plumbing
 
-  /// The store reader. Dormant through UA-P-1b and LIVE AGAIN under UA-P-5 —
-  /// but only on a GATED node (`storeBus` below): truffle now reports and
-  /// admits by login (RFC 025), so every store on a gated node is scoped to
-  /// this account by construction, which is the condition James's ruling set.
+  /// The presence reader (`field.devices.v1`): live only on a GATED node
+  /// (`storeBus` below) — truffle reports and admits by login (RFC 025), so
+  /// every store on a gated node is scoped to this account by construction.
   @ObservationIgnored public let devices: FieldStore
-  @ObservationIgnored public let boards: FieldStore
   @ObservationIgnored private let doors: FieldStoreDoors
   @ObservationIgnored private let transport: any ProductTransport
   @ObservationIgnored private let probe: any ProductDoorProbe
@@ -287,43 +303,55 @@ public final class FieldLink {
   @ObservationIgnored private let magicDNSSuffix: String?
   /// UA-P-5 — this node's own tailnet login, so a peer can be told from a
   /// stranger by the thing that actually separates them (RFC 025 §3.6, D7).
+  /// It is also the key the last home is remembered under (DS-8).
   ///
   /// `nil` is the pre-login window: no account to compare against, so nothing
   /// is called foreign on this evidence and the door probe remains the sole
-  /// witness, exactly as it was through UA-P-1a.
+  /// witness, exactly as it was through UA-P-1a — and no home is remembered.
   @ObservationIgnored private let selfLogin: String?
   /// SP-2 (g) — the phone's connection budget every door this link opens
-  /// counts against (one door per self desktop). The app passes the phone's one
-  /// ledger; a link made with none gets its own.
+  /// counts against: the home's, and an owner's opened on demand (one per
+  /// desktop). The app passes the phone's one ledger; a link made with none
+  /// gets its own.
   @ObservationIgnored public let budget: PhoneConnectionBudget
+  /// DS-8 — where the last home is remembered. nil remembers nothing.
+  @ObservationIgnored private let homeMemory: HomeMemory?
   @ObservationIgnored private let resumeTiming: FieldResumeTiming
-  /// SP-2 (c) — each desktop's window on the way back from the background. A
-  /// desktop with one pending is HELD: nothing re-subscribes it until it opens.
-  @ObservationIgnored private var resumeSlots: [String: Task<Void, Never>] = [:]
+
+  // MARK: The home's own state (DS-8)
+
+  @ObservationIgnored private var homeClient: FieldProductClient?
+  @ObservationIgnored private var homeSubscription: ProductSubscription?
+  /// SP-2 (c) — the home's window on the way back from the background. While
+  /// one is pending the home is HELD: nothing re-subscribes it until it opens.
+  @ObservationIgnored private var resumeSlot: Task<Void, Never>?
   /// Bumped by every pause (and by `stop`): an arm started before it is never
   /// KEPT after it, however quickly the app came back — a pause flag read after
   /// the subscribe's await cannot see a pause that was already undone.
   @ObservationIgnored private var armEpoch = 0
-
-  @ObservationIgnored private var clients: [String: FieldProductClient] = [:]
-  @ObservationIgnored private var subscriptions: [String: ProductSubscription] = [:]
-  @ObservationIgnored private var doorBoards: [String: DoorBoard] = [:]
-  /// Devices with a subscribe in flight. Set synchronously, so a burst cannot
-  /// walk past the slot that is only filled after the await.
-  @ObservationIgnored private var arming: Set<String> = []
-  /// AC-D9 — each door's own answer to `agent.catalog`, by device id, cached
-  /// for the connection it arrived on and dropped with the door.
+  /// The client a subscribe is in flight on, set synchronously — the arming
+  /// LATCH. `homeSubscription` is only assigned after the subscribe's await, so
+  /// a burst of edges around hello walked past that check and opened several
+  /// subscriptions on one door, each fighting over one board — a
+  /// self-sustaining storm on a metered radio.
+  @ObservationIgnored private var armingFor: ObjectIdentifier?
+  /// A gap seen while the subscription's handle was still on its way: repaired
+  /// the moment the handle lands, never dropped.
+  @ObservationIgnored private var gapWhileArming: String?
+  /// The home's mesh board, as this phone holds it, and the desktop whose
+  /// door it came from.
+  @ObservationIgnored private var board = MeshBoardCopy()
+  @ObservationIgnored private var boardFrom: String?
+  /// AC-D9 — each door's own answer to `agent.catalog`, by device id: the
+  /// home's, and an earlier home's until that desktop is forgotten.
   @ObservationIgnored private var catalogs: [String: AgentCatalog] = [:]
-  /// Devices whose CURRENT connection has been asked for its catalog. Set
-  /// synchronously like `arming`, and cleared whenever the client leaves
-  /// `ready`, so the next hello — a new connection — is asked afresh.
+  /// Homes whose CURRENT connection has been asked for its catalog. Set
+  /// synchronously, and cleared whenever the client leaves `ready`, so the next
+  /// hello — a new connection — is asked afresh.
   @ObservationIgnored private var catalogAsked: Set<String> = []
-  /// One timer per live board, at its own `expiresAt`. Expiry is TIME, and the
-  /// reconcile is edge-triggered — a publisher that goes quiet sends no edge,
-  /// so without these the board stayed on the field and the door was never
-  /// asked to replace it. Live with the bus (UA-P-5); a door board has no
-  /// expiry, because the socket carrying it is its own liveness.
-  @ObservationIgnored private var expiryTimers: [String: Task<Void, Never>] = [:]
+  /// The desktops the home's roster has been asked to name on its current
+  /// connection; nil = not asked on this connection.
+  @ObservationIgnored private var rosterAskedFor: Set<String>?
   @ObservationIgnored private var tracking = false
   @ObservationIgnored private var started = false
 
@@ -337,6 +365,13 @@ public final class FieldLink {
   /// The sweep's latch, set synchronously — two overlapping sweeps would probe
   /// every peer twice and race each other's verdicts into the table.
   @ObservationIgnored private var sweeping = false
+  /// A sweep asked for WHILE one is running, remembered rather than dropped.
+  ///
+  /// Without it a peer that arrived mid-sweep waited for the next tick — ten
+  /// seconds on the product schedule — because the latch turns a concurrent
+  /// request away and nothing was left to say it had happened. The flag is one
+  /// bit and it collapses a burst of arrivals into exactly one extra pass.
+  @ObservationIgnored private var sweepAgain = false
 
   private struct Found {
     var peer: FieldStorePeer
@@ -345,26 +380,18 @@ public final class FieldLink {
     /// When this peer may be asked again. `nil` = now.
     var askAgainAt: Date?
     var doorURL: URL?
-    /// The desktop's own row, once `device.list` has answered.
+    /// The desktop's own row — the home's roster's word for it.
     var info: DeviceInfo?
     /// The field subscription's refusal, in the door's words (UA-P-1d).
     var fieldRefusal: String?
     /// IOS-8c — the user ULID the door answered hello with.
     var userId: String?
-    /// SP-2 (e) — when the client the door STOPPED is replaced, and how many
-    /// replacements it has had since one last reached `ready`.
+    /// SP-2 (e) — a door that STOPPED this phone (`INCOMPATIBLE`,
+    /// `UNAUTHORIZED`, `PRECONDITION_FAILED`), in its own words; when it may be
+    /// asked again, and how many times it has stopped since it last answered.
+    var stopped: String?
     var stuckRetryAt: Date?
     var stuckRetries = 0
-  }
-
-  /// One desktop's board as the door has told it: rows by run id, at a
-  /// revision. A delta whose `since` is not this revision means a frame was
-  /// lost, and the repair is to re-subscribe for a snapshot — the tolerant
-  /// reader's own rule, with no ack protocol anywhere.
-  private struct DoorBoard {
-    var revision: Int64
-    var rows: [String: AgentFieldRow]
-    var order: [String]
   }
 
   public init(
@@ -382,13 +409,14 @@ public final class FieldLink {
     storeBus: Bool = false,
     selfLogin: String? = nil,
     budget: PhoneConnectionBudget? = nil,
+    homeMemory: HomeMemory? = nil,
     resumeTiming: FieldResumeTiming = .live,
     now: @escaping @MainActor () -> Date = { .now }
   ) {
     self.budget = budget ?? PhoneConnectionBudget()
+    self.homeMemory = homeMemory
     self.resumeTiming = resumeTiming
     devices = FieldStore(doors: storeDoors)
-    boards = FieldStore(doors: storeDoors)
     doors = storeDoors
     self.transport = transport
     self.probe = probe
@@ -408,7 +436,6 @@ public final class FieldLink {
     started = true
     if storeBus {
       devices.subscribe(FieldStoreID.devices)
-      boards.subscribe(FieldStoreID.agents)
       track()
     }
     watchPeers()
@@ -416,64 +443,63 @@ public final class FieldLink {
     reconcile()
   }
 
-  /// The app went away (§5). The door's subscriptions go and discovery stops
-  /// asking; the mesh NODE is left alone, and so are the clients — a WebSocket
-  /// that survives a two-second app switch is one fewer hello when the user
-  /// comes back, and the subscription is where the bytes were.
+  /// The app went away (§5). The home's subscription goes and discovery stops
+  /// asking; the mesh NODE is left alone, and so is the home's client — a
+  /// WebSocket that survives a two-second app switch is one fewer hello when
+  /// the user comes back, and the subscription is where the bytes were.
+  ///
+  /// The FIELD STANDS: the board copy is kept and applied to by nothing until
+  /// the way back's fresh snapshot replaces it. Emptying it on an app switch
+  /// would be a worse lie than a board that is a moment old (before DS-8 the
+  /// door boards were dropped here, against this very sentence).
   public func pause() {
     guard started, !isPaused else { return }
     isPaused = true
     armEpoch &+= 1
-    for (_, subscription) in subscriptions { subscription.cancel() }
-    subscriptions.removeAll()
+    homeSubscription?.cancel()
+    homeSubscription = nil
     // SP-2 (c) — the keepalive's clocks stop with the app: a deadline measured
-    // across a suspension would call every door dead at once on the way back.
-    for (_, client) in clients { client.pauseKeepalive() }
-    for (_, slot) in resumeSlots { slot.cancel() }
-    resumeSlots.removeAll()
-    for (_, timer) in expiryTimers { timer.cancel() }
-    expiryTimers.removeAll()
-    arming.removeAll()
-    doorBoards.removeAll()
+    // across a suspension would call the door dead on the way back.
+    homeClient?.pauseKeepalive()
+    resumeSlot?.cancel()
+    resumeSlot = nil
+    armingFor = nil
+    gapWhileArming = nil
     sweepTask?.cancel()
     sweepTask = nil
     devices.pause()
-    boards.pause()
     refold()
   }
 
-  /// Back. Discovery sweeps afresh, every ready door re-subscribes for a FRESH
-  /// snapshot (P5), and a peer whose deadline passed while the phone was away
-  /// is asked again on the first sweep.
+  /// Back. Discovery sweeps afresh, the home re-subscribes for a FRESH snapshot
+  /// (P5), and a peer whose deadline passed while the phone was away is asked
+  /// again on the first sweep.
   public func resume() {
     guard started, isPaused else { return }
     isPaused = false
     devices.resume()
-    boards.resume()
     startSweeping()
-    // THE FIELD HAS TO COME BACK. `pause` cancelled every subscription and left
-    // the CLIENTS open — a socket that survives a two-second app switch is one
-    // fewer hello — so nothing about those clients changes on the way back and
-    // the observation that arms a subscription never fires. Without this line
-    // the sweep skips them too (an open door is not re-probed), and the phone
-    // returned from the background to a permanently empty field behind a
-    // desktop reading "connected".
+    // THE FIELD HAS TO COME BACK. `pause` cancelled the subscription and left
+    // the client open, so nothing about the client changes on the way back and
+    // the observation that arms a subscription never fires; the sweep does not
+    // re-probe an open door either. Without this the phone returned from the
+    // background to a frozen field behind a desktop reading "connected".
     //
-    // SP-2 (c) — and NEVER ALL AT ONCE (SP-L7). Each desktop comes back in its
-    // own window, in device order, jittered inside it: its keepalive restarts
-    // (a fresh deadline and one ping, which finds a socket that died while the
-    // phone was away) and its board re-subscribes. Until its window opens it is
-    // held — the sweep this resume starts arms nobody early.
-    for (slot, deviceId) in clients.keys.sorted().enumerated() {
-      let delay = schedule.resumeDelay(slot: slot, jitter: resumeTiming.jitter())
+    // SP-2 (c) — in its own window, jittered: its keepalive restarts (a fresh
+    // deadline and one ping, which finds a socket that died while the phone was
+    // away) and its board re-subscribes. One door since DS-8, so "never a herd"
+    // is the home's alone; the window still holds it until it opens.
+    if let deviceId = home, homeClient != nil {
+      let delay = schedule.resumeDelay(slot: 0, jitter: resumeTiming.jitter())
       let timing = resumeTiming
-      resumeSlots[deviceId]?.cancel()
-      resumeSlots[deviceId] = Task { @MainActor [weak self] in
+      resumeSlot?.cancel()
+      resumeSlot = Task { @MainActor [weak self] in
         await timing.sleep(delay)
-        guard let self, !Task.isCancelled, self.started, !self.isPaused else { return }
-        self.resumeSlots[deviceId] = nil
-        self.clients[deviceId]?.resumeKeepalive()
-        self.armDoorSubscription(deviceId)
+        guard let self, !Task.isCancelled, self.started, !self.isPaused, self.home == deviceId
+        else { return }
+        self.resumeSlot = nil
+        self.homeClient?.resumeKeepalive()
+        self.armHomeSubscription()
       }
     }
     reconcile()
@@ -483,52 +509,59 @@ public final class FieldLink {
     started = false
     isPaused = false
     armEpoch &+= 1
-    for (_, slot) in resumeSlots { slot.cancel() }
-    resumeSlots.removeAll()
-    for (_, subscription) in subscriptions { subscription.cancel() }
-    subscriptions.removeAll()
-    for (_, client) in clients { client.close() }
-    clients.removeAll()
-    for (_, timer) in expiryTimers { timer.cancel() }
-    expiryTimers.removeAll()
+    resumeSlot?.cancel()
+    resumeSlot = nil
+    homeSubscription?.cancel()
+    homeSubscription = nil
+    homeClient?.close()
+    homeClient = nil
+    home = nil
+    armingFor = nil
+    gapWhileArming = nil
     peerTask?.cancel()
     peerTask = nil
     sweepTask?.cancel()
     sweepTask = nil
-    arming.removeAll()
-    doorBoards.removeAll()
+    board = MeshBoardCopy()
+    boardFrom = nil
     found.removeAll()
     catalogs.removeAll()
     catalogAsked.removeAll()
+    rosterAskedFor = nil
     catalog = .empty
     devices.unsubscribe()
-    boards.unsubscribe()
     desktops = []
     agents = []
     endpointRefusals = [:]
     foreignDoors = [:]
   }
 
-  // MARK: The card's one extra question
+  // MARK: The card's asks — each over its OWNER's door (DS-L4)
 
   /// The latest reply line for a run, asked only when a card opens.
   ///
   /// The field projection carries NO conversation content by design (§10.1),
   /// so this is the one door that fetches any — `agent.list`'s full row, on
-  /// demand, for one run. A phone that streamed reply text for every body
-  /// would be paying §5's whole budget for words nobody is reading.
+  /// demand, for one run, from the desktop that runs it. A phone that streamed
+  /// reply text for every body would be paying §5's whole budget for words
+  /// nobody is reading.
   public func latestReply(runtimeRunId: String, on deviceId: String) async throws -> String? {
-    guard let client = clients[deviceId] else {
-      throw FieldProductError(
+    try await ownerDoor(
+      deviceId,
+      refusal: FieldProductError(
         kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: false)
+    ) { client in
+      let result = try await client.call("agent.list", as: AgentListResult.self)
+      return result.sessions.first { $0.runtimeRunId == runtimeRunId }?.lastAssistantMessage
     }
-    let result = try await client.call("agent.list", as: AgentListResult.self)
-    return result.sessions.first { $0.runtimeRunId == runtimeRunId }?.lastAssistantMessage
   }
 
-  /// The client for a desktop, for the surfaces that need to ask it something
-  /// of their own (IOS-4c's attach).
-  public func client(for deviceId: String) -> FieldProductClient? { clients[deviceId] }
+  /// The home's client, for the surfaces that need to ask the home something
+  /// of their own; nil for any desktop that is not the home (DS-8: no other
+  /// door is held open).
+  public func client(for deviceId: String) -> FieldProductClient? {
+    deviceId == home ? homeClient : nil
+  }
 
   /// TM-5 — a routed terminal ticket for one session on one desktop.
   ///
@@ -539,45 +572,41 @@ public final class FieldLink {
   /// one (a transport grant's nonce is spent at first use), and a ticket held
   /// for later is a credential with no purpose.
   ///
+  /// DS-8 (DS-L4) — asked of the desktop that OWNS the session, directly: the
+  /// home's own door when the session is the home's, else a door opened for
+  /// this ask and let go after (`ownerDoor`). The home never mints for another
+  /// desktop: its forwarded ticket would answer loopback endpoints a phone
+  /// cannot dial, and the phone has its own node.
+  ///
   /// The answer comes back as the JSON the daemon sent, unread. FieldMesh knows
   /// how to ASK a door; what a ticket means belongs to the target that dials
   /// with it, and keeping that shape out of this signature is what keeps the
   /// field from learning what a terminal is.
   public func openTerminalTicket(on deviceId: String, sessionId: String) async throws -> JSONValue {
-    guard let client = clients[deviceId] else {
-      throw FieldProductError(
-        kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
-        details: .object([
-          "service": .string("terminal"), "state": .string("no_door"),
-        ]))
+    try await ownerDoor(deviceId, refusal: Self.noTerminalDoor) { client in
+      try await client.call(
+        "terminal.openTicket", params: .object(["sessionId": .string(sessionId)]))
     }
-    return try await client.call(
-      "terminal.openTicket", params: .object(["sessionId": .string(sessionId)]))
   }
 
   /// P0-C — renew a session's attach grant over the desktop that minted it:
   /// `terminal.renewAttach`, a CAS on the generation the phone holds and
   /// idempotent by `requestId` (spec §5.1). The same door and the same scope as
   /// the mint (`terminal.attach`, local to that desktop's fieldd), and the same
-  /// rule as `openTerminalTicket`: the answer comes back unread, because what a
-  /// grant means belongs to the target that carries it to the cell.
+  /// rule as `openTerminalTicket`: the OWNER's door, and the answer comes back
+  /// unread.
   public func renewTerminalGrant(
     on deviceId: String, sessionId: String, expectGeneration: Int64, requestId: String
   ) async throws -> JSONValue {
-    guard let client = clients[deviceId] else {
-      throw FieldProductError(
-        kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
-        details: .object([
-          "service": .string("terminal"), "state": .string("no_door"),
+    try await ownerDoor(deviceId, refusal: Self.noTerminalDoor) { client in
+      try await client.call(
+        "terminal.renewAttach",
+        params: .object([
+          "sessionId": .string(sessionId),
+          "expectGeneration": .int(expectGeneration),
+          "requestId": .string(requestId),
         ]))
     }
-    return try await client.call(
-      "terminal.renewAttach",
-      params: .object([
-        "sessionId": .string(sessionId),
-        "expectGeneration": .int(expectGeneration),
-        "requestId": .string(requestId),
-      ]))
   }
 
   /// IOS-4c — RESUME an ended run, over the desktop that owns it.
@@ -588,12 +617,63 @@ public final class FieldLink {
   /// delta shows it, which is a beat later and true.
   @discardableResult
   public func resume(runtimeRunId: String, on deviceId: String) async throws -> JSONValue {
-    guard let client = clients[deviceId] else {
-      throw FieldProductError(
+    try await ownerDoor(
+      deviceId,
+      refusal: FieldProductError(
         kind: "UNAVAILABLE", message: "no door to \(deviceId)", retryable: false)
+    ) { client in
+      try await client.call(
+        "agent.resume", params: .object(["runtimeRunId": .string(runtimeRunId)]))
     }
-    return try await client.call(
-      "agent.resume", params: .object(["runtimeRunId": .string(runtimeRunId)]))
+  }
+
+  private static let noTerminalDoor = FieldProductError(
+    kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
+    details: .object([
+      "service": .string("terminal"), "state": .string("no_door"),
+    ]))
+
+  /// DS-8 (DS-L4) — a door to the desktop that OWNS something, for one ask: the
+  /// home's own when the owner IS the home, else a second door opened on demand
+  /// and closed when the ask returns. It counts against the phone's budget like
+  /// every door (one per desktop, `PhoneConnectionBudget`): a second ask to the
+  /// same owner waits for the first's slot.
+  ///
+  /// Only a door this phone has heard ANSWER is opened: an owner whose probe
+  /// went unanswered, or that this phone has not asked yet, is refused at once
+  /// in the honest shape — there is no door to ask. Option (c), a door kept
+  /// open beside the home when the home calls a desktop unreachable that the
+  /// roster calls online (DS-D13), is NOT built: this door lives for one ask,
+  /// and the field is the home's alone.
+  private func ownerDoor<T>(
+    _ deviceId: String, refusal: FieldProductError,
+    _ ask: (FieldProductClient) async throws -> T
+  ) async throws -> T {
+    if deviceId == home, let homeClient { return try await ask(homeClient) }
+    guard let entry = found[deviceId], case .answering = entry.admission,
+      let url = entry.doorURL, endpointRefusals[deviceId] == nil
+    else { throw refusal }
+    let client = FieldProductClient(url: url, transport: transport, options: doorOptions(deviceId))
+    defer { client.close() }
+    return try await ask(client)
+  }
+
+  /// The options every door this link opens carries for `deviceId`.
+  private func doorOptions(_ deviceId: String) -> FieldProductClient.Options {
+    var options = self.options
+    // SP-2 (d) — the roster is asked before every dial the client makes, the
+    // first and each re-dial: the tailnet's own peer list, read live, so a
+    // desktop that went to sleep between two sweeps is not dialled in the gap.
+    options.mayDial = { [doors] in
+      await doors.onlinePeers().contains { $0.deviceId == deviceId && $0.online }
+    }
+    // SP-2 (h) — each subscription's bytes-per-second line names the desktop
+    // it came from by its durable id; never by its door's URL.
+    options.logLabel = deviceId
+    // SP-2 (g) — one door per self desktop, held in the phone's ledger from the
+    // dial to the close: a replacement waits for its predecessor's socket.
+    options.doorBudget = ProductDoorBudget(ledger: budget, desktop: deviceId)
+    return options
   }
 
   // RETIRED 2026-09-14 (TM-3, TM-D3): the grant (IOS-4d) —
@@ -645,22 +725,20 @@ public final class FieldLink {
     Task { @MainActor [weak self] in await self?.sweep() }
   }
 
-  /// A sweep asked for WHILE one is running, remembered rather than dropped.
-  ///
-  /// Without it a peer that arrived mid-sweep waited for the next tick — ten
-  /// seconds on the product schedule — because the latch below turns a
-  /// concurrent request away and nothing was left to say it had happened. The
-  /// flag is one bit and it collapses a burst of arrivals into exactly one
-  /// extra pass.
-  @ObservationIgnored private var sweepAgain = false
-
   /// One discovery pass.
   ///
-  /// Reads the peer list, drops what has gone, and asks every peer whose
-  /// deadline has passed. Peers are probed CONCURRENTLY: a sweep that asked
-  /// eight sleeping desktops one at a time would take the probe timeout times
-  /// eight, and the last peer's verdict would be a minute stale before it was
-  /// ever applied.
+  /// Reads the peer list, drops what has gone, asks every peer whose deadline
+  /// has passed, and settles the home. Peers are probed CONCURRENTLY: a sweep
+  /// that asked eight sleeping desktops one at a time would take the probe
+  /// timeout times eight, and the last peer's verdict would be a minute stale
+  /// before it was ever applied.
+  ///
+  /// DS-8 — the home's door is never probed while it is open (its socket is
+  /// its own liveness). A home that has STRUGGLED since the last pass (its
+  /// socket dropped, or the deadline closed it, and the re-dial has not
+  /// answered) makes this pass a re-home: every other candidate is asked
+  /// afresh, and the first that answers takes the field — within the one pass
+  /// the loss asked for.
   private func sweep() async {
     guard started, !isPaused else { return }
     guard !sweeping else {
@@ -679,6 +757,7 @@ public final class FieldLink {
     let peers = await doors.onlinePeers()
     guard started, !isPaused else { return }
 
+    let struggling = homeIsStruggling
     var live: Set<String> = []
     var due: [(deviceId: String, url: URL)] = []
     let at = now()
@@ -721,54 +800,35 @@ public final class FieldLink {
           note("refused \(fallbackName(entry))'s door: \(reason)")
         }
         found[deviceId] = entry
-        closeDoor(to: deviceId)
+        if deviceId == home { loseHome(because: reason) }
         continue
       case .ok(let url):
         endpointRefusals.removeValue(forKey: deviceId)
         entry.doorURL = url
       }
-
       found[deviceId] = entry
-      // A desktop whose door is open and ready is answering; the socket is its
-      // own liveness and there is nothing to ask. Its SUBSCRIPTION is still
-      // worth re-arming — the call is idempotent and returns at once when one
-      // is live — because a subscription can die without its client changing
-      // state, and the sweep is the only thing that would notice.
-      if let client = clients[deviceId], case .failed = client.state {
-        // SP-2 (e) — THE STUCK CLIENT. A client stops for good on INCOMPATIBLE,
-        // UNAUTHORIZED or PRECONDITION_FAILED (asking again with the same
-        // version and the same absent token is told the same thing), and the
-        // branch below never replaced an open client — so it stayed stopped
-        // for the life of the link while its peer stayed online. Those answers
-        // CAN change, so it is replaced on a backoff: closed, the door asked
-        // again, and a fresh client dialled if the door still answers.
-        // The ladder starts when the client STOPPED (`trackClient` stamps it);
-        // the stamp here is only the belt for a stop no observation reported.
-        var stuck = found[deviceId] ?? entry
-        if stuck.stuckRetryAt == nil { stuck.stuckRetryAt = stuckRetryDeadline(stuck, from: at) }
-        if let retryAt = stuck.stuckRetryAt, retryAt <= at {
-          stuck.stuckRetries += 1
-          stuck.stuckRetryAt = nil
-          found[deviceId] = stuck
-          closeDoor(to: deviceId)
-          if let url = stuck.doorURL { due.append((deviceId, url)) }
-        } else {
-          found[deviceId] = stuck
-        }
-        continue
-      }
-      if let client = clients[deviceId] {
-        // SP-2 (d) — the roster says this peer is online, so a client the
-        // roster parked (asleep between two sweeps) dials now. Idempotent for
-        // every other client: one with a socket, a dial or a re-dial in hand.
+
+      if deviceId == home, let client = homeClient {
+        // The home's socket is its own liveness: it is not probed. A client the
+        // roster parked (asleep between two sweeps) dials now — the roster says
+        // it is online — and the rest is idempotent: a live subscription
+        // returns at once, an answered catalog is not asked again.
         client.connect()
-        armDoorSubscription(deviceId)
-        // The same clock for the catalog: a no-op once this connection has an
-        // answer, and the retry for one a deadline or a dropped frame cost.
-        askForCatalog(deviceId)
+        armHomeSubscription()
+        askHomeForRoster()
+        askHomeForCatalog()
         continue
       }
-      if let deadline = entry.askAgainAt, deadline > at { continue }
+      // SP-2 (e) — a door that STOPPED this phone is not asked again, and is
+      // no home, until its backoff passes: those refusals change in minutes
+      // (a desktop upgraded, a login linked), never in seconds.
+      if let retryAt = entry.stuckRetryAt, retryAt > at { continue }
+      if let deadline = entry.askAgainAt, deadline > at {
+        // A re-home asks every candidate afresh — never a stranger's door, whose
+        // window is the account's, not the home's.
+        if case .notThisAccount = entry.admission { continue }
+        guard struggling else { continue }
+      }
       if let url = entry.doorURL { due.append((deviceId, url)) }
     }
 
@@ -780,41 +840,47 @@ public final class FieldLink {
 
     refreshDesktops()
     // A desktop that dropped off the online list (a sleep: truffle says
-    // `online: false`, never `left`) went through `closeDoor`, which dropped
-    // its board and its catalog — the field must follow NOW, not at the next
-    // probe's refold, which the early return below may never reach.
+    // `online: false`, never `left`) was forgotten — its catalog with it — and
+    // the field must follow NOW.
     if forgot { refold() }
 
-    guard !due.isEmpty else { return }
-    let probe = self.probe
-    let outcomes = await withTaskGroup(of: (String, DoorProbeOutcome).self) { group in
-      for item in due {
-        let probeURL =
-          FieldMeshContract.productDoorProbeURL(host: item.url.host ?? "") ?? item.url
-        group.addTask { (item.deviceId, await probe.probe(probeURL)) }
+    if !due.isEmpty {
+      let probe = self.probe
+      let outcomes = await withTaskGroup(of: (String, DoorProbeOutcome).self) { group in
+        for item in due {
+          let probeURL =
+            FieldMeshContract.productDoorProbeURL(host: item.url.host ?? "") ?? item.url
+          group.addTask { (item.deviceId, await probe.probe(probeURL)) }
+        }
+        var collected: [(String, DoorProbeOutcome)] = []
+        for await outcome in group { collected.append(outcome) }
+        return collected
       }
-      var collected: [(String, DoorProbeOutcome)] = []
-      for await outcome in group { collected.append(outcome) }
-      return collected
+      guard started, !isPaused else { return }
+      for (deviceId, outcome) in outcomes {
+        apply(DoorPolicy.admission(for: outcome), to: deviceId)
+      }
     }
-    guard started, !isPaused else { return }
-    for (deviceId, outcome) in outcomes {
-      apply(DoorPolicy.admission(for: outcome), to: deviceId)
-    }
+    settleHome(struggling: struggling)
     refreshDesktops()
     refold()
   }
 
-  /// One peer's verdict, recorded — and the door opened or left shut.
+  /// One peer's verdict, recorded. No door is opened here: a door that answers
+  /// is a CANDIDATE, and the pass decides which candidate is the home
+  /// (`settleHome`).
   private func apply(_ admission: DoorAdmission, to deviceId: String) {
     guard var entry = found[deviceId] else { return }
     entry.admission = admission
     switch admission {
     case .answering:
-      entry.askAgainAt = nil
+      // A desktop that is not the home holds no door, so its verdict is asked
+      // again on the weather cadence: the corner's word for it, and the next
+      // re-home's candidates, are never minutes old.
+      entry.askAgainAt =
+        deviceId == home ? nil : now().addingTimeInterval(seconds(schedule.unreachable))
       foreignDoors.removeValue(forKey: deviceId)
       found[deviceId] = entry
-      if let url = entry.doorURL { openDoor(to: deviceId, at: url) }
     case .notThisAccount(let reason):
       entry.askAgainAt = now().addingTimeInterval(seconds(schedule.notThisAccount))
       entry.info = nil
@@ -827,13 +893,11 @@ public final class FieldLink {
         foreignDoors[deviceId] = reason
         note("\(fallbackName(entry)) is not this account's desktop: \(reason)")
       }
-      closeDoor(to: deviceId)
-    case .unreachable(let reason):
+      if deviceId == home { loseHome(because: reason) }
+    case .unreachable:
       entry.askAgainAt = now().addingTimeInterval(seconds(schedule.unreachable))
       found[deviceId] = entry
       foreignDoors.removeValue(forKey: deviceId)
-      _ = reason
-      closeDoor(to: deviceId)
     }
   }
 
@@ -854,31 +918,12 @@ public final class FieldLink {
     return "the tailnet says this device is signed in as \(theirs)"
   }
 
-  /// UA-P-5 — whose slices this phone may draw. The DOOR decides, not the bus.
-  ///
-  /// The hole this closes was real and is not obvious. `refold` folds a board
-  /// for every device id it knows about, while `refreshDesktops` drops a peer
-  /// the door refused — so with the bus on, a FOREIGN desktop's board would
-  /// have put bodies on this person's field while its own row was correctly
-  /// hidden. Bodies with no desktop, from a machine the phone had already
-  /// established is somebody else's.
-  ///
-  /// So the probe's verdict gates the slice, and the three verdicts are three
-  /// different answers rather than two:
-  ///
-  /// - **no verdict yet** — held. Nothing has been established about this
-  ///   device; one sweep later something has. A slice must never be the thing
-  ///   that introduces a desktop, which is the shape UA-P-1a left behind.
-  /// - **`notThisAccount`** — held, permanently and on purpose. This is the
-  ///   case above: the door said this is not this account's machine, and the
-  ///   bus is not a second opinion that overrides a door.
-  /// - **`unreachable`** — DRAWN. The door is asleep and the peer is still one
-  ///   truffle's gate admitted, so its slice is this account's by construction
-  ///   (RFC 025 §3.1: every store on a gated node is scoped). Holding here
-  ///   would use liveness as a stand-in for authorization and delete the store
-  ///   leg's whole reason for existing — §5's hybrid is a board that arrives
-  ///   with no connection needed, and a board that needs the connection open
-  ///   anyway is just a slower door.
+  /// UA-P-5 — whose device slices this phone may read. The DOOR decides, not
+  /// the bus: no verdict yet is held (a slice must never be the thing that
+  /// introduces a desktop), `notThisAccount` is held for good (the bus is not
+  /// a second opinion that overrides a door), and `unreachable` is read — the
+  /// door is asleep and the peer is still one truffle's gate admitted, so its
+  /// slice is this account's by construction (RFC 025 §3.1).
   private func sliceIsDrawable(_ deviceId: String) -> Bool {
     switch found[deviceId]?.admission {
     case .answering, .unreachable: true
@@ -886,23 +931,26 @@ public final class FieldLink {
     }
   }
 
-  /// A peer that left takes its door, its board and its verdict with it.
+  /// A peer that left takes its door, its catalog and its verdict with it.
   private func forget(_ peer: FieldStorePeer) {
     guard let deviceId = peer.deviceId, !deviceId.isEmpty else { return }
     forget(deviceId: deviceId)
     refreshDesktops()
     refold()
+    // A home that left is a home lost: the roster is swept for the next.
+    if home == nil { sweepSoon() }
   }
 
   private func forget(deviceId: String) {
-    closeDoor(to: deviceId)
+    if deviceId == home { loseHome(because: "the tailnet no longer lists it") }
     if catalogs.removeValue(forKey: deviceId) != nil { mergeCatalogs() }
+    catalogAsked.remove(deviceId)
     found.removeValue(forKey: deviceId)
     endpointRefusals.removeValue(forKey: deviceId)
     foreignDoors.removeValue(forKey: deviceId)
   }
 
-  /// SP-2 (e) — when a stopped client is next replaced, counted from `from`.
+  /// SP-2 (e) — when a stopped door is next asked, counted from `from`.
   private func stuckRetryDeadline(_ entry: Found, from: Date) -> Date {
     from.addingTimeInterval(seconds(schedule.stuckClientRetry(after: entry.stuckRetries)))
   }
@@ -912,14 +960,180 @@ public final class FieldLink {
     return TimeInterval(parts.seconds) + TimeInterval(parts.attoseconds) / 1e18
   }
 
+  // MARK: The home (DS-8, DS-D13)
+
+  /// The home's socket dropped (or the deadline closed it) and its re-dial has
+  /// not answered yet.
+  private var homeIsStruggling: Bool {
+    guard let homeClient else { return false }
+    if case .reconnecting = homeClient.state { return true }
+    return false
+  }
+
+  /// Whether the field on screen is the home's own, live answer.
+  private var homeIsLive: Bool {
+    guard let home, boardFrom == home, let homeClient else { return false }
+    if case .ready = homeClient.state { return true }
+    return false
+  }
+
+  /// After a pass: a phone with no home takes one, and a home that struggled
+  /// through the whole pass gives way to the first OTHER desktop that answered
+  /// in it. With no other answer the home keeps its own client, which keeps
+  /// re-dialling on its ladder (and the roster parks it while it sleeps).
+  private func settleHome(struggling: Bool) {
+    guard started, !isPaused else { return }
+    guard let current = home else {
+      if let pick = homeCandidate(excluding: nil) { openHome(pick) }
+      return
+    }
+    guard struggling, let client = homeClient else { return }
+    if case .ready = client.state { return }
+    guard let pick = homeCandidate(excluding: current) else { return }
+    loseHome(because: "its door stopped answering")
+    openHome(pick)
+  }
+
+  /// `home = the last home ?? the first self desktop whose door answers`: the
+  /// desktops whose door answered this phone, that no door stopped and no
+  /// refusal holds, in device order — the remembered home first when it is
+  /// among them.
+  private func homeCandidate(excluding current: String?) -> String? {
+    let at = now()
+    let candidates = found.keys.sorted().filter { deviceId in
+      guard deviceId != current, let entry = found[deviceId], entry.doorURL != nil else {
+        return false
+      }
+      guard case .answering = entry.admission else { return false }
+      guard endpointRefusals[deviceId] == nil, foreignDoors[deviceId] == nil else { return false }
+      if let retryAt = entry.stuckRetryAt, retryAt > at { return false }
+      return true
+    }
+    if let login = selfLogin, let remembered = homeMemory?.lastHome(for: login),
+      candidates.contains(remembered)
+    {
+      return remembered
+    }
+    return candidates.first
+  }
+
+  private func openHome(_ deviceId: String) {
+    guard let url = found[deviceId]?.doorURL else { return }
+    home = deviceId
+    let client = FieldProductClient(url: url, transport: transport, options: doorOptions(deviceId))
+    homeClient = client
+    client.connect()
+    trackHome(client, deviceId)
+    refreshDesktops()
+  }
+
+  /// The home stops being the home: its subscription and its client go, its
+  /// slot comes back to the budget, and the next pass asks every candidate
+  /// afresh. The board copy STAYS — greyed, since no live home answers for it —
+  /// until the next home's open replaces it.
+  private func loseHome(because reason: String) {
+    guard let lost = home else { return }
+    if let entry = found[lost] {
+      note("\(fallbackName(entry)) stopped being this phone's home: \(reason)")
+    }
+    home = nil
+    resumeSlot?.cancel()
+    resumeSlot = nil
+    homeSubscription?.cancel()
+    homeSubscription = nil
+    armingFor = nil
+    gapWhileArming = nil
+    let client = homeClient
+    homeClient = nil
+    client?.close()
+    catalogAsked.remove(lost)
+    rosterAskedFor = nil
+    // A door that answered once and has stopped answering is not "answering"
+    // any more: it is weather, asked again on the next pass like every other
+    // candidate. (A door that STOPPED this phone keeps its own word and its
+    // backoff; a refused one keeps its refusal.)
+    if case .answering = found[lost]?.admission, found[lost]?.stopped == nil {
+      found[lost]?.admission = .unreachable(reason)
+    }
+    for deviceId in found.keys {
+      if case .notThisAccount = found[deviceId]?.admission { continue }
+      found[deviceId]?.askAgainAt = nil
+    }
+    refreshDesktops()
+    refold()
+  }
+
+  /// Watch the home's client: the account verdict re-read at every hello, the
+  /// field armed the moment one lands, and every loss turned into a pass.
+  private func trackHome(_ client: FieldProductClient, _ deviceId: String) {
+    withObservationTracking {
+      _ = client.state
+    } onChange: { [weak self] in
+      Task { @MainActor in
+        guard let self, self.started, self.homeClient === client else { return }
+        switch client.state {
+        case .ready(let hello):
+          // THE SECOND HALF OF THE ACCOUNT CHECK. The sidecar's allow-list is
+          // the first and refuses a stranger before fieldd sees the socket; this
+          // is fieldd's own stored-login comparison, which answers a foreign
+          // login with a hello that succeeds and grants NOTHING.
+          if case .notThisAccount(let reason) = DoorPolicy.admission(
+            forGrantedScopes: hello.grantedScopes)
+          {
+            self.apply(.notThisAccount(reason), to: deviceId)
+            self.refreshDesktops()
+            self.refold()
+            self.sweepSoon()
+            return
+          }
+          // IOS-8c — who this desktop serves. Decoded since UA-2 and read by
+          // nothing until the corner needed a seed for the face.
+          self.found[deviceId]?.userId = hello.userId
+          // SP-2 (e) — a door that answered starts the stuck ladder over.
+          self.found[deviceId]?.stopped = nil
+          self.found[deviceId]?.stuckRetries = 0
+          self.found[deviceId]?.stuckRetryAt = nil
+          // DS-8 — the home that answered is the last home.
+          if let login = self.selfLogin { self.homeMemory?.record(deviceId, login: login) }
+        case .failed(let error):
+          // SP-2 (e) — the door STOPPED this phone (INCOMPATIBLE, UNAUTHORIZED,
+          // PRECONDITION_FAILED): asking again with the same version and the
+          // same absent token is told the same thing, so it is not asked again
+          // until its backoff passes, and the field moves to the next desktop
+          // that answers.
+          if var entry = self.found[deviceId] {
+            entry.stopped = error.message
+            entry.stuckRetryAt = self.stuckRetryDeadline(entry, from: self.now())
+            entry.stuckRetries += 1
+            self.found[deviceId] = entry
+          }
+          self.loseHome(because: error.message)
+          self.sweepSoon()
+          return
+        case .reconnecting:
+          // The socket dropped, the deadline closed it, or the roster parked
+          // it: one pass decides whether the field moves (`settleHome`).
+          self.sweepSoon()
+        case .off, .connecting, .closed:
+          break
+        }
+        self.armHomeSubscription()
+        self.askHomeForRoster()
+        self.askHomeForCatalog()
+        self.refreshDesktops()
+        self.refold()
+        self.trackHome(client, deviceId)
+      }
+    }
+  }
+
   // MARK: Reconciliation
 
-  /// Re-arm observation of both stores. `withObservationTracking` fires once
-  /// per change and must be re-armed, which is what the `Task` does — it also
-  /// puts the work AFTER the mutation, so the reconcile sees the new value.
-  ///
-  /// Armed with the bus (UA-P-5): on an ungated node nothing is subscribed, so
-  /// nothing mutates, and `start()` does not even arm it.
+  /// Re-arm observation of the presence store. `withObservationTracking` fires
+  /// once per change and must be re-armed, which is what the `Task` does — it
+  /// also puts the work AFTER the mutation, so the reconcile sees the new
+  /// value. Armed with the bus (UA-P-5): on an ungated node nothing is
+  /// subscribed, so nothing mutates, and `start()` does not even arm it.
   private func track() {
     guard !tracking else { return }
     tracking = true
@@ -929,7 +1143,6 @@ public final class FieldLink {
   private func arm() {
     withObservationTracking {
       _ = devices.slices
-      _ = boards.slices
     } onChange: { [weak self] in
       Task { @MainActor in
         guard let self, self.started else { return }
@@ -949,164 +1162,69 @@ public final class FieldLink {
     refold()
   }
 
-  private func openDoor(to deviceId: String, at url: URL) {
-    if let existing = clients[deviceId] {
-      guard !existing.targets(url) else {
-        armDoorSubscription(deviceId)
-        return
-      }
-      closeDoor(to: deviceId)
-    }
-    // SP-2 (d) — the roster is asked before every dial this client makes, the
-    // first and each re-dial: the tailnet's own peer list, read live, so a
-    // desktop that went to sleep between two sweeps is not dialled in the gap.
-    var options = self.options
-    options.mayDial = { [doors] in
-      await doors.onlinePeers().contains { $0.deviceId == deviceId && $0.online }
-    }
-    // SP-2 (h) — each subscription's bytes-per-second line names the desktop
-    // it came from by its durable id; never by its door's URL.
-    options.logLabel = deviceId
-    // SP-2 (g) — one door per self desktop, held in the phone's ledger from the
-    // dial to the close: a replacement waits for its predecessor's socket.
-    options.doorBudget = ProductDoorBudget(ledger: budget, desktop: deviceId)
-    let client = FieldProductClient(url: url, transport: transport, options: options)
-    clients[deviceId] = client
-    client.connect()
-    trackClient(deviceId)
-  }
+  // MARK: The home's asks
 
-  private func closeDoor(to deviceId: String) {
-    resumeSlots.removeValue(forKey: deviceId)?.cancel()
-    subscriptions.removeValue(forKey: deviceId)?.cancel()
-    clients.removeValue(forKey: deviceId)?.close()
-    expiryTimers.removeValue(forKey: deviceId)?.cancel()
-    arming.remove(deviceId)
-    doorBoards.removeValue(forKey: deviceId)
-    // The desktop's catalog OUTLIVES its door: a closed door (a probe that
-    // failed, a gated node) leaves that desktop's store-bus board drawn, and
-    // the names on those bodies come from this catalog — dropping it here
-    // turned "Claude Code" into "claude" until the door reopened. It is
-    // re-asked when the door reopens (`catalogAsked` is cleared) and dropped
-    // only when the desktop itself is forgotten (`forget(deviceId:)`).
-    catalogAsked.remove(deviceId)
-  }
-
-  /// Watch one client's state so the chip is honest, the account verdict is
-  /// re-read at every hello, and the door subscription is armed the moment one
-  /// lands.
-  private func trackClient(_ deviceId: String) {
-    guard let client = clients[deviceId] else { return }
-    withObservationTracking {
-      _ = client.state
-    } onChange: { [weak self] in
-      Task { @MainActor in
-        guard let self, self.started, self.clients[deviceId] === client else { return }
-        // THE SECOND HALF OF THE ACCOUNT CHECK. The sidecar's allow-list is the
-        // first and it refuses a stranger before fieldd sees the socket; this
-        // is fieldd's own stored-login comparison, which answers a foreign
-        // login with a hello that succeeds and grants NOTHING. The desktop lane
-        // is removing that case under the same ruling — a desktop with no
-        // stored login has no serve at all — and the phone reads it anyway,
-        // because a face that assumes the other plane shipped is a face that
-        // lies on the day it has not.
-        if case .ready(let hello) = client.state {
-          if case .notThisAccount(let reason) = DoorPolicy.admission(
-            forGrantedScopes: hello.grantedScopes)
-          {
-            self.apply(.notThisAccount(reason), to: deviceId)
-            self.refreshDesktops()
-            self.refold()
-            return
-          }
-          // IOS-8c — who this desktop serves. Decoded since UA-2 and read by
-          // nothing until the corner needed a seed for the face.
-          self.found[deviceId]?.userId = hello.userId
-          // SP-2 (e) — a client that reached ready starts the stuck ladder over.
-          self.found[deviceId]?.stuckRetries = 0
-          self.found[deviceId]?.stuckRetryAt = nil
-        }
-        // SP-2 (e) — the door STOPPED this client: the replacement ladder starts
-        // now, at the stop, not at whichever sweep happens to notice it.
-        if case .failed = client.state, let entry = self.found[deviceId],
-          entry.stuckRetryAt == nil
-        {
-          self.found[deviceId]?.stuckRetryAt = self.stuckRetryDeadline(entry, from: self.now())
-        }
-        self.armDoorSubscription(deviceId)
-        self.askForDeviceRow(deviceId)
-        self.askForCatalog(deviceId)
-        self.refreshDesktops()
-        self.refold()
-        self.trackClient(deviceId)
-      }
-    }
-  }
-
-  /// The desktop's own row, once its door has answered.
+  /// The desktops' own rows, from the HOME's roster.
   ///
-  /// `device.list` has existed on this client and been called by nothing since
-  /// IOS-4b: the name, the platform and the terminal-mesh capability all came
-  /// from the `field.devices.v1` slice. With that store off (UA-P-1b) the door
-  /// is where they live, and this is the one call that fetches them. Asked
-  /// ONCE per connection — a roster does not change under a live socket often
-  /// enough to poll, and a desktop that renames itself is a re-dial away.
-  private func askForDeviceRow(_ deviceId: String) {
-    guard let client = clients[deviceId], found[deviceId]?.info == nil else { return }
-    guard case .ready = client.state else { return }
+  /// `device.list` answers every device the home lists — its own row by its
+  /// `self` flag (never by matching the durable id: the two keyspaces agreeing
+  /// is a property of the floor, D30, not a rule this phone gets to assume)
+  /// and each other desktop's under the device id the mesh board files its
+  /// rows by. Asked once per connection, and again on a later pass only when a
+  /// desktop has appeared that the last answer could not have named.
+  private func askHomeForRoster() {
+    guard let deviceId = home, let client = homeClient else { return }
+    guard case .ready = client.state else {
+      rosterAskedFor = nil
+      return
+    }
+    let known = Set(found.keys)
+    if let asked = rosterAskedFor, known.isSubset(of: asked) { return }
+    rosterAskedFor = known
     Task { @MainActor [weak self] in
       guard let self else { return }
       do {
         let result = try await client.call("device.list", as: DeviceListResult.self)
-        guard self.started, self.clients[deviceId] === client else { return }
+        guard self.started, self.homeClient === client else { return }
         for dropped in result.droppedRows {
           self.note("\(deviceId) sent a device row that did not read: \(dropped)")
         }
-        // The daemon's OWN row, by its own `self` flag — not by matching the
-        // durable id, because the two keyspaces agreeing is a property of the
-        // floor (D30) rather than a rule this phone gets to assume.
-        guard let own = result.devices.first(where: { $0.isSelf == true }) else {
+        if let own = result.devices.first(where: { $0.isSelf == true }) {
+          self.found[deviceId]?.info = own
+        } else {
           self.note("\(deviceId) named no device of its own")
-          return
         }
-        self.found[deviceId]?.info = own
+        for row in result.devices where row.isSelf != true && row.deviceId != deviceId {
+          if self.found[row.deviceId] != nil { self.found[row.deviceId]?.info = row }
+        }
         self.refreshDesktops()
       } catch {
-        // Not a state: the desktop is open and answering, and what is missing
-        // is a nicety (its own name and whether its terminal doors are out).
-        // The peer's hostname stands in, and `publishesTerminalDoors` stays nil
-        // — which is "it did not say" and is never drawn as a refusal.
+        // Not a state: the home is open and answering, and what is missing is
+        // a nicety (names and whether terminal doors are out). The peers'
+        // hostnames stand in, and `publishesTerminalDoors` stays nil — "it did
+        // not say", never drawn as a refusal.
         self.note("\(deviceId) did not answer device.list: \(MeshModel.shortReason(error))")
       }
     }
   }
 
-  /// AC-D9 — the desktop's agent catalog, asked once per CONNECTION.
+  /// AC-D9 — the home's agent catalog, asked once per CONNECTION.
   ///
   /// The desktop is the authority and this phone may be a build behind it, so
   /// an agent's name comes over the wire, never out of a table compiled in
   /// here. Asked at every hello — a desktop that was upgraded while the socket
-  /// was down may have decided something new — kept until the next, and
-  /// dropped with the door. The same door plumbing and the same posture as
-  /// `device.list`: what is missing without it is a nicety, never a state.
+  /// was down may have decided something new — kept until the next, and kept
+  /// past the door until the desktop is forgotten.
   ///
   /// A desktop without the door — a build from before AC-3, which answers
   /// `NOT_FOUND` — is not a failure of anything: its agents are named by the
-  /// label their field rows carry (the adapter's own word, from such a
-  /// desktop) and lettered by their ids, and a note says why.
-  /// A failure that asking again could fix (the door's own `retryable`: a
-  /// deadline on a slow radio, a socket that dropped) keeps whatever the last
+  /// label their field rows carry, and a note says why. A failure that asking
+  /// again could fix (the door's own `retryable`) keeps whatever the last
   /// connection said and is asked again on the sweep's clock; one that could
-  /// not — the door refused, or answered something this build cannot read —
-  /// leaves this desktop with no catalog and is not asked again on this
+  /// not leaves this desktop with no catalog and is not asked again on this
   /// connection.
-  ///
-  /// "A new connection" is one this link SAW the client leave `ready` for. A
-  /// re-dial quick enough to go unobserved keeps the answer it has — the same
-  /// desktop — and a desktop that was upgraded was gone for as long as its
-  /// daemon took to restart, which the client spends `reconnecting`.
-  private func askForCatalog(_ deviceId: String) {
-    guard let client = clients[deviceId] else { return }
+  private func askHomeForCatalog() {
+    guard let deviceId = home, let client = homeClient else { return }
     guard case .ready = client.state else {
       catalogAsked.remove(deviceId)
       return
@@ -1118,13 +1236,13 @@ public final class FieldLink {
       do {
         let result = try await client.call(
           "agent.catalog", params: AgentCatalogParams.phone.json, as: AgentCatalogResult.self)
-        guard self.started, self.clients[deviceId] === client else { return }
+        guard self.started, self.homeClient === client else { return }
         for dropped in result.droppedRows {
           self.note("\(deviceId) sent a catalog row that did not read: \(dropped)")
         }
         self.setCatalog(AgentCatalog(result), for: deviceId)
       } catch {
-        guard self.started, self.clients[deviceId] === client else { return }
+        guard self.started, self.homeClient === client else { return }
         if (error as? FieldProductError)?.retryable == true {
           self.catalogAsked.remove(deviceId)
           self.note(
@@ -1160,7 +1278,7 @@ public final class FieldLink {
   }
 
   /// The catalog one desktop's rows are named by: its OWN door's answer first,
-  /// then what the phone's other desktops said (a desktop a build behind has no
+  /// then what the phone's other doors said (a desktop a build behind has no
   /// door, and its agents are the same agents), else nothing — the row's own
   /// label names the body then.
   private func desktopCatalog(for deviceId: String) -> AgentCatalog {
@@ -1168,89 +1286,66 @@ public final class FieldLink {
     return own.backed(by: catalog)
   }
 
-  /// The board over the door.
+  // MARK: The field — the home's mesh board
+
+  /// The field's one subscription: `agent.subscribe {projection: "field",
+  /// scope: "mesh"}` on the home (DS-D13). Once open it STAYS open; an idle
+  /// board costs nothing (§5: nothing changes, nothing is sent).
   ///
-  /// Through UA-P-1b this was the ONLY leg, because no desktop published a
-  /// board. Under UA-P-5 the store came back on a gated node, and a live slice
-  /// for a door-confirmed device used to OUTRANK the subscription — the door
-  /// was not even asked while one was live.
-  ///
-  /// SP-2 (f), 2026-10-01 — reversed, because under SP-D3's trim the slice is
-  /// PRESENCE and the door is the content (`thinking-sync-planes.md` §1.9 item
-  /// 7): once the door has answered hello, it is subscribed whatever the bus
-  /// holds, and the fold prefers its board (`refold`). The slice still draws
-  /// a desktop whose door is asleep, and one whose board has not arrived yet.
-  ///
-  /// Once open it STAYS open. A slice that expires and returns would otherwise
-  /// tear the subscription down and build it up on the store's own heartbeat,
-  /// and an idle board over the door costs nothing (§5: nothing changes,
-  /// nothing is sent).
-  private func armDoorSubscription(_ deviceId: String) {
-    guard !isPaused, subscriptions[deviceId] == nil, let client = clients[deviceId] else {
+  /// Its frames pass through the client's table as `.stream`: the mesh board is
+  /// one subscription carrying a chain per desktop, so the cursor is the board
+  /// copy's (`MeshBoardCopy`) and a gap asks the table for the fresh snapshot,
+  /// exactly as the table's own gaps do.
+  private func armHomeSubscription() {
+    guard !isPaused, homeSubscription == nil, let deviceId = home, let client = homeClient else {
       return
     }
     // SP-2 (c) — held until its window on the way back opens.
-    guard resumeSlots[deviceId] == nil else { return }
-    // The arming LATCH, set synchronously. `subscriptions[deviceId]` is only
-    // assigned after the subscribe's await, so a burst of discovery edges
-    // around hello walked past that check four times and opened four
-    // subscriptions on one door — each streaming at 250 ms, all of them
-    // fighting over one `doorBoards[deviceId].revision`, so every `since`
-    // disagreed and every frame triggered a `resubscribe`. A self-sustaining
-    // storm, on a metered radio.
-    guard !arming.contains(deviceId) else { return }
+    guard resumeSlot == nil else { return }
+    guard armingFor == nil else { return }
     guard case .ready = client.state else { return }
-    arming.insert(deviceId)
+    let token = ObjectIdentifier(client)
+    armingFor = token
     let epoch = armEpoch
 
     Task { @MainActor [weak self] in
       guard let self else { return }
-      defer { self.arming.remove(deviceId) }
-      guard self.started, self.clients[deviceId] === client,
-        self.subscriptions[deviceId] == nil
-      else { return }
+      defer { if self.armingFor == token { self.armingFor = nil } }
+      guard self.started, self.homeClient === client, self.homeSubscription == nil else { return }
       do {
+        let params = AgentSubscribeParams.phoneMesh
         let subscription = try await client.subscribe(
           "agent.subscribe",
-          params: AgentSubscribeParams.phoneField.json,
-          // SP-2 (a) — the client's table keeps this board's cursor: a delta
-          // that does not continue it never reaches `applyDoorDelta`, and the
-          // repair (a fresh snapshot) is the table's. The cadence rides every
-          // subscribe the table sends, replays included.
-          shape: .snapshotDelta(minIntervalMs: AgentSubscribeParams.phoneField.minIntervalMs),
+          params: params.json,
+          shape: SubscriptionShape(kind: .stream, minIntervalMs: params.minIntervalMs),
           onSnapshot: { [weak self] payload in
-            self?.applyDoorSnapshot(payload, from: deviceId)
+            self?.applyMeshOpen(payload, from: deviceId, client: client)
           },
           onDelta: { [weak self] payload in
-            self?.applyDoorDelta(payload, from: deviceId)
+            self?.applyMeshFrame(payload, from: deviceId, client: client)
           })
-        // Re-checked AFTER the await, including the slot: whatever slipped
-        // through is cancelled rather than overwritten. An overwritten handle
-        // is a subscription nobody owns and the door keeps feeding.
-        //
-        // And the PAUSE (2026-10-01, found by SP-2 c's stagger row under
-        // load): a subscribe asked before the app went away and answered after
-        // it survived the pause — a backgrounded phone kept a live
-        // subscription, and the resume could not re-arm the full slot. The
-        // EPOCH, not the flag: a pause and a resume can both land inside one
-        // answer, and the flag reads "not paused" again by then.
-        guard self.started, !self.isPaused, self.armEpoch == epoch,
-          self.clients[deviceId] === client, self.subscriptions[deviceId] == nil
+        // Re-checked AFTER the await — the slot, the home, and the PAUSE by its
+        // epoch: a subscribe asked before the app went away and answered after
+        // it must not survive the pause, and a pause and a resume can both land
+        // inside one answer (2026-10-01, found by SP-2 c's stagger row). What
+        // slipped through is cancelled, never overwritten: an overwritten
+        // handle is a subscription nobody owns and the door keeps feeding.
+        guard self.started, !self.isPaused, self.armEpoch == epoch, self.homeClient === client,
+          self.homeSubscription == nil
         else {
           subscription.cancel()
           return
         }
-        self.subscriptions[deviceId] = subscription
-        if self.found[deviceId]?.fieldRefusal != nil {
-          self.found[deviceId]?.fieldRefusal = nil
-          self.refreshDesktops()
+        self.homeSubscription = subscription
+        if let why = self.gapWhileArming {
+          self.gapWhileArming = nil
+          subscription.resnapshot(because: why)
         }
       } catch {
-        // UA-P-1d — THIS REACHES A FACE. It used to go to `notes` alone, which
-        // no view reads: a desktop whose door answered hello and then refused
-        // the board drew as "connected" over an empty field, with the reason
-        // written down in a place nothing renders. The corner says it now
-        // (`MeshDisplay.linkLine`), and the note stays as the diagnostic.
+        guard self.homeClient === client else { return }
+        // UA-P-1d — THIS REACHES A FACE: a door that answered hello and then
+        // refused the field is said in the corner (`MeshDisplay.linkLine`), and
+        // the note stays as the diagnostic. The sweep asks again.
         let reason = MeshModel.shortReason(error)
         self.note("\(deviceId) refused the field subscription: \(reason)")
         self.found[deviceId]?.fieldRefusal = reason
@@ -1259,153 +1354,106 @@ public final class FieldLink {
     }
   }
 
-  // MARK: The two legs
-
-  /// The store leg (UA-P-5): live on a gated node, for a device whose door has
-  /// not refused this phone. Both conditions, and the second is the one that
-  /// is easy to lose — see `sliceIsDrawable`.
-  private func liveSlice(for deviceId: String) -> AgentFieldSlice? {
-    guard storeBus, sliceIsDrawable(deviceId) else { return nil }
-    guard let slice = boards.slices[deviceId] else { return nil }
-    guard let board = try? slice.decode(AgentFieldSlice.self) else { return nil }
-    return board.isExpired(at: now()) ? nil : board
-  }
-
-  private func applyDoorSnapshot(_ payload: JSONValue, from deviceId: String) {
-    // A paused link applies nothing the door sends: its boards were let go at
-    // the pause, and a late answer must not put one back behind it.
-    guard !isPaused else { return }
+  /// The home's open answer — every desktop it lists, on its own chain. It
+  /// REPLACES the board copy: a re-home or a repair never draws a row twice.
+  private func applyMeshOpen(_ payload: JSONValue, from deviceId: String, client: FieldProductClient)
+  {
+    // A paused link applies nothing the door sends, and a closed home's late
+    // answer must not put its board back behind the next home's.
+    guard !isPaused, homeClient === client else { return }
     do {
-      let snapshot = try AgentFieldSnapshot(json: payload)
-      var rows: [String: AgentFieldRow] = [:]
-      for row in snapshot.rows { rows[row.runtimeRunId] = row }
-      doorBoards[deviceId] = DoorBoard(
-        revision: snapshot.revision, rows: rows, order: snapshot.rows.map(\.runtimeRunId))
-      for dropped in snapshot.droppedRows {
-        note("\(deviceId) sent a row that did not read: \(dropped)")
+      let open = try AgentMeshOpen(json: payload)
+      board.reset(open)
+      boardFrom = deviceId
+      for dropped in open.droppedDevices {
+        note("\(deviceId) listed a desktop that did not read: \(dropped)")
+      }
+      for entry in open.devices {
+        for dropped in entry.snapshot?.droppedRows ?? [] {
+          note("\(entry.device) sent a row that did not read: \(dropped)")
+        }
+      }
+      if found[deviceId]?.fieldRefusal != nil {
+        found[deviceId]?.fieldRefusal = nil
+        refreshDesktops()
       }
       refold()
     } catch {
-      note("\(deviceId) sent a board that did not read: \(MeshModel.shortReason(error))")
+      // A door that answered the field with something that is not the mesh
+      // board — a fieldd from before DS-3 serves its own board — is SAID, on
+      // the home's row, never drawn as a partial field.
+      let reason =
+        "it answered a board this phone cannot read as the mesh: \(MeshModel.shortReason(error))"
+      note("\(deviceId) \(reason)")
+      found[deviceId]?.fieldRefusal = reason
+      refreshDesktops()
     }
   }
 
-  private func applyDoorDelta(_ payload: JSONValue, from deviceId: String) {
-    guard !isPaused else { return }
-    guard let delta = try? AgentFieldDelta(json: payload) else {
-      note("\(deviceId) sent a delta that did not read")
+  /// One later frame of the home's board, judged against its desktop's chain.
+  private func applyMeshFrame(_ payload: JSONValue, from deviceId: String, client: FieldProductClient)
+  {
+    guard !isPaused, homeClient === client, boardFrom == deviceId else { return }
+    let frame: AgentMeshFrame
+    do {
+      frame = try AgentMeshFrame(json: payload)
+    } catch {
+      // Dropped and named. A lost delta is a gap the NEXT delta finds, and the
+      // repair is then a fresh board — never a guess at what this one said.
+      note("\(deviceId) sent a mesh frame that did not read: \(MeshModel.shortReason(error))")
       return
     }
-    guard var board = doorBoards[deviceId] else { return }
-    guard delta.since == board.revision else {
-      // A BELT since SP-2 (a): the client's table only hands over a delta that
-      // continues its cursor, so this fires only for a board THIS link failed
-      // to take (a snapshot that did not read). The repair is still a fresh
-      // snapshot, and it is the table's to ask for.
-      note("\(deviceId) delta since \(delta.since) ≠ \(board.revision) — re-subscribing")
-      resubscribe(deviceId)
-      return
+    switch board.apply(frame) {
+    case .applied:
+      refold()
+    case .gap(let why):
+      // The board on the field STAYS until the fresh snapshot replaces it — a
+      // repair is not a reason to draw nothing.
+      note("\(why) — re-subscribing")
+      if let homeSubscription {
+        homeSubscription.resnapshot(because: why)
+      } else {
+        gapWhileArming = why
+      }
     }
-    for id in delta.removed {
-      board.rows.removeValue(forKey: id)
-      board.order.removeAll { $0 == id }
-    }
-    for row in delta.upserts {
-      if board.rows[row.runtimeRunId] == nil { board.order.append(row.runtimeRunId) }
-      board.rows[row.runtimeRunId] = row
-    }
-    board.revision = delta.revision
-    doorBoards[deviceId] = board
-    refold()
-  }
-
-  /// The board here disagrees with what the door sent: ask the client's table
-  /// for a fresh snapshot. The board on the field STAYS until that snapshot
-  /// replaces it — a repair is not a reason to draw nothing.
-  private func resubscribe(_ deviceId: String) {
-    subscriptions[deviceId]?.resnapshot(because: "the field board here is at another revision")
   }
 
   // MARK: The fold
 
-  /// A board's own expiry, as a timer. Live with the bus (UA-P-5).
-  ///
-  /// The reconcile is edge-triggered; expiry is a clock, and a desktop that
-  /// stops publishing sends no mutation to notice. Without this the field kept
-  /// drawing an expired board, `feed` still said `.store`, and the door — the
-  /// leg that exists for exactly this — was never asked.
-  private func armExpiry(for deviceId: String, at expiresAt: Int64) {
-    expiryTimers[deviceId]?.cancel()
-    let seconds = Double(expiresAt) / 1000 - now().timeIntervalSince1970
-    guard seconds > 0 else { return }
-    expiryTimers[deviceId] = Task { @MainActor [weak self] in
-      try? await Task.sleep(for: .seconds(seconds))
-      guard let self, !Task.isCancelled, self.started else { return }
-      self.expiryTimers[deviceId] = nil
-      self.reconcile()
-    }
-  }
-
   private func refold() {
-    var slices: [AgentFieldSlice] = []
-    var doorOnly: [String] = []
-    var known = Set(found.keys)
-    if storeBus {
-      // The FILTER is the rule (UA-P-5): a board from a device the door said
-      // is not this account's is held, and every key here is already in
-      // `found` anyway — a slice arrives from a peer — so the union is the
-      // belt. Without the filter a foreign desktop's board reached the fold
-      // while its own row was correctly hidden, which is bodies with no
-      // desktop, from a machine this phone had already refused.
-      known.formUnion(devices.slices.keys.filter(sliceIsDrawable))
-      known.formUnion(boards.slices.keys.filter(sliceIsDrawable))
-    }
-
-    for deviceId in known.sorted() {
-      // SP-2 (f) — THE DOOR OUTRANKS THE SLICE once it has hello'd and sent
-      // its board. The slice draws what the door cannot: a desktop whose door is
-      // asleep, or one whose board has not arrived yet — never a blank.
-      if doorBoards[deviceId] != nil {
-        doorOnly.append(deviceId)
-      } else if let slice = liveSlice(for: deviceId) {
-        slices.append(slice)
-        // Re-armed on every board, so a heartbeat that moves `expiresAt`
-        // moves the timer with it.
-        armExpiry(for: deviceId, at: slice.expiresAt)
-      }
-    }
-
-    // Each board named by its own desktop's catalog (AC-D9), resolved here once
-    // per fold so the projection stays a pure function of what it is handed.
-    var catalogsByDevice: [String: AgentCatalog] = [:]
-    for slice in slices { catalogsByDevice[slice.deviceId] = desktopCatalog(for: slice.deviceId) }
-    let projection = projectAgentSlices(slices, now: now(), catalogs: catalogsByDevice)
-    var merged = projection.agents
-    var seen = Set(merged.map(\.id))
-
-    for deviceId in doorOnly {
-      guard let board = doorBoards[deviceId] else { continue }
-      let rows = board.order.compactMap { board.rows[$0] }
-      let fromDoor = projectAgentField(
-        rows: rows, device: deviceId, catalog: desktopCatalog(for: deviceId))
-      for agent in fromDoor.agents where !seen.contains(agent.id) {
+    let live = homeIsLive
+    var merged: [AgentSnapshot] = []
+    var seen = Set<String>()
+    // UA-P-5's law, kept under a home: a desktop THIS phone established is
+    // somebody else's is held off the field even when a home lists it — the
+    // door decides, and the home is not a second opinion that overrides it.
+    for deviceId in board.deviceIds where foreignDoors[deviceId] == nil {
+      guard let device = board.devices[deviceId], let held = device.board else { continue }
+      // Each board named by its own desktop's catalog (AC-D9), resolved here
+      // once per fold so the projection stays a pure function of what it is
+      // handed; greyed when its desktop is not live on a live home (DS-L8).
+      let projection = projectAgentField(
+        rows: held.ordered, device: deviceId, catalog: desktopCatalog(for: deviceId),
+        deviceLive: live && device.state.isLive)
+      // A run id is a ULID minted on its own desktop, so two desktops never
+      // share one; the first is kept anyway — nothing is drawn twice.
+      for agent in projection.agents where !seen.contains(agent.id) {
         merged.append(agent)
         seen.insert(agent.id)
       }
     }
-
     agents = merged
-    refreshFeeds(doorOnly: Set(doorOnly))
+    refreshFeeds()
   }
 
   /// THIS ACCOUNT'S desktops, keyed by the durable device id.
   ///
   /// The key is truffle's durable id for the peer — the one the fold's rows
-  /// carry, the one `clients` is filed under, and the one a card hands back to
-  /// `client(for:)`. Everything here is keyed that way, and mixing it with the
-  /// Tailscale routing id (which is what a send is addressed to, a different
-  /// keyspace, RFC 017 §8) produced a desktop whose door was open and ready
-  /// while its row said "dialing" forever and `client(for:)` answered nil.
+  /// carry, and the one a card hands back to the link's asks. Everything here
+  /// is keyed that way, and mixing it with the Tailscale routing id (which is
+  /// what a send is addressed to, a different keyspace, RFC 017 §8) produced a
+  /// desktop whose door was open and ready while its row said "dialing"
+  /// forever.
   ///
   /// A peer whose door refused this login is deliberately ABSENT: it is not
   /// this account's desktop, and `foreignDoors` is where that fact is kept.
@@ -1431,7 +1479,7 @@ public final class FieldLink {
 
   /// What this desktop says about itself.
   ///
-  /// The DOOR's `device.list` first, because since UA-P-1b that is where these
+  /// The HOME's `device.list` first, because since UA-P-1b that is where these
   /// facts come from and it is the answer this phone was granted. The store
   /// second, on a gated node and only where the door has not refused this
   /// phone (UA-P-5): a published slice is the same row by another road, and
@@ -1444,7 +1492,7 @@ public final class FieldLink {
 
   /// What to call a desktop before it has told us.
   ///
-  /// The peer's slugged tailscale hostname stands in until `device.list`
+  /// The peer's slugged tailscale hostname stands in until the home's roster
   /// answers with the name its own user gave it. It is a real fact about that
   /// machine rather than a placeholder, which is what makes it safe to draw:
   /// a corner that said "unknown desktop" for a beat would be less true than
@@ -1454,41 +1502,45 @@ public final class FieldLink {
     return entry.peer.deviceId ?? entry.peer.id
   }
 
-  private func refreshFeeds(doorOnly: Set<String>) {
+  private func refreshFeeds() {
     desktops = desktops.map { desktop in
       FieldDesktop(
         deviceId: desktop.deviceId, name: desktop.name, platform: desktop.platform,
-        state: desktop.state, feed: feed(of: desktop.deviceId, doorOnly: doorOnly),
+        state: desktop.state, feed: feed(of: desktop.deviceId),
         publishesTerminalDoors: desktop.publishesTerminalDoors,
         fieldRefusal: desktop.fieldRefusal,
         userId: desktop.userId)
     }
   }
 
+  /// The corner's word for a desktop. The HOME's is its client's; any other
+  /// desktop holds no door (DS-8), so its word is its probe's: answering reads
+  /// `ready` (its door answers, and its board arrives through the home), a
+  /// silent door `noDoor`, and a door that stopped this phone its own words
+  /// until its backoff passes.
   private func state(of deviceId: String, entry: Found) -> FieldDesktop.State {
     if let refusal = endpointRefusals[deviceId] { return .refusedDoor(refusal) }
-    guard let client = clients[deviceId] else {
-      // No client: either the door has not been asked yet, or it did not
-      // answer. Both draw as `noDoor` — "on the mesh, not serving its product
-      // surface" — except the first beat after a peer arrives, which is
-      // dialing.
-      if entry.admission == nil { return .connecting }
-      return .noDoor
+    if deviceId == home, let homeClient {
+      switch homeClient.state {
+      case .off, .connecting: return .connecting
+      case .ready: return .ready
+      case .reconnecting: return .reconnecting
+      case .failed(let error): return .failed(error.message)
+      case .closed: return .noDoor
+      }
     }
-    switch client.state {
-    case .off, .connecting: return .connecting
-    case .ready: return .ready
-    case .reconnecting: return .reconnecting
-    case .failed(let error): return .failed(error.message)
-    case .closed: return .noDoor
+    if let stopped = entry.stopped, entry.stuckRetryAt != nil { return .failed(stopped) }
+    switch entry.admission {
+    case nil: return .connecting
+    case .answering: return .ready
+    case .unreachable, .notThisAccount: return .noDoor
     }
   }
 
-  /// Which leg this desktop's bodies came from — the door first (SP-2 f).
-  private func feed(of deviceId: String, doorOnly: Set<String>? = nil) -> FieldFeedSource {
-    if doorOnly?.contains(deviceId) ?? (doorBoards[deviceId] != nil) { return .door }
-    if liveSlice(for: deviceId) != nil { return .store }
-    return FieldFeedSource.none
+  /// Whether this desktop's board is on the field — every board arrives over
+  /// the home's door (DS-8).
+  private func feed(of deviceId: String) -> FieldFeedSource {
+    board.devices[deviceId]?.board != nil ? .door : FieldFeedSource.none
   }
 
   private func note(_ line: String) {
@@ -1501,18 +1553,14 @@ public final class FieldLink {
 /// The store ids the phone reads, from the contracts' `STORES` registry — never
 /// spelled at a call site.
 ///
-/// Dormant through UA-P-1b, when James's ruling of 2026-09-15 took every
-/// content-bearing slice off the bus. UA-P-5 subscribes to both again, and
-/// only on a node gated on this account's login — truffle gates by login now
-/// (RFC 025), which is the condition the ruling set.
+/// `field.devices.v1` is presence (UA-P-5: subscribed only on a node gated on
+/// this account's login).
 ///
-/// `terminal.v1.hosts` was listed here and NEVER SUBSCRIBED — the rows the
-/// phone showed came from a live per-host `list-sessions`, not from the store,
-/// which is a divergence the design doc recorded against this file and TM-5
-/// closes by deletion. The store itself retired with the TSP1 adapter at TM-1
-/// (TM-D5), and the join is discovery now: a fold row names the session, the
-/// product door mints the ticket.
+/// RETIRED 2026-10-01 (DS-D14): `agents = "field.agents.v1"`, the board's store
+/// leg. No desktop publishes it and this phone never reads it: the field is
+/// the home's mesh board (DS-8). RETIRED 2026-09-14 (TM-5): `terminal.v1.hosts`,
+/// listed and never subscribed — the store retired with the TSP1 adapter at
+/// TM-1 (TM-D5).
 public enum FieldStoreID {
   public static let devices = "field.devices.v1"
-  public static let agents = "field.agents.v1"
 }

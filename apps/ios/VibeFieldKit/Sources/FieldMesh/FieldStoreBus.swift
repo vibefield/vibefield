@@ -23,6 +23,10 @@
 /// audience the ruling forbids. The flag is the DEFAULT; the gate is the
 /// condition; a caller that names neither gets the ungated answer, which is
 /// off.
+///
+/// *DS-D14 (2026-10-01): the bus carries PRESENCE only — `field.devices.v1`.
+/// The board's store (`field.agents.v1`) is retired; the field is the home's
+/// mesh board over the door (DS-8).*
 public enum FieldStoreBus {
   /// On since UA-P-5. It is a default and not a verdict: the bus is live only
   /// where the node is gated on this account's login, and `FieldLink`'s
