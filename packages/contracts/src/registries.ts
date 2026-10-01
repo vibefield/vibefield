@@ -611,6 +611,32 @@ export const TAILNET_GUEST_SCOPES: readonly Scope[] = [] as const;
  * still open. */
 export const PEER_FIELDD_SCOPES: readonly Scope[] = [...TAILNET_SCOPES, "index.search"] as const;
 
+/** SP-2 (`thinking-sync-planes.md` §6; design-06 §7) — the PHONE's connection
+ * budget, as BUILT on 2026-10-01: the most the iOS companion holds open at
+ * once, and the numbers its kit ENFORCES — a dial beyond the budget WAITS for a
+ * slot; it is never refused and never raced past.
+ *  - DOORS_PER_DESKTOP: one product-door WebSocket per self desktop. The phone
+ *    dials every self desktop its roster lists (SP-L6 as built; there is no
+ *    total until DS-8 homes it to ONE desktop, DS-D13), so the number that is
+ *    true today is per desktop: a REPLACEMENT door waits for its predecessor's
+ *    socket to close.
+ *  - TERMINAL_LEGS: one attached terminal — its control leg and its frames leg
+ *    (a routed attachment is a connection SET of two legs; the card attaches one
+ *    session at a time).
+ *  - WEB_VIEWS: one. Nothing on the phone opens one yet (SP-4).
+ * SP-D12 is OPEN (James rules it): its lean is one door to the HOME desktop,
+ * at most TWO attached terminals (the open card and one warm), one web view.
+ * When it rules, this table moves and the kit's mirror
+ * (`apps/ios/VibeFieldKit/Sources/FieldProduct/PhoneBudget.swift`) moves with
+ * it — `pnpm check:ios-fixtures` pins the two verbatim, so one moving alone is
+ * a red. TS-only: no daemon opens any of these, and the native plane has no
+ * reader. */
+export const PHONE_BUDGET = {
+  DOORS_PER_DESKTOP: 1,
+  TERMINAL_LEGS: 2,
+  WEB_VIEWS: 1,
+} as const;
+
 /** Socket file names under the daemon run dirs; paths are stable across restarts (external-mode law). */
 export const SOCKETS = {
   FIELDD: "fieldd.sock",

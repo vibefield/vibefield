@@ -139,6 +139,30 @@ function tpPin(key, swiftName, indent = 2) {
  * that stops gating without a red is the exact failure this script exists to
  * catch, and an unarmed pin nobody is told about is one.
  */
+/**
+ * SP-2 (g) — the phone's connection budget (`PHONE_BUDGET`; SP-D12 is OPEN).
+ * The kit ENFORCES these — a dial beyond the budget waits for a slot — so a
+ * number that moved on one side only is a phone holding more sockets, or
+ * fewer, than the registry says it may. Pinned like every other value here:
+ * verbatim, `_` grouping included.
+ */
+const PHONE_BUDGET_SWIFT = "apps/ios/VibeFieldKit/Sources/FieldProduct/PhoneBudget.swift";
+function phoneBudgetPin(key, swiftName) {
+  return {
+    name: key,
+    origin: {
+      file: REGISTRIES,
+      pattern: new RegExp(`^ {2}${key}: ([0-9_]+),$`, "m"),
+      label: `PHONE_BUDGET.${key}`,
+    },
+    copy: {
+      file: PHONE_BUDGET_SWIFT,
+      pattern: new RegExp(`^ {2}public static let ${swiftName} = ([0-9_]+)$`, "m"),
+      label: `PhoneBudget.${swiftName}`,
+    },
+  };
+}
+
 const productServePin = {
   name: "FIELDD_PRODUCT_SERVE",
   origin: {
@@ -188,6 +212,10 @@ const pins = [
   tpPin("SUPERSEDED", "superseded", 4),
   tpPin("PROTOCOL", "protocolError", 4),
   tpPin("LEG_TIMEOUT", "legTimeout", 4),
+  // The phone's connection budget, which the kit enforces (SP-2).
+  phoneBudgetPin("DOORS_PER_DESKTOP", "doorsPerDesktop"),
+  phoneBudgetPin("TERMINAL_LEGS", "terminalLegs"),
+  phoneBudgetPin("WEB_VIEWS", "webViews"),
 ];
 
 const pinProblems = [];
