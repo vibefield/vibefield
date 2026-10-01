@@ -362,7 +362,9 @@ export interface CallerContext {
    * Present only on a call whose principal is `peer-fieldd` and whose params
    * carried the envelope; the door strips it from the params. RECORDED — the
    * audit actor names it beside the calling node — and never authority: no
-   * gate may read it to grant anything. */
+   * gate may read it to grant anything. *Note 2026-10-01 (the landing fix-up,
+   * D2): `rightsFor` reads its PRESENCE to NARROW — a peer daemon forwarding
+   * for no one is minted `[read]` — never its content, and never to widen.* */
   onBehalfOf?: ForwardedFor;
   /** DS-D15 — provenance facts about the product CONNECTION this call rode,
    * fixed at hello: an opaque per-connection id and the kind the hello

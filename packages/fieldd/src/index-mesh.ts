@@ -733,7 +733,11 @@ export class IndexMesh extends EventEmitter {
       peer.inRoster = true;
       peer.online = info.online;
       peer.name = info.name;
-      if (info.link === "incompatible") peer.incompatible = true;
+      // DS-L9 — another contracts major is `incompatible` and NOT asked: the
+      // link's pin says so once a dial was refused, and the roster's own state
+      // (`deviceState`, from the row's published major) says so before any
+      // dial — one roster truth (the landing fix-up, 2026-10-01).
+      if (info.link === "incompatible" || info.state === "incompatible") peer.incompatible = true;
       else if (wasAway && info.online) peer.incompatible = false; // it came back: ask again
       for (const table of TABLES) {
         if (peer.online && !peer.incompatible) this.#ensureAttached(peer, table);

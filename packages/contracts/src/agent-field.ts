@@ -194,7 +194,9 @@ export const AgentSubscribeParams = z
     /** field and desk only; default `AGENT_FIELD.MIN_INTERVAL_MS` (field) or
      * `AGENT_FIELD.DESK_MIN_INTERVAL_MS` (desk), and never below the desk's
      * floor for a desk board. A per-subscriber trailing-edge floor, like the
-     * fold's own tick. */
+     * fold's own tick. *Corrected 2026-10-01: a FLOOR for both — a field ask
+     * below `AGENT_FIELD.MIN_INTERVAL_MS` is served at the floor (it used to be
+     * a default a caller could undercut to the schema's 16 ms).* */
     minIntervalMs: z.number().int().min(16).max(60_000).optional(),
     /** DS-3 — field and desk only, `local` scope. After this long with no frame
      * the source sends a HEARTBEAT: an empty delta whose `since` equals its

@@ -11,7 +11,9 @@ import { ErrorKind } from "./errors";
 // owner still mints rights from ITS OWN rule (the principal is the peer
 // daemon, transport-derived once E1 lands); `onBehalfOf` widens nothing — it
 // is provenance for the audit row, which names the calling node and the
-// window behind it, so the ledger stops reading two devices as one.
+// window behind it, so the ledger stops reading two devices as one. (Its
+// ABSENCE narrows, since 2026-10-01: a peer daemon that forwards for no one is
+// minted `[read]` at a terminal door — `terminal-grants.ts` `rightsFor`.)
 
 /** Who a forwarded call is for. Every field is what the FORWARDING daemon
  * knows about its own client, restated; the owner records it and never

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   type DeviceInfo,
+  type DeviceState,
   type IndexCatalogProject,
   type IndexCatalogSession,
   IndexProjectsResult,
@@ -219,7 +220,10 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
   };
 }
 
-function roster(self: string, peers: Array<{ deviceId: string; online: boolean; name?: string }>) {
+function roster(
+  self: string,
+  peers: Array<{ deviceId: string; online: boolean; name?: string; state?: DeviceState }>,
+) {
   const events = new EventEmitter();
   let list: DeviceInfo[] = [];
   const set = (next: typeof peers) => {
@@ -231,6 +235,8 @@ function roster(self: string, peers: Array<{ deviceId: string; online: boolean; 
         self: false,
         online: peer.online,
         lastSeenAt: 1,
+        // DS-L8/L9 — the roster's own state, when a row says one (deviceState)
+        ...(peer.state !== undefined ? { state: peer.state } : {}),
       })),
     ];
     events.emit("changed", list);
@@ -246,7 +252,7 @@ function roster(self: string, peers: Array<{ deviceId: string; online: boolean; 
 function mesh(opts: {
   self: Desktop;
   desktops: Desktop[];
-  peers: Array<{ deviceId: string; online: boolean }>;
+  peers: Array<{ deviceId: string; online: boolean; state?: DeviceState }>;
   behaviour?: Map<string, Behaviour>;
   dir?: string;
   localSearch?: IndexSearchResult;
@@ -444,6 +450,34 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
       rows: 2,
     });
     expect(kept.sources?.find((source) => source.device === "dev-b")?.asOf).toMatch(/Z$/);
+  });
+
+  it("DS-L9: a peer the roster calls incompatible — another published contracts major — is never asked, before any dial", async () => {
+    // The link pins a peer only after a dial was refused; the roster knows from
+    // the row's published major (deviceState) before anyone dials. One roster
+    // truth (the landing fix-up, 2026-10-01): the replica never attaches, the
+    // search never asks, and both say `incompatible`.
+    const a = desktop("dev-a");
+    const b = desktop("dev-b");
+    b.sessions.upsert([session("dev-b", "b1", 800)]);
+    const { aggregator, wire } = mesh({
+      self: a,
+      desktops: [a, b],
+      peers: [{ deviceId: "dev-b", online: true, state: "incompatible" }],
+    });
+    // every chance to attach wrongly: the replica's retry floor here is 30 ms
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(wire.subscribes.filter((ask) => ask.device === "dev-b")).toEqual([]);
+    expect(aggregator.replica("dev-b")?.sessions ?? []).toEqual([]);
+    const listed = aggregator
+      .sessions({ scope: "mesh" })
+      .sources?.find((source) => source.device === "dev-b");
+    if (listed !== undefined) expect(listed.state).toBe("incompatible");
+    const found = await aggregator.search({ q: "b1", scope: "mesh" });
+    expect(found.sources?.find((source) => source.device === "dev-b")).toMatchObject({
+      state: "incompatible",
+      tookMs: 0,
+    });
   });
 
   it("a kept cursor resumes after a link death; a new epoch REPLACES the copy", async () => {
