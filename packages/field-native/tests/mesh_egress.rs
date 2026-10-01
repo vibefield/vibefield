@@ -204,7 +204,9 @@ async fn fake_floor() -> (
 /// every verb answers the golden `egress-unsupported` — and says so with no
 /// node up, which is the point of answering it before the node gate: a floor
 /// that said `mesh-down` here would send fieldd waiting for a node that can
-/// never carry egress.
+/// never carry egress. (Built without `truffle-egress`; the feature build's
+/// default is the next row's.)
+#[cfg(not(feature = "truffle-egress"))]
 #[tokio::test]
 async fn a_floor_without_rfc_026_answers_every_verb_egress_unsupported() {
     let (_dir, daemon) = boot(|c| c).await;
@@ -233,6 +235,41 @@ async fn a_floor_without_rfc_026_answers_every_verb_egress_unsupported() {
     daemon.state.mesh.force_node_presence_for_tests(true);
     let reply = mgmt.call("native.mesh.egress.proxy", json!({})).await;
     assert_eq!(reply["error"]["data"], unsupported, "{reply}");
+    drop(mgmt);
+    daemon.shutdown().await;
+}
+
+/// DS-1b (2026-10-01) — the FEATURE build's default is the real arm. With no
+/// node it is no longer `egress-unsupported` (the arm can carry egress once a
+/// node exists): the acts answer `mesh-down`, the table reads answer empty,
+/// and a forced presence with no node behind it still answers `mesh-down`,
+/// because the arm asks the node itself and there is none. A protocol-5
+/// sidecar under this arm answers `egress-unsupported` per call, from the core
+/// (`truffle_refusal`); the real tailnet is `mesh_egress_probe.rs`'s.
+#[cfg(feature = "truffle-egress")]
+#[tokio::test]
+async fn the_truffle_arm_without_a_node_answers_mesh_down_and_an_empty_table() {
+    let (_dir, daemon) = boot(|c| c).await;
+    assert_eq!(daemon.state.mesh.egress().arm(), "truffle");
+    let mut mgmt = Mgmt::connect(&daemon).await;
+    let down = golden("error-data.egress-mesh-down.json");
+    for method in ["native.mesh.egress.proxy", "native.mesh.egress.httpProxy"] {
+        let reply = mgmt.call(method, json!({})).await;
+        assert_eq!(reply["error"]["code"], -32006, "{method}: {reply}");
+        assert_eq!(
+            reply["error"]["data"]["state"], down["state"],
+            "{method}: {reply}"
+        );
+    }
+    let listed = mgmt.call("native.mesh.egress.route.list", json!({})).await;
+    assert_eq!(listed["result"]["routes"], json!([]), "{listed}");
+    let removed = mgmt
+        .call("native.mesh.egress.route.remove", json!({"id": "r1"}))
+        .await;
+    assert_eq!(removed["error"]["data"]["kind"], "NOT_FOUND", "{removed}");
+    daemon.state.mesh.force_node_presence_for_tests(true);
+    let reply = mgmt.call("native.mesh.egress.proxy", json!({})).await;
+    assert_eq!(reply["error"]["data"]["state"], down["state"], "{reply}");
     drop(mgmt);
     daemon.shutdown().await;
 }

@@ -20,11 +20,14 @@
 //!   [`FakeEgress`] — TESTS. Real loopback listeners that splice to an address
 //!       the test controls, so the facade, the table, the reset and fieldd's
 //!       consumers are exercised without a tailnet.
-//!   `TruffleEgress` — written against the API the wave plan names
-//!       (`Node::loopback`, `egress_add/remove/list`, `egress_http_proxy`),
-//!       behind the cargo feature `truffle-egress`, OFF by default. It does
-//!       not compile against the pinned 0.7.14 and must not: the pin moves
-//!       only as a deliberate EL8 event, on James's petition window.
+//!   `TruffleEgress` — the real arm, behind the cargo feature
+//!       `truffle-egress`, OFF by default. COMPILED 2026-10-01 (DS-1b) against
+//!       truffle-core as built on truffle's `rfc026-egress` branch at
+//!       `92ab2b7` (RFC 026, sidecar protocol 6), through a local
+//!       `[patch.crates-io]` that never enters this repo. The pinned 0.7.14
+//!       has none of it, so the feature flips only at the petition window that
+//!       moves truffle-core AND the npm sidecars together (EL8), a deliberate
+//!       event, never a casual one.
 //!
 //! The route table is REBUILT-NOT-PERSISTED like every facade table: a node
 //! teardown or rebuild calls [`EgressBackend::reset`], and the facade's
@@ -367,57 +370,257 @@ async fn splice_loop(listener: tokio::net::TcpListener, splice_to: SocketAddr) {
     }
 }
 
-/// THE REAL ARM, against truffle-core's RFC 026 API as the truffle lane built
-/// it (`draft/work/ds-wave1-2026-09-30.md`, 2026-10-01 00:06):
-/// `Node::loopback() -> LoopbackConfig {address, proxy_credential,
-/// local_api_credential: Option}`, `egress_add(EgressRoute {id, target, login:
-/// Option}) -> BoundEgress {id, listen}`, `egress_remove(&str)`,
-/// `egress_list() -> Vec<EgressRouteInfo {id, target, listen, login}>`,
-/// `egress_http_proxy() -> HttpProxyConfig {address, credential}`; the SOCKS5
-/// username is the constant `LOOPBACK_SOCKS5_USERNAME` ("tsnet"); a protocol-5
-/// sidecar makes the core refuse locally with `NetworkError::Unsupported`, a
-/// stopped node is `NotRunning`, and the sidecar's refusals are
-/// `NetworkError::EgressError {code, message}`.
+// ---- D6 (DS-1b, 2026-10-01): the sidecar's route table, and the floor's cache of it ----
+
+/// The sidecar's route verbs, already mapped onto [`EgressError`]: what
+/// [`RouteMirror`] drives. The truffle arm implements it over the node
+/// (`impl RouteSubstrate for MeshNode`), the tests over a scripted table.
+/// Not [`EgressBackend`]: that trait is the facade's; this one is the
+/// substrate under the cache.
+#[cfg(any(test, feature = "truffle-egress"))]
+#[async_trait::async_trait]
+pub(crate) trait RouteSubstrate: Send + Sync {
+    async fn add(
+        &self,
+        id: &str,
+        target: &str,
+        login: Option<&str>,
+    ) -> Result<EgressRoute, EgressError>;
+    async fn remove(&self, id: &str) -> Result<(), EgressError>;
+    /// The live routes, ordered by id.
+    async fn list(&self) -> Result<Vec<EgressRoute>, EgressError>;
+}
+
+/// D6 — THE FLOOR'S CACHE OF THE SIDECAR'S ROUTE TABLE, and only a cache: the
+/// sidecar's table is the truth, and this never outlives the node.
 ///
-/// UNCOMPILED on purpose: the feature is off by default and truffle-core
-/// 0.7.14 has none of it. The NAMES above are relayed facts; the module paths
-/// (`truffle_core::egress`, `truffle_core::network::NetworkError`), whether
-/// each call is async, and the error type each returns are this lane's
-/// reading, not a checked fact — the first build with `--features
-/// truffle-egress` against the RFC 026 crate, on the petition window (which
-/// moves truffle-core AND the npm sidecars together, protocol 5 → 6, EL8), is
-/// the check, and it will name whatever differs.
-#[cfg(feature = "truffle-egress")]
+/// Why a cache at all: the sidecar's `egress:add` refuses ANY id it holds, the
+/// same target included (`EGRESS_EXISTS`, `handleEgressAdd` in
+/// `packages/sidecar-slim/egress.go`), while the facade promises an idempotent
+/// re-add (fieldd re-ensures a route it holds, and replays its adds after a
+/// restart). The mirror is what answers a re-add without a second bind.
+///
+/// Why it must yield to the table: the core stops waiting for an add after
+/// 20 s (`EGRESS_REPLY_TIMEOUT`) while the sidecar may still bind it, and a
+/// placeholder for an add in flight is not listed. Such a route is live on the
+/// sidecar and absent here. The wave-1 arm trusted the mirror, so that id then
+/// answered CONFLICT to every re-add and NOT_FOUND to every remove until the
+/// node was torn down (review D6). Now:
+///  - a FAILED add (any refusal, the timeout included) re-reads the sidecar's
+///    table before it answers: an id listed with the same target is the add
+///    that landed after all, answered as bound; listed with another target, a
+///    conflict naming THAT target; unlisted, the refusal stands;
+///  - a remove asks the sidecar whenever a node is up, mirror or not;
+///  - `reset` (the node's teardown) clears it.
+#[cfg(any(test, feature = "truffle-egress"))]
 #[derive(Default)]
-pub struct TruffleEgress {
-    /// what THIS floor bound on the current node, for the idempotent re-add
-    /// and the conflict rule (the sidecar keeps its own table; this mirror
-    /// never outlives the node — `reset` clears it with the teardown)
+pub(crate) struct RouteMirror {
     bound: tokio::sync::Mutex<BTreeMap<String, EgressRoute>>,
 }
 
-/// The core's refusal → the facade's. Classified only as far as the wire
-/// needs; the sidecar's code and message ride verbatim.
+#[cfg(any(test, feature = "truffle-egress"))]
+impl RouteMirror {
+    pub(crate) async fn add(
+        &self,
+        substrate: &dyn RouteSubstrate,
+        id: &str,
+        target: &str,
+        login: Option<&str>,
+    ) -> Result<EgressRoute, EgressError> {
+        let mut bound = self.bound.lock().await;
+        if let Some(existing) = bound.get(id) {
+            if existing.target == target {
+                return Ok(existing.clone());
+            }
+            return Err(EgressError::Conflict {
+                bound_target: existing.target.clone(),
+            });
+        }
+        let refusal = match substrate.add(id, target, login).await {
+            Ok(route) => {
+                bound.insert(id.to_string(), route.clone());
+                return Ok(route);
+            }
+            Err(refusal) => refusal,
+        };
+        // The table decides (see the type's note). A table the sidecar cannot
+        // list leaves the refusal as the answer; the next verb tries again.
+        let Ok(table) = substrate.list().await else {
+            return Err(refusal);
+        };
+        *bound = table
+            .into_iter()
+            .map(|route| (route.id.clone(), route))
+            .collect();
+        match bound.get(id) {
+            Some(route) if route.target == target => Ok(route.clone()),
+            Some(route) => Err(EgressError::Conflict {
+                bound_target: route.target.clone(),
+            }),
+            None => Err(refusal),
+        }
+    }
+
+    /// `substrate` is `None` when no node is up: every route died with it, so
+    /// the mirror entry was all that was left.
+    pub(crate) async fn remove(
+        &self,
+        substrate: Option<&dyn RouteSubstrate>,
+        id: &str,
+    ) -> Result<(), EgressError> {
+        let mut bound = self.bound.lock().await;
+        let mirrored = bound.remove(id).is_some();
+        match substrate {
+            Some(substrate) => substrate.remove(id).await,
+            None if mirrored => Ok(()),
+            None => Err(EgressError::NotFound),
+        }
+    }
+
+    pub(crate) async fn reset(&self) -> usize {
+        let mut bound = self.bound.lock().await;
+        let dropped = bound.len();
+        bound.clear();
+        dropped
+    }
+}
+
+/// RFC 026 §4's coded refusals, as the sidecar on truffle's `rfc026-egress`
+/// answers them (`packages/sidecar-slim/egress.go`; the core already turns a
+/// `NOT_RUNNING` into `NetworkError::NotRunning`), onto the facade's arms. The
+/// code and message ride verbatim; only the CLASS is decided here, because the
+/// class is what the wire's error kind tells a reader: `Refused`
+/// (PRECONDITION_FAILED) is the caller's to fix, `Failed` (INTERNAL) is the
+/// substrate's.
+#[cfg(any(test, feature = "truffle-egress"))]
+fn coded_refusal(code: String, message: String) -> EgressError {
+    match code.as_str() {
+        "NOT_FOUND" => EgressError::NotFound,
+        // the node stopped under the call, or its lifecycle ended mid-add
+        "NOT_RUNNING" | "NOT_READY" => EgressError::MeshDown,
+        // the caller's: a target that is no admitted node, an owner a gate
+        // refuses or cannot state, a malformed target or login glob
+        "TARGET_NOT_PEER" | "LOGIN_REFUSED" | "LOGIN_UNKNOWN" | "INVALID_TARGET"
+        | "INVALID_LOGIN" => EgressError::Refused { code, message },
+        // EGRESS_EXISTS names no holder (the sidecar refuses ANY id it holds):
+        // `RouteMirror::add` resolves it against the table, where the same
+        // target is the route and another is a `Conflict` carrying THAT target;
+        // unresolved, it stays here. With it: LISTEN_ERROR, STATUS_UNAVAILABLE,
+        // INTERNAL, INVALID_COMMAND, LOOPBACK_ERROR, SERVE_ERROR, DIAL_FAILED,
+        // and any code a later sidecar adds.
+        _ => EgressError::Failed(format!("[{code}] {message}")),
+    }
+}
+
+/// THE REAL ARM, against truffle-core as BUILT on truffle's `rfc026-egress`
+/// branch (`92ab2b7`, 2026-10-01): `Node::loopback() -> LoopbackConfig`,
+/// `egress_add(EgressRoute) -> BoundEgress`, `egress_remove(&str)`,
+/// `egress_list() -> Vec<EgressRouteInfo>`, `egress_http_proxy() ->
+/// HttpProxyConfig`, every one `Result<_, NodeError>`.
+///
+/// COMPILED 2026-10-01 (DS-1b) under a local `[patch.crates-io]` that points
+/// truffle-core at that branch and never enters this repo; the wave-1 arm,
+/// written to a relay, mapped `NetworkError` and did not compile (review D6).
+/// The feature stays OFF: the pinned 0.7.14 has none of this, and it flips
+/// only at the petition window that moves truffle-core AND the npm sidecars
+/// together, protocol 5 → 6 (EL8). That build is the check again.
 #[cfg(feature = "truffle-egress")]
-fn truffle_refusal(error: truffle_core::network::NetworkError) -> EgressError {
+#[derive(Default)]
+pub struct TruffleEgress {
+    /// what THIS floor bound on the current node (see [`RouteMirror`])
+    mirror: RouteMirror,
+}
+
+/// Every `NodeError` an egress call can carry, onto the facade's arms. Matched
+/// EXHAUSTIVELY, both enums, so a variant a later truffle adds fails the build
+/// at the pin move instead of landing in a catch-all unread.
+#[cfg(feature = "truffle-egress")]
+fn truffle_refusal(error: truffle_core::NodeError) -> EgressError {
     use truffle_core::network::NetworkError;
+    use truffle_core::NodeError;
     match error {
-        // a protocol-5 sidecar: the core refuses before asking
-        NetworkError::Unsupported { .. } => EgressError::Unsupported,
-        NetworkError::NotRunning => EgressError::MeshDown,
-        NetworkError::EgressError { code, message } => match code.as_str() {
-            "NOT_FOUND" => EgressError::NotFound,
-            // our mirror is checked first, so the sidecar holding an id we did
-            // not bind is a desync worth naming, not a re-aim
-            "EGRESS_EXISTS" => EgressError::Conflict {
-                bound_target: message,
-            },
-            "LISTEN_ERROR" => EgressError::Failed(format!("[{code}] {message}")),
-            // TARGET_NOT_PEER · LOGIN_REFUSED · LOGIN_UNKNOWN · INVALID_TARGET ·
-            // INVALID_LOGIN — the caller's to fix, verbatim
-            _ => EgressError::Refused { code, message },
-        },
-        other => EgressError::Failed(other.to_string()),
+        // `ensure_not_stopped` (the node was stopped), or the provider is not
+        // running (`egress_ready`, or the sidecar's own NOT_RUNNING)
+        NodeError::Stopped | NodeError::Network(NetworkError::NotRunning) => EgressError::MeshDown,
+        // a sidecar below protocol 6: the core refuses before it asks
+        NodeError::Network(NetworkError::Unsupported(_)) => EgressError::Unsupported,
+        NodeError::Network(NetworkError::EgressError { code, message }) => {
+            coded_refusal(code, message)
+        }
+        // The core's 20 s reply budget runs out as `SidecarError("<verb> timed
+        // out")`; a dead bridge, an unexpected reply, and every variant no
+        // egress call produces today are the substrate's, by their Display.
+        failed @ (NodeError::Network(
+            NetworkError::AlreadyRunning
+            | NetworkError::StartFailed(_)
+            | NetworkError::StopFailed(_)
+            | NetworkError::AuthRequired { .. }
+            | NetworkError::DialFailed(_)
+            | NetworkError::DialTimeout(_)
+            | NetworkError::ListenFailed(_)
+            | NetworkError::PingFailed(_)
+            | NetworkError::SidecarError(_)
+            | NetworkError::BridgeError(_)
+            | NetworkError::Io(_)
+            | NetworkError::Serialize(_)
+            | NetworkError::Internal(_)
+            | NetworkError::ProxyError(_),
+        )
+        | NodeError::PeerNotFound(_)
+        | NodeError::AmbiguousPeer { .. }
+        | NodeError::PeerGone(_)
+        | NodeError::ConnectionFailed(_)
+        | NodeError::SendFailed(_)
+        | NodeError::Envelope(_)
+        | NodeError::Session(_)
+        | NodeError::Transport(_)
+        | NodeError::NotImplemented(_)
+        | NodeError::ReservedPort(_)
+        | NodeError::BuildError(_)
+        | NodeError::Io(_)) => EgressError::Failed(failed.to_string()),
+    }
+}
+
+#[cfg(feature = "truffle-egress")]
+#[async_trait::async_trait]
+impl RouteSubstrate for MeshNode {
+    async fn add(
+        &self,
+        id: &str,
+        target: &str,
+        login: Option<&str>,
+    ) -> Result<EgressRoute, EgressError> {
+        let bound = self
+            .egress_add(truffle_core::egress::EgressRoute {
+                id: id.to_string(),
+                target: target.to_string(),
+                login: login.map(str::to_string),
+            })
+            .await
+            .map_err(truffle_refusal)?;
+        Ok(EgressRoute {
+            id: bound.id,
+            target: target.to_string(),
+            listen: bound.listen,
+        })
+    }
+    async fn remove(&self, id: &str) -> Result<(), EgressError> {
+        self.egress_remove(id).await.map_err(truffle_refusal)
+    }
+    async fn list(&self) -> Result<Vec<EgressRoute>, EgressError> {
+        let mut routes: Vec<EgressRoute> = self
+            .egress_list()
+            .await
+            .map_err(truffle_refusal)?
+            .into_iter()
+            .map(|route| EgressRoute {
+                id: route.id,
+                target: route.target,
+                listen: route.listen,
+            })
+            .collect();
+        routes.sort_by(|a, b| a.id.cmp(&b.id));
+        Ok(routes)
     }
 }
 
@@ -450,81 +653,38 @@ impl EgressBackend for TruffleEgress {
         login: Option<&str>,
     ) -> Result<EgressRoute, EgressError> {
         let node = node.ok_or(EgressError::MeshDown)?;
-        let mut bound = self.bound.lock().await;
-        if let Some(existing) = bound.get(id) {
-            if existing.target == target {
-                return Ok(existing.clone());
-            }
-            return Err(EgressError::Conflict {
-                bound_target: existing.target.clone(),
-            });
-        }
-        let answer = node
-            .egress_add(truffle_core::egress::EgressRoute {
-                id: id.to_string(),
-                target: target.to_string(),
-                login: login.map(str::to_string),
-            })
-            .await
-            .map_err(truffle_refusal)?;
-        let route = EgressRoute {
-            id: answer.id,
-            target: target.to_string(),
-            listen: answer.listen,
-        };
-        bound.insert(id.to_string(), route.clone());
-        Ok(route)
+        self.mirror.add(node.as_ref(), id, target, login).await
     }
     async fn route_remove(
         &self,
         node: Option<&Arc<MeshNode>>,
         id: &str,
     ) -> Result<(), EgressError> {
-        let mut bound = self.bound.lock().await;
-        if bound.remove(id).is_none() {
-            return Err(EgressError::NotFound);
-        }
-        // No node = the route died with it; the mirror entry was all that was left.
-        let Some(node) = node else { return Ok(()) };
-        node.egress_remove(id).await.map_err(truffle_refusal)
+        let substrate = node.map(|node| node.as_ref() as &dyn RouteSubstrate);
+        self.mirror.remove(substrate, id).await
     }
     async fn route_list(
         &self,
         node: Option<&Arc<MeshNode>>,
     ) -> Result<Vec<EgressRoute>, EgressError> {
-        let Some(node) = node else {
-            return Ok(Vec::new());
-        };
-        let mut routes: Vec<EgressRoute> = node
-            .egress_list()
-            .await
-            .map_err(truffle_refusal)?
-            .into_iter()
-            .map(|r| EgressRoute {
-                id: r.id,
-                target: r.target,
-                listen: r.listen,
-            })
-            .collect();
-        routes.sort_by(|a, b| a.id.cmp(&b.id));
-        Ok(routes)
+        match node {
+            Some(node) => RouteSubstrate::list(node.as_ref()).await,
+            None => Ok(Vec::new()),
+        }
     }
     async fn http_proxy(&self, node: Option<&Arc<MeshNode>>) -> Result<ProxyGrant, EgressError> {
         let node = node.ok_or(EgressError::MeshDown)?;
         let config = node.egress_http_proxy().await.map_err(truffle_refusal)?;
         Ok(ProxyGrant {
             address: config.address,
-            // the plan names no username for E3's Basic challenge; this lane
-            // assumes the same fixed one — the petition window's build checks it
+            // E3's Basic challenge takes ANY username (`Node::egress_http_proxy`,
+            // as built), so the SOCKS5's constant serves both answers
             username: truffle_core::egress::LOOPBACK_SOCKS5_USERNAME.to_string(),
             credential: config.credential,
         })
     }
     async fn reset(&self) -> usize {
-        let mut bound = self.bound.lock().await;
-        let dropped = bound.len();
-        bound.clear();
-        dropped
+        self.mirror.reset().await
     }
 }
 
@@ -709,5 +869,305 @@ mod tests {
         let shown = format!("{grant:?}");
         assert!(shown.contains("127.0.0.1:1080"), "{shown}");
         assert!(!shown.contains("hunter2"), "{shown}");
+    }
+
+    // ---- D6: the mirror yields to the sidecar's table ----
+
+    const OTHER: &str = "other.tail1234.ts.net:9422";
+
+    /// The sidecar's route table as `egress.go` keeps it: an add refuses ANY
+    /// id it holds (`EGRESS_EXISTS`, the same target included), and an id
+    /// reserved by an add still in flight is refused too but NOT listed.
+    /// `next_add` scripts one refusal; with `lands` the route binds anyway,
+    /// which is the core's 20 s timeout answering while the sidecar finishes.
+    #[derive(Default)]
+    struct ScriptedSidecar {
+        table: std::sync::Mutex<BTreeMap<String, EgressRoute>>,
+        in_flight: std::sync::Mutex<Vec<String>>,
+        next_add: std::sync::Mutex<Option<(EgressError, bool)>>,
+        calls: std::sync::Mutex<Vec<String>>,
+        port: std::sync::atomic::AtomicU16,
+    }
+
+    impl ScriptedSidecar {
+        fn holding(id: &str, target: &str) -> Self {
+            let sidecar = Self::default();
+            sidecar.table.lock().unwrap().insert(
+                id.into(),
+                EgressRoute {
+                    id: id.into(),
+                    target: target.into(),
+                    listen: "127.0.0.1:47001".into(),
+                },
+            );
+            sidecar
+        }
+        fn calls(&self) -> Vec<String> {
+            self.calls.lock().unwrap().clone()
+        }
+        fn listed(&self) -> Vec<String> {
+            self.table.lock().unwrap().keys().cloned().collect()
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl RouteSubstrate for ScriptedSidecar {
+        async fn add(
+            &self,
+            id: &str,
+            target: &str,
+            _login: Option<&str>,
+        ) -> Result<EgressRoute, EgressError> {
+            self.calls.lock().unwrap().push(format!("add {id}"));
+            let mut table = self.table.lock().unwrap();
+            let reserved = self.in_flight.lock().unwrap().iter().any(|held| held == id);
+            if table.contains_key(id) || reserved {
+                return Err(coded_refusal(
+                    "EGRESS_EXISTS".into(),
+                    "an egress route with this id already exists".into(),
+                ));
+            }
+            let port = 48_000 + self.port.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            let route = EgressRoute {
+                id: id.into(),
+                target: target.into(),
+                listen: format!("127.0.0.1:{port}"),
+            };
+            match self.next_add.lock().unwrap().take() {
+                Some((refusal, lands)) => {
+                    if lands {
+                        table.insert(id.into(), route);
+                    }
+                    Err(refusal)
+                }
+                None => {
+                    table.insert(id.into(), route.clone());
+                    Ok(route)
+                }
+            }
+        }
+        async fn remove(&self, id: &str) -> Result<(), EgressError> {
+            self.calls.lock().unwrap().push(format!("remove {id}"));
+            match self.table.lock().unwrap().remove(id) {
+                Some(_) => Ok(()),
+                None => Err(coded_refusal(
+                    "NOT_FOUND".into(),
+                    "no egress route with this id".into(),
+                )),
+            }
+        }
+        async fn list(&self) -> Result<Vec<EgressRoute>, EgressError> {
+            self.calls.lock().unwrap().push("list".into());
+            Ok(self.table.lock().unwrap().values().cloned().collect())
+        }
+    }
+
+    /// The core's own words when its 20 s reply budget runs out
+    /// (`egress_rpc`), as `truffle_refusal` classes them.
+    fn timed_out() -> EgressError {
+        EgressError::Failed("network error: sidecar error: egress:add timed out".into())
+    }
+
+    #[tokio::test]
+    async fn a_timed_out_add_that_landed_is_the_route_and_a_re_add_answers_it() {
+        let sidecar = ScriptedSidecar::default();
+        *sidecar.next_add.lock().unwrap() = Some((timed_out(), true));
+        let mirror = RouteMirror::default();
+        let first = mirror.add(&sidecar, "r1", TARGET, None).await;
+        let landed = sidecar.table.lock().unwrap().get("r1").cloned();
+        let landed = landed.expect("the sidecar bound it");
+        assert_eq!(
+            first,
+            Ok(landed.clone()),
+            "the table answers, not the timeout"
+        );
+        assert_eq!(mirror.add(&sidecar, "r1", TARGET, None).await, Ok(landed));
+        assert_eq!(
+            sidecar.calls(),
+            vec!["add r1", "list"],
+            "the re-add is the mirror's answer, never a second bind"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_exists_refusal_names_the_holders_target_never_the_sidecars_message() {
+        // a route the sidecar holds and the mirror lost (a late add), aimed elsewhere
+        let elsewhere = ScriptedSidecar::holding("r1", OTHER);
+        assert_eq!(
+            RouteMirror::default()
+                .add(&elsewhere, "r1", TARGET, None)
+                .await,
+            Err(EgressError::Conflict {
+                bound_target: OTHER.into()
+            })
+        );
+        // aimed at the same target, it simply IS the route
+        let same = ScriptedSidecar::holding("r1", TARGET);
+        let mirror = RouteMirror::default();
+        let adopted = mirror.add(&same, "r1", TARGET, None).await;
+        assert_eq!(
+            adopted.map(|route| route.listen),
+            Ok("127.0.0.1:47001".into())
+        );
+        assert_eq!(
+            mirror.remove(Some(&same), "r1").await,
+            Ok(()),
+            "and it is removable"
+        );
+    }
+
+    #[tokio::test]
+    async fn remove_reaches_the_sidecar_for_a_route_the_mirror_never_held() {
+        let sidecar = ScriptedSidecar::holding("r1", TARGET);
+        let mirror = RouteMirror::default();
+        assert_eq!(mirror.remove(Some(&sidecar), "r1").await, Ok(()));
+        assert!(sidecar.listed().is_empty(), "the listener left the sidecar");
+        assert_eq!(
+            mirror.remove(Some(&sidecar), "r1").await,
+            Err(EgressError::NotFound),
+            "a second remove hears the sidecar's NOT_FOUND"
+        );
+    }
+
+    #[tokio::test]
+    async fn an_add_still_in_flight_on_the_sidecar_stays_the_substrates_refusal() {
+        let sidecar = ScriptedSidecar::default();
+        sidecar.in_flight.lock().unwrap().push("r1".into());
+        let refused = RouteMirror::default()
+            .add(&sidecar, "r1", TARGET, None)
+            .await;
+        assert!(
+            matches!(refused, Err(EgressError::Failed(ref m)) if m.starts_with("[EGRESS_EXISTS] ")),
+            "no holder is listed, so no conflict can be named: {refused:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn a_refused_add_stands_verbatim_and_binds_nothing() {
+        let sidecar = ScriptedSidecar::default();
+        let refusal = coded_refusal(
+            "TARGET_NOT_PEER".into(),
+            "studio.tail1234.ts.net is not a node of this node's tailnet".into(),
+        );
+        *sidecar.next_add.lock().unwrap() = Some((refusal.clone(), false));
+        let mirror = RouteMirror::default();
+        assert_eq!(mirror.add(&sidecar, "r1", TARGET, None).await, Err(refusal));
+        assert!(sidecar.listed().is_empty());
+        assert!(
+            mirror.add(&sidecar, "r1", TARGET, None).await.is_ok(),
+            "nothing stale was cached: the next add binds"
+        );
+    }
+
+    #[tokio::test]
+    async fn with_no_node_a_mirrored_route_died_with_it() {
+        let sidecar = ScriptedSidecar::default();
+        let mirror = RouteMirror::default();
+        mirror.add(&sidecar, "r1", TARGET, None).await.unwrap();
+        assert_eq!(mirror.remove(None, "r1").await, Ok(()));
+        assert_eq!(mirror.remove(None, "r1").await, Err(EgressError::NotFound));
+        mirror.add(&sidecar, "r2", OTHER, None).await.unwrap();
+        assert_eq!(mirror.reset().await, 1);
+        assert_eq!(mirror.reset().await, 0);
+    }
+
+    #[test]
+    fn the_sidecars_codes_keep_their_class() {
+        let class = |code: &str| coded_refusal(code.into(), "m".into());
+        assert_eq!(class("NOT_FOUND"), EgressError::NotFound);
+        for code in ["NOT_RUNNING", "NOT_READY"] {
+            assert_eq!(class(code), EgressError::MeshDown, "{code}");
+        }
+        for code in [
+            "TARGET_NOT_PEER",
+            "LOGIN_REFUSED",
+            "LOGIN_UNKNOWN",
+            "INVALID_TARGET",
+            "INVALID_LOGIN",
+        ] {
+            let refused = EgressError::Refused {
+                code: code.into(),
+                message: "m".into(),
+            };
+            assert_eq!(class(code), refused, "{code} is the caller's to fix");
+        }
+        for code in [
+            "EGRESS_EXISTS",
+            "LISTEN_ERROR",
+            "STATUS_UNAVAILABLE",
+            "INTERNAL",
+            "INVALID_COMMAND",
+            "LOOPBACK_ERROR",
+            "SERVE_ERROR",
+            "DIAL_FAILED",
+            "A_CODE_A_LATER_SIDECAR_ADDS",
+        ] {
+            let failed = EgressError::Failed(format!("[{code}] m"));
+            assert_eq!(class(code), failed, "{code} is the substrate's");
+        }
+    }
+
+    /// The real arm's error mapping, against the crate as built. Runs only
+    /// with the feature on (the local patch): the exhaustive match in
+    /// `truffle_refusal` is the compile-time half of the same check.
+    #[cfg(feature = "truffle-egress")]
+    #[test]
+    fn every_node_error_lands_on_one_arm() {
+        use truffle_core::network::NetworkError;
+        use truffle_core::NodeError;
+        let net = NodeError::Network;
+        assert_eq!(truffle_refusal(NodeError::Stopped), EgressError::MeshDown);
+        assert_eq!(
+            truffle_refusal(net(NetworkError::NotRunning)),
+            EgressError::MeshDown
+        );
+        assert_eq!(
+            truffle_refusal(net(NetworkError::Unsupported(
+                "sidecar protocol v5 predates RFC 026 egress (egress:add)".into()
+            ))),
+            EgressError::Unsupported
+        );
+        assert_eq!(
+            truffle_refusal(net(NetworkError::EgressError {
+                code: "LOGIN_REFUSED".into(),
+                message: "the node's login gate refuses it".into(),
+            })),
+            EgressError::Refused {
+                code: "LOGIN_REFUSED".into(),
+                message: "the node's login gate refuses it".into(),
+            }
+        );
+        assert_eq!(
+            truffle_refusal(net(NetworkError::EgressError {
+                code: "NOT_FOUND".into(),
+                message: "no egress route with this id".into(),
+            })),
+            EgressError::NotFound
+        );
+        assert_eq!(
+            truffle_refusal(net(NetworkError::EgressError {
+                code: "LISTEN_ERROR".into(),
+                message: "address in use".into(),
+            })),
+            EgressError::Failed("[LISTEN_ERROR] address in use".into())
+        );
+        assert_eq!(
+            truffle_refusal(net(NetworkError::SidecarError(
+                "egress:add timed out".into()
+            ))),
+            timed_out(),
+            "the core's timeout reads as the mirror's tests assume"
+        );
+        for (error, shown) in [
+            (
+                net(NetworkError::BridgeError("closed".into())),
+                "network error: bridge error: closed",
+            ),
+            (NodeError::PeerGone("p".into()), "peer gone: p"),
+            (NodeError::NotImplemented("x".into()), "not implemented: x"),
+            (NodeError::BuildError("b".into()), "build error: b"),
+        ] {
+            assert_eq!(truffle_refusal(error), EgressError::Failed(shown.into()));
+        }
     }
 }
