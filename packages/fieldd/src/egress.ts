@@ -121,7 +121,7 @@ export interface EgressDialOptions {
  * socket it holds is a stand-in that is CONNECTING until the path is known and
  * then forwards every event of the real one. */
 export function egressWebSocket(opts: EgressDialOptions): WsCtor {
-  const open = async (url: string): Promise<WsLike> => {
+  const open = async (url: string, caller: { closedByCaller: boolean }): Promise<WsLike> => {
     const path = await opts.path();
     opts.onPath?.(path);
     if (path.kind === "direct") {
@@ -141,7 +141,17 @@ export function egressWebSocket(opts: EgressDialOptions): WsCtor {
       ...(opts.socksTimeoutMs !== undefined ? { timeoutMs: opts.socksTimeoutMs } : {}),
     });
     const socket = new WebSocket(url, { agent, perMessageDeflate: false });
-    socket.on("error", (error) => opts.onDialError?.(error));
+    // A DIAL failure only: an error after the socket opened is a dropped
+    // session (FielddClient's reconnect law owns it), and the error `ws`
+    // raises when its caller closes a socket still connecting is the
+    // caller's own act, not a refusal.
+    let opened = false;
+    socket.once("open", () => {
+      opened = true;
+    });
+    socket.on("error", (error) => {
+      if (!opened && !caller.closedByCaller) opts.onDialError?.(error);
+    });
     return socket as unknown as WsLike;
   };
   return class EgressDialedSocket extends DeferredSocket {
@@ -161,6 +171,9 @@ type WsEvent = "open" | "message" | "close" | "error";
 class DeferredSocket implements WsLike {
   private inner: WsLike | null = null;
   private closedEarly = false;
+  /** the caller (FielddClient) closed this socket — read by the dial so the
+   * close it caused is not reported as a refusal */
+  closedByCaller = false;
   private readonly listeners: Record<WsEvent, Array<(ev: unknown) => void>> = {
     open: [],
     message: [],
@@ -168,8 +181,11 @@ class DeferredSocket implements WsLike {
     error: [],
   };
 
-  constructor(url: string, open: (url: string) => Promise<WsLike>) {
-    open(url).then(
+  constructor(
+    url: string,
+    open: (url: string, caller: { closedByCaller: boolean }) => Promise<WsLike>,
+  ) {
+    open(url, this).then(
       (inner) => {
         if (this.closedEarly) {
           inner.close();
@@ -200,6 +216,7 @@ class DeferredSocket implements WsLike {
   }
 
   close(code?: number, reason?: string): void {
+    this.closedByCaller = true;
     if (this.inner !== null) {
       this.inner.close(code, reason);
       return;

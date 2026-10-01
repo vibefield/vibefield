@@ -199,6 +199,33 @@ describe("DS-1 — PeerLink dials a peer's door through the node", () => {
     expect(log.events("fieldd.mesh.egress.dial_through_node")).toEqual([]);
   });
 
+  it("does not report its own close of a dial still in flight as a refusal", async () => {
+    // a proxy that accepts and never answers: the dial is mid-handshake when
+    // the link is torn down, and `ws` raises an error for that close
+    const silent = await startFakeSocks5({
+      ...CREDENTIAL,
+      route: () => undefined,
+      quirk: "silent",
+    });
+    cleanup.push(() => silent.close());
+    const log = capture();
+    const { peers, asked } = link({
+      endpoint: `http://${DOOR_HOST}:9423`,
+      source: { egressProxy: async () => ({ address: silent.address, ...credential() }) },
+      logger: log.logger,
+    });
+    const pending = peers.request("dev-b", "device.list", {}).catch((e: unknown) => e);
+    const deadline = Date.now() + 5_000;
+    while (silent.connections() === 0 || asked() === 0) {
+      if (Date.now() > deadline) throw new Error("the dial never reached the proxy");
+      await new Promise((r) => setTimeout(r, 10));
+    }
+    peers.dispose();
+    await pending;
+    await new Promise((r) => setTimeout(r, 50));
+    expect(log.events("fieldd.mesh.egress.dial_refused")).toEqual([]);
+  });
+
   it("leaves the C5 seam alone: an injected ws-ctor IS the dial, and egress is never asked", async () => {
     const d = await door();
     const { WebSocket } = await import("ws");
