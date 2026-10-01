@@ -8,6 +8,7 @@ import {
   type ErrorKind,
   Hello,
   IdempotencyKey,
+  isKeyedForward,
   MESH_CONTROL_LIMITS,
   METHODS,
   type MethodDef,
@@ -968,7 +969,7 @@ export class ProductApi extends EventEmitter {
           typeof target === "string" && this.forwarder !== null && target !== this.ownDeviceId?.();
         // a keyed forward: a mutation, never a subscription — `subscription`
         // read by PRESENCE (SP-1's descriptor makes it an object)
-        if (routed && def?.idempotent === false && !def?.subscription) inboundKey = key.data;
+        if (routed && def !== undefined && isKeyedForward(def)) inboundKey = key.data;
         else
           this.logger.debug(
             "fieldd.product_api.forward_key_set_aside",
@@ -1090,8 +1091,7 @@ export class ProductApi extends EventEmitter {
       // receipt journal: applied once, its retry answered from the receipt
       const receiptKey =
         inboundKey !== undefined &&
-        def.idempotent === false &&
-        !def.subscription && // by presence: SP-1's descriptor makes it an object
+        isKeyedForward(def) && // contracts' one statement of the keyed-forward rule
         callCtx.principal.kind === "peer-fieldd"
           ? inboundKey
           : undefined;
@@ -1182,8 +1182,7 @@ export class ProductApi extends EventEmitter {
           // relayed call restates what that peer said); never from params
           // DS-2 — every forwarded MUTATION carries a key (the caller's, a
           // relaying peer's, else a fresh one); a read carries none
-          const idempotencyKey =
-            def.idempotent === false ? (inboundKey ?? mintForwardKey()) : undefined;
+          const idempotencyKey = isKeyedForward(def) ? (inboundKey ?? mintForwardKey()) : undefined;
           const outbound: OutboundEnvelope = {
             onBehalfOf: forwardProvenance(callCtx, {
               deviceId: this.ownDeviceId?.() ?? "",
