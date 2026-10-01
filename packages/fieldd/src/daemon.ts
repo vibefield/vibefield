@@ -169,7 +169,7 @@ import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
-import { DocSyncService, docHostPeers, type LaneInfo } from "./doc-sync";
+import { DocSyncService, docHostPeers, isDocHostPeer, type LaneInfo } from "./doc-sync";
 import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
 import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
@@ -946,6 +946,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // next commit or the next peer-returns re-greet, and a lane is cheap and
       // mortal by design (D5).
       isSelfPeer: (peer) => devicesForAgents?.isSelfPeer(peer) ?? false,
+      // DS-5c (D3; UA-P-D5) — and the inbound half of the DOC peer set: the
+      // account gate admits a phone, the roster row's `docHost` does not. Same
+      // dial keyspace (`tailscaleId`), same predicate as `meshPeers` above, and
+      // the same boot window: refused until the roster is bound.
+      isDocHost: (peer) => {
+        const roster = devicesForAgents;
+        return roster !== null && isDocHostPeer(roster.list(), peer);
+      },
       // UA-D7 — the one place per-doc intent and user posture are folded
       // together; the service itself never learns that a posture exists.
       resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), syncPosture),

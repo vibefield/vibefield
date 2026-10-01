@@ -22,11 +22,18 @@ import {
   MESHDATA_INBOUND_LANE_ID_BASE,
   type MeshSyncPosture,
 } from "@vibefield/contracts";
+import type { LogFields, Logger } from "@vibefield/logging";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
 import { resolveSyncIntent } from "../src/app-preferences";
 import { contentIdOf, DocumentService } from "../src/doc-service";
-import { DocSyncService, type LaneBytes, type LaneControl, type LaneInfo } from "../src/doc-sync";
+import {
+  type DocSyncOptions,
+  DocSyncService,
+  type LaneBytes,
+  type LaneControl,
+  type LaneInfo,
+} from "../src/doc-sync";
 
 let dirs: string[] = [];
 afterEach(async () => {
@@ -117,7 +124,33 @@ async function until(predicate: () => boolean | Promise<boolean>, label: string)
   throw new Error(`timed out waiting for: ${label}`);
 }
 
-function harness(peerIds: string[] = ["peer-a"], isSelfPeer?: (peer: string) => boolean) {
+interface CapturedLog {
+  event: string;
+  attrs?: LogFields | undefined;
+}
+
+/** Every log line, by event name — the refusals here are logged, and a log
+ * line is part of what a refusal promises. */
+function captureLogger(events: CapturedLog[]): Logger {
+  const logger: Logger = {
+    child: () => logger,
+    trace: (event, _message, attrs) => events.push({ event, attrs }),
+    debug: (event, _message, attrs) => events.push({ event, attrs }),
+    info: (event, _message, attrs) => events.push({ event, attrs }),
+    warn: (event, _message, attrs) => events.push({ event, attrs }),
+    error: (event, _message, _error, attrs) => events.push({ event, attrs }),
+    fatal: (event, _message, _error, attrs) => events.push({ event, attrs }),
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
+
+function harness(
+  peerIds: string[] = ["peer-a"],
+  isSelfPeer?: (peer: string) => boolean,
+  /** DS-5c — any further DocSyncService options (the doc-host gate, a logger). */
+  extra: Partial<DocSyncOptions> = {},
+) {
   const dataDir = mkdtempSync(join(tmpdir(), "vf-syncsvc-"));
   dirs.push(dataDir);
   const control = new FakeControl();
@@ -140,6 +173,7 @@ function harness(peerIds: string[] = ["peer-a"], isSelfPeer?: (peer: string) => 
     peers: async () => [...peerState].map(([id, online]) => ({ id, online })),
     resolveIntent: (docId) => resolveSyncIntent(docs.syncIntentOf(docId), posture.value),
     ...(isSelfPeer !== undefined ? { isSelfPeer } : {}),
+    ...extra,
   });
   return { docs, control, bytes, sync, peerState, posture };
 }
@@ -954,6 +988,104 @@ describe("UA-P-0f — documents cross only within one account", () => {
     bytes.deliver(laneId, record(new Uint8Array([7, 0, 0, 9])));
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0).toBe(before);
+    expect(control.closed).toContain(laneId);
+  });
+});
+
+describe("D3 (UA-P-D5) — a phone never receives a document, inbound included", () => {
+  // The account gate ADMITS a phone: it is this account's, so it is in the
+  // self-peer set. What tells it apart is the roster: a desktop's row says
+  // `docHost`, and a phone publishes no row at all. Before DS-5c the inbound
+  // half asked only the account gate, so a phone that sent a VERSION was
+  // claimed, answered and given a return lane — D5 held outbound only.
+  const docHost = (peer: string): boolean => peer === "desk-b";
+  const sizeOf = (docs: DocumentService, docId: string): number =>
+    docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0;
+
+  it("refuses a phone's lane the account gate admits: unclaimed, closed, no return lane, logged", async () => {
+    const logs: CapturedLog[] = [];
+    const { docs, control, bytes, sync } = harness(["desk-b"], () => true, {
+      isDocHost: docHost,
+      logger: captureLogger(logs),
+    });
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 21;
+    const before = sizeOf(docs, docId);
+
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "phone",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.deliver(
+      laneId,
+      encodeDocSyncVersion(
+        { baseEpoch: 0, hasCheckpoint: false, loro: 1 },
+        new LoroDoc().oplogVersion().encode(),
+      ),
+    );
+    bytes.deliver(laneId, record(new Uint8Array([7, 0, 0, 9])));
+    await new Promise((resolve) => setTimeout(resolve, 60));
+
+    // left UNCLAIMED, exactly like the foreign-account refusal: no handler…
+    expect(bytes.claimed(laneId)).toBe(false);
+    // …nothing it sent landed…
+    expect(sizeOf(docs, docId)).toBe(before);
+    // …no return lane, so no checkpoint and no update ever left toward it…
+    expect(control.opened.some((o) => o.peer === "phone")).toBe(false);
+    // …and the lane is closed, so the phone is not left holding a dead stream.
+    expect(control.closed).toContain(laneId);
+    expect(logs.map((l) => l.event)).toContain("fieldd.doc_sync.lane_refused_not_doc_host");
+  });
+
+  it("admits the same lane from a desktop whose roster row says docHost", async () => {
+    // the CONTROL: one bit differs between the rows — what the roster says
+    const { docs, control, bytes, sync } = harness(["desk-b"], () => true, {
+      isDocHost: docHost,
+    });
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 22;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "desk-b",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.deliver(laneId, record(new Uint8Array([7, 0, 0, 9])));
+    await until(() => sizeOf(docs, docId) > ice1().byteLength, "the desktop's record to land");
+    expect(bytes.claimed(laneId)).toBe(true);
+    expect(control.closed).not.toContain(laneId);
+    await until(() => control.opened.some((o) => o.peer === "desk-b"), "the return lane");
+  });
+
+  it("the account gate still answers first: a foreign desktop is refused as foreign, not as a phone", async () => {
+    const logs: CapturedLog[] = [];
+    const { docs, control, sync } = harness(["desk-b"], (peer) => peer === "desk-b", {
+      isDocHost: () => true,
+      logger: captureLogger(logs),
+    });
+    const docId = await seeded(docs);
+    await sync.start();
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 23;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "someone-else",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const events = logs.map((l) => l.event);
+    expect(events).toContain("fieldd.doc_sync.lane_refused_foreign_account");
+    expect(events).not.toContain("fieldd.doc_sync.lane_refused_not_doc_host");
     expect(control.closed).toContain(laneId);
   });
 });

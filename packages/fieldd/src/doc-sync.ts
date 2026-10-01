@@ -119,21 +119,29 @@ export interface SyncPeer {
  * slice has not arrived yet is out until it does; the roster change that
  * brings it re-runs eager replication. */
 export function docHostPeers(
-  roster: ReadonlyArray<{
-    self: boolean;
-    tailscaleId?: string | undefined;
-    /** Absent reads as "did not say", which for a promise to host is a no. */
-    capabilities?: { docHost: boolean } | undefined;
-  }>,
+  roster: ReadonlyArray<DocHostRosterRow>,
   selfPeers: readonly SyncPeer[],
 ): SyncPeer[] {
-  const hosts = new Set<string>();
+  return selfPeers.filter((peer) => isDocHostPeer(roster, peer.id));
+}
+
+/** A roster row as the doc peer set reads it. */
+export interface DocHostRosterRow {
+  self: boolean;
+  tailscaleId?: string | undefined;
+  /** Absent reads as "did not say", which for a promise to host is a no. */
+  capabilities?: { docHost: boolean } | undefined;
+}
+
+/** DS-5c (D3) — the ONE predicate both halves of UA-P-D5 ask: is this dial-
+ * keyspace peer a desktop whose roster row says `docHost`? `docHostPeers`
+ * filters the outbound fan-out with it; the inbound gate (`isDocHost`) asks it
+ * of every lane a peer opens. A phone publishes no row, so it is never one. */
+export function isDocHostPeer(roster: ReadonlyArray<DocHostRosterRow>, peer: string): boolean {
   for (const row of roster) {
-    if (!row.self && row.tailscaleId !== undefined && row.capabilities?.docHost === true) {
-      hosts.add(row.tailscaleId);
-    }
+    if (!row.self && row.tailscaleId === peer && row.capabilities?.docHost === true) return true;
   }
-  return selfPeers.filter((peer) => hosts.has(peer.id));
+  return false;
 }
 
 /** The roster view the daemon wires in post-construction (DeviceService is
@@ -172,6 +180,19 @@ export interface DocSyncOptions {
    * ever consulting that list, so it is asked here. Absent means the pre-UA-P
    * world and admits everyone, which is why the daemon always passes it. */
   isSelfPeer?: (peer: string) => boolean;
+  /** DS-5c (D3; UA-P-D5, design-06 §4: "a phone never receives a document") —
+   * the INBOUND half of the doc peer set: is this `PeerInfo.id` a desktop whose
+   * roster row says `docHost`? The account gate above admits a phone — it is
+   * this account's — so before this seam a phone that sent a VERSION was
+   * claimed, answered and given a return lane, and the law held outbound only
+   * (`docHostPeers`). Asked AFTER the account gate (a foreign peer is refused
+   * as foreign) and fails closed like it: a desktop whose slice has not
+   * arrived is refused now and re-greeted by eager replication when the
+   * roster change that brings it fires. Absent (unit rigs, the pre-roster
+   * world) admits whoever the account gate admits; the daemon always passes it.
+   * A lane names its peer and never its principal, so the roster row is the
+   * whole of what this gate can know. */
+  isDocHost?: (peer: string) => boolean;
   logger?: Logger;
   /** injectable clock — the state tests drive it directly */
   now?: () => number;
@@ -248,6 +269,7 @@ export class DocSyncService {
   readonly #peers: () => Promise<SyncPeer[]>;
   readonly #resolveIntent: (docId: string) => DocSyncIntent;
   readonly #isSelfPeer: ((peer: string) => boolean) | undefined;
+  readonly #isDocHost: ((peer: string) => boolean) | undefined;
   readonly #logger: Logger;
   readonly #now: () => number;
   readonly #allocateLaneId: () => number;
@@ -290,6 +312,7 @@ export class DocSyncService {
     this.#allocateLaneId = opts.allocateLaneId;
     this.#resolveIntent = opts.resolveIntent ?? (() => "sync");
     this.#isSelfPeer = opts.isSelfPeer;
+    this.#isDocHost = opts.isDocHost;
     this.#now = opts.now ?? Date.now;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "doc.sync" });
     this.#maxRecordBytes = opts.maxRecordBytes ?? DOC_SYNC_MAX_RECORD_BYTES;
@@ -658,6 +681,25 @@ export class DocSyncService {
       this.#logger.warn(
         "fieldd.doc_sync.lane_refused_foreign_account",
         "A peer outside this account opened a doc-sync lane",
+        {
+          laneId: lane.laneId,
+          peer: lane.peer,
+          ...(lane.docId !== undefined ? { docId: lane.docId } : {}),
+        },
+      );
+      void this.#control.close(lane.laneId).catch(() => undefined);
+      return;
+    }
+    // DS-5c (D3) — THE DOC-HOST GATE, second: the peer is this account's, and
+    // a phone is too. UA-P-D5 ("a phone never receives a document") must hold
+    // INBOUND as well — a claimed lane is a return lane, a checkpoint and the
+    // whole update — so a peer whose roster row does not say `docHost` gets the
+    // same shape of "no" as a foreign account: unclaimed, nothing answered, the
+    // lane closed.
+    if (this.#isDocHost !== undefined && !this.#isDocHost(lane.peer)) {
+      this.#logger.warn(
+        "fieldd.doc_sync.lane_refused_not_doc_host",
+        "A peer that hosts no documents opened a doc-sync lane",
         {
           laneId: lane.laneId,
           peer: lane.peer,
