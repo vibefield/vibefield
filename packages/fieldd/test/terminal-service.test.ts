@@ -876,6 +876,9 @@ describe("TerminalService (NF-3, mock native)", () => {
       "terminal.terminate": "terminal.attach",
       "terminal.renewAttach": "terminal.attach",
       "terminal.roster": "terminal.attach",
+      // DS-4: the take's product door, declared for the phone (answers
+      // UNAVAILABLE not_implemented until DS-4b) — gated like every attach door
+      "terminal.takeGeometry": "terminal.attach",
       "terminal.config.read": "settings.manage",
       "terminal.config.write": "settings.manage",
       "terminal.config.validate": "settings.manage",
