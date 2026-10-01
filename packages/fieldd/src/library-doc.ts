@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { join } from "node:path";
 import {
+  DOC_HOST,
   DocHoldersSlice,
   type DocHolding,
   DocLibraryEntry,
@@ -12,6 +13,7 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, type LoroMap } from "loro-crdt";
 import type { SystemDocOwner } from "./doc-service";
+import { type HolderAck, versionFromBase64 } from "./loro-host";
 import { SystemDocFile } from "./system-doc-file";
 
 // The LIBRARY (DS-5, DS-D6 RULED (a); thinking-desktop-sync-plane §5.2) — a
@@ -280,10 +282,34 @@ export interface DocHoldersOptions {
   logger?: Logger;
   /** Coalesce a burst of holding changes into one publish (default 1 s). */
   debounceMs?: number;
+  /** DS-5d — the LEDGER's file: every holder last heard and what it last
+   * acknowledged, kept across restarts. Absent: the ledger lives in memory. */
+  ledgerPath?: string;
+  /** DS-5d — the clock (tests move it). */
+  now?: () => number;
+  /** DS-5d — DOC_HOST.RETIREMENT_MS. The watermark stops waiting for a holder
+   * at this horizon; the ledger forgets one at twice it. */
+  retirementMs?: number;
+}
+
+/** DS-5d — one holder as the ledger remembers it. */
+interface LedgerEntry {
+  /** When it was last heard: the moment its slice left, or (on disk) the
+   * last write while it was still present. */
+  seenAt: number;
+  docs: DocHolding[];
 }
 
 /** `field.docs.v1`, the device-owned holders slice (DS-L2: a device publishes
- * only its own row; peers' rows are held as they were last heard). */
+ * only its own row; peers' rows are held as they were last heard).
+ *
+ * DS-5d — THE LEDGER. A slice expires with its publisher: the store drops a
+ * peer's slice the moment the transport drops the peer. The compaction
+ * watermark has to outlast that — a laptop whose lid closed is still a
+ * holder, carrying edits home, and a trim may not cut under them until
+ * DS-D17's thirty days pass. So every slice heard is remembered here with the
+ * time it was last heard, kept on disk across restarts, and forgotten only
+ * after twice the horizon (the watermark has stopped waiting at once). */
 export class DocHoldersService {
   readonly #opts: DocHoldersOptions;
   readonly #log: Logger;
@@ -292,13 +318,31 @@ export class DocHoldersService {
   #timer: ReturnType<typeof setTimeout> | null = null;
   #dispose: (() => void) | null = null;
   #stopped = false;
+  /** DS-5d — every holder ever heard (present or not), by deviceId. */
+  readonly #ledger = new Map<string, LedgerEntry>();
+  readonly #ledgerFile: SystemDocFile | null;
+  #ledgerTimer: ReturnType<typeof setTimeout> | null = null;
+  /** DS-5d — the ledger can vouch for every holder: it has heard the store at
+   * least once, in this life or one it remembers. Until then it knows of no
+   * holder only because it has heard none — a desktop whose mesh is down at
+   * its first boot is not therefore alone. */
+  #heard = false;
 
   constructor(opts: DocHoldersOptions) {
     this.#opts = opts;
     this.#log = (opts.logger ?? createNoopLogger()).child({ component: "docs.holders" });
+    this.#ledgerFile =
+      opts.ledgerPath === undefined
+        ? null
+        : new SystemDocFile({
+            path: opts.ledgerPath,
+            snapshot: () => new TextEncoder().encode(JSON.stringify(this.#ledgerJson())),
+            logger: this.#log,
+          });
   }
 
   async start(): Promise<void> {
+    await this.#loadLedger();
     const subscription = await this.#opts.mesh.subscribeStoreManaged(STORES.DOCS, (payload, kind) =>
       this.#onStoreEvent(payload, kind),
     );
@@ -344,7 +388,46 @@ export class DocHoldersService {
     return out.sort();
   }
 
+  /** DS-5d — every OTHER holder of `docId` the compaction watermark reckons
+   * with: the ones whose slice is live (seen NOW) and the ones the ledger
+   * remembers (seen when their slice left). Each states the version it
+   * acknowledged — `ackVersion`, or the head of a holder from before DS-5d —
+   * and null when it states none it can be held to (opaque custody, a value
+   * that does not decode): the watermark holds the trim for that one.
+   * NULL as a whole while the ledger has never heard the store: no holder is
+   * known only because none was heard, and the trim waits. */
+  acknowledgements(docId: string): HolderAck[] | null {
+    if (!this.#heard) return null;
+    const self = this.#opts.deviceId();
+    const now = this.#now();
+    const out: HolderAck[] = [];
+    for (const [device, entry] of this.#ledger) {
+      if (device === self) continue;
+      const live = this.#peers.get(device);
+      const held = (live ?? entry.docs).find((doc) => doc.docId === docId);
+      if (held === undefined) continue;
+      const text = held.ackVersion ?? held.headVersion;
+      out.push({
+        device,
+        ack: text === undefined ? null : versionFromBase64(text),
+        seenAt: live !== undefined ? now : entry.seenAt,
+      });
+    }
+    return out;
+  }
+
+  /** DS-5d — write the ledger now (a graceful stop; the rows). */
+  async flush(): Promise<void> {
+    if (this.#ledgerTimer !== null) clearTimeout(this.#ledgerTimer);
+    this.#ledgerTimer = null;
+    await this.#ledgerFile?.persist();
+  }
+
   stop(): void {
+    // DS-5d — what was heard since the last write is not left behind.
+    if (this.#ledgerTimer !== null) {
+      void this.flush().catch(() => undefined);
+    }
     this.#stopped = true;
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#timer = null;
@@ -356,17 +439,28 @@ export class DocHoldersService {
   #onStoreEvent(payload: unknown, kind: "snapshot" | "delta"): void {
     if (kind === "snapshot") {
       const snap = payload as { slices?: Record<string, { data?: unknown }> } | null;
+      const before = new Set(this.#peers.keys());
       this.#peers.clear();
-      if (snap === null || typeof snap?.slices !== "object" || snap.slices === null) return;
-      for (const [deviceId, wrapped] of Object.entries(snap.slices)) {
-        this.#adopt(deviceId, wrapped?.data);
+      if (snap !== null && typeof snap?.slices === "object" && snap.slices !== null) {
+        for (const [deviceId, wrapped] of Object.entries(snap.slices)) {
+          this.#adopt(deviceId, wrapped?.data);
+        }
+        // DS-5d — the store answered: from here the ledger vouches for holders.
+        if (!this.#heard) {
+          this.#heard = true;
+          this.#scheduleLedger();
+        }
       }
+      // DS-5d — present before, absent now: it left while the stream lagged.
+      for (const deviceId of before) if (!this.#peers.has(deviceId)) this.#lastHeard(deviceId);
       return;
     }
     const d = payload as { kind?: unknown; deviceId?: unknown; data?: unknown } | null;
     if (d === null || typeof d.deviceId !== "string") return;
-    if (d.kind === "peerRemoved") this.#peers.delete(d.deviceId);
-    else this.#adopt(d.deviceId, d.data);
+    if (d.kind === "peerRemoved") {
+      this.#peers.delete(d.deviceId);
+      this.#lastHeard(d.deviceId);
+    } else this.#adopt(d.deviceId, d.data);
   }
 
   /** Tolerant reader: a slice that does not parse (an older desktop still
@@ -378,5 +472,87 @@ export class DocHoldersService {
       return;
     }
     this.#peers.set(deviceId, parsed.data.docs);
+    // DS-5d — remembered beyond the slice's life.
+    this.#ledger.set(deviceId, { seenAt: this.#now(), docs: parsed.data.docs });
+    this.#scheduleLedger();
+  }
+
+  // ---- the ledger (DS-5d) ----
+
+  #now(): number {
+    return (this.#opts.now ?? Date.now)();
+  }
+
+  /** Its slice left: it was last heard NOW. */
+  #lastHeard(deviceId: string): void {
+    const entry = this.#ledger.get(deviceId);
+    if (entry === undefined) return;
+    entry.seenAt = this.#now();
+    this.#scheduleLedger();
+  }
+
+  #scheduleLedger(): void {
+    if (this.#ledgerFile === null || this.#stopped || this.#ledgerTimer !== null) return;
+    this.#ledgerTimer = setTimeout(() => {
+      this.#ledgerTimer = null;
+      void this.#ledgerFile?.persist().catch((error: unknown) => {
+        this.#log.warn(
+          "fieldd.docs.holders_ledger_unwritten",
+          "The holders ledger was not written",
+          {
+            error: String(error),
+          },
+        );
+      });
+    }, this.#opts.debounceMs ?? 1_000);
+    this.#ledgerTimer.unref?.();
+  }
+
+  /** What reaches disk: every holder, a PRESENT one stamped now (so a restart
+   * after it left reads when it was last present, not when its slice last
+   * changed), and none unheard for twice the horizon. */
+  #ledgerJson(): { v: 1; heard: boolean; holders: Record<string, LedgerEntry> } {
+    const now = this.#now();
+    const holders: Record<string, LedgerEntry> = {};
+    for (const [deviceId, entry] of this.#ledger) {
+      const live = this.#peers.get(deviceId);
+      if (live === undefined && now - entry.seenAt > this.#forgetAfterMs()) continue;
+      holders[deviceId] =
+        live !== undefined
+          ? { seenAt: now, docs: live }
+          : { seenAt: entry.seenAt, docs: entry.docs };
+    }
+    return { v: 1, heard: this.#heard, holders };
+  }
+
+  #forgetAfterMs(): number {
+    return 2 * (this.#opts.retirementMs ?? DOC_HOST.RETIREMENT_MS);
+  }
+
+  /** The ledger from disk — tolerant per holder; a file that is not JSON is
+   * torn (SystemDocFile keeps it aside and reads the last good copy). */
+  async #loadLedger(): Promise<void> {
+    if (this.#ledgerFile === null) return;
+    const now = this.#now();
+    await this.#ledgerFile.load((bytes) => {
+      const parsed = JSON.parse(new TextDecoder().decode(bytes)) as {
+        v?: unknown;
+        heard?: unknown;
+        holders?: Record<string, { seenAt?: unknown; docs?: unknown }>;
+      } | null;
+      if (parsed === null || parsed.v !== 1 || typeof parsed.holders !== "object") {
+        throw new Error("not a holders ledger");
+      }
+      // A ledger that heard the store in a past life vouches from boot — a
+      // mesh down NOW leaves every remembered holder waited for.
+      if (parsed.heard === true) this.#heard = true;
+      for (const [deviceId, raw] of Object.entries(parsed.holders ?? {})) {
+        const seenAt = raw?.seenAt;
+        const slice = DocHoldersSlice.safeParse({ deviceId, docs: raw?.docs });
+        if (typeof seenAt !== "number" || !slice.success) continue;
+        if (now - seenAt > this.#forgetAfterMs()) continue;
+        this.#ledger.set(deviceId, { seenAt, docs: slice.data.docs });
+      }
+    });
   }
 }

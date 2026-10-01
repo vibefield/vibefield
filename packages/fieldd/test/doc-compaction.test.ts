@@ -628,3 +628,38 @@ describe("DS-5d — a holder's acknowledgement (the holders slice)", () => {
     docs.dispose();
   });
 });
+
+describe("DS-5d — the host and the holders slice", () => {
+  it("a holders source that cannot vouch for every holder holds the trim", async () => {
+    // The holders ledger answers null until it has heard the store once: a
+    // desktop whose mesh is down at its first boot is not therefore alone.
+    const docs = service(undefined, { compaction: false });
+    const { docId } = await journaled(docs);
+    docs.setAcknowledgements(() => null);
+    expect(await docs.compact(docId)).toEqual({ compacted: false, reason: "holders-unknown" });
+    expect(docs.list()[0]?.baseEpoch).toBe(0);
+    docs.dispose();
+  });
+
+  it("tells the slice to republish when a window opens, reads or closes, and when an epoch moves", async () => {
+    // The acknowledgement moves with the window's floor, with no commit to
+    // carry it: an open window whose floor lags must reach other desktops'
+    // watermarks before they trim, not on the next save.
+    const docs = service(undefined, { compaction: false });
+    const { docId, low } = await journaled(docs);
+    let told = 0;
+    docs.onHoldingsChanged(() => {
+      told += 1;
+    });
+    docs.writerAttached(docId);
+    expect(told).toBe(1);
+    await docs.readDocForWindow(docId);
+    expect(told).toBe(2);
+    docs.writerDetached(docId);
+    expect(told).toBe(3);
+    docs.setAcknowledgements(() => [{ device: "studio", ack: low, seenAt: Date.now() }]);
+    expect(await docs.compact(docId)).toMatchObject({ compacted: true });
+    expect(told).toBe(4);
+    docs.dispose();
+  });
+});

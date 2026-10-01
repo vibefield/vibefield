@@ -2978,9 +2978,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           return standing === undefined || standing.state === "in-step";
         }),
       logger: logger.child({ component: "docs.holders" }),
+      // DS-5d — the ledger outlives each slice (a slice leaves with its
+      // publisher): the compaction watermark waits for a desktop until
+      // DS-D17's horizon, across this daemon's restarts.
+      ledgerPath: join(config.dataDir, ...LAYOUT.REGISTRIES_DIR, `${STORES.DOCS}.holders.json`),
     });
     docHolders = holders;
     docs.setHomes((docId) => holders.homesOf(docId));
+    // DS-5d — the watermark's holders; and the slice republishes whenever what
+    // this desktop acknowledges moves without a commit (a window's floor).
+    docs.setAcknowledgements((docId) => holders.acknowledgements(docId));
+    docs.onHoldingsChanged(() => holders.schedule());
     docs.onCatalogChanged((change) => {
       holders.schedule();
       // DS-5 (DS-D7) — a canvas another desktop made is fetched on adoption,

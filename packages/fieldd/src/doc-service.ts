@@ -180,6 +180,9 @@ export type CompactOutcome =
         /** The watermark's two holds (loro-host.ts `watermark`). */
         | "unacknowledged"
         | "ahead-of-here"
+        /** The holders ledger cannot vouch for every holder yet (it has never
+         * heard the store): none known is not the same as none. */
+        | "holders-unknown"
         /** The watermark is at or below the current root. */
         | "nothing-to-trim"
         /** The trial: a base no doc could load, or one that lost ops. */
@@ -377,9 +380,10 @@ export class DocumentService {
     retirementMs: number;
   };
   /** DS-5d — every OTHER holder of a canvas, as the holders slice and its
-   * ledger know them (DocHoldersService). None until wired: a desktop alone
-   * waits for nobody. */
-  private acknowledgements: (docId: string) => HolderAck[] = () => [];
+   * ledger know them (DocHoldersService); null while they cannot be vouched
+   * for. None until wired: a desktop alone waits for nobody. */
+  private acknowledgements: (docId: string) => HolderAck[] | null = () => [];
+  private readonly holdingsListeners = new Set<() => void>();
   /** DS-5d — canvases past a threshold whose compaction is held (a window, a
    * holder); retried on the next append and when the window closes. */
   private readonly wantsCompaction = new Set<string>();
@@ -955,12 +959,15 @@ export class DocumentService {
 
   writerAttached(docId: string): void {
     this.writers.add(docId);
+    // DS-5d — until it reads, this window is one nobody can vouch for.
+    this.holdingsChanged();
   }
 
   writerDetached(docId: string): void {
     this.writers.delete(docId);
     // DS-5d — the window's floor leaves with it; a compaction it held runs.
     this.windowFloors.delete(docId);
+    this.holdingsChanged();
     if (this.wantsCompaction.has(docId)) this.requestCompaction(docId);
   }
 
@@ -1797,9 +1804,30 @@ export class DocumentService {
   // ---- compaction (DS-5d, design-06 §4) ----
 
   /** The holders the watermark waits for: every OTHER desktop holding a
-   * canvas, with what it acknowledged and when it was last heard. */
-  setAcknowledgements(source: (docId: string) => HolderAck[]): void {
+   * canvas, with what it acknowledged and when it was last heard — or null
+   * while the source cannot vouch for all of them (the trim holds). */
+  setAcknowledgements(source: (docId: string) => HolderAck[] | null): void {
     this.acknowledgements = source;
+  }
+
+  /** Fires when what this desktop's holders slice would say moved without a
+   * commit: a window opened, read or closed (its floor is the
+   * acknowledgement), or an epoch moved. The slice republishes on it. */
+  onHoldingsChanged(fn: () => void): () => void {
+    this.holdingsListeners.add(fn);
+    return () => this.holdingsListeners.delete(fn);
+  }
+
+  private holdingsChanged(): void {
+    for (const fn of this.holdingsListeners) {
+      try {
+        fn();
+      } catch (error) {
+        this.logger.warn("fieldd.docs.holdings_listener_failed", "A holdings listener threw", {
+          error: String(error),
+        });
+      }
+    }
   }
 
   /** Fires when a canvas's epoch moved here, or the library says it should. */
@@ -1905,12 +1933,9 @@ export class DocumentService {
     }
     const framed = liftIce1(checkpoint);
     if (!framed.ok) return { compacted: false, reason: "opaque" };
-    const mark = watermark(
-      hosted.version(),
-      this.acknowledgements(docId),
-      this.now(),
-      this.compaction.retirementMs,
-    );
+    const holders = this.acknowledgements(docId);
+    if (holders === null) return { compacted: false, reason: "holders-unknown" };
+    const mark = watermark(hosted.version(), holders, this.now(), this.compaction.retirementMs);
     if (!mark.ok) return { compacted: false, reason: mark.reason, device: mark.device };
     if (covers(hosted.rootVersion(), mark.version)) {
       return { compacted: false, reason: "nothing-to-trim" };
@@ -1998,6 +2023,7 @@ export class DocumentService {
       retired: mark.retired.length,
     });
     this.emitEpoch(docId, "compacted");
+    this.holdingsChanged();
     return {
       compacted: true,
       baseEpoch,
@@ -2045,8 +2071,10 @@ export class DocumentService {
       const hosted = await this.hostedNow(docId);
       // DS-5d — the epoch this window builds on, and what it can be held to.
       this.servedEpoch.set(docId, read.meta.baseEpoch);
-      if (hosted !== null && this.writers.has(docId))
+      if (hosted !== null && this.writers.has(docId)) {
         this.windowFloors.set(docId, hosted.version());
+        this.holdingsChanged();
+      }
       return { ...read, version: hosted?.encodedVersion() ?? null };
     });
   }
