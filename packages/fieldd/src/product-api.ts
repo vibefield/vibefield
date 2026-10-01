@@ -409,9 +409,11 @@ export class ProductApi extends EventEmitter {
     method: string,
     params: unknown,
     reply: (v: unknown) => void,
+    // DS-2b — this CALL's context: a peer's recorded provenance rides it
+    callCtx?: CallerContext,
   ): Promise<void> {
     const router = this.dynamicRouter;
-    const ctx = state.ctx;
+    const ctx = callCtx ?? state.ctx;
     if (router === null || !ctx) return;
     const kind = router.kindOf(method);
     if (kind === undefined) {
@@ -870,6 +872,84 @@ export class ProductApi extends EventEmitter {
       }
     }
 
+    const def = METHODS.find((m) => m.method === method && m.surface === "product");
+    // DS-L7 / DS-D15 (2026-09-30) — the forwarding envelope: ONE member,
+    // `forward: {onBehalfOf?, idempotencyKey?}`, beside a method's params (a
+    // method's own `idempotencyKey` — surface.open, artifact.publish/update —
+    // is a param and never the envelope's). It is the PEER LINK's to add: a
+    // `peer-fieldd` caller's is read (tolerantly — forward-envelope.ts),
+    // stripped from the params, and the provenance rides this call's context so
+    // the audit actor names the window behind the calling node. Authority does
+    // not move: the principal stays the peer daemon, scoped by the preset it
+    // was granted at hello. Any other caller carrying `onBehalfOf` is refused
+    // before anything runs — a window cannot assert who it is acting for — and
+    // may carry the key only on a mutation it routes to another device (DS-2,
+    // below).
+    //
+    // DS-2b (2026-10-01; the review's DS-2 list) — "before anything runs" is
+    // literal now: the block sits ahead of EVERY dispatch path. The
+    // shell-provider built-ins, `system.unsubscribe` and the dynamic router
+    // returned before it, so a caller that is not a peer daemon carried the
+    // envelope there unrefused, and a peer's was never stripped (the dynamic
+    // router got `forward` among its params, and no provenance). `def` is
+    // undefined for those (and for an unknown name): no routed mutation, so a
+    // non-peer's envelope is refused there whatever it carries.
+    const baseCtx = state.ctx;
+    if (!baseCtx) return; // unreachable past the authed gate; keeps the type honest
+    let callCtx: CallerContext = baseCtx;
+    let callParams: unknown = params;
+    let inboundKey: string | undefined;
+    const envelope = splitForwardEnvelope(params);
+    if (envelope.carried && baseCtx.principal.kind !== "peer-fieldd") {
+      // DS-2 — the ONE member a caller that is not a peer daemon may carry: the
+      // key of a MUTATION it routes to another device. That key is what the
+      // forward's receipt is bound to — the caller's own, or the one an
+      // `outcome-unknown` answer handed back, which is how the retry reads the
+      // owner's receipt instead of applying twice. `onBehalfOf` is never a
+      // caller's to assert, and a key on anything served here (or on a read)
+      // has no receipt to bind to.
+      const target = (envelope.rest as { device?: unknown } | null | undefined)?.device;
+      const routedMutation =
+        !envelope.malformed &&
+        !envelope.hasOnBehalfOf &&
+        envelope.hasIdempotencyKey &&
+        def?.idempotent === false &&
+        def?.subscription !== true &&
+        typeof target === "string" &&
+        this.forwarder !== null &&
+        target !== this.ownDeviceId?.();
+      if (!routedMutation) {
+        const refusal = nonPeerEnvelopeRefusal(method);
+        reply(this.err(id, refusal.kind, refusal.message, false, refusal.details));
+        return;
+      }
+      const key = IdempotencyKey.safeParse(envelope.rawIdempotencyKey);
+      if (!key.success) {
+        reply(
+          this.err(id, "PRECONDITION_FAILED", "malformed forwarding envelope", false, {
+            method,
+            reason: "malformed idempotencyKey",
+          }),
+        );
+        return;
+      }
+      callParams = envelope.rest;
+      inboundKey = key.data;
+    } else if (envelope.carried) {
+      const read = readPeerEnvelope(envelope);
+      if (!read.ok) {
+        reply(
+          this.err(id, "PRECONDITION_FAILED", "malformed forwarding envelope", false, {
+            method,
+            reason: read.reason,
+          }),
+        );
+        return;
+      }
+      callParams = envelope.rest;
+      if (read.onBehalfOf !== undefined) callCtx = { ...baseCtx, onBehalfOf: read.onBehalfOf };
+      inboundKey = read.idempotencyKey;
+    }
     // AH-3 — these two lifecycle calls bind to this exact transport. They are
     // intercepted before the ordinary handler map because a CallerContext
     // alone intentionally carries no writable connection handle.
@@ -877,8 +957,8 @@ export class ProductApi extends EventEmitter {
       try {
         const result =
           method === "shell.provider.register"
-            ? this.shellProvider.register(state.ctx, state.shellTransport, params)
-            : this.shellProvider.resolve(state.ctx, state.shellTransport, params);
+            ? this.shellProvider.register(callCtx, state.shellTransport, callParams)
+            : this.shellProvider.resolve(callCtx, state.shellTransport, callParams);
         reply({ jsonrpc: "2.0", id, result });
       } catch (e) {
         if (e instanceof RpcCallError) {
@@ -892,7 +972,7 @@ export class ProductApi extends EventEmitter {
 
     // built-in: dropping a subscription needs the connection's own sub table
     if (method === "system.unsubscribe") {
-      const subId = (params as { subId?: unknown } | undefined)?.subId;
+      const subId = (callParams as { subId?: unknown } | undefined)?.subId;
       const dispose = typeof subId === "string" ? state.subs.get(subId) : undefined;
       if (dispose) {
         dispose();
@@ -907,7 +987,7 @@ export class ProductApi extends EventEmitter {
     // own §14.4 pipeline (capability gate included — no static scope here).
     if (method.startsWith(NAMESPACES.DYNAMIC_PREFIX) && this.dynamicRouter !== null) {
       try {
-        await this.executeDynamic(ws, state, id, method, params, reply);
+        await this.executeDynamic(ws, state, id, method, callParams, reply, callCtx);
       } catch (e) {
         if (e instanceof RpcCallError) {
           reply(this.err(id, e.kind as ErrorKind, e.message, e.retryable, e.details));
@@ -918,7 +998,6 @@ export class ProductApi extends EventEmitter {
       return;
     }
 
-    const def = METHODS.find((m) => m.method === method && m.surface === "product");
     const handler = this.handlers.get(method);
     const subHandler = this.subHandlers.get(method);
     if (!def || (!handler && !subHandler)) {
@@ -957,74 +1036,6 @@ export class ProductApi extends EventEmitter {
         ),
       );
       return;
-    }
-    // DS-L7 / DS-D15 (2026-09-30) — the forwarding envelope: ONE member,
-    // `forward: {onBehalfOf?, idempotencyKey?}`, beside a method's params (a
-    // method's own `idempotencyKey` — surface.open, artifact.publish/update —
-    // is a param and never the envelope's). It is the PEER LINK's to add: a
-    // `peer-fieldd` caller's is read (tolerantly — forward-envelope.ts),
-    // stripped from the params, and the provenance rides this call's context so
-    // the audit actor names the window behind the calling node. Authority does
-    // not move: the principal stays the peer daemon, scoped by the preset it
-    // was granted at hello. Any other caller carrying `onBehalfOf` is refused
-    // before anything runs — a window cannot assert who it is acting for — and
-    // may carry the key only on a mutation it routes to another device (DS-2,
-    // below).
-    const baseCtx = state.ctx;
-    if (!baseCtx) return; // unreachable past the authed gate; keeps the type honest
-    let callCtx: CallerContext = baseCtx;
-    let callParams: unknown = params;
-    let inboundKey: string | undefined;
-    const envelope = splitForwardEnvelope(params);
-    if (envelope.carried && baseCtx.principal.kind !== "peer-fieldd") {
-      // DS-2 — the ONE member a caller that is not a peer daemon may carry: the
-      // key of a MUTATION it routes to another device. That key is what the
-      // forward's receipt is bound to — the caller's own, or the one an
-      // `outcome-unknown` answer handed back, which is how the retry reads the
-      // owner's receipt instead of applying twice. `onBehalfOf` is never a
-      // caller's to assert, and a key on anything served here (or on a read)
-      // has no receipt to bind to.
-      const target = (envelope.rest as { device?: unknown } | null | undefined)?.device;
-      const routedMutation =
-        !envelope.malformed &&
-        !envelope.hasOnBehalfOf &&
-        envelope.hasIdempotencyKey &&
-        def.idempotent === false &&
-        def.subscription !== true &&
-        typeof target === "string" &&
-        this.forwarder !== null &&
-        target !== this.ownDeviceId?.();
-      if (!routedMutation) {
-        const refusal = nonPeerEnvelopeRefusal(method);
-        reply(this.err(id, refusal.kind, refusal.message, false, refusal.details));
-        return;
-      }
-      const key = IdempotencyKey.safeParse(envelope.rawIdempotencyKey);
-      if (!key.success) {
-        reply(
-          this.err(id, "PRECONDITION_FAILED", "malformed forwarding envelope", false, {
-            method,
-            reason: "malformed idempotencyKey",
-          }),
-        );
-        return;
-      }
-      callParams = envelope.rest;
-      inboundKey = key.data;
-    } else if (envelope.carried) {
-      const read = readPeerEnvelope(envelope);
-      if (!read.ok) {
-        reply(
-          this.err(id, "PRECONDITION_FAILED", "malformed forwarding envelope", false, {
-            method,
-            reason: read.reason,
-          }),
-        );
-        return;
-      }
-      callParams = envelope.rest;
-      if (read.onBehalfOf !== undefined) callCtx = { ...baseCtx, onBehalfOf: read.onBehalfOf };
-      inboundKey = read.idempotencyKey;
     }
     try {
       // C5/D35 — the `device?` convention: route AFTER the local scope check

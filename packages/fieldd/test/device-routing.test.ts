@@ -530,6 +530,115 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
     expect(fromPhone.error.data.kind).toBe("PRECONDITION_FAILED");
   });
 
+  // DS-2b (2026-10-01; the review's DS-2 list) — the refusal ran only for
+  // registry methods: the shell-provider built-ins, `system.unsubscribe` and
+  // the dynamic router returned before the block, so a caller that is not a
+  // peer daemon could carry the envelope there unrefused (and a peer's was
+  // never stripped). It runs for every method now, ahead of them.
+  // one row per path that used to return before the block
+  it.each([
+    ["shell.provider.register", {}],
+    ["shell.provider.resolve", {}],
+    ["system.unsubscribe", { subId: "ps-1" }],
+    ["x.probe.echo (the dynamic router)", {}],
+  ] as Array<[string, Record<string, unknown>]>)(
+    "the refusal runs at %s: a non-peer's envelope is refused there too, the key alone included",
+    async (path, own) => {
+      const method = path.split(" ")[0] as string;
+      const { a, port } = await api();
+      let routed = 0;
+      a.setDynamicRouter({
+        kindOf: (m) => (m === "x.probe.echo" ? "call" : undefined),
+        call: async () => {
+          routed += 1;
+          return { routed: true };
+        },
+        subscribe: async () => ({ snapshot: null, dispose: () => {} }),
+      });
+      const local = await dial(port, "/");
+      await call(
+        local,
+        1,
+        "system.hello",
+        hello({ clientKind: "renderer", credential: "good-token" }),
+      );
+      // a key alone binds to nothing on these paths either: none is a routed mutation
+      const envelopes = [{ onBehalfOf: behalf }, { idempotencyKey: "k-0123456789" }];
+      let id = 2;
+      for (const forward of envelopes) {
+        const res = (await call(local, id++, method, { ...own, forward })) as {
+          error?: { data: { kind: string; details: Record<string, unknown> } };
+        };
+        expect(res.error?.data.kind, JSON.stringify(forward)).toBe("PRECONDITION_FAILED");
+        expect(res.error?.data.details).toMatchObject({
+          method,
+          reason: "forwarding envelope from a non-peer",
+        });
+      }
+      expect(routed).toBe(0);
+      // the phone's door is no peer daemon either
+      const phone = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
+      await call(phone, 1, "system.hello", hello({ clientKind: "ios" }));
+      const fromPhone = (await call(phone, 2, method, {
+        ...own,
+        forward: { onBehalfOf: behalf },
+      })) as { error?: { data: { kind: string } } };
+      expect(fromPhone.error?.data.kind).toBe("PRECONDITION_FAILED");
+      expect(routed).toBe(0);
+    },
+  );
+
+  it("…and without the envelope those paths answer as they did", async () => {
+    const { a, port } = await api();
+    a.setDynamicRouter({
+      kindOf: (m) => (m === "x.probe.echo" ? "call" : undefined),
+      call: async () => ({ routed: true }),
+      subscribe: async () => ({ snapshot: null, dispose: () => {} }),
+    });
+    const local = await dial(port, "/");
+    await call(
+      local,
+      1,
+      "system.hello",
+      hello({ clientKind: "renderer", credential: "good-token" }),
+    );
+    const bare = (await call(local, 2, "system.unsubscribe", { subId: "ps-1" })) as {
+      result: { removed: boolean };
+    };
+    expect(bare.result).toEqual({ removed: false });
+    const echo = (await call(local, 3, "x.probe.echo", {})) as { result: unknown };
+    expect(echo.result).toEqual({ routed: true });
+  });
+
+  it("a PEER's envelope on those paths is read and stripped like anywhere else: the dynamic router gets the method's own params and the call's provenance", async () => {
+    const { a, port } = await api();
+    const seen: Array<{ params: unknown; onBehalfOf: unknown }> = [];
+    a.setDynamicRouter({
+      kindOf: (m) => (m === "x.probe.echo" ? "call" : undefined),
+      call: async (ctx, _method, params) => {
+        seen.push({ params, onBehalfOf: ctx.onBehalfOf });
+        return {};
+      },
+      subscribe: async () => ({ snapshot: null, dispose: () => {} }),
+    });
+    const ws = await dial(port, `/t/${SECRET}`, PEER_A_SIDECAR);
+    await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
+    await call(ws, 2, "x.probe.echo", { n: 1, forward: { onBehalfOf: behalf } });
+    expect(seen).toEqual([{ params: { n: 1 }, onBehalfOf: behalf }]);
+    const removed = (await call(ws, 3, "system.unsubscribe", {
+      subId: "ps-404",
+      forward: { onBehalfOf: behalf },
+    })) as { result?: { removed: boolean } };
+    expect(removed.result).toEqual({ removed: false });
+    // an unreadable envelope is refused there as anywhere
+    const bad = (await call(ws, 4, "x.probe.echo", { forward: "nope" })) as {
+      error?: { data: { kind: string; details: Record<string, unknown> } };
+    };
+    expect(bad.error?.data.kind).toBe("PRECONDITION_FAILED");
+    expect(bad.error?.data.details).toMatchObject({ reason: "malformed forward" });
+    expect(seen).toHaveLength(1);
+  });
+
   it("the routing hop says who the call is for from the CALLING context — the window, never the params", async () => {
     const forwarder = vi.fn(async () => ({ ok: true }));
     const a = new ProductApi({
