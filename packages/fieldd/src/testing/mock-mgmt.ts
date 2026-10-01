@@ -7,6 +7,43 @@ import { createServer, type Server, type Socket } from "node:net";
 import { isPipeEndpoint, LOG_STREAMS, STORES } from "@vibefield/contracts";
 import { computeAckMac } from "../pairing";
 
+/** DS-1 — a scripted egress floor for `MockMgmtServer.egress`. */
+export interface MockEgress {
+  proxy: { address: string; username: string; credential: string };
+  httpProxy: { address: string; username: string; credential: string };
+  routes: Map<string, { id: string; target: string; listen: string }>;
+  revision: number;
+  /** the floor boot the table belongs to; a respawn is a new one, with the
+   * table emptied and the revision back at zero */
+  bootId: string;
+  nextPort: number;
+  /** targets the scripted sidecar refuses as non-peers */
+  refuseTargets: Set<string>;
+  /** every add asked, in order */
+  adds: Array<{ id: string; target: string }>;
+  /** every id removed, in order */
+  removed: string[];
+}
+
+export function mockEgress(overrides: Partial<MockEgress> = {}): MockEgress {
+  return {
+    proxy: { address: "127.0.0.1:41641", username: "tsnet", credential: "mock-socks-credential" },
+    httpProxy: {
+      address: "127.0.0.1:41642",
+      username: "tsnet",
+      credential: "mock-http-credential",
+    },
+    routes: new Map(),
+    revision: 0,
+    bootId: "mock-native-boot",
+    nextPort: 53_000,
+    refuseTargets: new Set(),
+    adds: [],
+    removed: [],
+    ...overrides,
+  };
+}
+
 export class MockMgmtServer {
   server: Server | null = null;
   sockets = new Set<Socket>();
@@ -26,6 +63,13 @@ export class MockMgmtServer {
   supersedeAfterSubscribe = false;
   /** when set, every native.mesh.* call answers UNAVAILABLE (node not up) */
   meshUnavailable = false;
+  /** DS-1 — the floor's EGRESS, answered ahead of every mesh gate (as the real
+   * floor's `mgmt/mesh_egress.rs` is). `"unsupported"` — the default, and
+   * production's answer until truffle ships RFC 026 — refuses every verb
+   * `egress-unsupported`; `"mesh-down"` refuses the acts that need a node
+   * while the table reads answer; a `MockEgress` serves from its own table.
+   * `pushEgressTable()` / `resetEgress()` drive the table stream. */
+  egress: "unsupported" | "mesh-down" | MockEgress = "unsupported";
   /** UA-P-0j — the floor's mesh POSTURE, modelled only for a suite that opts
    * in; `undefined` (the default) keeps the scripted node every older row
    * expects. `null` is a floor holding NO posture — the real floor's boot
@@ -404,6 +448,10 @@ export class MockMgmtServer {
     // answer. (`subscriptionRequests` never sees these — the mesh facade is
     // dispatched ahead of the generic `*.subscribe` recorder.)
     this.meshCalls.push(msg.method);
+    if (msg.method.startsWith("native.mesh.egress.")) {
+      this.onEgress(sock, msg);
+      return;
+    }
     if (msg.method === "native.mesh.lane.open") {
       const p = msg.params ?? {};
       this.meshLaneOpens.push({
@@ -628,6 +676,139 @@ export class MockMgmtServer {
       default:
         reply({ result: {} });
     }
+  }
+
+  /** DS-1 — the egress facade, in the real floor's refusal order. */
+  private onEgress(
+    sock: Socket,
+    msg: { id: number; method: string; params?: Record<string, unknown> },
+  ): void {
+    const reply = (body: object) =>
+      sock.write(`${JSON.stringify({ jsonrpc: "2.0", id: msg.id, ...body })}\n`);
+    const refuse = (code: number, kind: string, message: string, details?: unknown) =>
+      reply({
+        error: {
+          code,
+          message,
+          data: {
+            kind,
+            retryable: kind === "UNAVAILABLE" && code === -32006 && this.egress === "mesh-down",
+            ...(details !== undefined ? { details } : {}),
+          },
+        },
+      });
+    if (this.egress === "unsupported") {
+      refuse(-32006, "UNAVAILABLE", "egress is unsupported", {
+        service: "mesh",
+        state: "egress-unsupported",
+      });
+      return;
+    }
+    const egress = this.egress;
+    const table = () => ({
+      routes: egress === "mesh-down" ? [] : [...egress.routes.values()],
+      revision: egress === "mesh-down" ? 0 : egress.revision,
+      bootId: egress === "mesh-down" ? "mock-native-boot" : egress.bootId,
+    });
+    const p = msg.params ?? {};
+    switch (msg.method) {
+      case "native.mesh.egress.route.list":
+        reply({ result: table() });
+        return;
+      case "native.mesh.egress.route.subscribe": {
+        const subId = `s${this.nextSub++}`;
+        this.issued.push({ sock, subId, method: msg.method });
+        reply({ result: { subId, snapshot: table() } });
+        return;
+      }
+      case "native.mesh.egress.route.remove": {
+        const id = String(p["id"]);
+        if (egress === "mesh-down" || !egress.routes.delete(id)) {
+          refuse(-32003, "NOT_FOUND", "egress route not found");
+          return;
+        }
+        egress.removed.push(id);
+        egress.revision += 1;
+        reply({ result: { id } });
+        this.pushEgressTable();
+        return;
+      }
+      default:
+        break;
+    }
+    if (egress === "mesh-down") {
+      refuse(-32006, "UNAVAILABLE", "egress needs a mesh node and none is up", {
+        service: "mesh",
+        state: "mesh-down",
+        gatewayState: "disabled",
+      });
+      return;
+    }
+    switch (msg.method) {
+      case "native.mesh.egress.proxy":
+        reply({ result: { ...egress.proxy } });
+        return;
+      case "native.mesh.egress.httpProxy":
+        reply({ result: { ...egress.httpProxy } });
+        return;
+      case "native.mesh.egress.route.add": {
+        const id = String(p["id"]);
+        const target = String(p["target"]);
+        egress.adds.push({ id, target });
+        const bound = egress.routes.get(id);
+        if (bound !== undefined && bound.target !== target) {
+          refuse(-32004, "CONFLICT", "that route id is bound to another target", {
+            code: "EGRESS_ROUTE_CONFLICT",
+            boundTarget: bound.target,
+          });
+          return;
+        }
+        if (egress.refuseTargets.has(target)) {
+          refuse(-32005, "PRECONDITION_FAILED", `${target} is not a peer this node admits`, {
+            code: "TARGET_NOT_PEER",
+          });
+          return;
+        }
+        const listen = bound?.listen ?? `127.0.0.1:${egress.nextPort++}`;
+        egress.routes.set(id, { id, target, listen });
+        egress.revision += 1;
+        reply({ result: { id, listen, revision: egress.revision, bootId: egress.bootId } });
+        this.pushEgressTable();
+        return;
+      }
+      default:
+        refuse(-32601, "NOT_FOUND", "method not found");
+    }
+  }
+
+  /** DS-1 — push the egress table to every `route.subscribe` (a `.snapshot`,
+   * as the floor's forwarder sends it). */
+  pushEgressTable(): void {
+    if (typeof this.egress !== "object") return;
+    const payload = {
+      routes: [...this.egress.routes.values()],
+      revision: this.egress.revision,
+      bootId: this.egress.bootId,
+    };
+    for (const e of this.issued) {
+      if (e.method !== "native.mesh.egress.route.subscribe" || e.sock.destroyed) continue;
+      e.sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          method: "native.mesh.egress.route.snapshot",
+          params: { subId: e.subId, payload },
+        })}\n`,
+      );
+    }
+  }
+
+  /** DS-1 — a node teardown: the table empties, its revision moves, the
+   * stream says so. */
+  resetEgress(): void {
+    if (typeof this.egress !== "object") return;
+    this.egress.routes.clear();
+    this.egress.revision += 1;
+    this.pushEgressTable();
   }
 
   /** Push a delta on every live subscription whose method ends with the suffix. */

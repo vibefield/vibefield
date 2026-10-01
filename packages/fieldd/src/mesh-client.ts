@@ -1,5 +1,14 @@
 import { EventEmitter } from "node:events";
-import { ARTIFACT_SERVE_PREFIX, ServeConfig, ServeStatus } from "@vibefield/contracts";
+import {
+  ARTIFACT_SERVE_PREFIX,
+  MeshEgressProxy,
+  MeshEgressRouteAddParams,
+  MeshEgressRouteBound,
+  MeshEgressRouteRef,
+  MeshEgressRouteTable,
+  ServeConfig,
+  ServeStatus,
+} from "@vibefield/contracts";
 import type { NativeLink } from "./native-link";
 import { RpcCallError } from "./native-link";
 
@@ -464,6 +473,127 @@ export class MeshClient extends EventEmitter {
   ): Promise<{ snapshot: unknown; dispose: () => void }> {
     return await this.link.subscribe("native.mesh.store.subscribe", { storeId }, onEvent);
   }
+
+  // ---- DS-1 egress (design-02 §2.4's egress bullet; shapes in contracts mgmt.ts) ----
+  //
+  // Thin, but not blind: every answer is held to its contract before a caller
+  // sees it, and every ask is held to it before the wire does (the F-H3 law
+  // `contractValidSpec` states for serves). A refusal is the floor's
+  // `RpcCallError`, untouched — `egress.ts` reads its details, because an
+  // UNAVAILABLE here is an ANSWER (`egress-unsupported`, `mesh-down`), not a
+  // transport failure to retry.
+
+  /** E1 — the node's own SOCKS5 proxy and its credential. */
+  async egressProxy(): Promise<MeshEgressProxy> {
+    return egressAnswer(
+      MeshEgressProxy,
+      "native.mesh.egress.proxy",
+      await this.link.request("native.mesh.egress.proxy", {}),
+    );
+  }
+
+  /** E3 — the node's authenticated HTTP CONNECT proxy. */
+  async egressHttpProxy(): Promise<MeshEgressProxy> {
+    return egressAnswer(
+      MeshEgressProxy,
+      "native.mesh.egress.httpProxy",
+      await this.link.request("native.mesh.egress.httpProxy", {}),
+    );
+  }
+
+  /** E2 — bind (or re-answer) a loopback route to a fixed tailnet target. */
+  async egressRouteAdd(params: MeshEgressRouteAddParams): Promise<MeshEgressRouteBound> {
+    const ask = MeshEgressRouteAddParams.safeParse(params);
+    if (!ask.success) {
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `egress route does not match MeshEgressRouteAddParams (${issues(ask.error)})`,
+        false,
+      );
+    }
+    return egressAnswer(
+      MeshEgressRouteBound,
+      "native.mesh.egress.route.add",
+      await this.link.request("native.mesh.egress.route.add", params),
+    );
+  }
+
+  /** E2 — drop a route. NOT_FOUND (already gone) is the floor's to say. */
+  async egressRouteRemove(id: string): Promise<MeshEgressRouteRef> {
+    return egressAnswer(
+      MeshEgressRouteRef,
+      "native.mesh.egress.route.remove",
+      await this.link.request("native.mesh.egress.route.remove", { id }),
+    );
+  }
+
+  /** E2 — the node's route table. */
+  async egressRouteList(): Promise<MeshEgressRouteTable> {
+    return egressAnswer(
+      MeshEgressRouteTable,
+      "native.mesh.egress.route.list",
+      await this.link.request("native.mesh.egress.route.list", {}),
+    );
+  }
+
+  /** E2 — the route table's stream: the snapshot now, then the WHOLE table on
+   * every move. An emptied table is the facade's reset (a node teardown or
+   * rebuild), and NativeLink replays the subscription on reconnect with a
+   * fresh snapshot, so a floor restart reads the same way (P5). A payload
+   * outside the contract is dropped, never guessed at. */
+  async subscribeEgressRoutes(
+    onTable: (table: MeshEgressRouteTable) => void,
+  ): Promise<{ snapshot: MeshEgressRouteTable; dispose: () => void }> {
+    const { snapshot, dispose } = await this.link.subscribe(
+      "native.mesh.egress.route.subscribe",
+      {},
+      (payload) => {
+        const table = MeshEgressRouteTable.safeParse(payload);
+        if (table.success) onTable(table.data);
+      },
+    );
+    try {
+      return {
+        snapshot: egressAnswer(
+          MeshEgressRouteTable,
+          "native.mesh.egress.route.subscribe",
+          snapshot,
+        ),
+        dispose,
+      };
+    } catch (error) {
+      dispose();
+      throw error;
+    }
+  }
+}
+
+/** What `egressAnswer` needs of a contract schema — structural, so fieldd
+ * reads zod's `safeParse` without depending on zod itself. */
+interface Contract<T> {
+  safeParse(raw: unknown): { success: true; data: T } | { success: false; error: ContractIssues };
+}
+interface ContractIssues {
+  issues: ReadonlyArray<{ path: ReadonlyArray<PropertyKey>; message: string }>;
+}
+
+/** Hold a floor's egress answer to its contract. The floor outlives fieldd, so
+ * a skewed floor is an ordinary case; a shape outside the contract is an
+ * INTERNAL failure with the reason, never a partially trusted value. */
+function egressAnswer<T>(schema: Contract<T>, method: string, raw: unknown): T {
+  const parsed = schema.safeParse(raw);
+  if (parsed.success) return parsed.data;
+  throw new RpcCallError(
+    "INTERNAL",
+    `${method} answered outside its contract (${issues(parsed.error)})`,
+    false,
+  );
+}
+
+function issues(error: ContractIssues): string {
+  return error.issues
+    .map((issue) => `${issue.path.map(String).join(".") || "<root>"}: ${issue.message}`)
+    .join("; ");
 }
 
 /** Tolerant reader for a serve stream entry — full (snapshot) or partial (delta).
