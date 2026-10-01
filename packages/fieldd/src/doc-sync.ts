@@ -229,6 +229,9 @@ export interface DocSyncOptions {
 
 /** DS-5 — a CHUNKed record being put back together. */
 interface Reassembly {
+  /** DS-5c — whose, and for which document: the fair bound counts both. */
+  peer: string;
+  docId: string;
   count: number;
   byteLength: number;
   parts: (Uint8Array | undefined)[];
@@ -237,8 +240,13 @@ interface Reassembly {
   timer: ReturnType<typeof setTimeout>;
 }
 
-/** Transfers in flight per peer before the oldest is dropped. */
-const MAX_TRANSFERS_PER_PEER = 4;
+/** DS-5c — reassemblies in flight per (peer, DOCUMENT). A sender's per-doc
+ * queue awaits each transfer whole, so one is the rhythm; two let the next
+ * begin while a stalled one ages out. Past it a transfer is REFUSED (asked for
+ * again), never by evicting one under way — the old four-per-peer slots,
+ * shared across documents and freed by evicting the oldest, made five large
+ * records at once thrash until none completed. */
+const MAX_TRANSFERS_PER_PEER_DOC = 2;
 /** The most slices one transfer may declare: the reassembly bound at 1 KiB a
  * slice. A declared count sizes the parts table, so it is bounded on its own,
  * not only through the byte length. */
@@ -1041,8 +1049,9 @@ export class DocSyncService {
   }
 
   /** DS-5 — one slice of a record too large for a frame. Reassembled whole
-   * (bounded: the renderer's own ceiling, four transfers per peer, a TTL) and
-   * then read like any record that arrived in one piece. */
+   * (bounded: the renderer's own ceiling; DS-5c: two transfers per peer and
+   * document, the peer's declared bytes under DOC_HOST.REASSEMBLY_BYTES_PER_PEER,
+   * a TTL) and then read like any record that arrived in one piece. */
   async #onChunk(docId: string, peer: string, frame: DocSyncFrame): Promise<void> {
     const parsed = DocSyncChunkMeta.safeParse(frame.meta);
     if (!parsed.success) {
@@ -1077,15 +1086,47 @@ export class DocSyncService {
     }
     let held = this.#transfers.get(key);
     if (held === undefined) {
-      const mine = [...this.#transfers.keys()].filter((k) => k.startsWith(`${peer}\u0000`));
-      if (mine.length >= MAX_TRANSFERS_PER_PEER && mine[0] !== undefined) {
-        const oldest = this.#transfers.get(mine[0]);
-        if (oldest !== undefined) clearTimeout(oldest.timer);
-        this.#transfers.delete(mine[0]);
+      // DS-5c — a transfer begins at its FIRST slice: it rides one lane, in
+      // order, so a later slice with no reassembly is of a transfer this fieldd
+      // never saw begin (it restarted under a live lane) or already dropped. It
+      // could never complete; it takes no slot.
+      if (index !== 0) {
+        this.#logger.debug(
+          "fieldd.doc_sync.chunk_unstarted",
+          "A slice of a transfer that did not begin here was dropped",
+          { docId, peer, transfer, index },
+        );
+        return;
+      }
+      // DS-5c — the FAIR bound: per (peer, document), and the peer's declared
+      // bytes in flight under the budget. A transfer that does not fit is
+      // refused — the beat asks for it again — and nothing under way is evicted.
+      let sameDoc = 0;
+      let peerBytes = 0;
+      for (const transferHeld of this.#transfers.values()) {
+        if (transferHeld.peer !== peer) continue;
+        peerBytes += transferHeld.byteLength;
+        if (transferHeld.docId === docId) sameDoc += 1;
+      }
+      if (
+        sameDoc >= MAX_TRANSFERS_PER_PEER_DOC ||
+        peerBytes + byteLength > DOC_HOST.REASSEMBLY_BYTES_PER_PEER
+      ) {
+        refuse("over-budget");
+        return;
       }
       const timer = setTimeout(() => refuse("expired"), this.#transferTtlMs);
       timer.unref?.();
-      held = { count, byteLength, parts: new Array(count), received: 0, size: 0, timer };
+      held = {
+        peer,
+        docId,
+        count,
+        byteLength,
+        parts: new Array(count),
+        received: 0,
+        size: 0,
+        timer,
+      };
       this.#transfers.set(key, held);
     }
     if (held.count !== count || held.byteLength !== byteLength) {

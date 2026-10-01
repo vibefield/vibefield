@@ -12,6 +12,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  chunkDocSyncRecord,
   DOC_SYNC_RECORD,
   type DocSyncIntent,
   decodeDocSyncDigest,
@@ -1131,6 +1132,76 @@ describe("DS-5c — the doc-sync beat", () => {
     await new Promise((r) => setTimeout(r, 6 * T));
     expect(opens.length).toBe(settled);
   }, 15_000);
+});
+
+describe("DS-5c — reassembly is fair", () => {
+  it("five large records arriving interleaved from one peer all complete", async () => {
+    // The review: four reassembly slots per peer, shared across documents; a
+    // fifth transfer EVICTED the oldest, whose next slice then opened a slot
+    // of its own mid-stream and evicted the next — five at once thrashed until
+    // none completed, freed only by the TTL.
+    const { docs, control, bytes, sync } = harness(["peer-a"]);
+    await sync.start();
+    const transfers: Uint8Array[][] = [];
+    const docIds: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const { docId } = await docs.create(`board ${i}`);
+      docIds.push(docId);
+      const whole = record(ice1(`checkpoint ${i} ${"x".repeat(600)}`), DOC_SYNC_RECORD.SNAPSHOT);
+      transfers.push(chunkDocSyncRecord(whole, `peer-a-boot-${i}`, 64));
+      control.announce({
+        kind: "peerOpened",
+        laneId: MESHDATA_INBOUND_LANE_ID_BASE + 40 + i,
+        peer: "peer-a",
+        protocol: "doc-sync",
+        docId,
+        inbound: true,
+      });
+    }
+    // Round-robin: slice 0 of all five, then slice 1 of all five, …
+    const longest = Math.max(...transfers.map((t) => t.length));
+    expect(longest).toBeGreaterThan(5);
+    for (let slice = 0; slice < longest; slice++) {
+      for (const [i, chunks] of transfers.entries()) {
+        const chunk = chunks[slice];
+        if (chunk !== undefined) bytes.deliver(MESHDATA_INBOUND_LANE_ID_BASE + 40 + i, chunk);
+      }
+    }
+    await until(
+      () =>
+        docIds.every((docId) => (docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0) > 0),
+      "all five checkpoints to reassemble and land",
+    );
+  });
+
+  it("a slice of a transfer never started here takes no slot (the guard on refusing, not evicting)", async () => {
+    const { docs, control, bytes, sync } = harness(["peer-a"]);
+    await sync.start();
+    const { docId } = await docs.create("board");
+    const laneId = MESHDATA_INBOUND_LANE_ID_BASE + 50;
+    control.announce({
+      kind: "peerOpened",
+      laneId,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    const whole = record(ice1(`checkpoint ${"y".repeat(600)}`), DOC_SYNC_RECORD.SNAPSHOT);
+    // Two transfers joined mid-stream (this fieldd restarted under a live
+    // lane): their tails can never complete. Had they taken this document's
+    // slots, a full set would REFUSE the next transfer until the TTL.
+    for (const tail of ["peer-a-late-1", "peer-a-late-2"]) {
+      for (const chunk of chunkDocSyncRecord(whole, tail, 64).slice(1))
+        bytes.deliver(laneId, chunk);
+    }
+    // The same peer's next transfer, whole, still lands.
+    for (const chunk of chunkDocSyncRecord(whole, "peer-a-next", 64)) bytes.deliver(laneId, chunk);
+    await until(
+      () => (docs.list().find((d) => d.docId === docId)?.sizeBytes ?? 0) > 0,
+      "the whole transfer to land",
+    );
+  });
 });
 
 describe("DS-5 — system documents and eager replication, at the service seam", () => {

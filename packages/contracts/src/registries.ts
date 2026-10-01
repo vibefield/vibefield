@@ -275,13 +275,18 @@ export const FORWARDING = {
  * nothing on its per-doc chain, no import pending its base and no lane or
  * window touching it for IDLE_MS is evicted from memory (its bytes on disk
  * ARE the host's state), swept every SWEEP_MS; the next VERSION, record or
- * open reloads it. The design's DOC_HOST_IDLE_MS is IDLE_MS. */
+ * open reloads it. The design's DOC_HOST_IDLE_MS is IDLE_MS. REASSEMBLY: the
+ * declared bytes of CHUNKed transfers one peer may have in flight here (four
+ * of the largest, DOC_SYNC_MAX_TRANSFER_BYTES — the old four-slot bound's own
+ * worst case); a transfer past it is refused and asked for again, and none
+ * already under way is ever evicted for it. */
 export const DOC_HOST = {
   BEAT_MS: 15_000,
   ANSWER_TIMEOUT_MS: 30_000,
   REGREET_MAX_MS: 10 * 60 * 1000,
   IDLE_MS: 10 * 60 * 1000,
   SWEEP_MS: 60_000,
+  REASSEMBLY_BYTES_PER_PEER: 256 * 1024 * 1024,
 } as const;
 
 /** TC-S2 — the floor's supervision budget for a `field-terminal-host` cell
