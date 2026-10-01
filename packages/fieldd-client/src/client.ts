@@ -3,6 +3,8 @@ import {
   CONTRACTS_VERSION,
   PRODUCT_NOTIFICATIONS,
   SystemTick,
+  ForwardReceipt,
+  KEYED_FORWARD_METHODS,
 } from "@vibefield/contracts";
 
 // @vibefield/fieldd-client — the isomorphic product-plane client (design-03
@@ -27,6 +29,18 @@ import {
 //   to run inside hello's try: one refused replay closed the socket, and one
 //   refused with a terminal kind failed the whole client (through PeerLink, a
 //   peer's restart dropped every subscription standing on the shared link).
+// - DS-D15's client half (DS wave 2, 2026-10-01): a MUTATION routed by
+//   `device` to another desktop (`KEYED_FORWARD_METHODS`) carries ONE
+//   idempotency key per logical call, minted here and put under the envelope's
+//   `forward` member — the one a window may carry. A call that may have
+//   reached the owner without an answer reaching us (the owner's answer lost:
+//   the daemon's `outcome-unknown`; or this socket cut after the request left)
+//   fails `UNAVAILABLE {state: "outcome-unknown"}` and hands the caller its key
+//   (`error.forward.idempotencyKey`): the retry carrying it back
+//   (`request(..., {idempotencyKey})`) is the SAME call, which the owner
+//   answers from its receipt — applied once ("a window echoes the key from an
+//   outcome-unknown"). Before this, no client sent a key: a UI retry after a
+//   cut applied twice.
 
 export class FielddRpcError extends Error {
   // plain fields, no TS parameter properties: plugin workers import this file
@@ -35,6 +49,9 @@ export class FielddRpcError extends Error {
   readonly retryable: boolean;
   readonly details?: unknown;
   readonly code?: number;
+  /** DS-D15 — the key of the keyed forward this error ended (every error of
+   * such a call carries it; an `outcome-unknown`'s is the one to retry with). */
+  forward?: { idempotencyKey: string };
 
   constructor(kind: string, message: string, retryable = false, details?: unknown, code?: number) {
     super(message);
@@ -44,6 +61,36 @@ export class FielddRpcError extends Error {
     if (details !== undefined) this.details = details;
     if (code !== undefined) this.code = code;
   }
+}
+
+/** DS-D15 — this client's own transport failure after a keyed request LEFT
+ * (no JSON-RPC code: the socket closed under it, or the client was closed):
+ * nobody answered, and the owner may have applied it — so it is the same
+ * honest state the daemon reports for a forward whose answer was lost. A
+ * reply the daemon SENT passes through as the daemon's answer. */
+function asOutcomeUnknown(e: unknown, key: string): unknown {
+  if (!(e instanceof FielddRpcError) || e.code !== undefined || e.kind !== "UNAVAILABLE") return e;
+  return new FielddRpcError(
+    "UNAVAILABLE",
+    "the call was cut before an answer; its outcome is unknown",
+    true,
+    { service: "fieldd", state: "outcome-unknown", idempotencyKey: key },
+  );
+}
+
+/** DS-D15 — name the key a failed call should be retried with: the one an
+ * `outcome-unknown` names (the key the owner journaled — a daemon that minted
+ * its own for an unkeyed call says so there), else the call's own. */
+function withForwardKey(e: unknown, key: string | undefined): unknown {
+  if (!(e instanceof FielddRpcError)) return e;
+  const details = e.details as { state?: unknown; idempotencyKey?: unknown } | undefined;
+  const named =
+    details?.state === "outcome-unknown" && typeof details.idempotencyKey === "string"
+      ? details.idempotencyKey
+      : undefined;
+  const idempotencyKey = named ?? key;
+  if (idempotencyKey !== undefined) e.forward = { idempotencyKey };
+  return e;
 }
 
 /** Structural WebSocket shape (browser + Node undici both satisfy it). */
@@ -83,6 +130,52 @@ export interface FielddClientOptions {
    * liveness; a door silent for 2.5 × intervalMs is dead). A tick whose params
    * do not read is not a tick; without `onTick` the frame is taken quietly. */
   onTick?: (tick: { at: number; intervalMs: number }) => void;
+  /** DS-D15 — the device the dialed daemon runs on, for a host that knows it:
+   * a call routed to it is served there, not forwarded, so it carries no key
+   * (the door refuses a window's key on a call it serves itself). A daemon
+   * whose hello says its `deviceId` is believed first. Neither known, every
+   * routed mutation is keyed: route by `device` only to another desktop. */
+  selfDeviceId?: () => string | undefined;
+}
+
+/** DS-D15 — per-call choices for `FielddClient.request`. */
+export interface RequestOptions {
+  /** The key of a keyed forward (a method in `KEYED_FORWARD_METHODS`, routed
+   * by `device` to another desktop). Omitted, the client mints one for the
+   * call; given, the call is the SAME logical call — the retry of an
+   * `outcome-unknown` echoes `error.forward.idempotencyKey`, and the owner
+   * answers it from its receipt. Ignored on any call that is not keyed; an
+   * undefined one is omitted (a caller may pass `error.forward?.idempotencyKey`). */
+  idempotencyKey?: string | undefined;
+}
+
+/** DS-D15 — a fresh key for one logical call (contracts' `IdempotencyKey`,
+ * 8..128 chars): 128 random bits. `getRandomValues` exists in every host
+ * this file runs in, secure context or not. */
+export function mintIdempotencyKey(): string {
+  const bytes = new Uint8Array(16);
+  globalThis.crypto.getRandomValues(bytes);
+  let hex = "";
+  for (const byte of bytes) hex += byte.toString(16).padStart(2, "0");
+  return `wk_${hex}`;
+}
+
+/** DS-D15 — the owner's RECEIPT standing in for a keyed call's result. A retry
+ * whose original applied with an answer too large to journal is answered with
+ * the receipt itself (`resultOmitted: true`): the call applied, and its answer
+ * is gone — a caller that needs it reads the state some other way. Undefined
+ * when `result` is the call's own answer (or another key's receipt). */
+export function forwardReceiptOf(
+  result: unknown,
+  idempotencyKey?: string,
+): (ForwardReceipt & { resultOmitted: true }) | undefined {
+  if (result === null || typeof result !== "object") return undefined;
+  if ((result as { resultOmitted?: unknown }).resultOmitted !== true) return undefined;
+  const parsed = ForwardReceipt.safeParse(result);
+  if (!parsed.success) return undefined;
+  if (idempotencyKey !== undefined && parsed.data.idempotencyKey !== idempotencyKey)
+    return undefined;
+  return { ...parsed.data, resultOmitted: true };
 }
 
 export interface Subscription {
@@ -154,6 +247,9 @@ export class FielddClient {
   private readyWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
   private closedByUser = false;
   private credential: string;
+  /** DS-D15 — the device the dialed daemon's hello says it runs on, if it
+   * says (read tolerantly: a field the ack does not carry today) */
+  private helloDeviceId: string | undefined = undefined;
 
   // no TS parameter property: the worker harness imports this file under
   // Node's strip-only type erasure, which cannot rewrite ctor sugar (P5)
@@ -249,9 +345,82 @@ export class FielddClient {
     };
   }
 
-  async request(method: string, params?: unknown): Promise<unknown> {
-    await this.ready();
-    return await this.sendRequest(method, params);
+  /** One call. DS-D15: a keyed forward (a mutation routed by `device` to
+   * another desktop) carries ONE idempotency key — `opts.idempotencyKey`, or
+   * a fresh one — and every error of it says which (`error.forward`); one that
+   * may have reached the owner unanswered reads `outcome-unknown`, and its
+   * retry with that key applies once. The result is the owner's answer as it
+   * came (a receipt in its place reads through `forwardReceiptOf`). */
+  async request(method: string, params?: unknown, opts?: RequestOptions): Promise<unknown> {
+    let key: string | undefined;
+    let sent = false;
+    try {
+      await this.ready();
+      // decided AFTER the hello: it may name the daemon's own device
+      key = this.forwardKeyFor(method, params, opts);
+      const wire =
+        key === undefined
+          ? params
+          : { ...(params as Record<string, unknown>), forward: { idempotencyKey: key } };
+      // sendRequest puts it on this socket in this same tick, or refuses
+      // "not connected" — so this is whether the request LEFT
+      sent = this.ws !== null;
+      return await this.sendRequest(method, wire);
+    } catch (e) {
+      if (key === undefined) {
+        // never keyed, or never sent: a key the caller brought stays its own
+        throw withForwardKey(
+          e,
+          this.isKeyedCandidate(method, params) ? opts?.idempotencyKey : undefined,
+        );
+      }
+      throw withForwardKey(sent ? asOutcomeUnknown(e, key) : e, key);
+    }
+  }
+
+  /** DS-D15 — what this client's daemon knows about one of its keyed forwards
+   * (`forward.receipt`: applied, refused, or outcome-unknown, `inFlight` while
+   * an attempt is out). Read, never acted on: the retry is the same call with
+   * the same key. Undefined when nothing is journaled under the key. */
+  async forwardReceipt(
+    idempotencyKey: string,
+  ): Promise<(ForwardReceipt & { inFlight?: true }) | undefined> {
+    try {
+      return (await this.request("forward.receipt", { idempotencyKey })) as ForwardReceipt & {
+        inFlight?: true;
+      };
+    } catch (e) {
+      if (e instanceof FielddRpcError && e.kind === "NOT_FOUND") return undefined;
+      throw e;
+    }
+  }
+
+  /** DS-D15 — the key this call carries, or undefined when it is not a keyed
+   * forward from this client: a method the keyed-forward rule names, routed by
+   * a `device` that is not the dialed daemon's own, in params that carry no
+   * `forward` member of their own (PeerLink's client builds the whole
+   * envelope — onBehalfOf and the key — itself). */
+  private forwardKeyFor(
+    method: string,
+    params: unknown,
+    opts: RequestOptions | undefined,
+  ): string | undefined {
+    if (!this.isKeyedCandidate(method, params)) return undefined;
+    const device = (params as Record<string, unknown>)["device"];
+    const self = this.helloDeviceId ?? this.opts.selfDeviceId?.();
+    if (self !== undefined && device === self) return undefined;
+    return opts?.idempotencyKey ?? mintIdempotencyKey();
+  }
+
+  /** A keyed method routed by a `device`, in params with no envelope of their
+   * own — before the question of whose device it is. */
+  private isKeyedCandidate(method: string, params: unknown): boolean {
+    if (!KEYED_FORWARD_METHODS.has(method)) return false;
+    if (params === null || typeof params !== "object" || Array.isArray(params)) return false;
+    const record = params as Record<string, unknown>;
+    if (Object.hasOwn(record, "forward")) return false;
+    const device = record["device"];
+    return typeof device === "string" && device !== "";
   }
 
   /** Snapshot-then-delta subscription; survives reconnects (fresh snapshot each time) —
@@ -338,9 +507,11 @@ export class FielddClient {
         ...(this.credential !== "" ? { credential: this.credential } : {}),
         ...(this.opts.deviceId !== undefined ? { deviceId: this.opts.deviceId } : {}),
         ...(this.opts.userId !== undefined ? { userId: this.opts.userId } : {}),
-      })) as { grantedScopes?: string[] };
+      })) as { grantedScopes?: string[]; deviceId?: unknown };
       if (this.ws !== ws) return; // superseded by a newer dial while awaiting
       this.grantedScopes = ack.grantedScopes ?? [];
+      this.helloDeviceId =
+        typeof ack.deviceId === "string" && ack.deviceId !== "" ? ack.deviceId : undefined;
       this.attempts = 0;
       this.setStatus("ready");
       this.flushReadyWaiters(null);

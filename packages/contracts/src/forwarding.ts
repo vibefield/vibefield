@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { ClientKind } from "./envelope";
 import { ErrorKind } from "./errors";
+import { METHODS, type MethodDef } from "./methods";
 
 // DS-L7 / DS-D15 — a forwarded call is AUTHORIZED as the peer daemon that
 // carries it and RECORDED as the window or phone it is for (design-06 §5;
@@ -37,6 +38,31 @@ export type OnBehalfOf = z.infer<typeof OnBehalfOf>;
  * method on the same owner applies once; a retry with it reads the receipt. */
 export const IdempotencyKey = z.string().min(8).max(128);
 export type IdempotencyKey = z.infer<typeof IdempotencyKey>;
+
+/** DS-D15's client half (DS wave 2, 2026-10-01) — the KEYED FORWARD rule, one
+ * statement for the door and its clients: a call routed by `device` to another
+ * desktop is a keyed forwarded MUTATION when its method is not idempotent and
+ * is not a subscription. The forwarding daemon carries the caller's key (or
+ * mints one) and the owner journals a receipt under it (fieldd
+ * `forward-receipts.ts`); a window's client mints ONE key per logical call and
+ * echoes it on the retry of an outcome-unknown (fieldd-client `request`).
+ * `subscription` is read for truth, never `=== true`: SP-1 makes it a
+ * descriptor object on the tailnet-reachable rows. (fieldd's door states the
+ * same rule inline in `product-api.ts`; `FORWARDED_MINTS` in
+ * `terminal-service.ts` is a different set — which MINTS a caller this daemon
+ * would mint read-only may not have carried.) */
+export function isKeyedForward(def: Pick<MethodDef, "idempotent" | "subscription">): boolean {
+  return def.idempotent === false && !def.subscription;
+}
+
+/** The product methods a client keys when it routes them by `device`: the
+ * keyed-forward rule over the registry, `local` excluded (a local method never
+ * forwards — the door refuses its device routing). */
+export const KEYED_FORWARD_METHODS: ReadonlySet<string> = new Set(
+  METHODS.filter(
+    (def) => def.surface === "product" && def.locality !== "local" && isKeyedForward(def),
+  ).map((def) => def.method),
+);
 
 /** The three honest outcomes of a forwarded mutation. `outcome-unknown` is
  * the state a call lost IN FLIGHT leaves behind — the forward was cut before

@@ -99,6 +99,9 @@ export {
   type FederatedSubsOptions,
   type UpstreamLink,
 } from "./federated-subs";
+// DS-D15's client half (2026-10-01): fieldd-client's rows play the owner with
+// the real journal
+export { forwardDigest, OwnerForwardJournal } from "./forward-receipts";
 export { OutboundLaneIdAllocator } from "./lane-id";
 export {
   type BoardProjection,
