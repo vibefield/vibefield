@@ -1,17 +1,20 @@
 import { describe, expect, it } from "vitest";
 import { ARTIFACT_LIMITS } from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
-import { LOCALITIES, METHODS, SURFACES } from "../src/methods";
+import { defineMethod, LOCALITIES, METHODS, reachableFromTailnet, SURFACES } from "../src/methods";
 import {
   AGENT_FIELD,
   DESKTOP_APP_ID,
   DESKTOP_TRAY_GUID,
   HOST_SINGLETON_EXTERNALS,
   HOST_SINGLETON_MODULE_SPECIFIERS,
+  INDEX_MESH,
   LOG_STREAMS,
   MESH_CONTROL_LIMITS,
+  PEER_FIELDD_SCOPES,
   PORTS,
   PRODUCT_API_LIMITS,
+  ROWS,
   SCOPES,
   SOCKETS,
   STORES,
@@ -147,6 +150,156 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
       // the receipt door reads THIS daemon's journal of its own forwards
       if (m.method.startsWith("forward.")) expect(m.locality, m.method).toBe("local");
     }
+  });
+});
+
+// SP-1 (SP-L4 — `thinking-sync-planes.md` §3, §6; design-06 §2.2) — every
+// subscription a phone or a peer daemon can open says what its frames are and
+// how often they can come. A bare `true` is where a door that pours whole
+// boards at a radio hides, so the lint refuses it wherever the tailnet reaches.
+describe("SP-1 — the subscription descriptor (SP-L4)", () => {
+  const product = METHODS.filter((m) => m.surface === "product");
+  const subscriptions = product.filter((m) => m.subscription !== undefined);
+
+  it("refuses a bare `true` on every subscription reachable from the tailnet", () => {
+    const bare = subscriptions
+      .filter((m) => reachableFromTailnet(m) && m.subscription === true)
+      .map((m) => m.method);
+    expect(
+      bare,
+      "declare `subscription: {shape, cadenceFloorMs}` (methods.ts SUBSCRIPTION_SHAPES) on each",
+    ).toEqual([]);
+  });
+
+  it("reads reachability from both presets and from the two localities that cross devices", () => {
+    // a scope the phone holds, one only a peer daemon holds, a locality that
+    // federates — and `local` alone never decides it (the wall refuses a
+    // `local` method to a peer daemon, never to a phone)
+    const row = (scope: (typeof SCOPES)[number] | null, locality: (typeof LOCALITIES)[number]) =>
+      reachableFromTailnet({
+        surface: "product",
+        method: "x.probe",
+        scope,
+        idempotent: true,
+        locality,
+      });
+    expect(row("workspace.read", "local")).toBe(true);
+    expect(TAILNET_SCOPES).not.toContain("index.search");
+    expect(PEER_FIELDD_SCOPES).toContain("index.search");
+    expect(row("index.search", "local")).toBe(true);
+    expect(row("settings.manage", "stream")).toBe(true);
+    expect(row("settings.manage", "federate")).toBe(true);
+    expect(row("settings.manage", "sync")).toBe(false);
+    expect(row(null, "local")).toBe(false);
+    expect(
+      reachableFromTailnet({
+        surface: "mgmt",
+        method: "native.probe",
+        scope: null,
+        idempotent: true,
+        locality: "stream",
+      }),
+    ).toBe(false);
+  });
+
+  it("names every tailnet-reachable subscription and what its frames are", () => {
+    // A widening is a deliberate edit against this pin. Each floor is a
+    // registry number the door ENFORCES (a caller may ask slower, never
+    // faster) — fieldd's projection.ts and the handlers in daemon.ts.
+    const reachable = Object.fromEntries(
+      subscriptions.filter(reachableFromTailnet).map((m) => [m.method, m.subscription]),
+    );
+    const stream = { shape: "stream", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS };
+    expect(reachable).toEqual({
+      "artifact.subscribe": stream,
+      "device.subscribe": stream,
+      "services.subscribe": stream,
+      "agents.profileSets.subscribe": stream,
+      "index.catalog.subscribe": { shape: "rows", cadenceFloorMs: ROWS.MIN_INTERVAL_MS },
+      "index.changes.subscribe": {
+        shape: "rows",
+        cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS,
+      },
+      "agent.subscribe": {
+        // the bare ask is the full fold at its own tick — served to a phone
+        // that asks it (refuseBoardAsk refuses it to a peer daemon only)
+        shape: "stream",
+        cadenceFloorMs: AGENT_FIELD.FULL_TICK_MS,
+        variants: {
+          '{projection: "field"}': {
+            shape: "snapshot-delta",
+            cadenceFloorMs: AGENT_FIELD.MIN_INTERVAL_MS,
+          },
+          '{projection: "desk"}': {
+            shape: "snapshot-delta",
+            cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+          },
+          '{scope: "mesh", projection: "field"}': {
+            shape: "rows",
+            cadenceFloorMs: AGENT_FIELD.MIN_INTERVAL_MS,
+          },
+          '{scope: "mesh", projection: "desk"}': {
+            shape: "rows",
+            cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+          },
+        },
+      },
+    });
+    // the board's floors, as design-06 §8 rules them
+    expect(AGENT_FIELD.MIN_INTERVAL_MS).toBe(250);
+    expect(AGENT_FIELD.DESK_MIN_INTERVAL_MS).toBe(100);
+    expect(PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS).toBe(250);
+  });
+
+  it("keeps a census of the scope-null product subscriptions, whose reach is their handler's", () => {
+    // `scope: null` passes every hello'd principal through the registry's
+    // gate — a phone included — and only a handler can narrow it, which the
+    // registry cannot see. So each one is NAMED here with what decides its
+    // reach, and a new one fails this pin until somebody says.
+    //  · storage.settings.subscribe — `settingsCaller` (daemon.ts) admits a
+    //    plugin or a local window holding plugins.manage; a phone is refused
+    //  · process.subscribe — `processViewer` (daemon.ts), the same posture
+    //  · system.health.subscribe — NO handler gate: a phone can open it
+    //    (recorded 2026-10-01, SP-1; whole FielddHealth values on every
+    //    health change, no floor). Its `true` stands because the rule above
+    //    does not reach it; whether it gains a gate or a floor is a ruling,
+    //    not this lint's.
+    expect(
+      subscriptions.filter((m) => m.scope === null).map((m) => [m.method, m.locality]),
+    ).toEqual([
+      ["system.health.subscribe", "local"],
+      ["storage.settings.subscribe", "local"],
+      ["process.subscribe", "local"],
+    ]);
+  });
+
+  it("defineMethod refuses a descriptor it cannot honour", () => {
+    const base = {
+      surface: "product" as const,
+      method: "x.stream",
+      scope: null,
+      idempotent: true,
+      locality: "local" as const,
+    };
+    expect(() =>
+      defineMethod({ ...base, subscription: { shape: "rows", cadenceFloorMs: 100 } }),
+    ).not.toThrow();
+    expect(() =>
+      defineMethod({ ...base, subscription: { shape: "blob" as never, cadenceFloorMs: 100 } }),
+    ).toThrow(/unknown subscription shape on x\.stream/);
+    expect(() =>
+      defineMethod({ ...base, subscription: { shape: "stream", cadenceFloorMs: 0 } }),
+    ).toThrow(/subscription floor on x\.stream/);
+    expect(() =>
+      defineMethod({
+        ...base,
+        subscription: {
+          shape: "stream",
+          cadenceFloorMs: 250,
+          variants: { "{fast: true}": { shape: "stream", cadenceFloorMs: 2.5 } },
+        },
+      }),
+    ).toThrow(/subscription floor on x\.stream \(\{fast: true\}\)/);
   });
 });
 

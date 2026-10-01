@@ -1,4 +1,13 @@
-import { SCOPES, type Scope } from "./registries";
+import {
+  AGENT_FIELD,
+  INDEX_MESH,
+  PEER_FIELDD_SCOPES,
+  PRODUCT_API_LIMITS,
+  ROWS,
+  SCOPES,
+  type Scope,
+  TAILNET_SCOPES,
+} from "./registries";
 
 // Method registry (design-01 §3 + D36): every method declares surface, scope,
 // idempotency, and its LOCALITY CLASS. The registry lint (test/registry.test.ts)
@@ -18,6 +27,49 @@ export const LOCALITIES = [
 ] as const;
 export type Locality = (typeof LOCALITIES)[number];
 
+/**
+ * SP-1 (SP-L4 — `thinking-sync-planes.md` §3; design-06 §2.2) — what a
+ * subscription's frames ARE. A reader across the tailnet (a phone, a peer
+ * desktop's daemon) budgets a stream before it opens one, and a door that pours
+ * whole boards at a radio is the failure SP-L4 names. Three shapes:
+ *
+ *   · `rows` — `rows.ts`'s protocol (DS-L3): the open answers `{resumed}` or
+ *     `{snapshot: {epoch, revision, rows, more?}}` (or the mesh pair,
+ *     `meshRowsOpen`/`meshRowsFrame`); later frames are deltas `{epoch, since,
+ *     revision, upserts, removed}`, or a snapshot that resets. A kept cursor
+ *     resumes; a gap re-subscribes from the reader's own cursor.
+ *   · `snapshot-delta` — the field board's pair (`agent-field.ts`): the open
+ *     answers `{epoch?, revision, rows}`, later frames `{epoch?, since,
+ *     revision, upserts, removed}`. No resume: a gap re-subscribes for a fresh
+ *     snapshot (the tolerant reader's own rule — there is no ack protocol).
+ *   · `stream` — whole values: the open answers the current value and every
+ *     later frame is the WHOLE current value again; the newest stands. Nothing
+ *     on the wire is revisioned, so there is no gap to detect: a lost frame is
+ *     healed by the next one, and a reconnect re-snapshots (P5).
+ */
+export const SUBSCRIPTION_SHAPES = ["rows", "snapshot-delta", "stream"] as const;
+export type SubscriptionShape = (typeof SUBSCRIPTION_SHAPES)[number];
+
+/** One kind of frames a subscription sends, and how often at most. */
+export interface SubscriptionFrames {
+  shape: SubscriptionShape;
+  /** The door's per-subscriber TRAILING-EDGE floor in ms: the shortest
+   * interval between two frames that carry a change to ONE subscriber. A
+   * change is never dropped, only held to the end of its window; a caller may
+   * ask slower and is never served faster. A mesh-scoped `rows` stream
+   * multiplexes one chain per device, so there the floor holds per device. A
+   * heartbeat (an empty delta spoken into silence) carries no change. */
+  cadenceFloorMs: number;
+}
+
+/** A subscription's descriptor. `variants` names the frames a door answers
+ * when its PARAMS select something other than the bare ask, keyed by those
+ * params as a reader would write them — `agent.subscribe` is one door with
+ * three projections and two scopes. */
+export interface SubscriptionDescriptor extends SubscriptionFrames {
+  variants?: Readonly<Record<string, SubscriptionFrames>>;
+}
+
 export interface MethodDef {
   surface: Surface;
   /** dotted method name, e.g. "system.hello" */
@@ -26,12 +78,47 @@ export interface MethodDef {
   scope: Scope | null;
   idempotent: boolean;
   locality: Locality;
-  subscription?: boolean;
+  /** Present on a subscription method. SP-1 (2026-10-01): `true` is enough
+   * for a subscription only this device's own callers can open; one reachable
+   * from the tailnet (`reachableFromTailnet`) declares its descriptor — what
+   * its frames are and how often they can come — and the registry lint
+   * refuses a bare `true` there. */
+  subscription?: true | SubscriptionDescriptor;
   /** UA-4 (spec §7.3, UA-D14): a tailnet-guest principal may call ONLY
    * methods that set this — the scope check alone would pass scope:null
    * methods. The registry's first runtime-read column (`locality`'s sibling);
    * linted: guestOk ⇒ idempotent and a non-mutating scope. Default false. */
   guestOk?: boolean;
+}
+
+/**
+ * SP-1 — can a principal that crossed the tailnet open this product method?
+ * Its scope is in the phone's preset (`TAILNET_SCOPES`) or a self peer
+ * daemon's (`PEER_FIELDD_SCOPES`), or its locality crosses devices by
+ * definition (`federate`, `stream`). D36's `local` does not answer the
+ * question: the door refuses a `local` method to a PEER daemon only, and a
+ * phone's `tailnet` principal calls `local` methods on its home desktop every
+ * day. A `null` scope is every principal's in fact, and only a handler's own
+ * gate can narrow it — which the registry cannot see — so those rows are a
+ * census in the lint (`registry.test.ts`) rather than a guess here.
+ */
+export function reachableFromTailnet(def: MethodDef): boolean {
+  if (def.surface !== "product") return false;
+  if (def.locality === "federate" || def.locality === "stream") return true;
+  if (def.scope === null) return false;
+  return (
+    (TAILNET_SCOPES as readonly string[]).includes(def.scope) ||
+    (PEER_FIELDD_SCOPES as readonly string[]).includes(def.scope)
+  );
+}
+
+function assertFrames(method: string, label: string, frames: SubscriptionFrames): void {
+  if (!(SUBSCRIPTION_SHAPES as readonly string[]).includes(frames.shape))
+    throw new Error(`unknown subscription shape on ${method}${label}: ${frames.shape}`);
+  if (!Number.isSafeInteger(frames.cadenceFloorMs) || frames.cadenceFloorMs < 1)
+    throw new Error(
+      `subscription floor on ${method}${label} must be a whole number of ms ≥ 1: ${frames.cadenceFloorMs}`,
+    );
 }
 
 export function defineMethod(def: MethodDef): MethodDef {
@@ -40,8 +127,22 @@ export function defineMethod(def: MethodDef): MethodDef {
     throw new Error(`unknown scope on ${def.method}: ${def.scope}`);
   if (!(LOCALITIES as readonly string[]).includes(def.locality))
     throw new Error(`unknown locality on ${def.method}: ${def.locality}`);
+  const subscription = def.subscription;
+  if (subscription !== undefined && subscription !== true) {
+    assertFrames(def.method, "", subscription);
+    for (const [variant, frames] of Object.entries(subscription.variants ?? {}))
+      assertFrames(def.method, ` (${variant})`, frames);
+  }
   return def;
 }
+
+/** The whole-value stream every tailnet-reachable roster or catalog door
+ * answers (SP-1): the current value, then the whole value again at most once
+ * per `PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS` per subscriber. */
+const WHOLE_VALUE_STREAM: SubscriptionDescriptor = {
+  shape: "stream",
+  cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+};
 
 /** The catalog grows per milestone: M1 seeds → M2 mgmt channel → M3 product core. */
 export const METHODS: MethodDef[] = [
@@ -619,13 +720,16 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "sync",
   }),
+  // SP-1 — the catalog as whole lists, the newest standing (the kit and the
+  // browser plugin read it so), at the stream floor: a slice relay that churns
+  // costs a phone one list per window, not one per change.
   defineMethod({
     surface: "product",
     method: "artifact.subscribe",
     scope: "workspace.read",
     idempotent: true,
     locality: "sync",
-    subscription: true,
+    subscription: WHOLE_VALUE_STREAM,
   }),
 
   // C4 — DeviceService (design-04 D31, P1-lite: roster only; PeerLink/D32 and
@@ -645,13 +749,16 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "sync",
   }),
+  // SP-1 — the roster as whole lists (`DeviceInfo[]`), the newest standing,
+  // at the stream floor: a flapping peer or a door that blinks moves a phone's
+  // roster once per window.
   defineMethod({
     surface: "product",
     method: "device.subscribe",
     scope: "workspace.read",
     idempotent: true,
     locality: "sync",
-    subscription: true,
+    subscription: WHOLE_VALUE_STREAM,
   }),
   // DS-2 (DS-D15, 2026-09-30) — the receipt of a keyed forwarded mutation, as
   // THIS daemon knows it: applied, refused, or outcome-unknown (the forward
@@ -828,13 +935,17 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // SP-1 — `local`, and still the phone's to open: workspace.read is in the
+  // tailnet preset, and D36's wall refuses a `local` method to a peer daemon
+  // only. Whole snapshots of the registry, the newest standing, at the stream
+  // floor.
   defineMethod({
     surface: "product",
     method: "services.subscribe",
     scope: "workspace.read",
     idempotent: true,
     locality: "local",
-    subscription: true,
+    subscription: WHOLE_VALUE_STREAM,
   }),
 
   // PLUG-P5 — settings + KV storage (§16.2/§16.3/§22.3). scope null on
@@ -1447,13 +1558,17 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+  // SP-1 — both are `rows` (DS-L3; `catalog-rows.ts`, `index-mesh.ts`). The
+  // catalog's floor is ROWS' own; the pings' is the History page's. Each is a
+  // FLOOR at the door, never a default a caller can undercut (the field's
+  // lesson, 2026-10-01: the schema lets a caller ask 16 ms).
   defineMethod({
     surface: "product",
     method: "index.catalog.subscribe",
     scope: "index.search",
     idempotent: true,
     locality: "stream",
-    subscription: true,
+    subscription: { shape: "rows", cadenceFloorMs: ROWS.MIN_INTERVAL_MS },
   }),
   defineMethod({
     surface: "product",
@@ -1461,7 +1576,7 @@ export const METHODS: MethodDef[] = [
     scope: "index.search",
     idempotent: true,
     locality: "stream",
-    subscription: true,
+    subscription: { shape: "rows", cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS },
   }),
   // QL (thinking-ql-empty-pane-launcher.md, QL-D9) — the empty pane
   // launcher's list: a folder's past sessions (its rosetta project) or every
@@ -1621,13 +1736,16 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // SP-1 — reachable from the tailnet like services.subscribe (agent.spawn is
+  // in the phone's preset): whole `AgentsProfileSetsListResult` frames, the
+  // newest standing, at the stream floor.
   defineMethod({
     surface: "product",
     method: "agents.profileSets.subscribe",
     scope: "agent.spawn",
     idempotent: true,
     locality: "local",
-    subscription: true,
+    subscription: WHOLE_VALUE_STREAM,
   }),
   defineMethod({
     surface: "product",
@@ -1911,12 +2029,42 @@ export const METHODS: MethodDef[] = [
   // is for this device's clients, DS-L4). DS-2's census reclassifies the agent
   // reads as a set (design-04 §7's 2026-09-30 note); this row is its first
   // member, and that reclass supersedes this comment when both land.
+  // SP-1 (2026-10-01) — what each ask IS. The BARE ask (no params, or
+  // `{projection: "full"}`) is the whole fold row in whole-board frames at the
+  // fold's own tick. `agent-field.ts` `refuseBoardAsk` refuses it to a PEER
+  // daemon and NOT to a phone, so a phone that asks `{}` is served it: recorded
+  // here as the door is, not as SP-L4 would have it — the phone's own ask is
+  // `{projection: "field"}`. The field and the desk are snapshot-delta at the
+  // board's floors (250 / 100 ms, `AGENT_FIELD`); `scope: "mesh"` is the rows
+  // protocol (`meshRowsOpen`/`meshRowsFrame`), each device's chain at the
+  // floor of its projection.
   defineMethod({
     surface: "product",
     method: "agent.subscribe",
     scope: "agent.observe",
     idempotent: true,
     locality: "stream",
-    subscription: true,
+    subscription: {
+      shape: "stream",
+      cadenceFloorMs: AGENT_FIELD.FULL_TICK_MS,
+      variants: {
+        '{projection: "field"}': {
+          shape: "snapshot-delta",
+          cadenceFloorMs: AGENT_FIELD.MIN_INTERVAL_MS,
+        },
+        '{projection: "desk"}': {
+          shape: "snapshot-delta",
+          cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+        },
+        '{scope: "mesh", projection: "field"}': {
+          shape: "rows",
+          cadenceFloorMs: AGENT_FIELD.MIN_INTERVAL_MS,
+        },
+        '{scope: "mesh", projection: "desk"}': {
+          shape: "rows",
+          cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+        },
+      },
+    },
   }),
 ];

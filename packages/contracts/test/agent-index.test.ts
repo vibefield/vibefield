@@ -285,7 +285,8 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       // output while it runs), Agent Profiles by a third (the profiles and
       // their sign-ins), Extensions by a fourth (a profile's lens, again when
       // a read finishes); every other row stays a one-shot call.
-      expect(m.subscription ?? false, m.method).toBe(
+      // (SP-1: a descriptor is a subscription too; registry.test.ts pins it)
+      expect(m.subscription !== undefined, m.method).toBe(
         m.method === "agents.usage.subscribe" ||
           m.method === "agents.operations.subscribe" ||
           m.method === "agents.profileSets.subscribe" ||

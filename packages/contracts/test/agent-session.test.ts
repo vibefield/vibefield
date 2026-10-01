@@ -32,7 +32,8 @@ describe("agent.* registry rows (AR-3)", () => {
       scope: m.scope,
       idempotent: m.idempotent,
       locality: m.locality,
-      subscription: m.subscription ?? false,
+      // SP-1 — a descriptor is a subscription too; registry.test.ts pins what it says
+      subscription: m.subscription !== undefined,
     }));
 
   it("births on agent.spawn, reads on agent.observe, steers on agent.control; acts federate, the fold streams (DS-2)", () => {

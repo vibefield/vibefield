@@ -155,6 +155,14 @@ export const PRODUCT_API_LIMITS = {
    * starts. A caller past it gets RESOURCE_EXHAUSTED and keeps everything it
    * already had: the refusal never disturbs live subscriptions. */
   SUBSCRIPTIONS_PER_CONNECTION: 32,
+  /** SP-1 (SP-L4; design-06 §2.2) — the door's per-subscriber trailing-edge
+   * floor for a WHOLE-VALUE stream (`subscription.shape: "stream"` in
+   * `methods.ts`: the roster, the artifact catalog, the service registry, the
+   * profile sets). Every frame of such a stream is the whole current value, so
+   * coalescing loses nothing — the newest value stands — and a source that
+   * churns costs one frame per window per subscriber instead of one per
+   * change. The field board's number: a phone's radio budget, not a feeling. */
+  STREAM_MIN_INTERVAL_MS: 250,
 } as const;
 
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
@@ -190,7 +198,12 @@ export const TERMINAL_SCROLLBACK_CLASS_BYTES = {
  * heartbeat the mesh board asks each peer's upstream for (an empty delta
  * after that long without a frame), and a peer unheard for MESH_STALE_BEATS
  * of them reads `stale`: the board's own cadence is quiet when nothing moves,
- * so without a beat an idle desktop and a dead stream would look alike. */
+ * so without a beat an idle desktop and a dead stream would look alike.
+ *
+ * SP-1 (2026-10-01) — FULL_TICK_MS is the fold's own publish tick (PF5: one
+ * whole-board frame per tick per subscriber, trailing-edge), moved here from a
+ * fieldd constant so the registry can say what `agent.subscribe`'s full
+ * projection costs a reader (`methods.ts`'s subscription descriptor). */
 export const AGENT_FIELD = {
   MIN_INTERVAL_MS: 250,
   STORE_MIN_INTERVAL_MS: 250,
@@ -200,6 +213,7 @@ export const AGENT_FIELD = {
   DESK_TEXT_CHARS: 280,
   MESH_HEARTBEAT_MS: 1_000,
   MESH_STALE_BEATS: 3,
+  FULL_TICK_MS: 16,
 } as const;
 
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot

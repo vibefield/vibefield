@@ -40,6 +40,7 @@ import {
 import type { ProcessTable } from "@vibecook/puppeteer-runtime/spawn-through";
 import {
   AGENT_CATALOG,
+  AGENT_FIELD,
   type AgentCapability,
   type AgentCatalogEntry,
   type AgentCatalogReaders,
@@ -237,8 +238,10 @@ export function noTerminalHost(): AgentHost {
   };
 }
 
-/** PF5 — one fold frame per tick per subscriber, trailing-edge. */
-const PUBLISH_TICK_MS = 16;
+/** PF5 — one fold frame per tick per subscriber, trailing-edge. SP-1: the
+ * registry's number, so `agent.subscribe`'s descriptor (methods.ts) and this
+ * tick cannot drift apart. */
+const PUBLISH_TICK_MS = AGENT_FIELD.FULL_TICK_MS;
 /** The inventory backstop's grace: a PTY that left the inventory is closed
  * as an unknown exit only after the floor's own `session-exited` — which
  * carries the real outcome and code — has had one bounded turn to arrive
