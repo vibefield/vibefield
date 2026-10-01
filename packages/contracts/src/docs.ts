@@ -184,6 +184,9 @@ export const LaneHello = z
     /** DS-5 — frame capabilities the client handles unasked. Absent means none:
      * a pre-DS-5 client is never pushed to. */
     accepts: z.array(z.string()).optional(),
+    /** DS-5 — this is the SAME window re-attaching after a drop (it already
+     * holds what this device served it); absent or false is a new window. */
+    resume: z.boolean().optional(),
   })
   .passthrough();
 export type LaneHello = z.infer<typeof LaneHello>;

@@ -1,4 +1,5 @@
 import {
+  DOC_LANE_ACCEPTS,
   type DocOpenResult,
   decodeJsonPayload,
   decodeLaneFrame,
@@ -23,6 +24,14 @@ import { FielddRpcError } from "./client";
 // while it lives — re-attach after a drop is PUT-only (lastPut re-syncs the
 // daemon); GET happens once, at the initial attach. An op timeout closes the
 // socket outright so a stale reply can never pair with the next op's waiter.
+//
+// DS-5 (§1.2 defect 2) — LIVE UPDATES. HELLO declares `accepts: ["push"]`
+// (and `resume` on a re-attach), and fieldd answers with DOC_PUSH frames: Loro
+// updates a peer desktop's edits merged into the host, each exported from what
+// fieldd can PROVE this window holds. They go to `onPush` listeners and NEVER
+// to the reply waiter — an unasked-for frame there would fail an in-flight
+// save. With no listener yet, only the LATEST push is kept: each one covers
+// every earlier one, because fieldd exports from proof, not from what it sent.
 
 /** Structural binary-capable WebSocket (browser + Node undici both satisfy it). */
 export interface LaneWsLike {
@@ -87,6 +96,9 @@ export class DocLaneClient {
   private reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   private statusListeners = new Set<() => void>();
   private presenceListeners = new Set<(payload: Uint8Array) => void>();
+  /** DS-5 — live-update listeners, and the latest push no listener took yet. */
+  private pushListeners = new Set<(update: Uint8Array) => void>();
+  private unheardPush: Uint8Array | null = null;
   private closedByUser = false;
   private attachedOnce = false;
   private recoveryEnabled = false;
@@ -113,6 +125,30 @@ export class DocLaneClient {
   onPresence(fn: (payload: Uint8Array) => void): () => void {
     this.presenceListeners.add(fn);
     return () => this.presenceListeners.delete(fn);
+  }
+
+  /** DS-5 — subscribe to live updates a peer desktop's edits merged into this
+   * document. Hand each to the open session's `applyRemote`; a push held while
+   * nobody listened is delivered at once. Survives reconnects like presence. */
+  onPush(fn: (update: Uint8Array) => void): () => void {
+    this.pushListeners.add(fn);
+    const held = this.unheardPush;
+    if (held !== null) {
+      this.unheardPush = null;
+      this.deliverPush(held);
+    }
+    return () => this.pushListeners.delete(fn);
+  }
+
+  private deliverPush(update: Uint8Array): void {
+    for (const listener of [...this.pushListeners]) {
+      try {
+        listener(update);
+      } catch {
+        // One renderer observer cannot steal a persistence reply or tear down
+        // the document lane; the session reports its own quarantine.
+      }
+    }
   }
 
   /** Publish one opaque ICE presence snapshot into the authenticated doc room. */
@@ -255,7 +291,14 @@ export class DocLaneClient {
     }
     this.dialingWs = null;
     this.ws = ws;
-    this.send(encodeJsonFrame(LANE_FRAME.HELLO, 0, { ticket: open.ticket }));
+    this.send(
+      encodeJsonFrame(LANE_FRAME.HELLO, 0, {
+        ticket: open.ticket,
+        accepts: [DOC_LANE_ACCEPTS.PUSH],
+        // the same window coming back: fieldd keeps what it proved we hold
+        ...(this.attachedOnce ? { resume: true } : {}),
+      }),
+    );
     const reply = await this.nextFrame();
     if (reply.kind === LANE_FRAME.ERR) throw this.toError(reply.payload);
     if (reply.kind !== LANE_FRAME.HELLO_OK) throw this.protocolError(reply.kind);
@@ -371,6 +414,12 @@ export class DocLaneClient {
       frame = decodeLaneFrame(bytes);
     } catch {
       return; // tolerant reader: structural garbage never fatal to the client
+    }
+    if (frame.kind === LANE_FRAME.DOC_PUSH) {
+      const update = frame.payload.slice();
+      if (this.pushListeners.size === 0) this.unheardPush = update;
+      else this.deliverPush(update);
+      return;
     }
     if (frame.kind === LANE_FRAME.PRESENCE_PUSH) {
       const payload = frame.payload.slice();

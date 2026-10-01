@@ -79,6 +79,30 @@ export function versionToBase64(version: VersionVector): string {
   return Buffer.from(version.encode()).toString("base64");
 }
 
+/** The per-peer maximum of two versions. A valid LOWER BOUND of what a holder
+ * has when each input is: Loro applies one peer's ops in counter order, so
+ * holding (peer, n) means holding every earlier op of that peer. */
+export function mergeVersions(a: VersionVector, b: VersionVector): VersionVector {
+  const out = new Map(a.toJSON());
+  for (const [peer, counter] of b.toJSON()) {
+    if ((out.get(peer) ?? 0) < counter) out.set(peer, counter);
+  }
+  return VersionVector.parseJSON(out);
+}
+
+/** The version a blob PROVES its sender holds: a full snapshot's own version,
+ * or an update's end — the most a sender could have exported it from. Null
+ * for bytes that are neither. */
+export function provenVersion(bytes: Uint8Array): VersionVector | null {
+  try {
+    const meta = decodeImportBlobMeta(bytes, false);
+    if (meta.mode === "snapshot" || meta.mode === "update") return meta.partialEndVersionVector;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /** Does `ours` hold everything `theirs` names? (Equal or strictly ahead.) */
 export function covers(ours: VersionVector, theirs: VersionVector): boolean {
   const order = ours.compare(theirs);

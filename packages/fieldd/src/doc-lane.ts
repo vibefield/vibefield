@@ -1,10 +1,12 @@
 import {
+  DOC_LANE_ACCEPTS,
   decodeJsonPayload,
   decodeLaneFrame,
   type ErrorKind,
   encodeJsonFrame,
   encodeLaneFrame,
   LANE_FRAME,
+  LANE_HEADER_BYTES,
   LANE_MAX_FRAME_BYTES,
   type LaneErr,
   LaneHello,
@@ -14,8 +16,11 @@ import {
   MESHDATA_LOSSY_MAX_LOGICAL_BYTES,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { VersionVector } from "loro-crdt";
 import { type RawData, type WebSocket, WebSocketServer } from "ws";
 import type { DocumentService } from "./doc-service";
+import { liftIce1 } from "./ice1-envelope";
+import { decodeVersion, mergeVersions, provenVersion, updateCarriesChanges } from "./loro-host";
 import { RpcCallError } from "./native-link";
 
 // The :9411 doc lane (design-01 §4 / D27, B3): a second loopback WS carrying raw
@@ -28,6 +33,14 @@ import { RpcCallError } from "./native-link";
 // plus the advertised number of DOC_UPDATE frames, and PUT_META+PUT → PUT_OK
 // cycles (autosave). The single-writer lock lives in
 // DocumentService — the lane only reports it (LaneErr PRECONDITION_FAILED).
+//
+// DS-5 (§1.2 defect 2 closed) — a window that declares `accepts: ["push"]` is
+// PUSHED what a peer merged (LANE_FRAME.DOC_PUSH), exported from the version
+// this device can PROVE the window holds: what GET served it, raised by every
+// update and checkpoint it PUT (ICE re-journals applied remote updates, so a
+// push it applied comes back as proof). Never from what was merely sent — a
+// push lost on a dropped socket must cost size, never completeness, because a
+// window that imports a record whose base it lacks is quarantined for good.
 
 const WS_OPEN = 1;
 const HELLO_TIMEOUT_MS = 10_000;
@@ -61,14 +74,24 @@ interface LaneConn {
   chain: Promise<void>;
   /** identity-bound membership derived from the redeemed HELLO docId */
   room: DocumentPresenceRoomHandle | null;
+  /** DS-5 — the client declared it takes DOC_PUSH frames. */
+  pushes: boolean;
 }
 
 export class DocLane {
   private wss: WebSocketServer | null = null;
   private readonly logger: Logger;
+  /** DS-5 — per doc, what this device can PROVE the open window holds. Kept
+   * across a reconnect of the SAME window (HELLO `resume`), dropped for a new
+   * one; a lower bound, so a push exported from it is always complete. */
+  private readonly proven = new Map<string, VersionVector>();
+  /** DS-5 — the authenticated sockets per doc (the writer lock keeps it one). */
+  private readonly open = new Map<string, Set<{ ws: WebSocket; conn: LaneConn }>>();
+  private readonly offMerged: () => void;
 
   constructor(private readonly opts: DocLaneOptions) {
     this.logger = opts.logger ?? createNoopLogger();
+    this.offMerged = opts.docs.onPeerMerged((docId) => this.onPeerMerged(docId));
   }
 
   async listen(): Promise<number> {
@@ -89,6 +112,7 @@ export class DocLane {
       pendingMeta: null,
       chain: Promise.resolve(),
       room: null,
+      pushes: false,
       helloTimer: setTimeout(() => {
         if (!conn.docId) ws.close(1008, "no hello");
       }, HELLO_TIMEOUT_MS),
@@ -107,6 +131,11 @@ export class DocLane {
         const docId = conn.docId;
         const room = conn.room;
         conn.room = null;
+        if (docId) {
+          for (const held of this.open.get(docId) ?? []) {
+            if (held.conn === conn) this.open.get(docId)?.delete(held);
+          }
+        }
         try {
           await room?.close();
         } catch (error) {
@@ -226,6 +255,16 @@ export class DocLane {
     }
     conn.docId = redeemed.docId;
     this.opts.docs.writerAttached(redeemed.docId);
+    // DS-5 — a NEW window holds nothing this device served; a resuming one
+    // keeps its proof. Either way it is pushed only once something is proven.
+    if (hello.resume !== true) this.proven.delete(redeemed.docId);
+    conn.pushes = hello.accepts?.includes(DOC_LANE_ACCEPTS.PUSH) === true;
+    let held = this.open.get(redeemed.docId);
+    if (held === undefined) {
+      held = new Set();
+      this.open.set(redeemed.docId, held);
+    }
+    held.add({ ws, conn });
     try {
       conn.room =
         this.opts.rooms?.attach(redeemed.docId, (payload) => {
@@ -247,12 +286,13 @@ export class DocLane {
       docId: redeemed.docId,
       hasDoc: meta !== null,
       ...(meta ? { meta } : {}),
+      ...(conn.pushes ? { pushes: true } : {}),
     };
     this.sendFrame(ws, encodeJsonFrame(LANE_FRAME.HELLO_OK, 0, helloOk));
   }
 
   private async onGet(ws: WebSocket, docId: string): Promise<void> {
-    const read = await this.opts.docs.readDoc(docId);
+    const read = await this.opts.docs.readDocForWindow(docId);
     if (!read) {
       this.sendErr(ws, "NOT_FOUND", "no doc bytes yet");
       return;
@@ -261,6 +301,58 @@ export class DocLane {
     for (const update of read.updates) {
       this.sendFrame(ws, encodeLaneFrame(LANE_FRAME.DOC_UPDATE, 0, update));
     }
+    // DS-5 — what was just served is the window's first proven version.
+    const served = read.version === null ? null : decodeVersion(read.version);
+    if (served !== null) this.proven.set(docId, served);
+  }
+
+  /** DS-5 — a window's own PUT proves what it holds: a checkpoint its whole
+   * version, an update the end of what it exported (ICE exports everything
+   * since its last send, remote ops included). */
+  private prove(docId: string, payload: Uint8Array, kind: "checkpoint" | "update"): void {
+    let bytes: Uint8Array | null = payload;
+    if (kind === "checkpoint") {
+      const lifted = liftIce1(payload);
+      bytes = lifted.ok ? lifted.payload : null;
+    }
+    const version = bytes === null ? null : provenVersion(bytes);
+    if (version === null) return;
+    const known = this.proven.get(docId);
+    this.proven.set(docId, known === undefined ? version : mergeVersions(known, version));
+  }
+
+  /** DS-5 — a peer's bytes changed a doc: push every push-capable window on it
+   * what it lacks, in order behind whatever its socket is already doing. */
+  private onPeerMerged(docId: string): void {
+    for (const { ws, conn } of this.open.get(docId) ?? []) {
+      if (!conn.pushes) continue;
+      conn.chain = conn.chain
+        .then(() => this.push(ws, conn, docId))
+        .catch((error: unknown) => {
+          this.logger.warn("fieldd.doclane.push_failed", "A live update could not be pushed", {
+            docId,
+            error: String(error),
+          });
+        });
+    }
+  }
+
+  private async push(ws: WebSocket, conn: LaneConn, docId: string): Promise<void> {
+    if (ws.readyState !== WS_OPEN || conn.docId !== docId) return;
+    const known = this.proven.get(docId);
+    if (known === undefined) return; // nothing proven yet: pushes start at the window's first GET or PUT
+    const update = await this.opts.docs.windowUpdateSince(docId, known.encode());
+    if (update === null || !updateCarriesChanges(update)) return;
+    if (LANE_HEADER_BYTES + update.byteLength > LANE_MAX_FRAME_BYTES) {
+      // The window catches up on its next open; a frame past the ceiling is
+      // refused loudly everywhere else on this lane, and here too.
+      this.logger.warn("fieldd.doclane.push_oversize", "A live update exceeds the lane ceiling", {
+        docId,
+        bytes: update.byteLength,
+      });
+      return;
+    }
+    this.sendFrame(ws, encodeLaneFrame(LANE_FRAME.DOC_PUSH, 0, update));
   }
 
   private onPutMeta(ws: WebSocket, conn: LaneConn, payload: Uint8Array): void {
@@ -289,6 +381,7 @@ export class DocLane {
     try {
       // conn.docId is non-null here: dispatch only reaches PUT once authenticated
       await this.opts.docs.writeDoc(conn.docId as string, payload, meta);
+      this.prove(conn.docId as string, payload, meta.kind ?? "checkpoint");
       const ok: LanePutOk = { revisionId: meta.revisionId, byteLength: meta.byteLength };
       this.sendFrame(ws, encodeJsonFrame(LANE_FRAME.PUT_OK, 0, ok));
     } catch (e) {
@@ -329,6 +422,7 @@ export class DocLane {
   }
 
   close(): void {
+    this.offMerged();
     for (const client of this.wss?.clients ?? []) client.terminate();
     this.wss?.close();
   }

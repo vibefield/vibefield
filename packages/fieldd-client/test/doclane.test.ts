@@ -347,6 +347,70 @@ describe("DocLaneClient", () => {
     client.close();
   });
 
+  it("DS-5: routes DOC_PUSH to push listeners, never to the persistence waiter", async () => {
+    const store: MemoryDoc = { bytes: envelope(2), updates: [] };
+    const happy = happyServer(store);
+    FakeLaneWs.handler = (ws, frame) => {
+      // A peer's merge lands while a GET and a PUT are each awaiting a reply.
+      if (frame.kind === LANE_FRAME.GET || frame.kind === LANE_FRAME.PUT) {
+        ws.receive(encodeLaneFrame(LANE_FRAME.DOC_PUSH, 0, new Uint8Array([0xd0, frame.kind])));
+      }
+      happy(ws, frame);
+    };
+    const { client } = makeClient();
+    const pushed: number[][] = [];
+    client.onPush(() => {
+      throw new Error("one observer is broken");
+    });
+    client.onPush((update) => pushed.push(Array.from(update)));
+    await client.attach();
+    expect(Array.from((await client.get()) ?? [])).toEqual(Array.from(store.bytes ?? []));
+    const receipt = await client.put(envelope(4), { engineSchema: 2, savedAt: 9 });
+    expect(receipt.byteLength).toBe(64); // the save was not failed by the push
+    expect(pushed).toEqual([
+      [0xd0, LANE_FRAME.GET],
+      [0xd0, LANE_FRAME.PUT],
+    ]);
+    client.close();
+  });
+
+  it("DS-5: keeps only the LATEST push while nobody listens, and hands it to the first listener", async () => {
+    const store: MemoryDoc = { bytes: envelope(2), updates: [] };
+    FakeLaneWs.handler = happyServer(store);
+    const { client } = makeClient();
+    await client.attach();
+    const ws = FakeLaneWs.instances[0];
+    ws?.receive(encodeLaneFrame(LANE_FRAME.DOC_PUSH, 0, new Uint8Array([1])));
+    ws?.receive(encodeLaneFrame(LANE_FRAME.DOC_PUSH, 0, new Uint8Array([2])));
+    const heard: number[][] = [];
+    client.onPush((update) => heard.push(Array.from(update)));
+    // Each push covers every earlier one (fieldd exports from what it can PROVE
+    // this window holds), so the latest alone loses nothing.
+    expect(heard).toEqual([[2]]);
+    ws?.receive(encodeLaneFrame(LANE_FRAME.DOC_PUSH, 0, new Uint8Array([3])));
+    expect(heard).toEqual([[2], [3]]);
+    client.close();
+  });
+
+  it("DS-5: HELLO declares push, and `resume` only when the same window re-attaches", async () => {
+    const store = { bytes: null as Uint8Array | null };
+    FakeLaneWs.handler = happyServer(store);
+    const { client } = makeClient();
+    await client.attach();
+    const hello = (i: number) =>
+      decodeJsonPayload(
+        FakeLaneWs.instances[i]?.sent.find((f) => f.kind === LANE_FRAME.HELLO)?.payload ??
+          new Uint8Array(),
+      ) as { accepts?: string[]; resume?: boolean };
+    expect(hello(0).accepts).toEqual(["push"]);
+    expect(hello(0).resume).toBeUndefined();
+    FakeLaneWs.instances[0]?.drop();
+    await vi.advanceTimersByTimeAsync(600);
+    expect(client.status).toBe("attached");
+    expect(hello(1)).toMatchObject({ accepts: ["push"], resume: true });
+    client.close();
+  });
+
   it("close() is terminal: no reconnect timer survives", async () => {
     const store = { bytes: null as Uint8Array | null };
     FakeLaneWs.handler = happyServer(store);

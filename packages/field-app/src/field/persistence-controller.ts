@@ -11,6 +11,14 @@ import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 // controller's cleanup BEFORE ce.docs.close() (unregister → stop → close).
 // Autosave starts DIRTY (ice law): a seeded first-run board reaches fieldd
 // after the first debounce, no user edit required.
+//
+// DS-5 (§1.2 defect 2) — LIVE UPDATES. A peer desktop's edit, merged by
+// fieldd's Loro-level host, arrives on this lane as a push and is applied to
+// the open session. fieldd exports each push from what it can PROVE this
+// window holds, so it applies with nothing pending; the autosave then
+// re-journals it (ICE journals applied remote updates), which fieldd absorbs
+// and takes as the next proof. A push the store refuses (strata quarantines a
+// store on a pending import) leaves the board quarantined, never diverged.
 
 export function bindPersistence(opts: {
   ce: CanvasEngine;
@@ -39,7 +47,20 @@ export function bindPersistence(opts: {
     flush: () => autosave.flush(),
     close: () => autosave.close(),
   });
+  const offPush = lane.onPush((update) => {
+    const session = ce.docs.current();
+    if (session === undefined) return;
+    try {
+      session.applyRemote(update);
+    } catch (error) {
+      setBoardStatus({
+        state: "quarantined",
+        detail: `a live update was refused: ${error instanceof Error ? error.message : String(error)}`,
+      });
+    }
+  });
   return () => {
+    offPush();
     unregister();
     autosave.stop();
   };

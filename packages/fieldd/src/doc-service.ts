@@ -272,6 +272,8 @@ export class DocumentService {
   private detachLibrary: (() => void) | null = null;
   private catalogChain: Promise<void> = Promise.resolve();
   private readonly catalogListeners = new Set<(change: CatalogChange) => void>();
+  /** DS-5 — told after a PEER's bytes changed a canvas (the push trigger). */
+  private readonly peerMergeListeners = new Set<(docId: string) => void>();
   private homesOf: (docId: string) => string[] = () => [];
 
   constructor(opts: DocumentServiceOptions) {
@@ -1338,6 +1340,7 @@ export class DocumentService {
           },
           "peer",
         );
+        this.peerMerged(docId);
         return { applied: true, meta };
       }
       // DS-5 (§1.2 defect 1 closed) — a doc that HOLDS content merges a peer's
@@ -1435,7 +1438,60 @@ export class DocumentService {
       { revisionId: randomUUID(), engineSchema: stamp.engineSchema, savedAt: stamp.savedAt },
       "peer",
     );
+    this.peerMerged(entry.docId);
     return imported.pending ? { applied: true, meta, pending: true } : { applied: true, meta };
+  }
+
+  // ---- open windows (DS-5, §1.2 defect 2) ----
+
+  /** Fires after a peer's bytes changed a canvas — what an open window on
+   * this device has not seen. Listeners act OFF the per-doc chain. */
+  onPeerMerged(fn: (docId: string) => void): () => void {
+    this.peerMergeListeners.add(fn);
+    return () => this.peerMergeListeners.delete(fn);
+  }
+
+  private peerMerged(docId: string): void {
+    for (const fn of this.peerMergeListeners) {
+      try {
+        fn(docId);
+      } catch (error) {
+        this.logger.warn("fieldd.docs.merge_listener_failed", "A merge listener threw", {
+          docId,
+          error: String(error),
+        });
+      }
+    }
+  }
+
+  /** A window's GET: the at-rest doc AND the host version it amounts to, read
+   * together on the per-doc chain so no merge can land between them — that
+   * version is the first thing this device can PROVE the window holds. */
+  readDocForWindow(docId: string): Promise<{
+    bytes: Uint8Array;
+    updates: Uint8Array[];
+    meta: DocMeta;
+    version: Uint8Array | null;
+  } | null> {
+    return this.serialize(docId, async () => {
+      const read = await this.readDoc(docId);
+      if (read === null) return null;
+      const hosted = await this.hostedNow(docId);
+      return { ...read, version: hosted?.encodedVersion() ?? null };
+    });
+  }
+
+  /** What a window that provably holds `known` lacks — a Loro update it can
+   * apply with no pending import, because every op in it depends only on ops
+   * in `known` or in itself. Null when it lacks nothing, or the doc is not in
+   * Loro custody. */
+  windowUpdateSince(docId: string, known: Uint8Array): Promise<Uint8Array | null> {
+    return this.serialize(docId, async () => {
+      const hosted = await this.hostedNow(docId);
+      const version = decodeVersion(known);
+      if (hosted === null || version === null || !hosted.isAheadOf(version)) return null;
+      return hosted.exportSince(version);
+    });
   }
 
   // ---- the Loro-level host's version exchange (DS-5) ----
