@@ -58,8 +58,9 @@ interface BarrierWaiter {
 const DEFAULT_ORPHAN_TTL_MS = 30_000;
 const DEFAULT_ORPHAN_MAX_BYTES = 4 * 1024 * 1024;
 /** Matches the inbound orphan cap: the same amount of unmoved data is the same
- * amount of trouble whichever direction it is stuck in. */
-const DEFAULT_SEND_MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
+ * amount of trouble whichever direction it is stuck in. Exported (DS-5c): doc
+ * sync paces its sends under it and chunks any record that alone would cross it. */
+export const DEFAULT_SEND_MAX_BUFFERED_BYTES = 4 * 1024 * 1024;
 
 export class MeshLaneLink extends EventEmitter {
   #sock: Socket | null = null;

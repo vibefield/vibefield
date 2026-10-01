@@ -55,6 +55,15 @@ export class Mesh {
   readonly devices = new Map<string, Device>();
   /** Every record that crossed, so a test can ask what the protocol COST. */
   readonly carried: { from: string; kind: number; bytes: number }[] = [];
+  /** DS-5c — a record this answers true for is LOST on the wire (counted in
+   * `dropped`, never delivered): the lost-answer rows. */
+  drop: ((from: string, to: string, kind: number) => boolean) | null = null;
+  readonly dropped: { from: string; to: string; kind: number }[] = [];
+  /** DS-5c — when set, every device's byte plane behaves like MeshLaneLink's
+   * outbound socket: a send THROWS while more than this is queued, a send
+   * queues its bytes, and the queue drains a beat later. Off (null), the
+   * plane is the instant pipe it has always been. */
+  sendCap: number | null = null;
   /** sender's laneId → receiver's inbound laneId */
   readonly #routes = new Map<string, number>();
   /** The lane TABLE, which lives in field-native and outlives fieldd — so a
@@ -90,6 +99,10 @@ export class Mesh {
     const target = this.devices.get(to);
     if (inboundId === undefined || target === undefined) return;
     const record = decodeDocSyncFrame(payload); // DS-5: every kind, VERSION and CHUNK included
+    if (this.drop?.(from, to, record.kind) === true) {
+      this.dropped.push({ from, to, kind: record.kind });
+      return;
+    }
     this.carried.push({ from, kind: record.kind, bytes: payload.byteLength });
     // A copy, because the far side is a different device: sharing a buffer
     // across the seam would let one device's storage alias another's.
@@ -141,12 +154,32 @@ export class RoutedBytes implements LaneBytes {
    * to the wire AND makes the test deterministic on any timing. */
   readonly #pending = new Map<number, Uint8Array[]>();
 
+  /** DS-5c — bytes "queued toward the bridge" under `mesh.sendCap`. */
+  #queued = 0;
+
   constructor(
     private readonly self: string,
     private readonly mesh: Mesh,
   ) {}
 
+  /** MeshLaneLink's watermark reading (always 0 while the mesh does not model it). */
+  get bufferedBytes(): number {
+    return this.#queued;
+  }
+
   send(laneId: number, payload: Uint8Array): boolean {
+    const cap = this.mesh.sendCap;
+    if (cap !== null) {
+      // MeshLaneLink.send's own rule: refuse once MORE than the cap is queued
+      // (the check is before the write, so one record past it still goes in).
+      if (this.#queued > cap) {
+        throw new Error(`meshdata send buffer is full (${this.#queued} > ${cap} bytes)`);
+      }
+      this.#queued += payload.byteLength;
+      setTimeout(() => {
+        this.#queued -= payload.byteLength;
+      }, 1);
+    }
     const device = this.mesh.devices.get(this.self);
     const peer = device?.control.routes.get(laneId);
     if (peer !== undefined) this.mesh.carry(this.self, peer, laneId, payload);

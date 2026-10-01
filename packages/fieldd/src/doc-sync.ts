@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import {
   chunkDocSyncRecord,
+  DOC_HOST,
   DOC_SYNC_CHUNK_BYTES,
   DOC_SYNC_LORO_ENCODING,
   DOC_SYNC_MAX_RECORD_BYTES,
@@ -23,6 +24,7 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { VersionVector } from "loro-crdt";
 import { contentIdOf, type DocCommit, type DocumentService } from "./doc-service";
 import { covers, decodeVersion } from "./loro-host";
+import { DEFAULT_SEND_MAX_BUFFERED_BYTES as SEND_WATERMARK_BYTES } from "./mesh-lane";
 
 // DocSyncService (C6-3g) — the thing that makes an edit on one device appear on
 // another. It is WIRING, deliberately: every hard question was settled below it
@@ -64,6 +66,16 @@ import { covers, decodeVersion } from "./loro-host";
 // a record too large for a MeshData frame crosses as CHUNKs on a lane of its
 // own. Docs in opaque custody (a checkpoint the ICE1 frame rule cannot lift)
 // have no version to state and keep the whole C6 protocol unchanged.
+//
+// DS-5c (2026-10-01, the DS wave 1 review) — a lost answer is ASKED FOR AGAIN.
+// A doc-sync BEAT (DOC_HOST.BEAT_MS) re-greets a pair whose peer's VERSION
+// named ops this desktop still lacks ANSWER_TIMEOUT_MS later, or that a send
+// could not reach while the roster calls it online — each pair on its own
+// doubling backoff to REGREET_MAX_MS. And no send is refused for size any
+// more: a record that alone would cross MeshLaneLink's 4 MiB send watermark
+// rides the CHUNK path, and every whole send waits (bounded) for room under
+// it — a refused send used to throw, forget the lane, and leave the canvas
+// pending until a liveness flip that might never come.
 
 /** Lane LIFECYCLE, over the mgmt channel. Bytes never come through here (D5). */
 export interface LaneControl {
@@ -196,13 +208,23 @@ export interface DocSyncOptions {
   logger?: Logger;
   /** injectable clock — the state tests drive it directly */
   now?: () => number;
-  /** DS-5 — the largest record sent whole (default: a MeshData frame minus its
-   * header). Tests lower it to drive chunking without 8 MiB documents. */
+  /** DS-5 — the largest record sent whole. DS-5c: the default is the smaller of
+   * a MeshData frame minus its header and MeshLaneLink's 4 MiB send watermark,
+   * so a record that alone would cross the watermark is CHUNKED. Tests lower
+   * it to drive chunking without 8 MiB documents. */
   maxRecordBytes?: number;
   /** DS-5 — CHUNK slice size (default 1 MiB). */
   chunkBytes?: number;
   /** DS-5 — how long a half-received transfer is kept (default 60 s). */
   transferTtlMs?: number;
+  /** DS-5c — the doc-sync beat (default DOC_HOST.BEAT_MS). */
+  beatMs?: number;
+  /** DS-5c — how long an answer may take before its pair is re-greeted
+   * (default DOC_HOST.ANSWER_TIMEOUT_MS); doubles per retry. */
+  answerTimeoutMs?: number;
+  /** DS-5c — the longest wait between two re-greets of one (doc, peer) pair
+   * (default DOC_HOST.REGREET_MAX_MS). */
+  regreetMaxMs?: number;
 }
 
 /** DS-5 — a CHUNKed record being put back together. */
@@ -301,6 +323,15 @@ export class DocSyncService {
    * prefix keeps a restarted fieldd from reusing one a peer still holds. */
   readonly #transferPrefix = randomUUID().slice(0, 8);
   #nextTransfer = 0;
+  readonly #beatMs: number;
+  readonly #answerTimeoutMs: number;
+  readonly #regreetMaxMs: number;
+  #beatTimer: ReturnType<typeof setInterval> | null = null;
+  #beating = false;
+  /** DS-5c — `pairKey` → when that (doc, peer) pair is next re-greeted and how
+   * many times it has been. Derived each beat from the facts (an answer owed,
+   * a send that failed), so a pair that recovers leaves it on its own. */
+  readonly #regreets = new Map<string, { at: number; attempt: number }>();
 
   #started = false;
 
@@ -315,9 +346,13 @@ export class DocSyncService {
     this.#isDocHost = opts.isDocHost;
     this.#now = opts.now ?? Date.now;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "doc.sync" });
-    this.#maxRecordBytes = opts.maxRecordBytes ?? DOC_SYNC_MAX_RECORD_BYTES;
+    this.#maxRecordBytes =
+      opts.maxRecordBytes ?? Math.min(DOC_SYNC_MAX_RECORD_BYTES, SEND_WATERMARK_BYTES);
     this.#chunkBytes = opts.chunkBytes ?? DOC_SYNC_CHUNK_BYTES;
     this.#transferTtlMs = opts.transferTtlMs ?? 60_000;
+    this.#beatMs = opts.beatMs ?? DOC_HOST.BEAT_MS;
+    this.#answerTimeoutMs = opts.answerTimeoutMs ?? DOC_HOST.ANSWER_TIMEOUT_MS;
+    this.#regreetMaxMs = opts.regreetMaxMs ?? DOC_HOST.REGREET_MAX_MS;
   }
 
   /** Subscribe to lane lifecycle and claim whatever is already open.
@@ -332,6 +367,16 @@ export class DocSyncService {
       this.#onLaneEvent(payload, kind),
     );
     for (const lane of lanes ?? []) this.#claim(lane);
+    // DS-5c — the beat starts only once the lane table is ours: a start that
+    // failed above leaves no timer behind.
+    this.#beatTimer = setInterval(() => {
+      void this.#beat().catch((error) => {
+        this.#logger.warn("fieldd.doc_sync.beat_failed", "The doc-sync beat did not run", {
+          error: String(error),
+        });
+      });
+    }, this.#beatMs);
+    this.#beatTimer.unref?.();
     this.replicate();
   }
 
@@ -478,7 +523,67 @@ export class DocSyncService {
     this.#versionPeers.clear();
     for (const transfer of this.#transfers.values()) clearTimeout(transfer.timer);
     this.#transfers.clear();
+    if (this.#beatTimer !== null) clearInterval(this.#beatTimer);
+    this.#beatTimer = null;
+    this.#regreets.clear();
     this.#started = false;
+  }
+
+  /** DS-5c — the beat. Re-greets every (doc, peer) pair still owed something:
+   * an ANSWER (the peer's VERSION named ops we lack, and nothing that covers
+   * them has landed) or a REACH (a send or an open failed while the roster
+   * calls the peer online — offline peers are the liveness fold's, which
+   * re-greets them when they return). The first re-greet comes a full
+   * `answerTimeoutMs` after the beat that first saw the debt; each later one
+   * waits twice as long, up to `regreetMaxMs`. Re-greeting is the whole repair:
+   * the peer answers a VERSION with exactly what it lacks, on a lane that is
+   * re-opened if a failed send forgot it. */
+  async #beat(): Promise<void> {
+    if (!this.#started || this.#beating) return;
+    this.#beating = true;
+    try {
+      const online = new Set(
+        (await this.#peers()).filter((peer) => peer.online).map((peer) => peer.id),
+      );
+      const now = this.#now();
+      const owed = new Set<string>();
+      for (const [docId, facts] of this.#facts) {
+        if (this.#isLocal(docId)) continue;
+        const debtors = new Map<string, "answer" | "reach">();
+        for (const peer of facts.awaiting.keys()) debtors.set(peer, "answer");
+        for (const [peer, standing] of facts.peers) {
+          if (!standing.reachable && !debtors.has(peer)) debtors.set(peer, "reach");
+        }
+        for (const [peer, owes] of debtors) {
+          if (!online.has(peer)) continue;
+          const key = pairKey(docId, peer);
+          owed.add(key);
+          let due = this.#regreets.get(key);
+          if (due === undefined) {
+            due = { at: now + this.#answerTimeoutMs, attempt: 0 };
+            this.#regreets.set(key, due);
+          }
+          if (now < due.at) continue;
+          due.attempt += 1;
+          due.at = now + Math.min(this.#answerTimeoutMs * 2 ** due.attempt, this.#regreetMaxMs);
+          this.#logger.info("fieldd.doc_sync.regreet", "A doc-sync pair was greeted again", {
+            docId,
+            peer,
+            owes,
+            attempt: due.attempt,
+          });
+          this.#enqueue(docId, async () => {
+            const lane = await this.#ensureLane(docId, peer);
+            if (lane !== null && !lane.created) await this.#greet(docId, lane.laneId, peer);
+          });
+        }
+      }
+      for (const key of [...this.#regreets.keys()]) {
+        if (!owed.has(key)) this.#regreets.delete(key);
+      }
+    } finally {
+      this.#beating = false;
+    }
   }
 
   // ---- state derivation (C6-4) ----
@@ -1309,26 +1414,24 @@ export class DocSyncService {
       // ignores the HAVE behind it; a pre-DS-5 receiver refuses the VERSION's
       // meta, logs it, and answers the HAVE exactly as it always has.
       if (version !== null) {
-        this.#bytes.send(
-          laneId,
-          encodeDocSyncVersion(
-            {
-              baseEpoch: version.baseEpoch,
-              hasCheckpoint: version.hasCheckpoint,
-              loro: DOC_SYNC_LORO_ENCODING,
-            },
-            version.version,
-          ),
+        const frame = encodeDocSyncVersion(
+          {
+            baseEpoch: version.baseEpoch,
+            hasCheckpoint: version.hasCheckpoint,
+            loro: DOC_SYNC_LORO_ENCODING,
+          },
+          version.version,
         );
+        await this.#roomFor(frame.byteLength);
+        this.#bytes.send(laneId, frame);
       }
       if (digest !== null) {
-        this.#bytes.send(
-          laneId,
-          encodeDocSyncHave(digest.baseEpoch, {
-            hasCheckpoint: digest.hasCheckpoint,
-            records: digest.records,
-          }),
-        );
+        const frame = encodeDocSyncHave(digest.baseEpoch, {
+          hasCheckpoint: digest.hasCheckpoint,
+          records: digest.records,
+        });
+        await this.#roomFor(frame.byteLength);
+        this.#bytes.send(laneId, frame);
       }
       const facts = this.#factsFor(docId);
       this.#exchanged(facts, peer);
@@ -1338,6 +1441,11 @@ export class DocSyncService {
         laneId,
         error: String(error),
       });
+      // DS-5c — a FACT like any failed send: the pair is unreachable, so the
+      // beat greets it again while the roster calls the peer online.
+      const facts = this.#factsFor(docId);
+      this.#peerFor(facts, peer).reachable = false;
+      this.#touch(facts);
       this.#forget(laneId);
     }
   }
@@ -1401,6 +1509,9 @@ export class DocSyncService {
       return;
     }
     try {
+      // DS-5c — room first: MeshLaneLink refuses a send once more than its
+      // watermark is queued, and a refused send forgets its lane.
+      await this.#roomFor(record.byteLength);
       this.#bytes.send(laneId, record);
       const facts = this.#factsFor(docId);
       this.#exchanged(facts, peer);
@@ -1480,6 +1591,20 @@ export class DocSyncService {
       this.#touch(facts);
     } finally {
       void this.#control.close(laneId).catch(() => undefined);
+    }
+  }
+
+  /** DS-5c — wait (bounded) until a whole send of `bytes` fits under
+   * MeshLaneLink's send watermark. An empty socket always takes it — a record
+   * past the watermark never comes here, it is chunked. Wall-clock bounded on
+   * purpose: the injectable clock is the fold's, not the socket's. */
+  async #roomFor(bytes: number): Promise<void> {
+    const deadline = Date.now() + PACE_DEADLINE_MS;
+    for (;;) {
+      const queued = this.#bytes.bufferedBytes ?? 0;
+      if (queued === 0 || queued + bytes <= SEND_WATERMARK_BYTES) return;
+      if (Date.now() > deadline) throw new Error("the byte socket did not drain");
+      await new Promise((resolve) => setTimeout(resolve, 10));
     }
   }
 

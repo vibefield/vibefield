@@ -265,6 +265,19 @@ export const FORWARDING = {
   RESULT_CAP_BYTES: 64 * 1024,
 } as const;
 
+/** DS-5c — the Loro-level host's numbers (design-06 §4; the DS wave 1 review's
+ * DS-5 list). Doc sync keeps a BEAT: every BEAT_MS it re-greets a peer whose
+ * version named ops this desktop still lacks ANSWER_TIMEOUT_MS after it heard
+ * it (the answer was lost), or that a send could not reach while the roster
+ * calls it online — each retry of one (doc, peer) pair waiting twice as long
+ * as the last, up to REGREET_MAX_MS. A lost answer used to wait for a liveness
+ * flip that might never come. */
+export const DOC_HOST = {
+  BEAT_MS: 15_000,
+  ANSWER_TIMEOUT_MS: 30_000,
+  REGREET_MAX_MS: 10 * 60 * 1000,
+} as const;
+
 /** TC-S2 — the floor's supervision budget for a `field-terminal-host` cell
  * (TC-D3's extraction; NO panic-abort until custody separates at TC-S4).
  * The shape mirrors NATIVE_SUPERVISION one level down. HELLO covers a cold

@@ -1090,6 +1090,49 @@ describe("D3 (UA-P-D5) — a phone never receives a document, inbound included",
   });
 });
 
+describe("DS-5c — the doc-sync beat", () => {
+  /** A wider wait than `until`: the beat's own timers run under it. */
+  async function untilLong(predicate: () => boolean, label: string): Promise<void> {
+    const deadline = Date.now() + 8_000;
+    while (!predicate()) {
+      if (Date.now() > deadline) throw new Error(`timed out waiting for: ${label}`);
+      await new Promise((r) => setTimeout(r, 5));
+    }
+  }
+
+  it("a pair no send could reach is greeted again while the roster calls it online, each wait twice the last", async () => {
+    const T = 40;
+    const { docs, control, sync } = harness(["peer-a"], undefined, {
+      beatMs: 5,
+      answerTimeoutMs: T,
+    });
+    await sync.start();
+    control.refuse = true; // the peer's node answers nothing: every open fails
+    const opens: number[] = [];
+    const open = control.open.bind(control);
+    control.open = async (req) => {
+      opens.push(Date.now());
+      return open(req);
+    };
+    const docId = await seeded(docs); // its commit cannot reach peer-a
+    await untilLong(() => opens.length >= 4, "three greetings after the first");
+    const [, t1, t2, t3] = opens as [number, number, number, number];
+    // bounded: each retry waits at least twice as long as the one before
+    expect(t2 - t1).toBeGreaterThanOrEqual(2 * T - 5);
+    expect(t3 - t2).toBeGreaterThanOrEqual(4 * T - 5);
+    // the peer comes back: the next greeting reaches it, and the debt is paid
+    control.refuse = false;
+    await untilLong(
+      () => control.opened.some((o) => o.peer === "peer-a" && o.docId === docId),
+      "the greeting to reach the peer",
+    );
+    await untilLong(() => stateOf(sync, docId) !== "peer-offline", "the pair to read reachable");
+    const settled = opens.length;
+    await new Promise((r) => setTimeout(r, 6 * T));
+    expect(opens.length).toBe(settled);
+  }, 15_000);
+});
+
 describe("DS-5 — system documents and eager replication, at the service seam", () => {
   it("a system document's commits reach only a peer that spoke VERSION for it", async () => {
     // A pre-DS-5 desktop knows no system document: a legacy UPDATE for one
