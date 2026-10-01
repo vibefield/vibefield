@@ -3,10 +3,9 @@
 // outcome; caller: in flight / applied / refused / outcome-unknown), then a
 // REAL PeerLink against a scripted peer door, which is how the caller half
 // learns whether a forward left, was answered, or lost its answer.
-import type { AddressInfo } from "node:net";
-import { CONTRACTS_VERSION, IdempotencyKey } from "@vibefield/contracts";
+import { IdempotencyKey } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import WebSocket, { WebSocketServer } from "ws";
+import WebSocket from "ws";
 import {
   CallerForwardJournal,
   forwardDigest,
@@ -15,6 +14,7 @@ import {
 } from "../src/forward-receipts";
 import { RpcCallError } from "../src/native-link";
 import { PeerLink } from "../src/peer-link";
+import { answer, scriptedDoor as openDoor, refuse, type ScriptedDoor } from "./scripted-door";
 
 let cleanup: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -51,18 +51,21 @@ describe("the key's bindings", () => {
     expect(mintForwardKey()).not.toBe(a);
   });
 
-  it("the digest binds the method's OWN params: routing and envelope members and key order do not move it", () => {
+  it("the digest binds the method's OWN params: routing, the envelope and key order do not move it", () => {
     const base = forwardDigest({ runtimeRunId: "run-1", nested: { b: 2, a: 1 } });
     expect(
       forwardDigest({
         nested: { a: 1, b: 2 },
         device: "dev-b",
-        onBehalfOf: { clientKind: "renderer", deviceId: "dev-a" },
-        idempotencyKey: KEY,
+        forward: { onBehalfOf: { clientKind: "renderer", deviceId: "dev-a" }, idempotencyKey: KEY },
         runtimeRunId: "run-1",
       }),
     ).toBe(base);
     expect(forwardDigest({ runtimeRunId: "run-2", nested: { a: 1, b: 2 } })).not.toBe(base);
+    // a method's OWN idempotencyKey param is part of the call it names
+    expect(
+      forwardDigest({ runtimeRunId: "run-1", nested: { a: 1, b: 2 }, idempotencyKey: "own" }),
+    ).not.toBe(base);
   });
 });
 
@@ -240,49 +243,13 @@ describe("the caller's journal", () => {
   });
 });
 
-/** A peer door that speaks the hello and hands every other request to a
- * script — enough to decide, from the caller's side, whether a forward left,
- * was answered, or lost its answer. */
 async function scriptedDoor(
-  script: (msg: { id: number; method: string; params: unknown }, ws: WebSocket, n: number) => void,
-) {
-  const wss = new WebSocketServer({ port: 0, host: "127.0.0.1" });
-  await new Promise<void>((resolve) => wss.once("listening", () => resolve()));
-  const seen: Array<{ method: string; params: Record<string, unknown> }> = [];
-  wss.on("connection", (ws) => {
-    ws.on("message", (raw) => {
-      const msg = JSON.parse(raw.toString()) as { id: number; method: string; params: unknown };
-      if (msg.method === "system.hello") {
-        ws.send(
-          JSON.stringify({
-            jsonrpc: "2.0",
-            id: msg.id,
-            result: {
-              contractsVersion: CONTRACTS_VERSION,
-              serverKind: "fieldd",
-              grantedScopes: [],
-            },
-          }),
-        );
-        return;
-      }
-      seen.push({ method: msg.method, params: msg.params as Record<string, unknown> });
-      script(msg, ws, seen.length);
-    });
-  });
-  cleanup.push(
-    () =>
-      new Promise<void>((resolve) => {
-        for (const client of wss.clients) client.terminate();
-        wss.close(() => resolve());
-      }),
-  );
-  const port = (wss.address() as AddressInfo).port;
-  return { url: `ws://127.0.0.1:${port}`, seen };
-}
-
-function answer(ws: WebSocket, id: number, result: unknown): void {
-  ws.send(JSON.stringify({ jsonrpc: "2.0", id, result }));
+  script: Parameters<typeof openDoor>[0],
+  opts?: Parameters<typeof openDoor>[1],
+): Promise<ScriptedDoor> {
+  const door = await openDoor(script, opts);
+  cleanup.push(() => door.close());
+  return door;
 }
 
 function linkTo(url: string | undefined, forwardTimeoutMs = 250): PeerLink {
@@ -324,8 +291,8 @@ describe("PeerLink's keyed forwards (the caller's half)", () => {
     expect(link.receipts.get(KEY)).toMatchObject({ state: "applied" });
     // both attempts carried the SAME key and who they were for, beside the params
     expect(door.seen.map((s) => s.params)).toEqual([
-      { ...RUN, onBehalfOf: behalf, idempotencyKey: KEY },
-      { ...RUN, onBehalfOf: behalf, idempotencyKey: KEY },
+      { ...RUN, forward: { onBehalfOf: behalf, idempotencyKey: KEY } },
+      { ...RUN, forward: { onBehalfOf: behalf, idempotencyKey: KEY } },
     ]);
   });
 
@@ -340,21 +307,13 @@ describe("PeerLink's keyed forwards (the caller's half)", () => {
 
   it("the owner's own refusal is a refusal — even an UNAVAILABLE about its own dependency, which no longer drops the link", async () => {
     const door = await scriptedDoor((msg, ws) =>
-      ws.send(
-        JSON.stringify({
-          jsonrpc: "2.0",
-          id: msg.id,
-          error: {
-            code: -32006,
-            message: "agent runtime starting",
-            data: {
-              kind: "UNAVAILABLE",
-              retryable: true,
-              details: { service: "agents", state: "starting" },
-            },
-          },
-        }),
-      ),
+      refuse(ws, msg.id, {
+        code: -32006,
+        message: "agent runtime starting",
+        kind: "UNAVAILABLE",
+        retryable: true,
+        details: { service: "agents", state: "starting" },
+      }),
     );
     const link = linkTo(door.url);
     await expect(
@@ -398,6 +357,6 @@ describe("PeerLink's keyed forwards (the caller's half)", () => {
     const link = linkTo(door.url);
     await link.request("dev-b", "device.list", {}, { onBehalfOf: behalf });
     expect(link.receipts.size()).toBe(0);
-    expect(door.seen[0]?.params).toEqual({ onBehalfOf: behalf });
+    expect(door.seen[0]?.params).toEqual({ forward: { onBehalfOf: behalf } });
   });
 });

@@ -860,9 +860,11 @@ export class ProductApi extends EventEmitter {
       );
       return;
     }
-    // DS-L7 / DS-D15 (2026-09-30) — the forwarding envelope. `onBehalfOf` and
-    // `idempotencyKey` beside a method's params are the PEER LINK's to add: a
-    // `peer-fieldd` caller's are read (tolerantly — forward-envelope.ts),
+    // DS-L7 / DS-D15 (2026-09-30) — the forwarding envelope: ONE member,
+    // `forward: {onBehalfOf?, idempotencyKey?}`, beside a method's params (a
+    // method's own `idempotencyKey` — surface.open, artifact.publish/update —
+    // is a param and never the envelope's). It is the PEER LINK's to add: a
+    // `peer-fieldd` caller's is read (tolerantly — forward-envelope.ts),
     // stripped from the params, and the provenance rides this call's context so
     // the audit actor names the window behind the calling node. Authority does
     // not move: the principal stays the peer daemon, scoped by the preset it
@@ -875,10 +877,7 @@ export class ProductApi extends EventEmitter {
     let callCtx: CallerContext = baseCtx;
     let callParams: unknown = params;
     let inboundKey: string | undefined;
-    // the envelope's KEY is read on the forwardable surface only: on a `local`
-    // door `idempotencyKey` is the method's own retry key (surface.open,
-    // artifact.publish/update) and passes through untouched
-    const envelope = splitForwardEnvelope(params, { readKey: def.locality !== "local" });
+    const envelope = splitForwardEnvelope(params);
     if (envelope.carried && baseCtx.principal.kind !== "peer-fieldd") {
       // DS-2 — the ONE member a caller that is not a peer daemon may carry: the
       // key of a MUTATION it routes to another device. That key is what the
@@ -889,7 +888,9 @@ export class ProductApi extends EventEmitter {
       // has no receipt to bind to.
       const target = (envelope.rest as { device?: unknown } | null | undefined)?.device;
       const routedMutation =
+        !envelope.malformed &&
         !envelope.hasOnBehalfOf &&
+        envelope.hasIdempotencyKey &&
         def.idempotent === false &&
         def.subscription !== true &&
         typeof target === "string" &&

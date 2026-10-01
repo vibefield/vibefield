@@ -12,7 +12,8 @@ import { RpcCallError } from "./native-link";
 // DS-2 (DS-D15, 2026-09-30) — receipts for forwarded MUTATIONS.
 //
 // A mutation forwarded to the device that owns the thing carries an
-// `idempotencyKey` (forward-envelope.ts). Two journals hold what that key
+// `idempotencyKey` in its envelope (`forward`, forward-envelope.ts). Two
+// journals hold what that key
 // means, one on each side of the peer link:
 //
 //  - the OWNER's (`OwnerForwardJournal`, product-api): the first arrival of a
@@ -60,18 +61,14 @@ function canonicalJson(value: unknown): string {
 }
 
 /** What a key is bound to besides its method: a digest of the method's OWN
- * params — the routing key (`device`) and the envelope members excluded, so the
- * caller (which still holds `device`) and the owner (which stripped it) digest
- * the same call identically. */
+ * params — the routing key (`device`) and the envelope (`forward`) excluded,
+ * so the caller (which still holds `device`) and the owner (which stripped it)
+ * digest the same call identically. A method's own `idempotencyKey` param is
+ * part of the call, and is digested. */
 export function forwardDigest(params: unknown): string {
   let own = params;
   if (params !== null && typeof params === "object" && !Array.isArray(params)) {
-    const {
-      device: _device,
-      onBehalfOf: _behalf,
-      idempotencyKey: _key,
-      ...rest
-    } = params as Record<string, unknown>;
+    const { device: _device, forward: _forward, ...rest } = params as Record<string, unknown>;
     own = rest;
   }
   return createHash("sha256").update(canonicalJson(own)).digest("hex");

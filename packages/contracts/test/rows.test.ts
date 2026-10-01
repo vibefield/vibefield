@@ -143,12 +143,21 @@ describe("DS-L7 / DS-D15 — a forwarded call carries who it is for", () => {
     expect(FORWARDING.RECEIPT_TTL_MS).toBeGreaterThan(0);
   });
 
-  it("the envelope rides beside a method's own params", () => {
+  it("the envelope rides beside a method's own params, under ONE member", () => {
     const parsed = ForwardEnvelope.parse({
       sessionId: "s-1",
-      onBehalfOf: { clientKind: "renderer", deviceId: "laptop" },
-      idempotencyKey: "01J9ABCDEFGHJKMN",
+      forward: {
+        onBehalfOf: { clientKind: "renderer", deviceId: "laptop" },
+        idempotencyKey: "01J9ABCDEFGHJKMN",
+      },
     });
     expect((parsed as Record<string, unknown>).sessionId).toBe("s-1");
+    expect(parsed.forward?.idempotencyKey).toBe("01J9ABCDEFGHJKMN");
+    // namespaced (2026-09-30): a method's OWN `idempotencyKey` — surface.open,
+    // artifact.publish/update carry one — is a param, never the envelope's
+    const own = ForwardEnvelope.parse({ source: {}, idempotencyKey: "surface-retry-1" });
+    expect(own.forward).toBeUndefined();
+    expect((own as Record<string, unknown>).idempotencyKey).toBe("surface-retry-1");
+    expect(ForwardEnvelope.safeParse({ forward: { idempotencyKey: "short" } }).success).toBe(false);
   });
 });

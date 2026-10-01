@@ -26,21 +26,28 @@ afterEach(async () => {
 });
 
 describe("the envelope helpers", () => {
-  it("splits both members off an object's params and leaves every other value alone", () => {
-    const split = splitForwardEnvelope({ a: 1, onBehalfOf: { x: 1 }, idempotencyKey: "k" });
-    expect(split).toMatchObject({ carried: true, hasOnBehalfOf: true, hasIdempotencyKey: true });
+  it("splits the one `forward` member off an object's params and leaves everything else alone", () => {
+    const split = splitForwardEnvelope({
+      a: 1,
+      forward: { onBehalfOf: { x: 1 }, idempotencyKey: "k" },
+    });
+    expect(split).toMatchObject({
+      carried: true,
+      malformed: false,
+      hasOnBehalfOf: true,
+      hasIdempotencyKey: true,
+      rawIdempotencyKey: "k",
+    });
     expect(split.rest).toEqual({ a: 1 });
-    // a LOCAL door's own retry key (surface.open, artifact.publish/update) is
-    // not the envelope's: with readKey off it stays in the method's params
-    const own = splitForwardEnvelope({ a: 1, idempotencyKey: "own" }, { readKey: false });
+    // a method's OWN retry key (surface.open, artifact.publish/update carry
+    // one) is a param, never the envelope's — the collision the namespace ends
+    const own = splitForwardEnvelope({ a: 1, idempotencyKey: "own", onBehalfOf: "own" });
     expect(own.carried).toBe(false);
-    expect(own.rest).toEqual({ a: 1, idempotencyKey: "own" });
-    const both = splitForwardEnvelope(
-      { onBehalfOf: {}, idempotencyKey: "own" },
-      { readKey: false },
-    );
-    expect(both).toMatchObject({ carried: true, hasOnBehalfOf: true, hasIdempotencyKey: false });
-    expect(both.rest).toEqual({ idempotencyKey: "own" });
+    expect(own.rest).toEqual({ a: 1, idempotencyKey: "own", onBehalfOf: "own" });
+    // `forward` present but not an object: carried, and unreadable
+    const bad = splitForwardEnvelope({ a: 1, forward: "k" });
+    expect(bad).toMatchObject({ carried: true, malformed: true, hasIdempotencyKey: false });
+    expect(bad.rest).toEqual({ a: 1 });
     for (const value of [undefined, null, 3, "s", [1, 2], { a: 1 }]) {
       const none = splitForwardEnvelope(value);
       expect(none.carried).toBe(false);
@@ -60,24 +67,46 @@ describe("the envelope helpers", () => {
   });
 
   it("reads a peer's key strictly: the contract's bounds, or a refusal", () => {
-    expect(readPeerEnvelope(splitForwardEnvelope({ idempotencyKey: "fk_0123456789" }))).toEqual({
+    expect(
+      readPeerEnvelope(splitForwardEnvelope({ forward: { idempotencyKey: "fk_0123456789" } })),
+    ).toEqual({
       ok: true,
       idempotencyKey: "fk_0123456789",
     });
-    expect(readPeerEnvelope(splitForwardEnvelope({ idempotencyKey: "short" }))).toEqual({
+    expect(
+      readPeerEnvelope(splitForwardEnvelope({ forward: { idempotencyKey: "short" } })),
+    ).toEqual({
       ok: false,
       reason: "malformed idempotencyKey",
     });
-    expect(readPeerEnvelope(splitForwardEnvelope({ idempotencyKey: 42 }))).toMatchObject({
+    expect(
+      readPeerEnvelope(splitForwardEnvelope({ forward: { idempotencyKey: 42 } })),
+    ).toMatchObject({
       ok: false,
+    });
+    expect(readPeerEnvelope(splitForwardEnvelope({ forward: [1] }))).toEqual({
+      ok: false,
+      reason: "malformed forward",
+    });
+    // a member `forward` does not know is ignored (a newer peer may add one)
+    expect(readPeerEnvelope(splitForwardEnvelope({ forward: { trace: "t-1" } }))).toEqual({
+      ok: true,
     });
   });
 
   it("puts the envelope beside the params, and refuses params that cannot carry it", () => {
     const behalf = { clientKind: "renderer", deviceId: "d" };
-    expect(withEnvelope({ a: 1 }, { onBehalfOf: behalf })).toEqual({ a: 1, onBehalfOf: behalf });
+    expect(withEnvelope({ a: 1 }, { onBehalfOf: behalf })).toEqual({
+      a: 1,
+      forward: { onBehalfOf: behalf },
+    });
     expect(withEnvelope(undefined, { idempotencyKey: "fk_0123456789" })).toEqual({
-      idempotencyKey: "fk_0123456789",
+      forward: { idempotencyKey: "fk_0123456789" },
+    });
+    // a method's own `idempotencyKey` rides beside the envelope, untouched
+    expect(withEnvelope({ idempotencyKey: "own" }, { idempotencyKey: "fk_0123456789" })).toEqual({
+      idempotencyKey: "own",
+      forward: { idempotencyKey: "fk_0123456789" },
     });
     expect(withEnvelope({ a: 1 }, undefined)).toEqual({ a: 1 });
     expect(withEnvelope({ a: 1 }, {})).toEqual({ a: 1 });

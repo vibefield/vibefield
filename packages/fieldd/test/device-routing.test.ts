@@ -356,7 +356,10 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
       "Tailscale-Node-Id": "node-peer-a",
     });
     await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
-    const res = (await call(ws, 2, "device.list", { onBehalfOf: behalf, extra: 1 })) as {
+    const res = (await call(ws, 2, "device.list", {
+      forward: { onBehalfOf: behalf },
+      extra: 1,
+    })) as {
       result: { principal: unknown; params: unknown; onBehalfOf: unknown };
     };
     // authorized as the peer daemon — the principal is unchanged by the envelope
@@ -378,23 +381,28 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
     const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
     await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }));
     const newer = (await call(ws, 2, "device.list", {
-      onBehalfOf: { clientKind: "ios-watch", deviceId: "dev-peer-a", futureField: { x: 1 } },
+      forward: {
+        onBehalfOf: { clientKind: "ios-watch", deviceId: "dev-peer-a", futureField: { x: 1 } },
+        futureMember: true,
+      },
     })) as { result: { onBehalfOf: unknown } };
     // a kind this build does not know is kept; a member it does not know is not
     expect(newer.result.onBehalfOf).toEqual({ clientKind: "ios-watch", deviceId: "dev-peer-a" });
 
     const nameless = (await call(ws, 3, "device.list", {
-      onBehalfOf: { clientKind: "renderer" },
+      forward: { onBehalfOf: { clientKind: "renderer" } },
     })) as { error: { data: { kind: string; details: Record<string, unknown> } } };
     expect(nameless.error.data.kind).toBe("PRECONDITION_FAILED");
     expect(nameless.error.data.details).toMatchObject({ reason: "malformed onBehalfOf" });
 
     const oversized = (await call(ws, 4, "device.list", {
-      onBehalfOf: { clientKind: "renderer", deviceId: "d".repeat(257) },
+      forward: { onBehalfOf: { clientKind: "renderer", deviceId: "d".repeat(257) } },
     })) as { error: { data: { kind: string } } };
     expect(oversized.error.data.kind).toBe("PRECONDITION_FAILED");
 
-    const shortKey = (await call(ws, 5, "device.list", { idempotencyKey: "short" })) as {
+    const shortKey = (await call(ws, 5, "device.list", {
+      forward: { idempotencyKey: "short" },
+    })) as {
       error: { data: { kind: string; details: Record<string, unknown> } };
     };
     expect(shortKey.error.data.kind).toBe("PRECONDITION_FAILED");
@@ -417,10 +425,12 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
       hello({ clientKind: "renderer", credential: "good-token" }),
     );
     const cases: Array<[number, string, Record<string, unknown>]> = [
-      [2, "device.get", { deviceId: "x", onBehalfOf: behalf }],
-      [3, "device.get", { deviceId: "x", idempotencyKey: "k-0123456789" }],
+      [2, "device.get", { deviceId: "x", forward: { onBehalfOf: behalf } }],
+      [3, "device.get", { deviceId: "x", forward: { idempotencyKey: "k-0123456789" } }],
+      // `forward` that is not even an object
+      [6, "device.get", { deviceId: "x", forward: "k-0123456789" }],
       // routed: refused before the forwarder, so nothing crosses to the peer
-      [4, "device.list", { device: "dev-b", onBehalfOf: behalf }],
+      [4, "device.list", { device: "dev-b", forward: { onBehalfOf: behalf } }],
     ];
     for (const [id, method, params] of cases) {
       const res = (await call(local, id, method, params)) as {
@@ -436,19 +446,27 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
     expect(served).toBe(0);
     expect(forwarder).not.toHaveBeenCalled();
 
-    // the NAME collides with a LOCAL door's own retry key (surface.open,
-    // artifact.publish/update own an `idempotencyKey` param): on a local
-    // method the member is the method's, and it passes through untouched
+    // a method's OWN `idempotencyKey` param (surface.open, artifact.publish/
+    // update carry one) is never the envelope's: under `forward` nothing can
+    // collide, on a local door or a federating one
     a.register("system.health", (_ctx, params) => ({ params }));
     const own = (await call(local, 5, "system.health", { idempotencyKey: "surface-retry-1" })) as {
       result: { params: unknown };
     };
     expect(own.result.params).toEqual({ idempotencyKey: "surface-retry-1" });
+    const federating = (await call(local, 7, "device.get", {
+      deviceId: "x",
+      idempotencyKey: "own-key-0001",
+    })) as { result?: unknown };
+    expect(federating.result).toEqual({});
+    expect(served).toBe(1);
 
     // the phone's door is a tailnet principal, not a peer daemon: refused too
     const phone = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
     await call(phone, 1, "system.hello", hello({ clientKind: "ios" }));
-    const fromPhone = (await call(phone, 2, "device.list", { onBehalfOf: behalf })) as {
+    const fromPhone = (await call(phone, 2, "device.list", {
+      forward: { onBehalfOf: behalf },
+    })) as {
       error: { data: { kind: string } };
     };
     expect(fromPhone.error.data.kind).toBe("PRECONDITION_FAILED");
@@ -562,7 +580,7 @@ describe("the forwarded mutation's key (DS-2)", () => {
     await call(ws, 3, "doc.create", {
       device: "dev-b",
       name: "x",
-      idempotencyKey: "retry-key-0001",
+      forward: { idempotencyKey: "retry-key-0001" },
     });
     const echoed = forwarder.mock.calls.at(-1) as unknown[];
     expect(echoed[2]).toEqual({ device: "dev-b", name: "x" }); // the key left the params
@@ -577,18 +595,32 @@ describe("the forwarded mutation's key (DS-2)", () => {
     const { ws, forwarder, localCalls } = await writer();
     const cases: Array<[string, Record<string, unknown>, string]> = [
       // a read, even routed
-      ["doc.list", { device: "dev-b", idempotencyKey: "retry-key-0001" }, "non-peer"],
+      ["doc.list", { device: "dev-b", forward: { idempotencyKey: "retry-key-0001" } }, "non-peer"],
       // a mutation this daemon serves itself
-      ["doc.create", { name: "x", idempotencyKey: "retry-key-0001" }, "non-peer"],
-      ["doc.create", { device: OWN_ID, name: "x", idempotencyKey: "retry-key-0001" }, "non-peer"],
+      ["doc.create", { name: "x", forward: { idempotencyKey: "retry-key-0001" } }, "non-peer"],
+      [
+        "doc.create",
+        { device: OWN_ID, name: "x", forward: { idempotencyKey: "retry-key-0001" } },
+        "non-peer",
+      ],
+      // an empty envelope names no key to bind
+      ["doc.create", { device: "dev-b", name: "x", forward: {} }, "non-peer"],
       // the key beside a restatement: onBehalfOf is never a caller's
       [
         "doc.create",
-        { device: "dev-b", name: "x", idempotencyKey: "retry-key-0001", onBehalfOf: {} },
+        {
+          device: "dev-b",
+          name: "x",
+          forward: { idempotencyKey: "retry-key-0001", onBehalfOf: {} },
+        },
         "non-peer",
       ],
       // a key the contract would not journal
-      ["doc.create", { device: "dev-b", name: "x", idempotencyKey: "short" }, "malformed"],
+      [
+        "doc.create",
+        { device: "dev-b", name: "x", forward: { idempotencyKey: "short" } },
+        "malformed",
+      ],
     ];
     let id = 10;
     for (const [method, params, why] of cases) {

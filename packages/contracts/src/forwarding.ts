@@ -60,14 +60,30 @@ export const ForwardReceipt = z
   .passthrough();
 export type ForwardReceipt = z.infer<typeof ForwardReceipt>;
 
-/** The two optional members a forwarded call's params may carry beside the
- * method's own. Parsed with `.passthrough()` so a method's own params ride
- * along untouched; a LOCAL call that carries them is refused (they are the
- * peer link's to add, never a window's — DS-L7). */
-export const ForwardEnvelope = z
+/** The two members of the forwarding envelope (`ForwardEnvelope.forward`). */
+export const Forwarding = z
   .object({
     onBehalfOf: OnBehalfOf.optional(),
     idempotencyKey: IdempotencyKey.optional(),
+  })
+  .passthrough();
+export type Forwarding = z.infer<typeof Forwarding>;
+
+/** The envelope a forwarded call's params carry beside the method's own:
+ * ONE member, `forward`, holding `onBehalfOf` and a mutation's
+ * `idempotencyKey`. Parsed with `.passthrough()` so a method's own params ride
+ * along untouched. A caller that is not a peer daemon carrying `onBehalfOf` is
+ * refused (provenance is the peer link's to add, never a window's — DS-L7).
+ *
+ * NAMESPACED 2026-09-30 (ds-b's finding, the lead's ruling): the members used
+ * to sit flat beside the params, and the flat `idempotencyKey` collided with
+ * the method-level retry keys three LOCAL doors own (`surface.open`,
+ * `artifact.publish`, `artifact.update`) — a door that read the envelope off
+ * every call would have eaten them. Under `forward` no method param can
+ * collide. `OnBehalfOf`, `IdempotencyKey` and `ForwardReceipt` are unchanged. */
+export const ForwardEnvelope = z
+  .object({
+    forward: Forwarding.optional(),
   })
   .passthrough();
 export type ForwardEnvelope = z.infer<typeof ForwardEnvelope>;
