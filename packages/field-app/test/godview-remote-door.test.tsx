@@ -45,6 +45,7 @@ import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
+import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
 import type {
   MeshBoardFailure,
   MeshBoardListener,
@@ -441,6 +442,42 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
     });
     expect(view.querySelector(".vf-device-filter-menu")).toBeNull();
     expect(document.activeElement).toBe(chip);
+  });
+
+  it("holds the keys only while its menu is open, and lets them go when the chip goes with it open", async () => {
+    const here = board().devices[0];
+    if (here === undefined) throw new Error("no device in the fixture board");
+    // each gap below re-opens the board: this desktop alone, then both again
+    const door = fakeDoor([board(), { devices: [here] }, board()]);
+    const view = await mountMonitor(door);
+    expect(monitorHoldsKeys()).toBe(false);
+    await act(async () => view.querySelector<HTMLButtonElement>(".vf-device-filter-chip")?.click());
+    expect(view.querySelector(".vf-device-filter-menu")).not.toBeNull();
+    expect(monitorHoldsKeys()).toBe(true); // the menu's Escape is its own
+
+    await act(async () =>
+      door.push({
+        device: STUDIO,
+        delta: { epoch: "studio.1", since: 9, revision: 10, upserts: [], removed: [] },
+      }),
+    );
+    expect(door.opened()).toBe(2);
+    expect(view.querySelector(".vf-device-filter-chip")).toBeNull(); // one desktop: no choice
+    // the chip went with its menu open: a fresh pane's launcher gets its keys back
+    expect(monitorHoldsKeys()).toBe(false);
+
+    // the other desktop comes back: the chip is drawn again, CLOSED — the
+    // menu that went away is not remembered as open
+    await act(async () =>
+      door.push({
+        device: HERE,
+        delta: { epoch: "here.1", since: 7, revision: 8, upserts: [], removed: [] },
+      }),
+    );
+    expect(door.opened()).toBe(3);
+    expect(view.querySelector(".vf-device-filter-chip")).not.toBeNull();
+    expect(view.querySelector(".vf-device-filter-menu")).toBeNull();
+    expect(monitorHoldsKeys()).toBe(false);
   });
 });
 

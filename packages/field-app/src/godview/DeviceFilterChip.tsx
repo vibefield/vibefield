@@ -55,8 +55,15 @@ export function DeviceFilterChip({
   const chosen = devices.find((device) => device.id === selected);
   const total = devices.reduce((sum, device) => sum + device.agents, 0);
 
+  // The stage holds the keys while the menu is open, so it must hear the menu
+  // go — closed, or gone with the chip itself: the board dropped to one
+  // desktop and the chip unmounted with its menu open. Until 2026-10-01 only a
+  // close was said, and the stage kept the keys (every pane's fresh-shell
+  // launcher hidden) until Godview closed.
   useEffect(() => {
-    onOpenChange?.(open);
+    if (!open || onOpenChange === undefined) return;
+    onOpenChange(true);
+    return () => onOpenChange(false);
   }, [open, onOpenChange]);
 
   // A pointer anywhere else puts the menu away, as every dropdown does.

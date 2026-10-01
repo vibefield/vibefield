@@ -273,11 +273,15 @@ export function GodviewMonitor({
   const [deviceChoice, setDeviceChoice] = useState<string | null>(null);
   const deviceChosen = standingChoice(devices, deviceChoice);
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
+  // Held only while the chip is DRAWN and says its menu is open: the chip is
+  // drawn for two desktops or more, and one unmounted with its menu open used
+  // to leave the keys held until Godview closed (2026-10-01).
+  const deviceMenuHolds = deviceMenuOpen && devices.length > 1;
   useEffect(() => {
-    if (!deviceMenuOpen) return;
+    if (!deviceMenuHolds) return;
     setMonitorHoldsKeys(true);
     return () => setMonitorHoldsKeys(false);
-  }, [deviceMenuOpen]);
+  }, [deviceMenuHolds]);
   const chromeRef = useRef<HTMLDivElement>(null);
   const usagePort = door?.usage;
   const [usageState, setUsageState] = useState<MonitorFeedState>({ state: "no-door" });
