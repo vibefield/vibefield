@@ -35,6 +35,7 @@ import {
   isLoroPanic,
   isSnapshotPayload,
   LoroHost,
+  loroBlobMode,
   meetVersions,
   mergeVersions,
   provenVersion,
@@ -1138,6 +1139,9 @@ export class DocumentService {
     // be replaced without loss: what the host holds beyond the checkpoint (a
     // peer's edits the window never saw) becomes the new journal's one record.
     const folded = await this.foldCheckpoint(docId, bytes);
+    // DS-5d — what reaches disk: the checkpoint as it came, or (a full one
+    // into a compacted host) the host's own shallow base.
+    const stored = folded?.stored ?? bytes;
     const revisionId = putMeta.revisionId;
     const committedAt = this.now();
     const residual: JournalRevision | null =
@@ -1157,11 +1161,11 @@ export class DocumentService {
     const meta: CurrentRevision = {
       revisionId,
       file: `${revisionId}.ice1`,
-      contentId: contentIdOf(bytes),
+      contentId: contentIdOf(stored),
       committedAt,
       engineSchema: putMeta.engineSchema,
       savedAt: putMeta.savedAt,
-      byteLength: bytes.byteLength,
+      byteLength: stored.byteLength,
       baseEpoch: entry.baseEpoch,
       updates: residual === null ? [] : [residual],
     };
@@ -1179,7 +1183,7 @@ export class DocumentService {
       if (residual !== null && folded?.residual != null) {
         await atomicWrite(revisions, residual.file, folded.residual);
       }
-      await atomicWrite(revisions, meta.file, bytes);
+      await atomicWrite(revisions, meta.file, stored);
       // `current.json` is the sole commit point. Until this rename lands the
       // previous complete revision remains authoritative.
       await atomicWrite(dir, "current.json", `${JSON.stringify(meta, null, 2)}\n`);
@@ -1224,7 +1228,7 @@ export class DocumentService {
       docId,
       origin,
       kind: "checkpoint",
-      payload: bytes,
+      payload: stored,
       meta: currentMeta(meta),
       baseEpoch: entry.baseEpoch,
       ...(folded?.delta !== undefined ? { delta: folded.delta } : {}),
@@ -1245,7 +1249,12 @@ export class DocumentService {
   private async foldCheckpoint(
     docId: string,
     bytes: Uint8Array,
-  ): Promise<{ residual: Uint8Array | null; delta: Uint8Array | undefined } | null> {
+  ): Promise<{
+    residual: Uint8Array | null;
+    delta: Uint8Array | undefined;
+    /** DS-5d — the envelope to store instead of the one that came. */
+    stored?: Uint8Array;
+  } | null> {
     const lifted = liftIce1(bytes);
     const version = lifted.ok ? snapshotVersion(lifted.payload) : null;
     if (!lifted.ok || version === null) {
@@ -1295,9 +1304,24 @@ export class DocumentService {
     this.opaque.delete(docId);
     this.host.set(hosted);
     this.touch(docId);
+    const delta = imported.changed ? hosted.exportSince(imported.before) : undefined;
+    // DS-5d — a FULL checkpoint into a COMPACTED host (a window that read the
+    // canvas before it was compacted): the host stays shallow, and so must the
+    // stored base. Full history under a compacted epoch would hand a holder
+    // re-bootstrapping from it history this host cannot merge against — ops it
+    // would take and this host would refuse, for good. Stored instead: the
+    // host's own base (it holds the window's content and everything else),
+    // under the window's header, with nothing residual.
+    if (compacted && loroBlobMode(lifted.payload) === "snapshot") {
+      return {
+        residual: null,
+        delta,
+        stored: wrapIce1(lifted.header, hosted.doc.export({ mode: "snapshot" })),
+      };
+    }
     return {
       residual: hosted.isAheadOf(version) ? hosted.exportSince(version) : null,
-      delta: imported.changed ? hosted.exportSince(imported.before) : undefined,
+      delta,
     };
   }
 

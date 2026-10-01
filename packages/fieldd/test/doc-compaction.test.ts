@@ -663,3 +663,33 @@ describe("DS-5d — the host and the holders slice", () => {
     docs.dispose();
   });
 });
+
+describe("DS-5d — the stored base of a compacted canvas stays compacted", () => {
+  it("a FULL checkpoint folded into a compacted host is stored as the host's own shallow base", async () => {
+    // A window that read the canvas BEFORE it was compacted (a resumed lane)
+    // saves a whole checkpoint. It folds — it covers the root — but stored as
+    // it came it would put full history back under epoch 1: a holder
+    // re-bootstrapping from it could take ops this host itself cannot, and
+    // the two would never converge. The base stored is the host's own.
+    const docs = service(undefined, { compaction: false });
+    const { docId, low, w } = await journaled(docs);
+    docs.setAcknowledgements(() => [{ device: "studio", ack: low, seenAt: Date.now() }]);
+    expect(await docs.compact(docId)).toMatchObject({ compacted: true, baseEpoch: 1 });
+    w.editUnsent("late", "from the old window");
+    const full = w.checkpoint();
+    expect(loroBlobMode(payloadOf(full))).toBe("snapshot");
+    await put(docs, docId, "checkpoint", full);
+    const stored = await docs.readDoc(docId);
+    expect(loroBlobMode(payloadOf(stored?.bytes as Uint8Array))).toBe("shallow-snapshot");
+    expect(stored?.updates).toEqual([]);
+    expect((await replay(docs, docId)).board()).toEqual({
+      a: "1",
+      b: "2",
+      c: "3",
+      d: "4",
+      late: "from the old window",
+    });
+    expect(await docs.hostVersion(docId)).toMatchObject({ baseEpoch: 1, hasCheckpoint: true });
+    docs.dispose();
+  });
+});
