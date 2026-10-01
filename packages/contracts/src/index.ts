@@ -28,6 +28,7 @@ export * from "./plugin-runtime";
 export * from "./plugin-update";
 export * from "./plugins";
 export * from "./registries";
+export * from "./remote-endpoints";
 export * from "./rows";
 export * from "./screenshot";
 export * from "./shell";

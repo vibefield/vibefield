@@ -2,6 +2,7 @@ import { type ZodTypeAny, z } from "zod";
 import { AgentProfileSetId } from "./agent-index";
 import { CellEndpointSet, TerminalWorkloadClass } from "./envelope";
 import { TERMINAL_PIPELINE, TERMINAL_PIPELINE_CLOSE_CODES } from "./registries";
+import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
   TerminalExitOutcome,
   TerminalObservation,
@@ -381,22 +382,29 @@ export function remoteCellRoutePrefix(cellBootId: string): string {
  *
  * The host class is the discriminator between the two endpoint shapes, so it
  * is spelled as an exclusion rather than a pattern: anything that is not
- * `127.0.0.1` / `[::1]` / `localhost`. */
-const REMOTE_WS =
-  /^wss?:\/\/(?!127\.0\.0\.1(:|\/|$))(?!\[::1\](:|\/|$))(?!localhost(:|\/|$))[^/?#\s]+\/cell\/[^/?#\s]+\/(control|frames)$/;
+ * `127.0.0.1` / `[::1]` / `localhost`.
+ *
+ * SP-3 (2026-10-01): the host half moved into the ticket template
+ * (`remote-endpoints.ts` `remoteDoorUrl`), which every instance shares; the
+ * path half stays the cell's. Same verdicts — `remote-endpoints.test.ts` holds
+ * this rule to a frozen copy of the literal that stood here. */
+const REMOTE_WS = remoteDoorUrl("wss?", String.raw`\/cell\/[^/?#\s]+\/(control|frames)`);
 
 /** TM-2 (TM-D2) — the two doors of ONE cell as a TAILNET client dials them.
  * A PRODUCT-plane fact minted only by fieldd, only for a WhoIs-verified self
  * peer: the sidecar's reverse proxy carries the upgrade to the cell's loopback
  * door and the floor is never in the byte path. `CellEndpointSet` stays
  * loopback-only (D36 holds) — this is a second shape beside it, never a
- * widening of it. */
-export const RemoteCellEndpointSet = z
-  .object({
-    controlUrl: z.string().regex(REMOTE_WS, "a tailnet ws:// cell URL without query/fragment"),
-    framesUrl: z.string().regex(REMOTE_WS, "a tailnet ws:// cell URL without query/fragment"),
-  })
-  .passthrough();
+ * widening of it.
+ *
+ * SP-3 (2026-10-01) — the ticket template's FIRST INSTANCE: two legs,
+ * `control` and `frames`, the wire byte for byte what TM-2 shipped (the
+ * template took the cell's `<leg>Url` spelling, not the other way round). */
+export const RemoteCellEndpointSet = remoteEndpointSet(
+  ["control", "frames"],
+  REMOTE_WS,
+  "a tailnet ws:// cell URL without query/fragment",
+);
 export type RemoteCellEndpointSet = z.infer<typeof RemoteCellEndpointSet>;
 
 /** What a ticket's `endpoints` may be. The LOOPBACK shape is tried first: the
@@ -406,29 +414,19 @@ export const TicketEndpointSet = z.union([CellEndpointSet, RemoteCellEndpointSet
 export type TicketEndpointSet = z.infer<typeof TicketEndpointSet>;
 
 /** Compose one cell's remote door set from the serve's own base URL (truffle's
- * `ProxyInfo.url`, e.g. `http://host.ts.net:9422`) — the single place the
- * `http→ws` / `https→wss` mapping is written. Returns `undefined` when the
+ * `ProxyInfo.url`, e.g. `http://host.ts.net:9422`). Returns `undefined` when the
  * base is not a usable http(s) origin, so a caller refuses honestly instead of
- * minting a URL nothing can dial. */
+ * minting a URL nothing can dial. SP-3: the `http→ws` / `https→wss` mapping
+ * this used to spell is the template's now (`composeRemoteEndpoints`), the one
+ * place for every instance. */
 export function remoteCellEndpointsFor(
   serveBaseUrl: string,
   cellBootId: string,
 ): RemoteCellEndpointSet | undefined {
-  let base: URL;
-  try {
-    base = new URL(serveBaseUrl);
-  } catch {
-    return undefined;
-  }
-  const scheme =
-    base.protocol === "https:" ? "wss:" : base.protocol === "http:" ? "ws:" : undefined;
-  if (scheme === undefined) return undefined;
-  const origin = `${scheme}//${base.host}`;
-  const parsed = RemoteCellEndpointSet.safeParse({
-    controlUrl: `${origin}${remoteCellPath(cellBootId, "control")}`,
-    framesUrl: `${origin}${remoteCellPath(cellBootId, "frames")}`,
+  return composeRemoteEndpoints(RemoteCellEndpointSet, serveBaseUrl, {
+    control: remoteCellPath(cellBootId, "control"),
+    frames: remoteCellPath(cellBootId, "frames"),
   });
-  return parsed.success ? parsed.data : undefined;
 }
 
 /** The product-API ticket (spec §5.1): route + endpoints + both grants. The

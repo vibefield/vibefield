@@ -115,6 +115,7 @@ import {
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
+import { RemoteEndpointSet } from "../src/remote-endpoints";
 import {
   ScreenshotCaptureResult,
   ScreenshotHelperCommand,
@@ -343,6 +344,12 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // one so both arms of the endpoints union are golden, not just the arm the
   // desktop ships today.
   "tp-remote-open-ticket": TerminalOpenTicketResult,
+  // SP-3 — the ticket template's own reader, which every instance's set
+  // satisfies: the cell's pair rides `tp-remote-open-ticket` above (its
+  // instance is `RemoteCellEndpointSet`), rosettad's one-leg set is
+  // `remote-endpoint-set.rosetta` (its instance `RemoteIndexEndpointSet` —
+  // remote-endpoints.test.ts parses it with both).
+  "remote-endpoint-set": RemoteEndpointSet,
   "tp-create-open": TerminalCreateOpenResult,
   "tp-renew-attach-params": TerminalRenewAttachParams,
   "tp-connection-hello": ConnectionHello,

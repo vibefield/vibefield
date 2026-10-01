@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
+import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
   MeshScope,
   RowsDeviceState,
@@ -965,6 +966,56 @@ export const IndexChangesSubscribeParams = RowsSubscribeParams.extend({
   scope: MeshScope.optional(),
 }).passthrough();
 export type IndexChangesSubscribeParams = z.infer<typeof IndexChangesSubscribeParams>;
+
+// ── the direct plane (SP-3 — the ticket template's SECOND instance;
+// thinking-sync-planes.md §5.4, thinking-desktop-sync-plane.md §6.4; the
+// handler is DS-7's, at rosetta's pin move) ──
+//
+// A session's transcript is rosetta's own stream, read at the OWNER's rosettad:
+// history to a stamp, then the live tail, resumable, with `resync` as the gap
+// marker (AR-D7). fieldd publishes rosettad's loopback listener as ONE serve on
+// `PORTS.INDEX_SERVE` that proxies the whole listener with nothing stripped
+// (the floor's `port` serve kind), so a client dials rosetta's own route at the
+// ROOT — and the asset paths a timeline names stay dialable as they stand.
+// One leg, `session`: `/ws/sessions/{id}`. rosetta's grant (RO-10) opens that
+// route, the session's HTTP pages and the assets — never the lists, search,
+// `/ws/meta`, or the live-file read — so an HTTP leg is DS-7's to add if a
+// reader needs one, not this slice's to guess.
+
+/** rosetta's session socket route, before the session id. */
+export const REMOTE_INDEX_SESSION_PATH_PREFIX = "/ws/sessions/" as const;
+
+/** The path a client dials for one session's socket — the ONLY composer.
+ * rosetta's session ids are any text (its own grant vectors carry a quote, a
+ * backslash, controls, `/` and non-ASCII), so the id is percent-encoded into
+ * ONE segment: a `/` in an id must not become a route for another session. */
+export function remoteIndexSessionPath(sessionId: string): string {
+  return `${REMOTE_INDEX_SESSION_PATH_PREFIX}${encodeURIComponent(sessionId)}`;
+}
+
+/** SP-3 — rosettad's remote endpoint set: ONE leg, `session`, a tailnet
+ * `ws://`/`wss://` URL at `/ws/sessions/<id>`, no query, no fragment (the grant
+ * rides `Authorization: Rosetta-Grant` or the `rosetta.grant.<grant>`
+ * subprotocol, never the URL — rosetta AUTH.md §3). */
+export const RemoteIndexEndpointSet = remoteEndpointSet(
+  ["session"],
+  remoteDoorUrl("wss?", String.raw`\/ws\/sessions\/[^/?#\s]+`),
+  "a tailnet ws:// rosetta session URL without query/fragment",
+);
+export type RemoteIndexEndpointSet = z.infer<typeof RemoteIndexEndpointSet>;
+
+/** Compose one session's set from the index serve's own base URL (truffle's
+ * `ProxyInfo.url`, e.g. `http://host.ts.net:9424`); `undefined` when the base
+ * is unusable or the session id is empty — never a URL nothing can dial. */
+export function remoteIndexEndpointsFor(
+  serveBaseUrl: string,
+  sessionId: string,
+): RemoteIndexEndpointSet | undefined {
+  if (sessionId.length === 0) return undefined;
+  return composeRemoteEndpoints(RemoteIndexEndpointSet, serveBaseUrl, {
+    session: remoteIndexSessionPath(sessionId),
+  });
+}
 
 // ── agents.* (the distribution and persona doors; handlers land at AR-2 with
 // puppeteer's first import — these rows are the contract they will satisfy) ──
