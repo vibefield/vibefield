@@ -123,6 +123,39 @@ describe("PeerLink.doorState", () => {
     expect(doors).toEqual(["silent", "answers"]);
   });
 
+  // DS-2b (2026-10-01) — a standing link's lost socket is recorded as silence
+  // WHEN it is lost, and heard again when the client's re-dial is answered:
+  // both moves are announced, so the roster neither lags a blip nor sits on
+  // `restarting` after the door is back. It was read off `link.state` with no
+  // announcement, and no node flip could clear it.
+  it("DS-2b: a standing link that loses its socket is silent at once, and heard again when its client re-dials — each move announced", async () => {
+    let server: import("ws").WebSocket | undefined;
+    const d = await door((msg, ws) => {
+      server = ws;
+      if (msg.method === "device.subscribe") answer(ws, msg.id, { subId: "s-1", snapshot: {} });
+      else answer(ws, msg.id, { devices: [] });
+    });
+    const { link, doors } = linkTo(d.url);
+    let drops = 0;
+    await link.subscribe(
+      "dev-b",
+      "device.subscribe",
+      {},
+      () => {},
+      () => {
+        drops += 1;
+      },
+    );
+    expect(link.doorState("dev-b")).toBe("answers");
+    server?.terminate(); // the socket goes; the door itself stays up
+    await until(() => link.doorState("dev-b") === "silent", 3_000);
+    expect(doors).toEqual(["silent"]);
+    // the client re-dials on its own and replays the member: heard again
+    await until(() => link.doorState("dev-b") === "answers", 5_000);
+    expect(doors).toEqual(["silent", "answers"]);
+    expect(drops).toBe(0);
+  });
+
   it("a door that never answers the dial is silent once the deadline passes", async () => {
     const { link } = linkTo("ws://127.0.0.1:1/", { callTimeoutMs: 300 });
     await expect(link.request("dev-b", "device.list", {})).rejects.toMatchObject({

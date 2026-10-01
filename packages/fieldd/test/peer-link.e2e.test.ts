@@ -335,6 +335,81 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
     expect(A.devices.get("dev-quiet")?.online).toBe(false);
   }, 30_000);
 
+  // S6 (the landing review, 2026-10-01), red-proven end to end here (DS-2b):
+  // the door's silent mark survived a node's offline/online cycle, so a desktop
+  // that slept and woke read `restarting` until some call to it happened to
+  // succeed. The roster sees the flip and PeerLink forgets the silence
+  // (`clearSilent`); its own unit rows script one side each — these drive the
+  // REAL PeerLink and roster through the whole cycle, and make no call after
+  // the wake.
+  it("S6, the whole cycle: a node whose door went silent sleeps and wakes, NO call is made, and the roster reads awake — not restarting", async () => {
+    const { A, mockA } = await bootPair();
+    const withQuiet = (online: boolean) => [
+      ...mockA.meshPeers.filter((p) => (p as { deviceId?: string }).deviceId !== "dev-quiet"),
+      {
+        id: "node-quiet",
+        deviceId: "dev-quiet",
+        name: "quiet",
+        online,
+        whois: { login: LOGIN, deviceName: "quiet.tailnet.ts.net" },
+      },
+    ];
+    mockA.meshPeers = withQuiet(true);
+    mockA.pushPeersDelta({ kind: "peerUpdated" });
+    await until(() => A.devices.get("dev-quiet") !== undefined, 4000);
+    // its door goes unanswered — the node up, its daemon down
+    await expect(A.peers.request("dev-quiet", "device.list", {})).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+    });
+    expect(A.devices.get("dev-quiet")).toMatchObject({ online: true, state: "restarting" });
+    // it sleeps: asleep outranks the silence
+    mockA.meshPeers = withQuiet(false);
+    mockA.pushPeersDelta({ kind: "peerUpdated" });
+    await until(() => A.devices.get("dev-quiet")?.state === "asleep", 4000);
+    // it wakes, and nothing is asked of it: what its door said before it slept
+    // says nothing about the daemon it woke with
+    mockA.meshPeers = withQuiet(true);
+    mockA.pushPeersDelta({ kind: "peerUpdated" });
+    await until(() => A.devices.get("dev-quiet")?.online === true, 4000);
+    expect(A.devices.get("dev-quiet")?.state).toBe("awake");
+    expect(A.peers.doorState("dev-quiet")).toBeUndefined();
+  }, 30_000);
+
+  it("S6, the whole cycle on a STANDING link: its daemon goes away, its node sleeps and wakes, NO call is made, and the roster reads awake", async () => {
+    const { A, B, mockA } = await bootPair();
+    // a standing subscription pins A's link to B, as the board's upstreams do
+    let drops = 0;
+    const sub = await A.peers.subscribe(
+      "dev-b",
+      "device.subscribe",
+      {},
+      () => {},
+      () => {
+        drops += 1;
+      },
+    );
+    expect(A.devices.get("dev-b")?.state).toBe("awake");
+    // B's daemon goes away, its node still on the tailnet: the socket under the
+    // standing link closes and the client re-dials on its own — a silent door
+    await B.stop();
+    await until(() => A.devices.get("dev-b")?.state === "restarting", 8000);
+    const setB = (online: boolean) => {
+      mockA.meshPeers = mockA.meshPeers.map((p) =>
+        (p as { deviceId?: string }).deviceId === "dev-b" ? { ...(p as object), online } : p,
+      );
+      mockA.pushPeersDelta({ kind: "peerUpdated" });
+    };
+    setB(false);
+    await until(() => A.devices.get("dev-b")?.state === "asleep", 4000);
+    setB(true);
+    await until(() => A.devices.get("dev-b")?.online === true, 4000);
+    // no call since the wake: no evidence about the daemon it woke with
+    expect(A.devices.get("dev-b")?.state).toBe("awake");
+    expect(A.peers.doorState("dev-b")).toBeUndefined();
+    expect(drops).toBe(0); // the standing member was never dropped: its client heals the socket
+    sub.unsubscribe();
+  }, 30_000);
+
   it("one outbound connection per peer: two forwards reuse a single socket", async () => {
     const { A, dials } = await bootPair();
     await A.peers.request("dev-b", "device.list", {});

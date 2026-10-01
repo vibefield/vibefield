@@ -486,16 +486,17 @@ export class PeerLink extends EventEmitter {
    * refusals included); `silent` when the last attempt found no door — a dial
    * or a forward that failed at the transport — or a standing link that
    * answered and whose socket has gone; `incompatible` once its contracts
-   * major was refused. `undefined` = no evidence either way: never dialled, or
-   * an idle link swept after answering. The roster's `restarting` is `silent`
-   * on a node the tailnet lists online. */
+   * major was refused. `undefined` = no evidence either way: never dialled, an
+   * idle link swept after answering, or silence forgotten on a node's online
+   * flip (`clearSilent`). The roster's `restarting` is `silent` on a node the
+   * tailnet lists online. DS-2b (2026-10-01): a lost socket is recorded as
+   * silence when it is lost (ensureLink's status listener) and read from that
+   * record alone — it was read off `link.state`, which an online flip could
+   * not clear, so a desktop whose daemon restarted under a standing link read
+   * `restarting` across its node's sleep and wake. */
   doorState(deviceId: string): PeerDoorState | undefined {
     if (this.incompatible.has(deviceId)) return "incompatible";
-    const link = this.links.get(deviceId);
-    if (link !== undefined) {
-      if (link.client.status === "ready") return "answers";
-      if (link.state === "connected") return "silent";
-    }
+    if (this.links.get(deviceId)?.client.status === "ready") return "answers";
     return this.silentSince.has(deviceId) ? "silent" : undefined;
   }
 
@@ -529,12 +530,26 @@ export class PeerLink extends EventEmitter {
     const link: Link = { client, state: "dialing", lastUsed: this.now(), subs: new Set() };
     client.onStatusChange(() => {
       if (this.links.get(deviceId) !== link) return; // superseded/dropped
-      if (client.status === "ready" && link.state !== "connected") {
-        link.state = "connected";
-        this.emit("link-changed", { deviceId, state: "connected" });
+      if (client.status === "ready") {
+        if (link.state !== "connected") {
+          link.state = "connected";
+          this.emit("link-changed", { deviceId, state: "connected" });
+        }
+        // DS-2b (2026-10-01) — a door that answered a hello, first or again
+        // after a blip, is heard (it used to stay "silent" to the roster until
+        // some call happened to succeed)
+        this.markAnswered(deviceId);
       } else if (client.status === "failed") {
         if (client.lastError?.kind === "INCOMPATIBLE") this.pinIncompatible(deviceId);
         else this.dropLink(deviceId); // terminal auth/config failure — re-dial later
+      } else if (link.state === "connected") {
+        // DS-2b — a link that answered has lost its socket and its client is
+        // re-dialling: the door is silent until it answers again. Recorded as
+        // EVIDENCE, like a call's transport failure, so the roster hears it
+        // now and a node's online flip forgets it like any other silence
+        // (`clearSilent`) — it used to be read off `link.state`, which no flip
+        // could clear.
+        this.markSilent(deviceId);
       }
     });
     client.connect();
@@ -694,7 +709,9 @@ export class PeerLink extends EventEmitter {
    * about the daemon it woke with, and the mark used to survive the cycle, so
    * a desktop that slept and woke read `restarting` until some call to it
    * happened to succeed. Nothing is known afterwards (`doorState` reads
-   * `undefined` unless a live link says otherwise) — not "answers". */
+   * `undefined` unless a live link says otherwise) — not "answers". DS-2b: a
+   * standing link's lost socket is forgotten with it (it is the same record
+   * now); its client goes on re-dialling, and its next hello is heard. */
   clearSilent(deviceId: string): void {
     if (this.silentSince.delete(deviceId)) this.emit("door-changed", { deviceId, door: undefined });
   }
