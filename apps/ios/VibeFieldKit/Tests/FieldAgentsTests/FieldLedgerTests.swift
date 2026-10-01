@@ -269,6 +269,33 @@ private func row(
     #expect(rows[0].stale)
   }
 
+  /// DS-8 / DS-L8 — a run whose DESKTOP is not live on the home's mesh board
+  /// (asleep, stale, another version) keeps its row and is dressed STALE: the
+  /// dim the freshness policy already draws, whatever the run's own evidence
+  /// clock says. Fresh evidence on such a row is the last thing its desktop
+  /// said, not a desktop answering now.
+  @Test func aRunWhoseDesktopIsNotLiveIsDressedStale() {
+    var assembly = FieldAssembly(tint: .light)
+    let fresh = AgentRuntimeState(statusSince: now.addingTimeInterval(-60), lastEvidenceAt: now)
+    func run(_ id: String, desktopLive: Bool) -> FieldBubble {
+      let snapshot = AgentSnapshot(
+        id: id, runtimeSessionID: "r-\(id)", provider: .claude, project: "p", state: fresh,
+        createdAt: now,
+        join: AgentJoin(
+          deviceID: "dev-air", hosted: "local", runtimeSessionID: "pty-\(id)",
+          deviceLive: desktopLive))
+      return fieldBubble(from: snapshot)!
+    }
+    let rows = assembly.fold(
+      [run("awake", desktopLive: true), run("asleep", desktopLive: false)], cardSubjectID: nil,
+      nowMs: t0)
+    #expect(rows.map(\.id) == ["awake", "asleep"])
+    #expect(rows[0].stale == false)
+    #expect(rows[1].stale)
+    // The join says so, for any surface that wants the reason rather than the dim.
+    #expect(rows[1].agent?.join?.deviceLive == false)
+  }
+
   @Test func theProjectionCarriesTheMonitorsFacts() {
     let state = AgentRuntimeState(
       permissions: [AgentPermission(tool: "Bash")], effort: AgentEffort(value: "high", intent: .configured),

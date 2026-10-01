@@ -336,6 +336,9 @@ public struct FieldAssembly: Sendable {
         if let evidence = facet.lastEvidenceAt {
           dressed.stale = nowMs - evidence.timeIntervalSince1970 * 1000 > Self.staleAfterMs
         }
+        // DS-8 (DS-L8) — a run whose desktop is not live on the phone's home
+        // keeps its row, greyed: the same dim, whatever its own evidence says.
+        if facet.join?.deviceLive == false { dressed.stale = true }
       }
       dressed.unread = unread.unreadIDs.contains(bubble.id)
       dressed.active = bubble.id == cardSubjectID

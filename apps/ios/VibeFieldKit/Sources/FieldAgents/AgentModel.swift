@@ -294,16 +294,24 @@ public struct AgentJoin: Sendable, Equatable, Codable {
   /// floor still lists its PTY. `terminal.hosted` stays `local` with the same
   /// session id, so the pane can still be read — and RESUME is the verb.
   public var exited: Bool
+  /// DS-8 (DS-L8) — whether the desktop this run lives on is LIVE on the
+  /// phone's home right now: its chain is flowing on the home's mesh board, and
+  /// the home is answering. `false` is a desktop asleep, stale or on another
+  /// version — or a home that stopped answering — and the row STAYS, drawn
+  /// greyed (`FieldAssembly` dresses it stale), because asleep is a state and
+  /// not an absence. `true` for a feed with no mesh behind it.
+  public var deviceLive: Bool
 
   public init(
     deviceID: String, hosted: String, runtimeSessionID: String? = nil, pending: Bool = false,
-    exited: Bool = false
+    exited: Bool = false, deviceLive: Bool = true
   ) {
     self.deviceID = deviceID
     self.hosted = hosted
     self.runtimeSessionID = runtimeSessionID
     self.pending = pending
     self.exited = exited
+    self.deviceLive = deviceLive
   }
 
   /// Whether the run has a terminal at all, by the wire's word.
