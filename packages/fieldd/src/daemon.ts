@@ -98,8 +98,6 @@ import {
   type ProductInfo,
   RendererParticipantIdentity,
   ROWS,
-  remoteCellEndpointsFor,
-  remoteCellRoutePrefix,
   SCOPES,
   type Scope,
   SettingsGetParams,
@@ -221,7 +219,13 @@ import { SettingsDocService } from "./settings-doc";
 import { createSurfaceService } from "./surface-service";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
-import { serveAllowGlob, TERMINAL_SERVE_ID, TerminalServeDriver } from "./terminal-serve";
+import {
+  cellEndpointsFrom,
+  publishedTerminalRoutes,
+  serveAllowGlob,
+  TERMINAL_SERVE_ID,
+  TerminalServeDriver,
+} from "./terminal-serve";
 import { type TerminalProfileBinding, TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
 
@@ -1318,15 +1322,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // corrupt `link.json` — advertised "another device can attach here" while
     // ZERO routes were on the tailnet. `devices.ts` promises that field is "the
     // fact a REMOTE reader needs", and a card drawn on it was tappable and dead.
-    const publishedTerminalServe = ():
-      | { url: string; routes: ReadonlyArray<{ prefix: string; targetPort: number }> }
-      | undefined => {
-      const serve = mesh.serves().find((s) => (s.serveId ?? s.name) === TERMINAL_SERVE_ID);
-      if (serve?.status !== "active" || serve.url === undefined) return undefined;
-      const routes = serve.routes ?? [];
-      if (routes.length === 0) return undefined;
-      return { url: serve.url, routes };
-    };
+    // SP-3 — the reading itself is the route driver's (`publishedTerminalRoutes`
+    // in terminal-serve.ts, over route-serve.ts's `publishedServe`).
+    const publishedTerminalServe = () => publishedTerminalRoutes(mesh.serves());
 
     // -- Terminal floor (NF-3, native-floor spec §6): the observed inventory +
     // the D6 ticket seam. Tolerant of a floor-less native (no endpoints on the
@@ -1361,13 +1359,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // set. A ticket minted in the window between a cell's birth and its route
       // landing would name a path the sidecar answers 404 for, and a 404 is not
       // a state any client can act on. Anything missing is `doors_not_published`.
-      remoteEndpoints: (cellBootId) => {
-        const serve = publishedTerminalServe();
-        if (serve === undefined) return undefined;
-        const prefix = remoteCellRoutePrefix(cellBootId);
-        if (!serve.routes.some((route) => route.prefix === prefix)) return undefined;
-        return remoteCellEndpointsFor(serve.url, cellBootId);
-      },
+      // SP-3 — the route driver builds the set (`cellEndpointsFrom`).
+      remoteEndpoints: (cellBootId) => cellEndpointsFrom(mesh.serves(), cellBootId),
       // GT-7 — Import file… / Export… / Reveal: the api's internal shell
       // doors, read at call time (the api is built after this service).
       shell: () => shellApi,
