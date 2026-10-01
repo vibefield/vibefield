@@ -36,37 +36,29 @@ async function until(predicate: () => boolean | Promise<boolean>, label: string)
   throw new Error(`timed out waiting for: ${label}`);
 }
 
-/** Both devices know the docs exist (B's registry seeded, as the library will
+/** Both devices know the doc exists (B's registry seeded, as the library will
  * seed it — doc-library tests prove that half) and only A holds content. */
 async function pair(
   syncOptions: Partial<DocSyncOptions> = {},
   opts: {
-    docs?: number;
     join?: "now" | "later";
     /** DS-5c — per-device DocumentService options. */
     docsOptions?: (name: string) => Partial<DocumentServiceOptions>;
   } = {},
-): Promise<{ a: Device; b: Device; docId: string; docIds: string[]; mesh: Mesh }> {
+): Promise<{ a: Device; b: Device; docId: string; mesh: Mesh }> {
   const mesh = new Mesh();
-  const docIds = Array.from({ length: opts.docs ?? 1 }, () => randomUUID());
+  const docId = randomUUID();
   const devices: Device[] = [];
   for (const name of ["A", "B"]) {
     const dataDir = mkdtempSync(join(tmpdir(), `vf-dshost-${name}-`));
     dirs.push(dataDir);
     mkdirSync(join(dataDir, "registries"), { recursive: true });
-    for (const docId of docIds) mkdirSync(join(dataDir, "docs", docId), { recursive: true });
+    mkdirSync(join(dataDir, "docs", docId), { recursive: true });
     writeFileSync(
       join(dataDir, "registries", "field.docs.v1.json"),
-      JSON.stringify(
-        docIds.map((docId) => ({
-          docId,
-          name: "board",
-          updatedAt: 1,
-          baseEpoch: 0,
-          engineSchema: null,
-          sizeBytes: 0,
-        })),
-      ),
+      JSON.stringify([
+        { docId, name: "board", updatedAt: 1, baseEpoch: 0, engineSchema: null, sizeBytes: 0 },
+      ]),
     );
     devices.push(new Device(name, mesh, dataDir, syncOptions, opts.docsOptions?.(name) ?? {}));
   }
@@ -76,7 +68,7 @@ async function pair(
   // `later`: B joins the mesh only when the test says so (`enter`), so A can
   // hold content before anyone greets it.
   if (opts.join !== "later") await enter(mesh, b);
-  return { a, b, docId: docIds[0] as string, docIds, mesh };
+  return { a, b, docId, mesh };
 }
 
 /** B enters the mesh and starts; A replicates toward it at once (DS-D7). */
