@@ -26,6 +26,7 @@ import {
 } from "@vibefield/contracts";
 import type {
   DevicesPort,
+  MeshBoardFailure,
   MeshBoardListener,
   MonitorFeedState,
   MonitorUsagePort,
@@ -48,6 +49,9 @@ export interface DoorClient {
     method: string,
     params: Record<string, unknown>,
     onFrame: (payload: unknown, kind?: "snapshot" | "delta") => void,
+    /** fieldd-client's `SubscribeOptions`: `onReplayFailed` hears a replay
+     * after a reconnect that the daemon refused — the subscription is over */
+    opts?: { onReplayFailed?: (error: unknown) => void },
   ): Promise<{ snapshot: unknown; unsubscribe: () => void }>;
 }
 
@@ -359,11 +363,36 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
  * inventing any. */
 /* ── DS-3: the mesh board and the roster ───────────────────────────────── */
 
+/** The refusals no second ask can change: the same request gets the same
+ * answer until something else moves (a grant, a build, the request itself). */
+const MESH_TERMINAL_KINDS = new Set([
+  "FORBIDDEN_SCOPE",
+  "INCOMPATIBLE",
+  "PRECONDITION_FAILED",
+  "UNAUTHORIZED",
+]);
+
+/** A refusal or a lost ask, as the reader needs it (S4, 2026-10-01): fieldd's
+ * words, and whether asking again may be answered — read from the error's own
+ * `kind` and `retryable` (a FielddRpcError's), never from its message. */
+export function meshBoardFailure(cause: unknown): MeshBoardFailure {
+  const { kind, retryable } = (typeof cause === "object" && cause !== null ? cause : {}) as {
+    kind?: unknown;
+    retryable?: unknown;
+  };
+  return {
+    reason: cause instanceof Error ? cause.message : String(cause),
+    retryable: retryable === true && !(typeof kind === "string" && MESH_TERMINAL_KINDS.has(kind)),
+  };
+}
+
 /** The board every self desktop's agents arrive on (`agent.subscribe
  * {projection: "desk", scope: "mesh"}`, DS-D4), read through the deck's own
  * client: a `.snapshot` is a whole board (the open, and the client's replay
  * after a reconnect), a `.delta` one device's frame. The tolerant reader: a
- * frame that does not parse is a reason (`onError`), never a blank. */
+ * frame that does not parse is a reason (`onError`), never a blank. S4: every
+ * failure says whether asking again may be answered, and a replay the daemon
+ * refused after a reconnect is a failure too — the client let it go. */
 export function meshBoardOver(client: DoorClient): (listener: MeshBoardListener) => () => void {
   return ({ onOpen, onFrame, onError }) => {
     let cancelled = false;
@@ -372,24 +401,36 @@ export function meshBoardOver(client: DoorClient): (listener: MeshBoardListener)
       const parsed = AgentMeshOpen.safeParse(payload);
       if (parsed.success) onOpen(parsed.data);
       else
-        onError(
-          `the mesh board answered an unreadable board: ${parsed.error.issues[0]?.message ?? "invalid"}`,
-        );
+        onError({
+          reason: `the mesh board answered an unreadable board: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+          retryable: false, // another build's board: asking again reads the same
+        });
     };
     const deliverFrame = (payload: unknown): void => {
       const parsed = AgentMeshFrame.safeParse(payload);
       if (parsed.success) onFrame(parsed.data);
       else
-        onError(
-          `the mesh board sent an unreadable frame: ${parsed.error.issues[0]?.message ?? "invalid"}`,
-        );
+        onError({
+          reason: `the mesh board sent an unreadable frame: ${parsed.error.issues[0]?.message ?? "invalid"}`,
+          retryable: true,
+          frame: true,
+        });
     };
     void client
-      .subscribe("agent.subscribe", { projection: "desk", scope: "mesh" }, (payload, kind) => {
-        if (cancelled) return;
-        if (kind === "snapshot") deliverOpen(payload);
-        else deliverFrame(payload);
-      })
+      .subscribe(
+        "agent.subscribe",
+        { projection: "desk", scope: "mesh" },
+        (payload, kind) => {
+          if (cancelled) return;
+          if (kind === "snapshot") deliverOpen(payload);
+          else deliverFrame(payload);
+        },
+        {
+          onReplayFailed: (cause) => {
+            if (!cancelled) onError(meshBoardFailure(cause));
+          },
+        },
+      )
       .then((subscription) => {
         if (cancelled) {
           subscription.unsubscribe();
@@ -399,7 +440,7 @@ export function meshBoardOver(client: DoorClient): (listener: MeshBoardListener)
         deliverOpen(subscription.snapshot);
       })
       .catch((cause: unknown) => {
-        if (!cancelled) onError(cause instanceof Error ? cause.message : String(cause));
+        if (!cancelled) onError(meshBoardFailure(cause));
       });
     return () => {
       cancelled = true;

@@ -1085,7 +1085,9 @@ export function GodviewDeck({
         method: string,
         params: Record<string, unknown>,
         onFrame: (payload: unknown, kind?: "snapshot" | "delta") => void,
-      ) => fieldd.subscribe(method, params, onFrame),
+        // S4 — a refused replay reaches the door (the mesh board heals on it)
+        opts?: { onReplayFailed?: (error: unknown) => void },
+      ) => fieldd.subscribe(method, params, onFrame, opts),
     };
     return {
       // DS-3 (2026-09-30, DS-D4) — THE MESH HALF IS THE MESH BOARD. Other

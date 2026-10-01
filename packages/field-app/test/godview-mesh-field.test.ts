@@ -14,6 +14,8 @@
  *   3. the composition: every row says where it lives
  *   4. the device filter's choices and its narrowing
  *   5. the labels, scoped per source — the remote one naming the desktop
+ *   6. the re-ask backoff after a failure that may heal (S4; the hook's
+ *      behaviour itself is mounted in godview-remote-door.test.tsx)
  */
 
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
@@ -41,10 +43,13 @@ import {
 import { osOf, rosterView } from "../src/godview/monitor/devices";
 import {
   EMPTY_MESH_FIELD,
+  MESH_RETRY_MAX_MS,
+  MESH_RETRY_MIN_MS,
   type MeshFieldSnapshot,
   meshFieldAfterFailure,
   meshFieldAfterFrame,
   meshFieldFromOpen,
+  meshRetryDelay,
 } from "../src/godview/monitor/mesh-field";
 import {
   classifyRemoteStatus,
@@ -195,6 +200,16 @@ describe("the board, read (DS-D4)", () => {
     // GT-D15.3's identity rule: an unchanged state with an unchanged reason is the SAME object
     expect(meshFieldAfterFailure(down, "FORBIDDEN_SCOPE: agent.observe")).toBe(down);
     expect(meshFieldAfterFailure(down, "a new reason")).not.toBe(down);
+  });
+});
+
+describe("the re-ask backoff (S4, 2026-10-01)", () => {
+  it("waits 250 ms after the first failure, doubling, never longer than 8 s", () => {
+    expect([0, 1, 2, 3, 4, 5, 6, 12].map(meshRetryDelay)).toEqual([
+      250, 500, 1_000, 2_000, 4_000, 8_000, 8_000, 8_000,
+    ]);
+    expect(MESH_RETRY_MIN_MS).toBe(250);
+    expect(MESH_RETRY_MAX_MS).toBe(8_000);
   });
 });
 

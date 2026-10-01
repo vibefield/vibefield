@@ -18,6 +18,9 @@
  *   5. the device filter: a dropdown that narrows the rows handed to the view
  *   6. no door ⇒ no rows; a board that cannot be read ⇒ local rows still, the
  *      reason on screen; PF6: the board is closed with the stage
+ *   7. the board heals itself (S4): a failure that may heal asks again on the
+ *      backoff, a terminal refusal stays put, an unreadable frame re-opens,
+ *      and closing the stage cancels the wait
  *
  * The rows are read off the LIST view (the swarm paints on WebGPU, which
  * happy-dom does not have); the routing is view-independent.
@@ -42,7 +45,11 @@ import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
-import type { MeshBoardListener, MonitorDoor } from "../src/godview/monitor/remote-door";
+import type {
+  MeshBoardFailure,
+  MeshBoardListener,
+  MonitorDoor,
+} from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { managedSummary } from "./managed-session-fixture";
 import { useInlineSwarmPhysics } from "./swarm-physics-inline";
@@ -142,21 +149,32 @@ interface FakeDoor extends MonitorDoor {
   createTerminal: ReturnType<typeof vi.fn>;
   /** push a per-device frame to the newest board listener */
   push(frame: AgentMeshFrame): void;
+  /** tell the newest board listener its board failed (S4) */
+  fail(failure: MeshBoardFailure): void;
   /** how many boards were opened, and closed */
   opened(): number;
   closed(): number;
 }
 
-function fakeDoor(open: AgentMeshOpen | Error = board(), rows = LOCAL_ROWS): FakeDoor {
+/** What one open of the board answers: a board, a refusal no retry changes
+ * (an Error), or a structured failure (S4). */
+type BoardAnswer = AgentMeshOpen | Error | MeshBoardFailure;
+
+/** `open` answers every open alike; a LIST answers the n-th open with its
+ * n-th entry, and every later one with its last. */
+function fakeDoor(open: BoardAnswer | BoardAnswer[] = board(), rows = LOCAL_ROWS): FakeDoor {
   let listener: MeshBoardListener | null = null;
   let opened = 0;
   let closed = 0;
+  const answers = Array.isArray(open) ? open : [open];
   return {
     observeMesh: (next) => {
       opened += 1;
       listener = next;
-      if (open instanceof Error) next.onError(open.message);
-      else next.onOpen(open);
+      const answer = answers[Math.min(opened, answers.length) - 1] ?? board();
+      if (answer instanceof Error) next.onError({ reason: answer.message, retryable: false });
+      else if ("reason" in answer) next.onError(answer);
+      else next.onOpen(answer);
       return () => {
         closed += 1;
         if (listener === next) listener = null;
@@ -178,6 +196,7 @@ function fakeDoor(open: AgentMeshOpen | Error = board(), rows = LOCAL_ROWS): Fak
     history: unreachableHistory(),
     usage: emptyUsage(),
     push: (frame) => listener?.onFrame(frame),
+    fail: (failure) => listener?.onError(failure),
     opened: () => opened,
     closed: () => closed,
   };
@@ -449,6 +468,111 @@ describe("the board without a floor", () => {
     expect(door.opened()).toBe(1);
     act(() => root?.unmount());
     root = null;
+    expect(door.closed()).toBe(1);
+  });
+});
+
+// S4 (the DS landing review, 2026-10-01): the reader re-opened only on a gap,
+// so one failed open — the socket dropping mid-ask, fieldd's retryable "the
+// mesh board is not ready yet" — left "mesh unavailable" and no remote rows
+// until the stage was reopened. The two-second poll it replaced healed itself.
+describe("the board heals itself (S4)", () => {
+  const NOT_READY: MeshBoardFailure = {
+    reason: "the mesh board is not ready yet",
+    retryable: true,
+  };
+  const chip = (host: HTMLElement): string | null | undefined =>
+    host.querySelector(".vf-monitor-remote-unavailable-chip")?.textContent;
+
+  beforeEach(() => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
+  });
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  async function wait(ms: number): Promise<void> {
+    await act(async () => {
+      vi.advanceTimersByTime(ms);
+    });
+  }
+
+  it("a failure that may heal keeps 'mesh unavailable' on screen, then asks again after the backoff — and the second open answers", async () => {
+    const door = fakeDoor([NOT_READY, board()]);
+    const view = await mountMonitor(door);
+    expect(door.opened()).toBe(1);
+    expect(latest().remoteState).toBe("unavailable");
+    expect(chip(view)).toBe("mesh unavailable · the mesh board is not ready yet");
+    expect(remoteRows(view)).toHaveLength(0);
+
+    await wait(249);
+    expect(door.opened()).toBe(1); // not before the backoff
+    await wait(1);
+    expect(door.opened()).toBe(2);
+    expect(door.closed()).toBe(1); // the failed board was let go first
+    expect(latest().remoteState).toBe("serving");
+    expect(remoteRows(view)).toHaveLength(2);
+    expect(chip(view)).toBeUndefined();
+  });
+
+  it("the backoff doubles while the board stays unavailable — 250, 500, 1000 ms — and resets once it answers", async () => {
+    const door = fakeDoor([NOT_READY, NOT_READY, NOT_READY, board()]);
+    const view = await mountMonitor(door);
+    await wait(250);
+    expect(door.opened()).toBe(2);
+    await wait(499);
+    expect(door.opened()).toBe(2);
+    await wait(1);
+    expect(door.opened()).toBe(3);
+    await wait(999);
+    expect(door.opened()).toBe(3);
+    await wait(1);
+    expect(door.opened()).toBe(4);
+    expect(remoteRows(view)).toHaveLength(2);
+
+    // answered: the next failure (a replay refused after a reconnect) waits
+    // the FIRST step again, not the fourth
+    await act(async () => door.fail(NOT_READY));
+    expect(latest().remoteState).toBe("unavailable");
+    await wait(250);
+    expect(door.opened()).toBe(5);
+    expect(latest().remoteState).toBe("serving");
+  });
+
+  it("a refusal no second ask can change stays put, with its reason", async () => {
+    const door = fakeDoor({ reason: "FORBIDDEN_SCOPE: requires agent.observe", retryable: false });
+    const view = await mountMonitor(door);
+    await wait(30_000);
+    expect(door.opened()).toBe(1);
+    expect(chip(view)).toBe("mesh unavailable · FORBIDDEN_SCOPE: requires agent.observe");
+  });
+
+  it("an unreadable frame is a gap: the board re-opens at once, and the fresh open replaces the copy", async () => {
+    const door = fakeDoor();
+    const view = await mountMonitor(door);
+    await act(async () =>
+      door.fail({
+        reason: "the mesh board sent an unreadable frame: Invalid input",
+        retryable: true,
+        frame: true,
+      }),
+    );
+    expect(door.closed()).toBe(1);
+    expect(door.opened()).toBe(2);
+    expect(latest().remoteState).toBe("serving");
+    expect(remoteRows(view)).toHaveLength(2);
+  });
+
+  it("closing the stage cancels the wait: nothing is asked after it closed, and no timer is left", async () => {
+    const door = fakeDoor([NOT_READY, board()]);
+    await mountMonitor(door);
+    expect(door.opened()).toBe(1);
+    expect(vi.getTimerCount()).toBeGreaterThan(0); // the re-ask is waiting
+    act(() => root?.unmount());
+    root = null;
+    expect(vi.getTimerCount()).toBe(0);
+    await wait(30_000);
+    expect(door.opened()).toBe(1);
     expect(door.closed()).toBe(1);
   });
 });

@@ -37,11 +37,13 @@ import {
   type DoorClient,
   devicesPortOver,
   historyPortOver,
+  meshBoardFailure,
   meshBoardOver,
   profileSetsPortOver,
   toAccountUsageBatch,
   usagePortOver,
 } from "../src/godview/monitor/doors";
+import type { MeshBoardFailure } from "../src/godview/monitor/remote-door";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
 
@@ -550,9 +552,12 @@ function subscribingClient(): {
   resolve(snapshot: unknown): void;
   reject(reason: Error): void;
   frame(payload: unknown, kind?: "snapshot" | "delta"): void;
+  /** the client's replay after a reconnect, refused by the daemon (S3) */
+  refuseReplay(error: unknown): void;
   unsubscribes: number;
 } {
   let onFrame: ((payload: unknown, kind?: "snapshot" | "delta") => void) | undefined;
+  let onReplayFailed: ((error: unknown) => void) | undefined;
   let settle: ((value: { snapshot: unknown; unsubscribe: () => void }) => void) | undefined;
   let fail: ((reason: Error) => void) | undefined;
   const facts = {
@@ -563,8 +568,10 @@ function subscribingClient(): {
         _method: string,
         _params: Record<string, unknown>,
         handler: (payload: unknown, kind?: "snapshot" | "delta") => void,
+        opts?: { onReplayFailed?: (error: unknown) => void },
       ) => {
         onFrame = handler;
+        onReplayFailed = opts?.onReplayFailed;
         return new Promise<{ snapshot: unknown; unsubscribe: () => void }>((done, no) => {
           settle = done;
           fail = no;
@@ -581,8 +588,14 @@ function subscribingClient(): {
     },
     reject: (reason: Error): void => fail?.(reason),
     frame: (payload: unknown, kind?: "snapshot" | "delta"): void => onFrame?.(payload, kind),
+    refuseReplay: (error: unknown): void => onReplayFailed?.(error),
   };
   return facts;
+}
+
+/** A refusal shaped as fieldd-client's FielddRpcError (kind, retryable). */
+function rpcError(kind: string, message: string, retryable: boolean): Error {
+  return Object.assign(new Error(message), { kind, retryable });
 }
 
 /** Let the port's own `.then` chain run. */
@@ -710,7 +723,7 @@ describe("DS-3 — the mesh board over fieldd's own door", () => {
   function listen() {
     const opens: AgentMeshOpen[] = [];
     const frames: AgentMeshFrame[] = [];
-    const errors: string[] = [];
+    const errors: MeshBoardFailure[] = [];
     return {
       opens,
       frames,
@@ -718,7 +731,7 @@ describe("DS-3 — the mesh board over fieldd's own door", () => {
       listener: {
         onOpen: (open: AgentMeshOpen) => opens.push(open),
         onFrame: (frame: AgentMeshFrame) => frames.push(frame),
-        onError: (reason: string) => errors.push(reason),
+        onError: (failure: MeshBoardFailure) => errors.push(failure),
       },
     };
   }
@@ -747,21 +760,64 @@ describe("DS-3 — the mesh board over fieldd's own door", () => {
     expect(door.unsubscribes).toBe(1);
   });
 
-  it("an unreadable frame is a reason, never a blank; a refused board says why", async () => {
+  it("an unreadable frame is a reason, never a blank — and a gap; a refused board says why", async () => {
     const door = subscribingClient();
     const seen = listen();
     meshBoardOver(door.client)(seen.listener);
     door.resolve(OPEN);
     await settle();
     door.frame({ device: "", delta: {} }, "delta");
-    expect(seen.errors[0]).toMatch(/^the mesh board sent an unreadable frame/);
+    expect(seen.errors[0]?.reason).toMatch(/^the mesh board sent an unreadable frame/);
+    expect(seen.errors[0]).toMatchObject({ retryable: true, frame: true });
 
     const refused = subscribingClient();
     const told = listen();
     meshBoardOver(refused.client)(told.listener);
     refused.reject(new Error("FORBIDDEN_SCOPE: requires agent.observe"));
     await settle();
-    expect(told.errors).toEqual(["FORBIDDEN_SCOPE: requires agent.observe"]);
+    expect(told.errors).toEqual([
+      { reason: "FORBIDDEN_SCOPE: requires agent.observe", retryable: false },
+    ]);
+  });
+
+  it("S4: says whether asking again may be answered — from the refusal's kind and flag, never its words", async () => {
+    // the board not ready yet, and a socket that dropped mid-ask: both may heal
+    const starting = subscribingClient();
+    const first = listen();
+    meshBoardOver(starting.client)(first.listener);
+    starting.reject(rpcError("UNAVAILABLE", "the mesh board is not ready yet", true));
+    await settle();
+    expect(first.errors).toEqual([{ reason: "the mesh board is not ready yet", retryable: true }]);
+
+    // a refusal whose kind no second ask changes stays put, whatever the flag
+    expect(meshBoardFailure(rpcError("PRECONDITION_FAILED", "not served here", true))).toEqual({
+      reason: "not served here",
+      retryable: false,
+    });
+    expect(meshBoardFailure(rpcError("INCOMPATIBLE", "another major", false)).retryable).toBe(
+      false,
+    );
+    expect(meshBoardFailure(rpcError("FORBIDDEN_SCOPE", "no agent.observe", false)).retryable).toBe(
+      false,
+    );
+    expect(meshBoardFailure(rpcError("UNAVAILABLE", "connection closed", true)).retryable).toBe(
+      true,
+    );
+    // a cause with no kind and no flag is not guessed at
+    expect(meshBoardFailure(new Error("UNAVAILABLE: looks retryable")).retryable).toBe(false);
+  });
+
+  it("S4: a replay the daemon refused after a reconnect is a failure, said with its retryability", async () => {
+    const door = subscribingClient();
+    const seen = listen();
+    const dispose = meshBoardOver(door.client)(seen.listener);
+    door.resolve(OPEN);
+    await settle();
+    door.refuseReplay(rpcError("UNAVAILABLE", "the mesh board is not ready yet", true));
+    expect(seen.errors).toEqual([{ reason: "the mesh board is not ready yet", retryable: true }]);
+    dispose();
+    door.refuseReplay(rpcError("UNAVAILABLE", "after the stage closed", true));
+    expect(seen.errors).toHaveLength(1); // a closed stage hears nothing
   });
 
   it("unsubscribes on arrival when the stage closed first", async () => {

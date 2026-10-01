@@ -50,8 +50,10 @@ export interface MonitorDoor {
    * `onOpen` receives every WHOLE board — the open answer, and the client's
    * own re-snapshot after a reconnect — and the reader REPLACES what it held;
    * `onFrame` every per-device frame (a delta, a device's reset, a device's
-   * state); `onError` why the board could not be opened, or a frame could not
-   * be read. Returns the dispose.
+   * state); `onError` why the board could not be opened, why the client's
+   * replay of it was refused, or that a frame could not be read — said with
+   * whether asking again may be answered (`MeshBoardFailure`, S4 2026-10-01).
+   * Returns the dispose.
    */
   observeMesh(listener: MeshBoardListener): () => void;
   /** DS-3 — the roster (`device.subscribe`): names and platforms, so a row
@@ -103,7 +105,22 @@ export interface ProfileSetsPort {
 export interface MeshBoardListener {
   onOpen(open: AgentMeshOpen): void;
   onFrame(frame: AgentMeshFrame): void;
-  onError(reason: string): void;
+  onError(failure: MeshBoardFailure): void;
+}
+
+/** S4 (2026-10-01) — why the mesh board could not be read, structured: the
+ * reader decides from what fieldd SAID, never from its words. */
+export interface MeshBoardFailure {
+  /** fieldd's own words, or the door's for a board or frame it could not read */
+  reason: string;
+  /** asking again may be answered: fieldd's refusal said so (the board not
+   * ready yet), or the ask was never answered (the socket dropped while it was
+   * in flight). The reader keeps the honest `unavailable` and asks again on
+   * its backoff. False for a refusal no second ask can change. */
+  retryable: boolean;
+  /** the board was standing and one of its FRAMES could not be read: the
+   * reader's copy cannot follow it — a gap, which re-opens */
+  frame?: true;
 }
 
 /** DS-3 — the roster as whole lists, the door's own parse applied. Returns
