@@ -17,6 +17,12 @@ import {
   STORES,
   TAILNET_SCOPES,
 } from "../src/registries";
+import {
+  TerminalOpenTicketParams,
+  TerminalTakeGeometryParams,
+  TerminalTerminateParams,
+} from "../src/terminal";
+import { TerminalRenewAttachParams } from "../src/terminal-pipeline";
 
 describe("method registry lint (design-01 §9.2 + D36)", () => {
   it("every method is fully declared", () => {
@@ -317,5 +323,64 @@ describe("MF-1 — the field's two new doors and its store (§10.1)", () => {
     expect(AGENT_FIELD.STORE_MIN_INTERVAL_MS).toBe(250);
     // two lost heartbeats must not blank a live desktop's field on a reader
     expect(AGENT_FIELD.STORE_EXPIRY_MS).toBeGreaterThanOrEqual(AGENT_FIELD.STORE_HEARTBEAT_MS * 3);
+  });
+});
+
+// DS-4 (design-06 §6; design-04 §7's 2026-09-30 note) — a terminal on another
+// desktop: the three doors a window's daemon forwards to the owner are
+// `federate`, everything else on the terminal surface stays this device's.
+describe("DS-4 — the terminal doors routable to the owner", () => {
+  it("reclassifies exactly openTicket, renewAttach and terminate", () => {
+    const localities = Object.fromEntries(
+      METHODS.filter(
+        (m) =>
+          m.surface === "product" &&
+          m.method.startsWith("terminal.") &&
+          !m.method.startsWith("terminal.config."),
+      ).map((m) => [m.method, m.locality]),
+    );
+    expect(localities).toEqual({
+      "terminal.list": "local",
+      "terminal.sessions": "local",
+      "terminal.get": "local",
+      "terminal.openTicket": "federate",
+      "terminal.create": "local",
+      "terminal.renewAttach": "federate",
+      "terminal.roster": "local",
+      "terminal.terminate": "federate",
+      "terminal.takeGeometry": "local",
+      "terminal.link.open": "local",
+    });
+  });
+
+  it("declares the take's product door for the phone (served UNAVAILABLE until DS-4b)", () => {
+    expect(METHODS.find((m) => m.method === "terminal.takeGeometry")).toEqual({
+      surface: "product",
+      method: "terminal.takeGeometry",
+      scope: "terminal.attach",
+      idempotent: false,
+      locality: "local",
+    });
+    expect(TerminalTakeGeometryParams.safeParse({ sessionId: "s1" }).success).toBe(true);
+    expect(TerminalTakeGeometryParams.safeParse({}).success).toBe(false);
+  });
+
+  it("lets the routable doors carry `device`, and nothing else changes about them", () => {
+    for (const schema of [TerminalOpenTicketParams, TerminalTerminateParams]) {
+      expect(schema.parse({ sessionId: "s1", device: "dev-a" })).toEqual({
+        sessionId: "s1",
+        device: "dev-a",
+      });
+      expect(schema.safeParse({ sessionId: "s1", device: "" }).success).toBe(false);
+      expect(schema.safeParse({ device: "dev-a" }).success).toBe(false);
+    }
+    expect(
+      TerminalRenewAttachParams.parse({
+        sessionId: "s1",
+        expectGeneration: 2,
+        requestId: "r1",
+        device: "dev-a",
+      }).device,
+    ).toBe("dev-a");
   });
 });

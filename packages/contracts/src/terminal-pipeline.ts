@@ -481,6 +481,10 @@ export const TerminalRenewAttachParams = z
     sessionId: z.string().min(1),
     expectGeneration: Counter,
     requestId: z.string().min(1),
+    /** DS-4 — routable to the device that owns the session, like
+     * `terminal.openTicket` (terminal.ts `TerminalRoutableSessionParams`): a
+     * ticket forwarded from another desktop is renewed by the same road. */
+    device: z.string().min(1).optional(),
   })
   .passthrough();
 export type TerminalRenewAttachParams = z.infer<typeof TerminalRenewAttachParams>;

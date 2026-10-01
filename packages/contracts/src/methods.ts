@@ -1111,6 +1111,11 @@ export const METHODS: MethodDef[] = [
   // *Correction 2026-09-30 (SB §9):* since AR-4b (2026-09-13) the product API REFUSES a foreign
   // `device` on every `local` method before the forwarder (product-api.ts, D36), so nothing here is
   // reached by routing today; a routable birth is the sync plane's to add (DS-2, the spawn bloom's SB-6).
+  // *DS-4 (2026-09-30):* `terminal.openTicket`, `terminal.renewAttach` and `terminal.terminate`
+  // are `federate` — a terminal on another desktop (design-06 §6; design-04 §7's 2026-09-30 note):
+  // the call forwards WHOLE to the owner, the owner mints and acts from its own rule (its audit row
+  // names the calling node), and the caller's daemon carries a ticket's doors onto an egress route
+  // of its own. Everything else here stays `local`, the birth included.
   defineMethod({
     surface: "product",
     method: "terminal.list",
@@ -1143,7 +1148,7 @@ export const METHODS: MethodDef[] = [
     method: "terminal.openTicket",
     scope: "terminal.attach",
     idempotent: false,
-    locality: "local",
+    locality: "federate",
   }),
   // GT-D10's `terminal.connectTicket` (a ticket for a CONNECTION, no session)
   // RETIRED at TP-S3e with the bridge it fed: the routed transport dials per
@@ -1163,7 +1168,7 @@ export const METHODS: MethodDef[] = [
     method: "terminal.renewAttach",
     scope: "terminal.attach",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   // TP-D4: the UI's roster projection — ids, class, health, provenance and NO
   // placement; terminal.list stays the transport-facing inventory.
@@ -1182,6 +1187,19 @@ export const METHODS: MethodDef[] = [
     method: "terminal.terminate",
     scope: "terminal.attach",
     idempotent: true,
+    locality: "federate",
+  }),
+  // DS-4 (DS-D5's note; TPv3 §6 amended 2026-09-30) — the TAKE as a product door,
+  // for a host that cannot speak a cell's control leg (the phone's kit, DS-4b). A
+  // routed runtime takes over its own control leg and never calls it. Declared so
+  // the name is reserved in the registry; fieldd answers UNAVAILABLE
+  // {service: "terminal", state: "not_implemented"} until DS-4b. Not idempotent:
+  // a take is an act (one CAS), and a second one is a second act.
+  defineMethod({
+    surface: "product",
+    method: "terminal.takeGeometry",
+    scope: "terminal.attach",
+    idempotent: false,
     locality: "local",
   }),
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):

@@ -15,7 +15,7 @@ import {
   type CellEndpointSet,
   ENV_PREFIXES,
   ObservedState,
-  type RemoteCellEndpointSet,
+  RemoteCellEndpointSet,
   type RouteBinding,
   type ShellDialogPickFileParams,
   type ShellDialogPickFileResult,
@@ -41,7 +41,7 @@ import {
   type TerminalEndpoints,
   type TerminalInfo,
   type TerminalObservation,
-  type TerminalOpenTicket,
+  TerminalOpenTicket,
   type TerminalOpenTicketResponse,
   type TerminalRenewAttachParams,
   type TerminalRenewAttachResult,
@@ -57,14 +57,30 @@ import {
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRename, type Logger } from "@vibefield/logging";
 import { RpcCallError, terminalCreateTarget } from "./native-link";
+import type { DeviceForwarder } from "./product-api";
+import {
+  isRemoteCellUnavailable,
+  NO_EGRESS,
+  type RemoteCellRewriter,
+} from "./remote-cell-rewriter";
 import { TerminalBindingStore, type TerminalProfileBinding } from "./terminal-bindings";
 import {
   type CellGrantKey,
   type GrantPrincipal,
+  isSelfPeerDaemon,
+  isSelfPrincipal,
   isSelfTailnetPrincipal,
   projectRoster,
   TerminalGrantMinter,
 } from "./terminal-grants";
+
+/** DS-4 — the doors a forwarding daemon refuses to carry for a caller it
+ * would itself mint read-only: they MINT, and the owner mints for the
+ * forwarding daemon, not for the window behind it (`forwardVia`). */
+const FORWARDED_MINTS: ReadonlySet<string> = new Set([
+  "terminal.openTicket",
+  "terminal.renewAttach",
+]);
 
 // TerminalService (fieldd — NF-3, native-floor spec §6): the thin product seam
 // over the terminal floor. It owns NO sessions and NO bytes — field-native's
@@ -160,6 +176,13 @@ export interface TerminalServiceOptions {
    * which is exactly the pre-TM-2 behaviour.
    */
   remoteEndpoints?: (cellBootId: string) => RemoteCellEndpointSet | undefined;
+  /** DS-4 — how a ticket FORWARDED from another desktop's owner becomes doors a
+   * window on THIS desktop can dial (`remote-cell-rewriter.ts`): an egress
+   * route of this device's sidecar per owner serve, the paths kept. Absent =
+   * `NO_EGRESS`, the truth until DS-1 plugs the facade in (lane ds-a's
+   * `EgressRoutes`): every such ticket answers UNAVAILABLE `egress_unavailable`
+   * rather than a pair of doors nothing on this machine answers. */
+  remoteCellRewriter?: RemoteCellRewriter;
   /** GT-7 — the shell provider's file doors, as a GETTER: the api that owns
    * the provider is built after this service in the daemon's boot. Absent or
    * null, the file actions answer UNAVAILABLE in the broker's own words — the
@@ -630,6 +653,109 @@ export class TerminalService {
     return { attachGrant };
   }
 
+  /**
+   * DS-4 — the terminal half of this daemon's `device?` forwarder (ProductApi's
+   * `setDeviceRouting`; `thinking-desktop-sync-plane.md` §6.3). ProductApi
+   * forwards a `federate` call with a foreign `device` WHOLE, before any handler
+   * runs, so this wraps the forwarder rather than a handler. Two things happen
+   * here and nowhere else:
+   *
+   *  · BEFORE the forward, a mint (`openTicket`, `renewAttach`) is carried only
+   *    for a caller THIS daemon would mint the self set for. The owner mints
+   *    from its own rule for the principal it sees — this daemon, a self peer
+   *    (`isSelfPeerDaemon`) — so a plugin or an agent token that holds
+   *    `terminal.attach` here, and would be minted `["read"]` here, would be
+   *    minted `["geometry", "input", "read"]` there. That is a local restriction
+   *    laundered through a peer (the law ProductApi states for scopes), so it
+   *    is refused. `onBehalfOf` (DS-2, lane ds-b) is what would let the owner
+   *    narrow for such a caller instead; it is carried since the landing of
+   *    2026-10-01 (the `envelope` argument below) — the owner RECORDS it and
+   *    still mints from its own rule.
+   *  · AFTER it, a ticket's doors are adopted for the caller
+   *    (`adoptForwardedTicket`). `terminate` and a renewal carry no doors and
+   *    pass through as the owner answered.
+   */
+  forwardVia(inner: DeviceForwarder): DeviceForwarder {
+    return async (device, method, params, ctx, envelope) => {
+      if (FORWARDED_MINTS.has(method) && !isSelfPrincipal(ctx.principal))
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          `${method} is forwarded to another desktop only for this person's own windows and devices`,
+          false,
+          { method, device },
+        );
+      const answer = await inner(device, method, params, ctx, envelope);
+      if (method !== "terminal.openTicket") return answer;
+      return await this.adoptForwardedTicket(device, ctx.principal, answer);
+    };
+  }
+
+  /**
+   * DS-4 — a ticket the OWNER (`device`) minted, made dialable for the caller
+   * it was forwarded for. The grants are the owner's and ride through untouched
+   * (a URL is a coordinate, never authority — the owner's cell verifies the MAC
+   * whichever socket carries it); only `endpoints` can change:
+   *
+   *  · the owner answers its cell's TAILNET pair (`doorsFor`: a self peer daemon
+   *    dials the tailnet shape). Anything else — its own loopback pair, which
+   *    names a socket on ITS machine — is refused `doors_not_published`, never
+   *    handed to a window here to dial this machine's loopback (E-F6's class);
+   *  · a caller on ANOTHER device of this person's (the phone, through its
+   *    home) has a tailnet node of its own and dials that pair itself;
+   *  · a window HERE cannot — a desktop has no tailnet socket of its own
+   *    (TM-D6) — so the pair goes through the `RemoteCellRewriter` port onto an
+   *    egress route of this device's sidecar, or the answer is UNAVAILABLE
+   *    `egress_unavailable`.
+   *
+   * Public because a forwarded BIRTH carries a ticket too (`agent.spawn`'s and
+   * `agent.resume`'s `terminal`, should DS-2 make them routable).
+   */
+  async adoptForwardedTicket(
+    device: string,
+    principal: GrantPrincipal,
+    answer: unknown,
+  ): Promise<TerminalOpenTicket> {
+    const parsed = TerminalOpenTicket.safeParse(answer);
+    if (!parsed.success)
+      throw new RpcCallError(
+        "INCOMPATIBLE",
+        `the terminal ticket ${device} answered does not parse`,
+        false,
+        { service: "terminal", device },
+      );
+    const ticket = parsed.data;
+    const remote = RemoteCellEndpointSet.safeParse(ticket.endpoints);
+    if (!remote.success)
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        `${device} answered doors only its own machine can dial`,
+        true,
+        { service: "terminal", state: "doors_not_published", device },
+      );
+    if (isSelfTailnetPrincipal(principal) || isSelfPeerDaemon(principal)) return ticket;
+    const rewritten = await (this.opts.remoteCellRewriter ?? NO_EGRESS).rewrite(
+      device,
+      remote.data,
+    );
+    if (isRemoteCellUnavailable(rewritten))
+      throw new RpcCallError("UNAVAILABLE", rewritten.message, true, rewritten.unavailable);
+    return { ...ticket, endpoints: rewritten };
+  }
+
+  /** DS-4 — `terminal.takeGeometry`: the take for a host that cannot speak a
+   * cell's control leg (the phone's kit, DS-4b). Declared, NOT served: a routed
+   * runtime takes over its own control leg (one `TransferGeometry` to itself,
+   * the cell's `transfer_geometry`), and what this door would take FOR — which
+   * activation, answered how — is DS-4b's to design. Honest until then. */
+  takeGeometry(_sessionId: string): never {
+    throw new RpcCallError(
+      "UNAVAILABLE",
+      "terminal.takeGeometry is declared for the phone and not served yet; a routed runtime takes the seat over its own control leg",
+      false,
+      { service: "terminal", state: "not_implemented" },
+    );
+  }
+
   /** TP-D4 — the UI's roster projection (no placement). Refuses before the
    * first observation exactly like `list` (GT-5b's honesty). SB-2 — each
    * bound shell's row names the set it was born under. */
@@ -724,6 +850,12 @@ export class TerminalService {
    * this method. The refusal below stays as a BELT — a principal this door can
    * no longer receive is exactly the kind of thing a later change could
    * reintroduce, and the honest answer to it does not depend on how it arrived.
+   *
+   * DS-4 (2026-09-30) — a self peer DAEMON forwarding for a window on another
+   * of this person's desktops (`isSelfPeerDaemon`) is handed the tailnet pair
+   * too, for the reason the phone is: this Mac's `127.0.0.1` means nothing on
+   * the desktop it forwards for. Its daemon carries the pair onto an egress
+   * route of its own (`adoptForwardedTicket`, on THAT side).
    */
   private doorsFor(cell: CellTarget, principal: GrantPrincipal): TicketEndpointSet {
     // `cell.doors` is proven present by the caller above.
@@ -737,7 +869,7 @@ export class TerminalService {
         true,
         { service: "terminal", state: "device_not_linked" },
       );
-    if (!isSelfTailnetPrincipal(principal)) return loopback;
+    if (!isSelfTailnetPrincipal(principal) && !isSelfPeerDaemon(principal)) return loopback;
     const remote = this.opts.remoteEndpoints?.(cell.key);
     if (remote === undefined)
       throw new RpcCallError(

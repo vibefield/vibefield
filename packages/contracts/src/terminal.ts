@@ -60,6 +60,34 @@ export type TerminalListResult = z.infer<typeof TerminalListResult>;
 export const TerminalSessionParams = z.object({ sessionId: z.string().min(1) }).passthrough();
 export type TerminalSessionParams = z.infer<typeof TerminalSessionParams>;
 
+/** DS-4 (design-06 §6; design-04 §6's `device?` convention) — the params of a
+ * terminal door the caller may ROUTE to the device that owns the session:
+ * `terminal.openTicket` and `terminal.terminate` here, `terminal.renewAttach`
+ * beside its grant (terminal-pipeline.ts). `device` absent, or naming this
+ * device, serves here; naming another forwards the call whole to the owner
+ * (locality `federate`), which mints and acts from ITS OWN rule. The caller's
+ * daemon then carries a forwarded ticket's doors onto an egress route of its
+ * own (fieldd `remote-cell-rewriter.ts`). */
+export const TerminalRoutableSessionParams = TerminalSessionParams.extend({
+  device: z.string().min(1).optional(),
+}).passthrough();
+export type TerminalRoutableSessionParams = z.infer<typeof TerminalRoutableSessionParams>;
+
+/** terminal.openTicket params — routable (DS-4). */
+export const TerminalOpenTicketParams = TerminalRoutableSessionParams;
+export type TerminalOpenTicketParams = z.infer<typeof TerminalOpenTicketParams>;
+
+/** DS-4 — `terminal.takeGeometry {sessionId}`: the TAKE (TPv3 §6 amended
+ * 2026-09-30, DS-D5's note — the last focused pane holds the geometry) as a
+ * PRODUCT door, for a host that cannot speak a cell's control leg: the phone's
+ * kit, whose `FieldRoutedTerminal` has no lease verbs yet (DS-4b). A routed
+ * runtime takes over its own control leg — one `TransferGeometry` to itself —
+ * and never calls this. DECLARED, NOT SERVED: fieldd answers `UNAVAILABLE
+ * {service: "terminal", state: "not_implemented"}` until DS-4b designs its
+ * half (which activation the door takes for, and what it answers). */
+export const TerminalTakeGeometryParams = z.object({ sessionId: z.string().min(1) }).passthrough();
+export type TerminalTakeGeometryParams = z.infer<typeof TerminalTakeGeometryParams>;
+
 /** RETIRED at TP-S3e (2026-08-23). The legacy bridge trio
  * (`{controlSocket, frameSocket, token}` — `TerminalTicket`) and the
  * sessionless `terminal.connectTicket` method died with the
@@ -239,7 +267,7 @@ export type TerminalCreateResult = z.infer<typeof TerminalCreateResult>;
 
 /** terminal.terminate — the full ladder (interrupt → 2s → SIGTERM pgrp → 2s →
  * SIGKILL pgrp) runs native-side. */
-export const TerminalTerminateParams = TerminalSessionParams;
+export const TerminalTerminateParams = TerminalRoutableSessionParams;
 export type TerminalTerminateParams = z.infer<typeof TerminalTerminateParams>;
 
 /** terminal.terminate result. `terminated: true` = the ladder was fired for a

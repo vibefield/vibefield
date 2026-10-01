@@ -1629,6 +1629,20 @@
               reaches a screen. All carry <code>terminal.attach</code> and all are <code>local</code>: a
               remote terminal is reached by routing the call, never by federating its bytes.
             </p>
+            <p class="section-note">
+              <em>Corrected 2026-09-30 (DS-4, design-06 §6):</em> <code>terminal.openTicket</code>,
+              <code>terminal.renewAttach</code> and <code>terminal.terminate</code> are
+              <code>federate</code> now — the routing the sentence above describes, made real. A window's
+              daemon forwards them whole to the desktop that owns the session; the owner mints from its
+              own rule for the forwarding daemon (a self peer: its cell's tailnet doors and
+              <code>["geometry", "input", "read"]</code>), and the window's daemon carries the doors onto an
+              egress route of its own before the window sees them. It carries a mint only for a caller it
+              would mint the same set itself, so a read-only token here is never minted more there. Every
+              self principal — a window, the phone, a forwarding daemon — now holds
+              <code>geometry</code>: the pane focused last takes the seat (DS-D5).
+              <code>terminal.takeGeometry</code> is declared for the phone and answers
+              <code>UNAVAILABLE not_implemented</code> until DS-4b.
+            </p>
             <div class="table-wrap">
               <table class="reference-table">
                 <thead><tr><th>Door</th><th>Result</th><th>Idem</th><th>Why the agent plane needs it</th></tr></thead>

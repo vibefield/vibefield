@@ -123,6 +123,7 @@ import {
   type TerminalRosterResult,
   type TerminalRuntimeSessionsResult,
   TerminalSessionParams,
+  TerminalTakeGeometryParams,
 } from "@vibefield/contracts";
 import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
 import type { LoggingHealthV1 } from "@vibefield/contracts/logging";
@@ -185,6 +186,7 @@ import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
+import type { RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
   ROSETTAD_UNCONFIGURED,
   type RosettadHealth,
@@ -234,6 +236,11 @@ export interface FielddConfig {
   /** TC-S2 test seam: the terminal cell-birth wait budget (production
    * defaults to the cell's genned hello deadline). */
   terminalBirthWaitMs?: number;
+  /** DS-4 seam: how a terminal ticket forwarded from another desktop becomes
+   * doors a window here dials (`TerminalServiceOptions.remoteCellRewriter`).
+   * Absent = `NO_EGRESS` (UNAVAILABLE `egress_unavailable`) — production's
+   * answer until the egress facade (DS-1) plugs a route per owner serve. */
+  terminalRemoteCellRewriter?: RemoteCellRewriter;
   /** AR-7d test seam: what a free shell this daemon births adds to its
    * environment (`TerminalServiceOptions.shellIntegration`). Production
    * answers from the gateway service (AR-7b) through `shellIntegrationRef`. */
@@ -1178,6 +1185,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       logger: logger.child({ component: "terminal.service" }),
       ...(config.terminalBirthWaitMs !== undefined
         ? { birthWaitMs: config.terminalBirthWaitMs }
+        : {}),
+      ...(config.terminalRemoteCellRewriter !== undefined
+        ? { remoteCellRewriter: config.terminalRemoteCellRewriter }
         : {}),
       // TM-2 (TM-D2) — the doors a TAILNET self peer is told to dial, read off
       // the LIVE terminal serve (`publishedTerminalServe` above) plus one
@@ -2686,6 +2696,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // D6: every mint is an audited grant, even while the credential inside is
     // the shared native service token (per-client tokens are the named
     // ghosttea upgrade).
+    //
+    // DS-4 — routable (`federate`): a window on another desktop reaches this
+    // handler through ITS daemon, so `ctx.principal` is that daemon
+    // (`peer-fieldd`, a self peer), minted the self set and the tailnet doors
+    // (`doorsFor`), and the audit row names the calling node. The window behind
+    // it joins the row with `onBehalfOf` (DS-2, lane ds-b); nothing here reads it.
     api.register("terminal.openTicket", async (ctx, params) => {
       const sessionId = requireSessionId(params);
       if (terminals.get(sessionId) === undefined)
@@ -2833,6 +2849,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         () => ({ outcome: "succeeded" }),
       );
       return opened satisfies TerminalCreateOpenResponse;
+    });
+    // DS-4 — the take for a host that cannot speak a cell's control leg (the
+    // phone's kit, DS-4b): declared, answered honestly, never served yet.
+    api.register("terminal.takeGeometry", (_ctx, params) => {
+      const parsed = TerminalTakeGeometryParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { sessionId: string }", false);
+      return terminals.takeGeometry(parsed.data.sessionId);
     });
     api.register("terminal.terminate", async (ctx, params) => {
       const sessionId = requireSessionId(params);
@@ -4040,8 +4064,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       () => devices.currentDeviceId(),
       // DS-L7/DS-D15 — the envelope (who the call is for, and a mutation's
       // idempotency key) rides beside the params; this closure used to drop
-      // the calling context, so the owner recorded two devices as one
-      (device, method, params, _ctx, envelope) => peers.request(device, method, params, envelope),
+      // the calling context, so the owner recorded two devices as one.
+      // DS-4 — a forwarded terminal mint is carried only for a self principal,
+      // and a forwarded ticket's doors are adopted for the caller on the way back
+      // (`TerminalService.forwardVia`); every other forward passes through.
+      terminals.forwardVia((device, method, params, _ctx, envelope) =>
+        peers.request(device, method, params, envelope),
+      ),
       (device, method, params, _ctx, emit) => federatedSubs.attach(device, method, params, emit),
     );
     devices.attachPeerLink(peers); // C5/D32 — fold link state into the roster
