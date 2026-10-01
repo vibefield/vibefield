@@ -519,9 +519,25 @@ describe.skipIf(
       ["serve", "--json", "--db", join(dir, "r.db"), "--home", home, "--agent", "claude-code"],
       { stdio: ["ignore", "pipe", "pipe"] },
     );
-    cleanup.push(() => {
-      child.kill("SIGINT");
-    });
+    // the directory is removed right after this (cleanup runs in reverse):
+    // wait for the daemon to let go of its database — an exit, or 5 s — or the
+    // removal races its last writes (`ENOTEMPTY`, seen at load ~280 on
+    // 2026-10-01 in a full fieldd run; green alone)
+    cleanup.push(
+      () =>
+        new Promise<void>((resolve) => {
+          if (child.exitCode !== null || child.signalCode !== null) {
+            resolve();
+            return;
+          }
+          const cap = setTimeout(resolve, 5_000);
+          child.once("exit", () => {
+            clearTimeout(cap);
+            resolve();
+          });
+          child.kill("SIGINT");
+        }),
+    );
     const ready = await new Promise<{ origin: string; protocol_version: number }>(
       (resolve, reject) => {
         let buffered = "";
