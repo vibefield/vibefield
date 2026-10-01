@@ -41,7 +41,13 @@ import { RpcCallError } from "./native-link";
 // "peer-link", device, state:"offline"}; transport failure/timeout → the link
 // drops (next call re-dials) and UNAVAILABLE {service, device,
 // state:"unreachable"} (`service` on every one since 2026-10-01, the landing
-// review — `UnavailableDetails` requires it); a hello
+// review — `UnavailableDetails` requires it). *DS-2b (2026-10-01): a TIMEOUT
+// is the call's verdict, never the link's — the call fails and the link is
+// judged by its transport: a live socket is asked for a no-op round trip
+// (`probeTransport`) and drops only if that goes unanswered too; one still
+// dialling marks the door silent and keeps healing itself. A deadline used to
+// drop the shared link, cutting every sibling call and standing subscription
+// on it.* A hello
 // INCOMPATIBLE pins the peer incompatible (refuse fast — D32; clears on
 // restart, ledgered) — while the REMOTE's genuine replies (FORBIDDEN_SCOPE,
 // NOT_FOUND, …) pass through untouched: a forwarded call's answer is the
@@ -137,7 +143,20 @@ interface Link {
    * the peer's silence, and for a keyed mutation an outcome-unknown of our
    * own making. */
   inflight?: number;
+  /** DS-2b — a liveness probe is out on this link (one at a time) */
+  probing?: boolean;
 }
+
+/** DS-2b (2026-10-01) — the no-op round trip a deadline asks of a live socket:
+ * the door's own built-in, answered to any authenticated principal (a peer, or
+ * the `tailnet` one a demoted claim gets) right after its hello gate, touching
+ * nothing but this connection's own subscription table — and a subId no client
+ * mints (`ps-<n>` is the door's) removes nothing. Any answer, a refusal
+ * included, proves the socket still carries frames both ways. */
+const LIVENESS_PROBE = {
+  method: "system.unsubscribe",
+  params: { subId: "peer-link.liveness" },
+} as const;
 
 /** http(s) capability URL → the ws(s) dial URL (already-ws passes through). */
 function toWsUrl(url: string): string {
@@ -202,7 +221,7 @@ export class PeerLink extends EventEmitter {
     const link = this.ensureLink(deviceId);
     this.useLink(link);
     try {
-      const result = await this.withDeadline(link.client.request(method, wire), deviceId);
+      const result = await this.withDeadline(link.client.request(method, wire), deviceId, link);
       this.markAnswered(deviceId);
       return result;
     } catch (e) {
@@ -251,6 +270,7 @@ export class PeerLink extends EventEmitter {
           return await held.client.request(method, wire);
         })(),
         deviceId,
+        held,
         this.opts.forwardTimeoutMs ?? FORWARDING.FORWARD_TIMEOUT_MS,
       );
       attempt.applied();
@@ -337,8 +357,11 @@ export class PeerLink extends EventEmitter {
    * recovery — a socket blip re-dials and replays with a fresh snapshot (the
    * P5 law), delivered through `onEvent` as kind "snapshot", and the link is
    * pinned against the idle sweep. `onDrop` fires when the LINK itself is torn
-   * down (a unary timeout's dropLink, an incompatible pin, dispose) — the owner
-   * re-subscribes; it never fires for blips the client heals itself.
+   * down (a transport failure under a call, a liveness probe a deadline sent
+   * that went unanswered, an incompatible pin, dispose) — the owner
+   * re-subscribes; it never fires for blips the client heals itself, nor for
+   * another call's deadline (DS-2b, 2026-10-01: it used to — a unary timeout
+   * dropped the link under every standing member).
    *
    * S3 (2026-10-01): `onDrop` also fires — for THIS member alone — when the
    * peer's door refuses the member's replay after a blip (a peer that
@@ -372,32 +395,49 @@ export class PeerLink extends EventEmitter {
     /** set once standing — a refused replay answers for this member only */
     let member: { unsubscribe: () => void; onDrop: () => void } | undefined;
     let upstream: { snapshot: unknown; unsubscribe: () => void };
+    /** DS-2b — set when this subscribe failed here: the link outlives a
+     * deadline now, so the client may still be answered — and must not hand
+     * frames to an owner who was told the subscribe failed */
+    let abandoned = false;
+    const pending = link.client.subscribe(
+      method,
+      wire,
+      (payload, kind) => {
+        if (!abandoned) onEvent(payload, kind);
+      },
+      {
+        ...(replayParams !== undefined
+          ? { params: () => withEnvelope(replayParams(), envelope) }
+          : {}),
+        // S3 — the client has already let the subscription go; the door
+        // answered, so the link is fine: this member's owner re-attaches
+        onReplayFailed: (error) => {
+          const refused = member;
+          if (refused === undefined || !link.subs.delete(refused)) return;
+          this.logger.info(
+            "fieldd.peer_link.replay_refused",
+            "A peer refused a standing subscription's replay; its owner re-subscribes and the link stands",
+            { peer: deviceId, method, kind: error.kind },
+          );
+          try {
+            refused.onDrop();
+          } catch {
+            // an owner's recovery failure is its own
+          }
+        },
+      },
+    );
     try {
-      upstream = await this.withDeadline(
-        link.client.subscribe(method, wire, onEvent, {
-          ...(replayParams !== undefined
-            ? { params: () => withEnvelope(replayParams(), envelope) }
-            : {}),
-          // S3 — the client has already let the subscription go; the door
-          // answered, so the link is fine: this member's owner re-attaches
-          onReplayFailed: (error) => {
-            const refused = member;
-            if (refused === undefined || !link.subs.delete(refused)) return;
-            this.logger.info(
-              "fieldd.peer_link.replay_refused",
-              "A peer refused a standing subscription's replay; its owner re-subscribes and the link stands",
-              { peer: deviceId, method, kind: error.kind },
-            );
-            try {
-              refused.onDrop();
-            } catch {
-              // an owner's recovery failure is its own
-            }
-          },
-        }),
-        deviceId,
-      );
+      upstream = await this.withDeadline(pending, deviceId, link);
     } catch (e) {
+      // DS-2b — a subscribe the deadline gave up on can still be answered on
+      // the live link: its upstream is released when it lands, never left
+      // standing (and replayed on every blip) for an owner told it failed
+      abandoned = true;
+      void pending.then(
+        (late) => late.unsubscribe(),
+        () => {},
+      );
       throw this.mapPeerError(e, deviceId);
     } finally {
       this.releaseLink(link);
@@ -546,12 +586,22 @@ export class PeerLink extends EventEmitter {
     });
   }
 
-  private withDeadline<T>(p: Promise<T>, deviceId: string, ms = this.callTimeoutMs): Promise<T> {
+  /** A call's deadline. DS-2b (2026-10-01): it is the CALL's verdict and never
+   * the link's — the call fails (UNAVAILABLE `unreachable`; a keyed forward
+   * that left reads outcome-unknown, `requestKeyed`) and the link is judged by
+   * its transport (`onCallDeadline`). It used to drop the shared link here, on
+   * the theory that a stale socket was the usual suspect, and so cut every
+   * sibling: a keyed forward in flight beside the slow one read
+   * outcome-unknown, every standing subscription heard `onDrop`. */
+  private withDeadline<T>(
+    p: Promise<T>,
+    deviceId: string,
+    link: Link,
+    ms = this.callTimeoutMs,
+  ): Promise<T> {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
-        // a stale socket is the usual suspect — drop it so the next call re-dials
-        this.markSilent(deviceId);
-        this.dropLink(deviceId);
+        this.onCallDeadline(deviceId, link);
         reject(
           new RpcCallError("UNAVAILABLE", "peer call timed out", true, {
             service: "peer-link",
@@ -571,6 +621,58 @@ export class PeerLink extends EventEmitter {
         },
       );
     });
+  }
+
+  /** DS-2b — what one call's deadline says about its LINK. A socket that is
+   * up (the client `ready`) may still be dead underneath — a half-open
+   * connection reads as open until the kernel gives up — so the door is asked
+   * for a no-op round trip, and only a probe that goes unanswered too drops
+   * the link (`probeTransport`): the stale socket the old drop was for is
+   * still caught, and a slow call no longer costs its siblings. A link that is
+   * NOT up (dialling, or re-dialling after a blip) has no socket to judge: its
+   * door is silent (DS-L8) and its client keeps healing the transport on its
+   * own backoff, replaying what stands on it; the idle sweep closes it once
+   * nothing uses it. */
+  private onCallDeadline(deviceId: string, link: Link): void {
+    if (this.disposed || this.links.get(deviceId) !== link) return;
+    if (link.client.status === "ready") this.probeTransport(deviceId, link);
+    else this.markSilent(deviceId);
+  }
+
+  /** DS-2b — one liveness probe per link at a time (LIVENESS_PROBE). Any
+   * answer, a refusal included, is the door answering: the link stands and the
+   * door is heard. No answer within the call deadline, or the socket failing
+   * under the probe, is the transport's verdict: the door is silent and the
+   * link drops, so the next call re-dials. */
+  private probeTransport(deviceId: string, link: Link): void {
+    if (link.probing === true) return;
+    link.probing = true;
+    this.useLink(link);
+    let settled = false;
+    const settle = (alive: boolean): void => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      link.probing = false;
+      this.releaseLink(link);
+      if (this.disposed || this.links.get(deviceId) !== link) return;
+      if (alive) {
+        this.markAnswered(deviceId);
+        return;
+      }
+      this.logger.info(
+        "fieldd.peer_link.transport_dead",
+        "A call went unanswered and so did the liveness probe behind it; the link drops and the next call re-dials",
+        { peer: deviceId },
+      );
+      this.markSilent(deviceId);
+      this.dropLink(deviceId);
+    };
+    const timer = setTimeout(() => settle(false), this.callTimeoutMs);
+    link.client.request(LIVENESS_PROBE.method, LIVENESS_PROBE.params).then(
+      () => settle(true),
+      (e: unknown) => settle(isRemoteAnswer(e)),
+    );
   }
 
   /** DS-L8 — the door did not answer; "door-changed" wakes the roster (set

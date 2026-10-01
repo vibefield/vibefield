@@ -376,7 +376,11 @@ describe("PeerLink's keyed forwards (the caller's half)", () => {
     });
     expect(link.receipts.get(KEY)).toMatchObject({ state: "outcome-unknown", device: "dev-b" });
 
-    await link.request("dev-b", "device.list", {}); // the deadline dropped the link: re-dial
+    // DS-2b (2026-10-01) — the deadline was the CALL's: the link stayed up
+    // (the door answered the liveness probe the deadline sent), and the retry
+    // rides the same socket — it used to drop the link and re-dial here
+    expect(link.linkState("dev-b")).toBe("connected");
+    await link.request("dev-b", "device.list", {});
     const retried = await link.request("dev-b", "agent.interrupt", RUN, {
       onBehalfOf: behalf,
       idempotencyKey: KEY,
