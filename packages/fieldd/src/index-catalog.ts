@@ -74,6 +74,11 @@ export type IndexCatalogPhase =
   | "live"
   /** the tables hold the last snapshot and the stream is down: re-dialing */
   | "stale"
+  /** DS-6b (2026-10-01) — the daemon REFUSED the stream's upgrade (401/403): it
+   * wants a credential this build does not send. Warned once; asked again only
+   * at the refused cadence or on the daemon's next transition. The tables are
+   * kept (DS-L8). */
+  | "refused"
   /** the daemon speaks another protocol: not followed until it restarts */
   | "incompatible";
 
@@ -95,6 +100,9 @@ export interface IndexCatalogOptions {
   batchMs?: number;
   reconnectMinMs?: number;
   reconnectMaxMs?: number;
+  /** DS-6b — how long a refused upgrade waits before it is asked again
+   * (default INDEX_MESH.META_RESNAPSHOT_MS: the stream's own slow cadence) */
+  refusedRetryMs?: number;
   journalDepth?: number;
   pageBytes?: number;
   webSocket?: typeof WebSocket;
@@ -130,8 +138,11 @@ export class IndexCatalog extends EventEmitter {
   readonly #batchMs: number;
   readonly #reconnectMinMs: number;
   readonly #reconnectMaxMs: number;
+  readonly #refusedRetryMs: number;
 
   #phase: IndexCatalogPhase = "waiting";
+  /** a refused upgrade was warned this streak (a landed snapshot ends it) */
+  #warnedRefused = false;
   #ready = false;
   #heardAt: number | null = null;
   #disposed = false;
@@ -175,6 +186,7 @@ export class IndexCatalog extends EventEmitter {
     this.#batchMs = opts.batchMs ?? INDEX_MESH.META_BATCH_MS;
     this.#reconnectMinMs = opts.reconnectMinMs ?? INDEX_MESH.META_RECONNECT_MIN_MS;
     this.#reconnectMaxMs = opts.reconnectMaxMs ?? INDEX_MESH.META_RECONNECT_MAX_MS;
+    this.#refusedRetryMs = opts.refusedRetryMs ?? INDEX_MESH.META_RESNAPSHOT_MS;
     this.#reconnectDelay = this.#reconnectMinMs;
     this.epoch = opts.epoch ?? `catalog-${randomUUID()}`;
     const tableOpts = {
@@ -292,7 +304,14 @@ export class IndexCatalog extends EventEmitter {
     let ws: WebSocket;
     try {
       // a native client sends no Origin, which rosetta's WS guard admits
-      // (`require_local_origin`: only a browser's foreign Origin is refused)
+      // (`require_local_origin`: only a browser's foreign Origin is refused).
+      // DS-6b, 2026-10-01: nor does it send a CREDENTIAL. At RO-1's pin move
+      // (rosetta `feat/direct-plane-grants`, PROTOCOL_VERSION 24) a rosettad
+      // started with `--token-file` refuses every route without its bearer, so
+      // this dial must then carry `Authorization: Bearer <token>` (a native
+      // client can set the header; a browser would use the `rosetta.bearer.*`
+      // subprotocol). Until then such a daemon refuses this upgrade 401, and the
+      // follower warns once and waits (`#onRefused`) instead of re-dialling.
       ws = new this.#WebSocket(`${origin.replace(/^http/, "ws")}/ws/meta`, {
         perMessageDeflate: false,
         handshakeTimeout: 5_000,
@@ -306,6 +325,8 @@ export class IndexCatalog extends EventEmitter {
       return;
     }
     this.#ws = ws;
+    /** the upgrade's refusal status (401/403), read off its error */
+    let refused: number | null = null;
     ws.on("message", (data: WebSocket.RawData) => {
       if (generation === this.#generation) this.#onFrame(data);
     });
@@ -313,11 +334,20 @@ export class IndexCatalog extends EventEmitter {
       if (generation !== this.#generation) return;
       this.#ws = null;
       this.#flush();
+      if (refused !== null) {
+        this.#onRefused(generation, refused);
+        return;
+      }
       if (this.#phase !== "incompatible") this.#setPhase(this.#ready ? "stale" : "connecting");
       this.#scheduleReconnect(generation);
     });
     ws.on("error", (error: Error) => {
       if (generation !== this.#generation) return;
+      const status = refusedUpgradeStatus(error);
+      if (status !== undefined) {
+        refused = status;
+        return; // the close that follows says it, once (`#onRefused`)
+      }
       this.#logger.debug("fieldd.index_catalog.stream_error", "The meta stream failed", {
         route: "/ws/meta",
         error: error.message,
@@ -325,11 +355,30 @@ export class IndexCatalog extends EventEmitter {
     });
   }
 
-  #scheduleReconnect(generation: number): void {
+  /** DS-6b — the daemon refused the upgrade (401/403): this build presents no
+   * credential, so asking again on the ordinary backoff can only be refused
+   * again. Warned ONCE per streak; asked again at the refused cadence, or at
+   * once on the daemon's next transition (`#onTransition` re-dials). */
+  #onRefused(generation: number, status: number): void {
+    this.#setPhase("refused");
+    if (!this.#warnedRefused) {
+      this.#warnedRefused = true;
+      this.#logger.warn(
+        "fieldd.index_catalog.refused",
+        "The index daemon refused the meta stream: it wants a credential this build does not send; it is asked again at the slow cadence",
+        { route: "/ws/meta", status },
+      );
+    }
+    this.#scheduleReconnect(generation, this.#refusedRetryMs);
+  }
+
+  #scheduleReconnect(generation: number, fixedDelayMs?: number): void {
     if (this.#disposed || this.#origin === null || this.#phase === "incompatible") return;
     if (this.#reconnectTimer !== null) return;
-    const delay = this.#reconnectDelay;
-    this.#reconnectDelay = Math.min(this.#reconnectDelay * 2, this.#reconnectMaxMs);
+    const delay = fixedDelayMs ?? this.#reconnectDelay;
+    if (fixedDelayMs === undefined) {
+      this.#reconnectDelay = Math.min(this.#reconnectDelay * 2, this.#reconnectMaxMs);
+    }
     this.#reconnectTimer = setTimeout(() => {
       this.#reconnectTimer = null;
       if (generation !== this.#generation || this.#origin === null) return;
@@ -457,6 +506,7 @@ export class IndexCatalog extends EventEmitter {
     const first = !this.#ready;
     this.#ready = true;
     this.#reconnectDelay = this.#reconnectMinMs;
+    this.#warnedRefused = false; // a refusal streak, if any, is over
     this.#setPhase("live");
     this.#armResnapshot();
     if (first)
@@ -691,6 +741,15 @@ export class IndexCatalog extends EventEmitter {
 
 function asArray(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
+}
+
+/** DS-6b — the status of an upgrade the server REFUSED for want of a
+ * credential (401/403), from the `ws` client's error (ws 8: "Unexpected server
+ * response: <status>", emitted before the close); any other failure is not one. */
+function refusedUpgradeStatus(error: Error): number | undefined {
+  const match = /Unexpected server response: (\d{3})/.exec(error.message);
+  const status = match === null ? undefined : Number(match[1]);
+  return status === 401 || status === 403 ? status : undefined;
 }
 
 /** Parent absence is the navigation fact rosetta's own list browses by. */

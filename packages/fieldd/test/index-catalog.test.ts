@@ -1,8 +1,11 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { createServer } from "node:http";
+import type { AddressInfo } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import type { Duplex } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 import {
@@ -13,6 +16,7 @@ import {
   IndexCatalogSession,
   type IndexCatalogSession as IndexCatalogSessionRow,
 } from "@vibefield/contracts";
+import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
 import { RowsCopy } from "../src/catalog-rows";
 import { IndexCatalog } from "../src/index-catalog";
@@ -203,6 +207,26 @@ function follower(
 const ids = (rows: Array<{ sessionId?: string | undefined; projectId?: string | undefined }>) =>
   rows.map((row) => row.sessionId ?? row.projectId).sort();
 
+/** A logger that records each line's level, event and fields. */
+function levelLogger(lines: Array<{ level: string; event: string; fields?: unknown }>): Logger {
+  const at =
+    (level: string) =>
+    (event: string, _message: string, fields?: LogFields): void => {
+      lines.push({ level, event, ...(fields !== undefined ? { fields } : {}) });
+    };
+  const logger: Logger = {
+    child: () => logger,
+    trace: at("trace"),
+    debug: at("debug"),
+    info: at("info"),
+    warn: at("warn"),
+    error: (event, message, _error, fields) => at("error")(event, message, fields),
+    fatal: (event, message, _error, fields) => at("fatal")(event, message, fields),
+    isLevelEnabled: () => true,
+  };
+  return logger;
+}
+
 describe("IndexCatalog — following rosetta's /ws/meta (DS-6)", () => {
   it("republishes top-level sessions and projects as rows: device, agent, family, figures", async () => {
     const world = await startFake({
@@ -357,6 +381,64 @@ describe("IndexCatalog — following rosetta's /ws/meta (DS-6)", () => {
     await new Promise((resolve) => setTimeout(resolve, 200));
     expect(catalog.ready).toBe(false);
     expect(catalog.sessions.size).toBe(0);
+  });
+
+  // DS-6b (2026-10-01, the landing review's DS-6 list) — a rosettad that wants a
+  // credential this build does not send (RO-1's bearer arrives with its pin
+  // move) refuses the upgrade 401; the follower logged that at debug and
+  // re-dialled on the ordinary backoff, forever.
+  it("DS-6b: a refused /ws/meta upgrade (401/403) warns ONCE, reads `refused`, and is asked again only at the refused cadence or on the daemon's next transition", async () => {
+    const dials: number[] = [];
+    const server = createServer((_request, response) => {
+      response.writeHead(404);
+      response.end();
+    });
+    let status = 401;
+    server.on("upgrade", (_request, socket: Duplex) => {
+      dials.push(Date.now());
+      socket.end(
+        `HTTP/1.1 ${status} Refused\r\nx-rosetta-auth: missing\r\nContent-Length: 0\r\nConnection: close\r\n\r\n`,
+      );
+    });
+    await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+    cleanup.push(() => new Promise<void>((resolve) => server.close(() => resolve())));
+    const origin = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+    const logs: Array<{ level: string; event: string; fields?: unknown }> = [];
+    const control = supervisorAt(origin);
+    const catalog = new IndexCatalog({
+      supervisor: control.supervisor,
+      expectedProtocolVersion: PROTOCOL_VERSION,
+      deviceId: () => "dev-a",
+      epoch: "boot-test",
+      reconnectMinMs: 20,
+      reconnectMaxMs: 40,
+      refusedRetryMs: 60_000,
+      resnapshotMs: 0,
+      logger: levelLogger(logs),
+    });
+    cleanup.push(() => catalog.dispose());
+    catalog.start();
+    await until(() => dials.length >= 1, 3_000, "the first dial");
+    await new Promise((resolve) => setTimeout(resolve, 400)); // ten ordinary backoffs
+    expect(dials).toHaveLength(1);
+    expect(catalog.phase).toBe("refused");
+    const warned = () => logs.filter((log) => log.event === "fieldd.index_catalog.refused");
+    expect(warned()).toEqual([
+      expect.objectContaining({
+        level: "warn",
+        fields: expect.objectContaining({ route: "/ws/meta", status: 401 }),
+      }),
+    ]);
+    expect(JSON.stringify(warned())).not.toContain(origin); // EL7: the route, never the origin
+
+    // the daemon's next transition asks again at once; a 403 is the same streak
+    status = 403;
+    control.move({ phase: "ready", origin });
+    await until(() => dials.length === 2, 5_000, "the re-dial on the transition");
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    expect(dials).toHaveLength(2);
+    expect(catalog.phase).toBe("refused");
+    expect(warned()).toHaveLength(1);
   });
 
   it("re-stamps every row when the device id moves from its fallback to the mesh identity", async () => {
