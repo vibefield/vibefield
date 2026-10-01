@@ -139,6 +139,14 @@ impl Activation {
         self.rights.contains(&right)
     }
 
+    /// The attach grant is valid at `now_ms` — the tick's expiry sweep's own
+    /// boundary (`now >= expires` is expired), read synchronously by the
+    /// geometry verbs so neither the precheck nor the finalize races the sweep
+    /// (DS-4d).
+    fn grant_live(&self, now_ms: u64) -> bool {
+        now_ms < self.grant_expires_at_ms
+    }
+
     /// The lease, as the wire carries it.
     pub fn status(&self) -> CellActivationStatus {
         let (p_state, p_reason) = match self.presentation {
@@ -710,7 +718,12 @@ impl ActivationTable {
 
     /// `ClaimGeometry` (a re-claim of the same seat commits a resize). PURE: the
     /// door performs the engine op the decision names, then `geometry_finalize`.
-    pub fn claim_geometry(&mut self, leg: &LegRef, msg: ClaimGeometry) -> GeometryDecision {
+    pub fn claim_geometry(
+        &mut self,
+        leg: &LegRef,
+        msg: ClaimGeometry,
+        now_ms: u64,
+    ) -> GeometryDecision {
         // Phase 1 — the caller (its own control leg, its own view). A malformed
         // caller carries no lease context.
         let caller = match self.by_id.get(&msg.activation_id) {
@@ -730,7 +743,9 @@ impl ActivationTable {
                 ))
             }
         };
-        if !caller.has_right(AttachRight::Geometry) {
+        // a lapsed grant carries no rights at all (DS-4d — the tick would
+        // invalidate it within a tick; the verb no longer races that)
+        if !caller.has_right(AttachRight::Geometry) || !caller.grant_live(now_ms) {
             return GeometryDecision::Refuse(Self::geometry_refuse(
                 leg,
                 "RIGHT_MISSING",
@@ -819,7 +834,12 @@ impl ActivationTable {
     /// (DS-4d): the door runs this precheck, the engine claim and the finalize
     /// inside the session's gate, so of two takes at once the second prechecks
     /// against the first's commit.
-    pub fn transfer_geometry(&mut self, leg: &LegRef, msg: TransferGeometry) -> GeometryDecision {
+    pub fn transfer_geometry(
+        &mut self,
+        leg: &LegRef,
+        msg: TransferGeometry,
+        now_ms: u64,
+    ) -> GeometryDecision {
         // Phase 1 — the caller (its own control leg, this session) and its
         // standing. A caller with none of the three is refused BEFORE the
         // destination or the lease is examined, and told nothing about either:
@@ -831,11 +851,14 @@ impl ActivationTable {
                     && a.session_id == msg.session_id =>
             {
                 // the holder's own client (phase 3 proves `from` is live) · an
-                // admin · a TAKE: the destination is the caller, on its own right
+                // admin · a TAKE: the destination is the caller, on its own right.
+                // A lapsed grant has none of the three (DS-4d): a take on one
+                // must not displace a live holder.
+                let live = a.grant_live(now_ms);
                 let holder = a.client_id == msg.from.client_id;
                 let admin = a.has_right(AttachRight::GeometryAdmin);
                 let take = msg.to.client_id == a.client_id && a.has_right(AttachRight::Geometry);
-                (holder || admin || take, a.activation_id.clone())
+                (live && (holder || admin || take), a.activation_id.clone())
             }
             _ => {
                 return GeometryDecision::Refuse(Self::geometry_refuse(
@@ -864,6 +887,7 @@ impl ActivationTable {
         };
         let dest = self.by_id.get(&dest_id).expect("indexed");
         let dest_ok = dest.has_right(AttachRight::Geometry)
+            && dest.grant_live(now_ms)
             && dest.client_id == msg.to.client_id
             && dest.view.is_some();
         if !dest_ok {
@@ -931,12 +955,24 @@ impl ActivationTable {
     /// loss, grant expiry, a renewal dropping `geometry`), which only ever
     /// EMPTIES it: the revision CAS below refuses then, and the engine's
     /// controller is this verb's, inert, as after any release.
+    ///
+    /// The DESTINATION is re-checked at `now_ms`, the clock read after the
+    /// engine op (DS-4d): the engine acted for it, but it may have lapsed in
+    /// flight — its grant expired, its client went away (the activation
+    /// invalidated), its view or its `geometry` right changed. Committing would
+    /// seat a holder that can never resize again, every other pane reading
+    /// SEAT_HELD until a take. So it commits NO holder: the engine's claim has
+    /// already displaced whoever held the seat (and a resize's holder IS the
+    /// destination), so the seat is emptied — claimable — and the caller is
+    /// refused `DESTINATION_INELIGIBLE` with the revision and no holder.
     pub fn geometry_finalize(
         &mut self,
         leg: &LegRef,
         proceed: GeometryProceed,
         outcome: GeometryOutcome,
+        now_ms: u64,
     ) -> Vec<Effect> {
+        let destination_live = self.destination_live(&proceed, now_ms);
         let lease = self.geometry.entry(proceed.session_id).or_default();
         if lease.revision != proceed.base_revision {
             return Self::geometry_refuse(
@@ -953,6 +989,14 @@ impl ActivationTable {
                 lease.holder.as_ref().map(HolderRecord::wire),
                 Some(lease.revision),
             ),
+            GeometryOutcome::Claimed { .. } | GeometryOutcome::Resized { .. }
+                if !destination_live =>
+            {
+                if lease.holder.take().is_some() {
+                    lease.revision += 1;
+                }
+                Self::geometry_refuse(leg, "DESTINATION_INELIGIBLE", None, Some(lease.revision))
+            }
             GeometryOutcome::Claimed {
                 control_epoch,
                 cols,
@@ -1013,6 +1057,23 @@ impl ActivationTable {
                 )]
             }
         }
+    }
+
+    /// DS-4d — the destination of a geometry verb is still the one its precheck
+    /// authorized: the same activation (the view id IS the activation id —
+    /// `HolderRecord::activation_id`), its client and session, its `geometry`
+    /// right, a grant live at `now_ms`, and the same view incarnation the
+    /// engine op was fenced on.
+    fn destination_live(&self, proceed: &GeometryProceed, now_ms: u64) -> bool {
+        self.by_id.get(&proceed.ghosttea_view_id).is_some_and(|d| {
+            d.client_id == proceed.client_id
+                && d.session_id == proceed.session_id
+                && d.has_right(AttachRight::Geometry)
+                && d.grant_live(now_ms)
+                && d.view.as_ref().is_some_and(|(view, epoch)| {
+                    *view == proceed.ghosttea_view_id && *epoch == proceed.attachment_epoch
+                })
+        })
     }
 
     /// `ReleaseGeometry` — the holder yields the seat. No engine call (ghosttea
@@ -1775,6 +1836,10 @@ impl Ord for Input {
 
 #[cfg(test)]
 mod tests {
+    /// The table's clock for every geometry verb below that does not test time
+    /// itself: inside every fixture grant's `[issued, expires)` window.
+    const NOW: u64 = 1_000;
+
     use super::*;
     use crate::tp::wire::{InputOp, SourceDemand};
     use tokio::sync::mpsc::unbounded_channel;
@@ -2453,7 +2518,31 @@ mod tests {
         connection_id: u64,
         rights: &[AttachRight],
     ) -> LegRef {
+        let expires_at = claims_for(client, session, 1, rights).expires_at;
+        attach_live_expiring(
+            t,
+            client,
+            session,
+            activation_id,
+            connection_id,
+            rights,
+            expires_at,
+        )
+    }
+
+    /// `attach_live_with_view` with the grant lapsing at `expires_at` (ms).
+    fn attach_live_expiring(
+        t: &mut ActivationTable,
+        client: &str,
+        session: &str,
+        activation_id: &str,
+        connection_id: u64,
+        rights: &[AttachRight],
+        expires_at: u64,
+    ) -> LegRef {
         let (control, _rx) = leg(connection_id);
+        let mut claims = claims_for(client, session, 1, rights);
+        claims.expires_at = expires_at;
         t.attach_control(AttachControlInput {
             now_ms: 1_000,
             set: &set_for(client),
@@ -2468,7 +2557,7 @@ mod tests {
                     urgency: None,
                 },
             },
-            claims: claims_for(client, session, 1, rights),
+            claims,
             session_known: true,
         });
         // the door attaches the ghosttea view (view id == activation id)
@@ -2539,7 +2628,7 @@ mod tests {
         let (sink, mut rx) = leg(1);
 
         // claim an EMPTY seat → a Claim op → holder gen 1, revision 1.
-        let d = t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 100, 40, 0));
+        let d = t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 100, 40, 0), NOW);
         let p = proceed(d);
         assert!(matches!(
             p.op,
@@ -2556,6 +2645,7 @@ mod tests {
                 cols: 100,
                 rows: 40,
             },
+            NOW,
         );
         perform(effects);
         let committed = texts(&mut rx).pop().unwrap();
@@ -2566,7 +2656,7 @@ mod tests {
 
         // RE-claim the OWN seat with the new revision → a Resize op → the
         // generation is STABLE, the revision advances.
-        let d = t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 120, 40, 1));
+        let d = t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 120, 40, 1), NOW);
         let p = proceed(d);
         assert!(matches!(
             p.op,
@@ -2584,6 +2674,7 @@ mod tests {
                 cols: 120,
                 rows: 40,
             },
+            NOW,
         );
         perform(effects);
         let committed = texts(&mut rx).pop().unwrap();
@@ -2593,14 +2684,15 @@ mod tests {
 
         // a STALE expectRevision is refused, holder + revision echoed.
         let refusal =
-            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 80, 24, 0)));
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 80, 24, 0), NOW));
         assert_eq!(refusal["code"], "STALE_REVISION");
         assert_eq!(refusal["geometryRevision"], 2);
         assert_eq!(refusal["currentHolder"]["holderGeneration"], 1);
 
         // the engine refusing (a superseded view) does NOT mutate the lease.
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 90, 30, 2)));
-        let effects = t.geometry_finalize(&sink, p, GeometryOutcome::EngineRefused);
+        let p =
+            proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-1", 90, 30, 2), NOW));
+        let effects = t.geometry_finalize(&sink, p, GeometryOutcome::EngineRefused, NOW);
         perform(effects);
         assert_eq!(texts(&mut rx).pop().unwrap()["code"], "VIEW_SUPERSEDED");
     }
@@ -2622,13 +2714,14 @@ mod tests {
 
         // B without the geometry right → RIGHT_MISSING.
         assert_eq!(
-            refused(t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mount-b", 80, 24, 0)))
+            refused(t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mount-b", 80, 24, 0), NOW))
                 ["code"],
             "RIGHT_MISSING"
         );
 
         // A claims and holds the seat.
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0)));
+        let p =
+            proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0), NOW));
         perform(t.geometry_finalize(
             &sink,
             p,
@@ -2637,6 +2730,7 @@ mod tests {
                 cols: 100,
                 rows: 40,
             },
+            NOW,
         ));
 
         // give B geometry (a RENEWAL at a higher generation) — now B may CLAIM,
@@ -2664,7 +2758,7 @@ mod tests {
             session_known: true,
         });
         assert_eq!(
-            refused(t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mount-b", 80, 24, 1)))
+            refused(t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mount-b", 80, 24, 1), NOW))
                 ["code"],
             "SEAT_HELD"
         );
@@ -2708,7 +2802,7 @@ mod tests {
         // lets it TAKE the seat for itself (the next test), never hand it to a
         // THIRD party. Refused before the destination or the lease is read, so
         // nothing about either is echoed.
-        let refusal = refused(t.transfer_geometry(&b, a_to_c("b1")));
+        let refusal = refused(t.transfer_geometry(&b, a_to_c("b1"), NOW));
         assert_eq!(refusal["code"], "NOT_HOLDER");
         assert!(refusal.get("currentHolder").is_none());
         assert!(refusal.get("geometryRevision").is_none());
@@ -2716,7 +2810,7 @@ mod tests {
         // …while a `geometryAdmin` caller that holds nothing may (TP-D25 still
         // mints no admin; the cell keeps the clause for TP-S4). A PURE decision:
         // not finalized, so the lease below is untouched by it.
-        let p = proceed(t.transfer_geometry(&d, a_to_c("d1")));
+        let p = proceed(t.transfer_geometry(&d, a_to_c("d1"), NOW));
         assert_eq!(p.ghosttea_view_id, "c1");
         assert_eq!(p.client_id, "win:3#1");
 
@@ -2738,7 +2832,7 @@ mod tests {
             cols: 90,
             rows: 30,
         };
-        let p = proceed(t.transfer_geometry(&a, transfer));
+        let p = proceed(t.transfer_geometry(&a, transfer, NOW));
         assert_eq!(p.ghosttea_view_id, "b1"); // the destination's view is resized
         let (sink_b, mut rx_b) = leg(2);
         perform(t.geometry_finalize(
@@ -2749,6 +2843,7 @@ mod tests {
                 cols: 90,
                 rows: 30,
             },
+            NOW,
         ));
         let committed = texts(&mut rx_b).pop().unwrap();
         assert_eq!(committed["holder"]["clientId"], "win:2#1");
@@ -2757,7 +2852,7 @@ mod tests {
 
         // A is no longer the holder → A's claim on the (now B's) seat is SEAT_HELD.
         assert_eq!(
-            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 70, 20, 2)))
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 70, 20, 2), NOW))
                 ["code"],
             "SEAT_HELD"
         );
@@ -2817,13 +2912,15 @@ mod tests {
                 0,
                 (90, 30),
             ),
+            NOW,
         ));
         assert_eq!(refusal["code"], "NOT_HOLDER");
         assert!(refusal.get("currentHolder").is_none());
         assert_eq!(refusal["geometryRevision"], 0);
 
         // A claims and holds the seat: generation 1, revision 1.
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0)));
+        let p =
+            proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0), NOW));
         perform(t.geometry_finalize(
             &sink_a,
             p,
@@ -2832,6 +2929,7 @@ mod tests {
                 cols: 100,
                 rows: 40,
             },
+            NOW,
         ));
         texts(&mut rx_a);
 
@@ -2841,6 +2939,7 @@ mod tests {
         let held = refused(t.claim_geometry(
             &b,
             claim("tailnet:me#node-b", "s1", "b1", "mount-b", 90, 30, 0),
+            NOW,
         ));
         assert_eq!(held["code"], "STALE_REVISION");
         assert_eq!(held["currentHolder"]["clientId"], "win:1#1");
@@ -2860,6 +2959,7 @@ mod tests {
                 1,
                 (90, 30),
             ),
+            NOW,
         ));
         assert_eq!(p.ghosttea_view_id, "b1");
         assert_eq!(p.client_id, "tailnet:me#node-b");
@@ -2874,6 +2974,7 @@ mod tests {
                 cols: 90,
                 rows: 30,
             },
+            NOW,
         ));
         let committed = texts(&mut rx_b).pop().expect("the taker is told");
         assert_eq!(committed["type"], "GeometryCommitted");
@@ -2888,13 +2989,13 @@ mod tests {
         // pane's resize is a re-claim), and that verb resizes nothing: A renders
         // what B sized until A is focused again.
         let moved =
-            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 1)));
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 1), NOW));
         assert_eq!(moved["code"], "STALE_REVISION");
         assert_eq!(moved["currentHolder"]["clientId"], "tailnet:me#node-b");
         assert_eq!(moved["currentHolder"]["holderGeneration"], 2);
         assert_eq!(moved["geometryRevision"], 2);
         let moved =
-            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 2)));
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 2), NOW));
         assert_eq!(moved["code"], "SEAT_HELD");
 
         // Focus back on A takes it back the same way — one step again.
@@ -2907,6 +3008,7 @@ mod tests {
                 2,
                 (100, 40),
             ),
+            NOW,
         ));
         assert_eq!(p.ghosttea_view_id, "a1");
         perform(t.geometry_finalize(
@@ -2917,6 +3019,7 @@ mod tests {
                 cols: 100,
                 rows: 40,
             },
+            NOW,
         ));
         let back = texts(&mut rx_a).pop().unwrap();
         assert_eq!(back["holder"]["clientId"], "win:1#1");
@@ -2934,6 +3037,7 @@ mod tests {
                 2,
                 (90, 30),
             ),
+            NOW,
         ));
         assert_eq!(stale["code"], "STALE_REVISION");
         assert_eq!(stale["currentHolder"]["holderGeneration"], 3);
@@ -2948,6 +3052,7 @@ mod tests {
                 3,
                 (90, 30),
             ),
+            NOW,
         ));
         assert_eq!(gone["code"], "NOT_HOLDER");
         assert_eq!(gone["currentHolder"]["clientId"], "win:1#1");
@@ -2967,13 +3072,15 @@ mod tests {
                     3,
                     (90, 30)
                 ),
+                NOW
             ))["code"],
             "DESTINATION_INELIGIBLE"
         );
 
         // Through all of it the seat is A's at generation 3: A's own re-claim is
         // still a RESIZE of that seat.
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 110, 40, 3)));
+        let p =
+            proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 110, 40, 3), NOW));
         assert!(matches!(
             p.op,
             GeometryOp::Resize {
@@ -3007,7 +3114,8 @@ mod tests {
             &[AttachRight::Read, AttachRight::Input],
         );
         let (sink_a, _rx_a) = leg(1);
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0)));
+        let p =
+            proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0), NOW));
         perform(t.geometry_finalize(
             &sink_a,
             p,
@@ -3016,6 +3124,7 @@ mod tests {
                 cols: 100,
                 rows: 40,
             },
+            NOW,
         ));
 
         for (leg_ref, activation, client) in [
@@ -3031,6 +3140,7 @@ mod tests {
                     1,
                     (80, 24),
                 ),
+                NOW,
             ));
             assert_eq!(refusal["code"], "NOT_HOLDER", "{client}");
             assert!(refusal.get("currentHolder").is_none(), "{client}");
@@ -3038,7 +3148,8 @@ mod tests {
         }
 
         // the seat is A's, untouched: revision 1, generation 1, a re-claim resizes
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 120, 40, 1)));
+        let p =
+            proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 120, 40, 1), NOW));
         assert_eq!(p.base_revision, 1);
         assert!(matches!(
             p.op,
@@ -3046,6 +3157,242 @@ mod tests {
                 control_epoch: 5,
                 ..
             }
+        ));
+    }
+
+    /// DS-4d (the wave-1 review: "finalize never re-checks the destination
+    /// activation — a grant expiring mid-flight leaves a ghost holder, SEAT_HELD
+    /// until a take"). The door runs the engine op between the precheck and the
+    /// finalize, so a destination can lapse IN FLIGHT: its grant expires, or its
+    /// client goes away. By then the engine's claim has displaced the old holder,
+    /// so committing would seat a holder that can never resize again and every
+    /// other pane would read SEAT_HELD. The finalize re-checks the destination
+    /// and commits NO holder: the seat is empty and claimable, and the caller is
+    /// told why. The same holds for the holder's own resize when its grant lapses
+    /// mid-flight.
+    #[test]
+    fn geometry_a_destination_that_lapses_mid_flight_leaves_an_empty_seat_never_a_ghost() {
+        let full = [AttachRight::Read, AttachRight::Input, AttachRight::Geometry];
+        let held = |t: &mut ActivationTable, a: &LegRef| {
+            let (sink, mut rx) = leg(1);
+            let p = proceed(t.claim_geometry(
+                a,
+                claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0),
+                NOW,
+            ));
+            perform(t.geometry_finalize(
+                &sink,
+                p,
+                GeometryOutcome::Claimed {
+                    control_epoch: 5,
+                    cols: 100,
+                    rows: 40,
+                },
+                NOW,
+            ));
+            assert_eq!(texts(&mut rx).pop().unwrap()["type"], "GeometryCommitted");
+        };
+        let b_takes = || {
+            take(
+                "b1",
+                ("win:1#1", "mount-a", 1),
+                ("tailnet:me#node-b", "mount-b"),
+                1,
+                (90, 30),
+            )
+        };
+
+        // (1) B's GRANT lapses between the precheck and the finalize.
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(&mut t, "win:1#1", "s1", "a1", 1, &full);
+        let b = attach_live_expiring(&mut t, "tailnet:me#node-b", "s1", "b1", 2, &full, 5_000);
+        held(&mut t, &a);
+        let p = proceed(t.transfer_geometry(&b, b_takes(), 4_999));
+        let (sink_b, mut rx_b) = leg(2);
+        // the door's engine claim seated B — and B's grant lapsed meanwhile
+        perform(t.geometry_finalize(
+            &sink_b,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 6,
+                cols: 90,
+                rows: 30,
+            },
+            5_000,
+        ));
+        let told = texts(&mut rx_b).pop().expect("the taker is told");
+        assert_eq!(told["type"], "GeometryRefused", "{told}");
+        assert_eq!(told["code"], "DESTINATION_INELIGIBLE");
+        assert!(
+            told.get("currentHolder").is_none(),
+            "no ghost holder: {told}"
+        );
+        assert_eq!(told["geometryRevision"], 2);
+        // the seat is EMPTY and claimable — a claim establishes it, never SEAT_HELD
+        let p = proceed(t.claim_geometry(
+            &a,
+            claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 2),
+            5_000,
+        ));
+        assert!(matches!(
+            p.op,
+            GeometryOp::Claim {
+                cols: 100,
+                rows: 40
+            }
+        ));
+
+        // (2) B's CLIENT goes away between the precheck and the finalize.
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(&mut t, "win:1#1", "s1", "a1", 1, &full);
+        let b = attach_live_with_view(&mut t, "tailnet:me#node-b", "s1", "b1", 2, &full);
+        held(&mut t, &a);
+        let p = proceed(t.transfer_geometry(&b, b_takes(), NOW));
+        perform(t.leg_closed(2));
+        let (sink_b, mut rx_b) = leg(2);
+        perform(t.geometry_finalize(
+            &sink_b,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 6,
+                cols: 90,
+                rows: 30,
+            },
+            NOW,
+        ));
+        let told = texts(&mut rx_b).pop().expect("the caller is told");
+        assert_eq!(told["code"], "DESTINATION_INELIGIBLE", "{told}");
+        assert!(
+            told.get("currentHolder").is_none(),
+            "no ghost holder: {told}"
+        );
+        assert_eq!(told["geometryRevision"], 2);
+        let refusal =
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 1), NOW));
+        assert_eq!(refusal["code"], "STALE_REVISION");
+        assert!(refusal.get("currentHolder").is_none(), "the seat is empty");
+
+        // (3) the HOLDER's own grant lapses mid-resize: the seat is released, the
+        // way the tick would release it, rather than left to a holder that lapsed.
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_expiring(&mut t, "win:1#1", "s1", "a1", 1, &full, 5_000);
+        held(&mut t, &a);
+        let p = proceed(t.claim_geometry(
+            &a,
+            claim("win:1#1", "s1", "a1", "mount-a", 120, 40, 1),
+            4_999,
+        ));
+        assert!(matches!(p.op, GeometryOp::Resize { .. }));
+        let (sink_a, mut rx_a) = leg(1);
+        perform(t.geometry_finalize(
+            &sink_a,
+            p,
+            GeometryOutcome::Resized {
+                cols: 120,
+                rows: 40,
+            },
+            5_000,
+        ));
+        let told = texts(&mut rx_a).pop().expect("the holder is told");
+        assert_eq!(told["code"], "DESTINATION_INELIGIBLE", "{told}");
+        assert!(
+            told.get("currentHolder").is_none(),
+            "no ghost holder: {told}"
+        );
+        assert_eq!(told["geometryRevision"], 2);
+    }
+
+    /// DS-4d — the same rule at the PRECHECK: a lapsed grant has no standing. A
+    /// take on a lapsed grant is refused before it can displace a live holder
+    /// (and told nothing, like any caller without standing); a claim on one is
+    /// RIGHT_MISSING; a hand-off TO a lapsed grant is DESTINATION_INELIGIBLE. The
+    /// door's tick would invalidate it within a tick — the verb no longer races it.
+    #[test]
+    fn geometry_a_lapsed_grant_has_no_standing_at_the_precheck() {
+        let full = [AttachRight::Read, AttachRight::Input, AttachRight::Geometry];
+        let mut t = ActivationTable::new("cb");
+        let a = attach_live_with_view(&mut t, "win:1#1", "s1", "a1", 1, &full);
+        let b = attach_live_expiring(&mut t, "tailnet:me#node-b", "s1", "b1", 2, &full, 5_000);
+        let (sink_a, _rx_a) = leg(1);
+        let p =
+            proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "mount-a", 100, 40, 0), NOW));
+        perform(t.geometry_finalize(
+            &sink_a,
+            p,
+            GeometryOutcome::Claimed {
+                control_epoch: 5,
+                cols: 100,
+                rows: 40,
+            },
+            NOW,
+        ));
+
+        // B's take, at the moment its grant lapses: no standing, told nothing
+        let refusal = refused(t.transfer_geometry(
+            &b,
+            take(
+                "b1",
+                ("win:1#1", "mount-a", 1),
+                ("tailnet:me#node-b", "mount-b"),
+                1,
+                (90, 30),
+            ),
+            5_000,
+        ));
+        assert_eq!(refusal["code"], "NOT_HOLDER");
+        assert!(refusal.get("currentHolder").is_none());
+        assert!(refusal.get("geometryRevision").is_none());
+        // B's claim on a lapsed grant
+        assert_eq!(
+            refused(t.claim_geometry(
+                &b,
+                claim("tailnet:me#node-b", "s1", "b1", "mount-b", 90, 30, 1),
+                5_000,
+            ))["code"],
+            "RIGHT_MISSING"
+        );
+        // the holder handing the seat TO the lapsed grant
+        assert_eq!(
+            refused(t.transfer_geometry(
+                &a,
+                take(
+                    "a1",
+                    ("win:1#1", "mount-a", 1),
+                    ("tailnet:me#node-b", "mount-b"),
+                    1,
+                    (90, 30),
+                ),
+                5_000,
+            ))["code"],
+            "DESTINATION_INELIGIBLE"
+        );
+        // A's seat is untouched: generation 1, revision 1, a re-claim resizes
+        let p = proceed(t.claim_geometry(
+            &a,
+            claim("win:1#1", "s1", "a1", "mount-a", 120, 40, 1),
+            5_000,
+        ));
+        assert!(matches!(
+            p.op,
+            GeometryOp::Resize {
+                control_epoch: 5,
+                ..
+            }
+        ));
+        // …and one millisecond earlier the same take would have been a take
+        assert!(matches!(
+            t.transfer_geometry(
+                &b,
+                take(
+                    "b1",
+                    ("win:1#1", "mount-a", 1),
+                    ("tailnet:me#node-b", "mount-b"),
+                    1,
+                    (90, 30),
+                ),
+                4_999,
+            ),
+            GeometryDecision::Proceed(_)
         ));
     }
 
@@ -3062,7 +3409,7 @@ mod tests {
             &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
         );
         let (sink, _rx) = leg(1);
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0)));
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0), NOW));
         perform(t.geometry_finalize(
             &sink,
             p,
@@ -3071,18 +3418,20 @@ mod tests {
                 cols: 100,
                 rows: 40,
             },
+            NOW,
         ));
         t.view_detached("a1"); // demand-none parks the view ⇒ seat revoked
         t.view_attached("a1", "a1", 8); // demand-live re-attaches a fresh view
                                         // the OLD revision is now stale (release bumped it) …
         assert_eq!(
-            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0)))["code"],
+            refused(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0), NOW))
+                ["code"],
             "STALE_REVISION"
         );
         // … and a claim at the new revision (claim bumped to 1, the release to 2)
         // succeeds on the freed seat.
         assert!(matches!(
-            t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 2)),
+            t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 2), NOW),
             GeometryDecision::Proceed(_)
         ));
 
@@ -3096,7 +3445,7 @@ mod tests {
             1,
             &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
         );
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0)));
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0), NOW));
         perform(t.geometry_finalize(
             &leg(1).0,
             p,
@@ -3105,6 +3454,7 @@ mod tests {
                 cols: 100,
                 rows: 40,
             },
+            NOW,
         ));
         t.leg_closed(1); // the activation is invalidated → seat auto-released
         let b = attach_live_with_view(
@@ -3117,7 +3467,7 @@ mod tests {
         );
         // the seat is free: B claims it (revision advanced 1→2 by the release).
         assert!(matches!(
-            t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mb", 80, 24, 2)),
+            t.claim_geometry(&b, claim("win:2#1", "s1", "b1", "mb", 80, 24, 2), NOW),
             GeometryDecision::Proceed(_)
         ));
 
@@ -3131,7 +3481,7 @@ mod tests {
             1,
             &[AttachRight::Read, AttachRight::Input, AttachRight::Geometry],
         );
-        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0)));
+        let p = proceed(t.claim_geometry(&a, claim("win:1#1", "s1", "a1", "m", 100, 40, 0), NOW));
         perform(t.geometry_finalize(
             &leg(1).0,
             p,
@@ -3140,6 +3490,7 @@ mod tests {
                 cols: 100,
                 rows: 40,
             },
+            NOW,
         ));
         // renew A at a higher generation WITHOUT geometry.
         t.attach_control(AttachControlInput {
@@ -3171,7 +3522,7 @@ mod tests {
             &[AttachRight::Read, AttachRight::Geometry],
         );
         assert!(matches!(
-            t.claim_geometry(&c, claim("win:3#1", "s1", "c1", "mc", 60, 20, 2)),
+            t.claim_geometry(&c, claim("win:3#1", "s1", "c1", "mc", 60, 20, 2), NOW),
             GeometryDecision::Proceed(_)
         ));
     }

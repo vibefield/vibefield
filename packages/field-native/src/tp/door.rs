@@ -1427,8 +1427,8 @@ fn handle_text(
             let msg: ClaimGeometry =
                 serde_json::from_str(text).map_err(|e| format!("claim-geometry:{e}"))?;
             let session_id = msg.session_id.clone();
-            handle_geometry(state, leg, &session_id, |table| {
-                table.claim_geometry(leg, msg)
+            handle_geometry(state, leg, &session_id, |table, now| {
+                table.claim_geometry(leg, msg, now)
             });
             Ok(false)
         }
@@ -1436,8 +1436,8 @@ fn handle_text(
             let msg: TransferGeometry =
                 serde_json::from_str(text).map_err(|e| format!("transfer-geometry:{e}"))?;
             let session_id = msg.session_id.clone();
-            handle_geometry(state, leg, &session_id, |table| {
-                table.transfer_geometry(leg, msg)
+            handle_geometry(state, leg, &session_id, |table, now| {
+                table.transfer_geometry(leg, msg, now)
             });
             Ok(false)
         }
@@ -1651,13 +1651,13 @@ fn handle_geometry(
     state: &Arc<DoorState>,
     leg: &LegRef,
     session_id: &str,
-    decide: impl FnOnce(&mut ActivationTable) -> GeometryDecision,
+    decide: impl FnOnce(&mut ActivationTable, u64) -> GeometryDecision,
 ) {
     let effects = state.geometry_gates.run(session_id, || {
         let session = state.config.source.session(session_id);
         let (decision, expected_control_revision) = {
             let mut reg = state.registry.lock().unwrap();
-            let decision = decide(&mut reg.activations);
+            let decision = decide(&mut reg.activations, unix_ms());
             let expected = match (&decision, &session) {
                 (GeometryDecision::Proceed(proceed), Some(session))
                     if matches!(proceed.op, GeometryOp::Claim { .. }) =>
@@ -1676,8 +1676,12 @@ fn handle_geometry(
             Some(session) => perform_geometry_op(session, &proceed, expected_control_revision),
             None => GeometryOutcome::EngineRefused,
         };
+        // the clock read AFTER the engine op: a grant that lapsed meanwhile is
+        // what the finalize's destination re-check is for
+        let now = unix_ms();
         let mut reg = state.registry.lock().unwrap();
-        reg.activations.geometry_finalize(leg, proceed, outcome)
+        reg.activations
+            .geometry_finalize(leg, proceed, outcome, now)
     });
     perform(state, effects);
 }
