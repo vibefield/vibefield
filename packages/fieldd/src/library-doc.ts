@@ -40,6 +40,8 @@ const FIELDS = {
   intents: "intents",
   schemas: "schemas",
   epochs: "epochs",
+  /** DS-5c (DS-D7) — a `local` canvas's home desktop (roster deviceId). */
+  homes: "homes",
 } as const;
 
 /** The well-known id of a user's system document: derived from the ACCOUNT —
@@ -133,7 +135,16 @@ export class LibraryDocService extends EventEmitter {
     return out.sort((a, b) => a.createdAt - b.createdAt || a.docId.localeCompare(b.docId));
   }
 
+  /** DS-5c — undefined for a docId the library never held. It used to read
+   * the absent fields as defaults and answer a phantom row (name "",
+   * createdAt 0) — harmless until something asked whether a row EXISTS. */
   get(docId: string): DocLibraryEntry | undefined {
+    if (
+      this.map("names").get(docId) === undefined &&
+      this.map("created").get(docId) === undefined
+    ) {
+      return undefined;
+    }
     return this.read(docId);
   }
 
@@ -146,6 +157,7 @@ export class LibraryDocService extends EventEmitter {
     this.map("schemas").set(entry.docId, entry.engineSchema as never);
     this.map("epochs").set(entry.docId, entry.baseEpoch);
     if (entry.syncIntent !== undefined) this.map("intents").set(entry.docId, entry.syncIntent);
+    if (entry.home !== undefined) this.map("homes").set(entry.docId, entry.home);
     if (entry.tombstone !== undefined) this.map("tombstones").set(entry.docId, entry.tombstone);
     await this.commit(by);
   }
@@ -156,9 +168,19 @@ export class LibraryDocService extends EventEmitter {
     await this.commit(by);
   }
 
-  async setSyncIntent(docId: string, intent: DocSyncIntent, by: string): Promise<void> {
+  /** DS-5c (DS-D7) — `home`: the desktop a `local` canvas now lives on (the
+   * one whose person kept it home), in the same commit as the intent, so the
+   * two merge as one decision. `sync`, or a home nobody can name, clears it. */
+  async setSyncIntent(
+    docId: string,
+    intent: DocSyncIntent,
+    by: string,
+    home?: string,
+  ): Promise<void> {
     await this.ready();
     this.map("intents").set(docId, intent);
+    if (intent === "local" && home !== undefined) this.map("homes").set(docId, home);
+    else this.map("homes").delete(docId);
     await this.commit(by);
   }
 
@@ -211,6 +233,7 @@ export class LibraryDocService extends EventEmitter {
       ...(this.map("intents").get(docId) !== undefined
         ? { syncIntent: this.map("intents").get(docId) }
         : {}),
+      ...(this.map("homes").get(docId) !== undefined ? { home: this.map("homes").get(docId) } : {}),
       ...(this.map("tombstones").get(docId) !== undefined
         ? { tombstone: this.map("tombstones").get(docId) }
         : {}),

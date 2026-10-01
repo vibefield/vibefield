@@ -128,9 +128,12 @@ export interface SystemDocOwner {
 /** DS-5 (DS-D6) — the library, as the catalog reads and writes it. */
 export interface DocLibraryPort {
   entries(): DocLibraryEntry[];
+  /** DS-5c — one row, or undefined when the library never held the canvas. */
+  get(docId: string): DocLibraryEntry | undefined;
   upsert(entry: DocLibraryEntry, by: string): Promise<void>;
   rename(docId: string, name: string, by: string): Promise<void>;
-  setSyncIntent(docId: string, intent: DocSyncIntent, by: string): Promise<void>;
+  /** DS-5c — `home`: the desktop a `local` canvas now lives on (DS-D7). */
+  setSyncIntent(docId: string, intent: DocSyncIntent, by: string, home?: string): Promise<void>;
   tombstone(docId: string, at: number, by: string): Promise<void>;
   on(event: "changed", fn: (change: { origin: "local" | "remote" }) => void): unknown;
   off(event: "changed", fn: (change: { origin: "local" | "remote" }) => void): unknown;
@@ -185,6 +188,11 @@ export interface DocumentServiceOptions {
    * evicted by a sweep every `sweepMs` (DOC_HOST.SWEEP_MS). `false`: never,
    * and no timer. */
   residency?: { idleMs?: number; sweepMs?: number } | false;
+  /** DS-5c (DS-D7) — this desktop's roster deviceId, asked lazily (the roster
+   * is built after this service): the home a `local` canvas is given here, and
+   * what tells a canvas living elsewhere apart. Absent or undefined: no canvas
+   * reads as living elsewhere — the pre-DS-5c behaviour. */
+  selfDevice?: () => string | undefined;
 }
 
 /** doc.open's return: the caller pairs the ticket with laneUrl before dialing. */
@@ -297,6 +305,7 @@ export class DocumentService {
   private readonly evictedHeads = new Map<string, string>();
   private readonly idleMs: number;
   private sweepTimer: ReturnType<typeof setInterval> | null = null;
+  private readonly selfDevice: () => string | undefined;
 
   constructor(opts: DocumentServiceOptions) {
     this.dataDir = opts.dataDir;
@@ -305,6 +314,7 @@ export class DocumentService {
     this.logger = opts.logger ?? createNoopLogger();
     this.onCommit = opts.onCommit;
     this.host = opts.host ?? new LoroHost();
+    this.selfDevice = opts.selfDevice ?? (() => undefined);
     this.docsDir = join(this.dataDir, ...LAYOUT.DOCS_DIR);
     this.registryDir = join(this.dataDir, ...LAYOUT.REGISTRIES_DIR);
     this.registryFile = `${STORES.DOCS}.json`;
@@ -402,21 +412,52 @@ export class DocumentService {
     return entry;
   }
 
-  /** This device's canvases — a tombstoned one is gone from every list. */
+  /** This device's canvases — a tombstoned one is gone from every list, and
+   * (DS-5c, DS-D7) so is a copy held here of a `local` canvas that lives on
+   * another desktop: it is listed in `elsewhere()` instead. */
   list(): DocRegistryEntry[] {
-    return [...this.registry.values()].filter((entry) => entry.deletedAt === undefined);
+    return [...this.registry.values()].filter(
+      (entry) =>
+        entry.deletedAt === undefined &&
+        // only a `local` entry can live elsewhere: one cheap read, not a library scan
+        !(entry.syncIntent === "local" && this.livesElsewhere(entry.docId) !== null),
+    );
   }
 
   /** DS-5 (DS-D7) — canvases the library lists that this device does not hold:
-   * a `local` canvas living on another desktop. Listed, never openable here. */
+   * a `local` canvas living on another desktop. Listed, never openable here.
+   * DS-5c: and the ones it holds only a COPY of — adopted while they synced,
+   * kept home since by another desktop. */
   elsewhere(): DocElsewhere[] {
     if (this.library === null) return [];
     const out: DocElsewhere[] = [];
     for (const entry of this.library.entries()) {
-      if (entry.tombstone !== undefined || this.registry.has(entry.docId)) continue;
-      out.push({ docId: entry.docId, name: entry.name, homes: this.homesOf(entry.docId) });
+      if (entry.tombstone !== undefined) continue;
+      const held = this.registry.get(entry.docId);
+      if (held !== undefined) {
+        const home = held.deletedAt === undefined ? this.livesElsewhere(entry.docId) : null;
+        if (home !== null) out.push({ docId: entry.docId, name: entry.name, homes: [home] });
+        continue;
+      }
+      out.push({
+        docId: entry.docId,
+        name: entry.name,
+        homes: entry.home !== undefined ? [entry.home] : this.homesOf(entry.docId),
+      });
     }
     return out;
+  }
+
+  /** DS-5c (DS-D7) — the desktop a `local` canvas lives on when it is NOT this
+   * one: its library row names a home, and this desktop is not it. Null when
+   * the canvas lives here, syncs, or nothing names where it lives (a row from
+   * before DS-5c, a desktop that does not yet know its own id). */
+  private livesElsewhere(docId: string): string | null {
+    const row = this.library?.get(docId);
+    if (row === undefined || row.tombstone !== undefined || row.syncIntent !== "local") return null;
+    const self = this.selfDevice();
+    if (row.home === undefined || self === undefined || row.home === self) return null;
+    return row.home;
   }
 
   /** DS-5 — doc.delete: a TOMBSTONE, in the registry and the library, so the
@@ -480,9 +521,16 @@ export class DocumentService {
     }
     // DS-5 — the intent converges across desktops with the canvas's library row
     // (UA-D7's named follow-up); this device's registry answers first, so the
-    // gates move the instant the local write is durable.
+    // gates move the instant the local write is durable. DS-5c (DS-D7): a
+    // canvas kept home is kept HERE — this desktop is its home, in the same
+    // library commit as the intent.
     await this.toLibrary("setSyncIntent", (library) =>
-      library.setSyncIntent(docId, intent, "setSyncIntent"),
+      library.setSyncIntent(
+        docId,
+        intent,
+        "setSyncIntent",
+        intent === "local" ? this.selfDevice() : undefined,
+      ),
     );
     return next;
   }
@@ -589,6 +637,7 @@ export class DocumentService {
     const library = this.library;
     if (library === null) return;
     const known = new Map(library.entries().map((entry) => [entry.docId, entry]));
+    const self = this.selfDevice();
     for (const entry of [...this.registry.values()]) {
       if (known.has(entry.docId) || entry.deletedAt !== undefined || entry.system === true)
         continue;
@@ -601,6 +650,8 @@ export class DocumentService {
             engineSchema: entry.engineSchema,
             baseEpoch: entry.baseEpoch,
             ...(entry.syncIntent !== undefined ? { syncIntent: entry.syncIntent } : {}),
+            // DS-5c — a canvas already kept home here before the library knew it
+            ...(entry.syncIntent === "local" && self !== undefined ? { home: self } : {}),
           },
           "seed",
         ),
@@ -721,11 +772,22 @@ export class DocumentService {
 
   // ---- lane admission ----
 
-  /** Mints a one-shot lane ticket, or refuses if a writer already holds the doc. */
+  /** Mints a one-shot lane ticket, or refuses if a writer already holds the doc.
+   * DS-5c (DS-D7): a canvas that LIVES ON ANOTHER DESKTOP — a `local` one this
+   * desktop holds a copy of, or a library canvas it does not hold at all — is
+   * listed and not openable: `UNAVAILABLE {service: "docs", state:
+   * "held-elsewhere", device}` (the desktop it lives on, when one is known). */
   open(docId: string): DocOpenGrant {
     const listed = this.registry.get(docId);
-    if (listed === undefined || listed.deletedAt !== undefined)
+    if (listed === undefined || listed.deletedAt !== undefined) {
+      const row = listed === undefined ? this.library?.get(docId) : undefined;
+      if (row !== undefined && row.tombstone === undefined) {
+        throw heldElsewhere(docId, row.home ?? this.homesOf(docId)[0]);
+      }
       throw new RpcCallError("NOT_FOUND", `no such doc: ${docId}`, false);
+    }
+    const home = this.livesElsewhere(docId);
+    if (home !== null) throw heldElsewhere(docId, home);
     if (this.writers.has(docId))
       throw new RpcCallError("PRECONDITION_FAILED", "another writer holds the doc lane", false, {
         docId,
@@ -1990,6 +2052,17 @@ function parseCurrentRevision(value: unknown, docId: string): CurrentRevision {
     ...(typeof checkpointContentId === "string" ? { contentId: checkpointContentId } : {}),
     updates,
   };
+}
+
+/** DS-5c (DS-D7) — "listed, not openable here": the honest UNAVAILABLE, naming
+ * the desktop the canvas lives on when one is known. Not retryable — the
+ * canvas opens on its home, or here once its person lets it travel. */
+function heldElsewhere(docId: string, device: string | undefined): RpcCallError {
+  return new RpcCallError("UNAVAILABLE", `canvas ${docId} lives on another desktop`, false, {
+    service: "docs",
+    state: "held-elsewhere",
+    ...(device !== undefined ? { device } : {}),
+  });
 }
 
 function currentMeta(current: CurrentRevision): DocMeta {

@@ -62,6 +62,12 @@ export const DocLibraryEntry = z
     /** epoch ms of the delete; a tombstoned canvas is gone from every list. */
     tombstone: z.number().int().optional(),
     syncIntent: DocSyncIntent.optional(),
+    /** DS-5c (DS-D7) — where a `local` canvas LIVES: the roster deviceId of the
+     * desktop whose person kept it home. Every other desktop lists it there and
+     * refuses to open it — a copy one of them still holds included. Absent
+     * while the canvas syncs, and on rows written before DS-5c (then a held
+     * copy stays openable where it is held, as before). */
+    home: z.string().optional(),
     engineSchema: z.number().int().nullable(),
     baseEpoch: z.number().int().nonnegative(),
   })
@@ -97,7 +103,10 @@ export const DocHoldersSlice = z
 export type DocHoldersSlice = z.infer<typeof DocHoldersSlice>;
 
 /** A canvas the library lists that THIS device does not hold — a `local`
- * canvas living on another desktop (DS-D7): listed, not openable here. */
+ * canvas living on another desktop (DS-D7): listed, not openable here.
+ * DS-5c: or holds only a copy of — a canvas it adopted while it synced, kept
+ * home since by another desktop; `doc.open` answers it `UNAVAILABLE
+ * {service: "docs", state: "held-elsewhere", device}` either way. */
 export const DocElsewhere = z
   .object({
     docId: z.string().uuid(),

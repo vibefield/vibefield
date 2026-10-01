@@ -834,6 +834,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const docs = new DocumentService({
       dataDir: config.dataDir,
       logger: logger.child({ component: "docs.service" }),
+      // DS-5c (DS-D7) — the home a `local` canvas is given here, and what tells
+      // one living elsewhere apart; the roster binds further down (lazy read).
+      selfDevice: () => devicesForAgents?.currentDeviceId(),
       onCommit: (commit) => {
         docSync?.onCommit(commit);
         docHolders?.schedule();
