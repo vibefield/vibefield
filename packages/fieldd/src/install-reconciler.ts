@@ -1,9 +1,14 @@
-import type { InstallSetEntry, PluginRecord } from "@vibefield/contracts";
+import {
+  type InstallSetEntry,
+  type PluginRecord,
+  type StandingReason,
+  standingDecision,
+} from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { AuditService } from "./audit-service";
 import type { RegistryInstallService } from "./plugin-install";
 import type { PluginRegistryService } from "./plugin-registry";
-import type { SettingsDocService } from "./settings-doc";
+import type { InstallIdentity, InstallSetChange, SettingsDocService } from "./settings-doc";
 
 // InstallSetReconciler (P7, spec §16.6/PA-31/PA-32): the DESIRED plugin set is
 // user-scope state in the settings doc; each device converges its local
@@ -12,28 +17,44 @@ import type { SettingsDocService } from "./settings-doc";
 //
 // Two halves, both idempotent:
 //   apply()   — doc → device: install missing registry entries, align
-//               enablement, apply grant decisions;
+//               enablement, apply the STANDING grant decisions;
 //   publish() — device → doc: a LOCAL user action (install/uninstall/enable/
-//               disable/grant) writes the entry other devices will converge on.
+//               disable/grant) writes what IT decided, and nothing else.
 //
 // Laws (§16.6, enforced or honestly recorded):
 //   - effective enablement stays per-device (we set DESIRE via the registry;
 //     engine gates/quarantine remain local truths);
 //   - dev-linked/sideload NEVER enter the doc;
-//   - revocation-bias is a MERGE-time tie-break — single-replica v1 has no
-//     concurrent merges to break, so apply() is a plain idempotent diff; the
-//     bias lands with the doc-sync track (recorded, thinking-p7);
-//     NOTE 2026-10-01 (the DS landing review, B1): the doc-sync track's host
-//     (DS-5) can merge a peer desktop's settings, and this is where design-06
-//     §4 puts the guard — "PA-32's revocation bias is the merge rule inside
-//     the reconciler". It is not built: an entry merges as one last-writer-wins
-//     value, so a desktop that was offline across a revocation could merge its
-//     whole entry back and apply() would re-grant. So the settings document is
-//     NOT registered with the host (`daemon.ts` mountSystemDocs) and this
-//     single-replica premise still holds. DS-5b builds the per-capability
-//     revocation stamps a grant must postdate, here, before settings cross;
+//   - revocation wins (PA-32) — the bias is the merge rule here, as design-06
+//     §4 puts it. DS-5b 2026-10-01: the bias is built (the settings document
+//     joins the host in the step after it). A grant
+//     records the revocation generation it saw; a merged grant that saw fewer
+//     revocations than the entry holds missed one and is applied as REVOKED,
+//     audited `REVOCATION_BIAS` (contracts `standingDecision`). And publish()
+//     writes only the act's own fields — a revocation is one transaction (the
+//     generation and the revoked decision together), a grant names the
+//     generation it saw, enablement is enablement — because republishing a
+//     desktop's whole local truth is exactly how a stale grant came back (B1);
 //   - a failed install parks honestly (logged; §16.6 version-skew) and is
 //     retried on the next reconcile, never crash-looped.
+
+/** What a publication is for. Each act writes only what it decided (DS-5b). */
+export type PublishAction = "install" | "enable" | "disable" | "grants";
+
+/** The one decision a `grants` act made (`plugins.grants.set`). `changed` is
+ * whether this device's effective grants moved: a grant that moved nothing
+ * names no generation, because a desktop whose local grant still stands may
+ * simply not have applied a revocation it just merged. */
+export interface GrantAct {
+  capability: string;
+  granted: boolean;
+  changed: boolean;
+}
+
+const BIAS_REASON_CODES: Record<Exclude<StandingReason, "decision">, string> = {
+  "revocation-bias": "REVOCATION_BIAS",
+  "stamp-ahead": "REVOCATION_STAMP_AHEAD",
+};
 
 export interface InstallReconcilerConfig {
   settingsDoc: SettingsDocService;
@@ -50,7 +71,7 @@ export interface InstallReconcilerConfig {
 
 export class InstallSetReconciler {
   private readonly log: Logger;
-  private running = false;
+  private inflight: Promise<void> | null = null;
   private queued = false;
 
   constructor(private readonly cfg: InstallReconcilerConfig) {
@@ -64,20 +85,26 @@ export class InstallSetReconciler {
     });
   }
 
-  async reconcile(): Promise<void> {
-    if (this.running) {
+  /** Converge once more. Overlapping calls coalesce into the run in flight,
+   * which repeats until no call is queued; every caller's promise settles when
+   * that run does, so awaiting it means the doc as of the call has applied. */
+  reconcile(): Promise<void> {
+    if (this.inflight !== null) {
       this.queued = true;
-      return;
+      return this.inflight;
     }
-    this.running = true;
-    try {
-      do {
-        this.queued = false;
-        await this.applyOnce();
-      } while (this.queued);
-    } finally {
-      this.running = false;
-    }
+    const run = (async () => {
+      try {
+        do {
+          this.queued = false;
+          await this.applyOnce();
+        } while (this.queued);
+      } finally {
+        this.inflight = null;
+      }
+    })();
+    this.inflight = run;
+    return run;
   }
 
   private async applyOnce(): Promise<void> {
@@ -185,10 +212,13 @@ export class InstallSetReconciler {
       record = this.cfg.plugins.get(entry.pluginId) ?? record;
     }
 
-    // grant decisions — idempotent diff; any movement recycles principals
+    // grant decisions — the STANDING decision (PA-32: a grant that missed a
+    // revocation stands as revoked), an idempotent diff; any movement
+    // recycles principals
     let moved = false;
     for (const g of entry.grants) {
-      const wantGranted = g.decision === "granted";
+      const standing = standingDecision(entry, g);
+      const wantGranted = standing.granted;
       const isGranted = record.grantedCapabilities.includes(g.capability);
       const isDeniedRevoked = record.deniedCapabilities.some(
         (d) => d.capability === g.capability && d.reason === "revoked",
@@ -196,15 +226,25 @@ export class InstallSetReconciler {
       const matches = wantGranted ? isGranted || !isDeniedRevoked : !isGranted && isDeniedRevoked;
       if (matches) continue;
       if (!record.requestedCapabilities.includes(g.capability)) continue; // never grant the unrequested
+      const biased = standing.reason !== "decision";
+      const stamps = {
+        revocationGeneration: entry.revocationGenerations?.[g.capability] ?? 0,
+        decisionGeneration: g.revocationGeneration ?? 0,
+      };
       const { changed } = await this.cfg.audit.requiredSystem(
         {
           action: wantGranted ? "capability.grant" : "capability.revoke",
           target: { kind: "capability", id: g.capability, parentId: entry.pluginId },
+          ...(standing.reason !== "decision"
+            ? { reasonCode: BIAS_REASON_CODES[standing.reason] }
+            : {}),
           attrs: {
             origin: "settings-doc",
             pluginId: entry.pluginId,
             granted: wantGranted,
             decisionAt: g.at,
+            ...stamps,
+            ...(biased ? { reason: standing.reason } : {}),
           },
         },
         () => this.cfg.plugins.setGrant(entry.pluginId, g.capability, wantGranted),
@@ -216,6 +256,8 @@ export class InstallSetReconciler {
             granted: wantGranted,
             changed: result.changed,
             grantGeneration: result.record.grantGeneration,
+            ...stamps,
+            ...(biased ? { reason: standing.reason } : {}),
           },
         }),
       );
@@ -227,13 +269,15 @@ export class InstallSetReconciler {
     }
   }
 
-  /** device → doc: publish the local truth of one plugin as the desired
-   * entry. Dev-linked/sideload never publish (§16.6). Fire-and-forget by
-   * contract — a failed write logs and parks (the next mutation republishes);
-   * it must never surface as an unhandled rejection from a handler. */
-  async publish(record: PluginRecord, by: string): Promise<void> {
+  /** device → doc: publish what one LOCAL act decided — an install's identity
+   * and enablement, an enable or disable's enablement, a grant act's one
+   * decision — and nothing else (DS-5b: a republished whole entry carried a
+   * stale grant back over a revocation, B1). Dev-linked/sideload never publish
+   * (§16.6). Fire-and-forget by contract — a failed write logs and parks; it
+   * must never surface as an unhandled rejection from a handler. */
+  async publish(record: PluginRecord, action: PublishAction, act?: GrantAct): Promise<void> {
     try {
-      await this.publishInner(record, by);
+      await this.publishInner(record, action, act);
     } catch (e) {
       this.log.warn(
         "fieldd.install_reconciler.publish_parked",
@@ -243,55 +287,71 @@ export class InstallSetReconciler {
     }
   }
 
-  private async publishInner(record: PluginRecord, by: string): Promise<void> {
+  private async publishInner(
+    record: PluginRecord,
+    action: PublishAction,
+    act: GrantAct | undefined,
+  ): Promise<void> {
     if (record.source === "dev-linked" || record.source === "sideload") return;
-    const entry: InstallSetEntry = {
-      pluginId: record.id,
-      source: record.source === "registry" ? "registry" : "bundled",
-      ...(record.source === "registry"
+    const identity: InstallIdentity =
+      record.source === "registry"
         ? {
+            source: "registry",
             version: record.version,
             ...(record.registry?.artifactSha256 !== undefined
               ? { artifactSha256: record.registry.artifactSha256 }
               : {}),
           }
-        : {}),
+        : { source: "bundled" };
+    const change: InstallSetChange =
+      action === "install"
+        ? { identity, enabled: record.enabled }
+        : action === "grants"
+          ? { ensure: { identity, enabled: record.enabled } }
+          : { enabled: record.enabled, ensure: { identity, enabled: record.enabled } };
+    const revoke = new Set<string>();
+    const grant: string[] = [];
+    if (act !== undefined) {
+      // A revocation is always written — biased to security, and it must reach
+      // a document whose standing grant this device has not applied away yet.
+      // A grant is written only when it MOVED this device: one that moved
+      // nothing may be a desktop that has merged a revocation and not applied
+      // it, and stamping that grant now would let it outlive the revocation.
+      if (!act.granted) revoke.add(act.capability);
+      else if (act.changed) grant.push(act.capability);
+    }
+    // A revocation this device holds that the document has no decision for
+    // (made before its entry was ever published) joins it, biased to security.
+    // A grant is never inferred from state: defaults are not decisions, and a
+    // local grant may be one a merged revocation has not yet reached.
+    const decided = new Set(
+      ((await this.cfg.settingsDoc.installSet())[record.id]?.grants ?? []).map((g) => g.capability),
+    );
+    for (const denied of record.deniedCapabilities) {
+      if (denied.reason === "revoked" && !decided.has(denied.capability)) {
+        revoke.add(denied.capability);
+      }
+    }
+    if (revoke.size > 0) change.revoke = [...revoke];
+    if (grant.length > 0) change.grant = grant;
+    const attrs = {
+      by: action,
+      source: identity.source,
+      version: identity.version ?? "bundled",
       enabled: record.enabled,
-      grants: [
-        ...record.grantedCapabilities.map((capability) => ({
-          capability,
-          decision: "granted" as const,
-          at: Date.now(),
-        })),
-        ...record.deniedCapabilities
-          .filter((d) => d.reason === "revoked")
-          .map((d) => ({
-            capability: d.capability,
-            decision: "revoked" as const,
-            at: Date.now(),
-          })),
-      ],
+      grantCount: grant.length,
+      revokeCount: revoke.size,
+      ...(act !== undefined ? { capability: act.capability, granted: act.granted } : {}),
     };
     await this.cfg.audit.requiredSystem(
       {
         action: "plugin.install_set.publish",
         target: { kind: "install-set", id: record.id },
-        attrs: {
-          by,
-          source: entry.source,
-          version: entry.version ?? "bundled",
-          enabled: entry.enabled,
-          grantDecisionCount: entry.grants.length,
-        },
+        attrs,
       },
-      () => this.cfg.settingsDoc.setInstallSetEntry(entry, by),
-      () => ({
-        attrs: {
-          by,
-          source: entry.source,
-          enabled: entry.enabled,
-          grantDecisionCount: entry.grants.length,
-        },
+      () => this.cfg.settingsDoc.updateInstallSet(record.id, change, action),
+      (written) => ({
+        attrs: { ...attrs, revocationGenerations: written.revocationGenerations },
       }),
     );
   }

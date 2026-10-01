@@ -4335,7 +4335,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
               });
           }
           const latest = plugins.get(id) ?? record;
-          void reconciler?.publish(latest, "grants"); // §16.6 — decisions sync
+          // §16.6 — decisions sync: THIS decision, never the record's whole
+          // grant state (DS-5b, PA-32)
+          void reconciler?.publish(latest, "grants", { capability, granted, changed });
           return { record: latest, changed, revoked };
         },
         ({ record, changed, revoked }) => ({

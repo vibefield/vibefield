@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
@@ -25,32 +26,121 @@ import type { SystemDocOwner } from "./doc-service";
 //      HISTORY persists in full snapshots; deeper time travel arrives with
 //      compaction epochs.
 //
-// Replication: this IS a Loro doc, so the sync machinery is the doc itself —
-// it joins field.docs.v1 (system:true) and rides the doc-sync lanes when that
-// track lands; today it persists locally like every other doc (recorded
-// delta, thinking-p7).
-//
-// CORRECTED 2026-09-30 (DS-5, DS-D18): it rides the lanes now, though not as a
-// field.docs.v1 row — DocumentService.registerSystemDoc hands THIS LoroDoc to
-// the Loro-level host under a well-known id derived from the account, and the
-// host merges a peer desktop's settings into it (`hostOwner`: persist, then
-// every section is announced as changed — the posture, the app preferences,
-// and the install-set the reconciler applies). Undo stays this device's: the
-// UndoManager tracks local ops only, so a merged peer edit is never undone by
-// ⌘Z here (law 2 holds across devices too).
+// Replication (DS-5, DS-D18): DocumentService.registerSystemDoc hands THIS
+// LoroDoc to the Loro-level host under a well-known id derived from the
+// account, and the host merges a peer desktop's settings into it (`hostOwner`:
+// persist, then every section is announced as changed — the posture, the app
+// preferences, and the install-set the reconciler applies). Undo stays this
+// device's: the UndoManager tracks local ops only, so a merged peer edit is
+// never undone by ⌘Z here (law 2 holds across devices too).
 //
 // CORRECTED 2026-10-01 (the DS landing review, B1): it does NOT ride the lanes
 // yet. Design-06 §4 lets settings cross only with PA-32's revocation bias as
-// the merge rule inside the install reconciler, and that bias is not built
-// (`install-reconciler.ts`): an install-set entry below is one last-writer-wins
-// value, so a merge could put back a grant another desktop revoked. The daemon
-// registers only the library with the host (`daemon.ts` mountSystemDocs);
-// `hostDoc()`/`hostOwner()` stay for DS-5b, which builds the per-capability
-// revocation stamps and then registers this document.
+// the merge rule inside the install reconciler. DS-5b builds that bias (the
+// install-set below, `install-reconciler.ts`); the daemon still registers only
+// the library with the host (`daemon.ts` mountSystemDocs) until the step that
+// registers this document.
+//
+// THE INSTALL-SET (DS-5b, PA-32 — revocations propagate and win regardless of
+// last-writer-wins timing). P7 kept an entry as ONE map value, so a desktop
+// offline across a revocation could merge its whole entry back and the
+// reconciler re-granted (the DS wave 1 review's B1). Now:
+//   - one ROOT map per field (contracts SETTINGS_DOC_SECTIONS): the identity,
+//     the enablement, one decision register per capability, and the
+//     revocations. A desktop that flips enablement writes only `enabled`; a
+//     grant decision is its own register. Root maps are named, so two desktops
+//     creating one entry at once share every container — a nested map per
+//     entry would be two containers and one side's fields would be lost (the
+//     library's rule, `library-doc.ts`).
+//   - the revocation GENERATION of a capability is the number of revocation
+//     keys it has in `installSet.revocations`: one key per revocation ever made
+//     (`[pluginId, capability, eventId]`), never deleted. A grow-only set, so
+//     the merge is the union and a concurrent revoke is never lost; a grant
+//     records the generation it saw, and a grant whose generation is below the
+//     merged one missed a revocation and stands as revoked
+//     (`standingDecision`, contracts). A revoke adds its key and writes the
+//     revoked decision in ONE transaction.
+//   - why not a counter: the plan offered a per-replica counter map or
+//     `loro-crdt`'s LoroCounter. A LoroCounter per capability must live in a
+//     map under the capability's key, and two desktops creating it at once
+//     make two counters of which the merge keeps one — probed on 1.13.8: two
+//     concurrent first revocations merged to 1, not 2, the exact race the
+//     generation exists to win. A ROOT counter per capability is race-free
+//     but grows the document's root namespace by one container per capability
+//     and can only be listed by scanning root names. A per-replica map needs a
+//     stable single writer per key and a read-modify-write; the set needs
+//     neither, it is the same count (Σ over desktops of each one's
+//     revocations), and each key says when it was made.
+//   - P7's whole-entry section ("installSet") is migrated once, on load, into
+//     the fields above — a revoked decision becomes a revocation, so an old
+//     revocation still beats another desktop's old grant once both cross —
+//     and emptied. The migration completes before the daemon registers the
+//     document with the host, so no whole entry ever crosses.
 
 export interface SettingsDocConfig {
   dataDir: string;
   logger?: Logger;
+}
+
+/** Which plugin, from where, which bytes — an entry exists while this does. */
+export interface InstallIdentity {
+  source: "registry" | "bundled";
+  /** registry entries only */
+  version?: string;
+  artifactSha256?: string;
+}
+
+/** One change to one plugin's install-set entry, committed as ONE Loro
+ * transaction. Each local act writes only what it decided (DS-5b): a
+ * republished whole entry is how B1's stale grant came back. */
+export interface InstallSetChange {
+  /** write the identity (an install or an update) */
+  identity?: InstallIdentity;
+  /** write the desired enablement */
+  enabled?: boolean;
+  /** create the entry when it is absent: the identity and the enablement each
+   * written only where none stands */
+  ensure?: { identity: InstallIdentity; enabled: boolean };
+  /** grant these now — each decision records the generation this doc holds */
+  grant?: readonly string[];
+  /** revoke these now — each adds one revocation (its generation grows) and
+   * writes the revoked decision, in the same transaction */
+  revoke?: readonly string[];
+}
+
+const S = SETTINGS_DOC_SECTIONS;
+const ORIGIN_INSTALL_SET = "no-undo:install-set:";
+
+/** `[pluginId, capability]` — a JSON tuple, so no id alphabet can collide. */
+function grantKey(pluginId: string, capability: string): string {
+  return JSON.stringify([pluginId, capability]);
+}
+
+function readKey(key: string, arity: number): string[] | null {
+  try {
+    const parsed: unknown = JSON.parse(key);
+    return Array.isArray(parsed) &&
+      parsed.length === arity &&
+      parsed.every((part) => typeof part === "string")
+      ? (parsed as string[])
+      : null;
+  } catch {
+    return null;
+  }
+}
+
+/** The identity register's value: only the identity's own fields, so a whole
+ * entry handed in (the migration, the seeding verb) leaves its decisions out. */
+function identityValue(identity: {
+  source: InstallIdentity["source"];
+  version?: string | undefined;
+  artifactSha256?: string | undefined;
+}): Record<string, string> {
+  return {
+    source: identity.source,
+    ...(identity.version !== undefined ? { version: identity.version } : {}),
+    ...(identity.artifactSha256 !== undefined ? { artifactSha256: identity.artifactSha256 } : {}),
+  };
 }
 
 export class SettingsDocService extends EventEmitter {
@@ -68,27 +158,23 @@ export class SettingsDocService extends EventEmitter {
     this.docPath = join(cfg.dataDir, ...LAYOUT.SETTINGS_DOC);
     this.legacyUserPath = join(cfg.dataDir, "fieldd", "plugins", "settings-user.json");
     this.undoMgr = new UndoManager(this.doc, {
-      // law 2 — install-set/grant mutations and the one-time migration are
+      // law 2 — install-set/grant mutations and the one-time migrations are
       // OUTSIDE the undo stack, by origin prefix
       excludeOriginPrefixes: ["no-undo:", "migrate:"],
     });
   }
 
-  /** DS-5 — the document the Loro-level host merges into.
-   *
-   * Unused by the daemon until DS-5b (2026-10-01, the DS landing review B1:
-   * settings cross only once PA-32's revocation stamps are the merge rule); the
-   * harness in `doc-library.test.ts` exercises it. */
+  /** DS-5 — the document the Loro-level host merges into. Registered only
+   * after `ready()`: the P7 migration must finish before any merge, so no
+   * whole entry ever crosses. The daemon does not register it yet (B1, the
+   * header note); `doc-library.test.ts` and the PA-32 rows do. */
   hostDoc(): LoroDoc {
     return this.doc;
   }
 
   /** DS-5 — what the host needs after merging a peer's settings: persist (never
    * before this device's own file has loaded — a merge must not be written over
-   * a doc that has not read its disk yet), then tell every section's listeners.
-   *
-   * Unused by the daemon until DS-5b, like `hostDoc()`; the harness in
-   * `doc-library.test.ts` exercises it. */
+   * a doc that has not read its disk yet), then tell every section's listeners. */
   hostOwner(): SystemDocOwner {
     return {
       persist: async () => {
@@ -115,6 +201,7 @@ export class SettingsDocService extends EventEmitter {
       // first boot — an empty doc is the honest starting state
     }
     await this.migrateLegacyUserFile();
+    await this.migrateLegacyInstallSet();
   }
 
   /** P5's settings-user.json folds in ONCE, then the file is renamed aside
@@ -152,6 +239,65 @@ export class SettingsDocService extends EventEmitter {
     this.log.info(
       "fieldd.settings_doc.migrated",
       "Legacy user settings migrated into the system settings doc",
+    );
+  }
+
+  /** DS-5b — P7's whole entries move into the per-field sections, once. A
+   * revoked decision becomes a REVOCATION (its generation grows), so it beats
+   * another desktop's old grant when both documents cross; a granted one
+   * records the generation it finds. Nothing that already stands is
+   * overwritten: an identity, an enablement, a decision. Each migrated entry
+   * is deleted from the old section; one that fails its schema stays where it
+   * is, logged (the tolerant reader's rule — evidence stays). */
+  private async migrateLegacyInstallSet(): Promise<void> {
+    const legacy = this.doc.getMap(S.INSTALL_SET);
+    const ids = legacy.keys();
+    if (ids.length === 0) return;
+    const at = Date.now();
+    let migrated = 0;
+    for (const pluginId of ids) {
+      const parsed = InstallSetEntry.safeParse(legacy.get(pluginId));
+      if (!parsed.success) {
+        this.log.warn(
+          "fieldd.settings_doc.install_set_entry_invalid",
+          "A P7 install-set entry failed its schema and was left unmigrated",
+          { pluginId },
+        );
+        continue;
+      }
+      const entry = parsed.data;
+      const plugins = this.doc.getMap(S.INSTALL_SET_PLUGINS);
+      const enabled = this.doc.getMap(S.INSTALL_SET_ENABLED);
+      const grants = this.doc.getMap(S.INSTALL_SET_GRANTS);
+      if (plugins.get(pluginId) === undefined) {
+        plugins.set(pluginId, identityValue(entry) as never);
+      }
+      if (enabled.get(pluginId) === undefined) enabled.set(pluginId, entry.enabled);
+      for (const decision of entry.grants) {
+        const standing = grants.get(grantKey(pluginId, decision.capability)) as
+          | { decision?: unknown }
+          | undefined;
+        if (decision.decision === "revoked") {
+          if (standing?.decision === "revoked") continue;
+          this.recordRevocation(pluginId, decision.capability, decision.at);
+        } else if (standing === undefined) {
+          grants.set(grantKey(pluginId, decision.capability), {
+            decision: "granted",
+            at: decision.at,
+            revocationGeneration: this.generationOf(pluginId, decision.capability),
+          } as never);
+        }
+      }
+      legacy.delete(pluginId);
+      migrated += 1;
+    }
+    if (migrated === 0) return;
+    this.doc.commit({ origin: "migrate:install-set" });
+    await this.persistNow();
+    this.log.info(
+      "fieldd.settings_doc.install_set_migrated",
+      "P7 install-set entries moved into the per-field layout",
+      { migrated, at },
     );
   }
 
@@ -200,47 +346,189 @@ export class SettingsDocService extends EventEmitter {
     this.emit("changed", { section: "app" });
   }
 
-  // --- the install-set (§16.6 — OUTSIDE undo, law 2) -------------------------
+  // --- the install-set (§16.6 — OUTSIDE undo, law 2; DS-5b per-field) -------
 
+  /** The merged install-set, one entry per plugin whose identity stands. Each
+   * entry carries its decisions as written and, per capability, the merged
+   * revocation generation; which decision STANDS is `standingDecision`'s call
+   * (the reconciler's, and any reader's). Tolerant: an entry that fails its
+   * schema is skipped and logged, never fatal. */
   async installSet(): Promise<Record<string, InstallSetEntry>> {
     await this.ready();
-    const raw = this.doc.getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET).toJSON() as Record<
-      string,
-      unknown
-    >;
+    const identities = this.doc.getMap(S.INSTALL_SET_PLUGINS).toJSON() as Record<string, unknown>;
+    const enabled = this.doc.getMap(S.INSTALL_SET_ENABLED).toJSON() as Record<string, unknown>;
+    const generations = new Map<string, Record<string, number>>();
+    for (const key of this.doc.getMap(S.INSTALL_SET_REVOCATIONS).keys()) {
+      const parts = readKey(key, 3);
+      if (parts === null) continue;
+      const [pluginId, capability] = parts as [string, string, string];
+      const of = generations.get(pluginId) ?? {};
+      of[capability] = (of[capability] ?? 0) + 1;
+      generations.set(pluginId, of);
+    }
+    const decisions = new Map<string, unknown[]>();
+    const grants = this.doc.getMap(S.INSTALL_SET_GRANTS);
+    for (const key of grants.keys()) {
+      const parts = readKey(key, 2);
+      const value: unknown = grants.get(key);
+      if (parts === null || value === null || typeof value !== "object") continue;
+      const [pluginId, capability] = parts as [string, string];
+      decisions.set(pluginId, [...(decisions.get(pluginId) ?? []), { ...value, capability }]);
+    }
     const out: Record<string, InstallSetEntry> = {};
-    for (const [id, value] of Object.entries(raw)) {
-      // tolerant reader: a malformed entry is skipped and logged, never fatal
-      const parsed = InstallSetEntry.safeParse(value);
-      if (parsed.success) out[id] = parsed.data;
+    for (const [pluginId, identity] of Object.entries(identities)) {
+      const of = generations.get(pluginId);
+      const parsed = InstallSetEntry.safeParse({
+        ...(identity !== null && typeof identity === "object" ? identity : {}),
+        pluginId,
+        // An identity with no enablement beside it is reachable only through a
+        // concurrent uninstall and reinstall; the reinstall's intent is to run.
+        enabled: typeof enabled[pluginId] === "boolean" ? enabled[pluginId] : true,
+        grants: decisions.get(pluginId) ?? [],
+        ...(of !== undefined ? { revocationGenerations: of } : {}),
+      });
+      if (parsed.success) out[pluginId] = parsed.data;
       else
         this.log.warn(
           "fieldd.settings_doc.install_set_entry_invalid",
           "An install-set entry failed its schema and was skipped",
-          { pluginId: id },
+          { pluginId },
         );
     }
     return out;
   }
 
+  /** DS-5b — one plugin's change, ONE transaction (the reconciler's publish).
+   * Returns the generation each touched capability's decision records. */
+  async updateInstallSet(
+    pluginId: string,
+    change: InstallSetChange,
+    by: string,
+  ): Promise<{ revocationGenerations: Record<string, number> }> {
+    await this.ready();
+    const plugins = this.doc.getMap(S.INSTALL_SET_PLUGINS);
+    const enabled = this.doc.getMap(S.INSTALL_SET_ENABLED);
+    const grants = this.doc.getMap(S.INSTALL_SET_GRANTS);
+    const at = Date.now();
+    let wrote = false;
+    // Field order is fixed (identity, enablement, decisions) in every writer,
+    // so two concurrent transactions compare their registers in one order.
+    const identity =
+      change.identity ??
+      (change.ensure !== undefined && plugins.get(pluginId) === undefined
+        ? change.ensure.identity
+        : undefined);
+    if (identity !== undefined) {
+      plugins.set(pluginId, identityValue(identity) as never);
+      wrote = true;
+    }
+    const desired =
+      change.enabled ??
+      (change.ensure !== undefined && enabled.get(pluginId) === undefined
+        ? change.ensure.enabled
+        : undefined);
+    if (desired !== undefined) {
+      enabled.set(pluginId, desired);
+      wrote = true;
+    }
+    const generations: Record<string, number> = {};
+    const revoke = new Set(change.revoke ?? []);
+    for (const capability of revoke) {
+      generations[capability] = this.recordRevocation(pluginId, capability, at);
+      wrote = true;
+    }
+    for (const capability of change.grant ?? []) {
+      if (revoke.has(capability)) continue; // one decision per capability per act
+      const generation = this.generationOf(pluginId, capability);
+      grants.set(grantKey(pluginId, capability), {
+        decision: "granted",
+        at,
+        revocationGeneration: generation,
+      } as never);
+      generations[capability] = generation;
+      wrote = true;
+    }
+    if (wrote) {
+      this.doc.commit({ origin: `${ORIGIN_INSTALL_SET}${by}` });
+      await this.persistNow();
+      this.emit("changed", { section: "installSet" });
+    }
+    return { revocationGenerations: generations };
+  }
+
+  /** Adopt a whole entry as decided NOW: its identity, its enablement and
+   * every decision it states (a revoked one is a new revocation; a granted one
+   * keeps the generation it names, else records the current one), in ONE
+   * transaction. The seeding verb (tests, imports) — the reconciler never
+   * republishes state through it (B1). */
   async setInstallSetEntry(entry: InstallSetEntry, by: string): Promise<void> {
     await this.ready();
-    this.doc
-      .getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET)
-      .set(entry.pluginId, entry as unknown as never);
-    this.doc.commit({ origin: `no-undo:install-set:${by}` });
+    const grants = this.doc.getMap(S.INSTALL_SET_GRANTS);
+    this.doc.getMap(S.INSTALL_SET_PLUGINS).set(entry.pluginId, identityValue(entry) as never);
+    this.doc.getMap(S.INSTALL_SET_ENABLED).set(entry.pluginId, entry.enabled);
+    for (const decision of entry.grants) {
+      if (decision.decision === "revoked") {
+        this.recordRevocation(entry.pluginId, decision.capability, decision.at);
+      } else {
+        grants.set(grantKey(entry.pluginId, decision.capability), {
+          decision: "granted",
+          at: decision.at,
+          revocationGeneration:
+            decision.revocationGeneration ?? this.generationOf(entry.pluginId, decision.capability),
+        } as never);
+      }
+    }
+    this.doc.commit({ origin: `${ORIGIN_INSTALL_SET}${by}` });
     await this.persistNow();
     this.emit("changed", { section: "installSet" });
   }
 
+  /** Uninstall everywhere: the identity, the enablement and the decisions go;
+   * the REVOCATIONS stay — a generation never shrinks, or a grant some desktop
+   * made before a revocation would come back to life. */
   async removeInstallSetEntry(pluginId: string, by: string): Promise<void> {
     await this.ready();
-    const map = this.doc.getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET);
-    if (map.get(pluginId) === undefined) return;
-    map.delete(pluginId);
-    this.doc.commit({ origin: `no-undo:install-set:${by}` });
+    const plugins = this.doc.getMap(S.INSTALL_SET_PLUGINS);
+    const enabled = this.doc.getMap(S.INSTALL_SET_ENABLED);
+    const grants = this.doc.getMap(S.INSTALL_SET_GRANTS);
+    const decided = grants.keys().filter((key) => readKey(key, 2)?.[0] === pluginId);
+    if (
+      plugins.get(pluginId) === undefined &&
+      enabled.get(pluginId) === undefined &&
+      decided.length === 0
+    )
+      return;
+    if (plugins.get(pluginId) !== undefined) plugins.delete(pluginId);
+    if (enabled.get(pluginId) !== undefined) enabled.delete(pluginId);
+    for (const key of decided) grants.delete(key);
+    this.doc.commit({ origin: `${ORIGIN_INSTALL_SET}${by}` });
     await this.persistNow();
     this.emit("changed", { section: "installSet" });
+  }
+
+  /** How many revocations of this capability the document holds. */
+  private generationOf(pluginId: string, capability: string): number {
+    let generation = 0;
+    for (const key of this.doc.getMap(S.INSTALL_SET_REVOCATIONS).keys()) {
+      const parts = readKey(key, 3);
+      if (parts?.[0] === pluginId && parts[1] === capability) generation += 1;
+    }
+    return generation;
+  }
+
+  /** A revocation: one new key in the grow-only set, and the revoked decision
+   * naming the generation it made — in the caller's open transaction. */
+  private recordRevocation(pluginId: string, capability: string, at: number): number {
+    this.doc
+      .getMap(S.INSTALL_SET_REVOCATIONS)
+      .set(JSON.stringify([pluginId, capability, randomUUID()]), { at } as never);
+    const generation = this.generationOf(pluginId, capability);
+    this.doc.getMap(S.INSTALL_SET_GRANTS).set(grantKey(pluginId, capability), {
+      decision: "revoked",
+      at,
+      revocationGeneration: generation,
+    } as never);
+    return generation;
   }
 
   // --- D29′ undo surface -----------------------------------------------------

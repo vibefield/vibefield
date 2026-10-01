@@ -1,6 +1,8 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { SETTINGS_DOC_SECTIONS, standingDecision } from "@vibefield/contracts";
+import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
 import { SettingsDocService } from "../src/settings-doc";
 
@@ -131,16 +133,98 @@ describe("the system settings doc (D29′)", () => {
       },
       "test",
     );
-    // corrupt the doc's install-set section via a raw write from a second
-    // instance is not possible without the API — simulate by writing a bogus
-    // entry through the same map path (the schema gate is at READ)
-    const raw = a as unknown as {
-      doc: { getMap(n: string): { set(k: string, v: unknown): void }; commit(o: object): void };
-    };
-    raw.doc.getMap("installSet").set("vibefield.bad", { not: "an entry" });
-    raw.doc.commit({ origin: "no-undo:test" });
+    // A peer's merge is the only way bogus values arrive; simulate it with raw
+    // writes through the same maps (the schema gate is at READ): an identity
+    // that is not one, and a decision register under an unreadable key.
+    const doc = a.hostDoc();
+    doc.getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET_PLUGINS).set("vibefield.bad", {
+      not: "an identity",
+    } as never);
+    doc.getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET_GRANTS).set("not-a-tuple", {
+      decision: "granted",
+    } as never);
+    doc.commit({ origin: "no-undo:test" });
     const set = await a.installSet();
     expect(Object.keys(set)).toEqual(["vibefield.good"]);
+  });
+
+  // DS-5b (PA-32) — adoption: a document saved in P7's layout (ONE whole entry
+  // per plugin, no stamps) is migrated on load into the per-field layout, a
+  // revoked decision becoming a revocation the generation counts, once.
+  it("adopts a P7 install-set: migrated on load with its stamps, the old section emptied, once", async () => {
+    const dataDir = tempDataDir();
+    const old = new LoroDoc();
+    old.getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET).set("vibefield.example", {
+      pluginId: "vibefield.example",
+      source: "registry",
+      version: "1.0.0",
+      artifactSha256: `sha256:${"ab".repeat(32)}`,
+      enabled: false,
+      grants: [
+        { capability: "storage.self", decision: "revoked", at: 5 },
+        { capability: "canvas.read", decision: "granted", at: 6 },
+      ],
+    } as never);
+    old.commit();
+    const file = join(dataDir, "fieldd", "settings", "doc.loro");
+    mkdirSync(join(dataDir, "fieldd", "settings"), { recursive: true });
+    writeFileSync(file, old.export({ mode: "snapshot" }));
+
+    const expected = {
+      pluginId: "vibefield.example",
+      source: "registry",
+      version: "1.0.0",
+      artifactSha256: `sha256:${"ab".repeat(32)}`,
+      enabled: false,
+      revocationGenerations: { "storage.self": 1 },
+    };
+    const a = make(dataDir);
+    const entry = (await a.installSet())["vibefield.example"];
+    expect(entry).toMatchObject(expected);
+    expect(entry?.grants).toEqual(
+      expect.arrayContaining([
+        { capability: "storage.self", decision: "revoked", at: 5, revocationGeneration: 1 },
+        { capability: "canvas.read", decision: "granted", at: 6, revocationGeneration: 0 },
+      ]),
+    );
+    expect(a.hostDoc().getMap(SETTINGS_DOC_SECTIONS.INSTALL_SET).keys()).toEqual([]);
+    // the migration is outside the undo stack, like every install-set write
+    expect(await a.undo()).toEqual({ applied: false, reason: "empty-stack" });
+    await a.dispose();
+
+    // a restart reads the per-field layout and migrates nothing twice
+    const b = make(dataDir);
+    expect((await b.installSet())["vibefield.example"]).toMatchObject(expected);
+  });
+
+  it("a revocation outlives an uninstall: the generation never shrinks", async () => {
+    const svc = make(tempDataDir());
+    const entry = {
+      pluginId: "vibefield.example",
+      source: "bundled" as const,
+      enabled: true,
+      grants: [{ capability: "storage.self", decision: "revoked" as const, at: 1 }],
+    };
+    await svc.setInstallSetEntry(entry, "test");
+    await svc.removeInstallSetEntry("vibefield.example", "uninstall");
+    expect(await svc.installSet()).toEqual({});
+    // reinstalled with a grant some desktop made BEFORE the revocation (it saw 0)
+    await svc.setInstallSetEntry(
+      {
+        ...entry,
+        grants: [
+          { capability: "storage.self", decision: "granted", at: 2, revocationGeneration: 0 },
+        ],
+      },
+      "test",
+    );
+    const back = (await svc.installSet())["vibefield.example"];
+    expect(back?.revocationGenerations).toEqual({ "storage.self": 1 });
+    const decision = back?.grants.find((g) => g.capability === "storage.self");
+    expect(decision && back && standingDecision(back, decision)).toEqual({
+      granted: false,
+      reason: "revocation-bias",
+    });
   });
 
   it("the doc file never contains device/secret material by construction (law 1 lives in the settings service; the doc only ever receives user-scope writes)", async () => {
