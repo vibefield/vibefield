@@ -519,6 +519,20 @@ describe("PA-32 across desktops — revocation wins the merge (DS-5b)", () => {
     expect(count(a, "capability.grant", CAP), "A never re-granted").toBe(0);
   });
 
+  it("§16.6's other law holds through the new publish: a dev-linked or sideloaded plugin never enters the document", async () => {
+    // A guard, not a red proof: publish() was rewritten around this early
+    // return, which the old publish had too.
+    const a = await desktop("A");
+    for (const source of ["dev-linked", "sideload"] as const) {
+      a.registry.record = { ...a.registry.record, source };
+      await decide(a, CAP, false);
+      await decide(a, CAP, true);
+      await toggle(a);
+    }
+    expect(await a.settings.installSet()).toEqual({});
+    expect(a.announced, "nothing announced to a peer").toEqual([]);
+  });
+
   it("a revocation crosses as ONE update: the generation and the revoked decision together", async () => {
     const [a, b] = await sharedPair([grantRow(CAP, "granted"), grantRow(BYSTANDER, "granted")]);
     const before = a.announced.length;
