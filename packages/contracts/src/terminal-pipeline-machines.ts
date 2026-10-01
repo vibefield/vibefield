@@ -1090,7 +1090,7 @@ export function machineCoverage(table: MachineTable): MachineCoverage {
     const froms =
       t.from === ANY ? table.states.filter((s) => !table.absorbing.includes(s)) : [t.from];
     for (const from of froms) {
-      const key = `${from} ${t.event}`;
+      const key = `${from}\u0000${t.event}`;
       const list = pairs.get(key) ?? [];
       list.push(t);
       pairs.set(key, list);
@@ -1098,20 +1098,20 @@ export function machineCoverage(table: MachineTable): MachineCoverage {
   }
   const covered = new Set<string>([
     ...pairs.keys(),
-    ...table.ignored.map(([s, e]) => `${s} ${e}`),
-    ...table.refused.map(([s, e]) => `${s} ${e}`),
+    ...table.ignored.map(([s, e]) => `${s}\u0000${e}`),
+    ...table.refused.map(([s, e]) => `${s}\u0000${e}`),
   ]);
   const uncovered: (readonly [string, string])[] = [];
   for (const s of table.states) {
     if (table.absorbing.includes(s)) continue;
-    for (const e of table.events) if (!covered.has(`${s} ${e}`)) uncovered.push([s, e]);
+    for (const e of table.events) if (!covered.has(`${s}\u0000${e}`)) uncovered.push([s, e]);
   }
   const ambiguous: (readonly [string, string])[] = [];
   for (const [key, list] of pairs) {
     const guardless = list.filter((t) => t.guard === undefined);
     const lastIsGuardless = list[list.length - 1]?.guard === undefined;
     if (guardless.length > 1 || (guardless.length === 1 && !lastIsGuardless)) {
-      const [s, e] = key.split(" ") as [string, string];
+      const [s, e] = key.split("\u0000") as [string, string];
       ambiguous.push([s, e]);
     }
   }
