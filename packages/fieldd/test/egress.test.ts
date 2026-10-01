@@ -16,6 +16,7 @@ import {
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  EGRESS_PATH_DEADLINE_MS,
   type EgressRoster,
   type EgressRouteDrop,
   type EgressRouteFacade,
@@ -168,6 +169,21 @@ describe("DS-1 — MeshClient's egress verbs over the real link", () => {
     expect(await mesh.egressRouteRemove("r1")).toEqual({ id: "r1" });
     await expect(mesh.egressRouteRemove("r1")).rejects.toMatchObject({ kind: "NOT_FOUND" });
     sub.dispose();
+  });
+
+  it("degrades to today's dial within its own deadline when the floor is wedged", async () => {
+    const { mock, mesh } = await floor();
+    mock.egress = mockEgress();
+    mock.silentMethods.add("native.mesh.egress.proxy"); // connected, never answers
+    const started = Date.now();
+    expect(await resolveEgressPath(mesh)).toMatchObject({
+      kind: "direct",
+      state: "native-timeout",
+    });
+    const took = Date.now() - started;
+    expect(took).toBeGreaterThanOrEqual(EGRESS_PATH_DEADLINE_MS - 50);
+    // well under PeerLink's 8 s call deadline: the dial still happens in time
+    expect(took).toBeLessThan(6_000);
   });
 
   it("refuses an answer outside the contract instead of trusting part of it", async () => {

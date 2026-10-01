@@ -483,12 +483,13 @@ export class MeshClient extends EventEmitter {
   // UNAVAILABLE here is an ANSWER (`egress-unsupported`, `mesh-down`), not a
   // transport failure to retry.
 
-  /** E1 — the node's own SOCKS5 proxy and its credential. */
-  async egressProxy(): Promise<MeshEgressProxy> {
+  /** E1 — the node's own SOCKS5 proxy and its credential. `deadlineMs`
+   * bounds the ask below the mgmt default (a dial waits on it). */
+  async egressProxy(opts?: { deadlineMs?: number }): Promise<MeshEgressProxy> {
     return egressAnswer(
       MeshEgressProxy,
       "native.mesh.egress.proxy",
-      await this.link.request("native.mesh.egress.proxy", {}),
+      await this.link.request("native.mesh.egress.proxy", {}, opts),
     );
   }
 

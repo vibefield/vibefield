@@ -44,15 +44,24 @@ export type EgressPath =
 
 /** The verbs `resolveEgressPath` needs — `MeshClient` is the production one. */
 export interface EgressProxySource {
-  egressProxy(): Promise<{ address: string; username: string; credential: string }>;
+  egressProxy(opts?: {
+    deadlineMs?: number;
+  }): Promise<{ address: string; username: string; credential: string }>;
 }
+
+/** How long a dial waits for the floor's answer before it takes today's path.
+ * Far below the mgmt default (10 s) on purpose: PeerLink's own call deadline
+ * is 8 s, so a floor that is connected but wedged must cost a dial at most
+ * this, then degrade to the OS network as every dial did before DS-1 — never
+ * turn a reachable peer into a timeout. */
+export const EGRESS_PATH_DEADLINE_MS = 2_000;
 
 /** Ask the floor for the node's SOCKS5 and say, in every other case, why the
  * dial goes over the OS network instead. Never throws: a dial must still
  * happen when the floor cannot answer, exactly as it did before DS-1. */
 export async function resolveEgressPath(source: EgressProxySource): Promise<EgressPath> {
   try {
-    const proxy = await source.egressProxy();
+    const proxy = await source.egressProxy({ deadlineMs: EGRESS_PATH_DEADLINE_MS });
     return {
       kind: "proxy",
       address: proxy.address,
