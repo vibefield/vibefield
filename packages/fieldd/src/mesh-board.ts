@@ -80,14 +80,16 @@ export interface MeshBoardLinks {
   off(event: "link-changed", listener: () => void): unknown;
 }
 
-/** The federated subscription manager's attach (C6-5). */
+/** The federated subscription manager's attach (C6-5). `start` hands over
+ * what the upstream sent right behind the snapshot; the board calls it once
+ * the snapshot is applied (2026-10-01). */
 export interface MeshBoardUpstreams {
   attach(
     device: string,
     method: string,
     params: unknown,
     emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
-  ): Promise<{ snapshot: unknown; dispose: () => void }>;
+  ): Promise<{ snapshot: unknown; dispose: () => void; start?: () => void }>;
 }
 
 /** This device's own board at one projection and floor, stamped with its
@@ -445,7 +447,7 @@ class BoardHub {
         this.#onUpstream(peer, generation, payload, kind ?? "delta"),
       )
       .then(
-        ({ snapshot, dispose }) => {
+        ({ snapshot, dispose, start }) => {
           if (this.#disposed || generation !== peer.generation) {
             dispose();
             return;
@@ -454,6 +456,7 @@ class BoardHub {
           peer.upstream = { dispose };
           peer.backoffMs = this.opts.retryMinMs;
           this.#onUpstream(peer, generation, snapshot, "snapshot");
+          start?.(); // what followed the snapshot on the wire, after it
         },
         (error: unknown) => {
           if (this.#disposed || generation !== peer.generation) return;

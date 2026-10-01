@@ -4,6 +4,9 @@
 // late-attach re-snapshot that keeps incremental topics correct, drop
 // recovery with backoff, and the quiet-teardown rules. The real upstream leg
 // (a peer daemon serving under its tailnet principal) lives in peer-link.e2e.
+// The 23:47 ruling's two defects (fixed 2026-10-01) are pinned at the end:
+// frames a source sends right behind its open answer, and re-subscribing with
+// a reader's CURRENT params.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { FederatedSubscriptionManager, type UpstreamLink } from "../src/federated-subs";
 import { RpcCallError } from "../src/native-link";
@@ -14,6 +17,8 @@ interface FakeSub {
   params: unknown;
   onEvent: (payload: unknown, kind: "snapshot" | "delta") => void;
   onDrop: () => void;
+  /** what a socket blip's replay of this subscription would ask with */
+  replay: (() => unknown) | undefined;
   closed: boolean;
   snapshot: unknown;
 }
@@ -21,6 +26,13 @@ interface FakeSub {
 class FakeLink implements UpstreamLink {
   subs: FakeSub[] = [];
   failNext = 0;
+  /** frames the source sends right behind its open answer: delivered before
+   * the subscribe resolves, as FielddClient routes them (the reply installs
+   * the route, the frames in its tick follow, THEN the awaiting caller runs) */
+  early: Array<[unknown, "snapshot" | "delta"]> = [];
+  /** while set, a subscribe waits on it before answering */
+  gate: Promise<void> | null = null;
+  inFlight = 0;
   #seq = 0;
 
   async subscribe(
@@ -29,7 +41,13 @@ class FakeLink implements UpstreamLink {
     params: unknown,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
     onDrop: () => void,
+    opts?: { params?: () => unknown },
   ): Promise<{ snapshot: unknown; unsubscribe: () => void }> {
+    if (this.gate !== null) {
+      this.inFlight += 1;
+      await this.gate;
+      this.inFlight -= 1;
+    }
     if (this.failNext > 0) {
       this.failNext -= 1;
       throw new RpcCallError("UNAVAILABLE", "peer unreachable", true, {
@@ -44,10 +62,12 @@ class FakeLink implements UpstreamLink {
       params,
       onEvent,
       onDrop,
+      replay: opts?.params,
       closed: false,
       snapshot: { seq: this.#seq },
     };
     this.subs.push(sub);
+    for (const [payload, kind] of this.early) onEvent(payload, kind);
     return {
       snapshot: sub.snapshot,
       unsubscribe: () => {
@@ -212,5 +232,138 @@ describe("link-death recovery", () => {
     // recovery re-attached the surviving member
     await vi.waitFor(() => expect(link.active()).toHaveLength(1));
     await vi.waitFor(() => expect(first.events.at(-1)?.kind).toBe("snapshot"));
+  });
+
+  it("a RETIRED upstream's late drop is ignored — the standing one is never orphaned", async () => {
+    const link = new FakeLink();
+    const m = manager(link);
+    await m.attach("dev-b", "device.subscribe", { device: "dev-b" }, recorder().emit);
+    await m.attach("dev-b", "device.subscribe", { device: "dev-b" }, recorder().emit); // swap
+    expect(link.subs[0]?.closed).toBe(true);
+    link.subs[0]?.onDrop(); // the retired upstream's link death, heard late
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    expect(link.subs).toHaveLength(2); // nothing re-subscribed…
+    expect(link.active()).toHaveLength(1); // …and nothing leaked beside the standing one
+  });
+
+  it("a reader leaving while its upstream re-subscribes releases what the re-subscribe stood up", async () => {
+    const link = new FakeLink();
+    const m = manager(link);
+    const sub = await m.attach("dev-b", "device.subscribe", { device: "dev-b" }, recorder().emit);
+    let release: () => void = () => {};
+    link.gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    link.dropAll();
+    await vi.waitFor(() => expect(link.inFlight).toBe(1)); // the recovery is asking
+    sub.dispose();
+    link.gate = null;
+    release();
+    await vi.waitFor(() => expect(link.subs).toHaveLength(2));
+    await new Promise((resolve) => setTimeout(resolve, 10));
+    expect(link.active()).toHaveLength(0);
+    expect(m.size).toBe(0);
+  });
+});
+
+// The 23:47 ruling (2026-09-30), fixed at the landing fix-up (2026-10-01).
+describe("frames behind the open answer, and the CURRENT params on re-subscribe", () => {
+  it("a frame the source sends in its reply's tick reaches the FIRST reader — after its snapshot, at start()", async () => {
+    const link = new FakeLink();
+    link.early = [
+      [["page-2"], "snapshot"],
+      [["catch-up"], "delta"],
+    ];
+    const m = manager(link);
+    const a = recorder();
+    const sub = await m.attach("dev-b", "index.catalog.subscribe", { device: "dev-b" }, a.emit);
+    expect(sub.snapshot).toEqual({ seq: 1 });
+    expect(a.events).toEqual([]); // nothing before the caller holds the snapshot
+    sub.start();
+    expect(a.events).toEqual([
+      { payload: ["page-2"], kind: "snapshot" },
+      { payload: ["catch-up"], kind: "delta" },
+    ]);
+    sub.start(); // idempotent
+    link.active()[0]?.onEvent(["live"], "delta");
+    expect(a.events).toHaveLength(3);
+    expect(a.events.at(-1)).toEqual({ payload: ["live"], kind: "delta" });
+  });
+
+  it("without start(), what came behind the snapshot goes first at the next frame — never lost, never out of order", async () => {
+    const link = new FakeLink();
+    link.early = [[["behind"], "delta"]];
+    const m = manager(link);
+    const a = recorder();
+    await m.attach("dev-b", "device.subscribe", { device: "dev-b" }, a.emit);
+    link.active()[0]?.onEvent(["next"], "delta");
+    expect(a.events).toEqual([
+      { payload: ["behind"], kind: "delta" },
+      { payload: ["next"], kind: "delta" },
+    ]);
+  });
+
+  it("a swap: EXISTING members hear the fresh snapshot BEFORE what followed it; the newcomer hears it at start()", async () => {
+    const link = new FakeLink();
+    const m = manager(link);
+    const first = recorder();
+    await m.attach("dev-b", "device.subscribe", { device: "dev-b" }, first.emit);
+    link.early = [[["behind"], "delta"]];
+    const second = recorder();
+    const sub = await m.attach("dev-b", "device.subscribe", { device: "dev-b" }, second.emit);
+    expect(first.events).toEqual([
+      { payload: { seq: 2 }, kind: "snapshot" },
+      { payload: ["behind"], kind: "delta" },
+    ]);
+    expect(second.events).toEqual([]);
+    sub.start();
+    expect(second.events).toEqual([{ payload: ["behind"], kind: "delta" }]);
+  });
+
+  it("recovery re-subscribes with the reader's paramsForResubscribe, and a socket blip's replay asks the same", async () => {
+    const link = new FakeLink();
+    const m = manager(link);
+    let cursor = { epoch: "e", revision: 1 };
+    const a = recorder();
+    await m.attach("dev-b", "index.catalog.subscribe", { device: "dev-b", since: cursor }, a.emit, {
+      paramsForResubscribe: () => ({ device: "dev-b", since: cursor }),
+    });
+    expect(link.subs[0]?.params).toEqual({ device: "dev-b", since: { epoch: "e", revision: 1 } });
+    cursor = { epoch: "e", revision: 7 }; // the reader moved on
+    expect(link.subs[0]?.replay?.()).toEqual({
+      device: "dev-b",
+      since: { epoch: "e", revision: 7 },
+    });
+    link.dropAll();
+    await vi.waitFor(() => expect(link.active()).toHaveLength(1));
+    expect(link.subs[1]?.params).toEqual({ device: "dev-b", since: { epoch: "e", revision: 7 } });
+    await vi.waitFor(() =>
+      expect(a.events.at(-1)).toEqual({ payload: { seq: 2 }, kind: "snapshot" }),
+    );
+  });
+
+  it("with no supplier, recovery re-subscribes with the params the entry was opened with", async () => {
+    const link = new FakeLink();
+    const m = manager(link);
+    await m.attach("dev-b", "device.subscribe", { device: "dev-b", x: 1 }, recorder().emit);
+    expect(link.subs[0]?.replay?.()).toEqual({ device: "dev-b", x: 1 });
+    link.dropAll();
+    await vi.waitFor(() => expect(link.active()).toHaveLength(1));
+    expect(link.subs[1]?.params).toEqual({ device: "dev-b", x: 1 });
+  });
+
+  it("the first attach failing never drops the entry a queued reader is waiting on", async () => {
+    const link = new FakeLink();
+    const m = manager(link);
+    link.failNext = 1;
+    const first = m.attach("dev-b", "device.subscribe", { device: "dev-b" }, recorder().emit);
+    const second = m.attach("dev-b", "device.subscribe", { device: "dev-b" }, recorder().emit);
+    await expect(first).rejects.toThrow(/unreachable/);
+    const standing = await second;
+    expect(standing.snapshot).toEqual({ seq: 1 });
+    expect(link.active()).toHaveLength(1);
+    standing.dispose();
+    expect(link.active()).toHaveLength(0); // released by its own reader, nothing leaked
+    expect(m.size).toBe(0);
   });
 });

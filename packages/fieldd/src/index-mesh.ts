@@ -67,7 +67,11 @@ import type { PeerLinkState } from "./peer-link";
 // and every subscription on it. Now the replay asks with `params()` (the
 // copy's cursor at that moment), and a refused replay ends this subscription
 // alone: PeerLink calls its `onDrop` and the replica re-attaches on its
-// backoff while the link stands.
+// backoff while the link stands. The manager's two defects named above are
+// fixed in the same landing fix-up (federated-subs.ts: frames behind the open
+// answer are held and handed over at `start`; recovery and replay read
+// `paramsForResubscribe`). The replica stays on PeerLink directly — it needs
+// no fan-out, and moving it would be a change, not a fix.
 //
 // DS-L2: a daemon never edits another device's row — a replica's `device` is
 // the one it subscribed to, enforced on every row it serves. DS-L4: the daemon

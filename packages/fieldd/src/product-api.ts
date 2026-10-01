@@ -128,14 +128,18 @@ export type DeviceForwarder = (
 
 /** C6-5/D35 — the subscription half of the `device?` convention: installs a
  * federated proxy (ref-counted upstream, re-snapshot on recovery) and returns
- * the upstream snapshot plus a dispose for this local subscriber. */
+ * the upstream snapshot plus a dispose for this local subscriber — and, like a
+ * local producer's `SubscriptionInstall.start`, a `start` this API calls once
+ * its reply is sent: the proxy hands over what the upstream sent right behind
+ * its open answer then (2026-10-01), since a frame emitted before the reply
+ * has no subId the client can route. */
 export type DeviceSubscriptionForwarder = (
   device: string,
   method: string,
   params: unknown,
   ctx: CallerContext,
   emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
-) => Promise<{ snapshot: unknown; dispose: () => void }>;
+) => Promise<{ snapshot: unknown; dispose: () => void; start?: () => void }>;
 
 /** The slice of TokenService the API needs (keeps the dependency one-way). */
 export interface TokenServiceLike {
@@ -1012,7 +1016,7 @@ export class ProductApi extends EventEmitter {
             // DS-2 — a federated subscription carries no `onBehalfOf`: its
             // upstream is SHARED by every local reader (ref-counted per
             // {device, method, params}, PF6), so it is this daemon's own read
-            const { snapshot, dispose } = await subForwarder(
+            const { snapshot, dispose, start } = await subForwarder(
               device,
               method,
               callParams,
@@ -1024,6 +1028,15 @@ export class ProductApi extends EventEmitter {
               dispose();
             });
             reply({ jsonrpc: "2.0", id, result: { subId, snapshot } });
+            // what the upstream sent behind its open answer, now that the
+            // reply routes it (the local path's `start`, for the proxy)
+            try {
+              start?.();
+            } catch {
+              state.subs.get(subId)?.();
+              state.subs.delete(subId);
+              ws.terminate();
+            }
             return;
           }
           // DS-L7 — who the call is for, from the CALLING context (a peer's

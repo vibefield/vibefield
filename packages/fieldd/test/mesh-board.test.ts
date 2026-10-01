@@ -100,7 +100,7 @@ interface Attach {
   method: string;
   params: unknown;
   emit: (payload: unknown, kind?: "delta" | "snapshot") => void;
-  resolve: (value: { snapshot: unknown; dispose: () => void }) => void;
+  resolve: (value: { snapshot: unknown; dispose: () => void; start?: () => void }) => void;
   reject: (error: unknown) => void;
   disposed: boolean;
 }
@@ -112,18 +112,20 @@ class FakeUpstreams {
     method: string,
     params: unknown,
     emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
-  ): Promise<{ snapshot: unknown; dispose: () => void }> {
+  ): Promise<{ snapshot: unknown; dispose: () => void; start?: () => void }> {
     return new Promise((resolve, reject) => {
       this.attaches.push({ device, method, params, emit, resolve, reject, disposed: false });
     });
   }
-  /** answer an attach with the peer's snapshot; the dispose marks it closed */
-  answer(attach: Attach, snapshot: unknown): void {
+  /** answer an attach with the peer's snapshot; the dispose marks it closed;
+   * `start` is the manager's hand-over of what followed the snapshot */
+  answer(attach: Attach, snapshot: unknown, start?: () => void): void {
     attach.resolve({
       snapshot,
       dispose: () => {
         attach.disposed = true;
       },
+      ...(start !== undefined ? { start } : {}),
     });
   }
   standing(): Attach[] {
@@ -210,6 +212,28 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
       h.upstreams.attaches.map((attach) => [attach.device, attach.method, attach.params]),
     ).toEqual([
       ["dev-b", "agent.subscribe", { projection: "desk", minIntervalMs: 100, heartbeatMs: 1_000 }],
+    ]);
+    r.dispose();
+  });
+
+  it("takes what a peer sent right behind its snapshot only AFTER applying the snapshot (the manager's start, 2026-10-01)", async () => {
+    const h = harness([selfRow, desktop("dev-b")]);
+    const r = reader(h);
+    const [attach] = h.upstreams.attaches;
+    if (attach === undefined) throw new Error("no upstream");
+    const behind = {
+      epoch: "boot-dev-b.3",
+      since: 41,
+      revision: 42,
+      upserts: [{ ...row("run-b", "dev-b", 8), status: "blocked" }],
+      removed: [],
+    };
+    h.upstreams.answer(attach, peerSnapshot(), () => attach.emit(behind, "delta"));
+    await tick();
+    expect(r.frames).toEqual([
+      { device: "dev-b", snapshot: peerSnapshot() },
+      { device: "dev-b", state: "live", asOf: "2026-09-30T21:00:00.000Z" },
+      { device: "dev-b", delta: behind },
     ]);
     r.dispose();
   });

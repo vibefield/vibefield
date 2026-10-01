@@ -276,7 +276,7 @@ describe("the device? subscription hop (C6-5/D35)", () => {
       params: unknown,
       ctx: unknown,
       emit: (payload: unknown, kind?: "delta" | "snapshot") => void,
-    ) => Promise<{ snapshot: unknown; dispose: () => void }>,
+    ) => Promise<{ snapshot: unknown; dispose: () => void; start?: () => void }>,
   ) {
     const a = new ProductApi({
       port: 0,
@@ -341,6 +341,26 @@ describe("the device? subscription hop (C6-5/D35)", () => {
 
     await call(ws, 3, "system.unsubscribe", { subId: res.result.subId });
     expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it("the proxy's start runs after the reply: what it held arrives BEHIND the open answer (2026-10-01)", async () => {
+    // a frame emitted before the reply carries a subId the client cannot
+    // route yet — the federated manager holds what its upstream sent behind
+    // the open answer and hands it over here, at start
+    const port = await apiWithSubForwarder(async (_device, _method, _params, _ctx, emit) => ({
+      snapshot: ["peer-roster"],
+      dispose: () => {},
+      start: () => emit(["behind"], "delta"),
+    }));
+    const ws = await dial(port, "/");
+    await call(ws, 1, "system.hello", hello({ credential: "good-token" }));
+    const order: string[] = [];
+    ws.on("message", (raw: Buffer) => {
+      const msg = JSON.parse(raw.toString());
+      order.push(typeof msg.method === "string" ? msg.method : `reply:${msg.id}`);
+    });
+    await call(ws, 2, "device.subscribe", { device: "dev-b" });
+    await vi.waitFor(() => expect(order).toEqual(["reply:2", "device.delta"]));
   });
 
   it("a proxy failure maps back like any peer failure — the caller hears the truth", async () => {
