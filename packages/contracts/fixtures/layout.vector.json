@@ -26,6 +26,7 @@
   "INDEX_DB": ["index", "rosetta.db"],
   "INDEX_DAEMONS_DIR": ["index", "daemons"],
   "INDEX_ENROLLMENT_FILE": ["index", "enrollment.json"],
+  "MESH_CATALOG_DIR": ["mesh", "catalog"],
   "AGENTS_DIR": ["agents"],
   "AGENT_PROFILES_FILE": ["agents", "profiles.json"],
   "AGENT_PROFILE_SETS_DIR": ["agents", "profiles"],

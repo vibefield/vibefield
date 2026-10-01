@@ -1,0 +1,37 @@
+{
+  "//": "DS-6 — `index.search {scope: \"mesh\"}`: every awake desktop ASKED, the answers merged BY TIME (never by score), each hit naming its desktop, and `sources` saying who answered — the asleep laptop's silence is never \"nothing found\".",
+  "answered": true,
+  "state": { "readiness": "ready", "canonicalReady": true },
+  "hits": [
+    {
+      "sessionId": "ses-9b2f0c7d",
+      "rootSessionId": "ses-9b2f0c7d",
+      "nativeSessionId": "665e3e71-7c12-4810-925a-e8b92cb6f29d",
+      "title": "the history catalog across desktops",
+      "timelineId": "tl-77",
+      "kind": "agent",
+      "at": 1759276800000,
+      "snippet": "the [catalog] travels; the transcripts stay home",
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF"
+    },
+    {
+      "sessionId": "ses-31aa",
+      "timelineId": "tl-4",
+      "kind": "user",
+      "at": 1759100000000,
+      "snippet": "why does the [catalog] lag",
+      "device": "01J9ZQ5RT1Y8U2I4O6P3A7S9D0"
+    }
+  ],
+  "clipped": false,
+  "sources": [
+    { "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF", "state": "answered", "tookMs": 41 },
+    { "device": "01J9ZQ5RT1Y8U2I4O6P3A7S9D0", "state": "answered", "tookMs": 318 },
+    {
+      "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+      "state": "asleep",
+      "tookMs": 0,
+      "detail": "this desktop is asleep; wake it to search its history"
+    }
+  ]
+}

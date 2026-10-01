@@ -76,6 +76,10 @@ export interface CatalogTableOptions<Row> {
   pageBytes?: number;
 }
 
+/** A snapshot page as this table sends it: the base's shape plus which page
+ * of how many it is (see `snapshotPages`). */
+export type CatalogPage<Row> = RowsSnapshot<Row> & { page: number; pages: number };
+
 /** What a subscribe opens with: the journal covered the cursor (and the
  * catch-up that brings the reader to the head, when anything moved), or a
  * snapshot in pages. */
@@ -85,7 +89,7 @@ export type CatalogOpenPlan<Row> =
       resumed: { epoch: string; revision: number };
       catchUp: RowsDelta<Row> | null;
     }
-  | { kind: "snapshot"; pages: RowsSnapshot<Row>[] };
+  | { kind: "snapshot"; pages: CatalogPage<Row>[] };
 
 export class CatalogTable<Row> {
   readonly epoch: string;
@@ -254,22 +258,36 @@ export class CatalogTable<Row> {
 
   /** The table as snapshot pages under the page budget, all at one
    * `{epoch, revision}`; every page but the last says `more: true`. A single
-   * row larger than a page travels alone. An empty table is one empty page. */
-  snapshotPages(): RowsSnapshot<Row>[] {
-    const pages: RowsSnapshot<Row>[] = [];
+   * row larger than a page travels alone. An empty table is one empty page.
+   *
+   * Each page also says WHICH page it is (`page`, 0-based, of `pages`) — a
+   * passthrough member over the base's shape. The base's `more` alone assumes
+   * pages arrive in order, and one path does not deliver them so: FielddClient
+   * hands a replayed subscribe's OPEN answer (page 0) to its listener after the
+   * continuation pages that followed it on the wire (it awaits the reply, the
+   * pages route synchronously). With the index a reader assembles any order. */
+  snapshotPages(): CatalogPage<Row>[] {
+    const chunks: Row[][] = [];
     let rows: Row[] = [];
     let bytes = FRAME_OVERHEAD_BYTES;
     for (const held of this.#rows.values()) {
       if (rows.length > 0 && bytes + held.bytes + 1 > this.pageBytes) {
-        pages.push({ epoch: this.epoch, revision: this.#revision, rows, more: true });
+        chunks.push(rows);
         rows = [];
         bytes = FRAME_OVERHEAD_BYTES;
       }
       rows.push(held.row);
       bytes += held.bytes + 1;
     }
-    pages.push({ epoch: this.epoch, revision: this.#revision, rows });
-    return pages;
+    chunks.push(rows);
+    return chunks.map((chunk, page) => ({
+      epoch: this.epoch,
+      revision: this.#revision,
+      rows: chunk,
+      ...(page < chunks.length - 1 ? { more: true } : {}),
+      page,
+      pages: chunks.length,
+    }));
   }
 
   digest(): RowsDigest {
@@ -438,6 +456,9 @@ interface RawPage {
   revision: number;
   rows: unknown[];
   more: boolean;
+  /** which page of how many, when the source says (CatalogPage) */
+  index: number | undefined;
+  count: number | undefined;
 }
 
 /** A delta as the reader first reads it (rows raw, keys checked). */
@@ -462,10 +483,20 @@ const isRevision = (value: unknown): value is number =>
 function asPage(value: unknown): RawPage | undefined {
   if (typeof value !== "object" || value === null) return undefined;
   const record = value as Record<string, unknown>;
-  const { epoch, revision, rows, more } = record;
+  const { epoch, revision, rows, more, page, pages } = record;
   if (!isEpoch(epoch) || !isRevision(revision) || !Array.isArray(rows)) return undefined;
   if (more !== undefined && typeof more !== "boolean") return undefined;
-  return { epoch, revision, rows, more: more === true };
+  // the index is a hint the base does not carry: read when it is coherent,
+  // ignored (sequential `more` semantics) when it is not
+  const indexed = isRevision(page) && isRevision(pages) && page < pages;
+  return {
+    epoch,
+    revision,
+    rows,
+    more: more === true,
+    index: indexed ? page : undefined,
+    count: indexed ? pages : undefined,
+  };
 }
 
 function asDelta(value: unknown): RawDelta | undefined {
@@ -522,8 +553,16 @@ export class RowsCopy<Row> {
   #epoch: string | null = null;
   #revision = 0;
   #rows = new Map<string, Row>();
-  /** a paged snapshot being assembled: applied whole when its last page lands */
-  #pending: { epoch: string; revision: number; rows: Row[] } | null = null;
+  /** a paged snapshot being assembled: applied whole when its last page
+   * lands — by index when the pages carry one, in arrival order when not —
+   * and the deltas that arrived for it meanwhile, applied after it */
+  #pending: {
+    epoch: string;
+    revision: number;
+    parts: Map<number, Row[]>;
+    count: number | undefined;
+    deltas: RawDelta[];
+  } | null = null;
 
   constructor(opts: RowsCopyOptions<Row>, initial?: RowsCopyState<Row>) {
     this.#keyOf = opts.keyOf;
@@ -578,7 +617,6 @@ export class RowsCopy<Row> {
   }
 
   #resumed(epoch: string, revision: number): RowsApplied {
-    this.#pending = null;
     // the source resumed a cursor: ours, or one we held earlier (a replayed
     // subscribe carries the params it first attached with) — either way the
     // catch-up that follows brackets our revision. A cursor we never held is
@@ -594,36 +632,60 @@ export class RowsCopy<Row> {
   }
 
   #page(page: RawPage): RowsApplied {
-    const pending =
-      this.#pending !== null &&
-      this.#pending.epoch === page.epoch &&
-      this.#pending.revision === page.revision
-        ? this.#pending
-        : { epoch: page.epoch, revision: page.revision, rows: [] as Row[] };
+    let pending = this.#pending;
+    if (pending === null || pending.epoch !== page.epoch || pending.revision !== page.revision) {
+      // a newer snapshot supersedes one still being assembled
+      pending = {
+        epoch: page.epoch,
+        revision: page.revision,
+        parts: new Map(),
+        count: undefined,
+        deltas: [],
+      };
+    }
+    const rows: Row[] = [];
     for (const raw of page.rows) {
       const row = this.#parseRow(raw);
       if (row === undefined) this.#onDropped?.(raw);
-      else pending.rows.push(row);
+      else rows.push(row);
     }
-    if (page.more) {
-      this.#pending = pending;
-      return { changed: false };
+    if (page.index !== undefined && page.count !== undefined) {
+      pending.parts.set(page.index, rows);
+      pending.count = page.count;
+      if (pending.parts.size < page.count) {
+        this.#pending = pending;
+        return { changed: false };
+      }
+    } else {
+      pending.parts.set(pending.parts.size, rows);
+      if (page.more) {
+        this.#pending = pending;
+        return { changed: false };
+      }
     }
     this.#pending = null;
     // a reset REPLACES the copy (never a merge); it counts as a change even
     // when the rows come back identical, because the cursor moved with it
+    const ordered = [...pending.parts.entries()].sort((a, b) => a[0] - b[0]);
     this.#epoch = pending.epoch;
     this.#revision = pending.revision;
-    this.#rows = new Map(pending.rows.map((row) => [this.#keyOf(row), row]));
-    return { changed: true };
+    this.#rows = new Map(ordered.flatMap(([, part]) => part).map((row) => [this.#keyOf(row), row]));
+    const result: RowsApplied = { changed: true };
+    for (const delta of pending.deltas) {
+      const applied = this.#delta(delta);
+      if (applied.resubscribe !== undefined) return { ...applied, changed: true };
+    }
+    return result;
   }
 
   #delta(delta: RawDelta): RowsApplied {
-    if (this.#pending !== null) {
-      // a delta inside a paged snapshot: the source never interleaves them,
-      // so the stream is not the one this copy is following
-      this.#pending = null;
-      return { changed: false, resubscribe: "cursor", reason: "a delta inside a paged snapshot" };
+    const pending = this.#pending;
+    if (pending !== null && delta.epoch === pending.epoch) {
+      // it belongs to the snapshot still being assembled (a replay handed the
+      // open answer over after its followers): hold it for the snapshot, or
+      // drop it when the snapshot already covers it
+      if (delta.since >= pending.revision) pending.deltas.push(delta);
+      return { changed: false };
     }
     if (this.#epoch === null || delta.epoch !== this.#epoch) {
       return { changed: false, resubscribe: "reset", reason: "a delta from another epoch" };

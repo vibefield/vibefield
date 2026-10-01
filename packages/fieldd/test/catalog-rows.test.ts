@@ -116,9 +116,10 @@ describe("CatalogTable — snapshot pages", () => {
       expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(2_048);
       expect(Object.keys(page).sort()).toEqual(
         i < pages.length - 1
-          ? ["epoch", "more", "revision", "rows"]
-          : ["epoch", "revision", "rows"],
+          ? ["epoch", "more", "page", "pages", "revision", "rows"]
+          : ["epoch", "page", "pages", "revision", "rows"],
       );
+      expect(page).toMatchObject({ page: i, pages: pages.length });
     }
     expect(pages.flatMap((page) => page.rows)).toEqual(rows);
   });
@@ -128,7 +129,9 @@ describe("CatalogTable — snapshot pages", () => {
     t.upsert([row("small"), row("huge", "h".repeat(4_000)), row("tail")]);
     const pages = t.snapshotPages();
     expect(pages.map((page) => page.rows.map(keyOf))).toEqual([["small"], ["huge"], ["tail"]]);
-    expect(table().snapshotPages()).toEqual([{ epoch: "boot-1", revision: 0, rows: [] }]);
+    expect(table().snapshotPages()).toEqual([
+      { epoch: "boot-1", revision: 0, rows: [], page: 0, pages: 1 },
+    ]);
   });
 
   it("the default budget is the registry's", () => {
@@ -354,6 +357,24 @@ describe("RowsCopy — the reader's rules", () => {
       changed: true,
     });
     expect(copy.size).toBe(3);
+  });
+
+  it("a replay's pages assemble in any order, and a delta for the snapshot waits for it", () => {
+    // FielddClient hands a REPLAYED open answer (page 0) to the listener after
+    // the pages and deltas that followed it on the wire
+    const t = table({ pageBytes: 1_024 });
+    t.upsert(Array.from({ length: 30 }, (_, i) => row(`k${i}`, "v".repeat(30))));
+    const pages = t.snapshotPages();
+    expect(pages.length).toBeGreaterThan(2);
+    t.upsert([row("k0", "moved")]);
+    const live = t.deltaSince(1);
+    const copy = at(0, [row("stale")], "boot-0");
+    for (const page of pages.slice(1)) expect(copy.apply(page)).toEqual({ changed: false });
+    expect(copy.apply(live)).toEqual({ changed: false }); // held for the snapshot
+    expect(copy.rows()).toEqual([row("stale")]); // nothing half-applied meanwhile
+    expect(copy.apply({ snapshot: pages[0] })).toEqual({ changed: true });
+    expect(sorted(copy.rows())).toEqual(sorted(t.rows()));
+    expect(copy.cursor()).toEqual({ epoch: "boot-1", revision: 2 });
   });
 
   it("a row the gate cannot read is dropped and reported; the frame still applies", () => {

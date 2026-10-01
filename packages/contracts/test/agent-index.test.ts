@@ -18,7 +18,13 @@ import {
 } from "../src/agent-index";
 import { METHODS } from "../src/methods";
 import { PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
-import { LAYOUT, LAYOUT_ROOT_LEVEL, SCOPES, TAILNET_SCOPES } from "../src/registries";
+import {
+  LAYOUT,
+  LAYOUT_ROOT_LEVEL,
+  PEER_FIELDD_SCOPES,
+  SCOPES,
+  TAILNET_SCOPES,
+} from "../src/registries";
 
 // AR-1 — the agent-index and agent-runtime doors (thinking-ar-data-topology.md
 // §7, AR-D15…D22). The registry rows are pinned the way plugins.update's are:
@@ -44,8 +50,27 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       // AR-5e — the find sheet's doors, reads like the two above
       // AR-5b: the sheet's CONTENT reads ride their own scope — a plugin holding
       // index.read for the roll call must not gain transcript search on an upgrade
+      // DS-6 (DS-D8 RULED, search by asking) — the two content reads FEDERATE:
+      // a self peer's daemon is served them (the D36 wall refuses every local
+      // method to a peer), each still defaulting to this desktop's index
       { method: "index.sessions", scope: "index.search", idempotent: true, locality: "federate" },
       { method: "index.search", scope: "index.search", idempotent: true, locality: "federate" },
+      // DS-6 — the history catalog across desktops: the project page, the peer
+      // replication stream (rows), the invalidation pings — the same content,
+      // so the same consent
+      { method: "index.projects", scope: "index.search", idempotent: true, locality: "federate" },
+      {
+        method: "index.catalog.subscribe",
+        scope: "index.search",
+        idempotent: true,
+        locality: "stream",
+      },
+      {
+        method: "index.changes.subscribe",
+        scope: "index.search",
+        idempotent: true,
+        locality: "stream",
+      },
       // QL — the launcher's list is the same content, so the same consent
       { method: "index.recent", scope: "index.search", idempotent: true, locality: "federate" },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
@@ -230,20 +255,27 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
     ]);
   });
 
-  it("only the index READS federate (DS-2); none of the rows admits a guest; only the feeds subscribe", () => {
-    // DS-2 (2026-09-30): the index reads moved to `federate`; the consent acts
-    // and every agents.* row (machine-scope distribution) stay local
-    const indexReads = new Set([
-      "index.discoveries",
-      "index.status",
+  it("none of the rows admits a guest; only the history reads leave the device; only the feeds subscribe", () => {
+    // DS-6 — the history doors are the family's ONLY rows that leave the
+    // device: consent (enroll/retire), the census and every agents.* row stay
+    // the person's act at this desktop
+    const meshReads = new Set([
       "index.sessions",
       "index.search",
-      "index.recent",
+      "index.projects",
+      "index.catalog.subscribe",
+      "index.changes.subscribe",
     ]);
     for (const m of METHODS.filter(
       (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),
     )) {
-      expect(m.locality, m.method).toBe(indexReads.has(m.method) ? "federate" : "local");
+      expect(m.locality, m.method).toBe(
+        !meshReads.has(m.method)
+          ? "local"
+          : m.method.endsWith(".subscribe")
+            ? "stream"
+            : "federate",
+      );
       expect(m.guestOk ?? false, m.method).toBe(false);
       // AR-5d widened this family by exactly one subscription (the usage
       // column's feed), the Agents settings section by one more (an update's
@@ -254,9 +286,20 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         m.method === "agents.usage.subscribe" ||
           m.method === "agents.operations.subscribe" ||
           m.method === "agents.profileSets.subscribe" ||
-          m.method === "agents.extensions.subscribe",
+          m.method === "agents.extensions.subscribe" ||
+          // DS-6 — the catalog's rows and the History page's pings
+          m.method === "index.catalog.subscribe" ||
+          m.method === "index.changes.subscribe",
       );
     }
+  });
+
+  it("a self peer DAEMON may search; the phone's preset is unchanged (DS-D8; SP-D13 open)", () => {
+    expect(PEER_FIELDD_SCOPES).toContain("index.search");
+    expect(TAILNET_SCOPES).not.toContain("index.search");
+    // derived, never a copy: the two differ by exactly the one scope
+    expect([...PEER_FIELDD_SCOPES].sort()).toEqual([...TAILNET_SCOPES, "index.search"].sort());
+    expect(PEER_FIELDD_SCOPES).not.toContain("index.manage");
   });
 
   it("the two new scopes exist, never enter the tailnet preset, and are never plugin-eligible", () => {

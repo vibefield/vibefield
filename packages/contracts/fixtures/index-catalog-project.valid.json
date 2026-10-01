@@ -1,0 +1,11 @@
+{
+  "//": "DS-6 — one `projects` row as its OWNER republishes it from rosetta's /ws/meta: rosetta's opaque id (a hash of a local path — identity stays {device, path}, D30), the sanitized remote, the repository FAMILY VibeField computes from it (DS-D9), and two figures the owner derives from its own top-level sessions.",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "projectId": "p-4f1c2a9e",
+  "name": "vibe-field",
+  "rootPaths": ["/Users/me/Projects/vibe-field", "/Volumes/SSD/lanes/ds/f/vibe-field"],
+  "gitRepo": "github.com:jamesyong42/vibe-field",
+  "family": "github.com/jamesyong42/vibe-field",
+  "sessionCount": 412,
+  "lastActivityAt": 1759276800000
+}

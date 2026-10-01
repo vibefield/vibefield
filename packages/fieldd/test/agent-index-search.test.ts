@@ -616,13 +616,15 @@ describe("the doors' posture", () => {
     }
   });
 
-  it("D36: a peer-fieldd principal cannot call either door, whatever the tailnet preset grants", async () => {
-    // the SCOPE keeps a peer out: no tailnet preset carries `index.search`
-    // (the harness device-routing.test.ts uses for its local-door row).
-    // DS-2 (2026-09-30): the locality column no longer stands behind it — the
-    // three are `federate` now (each device's history is searched where it is
-    // indexed, by asking it); a peer daemon reaches them only when its preset
-    // grants the content scope (ds-f's PEER_FIELDD_SCOPES).
+  it("DS-6 (DS-D8): a self peer DAEMON is served both doors; index.recent stays local; the phone's preset still lacks the scope", async () => {
+    // Search is BY ASKING (DS-D8, RULED 2026-09-30): one desktop asks another's
+    // index on its person's behalf, so `index.sessions` and `index.search`
+    // FEDERATE and a peer-fieldd principal is minted PEER_FIELDD_SCOPES (the
+    // tailnet preset plus `index.search`). The launcher's list is still this
+    // desktop's alone (`local`: the D36 wall refuses it to a peer before any
+    // scope is read), and a `tailnet` principal — the phone — keeps the preset
+    // without the content scope until SP-D13 rules (the harness
+    // device-routing.test.ts uses for agent.spawn).
     const secret = "3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM";
     const api = new ProductApi({
       port: 0,
@@ -641,47 +643,69 @@ describe("the doors' posture", () => {
     }
     const port = await api.listen();
     cleanup.push(() => api.close());
-    const ws = new WebSocket(`ws://127.0.0.1:${port}/t/${secret}`, {
-      headers: { "Tailscale-User-Login": TEST_LOGIN },
-    });
-    cleanup.push(() => ws.close());
-    await new Promise<void>((resolve, reject) => {
-      ws.once("open", () => resolve());
-      ws.once("error", reject);
-    });
-    const call = (id: number, method: string, params: unknown): Promise<unknown> =>
-      new Promise((resolve, reject) => {
-        const onMsg = (raw: Buffer) => {
-          const msg = JSON.parse(raw.toString());
-          if (msg.id === id) {
-            ws.off("message", onMsg);
-            resolve(msg);
-          }
-        };
-        ws.on("message", onMsg);
-        ws.once("close", () => reject(new Error("closed before reply")));
-        ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+    const dial = async (clientKind: "peer-fieldd" | "ios") => {
+      const ws = new WebSocket(`ws://127.0.0.1:${port}/t/${secret}`, {
+        headers: { "Tailscale-User-Login": TEST_LOGIN },
       });
-    await call(1, "system.hello", {
-      contractsVersion: CONTRACTS_VERSION,
-      minCompatible: CONTRACTS_VERSION,
-      clientKind: "peer-fieldd",
-      deviceId: "dev-peer-a",
-    });
+      cleanup.push(() => ws.close());
+      await new Promise<void>((resolve, reject) => {
+        ws.once("open", () => resolve());
+        ws.once("error", reject);
+      });
+      const call = (id: number, method: string, params: unknown): Promise<unknown> =>
+        new Promise((resolve, reject) => {
+          const onMsg = (raw: Buffer) => {
+            const msg = JSON.parse(raw.toString());
+            if (msg.id === id) {
+              ws.off("message", onMsg);
+              resolve(msg);
+            }
+          };
+          ws.on("message", onMsg);
+          ws.once("close", () => reject(new Error("closed before reply")));
+          ws.send(JSON.stringify({ jsonrpc: "2.0", id, method, params }));
+        });
+      const hello = (await call(1, "system.hello", {
+        contractsVersion: CONTRACTS_VERSION,
+        minCompatible: CONTRACTS_VERSION,
+        clientKind,
+        ...(clientKind === "peer-fieldd" ? { deviceId: "dev-peer-a" } : {}),
+      })) as { result: { grantedScopes: string[] } };
+      return { call, granted: hello.result.grantedScopes };
+    };
+    type Reply = {
+      result?: unknown;
+      error?: { data: { kind: string; details: Record<string, unknown> } };
+    };
+    const params = { q: "needle", nativeSessionIds: ["nat-1"] };
+
+    const peer = await dial("peer-fieldd");
+    expect(peer.granted).toContain("index.search");
+    for (const [id, method] of [
+      [2, "index.sessions"],
+      [3, "index.search"],
+    ] as const) {
+      const res = (await peer.call(id, method, params)) as Reply;
+      expect(res.error, method).toBeUndefined();
+    }
+    expect(called).toBe(2);
+    const recent = (await peer.call(4, "index.recent", params)) as Reply;
+    expect(recent.error?.data.kind).toBe("FORBIDDEN_SCOPE");
+    expect(recent.error?.data.details).toMatchObject({ method: "index.recent", locality: "local" });
+    expect(called).toBe(2); // the locality wall fired before the handler
+
+    const phone = await dial("ios");
+    expect(phone.granted).not.toContain("index.search");
     for (const [id, method] of [
       [2, "index.sessions"],
       [3, "index.search"],
       [4, "index.recent"],
     ] as const) {
-      const res = (await call(id, method, { q: "needle", nativeSessionIds: ["nat-1"] })) as {
-        error: { data: { kind: string; details: Record<string, unknown> } };
-      };
-      expect(res.error.data.kind, method).toBe("FORBIDDEN_SCOPE");
-      // AR-5b: the tailnet preset carries no content scope at all, so the scope
-      // wall refuses the peer; the handler ran for none of the doors
-      expect(res.error.data.details).toMatchObject({ required: "index.search" });
+      const res = (await phone.call(id, method, params)) as Reply;
+      expect(res.error?.data.kind, method).toBe("FORBIDDEN_SCOPE");
+      expect(res.error?.data.details).toMatchObject({ required: "index.search" });
     }
-    expect(called).toBe(0);
+    expect(called).toBe(2);
   });
 });
 

@@ -1,0 +1,20 @@
+{
+  "//": "DS-6 — an `index.catalog.delta`: the CURRENT row of every key that changed since `since` (never operations), and the keys that are gone — so it lands a copy anywhere in [since, revision] at exactly `revision`.",
+  "epoch": "catalog-3c8e1f62-2b0d-4f7a-9d55-0e7b1a4c9f10",
+  "since": 512,
+  "revision": 513,
+  "upserts": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "sessionId": "ses-9b2f0c7d",
+      "nativeSessionId": "665e3e71-7c12-4810-925a-e8b92cb6f29d",
+      "kind": "claude-code",
+      "provider": "claude",
+      "projectId": "p-4f1c2a9e",
+      "title": "the history catalog across desktops",
+      "activity": { "firstAt": 1759270000000, "lastAt": 1759276860000 },
+      "streamState": "streaming"
+    }
+  ],
+  "removed": ["ses-0a11d2e3"]
+}

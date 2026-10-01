@@ -1,0 +1,8 @@
+{
+  "//": "DS-6 — a folder with no repository (or a remote that is only a folder): no gitRepo, no family; it groups only with itself. A project none of whose sessions has activity yet carries no lastActivityAt.",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "projectId": "p-77d0b3c1",
+  "name": "scratch",
+  "rootPaths": ["/Users/me/scratch"],
+  "sessionCount": 1
+}

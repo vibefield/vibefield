@@ -1,0 +1,39 @@
+{
+  "//": "DS-6 — `index.sessions {scope: \"mesh\", family}` (the listing arm): one row per {agent kind, native session id} however many desktops hold it (DS-D10) — `device` is the row's owner, `devices` every desktop that holds it — each with its project and family.",
+  "rows": [
+    {
+      "sessionId": "ses-9b2f0c7d",
+      "nativeSessionId": "665e3e71-7c12-4810-925a-e8b92cb6f29d",
+      "rootSessionId": "ses-9b2f0c7d",
+      "title": "the history catalog across desktops",
+      "cwd": "/Users/me/Projects/vibe-field",
+      "updatedAt": 1759276790000,
+      "activity": { "firstAt": 1759270000000, "lastAt": 1759276800000 },
+      "streamState": "indexed",
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF", "01J9ZM0PQ7W3E6R8T2Y4U1I5O9"],
+      "projectId": "p-4f1c2a9e",
+      "family": "github.com/jamesyong42/vibe-field",
+      "provider": "claude",
+      "startedAt": 1759270000000
+    }
+  ],
+  "sources": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "name": "studio",
+      "self": true,
+      "state": "live",
+      "asOf": "2026-09-30T23:40:00.000Z",
+      "rows": 6553
+    },
+    {
+      "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+      "name": "laptop",
+      "self": false,
+      "state": "stale",
+      "asOf": "2026-09-30T23:31:02.000Z",
+      "rows": 1890
+    }
+  ]
+}

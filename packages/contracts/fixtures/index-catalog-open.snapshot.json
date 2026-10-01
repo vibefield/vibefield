@@ -1,0 +1,22 @@
+{
+  "//": "DS-6 — the open answer when the reader must RESET: page 0 of a paged snapshot. Every page shares {epoch, revision}; `more` is the base's, `page`/`pages` say which page of how many (a FielddClient replay hands page 0 over after its followers, so a reader assembles by index).",
+  "snapshot": {
+    "epoch": "catalog-3c8e1f62-2b0d-4f7a-9d55-0e7b1a4c9f10",
+    "revision": 512,
+    "rows": [
+      {
+        "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+        "projectId": "p-4f1c2a9e",
+        "name": "vibe-field",
+        "rootPaths": ["/Users/me/Projects/vibe-field"],
+        "gitRepo": "github.com:jamesyong42/vibe-field",
+        "family": "github.com/jamesyong42/vibe-field",
+        "sessionCount": 412,
+        "lastActivityAt": 1759276800000
+      }
+    ],
+    "more": true,
+    "page": 0,
+    "pages": 2
+  }
+}

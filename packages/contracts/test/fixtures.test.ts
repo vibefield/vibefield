@@ -34,8 +34,15 @@ import {
   AgentsProfilesVerifyResult,
   AgentsReleasesResult,
   AgentsUpdateResult,
+  IndexCatalogDelta,
+  IndexCatalogOpen,
+  IndexCatalogProject,
+  IndexCatalogSession,
+  IndexCatalogSubscribeParams,
+  IndexChangesSubscribeParams,
   IndexDiscovery,
   IndexEnrollmentRecord,
+  IndexProjectsResult,
   IndexRecentParams,
   IndexRecentResult,
   IndexSearchResponse,
@@ -239,6 +246,18 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // workspace, which is never "here"; and the ask.
   "index-recent": IndexRecentResult,
   "index-recent-params": IndexRecentParams,
+  // DS-6 — the history catalog across desktops: each table's row as its owner
+  // republishes it, the peer replication door's params and wire (the open
+  // answer resumed or reset, a delta, the digest heartbeat), the mesh doors'
+  // answers (`index-sessions.mesh`, `index-search-result.mesh` ride the
+  // prefixes above) and the History page's ping params.
+  "index-catalog-project": IndexCatalogProject,
+  "index-catalog-session": IndexCatalogSession,
+  "index-catalog-subscribe-params": IndexCatalogSubscribeParams,
+  "index-catalog-open": IndexCatalogOpen,
+  "index-catalog-delta": IndexCatalogDelta,
+  "index-projects": IndexProjectsResult,
+  "index-changes-subscribe-params": IndexChangesSubscribeParams,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

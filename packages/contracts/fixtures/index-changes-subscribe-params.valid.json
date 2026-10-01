@@ -1,0 +1,5 @@
+{
+  "//": "DS-6 — a visible History page asking to be told when the merged catalog moves (pings: rows always empty, the revision moves).",
+  "scope": "mesh",
+  "minIntervalMs": 500
+}

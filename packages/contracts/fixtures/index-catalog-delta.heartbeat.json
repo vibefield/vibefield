@@ -1,0 +1,14 @@
+{
+  "//": "DS-6 — the digest heartbeat a caught-up reader hears every ROWS.DIGEST_INTERVAL_MS: a delta with since === revision, no rows, and the owner's key digest. A reader at the SAME revision whose own digest differs resets — never repairs; a reader that does not know `digest` applies a no-op.",
+  "epoch": "catalog-3c8e1f62-2b0d-4f7a-9d55-0e7b1a4c9f10",
+  "since": 513,
+  "revision": 513,
+  "upserts": [],
+  "removed": [],
+  "digest": {
+    "epoch": "catalog-3c8e1f62-2b0d-4f7a-9d55-0e7b1a4c9f10",
+    "revision": 513,
+    "count": 6553,
+    "keysHash": "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
+  }
+}

@@ -60,6 +60,7 @@ import {
   DocRenameParams,
   DocSetSyncIntentParams,
   IdempotencyKey,
+  IndexCatalogSubscribeParams,
   IndexEnrollParams,
   IndexRecentParams,
   IndexRetireParams,
@@ -163,6 +164,7 @@ import { DocSyncService, type LaneInfo } from "./doc-sync";
 import { EgressRoutes, resolveEgressPath } from "./egress";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
+import { IndexCatalog } from "./index-catalog";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import { LinkService, otherUserLinks } from "./link-service";
@@ -264,6 +266,20 @@ export interface FielddConfig {
   /** AR-1 test seam: the home rosettad's discovery scans (`--home`).
    * Production passes the OS user's own home, explicitly (topology R7). */
   rosettadHome?: string;
+  /** DS-6 test seams: the history catalog's cadences (the epoch, the
+   * re-snapshot and batch windows, the reconnect backoff, the journal and page
+   * budgets) and the digest heartbeat its peer subscribers hear. Production
+   * takes INDEX_MESH's and ROWS' numbers. */
+  indexCatalog?: {
+    epoch?: string;
+    resnapshotMs?: number;
+    batchMs?: number;
+    reconnectMinMs?: number;
+    reconnectMaxMs?: number;
+    journalDepth?: number;
+    pageBytes?: number;
+    digestIntervalMs?: number;
+  };
   /** AR-2 — the VibeField ROOT above this user's root: the machine scope
    * (`LAYOUT.MACHINE_DIR`, AR-D15) hangs off it. Absent = no machine scope
    * (embedded and unit daemons): the distribution doors that would write it
@@ -450,6 +466,10 @@ export interface FielddDaemon {
    * `index.enrollRuntime`. */
   enrollment: EnrollmentStore;
   index: IndexService;
+  /** DS-6 — this desktop's history catalog: rosetta's `/ws/meta` followed into
+   * two rows tables (`projects`, `sessions`) the peers replicate. Tests read
+   * its tables and drive `resnapshot` directly. */
+  indexCatalog: IndexCatalog;
   /** AR-2 — the agent runtime (puppeteer) and the service behind the
    * agents.* doors; tests read its runtime directly. */
   agents: AgentRuntimeService;
@@ -618,6 +638,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
     ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
     logger: logger.child({ component: "index_service" }),
+  });
+  // DS-6 — the history catalog's source (index-catalog.ts): rosetta's topology
+  // stream followed into rows. Constructed beside the index service, STARTED
+  // with the daemon it follows (after boot commits); the device id is read at
+  // every stamp — the device service is bound further down.
+  const indexCatalog = new IndexCatalog({
+    supervisor: rosettad,
+    expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
+    ...catalogCadences(config.indexCatalog),
+    logger,
   });
   // AR-2 — the agent runtime (puppeteer's first import): one per fieldd, its
   // registry and managed roots under THIS user's root, its update transcripts
@@ -1436,7 +1468,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // than claiming the history holds no matches.
     api.register("index.sessions", async (_ctx, params) => {
       const parsed = IndexSessionsParams.safeParse(params);
-      if (!parsed.success)
+      if (!parsed.success || parsed.data.nativeSessionIds === undefined)
         throw new RpcCallError(
           "PRECONDITION_FAILED",
           "expected { nativeSessionIds: string[] } (1..256)",
@@ -1466,6 +1498,49 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       return await index.recent(parsed.data);
+    });
+    // DS-6 — the history catalog, as rows (DS-L3): the PEER replication door.
+    // A self peer's daemon lists once and watches from its cursor; nothing else
+    // is admitted — a window or the phone pages the merged replica through the
+    // doors instead (DS-L4), and the rows are `index.search` content. Before
+    // this boot's first snapshot the tables do not speak for the index, so the
+    // door says so rather than answering an empty table a peer would REPLACE
+    // its copy with.
+    api.registerSubscription("index.catalog.subscribe", (ctx, params, emit) => {
+      if (ctx.principal.kind !== "peer-fieldd") {
+        throw new RpcCallError(
+          "FORBIDDEN_SCOPE",
+          "index.catalog.subscribe is the peer replication door; windows page index.sessions and index.projects",
+          false,
+          { method: "index.catalog.subscribe" },
+        );
+      }
+      const parsed = IndexCatalogSubscribeParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'expected { table: "projects" | "sessions", since?: {epoch, revision}, minIntervalMs? }',
+          false,
+        );
+      if (!indexCatalog.ready)
+        throw new RpcCallError(
+          "UNAVAILABLE",
+          "the history catalog has not read the index yet",
+          true,
+          {
+            service: "index",
+            state: indexCatalog.phase,
+          },
+        );
+      const pump = indexCatalog.pump(parsed.data.table, {
+        since: parsed.data.since,
+        minIntervalMs: parsed.data.minIntervalMs,
+        ...(config.indexCatalog?.digestIntervalMs !== undefined
+          ? { digestIntervalMs: config.indexCatalog.digestIntervalMs }
+          : {}),
+        emit,
+      });
+      return { snapshot: pump.open, dispose: () => pump.dispose(), start: () => pump.start() };
     });
     api.register("index.enroll", async (ctx, params) => {
       const parsed = IndexEnrollParams.safeParse(params);
@@ -4325,6 +4400,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // be gone first, and stop() resolves only after the real exit
           rosettad?.stop() ?? Promise.resolve(),
         ]);
+        indexCatalog.dispose();
         runtimeDiagnostics.dispose();
         detachHealthSources?.();
         links.stop();
@@ -4380,6 +4456,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs.dispose();
       const artifactDrain = artifacts.dispose();
       board.dispose();
+      indexCatalog.dispose();
       federatedSubs.dispose();
       peers.dispose();
       // MF-1h — the rollback disposes every neighbour and used to walk past
@@ -4704,6 +4781,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       }
     }
+    indexCatalog.start(); // DS-6 — follows the daemon's transitions from its first
     void rosettad?.start();
     let stopPromise: Promise<void> | null = null;
     const stop = (): Promise<void> => {
@@ -4722,6 +4800,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           await gateway?.stop();
           await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
           index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
+          indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           detachHealthSources?.();
           endpoints.dispose();
@@ -4797,6 +4876,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       rosettad,
       enrollment,
       index,
+      indexCatalog,
       agents,
       agentUsage,
       agentGateway: gateway,
@@ -4850,4 +4930,14 @@ function readFdSoftLimit(): number | null {
   } catch {
     return null;
   }
+}
+
+/** DS-6 — the follower's own cadences out of the config seam (the digest
+ * heartbeat is the door's, handed to each subscriber's pump instead). */
+function catalogCadences(
+  seam: FielddConfig["indexCatalog"],
+): Omit<NonNullable<FielddConfig["indexCatalog"]>, "digestIntervalMs"> {
+  if (seam === undefined) return {};
+  const { digestIntervalMs: _heartbeat, ...cadences } = seam;
+  return cadences;
 }

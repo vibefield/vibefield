@@ -12,6 +12,7 @@ import {
   METHODS,
   type MethodDef,
   NAMESPACES,
+  PEER_FIELDD_SCOPES,
   PRODUCT_API_LIMITS,
   type RendererParticipantIdentity,
   RPC_ERROR_CODES,
@@ -705,7 +706,11 @@ export class ProductApi extends EventEmitter {
           const deviceId = derived ?? claim;
           const peer = parsed.data.clientKind === "peer-fieldd" && deviceId !== undefined;
           state.authed = true;
-          state.scopes = [...TAILNET_SCOPES];
+          // DS-D8 (search by asking) — a self peer DAEMON carries one scope the
+          // phone's preset does not: `index.search`, so a person's desktops
+          // can ask each other's history (PEER_FIELDD_SCOPES, derived from the
+          // preset). A `tailnet` principal keeps the preset — SP-D13 is open.
+          state.scopes = peer ? [...PEER_FIELDD_SCOPES] : [...TAILNET_SCOPES];
           state.ctx = {
             principal: peer
               ? {

@@ -63,6 +63,26 @@
 // explicitly rather than serving an empty success, and fieldd must answer
 // `answered: false` over it. A hit is passed through as written, so a
 // deliberately malformed one reaches fieldd's parser.
+//
+// DS-6: `/ws/meta` — rosetta's topology stream as it is at the pin (d3cf325,
+// crates/server/src/ws.rs run_meta_stream): `{frame:"hello"}`, ONE
+// `{frame:"meta_snapshot", runtimes, projects, sessions}` of the whole mirror
+// (children included), then unstamped `{frame:"mutation", mutation:{type, …row}}`
+// frames carrying FULL rows of type session | project | runtime. The scripted
+// files are polled while a meta socket is open and every row that CHANGED is
+// sent as a mutation; a row that DISAPPEARS is sent as nothing at all — the
+// real surface "has no removal event" (store/src/hot.rs refresh_meta), and
+// the follower must find the removal by diffing a fresh snapshot.
+// FAKE_ROSETTAD_PROJECTS scripts `/api/projects` and the stream's project rows
+// (`git_repo` included); unset, projects are derived from the session rows as
+// before (git_repo null). FAKE_ROSETTAD_META_CONTROL is a JSON file polled the
+// same way: `{"resync": n}` sends `{frame:"resync"}` + a fresh snapshot each
+// time n changes (the barrier a subscriber 1,024 items behind gets), and
+// `{"drop": n}` closes every meta socket each time n changes (a daemon that
+// dropped the stream). The upgrade answers with the protocol header, and a
+// browser Origin that is not loopback is refused 403, as the real guard does.
+// Bare `/api/sessions` answers the ROOTS (no parent) newest first, 100 by
+// default, and every list clamps its limit to rosetta's 1..1,000.
 import {
   appendFileSync,
   existsSync,
@@ -75,6 +95,7 @@ import {
 import { createServer } from "node:http";
 import { join } from "node:path";
 import { PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
+import { WebSocketServer } from "ws";
 
 const args = process.argv.slice(2);
 const flag = (name) => {
@@ -237,6 +258,39 @@ const logRequest = (url) => {
   }
 };
 
+/** DS-6 — the project rows: scripted (with `git_repo`), or derived from the
+ * session rows the way the first QL fake did (a project rooted at its first
+ * session's cwd, no remote) */
+const projectRows = () => {
+  const scriptedProjects = scripted("FAKE_ROSETTAD_PROJECTS", undefined);
+  if (Array.isArray(scriptedProjects)) return scriptedProjects;
+  const projects = new Map();
+  for (const row of sessionRows()) {
+    if (typeof row.project_id !== "string" || projects.has(row.project_id)) continue;
+    const root = typeof row.cwd === "string" ? row.cwd : `/${row.project_id}`;
+    projects.set(row.project_id, {
+      id: row.project_id,
+      name: root.split("/").filter(Boolean).at(-1) ?? row.project_id,
+      root_paths: [root],
+      git_repo: null,
+    });
+  }
+  return [...projects.values()];
+};
+/** rosetta's `clamp_limit`: absent → the default, else 1..MAX_LIMIT */
+const clampLimit = (raw, fallback) => {
+  const value = raw === null ? fallback : Number(raw);
+  return Number.isFinite(value) ? Math.min(Math.max(Math.trunc(value), 1), 1_000) : fallback;
+};
+/** `SessionRow::compare_recent`: activity.last_at descending (none last), id */
+const rootsNewestFirst = (rows) =>
+  rows
+    .filter((row) => (row.parent_session_id ?? null) === null)
+    .sort((a, b) => {
+      const at = (row) => (row.activity ? row.activity.last_at : Number.NEGATIVE_INFINITY);
+      return at(b) - at(a) || String(a.id).localeCompare(String(b.id));
+    });
+
 if (mode === "silent") {
   setInterval(() => {}, 1_000);
 } else {
@@ -244,13 +298,16 @@ if (mode === "silent") {
   // gave us and the status probe answers like the real server
   const startedAt = Date.now();
   const censusPublished = () => Date.now() - startedAt >= censusDelayMs;
-  const server = createServer((req, res) => {
+  const runtimeRows = () => {
     const extraRuntimes = scripted("FAKE_ROSETTAD_RUNTIMES", []);
-    const rows = [
+    return [
       ...discoveredRows,
       ...enrolledRows,
       ...(Array.isArray(extraRuntimes) ? extraRuntimes : []),
     ];
+  };
+  const server = createServer((req, res) => {
+    const rows = runtimeRows();
     if (req.url === "/api/status") {
       const search = searchScript();
       json(res, {
@@ -322,18 +379,13 @@ if (mode === "silent") {
     }
     if (req.url === "/api/projects") {
       logRequest(req.url);
-      const projects = new Map();
-      for (const row of sessionRows()) {
-        if (typeof row.project_id !== "string" || projects.has(row.project_id)) continue;
-        const root = typeof row.cwd === "string" ? row.cwd : `/${row.project_id}`;
-        projects.set(row.project_id, {
-          id: row.project_id,
-          name: root.split("/").filter(Boolean).at(-1) ?? row.project_id,
-          root_paths: [root],
-          git_repo: null,
-        });
-      }
-      json(res, { projects: [...projects.values()] });
+      json(res, { projects: projectRows() });
+      return;
+    }
+    // DS-6 — rosetta's bare list: the ROOTS, newest activity first
+    if (req.url === "/api/sessions") {
+      logRequest(req.url);
+      json(res, { sessions: rootsNewestFirst(sessionRows()).slice(0, 100) });
       return;
     }
     if (req.url !== undefined && req.url.startsWith("/api/sessions?")) {
@@ -343,7 +395,7 @@ if (mode === "silent") {
         .split(",")
         .filter((id) => id !== "");
       const project = url.searchParams.get("project");
-      const limit = Number(url.searchParams.get("limit") ?? "100");
+      const limit = clampLimit(url.searchParams.get("limit"), 100);
       const sessions = sessionRows().filter(
         (row) =>
           (wanted.length === 0 || wanted.includes(row.native_session_id)) &&
@@ -403,7 +455,7 @@ if (mode === "silent") {
       const q = (url.searchParams.get("q") ?? "").toLowerCase();
       const kind = url.searchParams.get("kind");
       const afterTs = url.searchParams.get("after_ts");
-      const limit = Number(url.searchParams.get("limit") ?? "300");
+      const limit = clampLimit(url.searchParams.get("limit"), 300);
       const hits = script.hits.filter((hit) => {
         if (scope.length > 0 && !scope.includes(hit.session_id)) return false;
         if (
@@ -424,6 +476,95 @@ if (mode === "silent") {
     res.statusCode = 404;
     res.end();
   });
+  // DS-6 — `/ws/meta`, the topology stream (see the header)
+  const metaSockets = new Set();
+  const wss = new WebSocketServer({ noServer: true });
+  wss.on("headers", (headers) => headers.push(`x-rosetta-protocol-version: ${protocol}`));
+  const mirror = () => ({
+    runtimes: runtimeRows(),
+    projects: projectRows(),
+    sessions: sessionRows(),
+  });
+  const metaSnapshot = () => ({ frame: "meta_snapshot", ...mirror() });
+  /** `type:id` → the row's JSON as last broadcast */
+  let lastMirror = new Map();
+  const keyed = (state) => {
+    const out = new Map();
+    for (const [type, list] of [
+      ["runtime", state.runtimes],
+      ["project", state.projects],
+      ["session", state.sessions],
+    ]) {
+      for (const row of list) {
+        if (row !== null && typeof row === "object" && typeof row.id === "string") {
+          out.set(`${type}:${row.id}`, { type, row, json: JSON.stringify(row) });
+        }
+      }
+    }
+    return out;
+  };
+  let control = { resync: undefined, drop: undefined };
+  const readControl = () => {
+    const next = scripted("FAKE_ROSETTAD_META_CONTROL", {});
+    return next !== null && typeof next === "object" ? next : {};
+  };
+  control = { ...readControl() };
+  setInterval(() => {
+    if (metaSockets.size === 0) return;
+    const now = keyed(mirror());
+    for (const [key, entry] of now) {
+      if (lastMirror.get(key)?.json === entry.json) continue;
+      // a CHANGED or NEW row: its full self, unstamped (rosetta's meta stream)
+      const frame = JSON.stringify({
+        frame: "mutation",
+        stamp: null,
+        mutation: { type: entry.type, ...entry.row },
+      });
+      for (const ws of metaSockets) ws.send(frame);
+    }
+    // a row that disappeared is sent as NOTHING — there is no removal event
+    lastMirror = now;
+    const next = readControl();
+    if (next.resync !== undefined && next.resync !== control.resync) {
+      for (const ws of metaSockets) {
+        ws.send(JSON.stringify({ frame: "resync" }));
+        ws.send(JSON.stringify(metaSnapshot()));
+      }
+    }
+    if (next.drop !== undefined && next.drop !== control.drop) {
+      for (const ws of metaSockets) ws.close(1011, "scripted drop");
+    }
+    control = { ...next };
+  }, 40).unref();
+  server.on("upgrade", (req, socket, head) => {
+    if (req.url !== "/ws/meta") {
+      socket.destroy();
+      return;
+    }
+    // rosetta's `require_local_origin`: a native client sends no Origin; a
+    // browser's must be loopback
+    const origin = req.headers.origin;
+    if (
+      origin !== undefined &&
+      !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)
+    ) {
+      socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
+      socket.destroy();
+      return;
+    }
+    // the stream is a socket, not a READ: it never enters the request log
+    // (a test that counts the reads a door made must not count the follower)
+    wss.handleUpgrade(req, socket, head, (ws) => {
+      const state = mirror();
+      ws.send(JSON.stringify({ frame: "hello", protocol_version: protocol, stamp: null }));
+      ws.send(JSON.stringify({ frame: "meta_snapshot", ...state }));
+      if (metaSockets.size === 0) lastMirror = keyed(state);
+      metaSockets.add(ws);
+      ws.on("close", () => metaSockets.delete(ws));
+      ws.on("error", () => metaSockets.delete(ws));
+    });
+  });
+
   server.listen(0, "127.0.0.1", () => {
     const port = server.address().port;
     let announce = null;

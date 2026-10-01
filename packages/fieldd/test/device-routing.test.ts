@@ -1,7 +1,7 @@
 // C5 unit-level: the peer-fieldd door branch + the `device?` routing hook on a
 // standalone ProductApi (scripted tokens, real ws clients — the tailnet-door
 // harness pattern). The two-daemon end-to-end lives in peer-link.e2e tests.
-import { CONTRACTS_VERSION, TAILNET_SCOPES } from "@vibefield/contracts";
+import { CONTRACTS_VERSION, PEER_FIELDD_SCOPES, TAILNET_SCOPES } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { RpcCallError } from "../src/native-link";
@@ -78,13 +78,17 @@ const hello = (over: Record<string, unknown> = {}) => ({
 });
 
 describe("the peer-fieldd door branch (C5)", () => {
-  it("secret path + claim → {kind:'peer-fieldd', deviceId} with the same preset", async () => {
+  it("secret path + claim → {kind:'peer-fieldd', deviceId} with the peer preset", async () => {
     const { port } = await api();
     const ws = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
     const ack = (await call(ws, 1, "system.hello", hello({ deviceId: "dev-peer-a" }))) as {
       result: { grantedScopes: string[] };
     };
-    expect(ack.result.grantedScopes).toEqual([...TAILNET_SCOPES]); // a label, never an escalation
+    // the claim is a label, never an escalation: a self peer daemon gets the
+    // PEER preset whatever it claims — the tailnet preset plus `index.search`
+    // (DS-D8, search by asking), never anything a local token holds
+    expect(ack.result.grantedScopes).toEqual([...PEER_FIELDD_SCOPES]);
+    expect(PEER_FIELDD_SCOPES).toEqual([...TAILNET_SCOPES, "index.search"]);
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; deviceId: string } };
     };

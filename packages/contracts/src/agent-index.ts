@@ -1,5 +1,13 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
+import {
+  MeshScope,
+  RowsDeviceState,
+  RowsSubscribeParams,
+  rowsDelta,
+  rowsOpen,
+  rowsSnapshot,
+} from "./rows";
 
 // AR-1 — the agent index (rosetta) and the agent runtime's distribution and
 // persona doors (puppeteer): the wire shapes behind `index.*` and `agents.*`
@@ -516,6 +524,55 @@ export const IndexSearchResponse = z
   .passthrough();
 export type IndexSearchResponse = z.infer<typeof IndexSearchResponse>;
 
+// ── DS-6: how a desktop took part in a mesh answer (the listing's and the
+// search's `sources`; the history catalog's rows are further down) ──
+
+/** A desktop's standing in a mesh LISTING (DS-L8 — asleep is a state): its
+ * rows are listed either way, and this is how a page greys them. `asOf` is
+ * when its rows were last heard (absent: never, this boot or any earlier). */
+export const IndexCatalogSource = z
+  .object({
+    device: z.string().min(1),
+    /** the roster's display name, when the roster lists the device */
+    name: z.string().optional(),
+    self: z.boolean(),
+    state: RowsDeviceState,
+    asOf: z.string().min(1).optional(),
+    /** how many of this desktop's rows the answering table holds */
+    rows: z.number().int().nonnegative(),
+  })
+  .passthrough();
+export type IndexCatalogSource = z.infer<typeof IndexCatalogSource>;
+
+/** How one desktop took part in a mesh search: `answered` (its index had an
+ * answer — possibly no hits) · `building` (it answered that it has none yet:
+ * a building projection, a daemon not ready) · `asleep` (its door did not
+ * answer, or the roster says it is away — never "nothing found") · `timeout`
+ * (asked, and silent past the fan-out budget) · `incompatible` (another
+ * contracts major, or a build without the door: not asked, DS-L9). */
+export const IndexSearchSourceState = z.enum([
+  "answered",
+  "building",
+  "asleep",
+  "timeout",
+  "incompatible",
+]);
+export type IndexSearchSourceState = z.infer<typeof IndexSearchSourceState>;
+
+export const IndexSearchSource = z
+  .object({
+    device: z.string().min(1),
+    state: IndexSearchSourceState,
+    /** how long its answer took (0 for a desktop that was not asked) */
+    tookMs: z.number().int().nonnegative(),
+    /** its own answer clipped at the limit */
+    clipped: z.boolean().optional(),
+    /** one sentence for the foot, never an origin or the query */
+    detail: z.string().optional(),
+  })
+  .passthrough();
+export type IndexSearchSource = z.infer<typeof IndexSearchSource>;
+
 // ── index.sessions / index.search (AR-5e — the history port's doors; the find
 // sheet's two questions, and AR-8's first brick) ──
 //
@@ -527,11 +584,32 @@ export type IndexSearchResponse = z.infer<typeof IndexSearchResponse>;
 // them (rosetta widens each to its subagent tree, so a hit inside a delegated
 // child still answers for the root the reader navigates to).
 
-/** `index.sessions` — what the index knows about these live runs, by the
- * provider-native id every repo joins on. 256 is rosetta's own ceiling for a
- * selector list; fieldd chunks the ask and merges the answers. */
+/** `index.sessions` — two questions on one door.
+ *
+ * The LOOKUP (AR-5e, unchanged): what the index knows about these live runs,
+ * by the provider-native id every repo joins on. 256 is rosetta's own ceiling
+ * for a selector list; fieldd chunks the ask and merges the answers.
+ *
+ * The LISTING (DS-6, design-06 §5 "History"): with no `nativeSessionIds`, a
+ * page of the history catalog, newest first by the OWNER's timestamps with
+ * the device as tie-break, paged by keyset (`cursor` is the previous answer's,
+ * opaque). `scope: "local"` (the default) lists this desktop's own index;
+ * `scope: "mesh"` lists the MERGED replica of every self desktop — a sleeping
+ * desktop's rows included, greyed by `sources` (DS-L8) — with one row per
+ * `{agent kind, native session id}` however many desktops hold it (DS-D10).
+ * `family` narrows to one repository family (DS-D9), `devices` to some
+ * desktops, `projectId` to one project (rosetta's opaque id; with `devices`
+ * naming its owner when the scope is mesh). */
 export const IndexSessionsParams = z
-  .object({ nativeSessionIds: z.array(z.string().min(1).max(256)).min(1).max(256) })
+  .object({
+    nativeSessionIds: z.array(z.string().min(1).max(256)).min(1).max(256).optional(),
+    scope: MeshScope.optional(),
+    family: z.string().min(1).max(512).optional(),
+    devices: z.array(z.string().min(1).max(256)).min(1).max(64).optional(),
+    projectId: z.string().min(1).max(256).optional(),
+    cursor: z.string().min(1).max(1024).optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+  })
   .passthrough();
 export type IndexSessionsParams = z.infer<typeof IndexSessionsParams>;
 
@@ -557,11 +635,31 @@ export const IndexSession = z
       .nullable(),
     /** rosetta's ingest state for the session's source (open vocabulary) */
     streamState: z.string(),
+    // DS-6 — the listing's columns. Absent from a lookup's rows (they never
+    // carried them), present on a listing's: which desktop the row is from,
+    // every desktop that holds the same `{agent kind, native session id}`
+    // (DS-D10; the owner of the row first), the project and its family
+    // (DS-D9), the catalog agent, when the session began.
+    device: z.string().min(1).optional(),
+    devices: z.array(z.string().min(1)).optional(),
+    projectId: z.string().min(1).optional(),
+    family: z.string().min(1).optional(),
+    provider: AgentProviderId.optional(),
+    startedAt: z.number().finite().optional(),
   })
   .passthrough();
 export type IndexSession = z.infer<typeof IndexSession>;
 
-export const IndexSessionsResult = z.object({ rows: z.array(IndexSession) }).passthrough();
+/** `index.sessions`' answer. A lookup answers `rows` alone, as it always did;
+ * a listing adds the next page's `cursor` (absent on the last page) and the
+ * standing of every desktop the page read (`sources`). */
+export const IndexSessionsResult = z
+  .object({
+    rows: z.array(IndexSession),
+    cursor: z.string().min(1).optional(),
+    sources: z.array(IndexCatalogSource).optional(),
+  })
+  .passthrough();
 export type IndexSessionsResult = z.infer<typeof IndexSessionsResult>;
 
 // ── index.recent (QL — the empty pane launcher's list; thinking-ql-empty-pane-
@@ -655,6 +753,13 @@ export const IndexSearchParams = z
     /** widen word fragments to the tokens they begin (on by default) */
     prefix: z.boolean().optional(),
     kind: z.enum(["user", "agent"]).optional(),
+    /** DS-6 — `local` (the default): this desktop's index. `mesh`: ASK every
+     * awake self desktop (search by asking, DS-D8) and merge the answers by
+     * TIME, never by score (scores are per index, §1.6); `sources` says who
+     * answered — a sleeping desktop's silence is never "nothing found". */
+    scope: MeshScope.optional(),
+    /** with `scope: "mesh"`, ask only these desktops */
+    devices: z.array(z.string().min(1).max(256)).min(1).max(64).optional(),
   })
   .passthrough();
 export type IndexSearchParams = z.infer<typeof IndexSearchParams>;
@@ -694,6 +799,8 @@ export const IndexSearchHit = z
     at: z.number().finite().optional(),
     /** matches marked with `[` and `]`, the way rosetta marks them */
     snippet: z.string(),
+    /** DS-6 — the desktop whose index answered it (a mesh search's hits) */
+    device: z.string().min(1).optional(),
   })
   .passthrough();
 export type IndexSearchHit = z.infer<typeof IndexSearchHit>;
@@ -709,9 +816,148 @@ export const IndexSearchResult = z
     state: IndexSearchState,
     hits: z.array(IndexSearchHit),
     clipped: z.boolean(),
+    /** DS-6 — a mesh search's per-desktop account (absent on a local one) */
+    sources: z.array(IndexSearchSource).optional(),
   })
   .passthrough();
 export type IndexSearchResult = z.infer<typeof IndexSearchResult>;
+
+// ── the history catalog across desktops (DS-6; design-06 §5 "History",
+// `thinking-desktop-sync-plane.md` §6.4 — DS-D8/D9/D10 RULED 2026-09-30) ──
+//
+// Each desktop is the backend of ITS OWN index (one rosettad per user root per
+// device). Its fieldd follows rosetta's topology stream (`/ws/meta`) and
+// republishes two FACT tables as rows (DS-L3, `rows.ts`): `projects` and
+// `sessions` (top-level sessions only — a delegated child is transcript
+// structure). rosetta has no machine dimension, so the DEVICE is added here,
+// where the mesh lives, and every row carries its owner (DS-L2: keyed
+// `{device, id}`; a daemon never edits another device's row, it holds a copy).
+// The stream has no resume and no removal event, so fieldd owns the journal:
+// it assigns the revisions and finds removals by diffing a fresh snapshot.
+//
+// Peers list once and watch from their cursor (`index.catalog.subscribe`,
+// self peers only); a window or the phone never reads these tables raw — it
+// pages the MERGED replica through `index.projects` / `index.sessions`
+// (DS-L4: the daemon aggregates, a client never merges).
+
+export const INDEX_CATALOG_TABLES = ["projects", "sessions"] as const;
+export const IndexCatalogTable = z.enum(INDEX_CATALOG_TABLES);
+export type IndexCatalogTable = (typeof INDEX_CATALOG_TABLES)[number];
+
+/** One project as its OWNER republishes it: rosetta's project (the opaque id
+ * is a hash of a LOCAL path — identity stays `{device, path}`, D30), plus the
+ * repository FAMILY VibeField computes from `git_repo` (DS-D9: host
+ * lowercased, path without `.git`, scheme and userinfo dropped; absent when
+ * there is no remote, or the remote is only a folder) and two figures the
+ * owner derives from its own sessions. */
+export const IndexCatalogProject = z
+  .object({
+    device: z.string().min(1),
+    /** rosetta's opaque project id — the row's key within its owner's table */
+    projectId: z.string().min(1),
+    name: z.string(),
+    /** every root the owner's index has seen the project at (its identity
+     * root first, then each worktree's) — paths on THAT desktop */
+    rootPaths: z.array(z.string()),
+    /** rosetta's `git_repo`: the origin remote as rosetta sanitized it
+     * (display metadata — ssh and https spellings stay apart here) */
+    gitRepo: z.string().optional(),
+    family: z.string().min(1).optional(),
+    /** top-level sessions the owner holds for it */
+    sessionCount: z.number().int().nonnegative(),
+    /** epoch ms, the owner's clock: the newest of its sessions' activity
+     * (absent while none has any) */
+    lastActivityAt: z.number().finite().optional(),
+  })
+  .passthrough();
+export type IndexCatalogProject = z.infer<typeof IndexCatalogProject>;
+
+/** One top-level session as its OWNER republishes it — `IndexSession`'s
+ * columns keyed by rosetta's canonical id within the owner's table, with the
+ * agent named twice: rosetta's `kind` (the seam column the duplicate rule
+ * joins on, DS-D10) and the catalog `provider` it maps to (what a surface
+ * shows; absent when no catalog row maps the kind). */
+export const IndexCatalogSession = z
+  .object({
+    device: z.string().min(1),
+    sessionId: z.string().min(1),
+    nativeSessionId: z.string(),
+    kind: AgentKind.optional(),
+    provider: AgentProviderId.optional(),
+    projectId: z.string().min(1).optional(),
+    title: z.string().optional(),
+    summary: z.string().optional(),
+    cwd: z.string().optional(),
+    startedAt: z.number().finite().optional(),
+    updatedAt: z.number().finite().optional(),
+    activity: z
+      .object({ firstAt: z.number().finite(), lastAt: z.number().finite() })
+      .passthrough()
+      .nullable(),
+    streamState: z.string(),
+  })
+  .passthrough();
+export type IndexCatalogSession = z.infer<typeof IndexCatalogSession>;
+
+/** `index.catalog.subscribe` — one of a desktop's two tables, as rows (the
+ * base's `rowsOpen` answer, then `.delta` / `.snapshot` frames; a caught-up
+ * reader hears a periodic key-digest heartbeat — a delta with `since ===
+ * revision`, no rows and a `digest` member). SELF PEERS ONLY: it is the
+ * peer-to-peer replication door, admitted to a `peer-fieldd` principal and no
+ * other (titles, summaries and folders are the history's content —
+ * `index.search` consent — and a window pages the merged replica instead). */
+export const IndexCatalogSubscribeParams = RowsSubscribeParams.extend({
+  table: IndexCatalogTable,
+}).passthrough();
+export type IndexCatalogSubscribeParams = z.infer<typeof IndexCatalogSubscribeParams>;
+
+/** Either table's row, for a reader that holds both in one channel. */
+export const IndexCatalogRow = z.union([IndexCatalogProject, IndexCatalogSession]);
+export type IndexCatalogRow = z.infer<typeof IndexCatalogRow>;
+
+/** The catalog door's wire, with its rows typed (the base's shapes): the open
+ * answer, a `.delta` frame (a heartbeat is one with `since === revision` and
+ * a `digest`), and a `.snapshot` page — which also says WHICH page of how
+ * many (`page`, `pages`; passthrough over the base) so a reader can assemble
+ * pages that arrive out of order. */
+export const IndexCatalogOpen = rowsOpen(IndexCatalogRow);
+export const IndexCatalogDelta = rowsDelta(IndexCatalogRow);
+export const IndexCatalogSnapshotPage = rowsSnapshot(IndexCatalogRow);
+
+/** `index.projects` — a page of projects, newest activity first (the owner's
+ * clock; the device, then the id, as tie-breaks), by keyset. `scope` as
+ * `index.sessions`' listing; `family` narrows to one repository family. A
+ * project is never merged across desktops — identity is `{device, path}` —
+ * the family is what groups them. */
+export const IndexProjectsParams = z
+  .object({
+    scope: MeshScope.optional(),
+    family: z.string().min(1).max(512).optional(),
+    devices: z.array(z.string().min(1).max(256)).min(1).max(64).optional(),
+    cursor: z.string().min(1).max(1024).optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+  })
+  .passthrough();
+export type IndexProjectsParams = z.infer<typeof IndexProjectsParams>;
+
+export const IndexProjectsResult = z
+  .object({
+    rows: z.array(IndexCatalogProject),
+    cursor: z.string().min(1).optional(),
+    sources: z.array(IndexCatalogSource),
+  })
+  .passthrough();
+export type IndexProjectsResult = z.infer<typeof IndexProjectsResult>;
+
+/** `index.changes.subscribe` — invalidation pings for a visible History page:
+ * a rows subscription whose rows are always EMPTY and whose revision moves
+ * whenever the answering scope's catalog moves (a table on any desktop, or a
+ * desktop's standing). A reader re-asks the page it shows; the ping says
+ * which `tables` and `devices` moved, as a hint. */
+export const IndexChangesSubscribeParams = RowsSubscribeParams.extend({
+  scope: MeshScope.optional(),
+}).passthrough();
+export type IndexChangesSubscribeParams = z.infer<typeof IndexChangesSubscribeParams>;
 
 // ── agents.* (the distribution and persona doors; handlers land at AR-2 with
 // puppeteer's first import — these rows are the contract they will satisfy) ──

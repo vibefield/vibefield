@@ -1366,14 +1366,14 @@ export const METHODS: MethodDef[] = [
     method: "index.discoveries",
     scope: "index.read",
     idempotent: true,
-    locality: "federate",
+    locality: "local",
   }),
   defineMethod({
     surface: "product",
     method: "index.status",
     scope: "index.read",
     idempotent: true,
-    locality: "federate",
+    locality: "local",
   }),
   // AR-5e — the find sheet's two questions: `sessions` is what the index
   // knows about the live runs (by provider-native id) and `search` is one
@@ -1384,10 +1384,19 @@ export const METHODS: MethodDef[] = [
   // answering "no matches". AR-5b: they ride `index.search`, their own scope,
   // not the census scope `index.read` a plugin may hold for the roll call —
   // a search over every consented transcript is a different consent.
-  // locality "local" like the rest of the family — the history a person can
-  // search is the one indexed on the device in front of them. *DS-2
-  // (2026-09-30): `federate` — each device's history is searched where it is
-  // indexed, by asking it (DS-D8); the scope above is unchanged.*
+  // DS-6 (2026-09-30, DS-D8 RULED) — `federate`, no longer `local`: search is
+  // BY ASKING, so a self peer's daemon must be served both (the D36 wall
+  // refuses every `local` method to a peer-fieldd principal before its scope
+  // is read), and a `device` routes either to the desktop that holds the
+  // history. Each still defaults to `scope: "local"` (this desktop's index);
+  // `scope: "mesh"` pages the merged replica (`sessions`) or asks every awake
+  // self desktop (`search`). A peer is granted `index.search` by its own
+  // preset (PEER_FIELDD_SCOPES); guests stay refused at the registry, and the
+  // phone's preset is unchanged (SP-D13).
+  // At the landing of 2026-10-01 the two lanes' censuses were reconciled: DS-2 had
+  // moved every index READ to `federate`; DS-6's doors are the index rows that
+  // leave the device — `index.discoveries`, `index.status` and `index.recent`
+  // (the census, the status, the launcher's list) stay this desktop's, `local`.
   defineMethod({
     surface: "product",
     method: "index.sessions",
@@ -1402,6 +1411,37 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+  // DS-6 — the history catalog across desktops (design-06 §5): `projects`
+  // pages projects (rosetta's, with the repository family, DS-D9) newest
+  // activity first, this desktop's or the merged replica's; the catalog door
+  // is the PEER replication stream (rows, DS-L3; its handler admits only a
+  // peer-fieldd principal — a window pages the merged replica instead);
+  // `changes` is the invalidation ping a visible History page listens to. All
+  // three read the history's content (titles, folders, project names), so all
+  // ride `index.search`, the consent AR-5b gave that content.
+  defineMethod({
+    surface: "product",
+    method: "index.projects",
+    scope: "index.search",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.catalog.subscribe",
+    scope: "index.search",
+    idempotent: true,
+    locality: "stream",
+    subscription: true,
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.changes.subscribe",
+    scope: "index.search",
+    idempotent: true,
+    locality: "stream",
+    subscription: true,
+  }),
   // QL (thinking-ql-empty-pane-launcher.md, QL-D9) — the empty pane
   // launcher's list: a folder's past sessions (its rosetta project) or every
   // project's, newest first. The same consent as the two above — titles,
@@ -1413,7 +1453,7 @@ export const METHODS: MethodDef[] = [
     method: "index.recent",
     scope: "index.search",
     idempotent: true,
-    locality: "federate",
+    locality: "local",
   }),
   defineMethod({
     surface: "product",

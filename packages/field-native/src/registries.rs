@@ -177,6 +177,7 @@ pub mod layout {
     pub const INDEX_DB: &[&str] = &["index", "rosetta.db"];
     pub const INDEX_DAEMONS_DIR: &[&str] = &["index", "daemons"];
     pub const INDEX_ENROLLMENT_FILE: &[&str] = &["index", "enrollment.json"];
+    pub const MESH_CATALOG_DIR: &[&str] = &["mesh", "catalog"];
     pub const AGENTS_DIR: &[&str] = &["agents"];
     pub const AGENT_PROFILES_FILE: &[&str] = &["agents", "profiles.json"];
     pub const AGENT_PROFILE_SETS_DIR: &[&str] = &["agents", "profiles"];
@@ -224,6 +225,7 @@ pub mod layout {
         ("INDEX_DB", INDEX_DB),
         ("INDEX_DAEMONS_DIR", INDEX_DAEMONS_DIR),
         ("INDEX_ENROLLMENT_FILE", INDEX_ENROLLMENT_FILE),
+        ("MESH_CATALOG_DIR", MESH_CATALOG_DIR),
         ("AGENTS_DIR", AGENTS_DIR),
         ("AGENT_PROFILES_FILE", AGENT_PROFILES_FILE),
         ("AGENT_PROFILE_SETS_DIR", AGENT_PROFILE_SETS_DIR),

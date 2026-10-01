@@ -217,6 +217,32 @@ export const ROWS = {
   DIGEST_ALGORITHM: "sha256",
 } as const;
 
+/** DS-6 — history across desktops (design-06 §5 "History", §8 "Limits"; the
+ * catalog's own page, journal and digest numbers are ROWS'). rosetta's
+ * `/ws/meta` has no resume and no removal event, so the follower re-takes a
+ * fresh snapshot every META_RESNAPSHOT_MS — a session rosetta drops without a
+ * word leaves the catalog within that cadence, never sooner — and folds the
+ * stream's row upserts into one frame per table per META_BATCH_MS. A mesh
+ * search waits SEARCH_FANOUT_TIMEOUT_MS for each awake desktop, then answers
+ * with what it has (the silent one reads `timeout`, never "nothing found").
+ * A replica persists PERSIST_DEBOUNCE_MS after its last change; one that hears
+ * nothing — not even the digest heartbeat — for STALE_AFTER_MS while its peer
+ * is on the roster reads `stale`. */
+export const INDEX_MESH = {
+  SEARCH_FANOUT_TIMEOUT_MS: 5_000,
+  META_RESNAPSHOT_MS: 10 * 60 * 1000,
+  META_BATCH_MS: 50,
+  META_RECONNECT_MIN_MS: 500,
+  META_RECONNECT_MAX_MS: 30_000,
+  PERSIST_DEBOUNCE_MS: 1_000,
+  STALE_AFTER_MS: 150_000,
+  REPLICA_RETRY_MIN_MS: 1_000,
+  REPLICA_RETRY_MAX_MS: 60_000,
+  PAGE_DEFAULT_LIMIT: 100,
+  PAGE_MAX_LIMIT: 500,
+  CHANGES_MIN_INTERVAL_MS: 500,
+} as const;
+
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded
@@ -508,6 +534,18 @@ export const TAILNET_SCOPES: readonly Scope[] = [
  * guest surface grows from the `guestOk` method column, never from scopes. */
 export const TAILNET_GUEST_SCOPES: readonly Scope[] = [] as const;
 
+/** DS-D8 (search by asking; design-06 §5 "History") — the grant a SELF PEER
+ * DAEMON (the `peer-fieldd` principal) is minted at the tailnet door: the
+ * tailnet preset plus `index.search`, so one of a person's desktops can ask
+ * another's index — and replicate its history catalog — on that person's
+ * behalf. The forwarding daemon checked its OWN caller's `index.search` before
+ * it asked (the scope check precedes routing), and the owner still authorizes
+ * the carrier by its own rule (DS-L7). DERIVED from the preset, never a copy
+ * of it, so the two can only differ by this one scope. The phone's `tailnet`
+ * principal keeps `TAILNET_SCOPES`: whether a phone may search is SP-D13's,
+ * still open. */
+export const PEER_FIELDD_SCOPES: readonly Scope[] = [...TAILNET_SCOPES, "index.search"] as const;
+
 /** Socket file names under the daemon run dirs; paths are stable across restarts (external-mode law). */
 export const SOCKETS = {
   FIELDD: "fieldd.sock",
@@ -679,6 +717,12 @@ export const LAYOUT = {
    * BEFORE every rosettad spawn — and the same file is the daemon's
    * `--enroll` input (rosetta ignores the keys only VibeField reads). */
   INDEX_ENROLLMENT_FILE: ["index", "enrollment.json"],
+  /** DS-6 — the history catalog's REPLICAS of this user's other desktops
+   * (design-06 §5): one `<device>.<table>.json` per `{device, table}` — the
+   * rows as last heard and the cursor to resume from — kept while the desktop
+   * sleeps (DS-L8), replaced on a reset. Never this desktop's own rows: those
+   * are rosetta's, followed live. */
+  MESH_CATALOG_DIR: ["mesh", "catalog"],
   /** AR-1 (AR-D18/D20) — this user's personas: puppeteer's profile registry
    * (`ProfileRegistrySnapshot`, through fieldd's injected store) and the
    * managed roots beneath it (0700 — the agent's own data folder, bound at

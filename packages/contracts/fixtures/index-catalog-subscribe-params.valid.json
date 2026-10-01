@@ -1,0 +1,6 @@
+{
+  "//": "DS-6 — a self peer's replica asking for one table from the cursor it kept (it resumes when the owner's journal still covers it, else resets).",
+  "table": "sessions",
+  "since": { "epoch": "catalog-3c8e1f62-2b0d-4f7a-9d55-0e7b1a4c9f10", "revision": 418 },
+  "minIntervalMs": 250
+}

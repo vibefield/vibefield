@@ -1,0 +1,15 @@
+{
+  "//": "DS-6 — one top-level `sessions` row as its OWNER republishes it: IndexSession's columns keyed by rosetta's canonical id, the agent named twice (rosetta's kind — the duplicate rule's join column, DS-D10 — and the catalog id it maps to), and the project it belongs to.",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "sessionId": "ses-9b2f0c7d",
+  "nativeSessionId": "665e3e71-7c12-4810-925a-e8b92cb6f29d",
+  "kind": "claude-code",
+  "provider": "claude",
+  "projectId": "p-4f1c2a9e",
+  "title": "the history catalog across desktops",
+  "cwd": "/Users/me/Projects/vibe-field",
+  "startedAt": 1759270000000,
+  "updatedAt": 1759276790000,
+  "activity": { "firstAt": 1759270000000, "lastAt": 1759276800000 },
+  "streamState": "indexed"
+}

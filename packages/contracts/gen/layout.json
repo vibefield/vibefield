@@ -108,6 +108,10 @@
     "index",
     "enrollment.json"
   ],
+  "MESH_CATALOG_DIR": [
+    "mesh",
+    "catalog"
+  ],
   "AGENTS_DIR": [
     "agents"
   ],
