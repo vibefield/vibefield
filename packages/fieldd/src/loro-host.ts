@@ -341,6 +341,89 @@ export class HostedDoc {
   }
 }
 
+/** DS-5d — S4, THE RE-BOOTSTRAP's carry. `payload` is a fresh holder's base
+ * (a full or shallow snapshot, at a newer epoch); `old` is what this desktop
+ * held at its older one. The new host is the base plus every op of `old` the
+ * base can take — the RESIDUAL, one update from the base's version. An op
+ * whose own base lies below the new root cannot be taken: it was made
+ * concurrent with history the base folded, and design-06 §4 names it the
+ * known loss (the watermark exists so that a holder it waited for has none).
+ * What it cannot take is salvaged per peer, so one such op does not cost the
+ * rest. Every trial runs in a THROWAWAY doc, because on loro-crdt 1.13.8 such
+ * an import panics the doc it runs in; the doc returned is rebuilt clean from
+ * exactly base + residual — what will be persisted. */
+export function rebaseOnto(
+  payload: Uint8Array,
+  old: HostedDoc | null,
+):
+  | { ok: true; doc: LoroDoc; residual: Uint8Array | null; lostOps: number; lostPeers: string[] }
+  | { ok: false } {
+  const load = (extra: readonly Uint8Array[]): LoroDoc | null => {
+    const doc = new LoroDoc();
+    try {
+      doc.import(payload);
+      for (const bytes of extra) doc.import(bytes);
+      return doc;
+    } catch {
+      return null; // a refusal, or a panic that leaves `doc` dead: either way, not this one
+    }
+  };
+  const exported = (make: () => Uint8Array): Uint8Array | null => {
+    try {
+      return make();
+    } catch {
+      return null;
+    }
+  };
+  const base = load([]);
+  if (base === null) return { ok: false };
+  const baseVersion = base.oplogVersion();
+  if (old === null || !old.isAheadOf(baseVersion)) {
+    return { ok: true, doc: base, residual: null, lostOps: 0, lostPeers: [] };
+  }
+  let kept: Uint8Array[] = [];
+  const whole = exported(() => old.exportSince(baseVersion));
+  let carried = whole === null ? null : load([whole]);
+  if (carried !== null && whole !== null) {
+    kept = [whole];
+  } else {
+    for (const [peer, end] of old.version().toJSON()) {
+      const start = baseVersion.get(peer) ?? 0;
+      if (end <= start) continue;
+      const span = exported(() =>
+        old.doc.export({
+          mode: "updates-in-range",
+          spans: [{ id: { peer, counter: start }, len: end - start }],
+        }),
+      );
+      if (span !== null && load([...kept, span]) !== null) kept.push(span);
+    }
+    carried = load(kept);
+    if (carried === null) {
+      kept = [];
+      carried = base;
+    }
+  }
+  const residual = covers(baseVersion, carried.oplogVersion())
+    ? null
+    : carried.export({ mode: "update", from: baseVersion });
+  // What `old` held that the carry did not land — ops that never applied
+  // (pending on a lost base included) are the loss, counted per peer.
+  const landed = carried.oplogVersion();
+  let lostOps = 0;
+  const lostPeers: string[] = [];
+  for (const [peer, end] of old.version().toJSON()) {
+    const have = landed.get(peer) ?? 0;
+    if (have < end) {
+      lostOps += end - have;
+      lostPeers.push(String(peer));
+    }
+  }
+  const clean = load(residual === null ? [] : [residual]);
+  if (clean === null) return { ok: true, doc: base, residual: null, lostOps, lostPeers };
+  return { ok: true, doc: clean, residual, lostOps, lostPeers: lostPeers.sort() };
+}
+
 /** DS-5d — did this throw come from a PANIC inside loro-crdt's wasm (a trap,
  * `RuntimeError: unreachable`) rather than one of Loro's own refusals? Measured
  * on 1.13.8: importing into a shallow doc an op whose base lies below its root

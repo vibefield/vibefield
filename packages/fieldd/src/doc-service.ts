@@ -38,6 +38,7 @@ import {
   meetVersions,
   mergeVersions,
   provenVersion,
+  rebaseOnto,
   snapshotVersion,
   versionToBase64,
   watermark,
@@ -119,7 +120,11 @@ export type RemoteRecordOutcome =
         /** DS-5 — held by the host as pending: its causal base has not arrived. */
         | "pending"
         /** DS-5 — bytes the host could not read as Loro at all. */
-        | "undecodable";
+        | "undecodable"
+        /** DS-5d — an S4 answer this desktop will take once the window open on
+         * the canvas closes (it cannot vouch that the window's next edit would
+         * land on the new base); asked for again then. */
+        | "rebootstrap-deferred";
     };
 
 /** DS-5 — what the host needs from the service that OWNS a system document
@@ -230,6 +235,9 @@ export interface HostAnswer {
   snapshot: Uint8Array | null;
   /** A Loro update from the holder's version (or the checkpoint's). */
   update: Uint8Array | null;
+  /** DS-5d — an S4 ANSWER: the holder greeted with an OLDER epoch, so it is
+   * sent this desktop's base and the records since, to re-bootstrap from. */
+  rebootstrap?: true;
 }
 
 export interface DocumentServiceOptions {
@@ -404,6 +412,11 @@ export class DocumentService {
    * after a compaction. Kept across a window's reconnect, as the lane keeps
    * its proof. */
   private readonly servedEpoch = new Map<string, number>();
+  /** DS-5d — canvases whose S4 answer waited for a window to close. */
+  private readonly rebootstrapDeferred = new Set<string>();
+  /** DS-5d — the newest library epoch already announced as `behind`, per
+   * canvas: a library change says it once, not on every reconcile. */
+  private readonly behindNotified = new Map<string, number>();
 
   constructor(opts: DocumentServiceOptions) {
     this.dataDir = opts.dataDir;
@@ -790,8 +803,22 @@ export class DocumentService {
     }
     const change: CatalogChange = { adopted: [], removed: [] };
     let dirty = false;
+    const behind: string[] = [];
     for (const row of known.values()) {
       const local = this.registry.get(row.docId);
+      // DS-5d — the library names a newer epoch than this desktop holds: a
+      // fresher holder has compacted, and its base is this desktop's to ask
+      // for (S4). Said once per epoch, not on every reconcile.
+      if (
+        local !== undefined &&
+        local.deletedAt === undefined &&
+        row.tombstone === undefined &&
+        row.baseEpoch > local.baseEpoch &&
+        (this.behindNotified.get(row.docId) ?? -1) < row.baseEpoch
+      ) {
+        this.behindNotified.set(row.docId, row.baseEpoch);
+        behind.push(row.docId);
+      }
       if (row.tombstone !== undefined) {
         if (local !== undefined && local.deletedAt === undefined) {
           this.registry.set(row.docId, { ...local, deletedAt: row.tombstone });
@@ -839,6 +866,7 @@ export class DocumentService {
         dirty = true;
       }
     }
+    for (const docId of behind) this.emitEpoch(docId, "behind");
     if (!dirty) return;
     try {
       await this.persistRegistry();
@@ -965,10 +993,12 @@ export class DocumentService {
 
   writerDetached(docId: string): void {
     this.writers.delete(docId);
-    // DS-5d — the window's floor leaves with it; a compaction it held runs.
+    // DS-5d — the window's floor leaves with it; a compaction it held runs,
+    // and a fresher base it held off is asked for again.
     this.windowFloors.delete(docId);
     this.holdingsChanged();
     if (this.wantsCompaction.has(docId)) this.requestCompaction(docId);
+    if (this.rebootstrapDeferred.delete(docId)) this.emitEpoch(docId, "behind");
   }
 
   /** DS-5d — a window proved it holds `bytes`' version (a save it made). */
@@ -1677,6 +1707,15 @@ export class DocumentService {
       // A doc with no content is BOOTSTRAPPED by a peer's checkpoint, as ever —
       // and a liftable one puts it straight into Loro custody (writeDocNow).
       if (!this.hasStoredDoc(docId)) {
+        // DS-5d — a bootstrap takes the lineage it is handed: the base's epoch.
+        // Never one older than this desktop already knows of — the library
+        // named a newer one, and a fresher holder's base is on its way.
+        if (record.meta.baseEpoch < entry.baseEpoch) {
+          return { applied: false, reason: "epoch-mismatch" };
+        }
+        if (record.meta.baseEpoch > entry.baseEpoch) {
+          this.registry.set(docId, { ...entry, baseEpoch: record.meta.baseEpoch });
+        }
         const meta = await this.writeDocNow(
           docId,
           record.payload,
@@ -1703,6 +1742,13 @@ export class DocumentService {
       // content is exactly the across-the-boundary apply S4 forbids (latent
       // until compaction bumps an epoch). A doc with NO content still takes
       // one above — that is a (re-)bootstrap, which is what S4 asks for.
+      // DS-5d — S4's ANSWER: a holder at a newer epoch, answering this
+      // desktop's older-epoch greeting with its base. The one cross-epoch
+      // checkpoint that is taken — not merged across the boundary, but
+      // re-bootstrapped from (rebootstrapNow). Unmarked, the fence holds.
+      if (record.meta.rebootstrap === true && record.meta.baseEpoch > entry.baseEpoch) {
+        return this.rebootstrapNow(entry, record);
+      }
       if (record.meta.baseEpoch !== entry.baseEpoch) {
         return { applied: false, reason: "epoch-mismatch" };
       }
@@ -2034,6 +2080,162 @@ export class DocumentService {
     };
   }
 
+  /** DS-5d — S4, THE RE-BOOTSTRAP (design-06 §4). A holder at a newer epoch
+   * answered this desktop's older-epoch greeting with its base (a shallow
+   * snapshot once compacted) and, behind it, the records since. This desktop
+   * drops its copy and takes the base — carrying over every op of its own
+   * copy the base can take, as ONE residual record (rebaseOnto). An op it
+   * cannot take was made concurrent with history the base folded: the known
+   * loss design-06 accepts, which the watermark exists to make empty for every
+   * holder it waited for. Logged with its count; nothing is panicked into the
+   * host (every trial runs in a throwaway doc).
+   *
+   * An open window: taken now only if what the window provably holds covers
+   * the new root — then its next edit lands on the base, and its epoch stamp
+   * moves with it. Otherwise deferred until the window closes, then asked for
+   * again (writerDetached says `behind`). On the per-doc chain. */
+  private async rebootstrapNow(
+    entry: DocRegistryEntry,
+    record: DocSyncRecord,
+  ): Promise<RemoteRecordOutcome> {
+    const docId = entry.docId;
+    const lifted = liftIce1(record.payload);
+    if (!lifted.ok || !isSnapshotPayload(lifted.payload)) {
+      return { applied: false, reason: "undecodable" };
+    }
+    const old = await this.hostedNow(docId);
+    const rebased = rebaseOnto(lifted.payload, old);
+    if (!rebased.ok) return { applied: false, reason: "undecodable" };
+    if (this.writers.has(docId)) {
+      const floor = this.windowFloors.get(docId);
+      const root = new HostedDoc(docId, rebased.doc).rootVersion();
+      if (floor === undefined || !covers(floor, root)) {
+        this.rebootstrapDeferred.add(docId);
+        this.logger
+          .child({ docId })
+          .info(
+            "fieldd.docs.rebootstrap_deferred",
+            "A fresher base waits for the window open on this canvas to close",
+            { baseEpoch: record.meta.baseEpoch },
+          );
+        return { applied: false, reason: "rebootstrap-deferred" };
+      }
+    }
+    const baseEpoch = record.meta.baseEpoch;
+    const committedAt = this.now();
+    const revisionId = randomUUID();
+    const carried: JournalRevision | null =
+      rebased.residual === null
+        ? null
+        : (() => {
+            const id = randomUUID();
+            return {
+              revisionId: id,
+              file: `${id}.loro`,
+              contentId: contentIdOf(rebased.residual),
+              committedAt,
+              savedAt: record.meta.savedAt,
+              byteLength: rebased.residual.byteLength,
+            };
+          })();
+    const next: CurrentRevision = {
+      revisionId,
+      file: `${revisionId}.ice1`,
+      contentId: contentIdOf(record.payload),
+      committedAt,
+      engineSchema: record.meta.engineSchema,
+      savedAt: record.meta.savedAt,
+      byteLength: record.payload.byteLength,
+      baseEpoch,
+      updates: carried === null ? [] : [carried],
+    };
+    let previous: CurrentRevision | null = null;
+    try {
+      previous = await this.readCurrent(docId);
+    } catch {
+      // the new commit repairs a corrupt pointer
+    }
+    const dir = join(this.docsDir, docId);
+    const revisions = this.revisionsDir(docId);
+    try {
+      await mkdir(revisions, { recursive: true });
+      if (carried !== null && rebased.residual !== null) {
+        await atomicWrite(revisions, carried.file, rebased.residual);
+      }
+      await atomicWrite(revisions, next.file, record.payload);
+      // `current.json` is the commit point: until it lands, the old copy stands.
+      await atomicWrite(dir, "current.json", `${JSON.stringify(next, null, 2)}\n`);
+    } catch (err) {
+      throw this.storageError("re-bootstrap", err);
+    }
+    this.host.set(new HostedDoc(docId, rebased.doc));
+    this.opaque.delete(docId);
+    this.touch(docId);
+    this.failedTrims.delete(docId);
+    this.rebootstrapDeferred.delete(docId);
+    // A window that stayed open sits on the new base now (its floor covers the root).
+    if (this.writers.has(docId)) this.servedEpoch.set(docId, baseEpoch);
+    this.commitRegistryColumns(docId, entry, {
+      updatedAt: committedAt,
+      engineSchema: record.meta.engineSchema,
+      sizeBytes: storedSize(next),
+    });
+    this.registry.set(docId, { ...(this.registry.get(docId) ?? entry), baseEpoch });
+    try {
+      await this.persistRegistry();
+    } catch (err) {
+      // The revision is committed; boot reconciliation takes the epoch from it.
+      this.logger.error(
+        "fieldd.docs.rebootstrap_registry_failed",
+        "The registry did not record a re-bootstrap; the stored revision did",
+        err,
+      );
+    }
+    if (previous !== null) {
+      for (const file of [previous.file, ...previous.updates.map((update) => update.file)]) {
+        if (file === next.file || file === carried?.file) continue;
+        void rm(join(revisions, file), { force: true }).catch(() => {});
+      }
+    }
+    if (rebased.lostOps > 0) {
+      this.logger
+        .child({ docId })
+        .warn(
+          "fieldd.docs.rebootstrap_lost",
+          "A re-bootstrap could not carry ops made concurrent with the trimmed history",
+          { baseEpoch, lostOps: rebased.lostOps, lostPeers: rebased.lostPeers.length },
+        );
+    }
+    this.logger.child({ docId }).info("fieldd.docs.rebootstrapped", "A canvas re-bootstrapped", {
+      baseEpoch,
+      carriedBytes: rebased.residual?.byteLength ?? 0,
+      lostOps: rebased.lostOps,
+    });
+    const meta = currentMeta(next);
+    // What this desktop carried over is content its peers may lack: it goes
+    // out like a local commit, at the new epoch.
+    if (rebased.residual !== null) {
+      this.announce({
+        docId,
+        origin: "local",
+        kind: "update",
+        payload: rebased.residual,
+        meta,
+        baseEpoch,
+      });
+    }
+    this.peerMerged(docId);
+    this.emitEpoch(docId, "rebootstrapped");
+    this.holdingsChanged();
+    return { applied: true, meta };
+  }
+
+  /** DS-5d — this desktop's epoch for a canvas (a system document's is 0). */
+  baseEpochOf(docId: string): number | undefined {
+    if (this.system.has(docId)) return 0;
+    return this.registry.get(docId)?.baseEpoch;
+  }
+
   // ---- open windows (DS-5, §1.2 defect 2) ----
 
   /** Fires after a peer's bytes changed a canvas — what an open window on
@@ -2156,7 +2358,8 @@ export class DocumentService {
     }
     return this.serialize(docId, async () => {
       const entry = this.registry.get(docId);
-      if (entry === undefined || theirs.baseEpoch !== entry.baseEpoch) return null;
+      // A NEWER epoch than ours: we are the stale side, nothing to answer.
+      if (entry === undefined || theirs.baseEpoch > entry.baseEpoch) return null;
       const hosted = await this.hostedNow(docId);
       if (hosted === null) return null;
       const current = await this.readCurrent(docId);
@@ -2166,7 +2369,11 @@ export class DocumentService {
         engineSchema: current.engineSchema,
         savedAt: current.savedAt,
       };
-      if (!theirs.hasCheckpoint) {
+      // DS-5d — S4: an OLDER epoch is never answered with a delta across the
+      // compaction (S4's whole law); it is answered with this desktop's BASE
+      // and the records since, and re-bootstraps from them.
+      const s4 = theirs.baseEpoch < entry.baseEpoch;
+      if (!theirs.hasCheckpoint || s4) {
         const checkpoint = new Uint8Array(
           await readFile(join(this.revisionsDir(docId), current.file)),
         );
@@ -2177,6 +2384,7 @@ export class DocumentService {
           meta,
           snapshot: checkpoint,
           update: hosted.isAheadOf(base) ? hosted.exportSince(base) : null,
+          ...(s4 ? { rebootstrap: true as const } : {}),
         };
       }
       const version = decodeVersion(theirs.version);

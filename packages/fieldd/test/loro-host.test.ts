@@ -17,6 +17,7 @@ import {
   loroBlobMode,
   meetVersions,
   provenVersion,
+  rebaseOnto,
   snapshotVersion,
   updateCarriesChanges,
   versionFromBase64,
@@ -336,5 +337,58 @@ describe("DS-5d — a compacted doc: its root, what it can answer, and the trial
     expect(fine.ok).toBe(true);
     // A point it does not hold is no point to trim at.
     expect(hosted.compactTo(vvOf({ 9: 1 }))).toMatchObject({ ok: false, reason: "not-held" });
+  });
+});
+
+describe("DS-5d — S4's carry (rebaseOnto)", () => {
+  it("carries every op the fresh base can take; one made below its root costs only itself", () => {
+    // The fresh holder's base: peer 1's line, compacted at its head (1:1).
+    const line = new LoroDoc();
+    line.setPeerId(1n);
+    line.getMap("board").set("base", "b");
+    line.commit();
+    const atBase = line.oplogVersion();
+    line.getMap("board").set("z", "Z");
+    line.commit();
+    const base = line.export({ mode: "shallow-snapshot", frontiers: line.oplogFrontiers() });
+    // The old copy: x (peer 2) made on 1:0 — concurrent with z, below the
+    // root — and y (peer 3) made on top of z.
+    const old = new LoroDoc();
+    old.import(line.export({ mode: "snapshot" }));
+    const twoAtBase = new LoroDoc();
+    twoAtBase.setPeerId(2n);
+    twoAtBase.import(
+      line.export({ mode: "updates-in-range", spans: [{ id: { peer: "1", counter: 0 }, len: 1 }] }),
+    );
+    expect(json(twoAtBase.oplogVersion())).toEqual(json(atBase));
+    twoAtBase.getMap("board").set("x", "lost");
+    twoAtBase.commit();
+    old.import(twoAtBase.export({ mode: "update", from: atBase }));
+    const three = new LoroDoc();
+    three.setPeerId(3n);
+    three.import(line.export({ mode: "snapshot" }));
+    three.getMap("board").set("y", "carried");
+    three.commit();
+    old.import(three.export({ mode: "update", from: line.oplogVersion() }));
+    expect(old.getMap("board").toJSON()).toEqual({ base: "b", z: "Z", x: "lost", y: "carried" });
+
+    const rebased = rebaseOnto(base, new HostedDoc("doc", old));
+    expect(rebased.ok).toBe(true);
+    if (!rebased.ok) return;
+    expect(rebased.doc.getMap("board").toJSON()).toEqual({ base: "b", z: "Z", y: "carried" });
+    expect(rebased.lostOps).toBe(1);
+    expect(rebased.lostPeers).toEqual(["2"]);
+    // The residual is exactly what landed, and replays on the base.
+    const replayed = new LoroDoc();
+    replayed.import(base);
+    replayed.import(rebased.residual as Uint8Array);
+    expect(replayed.getMap("board").toJSON()).toEqual({ base: "b", z: "Z", y: "carried" });
+    // Nothing old held is carried when the base already holds it all.
+    expect(rebaseOnto(base, new HostedDoc("same", line))).toMatchObject({
+      ok: true,
+      residual: null,
+      lostOps: 0,
+    });
+    expect(rebaseOnto(new Uint8Array([1, 2, 3]), null)).toEqual({ ok: false });
   });
 });

@@ -344,6 +344,10 @@ export class DocSyncService {
    * many times it has been. Derived each beat from the facts (an answer owed,
    * a send that failed), so a pair that recovers leaves it on its own. */
   readonly #regreets = new Map<string, { at: number; attempt: number }>();
+  /** DS-5d — `pairKey` → when this desktop last told that pair its version
+   * (every greeting is one): an epoch mismatch asks again at most once per
+   * answer timeout — the beat owns the retries after that. */
+  readonly #told = new Map<string, number>();
 
   #started = false;
 
@@ -365,6 +369,11 @@ export class DocSyncService {
     this.#beatMs = opts.beatMs ?? DOC_HOST.BEAT_MS;
     this.#answerTimeoutMs = opts.answerTimeoutMs ?? DOC_HOST.ANSWER_TIMEOUT_MS;
     this.#regreetMaxMs = opts.regreetMaxMs ?? DOC_HOST.REGREET_MAX_MS;
+    // DS-5d — an epoch moved here (this host compacted, or re-bootstrapped),
+    // or the library says a fresher one exists: greet the canvas's peers at
+    // once. A peer at an older epoch hears the newer VERSION and asks for the
+    // base (S4); this desktop, when behind, asks for one by greeting.
+    this.#docs.onEpochChanged((docId) => this.replicate([docId], { regreet: true }));
   }
 
   /** Subscribe to lane lifecycle and claim whatever is already open.
@@ -560,6 +569,7 @@ export class DocSyncService {
     if (this.#beatTimer !== null) clearInterval(this.#beatTimer);
     this.#beatTimer = null;
     this.#regreets.clear();
+    this.#told.clear();
     this.#started = false;
   }
 
@@ -1027,11 +1037,23 @@ export class DocSyncService {
     // stays unmarked, so the HAVE behind this VERSION is answered as ever.
     if (ours === null) return;
     this.#versionPeers.add(pairKey(docId, peer));
-    if (ours.baseEpoch !== meta.baseEpoch) {
+    if (ours.baseEpoch > meta.baseEpoch) {
+      // DS-5d — S4: the peer holds an OLDER epoch. Never a delta across the
+      // compaction — it is answered with this desktop's base and the records
+      // since, and re-bootstraps from them.
+      await this.#answerS4(docId, peer, frame.payload, meta.hasCheckpoint, meta.baseEpoch);
+      return;
+    }
+    if (ours.baseEpoch < meta.baseEpoch) {
+      // DS-5d — WE hold the older epoch: a fresher base is the peer's to give.
+      // Our own VERSION is the ask; the pair is awaited, so a lost answer is
+      // asked for again by the beat.
       facts.epochStale = true;
       facts.reason = "epoch-mismatch";
+      facts.awaiting.set(peer, theirs);
       this.#touch(facts);
-      return; // never answer across a compaction boundary (S4)
+      this.#greetAgain(docId, peer);
+      return;
     }
     const oursVersion = decodeVersion(ours.version);
     if (oursVersion !== null && !covers(oursVersion, theirs)) facts.awaiting.set(peer, theirs);
@@ -1263,6 +1285,18 @@ export class DocSyncService {
       // must not be silent.
       if (outcome.reason === "epoch-mismatch") {
         facts.epochStale = true;
+        // DS-5d — a compaction parts the pair: greet it. Behind, our VERSION
+        // asks for the fresher base (S4); ahead, it tells the peer, which then
+        // asks. Throttled per pair, so a burst of declined records is one.
+        if (this.#docs.baseEpochOf(docId) !== decoded.meta.baseEpoch) {
+          this.#greetAgain(docId, peer);
+        }
+      } else if (outcome.reason === "rebootstrap-deferred") {
+        // DS-5d — a window holds the canvas; the base is asked for again when
+        // it closes (the host says `behind`). Not awaited meanwhile: the beat
+        // would only fetch a base this desktop would defer again.
+        facts.epochStale = true;
+        facts.awaiting.delete(peer);
       } else {
         facts.declined = true; // unknown-doc | unknown-kind | undecodable (local-only lands via #declineLocalOnly)
       }
@@ -1276,6 +1310,62 @@ export class DocSyncService {
     } catch (error) {
       this.#logger.error("fieldd.doc_sync.apply_failed", "Applying a peer's record failed", error);
     }
+  }
+
+  /** DS-5d — S4's ANSWER to a peer that greeted with an older epoch: this
+   * desktop's base (marked `rebootstrap`), then the records since — the pair a
+   * holder with no checkpoint is bootstrapped with, at the newer epoch. The
+   * peer drops its copy and re-bootstraps from it, carrying over what the base
+   * can take. Answered every time it is asked: the asking side throttles. */
+  async #answerS4(
+    docId: string,
+    peer: string,
+    version: Uint8Array,
+    hasCheckpoint: boolean,
+    baseEpoch: number,
+  ): Promise<void> {
+    const answer = await this.#docs.hostAnswer(docId, { version, hasCheckpoint, baseEpoch });
+    if (answer === null || answer.snapshot === null || answer.rebootstrap !== true) return;
+    const lane = await this.#ensureLane(docId, peer);
+    if (lane === null) return;
+    await this.#write(
+      lane.laneId,
+      docId,
+      peer,
+      DOC_SYNC_RECORD.SNAPSHOT,
+      { ...answer.meta, rebootstrap: true },
+      answer.snapshot,
+    );
+    if (answer.update !== null) {
+      await this.#write(
+        lane.laneId,
+        docId,
+        peer,
+        DOC_SYNC_RECORD.UPDATE,
+        answer.meta,
+        answer.update,
+      );
+    }
+    this.#logger.info(
+      "fieldd.doc_sync.answered_s4",
+      "A peer at an older epoch was sent this desktop's base to re-bootstrap from",
+      { docId, peer, theirs: baseEpoch, ours: answer.meta.baseEpoch },
+    );
+  }
+
+  /** DS-5d — greet a pair again because an epoch parts it: our VERSION is the
+   * ask (when we are behind) or the news (when it is). At most once per answer
+   * timeout per pair — every greeting counts — so two desktops parted by a
+   * compaction never trade greetings; the beat retries an awaited answer. */
+  #greetAgain(docId: string, peer: string): void {
+    const key = pairKey(docId, peer);
+    const last = this.#told.get(key);
+    if (last !== undefined && this.#now() - last < this.#answerTimeoutMs) return;
+    this.#told.set(key, this.#now());
+    this.#enqueue(docId, async () => {
+      const lane = await this.#ensureLane(docId, peer);
+      if (lane !== null && !lane.created) await this.#greet(docId, lane.laneId, peer);
+    });
   }
 
   /** DS-5 — retire every `awaiting` version our host now covers. */
@@ -1476,6 +1566,9 @@ export class DocSyncService {
     const version = await this.#docs.hostVersion(docId);
     const digest = await this.#docs.syncDigest(docId);
     if (version === null && digest === null) return;
+    // DS-5d — every greeting tells the pair our version: an epoch mismatch
+    // heard right behind it needs no second one (#greetAgain's throttle).
+    this.#told.set(pairKey(docId, peer), this.#now());
     try {
       // DS-5 — VERSION FIRST. A DS-5 receiver that reads it marks the pair and
       // ignores the HAVE behind it; a pre-DS-5 receiver refuses the VERSION's
@@ -1570,7 +1663,7 @@ export class DocSyncService {
     docId: string,
     peer: string,
     kind: number,
-    meta: { baseEpoch: number; engineSchema: number | null; savedAt: number },
+    meta: { baseEpoch: number; engineSchema: number | null; savedAt: number; rebootstrap?: true },
     payload: Uint8Array,
   ): Promise<void> {
     const record = encodeDocSyncRecord(kind, meta, payload);
