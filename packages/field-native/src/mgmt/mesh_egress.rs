@@ -49,14 +49,14 @@ pub async fn handle(
         "native.mesh.egress.route.list" => {
             let revision = state.mesh.egress_revision();
             match egress.route_list(node.as_ref()).await {
-                Ok(routes) => ok(id, table_json(&routes, revision)),
+                Ok(routes) => ok(id, table_json(&routes, revision, &state.boot_id)),
                 Err(e) => refusal(state, id, e),
             }
         }
         "native.mesh.egress.route.subscribe" => {
             let revision = state.mesh.egress_revision();
             let snapshot = match egress.route_list(node.as_ref()).await {
-                Ok(routes) => table_json(&routes, revision),
+                Ok(routes) => table_json(&routes, revision, &state.boot_id),
                 Err(e) => {
                     send(tx, refusal(state, id, e));
                     return;
@@ -184,7 +184,12 @@ async fn route_add(
             );
             ok(
                 id,
-                json!({ "id": route.id, "listen": route.listen, "revision": revision }),
+                json!({
+                    "id": route.id,
+                    "listen": route.listen,
+                    "revision": revision,
+                    "bootId": state.boot_id,
+                }),
             )
         }
         Err(e) => refusal(state, id, e),
@@ -263,14 +268,16 @@ fn grant_json(grant: &ProxyGrant) -> Value {
 }
 
 /// The table as the contract spells it, stamped with the revision the caller
-/// read BEFORE it listed, so the table is never older than its stamp.
-fn table_json(routes: &[EgressRoute], revision: u64) -> Value {
+/// read BEFORE it listed (so the table is never older than its stamp) and the
+/// floor boot it belongs to (a revision orders only within one boot).
+fn table_json(routes: &[EgressRoute], revision: u64, boot_id: &str) -> Value {
     json!({
         "routes": routes
             .iter()
             .map(|r| json!({ "id": r.id, "target": r.target, "listen": r.listen }))
             .collect::<Vec<_>>(),
         "revision": revision,
+        "bootId": boot_id,
     })
 }
 
@@ -293,7 +300,7 @@ fn spawn_route_forwarder(state: Arc<DaemonState>, tx: Tx, sub_id: String) {
             let revision = *changes.borrow_and_update();
             let egress = state.mesh.egress();
             let payload = match egress.route_list(state.mesh.node().as_ref()).await {
-                Ok(routes) => table_json(&routes, revision),
+                Ok(routes) => table_json(&routes, revision, &state.boot_id),
                 Err(_) => continue, // the arm cannot list right now; the next move re-reads
             };
             let note = json!({
@@ -359,12 +366,14 @@ mod tests {
                 listen: "127.0.0.1:53211".into(),
             }],
             4,
+            "01JNATIVEBOOT00000000000A",
         );
         let golden = golden("mesh-egress-route-table.valid.json");
         assert_eq!(table["routes"][0], golden["routes"][0]);
         assert_eq!(table["revision"], golden["revision"]);
+        assert_eq!(table["bootId"], golden["bootId"]);
         assert_eq!(
-            table_json(&[], 5),
+            table_json(&[], 5, "01JNATIVEBOOT00000000000A"),
             self::golden("mesh-egress-route-table.reset.json")
         );
     }

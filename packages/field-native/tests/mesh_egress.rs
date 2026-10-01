@@ -502,6 +502,12 @@ async fn a_node_teardown_resets_the_table_and_the_stream_says_so() {
     let listed: MeshEgressRouteTable = serde_json::from_value(listed["result"].clone()).unwrap();
     assert!(listed.routes.is_empty());
     assert_eq!(
+        listed.boot_id.as_str(),
+        bound.boot_id.as_str(),
+        "one floor boot: its revisions are one order"
+    );
+    assert_eq!(listed.boot_id.as_str(), daemon.state.boot_id);
+    assert_eq!(
         listed.revision.0, reset.revision.0,
         "nothing moved since the reset"
     );

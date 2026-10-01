@@ -677,7 +677,12 @@ export type MeshEgressRouteAddParams = z.infer<typeof MeshEgressRouteAddParams>;
  * beside the handler, so a snapshot read just before an add can reach the
  * reader AFTER that add's answer, and without an order it would read as
  * "the route is gone". A snapshot whose revision is below the one a route was
- * bound at says nothing about that route. */
+ * bound at says nothing about that route.
+ *
+ * A revision orders only within ONE floor boot: a respawned floor counts from
+ * zero again, so both shapes carry the floor's `bootId` beside it, and a table
+ * from another boot is authoritative for every route — the routes of the boot
+ * that bound them died with it. */
 export const MeshEgressRevision = z.number().int().nonnegative();
 
 /** `route.add`'s answer: the loopback address a local process dials, and the
@@ -687,6 +692,8 @@ export const MeshEgressRouteBound = z
     id: MeshEgressRouteId,
     listen: MeshEgressLoopbackAddress,
     revision: MeshEgressRevision,
+    /** the floor boot that bound it (`NativeHealth.bootId`) */
+    bootId: z.string().min(1),
   })
   .passthrough();
 export type MeshEgressRouteBound = z.infer<typeof MeshEgressRouteBound>;
@@ -721,6 +728,8 @@ export const MeshEgressRouteTable = z
     routes: z.array(MeshEgressRoute),
     /** the facade's revision this table was read at or after (never before) */
     revision: MeshEgressRevision,
+    /** the floor boot whose table this is (`NativeHealth.bootId`) */
+    bootId: z.string().min(1),
   })
   .passthrough();
 export type MeshEgressRouteTable = z.infer<typeof MeshEgressRouteTable>;

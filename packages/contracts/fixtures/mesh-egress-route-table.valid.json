@@ -11,5 +11,6 @@
       "listen": "[::1]:53212"
     }
   ],
-  "revision": 4
+  "revision": 4,
+  "bootId": "01JNATIVEBOOT00000000000A"
 }

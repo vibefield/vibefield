@@ -1048,12 +1048,17 @@
         },
         "revision": {
           "$ref": "#/definitions/MeshEgressRevision"
+        },
+        "bootId": {
+          "type": "string",
+          "minLength": 1
         }
       },
       "required": [
         "id",
         "listen",
-        "revision"
+        "revision",
+        "bootId"
       ],
       "additionalProperties": true
     },

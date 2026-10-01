@@ -3929,11 +3929,16 @@ impl<'de> ::serde::Deserialize<'de> for MeshEgressRouteAddParamsLogin {
 #[doc = "{"]
 #[doc = "  \"type\": \"object\","]
 #[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
 #[doc = "    \"id\","]
 #[doc = "    \"listen\","]
 #[doc = "    \"revision\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
 #[doc = "    \"id\": {"]
 #[doc = "      \"$ref\": \"#/definitions/MeshEgressRouteId\""]
 #[doc = "    },"]
@@ -3950,6 +3955,8 @@ impl<'de> ::serde::Deserialize<'de> for MeshEgressRouteAddParamsLogin {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct MeshEgressRouteBound {
+    #[serde(rename = "bootId")]
+    pub boot_id: MeshEgressRouteBoundBootId,
     pub id: MeshEgressRouteId,
     pub listen: MeshEgressLoopbackAddress,
     pub revision: MeshEgressRevision,
@@ -3957,6 +3964,74 @@ pub struct MeshEgressRouteBound {
 impl MeshEgressRouteBound {
     pub fn builder() -> builder::MeshEgressRouteBound {
         Default::default()
+    }
+}
+#[doc = "`MeshEgressRouteBoundBootId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshEgressRouteBoundBootId(::std::string::String);
+impl ::std::ops::Deref for MeshEgressRouteBoundBootId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshEgressRouteBoundBootId> for ::std::string::String {
+    fn from(value: MeshEgressRouteBoundBootId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshEgressRouteBoundBootId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshEgressRouteBoundBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshEgressRouteBoundBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshEgressRouteBoundBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshEgressRouteBoundBootId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`MeshEgressRouteId`"]
@@ -4067,10 +4142,15 @@ impl MeshEgressRouteRef {
 #[doc = "{"]
 #[doc = "  \"type\": \"object\","]
 #[doc = "  \"required\": ["]
+#[doc = "    \"bootId\","]
 #[doc = "    \"revision\","]
 #[doc = "    \"routes\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
+#[doc = "    \"bootId\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
 #[doc = "    \"revision\": {"]
 #[doc = "      \"$ref\": \"#/definitions/MeshEgressRevision\""]
 #[doc = "    },"]
@@ -4087,12 +4167,82 @@ impl MeshEgressRouteRef {
 #[doc = r" </details>"]
 #[derive(:: serde :: Deserialize, :: serde :: Serialize, Clone, Debug)]
 pub struct MeshEgressRouteTable {
+    #[serde(rename = "bootId")]
+    pub boot_id: MeshEgressRouteTableBootId,
     pub revision: MeshEgressRevision,
     pub routes: ::std::vec::Vec<MeshEgressRoute>,
 }
 impl MeshEgressRouteTable {
     pub fn builder() -> builder::MeshEgressRouteTable {
         Default::default()
+    }
+}
+#[doc = "`MeshEgressRouteTableBootId`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshEgressRouteTableBootId(::std::string::String);
+impl ::std::ops::Deref for MeshEgressRouteTableBootId {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshEgressRouteTableBootId> for ::std::string::String {
+    fn from(value: MeshEgressRouteTableBootId) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshEgressRouteTableBootId {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshEgressRouteTableBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshEgressRouteTableBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshEgressRouteTableBootId {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshEgressRouteTableBootId {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
     }
 }
 #[doc = "`MeshEgressTarget`"]
@@ -10086,6 +10236,7 @@ pub mod builder {
     }
     #[derive(Clone, Debug)]
     pub struct MeshEgressRouteBound {
+        boot_id: ::std::result::Result<super::MeshEgressRouteBoundBootId, ::std::string::String>,
         id: ::std::result::Result<super::MeshEgressRouteId, ::std::string::String>,
         listen: ::std::result::Result<super::MeshEgressLoopbackAddress, ::std::string::String>,
         revision: ::std::result::Result<super::MeshEgressRevision, ::std::string::String>,
@@ -10093,6 +10244,7 @@ pub mod builder {
     impl ::std::default::Default for MeshEgressRouteBound {
         fn default() -> Self {
             Self {
+                boot_id: Err("no value supplied for boot_id".to_string()),
                 id: Err("no value supplied for id".to_string()),
                 listen: Err("no value supplied for listen".to_string()),
                 revision: Err("no value supplied for revision".to_string()),
@@ -10100,6 +10252,16 @@ pub mod builder {
         }
     }
     impl MeshEgressRouteBound {
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressRouteBoundBootId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
         pub fn id<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<super::MeshEgressRouteId>,
@@ -10137,6 +10299,7 @@ pub mod builder {
             value: MeshEgressRouteBound,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                boot_id: value.boot_id?,
                 id: value.id?,
                 listen: value.listen?,
                 revision: value.revision?,
@@ -10146,6 +10309,7 @@ pub mod builder {
     impl ::std::convert::From<super::MeshEgressRouteBound> for MeshEgressRouteBound {
         fn from(value: super::MeshEgressRouteBound) -> Self {
             Self {
+                boot_id: Ok(value.boot_id),
                 id: Ok(value.id),
                 listen: Ok(value.listen),
                 revision: Ok(value.revision),
@@ -10190,6 +10354,7 @@ pub mod builder {
     }
     #[derive(Clone, Debug)]
     pub struct MeshEgressRouteTable {
+        boot_id: ::std::result::Result<super::MeshEgressRouteTableBootId, ::std::string::String>,
         revision: ::std::result::Result<super::MeshEgressRevision, ::std::string::String>,
         routes:
             ::std::result::Result<::std::vec::Vec<super::MeshEgressRoute>, ::std::string::String>,
@@ -10197,12 +10362,23 @@ pub mod builder {
     impl ::std::default::Default for MeshEgressRouteTable {
         fn default() -> Self {
             Self {
+                boot_id: Err("no value supplied for boot_id".to_string()),
                 revision: Err("no value supplied for revision".to_string()),
                 routes: Err("no value supplied for routes".to_string()),
             }
         }
     }
     impl MeshEgressRouteTable {
+        pub fn boot_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressRouteTableBootId>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.boot_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for boot_id: {e}"));
+            self
+        }
         pub fn revision<T>(mut self, value: T) -> Self
         where
             T: ::std::convert::TryInto<super::MeshEgressRevision>,
@@ -10230,6 +10406,7 @@ pub mod builder {
             value: MeshEgressRouteTable,
         ) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
+                boot_id: value.boot_id?,
                 revision: value.revision?,
                 routes: value.routes?,
             })
@@ -10238,6 +10415,7 @@ pub mod builder {
     impl ::std::convert::From<super::MeshEgressRouteTable> for MeshEgressRouteTable {
         fn from(value: super::MeshEgressRouteTable) -> Self {
             Self {
+                boot_id: Ok(value.boot_id),
                 revision: Ok(value.revision),
                 routes: Ok(value.routes),
             }
