@@ -170,7 +170,7 @@ import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
 import { DocSyncService, docHostPeers, type LaneInfo } from "./doc-sync";
-import { EgressRoutes, resolveEgressPath } from "./egress";
+import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { IndexCatalog } from "./index-catalog";
@@ -4303,6 +4303,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
 
     // -- PeerLink (C5, design-04 D32): the device?-routing substrate --
+    // DS-1b (D4 + D5) — the floor's egress answer, asked once per FLOOR BOOT
+    // (`NativeHealth.bootId` off the health stream above, which re-snapshots on
+    // every mgmt reconnect) and failing closed on anything but "unsupported".
+    // The dial and the routes read the same cache.
+    const floorEgress = new FloorEgress({
+      floor: mesh,
+      bootId: () => {
+        const bootId = (latestHealth as { bootId?: unknown } | null)?.bootId;
+        return typeof bootId === "string" && bootId !== "" ? bootId : undefined;
+      },
+      logger: logger.child({ component: "mesh.egress" }),
+    });
     const peers = new PeerLink({
       ownDeviceId: () => devices.currentDeviceId(),
       // UA-P-0e — endpoint truth is the roster's DERIVED locator (it was the
@@ -4310,9 +4322,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // a peer the tailnet says shares this account.
       endpointFor: (deviceId) => devices.get(deviceId)?.productEndpoint?.url,
       ...(config.peerWebSocket !== undefined ? { webSocket: config.peerWebSocket } : {}),
-      // DS-1 — every dial asks the floor how to reach the tailnet: the node's
-      // own SOCKS5 when it has egress, else the OS network, said once per link
-      egress: () => resolveEgressPath(mesh),
+      // DS-1 — every dial asks how to reach the tailnet: the node's own SOCKS5
+      // when it has egress; the OS network only when the floor cannot carry
+      // egress at all; otherwise the dial fails closed (DS-1b)
+      egress: () => resolveEgressPath(floorEgress),
       logger: logger.child({ component: "peer.link" }),
     });
     // DS-1 — the egress ROUTES port (E2), for the terminal rewriter (DS-4).
@@ -4320,7 +4333,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // `devices.dispose()`, and a route it placed outlives fieldd the way a
     // serve does — the next fieldd's identical route id re-answers it.
     const egressRoutes = new EgressRoutes({
-      facade: mesh,
+      facade: floorEgress,
       roster: {
         hostFor: (deviceId) => devices.get(deviceId)?.tailnetDnsName,
         onChange: (listener) => {

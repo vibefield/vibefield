@@ -94,12 +94,14 @@ export interface PeerLinkOptions {
    * and `egress` is not consulted. */
   webSocket?: WsCtor;
   /** DS-1 — how a dial reaches the tailnet, asked ONCE PER DIAL
-   * (`resolveEgressPath` over the floor's `native.mesh.egress.proxy`): the
-   * node's own SOCKS5 when the floor has egress, which makes the peer's
-   * sidecar see THIS desktop's node; else the OS network, today's dial,
-   * said once per link (`fieldd.mesh.egress.fallback_os_network`). A dial
-   * through the node that fails is never retried over the OS network.
-   * Absent = today's dial, unannounced. */
+   * (`resolveEgressPath` over the floor's `native.mesh.egress.proxy`; the
+   * daemon answers from `FloorEgress`, so the floor itself is asked once per
+   * floor boot): the node's own SOCKS5 when the floor has egress, which makes
+   * the peer's sidecar see THIS desktop's node; the OS network, today's dial,
+   * ONLY when the floor cannot carry egress at all (said once per floor boot,
+   * `fieldd.mesh.egress.fallback_os_network`); otherwise the dial fails closed
+   * (DS-1b). A dial through the node that fails is never retried over the OS
+   * network. Absent = today's dial, unannounced. */
   egress?: () => Promise<EgressPath>;
   logger?: Logger;
   idleCloseMs?: number;
@@ -571,10 +573,18 @@ export class PeerLink extends EventEmitter {
       onPath: (path) => {
         if (said === path.kind) return;
         said = path.kind;
-        if (path.kind === "direct") {
+        if (path.kind === "proxy") {
           this.logger.info(
-            "fieldd.mesh.egress.fallback_os_network",
-            "This peer link dials over the OS network; the node has no egress for it",
+            "fieldd.mesh.egress.dial_through_node",
+            "This peer link dials through the node's own proxy",
+            { peer: deviceId },
+          );
+        } else if (path.kind === "unavailable") {
+          // DS-1b — fail closed: no road through the node right now, and the
+          // OS network is not taken instead (said once per spell, per link)
+          this.logger.warn(
+            "fieldd.mesh.egress.dial_unavailable",
+            "This peer link has no road through the node right now; it does not take the OS network instead",
             {
               peer: deviceId,
               state: path.state,
@@ -582,10 +592,16 @@ export class PeerLink extends EventEmitter {
             },
           );
         } else {
-          this.logger.info(
-            "fieldd.mesh.egress.dial_through_node",
-            "This peer link dials through the node's own proxy",
-            { peer: deviceId },
+          // the floor's "no egress" is said once per floor boot (FloorEgress);
+          // the link's own line is detail
+          this.logger.debug(
+            "fieldd.mesh.egress.link_direct",
+            "This peer link dials over the OS network: the floor cannot carry egress",
+            {
+              peer: deviceId,
+              state: path.state,
+              ...(path.detail !== undefined ? { detail: path.detail } : {}),
+            },
           );
         }
       },

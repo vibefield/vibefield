@@ -32,14 +32,21 @@ async function until(fn: () => boolean, ms = 8000): Promise<void> {
   }
 }
 
-/** One real daemon whose roster names `dev-b` at `device-b.tailnet.ts.net`. */
-async function daemonWithPeer(): Promise<{ A: FielddDaemon; mock: MockMgmtServer }> {
+/** One real daemon whose roster names `dev-b` at `device-b.tailnet.ts.net`.
+ * `floorBootId` scripts the floor's health stream (the generic answer carries
+ * no boot, and a daemon that cannot tell the floor's boot caches nothing). */
+async function daemonWithPeer(
+  opts: { floorBootId?: string } = {},
+): Promise<{ A: FielddDaemon; mock: MockMgmtServer }> {
   const dir = mkdtempSync(join(tmpdir(), "vf-ds1-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
   writeLinkFixture(dir, LOGIN);
   mkdirSync(join(dir, "native", "run"), { recursive: true });
   writeFileSync(join(dir, "native", "pairing"), "ab".repeat(32));
   const mock = new MockMgmtServer(nativeEndpoint(dir, SOCKETS.MGMT));
+  if (opts.floorBootId !== undefined) {
+    mock.healthSnapshot = { state: "up", bootId: opts.floorBootId, units: [] };
+  }
   await mock.start();
   cleanup.push(() => mock.stop());
   mock.meshPeers = [
@@ -59,7 +66,21 @@ async function daemonWithPeer(): Promise<{ A: FielddDaemon; mock: MockMgmtServer
 
 /** A peer's door: the hello and one read. */
 async function door(): Promise<number> {
+  return (await droppableDoor()).port;
+}
+
+/** The same door, with its connections countable and droppable (each drop
+ * makes the link's client dial again). */
+async function droppableDoor(): Promise<{
+  port: number;
+  connections: () => number;
+  drop: () => void;
+}> {
   const wss = new WebSocketServer({ host: "127.0.0.1", port: 0 });
+  let connections = 0;
+  wss.on("connection", () => {
+    connections += 1;
+  });
   await new Promise<void>((resolve) => wss.once("listening", () => resolve()));
   wss.on("connection", (ws) => {
     ws.on("message", (raw) => {
@@ -78,7 +99,13 @@ async function door(): Promise<number> {
         wss.close(() => resolve());
       }),
   );
-  return (wss.address() as { port: number }).port;
+  return {
+    port: (wss.address() as { port: number }).port,
+    connections: () => connections,
+    drop: () => {
+      for (const client of wss.clients) client.terminate();
+    },
+  };
 }
 
 describe("DS-1 — the daemon's dial and routes ride the floor's egress", () => {
@@ -111,6 +138,40 @@ describe("DS-1 — the daemon's dial and routes ride the floor's egress", () => 
     expect(proxy.requests).toEqual([
       expect.objectContaining({ atyp: 0x03, host: PEER_HOST, port: PORTS.FIELDD_PRODUCT_SERVE }),
     ]);
+  }, 30_000);
+
+  it("asks the floor ONCE per floor boot across three dials, and again when the floor boots again (DS-1b)", async () => {
+    const { A, mock } = await daemonWithPeer({ floorBootId: "floor-boot-1" });
+    const d = await droppableDoor();
+    const proxy = await startFakeSocks5({
+      username: "tsnet",
+      password: "the-node-credential",
+      route: (host, port) =>
+        host === PEER_HOST && port === PORTS.FIELDD_PRODUCT_SERVE
+          ? { host: "127.0.0.1", port: d.port }
+          : undefined,
+    });
+    cleanup.push(() => proxy.close());
+    mock.egress = mockEgress({
+      proxy: { address: proxy.address, username: "tsnet", credential: "the-node-credential" },
+    });
+    const asks = () => mock.meshCalls.filter((m) => m === "native.mesh.egress.proxy").length;
+    const reached = { reached: "the peer's door, through the node" };
+    expect(await A.peers.request("dev-b", "device.list", {})).toEqual(reached);
+    for (const dials of [2, 3]) {
+      d.drop(); // the link's client dials again by itself
+      await until(() => proxy.requests.length === dials && d.connections() === dials);
+      expect(await A.peers.request("dev-b", "device.list", {})).toEqual(reached);
+    }
+    expect(proxy.requests, "three dials, each through the node").toHaveLength(3);
+    expect(asks(), "one ask for the floor's boot, not one per dial").toBe(1);
+
+    mock.pushHealth({ state: "up", bootId: "floor-boot-2", units: [] }); // the floor respawned
+    await until(() => A.nativeHealth()?.bootId === "floor-boot-2");
+    d.drop();
+    await until(() => proxy.requests.length === 4);
+    expect(await A.peers.request("dev-b", "device.list", {})).toEqual(reached);
+    expect(asks(), "a new floor boot is asked again").toBe(2);
   }, 30_000);
 
   it("exposes the routes port, aimed at the roster's tailnet name", async () => {

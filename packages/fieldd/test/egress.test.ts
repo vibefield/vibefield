@@ -171,18 +171,18 @@ describe("DS-1 — MeshClient's egress verbs over the real link", () => {
     sub.dispose();
   });
 
-  it("degrades to today's dial within its own deadline when the floor is wedged", async () => {
+  it("FAILS the dial within its own deadline when the floor is wedged — never the OS network (DS-1b)", async () => {
     const { mock, mesh } = await floor();
     mock.egress = mockEgress();
     mock.silentMethods.add("native.mesh.egress.proxy"); // connected, never answers
     const started = Date.now();
     expect(await resolveEgressPath(mesh)).toMatchObject({
-      kind: "direct",
+      kind: "unavailable",
       state: "native-timeout",
     });
     const took = Date.now() - started;
     expect(took).toBeGreaterThanOrEqual(EGRESS_PATH_DEADLINE_MS - 50);
-    // well under PeerLink's 8 s call deadline: the dial still happens in time
+    // well under PeerLink's 8 s call deadline: the dial fails in time to say so
     expect(took).toBeLessThan(6_000);
   });
 
@@ -194,7 +194,11 @@ describe("DS-1 — MeshClient's egress verbs over the real link", () => {
       proxy: { address: "localhost:41641", username: "tsnet", credential: "c" },
     });
     await expect(mesh.egressProxy()).rejects.toMatchObject({ kind: "INTERNAL" });
-    expect(await resolveEgressPath(mesh)).toMatchObject({ kind: "direct", state: "egress-error" });
+    // DS-1b — and an answer nobody can trust is no road at all, never the OS network
+    expect(await resolveEgressPath(mesh)).toMatchObject({
+      kind: "unavailable",
+      state: "egress-error",
+    });
   });
 
   it("refuses an off-contract ask before it reaches the wire", async () => {

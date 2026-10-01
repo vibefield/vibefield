@@ -57,6 +57,11 @@ export class MockMgmtServer {
   /** the boot id the ping ack carries (a changed value simulates a floor that
    * restarted underneath a surviving socket) */
   pingBootId = "mock-native-boot";
+  /** DS-1b — when set, `native.lifecycle.health.subscribe` answers this
+   * NativeHealth, so the daemon knows the floor's `bootId` (the generic
+   * `{n: 0}` reads as a floor whose boot is unknown). `pushHealth` moves it,
+   * as a respawned floor's re-snapshot would. */
+  healthSnapshot: unknown = null;
   /** when set, subscribe responses are followed by a delta IN THE SAME write */
   deltaInSameChunk = false;
   /** send SUPERSEDED immediately after the next subscribe response */
@@ -303,6 +308,18 @@ export class MockMgmtServer {
             ...(serverMac !== undefined ? { serverMac } : {}),
           },
         }) + "\n",
+      );
+      return;
+    }
+    if (msg.method === "native.lifecycle.health.subscribe" && this.healthSnapshot !== null) {
+      const subId = `s${this.nextSub++}`;
+      this.issued.push({ sock, subId, method: msg.method });
+      sock.write(
+        `${JSON.stringify({
+          jsonrpc: "2.0",
+          id: msg.id,
+          result: { subId, snapshot: this.healthSnapshot },
+        })}\n`,
       );
       return;
     }
@@ -839,6 +856,13 @@ export class MockMgmtServer {
         }) + "\n",
       );
     }
+  }
+
+  /** DS-1b — push a fresh NativeHealth to every health subscription (a new
+   * `bootId` is a new floor boot to the daemon). */
+  pushHealth(health: unknown): void {
+    this.healthSnapshot = health;
+    this.pushDelta("lifecycle.health.subscribe", health);
   }
 
   /** NF-3 — push a fresh ObservedState to every observed subscription. */

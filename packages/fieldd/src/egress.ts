@@ -11,17 +11,18 @@ import type { WsCtor, WsLike } from "@vibefield/fieldd-client";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import WebSocket from "ws";
 import { RpcCallError } from "./native-link";
-import { Socks5Agent } from "./socks5";
+import { Socks5Agent, Socks5Error, type Socks5Stage } from "./socks5";
 
 // DS-1 — fieldd's face of EGRESS (design-02 §2.4's egress bullet; design-06
 // §3; petition T7 = truffle RFC 026). The floor asks the node's sidecar for
 // the paths; this file is what fieldd does with the answers:
 //
 //   · `resolveEgressPath` — "how does a dial reach the tailnet right now?":
-//     the node's own SOCKS5 (E1) when the floor has it, else the OS network
-//     with the floor's reason. PeerLink's dial reads it once per dial,
-//     through `egressWebSocket` — the WebSocket constructor FielddClient
-//     dials with.
+//     the node's own SOCKS5 (E1) when the floor has it; the OS network ONLY
+//     when the floor cannot carry egress at all; otherwise no road, and the
+//     dial fails closed. PeerLink's dial reads it once per dial, through
+//     `egressWebSocket` — the WebSocket constructor FielddClient dials with —
+//     over `FloorEgress`, which asks the floor once per floor boot.
 //   · `EgressRoutes` — the PORT lane ds-e's terminal rewriter consumes (E2): a
 //     loopback address that reaches a door on a peer, ref-counted per
 //     {peer, port}, dropped (and said so) when the peer leaves the roster or
@@ -30,46 +31,236 @@ import { Socks5Agent } from "./socks5";
 // Today the floor answers `egress-unsupported` for everything (truffle-core
 // 0.7.14 has no egress), so every path here resolves to "the OS network" and
 // every route to `undefined` — honestly, and with the floor's own reason.
+//
+// DS-1b (2026-10-01, review D4 + D5) — FALLS BACK ONLY ON UNSUPPORTED.
+// Design-06 §3's "falls back, logged" was read as ANY refusal, and wave 1
+// built it that way: mesh-down, the 2 s timeout or a reconnecting mgmt link
+// dialled the OS network, a silent DS-L5 downgrade from the day egress is
+// live. Now the OS network is taken only when the floor says it CANNOT carry
+// egress (`egress-unsupported`, or a floor older than DS-1, whose mesh
+// answers `method not found`); every other answer fails the dial
+// `UNAVAILABLE {service: "mesh", state, retryable: true}` and nothing touches
+// the OS network. And the ask is made once per FLOOR BOOT (`FloorEgress`),
+// not once per dial: the answer is a fact of the floor's boot, and every dial
+// used to queue on the floor's single mesh FIFO for it (D5). The design
+// record's sentence changes with this note at the docs ritual.
+
+/** The node's SOCKS5 as the floor hands it over (`native.mesh.egress.proxy`). */
+export interface EgressProxyGrant {
+  address: string;
+  username: string;
+  credential: string;
+}
 
 /** How a dial reaches the tailnet. */
 export type EgressPath =
-  | { kind: "proxy"; address: string; username: string; credential: string }
+  | {
+      kind: "proxy";
+      address: string;
+      username: string;
+      credential: string;
+      /** The grant did not open its proxy (the proxy is gone, or refused the
+       * credential: a node rebuilt within the floor's boot mints both anew).
+       * Forgets a cached grant so the next dial asks the floor again; absent
+       * when nothing cached it. */
+      refused?: () => void;
+    }
   | {
       kind: "direct";
-      /** the floor's word (`egress-unsupported`, `mesh-down`) or this side's
-       * (`native-unavailable`, `native-timeout`, `egress-error`) */
+      /** ONLY `egress-unsupported`: the floor's sidecar predates RFC 026, or
+       * the floor predates DS-1 — a fact of the floor's boot, so the OS
+       * network is the honest road */
+      state: string;
+      detail?: string;
+    }
+  | {
+      /** DS-L5 — no road right now, and the OS network is not one: the floor's
+       * word (`mesh-down`) or this side's (`native-unavailable`,
+       * `native-timeout`, `egress-error`). The dial fails closed. */
+      kind: "unavailable";
       state: string;
       detail?: string;
     };
 
-/** The verbs `resolveEgressPath` needs — `MeshClient` is the production one. */
+/** The verbs `resolveEgressPath` needs — `MeshClient` is the production one,
+ * `FloorEgress` the per-boot cache over it. */
 export interface EgressProxySource {
-  egressProxy(opts?: {
-    deadlineMs?: number;
-  }): Promise<{ address: string; username: string; credential: string }>;
+  egressProxy(opts?: { deadlineMs?: number }): Promise<EgressProxyGrant>;
+  /** A grant this source answered did not open its proxy. Optional: only a
+   * source that CACHES a grant has anything to forget. */
+  grantRefused?(grant: EgressProxyGrant): void;
 }
 
-/** How long a dial waits for the floor's answer before it takes today's path.
- * Far below the mgmt default (10 s) on purpose: PeerLink's own call deadline
- * is 8 s, so a floor that is connected but wedged must cost a dial at most
- * this, then degrade to the OS network as every dial did before DS-1 — never
- * turn a reachable peer into a timeout. */
+/** How long a dial waits for the floor's answer. Far below the mgmt default
+ * (10 s) on purpose: PeerLink's own call deadline is 8 s, so a floor that is
+ * connected but wedged costs a dial at most this, and then the dial FAILS
+ * (DS-1b: never the OS network instead) well inside the call's own deadline. */
 export const EGRESS_PATH_DEADLINE_MS = 2_000;
 
-/** Ask the floor for the node's SOCKS5 and say, in every other case, why the
- * dial goes over the OS network instead. Never throws: a dial must still
- * happen when the floor cannot answer, exactly as it did before DS-1. */
+/** Ask the floor for the node's SOCKS5. The OS network is the answer ONLY when
+ * the floor cannot carry egress at all; every other refusal is `unavailable`,
+ * and the dial fails closed (DS-L5). Never throws. */
 export async function resolveEgressPath(source: EgressProxySource): Promise<EgressPath> {
+  let grant: EgressProxyGrant;
   try {
-    const proxy = await source.egressProxy({ deadlineMs: EGRESS_PATH_DEADLINE_MS });
-    return {
-      kind: "proxy",
-      address: proxy.address,
-      username: proxy.username,
-      credential: proxy.credential,
-    };
+    grant = await source.egressProxy({ deadlineMs: EGRESS_PATH_DEADLINE_MS });
   } catch (error) {
-    return { kind: "direct", ...egressRefusal(error) };
+    const refusal = egressRefusal(error);
+    return refusal.state === MESH_EGRESS.STATE_UNSUPPORTED
+      ? { kind: "direct", ...refusal }
+      : { kind: "unavailable", ...refusal };
+  }
+  return {
+    kind: "proxy",
+    address: grant.address,
+    username: grant.username,
+    credential: grant.credential,
+    ...(source.grantRefused !== undefined ? { refused: () => source.grantRefused?.(grant) } : {}),
+  };
+}
+
+/** Is this refusal the floor saying it cannot carry egress at all? */
+function isUnsupported(error: unknown): boolean {
+  return egressRefusal(error).state === MESH_EGRESS.STATE_UNSUPPORTED;
+}
+
+export interface FloorEgressOptions {
+  /** the floor's verbs (`MeshClient`) */
+  floor: EgressProxySource & EgressRouteFacade;
+  /** The floor's boot: `NativeHealth.bootId` off the daemon's health stream,
+   * which re-snapshots on every mgmt reconnect (P5), so a respawned floor is a
+   * new boot as soon as its link is back. `undefined` = not known (yet), and
+   * nothing is cached: every ask goes to the floor. */
+  bootId: () => string | undefined;
+  logger?: Logger;
+}
+
+/** DS-1b (D4 + D5) — THE FLOOR'S EGRESS ANSWER, ONCE PER FLOOR BOOT.
+ *
+ * `native.mesh.egress.proxy`'s answer is a fact of the floor's boot: the
+ * sidecar binary (so `egress-unsupported`) is fixed when the floor starts, and
+ * the node's proxy grant lives as long as the node. So the ask is made once
+ * per boot, concurrent dials share the ask in flight, and only the two
+ * answers that ARE facts are kept: a proxy grant, and `egress-unsupported`
+ * (logged once per boot). Everything else (`mesh-down`, a timeout, a mgmt
+ * link that is reconnecting) is a moment, never cached: the next dial asks
+ * again. A grant that fails to open its proxy is forgotten once
+ * (`grantRefused`), because a node rebuilt within the boot mints a new one.
+ *
+ * It is also the `EgressRouteFacade` `EgressRoutes` binds through, so routes
+ * read the same cache: a boot known unsupported answers a route add without
+ * asking, and a route add's own `egress-unsupported` teaches the cache. */
+export class FloorEgress implements EgressProxySource, EgressRouteFacade {
+  private known: { bootId: string; grant?: EgressProxyGrant; unsupported?: unknown } | undefined;
+  private asking: { bootId: string | undefined; answer: Promise<EgressProxyGrant> } | undefined;
+  /** the boot whose "no egress" was logged, so each boot says it once */
+  private saidUnsupported: string | undefined;
+  private readonly logger: Logger;
+
+  constructor(private readonly opts: FloorEgressOptions) {
+    this.logger = opts.logger ?? createNoopLogger();
+  }
+
+  async egressProxy(opts?: { deadlineMs?: number }): Promise<EgressProxyGrant> {
+    const bootId = this.opts.bootId();
+    const known = this.known;
+    if (known !== undefined && known.bootId === bootId) {
+      if (known.grant !== undefined) return known.grant;
+      if (known.unsupported !== undefined) throw known.unsupported;
+    }
+    const asking = this.asking;
+    if (asking !== undefined && asking.bootId === bootId) return asking.answer;
+    const answer = this.ask(bootId, opts);
+    const mine = { bootId, answer };
+    this.asking = mine;
+    try {
+      return await answer;
+    } finally {
+      if (this.asking === mine) this.asking = undefined;
+    }
+  }
+
+  grantRefused(grant: EgressProxyGrant): void {
+    const held = this.known?.grant;
+    // only the grant the cache still holds: a late failure of an older grant
+    // must not throw away the newer one a later ask brought
+    if (
+      held === undefined ||
+      held.address !== grant.address ||
+      held.credential !== grant.credential
+    ) {
+      return;
+    }
+    this.known = undefined;
+    this.logger.info(
+      "fieldd.mesh.egress.grant_forgotten",
+      "The node's proxy did not open with the grant this floor boot gave; the next dial asks again",
+      { address: grant.address },
+    );
+  }
+
+  async egressRouteAdd(params: MeshEgressRouteAddParams): Promise<MeshEgressRouteBound> {
+    const bootId = this.opts.bootId();
+    const known = this.known;
+    if (known !== undefined && known.bootId === bootId && known.unsupported !== undefined) {
+      throw known.unsupported;
+    }
+    try {
+      return await this.opts.floor.egressRouteAdd(params);
+    } catch (error) {
+      if (isUnsupported(error)) this.noteUnsupported(bootId, error);
+      throw error;
+    }
+  }
+
+  egressRouteRemove(id: string): Promise<MeshEgressRouteRef> {
+    return this.opts.floor.egressRouteRemove(id);
+  }
+
+  subscribeEgressRoutes(
+    onTable: (table: MeshEgressRouteTable) => void,
+  ): Promise<{ snapshot: MeshEgressRouteTable; dispose: () => void }> {
+    return this.opts.floor.subscribeEgressRoutes(onTable);
+  }
+
+  private async ask(
+    bootId: string | undefined,
+    opts: { deadlineMs?: number } | undefined,
+  ): Promise<EgressProxyGrant> {
+    try {
+      const answer = await this.opts.floor.egressProxy(opts);
+      const grant = {
+        address: answer.address,
+        username: answer.username,
+        credential: answer.credential,
+      };
+      // kept only for the boot it was asked in: a floor that restarted while
+      // the ask was out answered for a boot that is already gone
+      if (bootId !== undefined && this.opts.bootId() === bootId) this.known = { bootId, grant };
+      return grant;
+    } catch (error) {
+      if (isUnsupported(error)) this.noteUnsupported(bootId, error);
+      throw error;
+    }
+  }
+
+  private noteUnsupported(bootId: string | undefined, error: unknown): void {
+    if (bootId !== undefined && this.opts.bootId() === bootId) {
+      this.known = { bootId, unsupported: error };
+    }
+    const key = bootId ?? "";
+    if (this.saidUnsupported === key) return;
+    this.saidUnsupported = key;
+    const refusal = egressRefusal(error);
+    this.logger.info(
+      "fieldd.mesh.egress.fallback_os_network",
+      "This floor cannot carry egress: peer links dial over the OS network for the rest of its boot",
+      {
+        ...(bootId !== undefined ? { floorBootId: bootId } : {}),
+        state: refusal.state,
+        ...(refusal.detail !== undefined ? { detail: refusal.detail } : {}),
+      },
+    );
   }
 }
 
@@ -106,9 +297,11 @@ export function egressRefusal(error: unknown): { state: string; detail?: string 
 // ---- the dial (E1): a WebSocket constructor that asks first ----
 
 export interface EgressDialOptions {
-  /** Asked ONCE PER DIAL, reconnects included: a node rebuild rotates the
-   * proxy's credential, and a floor upgrade can turn the OS network into the
-   * node's own path between two dials of one link. */
+  /** Asked ONCE PER DIAL, reconnects included (production answers from
+   * `FloorEgress`, so the FLOOR is asked once per boot): a floor upgrade can
+   * turn the OS network into the node's own path between two dials of one
+   * link, and a grant the proxy no longer takes is forgotten by the dial that
+   * found out (`EgressPath.refused`). */
   path: () => Promise<EgressPath>;
   /** The path a dial took (PeerLink says it once per link). */
   onPath?: (path: EgressPath) => void;
@@ -133,6 +326,10 @@ export function egressWebSocket(opts: EgressDialOptions): WsCtor {
   const open = async (url: string, caller: { closedByCaller: boolean }): Promise<WsLike> => {
     const path = await opts.path();
     opts.onPath?.(path);
+    // DS-1b — no road through the node right now, and the OS network is not
+    // one: the dial FAILS, with the floor's state, and FielddClient's own
+    // backoff asks again on the next dial
+    if (path.kind === "unavailable") throw egressDialUnavailable(path);
     if (path.kind === "direct") {
       const Direct = opts.direct ?? (globalThis as { WebSocket?: WsCtor }).WebSocket;
       if (Direct === undefined) throw new Error("no WebSocket implementation in this host");
@@ -159,7 +356,11 @@ export function egressWebSocket(opts: EgressDialOptions): WsCtor {
       opened = true;
     });
     socket.on("error", (error) => {
-      if (!opened && !caller.closedByCaller) opts.onDialError?.(error);
+      if (opened || caller.closedByCaller) return;
+      // the grant did not open its proxy: it is stale, so it is forgotten
+      // and the next dial asks the floor again (a refused PEER is not this)
+      if (error instanceof Socks5Error && GRANT_STAGES.has(error.stage)) path.refused?.();
+      opts.onDialError?.(error);
     });
     return socket as unknown as WsLike;
   };
@@ -168,6 +369,29 @@ export function egressWebSocket(opts: EgressDialOptions): WsCtor {
       super(url, open);
     }
   };
+}
+
+/** The handshake stages at which a SOCKS5 failure says the GRANT is wrong
+ * (nothing listens at its address, the listener is not the node's proxy, or
+ * it refused the credential) rather than the peer. */
+const GRANT_STAGES: ReadonlySet<Socks5Stage> = new Set<Socks5Stage>([
+  "connect",
+  "greeting",
+  "auth",
+]);
+
+/** A dial with no road: `UNAVAILABLE {service: "mesh", state}`, retryable. */
+export function egressDialUnavailable(path: { state: string; detail?: string }): RpcCallError {
+  return new RpcCallError(
+    "UNAVAILABLE",
+    `no road to the tailnet through this desktop's node right now (${path.state}); the OS network is not taken instead (DS-L5)`,
+    true,
+    {
+      service: MESH_EGRESS.SERVICE,
+      state: path.state,
+      ...(path.detail !== undefined ? { detail: path.detail } : {}),
+    },
+  );
 }
 
 type WsEvent = "open" | "message" | "close" | "error";

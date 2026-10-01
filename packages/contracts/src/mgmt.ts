@@ -584,6 +584,11 @@ export type MeshLaneClosed = z.infer<typeof MeshLaneClosed>;
 // `UNAVAILABLE {service: "mesh", state: "egress-unsupported"}`. That is a
 // capability fact, not a transient: fieldd keeps dialling over the OS network
 // and says so once per link (`mesh.egress.fallback_os_network`).
+// Corrected 2026-10-01 (DS-1b, review D4 + D5): fieldd asks once per FLOOR
+// BOOT and says it once per boot (`FloorEgress` in fieldd's egress.ts), and
+// `egress-unsupported` is the ONLY answer that takes the OS network:
+// `mesh-down`, a timeout or a mgmt link mid-reconnect fail the dial closed
+// (DS-L5).
 
 /** The egress registry. Generated into Rust (`registries::mesh_egress`) so the
  * floor's belt and fieldd's suspenders read ONE list, never two copies. */
