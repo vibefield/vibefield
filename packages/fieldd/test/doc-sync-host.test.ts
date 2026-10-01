@@ -15,7 +15,7 @@ import { join } from "node:path";
 import { DOC_SYNC_RECORD } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DocumentService } from "../src/doc-service";
-import type { DocSyncOptions } from "../src/doc-sync";
+import { type DocSyncOptions, docHostPeers } from "../src/doc-sync";
 import { Device, Mesh } from "./doc-mesh-harness";
 import { Renderer, replay } from "./loro-renderer";
 
@@ -162,7 +162,12 @@ describe("DS-5 — two desktops, one canvas, merged by version", () => {
     for (let i = 0; i < 40; i++) wa.edit(`key-${i}`, `value-${i}-${"x".repeat(12)}`);
     const checkpoint = wa.checkpoint();
     expect(checkpoint.byteLength).toBeGreaterThan(400);
-    const lanesBefore = a.control.routes.size;
+    const opened: number[] = [];
+    const open = a.control.open.bind(a.control);
+    a.control.open = async (req) => {
+      opened.push(req.laneId);
+      await open(req);
+    };
     await put(a.docs, docId, "checkpoint", checkpoint);
     await until(async () => Object.keys(await boardOf(b, docId)).length === 40, "B to reassemble");
     expect(await boardOf(b, docId)).toEqual(wa.board());
@@ -170,6 +175,48 @@ describe("DS-5 — two desktops, one canvas, merged by version", () => {
     expect(chunks.length).toBeGreaterThan(2);
     for (const c of chunks) expect(c.bytes).toBeLessThanOrEqual(400);
     // The transfer rode a lane opened for it and closed behind it.
-    expect(a.control.routes.size).toBe(lanesBefore + 1);
+    await until(
+      () => opened.some((laneId) => !a.control.routes.has(laneId)),
+      "the transfer lane to close",
+    );
+  });
+});
+
+describe("DS-5 — the doc peer set is desktops only (DS-D7, UA-P-D5)", () => {
+  const roster = [
+    { self: true, tailscaleId: undefined, capabilities: { docHost: true } },
+    { self: false, tailscaleId: "B", capabilities: { docHost: true } },
+    // A desktop that says it hosts no documents is not dialed either.
+    { self: false, tailscaleId: "HEADLESS", capabilities: { docHost: false } },
+  ];
+  // The phone is a self peer (same login) with NO roster row: it publishes no
+  // device slice, because it runs no fieldd.
+  const selfPeers = [
+    { id: "B", online: true },
+    { id: "PHONE", online: true },
+    { id: "HEADLESS", online: true },
+  ];
+
+  it("keeps self peers whose roster row says docHost, and only those", () => {
+    expect(docHostPeers(roster, selfPeers)).toEqual([{ id: "B", online: true }]);
+    expect(docHostPeers([], selfPeers)).toEqual([]);
+  });
+
+  it("a commit is never dialed toward a phone — no failed dial, no peer-offline", async () => {
+    const { a, docId } = await pair({ peers: async () => docHostPeers(roster, selfPeers) });
+    const wa = new Renderer(1n);
+    wa.edit("k", "v");
+    await put(a.docs, docId, "checkpoint", wa.checkpoint());
+    await put(a.docs, docId, "update", wa.edit("k2", "v2"));
+    await until(
+      () => a.sync.statuses().some((s) => s.peers.some((p) => p.peer === "B")),
+      "A to reach B",
+    );
+    await new Promise((r) => setTimeout(r, 30));
+    const peersSeen = a.sync.statuses().flatMap((s) => s.peers.map((p) => p.peer));
+    expect(peersSeen).not.toContain("PHONE");
+    expect(peersSeen).not.toContain("HEADLESS");
+    expect([...a.control.routes.values()]).not.toContain("PHONE");
+    for (const status of a.sync.statuses()) expect(status.state).not.toBe("peer-offline");
   });
 });

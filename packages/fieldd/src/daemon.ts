@@ -163,7 +163,7 @@ import { DeviceService } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
-import { DocSyncService, type LaneInfo } from "./doc-sync";
+import { DocSyncService, docHostPeers, type LaneInfo } from "./doc-sync";
 import { EgressRoutes, resolveEgressPath } from "./egress";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
@@ -882,8 +882,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // "a phone never receives a document" holds by the phone having no door,
     // and the failure is quiet by the path that reaches it already being the
     // mesh-down path.
-    const meshPeers = async (): Promise<Array<{ id: string; online: boolean }>> =>
-      devicesForAgents?.selfSyncPeers() ?? [];
+    //
+    // CORRECTED 2026-09-30 (DS-5, DS-D7): quiet was not harmless — every commit
+    // re-dialed the phone and folded the doc to `peer-offline` (DS §1.2). The
+    // closure now keeps only self peers whose roster row says `docHost`; a
+    // phone publishes no device slice and leaves it (`docHostPeers`).
+    const meshPeers = async (): Promise<Array<{ id: string; online: boolean }>> => {
+      const roster = devicesForAgents;
+      if (roster === null) return [];
+      return docHostPeers(roster.list(), roster.selfSyncPeers());
+    };
     // PLUG-P2 — the plugin registry (§9): manifest-only discovery, pre-listen
     // so the first snapshot is warm. No module code loads here (§19.1).
     // P7 — the installed root is fieldd-OWNED: absent on first boot is the
@@ -1075,6 +1083,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       await docs.attachLibrary(library, (entry) =>
         resolveSyncIntent(entry.syncIntent, syncPosture),
       );
+      // DS-5 (DS-D7) — both system documents toward every awake desktop now.
+      docSync?.replicate(docs.systemDocIds(), { regreet: true });
     };
     await mountSystemDocs();
     links.on("changed", () => {
@@ -2747,7 +2757,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       // posture, not content — docCount and updatedAt both stand
-      return docs.setSyncIntent(parsed.data.docId, parsed.data.intent);
+      const entry = await docs.setSyncIntent(parsed.data.docId, parsed.data.intent);
+      // DS-5 (DS-D7) — a canvas told to travel replicates now.
+      if (parsed.data.intent === "sync") {
+        docSync?.replicate([parsed.data.docId], { regreet: true });
+      }
+      return entry;
     });
     // C6-4 — per-doc sync standing. Registered even with sync unavailable
     // (mesh off, the default): the empty list is the honest snapshot then, and
@@ -2889,7 +2904,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // lives. `fresh` is the sync fold's own word: nothing known un-synced.
     const holders = new DocHoldersService({
       mesh,
-      deviceId: () => devices.list().find((d) => d.self)?.deviceId ?? "",
+      deviceId: () => devices.currentDeviceId(),
       holdings: () =>
         docs.holdings((docId) => {
           const standing = docSync?.statuses().find((s) => s.docId === docId);
@@ -2899,7 +2914,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     docHolders = holders;
     docs.setHomes((docId) => holders.homesOf(docId));
-    docs.onCatalogChanged(() => holders.schedule());
+    docs.onCatalogChanged((change) => {
+      holders.schedule();
+      // DS-5 (DS-D7) — a canvas another desktop made is fetched on adoption,
+      // not on its next commit there.
+      if (change.adopted.length > 0) docSync?.replicate(change.adopted, { regreet: true });
+    });
     if (MESH_BUS_CARRIES_CONTENT) {
       void holders.start().catch((error) =>
         logger.info("fieldd.docs.holders_unavailable", "The holders slice is not live yet", {

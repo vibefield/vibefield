@@ -183,7 +183,7 @@ describe("the catalog derives from the library", () => {
 });
 
 describe("two desktops — the library and settings on the host", () => {
-  async function pair(): Promise<{
+  async function pair(opts: { deferAttachOn?: "B" } = {}): Promise<{
     a: Device;
     b: Device;
     libraries: [LibraryDocService, LibraryDocService];
@@ -211,7 +211,11 @@ describe("two desktops — the library and settings on the host", () => {
         settings.hostDoc(),
         settings.hostOwner(),
       );
-      await device.docs.attachLibrary(library);
+      // As the daemon wires it: an adopted canvas is fetched on adoption.
+      device.docs.onCatalogChanged((change) => {
+        if (change.adopted.length > 0) device.sync.replicate(change.adopted, { regreet: true });
+      });
+      if (opts.deferAttachOn !== name) await device.docs.attachLibrary(library);
       mesh.devices.set(name, device);
       made.push({ device, library, settings });
     }
@@ -252,6 +256,31 @@ describe("two desktops — the library and settings on the host", () => {
     }, "A's content to open on B");
     // B's window can open it: a ticket is minted for a doc B now holds.
     expect(b.docs.open(created.docId).hasDoc).toBe(true);
+  });
+
+  it("EAGER (DS-D7): content that existed before B adopted the canvas opens on B with no new commit on A", async () => {
+    const { a, b, libraries } = await pair({ deferAttachOn: "B" });
+    const created = await a.docs.create("Written before B knew it");
+    const w = new Renderer(1n);
+    w.edit("early", "content");
+    const checkpoint = w.checkpoint();
+    await a.docs.writeDoc(created.docId, checkpoint, {
+      revisionId: crypto.randomUUID(),
+      kind: "checkpoint",
+      engineSchema: 2,
+      savedAt: Date.now(),
+      byteLength: checkpoint.byteLength,
+    });
+    // B learns of the canvas only now — after its only commit on A.
+    await until(() => libraries[1].get(created.docId) !== undefined, "B's library to hear of it");
+    await b.docs.attachLibrary(libraries[1]);
+    await until(async () => {
+      try {
+        return (await replay(b.docs, created.docId)).board().early === "content";
+      } catch {
+        return false;
+      }
+    }, "the content to arrive on B without another commit");
   });
 
   it("a rename on B, an intent on A and a delete converge across", async () => {

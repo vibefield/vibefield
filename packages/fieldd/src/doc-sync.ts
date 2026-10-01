@@ -111,6 +111,31 @@ export interface SyncPeer {
   online: boolean;
 }
 
+/** DS-5 (DS-D7; UA-P-D5: "a phone never receives a document") — the DOC peer
+ * set: self peers whose roster row says `docHost`. A phone is a self peer and
+ * publishes no device slice — it runs no fieldd and binds no doc-sync door —
+ * so it has no row and leaves the closure HERE, instead of being dialed on
+ * every commit and folding each doc to `peer-offline` (§1.2). A desktop whose
+ * slice has not arrived yet is out until it does; the roster change that
+ * brings it re-runs eager replication. */
+export function docHostPeers(
+  roster: ReadonlyArray<{
+    self: boolean;
+    tailscaleId?: string | undefined;
+    /** Absent reads as "did not say", which for a promise to host is a no. */
+    capabilities?: { docHost: boolean } | undefined;
+  }>,
+  selfPeers: readonly SyncPeer[],
+): SyncPeer[] {
+  const hosts = new Set<string>();
+  for (const row of roster) {
+    if (!row.self && row.tailscaleId !== undefined && row.capabilities?.docHost === true) {
+      hosts.add(row.tailscaleId);
+    }
+  }
+  return selfPeers.filter((peer) => hosts.has(peer.id));
+}
+
 /** The roster view the daemon wires in post-construction (DeviceService is
  * built later — the attachPeerLink precedent). `on` returns a detach. */
 export interface SyncLiveness {
@@ -280,6 +305,46 @@ export class DocSyncService {
       this.#onLaneEvent(payload, kind),
     );
     for (const lane of lanes ?? []) this.#claim(lane);
+    this.replicate();
+  }
+
+  /** DS-5 (DS-D7) — EAGER replication: every syncable document (each held
+   * canvas that resolves to `sync`, and every system document) toward every
+   * awake doc peer, NOW — not on its next commit, which may never come for a
+   * canvas nobody is editing. An open lane is left alone; a new one greets, and
+   * the version exchange does the rest in one round. Idempotent by the lane
+   * table, so every roster change and every adoption may call it.
+   *
+   * `regreet` sends a VERSION down a lane that is ALREADY open: a lane a peer
+   * opened while this device did not yet know the doc greeted nothing (there
+   * was no version to state), so an adoption must speak up on it. */
+  replicate(docIds?: readonly string[], opts: { regreet?: boolean } = {}): void {
+    void this.#replicateNow(docIds, opts.regreet === true).catch((error) => {
+      this.#logger.warn("fieldd.doc_sync.replicate_failed", "Eager replication did not run", {
+        error: String(error),
+      });
+    });
+  }
+
+  async #replicateNow(docIds: readonly string[] | undefined, regreet: boolean): Promise<void> {
+    if (!this.#started) return;
+    const peers = (await this.#peers()).filter((peer) => peer.online);
+    if (peers.length === 0) return;
+    const ids = docIds ?? [
+      ...this.#docs.list().map((entry) => entry.docId),
+      ...this.#docs.systemDocIds(),
+    ];
+    for (const docId of ids) {
+      if (this.#isLocal(docId)) continue;
+      for (const { id: peer } of peers) {
+        if (!regreet && this.#outbound.get(docId)?.has(peer) === true) continue;
+        this.#enqueue(docId, async () => {
+          const lane = await this.#ensureLane(docId, peer);
+          if (regreet && lane !== null && !lane.created)
+            await this.#greet(docId, lane.laneId, peer);
+        });
+      }
+    }
   }
 
   /** DocumentService's commit hook. Sync is a CONSUMER of durability: this
@@ -499,6 +564,9 @@ export class DocSyncService {
 
   #onLivenessChanged(): void {
     if (this.#liveness === null) return;
+    // DS-5 (DS-D7) — a desktop that woke (or whose slice just arrived) gets
+    // every syncable document, whether or not anything was waiting on it.
+    this.replicate();
     const online = new Map(this.#liveness.list().map((p) => [p.id, p.online]));
     for (const [docId, facts] of this.#facts) {
       for (const [peer, pf] of facts.peers) {
