@@ -546,10 +546,17 @@ export type IndexCatalogSource = z.infer<typeof IndexCatalogSource>;
 
 /** How one desktop took part in a mesh search: `answered` (its index had an
  * answer — possibly no hits) · `building` (it answered that it has none yet:
- * a building projection, a daemon not ready) · `asleep` (its door did not
- * answer, or the roster says it is away — never "nothing found") · `timeout`
- * (asked, and silent past the fan-out budget) · `incompatible` (another
- * contracts major, or a build without the door: not asked, DS-L9). */
+ * a building projection, a daemon not ready) · `asleep` (the roster says it
+ * is away — never "nothing found") · `timeout` (asked, and no answer: silent
+ * past the fan-out budget, its own search timed out, or the link failed while
+ * the roster calls it awake or restarting) · `incompatible` (another
+ * contracts major, or a build without the door: not asked, DS-L9).
+ *
+ * Corrected 2026-10-01 (DS-6b): `asleep` also read "its door did not answer",
+ * which let a failed call stand for the desktop's state — a retryable refusal
+ * or a TIMEOUT from a desktop the roster calls awake or restarting read
+ * `asleep`. The error is not the state: whether a desktop is away is the
+ * roster's to say (DS-L8), and a silent awake desktop is a `timeout`. */
 export const IndexSearchSourceState = z.enum([
   "answered",
   "building",

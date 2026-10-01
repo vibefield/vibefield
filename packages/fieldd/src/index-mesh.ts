@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import {
   type DeviceInfo,
+  type DeviceState,
   INDEX_MESH,
   IndexCatalogProject,
   IndexCatalogSession,
@@ -124,6 +125,10 @@ export interface IndexMeshOptions {
 
 const FILE_FORMAT = 1;
 const TABLES: readonly IndexCatalogTable[] = ["projects", "sessions"];
+/** A kept replica's name, and the temporary one a write goes through. */
+const KEPT_FILE = /^(.+)\.(projects|sessions)\.json$/;
+const KEPT_TMP = /^.+\.(projects|sessions)\.json\.\d+\.tmp$/;
+const ASLEEP_DETAIL = "this desktop is asleep; wake it to search its history";
 
 type Row<T extends IndexCatalogTable> = T extends "projects"
   ? IndexCatalogProject
@@ -336,11 +341,12 @@ export class IndexMesh extends EventEmitter {
       for (const table of TABLES) {
         this.#detach(peer, table);
         const entry = this.#table(peer, table);
-        if (entry.persist !== null) {
-          clearTimeout(entry.persist);
-          entry.persist = null;
-          this.#persist(peer, table); // what was heard is kept
-        }
+        if (entry.persist !== null) clearTimeout(entry.persist);
+        entry.persist = null;
+        // what was heard is kept — EVERY table, not only one with a write
+        // pending (DS-6b, 2026-10-01): a heartbeat changes no row but moves
+        // `heardAt`, and the restarted replica's `asOf` read the last change
+        this.#persist(peer, table);
       }
     }
     this.removeAllListeners();
@@ -1050,7 +1056,17 @@ export class IndexMesh extends EventEmitter {
     }
     const self = this.#opts.roster.currentDeviceId();
     for (const name of names) {
-      const match = /^(.+)\.(projects|sessions)\.json$/.exec(name);
+      if (KEPT_TMP.test(name)) {
+        // DS-6b (2026-10-01) — `<file>.<pid>.tmp` is a write that died before
+        // its rename (`#persist`); nothing is writing yet, so it is debris
+        try {
+          unlinkSync(join(this.#opts.dir, name));
+        } catch {
+          // gone already, or not ours to remove: the next write replaces it
+        }
+        continue;
+      }
+      const match = KEPT_FILE.exec(name);
       if (match === null) continue;
       const table = match[2] as IndexCatalogTable;
       let device: string;
@@ -1183,12 +1199,7 @@ export class IndexMesh extends EventEmitter {
       if (standing === "asleep") {
         return {
           hits: [],
-          source: {
-            device,
-            state: "asleep",
-            tookMs: 0,
-            detail: "this desktop is asleep; wake it to search its history",
-          },
+          source: { device, state: "asleep", tookMs: 0, detail: ASLEEP_DETAIL },
         };
       }
     }
@@ -1212,17 +1223,60 @@ export class IndexMesh extends EventEmitter {
         },
       };
     } catch (error) {
-      const kind = (error as { kind?: unknown }).kind;
-      const retryable = (error as { retryable?: unknown }).retryable === true;
-      const state: IndexSearchSource["state"] =
-        kind === "UNAVAILABLE" &&
-        (error as { details?: { service?: unknown } }).details?.service === "index"
-          ? "building" // its door answered: its INDEX is not up
-          : kind === "UNAVAILABLE" || kind === "TIMEOUT" || retryable
-            ? "asleep"
-            : "incompatible";
-      return { hits: [], source: { device, state, tookMs: this.#took(started) } };
+      return {
+        hits: [],
+        source: { device, ...this.#refusedSource(device, error), tookMs: this.#took(started) },
+      };
     }
+  }
+
+  /** DS-6b (2026-10-01) — what a failed ask says about a desktop. The ERROR is
+   * not the STATE: whether a desktop is away is the roster's to say (DS-L8),
+   * so a retryable refusal or a TIMEOUT used to read `asleep` and no longer
+   * does. PeerLink's own failure (`service: "peer-link"` — its deadline, an
+   * unreachable node) reads the roster: away → `asleep`, skewed →
+   * `incompatible`, awake or restarting → `timeout` (asked, no answer). The
+   * owner's door saying its own work timed out is a `timeout`; its door saying
+   * it is not ready (UNAVAILABLE about its index or its daemon, or any other
+   * retryable refusal) is `building`. A refusal that will not change is
+   * another build or principal: `incompatible` (DS-L9). */
+  #refusedSource(device: string, error: unknown): Pick<IndexSearchSource, "state" | "detail"> {
+    const kind = (error as { kind?: unknown }).kind;
+    const retryable = (error as { retryable?: unknown }).retryable === true;
+    const service = (error as { details?: { service?: unknown } }).details?.service;
+    const roster = this.#rosterState(device);
+    if (roster === "asleep") return { state: "asleep", detail: ASLEEP_DETAIL };
+    if (roster === "incompatible") return { state: "incompatible" };
+    if (kind === "UNAVAILABLE" && (service === "peer-link" || service === undefined)) {
+      return {
+        state: "timeout",
+        detail:
+          roster === "restarting"
+            ? "this desktop's daemon is restarting; ask again in a moment"
+            : "this desktop did not answer",
+      };
+    }
+    if (kind === "TIMEOUT") return { state: "timeout" };
+    if (kind === "UNAVAILABLE" || retryable) {
+      return {
+        state: "building",
+        detail:
+          service === "index"
+            ? "this desktop's index is not up yet"
+            : "this desktop's daemon is not ready yet",
+      };
+    }
+    return { state: "incompatible" };
+  }
+
+  /** The roster's state for a device, read NOW (a row without `state` is an
+   * older roster: online decides, as `deviceState` would). */
+  #rosterState(device: string): DeviceState | undefined {
+    const info = this.#opts.roster.list().find((row) => row.deviceId === device);
+    if (info === undefined) return undefined;
+    if (info.state !== undefined) return info.state;
+    if (info.link === "incompatible") return "incompatible";
+    return info.online ? "awake" : "asleep";
   }
 
   async #withTimeout<T>(promise: Promise<T>): Promise<T | "timeout"> {

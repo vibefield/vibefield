@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -101,8 +101,11 @@ function desktop(device: string, epoch = `${device}-boot-1`, opts: { pageBytes?:
 type Desktop = ReturnType<typeof desktop>;
 
 interface Behaviour {
-  /** how the desktop's door answers a search, or why it does not */
-  search?: IndexSearchResult | "asleep" | "hang" | "incompatible";
+  /** how the desktop's door answers a search, or why it does not: `asleep` is
+   * PeerLink's own failure (the call deadline, an unreachable node), `timeout`
+   * the owner's door saying its own work timed out, `not-ready` its door
+   * answering UNAVAILABLE about its own daemon */
+  search?: IndexSearchResult | "asleep" | "hang" | "incompatible" | "timeout" | "not-ready";
   /** refuse the catalog door (another build) */
   refuseCatalog?: boolean;
   /** S3 — the door answers UNAVAILABLE {service: "index"}: a desktop that
@@ -223,9 +226,18 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
       expect((params as { scope?: string }).scope).toBe("local"); // never fans out twice
       const how = behaviour.get(device)?.search;
       if (how === undefined || how === "asleep") {
-        throw new RpcCallError("UNAVAILABLE", "peer unreachable", true, {
+        // PeerLink's own words, as every one of its sites says them since fx1
+        throw new RpcCallError("UNAVAILABLE", "peer call timed out", true, {
+          service: "peer-link",
           device,
           state: "unreachable",
+        });
+      }
+      if (how === "timeout") throw new RpcCallError("TIMEOUT", "the search timed out", true);
+      if (how === "not-ready") {
+        throw new RpcCallError("UNAVAILABLE", "the daemon is starting", true, {
+          service: "fieldd",
+          state: "starting",
         });
       }
       if (how === "incompatible") throw new RpcCallError("INCOMPATIBLE", "major", false);
@@ -286,6 +298,7 @@ function mesh(opts: {
   behaviour?: Map<string, Behaviour>;
   dir?: string;
   localSearch?: IndexSearchResult;
+  now?: () => number;
 }) {
   const dir = opts.dir ?? mkdtempSync(join(tmpdir(), "vf-ixm-"));
   if (opts.dir === undefined) cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
@@ -310,6 +323,7 @@ function mesh(opts: {
     retryMinMs: 30,
     retryMaxMs: 120,
     changesMinIntervalMs: 20,
+    ...(opts.now !== undefined ? { now: opts.now } : {}),
   });
   cleanup.push(() => aggregator.dispose());
   aggregator.start();
@@ -732,6 +746,47 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
     await new Promise((resolve) => setTimeout(resolve, 300));
     expect(resumed()).toHaveLength(1);
   });
+
+  // DS-6b — dispose wrote only the tables with a write pending, so a replica
+  // that had heard B since its last write (a heartbeat, no change) came back
+  // after a restart with B's `asOf` as old as that write.
+  it("DS-6b: dispose writes EVERY table — the kept `heardAt` is the last frame heard, not the last change", async () => {
+    let clock = 1_000_000;
+    const a = desktop("dev-a");
+    const b = desktop("dev-b");
+    b.sessions.upsert([session("dev-b", "b1", 800)]);
+    const { aggregator, dir } = mesh({
+      self: a,
+      desktops: [a, b],
+      peers: [{ deviceId: "dev-b", online: true }],
+      behaviour: new Map([["dev-b", { digestIntervalMs: 30 }]]),
+      now: () => clock,
+    });
+    const kept = (table: string) =>
+      JSON.parse(readFileSync(join(dir, `dev-b.${table}.json`), "utf8")) as { heardAt: number };
+    const written = (table: string) => existsSync(join(dir, `dev-b.${table}.json`));
+    await until(() => written("sessions") && written("projects"), 3_000, "both tables kept");
+    expect(kept("sessions").heardAt).toBe(1_000_000);
+    // B is heard again — heartbeats only, nothing changes, nothing to write
+    clock = 2_000_000;
+    const asOfB = () =>
+      aggregator.sourcesFor("sessions").find((source) => source.device === "dev-b")?.asOf;
+    await until(() => asOfB() === new Date(2_000_000).toISOString(), 3_000, "a heartbeat heard");
+    aggregator.dispose();
+    expect(kept("sessions").heardAt).toBe(2_000_000);
+    expect(kept("projects").heardAt).toBe(2_000_000);
+  });
+
+  it("DS-6b: a write that died midway leaves `<file>.<pid>.tmp` — start sweeps it, and nothing else", async () => {
+    const a = desktop("dev-a");
+    const dir = mkdtempSync(join(tmpdir(), "vf-ixm-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    writeFileSync(join(dir, "dev-b.sessions.json.4242.tmp"), '{"partial":');
+    writeFileSync(join(dir, `dev%2Fc.projects.json.${process.pid}.tmp`), "");
+    writeFileSync(join(dir, "notes.tmp"), "not ours");
+    mesh({ self: a, desktops: [a], peers: [], dir });
+    expect(readdirSync(dir).sort()).toEqual(["notes.tmp"]);
+  });
 });
 
 describe("IndexMesh — search by asking (DS-D8)", () => {
@@ -797,7 +852,9 @@ describe("IndexMesh — search by asking (DS-D8)", () => {
     expect(states).toEqual({
       "dev-a": "answered",
       "dev-b": "answered",
-      "dev-c": "asleep", // the door did not answer
+      // asked, and the link failed while the roster calls it awake: no answer
+      // — `asleep` here until DS-6b (2026-10-01): the error is not the state
+      "dev-c": "timeout",
       "dev-d": "timeout", // asked, silent past the budget
       "dev-e": "building", // answered that it has no answer yet
       "dev-f": "incompatible",
@@ -834,6 +891,60 @@ describe("IndexMesh — search by asking (DS-D8)", () => {
     const onlyB = await aggregator.search({ q: "needle", scope: "mesh", devices: ["dev-b"] });
     expect(onlyB.sources?.map((source) => source.device)).toEqual(["dev-b"]);
     expect(onlyB.hits.every((hit) => hit.device === "dev-b")).toBe(true);
+  });
+
+  // DS-6b (2026-10-01, the landing review's DS-6 list) — a retryable refusal or
+  // a TIMEOUT read `asleep`: the ERROR was taken for the STATE. The roster says
+  // whether a desktop is away; a desktop it calls awake or restarting that did
+  // not answer is a `timeout`, and one whose door said "not ready" is building.
+  it("DS-6b: the error is not the state — a refusal or a timeout reads what the roster says, never `asleep` for a desktop it calls awake or restarting", async () => {
+    const a = desktop("dev-a");
+    const behaviour = new Map<string, Behaviour>([
+      ["dev-b", { search: "asleep" }], // the link failed (its deadline, the node's daemon gone)
+      ["dev-c", { search: "timeout" }], // the owner said its own search timed out
+      ["dev-d", { search: "not-ready" }], // the owner's door: its daemon is starting
+      ["dev-e", { search: "asleep" }],
+    ]);
+    const { aggregator, people } = mesh({
+      self: a,
+      desktops: [a],
+      peers: [
+        { deviceId: "dev-b", online: true, state: "restarting" },
+        { deviceId: "dev-c", online: true, state: "awake" },
+        { deviceId: "dev-d", online: true, state: "awake" },
+        { deviceId: "dev-e", online: true, state: "awake" },
+      ],
+      behaviour,
+    });
+    const result = IndexSearchResultSchema.parse(
+      await aggregator.search({ q: "needle", scope: "mesh" }),
+    );
+    const byDevice = new Map((result.sources ?? []).map((source) => [source.device, source]));
+    expect(byDevice.get("dev-b")).toMatchObject({ state: "timeout" });
+    expect(byDevice.get("dev-b")?.detail).toMatch(/restarting/);
+    expect(byDevice.get("dev-c")).toMatchObject({ state: "timeout" });
+    expect(byDevice.get("dev-d")).toMatchObject({ state: "building" });
+    expect(byDevice.get("dev-e")).toMatchObject({ state: "timeout" });
+
+    // the replica's standing reads the roster too: a desktop whose door does
+    // not answer while the roster calls it restarting is `stale`, not asleep
+    expect(
+      aggregator.sessions({ scope: "mesh" }).sources?.find((source) => source.device === "dev-b")
+        ?.state,
+    ).toBe("stale");
+
+    // …and when the roster DOES say a desktop is away, that is what it reads
+    people.set([
+      { deviceId: "dev-b", online: false, state: "asleep" },
+      { deviceId: "dev-c", online: true, state: "awake" },
+      { deviceId: "dev-d", online: true, state: "awake" },
+      { deviceId: "dev-e", online: true, state: "awake" },
+    ]);
+    const later = await aggregator.search({ q: "needle", scope: "mesh" });
+    expect(later.sources?.find((source) => source.device === "dev-b")).toMatchObject({
+      state: "asleep",
+      tookMs: 0,
+    });
   });
 });
 
