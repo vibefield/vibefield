@@ -1848,3 +1848,43 @@ private let catalogWait: Duration = .seconds(20)
     #expect(link.catalog.isEmpty)
   }
 }
+
+// MARK: - SP-2 (d): the roster is asked before every dial
+
+@MainActor
+@Suite struct FieldLinkRosterDialTests {
+  /// The tailnet says a desktop went to sleep, and no sweep has run since (the
+  /// tick is a minute here, so the window stays open): its socket drops, and
+  /// the client — asking the roster before the re-dial — parks instead of
+  /// climbing the backoff ladder against a machine that is not there. When the
+  /// roster says it woke, the link's sweep dials it again.
+  @Test func aDesktopTheTailnetCallsAsleepIsNotDialledAgainUntilItWakes() async throws {
+    let mesh = MeshRehearsal()
+    await mesh.set(peers: [studio])
+    let door = LinkDoor(script: selfDoor)
+    let link = FieldLink(
+      storeDoors: await mesh.doors(), transport: door, probe: LinkProbe(),
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
+      magicDNSSuffix: rehearsalSuffix,
+      schedule: FieldDiscoverySchedule(
+        notThisAccount: .seconds(300), unreachable: .seconds(30), tick: .seconds(60)),
+      now: { Date(timeIntervalSince1970: 1_757_808_001) })
+    link.start()
+    defer { link.stop() }
+    try await waitUntil("the door ready") { link.desktops.first?.state == .ready }
+
+    let asleepStudio = FieldStorePeer(
+      id: studio.id, deviceId: studio.deviceId, online: false, hostname: studio.hostname,
+      tailnetIPs: studio.tailnetIPs)
+    await mesh.set(peers: [asleepStudio])
+    await door.latest?.drop()
+    try await waitUntil("the drop heard") { link.desktops.first?.state == .reconnecting }
+    try await Task.sleep(for: .milliseconds(150))  // thirty 5 ms rungs of the ladder
+    #expect(await door.dials == 1)
+
+    await mesh.set(peers: [studio])
+    await mesh.emit(.upsert(studio))
+    try await waitUntil("a dial after the wake") { await door.dials == 2 }
+    try await waitUntil("ready again") { link.desktops.first?.state == .ready }
+  }
+}

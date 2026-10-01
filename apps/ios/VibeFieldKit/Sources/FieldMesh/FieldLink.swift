@@ -638,7 +638,11 @@ public final class FieldLink {
       // worth re-arming — the call is idempotent and returns at once when one
       // is live — because a subscription can die without its client changing
       // state, and the sweep is the only thing that would notice.
-      if clients[deviceId] != nil {
+      if let client = clients[deviceId] {
+        // SP-2 (d) — the roster says this peer is online, so a client the
+        // roster parked (asleep between two sweeps) dials now. Idempotent for
+        // every other client: one with a socket, a dial or a re-dial in hand.
+        client.connect()
         armDoorSubscription(deviceId)
         // The same clock for the catalog: a no-op once this connection has an
         // answer, and the retry for one a deadline or a dropped frame cost.
@@ -828,6 +832,13 @@ public final class FieldLink {
         return
       }
       closeDoor(to: deviceId)
+    }
+    // SP-2 (d) — the roster is asked before every dial this client makes, the
+    // first and each re-dial: the tailnet's own peer list, read live, so a
+    // desktop that went to sleep between two sweeps is not dialled in the gap.
+    var options = self.options
+    options.mayDial = { [doors] in
+      await doors.onlinePeers().contains { $0.deviceId == deviceId && $0.online }
     }
     let client = FieldProductClient(url: url, transport: transport, options: options)
     clients[deviceId] = client

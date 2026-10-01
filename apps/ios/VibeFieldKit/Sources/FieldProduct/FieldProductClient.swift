@@ -104,6 +104,17 @@ public final class FieldProductClient {
     public var keepalive: ProductKeepalive
     /// SP-2 — the clock every keepalive timer reads. Tests drive a manual one.
     public var clock: any ProductClock
+    /// SP-2 (d) — the roster's word, asked before EVERY dial: the first, every
+    /// re-dial after a drop, and the one after a silent door. `false` PARKS the
+    /// client: nothing is dialled and nothing is scheduled until `connect()`
+    /// asks again — the owner watches the roster and calls it.
+    ///
+    /// The phone's roster is the tailnet's own peer list: a peer listed online
+    /// is `awake` or `restarting` (its node answers while its daemon comes back,
+    /// and the backoff ladder is exactly what that needs) and is dialled; one
+    /// listed offline is `asleep`, and one not listed is gone — neither is ever
+    /// dialled. `nil` = no roster (a loopback door): always dial.
+    public var mayDial: (@Sendable () async -> Bool)?
 
     public init(
       maxBackoff: Duration = .seconds(10),
@@ -112,7 +123,8 @@ public final class FieldProductClient {
       userId: String? = nil,
       credential: String = "",
       keepalive: ProductKeepalive = .init(),
-      clock: any ProductClock = SystemProductClock()
+      clock: any ProductClock = SystemProductClock(),
+      mayDial: (@Sendable () async -> Bool)? = nil
     ) {
       self.maxBackoff = maxBackoff
       self.callTimeout = callTimeout
@@ -121,6 +133,7 @@ public final class FieldProductClient {
       self.credential = credential
       self.keepalive = keepalive
       self.clock = clock
+      self.mayDial = mayDial
     }
   }
 
@@ -138,6 +151,8 @@ public final class FieldProductClient {
   /// deadline closed for silence.
   @ObservationIgnored public private(set) var pingsSent = 0
   @ObservationIgnored public private(set) var silentDoorCloses = 0
+  /// SP-2 (d) — dials the roster turned away (a diagnostic, never a state).
+  @ObservationIgnored public private(set) var parkedDials = 0
 
   /// The dial target. NOT public and NOT observable: it carries the C3
   /// capability secret in its path, and a public property on an `@Observable`
@@ -567,6 +582,15 @@ public final class FieldProductClient {
     dialTask = Task { [weak self] in
       guard let self else { return }
       defer { if token == self.generation { self.dialTask = nil } }
+      // SP-2 (d) — never dial a peer the roster calls asleep or gone.
+      if let mayDial = self.options.mayDial {
+        let allowed = await mayDial()
+        guard token == self.generation else { return }
+        guard allowed else {
+          self.park(token: token)
+          return
+        }
+      }
       do {
         let connection = try await self.transport.connect(to: self.url)
         guard token == self.generation else {
@@ -789,6 +813,23 @@ public final class FieldProductClient {
     case .failed, .closed: return
     default: scheduleReconnect()
     }
+  }
+
+  /// SP-2 (d) — the roster said this desktop is not online. Nothing is dialled
+  /// and nothing is scheduled: the client waits, saying why in the honest
+  /// degraded shape, until `connect()` asks again. A caller parked on `ready()`
+  /// is TOLD rather than left waiting for a dial that will not come.
+  private func park(token: Int) {
+    guard token == generation else { return }
+    parkedDials += 1
+    let refusal = FieldProductError(
+      kind: "UNAVAILABLE",
+      message: "the tailnet says this desktop is not online — not dialing it until it is",
+      retryable: true,
+      details: .object(["service": .string("product"), "state": .string("asleep")]))
+    record(refusal, for: token)
+    state = .reconnecting
+    flushReadyWaiters(refusal)
   }
 
   /// At most one reconnect is ever scheduled.
