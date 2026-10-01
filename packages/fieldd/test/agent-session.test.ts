@@ -798,6 +798,32 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     ).toBe(0);
   });
 
+  // The landing review's nit (2026-10-01) — design-06 §8 names BOTH cadences
+  // floors (250 / 100 ms). The field's was only a default: a 16 ms ask was
+  // honoured, and on the mesh every distinct ask stood up a hub (a set of
+  // upstreams) of its own. Asked faster than its floor, a board is served at
+  // the floor; asked slower, it is honoured.
+  it("the field projection's cadence is a FLOOR, like the desk's: faster asks share the floor's hub", async () => {
+    const { daemon } = await setup({ floor: "mock" });
+    const win = await window(daemon, DECK, "floor");
+    const ask = (minIntervalMs: number) =>
+      win.call("agent.subscribe", { projection: "field", scope: "mesh", minIntervalMs });
+    await ask(AGENT_FIELD.MIN_INTERVAL_MS);
+    await ask(16);
+    await ask(100);
+    expect(daemon.meshBoard.size).toBe(1); // all three at the 250 ms floor
+    await ask(AGENT_FIELD.MIN_INTERVAL_MS * 2);
+    expect(daemon.meshBoard.size).toBe(2); // slower is the caller's to ask
+    // the desk's floor, as it was
+    await win.call("agent.subscribe", { projection: "desk", scope: "mesh", minIntervalMs: 16 });
+    await win.call("agent.subscribe", {
+      projection: "desk",
+      scope: "mesh",
+      minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+    });
+    expect(daemon.meshBoard.size).toBe(3);
+  });
+
   it("the scopes: births need agent.spawn, the fold needs agent.observe", async () => {
     const { daemon } = await setup({ floor: "mock" });
     const observer = await window(daemon, ["agent.observe"], "s1");

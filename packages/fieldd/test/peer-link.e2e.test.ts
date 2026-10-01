@@ -237,7 +237,12 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
 
     const err = await rpcA.callErr("doc.list", { device: "dev-unknown" });
     expect(err.data?.kind).toBe("UNAVAILABLE");
-    expect(err.data?.details).toEqual({ device: "dev-unknown", state: "offline" });
+    // `service` since 2026-10-01 (the landing review): UnavailableDetails requires it
+    expect(err.data?.details).toEqual({
+      service: "peer-link",
+      device: "dev-unknown",
+      state: "offline",
+    });
   }, 30_000);
 
   it("a dead endpoint → UNAVAILABLE {state:'unreachable'} within the per-call deadline", async () => {

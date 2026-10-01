@@ -591,4 +591,22 @@ describe("the mesh board — one door for every self desktop (DS-D4)", () => {
     early.dispose();
     late.dispose();
   });
+
+  // the landing review's nit (2026-10-01) — the honest state names its service
+  it("a stopped board refuses a reader with UNAVAILABLE {service, state: stopping}", () => {
+    const h = harness([selfRow]);
+    h.board.dispose();
+    let refusal: unknown;
+    try {
+      h.board.open("desk", 100, () => {});
+    } catch (error) {
+      refusal = error;
+    }
+    expect(refusal).toBeInstanceOf(RpcCallError);
+    expect(refusal).toMatchObject({
+      kind: "UNAVAILABLE",
+      retryable: true,
+      details: { service: "mesh-board", state: "stopping" },
+    });
+  });
 });

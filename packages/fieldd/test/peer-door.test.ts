@@ -159,3 +159,49 @@ describe("PeerLink.doorState", () => {
     expect(d.seen).toHaveLength(0); // never asked
   });
 });
+
+// The landing review's nit (2026-10-01) — `UnavailableDetails` requires
+// `{service, state}`, and PeerLink's own refusals carried no `service`: every
+// UNAVAILABLE it raises names it now, whatever the cause.
+describe("PeerLink's UNAVAILABLE names its service", () => {
+  it("no endpoint, a dead door, a deadline, and a disposed link — each says peer-link", async () => {
+    const offline = new PeerLink({ ownDeviceId: () => "dev-a", endpointFor: () => undefined });
+    cleanup.push(() => offline.dispose());
+    await expect(offline.request("dev-b", "device.list", {})).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      details: { service: "peer-link", device: "dev-b", state: "offline" },
+    });
+
+    const d = await door((_msg, ws) => ws.terminate());
+    const { link: cut } = linkTo(d.url);
+    await expect(cut.request("dev-b", "device.list", {})).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      details: { service: "peer-link", device: "dev-b", state: "unreachable" },
+    });
+
+    const { link: dead } = linkTo("ws://127.0.0.1:1/", { callTimeoutMs: 300 });
+    await expect(dead.request("dev-b", "device.list", {})).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      details: { service: "peer-link", device: "dev-b", state: "unreachable" },
+    });
+
+    const { link: gone } = linkTo("ws://127.0.0.1:1/");
+    gone.dispose();
+    await expect(gone.request("dev-b", "device.list", {})).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      details: { service: "peer-link", state: "disposed" },
+    });
+    await expect(
+      gone.subscribe(
+        "dev-b",
+        "device.subscribe",
+        {},
+        () => {},
+        () => {},
+      ),
+    ).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+      details: { service: "peer-link", state: "disposed" },
+    });
+  });
+});

@@ -367,7 +367,12 @@ describe("PeerLink's keyed forwards (the caller's half)", () => {
     expect(cut).toMatchObject({
       kind: "UNAVAILABLE",
       retryable: true,
-      details: { device: "dev-b", state: "outcome-unknown", idempotencyKey: KEY },
+      details: {
+        service: "peer-link", // UnavailableDetails requires it (2026-10-01)
+        device: "dev-b",
+        state: "outcome-unknown",
+        idempotencyKey: KEY,
+      },
     });
     expect(link.receipts.get(KEY)).toMatchObject({ state: "outcome-unknown", device: "dev-b" });
 

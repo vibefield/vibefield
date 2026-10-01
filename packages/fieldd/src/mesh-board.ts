@@ -625,7 +625,11 @@ export class MeshBoard {
     minIntervalMs: number,
     emit: (frame: AgentMeshFrame) => void,
   ): { open: AgentMeshOpen; dispose: () => void } {
-    if (this.#disposed) throw new RpcCallError("UNAVAILABLE", "the mesh board is stopping", true);
+    if (this.#disposed)
+      throw new RpcCallError("UNAVAILABLE", "the mesh board is stopping", true, {
+        service: "mesh-board",
+        state: "stopping",
+      });
     const key = `${projection}|${minIntervalMs}`;
     let hub = this.#hubs.get(key);
     if (hub === undefined) {

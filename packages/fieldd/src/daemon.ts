@@ -2390,13 +2390,17 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         const dispose = agents.subscribe((rows) => emit(rows));
         return { snapshot: agents.list(), dispose };
       }
+      // design-06 §8: "the board's cadence floors (250 / 100 ms)" — a caller
+      // may ask SLOWER, never faster, on either projection. The field's was a
+      // default and not a floor until 2026-10-01 (the landing review): a 16 ms
+      // ask was honoured, and every distinct ask stood up its own mesh hub.
       const floor =
         projection === "desk"
           ? Math.max(
               minIntervalMs ?? AGENT_FIELD.DESK_MIN_INTERVAL_MS,
               AGENT_FIELD.DESK_MIN_INTERVAL_MS,
             )
-          : (minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS);
+          : Math.max(minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS, AGENT_FIELD.MIN_INTERVAL_MS);
       if (scope === "mesh") {
         if (meshBoard === null)
           throw new RpcCallError("UNAVAILABLE", "the mesh board is not ready yet", true, {

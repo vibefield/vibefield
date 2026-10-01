@@ -30,9 +30,11 @@ import { RpcCallError } from "./native-link";
 // login is this account's.
 //
 // One OUTBOUND connection per peer, dial-on-demand, idle-close (5min), per-call
-// deadline (8s). Failure honesty: no endpoint → UNAVAILABLE {device,
-// state:"offline"}; transport failure/timeout → the link drops (next call
-// re-dials) and UNAVAILABLE {device, state:"unreachable"}; a hello
+// deadline (8s). Failure honesty: no endpoint → UNAVAILABLE {service:
+// "peer-link", device, state:"offline"}; transport failure/timeout → the link
+// drops (next call re-dials) and UNAVAILABLE {service, device,
+// state:"unreachable"} (`service` on every one since 2026-10-01, the landing
+// review — `UnavailableDetails` requires it); a hello
 // INCOMPATIBLE pins the peer incompatible (refuse fast — D32; clears on
 // restart, ledgered) — while the REMOTE's genuine replies (FORBIDDEN_SCOPE,
 // NOT_FOUND, …) pass through untouched: a forwarded call's answer is the
@@ -163,7 +165,11 @@ export class PeerLink extends EventEmitter {
     params: unknown,
     envelope?: OutboundEnvelope,
   ): Promise<unknown> {
-    if (this.disposed) throw new RpcCallError("UNAVAILABLE", "peer link disposed", false);
+    if (this.disposed)
+      throw new RpcCallError("UNAVAILABLE", "peer link disposed", false, {
+        service: "peer-link",
+        state: "disposed",
+      });
     if (deviceId === this.opts.ownDeviceId())
       throw new RpcCallError("PRECONDITION_FAILED", "device is self — routing bug", false);
     if (this.incompatible.has(deviceId))
@@ -191,7 +197,7 @@ export class PeerLink extends EventEmitter {
    * attempt ended: a result (`applied`), the owner's own refusal (`refused`),
    * or — when the request LEFT and no answer came back, the link cut or the
    * FORWARD_TIMEOUT_MS deadline passed — `outcome-unknown`, surfaced as
-   * UNAVAILABLE {device, state: "outcome-unknown", idempotencyKey}: never
+   * UNAVAILABLE {service, device, state: "outcome-unknown", idempotencyKey}: never
    * success, never a plain failure. An attempt that never left (no endpoint,
    * the dial failed before the link was ready) is forgotten — nothing reached
    * the owner. The retry is the same call with the same key; the owner answers
@@ -246,7 +252,7 @@ export class PeerLink extends EventEmitter {
         "UNAVAILABLE",
         "the forward was cut before an answer; its outcome is unknown",
         true,
-        { device: deviceId, state: "outcome-unknown", idempotencyKey: key },
+        { service: "peer-link", device: deviceId, state: "outcome-unknown", idempotencyKey: key },
       );
     } finally {
       if (link !== undefined) this.releaseLink(link);
@@ -290,6 +296,7 @@ export class PeerLink extends EventEmitter {
         this.markSilent(deviceId);
         this.dropLink(deviceId);
         return new RpcCallError("UNAVAILABLE", `peer unreachable: ${e.message}`, true, {
+          service: "peer-link",
           device: deviceId,
           state: "unreachable",
         });
@@ -302,7 +309,7 @@ export class PeerLink extends EventEmitter {
       "UNAVAILABLE",
       `peer unreachable: ${e instanceof Error ? e.message : String(e)}`,
       true,
-      { device: deviceId, state: "unreachable" },
+      { service: "peer-link", device: deviceId, state: "unreachable" },
     );
   }
 
@@ -324,7 +331,11 @@ export class PeerLink extends EventEmitter {
      * none: they are the daemon's own reads. */
     envelope?: OutboundEnvelope,
   ): Promise<PeerSubscription> {
-    if (this.disposed) throw new RpcCallError("UNAVAILABLE", "peer link disposed", false);
+    if (this.disposed)
+      throw new RpcCallError("UNAVAILABLE", "peer link disposed", false, {
+        service: "peer-link",
+        state: "disposed",
+      });
     if (deviceId === this.opts.ownDeviceId())
       throw new RpcCallError("PRECONDITION_FAILED", "device is self — routing bug", false);
     if (this.incompatible.has(deviceId))
@@ -353,6 +364,7 @@ export class PeerLink extends EventEmitter {
     if (this.links.get(deviceId) !== link) {
       upstream.unsubscribe();
       throw new RpcCallError("UNAVAILABLE", "peer link dropped during subscribe", true, {
+        service: "peer-link",
         device: deviceId,
         state: "unreachable",
       });
@@ -411,6 +423,7 @@ export class PeerLink extends EventEmitter {
     const endpoint = this.opts.endpointFor(deviceId);
     if (endpoint === undefined)
       throw new RpcCallError("UNAVAILABLE", "peer has no published endpoint", true, {
+        service: "peer-link",
         device: deviceId,
         state: "offline",
       });
@@ -491,6 +504,7 @@ export class PeerLink extends EventEmitter {
         this.dropLink(deviceId);
         reject(
           new RpcCallError("UNAVAILABLE", "peer call timed out", true, {
+            service: "peer-link",
             device: deviceId,
             state: "unreachable",
           }),
