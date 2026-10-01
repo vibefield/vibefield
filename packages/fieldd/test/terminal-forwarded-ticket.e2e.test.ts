@@ -200,12 +200,21 @@ describe("DS-4 — a window's ticket to a session on another desktop", () => {
       { deviceId: "dev-b", target: `mock.ts.net:${PORTS.TERMINAL_CELLS_SERVE}` },
     ]);
     // the grants are B's: its cell, its route, minted for A's daemon — a self
-    // peer, so the self set (DS-D5), the take included
+    // peer FORWARDING FOR A WINDOW (the call carried `onBehalfOf`, DS-2), so
+    // the self set (DS-D5, D2), the take included
     expect(ticket.route).toEqual({ cellBootId: "cell-b", routeRevision: 7 });
     expect(ticket.attachGrant.claims.audienceCellBootId).toBe("cell-b");
     expect(ticket.attachGrant.claims.rights).toEqual(["geometry", "input", "read"]);
     expect(ticket.attachGrant.claims.clientId).toMatch(/^peer-fieldd:dev-self~/);
     expect(ticket.transportGrant.claims.clientId).toBe(ticket.attachGrant.claims.clientId);
+
+    // D2 (the landing review, 2026-10-01) — the same door asked by A's daemon
+    // on its OWN account (no envelope: nobody behind the call) is a peer daemon
+    // acting for no one, and design-06 §6 mints it `[read]`
+    const own = TerminalOpenTicketResult.parse(
+      await A.peers.request("dev-b", "terminal.openTicket", { sessionId: "pane-b" }),
+    );
+    expect(own.attachGrant.claims.rights).toEqual(["read"]);
 
     // the take's product door (the phone's, DS-4b) is declared and honest
     const take = await window.callErr("terminal.takeGeometry", { sessionId: "pane-b" });

@@ -14,6 +14,7 @@ import {
   CELL_SUPERVISION,
   type CellEndpointSet,
   ENV_PREFIXES,
+  type ForwardedFor,
   ObservedState,
   RemoteCellEndpointSet,
   type RouteBinding,
@@ -651,10 +652,18 @@ export class TerminalService {
 
   /** `terminal.openTicket` — exactly `TerminalOpenTicket` since TP-S3e: the
    * session's OWN cell (the inventory's `cell` tag), its doors and both
-   * grants; a keyless or doorless cell is UNAVAILABLE, never a half ticket. */
-  openTicket(principal: GrantPrincipal, sessionId: string): TerminalOpenTicketResponse {
+   * grants; a keyless or doorless cell is UNAVAILABLE, never a half ticket.
+   *
+   * D2 — `forwardedFor` is who a FORWARDED call is for (the caller's
+   * `ctx.onBehalfOf`, on every mint below): a peer daemon naming no one is
+   * minted `["read"]` (`rightsFor`). */
+  openTicket(
+    principal: GrantPrincipal,
+    sessionId: string,
+    forwardedFor?: ForwardedFor,
+  ): TerminalOpenTicketResponse {
     const cell = this.sessionCell(sessionId);
-    return this.ticketFor(cell, principal, sessionId);
+    return this.ticketFor(cell, principal, sessionId, forwardedFor);
   }
 
   /** The create result (GT-1's atomic mint) for the cell the session LANDED
@@ -671,6 +680,7 @@ export class TerminalService {
       cellBootId?: string | undefined;
       profileSet?: string | undefined;
     },
+    forwardedFor?: ForwardedFor,
   ): TerminalCreateOpenResponse {
     if (created.cellBootId === undefined)
       throw new RpcCallError(
@@ -684,7 +694,7 @@ export class TerminalService {
       sessionId: created.sessionId,
       session: created.session,
       ...(created.profileSet === undefined ? {} : { profileSet: created.profileSet }),
-      ...this.ticketFor(cell, principal, created.sessionId),
+      ...this.ticketFor(cell, principal, created.sessionId, forwardedFor),
     };
   }
 
@@ -694,6 +704,7 @@ export class TerminalService {
   renewAttach(
     principal: GrantPrincipal,
     params: TerminalRenewAttachParams,
+    forwardedFor?: ForwardedFor,
   ): TerminalRenewAttachResult {
     const cell = this.sessionCell(params.sessionId);
     if (cell.grantKey === undefined)
@@ -710,6 +721,7 @@ export class TerminalService {
       route: this.routeBinding(cell.key),
       expectGeneration: params.expectGeneration,
       requestId: params.requestId,
+      forwardedFor,
     });
     return { attachGrant };
   }
@@ -882,6 +894,7 @@ export class TerminalService {
     cell: CellTarget,
     principal: GrantPrincipal,
     sessionId: string,
+    forwardedFor?: ForwardedFor,
   ): TerminalOpenTicket {
     if (cell.grantKey === undefined)
       throw new RpcCallError(
@@ -903,6 +916,7 @@ export class TerminalService {
       sessionId,
       route: this.routeBinding(cell.key),
       doors: this.doorsFor(cell, principal),
+      forwardedFor,
     });
   }
 

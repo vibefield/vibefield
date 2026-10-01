@@ -3,6 +3,7 @@ import {
   type CellTransportGrant,
   type CellTransportGrantClaims,
   DEFAULT_GRANT_VALIDITY_LIMITS,
+  type ForwardedFor,
   GRANT_ALG,
   GRANT_ENVELOPE_VERSION,
   type GrantProtectedHeader,
@@ -71,11 +72,16 @@ export function isSelfTailnetPrincipal(principal: GrantPrincipal): boolean {
  *
  * design-06 §6 also says "a peer daemon acting for no one gets `[read]`".
  * Telling "for no one" from "for a window" needs `onBehalfOf` at the owner
- * (DS-2, lane ds-b — `contracts/src/forwarding.ts`); until it lands, nothing a
- * daemon does on its own account calls a terminal door, and the FORWARDING
- * daemon refuses to carry a mint for a caller it would itself mint read-only
+ * (DS-2, lane ds-b — `contracts/src/forwarding.ts`). The FORWARDING daemon
+ * refuses to carry a mint for a caller it would itself mint read-only
  * (`terminal-service.ts` `forwardVia`), so a local restriction never launders
- * through a peer. */
+ * through a peer.
+ *
+ * LANDED 2026-10-01 (the landing review, D2): `onBehalfOf` reaches the owner on
+ * every forwarded call (ProductApi puts it on `ctx.onBehalfOf`), so the
+ * narrowing is built — `rightsFor(principal, forwardedFor)` mints this kind
+ * the self set only when the call names who it is for, and `["read"]` when it
+ * names no one. */
 export function isSelfPeerDaemon(principal: GrantPrincipal): boolean {
   return principal.kind === "peer-fieldd";
 }
@@ -175,8 +181,22 @@ export function clientIdFor(principal: GrantPrincipal): string {
  * time, the last one they focused, and it follows them. The `input` half's
  * history still stands — TM-3 deleted `terminal.mirrorWriteGrant`, the durable
  * bearer that used to hand a self peer the right to type, so this per-client,
- * per-session, expiring grant is the only way any principal comes by it. */
-export function rightsFor(principal: GrantPrincipal): SessionAttachRight[] {
+ * per-session, expiring grant is the only way any principal comes by it.
+ *
+ * D2 (the landing review, 2026-10-01) — design-06 §6: "a peer daemon acting for
+ * no one gets `[read]`". A `peer-fieldd` is minted the self set only when the
+ * forwarded call names who it is for (`forwardedFor`, the owner's
+ * `ctx.onBehalfOf`); a call that names no one is the daemon on its own account,
+ * and reads. The provenance only NARROWS: the most it buys a peer daemon is the
+ * self set it was minted unconditionally before, so a restated `onBehalfOf` is
+ * still never authority beyond the principal's own (DS-L7). Every other kind is
+ * unchanged and ignores it. */
+export function rightsFor(
+  principal: GrantPrincipal,
+  forwardedFor?: ForwardedFor,
+): SessionAttachRight[] {
+  if (isSelfPeerDaemon(principal))
+    return forwardedFor !== undefined ? ["geometry", "input", "read"] : ["read"];
   return isSelfPrincipal(principal) ? ["geometry", "input", "read"] : ["read"];
 }
 
@@ -231,6 +251,9 @@ export interface MintTicketInput {
    * same key — so the cell cannot tell, and must not: a URL is a coordinate,
    * and coordinates are not authority. */
   doors: TicketEndpointSet;
+  /** D2 — who a FORWARDED mint is for (the owner's `ctx.onBehalfOf`), read only
+   * by `rightsFor`: a peer daemon naming no one is minted `["read"]`. */
+  forwardedFor?: ForwardedFor | undefined;
 }
 
 export interface RenewAttachInput extends Omit<MintTicketInput, "doors"> {
@@ -387,7 +410,7 @@ export class TerminalGrantMinter {
       routeRevision: input.route.routeRevision,
       ...(input.route.leaseEpoch === undefined ? {} : { leaseEpoch: input.route.leaseEpoch }),
       grantGeneration: generation,
-      rights: rightsFor(input.principal),
+      rights: rightsFor(input.principal, input.forwardedFor),
       issuedAt,
       expiresAt: issuedAt + TP_ATTACH_GRANT_TTL_MS,
     };

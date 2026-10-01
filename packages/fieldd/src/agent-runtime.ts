@@ -65,6 +65,7 @@ import {
   type AgentsProfilesLoginParams,
   type AgentsProfilesLoginResult,
   createAgentCatalogReaders,
+  type ForwardedFor,
   isAgentResumeRun,
   LAYOUT,
   type TerminalInfo,
@@ -959,7 +960,13 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
 
   /** A managed session born in a PTY on this device's floor. The answer is
    * the fold's row at birth and the routed ticket the pane mounts. */
-  async spawn(params: AgentSpawnParams, principal: GrantPrincipal): Promise<AgentSpawnResult> {
+  async spawn(
+    params: AgentSpawnParams,
+    principal: GrantPrincipal,
+    /** D2 — who a FORWARDED birth is for (the owner's `ctx.onBehalfOf`): the
+     * ticket's rights follow it (`rightsFor`). */
+    forwardedFor?: ForwardedFor,
+  ): Promise<AgentSpawnResult> {
     this.requireOffered(params.provider, "spawn");
     const terminals = this.requireTerminals();
     const cwd = params.cwd ?? this.home;
@@ -979,15 +986,19 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
       return this.enter(result, { cwd, title: params.title, ...identity.launched() });
     });
-    return this.ticketed(entry, principal, terminals);
+    return this.ticketed(entry, principal, terminals, forwardedFor);
   }
 
   /** `agent.resume` — a run of ours (its record), or QL-D10's conversation by
    * its provider-native id. */
-  async resume(params: AgentResumeParams, principal: GrantPrincipal): Promise<AgentSpawnResult> {
+  async resume(
+    params: AgentResumeParams,
+    principal: GrantPrincipal,
+    forwardedFor?: ForwardedFor,
+  ): Promise<AgentSpawnResult> {
     return isAgentResumeRun(params)
-      ? await this.resumeRun(params, principal)
-      : await this.resumeNative(params, principal);
+      ? await this.resumeRun(params, principal, forwardedFor)
+      : await this.resumeNative(params, principal, forwardedFor);
   }
 
   /** QL-D10 — continue a conversation the agent index knows (an
@@ -1001,6 +1012,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private async resumeNative(
     params: AgentResumeNativeParams,
     principal: GrantPrincipal,
+    forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
     // The review's hardening: the native id becomes an argv token in the
     // adapters (`resume <id>`), so one that could read as a flag — or carry
@@ -1038,7 +1050,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // the first await; given back once the run is entered or the call failed.
     const release = this.claimConversation(params.provider, params.nativeSessionId);
     try {
-      return await this.resumeNativeClaimed(params, principal, terminals);
+      return await this.resumeNativeClaimed(params, principal, terminals, forwardedFor);
     } finally {
       release();
     }
@@ -1048,6 +1060,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     params: AgentResumeNativeParams,
     principal: GrantPrincipal,
     terminals: TerminalService,
+    forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
     const profileId = await this.resumeProfile(params);
     if (!this.personaActive(profileId)) {
@@ -1117,7 +1130,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       if (isSessionFailure(result)) throw this.sessionFailureToError(result, params.provider);
       return this.enter(result, { cwd, title: params.title, ...identity.launched() });
     });
-    return this.ticketed(entry, principal, terminals);
+    return this.ticketed(entry, principal, terminals, forwardedFor);
   }
 
   /** QL-D10 — the persona a native resume runs under: the one named, or the
@@ -1204,6 +1217,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   private async resumeRun(
     params: AgentResumeRunParams,
     principal: GrantPrincipal,
+    forwardedFor?: ForwardedFor,
   ): Promise<AgentSpawnResult> {
     const terminals = this.requireTerminals();
     const record = this.records.read(params.runtimeRunId);
@@ -1246,7 +1260,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         );
       }
       const entry = await this.track(this.replacePending(pending, params.cwd, "manual"));
-      return this.ticketed(entry, principal, terminals);
+      return this.ticketed(entry, principal, terminals, forwardedFor);
     }
     const live = this.managed.get(record.runtimeRunId);
     // MF-1f — a STAMPED record means the process is over, so its PTY still
@@ -1306,7 +1320,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // The ticket FIRST: the successor exists and is answerable before anything
     // is destroyed, so a birth that failed above leaves the dead pane and its
     // final screen exactly where they were.
-    const answer = this.ticketed(entry, principal, terminals);
+    const answer = this.ticketed(entry, principal, terminals, forwardedFor);
     // MF-1g — then the husk goes. Ordered like AR-4b's own replacement (the
     // pending path terminates the old PTY before its door answers, and the
     // deck's hand-over is built for precisely that), so nothing lingers once
@@ -2197,6 +2211,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     entry: ManagedEntry,
     principal: GrantPrincipal,
     terminals: TerminalService,
+    forwardedFor?: ForwardedFor,
   ): AgentSpawnResult {
     const born = this.terminalHost?.born(entry.info.terminalSessionId);
     if (born === undefined) {
@@ -2209,7 +2224,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     const session = this.summarize(entry);
     try {
-      return { session, terminal: terminals.createOpenResult(principal, born) };
+      return { session, terminal: terminals.createOpenResult(principal, born, forwardedFor) };
     } catch (error) {
       const refusal = bornWithoutTicket(error, {
         runtimeRunId: entry.info.runtimeRunId,

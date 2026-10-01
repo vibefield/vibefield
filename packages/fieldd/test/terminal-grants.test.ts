@@ -43,6 +43,8 @@ const GUEST = { kind: "tailnet-guest", login: "me@example.com" };
 // reaching it from another of their own devices (product-api sets `self` only
 // when the login matched link.json).
 const SELF = { kind: "tailnet", login: "me@example.com", self: true };
+// D2 — who a forwarded call is FOR, as the owner reads it (`ctx.onBehalfOf`)
+const FOR_A_WINDOW = { clientKind: "renderer", deviceId: "dev-b", windowId: "p-77" };
 const ROUTE = { cellBootId: KEY.cellBootId, routeRevision: 12 };
 const DOORS = {
   controlUrl: "ws://127.0.0.1:49152/control",
@@ -97,10 +99,61 @@ describe("clientId and rights derive from the principal, never from the caller's
   it("a self peer DAEMON forwarding for a window is minted the self set", () => {
     const daemon = { kind: "peer-fieldd", deviceId: "dev-b" };
     expect(isSelfPeerDaemon(daemon)).toBe(true);
-    expect(rightsFor(daemon)).toEqual(["geometry", "input", "read"]);
+    expect(rightsFor(daemon, FOR_A_WINDOW)).toEqual(["geometry", "input", "read"]);
+  });
+
+  // D2 (the landing review, 2026-10-01) — design-06 §6: "a peer daemon acting
+  // for no one gets [read]". Provenance reaches the owner on every forwarded
+  // call (`ctx.onBehalfOf`); a call that names no one is the daemon on its own
+  // account.
+  it("a self peer DAEMON acting for no one reads only — provenance narrows, and lifts nobody else", () => {
+    const daemon = { kind: "peer-fieldd", deviceId: "dev-b" };
+    expect(rightsFor(daemon)).toEqual(["read"]);
+    expect(rightsFor(daemon, undefined)).toEqual(["read"]);
+    expect(rightsFor(daemon, { clientKind: "ios", deviceId: "dev-b" })).toEqual([
+      "geometry",
+      "input",
+      "read",
+    ]);
+    // a restated `onBehalfOf` is never authority beyond the principal's own
+    for (const other of [GUEST, { kind: "plugin", tokenId: "t" }, { kind: "tailnet" }])
+      expect(rightsFor(other, FOR_A_WINDOW), other.kind).toEqual(["read"]);
+    // and the self principals here need none
+    expect(rightsFor(WINDOW)).toEqual(["geometry", "input", "read"]);
+    expect(rightsFor(SELF)).toEqual(["geometry", "input", "read"]);
+  });
+
+  it("the minter carries the rule: a ticket and a renewal for a peer daemon follow its provenance", () => {
+    const minter = new TerminalGrantMinter(() => 1_000_000, "epochA");
+    const daemon = { kind: "peer-fieldd", deviceId: "dev-b" };
+    const base = { key: KEY, principal: daemon, sessionId: "s-1", route: ROUTE, doors: DOORS };
+    expect(minter.mintTicket(base).attachGrant.claims.rights).toEqual(["read"]);
+    const forwarded = minter.mintTicket({ ...base, forwardedFor: FOR_A_WINDOW });
+    expect(forwarded.attachGrant.claims.rights).toEqual(["geometry", "input", "read"]);
+    const generation = minter.attachGeneration(daemon, "s-1");
+    const renewed = minter.renewAttach({
+      key: KEY,
+      principal: daemon,
+      sessionId: "s-1",
+      route: ROUTE,
+      expectGeneration: generation,
+      requestId: "r-1",
+      forwardedFor: FOR_A_WINDOW,
+    });
+    expect(renewed.claims.rights).toEqual(["geometry", "input", "read"]);
+    const ownAccount = minter.renewAttach({
+      key: KEY,
+      principal: daemon,
+      sessionId: "s-1",
+      route: ROUTE,
+      expectGeneration: generation + 1,
+      requestId: "r-2",
+    });
+    expect(ownAccount.claims.rights).toEqual(["read"]);
   });
 
   it("every self principal gets exactly one set, and nobody gets geometryAdmin", () => {
+    // (a peer daemon's set is for a call FOR someone — D2, the row above)
     const self = [
       WINDOW,
       { kind: "shell-main", tokenId: "t" },
@@ -109,7 +162,11 @@ describe("clientId and rights derive from the principal, never from the caller's
     ];
     for (const principal of self) {
       expect(isSelfPrincipal(principal), principal.kind).toBe(true);
-      expect(rightsFor(principal), principal.kind).toEqual(["geometry", "input", "read"]);
+      expect(rightsFor(principal, FOR_A_WINDOW), principal.kind).toEqual([
+        "geometry",
+        "input",
+        "read",
+      ]);
     }
     const others = [
       GUEST,

@@ -2237,7 +2237,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             ...(parsed.data.title !== undefined ? { title: parsed.data.title } : {}),
           },
         },
-        () => agents.spawn(parsed.data, ctx.principal),
+        () => agents.spawn(parsed.data, ctx.principal, ctx.onBehalfOf),
         (result) => ({
           outcome: "succeeded",
           attrs: {
@@ -2278,7 +2278,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           target,
           attrs: { ...attrs, ...(resume.cwd !== undefined ? { cwd: resume.cwd } : {}) },
         },
-        () => agents.resume(resume, ctx.principal),
+        () => agents.resume(resume, ctx.principal, ctx.onBehalfOf),
         (result) => ({
           outcome: "succeeded",
           attrs: {
@@ -2947,7 +2947,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // handler through ITS daemon, so `ctx.principal` is that daemon
     // (`peer-fieldd`, a self peer), minted the self set and the tailnet doors
     // (`doorsFor`), and the audit row names the calling node. The window behind
-    // it joins the row with `onBehalfOf` (DS-2, lane ds-b); nothing here reads it.
+    // it joins the row with `onBehalfOf` (DS-2, lane ds-b).
+    // D2 (the landing review, 2026-10-01) — and the mint reads it now: a peer
+    // daemon whose call names no one behind it is minted `["read"]`, the self
+    // set only for a call that is FOR someone (`rightsFor`; design-06 §6). The
+    // same `ctx.onBehalfOf` rides every mint below: renewAttach, create, and
+    // the agent births.
     api.register("terminal.openTicket", async (ctx, params) => {
       const sessionId = requireSessionId(params);
       if (terminals.get(sessionId) === undefined)
@@ -2960,7 +2965,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // that has never heard of this session. TP-S1: the TPv3 route + grants
         // ride beside the legacy trio when the cell carries a grant key; the
         // caller's principal is what the grants are bound to (never UI claims).
-        () => terminals.openTicket(ctx.principal, sessionId),
+        () => terminals.openTicket(ctx.principal, sessionId, ctx.onBehalfOf),
         () => ({ outcome: "succeeded" }),
       );
     });
@@ -2986,7 +2991,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
             requestId: parsed.data.requestId,
           },
         },
-        () => terminals.renewAttach(ctx.principal, parsed.data),
+        () => terminals.renewAttach(ctx.principal, parsed.data, ctx.onBehalfOf),
         () => ({ outcome: "succeeded" }),
       );
     });
@@ -3091,7 +3096,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         // (GT-1's window, the reason this mint exists at all).
         // TP-S1: the legacy `ticket` beside the spread route + grants, bound
         // to the caller's principal.
-        () => terminals.createOpenResult(ctx.principal, created),
+        () => terminals.createOpenResult(ctx.principal, created, ctx.onBehalfOf),
         () => ({ outcome: "succeeded" }),
       );
       return opened satisfies TerminalCreateOpenResponse;

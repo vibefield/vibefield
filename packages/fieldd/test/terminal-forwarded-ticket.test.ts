@@ -53,7 +53,9 @@ const PLUGIN: GrantPrincipal = { kind: "plugin", tokenId: "tok-p" };
 const PHONE: GrantPrincipal = { kind: "tailnet", login: TEST_LOGIN, self: true };
 
 /** What A's daemon answers a forwarded `terminal.openTicket`: minted for B's
- * daemon (a self peer — the self set), its cell's tailnet doors. */
+ * daemon (a self peer — the self set), its cell's tailnet doors. The call is
+ * FOR B's window — a forwarded call always says so (`onBehalfOf`, DS-2), and
+ * since D2 (2026-10-01) that is what earns a peer daemon the self set. */
 function ownersTicket(doors: unknown = OWNER_DOORS) {
   const minted = new TerminalGrantMinter(() => 1_000_000, "epochA").mintTicket({
     key: OWNER_KEY,
@@ -61,6 +63,7 @@ function ownersTicket(doors: unknown = OWNER_DOORS) {
     sessionId: "pane-a",
     route: { cellBootId: "cell-a", routeRevision: 4 },
     doors: OWNER_DOORS,
+    forwardedFor: { clientKind: "renderer", deviceId: "dev-b", windowId: "p-1" },
   });
   return { ...minted, endpoints: doors };
 }
