@@ -248,7 +248,7 @@ function mesh(opts: {
     dir,
     searchTimeoutMs: 150,
     staleAfterMs: 400,
-    persistDebounceMs: 20,
+    persistIntervalMs: 20,
     retryMinMs: 30,
     retryMaxMs: 120,
     changesMinIntervalMs: 20,
@@ -450,7 +450,7 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
       dir,
       retryMinMs: 20,
       retryMaxMs: 60,
-      persistDebounceMs: 10,
+      persistIntervalMs: 10,
     });
     cleanup.push(() => aggregator.dispose());
     aggregator.start();

@@ -274,12 +274,14 @@ export interface FielddConfig {
    * budgets) and the digest heartbeat its peer subscribers hear. Production
    * takes INDEX_MESH's and ROWS' numbers. */
   /** DS-6 test seams: the aggregator's cadences (the search fan-out budget,
-   * the stale horizon, the persist debounce, the replica's re-attach backoff,
-   * the change pings' floor). Production takes INDEX_MESH's numbers. */
+   * the stale horizon, the persist interval, the replica's delta floor and
+   * re-attach backoff, the change pings' floor). Production takes INDEX_MESH's
+   * numbers. */
   indexMesh?: {
     searchTimeoutMs?: number;
     staleAfterMs?: number;
-    persistDebounceMs?: number;
+    persistIntervalMs?: number;
+    replicaMinIntervalMs?: number;
     retryMinMs?: number;
     retryMaxMs?: number;
     changesMinIntervalMs?: number;

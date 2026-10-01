@@ -99,7 +99,8 @@ export interface IndexMeshOptions {
   /** test seams for the cadences (defaults: INDEX_MESH) */
   searchTimeoutMs?: number;
   staleAfterMs?: number;
-  persistDebounceMs?: number;
+  persistIntervalMs?: number;
+  replicaMinIntervalMs?: number;
   retryMinMs?: number;
   retryMaxMs?: number;
   changesMinIntervalMs?: number;
@@ -239,7 +240,8 @@ export class IndexMesh extends EventEmitter {
   readonly #now: () => number;
   readonly #searchTimeoutMs: number;
   readonly #staleAfterMs: number;
-  readonly #persistDebounceMs: number;
+  readonly #persistIntervalMs: number;
+  readonly #replicaMinIntervalMs: number;
   readonly #retryMinMs: number;
   readonly #retryMaxMs: number;
   readonly #changesMinIntervalMs: number;
@@ -253,8 +255,8 @@ export class IndexMesh extends EventEmitter {
   /** merged + sorted sessions per {scope, who may speak}, for one version */
   #sortedSessions = new Map<string, { version: number; rows: MergedSession[] }>();
   #sortedProjects: { version: number; rows: IndexCatalogProject[] } | null = null;
-  /** the change pings' chain: one epoch per daemon, a revision per change */
-  readonly #changesEpoch = `changes-${randomUUID()}`;
+  /** the change pings' chains: one epoch per daemon and scope, a revision per change */
+  readonly #changesEpoch = randomUUID();
   #changesRevision = { local: 0, mesh: 0 };
   #localOff: Array<() => void> = [];
   readonly #saidOnce = new Set<string>();
@@ -267,7 +269,8 @@ export class IndexMesh extends EventEmitter {
     this.#now = opts.now ?? Date.now;
     this.#searchTimeoutMs = opts.searchTimeoutMs ?? INDEX_MESH.SEARCH_FANOUT_TIMEOUT_MS;
     this.#staleAfterMs = opts.staleAfterMs ?? INDEX_MESH.STALE_AFTER_MS;
-    this.#persistDebounceMs = opts.persistDebounceMs ?? INDEX_MESH.PERSIST_DEBOUNCE_MS;
+    this.#persistIntervalMs = opts.persistIntervalMs ?? INDEX_MESH.PERSIST_INTERVAL_MS;
+    this.#replicaMinIntervalMs = opts.replicaMinIntervalMs ?? INDEX_MESH.REPLICA_MIN_INTERVAL_MS;
     this.#retryMinMs = opts.retryMinMs ?? INDEX_MESH.REPLICA_RETRY_MIN_MS;
     this.#retryMaxMs = opts.retryMaxMs ?? INDEX_MESH.REPLICA_RETRY_MAX_MS;
     this.#changesMinIntervalMs = opts.changesMinIntervalMs ?? INDEX_MESH.CHANGES_MIN_INTERVAL_MS;
@@ -416,12 +419,14 @@ export class IndexMesh extends EventEmitter {
     const scope = params.scope ?? "local";
     const floor = params.minIntervalMs ?? this.#changesMinIntervalMs;
     const head = () => this.#changesRevision[scope];
+    // each scope is its own chain: a local cursor never resumes a mesh one
+    const epoch = `changes-${scope}-${this.#changesEpoch}`;
     const since = params.since;
     let sent = head();
     const open =
-      since !== undefined && since.epoch === this.#changesEpoch && since.revision <= head()
-        ? { resumed: { epoch: this.#changesEpoch, revision: since.revision } }
-        : { snapshot: { epoch: this.#changesEpoch, revision: head(), rows: [] } };
+      since !== undefined && since.epoch === epoch && since.revision <= head()
+        ? { resumed: { epoch, revision: since.revision } }
+        : { snapshot: { epoch, revision: head(), rows: [] } };
     if ("resumed" in open) sent = since?.revision ?? head();
     let timer: ReturnType<typeof setTimeout> | null = null;
     let lastAt = Number.NEGATIVE_INFINITY;
@@ -434,7 +439,7 @@ export class IndexMesh extends EventEmitter {
       lastAt = this.#now();
       emit(
         {
-          epoch: this.#changesEpoch,
+          epoch,
           since: sent,
           revision: head(),
           upserts: [],
@@ -808,7 +813,11 @@ export class IndexMesh extends EventEmitter {
       const sub = await this.#opts.link.subscribe(
         peer.device,
         "index.catalog.subscribe",
-        { table, ...(cursor !== undefined ? { since: cursor } : {}) },
+        {
+          table,
+          minIntervalMs: this.#replicaMinIntervalMs,
+          ...(cursor !== undefined ? { since: cursor } : {}),
+        },
         onEvent,
         onDrop,
       );
@@ -937,10 +946,12 @@ export class IndexMesh extends EventEmitter {
   #schedulePersist(peer: Peer, table: IndexCatalogTable): void {
     const entry = this.#table(peer, table);
     if (entry.persist !== null || this.#disposed) return;
+    // a THROTTLE, not a debounce: the first change after a write schedules
+    // the next one; everything in between rides it
     entry.persist = setTimeout(() => {
       entry.persist = null;
       this.#persist(peer, table);
-    }, this.#persistDebounceMs);
+    }, this.#persistIntervalMs);
     entry.persist.unref?.();
   }
 

@@ -225,16 +225,21 @@ export const ROWS = {
  * stream's row upserts into one frame per table per META_BATCH_MS. A mesh
  * search waits SEARCH_FANOUT_TIMEOUT_MS for each awake desktop, then answers
  * with what it has (the silent one reads `timeout`, never "nothing found").
- * A replica persists PERSIST_DEBOUNCE_MS after its last change; one that hears
- * nothing — not even the digest heartbeat — for STALE_AFTER_MS while its peer
- * is on the roster reads `stale`. */
+ * A replica asks its peer for deltas no faster than REPLICA_MIN_INTERVAL_MS
+ * (history is not a live fold) and rewrites its file at most once per
+ * PERSIST_INTERVAL_MS while it changes (a whole-table JSON file: a busy peer's
+ * ~4 MB table rewritten per second would be gigabytes an hour; a crash loses
+ * at most that window, which the next subscribe's catch-up or reset repairs),
+ * and on shutdown. One that hears nothing — not even the digest heartbeat —
+ * for STALE_AFTER_MS while its peer is on the roster reads `stale`. */
 export const INDEX_MESH = {
   SEARCH_FANOUT_TIMEOUT_MS: 5_000,
   META_RESNAPSHOT_MS: 10 * 60 * 1000,
   META_BATCH_MS: 50,
   META_RECONNECT_MIN_MS: 500,
   META_RECONNECT_MAX_MS: 30_000,
-  PERSIST_DEBOUNCE_MS: 1_000,
+  REPLICA_MIN_INTERVAL_MS: 1_000,
+  PERSIST_INTERVAL_MS: 60_000,
   STALE_AFTER_MS: 150_000,
   REPLICA_RETRY_MIN_MS: 1_000,
   REPLICA_RETRY_MAX_MS: 60_000,
