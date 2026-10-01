@@ -164,6 +164,50 @@ describe("the template's own reader (any served process's set)", () => {
   });
 });
 
+describe("an HTTP leg beside the WebSocket ones — SP-D9's `put` (ruled 2026-10-01 12:38)", () => {
+  // The upload plane (draft/thinking-upload-plane.md) hands a client ONE leg,
+  // `put`: a plain HTTP PUT per chunk at `/blob/<hostBootId>/u/<uploadId>`,
+  // the grant in a header and never the URL. The template must carry it: the
+  // reader admits http(s) legs, and an instance composes them from its serve's
+  // base URL with the serve's own TLS choice, as it does a WebSocket leg.
+  const upload = remoteEndpointSet(
+    ["put"],
+    remoteDoorUrl("https?", String.raw`\/blob\/[^/?#\s]+\/u\/[^/?#\s]+`),
+    "a tailnet http:// blob URL without query/fragment",
+  );
+  const put = { path: "/blob/hb-1/u/up-7", transport: "http" } as const;
+
+  it("composes an HTTP leg over the serve's own scheme", () => {
+    expect(composeRemoteEndpoints(upload, "http://studio.tail9f2c.ts.net", { put })).toEqual({
+      putUrl: "http://studio.tail9f2c.ts.net/blob/hb-1/u/up-7",
+    });
+    expect(composeRemoteEndpoints(upload, "https://studio.tail9f2c.ts.net:443/", { put })).toEqual({
+      putUrl: "https://studio.tail9f2c.ts.net/blob/hb-1/u/up-7",
+    });
+  });
+
+  it("never builds a WebSocket URL for an HTTP door, or an HTTP one from a loopback base", () => {
+    // asked as a bare path, a leg is a WebSocket leg — which this door refuses
+    expect(
+      composeRemoteEndpoints(upload, "http://studio.tail9f2c.ts.net", { put: put.path }),
+    ).toBeUndefined();
+    expect(composeRemoteEndpoints(upload, "http://127.0.0.1:1", { put })).toBeUndefined();
+    expect(composeRemoteEndpoints(upload, "ftp://studio.tail9f2c.ts.net", { put })).toBeUndefined();
+  });
+
+  it("the template's reader takes it beside a WebSocket leg, and still refuses loopback", () => {
+    expect(
+      RemoteEndpointSet.safeParse({
+        putUrl: "http://studio.tail9f2c.ts.net/blob/hb-1/u/up-7",
+        sessionUrl: "ws://studio.tail9f2c.ts.net:9424/ws/sessions/s1",
+      }).success,
+    ).toBe(true);
+    expect(
+      RemoteEndpointSet.safeParse({ putUrl: "http://127.0.0.1:9499/blob/hb-1/u/up-7" }).success,
+    ).toBe(false);
+  });
+});
+
 describe("rosettad's direct plane — the template's second instance (one leg)", () => {
   const golden = fixture("remote-endpoint-set.rosetta.json");
 

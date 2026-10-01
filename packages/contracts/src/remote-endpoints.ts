@@ -105,42 +105,59 @@ export const RemoteEndpointSet = z.record(z.string(), z.unknown()).superRefine((
 });
 export type RemoteEndpointSet = z.infer<typeof RemoteEndpointSet>;
 
-/** The WebSocket origin of a serve's own base URL (truffle's `ProxyInfo.url`,
- * e.g. `http://host.ts.net:9422`) — THE place the `http→ws` / `https→wss`
- * mapping is written, for every instance. `undefined` when the base is not a
+/** How a leg is dialled. `ws`: a WebSocket upgrade — the cell's `control` and
+ * `frames`, rosetta's `session`. `http`: a plain request — SP-D9's upload `put`
+ * (ruled 2026-10-01 12:38: the template admits an http/https leg beside the
+ * WebSocket ones). Either way the scheme's TLS half is the SERVE's, never the
+ * leg's: plain inside WireGuard, or TLS where the serve terminates it. */
+export type RemoteLegTransport = "ws" | "http";
+
+/** One leg's path, and how it is dialled: a bare path is a WebSocket leg (every
+ * leg until SP-D9's), `{path, transport}` says so explicitly. */
+export type RemoteLegPath =
+  | string
+  | { readonly path: string; readonly transport: RemoteLegTransport };
+
+/** The origin a leg dials, from a serve's own base URL (truffle's
+ * `ProxyInfo.url`, e.g. `http://host.ts.net:9422`) — THE place the serve's
+ * scheme becomes a leg's (`http→ws`, `https→wss` for a WebSocket leg; itself
+ * for an HTTP leg), for every instance. `undefined` when the base is not a
  * usable http(s) origin. */
-function remoteDoorOrigin(serveBaseUrl: string): string | undefined {
+function remoteDoorOrigin(serveBaseUrl: string, transport: RemoteLegTransport): string | undefined {
   let base: URL;
   try {
     base = new URL(serveBaseUrl);
   } catch {
     return undefined;
   }
-  const scheme =
-    base.protocol === "https:" ? "wss:" : base.protocol === "http:" ? "ws:" : undefined;
-  return scheme === undefined ? undefined : `${scheme}//${base.host}`;
+  const tls = base.protocol === "https:" ? true : base.protocol === "http:" ? false : undefined;
+  if (tls === undefined) return undefined;
+  const scheme = transport === "ws" ? (tls ? "wss:" : "ws:") : tls ? "https:" : "http:";
+  return `${scheme}//${base.host}`;
 }
 
 /**
  * Compose an instance's set from its serve's base URL and one path per leg
- * (keyed by the leg's NAME). Every leg is a WebSocket door today, so the scheme
- * follows the serve's (`ws` over plain HTTP inside WireGuard, `wss` over TLS).
- * `undefined` — never a URL nothing can dial — when the base is unusable, a
- * leg has no path, or the instance refuses what was built (a loopback base, a
- * foreign path). A path for a leg the instance does not have is ignored.
+ * (keyed by the leg's NAME; a bare path is a WebSocket leg, `{path, transport:
+ * "http"}` an HTTP one). `undefined` — never a URL nothing can dial — when the
+ * base is unusable, a leg has no path, or the instance refuses what was built
+ * (a loopback base, a foreign path, a WebSocket URL for an HTTP door). A path
+ * for a leg the instance does not have is ignored.
  */
 export function composeRemoteEndpoints<T extends z.ZodRawShape>(
   set: z.ZodObject<T, "passthrough">,
   serveBaseUrl: string,
-  paths: Readonly<Record<string, string>>,
+  paths: Readonly<Record<string, RemoteLegPath>>,
 ): z.infer<z.ZodObject<T, "passthrough">> | undefined {
-  const origin = remoteDoorOrigin(serveBaseUrl);
-  if (origin === undefined) return undefined;
   const built: Record<string, string> = {};
   for (const member of Object.keys(set.shape)) {
     if (!LEG_MEMBER.test(member)) continue; // not a leg: nothing a URL can fill
-    const path = paths[member.slice(0, -"Url".length)];
-    if (path === undefined) return undefined;
+    const leg = paths[member.slice(0, -"Url".length)];
+    if (leg === undefined) return undefined;
+    const { path, transport } =
+      typeof leg === "string" ? { path: leg, transport: "ws" as const } : leg;
+    const origin = remoteDoorOrigin(serveBaseUrl, transport);
+    if (origin === undefined) return undefined;
     built[member] = `${origin}${path}`;
   }
   const parsed = set.safeParse(built);
