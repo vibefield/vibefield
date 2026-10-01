@@ -71,6 +71,24 @@ struct AccountMemoryTests {
     #expect(store.face(for: "ME@EXAMPLE.COM") == dealt)
   }
 
+  @Test("the last home is remembered per login, replaced by the next, and forgotten with the account")
+  func lastHome() {
+    let memory = HomeMemory(defaults: scratch())
+    #expect(memory.lastHome(for: "me@example.com") == nil)
+    memory.record("dev-studio", login: "Me@Example.com")
+    #expect(memory.lastHome(for: "me@example.com") == "dev-studio")
+    // A re-home replaces it: there is one last home, never a list.
+    memory.record("dev-mini", login: "me@example.com")
+    #expect(memory.lastHome(for: "ME@EXAMPLE.COM") == "dev-mini")
+    // Another login's home is another login's.
+    #expect(memory.lastHome(for: "bob@corp.com") == nil)
+    // An empty login remembers nowhere — the pre-login window knows no account.
+    memory.record("dev-x", login: "")
+    #expect(memory.lastHome(for: "") == nil)
+    memory.forget(login: "me@example.com")
+    #expect(memory.lastHome(for: "me@example.com") == nil)
+  }
+
   @Test("the desktop's own face overrides the deal, and sign out forgets it")
   func setAndForget() {
     let store = AccountFaceStore(defaults: scratch())

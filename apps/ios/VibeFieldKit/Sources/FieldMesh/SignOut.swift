@@ -7,7 +7,8 @@ import Foundation
 /// **Goes — what the field taught this phone:** the node's state directory
 /// (the Tailscale keys, the durable device id, the remembered login, the
 /// synced store), so the next CONNECT is a fresh node and a fresh sign-in;
-/// this login's remembered desktops and its face; the project ledger (the
+/// this login's remembered desktops, its face and its home (DS-8 — the desktop
+/// its field was last read through); the project ledger (the
 /// colours dealt to another account's projects would otherwise greet the
 /// next one). **Stays — what the person taught it:** the terminal
 /// appearance, the snippets, the clipboard history, and every other
@@ -60,8 +61,10 @@ public struct SignOutSweep: Sendable {
     if let login, !login.isEmpty {
       DesktopMemory(defaults: defaults).forget(login: login)
       AccountFaceStore(defaults: defaults).forget(login: login)
+      HomeMemory(defaults: defaults).forget(login: login)
       report.removed.append("desktops")
       report.removed.append("face")
+      report.removed.append("home")
     }
     if defaults.object(forKey: UserDefaultsProjectLedgerStore.defaultKey) != nil {
       defaults.removeObject(forKey: UserDefaultsProjectLedgerStore.defaultKey)

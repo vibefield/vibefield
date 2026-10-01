@@ -58,8 +58,11 @@ struct SignOutTests {
     DesktopMemory(defaults: defaults).record(
       [FieldDesktop(deviceId: "a", name: "studio", platform: nil, state: .ready, feed: .door)], login: "alice@corp.com")
     AccountFaceStore(defaults: defaults).set(UserFace(emoji: "🦊"), for: "alice@corp.com")
+    // DS-8 — the desktop this login's field was last read through.
+    HomeMemory(defaults: defaults).record("a", login: "alice@corp.com")
     // Another login's memory is another login's: it stays.
     AccountFaceStore(defaults: defaults).set(UserFace(emoji: "🐙"), for: "bob@corp.com")
+    HomeMemory(defaults: defaults).record("b", login: "bob@corp.com")
     defaults.set(Data("ledger".utf8), forKey: UserDefaultsProjectLedgerStore.defaultKey)
     for key in SignOutSweep.kept { defaults.set(Data("mine".utf8), forKey: key) }
     defaults.set("dark", forKey: "vf.terminal.appearance.test")
@@ -67,12 +70,15 @@ struct SignOutTests {
     let report = SignOutSweep(login: "alice@corp.com", stateDirectory: directory, legacyStateDirectory: legacy)
       .run(defaults: defaults)
 
-    #expect(report.removed == ["node state", "legacy node state", "desktops", "face", "project ledger"])
+    #expect(
+      report.removed == ["node state", "legacy node state", "desktops", "face", "home", "project ledger"])
     #expect(!FileManager.default.fileExists(atPath: directory.path))
     #expect(!FileManager.default.fileExists(atPath: legacy.path))
     #expect(DesktopMemory(defaults: defaults).remembered(for: "alice@corp.com").isEmpty)
     #expect(AccountFaceStore(defaults: defaults).face(for: "alice@corp.com") == nil)
     #expect(AccountFaceStore(defaults: defaults).face(for: "bob@corp.com") == UserFace(emoji: "🐙"))
+    #expect(HomeMemory(defaults: defaults).lastHome(for: "alice@corp.com") == nil)
+    #expect(HomeMemory(defaults: defaults).lastHome(for: "bob@corp.com") == "b")
     #expect(defaults.object(forKey: UserDefaultsProjectLedgerStore.defaultKey) == nil)
     for key in SignOutSweep.kept { #expect(defaults.data(forKey: key) == Data("mine".utf8)) }
     #expect(SignOutSweep.kept.contains("fieldterminal.appearance.v1"))

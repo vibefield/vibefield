@@ -65,6 +65,42 @@ public struct DesktopMemory {
   }
 }
 
+/// DS-8 (DS-D13) — the desktop this phone last read its field through: its
+/// HOME, by durable device id, per login. The phone homes to its last home
+/// when it answers, else to the first self desktop whose door answers, and
+/// re-homes by the roster when the home stops answering — and the desktop it
+/// re-homed to becomes the last home. One per login, never a list; another
+/// login's home is another login's; and sign out forgets it with the rest of
+/// what the field taught this phone (AP-D4).
+public struct HomeMemory {
+  private let defaults: UserDefaults
+
+  public init(defaults: UserDefaults = .standard) {
+    self.defaults = defaults
+  }
+
+  static func key(for login: String) -> String {
+    "vf.account.home." + login.lowercased()
+  }
+
+  public func lastHome(for login: String) -> String? {
+    guard !login.isEmpty else { return nil }
+    let home = defaults.string(forKey: Self.key(for: login))
+    return home?.isEmpty == false ? home : nil
+  }
+
+  /// An empty login records nowhere: the pre-login window knows no account to
+  /// file a home under.
+  public func record(_ deviceId: String, login: String) {
+    guard !login.isEmpty, !deviceId.isEmpty else { return }
+    defaults.set(deviceId, forKey: Self.key(for: login))
+  }
+
+  public func forget(login: String) {
+    defaults.removeObject(forKey: Self.key(for: login))
+  }
+}
+
 /// The face this phone wears for an account.
 ///
 /// Until the door carries the desktop's own face (IOS-8f, `user.me`), the
