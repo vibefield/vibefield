@@ -91,6 +91,14 @@ const FORWARDED_MINTS: ReadonlySet<string> = new Set([
   "agent.resume",
 ]);
 
+/** DS-4e (2026-10-01, the lead's 12:32 ruling) — the forwarded READ a
+ * forwarding daemon carries only for this person's own callers, like the mints
+ * above but minting nothing: `terminal.sessions {device}` hands over the
+ * owner's whole inventory (absolute cwds, pids), and the owner answers this
+ * daemon, never the caller behind it — a plugin holding `terminal.attach` here
+ * is not this person (`isSelfPrincipal`). */
+const FORWARDED_SELF_ONLY: ReadonlySet<string> = new Set(["terminal.sessions"]);
+
 /** S1 — the forwarded answers that carry a run's row AND its pane's ticket
  * (`AgentSpawnResult`); the ticket's doors are adopted like `openTicket`'s. */
 const FORWARDED_BIRTHS: ReadonlySet<string> = new Set(["agent.spawn", "agent.resume"]);
@@ -755,7 +763,10 @@ export class TerminalService {
    */
   forwardVia(inner: DeviceForwarder): DeviceForwarder {
     return async (device, method, params, ctx, envelope) => {
-      if (FORWARDED_MINTS.has(method) && !isSelfPrincipal(ctx.principal))
+      if (
+        (FORWARDED_MINTS.has(method) || FORWARDED_SELF_ONLY.has(method)) &&
+        !isSelfPrincipal(ctx.principal)
+      )
         throw new RpcCallError(
           "FORBIDDEN_SCOPE",
           `${method} is forwarded to another desktop only for this person's own windows and devices`,

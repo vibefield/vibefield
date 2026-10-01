@@ -246,6 +246,31 @@ describe("TerminalService.forwardVia — the forwarded ticket on the caller's de
     ).toEqual({ terminated: true });
   });
 
+  // DS-4e (2026-10-01, the lead's 12:32 ruling) — the flipped sessions READ is
+  // self-only too. It hands over the owner's whole inventory (absolute cwds,
+  // pids), and the owner sees only this daemon, never the caller behind it; a
+  // plugin may hold `terminal.attach` here (renderer-eligible) without being
+  // this person, so the refusal is HERE, before anything leaves the desktop.
+  it("carries the owner's inventory read only for this person's own windows and devices", async () => {
+    const inventory = { sessions: [] };
+    const inner = vi.fn<DeviceForwarder>(async () => inventory);
+    const forward = service().forwardVia(inner);
+    const error = await refusal(
+      forward(OWNER, "terminal.sessions", { device: OWNER }, ctx(PLUGIN)),
+    );
+    expect(error.kind).toBe("FORBIDDEN_SCOPE");
+    expect(error.details).toEqual({ method: "terminal.sessions", device: OWNER });
+    expect(inner).not.toHaveBeenCalled();
+    // a window and the phone ARE this person: carried, the answer untouched
+    expect(await forward(OWNER, "terminal.sessions", { device: OWNER }, ctx(WINDOW))).toBe(
+      inventory,
+    );
+    expect(await forward(OWNER, "terminal.sessions", { device: OWNER }, ctx(PHONE))).toBe(
+      inventory,
+    );
+    expect(inner).toHaveBeenCalledTimes(2);
+  });
+
   it("refuses an owner that answers its OWN loopback pair — that coordinate is on its machine", async () => {
     const error = await refusal(
       service(fakeEgress().rewriter).forwardVia(async () =>
