@@ -1,5 +1,7 @@
+import { PRODUCT_API_LIMITS } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  atFloor,
   type DeltaFrame,
   diffRows,
   type FrameKind,
@@ -7,6 +9,7 @@ import {
   RevisionedSubscription,
   type SnapshotFrame,
   snapshotDeltaView,
+  wholeValueDoor,
   wholeValueView,
 } from "../src/projection";
 
@@ -544,5 +547,45 @@ describe("snapshotDeltaView's frames are the field's shapes", () => {
       removed: [],
     });
     expect(view.reset).toBeUndefined();
+  });
+});
+
+describe("atFloor — a declared floor is a floor", () => {
+  it("serves a faster ask at the floor, honours a slower one, and defaults to the floor", () => {
+    expect(atFloor(16, 100)).toBe(100);
+    expect(atFloor(1_000, 100)).toBe(1_000);
+    expect(atFloor(undefined, 500)).toBe(500);
+  });
+});
+
+describe("wholeValueDoor — the install a whole-value door hands ProductAPI", () => {
+  beforeEach(() => vi.useFakeTimers());
+  afterEach(() => vi.useRealTimers());
+
+  it("opens with the value, frames the whole newest value as a delta at the stream floor, and lets go", () => {
+    let value = { rows: ["a"] };
+    const listeners = new Set<() => void>();
+    const sent: Array<[unknown, FrameKind | undefined]> = [];
+    const door = wholeValueDoor(
+      {
+        read: () => value,
+        onChange: (listener) => {
+          listeners.add(listener);
+          return () => listeners.delete(listener);
+        },
+      },
+      (payload, kind) => sent.push([payload, kind]),
+    );
+    expect(door.snapshot).toEqual({ rows: ["a"] });
+    value = { rows: ["a", "b"] };
+    for (const fn of [...listeners]) fn();
+    value = { rows: ["a", "b", "c"] };
+    for (const fn of [...listeners]) fn();
+    vi.advanceTimersByTime(PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS - 1);
+    expect(sent).toEqual([]);
+    vi.advanceTimersByTime(1);
+    expect(sent).toEqual([[{ rows: ["a", "b", "c"] }, "delta"]]);
+    door.dispose();
+    expect(listeners.size).toBe(0);
   });
 });

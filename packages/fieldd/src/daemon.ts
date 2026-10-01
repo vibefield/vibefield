@@ -61,6 +61,7 @@ import {
   DocRenameParams,
   DocSetSyncIntentParams,
   IdempotencyKey,
+  INDEX_MESH,
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
   IndexEnrollParams,
@@ -96,6 +97,7 @@ import {
   type ProcessSubEvent,
   type ProductInfo,
   RendererParticipantIdentity,
+  ROWS,
   remoteCellEndpointsFor,
   remoteCellRoutePrefix,
   SCOPES,
@@ -200,6 +202,7 @@ import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
+import { atFloor, wholeValueDoor } from "./projection";
 import { NO_EGRESS, type RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
   ROSETTAD_UNCONFIGURED,
@@ -1671,8 +1674,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         scope: ctx.principal.kind === "peer-fieldd" ? "local" : parsed.data.scope,
       });
     });
+    /** SP-1 — a whole-value stream's frame that did not land (`wholeValueDoor`),
+     * logged rather than thrown into its source's listener. */
+    const streamFrameFailed =
+      (method: string) =>
+      (error: unknown): void =>
+        logger.warn("fieldd.stream_frame_failed", "A stream subscriber's frame failed", {
+          method,
+          error: error instanceof Error ? error.message : String(error),
+        });
     // DS-6 — a visible History page's invalidation pings (rows always empty,
     // the revision moves when the scope's catalog or a desktop's standing does)
+    // SP-1 — the pings' floor is a FLOOR (methods.ts declares it): a faster ask
+    // is served at it, a slower one is honoured. The configured seam stands.
+    const changesFloorMs =
+      config.indexMesh?.changesMinIntervalMs ?? INDEX_MESH.CHANGES_MIN_INTERVAL_MS;
     api.registerSubscription("index.changes.subscribe", (_ctx, params, emit) => {
       const parsed = IndexChangesSubscribeParams.safeParse(params ?? {});
       if (!parsed.success)
@@ -1681,7 +1697,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           'expected { scope?: "local" | "mesh", since?: {epoch, revision}, minIntervalMs? }',
           false,
         );
-      const pings = requireMesh().changes(parsed.data, emit);
+      const pings = requireMesh().changes(
+        { ...parsed.data, minIntervalMs: atFloor(parsed.data.minIntervalMs, changesFloorMs) },
+        emit,
+      );
       return { snapshot: pings.open, dispose: pings.dispose, start: pings.start };
     });
     // QL (QL-D9) — the empty pane launcher's list: a folder's past sessions
@@ -1743,7 +1762,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       const pump = indexCatalog.pump(parsed.data.table, {
         since: parsed.data.since,
-        minIntervalMs: parsed.data.minIntervalMs,
+        // SP-1 — ROWS' floor is a FLOOR at this door (methods.ts declares it)
+        minIntervalMs: atFloor(parsed.data.minIntervalMs, ROWS.MIN_INTERVAL_MS),
         ...(config.indexCatalog?.digestIntervalMs !== undefined
           ? { digestIntervalMs: config.indexCatalog.digestIntervalMs }
           : {}),
@@ -1873,10 +1893,24 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // subscription the client does not know yet, and would be dropped; and a
       // read that throws leaves no subscriber behind. What changed while it was
       // read arrives as the next frame.
-      const snapshot = await agents.profiles.sets();
-      const dispose = agents.profiles.subscribe((frame) => emit(frame));
+      // SP-1 — the frames are PUSHED whole (the sets' own 16 ms publisher), so
+      // the newest one stands and the stream floor coalesces them
+      // (`wholeValueDoor`); a frame equal to what this reader holds is not sent.
+      let latest = await agents.profiles.sets();
+      const door = wholeValueDoor(
+        {
+          read: () => latest,
+          onChange: (listener) =>
+            agents.profiles.subscribe((frame) => {
+              latest = frame;
+              listener();
+            }),
+        },
+        emit,
+        { onError: streamFrameFailed("agents.profileSets.subscribe") },
+      );
       agents.profiles.publish();
-      return { snapshot, dispose };
+      return door;
     });
     api.register("agents.profileSets.create", async (ctx, params) => {
       const parsed = AgentsProfileSetsCreateParams.safeParse(params);
@@ -2948,11 +2982,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         throw new RpcCallError("NOT_FOUND", `no such device: ${parsed.data.deviceId}`, false);
       return info;
     });
-    api.registerSubscription("device.subscribe", (_ctx, _params, emit) => {
-      const fn = (roster: unknown) => emit(roster);
-      devices.on("changed", fn);
-      return { snapshot: devices.list(), dispose: () => devices.off("changed", fn) };
-    });
+    // SP-1 — whole lists (`DeviceInfo[]`), the newest standing, at the stream
+    // floor (`wholeValueDoor`): the wire Godview, the mesh section and the kit
+    // read is unchanged; a roster that churns moves a reader once per window.
+    api.registerSubscription("device.subscribe", (_ctx, _params, emit) =>
+      wholeValueDoor(
+        {
+          read: () => devices.list(),
+          onChange: (listener) => {
+            devices.on("changed", listener);
+            return () => devices.off("changed", listener);
+          },
+        },
+        emit,
+        { onError: streamFrameFailed("device.subscribe") },
+      ),
+    );
 
     // -- Terminal floor (NF-3, native-floor spec §6): list/get read the
     // observed inventory; openTicket/create/terminate are audited (attempt
@@ -4311,11 +4356,20 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // -- dynamic services (PLUG-P4, §14/§22.2) --
     api.setDynamicRouter(services);
     api.register("services.list", () => services.snapshot());
-    api.registerSubscription("services.subscribe", (_ctx, _params, emit) => {
-      const fn = (snap: unknown) => emit(snap);
-      services.on("changed", fn);
-      return { snapshot: services.snapshot(), dispose: () => services.off("changed", fn) };
-    });
+    // SP-1 — whole snapshots, the newest standing, at the stream floor
+    api.registerSubscription("services.subscribe", (_ctx, _params, emit) =>
+      wholeValueDoor(
+        {
+          read: () => services.snapshot(),
+          onChange: (listener) => {
+            services.on("changed", listener);
+            return () => services.off("changed", listener);
+          },
+        },
+        emit,
+        { onError: streamFrameFailed("services.subscribe") },
+      ),
+    );
     // §16.5 / PRC-2 — durable disable enters the SAME synchronous host-owned route drain as
     // reload/revocation/shutdown. The command path then joins it for worker teardown.
     plugins.on("changed", () => {
@@ -4833,10 +4887,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return artifacts.refreshPreview(parsed.data.artifactId);
     });
     api.register("artifact.list", () => ({ artifacts: artifacts.artifacts() }));
-    api.registerSubscription("artifact.subscribe", (_ctx, _params, emit) => {
-      const off = artifacts.onCatalogChanged((catalog) => emit(catalog));
-      return { snapshot: artifacts.artifacts(), dispose: off };
-    });
+    // SP-1 — whole lists (`ArtifactView[]`), the newest standing, at the
+    // stream floor: the wire the kit and the browser plugin read is unchanged.
+    api.registerSubscription("artifact.subscribe", (_ctx, _params, emit) =>
+      wholeValueDoor(
+        {
+          read: () => artifacts.artifacts(),
+          onChange: (listener) => artifacts.onCatalogChanged(() => listener()),
+        },
+        emit,
+        { onError: streamFrameFailed("artifact.subscribe") },
+      ),
+    );
     mesh.on("reconciled", emitHealth);
     mesh.on("serves-changed", emitHealth);
 

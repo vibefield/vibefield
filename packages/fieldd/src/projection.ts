@@ -34,8 +34,17 @@
 // exactly what it was (the roster as `DeviceInfo[]`, the catalog as
 // `ArtifactView[]`).
 
+import { PRODUCT_API_LIMITS } from "@vibefield/contracts";
+
 /** A frame's kind on the door: `<base>.delta` or `<base>.snapshot`. */
 export type FrameKind = "delta" | "snapshot";
+
+/** A reader's asked cadence, served at the door's floor: slower is honoured,
+ * faster never is (SP-1 — a declared floor that a caller can undercut is a
+ * default, and the registry declares floors). */
+export function atFloor(askedMs: number | undefined, floorMs: number): number {
+  return Math.max(askedMs ?? floorMs, floorMs);
+}
 
 // ── diffRows ──
 
@@ -450,4 +459,34 @@ export function wholeValueView<V>(read: () => V): RevisionedView<V, V> {
       return { frame: value, kind: "delta" };
     },
   };
+}
+
+/** A source whose whole value can be read now, and which says when it may have
+ * moved (the roster's "changed", the catalog's listener, a pushed frame). */
+export interface WholeValueSource<V> {
+  read(): V;
+  onChange(listener: () => void): () => void;
+}
+
+/**
+ * SP-1 — a whole-value door (`stream` in the registry), as ProductAPI installs
+ * it: the open answers `read()`, then the WHOLE value again on `<base>.delta`
+ * at most once per window per subscriber (default
+ * `PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS`). The frames a reader of whole
+ * lists has always taken, at a cadence a phone's radio can afford: a churning
+ * source costs one frame per window, an unmoved one costs nothing.
+ */
+export function wholeValueDoor<V>(
+  source: WholeValueSource<V>,
+  emit: (payload: unknown, kind?: FrameKind) => void,
+  opts: { minIntervalMs?: number; onError?: (error: unknown) => void } = {},
+): { snapshot: V; dispose: () => void } {
+  const subscriber = new RevisionedSubscription<V, V>({
+    view: wholeValueView(() => source.read()),
+    subscribe: (onChange) => source.onChange(onChange),
+    emit: (frame, kind) => emit(frame, kind),
+    minIntervalMs: opts.minIntervalMs ?? PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+    ...(opts.onError !== undefined ? { onError: opts.onError } : {}),
+  });
+  return { snapshot: subscriber.snapshot, dispose: () => subscriber.dispose() };
 }
