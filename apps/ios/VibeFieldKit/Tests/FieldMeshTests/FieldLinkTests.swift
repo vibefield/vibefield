@@ -778,7 +778,11 @@ private func sweepNow(
     try await waitUntil("a second subscribe") {
       await (door.latest?.methods.filter { $0 == "agent.subscribe" }.count ?? 0) >= 2
     }
-    #expect(link.notes.contains { $0.contains("re-subscribing") })
+    // SP-2 (a), 2026-10-01: the gap is caught by the client's subscription
+    // table before the link sees the delta, so the note is the client's.
+    #expect(
+      link.client(for: "dev-studio")?.tolerantNotes.contains { $0.contains("re-subscribing") }
+        == true)
   }
 
   /// Every row on a live board reaches the field, whatever vendor it names.

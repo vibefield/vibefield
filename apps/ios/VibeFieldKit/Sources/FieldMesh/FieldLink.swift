@@ -1065,6 +1065,11 @@ public final class FieldLink {
         let subscription = try await client.subscribe(
           "agent.subscribe",
           params: AgentSubscribeParams.phoneField.json,
+          // SP-2 (a) — the client's table keeps this board's cursor: a delta
+          // that does not continue it never reaches `applyDoorDelta`, and the
+          // repair (a fresh snapshot) is the table's. The cadence rides every
+          // subscribe the table sends, replays included.
+          shape: .snapshotDelta(minIntervalMs: AgentSubscribeParams.phoneField.minIntervalMs),
           onSnapshot: { [weak self] payload in
             self?.applyDoorSnapshot(payload, from: deviceId)
           },
@@ -1134,8 +1139,10 @@ public final class FieldLink {
     }
     guard var board = doorBoards[deviceId] else { return }
     guard delta.since == board.revision else {
-      // A frame was lost. The repair is a fresh snapshot, asked for by
-      // re-subscribing — there is no ack protocol and nothing to replay.
+      // A BELT since SP-2 (a): the client's table only hands over a delta that
+      // continues its cursor, so this fires only for a board THIS link failed
+      // to take (a snapshot that did not read). The repair is still a fresh
+      // snapshot, and it is the table's to ask for.
       note("\(deviceId) delta since \(delta.since) ≠ \(board.revision) — re-subscribing")
       resubscribe(deviceId)
       return
@@ -1153,10 +1160,11 @@ public final class FieldLink {
     refold()
   }
 
+  /// The board here disagrees with what the door sent: ask the client's table
+  /// for a fresh snapshot. The board on the field STAYS until that snapshot
+  /// replaces it — a repair is not a reason to draw nothing.
   private func resubscribe(_ deviceId: String) {
-    subscriptions.removeValue(forKey: deviceId)?.cancel()
-    doorBoards.removeValue(forKey: deviceId)
-    armDoorSubscription(deviceId)
+    subscriptions[deviceId]?.resnapshot(because: "the field board here is at another revision")
   }
 
   // MARK: The fold

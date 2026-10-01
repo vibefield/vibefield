@@ -45,6 +45,20 @@ public final class ProductSubscription {
     cancelled = true
     client?.unsubscribe(key: key)
   }
+
+  /// SP-2 (a) — the last frame this subscription APPLIED (nil for a `stream`,
+  /// and before the open answer).
+  public var cursor: SubscriptionCursor? { client?.cursor(forKey: key) }
+
+  /// How many times the table re-subscribed this for a fresh snapshot after a
+  /// gap. A diagnostic.
+  public var resnapshots: Int { client?.resnapshotCount(forKey: key) ?? 0 }
+
+  /// Ask for a fresh snapshot — the owner's own belt, for a board it could not
+  /// apply. The table already does this by itself on every gap it can see.
+  public func resnapshot(because reason: String) {
+    client?.resnapshot(key: key, because: reason)
+  }
 }
 
 /// The phone's product-API client (H-D3): JSON-RPC 2.0 over one WebSocket to a
@@ -300,22 +314,28 @@ public final class FieldProductClient {
   public func subscribe(
     _ method: String,
     params: JSONValue? = nil,
+    shape: SubscriptionShape = .stream,
     onSnapshot: @escaping @MainActor (JSONValue) -> Void,
     onDelta: @escaping @MainActor (JSONValue) -> Void
   ) async throws -> ProductSubscription {
     let key = nextSubKey
     nextSubKey += 1
     subs[key] = SubEntry(
-      method: method, params: params, onSnapshot: onSnapshot, onDelta: onDelta)
+      method: method, params: params, shape: shape, onSnapshot: onSnapshot, onDelta: onDelta)
     do {
       try await ready()
+      guard let entry = subs[key] else {
+        throw FieldProductError(kind: "UNAVAILABLE", message: "client closed", retryable: true)
+      }
       let result = try await send(
-        method: method, params: params, subKey: key, dropSubOnFailure: true)
+        method: method, params: subscribeParams(for: entry, resuming: false), subKey: key,
+        dropSubOnFailure: true)
       guard let subId = result["subId"]?.stringValue else {
         subs.removeValue(forKey: key)
         throw WireDecodeError(shape: method, reason: "subscribe answered without a subId")
       }
-      onSnapshot(result["snapshot"] ?? .null)
+      // The snapshot was handed over in `handle`, the moment the answer was
+      // read (SP-2 a) — never after this await, where a frame could pass it.
       return ProductSubscription(subId: subId, key: key, client: self)
     } catch {
       // Never leave an orphan the caller cannot cancel — and never leave a
@@ -330,6 +350,151 @@ public final class FieldProductClient {
       }
       throw error
     }
+  }
+
+  func cursor(forKey key: Int) -> SubscriptionCursor? { subs[key]?.cursor }
+
+  func resnapshotCount(forKey key: Int) -> Int { subs[key]?.resnapshots ?? 0 }
+
+  /// SP-2 (a) — the repair for a gap: let the gapped stream go, and subscribe
+  /// again for a fresh snapshot (a rows table WITH the last cursor it applied,
+  /// so a source whose journal covers it answers `resumed`). The tolerant
+  /// reader's own rule; there is no ack protocol anywhere.
+  ///
+  /// A socket that is not up does nothing here: the re-dial replays every
+  /// subscription, and a replay IS a fresh snapshot (P5). A re-subscribe the
+  /// door refuses takes the socket down for the same reason a failed replay
+  /// does — the re-dial puts every subscription back from the top.
+  func resnapshot(key: Int, because reason: String) {
+    guard var entry = subs[key], !entry.resnapshotting else { return }
+    guard case .ready = state, connection != nil else { return }
+    entry.resnapshotting = true
+    entry.resnapshots += 1
+    entry.paging = nil
+    let retired = entry.subId
+    if let retired { subRoutes.removeValue(forKey: retired) }
+    entry.subId = nil
+    subs[key] = entry
+    if let retired { sendUnsubscribe(retired) }
+    note("\(entry.method): \(reason) — re-subscribing for a fresh snapshot")
+    let token = generation
+    let method = entry.method
+    let params = subscribeParams(for: entry, resuming: true)
+    Task { [weak self] in
+      guard let self else { return }
+      do {
+        // The open answer is applied in `handle`, before any frame after it.
+        _ = try await self.send(method: method, params: params, subKey: key)
+      } catch {
+        guard token == self.generation else { return }
+        let refusal = Self.refusal(from: error)
+        self.record(refusal, for: token)
+        self.note("re-subscribing \(method) failed — re-dialing: \(refusal.message)")
+        let dying = self.connection
+        self.connection = nil
+        if let dying { Task { await dying.close() } }
+        self.socketDown(token: token, error: refusal)
+      }
+    }
+  }
+
+  /// The params a subscribe carries: the caller's, with the table's cadence
+  /// (`minIntervalMs`) written in when the shape names one, and — for a rows
+  /// table subscribing AGAIN — the last cursor it applied as `since`.
+  private func subscribeParams(for entry: SubEntry, resuming: Bool) -> JSONValue? {
+    var fields = entry.params?.objectValue ?? [:]
+    guard entry.params == nil || entry.params?.objectValue != nil else { return entry.params }
+    var changed = false
+    if let minIntervalMs = entry.shape.minIntervalMs {
+      fields["minIntervalMs"] = .int(Int64(minIntervalMs))
+      changed = true
+    }
+    if resuming, entry.shape.kind == .rows, let since = entry.cursor?.json {
+      fields["since"] = since
+      changed = true
+    }
+    guard changed else { return entry.params }
+    return .object(fields)
+  }
+
+  /// The OPEN answer, applied the moment it is read — before any frame after
+  /// it, so a delta in the same breath continues the snapshot instead of
+  /// looking like a gap against a cursor not yet set.
+  private func deliverOpen(_ payload: JSONValue, key: Int) {
+    guard var entry = subs[key] else { return }
+    entry.resnapshotting = false
+    entry.paging = nil
+    switch entry.shape.kind {
+    case .stream:
+      subs[key] = entry
+      entry.onSnapshot(payload)
+    case .snapshotDelta:
+      entry.cursor = SubscriptionCursor.of(snapshot: payload)
+      subs[key] = entry
+      entry.onSnapshot(payload)
+    case .rows:
+      if let resumed = payload["resumed"], let cursor = SubscriptionCursor.of(snapshot: resumed) {
+        // The source's journal still covers the cursor: the caller's copy
+        // stands, and what it missed follows as deltas.
+        entry.cursor = cursor
+        subs[key] = entry
+        return
+      }
+      subs[key] = entry
+      applyRowsPage(payload["snapshot"] ?? payload, key: key)
+    }
+  }
+
+  /// A later frame, judged against the cursor before the caller sees it.
+  private func deliverEvent(_ kind: SubEventKind, _ payload: JSONValue, key: Int) {
+    guard var entry = subs[key] else { return }
+    switch (entry.shape.kind, kind) {
+    case (.stream, .snapshot):
+      entry.onSnapshot(payload)
+    case (.stream, .delta):
+      entry.onDelta(payload)
+    case (.snapshotDelta, .snapshot):
+      entry.cursor = SubscriptionCursor.of(snapshot: payload)
+      subs[key] = entry
+      entry.onSnapshot(payload)
+    case (.rows, .snapshot):
+      applyRowsPage(payload, key: key)
+    case (.snapshotDelta, .delta), (.rows, .delta):
+      guard entry.paging == nil, let next = entry.cursor?.after(delta: payload, kind: entry.shape.kind)
+      else {
+        let since = payload["since"]?.intValue.map(String.init) ?? "?"
+        let held = entry.cursor.map { String($0.revision) } ?? "nothing"
+        resnapshot(key: key, because: "a delta since \(since) does not continue \(held)")
+        return
+      }
+      entry.cursor = next
+      subs[key] = entry
+      entry.onDelta(payload)
+    }
+  }
+
+  /// One page of a rows snapshot: assembled while `more` says another follows,
+  /// handed over ONCE, whole, as `{epoch, revision, rows}`. A page of another
+  /// cursor than the one being assembled starts over — it is a newer reset.
+  private func applyRowsPage(_ page: JSONValue, key: Int) {
+    guard var entry = subs[key] else { return }
+    guard let cursor = SubscriptionCursor.of(snapshot: page) else {
+      note("\(entry.method) sent a snapshot that names no revision")
+      return
+    }
+    var rows = page["rows"]?.arrayValue ?? []
+    if let paging = entry.paging, paging.cursor == cursor { rows = paging.rows + rows }
+    if page["more"]?.boolValue == true {
+      entry.paging = (cursor, rows)
+      subs[key] = entry
+      return
+    }
+    entry.paging = nil
+    entry.cursor = cursor
+    subs[key] = entry
+    var whole: [String: JSONValue] = ["revision": .int(cursor.revision), "rows": .array(rows)]
+    if let epoch = cursor.epoch { whole["epoch"] = .string(epoch) }
+    entry.onSnapshot(.object(whole))
   }
 
   func unsubscribe(key: Int) {
@@ -553,20 +718,30 @@ public final class FieldProductClient {
   private struct SubEntry {
     let method: String
     let params: JSONValue?
+    let shape: SubscriptionShape
     let onSnapshot: @MainActor (JSONValue) -> Void
     let onDelta: @MainActor (JSONValue) -> Void
     var subId: String?
     /// True once a subscribe request has reached a live socket. Only those are
     /// replayed; one still owned by a pending `subscribe()` call is not.
     var sentOnce = false
+    /// SP-2 (a) — the last frame applied.
+    var cursor: SubscriptionCursor?
+    var resnapshots = 0
+    /// A re-subscribe for a fresh snapshot is in flight: the gapped stream's
+    /// route is retired, and a second gap cannot start a second one.
+    var resnapshotting = false
+    /// A paged rows snapshot being assembled: its cursor and the rows so far.
+    var paging: (cursor: SubscriptionCursor, rows: [JSONValue])?
 
     init(
-      method: String, params: JSONValue?,
+      method: String, params: JSONValue?, shape: SubscriptionShape,
       onSnapshot: @escaping @MainActor (JSONValue) -> Void,
       onDelta: @escaping @MainActor (JSONValue) -> Void
     ) {
       self.method = method
       self.params = params
+      self.shape = shape
       self.onSnapshot = onSnapshot
       self.onDelta = onDelta
     }
@@ -680,12 +855,11 @@ public final class FieldProductClient {
       guard token == generation else { return }
       guard let entry = subs[key], entry.sentOnce else { continue }
       do {
-        let result = try await send(method: entry.method, params: entry.params, subKey: key)
+        // A rows table asks for what it missed from the cursor it kept; the
+        // open answer is handed over in `handle`, as every open answer is.
+        _ = try await send(
+          method: entry.method, params: subscribeParams(for: entry, resuming: true), subKey: key)
         guard token == generation else { return }
-        // Cancelled while we awaited: its board is nobody's now, and the rest
-        // of the loop is still owed.
-        guard let live = subs[key] else { continue }
-        live.onSnapshot(result["snapshot"] ?? .null)
       } catch {
         guard token == generation else { return }
         let refusal = Self.refusal(from: error)
@@ -716,6 +890,11 @@ public final class FieldProductClient {
           subRoutes.removeValue(forKey: subId)
           subs.removeValue(forKey: key)
           sendUnsubscribe(subId)
+        } else {
+          // SP-2 (a) — the open answer is applied HERE, synchronously, before
+          // the receive loop reads the next frame: the first snapshot, a
+          // replay's, a re-subscribe's, alike.
+          deliverOpen(result["snapshot"] ?? .null, key: key)
         }
       }
       entry.continuation.resume(returning: result)
@@ -727,11 +906,8 @@ public final class FieldProductClient {
       entry.continuation.resume(throwing: error)
 
     case .subscriptionEvent(_, let subId, let kind, let payload):
-      guard let key = subRoutes[subId], let entry = subs[key] else { return }
-      switch kind {
-      case .snapshot: entry.onSnapshot(payload)
-      case .delta: entry.onDelta(payload)
-      }
+      guard let key = subRoutes[subId], subs[key] != nil else { return }
+      deliverEvent(kind, payload, key: key)
 
     case .notification(let method, let params):
       // SP-2 (b) — the door's keepalive tick. Every OTHER server notification
