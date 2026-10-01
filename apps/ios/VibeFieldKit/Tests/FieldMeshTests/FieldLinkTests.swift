@@ -156,6 +156,15 @@ private actor LinkDoor: ProductTransport {
 
   var latest: LinkConnection? { connections.last }
   var dials: Int { connections.count }
+
+  /// `agent.subscribe` requests across every connection this door served.
+  func subscribes() async -> Int {
+    var total = 0
+    for connection in connections {
+      total += await connection.methods.filter { $0 == "agent.subscribe" }.count
+    }
+    return total
+  }
 }
 
 private actor LinkConnection: ProductConnection {
@@ -2035,5 +2044,161 @@ private func stuckLink(
     #expect(ledger.inUse(.door(desktop: "dev-studio")) == 1)
     link.stop()
     try await waitUntil("the slot back") { ledger.inUse(.door(desktop: "dev-studio")) == 0 }
+  }
+}
+
+// MARK: - SP-2 (c): back from the background, staggered across desktops
+
+/// The resume stagger's waits, held by the test: each `sleep` parks until the
+/// test wakes the SHORTEST one — the next slot.
+private final class ResumeGate: @unchecked Sendable {
+  private let lock = NSLock()
+  private var waiting: [(delay: Duration, wake: CheckedContinuation<Void, Never>)] = []
+  private var asked: [Duration] = []
+
+  var sleep: @Sendable (Duration) async -> Void {
+    { [self] delay in
+      await withCheckedContinuation { wake in
+        lock.withLock {
+          asked.append(delay)
+          waiting.append((delay, wake))
+        }
+      }
+    }
+  }
+
+  var parked: Int { lock.withLock { waiting.count } }
+  var delays: [Duration] { lock.withLock { asked } }
+
+  func releaseNext() {
+    let next: CheckedContinuation<Void, Never>? = lock.withLock {
+      guard let index = waiting.indices.min(by: { waiting[$0].delay < waiting[$1].delay })
+      else { return nil }
+      return waiting.remove(at: index).wake
+    }
+    next?.resume()
+  }
+
+  func releaseAll() {
+    let all = lock.withLock { () -> [CheckedContinuation<Void, Never>] in
+      defer { waiting = [] }
+      return waiting.map(\.wake)
+    }
+    for wake in all { wake.resume() }
+  }
+}
+
+@MainActor
+@Suite struct FieldLinkResumeStaggerTests {
+  /// SP-L7: subscriptions pause in the background and resnapshot on return —
+  /// and a phone with three desktops must not bring all three back in one
+  /// breath. Each desktop has its own window, in device order, jittered inside
+  /// it, so no two re-subscribe (or re-probe their sockets) together; the
+  /// sweep the resume starts holds every desktop until its window opens.
+  @Test func comingBackIsStaggeredAcrossDesktopsNeverAHerd() async throws {
+    let mini = FieldStorePeer(
+      id: "node-mini", deviceId: "dev-mini", online: true, hostname: "mini",
+      tailnetIPs: ["100.64.0.4"])
+    let mesh = MeshRehearsal()
+    await mesh.set(peers: [studio, laptop, mini])
+    let snapshot = snapshotFrame(revision: 1, rows: [])
+    let door = LinkDoor { method, id, _ in
+      switch method {
+      case "system.hello": return [frame(id: id, ack)]
+      case "agent.subscribe":
+        return [frame(id: id, .object(["subId": .string("s\(id)"), "snapshot": snapshot]))]
+      default: return []
+      }
+    }
+    let gate = ResumeGate()
+    let link = FieldLink(
+      storeDoors: await mesh.doors(), transport: door, probe: LinkProbe(),
+      options: .init(maxBackoff: .milliseconds(5), callTimeout: .seconds(5)),
+      magicDNSSuffix: rehearsalSuffix,
+      schedule: FieldDiscoverySchedule(
+        notThisAccount: .seconds(300), unreachable: .seconds(30), tick: .milliseconds(20),
+        resumeStagger: .milliseconds(400)),
+      resumeTiming: FieldResumeTiming(jitter: { 0.5 }, sleep: gate.sleep),
+      now: { Date(timeIntervalSince1970: 1_757_808_001) })
+    link.start()
+    defer {
+      link.stop()
+      gate.releaseAll()
+    }
+    try await waitUntil("three desktops subscribed") { await door.subscribes() == 3 }
+    // Three BOARDS, not three requests: a subscribe asked but not yet answered
+    // is the pause race `FieldLinkPauseRaceTests` pins on its own.
+    try await waitUntil("three boards on the field") {
+      link.desktops.count == 3 && link.desktops.allSatisfy { $0.feed == .door }
+    }
+
+    link.pause()
+    link.resume()
+    try await waitUntil("three resume windows") { gate.parked == 3 }
+    #expect(gate.delays.sorted() == [.milliseconds(200), .milliseconds(600), .milliseconds(1000)])
+    try await Task.sleep(for: .milliseconds(80))  // the resumed sweep runs on its 20 ms tick
+    #expect(await door.subscribes() == 3, "nobody came back before its window")
+
+    gate.releaseNext()
+    try await waitUntil("the first window's desktop") { await door.subscribes() == 4 }
+    try await Task.sleep(for: .milliseconds(40))
+    #expect(await door.subscribes() == 4, "one desktop per window")
+    gate.releaseNext()
+    try await waitUntil("the second") { await door.subscribes() == 5 }
+    gate.releaseNext()
+    try await waitUntil("the third") { await door.subscribes() == 6 }
+  }
+
+  /// The windows, pure: slot `i` comes back at (i + jitter) × the stagger, so a
+  /// window never overlaps the next, whatever the jitter draws.
+  @Test func eachDesktopHasItsOwnWindow() {
+    let schedule = FieldDiscoverySchedule(resumeStagger: .milliseconds(400))
+    #expect(schedule.resumeDelay(slot: 0, jitter: 0) == .zero)
+    #expect(schedule.resumeDelay(slot: 0, jitter: 0.5) == .milliseconds(200))
+    #expect(schedule.resumeDelay(slot: 2, jitter: 0.25) == .milliseconds(900))
+    #expect(schedule.resumeDelay(slot: 1, jitter: 0.999) < schedule.resumeDelay(slot: 2, jitter: 0))
+    // A jitter source that misbehaves stays inside its own window.
+    #expect(schedule.resumeDelay(slot: 1, jitter: 7) < schedule.resumeDelay(slot: 2, jitter: 0))
+    #expect(schedule.resumeDelay(slot: 1, jitter: -3) == .milliseconds(400))
+  }
+}
+
+// MARK: - A subscribe in flight at pause does not survive it (found by SP-2 c)
+
+@MainActor
+@Suite struct FieldLinkPauseRaceTests {
+  /// The race the stagger row found under load: a subscribe ASKED before the
+  /// app went away and ANSWERED after it. The arm re-checked its slot after the
+  /// await but not the pause, and the late snapshot was applied to a paused
+  /// link — so a backgrounded phone kept a live subscription (bytes it had just
+  /// promised not to spend), and the resume could not re-arm it (the slot was
+  /// already full) and kept a board from before the pause.
+  @Test func aSubscribeInFlightAtPauseDoesNotSurviveIt() async throws {
+    let snapshot = snapshotFrame(revision: 1, rows: [boardRow(id: "run-1")])
+    let (link, _, door, _) = try await standingLink(
+      answerDelay: .milliseconds(150),
+      script: { method, id, _ in
+        switch method {
+        case "system.hello": return [frame(id: id, ack)]
+        case "agent.subscribe":
+          return [frame(id: id, .object(["subId": .string("s1"), "snapshot": snapshot]))]
+        default: return []
+        }
+      })
+    defer { link.stop() }
+    try await waitUntil("the subscribe in flight") {
+      await door.latest?.methods.contains("agent.subscribe") == true
+    }
+    link.pause()
+    try await waitUntil("the late answer let go") {
+      await door.latest?.methods.contains("system.unsubscribe") == true
+    }
+    #expect(link.agents.isEmpty, "a paused link applies nothing the door sends")
+
+    link.resume()
+    try await waitUntil("a fresh subscribe on the way back") {
+      await (door.latest?.methods.filter { $0 == "agent.subscribe" }.count ?? 0) == 2
+    }
+    try await waitUntil("the board back") { link.agents.map(\.id) == ["run-1"] }
   }
 }

@@ -105,15 +105,36 @@ public struct FieldDiscoverySchedule: Sendable, Equatable {
   /// How often the sweep wakes to see whose deadline has passed. It probes
   /// nobody whose deadline has not.
   public var tick: Duration
+  /// SP-2 (c) — the width of each desktop's window on the way back from the
+  /// background.
+  public var resumeStagger: Duration
 
   public init(
     notThisAccount: Duration = .seconds(300),
     unreachable: Duration = .seconds(30),
-    tick: Duration = .seconds(10)
+    tick: Duration = .seconds(10),
+    resumeStagger: Duration = .milliseconds(400)
   ) {
     self.notThisAccount = notThisAccount
     self.unreachable = unreachable
     self.tick = tick
+    self.resumeStagger = resumeStagger
+  }
+
+  /// SP-2 (c) — when the desktop in `slot` comes back: `(slot + jitter) ×
+  /// resumeStagger`, the jitter held inside [0, 1) so a window never reaches
+  /// the next one's, whatever the source draws. Whole milliseconds, rounded
+  /// down. Pure; pinned by tests.
+  public func resumeDelay(slot: Int, jitter: Double) -> Duration {
+    let parts = resumeStagger.components
+    let staggerMs = parts.seconds * 1000 + parts.attoseconds / 1_000_000_000_000_000
+    let inside = jitter.isFinite ? min(max(jitter, 0), 1) : 0
+    // The window's own offset, in whole milliseconds and strictly inside it.
+    // Computed apart from the slot on purpose: `1 + 1.0.nextDown` rounds to
+    // exactly 2.0 in a Double, which put a maximal jitter on the NEXT window's
+    // first millisecond (the pure row caught it).
+    let within = min(Int64((inside * Double(staggerMs)).rounded(.down)), max(staggerMs - 1, 0))
+    return .milliseconds(Int64(max(slot, 0)) * staggerMs + within)
   }
 
   /// SP-2 (e) — when a client the door STOPPED (`INCOMPATIBLE`, `UNAUTHORIZED`,
@@ -125,6 +146,25 @@ public struct FieldDiscoverySchedule: Sendable, Equatable {
     let doublings = min(max(retries, 0), 16)
     return min(unreachable * (1 << doublings), notThisAccount)
   }
+}
+
+/// SP-2 (c) — where the resume stagger's randomness and its waiting come from:
+/// the system's, live; a script, in tests.
+public struct FieldResumeTiming: Sendable {
+  public var jitter: @Sendable () -> Double
+  public var sleep: @Sendable (Duration) async -> Void
+
+  public init(
+    jitter: @escaping @Sendable () -> Double,
+    sleep: @escaping @Sendable (Duration) async -> Void
+  ) {
+    self.jitter = jitter
+    self.sleep = sleep
+  }
+
+  public static let live = FieldResumeTiming(
+    jitter: { Double.random(in: 0..<1) },
+    sleep: { try? await Task.sleep(for: $0) })
 }
 
 /// The join (§10.3): the mesh, the doors on it, and the boards behind them, as
@@ -256,6 +296,10 @@ public final class FieldLink {
   /// counts against (one door per self desktop). The app passes the phone's one
   /// ledger; a link made with none gets its own.
   @ObservationIgnored public let budget: PhoneConnectionBudget
+  @ObservationIgnored private let resumeTiming: FieldResumeTiming
+  /// SP-2 (c) — each desktop's window on the way back from the background. A
+  /// desktop with one pending is HELD: nothing re-subscribes it until it opens.
+  @ObservationIgnored private var resumeSlots: [String: Task<Void, Never>] = [:]
 
   @ObservationIgnored private var clients: [String: FieldProductClient] = [:]
   @ObservationIgnored private var subscriptions: [String: ProductSubscription] = [:]
@@ -334,9 +378,11 @@ public final class FieldLink {
     storeBus: Bool = false,
     selfLogin: String? = nil,
     budget: PhoneConnectionBudget? = nil,
+    resumeTiming: FieldResumeTiming = .live,
     now: @escaping @MainActor () -> Date = { .now }
   ) {
     self.budget = budget ?? PhoneConnectionBudget()
+    self.resumeTiming = resumeTiming
     devices = FieldStore(doors: storeDoors)
     boards = FieldStore(doors: storeDoors)
     doors = storeDoors
@@ -375,6 +421,11 @@ public final class FieldLink {
     isPaused = true
     for (_, subscription) in subscriptions { subscription.cancel() }
     subscriptions.removeAll()
+    // SP-2 (c) — the keepalive's clocks stop with the app: a deadline measured
+    // across a suspension would call every door dead at once on the way back.
+    for (_, client) in clients { client.pauseKeepalive() }
+    for (_, slot) in resumeSlots { slot.cancel() }
+    resumeSlots.removeAll()
     for (_, timer) in expiryTimers { timer.cancel() }
     expiryTimers.removeAll()
     arming.removeAll()
@@ -402,13 +453,32 @@ public final class FieldLink {
     // the sweep skips them too (an open door is not re-probed), and the phone
     // returned from the background to a permanently empty field behind a
     // desktop reading "connected".
-    for deviceId in clients.keys { armDoorSubscription(deviceId) }
+    //
+    // SP-2 (c) — and NEVER ALL AT ONCE (SP-L7). Each desktop comes back in its
+    // own window, in device order, jittered inside it: its keepalive restarts
+    // (a fresh deadline and one ping, which finds a socket that died while the
+    // phone was away) and its board re-subscribes. Until its window opens it is
+    // held — the sweep this resume starts arms nobody early.
+    for (slot, deviceId) in clients.keys.sorted().enumerated() {
+      let delay = schedule.resumeDelay(slot: slot, jitter: resumeTiming.jitter())
+      let timing = resumeTiming
+      resumeSlots[deviceId]?.cancel()
+      resumeSlots[deviceId] = Task { @MainActor [weak self] in
+        await timing.sleep(delay)
+        guard let self, !Task.isCancelled, self.started, !self.isPaused else { return }
+        self.resumeSlots[deviceId] = nil
+        self.clients[deviceId]?.resumeKeepalive()
+        self.armDoorSubscription(deviceId)
+      }
+    }
     reconcile()
   }
 
   public func stop() {
     started = false
     isPaused = false
+    for (_, slot) in resumeSlots { slot.cancel() }
+    resumeSlots.removeAll()
     for (_, subscription) in subscriptions { subscription.cancel() }
     subscriptions.removeAll()
     for (_, client) in clients { client.close() }
@@ -901,6 +971,7 @@ public final class FieldLink {
   }
 
   private func closeDoor(to deviceId: String) {
+    resumeSlots.removeValue(forKey: deviceId)?.cancel()
     subscriptions.removeValue(forKey: deviceId)?.cancel()
     clients.removeValue(forKey: deviceId)?.close()
     expiryTimers.removeValue(forKey: deviceId)?.cancel()
@@ -1112,6 +1183,8 @@ public final class FieldLink {
     guard !isPaused, subscriptions[deviceId] == nil, let client = clients[deviceId] else {
       return
     }
+    // SP-2 (c) — held until its window on the way back opens.
+    guard resumeSlots[deviceId] == nil else { return }
     // The arming LATCH, set synchronously. `subscriptions[deviceId]` is only
     // assigned after the subscribe's await, so a burst of discovery edges
     // around hello walked past that check four times and opened four
@@ -1147,7 +1220,12 @@ public final class FieldLink {
         // Re-checked AFTER the await, including the slot: whatever slipped
         // through is cancelled rather than overwritten. An overwritten handle
         // is a subscription nobody owns and the door keeps feeding.
-        guard self.started, self.clients[deviceId] === client,
+        //
+        // And the PAUSE (2026-10-01, found by SP-2 c's stagger row under
+        // load): a subscribe asked before the app went away and answered after
+        // it survived the pause — a backgrounded phone kept a live
+        // subscription, and the resume could not re-arm the full slot.
+        guard self.started, !self.isPaused, self.clients[deviceId] === client,
           self.subscriptions[deviceId] == nil
         else {
           subscription.cancel()
@@ -1185,6 +1263,9 @@ public final class FieldLink {
   }
 
   private func applyDoorSnapshot(_ payload: JSONValue, from deviceId: String) {
+    // A paused link applies nothing the door sends: its boards were let go at
+    // the pause, and a late answer must not put one back behind it.
+    guard !isPaused else { return }
     do {
       let snapshot = try AgentFieldSnapshot(json: payload)
       var rows: [String: AgentFieldRow] = [:]
@@ -1201,6 +1282,7 @@ public final class FieldLink {
   }
 
   private func applyDoorDelta(_ payload: JSONValue, from deviceId: String) {
+    guard !isPaused else { return }
     guard let delta = try? AgentFieldDelta(json: payload) else {
       note("\(deviceId) sent a delta that did not read")
       return
