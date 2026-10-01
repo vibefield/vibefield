@@ -1,15 +1,28 @@
+import { randomUUID } from "node:crypto";
 import {
+  chunkDocSyncRecord,
+  DOC_SYNC_CHUNK_BYTES,
+  DOC_SYNC_LORO_ENCODING,
+  DOC_SYNC_MAX_RECORD_BYTES,
+  DOC_SYNC_MAX_TRANSFER_BYTES,
   DOC_SYNC_RECORD,
+  DocSyncChunkMeta,
   type DocSyncDocState,
+  type DocSyncFrame,
   type DocSyncIntent,
+  DocSyncMeta,
   type DocSyncStatus,
+  DocSyncVersionMeta,
   decodeDocSyncDigest,
-  decodeDocSyncRecord,
+  decodeDocSyncFrame,
   encodeDocSyncHave,
   encodeDocSyncRecord,
+  encodeDocSyncVersion,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import type { VersionVector } from "loro-crdt";
 import { contentIdOf, type DocCommit, type DocumentService } from "./doc-service";
+import { covers, decodeVersion } from "./loro-host";
 
 // DocSyncService (C6-3g) — the thing that makes an edit on one device appear on
 // another. It is WIRING, deliberately: every hard question was settled below it
@@ -40,6 +53,17 @@ import { contentIdOf, type DocCommit, type DocumentService } from "./doc-service
 // only what fieldd can check: there are no delivery receipts in this protocol,
 // so the best good state is "in step" (nothing known un-synced), never
 // "converged".
+//
+// DS-5 (DS-D18 RULED (a), 2026-09-30) — VERSION beside HAVE. A lane now opens
+// with a VERSION (the host's encoded version vector) and THEN the legacy HAVE.
+// A DS-5 peer answers the VERSION with exactly what the sender lacks — the
+// checkpoint envelope first if it holds none, then one Loro update — and
+// ignores the HAVE behind it; a pre-DS-5 peer refuses the VERSION's meta, logs,
+// and answers the HAVE as it always did. After that a DS-5 peer is sent each
+// local commit as a Loro update (a checkpoint's DELTA, not the checkpoint), and
+// a record too large for a MeshData frame crosses as CHUNKs on a lane of its
+// own. Docs in opaque custody (a checkpoint the ICE1 frame rule cannot lift)
+// have no version to state and keep the whole C6 protocol unchanged.
 
 /** Lane LIFECYCLE, over the mgmt channel. Bytes never come through here (D5). */
 export interface LaneControl {
@@ -62,6 +86,12 @@ export interface LaneBytes {
   send(laneId: number, payload: Uint8Array): boolean;
   onLane(laneId: number, handler: (payload: Uint8Array) => void): void;
   offLane(laneId: number): void;
+  /** DS-5 — bytes queued toward the bridge, for pacing a chunked transfer
+   * (MeshLaneLink's outbound watermark reading). Absent: no pacing. */
+  readonly bufferedBytes?: number;
+  /** DS-5 — a barrier: resolves once earlier sends on the lane entered the
+   * transport, so the transfer lane is closed behind its last chunk. */
+  flush?(laneId: number): Promise<void>;
 }
 
 export interface LaneInfo {
@@ -120,7 +150,30 @@ export interface DocSyncOptions {
   logger?: Logger;
   /** injectable clock — the state tests drive it directly */
   now?: () => number;
+  /** DS-5 — the largest record sent whole (default: a MeshData frame minus its
+   * header). Tests lower it to drive chunking without 8 MiB documents. */
+  maxRecordBytes?: number;
+  /** DS-5 — CHUNK slice size (default 1 MiB). */
+  chunkBytes?: number;
+  /** DS-5 — how long a half-received transfer is kept (default 60 s). */
+  transferTtlMs?: number;
 }
+
+/** DS-5 — a CHUNKed record being put back together. */
+interface Reassembly {
+  count: number;
+  byteLength: number;
+  parts: (Uint8Array | undefined)[];
+  received: number;
+  size: number;
+  timer: ReturnType<typeof setTimeout>;
+}
+
+/** Transfers in flight per peer before the oldest is dropped. */
+const MAX_TRANSFERS_PER_PEER = 4;
+/** A chunked send waits while more than this many bytes are queued. */
+const PACE_WATERMARK_CHUNKS = 2;
+const PACE_DEADLINE_MS = 30_000;
 
 /** What one peer's standing with one doc rests on. */
 interface PeerSyncFacts {
@@ -140,6 +193,13 @@ interface DocSyncFacts {
   expected: Set<string>;
   /** A checkpoint is owed to us — the peer has one, we have none. */
   expectCheckpoint: boolean;
+  /** DS-5 — peers whose VERSION names ops our host does not hold yet: the
+   * version-exchange form of `expected`. Drains as their answer lands. */
+  awaiting: Map<string, VersionVector>;
+  /** DS-5 — the host holds a peer's record as PENDING (its causal base has not
+   * arrived). Not complete, however settled it looks; cleared by the next
+   * applied record. */
+  pendingBase: boolean;
   peers: Map<string, PeerSyncFacts>;
   /** We declined a peer's record and the difference is standing (unknown-doc /
    * unknown-kind / local-only). Cleared by the next applied record. */
@@ -178,6 +238,18 @@ export class DocSyncService {
   #lastSig = "";
   #liveness: SyncLiveness | null = null;
   #livenessOff: (() => void) | null = null;
+  /** DS-5 — `${docId}\u0000${peer}` pairs that spoke VERSION: their HAVE is
+   * ignored and their commits go out as Loro updates. */
+  readonly #versionPeers = new Set<string>();
+  /** DS-5 — `${peer}\u0000${transfer}` → a chunked record being reassembled. */
+  readonly #transfers = new Map<string, Reassembly>();
+  readonly #maxRecordBytes: number;
+  readonly #chunkBytes: number;
+  readonly #transferTtlMs: number;
+  /** Transfer ids are unique per sender for the transfer's life; a per-boot
+   * prefix keeps a restarted fieldd from reusing one a peer still holds. */
+  readonly #transferPrefix = randomUUID().slice(0, 8);
+  #nextTransfer = 0;
 
   #started = false;
 
@@ -191,6 +263,9 @@ export class DocSyncService {
     this.#isSelfPeer = opts.isSelfPeer;
     this.#now = opts.now ?? Date.now;
     this.#logger = (opts.logger ?? createNoopLogger()).child({ component: "doc.sync" });
+    this.#maxRecordBytes = opts.maxRecordBytes ?? DOC_SYNC_MAX_RECORD_BYTES;
+    this.#chunkBytes = opts.chunkBytes ?? DOC_SYNC_CHUNK_BYTES;
+    this.#transferTtlMs = opts.transferTtlMs ?? 60_000;
   }
 
   /** Subscribe to lane lifecycle and claim whatever is already open.
@@ -254,7 +329,11 @@ export class DocSyncService {
         // does not have (doc EXISTENCE does not replicate yet).
         name: names.get(docId) ?? null,
         state: this.#docState(docId, facts),
-        pendingRecords: facts.expected.size + (facts.expectCheckpoint ? 1 : 0),
+        pendingRecords:
+          facts.expected.size +
+          facts.awaiting.size +
+          (facts.expectCheckpoint ? 1 : 0) +
+          (facts.pendingBase ? 1 : 0),
         peers: [...facts.peers].map(([peer, p]) => ({
           peer,
           reachable: p.reachable,
@@ -295,6 +374,9 @@ export class DocSyncService {
     this.#livenessOff?.();
     this.#livenessOff = null;
     this.#liveness = null;
+    this.#versionPeers.clear();
+    for (const transfer of this.#transfers.values()) clearTimeout(transfer.timer);
+    this.#transfers.clear();
     this.#started = false;
   }
 
@@ -305,7 +387,14 @@ export class DocSyncService {
   #docState(docId: string, facts: DocSyncFacts): DocSyncDocState {
     if (facts.epochStale) return "epoch-stale";
     if (facts.declined) return "peer-declined";
-    if (facts.expected.size > 0 || facts.expectCheckpoint) return "pending";
+    if (
+      facts.expected.size > 0 ||
+      facts.expectCheckpoint ||
+      facts.awaiting.size > 0 ||
+      facts.pendingBase
+    ) {
+      return "pending";
+    }
     for (const peer of facts.peers.values()) {
       if (!peer.reachable) return "peer-offline";
     }
@@ -319,6 +408,8 @@ export class DocSyncService {
       facts = {
         expected: new Set(),
         expectCheckpoint: false,
+        awaiting: new Map(),
+        pendingBase: false,
         peers: new Map(),
         declined: false,
         epochStale: false,
@@ -573,9 +664,9 @@ export class DocSyncService {
       );
       return;
     }
-    let decoded: ReturnType<typeof decodeDocSyncRecord>;
+    let frame: DocSyncFrame;
     try {
-      decoded = decodeDocSyncRecord(record);
+      frame = decodeDocSyncFrame(record);
     } catch (error) {
       // One malformed record is one record. The lane survives — a peer running
       // a newer build should degrade, not disconnect.
@@ -586,12 +677,229 @@ export class DocSyncService {
       });
       return;
     }
-    if (decoded.kind === DOC_SYNC_RECORD.HAVE) {
-      this.#enqueue(docId, () =>
-        this.#answerHave(docId, peer, decoded.meta.baseEpoch, decoded.payload),
+    switch (frame.kind) {
+      case DOC_SYNC_RECORD.HAVE:
+        this.#onHave(docId, peer, frame);
+        return;
+      case DOC_SYNC_RECORD.VERSION:
+        await this.#onVersion(docId, peer, frame);
+        return;
+      case DOC_SYNC_RECORD.CHUNK:
+        await this.#onChunk(docId, peer, frame);
+        return;
+      case DOC_SYNC_RECORD.SNAPSHOT:
+      case DOC_SYNC_RECORD.UPDATE:
+        await this.#onContent(docId, peer, frame);
+        return;
+      default:
+        // CORRECTED 2026-09-30 (DS-5): a kind this fieldd does not know used to
+        // reach applyRemoteRecord and stand as a `peer-declined` decline. It is
+        // a NEWER peer's addition — DS-L9, "additions are tolerated" — so it is
+        // ignored and logged, and the doc's standing does not move.
+        this.#logger.debug(
+          "fieldd.doc_sync.kind_ignored",
+          "A peer's record of a kind this fieldd does not know was ignored",
+          { docId, peer, kind: frame.kind },
+        );
+    }
+  }
+
+  /** A legacy HAVE. Ignored from a peer that already stated a VERSION for this
+   * doc — the VERSION's answer was exact, and answering the HAVE too would
+   * send the same content twice. */
+  #onHave(docId: string, peer: string, frame: DocSyncFrame): void {
+    if (this.#versionPeers.has(pairKey(docId, peer))) return;
+    const meta = DocSyncMeta.safeParse(frame.meta);
+    if (!meta.success) {
+      this.#logger.warn("fieldd.doc_sync.have_undecodable", "A peer's HAVE could not be read", {
+        docId,
+        peer,
+        error: meta.error.message,
+      });
+      return;
+    }
+    this.#enqueue(docId, () => this.#answerHave(docId, peer, meta.data.baseEpoch, frame.payload));
+  }
+
+  /** DS-5 — a peer stated its host's version vector. Answer with exactly what
+   * it lacks, and note what IT holds that we do not (the doc is `pending` until
+   * that lands). Handled inline, not queued behind itself: the HAVE the peer
+   * sent after it must find the pair already marked. */
+  async #onVersion(docId: string, peer: string, frame: DocSyncFrame): Promise<void> {
+    const parsed = DocSyncVersionMeta.safeParse(frame.meta);
+    if (!parsed.success) {
+      this.#logger.warn(
+        "fieldd.doc_sync.version_undecodable",
+        "A peer's VERSION could not be read",
+        { docId, peer, error: parsed.error.message },
       );
       return;
     }
+    const meta = parsed.data;
+    const facts = this.#factsFor(docId);
+    this.#exchanged(facts, peer);
+    if (meta.loro !== DOC_SYNC_LORO_ENCODING) {
+      // DS-L9 / risk 4 — skew is honest: another Loro encoding family is not
+      // merged with. Refused, and shown as the decline it is.
+      facts.declined = true;
+      facts.reason = "loro-encoding";
+      this.#touch(facts);
+      this.#logger.warn(
+        "fieldd.doc_sync.loro_encoding_refused",
+        "A peer speaks another Loro encoding; its document is not merged",
+        { docId, peer, theirs: meta.loro, ours: DOC_SYNC_LORO_ENCODING },
+      );
+      return;
+    }
+    const theirs = decodeVersion(frame.payload);
+    if (theirs === null) {
+      this.#logger.warn(
+        "fieldd.doc_sync.version_undecodable",
+        "A peer's version vector could not be decoded",
+        { docId, peer },
+      );
+      return;
+    }
+    const ours = await this.#docs.hostVersion(docId);
+    // Opaque custody (or a doc unknown here): no version to answer by. The pair
+    // stays unmarked, so the HAVE behind this VERSION is answered as ever.
+    if (ours === null) return;
+    this.#versionPeers.add(pairKey(docId, peer));
+    if (ours.baseEpoch !== meta.baseEpoch) {
+      facts.epochStale = true;
+      facts.reason = "epoch-mismatch";
+      this.#touch(facts);
+      return; // never answer across a compaction boundary (S4)
+    }
+    const oursVersion = decodeVersion(ours.version);
+    if (oursVersion !== null && !covers(oursVersion, theirs)) facts.awaiting.set(peer, theirs);
+    else facts.awaiting.delete(peer);
+    if (meta.hasCheckpoint && !ours.hasCheckpoint) facts.expectCheckpoint = true;
+    this.#touch(facts);
+    const answer = await this.#docs.hostAnswer(docId, {
+      version: frame.payload,
+      hasCheckpoint: meta.hasCheckpoint,
+      baseEpoch: meta.baseEpoch,
+    });
+    if (answer === null || (answer.snapshot === null && answer.update === null)) return;
+    const lane = await this.#ensureLane(docId, peer);
+    if (lane === null) return;
+    if (answer.snapshot !== null) {
+      await this.#write(
+        lane.laneId,
+        docId,
+        peer,
+        DOC_SYNC_RECORD.SNAPSHOT,
+        answer.meta,
+        answer.snapshot,
+      );
+    }
+    if (answer.update !== null) {
+      await this.#write(
+        lane.laneId,
+        docId,
+        peer,
+        DOC_SYNC_RECORD.UPDATE,
+        answer.meta,
+        answer.update,
+      );
+    }
+    this.#logger.info("fieldd.doc_sync.answered_version", "Sent a peer what its version lacked", {
+      docId,
+      peer,
+      checkpoint: answer.snapshot !== null,
+      updateBytes: answer.update?.byteLength ?? 0,
+    });
+  }
+
+  /** DS-5 — one slice of a record too large for a frame. Reassembled whole
+   * (bounded: the renderer's own ceiling, four transfers per peer, a TTL) and
+   * then read like any record that arrived in one piece. */
+  async #onChunk(docId: string, peer: string, frame: DocSyncFrame): Promise<void> {
+    const parsed = DocSyncChunkMeta.safeParse(frame.meta);
+    if (!parsed.success) {
+      this.#logger.warn("fieldd.doc_sync.chunk_undecodable", "A peer's CHUNK could not be read", {
+        docId,
+        peer,
+        error: parsed.error.message,
+      });
+      return;
+    }
+    const { transfer, index, count, byteLength } = parsed.data;
+    const key = `${peer}\u0000${transfer}`;
+    const refuse = (why: string): void => {
+      const held = this.#transfers.get(key);
+      if (held !== undefined) clearTimeout(held.timer);
+      this.#transfers.delete(key);
+      this.#logger.warn("fieldd.doc_sync.chunk_refused", "A chunked transfer was dropped", {
+        docId,
+        peer,
+        transfer,
+        reason: why,
+      });
+    };
+    if (byteLength > DOC_SYNC_MAX_TRANSFER_BYTES || index >= count || count > byteLength) {
+      refuse("out-of-bounds");
+      return;
+    }
+    let held = this.#transfers.get(key);
+    if (held === undefined) {
+      const mine = [...this.#transfers.keys()].filter((k) => k.startsWith(`${peer}\u0000`));
+      if (mine.length >= MAX_TRANSFERS_PER_PEER && mine[0] !== undefined) {
+        const oldest = this.#transfers.get(mine[0]);
+        if (oldest !== undefined) clearTimeout(oldest.timer);
+        this.#transfers.delete(mine[0]);
+      }
+      const timer = setTimeout(() => refuse("expired"), this.#transferTtlMs);
+      timer.unref?.();
+      held = { count, byteLength, parts: new Array(count), received: 0, size: 0, timer };
+      this.#transfers.set(key, held);
+    }
+    if (held.count !== count || held.byteLength !== byteLength) {
+      refuse("inconsistent");
+      return;
+    }
+    if (held.parts[index] !== undefined) return; // a redelivered slice
+    held.size += frame.payload.byteLength;
+    if (held.size > byteLength) {
+      refuse("overrun");
+      return;
+    }
+    held.parts[index] = frame.payload;
+    held.received += 1;
+    if (held.received < count) return;
+    clearTimeout(held.timer);
+    this.#transfers.delete(key);
+    if (held.size !== byteLength) {
+      refuse("short");
+      return;
+    }
+    const whole = new Uint8Array(byteLength);
+    let at = 0;
+    for (const part of held.parts) {
+      if (part === undefined) return;
+      whole.set(part, at);
+      at += part.byteLength;
+    }
+    if (whole[0] === DOC_SYNC_RECORD.CHUNK) {
+      refuse("nested");
+      return;
+    }
+    await this.#receive(docId, whole, peer);
+  }
+
+  /** A SNAPSHOT or an UPDATE — content, from either protocol. */
+  async #onContent(docId: string, peer: string, frame: DocSyncFrame): Promise<void> {
+    const parsedMeta = DocSyncMeta.safeParse(frame.meta);
+    if (!parsedMeta.success) {
+      this.#logger.warn("fieldd.doc_sync.record_undecodable", "A peer's record could not be read", {
+        docId,
+        peer,
+        error: parsedMeta.error.message,
+      });
+      return;
+    }
+    const decoded = { kind: frame.kind, meta: parsedMeta.data, payload: frame.payload };
     const facts = this.#factsFor(docId);
     this.#exchanged(facts, peer);
     // The same identity the digest speaks — an arriving record retires its own
@@ -607,6 +915,8 @@ export class DocSyncService {
         facts.declined = false;
         facts.epochStale = false;
         facts.reason = null;
+        facts.pendingBase = outcome.pending === true;
+        await this.#settleAwaiting(docId, facts);
         this.#touch(facts);
         return;
       }
@@ -615,6 +925,14 @@ export class DocSyncService {
       // a crossed HAVE looks like from here.
       if (outcome.reason === "already-held") {
         facts.expected.delete(incoming);
+        await this.#settleAwaiting(docId, facts);
+        this.#touch(facts);
+        return;
+      }
+      // DS-5 — held by the host as pending: its causal base has not arrived.
+      // Incomplete, not declined; the peer's next answer brings the base.
+      if (outcome.reason === "pending") {
+        facts.pendingBase = true;
         this.#touch(facts);
         return;
       }
@@ -646,7 +964,7 @@ export class DocSyncService {
       if (outcome.reason === "epoch-mismatch") {
         facts.epochStale = true;
       } else {
-        facts.declined = true; // unknown-doc | unknown-kind (local-only lands via #declineLocalOnly)
+        facts.declined = true; // unknown-doc | unknown-kind | undecodable (local-only lands via #declineLocalOnly)
       }
       facts.reason = outcome.reason;
       this.#touch(facts);
@@ -657,6 +975,14 @@ export class DocSyncService {
       });
     } catch (error) {
       this.#logger.error("fieldd.doc_sync.apply_failed", "Applying a peer's record failed", error);
+    }
+  }
+
+  /** DS-5 — retire every `awaiting` version our host now covers. */
+  async #settleAwaiting(docId: string, facts: DocSyncFacts): Promise<void> {
+    if (facts.awaiting.size === 0) return;
+    for (const [peer, version] of [...facts.awaiting]) {
+      if (await this.#docs.hostCovers(docId, version.encode())) facts.awaiting.delete(peer);
     }
   }
 
@@ -718,7 +1044,7 @@ export class DocSyncService {
     const lane = await this.#ensureLane(docId, peer);
     if (lane === null) return;
     if (missing.checkpoint !== null) {
-      this.#write(
+      await this.#write(
         lane.laneId,
         docId,
         peer,
@@ -728,7 +1054,7 @@ export class DocSyncService {
       );
     }
     for (const update of missing.updates) {
-      this.#write(lane.laneId, docId, peer, DOC_SYNC_RECORD.UPDATE, missing.meta, update);
+      await this.#write(lane.laneId, docId, peer, DOC_SYNC_RECORD.UPDATE, missing.meta, update);
     }
     if (missing.checkpoint !== null || missing.updates.length > 0) {
       this.#logger.info("fieldd.doc_sync.answered_have", "Sent a peer the records it lacked", {
@@ -782,9 +1108,36 @@ export class DocSyncService {
       // will carry this commit along with anything else it lacks. Sending it
       // again here would be a duplicate — free, since the protocol is
       // idempotent, but noise on the wire for no gain.
-      if (lane !== null && !lane.created) {
-        this.#send(lane.laneId, peer, commit.kind === "checkpoint" ? "snapshot" : "update", commit);
+      if (lane === null || lane.created) continue;
+      if (this.#versionPeers.has(pairKey(commit.docId, peer))) {
+        // DS-5 — a peer that speaks VERSION gets Loro updates only: an update
+        // commit as it is, a checkpoint as the DELTA it added to the host (an
+        // edit ICE folded into a checkpoint reaches a desktop holding content
+        // this way — §1.2 defect 1). A checkpoint that added nothing sends
+        // nothing.
+        const bytes = commit.kind === "checkpoint" ? commit.delta : commit.payload;
+        if (bytes !== undefined) {
+          await this.#write(
+            lane.laneId,
+            commit.docId,
+            peer,
+            DOC_SYNC_RECORD.UPDATE,
+            {
+              baseEpoch: commit.baseEpoch,
+              engineSchema: commit.meta.engineSchema,
+              savedAt: commit.meta.savedAt,
+            },
+            bytes,
+          );
+        }
+        continue;
       }
+      await this.#send(
+        lane.laneId,
+        peer,
+        commit.kind === "checkpoint" ? "snapshot" : "update",
+        commit,
+      );
     }
     // No settling line here, deliberately: the old shape set "syncing" then
     // put "idle" back, and F-C6-16 was the receive path's state vanishing
@@ -816,16 +1169,35 @@ export class DocSyncService {
    * sends its own HAVE on its own return lane, which is how we learn what IT
    * lacks. Symmetric, two messages, no request/response pairing. */
   async #greet(docId: string, laneId: number, peer: string): Promise<void> {
+    const version = await this.#docs.hostVersion(docId);
     const digest = await this.#docs.syncDigest(docId);
-    if (digest === null) return;
+    if (version === null && digest === null) return;
     try {
-      this.#bytes.send(
-        laneId,
-        encodeDocSyncHave(digest.baseEpoch, {
-          hasCheckpoint: digest.hasCheckpoint,
-          records: digest.records,
-        }),
-      );
+      // DS-5 — VERSION FIRST. A DS-5 receiver that reads it marks the pair and
+      // ignores the HAVE behind it; a pre-DS-5 receiver refuses the VERSION's
+      // meta, logs it, and answers the HAVE exactly as it always has.
+      if (version !== null) {
+        this.#bytes.send(
+          laneId,
+          encodeDocSyncVersion(
+            {
+              baseEpoch: version.baseEpoch,
+              hasCheckpoint: version.hasCheckpoint,
+              loro: DOC_SYNC_LORO_ENCODING,
+            },
+            version.version,
+          ),
+        );
+      }
+      if (digest !== null) {
+        this.#bytes.send(
+          laneId,
+          encodeDocSyncHave(digest.baseEpoch, {
+            hasCheckpoint: digest.hasCheckpoint,
+            records: digest.records,
+          }),
+        );
+      }
       const facts = this.#factsFor(docId);
       this.#exchanged(facts, peer);
       this.#touch(facts);
@@ -868,8 +1240,8 @@ export class DocSyncService {
     return laneId;
   }
 
-  #send(laneId: number, peer: string, as: "snapshot" | "update", commit: DocCommit): void {
-    this.#write(
+  #send(laneId: number, peer: string, as: "snapshot" | "update", commit: DocCommit): Promise<void> {
+    return this.#write(
       laneId,
       commit.docId,
       peer,
@@ -883,16 +1255,21 @@ export class DocSyncService {
     );
   }
 
-  #write(
+  async #write(
     laneId: number,
     docId: string,
     peer: string,
     kind: number,
     meta: { baseEpoch: number; engineSchema: number | null; savedAt: number },
     payload: Uint8Array,
-  ): void {
+  ): Promise<void> {
+    const record = encodeDocSyncRecord(kind, meta, payload);
+    if (record.byteLength > this.#maxRecordBytes) {
+      await this.#sendChunked(docId, peer, record);
+      return;
+    }
     try {
-      this.#bytes.send(laneId, encodeDocSyncRecord(kind, meta, payload));
+      this.#bytes.send(laneId, record);
       const facts = this.#factsFor(docId);
       this.#exchanged(facts, peer);
       this.#touch(facts);
@@ -909,4 +1286,83 @@ export class DocSyncService {
       this.#forget(laneId);
     }
   }
+
+  /** DS-5 (§1.2 defect 3) — a record past the frame budget crosses as CHUNKs
+   * on a lane of its OWN (design-02 §3.3, "own lane per snapshot"), so a
+   * bootstrap never queues a live edit behind it. Paced against the byte
+   * socket's watermark; a lost slice abandons the transfer on the far side
+   * (TTL), and the next version exchange asks again — lossy is detectable,
+   * never silent. */
+  async #sendChunked(docId: string, peer: string, record: Uint8Array): Promise<void> {
+    const facts = this.#factsFor(docId);
+    if (record.byteLength > DOC_SYNC_MAX_TRANSFER_BYTES) {
+      facts.declined = true;
+      facts.reason = "transfer-too-large";
+      this.#touch(facts);
+      this.#logger.error(
+        "fieldd.doc_sync.transfer_too_large",
+        "A record exceeds the largest transfer a peer reassembles",
+        undefined,
+        { docId, peer, bytes: record.byteLength, ceiling: DOC_SYNC_MAX_TRANSFER_BYTES },
+      );
+      return;
+    }
+    const transfer = `${this.#transferPrefix}-${++this.#nextTransfer}`;
+    const laneId = this.#allocateLaneId();
+    try {
+      await this.#control.open({ laneId, class: "reliable", peer, protocol: "doc-sync", docId });
+    } catch (error) {
+      this.#logger.info("fieldd.doc_sync.transfer_lane_failed", "No transfer lane to a peer", {
+        docId,
+        peer,
+        error: String(error),
+      });
+      this.#peerFor(facts, peer).reachable = false;
+      this.#touch(facts);
+      return;
+    }
+    try {
+      const chunks = chunkDocSyncRecord(record, transfer, this.#chunkBytes);
+      for (const chunk of chunks) {
+        await this.#paced();
+        this.#bytes.send(laneId, chunk);
+      }
+      await this.#bytes.flush?.(laneId);
+      this.#exchanged(facts, peer);
+      this.#touch(facts);
+      this.#logger.info("fieldd.doc_sync.transfer_sent", "A chunked record was sent", {
+        docId,
+        peer,
+        transfer,
+        chunks: chunks.length,
+        bytes: record.byteLength,
+      });
+    } catch (error) {
+      this.#logger.warn("fieldd.doc_sync.transfer_failed", "A chunked transfer did not complete", {
+        docId,
+        peer,
+        transfer,
+        error: String(error),
+      });
+      this.#peerFor(facts, peer).reachable = false;
+      this.#touch(facts);
+    } finally {
+      void this.#control.close(laneId).catch(() => undefined);
+    }
+  }
+
+  /** Wait while the byte socket holds more than two slices — MeshLaneLink
+   * THROWS past its 4 MiB watermark rather than queue. */
+  async #paced(): Promise<void> {
+    const deadline = this.#now() + PACE_DEADLINE_MS;
+    while ((this.#bytes.bufferedBytes ?? 0) > PACE_WATERMARK_CHUNKS * this.#chunkBytes) {
+      if (this.#now() > deadline) throw new Error("the byte socket did not drain");
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+}
+
+/** The (doc, peer) pair key the version-speaker set uses. */
+function pairKey(docId: string, peer: string): string {
+  return `${docId}\u0000${peer}`;
 }

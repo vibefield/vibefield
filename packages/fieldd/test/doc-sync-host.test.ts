@@ -1,0 +1,175 @@
+// DS-5 — two complete fieldd doc stacks in Loro custody, joined by the shared
+// in-process router (doc-mesh-harness). The witnesses DS §11 names for the
+// intent plane's merge half:
+//   · THE §1.2 DEFECT: a checkpoint written on A while B holds content
+//     converges — the edits ICE folded into it reach B though no journal
+//     record ever carried them;
+//   · two DS-5 peers open with VERSION, answer once, and leave the HAVE behind
+//     it unanswered;
+//   · a record too large for a frame crosses as CHUNKs on a lane of its own.
+// What it does not prove is the wire (field-native's quic_lane_transport.rs).
+import { randomUUID } from "node:crypto";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { DOC_SYNC_RECORD } from "@vibefield/contracts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import type { DocumentService } from "../src/doc-service";
+import type { DocSyncOptions } from "../src/doc-sync";
+import { Device, Mesh } from "./doc-mesh-harness";
+import { Renderer, replay } from "./loro-renderer";
+
+let dirs: string[] = [];
+afterEach(async () => {
+  await new Promise((r) => setTimeout(r, 60));
+  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+  dirs = [];
+});
+vi.setConfig({ testTimeout: 15_000 });
+
+async function until(predicate: () => boolean | Promise<boolean>, label: string): Promise<void> {
+  for (let i = 0; i < 600; i++) {
+    if (await predicate()) return;
+    await new Promise((r) => setTimeout(r, 5));
+  }
+  throw new Error(`timed out waiting for: ${label}`);
+}
+
+/** Both devices know the doc exists (B's registry seeded, as the library will
+ * seed it — doc-library tests prove that half) and only A holds content. */
+async function pair(
+  syncOptions: Partial<DocSyncOptions> = {},
+): Promise<{ a: Device; b: Device; docId: string; mesh: Mesh }> {
+  const mesh = new Mesh();
+  const docId = randomUUID();
+  const devices: Device[] = [];
+  for (const name of ["A", "B"]) {
+    const dataDir = mkdtempSync(join(tmpdir(), `vf-dshost-${name}-`));
+    dirs.push(dataDir);
+    mkdirSync(join(dataDir, "registries"), { recursive: true });
+    mkdirSync(join(dataDir, "docs", docId), { recursive: true });
+    writeFileSync(
+      join(dataDir, "registries", "field.docs.v1.json"),
+      JSON.stringify([
+        { docId, name: "board", updatedAt: 1, baseEpoch: 0, engineSchema: null, sizeBytes: 0 },
+      ]),
+    );
+    devices.push(new Device(name, mesh, dataDir, syncOptions));
+  }
+  const [a, b] = devices as [Device, Device];
+  mesh.devices.set("A", a);
+  mesh.devices.set("B", b);
+  await a.sync.start();
+  await b.sync.start();
+  return { a, b, docId, mesh };
+}
+
+async function put(
+  docs: DocumentService,
+  docId: string,
+  kind: "checkpoint" | "update",
+  bytes: Uint8Array,
+): Promise<void> {
+  await docs.writeDoc(docId, bytes, {
+    revisionId: randomUUID(),
+    kind,
+    ...(kind === "update"
+      ? { baseRevisionId: (await docs.readDocMeta(docId))?.revisionId ?? randomUUID() }
+      : {}),
+    engineSchema: 2,
+    savedAt: Date.now(),
+    byteLength: bytes.byteLength,
+  });
+}
+
+/** Loro promises no key order, so boards compare as sorted entries. */
+const sameBoard = (x: Record<string, unknown>, y: Record<string, unknown>): boolean =>
+  JSON.stringify(Object.entries(x).sort()) === JSON.stringify(Object.entries(y).sort());
+
+const boardOf = async (d: Device, docId: string): Promise<Record<string, unknown>> => {
+  try {
+    return (await replay(d.docs, docId)).board();
+  } catch {
+    return {};
+  }
+};
+
+describe("DS-5 — two desktops, one canvas, merged by version", () => {
+  it("THE §1.2 DEFECT: a checkpoint written on A while B holds content converges", async () => {
+    const { a, b, docId, mesh } = await pair();
+    const wa = new Renderer(1n);
+    wa.edit("base", "A");
+    await put(a.docs, docId, "checkpoint", wa.checkpoint());
+    await until(async () => (await boardOf(b, docId)).base === "A", "B to bootstrap from A");
+
+    // B's window opens B's at-rest doc and edits: B now HOLDS content of its own.
+    const wb = await replay(b.docs, docId, 2n);
+    await put(b.docs, docId, "update", wb.edit("fromB", "journaled"));
+    // Meanwhile A's window edits twice and FLUSHES before the debounce: ICE
+    // folds both edits into a checkpoint and never appends either one.
+    wa.editUnsent("fold1", "x");
+    wa.editUnsent("fold2", "y");
+    const snapshotsBefore = mesh.carried.filter(
+      (r) => r.from === "A" && r.kind === DOC_SYNC_RECORD.SNAPSHOT,
+    ).length;
+    await put(a.docs, docId, "checkpoint", wa.checkpoint());
+
+    const everything = { base: "A", fromB: "journaled", fold1: "x", fold2: "y" };
+    await until(
+      async () =>
+        sameBoard(await boardOf(a, docId), everything) &&
+        sameBoard(await boardOf(b, docId), everything),
+      "both desktops to hold everything",
+    );
+    expect(await boardOf(a, docId)).toEqual(everything);
+    expect(await boardOf(b, docId)).toEqual(everything);
+    // The folded checkpoint crossed as its DELTA, not as a checkpoint B would
+    // have had to decline: no new SNAPSHOT left A after the bootstrap.
+    expect(
+      mesh.carried.filter((r) => r.from === "A" && r.kind === DOC_SYNC_RECORD.SNAPSHOT).length,
+    ).toBe(snapshotsBefore);
+    for (const status of b.sync.statuses()) {
+      expect(status.state).not.toBe("peer-declined");
+      expect(status.state).not.toBe("epoch-stale");
+    }
+  });
+
+  it("two DS-5 peers open with VERSION, answer once, and leave the HAVE behind it unanswered", async () => {
+    const { a, b, docId, mesh } = await pair();
+    const wa = new Renderer(1n);
+    wa.edit("k", "v");
+    await put(a.docs, docId, "checkpoint", wa.checkpoint());
+    await until(async () => (await boardOf(b, docId)).k === "v", "B to bootstrap");
+    await new Promise((r) => setTimeout(r, 50));
+    const fromA = mesh.carried.filter((r) => r.from === "A");
+    const fromB = mesh.carried.filter((r) => r.from === "B");
+    // Each side's greeting is a VERSION, then the HAVE for pre-DS-5 peers.
+    expect(fromA.some((r) => r.kind === DOC_SYNC_RECORD.VERSION)).toBe(true);
+    expect(fromB.some((r) => r.kind === DOC_SYNC_RECORD.VERSION)).toBe(true);
+    // B was bootstrapped exactly once: one checkpoint crossed, whatever the
+    // number of greetings — the HAVE behind B's VERSION was not answered too.
+    expect(fromA.filter((r) => r.kind === DOC_SYNC_RECORD.SNAPSHOT)).toHaveLength(1);
+    // B holds what A holds and nothing is pending on either side.
+    await until(
+      () => b.sync.statuses().every((s) => s.state === "in-step"),
+      "B's standing to settle in step",
+    );
+  });
+
+  it("a record too large for a frame crosses as CHUNKs on a lane of its own", async () => {
+    const { a, b, docId, mesh } = await pair({ maxRecordBytes: 400, chunkBytes: 128 });
+    const wa = new Renderer(1n);
+    for (let i = 0; i < 40; i++) wa.edit(`key-${i}`, `value-${i}-${"x".repeat(12)}`);
+    const checkpoint = wa.checkpoint();
+    expect(checkpoint.byteLength).toBeGreaterThan(400);
+    const lanesBefore = a.control.routes.size;
+    await put(a.docs, docId, "checkpoint", checkpoint);
+    await until(async () => Object.keys(await boardOf(b, docId)).length === 40, "B to reassemble");
+    expect(await boardOf(b, docId)).toEqual(wa.board());
+    const chunks = mesh.carried.filter((r) => r.from === "A" && r.kind === DOC_SYNC_RECORD.CHUNK);
+    expect(chunks.length).toBeGreaterThan(2);
+    for (const c of chunks) expect(c.bytes).toBeLessThanOrEqual(400);
+    // The transfer rode a lane opened for it and closed behind it.
+    expect(a.control.routes.size).toBe(lanesBefore + 1);
+  });
+});

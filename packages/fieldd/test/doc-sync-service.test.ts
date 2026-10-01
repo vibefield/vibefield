@@ -15,7 +15,7 @@ import {
   DOC_SYNC_RECORD,
   type DocSyncIntent,
   decodeDocSyncDigest,
-  decodeDocSyncRecord,
+  decodeDocSyncFrame,
   encodeDocSyncHave,
   encodeDocSyncRecord,
   MESHDATA_INBOUND_LANE_ID_BASE,
@@ -75,7 +75,9 @@ class FakeBytes implements LaneBytes {
 
   send(laneId: number, payload: Uint8Array): boolean {
     if (this.throwOnSend) throw new Error("meshdata send buffer is full");
-    const record = decodeDocSyncRecord(payload);
+    // DS-5 — the wire now carries VERSION and CHUNK too: read it the way a
+    // DS-5 peer does (the strict legacy reader throws on the new kinds).
+    const record = decodeDocSyncFrame(payload);
     this.sent.push({ laneId, kind: record.kind, payload: record.payload });
     return true;
   }

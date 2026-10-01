@@ -19,6 +19,17 @@ import {
   durableRenameSync,
   type Logger,
 } from "@vibefield/logging";
+import { hasIce1Magic, liftIce1 } from "./ice1-envelope";
+import {
+  covers,
+  decodeVersion,
+  EMPTY_VERSION,
+  HostedDoc,
+  type HostImport,
+  LoroHost,
+  loroBlobMode,
+  snapshotVersion,
+} from "./loro-host";
 import { RpcCallError } from "./native-link";
 
 // DocumentService (design-02 §3.5, B3 shape A): fieldd owns the board's at-rest
@@ -32,8 +43,24 @@ import { RpcCallError } from "./native-link";
 // every write is tmp-file → fsync → rename → dir-fsync, so a crash mid-write can
 // never leave a torn snapshot, only the prior whole one. The registry read on boot
 // is a tolerant reader — a corrupt catalog is moved aside, never fatal.
-
-const ICE1_MAGIC = [0x49, 0x43, 0x45, 0x31] as const; // "ICE1"
+//
+// DS-5 (DS-D18 RULED (a), 2026-09-30) — the opaque half above now has a MERGING
+// half beside it. A checkpoint the ICE1 frame rule can lift (every checkpoint
+// ICE 0.11.0 writes — test/probes/ice1-envelope) puts its doc in LORO custody:
+// the LoroHost holds one LoroDoc for it, built from the at-rest bytes, and
+//   · a renderer checkpoint is IMPORTED, not swapped in: whatever the host held
+//     beyond it (a peer's edits the window never saw) is kept as one RESIDUAL
+//     journal record, so replacing the journal can no longer drop anything;
+//   · a peer's checkpoint or update is MERGED and exactly what it added is
+//     appended (§1.2 defect 1: no more would-clobber for a doc that holds
+//     content);
+//   · an update the host already holds (a window re-journaling a pushed update,
+//     a retry) is absorbed, not appended.
+// The at-rest shape is unchanged and stays a renderer-openable document —
+// checkpoint + journal, replayed in order, IS the host's state (pending ops
+// excepted: a record that cannot apply is never persisted, because a renderer
+// replaying it would quarantine). A checkpoint the rule cannot lift keeps the
+// opaque custody above, untouched.
 
 /** A revision that actually landed. `origin` is load-bearing rather than
  * informational: cross-device sync broadcasts what it hears about, and a record
@@ -48,6 +75,47 @@ export interface DocCommit {
   payload: Uint8Array;
   meta: DocMeta;
   baseEpoch: number;
+  /** DS-5 — for a checkpoint in Loro custody, exactly what it ADDED to the
+   * host (a Loro update from the version before it). A DS-5 peer is sent this
+   * instead of the whole checkpoint — which is how an edit that lives only in a
+   * checkpoint (ICE folds pending edits into one) still reaches a desktop that
+   * holds content. Absent when the checkpoint added nothing, or is opaque. */
+  delta?: Uint8Array;
+}
+
+/** What became of a peer's record (applyRemoteRecord). */
+export type RemoteRecordOutcome =
+  | { applied: true; meta: DocMeta; pending?: true }
+  | {
+      applied: false;
+      reason:
+        | "unknown-doc"
+        | "would-clobber"
+        | "epoch-mismatch"
+        | "unknown-kind"
+        | "already-held"
+        /** DS-5 — held by the host as pending: its causal base has not arrived. */
+        | "pending"
+        /** DS-5 — bytes the host could not read as Loro at all. */
+        | "undecodable";
+    };
+
+/** DS-5 — the host's standing for one doc, for a VERSION record. */
+export interface HostVersion {
+  /** Loro's encoded version vector (empty when nothing is held yet). */
+  version: Uint8Array;
+  /** A base a renderer can open is held here. */
+  hasCheckpoint: boolean;
+  baseEpoch: number;
+}
+
+/** DS-5 — what a holder at some version lacks, ready to send. */
+export interface HostAnswer {
+  meta: { baseEpoch: number; engineSchema: number | null; savedAt: number };
+  /** The checkpoint envelope, for a holder that has none. */
+  snapshot: Uint8Array | null;
+  /** A Loro update from the holder's version (or the checkpoint's). */
+  update: Uint8Array | null;
 }
 
 export interface DocumentServiceOptions {
@@ -60,6 +128,8 @@ export interface DocumentServiceOptions {
   /** Fires once per revision that reached disk. Never for the idempotent-retry
    * path, which commits nothing. */
   onCommit?: (commit: DocCommit) => void;
+  /** DS-5 — the Loro-level host (a fresh one when absent). */
+  host?: LoroHost;
 }
 
 /** doc.open's return: the caller pairs the ticket with laneUrl before dialing. */
@@ -148,6 +218,11 @@ export class DocumentService {
   private writers = new Set<string>();
   private writes = new Map<string, Promise<void>>();
   private storageOk = false;
+  /** DS-5 — one LoroDoc per doc in Loro custody. */
+  private readonly host: LoroHost;
+  /** DS-5 — docs whose current checkpoint the frame rule cannot lift: opaque
+   * custody, remembered so a HAVE does not re-read the file every time. */
+  private readonly opaque = new Set<string>();
 
   constructor(opts: DocumentServiceOptions) {
     this.dataDir = opts.dataDir;
@@ -155,6 +230,7 @@ export class DocumentService {
     this.ticketTtlMs = opts.ticketTtlMs ?? 30_000;
     this.logger = opts.logger ?? createNoopLogger();
     this.onCommit = opts.onCommit;
+    this.host = opts.host ?? new LoroHost();
     this.docsDir = join(this.dataDir, ...LAYOUT.DOCS_DIR);
     this.registryDir = join(this.dataDir, ...LAYOUT.REGISTRIES_DIR);
     this.registryFile = `${STORES.DOCS}.json`;
@@ -350,14 +426,21 @@ export class DocumentService {
     putMeta: LanePutMeta,
     origin: "local" | "peer" = "local",
   ): Promise<DocMeta> {
+    return this.serialize(docId, () => this.writeDocNow(docId, bytes, putMeta, origin));
+  }
+
+  /** The per-doc chain every at-rest read-modify-write rides — the renderer's
+   * writes, a peer's merges, and (DS-5) the host reads that must see disk and
+   * host agree. Nothing on it may call back into `serialize` for the same doc. */
+  private serialize<T>(docId: string, op: () => Promise<T>): Promise<T> {
     const prior = this.writes.get(docId) ?? Promise.resolve();
-    const write = prior.catch(() => {}).then(() => this.writeDocNow(docId, bytes, putMeta, origin));
-    const tail = write.then(
+    const run = prior.catch(() => {}).then(op);
+    const tail = run.then(
       () => {},
       () => {},
     );
     this.writes.set(docId, tail);
-    return write.finally(() => {
+    return run.finally(() => {
       if (this.writes.get(docId) === tail) this.writes.delete(docId);
     });
   }
@@ -388,17 +471,36 @@ export class DocumentService {
     if (!hasIce1Magic(bytes))
       throw new RpcCallError("PRECONDITION_FAILED", "payload is not an ICE1 envelope", false);
 
+    // DS-5 — into the host first, so the journal this checkpoint replaces can
+    // be replaced without loss: what the host holds beyond the checkpoint (a
+    // peer's edits the window never saw) becomes the new journal's one record.
+    const folded = await this.foldCheckpoint(docId, bytes);
     const revisionId = putMeta.revisionId;
+    const committedAt = this.now();
+    const residual: JournalRevision | null =
+      folded?.residual != null
+        ? (() => {
+            const id = randomUUID();
+            return {
+              revisionId: id,
+              file: `${id}.loro`,
+              contentId: contentIdOf(folded.residual),
+              committedAt,
+              savedAt: putMeta.savedAt,
+              byteLength: folded.residual.byteLength,
+            };
+          })()
+        : null;
     const meta: CurrentRevision = {
       revisionId,
       file: `${revisionId}.ice1`,
       contentId: contentIdOf(bytes),
-      committedAt: this.now(),
+      committedAt,
       engineSchema: putMeta.engineSchema,
       savedAt: putMeta.savedAt,
       byteLength: bytes.byteLength,
       baseEpoch: entry.baseEpoch,
-      updates: [],
+      updates: residual === null ? [] : [residual],
     };
     const dir = join(this.docsDir, docId);
     const revisions = this.revisionsDir(docId);
@@ -411,18 +513,24 @@ export class DocumentService {
     }
     try {
       await mkdir(revisions, { recursive: true });
+      if (residual !== null && folded?.residual != null) {
+        await atomicWrite(revisions, residual.file, folded.residual);
+      }
       await atomicWrite(revisions, meta.file, bytes);
       // `current.json` is the sole commit point. Until this rename lands the
       // previous complete revision remains authoritative.
       await atomicWrite(dir, "current.json", `${JSON.stringify(meta, null, 2)}\n`);
     } catch (err) {
+      // The host already took the checkpoint in; disk did not. Rebuild the host
+      // from disk on next use rather than let the two disagree.
+      this.host.delete(docId);
       throw this.storageError("write", err);
     }
 
     this.commitRegistryColumns(docId, entry, {
       updatedAt: meta.committedAt,
       engineSchema: putMeta.engineSchema,
-      sizeBytes: bytes.byteLength,
+      sizeBytes: storedSize(meta),
     });
     try {
       await this.persistRegistry();
@@ -456,8 +564,92 @@ export class DocumentService {
       payload: bytes,
       meta: currentMeta(meta),
       baseEpoch: entry.baseEpoch,
+      ...(folded?.delta !== undefined ? { delta: folded.delta } : {}),
     });
     return meta;
+  }
+
+  /** DS-5 — bring a checkpoint into Loro custody: import it into the doc's
+   * host (a fresh one when the doc had no liftable base) and say what the host
+   * holds BEYOND it — the residual a replaced journal must keep — and what it
+   * ADDED — the delta a DS-5 peer is sent. Null when the frame rule cannot lift
+   * it: the doc goes (or stays) opaque, exactly as before DS-5. */
+  private async foldCheckpoint(
+    docId: string,
+    bytes: Uint8Array,
+  ): Promise<{ residual: Uint8Array | null; delta: Uint8Array | undefined } | null> {
+    const lifted = liftIce1(bytes);
+    const version = lifted.ok ? snapshotVersion(lifted.payload) : null;
+    if (!lifted.ok || version === null) {
+      this.host.delete(docId);
+      this.opaque.add(docId);
+      return null;
+    }
+    const hosted = (await this.hostedNow(docId)) ?? new HostedDoc(docId);
+    let imported: HostImport;
+    try {
+      imported = hosted.import(lifted.payload);
+    } catch (error) {
+      this.logger
+        .child({ docId })
+        .warn(
+          "fieldd.docs.checkpoint_unmergeable",
+          "A checkpoint's Loro payload could not be imported; the document stays in opaque custody",
+          { error: String(error) },
+        );
+      this.host.delete(docId);
+      this.opaque.add(docId);
+      return null;
+    }
+    this.opaque.delete(docId);
+    this.host.set(hosted);
+    return {
+      residual: hosted.isAheadOf(version) ? hosted.exportSince(version) : null,
+      delta: imported.changed ? hosted.exportSince(imported.before) : undefined,
+    };
+  }
+
+  /** DS-5 — the doc's host, built from its at-rest bytes on first use: the
+   * checkpoint's Loro payload, then every journal record in order — exactly
+   * the renderer's own replay. Null when the doc holds no checkpoint yet, or
+   * one the frame rule cannot lift (opaque custody). Runs on the per-doc chain. */
+  private async hostedNow(docId: string): Promise<HostedDoc | null> {
+    const cached = this.host.get(docId);
+    if (cached !== undefined) return cached;
+    if (this.opaque.has(docId)) return null;
+    const revisions = this.revisionsDir(docId);
+    let current: CurrentRevision | null;
+    let checkpoint: Uint8Array;
+    try {
+      current = await this.readCurrent(docId);
+      if (current === null) return null;
+      checkpoint = new Uint8Array(await readFile(join(revisions, current.file)));
+    } catch {
+      return null; // unreadable at-rest bytes: the next whole write repairs them
+    }
+    const lifted = liftIce1(checkpoint);
+    if (!lifted.ok || loroBlobMode(lifted.payload) !== "snapshot") {
+      this.opaque.add(docId);
+      return null;
+    }
+    const hosted = new HostedDoc(docId);
+    try {
+      hosted.import(lifted.payload);
+      for (const update of current.updates) {
+        hosted.import(new Uint8Array(await readFile(join(revisions, update.file))));
+      }
+    } catch (error) {
+      this.logger
+        .child({ docId })
+        .warn(
+          "fieldd.docs.host_load_failed",
+          "A document's at-rest bytes could not be loaded into the host; it stays in opaque custody",
+          { error: String(error) },
+        );
+      this.opaque.add(docId);
+      return null;
+    }
+    return this.host.set(hosted);
   }
 
   private async writeUpdateNow(
@@ -516,21 +708,79 @@ export class DocumentService {
       );
     }
 
+    // DS-5 — in Loro custody the update goes into the host FIRST: what the
+    // host cannot apply is never journaled, and what it already holds is not
+    // journaled twice.
+    const hosted = await this.hostedNow(docId);
+    if (hosted !== null) {
+      let imported: HostImport;
+      try {
+        imported = hosted.import(bytes);
+      } catch {
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "journal update is not a Loro update this host can read",
+          false,
+          { docId, reason: "undecodable" },
+        );
+      }
+      if (imported.pending) {
+        // Its causal base is not held here, so no replay of this journal could
+        // apply it — a renderer's would quarantine the document. Refused; the
+        // window's autosave answers a failed append with a whole checkpoint,
+        // which carries the base with it.
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "journal update's causal base is not held here; send a checkpoint",
+          false,
+          { docId, reason: "base-missing" },
+        );
+      }
+      if (!imported.changed) {
+        // Already held: the echo of a PUSHED update (ICE's autosave journals
+        // applied remote updates too — the spike measured it), or a retry.
+        // Nothing new to store, and nothing to tell anyone.
+        return currentMeta(current);
+      }
+    }
+    return this.appendNow(
+      entry,
+      current,
+      bytes,
+      {
+        revisionId: putMeta.revisionId,
+        engineSchema: putMeta.engineSchema,
+        savedAt: putMeta.savedAt,
+      },
+      origin,
+    );
+  }
+
+  /** The durable tail of every journal append: file, then `current.json` (the
+   * commit point), then the registry columns, then the announcement. */
+  private async appendNow(
+    entry: DocRegistryEntry,
+    current: CurrentRevision,
+    bytes: Uint8Array,
+    stamp: { revisionId: string; engineSchema: number | null; savedAt: number },
+    origin: "local" | "peer",
+  ): Promise<DocMeta> {
+    const docId = entry.docId;
     const committedAt = this.now();
     const update: JournalRevision = {
-      revisionId: putMeta.revisionId,
-      file: `${putMeta.revisionId}.loro`,
+      revisionId: stamp.revisionId,
+      file: `${stamp.revisionId}.loro`,
       contentId: contentIdOf(bytes),
       committedAt,
-      savedAt: putMeta.savedAt,
+      savedAt: stamp.savedAt,
       byteLength: bytes.byteLength,
     };
     const next: CurrentRevision = {
       ...current,
-      revisionId: putMeta.revisionId,
+      revisionId: stamp.revisionId,
       committedAt,
-      engineSchema: putMeta.engineSchema,
-      savedAt: putMeta.savedAt,
+      engineSchema: stamp.engineSchema,
+      savedAt: stamp.savedAt,
       updates: [...current.updates, update],
     };
     const dir = join(this.docsDir, docId);
@@ -539,12 +789,16 @@ export class DocumentService {
       await atomicWrite(revisions, update.file, bytes);
       await atomicWrite(dir, "current.json", `${JSON.stringify(next, null, 2)}\n`);
     } catch (err) {
+      // A host that already merged these bytes is now ahead of disk: rebuild
+      // it from disk on next use (a peer's lost record comes back on the next
+      // version exchange; a window's comes back as its retry).
+      this.host.delete(docId);
       throw this.storageError("append", err);
     }
 
     this.commitRegistryColumns(docId, entry, {
       updatedAt: committedAt,
-      engineSchema: putMeta.engineSchema,
+      engineSchema: stamp.engineSchema,
       sizeBytes: storedSize(next),
     });
     try {
@@ -682,45 +936,51 @@ export class DocumentService {
 
   /** What became of a peer's record. Declining is a normal outcome, not a
    * failure, so it is a value rather than a thrown error — the caller reports
-   * it as sync state (EL5: no silent divergence). */
-  async applyRemoteRecord(
+   * it as sync state (EL5: no silent divergence).
+   *
+   * DS-5 — on the per-doc chain as a WHOLE: merging is read-modify-write of
+   * the host and the journal together, and a write arriving between the two
+   * halves would persist a delta computed against a state that no longer is. */
+  applyRemoteRecord(docId: string, record: DocSyncRecord): Promise<RemoteRecordOutcome> {
+    return this.serialize(docId, () => this.applyRemoteRecordNow(docId, record));
+  }
+
+  private async applyRemoteRecordNow(
     docId: string,
     record: DocSyncRecord,
-  ): Promise<
-    | { applied: true; meta: DocMeta }
-    | {
-        applied: false;
-        reason:
-          | "unknown-doc"
-          | "would-clobber"
-          | "epoch-mismatch"
-          | "unknown-kind"
-          | "already-held";
-      }
-  > {
+  ): Promise<RemoteRecordOutcome> {
     const entry = this.registry.get(docId);
     if (!entry) return { applied: false, reason: "unknown-doc" };
 
     if (record.kind === DOC_SYNC_RECORD.SNAPSHOT) {
-      // Bootstrap ONLY. fieldd cannot merge two checkpoints because it cannot
-      // read them (B3 shape A), and writeDoc replaces rather than merges — so
-      // accepting a peer's checkpoint over local content would destroy work
-      // that Loro itself would happily have merged. Declining is the honest
-      // move; merging belongs to the renderer, which holds the live doc.
-      if (this.hasStoredDoc(docId)) return { applied: false, reason: "would-clobber" };
-      const meta = await this.writeDoc(
-        docId,
-        record.payload,
-        {
-          revisionId: randomUUID(),
-          kind: "checkpoint",
-          engineSchema: record.meta.engineSchema,
-          savedAt: record.meta.savedAt,
-          byteLength: record.payload.byteLength,
-        },
-        "peer",
-      );
-      return { applied: true, meta };
+      // A doc with no content is BOOTSTRAPPED by a peer's checkpoint, as ever —
+      // and a liftable one puts it straight into Loro custody (writeDocNow).
+      if (!this.hasStoredDoc(docId)) {
+        const meta = await this.writeDocNow(
+          docId,
+          record.payload,
+          {
+            revisionId: randomUUID(),
+            kind: "checkpoint",
+            engineSchema: record.meta.engineSchema,
+            savedAt: record.meta.savedAt,
+            byteLength: record.payload.byteLength,
+          },
+          "peer",
+        );
+        return { applied: true, meta };
+      }
+      // DS-5 (§1.2 defect 1 closed) — a doc that HOLDS content merges a peer's
+      // checkpoint instead of declining it: the host imports its Loro payload
+      // and keeps exactly what it added. The record-level would-clobber below
+      // survives only for the case the host cannot help — either side's
+      // checkpoint outside the frame rule (opaque custody, B3 shape A).
+      const lifted = liftIce1(record.payload);
+      if (lifted.ok && loroBlobMode(lifted.payload) === "snapshot") {
+        const hosted = await this.hostedNow(docId);
+        if (hosted !== null) return this.mergeNow(entry, hosted, lifted.payload, record.meta);
+      }
+      return { applied: false, reason: "would-clobber" };
     }
 
     if (record.kind !== DOC_SYNC_RECORD.UPDATE) {
@@ -735,6 +995,11 @@ export class DocumentService {
     const current = await this.readCurrent(docId);
     if (current === null) return { applied: false, reason: "would-clobber" };
 
+    const hosted = await this.hostedNow(docId);
+    if (hosted !== null) return this.mergeNow(entry, hosted, record.payload, record.meta);
+
+    // OPAQUE custody from here down — unchanged since C6-3h.
+    //
     // Already held? Then this is a redelivery — a reconnect, a second lane, a
     // HAVE exchange crossing a push — and the right answer is nothing at all.
     // Loro would dedupe it on import anyway, so appending is CORRECT but the
@@ -751,8 +1016,8 @@ export class DocumentService {
     // peer's chain and mean nothing here. A fresh id, based on OUR head. The
     // C6-3f probe measured that this converges — and that a record whose causal
     // dependencies have not arrived is held pending by Loro, not lost.
-    const meta = await this.writeDoc(
-      docId,
+    const meta = await this.writeUpdateNow(
+      entry,
       record.payload,
       {
         revisionId: randomUUID(),
@@ -766,6 +1031,117 @@ export class DocumentService {
       "peer",
     );
     return { applied: true, meta };
+  }
+
+  /** DS-5 — merge a peer's bytes (a checkpoint's Loro payload or an update)
+   * into the host and journal EXACTLY what they added: a Loro update exported
+   * from the version before, so the journal replays without a pending import
+   * whatever order the peer's records arrived in — and a record the host holds
+   * as pending is not journaled until the base that resolves it lands. */
+  private async mergeNow(
+    entry: DocRegistryEntry,
+    hosted: HostedDoc,
+    bytes: Uint8Array,
+    stamp: { engineSchema: number | null; savedAt: number },
+  ): Promise<RemoteRecordOutcome> {
+    let imported: HostImport;
+    try {
+      imported = hosted.import(bytes);
+    } catch {
+      return { applied: false, reason: "undecodable" };
+    }
+    if (!imported.changed) {
+      return { applied: false, reason: imported.pending ? "pending" : "already-held" };
+    }
+    const current = await this.readCurrent(entry.docId);
+    if (current === null) {
+      this.host.delete(entry.docId);
+      return { applied: false, reason: "would-clobber" };
+    }
+    const meta = await this.appendNow(
+      entry,
+      current,
+      hosted.exportSince(imported.before),
+      { revisionId: randomUUID(), engineSchema: stamp.engineSchema, savedAt: stamp.savedAt },
+      "peer",
+    );
+    return imported.pending ? { applied: true, meta, pending: true } : { applied: true, meta };
+  }
+
+  // ---- the Loro-level host's version exchange (DS-5) ----
+
+  /** What the host holds of a doc, for a VERSION record. Null when the version
+   * exchange cannot speak for it — an unknown doc, or one in opaque custody
+   * (the legacy HAVE speaks for that one). */
+  hostVersion(docId: string): Promise<HostVersion | null> {
+    return this.serialize(docId, async () => {
+      const entry = this.registry.get(docId);
+      if (entry === undefined) return null;
+      if (!this.hasStoredDoc(docId)) {
+        return {
+          version: EMPTY_VERSION().encode(),
+          hasCheckpoint: false,
+          baseEpoch: entry.baseEpoch,
+        };
+      }
+      const hosted = await this.hostedNow(docId);
+      if (hosted === null) return null;
+      return {
+        version: hosted.encodedVersion(),
+        hasCheckpoint: true,
+        baseEpoch: entry.baseEpoch,
+      };
+    });
+  }
+
+  /** Exactly what a holder at `theirs` lacks. A holder with no checkpoint gets
+   * this device's stored checkpoint envelope first — what a renderer needs to
+   * open anything — and then the update from the CHECKPOINT's version, so the
+   * pair is precisely checkpoint + journal as held here. Null when there is
+   * nothing to say: an unknown or opaque doc, another epoch (S4 — never answer
+   * across a compaction), or a version the bytes do not decode to. */
+  hostAnswer(docId: string, theirs: HostVersion): Promise<HostAnswer | null> {
+    return this.serialize(docId, async () => {
+      const entry = this.registry.get(docId);
+      if (entry === undefined || theirs.baseEpoch !== entry.baseEpoch) return null;
+      const hosted = await this.hostedNow(docId);
+      if (hosted === null) return null;
+      const current = await this.readCurrent(docId);
+      if (current === null) return null;
+      const meta = {
+        baseEpoch: entry.baseEpoch,
+        engineSchema: current.engineSchema,
+        savedAt: current.savedAt,
+      };
+      if (!theirs.hasCheckpoint) {
+        const checkpoint = new Uint8Array(
+          await readFile(join(this.revisionsDir(docId), current.file)),
+        );
+        const lifted = liftIce1(checkpoint);
+        const base = lifted.ok ? snapshotVersion(lifted.payload) : null;
+        if (base === null) return null;
+        return {
+          meta,
+          snapshot: checkpoint,
+          update: hosted.isAheadOf(base) ? hosted.exportSince(base) : null,
+        };
+      }
+      const version = decodeVersion(theirs.version);
+      if (version === null) return null;
+      if (!hosted.isAheadOf(version)) return { meta, snapshot: null, update: null };
+      return { meta, snapshot: null, update: hosted.exportSince(version) };
+    });
+  }
+
+  /** Does this device's host hold everything `version` names? False for a doc
+   * outside Loro custody — nothing can be claimed about it. */
+  hostCovers(docId: string, version: Uint8Array): Promise<boolean> {
+    return this.serialize(docId, async () => {
+      const hosted = await this.hostedNow(docId);
+      const theirs = decodeVersion(version);
+      if (hosted === null || theirs === null) return false;
+      return covers(hosted.version(), theirs);
+    });
   }
 
   // ---- health / lifecycle ----
@@ -964,10 +1340,6 @@ export class DocumentService {
       );
     }
   }
-}
-
-function hasIce1Magic(bytes: Uint8Array): boolean {
-  return bytes.byteLength >= ICE1_MAGIC.length && ICE1_MAGIC.every((b, i) => bytes[i] === b);
 }
 
 /** tmp-in-same-dir → fsync file → rename → fsync dir. No partial file is ever
