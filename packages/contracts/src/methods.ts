@@ -1299,12 +1299,18 @@ export const METHODS: MethodDef[] = [
   // TP-S3/G23 — the transport-private Ghosttea summaries the routed runtime
   // needs before mounting. Separate from terminal.list (floor observation) and
   // terminal.roster (UI projection): notably, this carries the TRF1 handle.
+  // DS-4e (2026-10-01, the lead's ruling (B); design-04 §7's census, "terminal
+  // READS become federate") — routable by `device` (`TerminalSessionsParams`):
+  // a window mounts ANOTHER desktop's session by the owner's engine handle,
+  // which exists in no other answer, so the read rides to the owner like the
+  // ticket. A read: idempotent, so never keyed (DS-D15). The owner's whole
+  // inventory reaches self principals only — guests hold no `terminal.attach`.
   defineMethod({
     surface: "product",
     method: "terminal.sessions",
     scope: "terminal.attach",
     idempotent: true,
-    locality: "local",
+    locality: "federate",
   }),
   defineMethod({
     surface: "product",

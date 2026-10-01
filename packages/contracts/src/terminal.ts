@@ -77,6 +77,16 @@ export type TerminalRoutableSessionParams = z.infer<typeof TerminalRoutableSessi
 export const TerminalOpenTicketParams = TerminalRoutableSessionParams;
 export type TerminalOpenTicketParams = z.infer<typeof TerminalOpenTicketParams>;
 
+/** DS-4e (2026-10-01) — `terminal.sessions {device?}`: the exact engine
+ * summaries (`TerminalRuntimeSessionsResult`), routable to the device that
+ * owns them like the ticket. A window mounts another desktop's session by the
+ * OWNER's decimal `handle` (see `TerminalRuntimeSession` below), which no
+ * other answer carries; `device` absent, or naming this device, reads here. */
+export const TerminalSessionsParams = z
+  .object({ device: z.string().min(1).optional() })
+  .passthrough();
+export type TerminalSessionsParams = z.infer<typeof TerminalSessionsParams>;
+
 /** DS-4 — `terminal.takeGeometry {sessionId}`: the TAKE (TPv3 §6 amended
  * 2026-09-30, DS-D5's note — the last focused pane holds the geometry) as a
  * PRODUCT door, for a host that cannot speak a cell's control leg: the phone's

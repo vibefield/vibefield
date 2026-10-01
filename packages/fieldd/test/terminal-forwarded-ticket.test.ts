@@ -457,6 +457,11 @@ describe("the terminal doors ride the device? routing (DS-4)", () => {
       params,
     }));
     a.register("terminal.list", () => ({ items: [] }));
+    a.register("terminal.sessions", (c, params) => ({
+      served: "here",
+      principal: c.principal,
+      params,
+    }));
     const port = await a.listen();
     cleanup.push(() => a.close());
     return port;
@@ -513,5 +518,54 @@ describe("the terminal doors ride the device? routing (DS-4)", () => {
     );
     const refused = await rpc.callErr("terminal.list", {});
     expect(refused.data?.kind).toBe("FORBIDDEN_SCOPE");
+  });
+
+  // DS-4e (2026-10-01, the lead's ruling (B)) — the READ a window mounts
+  // another desktop's pane from. The routed runtime mounts by the session's
+  // decimal engine `handle`, which only the OWNER's inventory carries, so
+  // `terminal.sessions` rides the same `device?` road the mints do: forwarded
+  // whole, UNKEYED (an idempotent read journals no receipt, DS-D15), and
+  // answered with the owner's own words — no rewrite, a summary is not a
+  // coordinate.
+  it("forwards a window's sessions read for another desktop unkeyed and hands back the owner's answer", async () => {
+    const inventory = { sessions: [{ id: "pane-a", handle: "7" }] };
+    const forwarder = vi.fn<DeviceForwarder>(async () => inventory);
+    const port = await api(forwarder);
+    const rpc = await dial(port);
+    await rpc.call("system.hello", {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind: "renderer",
+      credential: "window-token",
+    });
+    expect(await rpc.call("terminal.sessions", { device: OWNER })).toEqual(inventory);
+    expect(forwarder).toHaveBeenCalledTimes(1);
+    const [device, method, params, , envelope] = forwarder.mock.calls[0] ?? [];
+    expect([device, method, params]).toEqual([OWNER, "terminal.sessions", { device: OWNER }]);
+    expect(envelope?.idempotencyKey).toBeUndefined();
+    // own id: served here, the routing key stripped
+    expect(await rpc.call("terminal.sessions", { device: "dev-b" })).toEqual(
+      expect.objectContaining({ served: "here", params: {} }),
+    );
+  });
+
+  it("serves a self peer daemon the sessions read it forwards for a window there", async () => {
+    const port = await api(vi.fn());
+    const rpc = await dial(port, `/t/${SECRET}`, {
+      "Tailscale-User-Login": TEST_LOGIN,
+      "Tailscale-Node-Id": "node-c",
+    });
+    await rpc.call("system.hello", {
+      contractsVersion: CONTRACTS_VERSION,
+      minCompatible: CONTRACTS_VERSION,
+      clientKind: "peer-fieldd",
+      deviceId: "dev-c",
+    });
+    expect(await rpc.call("terminal.sessions", {})).toEqual(
+      expect.objectContaining({
+        served: "here",
+        principal: { kind: "peer-fieldd", deviceId: "dev-c", tailscaleId: "node-c" },
+      }),
+    );
   });
 });

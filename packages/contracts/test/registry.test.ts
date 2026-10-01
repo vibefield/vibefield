@@ -36,6 +36,7 @@ import {
 } from "../src/registries";
 import {
   TerminalOpenTicketParams,
+  TerminalSessionsParams,
   TerminalTakeGeometryParams,
   TerminalTerminateParams,
 } from "../src/terminal";
@@ -564,8 +565,11 @@ describe("MF-1 — the field's two new doors and its store (§10.1)", () => {
 // DS-4 (design-06 §6; design-04 §7's 2026-09-30 note) — a terminal on another
 // desktop: the three doors a window's daemon forwards to the owner are
 // `federate`, everything else on the terminal surface stays this device's.
+// DS-4e (2026-10-01, the lead's ruling (B)) — and the READ a window mounts a
+// remote pane from: `terminal.sessions`, the owner's exact engine summaries
+// (the decimal `handle` the routed runtime mounts by exists nowhere else).
 describe("DS-4 — the terminal doors routable to the owner", () => {
-  it("reclassifies exactly openTicket, renewAttach and terminate", () => {
+  it("reclassifies exactly openTicket, renewAttach, terminate and the sessions read", () => {
     const localities = Object.fromEntries(
       METHODS.filter(
         (m) =>
@@ -576,7 +580,7 @@ describe("DS-4 — the terminal doors routable to the owner", () => {
     );
     expect(localities).toEqual({
       "terminal.list": "local",
-      "terminal.sessions": "local",
+      "terminal.sessions": "federate",
       "terminal.get": "local",
       "terminal.openTicket": "federate",
       "terminal.create": "local",
@@ -617,6 +621,20 @@ describe("DS-4 — the terminal doors routable to the owner", () => {
         device: "dev-a",
       }).device,
     ).toBe("dev-a");
+  });
+
+  it("lets the sessions read name the owner, and stays a read nothing keys", () => {
+    expect(TerminalSessionsParams.parse({})).toEqual({});
+    expect(TerminalSessionsParams.parse({ device: "dev-a" })).toEqual({ device: "dev-a" });
+    expect(TerminalSessionsParams.safeParse({ device: "" }).success).toBe(false);
+    // idempotent: a forwarded read carries no idempotency key (DS-D15)
+    expect(METHODS.find((m) => m.method === "terminal.sessions")).toEqual({
+      surface: "product",
+      method: "terminal.sessions",
+      scope: "terminal.attach",
+      idempotent: true,
+      locality: "federate",
+    });
   });
 });
 
