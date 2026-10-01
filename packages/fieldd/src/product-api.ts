@@ -250,6 +250,9 @@ export class ProductApi extends EventEmitter {
     for (const conn of [...this.liveConns]) {
       const { state } = conn;
       if (!state.peerClaimDemoted || state.tailnetNodeId === null) continue;
+      // still the demoted claim: a later hello on the socket (a verified
+      // token wins on either door) made it something else
+      if (state.ctx?.principal.kind !== "tailnet") continue;
       const derived = this.opts.correlateNodeId?.(state.tailnetNodeId);
       if (derived === undefined || this.opts.isDocHost?.(derived) !== true) continue;
       state.peerClaimDemoted = false; // one close per demotion, however often the roster moves

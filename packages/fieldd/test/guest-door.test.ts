@@ -318,4 +318,21 @@ describe("D1 — the peer daemon's kind is transport-derived", () => {
     again.send(hello(1, "peer-fieldd", { deviceId: DESK }));
     expect(result(await again.next())["grantedScopes"]).toEqual([...PEER_FIELDD_SCOPES]);
   });
+
+  it("the heal closes only a connection that is STILL the demoted claim — one that helloed again with a token is left alone", async () => {
+    const rows: Record<string, { deviceId: string; docHost: boolean }> = {};
+    const port = await boot(() => "me@github", peerRoster(rows));
+    const wire = await dial(port, `/t/${SECRET}`, {
+      "tailscale-user-login": "me@github",
+      "tailscale-node-id": "nTKSLATE",
+    });
+    wire.send(hello(1, "peer-fieldd", { deviceId: DESK }));
+    expect(result(await wire.next())["grantedScopes"]).toEqual([...TAILNET_SCOPES]);
+    // a verified token wins on either door: this connection is a local grant now
+    wire.send(hello(2, "shell-main", { credential: TOKEN }));
+    expect(result(await wire.next())["grantedScopes"]).toEqual([]);
+    rows["nTKSLATE"] = { deviceId: DESK, docHost: true };
+    expect(api?.reconsiderPeerClaims()).toBe(0);
+    expect(wire.ws.readyState).toBe(WebSocket.OPEN);
+  });
 });
