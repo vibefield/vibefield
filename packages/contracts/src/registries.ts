@@ -336,7 +336,23 @@ export const FORWARDING = {
  * declared bytes of CHUNKed transfers one peer may have in flight here (four
  * of the largest, DOC_SYNC_MAX_TRANSFER_BYTES — the old four-slot bound's own
  * worst case); a transfer past it is refused and asked for again, and none
- * already under way is ever evicted for it. */
+ * already under way is ever evicted for it.
+ *
+ * DS-5d — COMPACTION (design-06 §4). A hosted canvas whose JOURNAL (the
+ * records kept after its checkpoint) reaches COMPACT_RECORDS records or
+ * COMPACT_JOURNAL_BYTES bytes is offered for an epoch bump: a Loro shallow
+ * snapshot at the watermark becomes its base. The journal is the measure
+ * because it is the history fieldd keeps and replays — one file read and one
+ * Loro import per record on every host load and every window open — and
+ * because it is where history piles up: a window's own checkpoints fold it,
+ * so it grows on the desktop that hosts a canvas it does not have open, one
+ * record per merged peer save, for as long as that lasts. 1024 records is a
+ * long day of a peer's autosaves and keeps an open at ~1k small reads; 4 MiB
+ * is MeshLaneLink's send watermark, the size past which one record already
+ * crosses as CHUNKs, so a journal heavier than one send window is history
+ * worth trimming. RETIREMENT_MS is DS-D17's thirty days: a holder unseen that
+ * long is no longer waited for — the trim may pass what it acknowledged, and
+ * it re-bootstraps (S4) when it returns. */
 export const DOC_HOST = {
   BEAT_MS: 15_000,
   ANSWER_TIMEOUT_MS: 30_000,
@@ -344,6 +360,9 @@ export const DOC_HOST = {
   IDLE_MS: 10 * 60 * 1000,
   SWEEP_MS: 60_000,
   REASSEMBLY_BYTES_PER_PEER: 256 * 1024 * 1024,
+  COMPACT_RECORDS: 1024,
+  COMPACT_JOURNAL_BYTES: 4 * 1024 * 1024,
+  RETIREMENT_MS: 30 * 24 * 60 * 60 * 1000,
 } as const;
 
 /** TC-S2 — the floor's supervision budget for a `field-terminal-host` cell

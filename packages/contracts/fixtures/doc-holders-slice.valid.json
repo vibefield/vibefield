@@ -5,6 +5,7 @@
       "docId": "6f1c2b0e-7c1a-4f0e-9d0b-2b8f5a1c3d4e",
       "baseEpoch": 0,
       "headVersion": "AQfOAQ==",
+      "ackVersion": "AQfOAQ==",
       "fresh": true,
       "heldSince": 1790000000000
     },

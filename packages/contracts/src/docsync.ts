@@ -64,6 +64,14 @@ export const DocSyncMeta = z
     baseEpoch: z.number().int().nonnegative(),
     engineSchema: z.number().int().nullable(),
     savedAt: z.number().int().nonnegative(),
+    /** DS-5d — this SNAPSHOT is an S4 ANSWER: the sender holds the canvas at a
+     * newer epoch than the one the receiver greeted with, so it sends its base
+     * (a shallow snapshot once compacted) and, behind it, the records since.
+     * The receiver drops its copy and re-bootstraps from it, carrying over
+     * whatever it held that the base can take. Only ever `true`; absent on
+     * every other record — a cross-epoch SNAPSHOT without it is still never
+     * merged into content (the DS-5c fence). An older peer ignores the key. */
+    rebootstrap: z.literal(true).optional(),
   })
   .passthrough();
 export type DocSyncMeta = z.infer<typeof DocSyncMeta>;

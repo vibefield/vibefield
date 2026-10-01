@@ -13,14 +13,20 @@ export const DocSyncIntent = z.enum(["sync", "local"]);
 export type DocSyncIntent = z.infer<typeof DocSyncIntent>;
 
 /** Registry entry in `field.docs.v1`. P0 is local-single-holder: no holders[] yet;
- * baseEpoch stays 0 until compaction lands (no cross-base exchange law). */
+ * baseEpoch stays 0 until compaction lands (no cross-base exchange law).
+ * *Corrected 2026-10-01 (DS-5d):* compaction landed — the host bumps baseEpoch
+ * when it trims a canvas's history, and a holder at an older epoch
+ * re-bootstraps (S4); the holders are the `field.docs.v1` store slice. */
 export const DocRegistryEntry = z
   .object({
     docId: z.string().uuid(),
     name: z.string(),
     /** epoch ms of the last accepted PUT (or creation). */
     updatedAt: z.number().int(),
-    /** bumped only by doc.compact (deferred) — 0 throughout B3. */
+    /** bumped only by doc.compact (deferred) — 0 throughout B3.
+     * *Corrected 2026-10-01 (DS-5d):* bumped by the host's compaction (a Loro
+     * shallow snapshot at the watermark) and taken from a fresher holder by a
+     * re-bootstrap; there is still no `doc.compact` method. */
     baseEpoch: z.number().int(),
     /** from the last PUT's meta; null until the first PUT lands (fieldd never decodes the envelope). */
     engineSchema: z.number().int().nullable(),
@@ -83,6 +89,18 @@ export const DocHolding = z
      * (the compaction watermark's input, DS §5.3). Absent while the document is
      * held in opaque custody (an envelope the fixed rule cannot lift). */
     headVersion: z.string().optional(),
+    /** DS-5d — base64 of the version this holder ACKNOWLEDGES: the one below
+     * which it will never again produce an op. Its head while no window has
+     * the canvas open; with one open, the meet of the head and what this
+     * desktop can prove the window holds (a window's next edit descends from
+     * what it holds, so nothing it writes can be concurrent with ops below
+     * that). The compaction watermark is the meet of every known holder's
+     * acknowledgement, so a trim never cuts under an edit still on its way.
+     * The EMPTY version (`"AA=="`, Loro's encoding of a version naming no
+     * peer) acknowledges nothing — an open window this desktop cannot vouch
+     * for — and holds every trim; so does a value that does not decode.
+     * Absent on a holder before DS-5d: its `headVersion` stands in. */
+    ackVersion: z.string().optional(),
     /** This holder knows of nothing it lacks from any peer it has heard from. */
     fresh: z.boolean(),
     heldSince: z.number().int(),
