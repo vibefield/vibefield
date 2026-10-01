@@ -150,6 +150,10 @@ public struct AgentFieldRow: Sendable, Equatable, Identifiable, Decodable {
 
 /// The subscription's first frame: the whole board at one revision.
 public struct AgentFieldSnapshot: Sendable, Equatable, Decodable {
+  /// DS-3 — the revision CHAIN this board belongs to (`rows.ts`'s epoch): a
+  /// boot id plus the chain's ordinal. Two chains' revisions are never
+  /// compared. Optional, as on the wire: a door older than DS-3 names none.
+  public let epoch: String?
   public let revision: Int64
   public let rows: [AgentFieldRow]
   public let droppedRows: [String]
@@ -157,6 +161,7 @@ public struct AgentFieldSnapshot: Sendable, Equatable, Decodable {
 
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "AgentFieldSnapshot", value: json)
+    epoch = object.string("epoch")
     revision = try object.requiredInt("revision")
     var dropped: [String] = []
     rows = try object.rows("rows", AgentFieldRow.init(json:), dropped: &dropped)
@@ -173,6 +178,8 @@ public struct AgentFieldSnapshot: Sendable, Equatable, Decodable {
 /// `since` has lost a frame and RE-SUBSCRIBES for a fresh snapshot — the
 /// tolerant reader's own repair, with no ack protocol anywhere.
 public struct AgentFieldDelta: Sendable, Equatable, Decodable {
+  /// DS-3 — the chain this delta continues; a delta on another chain is a gap.
+  public let epoch: String?
   public let since: Int64
   public let revision: Int64
   public let upserts: [AgentFieldRow]
@@ -182,6 +189,7 @@ public struct AgentFieldDelta: Sendable, Equatable, Decodable {
 
   public init(json: JSONValue) throws {
     var object = try WireObject(shape: "AgentFieldDelta", value: json)
+    epoch = object.string("epoch")
     since = try object.requiredInt("since")
     revision = try object.requiredInt("revision")
     var dropped: [String] = []
@@ -197,6 +205,12 @@ public struct AgentFieldDelta: Sendable, Equatable, Decodable {
 }
 
 /// The synced-store slice, one per device (`field.agents.v1`).
+///
+/// **RETIRED 2026-10-01 (DS-D14, DS wave 3):** no phone reads this slice and no
+/// desktop publishes it — the field arrives through the home's mesh board
+/// (`AgentMeshOpen` below, DS-8). The decoder stays as the mirror of the
+/// contracts' schema, which stays as the record of an older desktop's slice,
+/// pinned by the same goldens.
 ///
 /// `expiresAt` is what makes a dead publisher's board fade instead of lying:
 /// the desktop refreshes it on a heartbeat while rows exist, and a reader drops
@@ -251,11 +265,20 @@ public struct AgentSubscribeParams: Sendable, Equatable {
     case field
   }
 
+  /// DS-3 — `local` (the door's default) is the answering desktop's own board;
+  /// `mesh` is every self desktop its roster lists, multiplexed by it (DS-L4).
+  public enum Scope: String, Sendable, Equatable {
+    case local
+    case mesh
+  }
+
   public let projection: Projection?
+  public let scope: Scope?
   public let minIntervalMs: Int?
 
-  public init(projection: Projection? = nil, minIntervalMs: Int? = nil) {
+  public init(projection: Projection? = nil, scope: Scope? = nil, minIntervalMs: Int? = nil) {
     self.projection = projection
+    self.scope = scope
     self.minIntervalMs = minIntervalMs
   }
 
@@ -264,11 +287,136 @@ public struct AgentSubscribeParams: Sendable, Equatable {
   /// interpolates between.
   public static let phoneField = AgentSubscribeParams(projection: .field, minIntervalMs: 250)
 
+  /// DS-8 — the phone's ONE subscription since it homes to one desktop: the
+  /// field projection of the home's MESH board (DS-D13; every aggregated door
+  /// takes `scope: "mesh"`), at the field's floor. Never `desk` — the home
+  /// refuses it to a phone (SP-L4) — and never `full`.
+  public static let phoneMesh = AgentSubscribeParams(
+    projection: .field, scope: .mesh, minIntervalMs: 250)
+
   public var json: JSONValue {
     var fields: [String: JSONValue] = [:]
     if let projection { fields["projection"] = .string(projection.rawValue) }
+    if let scope { fields["scope"] = .string(scope.rawValue) }
     if let minIntervalMs { fields["minIntervalMs"] = .int(Int64(minIntervalMs)) }
     return .object(fields)
+  }
+}
+
+// MARK: - DS-8: the mesh board, as the home's door serves it
+
+/// A desktop's standing on the home's mesh board (`RowsDeviceState`, DS-L8 —
+/// asleep is a STATE): `live` its stream is flowing · `stale` it has not
+/// answered within its cadence but its node is on the tailnet · `asleep` its
+/// door does not answer · `incompatible` another contracts major, not asked.
+///
+/// The phone draws by ONE rule: only `live` is live, and every other word greys
+/// that desktop's rows while they STAY (the home's replica answers for them). A
+/// word this build has never heard is kept verbatim and drawn as not live —
+/// DS-L9's "additions are tolerated", never a failed parse.
+public enum AgentMeshDeviceState: Sendable, Equatable {
+  case live
+  case stale
+  case asleep
+  case incompatible
+  case unrecognized(String)
+
+  public init(wire: String) {
+    switch wire {
+    case "live": self = .live
+    case "stale": self = .stale
+    case "asleep": self = .asleep
+    case "incompatible": self = .incompatible
+    default: self = .unrecognized(wire)
+    }
+  }
+
+  public var wire: String {
+    switch self {
+    case .live: "live"
+    case .stale: "stale"
+    case .asleep: "asleep"
+    case .incompatible: "incompatible"
+    case .unrecognized(let word): word
+    }
+  }
+
+  public var isLive: Bool { self == .live }
+}
+
+/// One desktop's entry in the mesh board's open answer: its state, when that
+/// was established, and — once it has answered — its own board on its own
+/// `{epoch, revision}` chain. A desktop that has not answered is still LISTED,
+/// with no snapshot.
+public struct AgentMeshDevice: Sendable, Equatable {
+  public let device: String
+  public let state: AgentMeshDeviceState
+  /// ISO-8601, as the home wrote it — when `state` was last established.
+  public let asOf: String
+  public let snapshot: AgentFieldSnapshot?
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "AgentMeshDevice", value: json)
+    device = try object.requiredString("device")
+    state = AgentMeshDeviceState(wire: try object.requiredString("state"))
+    asOf = try object.requiredString("asOf")
+    snapshot = try object.decodeObject("snapshot", AgentFieldSnapshot.init(json:))
+    unknownFields = object.unknownFields
+  }
+}
+
+/// The OPEN answer of `agent.subscribe {scope: "mesh"}` (DS-D4): every self
+/// desktop the home's roster lists. The home MULTIPLEXES and never re-folds —
+/// a peer's revisions arrive as the peer numbered them, so each desktop is its
+/// own chain and nothing here is renumbered.
+public struct AgentMeshOpen: Sendable, Equatable {
+  public let devices: [AgentMeshDevice]
+  /// Entries that did not read, named. One unreadable desktop never costs the
+  /// others their rows.
+  public let droppedDevices: [String]
+  public let unknownFields: [String]
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "AgentMeshOpen", value: json)
+    var dropped: [String] = []
+    devices = try object.rows("devices", AgentMeshDevice.init(json:), dropped: &dropped)
+    droppedDevices = dropped
+    unknownFields = object.unknownFields
+  }
+}
+
+/// A later frame of the mesh board, one of three arms: one desktop's delta,
+/// relayed verbatim · one desktop's snapshot (that desktop's RESET — a reader
+/// replaces its copy of that desktop and nothing else) · one desktop's state
+/// changing. A desktop that stops answering sends only the state change: its
+/// last board stays with the reader, greyed (DS-L8).
+public enum AgentMeshFrame: Sendable, Equatable {
+  case delta(device: String, AgentFieldDelta)
+  case snapshot(device: String, AgentFieldSnapshot)
+  case state(device: String, AgentMeshDeviceState, asOf: String)
+
+  public init(json: JSONValue) throws {
+    var object = try WireObject(shape: "AgentMeshFrame", value: json)
+    let device = try object.requiredString("device")
+    if let delta = try object.decodeObject("delta", AgentFieldDelta.init(json:)) {
+      self = .delta(device: device, delta)
+    } else if let snapshot = try object.decodeObject("snapshot", AgentFieldSnapshot.init(json:)) {
+      self = .snapshot(device: device, snapshot)
+    } else if let state = object.string("state") {
+      self = .state(
+        device: device, AgentMeshDeviceState(wire: state), asOf: object.string("asOf") ?? "")
+    } else {
+      throw WireDecodeError(
+        shape: "AgentMeshFrame", reason: "names no delta, no snapshot and no state")
+    }
+  }
+
+  /// The desktop this frame is about.
+  public var device: String {
+    switch self {
+    case .delta(let device, _), .snapshot(let device, _), .state(let device, _, _): device
+    }
   }
 }
 
