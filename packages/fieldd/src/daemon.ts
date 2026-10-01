@@ -1614,9 +1614,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       if (parsed.data.scope === "mesh" && ctx.principal.kind !== "peer-fieldd")
         return await requireMesh().search(parsed.data);
       if (ctx.principal.kind !== "peer-fieldd") return await index.search(parsed.data);
-      // a peer's ask is answered, never refused UNAVAILABLE: its PeerLink
-      // would read that as a dead transport and drop the shared link. An index
-      // that is not up is the honest `answered: false` (its source: building).
+      // a peer's ask is ANSWERED: an index that is not up is the honest
+      // `answered: false`, which the asking desktop's `sources` reads as
+      // `building` (as index-mesh's `#askPeer` reads UNAVAILABLE {service:
+      // "index"}). *Corrected 2026-10-01 (the DS landing review, S3):* this
+      // said a refusal would make the asker's PeerLink "drop the shared link"
+      // — false since DS-2's `isRemoteAnswer` (peer-link.ts) passes every
+      // coded reply through. The answer stays because it is honest, not
+      // because a refusal would cut anything.
       try {
         return await index.search(parsed.data);
       } catch (error) {
@@ -1691,14 +1696,23 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           'expected { table: "projects" | "sessions", since?: {epoch, revision}, minIntervalMs? }',
           false,
         );
-      // NOT `UNAVAILABLE`, deliberately: this door's only caller is a peer's
-      // PeerLink, which reads a remote UNAVAILABLE as a dead transport and
-      // DROPS the shared link — every standing subscription and call on it
-      // with it — and the replica asks again on its backoff. A typed,
-      // retryable refusal that names the index's state passes through intact.
+      // The honest state (SP-L8): UNAVAILABLE {service, state}, retryable —
+      // the replica asks again on its backoff, and its link stands.
+      // *Corrected 2026-10-01 (the DS landing review, S3):* this door answered
+      // PRECONDITION_FAILED on the premise that a peer's PeerLink reads a
+      // remote UNAVAILABLE as a dead transport and drops the shared link. The
+      // premise was stale before the door landed — DS-2's `isRemoteAnswer`
+      // (peer-link.ts) passes any CODED reply through, UNAVAILABLE included,
+      // and drops nothing — and the swap did harm: FielddClient replayed its
+      // subscriptions inside hello's try, where PRECONDITION_FAILED is
+      // TERMINAL, so a desktop restarting with this catalog not yet read
+      // failed its peer's whole client — every subscription on the link
+      // dropped — again on each re-dial until the catalog was ready. The
+      // hazard was the replay, and it is isolated now (fieldd-client: a
+      // refused replay ends one subscription; PeerLink hands it to its owner).
       if (!indexCatalog.ready)
         throw new RpcCallError(
-          "PRECONDITION_FAILED",
+          "UNAVAILABLE",
           "the history catalog has not read the index yet",
           true,
           { service: "index", state: indexCatalog.phase },

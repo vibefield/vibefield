@@ -9,9 +9,19 @@ import { type ClientKind, CONTRACTS_VERSION } from "@vibefield/contracts";
 //   processed, never after an await;
 // - reconnect scheduling is idempotent (single timer), stale-socket events are
 //   ignored, and every reconnect replays subscriptions with a FRESH snapshot
-//   (P5 — reconnect = re-snapshot);
+//   (P5 — reconnect = re-snapshot), carrying the params its owner supplies at
+//   that moment (`SubscribeOptions.params` — a resumable subscription's
+//   CURRENT cursor, never the one it first attached with);
 // - INCOMPATIBLE / UNAUTHORIZED / PRECONDITION_FAILED at hello are terminal:
-//   retrying with the same token/version can never succeed.
+//   retrying with the same token/version can never succeed;
+// - a REPLAY's refusal belongs to its subscription, never to the client (the
+//   DS landing review's S3, 2026-10-01): replay runs after hello's verdict, one
+//   subscription at a time, and a refused replay ends only that subscription —
+//   its owner hears it (`onReplayFailed`) and re-attaches on its own terms —
+//   while `ready`, the socket and every other subscription stand. Replay used
+//   to run inside hello's try: one refused replay closed the socket, and one
+//   refused with a terminal kind failed the whole client (through PeerLink, a
+//   peer's restart dropped every subscription standing on the shared link).
 
 export class FielddRpcError extends Error {
   // plain fields, no TS parameter properties: plugin workers import this file
@@ -70,6 +80,21 @@ export interface Subscription {
   unsubscribe: () => void;
 }
 
+/** Per-subscription choices for a replay (S3, 2026-10-01). */
+export interface SubscribeOptions {
+  /** The params a REPLAY carries, read when it is sent: a reconnect re-sends
+   * every standing subscribe, and a resumable subscription asks from where its
+   * owner IS — its current cursor — not from where it first attached. The
+   * initial subscribe sends the `params` argument. */
+  params?: () => unknown;
+  /** The daemon REFUSED this subscription's replay: the subscription is over
+   * on this client (no route, never replayed again) and its owner decides what
+   * follows — its own cursor, its own backoff. Nothing else on the client
+   * moves. With no owner, a RETRYABLE refusal is re-asked by the client alone,
+   * on the reconnect backoff, and any other refusal ends the subscription. */
+  onReplayFailed?: (error: FielddRpcError) => void;
+}
+
 type SubEventKind = "snapshot" | "delta";
 
 interface SubEntry {
@@ -81,6 +106,14 @@ interface SubEntry {
    * only such entries are replayed on reconnect (unsent ones are still owned
    * by their pending subscribe() call). */
   sentOnce?: boolean;
+  /** SubscribeOptions.params — read when a replay is sent */
+  replayParams?: () => unknown;
+  /** SubscribeOptions.onReplayFailed */
+  onReplayFailed?: (error: FielddRpcError) => void;
+  /** a retryable replay refusal nobody owns: the client's own re-ask of this
+   * one subscription, and how many came before it (the backoff) */
+  replayRetry?: ReturnType<typeof setTimeout> | undefined;
+  replayRetries?: number;
 }
 
 interface Pending {
@@ -162,6 +195,7 @@ export class FielddClient {
     this.ws = null;
     ws?.close(1000, "credential rotated");
     this.failPending();
+    this.clearReplayRetries();
     this.subRoutes.clear();
     this.attempts = 0;
 
@@ -209,14 +243,22 @@ export class FielddClient {
     return await this.sendRequest(method, params);
   }
 
-  /** Snapshot-then-delta subscription; survives reconnects (fresh snapshot each time). */
+  /** Snapshot-then-delta subscription; survives reconnects (fresh snapshot each time) —
+   * unless the daemon refuses its replay (`SubscribeOptions`). */
   async subscribe(
     method: string,
     params: unknown,
     onEvent: (payload: unknown, kind: SubEventKind) => void,
+    opts?: SubscribeOptions,
   ): Promise<Subscription> {
     const key = this.nextSubKey++;
-    const entry: SubEntry = { method, params, onEvent };
+    const entry: SubEntry = {
+      method,
+      params,
+      onEvent,
+      ...(opts?.params !== undefined ? { replayParams: opts.params } : {}),
+      ...(opts?.onReplayFailed !== undefined ? { onReplayFailed: opts.onReplayFailed } : {}),
+    };
     this.subs.set(key, entry);
     try {
       await this.ready();
@@ -245,6 +287,7 @@ export class FielddClient {
     this.ws = null;
     ws?.close();
     this.failPending();
+    this.clearReplayRetries();
     this.subs.clear();
     this.subRoutes.clear();
     this.notificationListeners.clear();
@@ -290,7 +333,6 @@ export class FielddClient {
       this.attempts = 0;
       this.setStatus("ready");
       this.flushReadyWaiters(null);
-      await this.replaySubscriptions();
     } catch (e) {
       if (this.ws !== ws) return;
       const kind = e instanceof FielddRpcError ? e.kind : "INTERNAL";
@@ -300,7 +342,11 @@ export class FielddClient {
         return;
       }
       ws.close(); // transient — the close event schedules the reconnect
+      return;
     }
+    // S3 — the hello's verdict stands from here: what a replay meets is its
+    // subscription's own (replaySubscriptions never throws)
+    await this.replaySubscriptions(ws);
   }
 
   private onMessage(raw: string): void {
@@ -370,6 +416,7 @@ export class FielddClient {
     if (ws !== this.ws) return; // stale socket
     this.ws = null;
     this.failPending();
+    this.clearReplayRetries(); // the next hello replays every standing subscription
     this.subRoutes.clear();
     if (this.closedByUser || this.status === "failed" || this.status === "closed") return;
     this.scheduleReconnect();
@@ -388,17 +435,94 @@ export class FielddClient {
     }, delay);
   }
 
-  private async replaySubscriptions(): Promise<void> {
-    for (const [key, sub] of this.subs) {
-      if (!sub.sentOnce) continue; // still owned by its pending subscribe() call
-      const res = (await this.sendRequest(sub.method, sub.params, key)) as { snapshot: unknown };
+  /** P5: reconnect = fresh snapshot, one subscription at a time. Each replay
+   * is its own (S3): one the daemon refuses ends alone and its owner hears
+   * why, or — retryable, with no owner — the client re-asks it alone; the rest
+   * still replay and `ready` stands. A socket lost mid-replay stops the pass:
+   * the next hello replays whatever is still standing. Never throws. */
+  private async replaySubscriptions(ws: WsLike): Promise<void> {
+    for (const [key, sub] of [...this.subs]) {
+      if (this.ws !== ws) return;
+      // unsent: still owned by its pending subscribe() call; gone: unsubscribed meanwhile
+      if (!sub.sentOnce || this.subs.get(key) !== sub) continue;
+      await this.replayOne(ws, key, sub);
+    }
+  }
+
+  private async replayOne(ws: WsLike, key: number, sub: SubEntry): Promise<void> {
+    let res: { subId?: unknown; snapshot?: unknown };
+    try {
+      res = (await this.sendRequest(sub.method, this.replayParams(sub), key)) as typeof res;
+    } catch (e) {
+      // the socket went under the replay, or its owner left: nothing to judge
+      if (this.ws !== ws || this.subs.get(key) !== sub) return;
+      const error = e instanceof FielddRpcError ? e : new FielddRpcError("INTERNAL", String(e));
+      if (sub.onReplayFailed === undefined && error.retryable) {
+        this.retryReplay(ws, key, sub);
+        return;
+      }
+      this.subs.delete(key);
+      try {
+        sub.onReplayFailed?.(error);
+      } catch {
+        // the owner's recovery is its own — the other subscriptions still replay
+      }
+      return;
+    }
+    if (this.subs.get(key) !== sub) {
+      // unsubscribed while the replay was in flight: release what it stood up
+      if (typeof res.subId === "string") {
+        this.subRoutes.delete(res.subId);
+        if (this.ws === ws && this.status === "ready")
+          void this.sendRequest("system.unsubscribe", { subId: res.subId }).catch(() => {});
+      }
+      return;
+    }
+    sub.replayRetries = 0;
+    try {
       sub.onEvent(res.snapshot, "snapshot"); // P5: reconnect = fresh snapshot
+    } catch {
+      // a consumer's failure is its own — it must not stop the replay pass
+    }
+  }
+
+  /** A RETRYABLE replay refusal no owner decides: the client asks again for
+   * this one subscription, on the reconnect backoff, while the socket that
+   * refused it stands (a new socket replays it anyway). */
+  private retryReplay(ws: WsLike, key: number, sub: SubEntry): void {
+    if (sub.replayRetry !== undefined) clearTimeout(sub.replayRetry);
+    const attempt = sub.replayRetries ?? 0;
+    sub.replayRetries = attempt + 1;
+    const delay = Math.min(500 * 2 ** attempt, this.opts.maxBackoffMs ?? 10_000);
+    sub.replayRetry = setTimeout(() => {
+      sub.replayRetry = undefined;
+      if (this.ws !== ws || this.status !== "ready" || this.subs.get(key) !== sub) return;
+      void this.replayOne(ws, key, sub);
+    }, delay);
+  }
+
+  private clearReplayRetries(): void {
+    for (const sub of this.subs.values()) {
+      if (sub.replayRetry === undefined) continue;
+      clearTimeout(sub.replayRetry);
+      sub.replayRetry = undefined;
+    }
+  }
+
+  /** What a replay asks with: its owner's params NOW, else the first ones. */
+  private replayParams(sub: SubEntry): unknown {
+    if (sub.replayParams === undefined) return sub.params;
+    try {
+      return sub.replayParams();
+    } catch {
+      return sub.params; // the supplier's failure is its owner's; the replay still goes
     }
   }
 
   private unsubscribeKey(key: number): void {
     const entry = this.subs.get(key);
     this.subs.delete(key);
+    if (entry?.replayRetry !== undefined) clearTimeout(entry.replayRetry);
     if (entry?.subId) {
       this.subRoutes.delete(entry.subId);
       if (this.status === "ready")
@@ -442,6 +566,7 @@ export class FielddClient {
     this.setStatus("failed");
     ws?.close();
     this.failPending();
+    this.clearReplayRetries();
     this.flushReadyWaiters(e);
   }
 

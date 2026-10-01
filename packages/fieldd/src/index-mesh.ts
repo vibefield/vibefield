@@ -58,6 +58,16 @@ import type { PeerLinkState } from "./peer-link";
 // The replica holds the same UpstreamLink capability (PeerLink) directly:
 // it buffers frames until its own open answer lands, re-attaches with its
 // CURRENT cursor, and owns its backoff (findings reported to the lead).
+// *Corrected 2026-10-01 (the DS landing review, S3 and its DS-6 item):* "its
+// CURRENT cursor" held for the replica's OWN attaches only. A socket blip is
+// healed below this file, by FielddClient's replay, which re-sent the FIRST
+// params of the attach — a stale cursor after any frame (a full re-download
+// once the source's journal stops covering it) — and a replay the restarted
+// peer refused failed the whole client, so PeerLink dropped the shared link
+// and every subscription on it. Now the replay asks with `params()` (the
+// copy's cursor at that moment), and a refused replay ends this subscription
+// alone: PeerLink calls its `onDrop` and the replica re-attaches on its
+// backoff while the link stands.
 //
 // DS-L2: a daemon never edits another device's row — a replica's `device` is
 // the one it subscribed to, enforced on every row it serves. DS-L4: the daemon
@@ -80,6 +90,8 @@ export interface MeshLink {
     params: unknown,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
     onDrop: () => void,
+    /** S3 — `params` is read when a socket blip's replay is sent */
+    opts?: { params?: () => unknown },
   ): Promise<{ snapshot: unknown; unsubscribe: () => void }>;
   request(deviceId: string, method: string, params: unknown): Promise<unknown>;
   linkState(deviceId: string): PeerLinkState | undefined;
@@ -809,17 +821,21 @@ export class IndexMesh extends EventEmitter {
       this.#scheduleRetry(peer, table);
       this.#checkStandings();
     };
+    const ask = (since: RowsCursor | undefined) => ({
+      table,
+      minIntervalMs: this.#replicaMinIntervalMs,
+      ...(since !== undefined ? { since } : {}),
+    });
     try {
       const sub = await this.#opts.link.subscribe(
         peer.device,
         "index.catalog.subscribe",
-        {
-          table,
-          minIntervalMs: this.#replicaMinIntervalMs,
-          ...(cursor !== undefined ? { since: cursor } : {}),
-        },
+        ask(cursor),
         onEvent,
         onDrop,
+        // S3 — a socket blip's replay resumes from where the copy IS, never
+        // from where this attach began
+        { params: () => ask(entry.forceReset ? undefined : entry.copy.cursor()) },
       );
       if (entry.generation !== generation || this.#disposed) {
         sub.unsubscribe();

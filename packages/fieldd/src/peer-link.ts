@@ -61,6 +61,18 @@ export interface PeerSubscription {
   unsubscribe: () => void;
 }
 
+/** How a standing subscription is opened and replayed (`PeerLink.subscribe`). */
+export interface PeerSubscribeOptions {
+  /** DS-L7 — provenance for an upstream opened FOR one client. The shared
+   * federated upstreams (ref-counted per {device, method, params}) pass none:
+   * they are the daemon's own reads. */
+  envelope?: OutboundEnvelope;
+  /** S3 (2026-10-01) — the params a REPLAY carries after a socket blip, read
+   * when it is sent: a resumable owner supplies its CURRENT cursor here. The
+   * first subscribe sends `params`. */
+  params?: () => unknown;
+}
+
 export interface PeerLinkOptions {
   ownDeviceId: () => string;
   /** the peer's capability URL from its slice, or undefined = unpublished/offline */
@@ -317,19 +329,22 @@ export class PeerLink extends EventEmitter {
    * runs under the per-call deadline; once standing, the CLIENT owns transport
    * recovery — a socket blip re-dials and replays with a fresh snapshot (the
    * P5 law), delivered through `onEvent` as kind "snapshot", and the link is
-   * pinned against the idle sweep. `onDrop` fires only when the LINK itself is
-   * torn down (a unary timeout's dropLink, an incompatible pin, dispose) — the
-   * owner re-subscribes; it never fires for blips the client heals itself. */
+   * pinned against the idle sweep. `onDrop` fires when the LINK itself is torn
+   * down (a unary timeout's dropLink, an incompatible pin, dispose) — the owner
+   * re-subscribes; it never fires for blips the client heals itself.
+   *
+   * S3 (2026-10-01): `onDrop` also fires — for THIS member alone — when the
+   * peer's door refuses the member's replay after a blip (a peer that
+   * restarted and cannot serve it yet answers UNAVAILABLE {service, state}).
+   * The link and every other member stand; the owner re-subscribes on its own
+   * backoff. A replay asks with `opts.params()` when the owner supplies one. */
   async subscribe(
     deviceId: string,
     method: string,
     params: unknown,
     onEvent: (payload: unknown, kind: "snapshot" | "delta") => void,
     onDrop: () => void,
-    /** DS-L7 — provenance for an upstream opened FOR one client. The shared
-     * federated upstreams (ref-counted per {device, method, params}) pass
-     * none: they are the daemon's own reads. */
-    envelope?: OutboundEnvelope,
+    opts?: PeerSubscribeOptions,
   ): Promise<PeerSubscription> {
     if (this.disposed)
       throw new RpcCallError("UNAVAILABLE", "peer link disposed", false, {
@@ -342,22 +357,50 @@ export class PeerLink extends EventEmitter {
       throw new RpcCallError("INCOMPATIBLE", "peer contracts major mismatch", false, {
         device: deviceId,
       });
+    const envelope = opts?.envelope;
+    const replayParams = opts?.params;
     const wire = withEnvelope(params, envelope);
     const link = this.ensureLink(deviceId);
     this.useLink(link);
+    /** set once standing — a refused replay answers for this member only */
+    let member: { unsubscribe: () => void; onDrop: () => void } | undefined;
     let upstream: { snapshot: unknown; unsubscribe: () => void };
     try {
-      upstream = await this.withDeadline(link.client.subscribe(method, wire, onEvent), deviceId);
+      upstream = await this.withDeadline(
+        link.client.subscribe(method, wire, onEvent, {
+          ...(replayParams !== undefined
+            ? { params: () => withEnvelope(replayParams(), envelope) }
+            : {}),
+          // S3 — the client has already let the subscription go; the door
+          // answered, so the link is fine: this member's owner re-attaches
+          onReplayFailed: (error) => {
+            const refused = member;
+            if (refused === undefined || !link.subs.delete(refused)) return;
+            this.logger.info(
+              "fieldd.peer_link.replay_refused",
+              "A peer refused a standing subscription's replay; its owner re-subscribes and the link stands",
+              { peer: deviceId, method, kind: error.kind },
+            );
+            try {
+              refused.onDrop();
+            } catch {
+              // an owner's recovery failure is its own
+            }
+          },
+        }),
+        deviceId,
+      );
     } catch (e) {
       throw this.mapPeerError(e, deviceId);
     } finally {
       this.releaseLink(link);
     }
     this.markAnswered(deviceId);
-    const member = {
+    const standing = {
       unsubscribe: upstream.unsubscribe,
       onDrop,
     };
+    member = standing;
     // The link may have been dropped while the subscribe was in flight (the
     // deadline path, a concurrent unary timeout). Registering on a corpse
     // would pin nothing — report the drop instead of pretending.
@@ -369,11 +412,11 @@ export class PeerLink extends EventEmitter {
         state: "unreachable",
       });
     }
-    link.subs.add(member);
+    link.subs.add(standing);
     return {
       snapshot: upstream.snapshot,
       unsubscribe: () => {
-        link.subs.delete(member);
+        link.subs.delete(standing);
         upstream.unsubscribe();
       },
     };

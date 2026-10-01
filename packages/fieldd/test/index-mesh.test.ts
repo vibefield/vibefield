@@ -102,6 +102,9 @@ interface Behaviour {
   search?: IndexSearchResult | "asleep" | "hang" | "incompatible";
   /** refuse the catalog door (another build) */
   refuseCatalog?: boolean;
+  /** S3 — the door answers UNAVAILABLE {service: "index"}: a desktop that
+   * restarted and whose catalog has not read the index yet */
+  catalogNotReady?: boolean;
   digestIntervalMs?: number;
 }
 
@@ -109,11 +112,17 @@ interface Behaviour {
  * hands over its frames the way FielddClient does — the frames that follow
  * the reply first, then the open answer as the subscribe's result. */
 function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>) {
-  const subscribes: Array<{ device: string; params: Record<string, unknown> }> = [];
+  const subscribes: Array<{
+    device: string;
+    params: Record<string, unknown>;
+    /** what a socket blip's replay of this subscription would ask with */
+    replay: (() => unknown) | undefined;
+  }> = [];
+  const refused: Array<{ device: string; params: Record<string, unknown> }> = [];
   const drops = new Map<string, Set<() => void>>();
   const pumps = new Map<string, Set<{ dispose: () => void }>>();
   const meshLink: MeshLink = {
-    async subscribe(device, method, params, onEvent, onDrop) {
+    async subscribe(device, method, params, onEvent, onDrop, opts) {
       expect(method).toBe("index.catalog.subscribe");
       const source = desktops.get(device);
       const how = behaviour.get(device) ?? {};
@@ -127,7 +136,19 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
         table: "projects" | "sessions";
         since?: { epoch: string; revision: number };
       };
-      subscribes.push({ device, params: ask as Record<string, unknown> });
+      if (how.catalogNotReady === true) {
+        refused.push({ device, params: ask as Record<string, unknown> });
+        throw new RpcCallError(
+          "UNAVAILABLE",
+          "the history catalog has not read the index yet",
+          true,
+          {
+            service: "index",
+            state: "waiting",
+          },
+        );
+      }
+      subscribes.push({ device, params: ask as Record<string, unknown>, replay: opts?.params });
       const pump =
         ask.table === "projects"
           ? createRowsPump({
@@ -186,6 +207,7 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
   return {
     meshLink,
     subscribes,
+    refused,
     /** the link under a device dies (what PeerLink's dropLink does: the
      * client closes, so its pumps stop, and every owner hears onDrop once) */
     drop(device: string) {
@@ -480,6 +502,57 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
       3_000,
       "the reset",
     );
+  });
+
+  it("S3: a restarted peer whose catalog answers UNAVAILABLE keeps the replica retrying on its backoff — rows kept, never incompatible — and every replay or re-attach asks from the CURRENT cursor", async () => {
+    const a = desktop("dev-a");
+    const b = desktop("dev-b");
+    b.sessions.upsert([session("dev-b", "b1", 800)]);
+    const behaviour = new Map<string, Behaviour>();
+    const { aggregator, wire } = mesh({
+      self: a,
+      desktops: [a, b],
+      peers: [{ deviceId: "dev-b", online: true }],
+      behaviour,
+    });
+    const sessionAsks = () => wire.subscribes.filter((ask) => ask.params["table"] === "sessions");
+    const sessionRefusals = () => wire.refused.filter((ask) => ask.params["table"] === "sessions");
+    const standingOfB = () =>
+      aggregator.sessions({ scope: "mesh" }).sources?.find((source) => source.device === "dev-b")
+        ?.state;
+    await until(() => aggregator.replica("dev-b")?.sessions.length === 1, 3_000, "B's replica");
+    expect(sessionAsks().at(-1)?.params["since"]).toBeUndefined(); // nothing to resume yet
+
+    // B moves on and the copy follows: a socket blip's REPLAY now asks from
+    // revision 2 — it used to re-send this attach's first params (no cursor)
+    b.sessions.upsert([session("dev-b", "b2", 900)]);
+    await until(() => aggregator.replica("dev-b")?.sessions.length === 2, 3_000, "the delta");
+    expect(sessionAsks().at(-1)?.replay?.()).toMatchObject({
+      table: "sessions",
+      since: { epoch: "dev-b-boot-1", revision: 2 },
+    });
+
+    // B restarts and its catalog has not read the index yet: the replay it
+    // refused reaches the replica as this subscription's onDrop (PeerLink's
+    // S3 hand-off), and every re-attach on the backoff is refused UNAVAILABLE
+    behaviour.set("dev-b", { catalogNotReady: true });
+    wire.drop("dev-b");
+    await until(() => sessionRefusals().length >= 3, 3_000, "three refusals on the backoff");
+    expect(standingOfB()).toBe("stale"); // not incompatible: asked again, and again
+    expect(
+      aggregator
+        .replica("dev-b")
+        ?.sessions.map((row) => row.sessionId)
+        .sort(),
+    ).toEqual(["b1", "b2"]); // asleep or restarting, its rows stay (DS-L8)
+    expect(sessionRefusals().every((ask) => ask.params["since"] !== undefined)).toBe(true);
+
+    // ready: the next attempt is served, from the cursor the copy holds
+    const served = sessionAsks().length;
+    behaviour.set("dev-b", {});
+    await until(() => sessionAsks().length > served, 3_000, "the re-attach");
+    expect(sessionAsks().at(-1)?.params["since"]).toEqual({ epoch: "dev-b-boot-1", revision: 2 });
+    await until(() => standingOfB() === "live", 3_000, "live again");
   });
 });
 
