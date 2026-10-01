@@ -3620,7 +3620,8 @@ impl<'de> ::serde::Deserialize<'de> for MeshEgressLoopbackAddress {
 #[doc = "  \"type\": \"object\","]
 #[doc = "  \"required\": ["]
 #[doc = "    \"address\","]
-#[doc = "    \"credential\""]
+#[doc = "    \"credential\","]
+#[doc = "    \"username\""]
 #[doc = "  ],"]
 #[doc = "  \"properties\": {"]
 #[doc = "    \"address\": {"]
@@ -3629,6 +3630,11 @@ impl<'de> ::serde::Deserialize<'de> for MeshEgressLoopbackAddress {
 #[doc = "    \"credential\": {"]
 #[doc = "      \"type\": \"string\","]
 #[doc = "      \"maxLength\": 1024,"]
+#[doc = "      \"minLength\": 1"]
+#[doc = "    },"]
+#[doc = "    \"username\": {"]
+#[doc = "      \"type\": \"string\","]
+#[doc = "      \"maxLength\": 255,"]
 #[doc = "      \"minLength\": 1"]
 #[doc = "    }"]
 #[doc = "  },"]
@@ -3640,6 +3646,7 @@ impl<'de> ::serde::Deserialize<'de> for MeshEgressLoopbackAddress {
 pub struct MeshEgressProxy {
     pub address: MeshEgressLoopbackAddress,
     pub credential: MeshEgressProxyCredential,
+    pub username: MeshEgressProxyUsername,
 }
 impl MeshEgressProxy {
     pub fn builder() -> builder::MeshEgressProxy {
@@ -3707,6 +3714,78 @@ impl ::std::convert::TryFrom<::std::string::String> for MeshEgressProxyCredentia
     }
 }
 impl<'de> ::serde::Deserialize<'de> for MeshEgressProxyCredential {
+    fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
+    where
+        D: ::serde::Deserializer<'de>,
+    {
+        ::std::string::String::deserialize(deserializer)?
+            .parse()
+            .map_err(|e: self::error::ConversionError| {
+                <D::Error as ::serde::de::Error>::custom(e.to_string())
+            })
+    }
+}
+#[doc = "`MeshEgressProxyUsername`"]
+#[doc = r""]
+#[doc = r" <details><summary>JSON schema</summary>"]
+#[doc = r""]
+#[doc = r" ```json"]
+#[doc = "{"]
+#[doc = "  \"type\": \"string\","]
+#[doc = "  \"maxLength\": 255,"]
+#[doc = "  \"minLength\": 1"]
+#[doc = "}"]
+#[doc = r" ```"]
+#[doc = r" </details>"]
+#[derive(:: serde :: Serialize, Clone, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[serde(transparent)]
+pub struct MeshEgressProxyUsername(::std::string::String);
+impl ::std::ops::Deref for MeshEgressProxyUsername {
+    type Target = ::std::string::String;
+    fn deref(&self) -> &::std::string::String {
+        &self.0
+    }
+}
+impl ::std::convert::From<MeshEgressProxyUsername> for ::std::string::String {
+    fn from(value: MeshEgressProxyUsername) -> Self {
+        value.0
+    }
+}
+impl ::std::str::FromStr for MeshEgressProxyUsername {
+    type Err = self::error::ConversionError;
+    fn from_str(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        if value.chars().count() > 255usize {
+            return Err("longer than 255 characters".into());
+        }
+        if value.chars().count() < 1usize {
+            return Err("shorter than 1 characters".into());
+        }
+        Ok(Self(value.to_string()))
+    }
+}
+impl ::std::convert::TryFrom<&str> for MeshEgressProxyUsername {
+    type Error = self::error::ConversionError;
+    fn try_from(value: &str) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<&::std::string::String> for MeshEgressProxyUsername {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: &::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl ::std::convert::TryFrom<::std::string::String> for MeshEgressProxyUsername {
+    type Error = self::error::ConversionError;
+    fn try_from(
+        value: ::std::string::String,
+    ) -> ::std::result::Result<Self, self::error::ConversionError> {
+        value.parse()
+    }
+}
+impl<'de> ::serde::Deserialize<'de> for MeshEgressProxyUsername {
     fn deserialize<D>(deserializer: D) -> ::std::result::Result<Self, D::Error>
     where
         D: ::serde::Deserializer<'de>,
@@ -10045,12 +10124,14 @@ pub mod builder {
     pub struct MeshEgressProxy {
         address: ::std::result::Result<super::MeshEgressLoopbackAddress, ::std::string::String>,
         credential: ::std::result::Result<super::MeshEgressProxyCredential, ::std::string::String>,
+        username: ::std::result::Result<super::MeshEgressProxyUsername, ::std::string::String>,
     }
     impl ::std::default::Default for MeshEgressProxy {
         fn default() -> Self {
             Self {
                 address: Err("no value supplied for address".to_string()),
                 credential: Err("no value supplied for credential".to_string()),
+                username: Err("no value supplied for username".to_string()),
             }
         }
     }
@@ -10075,6 +10156,16 @@ pub mod builder {
                 .map_err(|e| format!("error converting supplied value for credential: {e}"));
             self
         }
+        pub fn username<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<super::MeshEgressProxyUsername>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.username = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for username: {e}"));
+            self
+        }
     }
     impl ::std::convert::TryFrom<MeshEgressProxy> for super::MeshEgressProxy {
         type Error = super::error::ConversionError;
@@ -10084,6 +10175,7 @@ pub mod builder {
             Ok(Self {
                 address: value.address?,
                 credential: value.credential?,
+                username: value.username?,
             })
         }
     }
@@ -10092,6 +10184,7 @@ pub mod builder {
             Self {
                 address: Ok(value.address),
                 credential: Ok(value.credential),
+                username: Ok(value.username),
             }
         }
     }

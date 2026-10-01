@@ -184,10 +184,12 @@ async fn fake_floor() -> (
     let fake = Arc::new(FakeEgress::new().with_proxies(
         ProxyGrant {
             address: "127.0.0.1:41641".into(),
+            username: "tsnet".into(),
             credential: "socks-credential-for-the-test".into(),
         },
         ProxyGrant {
             address: "[::1]:41642".into(),
+            username: "tsnet".into(),
             credential: "http-credential-for-the-test".into(),
         },
     ));
@@ -242,6 +244,7 @@ async fn the_proxies_answer_the_contracts_shape() {
     let socks = mgmt.call("native.mesh.egress.proxy", json!({})).await;
     let socks: MeshEgressProxy = serde_json::from_value(socks["result"].clone()).unwrap();
     assert_eq!(socks.address.as_str(), "127.0.0.1:41641");
+    assert_eq!(socks.username.as_str(), "tsnet");
     assert_eq!(socks.credential.as_str(), "socks-credential-for-the-test");
     let http = mgmt.call("native.mesh.egress.httpProxy", json!({})).await;
     let http: MeshEgressProxy = serde_json::from_value(http["result"].clone()).unwrap();
@@ -389,7 +392,8 @@ async fn a_route_may_aim_only_at_an_admitted_peers_grant_door() {
             json!({"id": "r2", "target": "stranger.tail1234.ts.net:9422"}),
         )
         .await;
-    assert_eq!(error_code(&stranger), "EGRESS_TARGET_REFUSED", "{stranger}");
+    // the substrate's code, verbatim (RFC 026's sidecar answers the same one)
+    assert_eq!(error_code(&stranger), "TARGET_NOT_PEER", "{stranger}");
 
     // the contract's own pattern, on the floor's side of the wire
     let url = mgmt

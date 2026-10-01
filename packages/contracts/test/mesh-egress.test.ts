@@ -176,7 +176,6 @@ describe("DS-1 — the registry", () => {
     // same-uid process (EL7's adversary) the peer's whole door.
     expect(MESH_EGRESS.ROUTABLE_PORTS).toEqual([PORTS.TERMINAL_CELLS_SERVE]);
     expect(MESH_EGRESS.ROUTABLE_PORTS).not.toContain(PORTS.FIELDD_PRODUCT_SERVE);
-    expect(MESH_EGRESS.SOCKS_USERNAME).toBe("tsnet");
   });
 
   it("declares the six facade verbs as local mgmt methods", () => {
@@ -197,9 +196,20 @@ describe("DS-1 — the registry", () => {
     }
   });
 
+  it("carries the proxy's username with its credential, neither ever empty", () => {
+    // RFC 1929 sends both; a reader that hardcoded tsnet's username would be
+    // a second source of truth for the substrate's own constant
+    const proxy = { address: "127.0.0.1:41641", username: "tsnet", credential: "c" };
+    expect(MeshEgressProxy.safeParse(proxy).success).toBe(true);
+    expect(MeshEgressProxy.safeParse({ ...proxy, username: undefined }).success).toBe(false);
+    expect(MeshEgressProxy.safeParse({ ...proxy, username: "" }).success).toBe(false);
+    expect(MeshEgressProxy.safeParse({ ...proxy, credential: "" }).success).toBe(false);
+  });
+
   it("keeps a proxy answer's unknown fields (tolerant reader)", () => {
     const parsed = MeshEgressProxy.parse({
       address: "127.0.0.1:41641",
+      username: "tsnet",
       credential: "c",
       localApiCredential: "later",
     }) as Record<string, unknown>;

@@ -240,13 +240,15 @@ fn refusal(state: &Arc<DaemonState>, id: Option<Value>, e: EgressError) -> Value
             false,
             Some(json!({ "code": "EGRESS_ROUTE_CONFLICT", "boundTarget": bound_target })),
         ),
-        EgressError::Refused(reason) => err(
+        // the substrate's own code (TARGET_NOT_PEER, LOGIN_REFUSED, …) and
+        // message, verbatim
+        EgressError::Refused { code, message } => err(
             id,
             "PRECONDITION_FAILED",
             -32005,
-            &reason,
+            &message,
             false,
-            Some(json!({ "code": "EGRESS_TARGET_REFUSED" })),
+            Some(json!({ "code": code })),
         ),
         EgressError::Failed(message) => err(id, "INTERNAL", -32000, &message, false, None),
     }
@@ -264,7 +266,11 @@ fn malformed(id: Option<Value>, expects: &str, e: &serde_json::Error) -> Value {
 }
 
 fn grant_json(grant: &ProxyGrant) -> Value {
-    json!({ "address": grant.address, "credential": grant.credential })
+    json!({
+        "address": grant.address,
+        "username": grant.username,
+        "credential": grant.credential,
+    })
 }
 
 /// The table as the contract spells it, stamped with the revision the caller

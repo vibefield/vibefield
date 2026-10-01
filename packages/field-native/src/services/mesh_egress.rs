@@ -47,9 +47,12 @@ pub enum EgressError {
     NotFound,
     /// The id is already bound to ANOTHER target; a route never re-aims.
     Conflict { bound_target: String },
-    /// The substrate refused the ask (a target that is not an admitted peer, a
-    /// login that does not match). Its words, verbatim.
-    Refused(String),
+    /// The substrate refused the ask: a target that is not an admitted peer, a
+    /// login that does not match, a malformed target. `code` is the
+    /// substrate's own (RFC 026 as built: TARGET_NOT_PEER, LOGIN_REFUSED,
+    /// LOGIN_UNKNOWN, INVALID_TARGET, INVALID_LOGIN), carried verbatim with
+    /// its message.
+    Refused { code: String, message: String },
     /// Anything else, verbatim.
     Failed(String),
 }
@@ -69,6 +72,8 @@ pub struct EgressRoute {
 #[derive(Clone, PartialEq, Eq)]
 pub struct ProxyGrant {
     pub address: String,
+    /// the substrate's constant (tsnet's loopback proxy fixes it), never a secret
+    pub username: String,
     pub credential: String,
 }
 
@@ -78,6 +83,7 @@ impl std::fmt::Debug for ProxyGrant {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("ProxyGrant")
             .field("address", &self.address)
+            .field("username", &self.username)
             .field("credential", &"<redacted>")
             .finish()
     }
@@ -209,10 +215,12 @@ impl FakeEgress {
         Self {
             proxy: ProxyGrant {
                 address: "127.0.0.1:1080".into(),
+                username: "tsnet".into(),
                 credential: "fake-socks-credential".into(),
             },
             http_proxy: ProxyGrant {
                 address: "127.0.0.1:3128".into(),
+                username: "tsnet".into(),
                 credential: "fake-http-credential".into(),
             },
             peers: std::sync::Mutex::new(HashMap::new()),
@@ -277,9 +285,11 @@ impl EgressBackend for FakeEgress {
             });
         }
         let Some(splice_to) = self.peers.lock().unwrap().get(target).copied() else {
-            return Err(EgressError::Refused(format!(
-                "{target} is not a peer this node admits"
-            )));
+            // the code RFC 026's sidecar answers for the same refusal
+            return Err(EgressError::Refused {
+                code: "TARGET_NOT_PEER".into(),
+                message: format!("{target} is not a peer this node admits"),
+            });
         };
         let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
             .await
@@ -357,19 +367,26 @@ async fn splice_loop(listener: tokio::net::TcpListener, splice_to: SocketAddr) {
     }
 }
 
-/// THE REAL ARM, against the API the wave plan fixed with the truffle lane
-/// (`draft/work/ds-wave1-2026-09-30.md`, "The egress facade"):
+/// THE REAL ARM, against truffle-core's RFC 026 API as the truffle lane built
+/// it (`draft/work/ds-wave1-2026-09-30.md`, 2026-10-01 00:06):
 /// `Node::loopback() -> LoopbackConfig {address, proxy_credential,
-/// local_api_credential}`, `Node::egress_add(EgressRoute {id, target, login})
-/// -> BoundEgress {id, listen}`, `egress_remove(id)`, `egress_list()`,
-/// `Node::egress_http_proxy() -> HttpProxyConfig {address, credential}`.
+/// local_api_credential: Option}`, `egress_add(EgressRoute {id, target, login:
+/// Option}) -> BoundEgress {id, listen}`, `egress_remove(&str)`,
+/// `egress_list() -> Vec<EgressRouteInfo {id, target, listen, login}>`,
+/// `egress_http_proxy() -> HttpProxyConfig {address, credential}`; the SOCKS5
+/// username is the constant `LOOPBACK_SOCKS5_USERNAME` ("tsnet"); a protocol-5
+/// sidecar makes the core refuse locally with `NetworkError::Unsupported`, a
+/// stopped node is `NotRunning`, and the sidecar's refusals are
+/// `NetworkError::EgressError {code, message}`.
 ///
 /// UNCOMPILED on purpose: the feature is off by default and truffle-core
-/// 0.7.14 has none of these methods. The module paths (`truffle_core::egress`)
-/// and the async-ness below are this lane's best reading of the plan, not a
-/// checked fact — the first build with `--features truffle-egress` against the
-/// RFC 026 crate, on the petition window, is the check, and it will name
-/// whatever differs.
+/// 0.7.14 has none of it. The NAMES above are relayed facts; the module paths
+/// (`truffle_core::egress`, `truffle_core::network::NetworkError`), whether
+/// each call is async, and the error type each returns are this lane's
+/// reading, not a checked fact — the first build with `--features
+/// truffle-egress` against the RFC 026 crate, on the petition window (which
+/// moves truffle-core AND the npm sidecars together, protocol 5 → 6, EL8), is
+/// the check, and it will name whatever differs.
 #[cfg(feature = "truffle-egress")]
 #[derive(Default)]
 pub struct TruffleEgress {
@@ -379,19 +396,28 @@ pub struct TruffleEgress {
     bound: tokio::sync::Mutex<BTreeMap<String, EgressRoute>>,
 }
 
+/// The core's refusal → the facade's. Classified only as far as the wire
+/// needs; the sidecar's code and message ride verbatim.
 #[cfg(feature = "truffle-egress")]
-fn truffle_refusal(message: String) -> EgressError {
-    // The sidecar's words, classified only as far as the wire needs: a
-    // not-running node is transient, a refused target is the caller's, and
-    // everything else is passed through verbatim.
-    if message.contains("not running") || message.contains("NotRunning") {
-        EgressError::MeshDown
-    } else if message.contains("EGRESS_TARGET") || message.contains("not a peer") {
-        EgressError::Refused(message)
-    } else if message.contains("EGRESS_NOT_FOUND") || message.contains("not found") {
-        EgressError::NotFound
-    } else {
-        EgressError::Failed(message)
+fn truffle_refusal(error: truffle_core::network::NetworkError) -> EgressError {
+    use truffle_core::network::NetworkError;
+    match error {
+        // a protocol-5 sidecar: the core refuses before asking
+        NetworkError::Unsupported { .. } => EgressError::Unsupported,
+        NetworkError::NotRunning => EgressError::MeshDown,
+        NetworkError::EgressError { code, message } => match code.as_str() {
+            "NOT_FOUND" => EgressError::NotFound,
+            // our mirror is checked first, so the sidecar holding an id we did
+            // not bind is a desync worth naming, not a re-aim
+            "EGRESS_EXISTS" => EgressError::Conflict {
+                bound_target: message,
+            },
+            "LISTEN_ERROR" => EgressError::Failed(format!("[{code}] {message}")),
+            // TARGET_NOT_PEER · LOGIN_REFUSED · LOGIN_UNKNOWN · INVALID_TARGET ·
+            // INVALID_LOGIN — the caller's to fix, verbatim
+            _ => EgressError::Refused { code, message },
+        },
+        other => EgressError::Failed(other.to_string()),
     }
 }
 
@@ -409,12 +435,10 @@ impl EgressBackend for TruffleEgress {
         node: Option<&Arc<MeshNode>>,
     ) -> Result<ProxyGrant, EgressError> {
         let node = node.ok_or(EgressError::MeshDown)?;
-        let config = node
-            .loopback()
-            .await
-            .map_err(|e| truffle_refusal(e.to_string()))?;
+        let config = node.loopback().await.map_err(truffle_refusal)?;
         Ok(ProxyGrant {
             address: config.address,
+            username: truffle_core::egress::LOOPBACK_SOCKS5_USERNAME.to_string(),
             credential: config.proxy_credential,
         })
     }
@@ -442,7 +466,7 @@ impl EgressBackend for TruffleEgress {
                 login: login.map(str::to_string),
             })
             .await
-            .map_err(|e| truffle_refusal(e.to_string()))?;
+            .map_err(truffle_refusal)?;
         let route = EgressRoute {
             id: answer.id,
             target: target.to_string(),
@@ -462,9 +486,7 @@ impl EgressBackend for TruffleEgress {
         }
         // No node = the route died with it; the mirror entry was all that was left.
         let Some(node) = node else { return Ok(()) };
-        node.egress_remove(id)
-            .await
-            .map_err(|e| truffle_refusal(e.to_string()))
+        node.egress_remove(id).await.map_err(truffle_refusal)
     }
     async fn route_list(
         &self,
@@ -476,7 +498,7 @@ impl EgressBackend for TruffleEgress {
         let mut routes: Vec<EgressRoute> = node
             .egress_list()
             .await
-            .map_err(|e| truffle_refusal(e.to_string()))?
+            .map_err(truffle_refusal)?
             .into_iter()
             .map(|r| EgressRoute {
                 id: r.id,
@@ -489,12 +511,12 @@ impl EgressBackend for TruffleEgress {
     }
     async fn http_proxy(&self, node: Option<&Arc<MeshNode>>) -> Result<ProxyGrant, EgressError> {
         let node = node.ok_or(EgressError::MeshDown)?;
-        let config = node
-            .egress_http_proxy()
-            .await
-            .map_err(|e| truffle_refusal(e.to_string()))?;
+        let config = node.egress_http_proxy().await.map_err(truffle_refusal)?;
         Ok(ProxyGrant {
             address: config.address,
+            // the plan names no username for E3's Basic challenge; this lane
+            // assumes the same fixed one — the petition window's build checks it
+            username: truffle_core::egress::LOOPBACK_SOCKS5_USERNAME.to_string(),
             credential: config.credential,
         })
     }
@@ -633,7 +655,11 @@ mod tests {
         let fake = FakeEgress::new();
         let refused = fake.route_add(None, "r1", TARGET, None).await;
         assert!(
-            matches!(refused, Err(EgressError::Refused(ref why)) if why.contains("not a peer")),
+            matches!(
+                refused,
+                Err(EgressError::Refused { ref code, ref message })
+                    if code == "TARGET_NOT_PEER" && message.contains("not a peer")
+            ),
             "{refused:?}"
         );
         assert!(fake.route_list(None).await.unwrap().is_empty());
@@ -677,6 +703,7 @@ mod tests {
     fn a_proxy_grant_never_prints_its_credential() {
         let grant = ProxyGrant {
             address: "127.0.0.1:1080".into(),
+            username: "tsnet".into(),
             credential: "hunter2".into(),
         };
         let shown = format!("{grant:?}");

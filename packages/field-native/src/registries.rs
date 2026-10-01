@@ -58,7 +58,6 @@ pub mod mesh_egress {
     pub const SERVICE: &str = "mesh";
     pub const STATE_UNSUPPORTED: &str = "egress-unsupported";
     pub const STATE_MESH_DOWN: &str = "mesh-down";
-    pub const SOCKS_USERNAME: &str = "tsnet";
     pub const ROUTABLE_PORTS: &[u16] = &[9422];
 }
 

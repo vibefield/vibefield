@@ -983,6 +983,11 @@
         "address": {
           "$ref": "#/definitions/MeshEgressLoopbackAddress"
         },
+        "username": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 255
+        },
         "credential": {
           "type": "string",
           "minLength": 1,
@@ -991,6 +996,7 @@
       },
       "required": [
         "address",
+        "username",
         "credential"
       ],
       "additionalProperties": true

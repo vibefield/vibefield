@@ -596,10 +596,6 @@ export const MESH_EGRESS = {
   /** Egress exists, but no node is installed right now (the posture is
    * offline, or the node is starting or rebuilding). */
   STATE_MESH_DOWN: "mesh-down",
-  /** tsnet's loopback SOCKS5 username (`tsnet/tsnet.go:451-455` at v1.102.3;
-   * the credential is the password). The answer carries only the password
-   * because the username is tsnet's constant, not a secret. */
-  SOCKS_USERNAME: "tsnet",
   /** DS-L6 — the ONLY tailnet ports an unauthenticated loopback route may
    * target: doors that demand their own grant. A terminal cell verifies a MAC
    * on its first frame; the product door trusts the node's login and is
@@ -645,12 +641,17 @@ export type MeshEgressRouteId = z.infer<typeof MeshEgressRouteId>;
 
 /** `native.mesh.egress.proxy {}` (E1, SOCKS5) and `native.mesh.egress.httpProxy {}`
  * (E3, HTTP CONNECT): one answer shape for both, where the proxy listens and
- * the credential it demands. The credential is the only secret on this seam.
- * It rides the paired channel once per ask and lives in fieldd's memory,
- * never a log, a file or an environment (EL7). */
+ * the username and credential it demands (RFC 1929 for the SOCKS5, Basic for
+ * the HTTP proxy). The username is the substrate's constant — tsnet's
+ * loopback proxy fixes it (`LOOPBACK_SOCKS5_USERNAME = "tsnet"` in truffle-core
+ * as built for RFC 026) — and rides the answer so no reader hardcodes it. The
+ * credential is the only secret on this seam: it rides the paired channel
+ * once per ask and lives in fieldd's memory, never a log, a file or an
+ * environment (EL7). */
 export const MeshEgressProxy = z
   .object({
     address: MeshEgressLoopbackAddress,
+    username: z.string().min(1).max(255),
     credential: z.string().min(1).max(1024),
   })
   .passthrough();
