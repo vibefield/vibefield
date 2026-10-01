@@ -141,7 +141,10 @@ export const DocSyncStatus = z
   .object({
     docId: z.string(),
     /** Registry name; null when a peer syncs a doc this device does not have
-     * (doc existence does NOT replicate yet — the honest unknown-doc case). */
+     * (doc existence does NOT replicate yet — the honest unknown-doc case).
+     * *Corrected 2026-10-01 (DS-5c):* existence replicates since DS-5, through
+     * the library system document (DS-D6) — null is the window between a
+     * peer's greeting and the library row landing, not a standing state. */
     name: z.string().nullable(),
     state: DocSyncDocState,
     /** Records a peer's digest names that we do not hold yet (§8: the

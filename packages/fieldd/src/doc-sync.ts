@@ -1521,6 +1521,9 @@ export class DocSyncService {
       // Mesh down, peer unreachable, node not up — all ordinary. The next
       // commit retries; nothing is queued waiting for this peer, because a
       // queue that outlives the reason for it is how memory disappears.
+      // *DS-5c (2026-10-01):* the doc-sync beat retries too while the roster
+      // calls the peer online — derived each beat from the unreachable fact
+      // recorded below, so still nothing is queued.
       this.#logger.info("fieldd.doc_sync.lane_open_failed", "No doc-sync lane to a peer", {
         docId,
         peer,
