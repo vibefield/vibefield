@@ -1049,6 +1049,9 @@ impl Hello {
 #[doc = "    \"contractsVersion\": {"]
 #[doc = "      \"$ref\": \"#/definitions/SemverString\""]
 #[doc = "    },"]
+#[doc = "    \"deviceId\": {"]
+#[doc = "      \"type\": \"string\""]
+#[doc = "    },"]
 #[doc = "    \"grantedScopes\": {"]
 #[doc = "      \"type\": \"array\","]
 #[doc = "      \"items\": {"]
@@ -1088,6 +1091,12 @@ impl Hello {
 pub struct HelloAck {
     #[serde(rename = "contractsVersion")]
     pub contracts_version: SemverString,
+    #[serde(
+        rename = "deviceId",
+        default,
+        skip_serializing_if = "::std::option::Option::is_none"
+    )]
+    pub device_id: ::std::option::Option<::std::string::String>,
     #[serde(rename = "grantedScopes")]
     pub granted_scopes: ::std::vec::Vec<::std::string::String>,
     #[serde(
@@ -8701,6 +8710,10 @@ pub mod builder {
     #[derive(Clone, Debug)]
     pub struct HelloAck {
         contracts_version: ::std::result::Result<super::SemverString, ::std::string::String>,
+        device_id: ::std::result::Result<
+            ::std::option::Option<::std::string::String>,
+            ::std::string::String,
+        >,
         granted_scopes:
             ::std::result::Result<::std::vec::Vec<::std::string::String>, ::std::string::String>,
         native_build: ::std::result::Result<
@@ -8730,6 +8743,7 @@ pub mod builder {
         fn default() -> Self {
             Self {
                 contracts_version: Err("no value supplied for contracts_version".to_string()),
+                device_id: Ok(Default::default()),
                 granted_scopes: Err("no value supplied for granted_scopes".to_string()),
                 native_build: Ok(Default::default()),
                 server_kind: Err("no value supplied for server_kind".to_string()),
@@ -8750,6 +8764,16 @@ pub mod builder {
             self.contracts_version = value
                 .try_into()
                 .map_err(|e| format!("error converting supplied value for contracts_version: {e}"));
+            self
+        }
+        pub fn device_id<T>(mut self, value: T) -> Self
+        where
+            T: ::std::convert::TryInto<::std::option::Option<::std::string::String>>,
+            T::Error: ::std::fmt::Display,
+        {
+            self.device_id = value
+                .try_into()
+                .map_err(|e| format!("error converting supplied value for device_id: {e}"));
             self
         }
         pub fn granted_scopes<T>(mut self, value: T) -> Self
@@ -8838,6 +8862,7 @@ pub mod builder {
         fn try_from(value: HelloAck) -> ::std::result::Result<Self, super::error::ConversionError> {
             Ok(Self {
                 contracts_version: value.contracts_version?,
+                device_id: value.device_id?,
                 granted_scopes: value.granted_scopes?,
                 native_build: value.native_build?,
                 server_kind: value.server_kind?,
@@ -8853,6 +8878,7 @@ pub mod builder {
         fn from(value: super::HelloAck) -> Self {
             Self {
                 contracts_version: Ok(value.contracts_version),
+                device_id: Ok(value.device_id),
                 granted_scopes: Ok(value.granted_scopes),
                 native_build: Ok(value.native_build),
                 server_kind: Ok(value.server_kind),

@@ -1,7 +1,12 @@
 // C5 unit-level: the peer-fieldd door branch + the `device?` routing hook on a
 // standalone ProductApi (scripted tokens, real ws clients — the tailnet-door
 // harness pattern). The two-daemon end-to-end lives in peer-link.e2e tests.
-import { CONTRACTS_VERSION, PEER_FIELDD_SCOPES, TAILNET_SCOPES } from "@vibefield/contracts";
+import {
+  CONTRACTS_VERSION,
+  HelloAck,
+  PEER_FIELDD_SCOPES,
+  TAILNET_SCOPES,
+} from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import WebSocket from "ws";
 import { RpcCallError } from "../src/native-link";
@@ -119,6 +124,33 @@ describe("the peer-fieldd door branch (C5)", () => {
       result: { principal: { kind: string } };
     };
     expect(probe.result.principal.kind).toBe("local-token"); // no identity theater locally
+  });
+
+  // 2026-10-01 (the lead's ruling on DS-D15's client half) — the product hello
+  // ack names the device this daemon IS, so a client can tell a call it routes
+  // to its own daemon from one to another desktop; a guest is told nothing.
+  it("the hello ack names the device this daemon is — to a window and to the phone, never to a guest", async () => {
+    const { port } = await api();
+    const ackOf = async (ws: WebSocket, over: Record<string, unknown>) =>
+      ((await call(ws, 1, "system.hello", hello(over))) as { result: Record<string, unknown> })
+        .result;
+    const win = await ackOf(await dial(port, "/"), {
+      clientKind: "renderer",
+      credential: "good-token",
+    });
+    expect(win["deviceId"]).toBe(OWN_ID);
+    expect(HelloAck.safeParse(win).success).toBe(true);
+    const phone = await ackOf(
+      await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN }),
+      { clientKind: "ios" },
+    );
+    expect(phone["deviceId"]).toBe(OWN_ID);
+    const guest = await ackOf(
+      await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": "colleague@example.com" }),
+      { clientKind: "ios" },
+    );
+    expect(guest["grantedScopes"]).toEqual([]);
+    expect(guest).not.toHaveProperty("deviceId");
   });
 
   it("a non-peer clientKind on the tailnet door stays a tailnet principal despite a claim", async () => {
@@ -467,7 +499,7 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
     expect(shortKey.error.data.details).toMatchObject({ reason: "malformed idempotencyKey" });
   });
 
-  it("a caller that is not a peer daemon carrying either member is refused before anything runs", async () => {
+  it("a caller that is not a peer daemon carrying `onBehalfOf`, or an envelope it cannot read, is refused before anything runs", async () => {
     const forwarder = vi.fn(async () => ({ forwarded: true }));
     const { a, port } = await api(forwarder);
     let served = 0;
@@ -482,9 +514,10 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
       "system.hello",
       hello({ clientKind: "renderer", credential: "good-token" }),
     );
+    // (a lone well-formed key is no assertion: it is set aside, below — the
+    // narrowed refusal of 2026-10-01's ruling on DS-D15's client half)
     const cases: Array<[number, string, Record<string, unknown>]> = [
       [2, "device.get", { deviceId: "x", forward: { onBehalfOf: behalf } }],
-      [3, "device.get", { deviceId: "x", forward: { idempotencyKey: "k-0123456789" } }],
       // `forward` that is not even an object
       [6, "device.get", { deviceId: "x", forward: "k-0123456789" }],
       // routed: refused before the forwarder, so nothing crosses to the peer
@@ -542,7 +575,7 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
     ["system.unsubscribe", { subId: "ps-1" }],
     ["x.probe.echo (the dynamic router)", {}],
   ] as Array<[string, Record<string, unknown>]>)(
-    "the refusal runs at %s: a non-peer's envelope is refused there too, the key alone included",
+    "the refusal runs at %s: a non-peer's onBehalfOf is refused there too, and a lone key is set aside as anywhere",
     async (path, own) => {
       const method = path.split(" ")[0] as string;
       const { a, port } = await api();
@@ -562,19 +595,15 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
         "system.hello",
         hello({ clientKind: "renderer", credential: "good-token" }),
       );
-      // a key alone binds to nothing on these paths either: none is a routed mutation
-      const envelopes = [{ onBehalfOf: behalf }, { idempotencyKey: "k-0123456789" }];
-      let id = 2;
-      for (const forward of envelopes) {
-        const res = (await call(local, id++, method, { ...own, forward })) as {
-          error?: { data: { kind: string; details: Record<string, unknown> } };
-        };
-        expect(res.error?.data.kind, JSON.stringify(forward)).toBe("PRECONDITION_FAILED");
-        expect(res.error?.data.details).toMatchObject({
-          method,
-          reason: "forwarding envelope from a non-peer",
-        });
-      }
+      const asserted = (await call(local, 2, method, {
+        ...own,
+        forward: { onBehalfOf: behalf },
+      })) as { error?: { data: { kind: string; details: Record<string, unknown> } } };
+      expect(asserted.error?.data.kind).toBe("PRECONDITION_FAILED");
+      expect(asserted.error?.data.details).toMatchObject({
+        method,
+        reason: "forwarding envelope from a non-peer",
+      });
       expect(routed).toBe(0);
       // the phone's door is no peer daemon either
       const phone = await dial(port, `/t/${SECRET}`, { "Tailscale-User-Login": TEST_LOGIN });
@@ -585,6 +614,18 @@ describe("the forwarding envelope (DS-L7 / DS-D15)", () => {
       })) as { error?: { data: { kind: string } } };
       expect(fromPhone.error?.data.kind).toBe("PRECONDITION_FAILED");
       expect(routed).toBe(0);
+      // a lone key binds to nothing here (none of these is a routed mutation):
+      // it is set aside, and the path answers exactly as without the envelope
+      const strip = (msg: unknown) => {
+        const { id: _id, ...rest } = msg as Record<string, unknown>;
+        return rest;
+      };
+      const keyed = await call(local, 3, method, {
+        ...own,
+        forward: { idempotencyKey: "k-0123456789" },
+      });
+      const bare = await call(local, 4, method, { ...own });
+      expect(strip(keyed)).toEqual(strip(bare));
     },
   );
 
@@ -758,50 +799,65 @@ describe("the forwarded mutation's key (DS-2)", () => {
     expect(read[4]).not.toHaveProperty("idempotencyKey"); // a read carries none
   });
 
-  it("a key anywhere else has no receipt to bind to and is refused", async () => {
+  // 2026-10-01 (the lead's ruling on DS-D15's client half, the self-device
+  // trap): the client keys every call in the forwarded set it routes by
+  // `device` and cannot always tell its own device from another, so a key on a
+  // call that turns out to be served here (or on a read) must not be refused.
+  // The refusal narrows to what is an ASSERTION — `onBehalfOf` — and what
+  // cannot be read; a lone well-formed key off a routed mutation is set aside
+  // (a debug line), and no receipt exists for it anywhere.
+  it("a lone key off a routed mutation is set aside, never refused: served here or carried without it, and no receipt binds it", async () => {
     const { ws, forwarder, localCalls } = await writer();
-    const cases: Array<[string, Record<string, unknown>, string]> = [
-      // a read, even routed
-      ["doc.list", { device: "dev-b", forward: { idempotencyKey: "retry-key-0001" } }, "non-peer"],
-      // a mutation this daemon serves itself
-      ["doc.create", { name: "x", forward: { idempotencyKey: "retry-key-0001" } }, "non-peer"],
-      [
-        "doc.create",
-        { device: OWN_ID, name: "x", forward: { idempotencyKey: "retry-key-0001" } },
-        "non-peer",
-      ],
-      // an empty envelope names no key to bind
-      ["doc.create", { device: "dev-b", name: "x", forward: {} }, "non-peer"],
-      // the key beside a restatement: onBehalfOf is never a caller's
-      [
-        "doc.create",
-        {
-          device: "dev-b",
-          name: "x",
-          forward: { idempotencyKey: "retry-key-0001", onBehalfOf: {} },
-        },
-        "non-peer",
-      ],
-      // a key the contract would not journal
-      [
-        "doc.create",
-        { device: "dev-b", name: "x", forward: { idempotencyKey: "short" } },
-        "malformed",
-      ],
-    ];
-    let id = 10;
-    for (const [method, params, why] of cases) {
-      const res = (await call(ws, id++, method, params)) as {
-        error: { data: { kind: string; details: { reason: string } } };
+    const done = async (id: number, method: string, params: Record<string, unknown>) =>
+      (await call(ws, id, method, params)) as {
+        result?: unknown;
+        error?: { data: { kind: string; details: { reason: string } } };
       };
-      expect(res.error.data.kind, `${method} ${JSON.stringify(params)}`).toBe(
-        "PRECONDITION_FAILED",
-      );
-      expect(res.error.data.details.reason).toBe(
-        why === "non-peer" ? "forwarding envelope from a non-peer" : "malformed idempotencyKey",
-      );
+    // a mutation this daemon serves itself, with or without its own id: served,
+    // TWICE under one key — no local receipt replays the second
+    expect(
+      (await done(10, "doc.create", { name: "x", forward: { idempotencyKey: "retry-key-0001" } }))
+        .result,
+    ).toEqual({ local: true });
+    expect(
+      (
+        await done(11, "doc.create", {
+          device: OWN_ID,
+          name: "x",
+          forward: { idempotencyKey: "retry-key-0001" },
+        })
+      ).result,
+    ).toEqual({ local: true });
+    expect(localCalls()).toBe(2);
+    // an empty envelope names nothing: set aside too
+    expect((await done(12, "doc.create", { name: "x", forward: {} })).result).toEqual({
+      local: true,
+    });
+    expect(localCalls()).toBe(3);
+    // a read carried to another device: carried WITHOUT the key (a read binds none)
+    await done(13, "doc.list", { device: "dev-b", forward: { idempotencyKey: "retry-key-0001" } });
+    const read = forwarder.mock.calls.at(-1) as unknown[];
+    expect(read[2]).toEqual({ device: "dev-b" });
+    expect(read[4]).not.toHaveProperty("idempotencyKey");
+
+    // still refused, routed or not: the restatement (authority by assertion)…
+    const asserted = await done(14, "doc.create", {
+      device: "dev-b",
+      name: "x",
+      forward: { idempotencyKey: "retry-key-0001", onBehalfOf: {} },
+    });
+    expect(asserted.error?.data.kind).toBe("PRECONDITION_FAILED");
+    expect(asserted.error?.data.details.reason).toBe("forwarding envelope from a non-peer");
+    // …and a key the contract would not journal, wherever it rides
+    for (const [id, params] of [
+      [15, { device: "dev-b", name: "x", forward: { idempotencyKey: "short" } }],
+      [16, { name: "x", forward: { idempotencyKey: "short" } }],
+    ] as Array<[number, Record<string, unknown>]>) {
+      const bad = await done(id, "doc.create", params);
+      expect(bad.error?.data.kind, JSON.stringify(params)).toBe("PRECONDITION_FAILED");
+      expect(bad.error?.data.details.reason).toBe("malformed idempotencyKey");
     }
-    expect(forwarder).not.toHaveBeenCalled();
-    expect(localCalls()).toBe(0);
+    expect(forwarder).toHaveBeenCalledTimes(1); // the read alone crossed
+    expect(localCalls()).toBe(3);
   });
 });

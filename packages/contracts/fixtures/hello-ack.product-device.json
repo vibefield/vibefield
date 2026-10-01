@@ -1,0 +1,7 @@
+{
+  "contractsVersion": "0.1.0",
+  "serverKind": "fieldd",
+  "grantedScopes": ["canvas.read", "terminal.attach"],
+  "userId": "01J9USERAAAAAAAAAAAAAAAAAA",
+  "deviceId": "01J9DEVICEAAAAAAAAAAAAAAAA"
+}

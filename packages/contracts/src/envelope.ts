@@ -242,6 +242,15 @@ export const HelloAck = z
      * unconfigured (embedded/unit daemons); absent = a pre-UA-2 daemon.
      * Display + verification truth; never a grant. */
     userId: z.string().nullable().optional(),
+    /** DS-D15's client half (2026-10-01, the lead's ruling on the self-device
+     * trap) — PRODUCT surface only: the device this daemon IS (its roster id,
+     * the one a `device` param names), so a client can tell a call it routes
+     * to its own daemon from one carried to another desktop. Absent on mgmt
+     * acks, to a guest, from a door not yet armed with its device, and from a
+     * daemon predating it; a tolerant reader falls back to its own supplier.
+     * It can change once per boot (a local fallback id before the mesh
+     * identity is known): a reader treats it as a hint, never a gate. */
+    deviceId: z.string().optional(),
     /** WIN-10 — the server's proof that it holds the pairing secret, answering
      * `PairingMac.nonce`:
      *   serverMac = hex(HMAC-SHA256(pairing_secret, "fn-ack" 0x00 nonce 0x00 bootId))

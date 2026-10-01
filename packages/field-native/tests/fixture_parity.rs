@@ -69,6 +69,11 @@ fn hello_ack_fixture() {
     // can be true over (cells always; the flag means the tailnet door).
     // Emitted here, so strict.
     roundtrip::<HelloAck>("hello-ack.terminal-mesh.json", true);
+    // DS-D15's client half (2026-10-01) — the PRODUCT door's ack naming the
+    // device its daemon is (`deviceId`). fieldd emits it, field-native never
+    // does; strict anyway, because the generated type is shared and a field it
+    // did not carry would drop out of the round trip.
+    roundtrip::<HelloAck>("hello-ack.product-device.json", true);
 }
 
 #[test]

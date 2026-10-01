@@ -841,6 +841,8 @@ export class ProductApi extends EventEmitter {
         ws.close(1008, "unauthorized");
         return;
       }
+      const ackDevice =
+        state.ctx?.principal.kind === "tailnet-guest" ? undefined : this.ownDeviceId?.();
       reply({
         jsonrpc: "2.0",
         id,
@@ -850,6 +852,10 @@ export class ProductApi extends EventEmitter {
           grantedScopes: state.scopes,
           // UA-2 — the pair asserts which user it serves (null = unconfigured)
           userId: this.opts.userId ?? null,
+          // DS-D15's client half (2026-10-01) — the device this daemon IS, so a
+          // client can tell a call routed to its own daemon from one carried
+          // to another desktop; a guest is told nothing
+          ...(ackDevice !== undefined && ackDevice.length > 0 ? { deviceId: ackDevice } : {}),
         },
       });
       return;
@@ -909,35 +915,48 @@ export class ProductApi extends EventEmitter {
       // forward's receipt is bound to — the caller's own, or the one an
       // `outcome-unknown` answer handed back, which is how the retry reads the
       // owner's receipt instead of applying twice. `onBehalfOf` is never a
-      // caller's to assert, and a key on anything served here (or on a read)
-      // has no receipt to bind to.
-      const target = (envelope.rest as { device?: unknown } | null | undefined)?.device;
-      const routedMutation =
-        !envelope.malformed &&
-        !envelope.hasOnBehalfOf &&
-        envelope.hasIdempotencyKey &&
-        def?.idempotent === false &&
-        def?.subscription !== true &&
-        typeof target === "string" &&
-        this.forwarder !== null &&
-        target !== this.ownDeviceId?.();
-      if (!routedMutation) {
+      // caller's to assert.
+      //
+      // NARROWED 2026-10-01 (the lead's ruling on DS-D15's client half — the
+      // self-device trap): the refusal is for what ASSERTS — `onBehalfOf`,
+      // authority by assertion — and for what cannot be read (a `forward`
+      // that is not an object, a key the contract would not journal). A lone
+      // well-formed key anywhere else used to be refused too, but a client
+      // keys every call in the forwarded set it routes by `device` and cannot
+      // always tell its own device from another, so a key on a call that turns
+      // out to be served here, or on a read, is SET ASIDE (a debug line): the
+      // call runs without it, and no receipt binds it anywhere (local
+      // idempotency is outside DS-D15, named).
+      if (envelope.malformed || envelope.hasOnBehalfOf) {
         const refusal = nonPeerEnvelopeRefusal(method);
         reply(this.err(id, refusal.kind, refusal.message, false, refusal.details));
         return;
       }
-      const key = IdempotencyKey.safeParse(envelope.rawIdempotencyKey);
-      if (!key.success) {
-        reply(
-          this.err(id, "PRECONDITION_FAILED", "malformed forwarding envelope", false, {
-            method,
-            reason: "malformed idempotencyKey",
-          }),
-        );
-        return;
+      if (envelope.hasIdempotencyKey) {
+        const key = IdempotencyKey.safeParse(envelope.rawIdempotencyKey);
+        if (!key.success) {
+          reply(
+            this.err(id, "PRECONDITION_FAILED", "malformed forwarding envelope", false, {
+              method,
+              reason: "malformed idempotencyKey",
+            }),
+          );
+          return;
+        }
+        const target = (envelope.rest as { device?: unknown } | null | undefined)?.device;
+        const routed =
+          typeof target === "string" && this.forwarder !== null && target !== this.ownDeviceId?.();
+        // a keyed forward: a mutation, never a subscription — `subscription`
+        // read by PRESENCE (SP-1's descriptor makes it an object)
+        if (routed && def?.idempotent === false && !def?.subscription) inboundKey = key.data;
+        else
+          this.logger.debug(
+            "fieldd.product_api.forward_key_set_aside",
+            "A caller's idempotency key rode a call that binds none; set aside",
+            { method, reason: routed ? "not-a-mutation" : "served-here" },
+          );
       }
       callParams = envelope.rest;
-      inboundKey = key.data;
     } else if (envelope.carried) {
       const read = readPeerEnvelope(envelope);
       if (!read.ok) {
@@ -1052,7 +1071,7 @@ export class ProductApi extends EventEmitter {
       const receiptKey =
         inboundKey !== undefined &&
         def.idempotent === false &&
-        def.subscription !== true &&
+        !def.subscription && // by presence: SP-1's descriptor makes it an object
         callCtx.principal.kind === "peer-fieldd"
           ? inboundKey
           : undefined;

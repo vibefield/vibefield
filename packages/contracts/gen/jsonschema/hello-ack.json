@@ -1157,6 +1157,9 @@
             "null"
           ]
         },
+        "deviceId": {
+          "type": "string"
+        },
         "serverMac": {
           "type": "string"
         }
