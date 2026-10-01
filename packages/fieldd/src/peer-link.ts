@@ -48,6 +48,9 @@ import { RpcCallError } from "./native-link";
 
 export type PeerLinkState = "dialing" | "connected" | "incompatible";
 
+/** DS-L8 — what a peer's DOOR last told this daemon (`PeerLink.doorState`). */
+export type PeerDoorState = "answers" | "silent" | "incompatible";
+
 /** A standing upstream subscription on a peer link (C6-5/D35). */
 export interface PeerSubscription {
   snapshot: unknown;
@@ -115,6 +118,10 @@ export class PeerLink extends EventEmitter {
   /** DS-2 — this daemon's own keyed forwards: in flight, applied, refused, or
    * `outcome-unknown` (sent, answer lost). `forward.receipt` reads it. */
   readonly receipts = new CallerForwardJournal({ now: () => this.now() });
+  /** DS-L8 — peers whose door the last attempt found silent (a dial or a
+   * forward that failed at the transport), with when; cleared the moment the
+   * door answers anything. The roster reads it through `doorState`. */
+  private readonly silentSince = new Map<string, number>();
 
   constructor(private readonly opts: PeerLinkOptions) {
     super();
@@ -149,7 +156,9 @@ export class PeerLink extends EventEmitter {
     const link = this.ensureLink(deviceId);
     link.lastUsed = this.now();
     try {
-      return await this.withDeadline(link.client.request(method, wire), deviceId);
+      const result = await this.withDeadline(link.client.request(method, wire), deviceId);
+      this.markAnswered(deviceId);
+      return result;
     } catch (e) {
       throw this.mapPeerError(e, deviceId);
     }
@@ -195,6 +204,7 @@ export class PeerLink extends EventEmitter {
         this.opts.forwardTimeoutMs ?? FORWARDING.FORWARD_TIMEOUT_MS,
       );
       attempt.applied();
+      this.markAnswered(deviceId);
       return result;
     } catch (e) {
       const mapped = this.mapPeerError(e, deviceId);
@@ -223,6 +233,15 @@ export class PeerLink extends EventEmitter {
    * answer. Already-mapped errors (the deadline path) pass straight through. */
   private mapPeerError(e: unknown, deviceId: string): RpcCallError {
     if (e instanceof RpcCallError) return e;
+    // DS-L8 — a pin that landed WHILE this call waited is its answer. The
+    // client's status listener pins the peer and closes the client before the
+    // call's own ready-waiter hears the hello's INCOMPATIBLE, so that waiter
+    // sees "client closed" — which used to read the first call to a skewed
+    // peer as "unreachable" (and now would mark its door silent).
+    if (this.incompatible.has(deviceId))
+      return new RpcCallError("INCOMPATIBLE", "peer contracts major mismatch", false, {
+        device: deviceId,
+      });
     if (e instanceof FielddRpcError) {
       if (e.kind === "INCOMPATIBLE") {
         this.pinIncompatible(deviceId);
@@ -236,9 +255,12 @@ export class PeerLink extends EventEmitter {
       // transport failures (no JSON-RPC code) mean the peer did not answer.
       // (This used to drop the link and rewrite the owner's honest state as
       // "unreachable".)
-      if (isRemoteAnswer(e))
+      if (isRemoteAnswer(e)) {
+        this.markAnswered(deviceId);
         return new RpcCallError(e.kind as never, e.message, e.retryable, e.details);
+      }
       if (e.kind === "UNAVAILABLE" || e.kind === "TIMEOUT") {
+        this.markSilent(deviceId);
         this.dropLink(deviceId);
         return new RpcCallError("UNAVAILABLE", `peer unreachable: ${e.message}`, true, {
           device: deviceId,
@@ -247,6 +269,7 @@ export class PeerLink extends EventEmitter {
       }
       return new RpcCallError(e.kind as never, e.message, e.retryable, e.details);
     }
+    this.markSilent(deviceId);
     this.dropLink(deviceId);
     return new RpcCallError(
       "UNAVAILABLE",
@@ -290,6 +313,7 @@ export class PeerLink extends EventEmitter {
     } catch (e) {
       throw this.mapPeerError(e, deviceId);
     }
+    this.markAnswered(deviceId);
     const member = {
       unsubscribe: upstream.unsubscribe,
       onDrop,
@@ -324,6 +348,24 @@ export class PeerLink extends EventEmitter {
     for (const [id, link] of this.links) out.set(id, link.state);
     for (const id of this.incompatible) out.set(id, "incompatible");
     return out;
+  }
+
+  /** DS-L8 — the peer's DOOR as this daemon last heard it: `answers` while a
+   * link is ready (or since its door last answered anything, the owner's own
+   * refusals included); `silent` when the last attempt found no door — a dial
+   * or a forward that failed at the transport — or a standing link that
+   * answered and whose socket has gone; `incompatible` once its contracts
+   * major was refused. `undefined` = no evidence either way: never dialled, or
+   * an idle link swept after answering. The roster's `restarting` is `silent`
+   * on a node the tailnet lists online. */
+  doorState(deviceId: string): PeerDoorState | undefined {
+    if (this.incompatible.has(deviceId)) return "incompatible";
+    const link = this.links.get(deviceId);
+    if (link !== undefined) {
+      if (link.client.status === "ready") return "answers";
+      if (link.state === "connected") return "silent";
+    }
+    return this.silentSince.has(deviceId) ? "silent" : undefined;
   }
 
   dispose(): void {
@@ -372,6 +414,7 @@ export class PeerLink extends EventEmitter {
     return new Promise((resolve, reject) => {
       const t = setTimeout(() => {
         // a stale socket is the usual suspect — drop it so the next call re-dials
+        this.markSilent(deviceId);
         this.dropLink(deviceId);
         reject(
           new RpcCallError("UNAVAILABLE", "peer call timed out", true, {
@@ -391,6 +434,19 @@ export class PeerLink extends EventEmitter {
         },
       );
     });
+  }
+
+  /** DS-L8 — the door did not answer; "door-changed" wakes the roster (set
+   * BEFORE any dropLink, so the roster that link-changed re-emits sees it). */
+  private markSilent(deviceId: string): void {
+    const was = this.silentSince.has(deviceId);
+    this.silentSince.set(deviceId, this.now());
+    if (!was) this.emit("door-changed", { deviceId, door: "silent" });
+  }
+
+  /** DS-L8 — the door answered (a result, or the owner's own error). */
+  private markAnswered(deviceId: string): void {
+    if (this.silentSince.delete(deviceId)) this.emit("door-changed", { deviceId, door: "answers" });
   }
 
   private pinIncompatible(deviceId: string): void {

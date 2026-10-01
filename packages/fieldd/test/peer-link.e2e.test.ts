@@ -268,6 +268,46 @@ describe("PeerLink e2e — two real daemons over the tailnet door", () => {
     expect(Date.now() - started).toBeLessThan(15_000); // the 8s per-call deadline
   }, 30_000);
 
+  it("DS-L8: a node on the tailnet whose daemon is silent reads restarting, and asleep once the tailnet drops it", async () => {
+    const { A, mockA } = await bootPair();
+    // B's door answers: awake
+    await A.peers.request("dev-b", "device.list", {});
+    expect(A.devices.get("dev-b")?.state).toBe("awake");
+    // a self peer the tailnet lists ONLINE whose door nothing answers — its
+    // field-native (the node) up, its fieldd down
+    mockA.meshPeers = [
+      ...mockA.meshPeers,
+      {
+        id: "node-quiet",
+        deviceId: "dev-quiet",
+        name: "quiet",
+        online: true,
+        whois: { login: LOGIN, deviceName: "quiet.tailnet.ts.net" },
+      },
+    ];
+    mockA.pushPeersDelta({ kind: "peerUpdated" });
+    await until(() => A.devices.get("dev-quiet") !== undefined, 4000);
+    expect(A.devices.get("dev-quiet")?.state).toBe("awake"); // never dialled: no evidence yet
+    await expect(A.peers.request("dev-quiet", "device.list", {})).rejects.toMatchObject({
+      kind: "UNAVAILABLE",
+    });
+    expect(A.devices.get("dev-quiet")).toMatchObject({ online: true, state: "restarting" });
+    // the tailnet drops the node: asleep — the row is kept, greyed by its state
+    mockA.meshPeers = [
+      ...mockA.meshPeers.filter((p) => (p as { deviceId?: string }).deviceId !== "dev-quiet"),
+      {
+        id: "node-quiet",
+        deviceId: "dev-quiet",
+        name: "quiet",
+        online: false,
+        whois: { login: LOGIN, deviceName: "quiet.tailnet.ts.net" },
+      },
+    ];
+    mockA.pushPeersDelta({ kind: "peerUpdated" });
+    await until(() => A.devices.get("dev-quiet")?.state === "asleep", 4000);
+    expect(A.devices.get("dev-quiet")?.online).toBe(false);
+  }, 30_000);
+
   it("one outbound connection per peer: two forwards reuse a single socket", async () => {
     const { A, dials } = await bootPair();
     await A.peers.request("dev-b", "device.list", {});

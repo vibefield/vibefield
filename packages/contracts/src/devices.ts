@@ -100,6 +100,19 @@ export const DeviceSlice = z
   .passthrough();
 export type DeviceSlice = z.infer<typeof DeviceSlice>;
 
+/** DS-L8 (2026-09-30) — asleep is a state, not an absence: the roster tells
+ * the three apart, plus the skewed peer DS-L9 names.
+ *  - `awake`: its door answers (or nothing says otherwise while the tailnet
+ *    lists it online — a peer never dialled is not a silent one); self always.
+ *  - `restarting`: its NODE is on the tailnet and its DAEMON is silent — the
+ *    last forward to its door went unanswered at the transport. field-native
+ *    outlives fieldd, and the tailnet's `online` flag is the node's.
+ *  - `asleep`: the tailnet says it is not online.
+ *  - `incompatible`: its door refused our contracts major (the link's pin);
+ *    it is not asked until this daemon restarts. */
+export const DeviceState = z.enum(["awake", "restarting", "asleep", "incompatible"]);
+export type DeviceState = z.infer<typeof DeviceState>;
+
 /** The roster row. `online` derives from tailnet peer state (self is always
  * online); `lastSeenAt` = max(publishedAt, peer last-seen) — honest without
  * heartbeats. `link` is PeerLink's live verdict about OUR connection to the
@@ -150,6 +163,10 @@ export const DeviceInfo = z
     self: z.boolean(),
     online: z.boolean(),
     lastSeenAt: z.number().int(),
+    /** DS-L8 — ADDITIVE beside `online` (kept: old readers read it). This
+     * daemon always sets it; optional so a roster read from an older peer
+     * (a federated `device.list {device}`) still parses. */
+    state: DeviceState.optional(),
     link: z.enum(["connected", "dialing", "incompatible"]).optional(),
     /** The Tailscale stable node id, when the peer registry correlates it to
      * this device (PeerInfo.deviceId ⋈ slice key). This is the DIAL/liveness

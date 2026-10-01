@@ -7,6 +7,7 @@ import {
   DEVICE_LIMITS,
   type DeviceInfo,
   DeviceSlice,
+  type DeviceState,
   LAYOUT,
   PeerInfo,
   type ProductEndpoint,
@@ -112,7 +113,30 @@ interface PeerLiveness {
  * so DeviceService never imports PeerLink (the daemon owns that wiring). */
 interface PeerLinkView {
   linkState(deviceId: string): "connected" | "dialing" | "incompatible" | undefined;
-  on(event: "link-changed", fn: (ev: unknown) => void): unknown;
+  /** DS-L8 — the peer's door as last heard (PeerLink.doorState). Optional so
+   * a view that cannot say leaves every online peer `awake`. */
+  doorState?(deviceId: string): "answers" | "silent" | "incompatible" | undefined;
+  on(event: "link-changed" | "door-changed", fn: (ev: unknown) => void): unknown;
+}
+
+/** DS-L8 — the roster's state for one row. Self is awake (it is this
+ * process); a peer whose door refused our contracts major is `incompatible`
+ * whatever else is true (it is not asked until this daemon restarts); a node
+ * the tailnet does not list online is `asleep`; a node it does list whose door
+ * last went unanswered is `restarting` (field-native outlives fieldd — the
+ * node's `online` is not the daemon's); everything else is `awake`, including
+ * a peer never dialled: no answer yet is not silence. */
+export function deviceState(
+  self: boolean,
+  online: boolean,
+  door: "answers" | "silent" | "incompatible" | undefined,
+  link: "connected" | "dialing" | "incompatible" | undefined,
+): DeviceState {
+  if (self) return "awake";
+  if (door === "incompatible" || link === "incompatible") return "incompatible";
+  if (!online) return "asleep";
+  if (door === "silent") return "restarting";
+  return "awake";
 }
 
 export class DeviceService extends EventEmitter {
@@ -190,6 +214,8 @@ export class DeviceService extends EventEmitter {
   attachPeerLink(peers: PeerLinkView): void {
     this.peers = peers;
     peers.on("link-changed", () => this.emitRoster());
+    // DS-L8 — a door going silent or answering again moves a row's `state`
+    peers.on("door-changed", () => this.emitRoster());
   }
 
   list(): DeviceInfo[] {
@@ -543,6 +569,12 @@ export class DeviceService extends EventEmitter {
         publishedAt: slice.publishedAt,
         self,
         online: self ? true : (live?.online ?? false),
+        state: deviceState(
+          self,
+          self ? true : (live?.online ?? false),
+          self ? undefined : this.peers?.doorState?.(deviceId),
+          link,
+        ),
         lastSeenAt: Math.max(slice.publishedAt, live?.lastSeen ?? 0),
         ...(tailscaleId !== undefined ? { tailscaleId } : {}),
         ...(tailnetDnsName !== undefined ? { tailnetDnsName } : {}),
@@ -553,7 +585,13 @@ export class DeviceService extends EventEmitter {
     if (!seen.has(this.deviceId)) {
       // Unpublished (mesh down / first sync pending): the roster still shows
       // this device honestly rather than an empty list.
-      out.push({ ...this.selfSlice(), self: true, online: true, lastSeenAt: this.now() });
+      out.push({
+        ...this.selfSlice(),
+        self: true,
+        online: true,
+        state: "awake",
+        lastSeenAt: this.now(),
+      });
       seen.add(this.deviceId);
     }
     for (const row of this.selfPeerRows()) {
@@ -583,6 +621,7 @@ export class DeviceService extends EventEmitter {
         name: peer.name,
         self: false,
         online: peer.online,
+        state: deviceState(false, peer.online, this.peers?.doorState?.(peer.deviceId), link),
         lastSeenAt: peer.lastSeen,
         // a locator, not a capability: D7 left no secret in it
         productEndpoint: { serve: "product", ...(url !== undefined ? { url } : {}) },
@@ -603,6 +642,9 @@ export class DeviceService extends EventEmitter {
         d.deviceId,
         d.name,
         d.online,
+        // DS-L8 — awake → restarting → asleep moves wake subscribers even
+        // when `online` holds still (a silent daemon on a live node)
+        d.state ?? null,
         d.self,
         d.productEndpoint?.url ?? null,
         d.link ?? null,

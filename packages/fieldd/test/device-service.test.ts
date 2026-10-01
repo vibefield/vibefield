@@ -3,6 +3,7 @@
 // device.list over the product WS with the scope gate, peer slices fused from
 // the store stream, the tolerant malformed-slice drop, device.subscribe
 // streaming, meshless identity stability across a restart, and device.get.
+import { EventEmitter } from "node:events";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -654,5 +655,81 @@ describe("UA-P-0f — the fan-out reaches only this account's desktops", () => {
     // reaches nobody rather than everybody
     expect(daemon.devices.selfSyncPeers()).toEqual([]);
     expect(daemon.devices.isSelfPeer("node-mine")).toBe(false);
+  });
+});
+
+// DS-L8 (2026-09-30) — asleep is a state, not an absence. The roster tells
+// `awake`, `restarting` (the node on the tailnet, its daemon silent),
+// `asleep` and `incompatible` apart, ADDITIVE beside `online`, from the
+// tailnet's liveness and what each peer's door last said (PeerLink.doorState —
+// scripted here; its own rows are peer-door.test.ts, the two-daemon witness is
+// the PeerLink e2e).
+describe("DS-L8 — the roster's states", () => {
+  it("tells awake, restarting, asleep and incompatible apart beside online, and a move wakes device.subscribe", async () => {
+    const dataDir = makeDataDir();
+    const mock = await startMock(dataDir);
+    linkTo(dataDir);
+    mock.meshPeers = [
+      tailnetPeer({ id: "node-up", deviceId: "dev-up", login: ACCOUNT, name: "up" }),
+      tailnetPeer({ id: "node-quiet", deviceId: "dev-quiet", login: ACCOUNT, name: "quiet" }),
+      tailnetPeer({
+        id: "node-off",
+        deviceId: "dev-off",
+        login: ACCOUNT,
+        name: "off",
+        online: false,
+      }),
+      tailnetPeer({ id: "node-skew", deviceId: "dev-skew", login: ACCOUNT, name: "skew" }),
+    ];
+    const daemon = await bootstrap({ dataDir, controlPort: 0, dataPort: 0 });
+    cleanup.push(() => daemon.stop());
+    const rpc = await openRpc(daemon.controlPort);
+    await helloAs(rpc, daemon.shellToken, "shell-main");
+    await pollDevices(rpc, (d) => d.some((x) => x.deviceId === "dev-skew"));
+
+    // what each door last said: the off peer's door was silent too — the
+    // tailnet saying it is not online outranks that
+    const doors = new Map<string, "answers" | "silent" | "incompatible">([
+      ["dev-quiet", "silent"],
+      ["dev-off", "silent"],
+      ["dev-skew", "incompatible"],
+    ]);
+    const view = Object.assign(new EventEmitter(), {
+      linkState: (id: string) => (doors.get(id) === "incompatible" ? "incompatible" : undefined),
+      doorState: (id: string) => doors.get(id),
+    }) as EventEmitter & {
+      linkState(id: string): "incompatible" | undefined;
+      doorState(id: string): "answers" | "silent" | "incompatible" | undefined;
+    };
+    daemon.devices.attachPeerLink(view);
+    view.emit("door-changed", {});
+
+    const roster = await pollDevices(
+      rpc,
+      (d) => d.find((x) => x.deviceId === "dev-quiet")?.state === "restarting",
+    );
+    const row = (id: string) => roster.find((d) => d.deviceId === id) as DeviceInfo;
+    expect(roster.find((d) => d.self)?.state).toBe("awake");
+    expect(row("dev-up")).toMatchObject({ state: "awake", online: true }); // never dialled ≠ silent
+    expect(row("dev-quiet")).toMatchObject({ state: "restarting", online: true });
+    expect(row("dev-off")).toMatchObject({ state: "asleep", online: false });
+    expect(row("dev-skew")).toMatchObject({ state: "incompatible", online: true });
+
+    // the daemon comes back: its door answers, and the move wakes a subscriber
+    // although `online` never changed
+    const sub = (await rpc.call("device.subscribe", {})) as { subId: string };
+    doors.set("dev-quiet", "answers");
+    view.emit("door-changed", {});
+    await until(() =>
+      rpc.notifications.some(
+        (n) =>
+          n.method === "device.delta" &&
+          n.params.subId === sub.subId &&
+          Array.isArray(n.params.payload) &&
+          (n.params.payload as DeviceInfo[]).some(
+            (d) => d.deviceId === "dev-quiet" && d.state === "awake",
+          ),
+      ),
+    );
   });
 });
