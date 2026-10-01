@@ -252,12 +252,23 @@ async fn the_truffle_arm_without_a_node_answers_mesh_down_and_an_empty_table() {
     let (_dir, daemon) = boot(|c| c).await;
     assert_eq!(daemon.state.mesh.egress().arm(), "truffle");
     let mut mgmt = Mgmt::connect(&daemon).await;
+    // the refusal's fields ride under `data.details` (mgmt `err`), as the
+    // golden spells them; the state is compared there, and to the word itself
     let down = golden("error-data.egress-mesh-down.json");
+    assert_eq!(down["details"]["state"], "mesh-down");
     for method in ["native.mesh.egress.proxy", "native.mesh.egress.httpProxy"] {
         let reply = mgmt.call(method, json!({})).await;
         assert_eq!(reply["error"]["code"], -32006, "{method}: {reply}");
         assert_eq!(
-            reply["error"]["data"]["state"], down["state"],
+            reply["error"]["data"]["kind"], "UNAVAILABLE",
+            "{method}: {reply}"
+        );
+        assert_eq!(
+            reply["error"]["data"]["details"]["service"], down["details"]["service"],
+            "{method}: {reply}"
+        );
+        assert_eq!(
+            reply["error"]["data"]["details"]["state"], down["details"]["state"],
             "{method}: {reply}"
         );
     }
@@ -269,7 +280,10 @@ async fn the_truffle_arm_without_a_node_answers_mesh_down_and_an_empty_table() {
     assert_eq!(removed["error"]["data"]["kind"], "NOT_FOUND", "{removed}");
     daemon.state.mesh.force_node_presence_for_tests(true);
     let reply = mgmt.call("native.mesh.egress.proxy", json!({})).await;
-    assert_eq!(reply["error"]["data"]["state"], down["state"], "{reply}");
+    assert_eq!(
+        reply["error"]["data"]["details"]["state"], down["details"]["state"],
+        "{reply}"
+    );
     drop(mgmt);
     daemon.shutdown().await;
 }
