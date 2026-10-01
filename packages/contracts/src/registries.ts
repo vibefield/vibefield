@@ -251,11 +251,18 @@ export const INDEX_MESH = {
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded
- * `outcome-unknown` after FORWARD_TIMEOUT_MS and read back by the retry. */
+ * `outcome-unknown` after FORWARD_TIMEOUT_MS and read back by the retry.
+ * RESULT_CAP_BYTES (DS-2b, 2026-10-01 — it was a literal in fieldd's
+ * forward-receipts.ts): the largest answer (or refusal details) a receipt
+ * stores as JSON; a larger one is journaled `resultOmitted` and its retry
+ * answers the receipt. An answer carrying a transport grant replays only
+ * while that grant lives (TERMINAL_PIPELINE.TRANSPORT_GRANT_TTL_MS), whatever
+ * the TTL above says. */
 export const FORWARDING = {
   RECEIPT_JOURNAL_DEPTH: 1024,
   RECEIPT_TTL_MS: 24 * 60 * 60 * 1000,
   FORWARD_TIMEOUT_MS: 15_000,
+  RESULT_CAP_BYTES: 64 * 1024,
 } as const;
 
 /** TC-S2 — the floor's supervision budget for a `field-terminal-host` cell

@@ -3,7 +3,7 @@
 // outcome; caller: in flight / applied / refused / outcome-unknown), then a
 // REAL PeerLink against a scripted peer door, which is how the caller half
 // learns whether a forward left, was answered, or lost its answer.
-import { IdempotencyKey } from "@vibefield/contracts";
+import { FORWARDING, IdempotencyKey, TERMINAL_PIPELINE } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import {
@@ -246,6 +246,87 @@ describe("the owner's journal", () => {
       resultOmitted: true,
     });
     expect(applied).toBe(1);
+  });
+
+  it("the result cap is the registry's (FORWARDING.RESULT_CAP_BYTES): an answer one byte over it is journaled as a receipt", async () => {
+    const { journal } = ownerJournal(); // the default cap, not a test's own
+    // `{"blob":"…"}` is 11 bytes of JSON around the blob
+    const blob = "x".repeat(FORWARDING.RESULT_CAP_BYTES - 11 + 1);
+    let applied = 0;
+    const big = async () => {
+      applied += 1;
+      return { blob };
+    };
+    await journal.run(call(), big);
+    expect(await journal.run(call(), big)).toMatchObject({ state: "applied", resultOmitted: true });
+    expect(applied).toBe(1);
+  });
+
+  // DS-2b (2026-10-01; the review's DS-2 list) — keyed results replayed for
+  // RECEIPT_TTL_MS (a day), tickets included: a forwarded `terminal.openTicket`
+  // is a keyed mutation and its transport grant lives a minute, so a retry
+  // past that replayed a ticket the cell refuses to dial.
+  it("a ticket mint is never journaled: its same-key retry mints afresh — a replayed ticket is a refused dial", async () => {
+    const { journal } = ownerJournal();
+    let minted = 0;
+    const mint = async () => {
+      minted += 1;
+      return { transportGrant: { claims: { expiresAt: 61_000, nonce: `n-${minted}` } } };
+    };
+    const ticket = call({
+      method: "terminal.openTicket",
+      digest: forwardDigest({ sessionId: "s" }),
+    });
+    const first = await journal.run(ticket, mint);
+    const retry = await journal.run(ticket, mint);
+    expect(minted).toBe(2);
+    expect(retry).not.toEqual(first);
+    expect(journal.receipt("dev-a", KEY)).toBeUndefined();
+    expect(journal.size()).toBe(0);
+  });
+
+  it("an answer carrying a transport grant replays only while the grant lives — past its own expiry the retry answers the receipt, never the stale ticket, and the act never runs twice", async () => {
+    const { journal, tick } = ownerJournal(); // the journal's clock starts at 1_000
+    let born = 0;
+    const birth = async () => {
+      born += 1;
+      return {
+        session: { runtimeRunId: "run-1" },
+        terminal: { sessionId: "pane-1", transportGrant: { claims: { expiresAt: 61_000 } } },
+      };
+    };
+    const spawn = call({ method: "agent.spawn", digest: forwardDigest({ provider: "scripted" }) });
+    const first = await journal.run(spawn, birth);
+    tick(59_999); // 60_999: the grant still lives — the same answer
+    expect(await journal.run(spawn, birth)).toEqual(first);
+    tick(1); // 61_000: it does not
+    const late = await journal.run(spawn, birth);
+    expect(late).toMatchObject({
+      idempotencyKey: KEY,
+      method: "agent.spawn",
+      state: "applied",
+      resultOmitted: true,
+      resultExpired: true,
+    });
+    expect(JSON.stringify(late)).not.toContain("transportGrant");
+    expect(await journal.run(spawn, birth)).toMatchObject({ resultExpired: true }); // and stays so
+    expect(born).toBe(1);
+  });
+
+  it("a grant whose expiry cannot be read counts the registry's grant life from when the act applied", async () => {
+    const { journal, tick } = ownerJournal();
+    let born = 0;
+    const birth = async () => {
+      born += 1;
+      return { session: { runtimeRunId: "run-2" }, terminal: { transportGrant: {} } };
+    };
+    const spawn = call({ method: "agent.resume", digest: forwardDigest({ runtimeRunId: "r" }) });
+    const first = await journal.run(spawn, birth);
+    tick(TERMINAL_PIPELINE.TRANSPORT_GRANT_TTL_MS - 1);
+    expect(await journal.run(spawn, birth)).toEqual(first);
+    tick(1);
+    expect(await journal.run(spawn, birth)).toMatchObject({ resultExpired: true });
+    expect(born).toBe(1);
   });
 
   it("is bounded: receipts expire after the TTL and the oldest settle out past the depth", async () => {

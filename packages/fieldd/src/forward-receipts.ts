@@ -6,6 +6,7 @@ import {
   type ForwardReceipt,
   type ForwardReceiptState,
   OnBehalfOf,
+  TERMINAL_PIPELINE,
 } from "@vibefield/contracts";
 import { RpcCallError } from "./native-link";
 
@@ -36,13 +37,61 @@ import { RpcCallError } from "./native-link";
 //
 // Both are bounded (FORWARDING.RECEIPT_JOURNAL_DEPTH settled entries, each for
 // FORWARDING.RECEIPT_TTL_MS) and memory-only: a daemon restart forgets them,
-// which the session-persistence ceiling already says (two planes).
+// which the session-persistence ceiling already says (two planes). A stored
+// result is capped at FORWARDING.RESULT_CAP_BYTES (a registry number since
+// DS-2b, 2026-10-01; a larger one is journaled `resultOmitted`, which is what
+// its retry answers).
+//
+// DS-2b (2026-10-01; the review's DS-2 list) — TICKETS. Keyed results replayed
+// for the TTL, tickets included, and a ticket's transport grant lives a minute
+// (TERMINAL_PIPELINE.TRANSPORT_GRANT_TTL_MS): a retry past that replayed a
+// ticket the cell refuses to dial. So a ticket MINT (TICKET_MINTS) is never
+// journaled — nothing it applies is doubled by minting again, and its retry
+// gets a fresh ticket — and any other answer that carries a transport grant (a
+// birth's `terminal`) replays only while that grant lives; past it, the retry
+// answers the receipt (`applied`, `resultOmitted`, `resultExpired`), never the
+// stale ticket, and the act still never runs twice.
 
-/** A stored result's byte cap: a larger one is journaled as a receipt with
- * `resultOmitted: true`, which is what its retry answers. (A local number: the
- * base registry carries the journal's depth and TTL, not this.) */
-export const RECEIPT_RESULT_BYTES = 64 * 1024;
 const RECEIPT_MESSAGE_CHARS = 1024;
+
+/** DS-2b — the forwarded mints whose answer IS a ticket and which apply
+ * nothing a second mint would double (a second credential; the first, lost
+ * in flight, expires unused): never journaled, so a same-key retry mints
+ * afresh. Named, never inferred from an answer's shape — `terminal.create`
+ * answers a ticket too, and it creates a session. `workspace.openTicket`
+ * (DS-D12) and `index.openTicket` (SP-3) join when they are served. */
+const TICKET_MINTS: ReadonlySet<string> = new Set(["terminal.openTicket"]);
+
+function isObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+/** DS-2b — when a stored answer stops being safe to replay: the earliest
+ * expiry of any transport grant it carries (a ticket's `transportGrant`, at
+ * its top or one member down — a birth's `terminal`), read from the grant's
+ * own `claims.expiresAt`; a grant whose expiry cannot be read counts the
+ * registry's grant life from `appliedAt`. `undefined` = it carries none, and
+ * replays for the receipt's TTL. */
+export function transportGrantExpiry(result: unknown, appliedAt: number): number | undefined {
+  if (!isObject(result)) return undefined;
+  const grants: unknown[] = [];
+  for (const holder of [result, ...Object.values(result)])
+    if (isObject(holder) && Object.hasOwn(holder, "transportGrant"))
+      grants.push(holder["transportGrant"]);
+  if (grants.length === 0) return undefined;
+  let earliest = Number.POSITIVE_INFINITY;
+  for (const grant of grants) {
+    const claims = isObject(grant) ? grant["claims"] : undefined;
+    const expiresAt = isObject(claims) ? claims["expiresAt"] : undefined;
+    earliest = Math.min(
+      earliest,
+      typeof expiresAt === "number" && Number.isFinite(expiresAt)
+        ? expiresAt
+        : appliedAt + TERMINAL_PIPELINE.TRANSPORT_GRANT_TTL_MS,
+    );
+  }
+  return earliest;
+}
 
 /** A fresh key for a forwarded mutation (IdempotencyKey: 8..128 chars). */
 export function mintForwardKey(): string {
@@ -136,6 +185,11 @@ interface OwnerEntry {
   /** the result's JSON; `null` = the method answered nothing; absent = omitted */
   resultJson?: string | null;
   resultOmitted?: boolean;
+  /** DS-2b — the stored answer carried a transport grant: it replays until
+   * then (`transportGrantExpiry`), and the receipt answers after */
+  replayUntil?: number;
+  /** DS-2b — set once a stored answer outlived its grant and was let go */
+  resultExpired?: boolean;
   error?: StoredError;
 }
 
@@ -167,8 +221,10 @@ export class OwnerForwardJournal {
     this.ttlMs = opts.ttlMs ?? FORWARDING.RECEIPT_TTL_MS;
   }
 
-  /** Execute a keyed forwarded mutation at most once per {peer, key}. */
+  /** Execute a keyed forwarded mutation at most once per {peer, key}. A ticket
+   * mint (TICKET_MINTS) is not journaled at all: it runs every time. */
   async run(call: OwnerForwardCall, execute: () => Promise<unknown>): Promise<unknown> {
+    if (TICKET_MINTS.has(call.method)) return await execute();
     this.sweep();
     const id = `${call.peer}\u0000${call.key}`;
     const hit = this.entries.get(id);
@@ -199,14 +255,16 @@ export class OwnerForwardJournal {
       const json =
         result === undefined
           ? null
-          : jsonWithin(result, this.opts.resultBytes ?? RECEIPT_RESULT_BYTES);
+          : jsonWithin(result, this.opts.resultBytes ?? FORWARDING.RESULT_CAP_BYTES);
       if (json === undefined) entry.resultOmitted = true;
       else entry.resultJson = json;
+      const replayUntil = transportGrantExpiry(result, entry.at);
+      if (replayUntil !== undefined) entry.replayUntil = replayUntil;
       return result;
     } catch (error) {
       entry.state = "refused";
       entry.at = this.now();
-      entry.error = storedError(error, this.opts.resultBytes ?? RECEIPT_RESULT_BYTES);
+      entry.error = storedError(error, this.opts.resultBytes ?? FORWARDING.RESULT_CAP_BYTES);
       retryable = entry.error.retryable;
       throw error;
     } finally {
@@ -254,7 +312,20 @@ export class OwnerForwardJournal {
       const { kind, message, retryable, details } = entry.error;
       throw new RpcCallError(kind as never, message, retryable, details);
     }
-    if (entry.resultOmitted === true) return { ...this.receiptOf(entry), resultOmitted: true };
+    // DS-2b — an answer that carried a transport grant is let go once the
+    // grant is dead: its ticket would be a refused dial
+    if (entry.replayUntil !== undefined && this.now() >= entry.replayUntil) {
+      delete entry.resultJson;
+      delete entry.replayUntil;
+      entry.resultOmitted = true;
+      entry.resultExpired = true;
+    }
+    if (entry.resultOmitted === true)
+      return {
+        ...this.receiptOf(entry),
+        resultOmitted: true,
+        ...(entry.resultExpired === true ? { resultExpired: true } : {}),
+      };
     return entry.resultJson === null || entry.resultJson === undefined
       ? undefined
       : JSON.parse(entry.resultJson);
