@@ -1741,13 +1741,18 @@ describe("Artifact Hub over a real daemon", () => {
         b.daemon.artifacts.artifacts().find((view) => view.artifactKey === `dev-a:${A}`)
           ?.availability === "source-unavailable",
     );
-    expect(
+    // SP-1 (DS wave 2): `artifact.subscribe` rides the projection helper at the
+    // stream floor (PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS, trailing edge), so
+    // the delta follows the catalog's change by up to one window — it used to be
+    // emitted synchronously, and this row read it the instant the daemon's own
+    // state converged. The wire is the contract; the timing is the floor's.
+    await until(() =>
       rpcB.notifications.some(
         (notification) =>
           notification.method === "artifact.delta" &&
           notification.params.subId === subscription.subId,
       ),
-    ).toBe(true);
+    );
 
     await rpcA.call("artifact.unpublish", { artifactId: A });
     await until(() => lastArtifactSlice(a.mock).artifacts.length === 0);
