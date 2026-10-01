@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import {
   DocHoldersSlice,
   type DocHolding,
@@ -13,6 +12,7 @@ import {
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, type LoroMap } from "loro-crdt";
 import type { SystemDocOwner } from "./doc-service";
+import { SystemDocFile } from "./system-doc-file";
 
 // The LIBRARY (DS-5, DS-D6 RULED (a); thinking-desktop-sync-plane §5.2) — a
 // user-scope SYSTEM document every linked desktop holds and the Loro-level host
@@ -79,7 +79,8 @@ export interface LibraryChange {
 export class LibraryDocService extends EventEmitter {
   readonly doc = new LoroDoc();
   readonly docId: string;
-  private readonly path: string;
+  /** DS-5c — one writer, fsync'd, the last good copy kept (system-doc-file.ts). */
+  private readonly file: SystemDocFile;
   private readonly log: Logger;
   private readyPromise: Promise<void> | null = null;
   private disposed = false;
@@ -88,16 +89,20 @@ export class LibraryDocService extends EventEmitter {
     super();
     this.docId = cfg.docId;
     this.log = (cfg.logger ?? createNoopLogger()).child({ component: "docs.library" });
-    this.path = join(cfg.dataDir, ...LAYOUT.DOCS_DIR, ".library", `${cfg.docId}.loro`);
+    this.file = new SystemDocFile({
+      path: join(cfg.dataDir, ...LAYOUT.DOCS_DIR, ".library", `${cfg.docId}.loro`),
+      snapshot: () => this.doc.export({ mode: "snapshot" }),
+      logger: this.log,
+    });
   }
 
   ready(): Promise<void> {
     this.readyPromise ??= (async () => {
-      try {
-        this.doc.import(new Uint8Array(await readFile(this.path)));
-      } catch {
-        // first boot for this account — an empty library is the honest start
-      }
+      // "none" is first boot for this account — an empty library is the honest
+      // start. DS-5c: a torn file is no longer one (the last good copy loads).
+      await this.file.load((bytes) => {
+        this.doc.import(bytes);
+      });
     })();
     return this.readyPromise;
   }
@@ -182,6 +187,8 @@ export class LibraryDocService extends EventEmitter {
   async dispose(): Promise<void> {
     this.disposed = true;
     this.removeAllListeners();
+    // DS-5c — a write already asked for lands before the daemon goes.
+    await this.file.drained();
   }
 
   // ---- internals ----
@@ -223,13 +230,12 @@ export class LibraryDocService extends EventEmitter {
     this.emit("changed", { origin: "local" } satisfies LibraryChange);
   }
 
+  /** DS-5c — through the file's ONE writer queue: a local commit's persist
+   * and a merge's (`hostOwner().persist`) never interleave, and the snapshot
+   * is taken when the write runs. */
   private async persistNow(): Promise<void> {
     if (this.disposed) return;
-    const bytes = this.doc.export({ mode: "snapshot" });
-    await mkdir(dirname(this.path), { recursive: true });
-    const tmp = `${this.path}.tmp`;
-    await writeFile(tmp, Buffer.from(bytes));
-    await rename(tmp, this.path);
+    await this.file.persist();
   }
 }
 
