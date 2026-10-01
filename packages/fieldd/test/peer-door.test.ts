@@ -193,6 +193,32 @@ describe("PeerLink.doorState", () => {
   });
 });
 
+// D1 (2026-10-01) — the dialler's half of the peer identity is unchanged: its
+// hello still ASKS for the peer kind and names its device. Whether it gets it
+// is the peer door's call, made from the peer's own sidecar node id and roster
+// (product-api's hello; guest-door.test.ts) — never from these two fields.
+describe("PeerLink's own hello (D1)", () => {
+  it("asks for the peer kind and names this device, and carries no credential", async () => {
+    const hellos: unknown[] = [];
+    const d = await door((msg, ws) => answer(ws, msg.id, { devices: [] }), {
+      hello: (msg, ws) => {
+        hellos.push(msg.params);
+        answer(ws, msg.id, {
+          contractsVersion: CONTRACTS_VERSION,
+          serverKind: "fieldd",
+          grantedScopes: [],
+        });
+      },
+    });
+    const { link } = linkTo(d.url);
+    await link.request("dev-b", "device.list", {});
+    expect(hellos).toEqual([
+      expect.objectContaining({ clientKind: "peer-fieldd", deviceId: "dev-a" }),
+    ]);
+    expect(hellos[0]).not.toHaveProperty("credential");
+  });
+});
+
 // The landing review's nit (2026-10-01) — `UnavailableDetails` requires
 // `{service, state}`, and PeerLink's own refusals carried no `service`: every
 // UNAVAILABLE it raises names it now, whatever the cause.
