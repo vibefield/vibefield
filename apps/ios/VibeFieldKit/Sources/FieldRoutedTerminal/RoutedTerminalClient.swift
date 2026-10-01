@@ -111,7 +111,12 @@ public struct RoutedSessionState: Sendable {
   internal var nowMs: Int64 = 0
   internal var inputSequence: Int64 = 0
   internal var demandSequence: Int64 = 0
-  internal var geometryRevision: Int64 = 0
+  /// DS-4b — the seat as last ANNOUNCED to this client: the revision its next
+  /// verb must expect, and the holder (nil = empty, or never heard of). The
+  /// cell pushes nothing to a displaced holder, so this is learned from
+  /// `GeometryCommitted` and from refusals, never assumed.
+  public internal(set) var geometryRevision: Int64 = 0
+  public internal(set) var geometryHolder: RoutedGeometryHolder?
   internal var demand: RoutedDemand = .live
   internal var framesAttachSent = false
   internal var transfer: RoutedTransfer?
@@ -237,6 +242,45 @@ public final class RoutedTerminalClient {
   /// SP-2 (g) — the two legs' budget slots, and a dial waiting for them.
   private var legGrant: PhoneConnectionBudget.Grant?
   private var legGrantTask: Task<Void, Never>?
+
+  // MARK: DS-4b — the lease verbs' bookkeeping
+
+  /// A cols × rows a pane asked for.
+  private struct Grid: Equatable {
+    let cols: Int
+    let rows: Int
+  }
+
+  /// The seat a verb was BUILT ON: the holder and revision this client
+  /// believed when it sent it. A refusal that repeats it exactly says nothing
+  /// new, and a take is never retried on nothing new.
+  private struct SeatBelief: Equatable {
+    let holder: RoutedGeometryHolder?
+    let revision: Int64
+  }
+
+  /// One geometry verb in flight on the control leg. The cell answers each
+  /// claim and transfer with exactly one `GeometryCommitted` or
+  /// `GeometryRefused`, on the CALLER's leg, in order — and neither names the
+  /// session or the verb — so answers are matched to asks in send order
+  /// (ghosttea-react's own rule). A take carries whether it is already the
+  /// retry: one retry per take, owned here, never by the host.
+  private struct GeometryAsk {
+    enum Intent { case take, resize, claim }
+    let sessionId: String
+    let intent: Intent
+    let basis: SeatBelief
+    let grid: Grid
+    let retried: Bool
+  }
+
+  private var geometryAsks: [GeometryAsk] = []
+  /// A take asked before its session's control leg attached: held, the newest
+  /// grid kept, and sent the moment the leg attaches with the right.
+  private var pendingTakes: [String: Grid] = [:]
+  /// The grid each pane wants now — what a take or a resize carries, and what
+  /// a commit is checked against.
+  private var wantedGrids: [String: Grid] = [:]
   private var closed = false
   private var generation = 0
 
@@ -444,13 +488,93 @@ public final class RoutedTerminalClient {
       ])
   }
 
-  /// Claim the geometry seat and resize. FOCUS NEVER IMPLIES A CLAIM (TP-L-D):
-  /// the seat is explicit, held by one viewer, and a second claimant is refused
-  /// `SEAT_HELD` rather than quietly taking it.
+  /// Claim the geometry seat and resize — the bare verb. FOCUS NEVER IMPLIES A
+  /// CLAIM in the cell (TP-L-D): the seat is explicit, held by one viewer, and
+  /// a second claimant is refused `SEAT_HELD` rather than quietly taking it.
+  /// The PRODUCT's policy on focus is `takeGeometry`, above this.
   public func claimGeometry(cols: Int, rows: Int, for sessionId: String) {
-    guard let session = sessions[sessionId], let ticket else { return }
+    guard let session = sessions[sessionId], session.rights.contains(.geometry) else { return }
+    sendClaim(
+      sessionId: sessionId, grid: Grid(cols: cols, rows: rows),
+      revision: session.geometryRevision, intent: .claim, retried: false)
+  }
+
+  /// DS-4b — THE TAKE (TPv3 §6 as amended 2026-09-30, DS-D5): the pane the
+  /// person focused LAST holds the geometry, on any device, last write wins.
+  /// The host calls this ONCE per focus gain; the retry is this client's.
+  ///
+  /// - An empty seat (as last announced) is CLAIMED; this view's own seat is
+  ///   claimed too, which the cell commits as a resize.
+  /// - A seat another view holds is taken with ONE `TransferGeometry` from the
+  ///   announced holder to this view, at the announced revision.
+  /// - The cell tells a displaced holder nothing, so this client's belief may
+  ///   be stale; the refusal of a stale take IS the announcement, and earns
+  ///   exactly one retry against what it announced (`retryTake`).
+  /// - A session whose control leg has not attached holds the take until it
+  ///   does (the newest grid wins); a grant without `geometry` sends no verb.
+  public func takeGeometry(cols: Int, rows: Int, for sessionId: String) {
+    let grid = Grid(cols: cols, rows: rows)
+    wantedGrids[sessionId] = grid
+    guard let session = sessions[sessionId], session.control == .attached, control != nil,
+      let ticket
+    else {
+      pendingTakes[sessionId] = grid
+      return
+    }
+    pendingTakes[sessionId] = nil
     guard session.rights.contains(.geometry) else { return }
-    control?.send(
+    if let holder = session.geometryHolder,
+      !holder.isClaimant(clientId: ticket.clientId, viewId: options.viewId)
+    {
+      sendTransfer(
+        sessionId: sessionId, from: holder, grid: grid, revision: session.geometryRevision,
+        retried: false)
+    } else {
+      sendClaim(
+        sessionId: sessionId, grid: grid, revision: session.geometryRevision, intent: .take,
+        retried: false)
+    }
+  }
+
+  /// DS-4b — the pane's grid moved. The HOLDER resizes its own seat; a pane
+  /// that lost the seat renders what the holder sized and NEVER claims on a
+  /// mere resize — only a focus gain takes. A take still held, or in flight,
+  /// carries the newest grid instead (a commit that lands at an older grid is
+  /// followed by one resize).
+  public func resizeGeometry(cols: Int, rows: Int, for sessionId: String) {
+    let grid = Grid(cols: cols, rows: rows)
+    wantedGrids[sessionId] = grid
+    if pendingTakes[sessionId] != nil {
+      pendingTakes[sessionId] = grid
+      return
+    }
+    guard !geometryAsks.contains(where: { $0.sessionId == sessionId }) else { return }
+    guard holdsGeometry(sessionId), let session = sessions[sessionId],
+      session.rights.contains(.geometry)
+    else { return }
+    sendClaim(
+      sessionId: sessionId, grid: grid, revision: session.geometryRevision, intent: .resize,
+      retried: false)
+  }
+
+  /// DS-4b — whether this view holds the seat, as last ANNOUNCED. The cell
+  /// tells a displaced holder nothing, so a `true` here may be stale until the
+  /// next verb's answer — which is exactly how the take learns otherwise.
+  public func holdsGeometry(_ sessionId: String) -> Bool {
+    guard let ticket, let holder = sessions[sessionId]?.geometryHolder else { return false }
+    return holder.isClaimant(clientId: ticket.clientId, viewId: options.viewId)
+  }
+
+  private func sendClaim(
+    sessionId: String, grid: Grid, revision: Int64, intent: GeometryAsk.Intent, retried: Bool
+  ) {
+    guard let session = sessions[sessionId], let ticket, let control else { return }
+    geometryAsks.append(
+      GeometryAsk(
+        sessionId: sessionId, intent: intent,
+        basis: SeatBelief(holder: session.geometryHolder, revision: revision), grid: grid,
+        retried: retried))
+    control.send(
       .claimGeometry,
       [
         "sessionId": .string(sessionId),
@@ -459,12 +583,74 @@ public final class RoutedTerminalClient {
         "claimant": .object([
           "clientId": .string(ticket.clientId), "viewId": .string(options.viewId),
         ]),
-        "cols": .int(Int64(cols)),
-        "rows": .int(Int64(rows)),
-        "expectRevision": .int(session.geometryRevision),
+        "cols": .int(Int64(grid.cols)),
+        "rows": .int(Int64(grid.rows)),
+        "expectRevision": .int(revision),
       ])
   }
 
+  private func sendTransfer(
+    sessionId: String, from holder: RoutedGeometryHolder, grid: Grid, revision: Int64,
+    retried: Bool
+  ) {
+    guard let session = sessions[sessionId], let ticket, let control else { return }
+    geometryAsks.append(
+      GeometryAsk(
+        sessionId: sessionId, intent: .take,
+        basis: SeatBelief(holder: holder, revision: revision), grid: grid, retried: retried))
+    control.send(
+      .transferGeometry,
+      [
+        "sessionId": .string(sessionId),
+        "activationId": .string(session.activationId),
+        "leaseEpoch": .int(leaseEpoch(for: sessionId)),
+        "from": holder.json,
+        "to": .object(["clientId": .string(ticket.clientId), "viewId": .string(options.viewId)]),
+        "expectRevision": .int(revision),
+        "cols": .int(Int64(grid.cols)),
+        "rows": .int(Int64(grid.rows)),
+      ])
+  }
+
+  /// The one retry of a refused take, against what the refusal ANNOUNCED.
+  ///
+  /// None when the refusal names no seat at all (no revision: `RIGHT_MISSING`,
+  /// a malformed caller), and none when it repeats exactly the seat the take
+  /// was built on — a resend would be refused the same way. Otherwise: the
+  /// announced holder is another view → one transfer from it; the seat is
+  /// empty (a revision and no holder) → one claim at that revision; the
+  /// announced holder is THIS view → one claim of its own seat (a resize),
+  /// never a transfer to itself. The retry is never retried.
+  private func retryTake(_ ask: GeometryAsk, after refusal: RoutedGeometryRefused) {
+    guard let revision = refusal.geometryRevision else { return }
+    guard SeatBelief(holder: refusal.currentHolder, revision: revision) != ask.basis else { return }
+    guard let session = sessions[ask.sessionId], session.control == .attached,
+      session.rights.contains(.geometry), let ticket
+    else { return }
+    let grid = wantedGrids[ask.sessionId] ?? ask.grid
+    if let holder = refusal.currentHolder,
+      !holder.isClaimant(clientId: ticket.clientId, viewId: options.viewId)
+    {
+      sendTransfer(sessionId: ask.sessionId, from: holder, grid: grid, revision: revision, retried: true)
+    } else {
+      sendClaim(sessionId: ask.sessionId, grid: grid, revision: revision, intent: .take, retried: true)
+    }
+  }
+
+  /// The session an unsolicited geometry answer belongs to: the one attached
+  /// session, or none (an answer this client cannot place is not applied to
+  /// every session it holds).
+  private var soleAttachedSession: String? {
+    let attached = sessions.filter { $0.value.control == .attached }.map(\.key)
+    return attached.count == 1 ? attached[0] : nil
+  }
+
+  /// The holder yields the seat. NOT matched in send order: the cell answers a
+  /// successful release with nothing and a refused one with `GeometryRefused`,
+  /// so a release in flight would desynchronize the take's answers (ghosttea
+  /// fenced the same hazard). Nothing on the phone sends one — a view that
+  /// detaches releases the seat cell-side — and a caller that adds one must
+  /// fence the asks first.
   public func releaseGeometry(for sessionId: String, holderGeneration: Int64) {
     guard let session = sessions[sessionId], let ticket else { return }
     control?.send(
@@ -679,6 +865,10 @@ public final class RoutedTerminalClient {
       // attach and an accepted renewal land here, and scheduling is idempotent:
       // it replaces whatever was scheduled with the grant actually held.
       scheduleRenewal(for: attached.sessionId)
+      // DS-4b — a take that waited for this leg goes now, with the newest grid.
+      if let held = pendingTakes[attached.sessionId] {
+        takeGeometry(cols: held.cols, rows: held.rows, for: attached.sessionId)
+      }
 
     case .attachRefused:
       guard let refused = try? RoutedAttachRefused(json: body) else { return }
@@ -789,20 +979,41 @@ public final class RoutedTerminalClient {
 
     case .geometryCommitted:
       guard let committed = try? RoutedGeometryCommitted(json: body) else { return }
-      for (sessionId, var session) in sessions where session.control == .attached {
-        session.geometryRevision = committed.geometryRevision
-        sessions[sessionId] = session
+      // DS-4b — the answer to the OLDEST verb in flight (send order is answer
+      // order on this leg). The seat it names is now the belief.
+      let ask = geometryAsks.isEmpty ? nil : geometryAsks.removeFirst()
+      guard let sessionId = ask?.sessionId ?? soleAttachedSession,
+        var session = sessions[sessionId]
+      else { return }
+      session.geometryRevision = committed.geometryRevision
+      session.geometryHolder = committed.holder
+      sessions[sessionId] = session
+      // The pane's grid moved while the verb was in flight: ONE resize of the
+      // seat this view now holds carries the newest grid.
+      if holdsGeometry(sessionId), let wanted = wantedGrids[sessionId],
+        wanted != Grid(cols: committed.cols, rows: committed.rows),
+        !geometryAsks.contains(where: { $0.sessionId == sessionId })
+      {
+        sendClaim(
+          sessionId: sessionId, grid: wanted, revision: committed.geometryRevision, intent: .resize,
+          retried: false)
       }
 
     case .geometryRefused:
       guard let refused = try? RoutedGeometryRefused(json: body) else { return }
       lastRefusal = refused.code
-      if let revision = refused.geometryRevision {
-        for (sessionId, var session) in sessions {
-          session.geometryRevision = revision
-          sessions[sessionId] = session
-        }
+      let ask = geometryAsks.isEmpty ? nil : geometryAsks.removeFirst()
+      // THE REFUSAL IS THE ANNOUNCEMENT: a revision says where the seat is now,
+      // and its holder (or none: the seat is empty) is the belief from here.
+      // A refusal naming no revision says nothing about the seat.
+      if let revision = refused.geometryRevision,
+        let sessionId = ask?.sessionId ?? soleAttachedSession, var session = sessions[sessionId]
+      {
+        session.geometryRevision = revision
+        session.geometryHolder = refused.currentHolder
+        sessions[sessionId] = session
       }
+      if let ask, ask.intent == .take, !ask.retried { retryTake(ask, after: refused) }
 
     case .sessionEvent:
       guard let event = try? RoutedSessionEvent(json: body) else { return }
@@ -1347,6 +1558,13 @@ public final class RoutedTerminalClient {
     frames?.close()
     control = nil
     frames = nil
+    // DS-4b — the answers to these verbs went with the leg. A TAKE whose answer
+    // never came is still this focus gain's take: it is held for the next
+    // attach. Resizes and bare claims are not (the next take re-sizes anyway).
+    for ask in geometryAsks where ask.intent == .take && pendingTakes[ask.sessionId] == nil {
+      pendingTakes[ask.sessionId] = wantedGrids[ask.sessionId] ?? ask.grid
+    }
+    geometryAsks = []
     // SP-2 (g) — the legs' slots go back with the legs, and a dial still
     // waiting for slots stops waiting.
     legGrantTask?.cancel()

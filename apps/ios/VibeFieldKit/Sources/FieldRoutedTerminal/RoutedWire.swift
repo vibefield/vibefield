@@ -452,34 +452,81 @@ public enum RoutedSessionEvent: Sendable, Equatable {
   }
 }
 
-public struct RoutedGeometryCommitted: Sendable, Equatable {
+/// DS-4b — who holds a session's geometry seat, as the CELL names it: the
+/// claimant (`clientId` + a non-reused `viewId`) and the `holderGeneration`
+/// the cell minted at the claim or transfer that seated it (TPv3 §6). A view
+/// can only ever NAME itself; the generation is the cell's.
+public struct RoutedGeometryHolder: Sendable, Equatable {
   public let clientId: String
   public let viewId: String
   public let holderGeneration: Int64
+
+  public init(clientId: String, viewId: String, holderGeneration: Int64) {
+    self.clientId = clientId
+    self.viewId = viewId
+    self.holderGeneration = holderGeneration
+  }
+
+  public init(json: JSONValue) throws {
+    var fields = try WireObject(shape: "GeometryHolder", value: json)
+    clientId = try fields.requiredString("clientId")
+    viewId = try fields.requiredString("viewId")
+    holderGeneration = try fields.requiredInt("holderGeneration")
+  }
+
+  /// Whether this holder is the claimant `clientId`/`viewId`: a seat is a
+  /// view's only when BOTH match — one client's two views are two claimants.
+  public func isClaimant(clientId: String, viewId: String) -> Bool {
+    self.clientId == clientId && self.viewId == viewId
+  }
+
+  public var json: JSONValue {
+    .object([
+      "clientId": .string(clientId), "viewId": .string(viewId),
+      "holderGeneration": .int(holderGeneration),
+    ])
+  }
+}
+
+public struct RoutedGeometryCommitted: Sendable, Equatable {
+  public let holder: RoutedGeometryHolder
   public let geometryRevision: Int64
   public let cols: Int
   public let rows: Int
 
+  public var clientId: String { holder.clientId }
+  public var viewId: String { holder.viewId }
+  public var holderGeneration: Int64 { holder.holderGeneration }
+
   public init(json: JSONValue) throws {
     var fields = try WireObject(shape: "GeometryCommitted", value: json)
-    var holder = fields.object("holder")
-    clientId = try holder.requiredString("clientId")
-    viewId = try holder.requiredString("viewId")
-    holderGeneration = try holder.requiredInt("holderGeneration")
+    guard let holder = fields.value("holder") else {
+      throw WireDecodeError(shape: "GeometryCommitted", reason: "missing `holder`")
+    }
+    self.holder = try RoutedGeometryHolder(json: holder)
     geometryRevision = try fields.requiredInt("geometryRevision")
     cols = Int(try fields.requiredInt("cols"))
     rows = Int(try fields.requiredInt("rows"))
   }
 }
 
+/// A refusal — and, since DS-D5, the ANNOUNCEMENT: the cell tells a displaced
+/// holder nothing when another view takes the seat, so a view learns who holds
+/// it from the refusal of its next verb (`currentHolder` + `geometryRevision`
+/// on `STALE_REVISION`, `NOT_HOLDER`, `SEAT_HELD`). A refusal that names a
+/// revision and no holder says the seat is EMPTY; one that names neither says
+/// nothing about the seat at all (`RIGHT_MISSING`, a malformed caller).
 public struct RoutedGeometryRefused: Sendable, Equatable {
   public let code: String
   public let geometryRevision: Int64?
+  public let currentHolder: RoutedGeometryHolder?
 
   public init(json: JSONValue) throws {
     var fields = try WireObject(shape: "GeometryRefused", value: json)
     code = try fields.requiredString("code")
     geometryRevision = fields.int("geometryRevision")
-    _ = fields.object("currentHolder")
+    // Tolerant: a holder this build cannot read is no announcement, never a
+    // refusal this client cannot read at all.
+    currentHolder = fields.value("currentHolder").flatMap { try? RoutedGeometryHolder(json: $0) }
   }
 }
