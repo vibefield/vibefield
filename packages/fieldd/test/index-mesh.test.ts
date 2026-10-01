@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -75,14 +75,16 @@ const project = (
 });
 
 /** One desktop's catalog, as a source. */
-function desktop(device: string, epoch = `${device}-boot-1`) {
+function desktop(device: string, epoch = `${device}-boot-1`, opts: { pageBytes?: number } = {}) {
   const projects = new CatalogTable<IndexCatalogProject>({
     epoch,
     keyOf: (row) => row.projectId,
+    ...opts,
   });
   const sessions = new CatalogTable<IndexCatalogSession>({
     epoch,
     keyOf: (row) => row.sessionId,
+    ...opts,
   });
   const events = new EventEmitter();
   const local = Object.assign(events, {
@@ -107,6 +109,10 @@ interface Behaviour {
    * restarted and whose catalog has not read the index yet */
   catalogNotReady?: boolean;
   digestIntervalMs?: number;
+  /** DS-6b — the NEXT subscribe to this table that asks for a snapshot (no
+   * cursor) is cut mid-transfer: the open answer and `afterPages` more pages
+   * arrive, then the link under it dies. One cut, then it is spent. */
+  cutReset?: { table: "projects" | "sessions"; afterPages: number };
 }
 
 /** The fake link: serves each desktop's tables through the REAL pump and
@@ -120,6 +126,8 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
     replay: (() => unknown) | undefined;
   }> = [];
   const refused: Array<{ device: string; params: Record<string, unknown> }> = [];
+  /** DS-6b — what a socket blip's replay would have asked at each cut */
+  const cutReplays: unknown[] = [];
   const drops = new Map<string, Set<() => void>>();
   const pumps = new Map<string, Set<{ dispose: () => void }>>();
   const meshLink: MeshLink = {
@@ -150,6 +158,17 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
         );
       }
       subscribes.push({ device, params: ask as Record<string, unknown>, replay: opts?.params });
+      const cut =
+        how.cutReset !== undefined && how.cutReset.table === ask.table && ask.since === undefined
+          ? how.cutReset.afterPages
+          : undefined;
+      if (cut !== undefined) delete how.cutReset; // one cut, then spent
+      let forwarded = 0;
+      const deliver = (payload: unknown, kind: "delta" | "snapshot") => {
+        if (cut !== undefined && forwarded >= cut) return; // the transfer died here
+        forwarded += 1;
+        onEvent(payload, kind);
+      };
       const pump =
         ask.table === "projects"
           ? createRowsPump({
@@ -157,14 +176,14 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
               since: ask.since,
               minIntervalMs: 16,
               digestIntervalMs: how.digestIntervalMs ?? 0,
-              emit: (payload, kind) => onEvent(payload, kind),
+              emit: deliver,
             })
           : createRowsPump({
               table: source.sessions,
               since: ask.since,
               minIntervalMs: 16,
               digestIntervalMs: how.digestIntervalMs ?? 0,
-              emit: (payload, kind) => onEvent(payload, kind),
+              emit: deliver,
             });
       // FielddClient's order: the continuation frames reach the listener in
       // the same tick as the reply, before the awaiting caller resumes
@@ -181,6 +200,16 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
         drops.set(device, set);
       }
       set.add(onDrop);
+      if (cut !== undefined) {
+        // the link under THIS subscription dies once its owner holds the open
+        // answer: the pages that did not arrive never will
+        setTimeout(() => {
+          cutReplays.push(opts?.params?.());
+          pump.dispose();
+          live?.delete(pump);
+          if (set?.delete(onDrop) === true) onDrop();
+        }, 0);
+      }
       return {
         snapshot: pump.open,
         unsubscribe: () => {
@@ -209,6 +238,7 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
     meshLink,
     subscribes,
     refused,
+    cutReplays,
     /** the link under a device dies (what PeerLink's dropLink does: the
      * client closes, so its pumps stop, and every owner hears onDrop once) */
     drop(device: string) {
@@ -587,6 +617,120 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
     await until(() => sessionAsks().length > served, 3_000, "the re-attach");
     expect(sessionAsks().at(-1)?.params["since"]).toEqual({ epoch: "dev-b-boot-1", revision: 2 });
     await until(() => standingOfB() === "live", 3_000, "live again");
+  });
+
+  // DS-6b (2026-10-01) — the landing review's DS-6 list: `forceReset` was
+  // cleared when the reset's subscribe LEFT, so a link that died mid-transfer
+  // re-attached from the drifted cursor; the copy kept the half snapshot, which
+  // then held every frame of the epoch — the digest included — and the replica
+  // froze with the drift it was resetting to remove.
+  it("DS-6b: an interrupted reset restarts FROM A RESET — never the drifted cursor — and the replica converges", async () => {
+    const a = desktop("dev-a");
+    const b = desktop("dev-b", "dev-b-boot-1", { pageBytes: 700 });
+    const rows = Array.from({ length: 12 }, (_, i) => session("dev-b", `b${i}`, 100 + i));
+    b.sessions.upsert(rows);
+    // A kept a copy at B's own cursor that DRIFTED: a ghost B no longer holds
+    const dir = mkdtempSync(join(tmpdir(), "vf-ixm-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    writeFileSync(
+      join(dir, "dev-b.sessions.json"),
+      JSON.stringify({
+        format: 1,
+        device: "dev-b",
+        table: "sessions",
+        heardAt: 1,
+        epoch: "dev-b-boot-1",
+        revision: b.sessions.revision,
+        rows: [...rows, session("dev-b", "ghost", 1)],
+      }),
+    );
+    expect(b.sessions.snapshotPages().length).toBeGreaterThan(3);
+    // the digest catches the ghost; the reset that follows is cut after one page
+    const behaviour = new Map<string, Behaviour>([
+      ["dev-b", { digestIntervalMs: 40, cutReset: { table: "sessions", afterPages: 1 } }],
+    ]);
+    const { aggregator, wire } = mesh({
+      self: a,
+      desktops: [a, b],
+      peers: [{ deviceId: "dev-b", online: true }],
+      behaviour,
+      dir,
+    });
+    const sessionAsks = () => wire.subscribes.filter((ask) => ask.params["table"] === "sessions");
+    const held = () =>
+      (aggregator.replica("dev-b")?.sessions ?? []).map((row) => row.sessionId).sort();
+    await until(() => sessionAsks().length >= 3, 3_000, "the reset, its cut, and the next ask");
+    expect(sessionAsks()[0]?.params["since"]).toEqual({ epoch: "dev-b-boot-1", revision: 1 });
+    expect(sessionAsks()[1]?.params["since"]).toBeUndefined(); // the reset the digest asked for
+    // the transfer died: the next ask is a reset again, never the drifted cursor
+    expect(sessionAsks()[2]?.params["since"]).toBeUndefined();
+    // …and so is what a socket blip's replay (S3's supplier) asked mid-transfer
+    expect(wire.cutReplays).toHaveLength(1);
+    expect(wire.cutReplays[0]).toMatchObject({ table: "sessions" });
+    expect(wire.cutReplays[0]).not.toHaveProperty("since");
+    await until(() => !held().includes("ghost"), 3_000, "the reset landing");
+    expect(held()).toEqual(rows.map((row) => row.sessionId).sort());
+
+    // landed: the reset is spent, and the next re-attach resumes the new cursor
+    const before = sessionAsks().length;
+    wire.drop("dev-b");
+    await until(() => sessionAsks().length > before, 3_000, "the re-attach");
+    expect(sessionAsks().at(-1)?.params["since"]).toEqual({
+      epoch: "dev-b-boot-1",
+      revision: b.sessions.revision,
+    });
+  });
+
+  // DS-6b — a row the replica could not read was dropped with its KEY, so the
+  // replica's digest disagreed with B's at every heartbeat: a reset, the whole
+  // table again, the same row dropped again — per peer per minute.
+  it("DS-6b: a row the replica cannot read keeps its key — the digest agrees, nothing resets, and a restart keeps agreeing", async () => {
+    const a = desktop("dev-a");
+    const b = desktop("dev-b");
+    const unreadable = { ...session("dev-b", "odd", 300), streamState: 42 };
+    b.sessions.upsert([session("dev-b", "b1", 800), unreadable as unknown as IndexCatalogSession]);
+    const behaviour = new Map<string, Behaviour>([["dev-b", { digestIntervalMs: 30 }]]);
+    const first = mesh({
+      self: a,
+      desktops: [a, b],
+      peers: [{ deviceId: "dev-b", online: true }],
+      behaviour,
+    });
+    const sessionAsks = () =>
+      first.wire.subscribes.filter((ask) => ask.params["table"] === "sessions");
+    await until(() => first.aggregator.replica("dev-b")?.sessions.length === 1, 3_000, "B's rows");
+    await new Promise((resolve) => setTimeout(resolve, 300)); // ten heartbeats
+    expect(sessionAsks()).toHaveLength(1); // no reset: the digests agree
+    expect(first.aggregator.replica("dev-b")?.sessions.map((row) => row.sessionId)).toEqual(["b1"]);
+    const file = join(first.dir, "dev-b.sessions.json");
+    await until(
+      () =>
+        existsSync(file) &&
+        (JSON.parse(readFileSync(file, "utf8")) as { unreadable?: unknown }).unreadable !==
+          undefined,
+      3_000,
+      "the kept copy",
+    );
+    expect(JSON.parse(readFileSync(file, "utf8"))).toMatchObject({ unreadable: ["odd"] });
+    first.aggregator.dispose();
+
+    // a fresh aggregator over the same directory resumes, and still agrees
+    const second = mesh({
+      self: a,
+      desktops: [a, b],
+      peers: [{ deviceId: "dev-b", online: true }],
+      behaviour,
+      dir: first.dir,
+    });
+    const resumed = () =>
+      second.wire.subscribes.filter((ask) => ask.params["table"] === "sessions");
+    await until(() => resumed().length === 1, 3_000, "the resume");
+    expect(resumed()[0]?.params["since"]).toEqual({
+      epoch: "dev-b-boot-1",
+      revision: b.sessions.revision,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(resumed()).toHaveLength(1);
   });
 });
 

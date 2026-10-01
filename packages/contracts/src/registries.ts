@@ -231,13 +231,19 @@ export const AGENT_FIELD = {
  * cursor resumes and beyond which it resets; a reader compares a key digest
  * every DIGEST_INTERVAL_MS (DIGEST_ALGORITHM over the sorted keys) and resets
  * on a mismatch — never repairs. MIN_INTERVAL_MS is the default per-subscriber
- * floor on deltas; a table may set a slower one of its own. */
+ * floor on deltas; a table may set a slower one of its own. A reader holds at
+ * most MAX_PENDING_DELTAS deltas for a paged snapshot still being assembled
+ * (DS-6b, 2026-10-01): pages that stop arriving while deltas pile up are a
+ * transfer that will not complete, so past the bound the half snapshot is
+ * dropped and the reader resets. The pages follow the open answer at once, so
+ * a healthy transfer holds a handful; 256 is minutes of a stalled one. */
 export const ROWS = {
   SNAPSHOT_PAGE_BYTES: 256 * 1024,
   JOURNAL_DEPTH: 4096,
   MIN_INTERVAL_MS: 100,
   DIGEST_INTERVAL_MS: 60_000,
   DIGEST_ALGORITHM: "sha256",
+  MAX_PENDING_DELTAS: 256,
 } as const;
 
 /** DS-6 — history across desktops (design-06 §5 "History", §8 "Limits"; the

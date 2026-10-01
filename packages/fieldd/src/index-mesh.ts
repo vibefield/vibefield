@@ -137,7 +137,10 @@ interface PeerTable<T extends IndexCatalogTable> {
   attaching: boolean;
   retry: ReturnType<typeof setTimeout> | null;
   retryMs: number;
-  /** the next attach asks for a snapshot (a digest or epoch the copy cannot follow) */
+  /** every attach (and every replay) asks for a snapshot — a digest or epoch
+   * the copy cannot follow — until one LANDS (DS-6b, 2026-10-01: it used to
+   * clear when the reset's subscribe left, so a link that died mid-transfer
+   * re-attached from the drifted cursor and the replica froze) */
   forceReset: boolean;
   persist: ReturnType<typeof setTimeout> | null;
 }
@@ -249,6 +252,18 @@ const parseSession = (raw: unknown): IndexCatalogSession | undefined => {
   const parsed = IndexCatalogSession.safeParse(raw);
   return parsed.success ? parsed.data : undefined;
 };
+
+/** DS-6b — the key of a row the gate cannot read: the writer's key field, read
+ * alone, so the replica's digest still counts the row (catalog-rows.ts). */
+const rawKey =
+  (field: "projectId" | "sessionId") =>
+  (raw: unknown): string | undefined => {
+    if (typeof raw !== "object" || raw === null) return undefined;
+    const key = (raw as Record<string, unknown>)[field];
+    return typeof key === "string" && key.length > 0 ? key : undefined;
+  };
+const projectKey = rawKey("projectId");
+const sessionKey = rawKey("sessionId");
 
 export class IndexMesh extends EventEmitter {
   readonly #opts: IndexMeshOptions;
@@ -757,8 +772,8 @@ export class IndexMesh extends EventEmitter {
     if (peer === undefined) {
       peer = {
         device,
-        projects: this.#newTable<"projects">(parseProject, (row) => row.projectId),
-        sessions: this.#newTable<"sessions">(parseSession, (row) => row.sessionId),
+        projects: this.#newTable<"projects">(parseProject, projectKey, (row) => row.projectId),
+        sessions: this.#newTable<"sessions">(parseSession, sessionKey, (row) => row.sessionId),
         heardAt: null,
         incompatible: false,
         inRoster: false,
@@ -772,15 +787,19 @@ export class IndexMesh extends EventEmitter {
 
   #newTable<T extends IndexCatalogTable>(
     parseRow: (raw: unknown) => Row<T> | undefined,
+    rawKeyOf: (raw: unknown) => string | undefined,
     keyOf: (row: Row<T>) => string,
-    initial?: { epoch: string; revision: number; rows: Row<T>[] },
+    initial?: { epoch: string; revision: number; rows: Row<T>[]; unreadable?: string[] },
   ): PeerTable<T> {
     return {
       copy: new RowsCopy<Row<T>>(
         {
           keyOf,
           parseRow,
-          onDropped: () => this.#sayOnce("row", "A replica dropped a row it cannot read"),
+          // DS-6b — the row is not listed, its key is kept (the digest agrees)
+          rawKeyOf,
+          onDropped: () =>
+            this.#sayOnce("row", "A replica holds a row it cannot read; it is not listed"),
         },
         initial,
       ),
@@ -808,8 +827,12 @@ export class IndexMesh extends EventEmitter {
     const entry = this.#table(peer, table);
     const generation = ++entry.generation;
     entry.attaching = true;
+    // DS-6b — a reset asked for stays asked for until its snapshot LANDS
+    // (`#apply`): an attach that dies mid-transfer is followed by another
+    // reset, never by the drifted cursor the reset was meant to replace. A new
+    // subscription starts clean: no half snapshot of an earlier one survives.
     const cursor = entry.forceReset ? undefined : entry.copy.cursor();
-    entry.forceReset = false;
+    entry.copy.abandonSnapshot();
     /** frames that beat the open answer to us (FielddClient routes them the
      * moment the reply installs the route, before the await resumes) */
     const early: unknown[] = [];
@@ -821,11 +844,13 @@ export class IndexMesh extends EventEmitter {
     };
     const onDrop = (): void => {
       if (entry.generation !== generation || this.#disposed) return;
-      // the link under it died: nothing more from this subscription counts
+      // the link under it died: nothing more from this subscription counts —
+      // a snapshot it was sending included
       entry.generation += 1;
       const dead = entry.sub;
       entry.sub = null;
       dead?.unsubscribe();
+      entry.copy.abandonSnapshot();
       this.#scheduleRetry(peer, table);
       this.#checkStandings();
     };
@@ -884,6 +909,9 @@ export class IndexMesh extends EventEmitter {
     const entry = this.#table(peer, table);
     const outcome = entry.copy.apply(payload);
     peer.heardAt = this.#now();
+    // DS-6b — a snapshot landed whole: a reset asked for is done (the
+    // re-subscribe below may ask for another)
+    if (outcome.replaced === true) entry.forceReset = false;
     if (outcome.changed) {
       this.#schedulePersist(peer, table);
       this.#changed("mesh", table, peer.device);
@@ -909,6 +937,7 @@ export class IndexMesh extends EventEmitter {
     const sub = entry.sub;
     entry.sub = null;
     sub?.unsubscribe();
+    entry.copy.abandonSnapshot(); // DS-6b — its transfer ends with it
   }
 
   #scheduleRetry(peer: Peer, table: IndexCatalogTable): void {
@@ -996,6 +1025,9 @@ export class IndexMesh extends EventEmitter {
           epoch: state.epoch,
           revision: state.revision,
           rows: state.rows,
+          // DS-6b — additive (an older build ignores it): the keys of rows
+          // this build cannot read, so a restarted copy's digest still agrees
+          ...(state.unreadable !== undefined ? { unreadable: state.unreadable } : {}),
         }),
         { mode: 0o600 },
       );
@@ -1053,20 +1085,43 @@ export class IndexMesh extends EventEmitter {
         }
         const epoch = kept["epoch"];
         const revision = kept["revision"];
+        // DS-6b — a kept row this build cannot read (a downgrade, a newer
+        // writer) keeps its key like a live one; so do the keys kept as such
+        const keptUnreadable = Array.isArray(kept["unreadable"])
+          ? (kept["unreadable"] as unknown[]).filter(
+              (key): key is string => typeof key === "string" && key.length > 0,
+            )
+          : [];
+        const gate = <R>(
+          parse: (raw: unknown) => R | undefined,
+          keyOf: (raw: unknown) => string | undefined,
+        ): { rows: R[]; unreadable: string[] } => {
+          const rows: R[] = [];
+          const unreadable = [...keptUnreadable];
+          for (const raw of kept["rows"] as unknown[]) {
+            const row = parse(raw);
+            if (row !== undefined) rows.push(row);
+            else {
+              const key = keyOf(raw);
+              if (key !== undefined) unreadable.push(key);
+            }
+          }
+          return { rows, unreadable };
+        };
         if (table === "projects") {
-          const rows = (kept["rows"] as unknown[]).flatMap((raw) => parseProject(raw) ?? []);
-          peer.projects = this.#newTable<"projects">(parseProject, (row) => row.projectId, {
-            epoch,
-            revision,
-            rows,
-          });
+          peer.projects = this.#newTable<"projects">(
+            parseProject,
+            projectKey,
+            (row) => row.projectId,
+            { epoch, revision, ...gate(parseProject, projectKey) },
+          );
         } else {
-          const rows = (kept["rows"] as unknown[]).flatMap((raw) => parseSession(raw) ?? []);
-          peer.sessions = this.#newTable<"sessions">(parseSession, (row) => row.sessionId, {
-            epoch,
-            revision,
-            rows,
-          });
+          peer.sessions = this.#newTable<"sessions">(
+            parseSession,
+            sessionKey,
+            (row) => row.sessionId,
+            { epoch, revision, ...gate(parseSession, sessionKey) },
+          );
         }
       } catch (error) {
         this.#sayOnce(`kept:${name}`, "A kept replica could not be read; it is ignored", {

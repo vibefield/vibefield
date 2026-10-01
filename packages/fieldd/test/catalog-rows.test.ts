@@ -349,6 +349,7 @@ describe("RowsCopy — the reader's rules", () => {
     expect(copy.rows()).toEqual([row("old")]); // the old copy stays visible meanwhile
     expect(copy.apply({ epoch: "boot-2", revision: 5, rows: [row("p2")] })).toEqual({
       changed: true,
+      replaced: true,
     });
     expect(sorted(copy.rows())).toEqual([row("p1"), row("p2")]);
     expect(copy.cursor()).toEqual({ epoch: "boot-2", revision: 5 });
@@ -372,7 +373,7 @@ describe("RowsCopy — the reader's rules", () => {
     for (const page of pages.slice(1)) expect(copy.apply(page)).toEqual({ changed: false });
     expect(copy.apply(live)).toEqual({ changed: false }); // held for the snapshot
     expect(copy.rows()).toEqual([row("stale")]); // nothing half-applied meanwhile
-    expect(copy.apply({ snapshot: pages[0] })).toEqual({ changed: true });
+    expect(copy.apply({ snapshot: pages[0] })).toEqual({ changed: true, replaced: true });
     expect(sorted(copy.rows())).toEqual(sorted(t.rows()));
     expect(copy.cursor()).toEqual({ epoch: "boot-1", revision: 2 });
   });
@@ -394,5 +395,110 @@ describe("RowsCopy — the reader's rules", () => {
     ).toMatchObject({
       resubscribe: "cursor",
     });
+  });
+
+  // DS-6b (2026-10-01, the landing review's DS-6 list) — an interrupted reset
+  // froze a replica: the half snapshot outlived the subscription that was
+  // sending it, and every later frame of the same epoch was held for a
+  // snapshot that could never complete — a catch-up eaten, deltas piling up.
+  it("DS-6b: a half snapshot never outlives its subscription — a resumed answer ends it, the owner can abandon it, and the next frames apply", () => {
+    const t = table({ pageBytes: 1_024 });
+    t.upsert(Array.from({ length: 30 }, (_, i) => row(`k${i}`, "v".repeat(30))));
+    const pages = t.snapshotPages();
+    expect(pages.length).toBeGreaterThan(2);
+    const copy = at(1, [row("k0", "drifted")]);
+    // the reset's transfer is cut after two pages…
+    expect(copy.apply({ snapshot: pages[0] })).toEqual({ changed: false });
+    expect(copy.apply(pages[1])).toEqual({ changed: false });
+    // …and the next subscription RESUMED this copy's cursor: those pages will
+    // never complete, so the catch-up behind the answer must land
+    t.upsert([row("k1", "moved")]);
+    expect(copy.apply({ resumed: { epoch: "boot-1", revision: 1 } })).toEqual({ changed: false });
+    expect(copy.apply(t.deltaSince(1))).toEqual({ changed: true });
+    expect(copy.cursor()).toEqual({ epoch: "boot-1", revision: 2 });
+    expect(copy.get("k1")).toEqual(row("k1", "moved"));
+
+    // the owner ends a subscription mid-transfer: the half is dropped with it
+    expect(copy.apply({ snapshot: { ...pages[0], revision: 2 } })).toEqual({ changed: false });
+    expect(copy.abandonSnapshot()).toBe(true);
+    expect(copy.abandonSnapshot()).toBe(false); // nothing left to drop
+    t.upsert([row("k2", "moved")]);
+    expect(copy.apply(t.deltaSince(2))).toEqual({ changed: true });
+    expect(copy.cursor()).toEqual({ epoch: "boot-1", revision: 3 });
+  });
+
+  it("DS-6b: the deltas held for a snapshot are bounded (ROWS.MAX_PENDING_DELTAS) — past the bound the half is dropped and the copy asks for a reset", () => {
+    expect(ROWS.MAX_PENDING_DELTAS).toBeGreaterThan(0);
+    const copy = new RowsCopy<Row>(
+      { keyOf, parseRow, maxPendingDeltas: 3 },
+      { epoch: "boot-1", revision: 1, rows: [row("kept")] },
+    );
+    const half = { epoch: "boot-1", revision: 5, rows: [row("p1")], more: true };
+    expect(copy.apply({ snapshot: half })).toEqual({ changed: false });
+    for (let i = 0; i < 3; i += 1) {
+      expect(copy.apply(delta(5 + i, 6 + i, [row(`d${i}`)]))).toEqual({ changed: false });
+    }
+    expect(copy.apply(delta(8, 9, [row("d3")]))).toMatchObject({
+      changed: false,
+      resubscribe: "reset",
+    });
+    expect(copy.rows()).toEqual([row("kept")]); // nothing half-applied
+    // the dropped half never joins the next snapshot: it lands whole, alone
+    expect(copy.apply({ snapshot: { epoch: "boot-1", revision: 9, rows: [row("q")] } })).toEqual({
+      changed: true,
+      replaced: true,
+    });
+    expect(copy.rows()).toEqual([row("q")]);
+  });
+
+  // DS-6b — a row the reader drops used to leave its key out of the reader's
+  // digest, so the digest disagreed with the writer's at every heartbeat and
+  // the reader reset — a full table per peer per minute, forever.
+  it("DS-6b: a row the gate cannot read keeps its KEY (unreadable) — the digest agrees with the writer's, and nothing resets", () => {
+    const dropped: unknown[] = [];
+    const rawKeyOf = (raw: unknown): string | undefined => {
+      const id = (raw as { id?: unknown } | null)?.id;
+      return typeof id === "string" && id !== "" ? id : undefined;
+    };
+    const t = table();
+    t.upsert([row("a"), { id: "odd", title: 7 } as unknown as Row, row("b")]);
+    const copy = new RowsCopy<Row>({
+      keyOf,
+      parseRow,
+      rawKeyOf,
+      onDropped: (raw) => dropped.push(raw),
+    });
+    expect(copy.apply({ snapshot: t.snapshotPages()[0] })).toMatchObject({ changed: true });
+    expect(sorted(copy.rows())).toEqual([row("a"), row("b")]); // only what it can read is listed
+    expect(dropped).toEqual([{ id: "odd", title: 7 }]); // still reported (the log)
+    expect(copy.digest()).toEqual(t.digest());
+    const heartbeat = () => ({
+      epoch: "boot-1",
+      since: t.revision,
+      revision: t.revision,
+      upserts: [],
+      removed: [],
+      digest: t.digest(),
+    });
+    expect(copy.apply(heartbeat())).toEqual({ changed: false });
+    expect(copy.state()?.unreadable).toEqual(["odd"]); // what a persisted copy keeps
+
+    // a readable version takes the key back; a row that turns unreadable keeps
+    // only its key (what it says now is not what the copy held); removal drops it
+    t.upsert([row("odd", "fixed"), { id: "a", title: null } as unknown as Row]);
+    expect(copy.apply(t.deltaSince(1))).toEqual({ changed: true });
+    expect(sorted(copy.rows())).toEqual([row("b"), row("odd", "fixed")]);
+    expect(copy.apply(heartbeat())).toEqual({ changed: false });
+    t.remove(["a"]);
+    expect(copy.apply(t.deltaSince(2))).toEqual({ changed: true });
+    expect(copy.state()?.unreadable ?? []).toEqual([]);
+    expect(copy.apply(heartbeat())).toEqual({ changed: false });
+
+    // a kept copy restores its unreadable keys with its rows
+    t.upsert([{ id: "z", title: 1 } as unknown as Row]);
+    expect(copy.apply(t.deltaSince(3))).toEqual({ changed: true });
+    expect(copy.state()?.unreadable).toEqual(["z"]);
+    const restored = new RowsCopy<Row>({ keyOf, parseRow, rawKeyOf }, copy.state());
+    expect(restored.digest()).toEqual(t.digest());
   });
 });

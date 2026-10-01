@@ -433,20 +433,32 @@ export interface RowsApplied {
   resubscribe?: "cursor" | "reset";
   /** why, for the log */
   reason?: string;
+  /** DS-6b — a whole snapshot LANDED: the copy was replaced. This, and never
+   * the subscribe that asked for one, is where a reset completes. */
+  replaced?: true;
 }
 
 export interface RowsCopyOptions<Row> {
   keyOf: (row: Row) => string;
-  /** the tolerant reader's row gate: a row it cannot read is dropped (and
-   * reported through `onDropped`), never the whole frame */
+  /** the tolerant reader's row gate: a row it cannot read is not LISTED (and
+   * is reported through `onDropped`), never the whole frame */
   parseRow: (raw: unknown) => Row | undefined;
+  /** DS-6b — the KEY of a row the gate cannot read, when the raw row names
+   * one. The copy keeps that key (unreadable) so its digest counts what the
+   * writer holds; without it the digest disagreed at every heartbeat. */
+  rawKeyOf?: (raw: unknown) => string | undefined;
   onDropped?: (raw: unknown) => void;
+  /** DS-6b — deltas held for a snapshot still being assembled, at most
+   * (default `ROWS.MAX_PENDING_DELTAS`); past it the copy asks for a reset */
+  maxPendingDeltas?: number;
 }
 
 export interface RowsCopyState<Row> {
   epoch: string;
   revision: number;
   rows: Row[];
+  /** keys the copy holds and cannot read (they count in its digest) */
+  unreadable?: string[];
 }
 
 /** A snapshot page as the reader first reads it: the envelope checked, the
@@ -546,20 +558,37 @@ function classify(payload: unknown): Classified {
   return { kind: "unreadable" };
 }
 
+/** A frame's rows through the copy's gate, in order: each row it read, or the
+ * key of one it could not (DS-6b). */
+type Gated<Row> = Array<readonly ["row", Row] | readonly ["unreadable", string]>;
+
 export class RowsCopy<Row> {
   readonly #keyOf: (row: Row) => string;
   readonly #parseRow: (raw: unknown) => Row | undefined;
+  readonly #rawKeyOf: ((raw: unknown) => string | undefined) | undefined;
   readonly #onDropped: ((raw: unknown) => void) | undefined;
+  readonly #maxPendingDeltas: number;
   #epoch: string | null = null;
   #revision = 0;
   #rows = new Map<string, Row>();
+  /** DS-6b (2026-10-01) — keys the copy holds whose rows the gate cannot read:
+   * never listed, always counted in the digest, because the writer holds them.
+   * Dropping them outright made the reader's digest disagree with the
+   * writer's at every heartbeat — a reset, a full table, the same row dropped
+   * again, forever. Disjoint from `#rows`. */
+  #unreadable = new Set<string>();
   /** a paged snapshot being assembled: applied whole when its last page
    * lands — by index when the pages carry one, in arrival order when not —
-   * and the deltas that arrived for it meanwhile, applied after it */
+   * and the deltas that arrived for it meanwhile, applied after it. It
+   * belongs to the subscription sending it (DS-6b): a resumed answer ends it,
+   * its owner drops it when that subscription ends (`abandonSnapshot`), and
+   * past `maxPendingDeltas` held deltas it is given up for a reset — a half
+   * snapshot that outlived its transfer used to hold every later frame of its
+   * epoch, and the replica froze. */
   #pending: {
     epoch: string;
     revision: number;
-    parts: Map<number, Row[]>;
+    parts: Map<number, Gated<Row>>;
     count: number | undefined;
     deltas: RawDelta[];
   } | null = null;
@@ -567,11 +596,16 @@ export class RowsCopy<Row> {
   constructor(opts: RowsCopyOptions<Row>, initial?: RowsCopyState<Row>) {
     this.#keyOf = opts.keyOf;
     this.#parseRow = opts.parseRow;
+    this.#rawKeyOf = opts.rawKeyOf;
     this.#onDropped = opts.onDropped;
+    this.#maxPendingDeltas = opts.maxPendingDeltas ?? ROWS.MAX_PENDING_DELTAS;
     if (initial !== undefined) {
       this.#epoch = initial.epoch;
       this.#revision = initial.revision;
       for (const row of initial.rows) this.#rows.set(this.#keyOf(row), row);
+      for (const key of initial.unreadable ?? []) {
+        if (!this.#rows.has(key)) this.#unreadable.add(key);
+      }
     }
   }
 
@@ -594,15 +628,31 @@ export class RowsCopy<Row> {
   }
 
   state(): RowsCopyState<Row> | undefined {
-    return this.#epoch === null
-      ? undefined
-      : { epoch: this.#epoch, revision: this.#revision, rows: this.rows() };
+    if (this.#epoch === null) return undefined;
+    return {
+      epoch: this.#epoch,
+      revision: this.#revision,
+      rows: this.rows(),
+      ...(this.#unreadable.size > 0 ? { unreadable: [...this.#unreadable].sort() } : {}),
+    };
   }
 
+  /** The key digest over EVERY key the copy holds, readable or not (DS-6b) —
+   * the writer's digest counts each row it holds, whatever this build reads. */
   digest(): RowsDigest | undefined {
     return this.#epoch === null
       ? undefined
-      : digestOfKeys(this.#epoch, this.#revision, this.#rows.keys());
+      : digestOfKeys(this.#epoch, this.#revision, [...this.#rows.keys(), ...this.#unreadable]);
+  }
+
+  /** DS-6b — the subscription that was sending a snapshot has ended (its link
+   * dropped, its owner detached or is subscribing again): the pages that
+   * arrived can never complete, so they go, and a half snapshot never holds
+   * the next subscription's frames. Says whether one was dropped. */
+  abandonSnapshot(): boolean {
+    const had = this.#pending !== null;
+    this.#pending = null;
+    return had;
   }
 
   /** Apply a subscribe's answer or any later frame. */
@@ -621,6 +671,11 @@ export class RowsCopy<Row> {
   }
 
   #resumed(epoch: string, revision: number): RowsApplied {
+    // DS-6b — a resumed answer means no snapshot is coming on this
+    // subscription: one still being assembled is a transfer an earlier
+    // subscription never finished, and kept it would hold (and so eat) the
+    // catch-up that follows this answer
+    this.#pending = null;
     // the source resumed a cursor: ours, or one we held earlier (a replayed
     // subscribe carries the params it first attached with) — either way the
     // catch-up that follows brackets our revision. A cursor we never held is
@@ -635,6 +690,40 @@ export class RowsCopy<Row> {
     return { changed: false };
   }
 
+  /** The row gate over a frame's raw rows, in order. A row it cannot read is
+   * reported (`onDropped`, the owner's log) and, when its key can be read,
+   * kept as that key (DS-6b). A row with no readable key is lost to the
+   * digest too: the writer's key field is its contract, so that is a skew
+   * the epoch or the hello catches, not a row to guess at. */
+  #gate(raws: readonly unknown[]): Gated<Row> {
+    const gated: Gated<Row> = [];
+    for (const raw of raws) {
+      const row = this.#parseRow(raw);
+      if (row !== undefined) {
+        gated.push(["row", row]);
+        continue;
+      }
+      this.#onDropped?.(raw);
+      const key = this.#rawKeyOf?.(raw);
+      if (key !== undefined) gated.push(["unreadable", key]);
+    }
+    return gated;
+  }
+
+  /** Hold one gated entry. A row that turns unreadable keeps only its key:
+   * what the writer holds now is not what the copy held, so the old row goes
+   * — a stale row listed as current would be a guess. */
+  #hold(entry: Gated<Row>[number]): void {
+    if (entry[0] === "row") {
+      const key = this.#keyOf(entry[1]);
+      this.#unreadable.delete(key);
+      this.#rows.set(key, entry[1]);
+    } else {
+      this.#rows.delete(entry[1]);
+      this.#unreadable.add(entry[1]);
+    }
+  }
+
   #page(page: RawPage): RowsApplied {
     let pending = this.#pending;
     if (pending === null || pending.epoch !== page.epoch || pending.revision !== page.revision) {
@@ -647,21 +736,16 @@ export class RowsCopy<Row> {
         deltas: [],
       };
     }
-    const rows: Row[] = [];
-    for (const raw of page.rows) {
-      const row = this.#parseRow(raw);
-      if (row === undefined) this.#onDropped?.(raw);
-      else rows.push(row);
-    }
+    const part = this.#gate(page.rows);
     if (page.index !== undefined && page.count !== undefined) {
-      pending.parts.set(page.index, rows);
+      pending.parts.set(page.index, part);
       pending.count = page.count;
       if (pending.parts.size < page.count) {
         this.#pending = pending;
         return { changed: false };
       }
     } else {
-      pending.parts.set(pending.parts.size, rows);
+      pending.parts.set(pending.parts.size, part);
       if (page.more) {
         this.#pending = pending;
         return { changed: false };
@@ -673,11 +757,13 @@ export class RowsCopy<Row> {
     const ordered = [...pending.parts.entries()].sort((a, b) => a[0] - b[0]);
     this.#epoch = pending.epoch;
     this.#revision = pending.revision;
-    this.#rows = new Map(ordered.flatMap(([, part]) => part).map((row) => [this.#keyOf(row), row]));
-    const result: RowsApplied = { changed: true };
+    this.#rows = new Map();
+    this.#unreadable = new Set();
+    for (const [, entries] of ordered) for (const entry of entries) this.#hold(entry);
+    const result: RowsApplied = { changed: true, replaced: true };
     for (const delta of pending.deltas) {
       const applied = this.#delta(delta);
-      if (applied.resubscribe !== undefined) return { ...applied, changed: true };
+      if (applied.resubscribe !== undefined) return { ...applied, changed: true, replaced: true };
     }
     return result;
   }
@@ -688,14 +774,27 @@ export class RowsCopy<Row> {
       // it belongs to the snapshot still being assembled (a replay handed the
       // open answer over after its followers): hold it for the snapshot, or
       // drop it when the snapshot already covers it
-      if (delta.since >= pending.revision) pending.deltas.push(delta);
+      if (delta.since >= pending.revision) {
+        if (pending.deltas.length >= this.#maxPendingDeltas) {
+          // DS-6b — pages that stopped arriving while deltas pile up are a
+          // transfer that will not complete; holding more is unbounded memory
+          this.#pending = null;
+          return {
+            changed: false,
+            resubscribe: "reset",
+            reason: "a paged snapshot stopped arriving",
+          };
+        }
+        pending.deltas.push(delta);
+      }
       return { changed: false };
     }
     if (this.#epoch === null || delta.epoch !== this.#epoch) {
       return { changed: false, resubscribe: "reset", reason: "a delta from another epoch" };
     }
     if (delta.since === delta.revision) {
-      // the heartbeat: a digest compared only at the same revision
+      // the heartbeat: a digest compared only at the same revision, over
+      // every key the copy holds (unreadable ones included — DS-6b)
       const theirs = delta.digest;
       if (theirs !== undefined && delta.revision === this.#revision) {
         const mine = this.digest();
@@ -713,16 +812,15 @@ export class RowsCopy<Row> {
       return { changed: false, resubscribe: "cursor", reason: "a revision gap" };
     }
     let changed = false;
-    for (const raw of delta.upserts) {
-      const row = this.#parseRow(raw);
-      if (row === undefined) {
-        this.#onDropped?.(raw);
-        continue;
-      }
-      this.#rows.set(this.#keyOf(row), row);
+    for (const entry of this.#gate(delta.upserts)) {
+      this.#hold(entry);
       changed = true;
     }
-    for (const key of delta.removed) changed = this.#rows.delete(key) || changed;
+    for (const key of delta.removed) {
+      const listed = this.#rows.delete(key);
+      const unreadable = this.#unreadable.delete(key);
+      changed = listed || unreadable || changed;
+    }
     this.#revision = delta.revision;
     return { changed };
   }
