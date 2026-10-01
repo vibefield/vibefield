@@ -250,10 +250,8 @@ export class IndexMesh extends EventEmitter {
   #lastStandings = "";
   /** bumped on any change the merged views read */
   #version = 0;
-  #sortedSessions: Record<"local" | "mesh", { version: number; rows: MergedSession[] } | null> = {
-    local: null,
-    mesh: null,
-  };
+  /** merged + sorted sessions per {scope, who may speak}, for one version */
+  #sortedSessions = new Map<string, { version: number; rows: MergedSession[] }>();
   #sortedProjects: { version: number; rows: IndexCatalogProject[] } | null = null;
   /** the change pings' chain: one epoch per daemon, a revision per change */
   readonly #changesEpoch = `changes-${randomUUID()}`;
@@ -346,7 +344,7 @@ export class IndexMesh extends EventEmitter {
     const devices = this.#devicesInScope(scope, params.devices);
     const cursor = decodeCursor(params.cursor);
     const limit = clampLimit(params.limit);
-    const sorted = this.#sessionsSorted(scope);
+    const sorted = this.#sessionsSorted(scope, devices);
     const { items, next } = pageOf(
       sorted,
       (merged) => [merged.at ?? null, merged.device, merged.key],
@@ -550,15 +548,21 @@ export class IndexMesh extends EventEmitter {
     return this.#peers.get(device)?.projects.copy.get(projectId)?.family;
   }
 
-  /** One row per `{agent kind, native session id}` (DS-D10): the member with
-   * the newest activity speaks for the row (the device breaks a tie), and
-   * every desktop that holds it is named. A session whose agent kind is not
-   * known stays its own row — the duplicate rule needs both halves of the key.
-   * The LOCAL scope reads this desktop's own rows only: nothing of a peer's
-   * may speak for a row there. */
-  #sessionsSorted(scope: "local" | "mesh"): MergedSession[] {
-    const cached = this.#sortedSessions[scope];
+  /** One row per `{agent kind, native session id}` (DS-D10): every desktop
+   * that holds it is named, and the member with the newest activity among the
+   * desktops the page reads (`speakers`, the device breaks a tie) speaks for
+   * the row — so a page narrowed to one desktop shows THAT desktop's copy,
+   * with every badge still on it. A session whose agent kind is not known
+   * stays its own row — the duplicate rule needs both halves of the key. The
+   * LOCAL scope reads this desktop's own rows only: nothing of a peer's may
+   * speak for, or badge, a row there. */
+  #sessionsSorted(scope: "local" | "mesh", speakers: Set<string>): MergedSession[] {
+    const cacheKey = `${scope}|${[...speakers].sort().join(",")}`;
+    const cached = this.#sortedSessions.get(cacheKey);
     if (cached?.version === this.#version) return cached.rows;
+    for (const [key, entry] of this.#sortedSessions) {
+      if (entry.version !== this.#version) this.#sortedSessions.delete(key);
+    }
     const self = this.#opts.roster.currentDeviceId();
     const groups = new Map<string, Array<{ device: string; row: IndexCatalogSession }>>();
     const add = (device: string, row: IndexCatalogSession) => {
@@ -586,20 +590,22 @@ export class IndexMesh extends EventEmitter {
           [sessionActivityAt(b.row) ?? null, b.device, b.row.sessionId],
         ),
       );
-      const primary = group[0];
-      if (primary === undefined) continue;
+      const primary = group.find((member) => speakers.has(member.device));
+      if (primary === undefined) continue; // no desktop this page reads holds it
       const devices = [
         primary.device,
-        ...[...new Set(group.slice(1).map((member) => member.device))]
+        ...[...new Set(group.map((member) => member.device))]
           .filter((device) => device !== primary.device)
           .sort(),
       ];
-      let family: string | undefined;
+      let family = this.#familyOf(primary.device, primary.row.projectId);
       for (const member of group) {
-        family = this.#familyOf(member.device, member.row.projectId);
         if (family !== undefined) break;
+        family = this.#familyOf(member.device, member.row.projectId);
       }
-      const provider = group.find((member) => member.row.provider !== undefined)?.row.provider;
+      const provider =
+        primary.row.provider ??
+        group.find((member) => member.row.provider !== undefined)?.row.provider;
       const { row } = primary;
       merged.push({
         row: {
@@ -631,7 +637,7 @@ export class IndexMesh extends EventEmitter {
     merged.sort((a, b) =>
       compareKeys([a.at ?? null, a.device, a.key], [b.at ?? null, b.device, b.key]),
     );
-    this.#sortedSessions[scope] = { version: this.#version, rows: merged };
+    this.#sortedSessions.set(cacheKey, { version: this.#version, rows: merged });
     return merged;
   }
 
@@ -640,11 +646,11 @@ export class IndexMesh extends EventEmitter {
     devices: Set<string>,
     params: IndexSessionsParams,
   ): boolean {
-    const held = merged.members.filter((member) => devices.has(member.device));
-    if (held.length === 0) return false;
     if (params.family !== undefined && merged.row.family !== params.family) return false;
     if (params.projectId !== undefined) {
-      return held.some((member) => member.projectId === params.projectId);
+      return merged.members.some(
+        (member) => devices.has(member.device) && member.projectId === params.projectId,
+      );
     }
     return true;
   }

@@ -1,6 +1,6 @@
 import { type ChildProcess, spawn } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -399,4 +399,90 @@ describe("IndexCatalog — following rosetta's /ws/meta (DS-6)", () => {
     const projects: IndexCatalogProjectRow[] = catalog.projects.rows();
     expect(projects.map((row) => row.projectId).sort()).toEqual(["p-app", "p-lib"]);
   });
+});
+
+// The real binary (`pnpm siblings:build`; FIELDD_ROSETTAD_BIN): the follower
+// against rosetta's OWN /ws/meta, over its ground-truth transcript seeded into
+// an empty home (nothing of the developer's is ever read). This is the row
+// that says the stream reading above is the wire, not the fake's opinion of it.
+const REAL_BIN = process.env["FIELDD_ROSETTAD_BIN"];
+const GROUNDTRUTH = join(
+  HERE,
+  "..",
+  "..",
+  "..",
+  "..",
+  "rosetta",
+  "groundtruth",
+  "claude-code",
+  "fixtures",
+  "2.1.241",
+  "basic-chat",
+  "claude-config",
+);
+/** the one session that transcript records */
+const FIXTURE_NATIVE_ID = "665e3e71-7c12-4810-925a-e8b92cb6f29d";
+
+describe.skipIf(
+  REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BIN) || !existsSync(GROUNDTRUTH),
+)("IndexCatalog — against the real rosettad (opt-in via FIELDD_ROSETTAD_BIN)", () => {
+  it("follows the real /ws/meta: the ground-truth session arrives as a row with its agent named", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vf-ixr-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    const home = join(dir, "home");
+    mkdirSync(home, { recursive: true });
+    cpSync(GROUNDTRUTH, join(home, ".claude"), { recursive: true });
+    const child = spawn(
+      REAL_BIN as string,
+      ["serve", "--json", "--db", join(dir, "r.db"), "--home", home, "--agent", "claude-code"],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    cleanup.push(() => {
+      child.kill("SIGINT");
+    });
+    const ready = await new Promise<{ origin: string; protocol_version: number }>(
+      (resolve, reject) => {
+        let buffered = "";
+        const timer = setTimeout(() => reject(new Error("rosettad never said ready")), 30_000);
+        child.stdout?.on("data", (chunk: Buffer) => {
+          buffered += chunk.toString();
+          for (const line of buffered.split("\n")) {
+            try {
+              const parsed = JSON.parse(line) as {
+                event?: string;
+                origin?: string;
+                protocol_version?: number;
+              };
+              if (parsed.event === "ready" && typeof parsed.origin === "string") {
+                clearTimeout(timer);
+                resolve({ origin: parsed.origin, protocol_version: parsed.protocol_version ?? -1 });
+              }
+            } catch {
+              // not a whole line yet
+            }
+          }
+        });
+        child.once("exit", (code) => reject(new Error(`rosettad exited ${code}`)));
+      },
+    );
+    expect(
+      ready.protocol_version,
+      `FIELDD_ROSETTAD_BIN speaks protocol ${ready.protocol_version}; the pin is ${PROTOCOL_VERSION}`,
+    ).toBe(PROTOCOL_VERSION);
+    const { catalog } = follower(ready.origin);
+    await until(
+      () => catalog.sessions.rows().some((row) => row.nativeSessionId === FIXTURE_NATIVE_ID),
+      60_000,
+      "the ground-truth session in the catalog",
+    );
+    expect(catalog.phase).toBe("live");
+    const row = catalog.sessions.rows().find((r) => r.nativeSessionId === FIXTURE_NATIVE_ID);
+    expect(IndexCatalogSession.safeParse(row).success).toBe(true);
+    expect(row?.kind).toBe("claude-code");
+    expect(row?.provider).toBe(readers.idForKind("claude-code"));
+    expect(row?.device).toBe("dev-a");
+    for (const project of catalog.projects.rows()) {
+      expect(IndexCatalogProject.safeParse(project).success).toBe(true);
+    }
+  }, 90_000);
 });
