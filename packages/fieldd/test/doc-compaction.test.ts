@@ -20,8 +20,25 @@ import { decodeVersion, EMPTY_VERSION, loroBlobMode } from "../src/loro-host";
 import { HEADER, Renderer, replay } from "./loro-renderer";
 
 let dirs: string[] = [];
-afterEach(() => {
-  for (const d of dirs) rmSync(d, { recursive: true, force: true });
+/** A disposed DocumentService may still have a write landing (`dispose()` drops
+ * admission state and the sweep timer; it does not quiesce in-flight persist
+ * work — a finding of the DS wave 3 landing), so under load the directory can
+ * read ENOTEMPTY for a beat. Retry the removal briefly rather than fail a row
+ * on its own cleanup. */
+async function removeDir(d: string): Promise<void> {
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      rmSync(d, { recursive: true, force: true });
+      return;
+    } catch (e) {
+      const code = (e as { code?: string }).code;
+      if ((code !== "ENOTEMPTY" && code !== "EBUSY") || attempt >= 20) throw e;
+      await new Promise((r) => setTimeout(r, 50));
+    }
+  }
+}
+afterEach(async () => {
+  for (const d of dirs) await removeDir(d);
   dirs = [];
 });
 
@@ -120,7 +137,7 @@ describe("DS-5d — a canvas on a shallow base stays in Loro custody", () => {
     expect(loroBlobMode(payloadOf(checkpoint))).toBe("shallow-snapshot");
     await put(docs, docId, "checkpoint", checkpoint);
     await put(docs, docId, "update", w.edit("c", "3"));
-    docs.dispose();
+    await docs.dispose();
 
     const again = service(dir);
     const stated = await again.hostVersion(docId);
@@ -136,7 +153,7 @@ describe("DS-5d — a canvas on a shallow base stays in Loro custody", () => {
     fresh.apply(payloadOf(answer?.snapshot as Uint8Array));
     if (answer?.update) fresh.apply(answer.update);
     expect(fresh.board()).toEqual({ a: "1", b: "2", c: "3" });
-    again.dispose();
+    await again.dispose();
   });
 
   it("a window's shallow checkpoint folds, keeping what the host held beyond it", async () => {
@@ -145,7 +162,7 @@ describe("DS-5d — a canvas on a shallow base stays in Loro custody", () => {
     const { docId } = await docs.create("board");
     const w = shallowWindow(1n);
     await put(docs, docId, "checkpoint", w.checkpoint());
-    docs.dispose();
+    await docs.dispose();
     // A restart, then a peer's edit lands that the window never saw.
     const again = service(dir);
     const peer = await replay(again, docId, 7n);
@@ -166,7 +183,7 @@ describe("DS-5d — a canvas on a shallow base stays in Loro custody", () => {
       peer: "edit",
     });
     expect(await again.hostVersion(docId)).not.toBeNull();
-    again.dispose();
+    await again.dispose();
   });
 });
 
@@ -189,7 +206,7 @@ describe("DS-5d — nobody is answered from below a compacted root", () => {
     expect(
       await docs.hostAnswer(docId, { version: root.encode(), hasCheckpoint: true, baseEpoch: 0 }),
     ).toMatchObject({ snapshot: null, update: null });
-    docs.dispose();
+    await docs.dispose();
   });
 });
 
@@ -214,7 +231,7 @@ describe("DS-5d — an import that panics Loro is contained", () => {
     expect(await docs.hostVersion(docId)).toMatchObject({ hasCheckpoint: true });
     expect((await docs.readDoc(docId))?.updates).toEqual(before?.updates);
     expect((await replay(docs, docId)).board()).toEqual({ base: "b", z: "Z" });
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("a window's update that panics the host is refused, and the next save still lands", async () => {
@@ -232,7 +249,7 @@ describe("DS-5d — an import that panics Loro is contained", () => {
       z: "Z",
       after: "the refusal",
     });
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("a checkpoint the compacted host cannot take is REFUSED — never written over the base", async () => {
@@ -260,7 +277,7 @@ describe("DS-5d — an import that panics Loro is contained", () => {
     );
     expect((await replay(docs, docId)).board()).toEqual({ base: "b", z: "Z", kept: "yes" });
     expect(await docs.hostVersion(docId)).not.toBeNull(); // still in Loro custody
-    docs.dispose();
+    await docs.dispose();
   });
 });
 
@@ -349,7 +366,7 @@ describe("DS-5d — the epoch bump", () => {
     expect(library.get(docId)?.baseEpoch).toBe(1);
     expect(await docs.hostVersion(docId)).toMatchObject({ baseEpoch: 1, hasCheckpoint: true });
     expect(moves).toEqual([[docId, "compacted"]]);
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("waits for every KNOWN holder: the lowest acknowledgement holds the root, one unseen thirty-one days is not waited for", async () => {
@@ -371,7 +388,7 @@ describe("DS-5d — the epoch bump", () => {
       retired: ["attic"],
     });
     expect(rootOf((await docs.readDoc(docId))?.bytes as Uint8Array)).toEqual(json(low));
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("a holder that acknowledges nothing, or more than this desktop holds, BLOCKS the trim: no epoch, no write", async () => {
@@ -403,7 +420,7 @@ describe("DS-5d — the epoch bump", () => {
     expect(Buffer.compare(Buffer.from(after?.bytes ?? []), Buffer.from(before?.bytes ?? []))).toBe(
       0,
     );
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("a window open on the canvas holds the compaction; it runs when the window closes", async () => {
@@ -420,7 +437,7 @@ describe("DS-5d — the epoch bump", () => {
     docs.writerDetached(docId);
     await until(() => docs.list()[0]?.baseEpoch === 1, "the compaction once the window closed");
     expect((await replay(docs, docId)).board()).toEqual({ a: "1", b: "2", c: "3" });
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("a base that would not load is never written: a held op concurrent with the watermark refuses the trim", async () => {
@@ -467,7 +484,7 @@ describe("DS-5d — the epoch bump", () => {
     docs.setAcknowledgements(() => [{ device: "studio", ack: head, seenAt: Date.now() }]);
     expect(await docs.compact(docId)).toMatchObject({ compacted: true, baseEpoch: 1 });
     expect((await replay(docs, docId)).board()).toEqual({ base: "b", z: "Z", x: "X" });
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("a restart after compaction loads the base and answers; current.json is the truth for the epoch", async () => {
@@ -478,7 +495,7 @@ describe("DS-5d — the epoch bump", () => {
     expect(await docs.compact(docId)).toMatchObject({ compacted: true, baseEpoch: 1 });
     // A second pass has nothing below the watermark left to trim.
     expect(await docs.compact(docId)).toEqual({ compacted: false, reason: "nothing-to-trim" });
-    docs.dispose();
+    await docs.dispose();
 
     const again = service(dir, { compaction: false });
     expect(again.list()[0]?.baseEpoch).toBe(1);
@@ -492,7 +509,7 @@ describe("DS-5d — the epoch bump", () => {
     fresh.apply(payloadOf(answer?.snapshot as Uint8Array));
     if (answer?.update) fresh.apply(answer.update);
     expect(fresh.board()).toEqual({ a: "1", b: "2", c: "3", d: "4" });
-    again.dispose();
+    await again.dispose();
 
     // A crash between the stored revision and the registry write: the
     // registry still says 0, the revision says 1 — the revision wins.
@@ -502,7 +519,7 @@ describe("DS-5d — the epoch bump", () => {
     writeFileSync(registryPath, JSON.stringify(registry));
     const third = service(dir, { compaction: false });
     expect(third.list()[0]?.baseEpoch).toBe(1);
-    third.dispose();
+    await third.dispose();
   });
 });
 
@@ -548,7 +565,7 @@ describe("DS-5d — a window on the compacted canvas", () => {
       f: "folded",
     });
     docs.writerDetached(docId);
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("a window that read nothing in this daemon's life still cannot append undeclared after a compaction", async () => {
@@ -557,12 +574,12 @@ describe("DS-5d — a window on the compacted canvas", () => {
     const { docId, low, w } = await journaled(docs);
     docs.setAcknowledgements(() => [{ device: "studio", ack: low, seenAt: Date.now() }]);
     expect(await docs.compact(docId)).toMatchObject({ compacted: true });
-    docs.dispose();
+    await docs.dispose();
     const again = service(dir, { compaction: false });
     await expect(put(again, docId, "update", w.edit("late", "edit"))).rejects.toMatchObject({
       kind: "PRECONDITION_FAILED",
     });
-    again.dispose();
+    await again.dispose();
   });
 });
 
@@ -612,7 +629,7 @@ describe("DS-5d — a holder's acknowledgement (the holders slice)", () => {
     const proven = await ackOf(docs, docId);
     expect(proven.ack).toEqual(proven.head);
     docs.writerDetached(docId);
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("an open window this desktop cannot vouch for (it never read here) acknowledges NOTHING", async () => {
@@ -625,7 +642,7 @@ describe("DS-5d — a holder's acknowledgement (the holders slice)", () => {
     docs.writerDetached(docId);
     const closed = await ackOf(docs, docId);
     expect(closed.ack).toEqual(closed.head);
-    docs.dispose();
+    await docs.dispose();
   });
 });
 
@@ -638,7 +655,7 @@ describe("DS-5d — the host and the holders slice", () => {
     docs.setAcknowledgements(() => null);
     expect(await docs.compact(docId)).toEqual({ compacted: false, reason: "holders-unknown" });
     expect(docs.list()[0]?.baseEpoch).toBe(0);
-    docs.dispose();
+    await docs.dispose();
   });
 
   it("tells the slice to republish when a window opens, reads or closes, and when an epoch moves", async () => {
@@ -660,7 +677,7 @@ describe("DS-5d — the host and the holders slice", () => {
     docs.setAcknowledgements(() => [{ device: "studio", ack: low, seenAt: Date.now() }]);
     expect(await docs.compact(docId)).toMatchObject({ compacted: true });
     expect(told).toBe(4);
-    docs.dispose();
+    await docs.dispose();
   });
 });
 
@@ -690,7 +707,7 @@ describe("DS-5d — the stored base of a compacted canvas stays compacted", () =
       late: "from the old window",
     });
     expect(await docs.hostVersion(docId)).toMatchObject({ baseEpoch: 1, hasCheckpoint: true });
-    docs.dispose();
+    await docs.dispose();
   });
 });
 
@@ -751,6 +768,6 @@ describe("DS-5d — an epoch is bumped only for real progress", () => {
       left: "L",
       right: "R",
     });
-    docs.dispose();
+    await docs.dispose();
   });
 });
