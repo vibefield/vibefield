@@ -36,7 +36,10 @@ export const DocRegistryEntry = z
      * registry written before UA-6 keeps behaving exactly as it did (the entry
      * is `.passthrough()`, so an older reader tolerates it in the other
      * direction). Intent is per DEVICE until doc existence replicates — the
-     * named C6-4 debt — and nothing here pretends otherwise. */
+     * named C6-4 debt — and nothing here pretends otherwise.
+     * *Corrected 2026-10-01 (DS-5 landed):* existence AND intent replicate now
+     * through the library system document (DS-D6), so this field is the
+     * device's copy of a converging value, not the only one. */
     syncIntent: DocSyncIntent.optional(),
     /** DS-5 — epoch ms the canvas was created (the library's `createdAt`).
      * Absent on entries written before the library existed. */

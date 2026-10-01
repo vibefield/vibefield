@@ -34,7 +34,9 @@ export type UserFace = z.infer<typeof UserFace>;
  * user. UA-D18 moves `name` and `face` into the user-scope settings doc so they
  * travel with the login — GATED: the settings doc does not replicate yet
  * (`fieldd/src/settings-doc.ts`), so until it does these fields are the only
- * copy, not a cache. */
+ * copy, not a cache. *Still true at the landing of 2026-10-01: DS-5 put the
+ * LIBRARY on the Loro host and held the settings document back until the
+ * install set carries PA-32's revocation bias (DS-5b, design-06 §4).* */
 export const UserRecord = z
   .object({
     /** 26-char Crockford ULID — THE durable root identity; the tailscale link

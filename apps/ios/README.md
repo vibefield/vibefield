@@ -47,6 +47,12 @@ cell says so. A WhoIs-verified self peer is minted `[input, read]`; anything els
 is minted `[read]` and the attachment says so in its own words ("view only — this
 desktop granted read without input"). Nothing durable is stored on this device.
 
+> **Corrected 2026-09-30 (DS-4, DS-D5's note):** a WhoIs-verified self peer is
+> minted `[geometry, input, read]` now — the pane focused last takes the geometry
+> seat on any device. The kit does not yet speak the lease verbs that would take
+> it (DS-4b), so the phone's pane still never resizes the session; the right is
+> in the grant, the verb is not in the kit.
+
 **A phone upgrading from an older build** has its Keychain items REMOVED at the
 first launch on this build: a one-time delete by service, which never reads a
 value (`RetiredWriteKeyCleanup`). Nothing replaces them.

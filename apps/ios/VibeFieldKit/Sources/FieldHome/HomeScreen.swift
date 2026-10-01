@@ -1711,7 +1711,9 @@ public struct HomeScreen: View {
       // A starting grid the surface immediately corrects through onGridSize.
       // 80×24 is the one every terminal has agreed on since the VT100 — and
       // under T it shapes nothing on the desktop, because a phone is minted
-      // `[input, read]` and holds no geometry lease (TM-D3).
+      // `[input, read]` and holds no geometry lease (TM-D3). Corrected
+      // 2026-09-30 (DS-4): the phone IS minted `geometry` now, and it still
+      // shapes nothing because this kit speaks no lease verb until DS-4b.
       // The device NAME rides along so a refusal can say "studio is not
       // publishing its terminal doors" rather than naming a ULID at the user.
       attachment.attach(

@@ -80,6 +80,11 @@ public struct TerminalBanner: Sendable, Equatable {
 /// funnel that used to fight for the control epoch is gone with the protocol
 /// that had one. The pane's own grid is still recorded here because the input
 /// card lays itself out against it.
+///
+/// Corrected 2026-09-30 (DS-4, DS-D5's note): the GRANT now carries `geometry`
+/// for every self principal, the phone included — the pane focused last takes
+/// the seat on any device. What is still true is the behaviour: this kit speaks
+/// no lease verb yet (DS-4b), so the phone never claims and never resizes.
 @MainActor
 @Observable
 public final class TerminalAttachment {
@@ -416,6 +421,10 @@ public final class TerminalAttachment {
   /// be refused at the cell. The number is kept because the input card and the
   /// accessibility summary both lay out against it, and because the day a
   /// phone is granted `geometry` this is the value it would claim with.
+  /// Corrected 2026-09-30 (DS-4): that day came for the GRANT — a self peer is
+  /// minted `[geometry, input, read]` — but not for this kit, which has no
+  /// lease verb to claim with until DS-4b; so the sentence above is now an
+  /// omission, named.
   public func setViewport(cols: UInt16, rows: UInt16) {
     grid = GhostteaTerminalGridSize(columns: cols, rows: rows)
   }

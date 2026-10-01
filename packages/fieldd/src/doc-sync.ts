@@ -392,13 +392,16 @@ export class DocSyncService {
     const out: DocSyncStatus[] = [];
     for (const [docId, facts] of this.#facts) {
       if (this.#isLocal(docId)) continue;
-      // DS-5 — system documents (settings, library) sync with the canvases and
-      // are not canvases: the renderer's sync rows and pill dots key canvases.
+      // DS-5 — system documents (the library; the settings document once the
+      // install set has PA-32's revocation bias, DS-5b) sync with the canvases
+      // and are not canvases: the renderer's sync rows and pill dots key canvases.
       if (this.#docs.isSystemDoc(docId)) continue;
       out.push({
         docId,
         // null is the honest unknown-doc face: a peer syncs a doc this device
-        // does not have (doc EXISTENCE does not replicate yet).
+        // does not have yet — since DS-5 existence replicates through the
+        // library (DS-D6), so this is the window between a peer's greeting and
+        // the library row landing, no longer a standing state.
         name: names.get(docId) ?? null,
         state: this.#docState(docId, facts),
         pendingRecords:

@@ -323,4 +323,6 @@ export type AgentInterruptResult = z.infer<typeof AgentInterruptResult>;
 // var into a phone. The secret it carried is deleted on every plane. The right
 // to type now rides the attach grant in the ticket (`rights: ["input", "read"]`
 // for a WhoIs-verified self peer, TM-2), so the phone asks for nothing extra
-// and holds nothing that outlives the session it was minted for.
+// and holds nothing that outlives the session it was minted for. *Corrected
+// 2026-09-30 (DS-4, DS-D5's note): every self principal — the phone included —
+// is minted `["geometry", "input", "read"]`; the kit's lease verbs are DS-4b.*

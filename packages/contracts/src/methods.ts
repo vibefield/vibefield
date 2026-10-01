@@ -554,6 +554,11 @@ export const METHODS: MethodDef[] = [
   // UA-D7 — may this doc leave this device? `local` locality is the honest
   // class and not a shortcut: the answer is this device's own, held in this
   // device's registry, and it does not replicate (the C6-4 doc-existence debt).
+  // *Corrected 2026-10-01 (DS-5 landed):* the ACT stays local — it is this
+  // device's person deciding — but the answer now travels: the library system
+  // document (DS-D6) carries each canvas's `syncIntent` to every self desktop,
+  // which closes the C6-4 debt this comment named. A canvas told to travel
+  // replicates on the next tick (`docSync.replicate`).
   defineMethod({
     surface: "product",
     method: "doc.setSyncIntent",
@@ -1370,6 +1375,13 @@ export const METHODS: MethodDef[] = [
   // stay `local`: consent is still an act of the person at this device.
   // Scopes do not move — `index.search` is in no tailnet preset here, so a
   // peer is still refused the content reads at the scope gate.
+  // *Corrected at the landing of 2026-10-01 (the review's errata):* three of
+  // the five stayed `local` — `discoveries`, `status` and `recent` are the
+  // census, the status and the launcher's list, this desktop's own; only
+  // `sessions`, `search` and DS-6's `projects` federate (the rows that leave
+  // the device). And a self peer DAEMON is granted `index.search` by its own
+  // preset (`PEER_FIELDD_SCOPES`, DS-6), so "in no tailnet preset" holds for
+  // the phone's preset and for guests, not for a peer-fieldd principal.
   defineMethod({
     surface: "product",
     method: "index.discoveries",
@@ -1456,7 +1468,10 @@ export const METHODS: MethodDef[] = [
   // project's, newest first. The same consent as the two above — titles,
   // summaries and each session's cwd are the history's content — so the same
   // scope, and the same locality: the history is the device's own. *DS-2
-  // (2026-09-30): `federate`, like the two above.*
+  // (2026-09-30): `federate`, like the two above.* *Corrected at the landing of
+  // 2026-10-01: it STAYS `local` — the launcher's list is this desktop's
+  // history; the merged replica is paged through `index.sessions {scope:
+  // "mesh"}` (DS-6), not through this door.*
   defineMethod({
     surface: "product",
     method: "index.recent",
