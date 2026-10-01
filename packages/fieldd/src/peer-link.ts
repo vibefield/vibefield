@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { FORWARDING } from "@vibefield/contracts";
+import { FORWARDING, MESH_EGRESS } from "@vibefield/contracts";
 import { FielddClient, FielddRpcError, type WsCtor } from "@vibefield/fieldd-client";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { type EgressPath, egressWebSocket } from "./egress";
@@ -117,6 +117,21 @@ export interface PeerLinkOptions {
  * ("connection closed", "not connected", a dead client) never do. */
 function isRemoteAnswer(e: unknown): boolean {
   return e instanceof FielddRpcError && e.code !== undefined;
+}
+
+/** DS-1b (DS wave 2 landing) — the FLOOR's verdict on the dial, surfaced by
+ * fieldd-client from the egress stand-in socket (`egressDialUnavailable`):
+ * `UNAVAILABLE {service: "mesh", state}` with no JSON-RPC code. Nothing reached
+ * the peer, so it says nothing about the peer. */
+function isEgressVerdict(e: unknown): boolean {
+  return (
+    e instanceof FielddRpcError &&
+    e.code === undefined &&
+    e.kind === "UNAVAILABLE" &&
+    typeof e.details === "object" &&
+    e.details !== null &&
+    (e.details as { service?: unknown }).service === MESH_EGRESS.SERVICE
+  );
 }
 
 /** The one transport failure that PROVES a request never left: the client had
@@ -332,6 +347,16 @@ export class PeerLink extends EventEmitter {
       if (isRemoteAnswer(e)) {
         this.markAnswered(deviceId);
         return new RpcCallError(e.kind as never, e.message, e.retryable, e.details);
+      }
+      if (isEgressVerdict(e)) {
+        // DS-1b — no road through the node: the caller reads the floor's own
+        // state, the peer's record is untouched (it was never dialled), and the
+        // link goes — its client would only redial into the same per-boot answer
+        this.dropLink(deviceId);
+        return new RpcCallError("UNAVAILABLE", e.message, true, {
+          ...(e.details as Record<string, unknown>),
+          device: deviceId,
+        });
       }
       if (e.kind === "UNAVAILABLE" || e.kind === "TIMEOUT") {
         this.markSilent(deviceId);

@@ -233,9 +233,19 @@ describe("DS-1 — PeerLink dials a peer's door through the node", () => {
         logger: log.logger,
         callTimeoutMs: 1_500,
       });
+      const started = Date.now();
       const refused = await peers.request("dev-b", "device.list", {}).catch((e: unknown) => e);
+      const elapsed = Date.now() - started;
       expect(refused, state).toBeInstanceOf(RpcCallError);
       expect(refused, state).toMatchObject({ kind: "UNAVAILABLE" });
+      // DS wave 2 landing — the floor's verdict IS the answer, honestly and at
+      // once: `{service: "mesh", state}` to the caller, never "peer unreachable"
+      // after the call's deadline (the peer was never dialled)
+      expect(refused, state).toMatchObject({
+        retryable: true,
+        details: { service: "mesh", state, device: "dev-b" },
+      });
+      expect(elapsed, `${state}: answered before the call deadline`).toBeLessThan(1_500);
       expect(d.connections(), `${state}: nothing reached the door by any path`).toBe(0);
       expect(asked(), state).toBeGreaterThanOrEqual(1);
       // said once per link, however many redials the backoff made

@@ -1,10 +1,10 @@
 import {
   type ClientKind,
   CONTRACTS_VERSION,
-  PRODUCT_NOTIFICATIONS,
-  SystemTick,
   ForwardReceipt,
   KEYED_FORWARD_METHODS,
+  PRODUCT_NOTIFICATIONS,
+  SystemTick,
 } from "@vibefield/contracts";
 
 // @vibefield/fieldd-client — the isomorphic product-plane client (design-03
@@ -95,6 +95,22 @@ function withForwardKey(e: unknown, key: string | undefined): unknown {
   const keyed = new FielddRpcError(e.kind, e.message, e.retryable, e.details, e.code);
   keyed.forward = { idempotencyKey };
   return keyed;
+}
+
+/** DS-1b — a dial's VERDICT, when a socket's error carries one: a structured
+ * `{kind, message, retryable?, details?}` (fieldd's RpcCallError shape, duck-
+ * typed — this file stays browser-safe and imports nothing of fieldd). A bare
+ * transport error carries none and stays the transient it always was. */
+function dialVerdictOf(error: unknown): FielddRpcError | undefined {
+  if (error === null || typeof error !== "object") return undefined;
+  const { kind, message, retryable, details } = error as {
+    kind?: unknown;
+    message?: unknown;
+    retryable?: unknown;
+    details?: unknown;
+  };
+  if (typeof kind !== "string" || kind === "" || typeof message !== "string") return undefined;
+  return new FielddRpcError(kind, message, retryable === true, details);
 }
 
 /** Structural WebSocket shape (browser + Node undici both satisfy it). */
@@ -249,6 +265,13 @@ export class FielddClient {
   private statusListeners = new Set<() => void>();
   private notificationListeners = new Map<string, Set<(params: unknown) => void>>();
   private readyWaiters: Array<{ resolve: () => void; reject: (e: Error) => void }> = [];
+  /** DS-1b (DS wave 2 landing) — the verdict of a dial that FAILED CLOSED
+   * before it opened: the egress stand-in socket reports the floor's
+   * `UNAVAILABLE {service: "mesh", state}` as its error, then closes 1006.
+   * Held until that close, when it answers every caller waiting on the dial
+   * (the request and the `ready()` behind it) instead of leaving them to
+   * PeerLink's deadline — and the client still redials on its backoff. */
+  private dialVerdict: FielddRpcError | null = null;
   private closedByUser = false;
   private credential: string;
   /** DS-D15 — the device the dialed daemon's hello says it runs on, if it
@@ -497,8 +520,10 @@ export class FielddClient {
       if (this.ws === ws) this.onMessage(String((ev as { data: unknown }).data));
     });
     ws.addEventListener("close", () => this.onClose(ws));
-    ws.addEventListener("error", () => {
-      /* close follows */
+    ws.addEventListener("error", (ev) => {
+      // close follows; a structured verdict on the error is the dial's answer
+      const verdict = dialVerdictOf((ev as { error?: unknown } | null | undefined)?.error);
+      if (verdict !== undefined && this.ws === ws) this.dialVerdict = verdict;
     });
   }
 
@@ -611,7 +636,16 @@ export class FielddClient {
   private onClose(ws: WsLike): void {
     if (ws !== this.ws) return; // stale socket
     this.ws = null;
-    this.failPending();
+    const verdict = this.dialVerdict;
+    this.dialVerdict = null;
+    if (verdict !== null) {
+      // DS-1b — the floor refused the road: every caller waiting on this dial
+      // hears the honest state now; the reconnect below still happens
+      this.failPending(verdict);
+      this.flushReadyWaiters(verdict);
+    } else {
+      this.failPending();
+    }
     this.clearReplayRetries(); // the next hello replays every standing subscription
     this.subRoutes.clear();
     if (this.closedByUser || this.status === "failed" || this.status === "closed") return;
@@ -747,10 +781,10 @@ export class FielddClient {
     });
   }
 
-  private failPending(): void {
+  private failPending(error?: FielddRpcError): void {
     for (const [, p] of this.pending) {
       if (p.subKey !== undefined && p.dropSubOnFailure === true) this.subs.delete(p.subKey);
-      p.reject(new FielddRpcError("UNAVAILABLE", "connection closed", true));
+      p.reject(error ?? new FielddRpcError("UNAVAILABLE", "connection closed", true));
     }
     this.pending.clear();
   }
