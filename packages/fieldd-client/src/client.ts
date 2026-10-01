@@ -80,7 +80,9 @@ function asOutcomeUnknown(e: unknown, key: string): unknown {
 
 /** DS-D15 — name the key a failed call should be retried with: the one an
  * `outcome-unknown` names (the key the owner journaled — a daemon that minted
- * its own for an unkeyed call says so there), else the call's own. */
+ * its own for an unkeyed call says so there), else the call's own. A COPY is
+ * stamped, never the error itself: a failed client hands every caller the
+ * same `lastError`, and one call's key must not surface on another's. */
 function withForwardKey(e: unknown, key: string | undefined): unknown {
   if (!(e instanceof FielddRpcError)) return e;
   const details = e.details as { state?: unknown; idempotencyKey?: unknown } | undefined;
@@ -89,8 +91,10 @@ function withForwardKey(e: unknown, key: string | undefined): unknown {
       ? details.idempotencyKey
       : undefined;
   const idempotencyKey = named ?? key;
-  if (idempotencyKey !== undefined) e.forward = { idempotencyKey };
-  return e;
+  if (idempotencyKey === undefined) return e;
+  const keyed = new FielddRpcError(e.kind, e.message, e.retryable, e.details, e.code);
+  keyed.forward = { idempotencyKey };
+  return keyed;
 }
 
 /** Structural WebSocket shape (browser + Node undici both satisfy it). */

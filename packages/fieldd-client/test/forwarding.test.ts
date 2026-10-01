@@ -184,8 +184,12 @@ describe("FielddClient — the client half of DS-D15", () => {
 });
 
 /** A socket that answers hello and records every other frame, answering each
- * with an empty result — the client's own rules, with no daemon behind them. */
-function recordingSocket(sent: Array<{ method: string; params: unknown }>, ack: object = {}) {
+ * with an empty result — the client's own rules, with no daemon behind them.
+ * `ack: "refuse"` answers the hello UNAUTHORIZED (a terminal verdict). */
+function recordingSocket(
+  sent: Array<{ method: string; params: unknown }>,
+  ack: object | "refuse" = {},
+) {
   class Recording implements WsLike {
     readyState = 0;
     readonly #listeners = new Map<string, Array<(ev: unknown) => void>>();
@@ -200,15 +204,28 @@ function recordingSocket(sent: Array<{ method: string; params: unknown }>, ack: 
     }
     send(data: string): void {
       const frame = JSON.parse(data) as { id: number; method: string; params: unknown };
-      const result =
-        frame.method === "system.hello"
-          ? { contractsVersion: "0.0.0", serverKind: "fieldd", grantedScopes: [], ...ack }
-          : {};
-      if (frame.method !== "system.hello")
-        sent.push({ method: frame.method, params: frame.params });
+      const hello = frame.method === "system.hello";
+      const extra = ack === "refuse" ? {} : ack;
+      const answer =
+        hello && ack === "refuse"
+          ? {
+              error: {
+                code: -32001,
+                message: "invalid token",
+                data: { kind: "UNAUTHORIZED", retryable: false },
+              },
+            }
+          : {
+              result: hello
+                ? { contractsVersion: "0.0.0", serverKind: "fieldd", grantedScopes: [], ...extra }
+                : {},
+            };
+      if (!hello) sent.push({ method: frame.method, params: frame.params });
       setTimeout(
         () =>
-          this.#emit("message", { data: JSON.stringify({ jsonrpc: "2.0", id: frame.id, result }) }),
+          this.#emit("message", {
+            data: JSON.stringify({ jsonrpc: "2.0", id: frame.id, ...answer }),
+          }),
         0,
       );
     }
@@ -254,6 +271,24 @@ describe("FielddClient — a call that is not a keyed forward carries no key (DS
         forward: { idempotencyKey: expect.stringMatching(/^.{8,128}$/) },
       },
     });
+  });
+
+  it("a failed client's one shared error is never stamped with one caller's key", async () => {
+    const client = new FielddClient({
+      url: "ws://fake",
+      token: "t",
+      webSocket: recordingSocket([], "refuse"),
+    });
+    cleanup.push(() => client.close());
+    const first = await failure(
+      client.request("agent.spawn", { device: "dev-b" }, { idempotencyKey: "wk_first_call" }),
+    );
+    expect(first.kind).toBe("UNAUTHORIZED");
+    expect(first.forward?.idempotencyKey).toBe("wk_first_call"); // a key the caller brought stays its own
+    const second = await failure(client.request("agent.spawn", { device: "dev-b" }));
+    expect(second.kind).toBe("UNAUTHORIZED");
+    expect(second.forward).toBeUndefined();
+    expect(client.lastError?.forward).toBeUndefined();
   });
 
   it("the daemon's own device read from its hello, when it says it", async () => {
