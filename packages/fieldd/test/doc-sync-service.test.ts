@@ -35,6 +35,7 @@ import {
   type LaneControl,
   type LaneInfo,
 } from "../src/doc-sync";
+import { Renderer } from "./loro-renderer";
 
 let dirs: string[] = [];
 afterEach(async () => {
@@ -1132,6 +1133,71 @@ describe("DS-5c — the doc-sync beat", () => {
     await new Promise((r) => setTimeout(r, 6 * T));
     expect(opens.length).toBe(settled);
   }, 15_000);
+});
+
+describe("DS-5c — a version-speaker mark leaves with its peer", () => {
+  it("a peer that left the peer set and returns speaking only HAVE is answered", async () => {
+    // The review: the marks (`(doc, peer)` spoke VERSION, so its HAVE is
+    // ignored) were never pruned — they grew with every peer ever met, and a
+    // peer that came back as an older build had its HAVE ignored for good.
+    const { docs, control, bytes, sync, peerState } = harness(["peer-a"], undefined, {
+      beatMs: 10,
+    });
+    await sync.start();
+    const { docId } = await docs.create("board");
+    const w = new Renderer(1n);
+    w.edit("k", "v");
+    const checkpoint = w.checkpoint();
+    await docs.writeDoc(docId, checkpoint, {
+      revisionId: randomUUID(),
+      kind: "checkpoint",
+      engineSchema: 2,
+      savedAt: 1,
+      byteLength: checkpoint.byteLength,
+    });
+    const snapshotsSent = (): number =>
+      bytes.sent.filter((s) => s.kind === DOC_SYNC_RECORD.SNAPSHOT).length;
+
+    const lane1 = MESHDATA_INBOUND_LANE_ID_BASE + 60;
+    control.announce({
+      kind: "peerOpened",
+      laneId: lane1,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    // It speaks VERSION (holding all we hold: nothing to answer), then a HAVE —
+    // ignored, the VERSION's answer was exact.
+    bytes.deliver(
+      lane1,
+      encodeDocSyncVersion(
+        { baseEpoch: 0, hasCheckpoint: true, loro: 1 },
+        w.doc.oplogVersion().encode(),
+      ),
+    );
+    bytes.deliver(lane1, encodeDocSyncHave(0, { hasCheckpoint: false, records: [] }));
+    await new Promise((r) => setTimeout(r, 60));
+    expect(snapshotsSent()).toBe(0);
+
+    // The peer leaves this account's doc peer set…
+    peerState.delete("peer-a");
+    control.announce({ kind: "closed", laneId: lane1 });
+    await new Promise((r) => setTimeout(r, 80)); // several beats
+    // …and comes back as a build that speaks only HAVE.
+    peerState.set("peer-a", true);
+    const lane2 = MESHDATA_INBOUND_LANE_ID_BASE + 61;
+    control.announce({
+      kind: "peerOpened",
+      laneId: lane2,
+      peer: "peer-a",
+      protocol: "doc-sync",
+      docId,
+      inbound: true,
+    });
+    bytes.deliver(lane2, encodeDocSyncHave(0, { hasCheckpoint: false, records: [] }));
+    await until(() => snapshotsSent() > 0, "the returning peer's HAVE to be answered");
+  });
 });
 
 describe("DS-5c — reassembly is fair", () => {

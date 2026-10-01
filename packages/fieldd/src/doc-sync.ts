@@ -517,6 +517,28 @@ export class DocSyncService {
     this.replicate();
   }
 
+  /** DS-5c — a version-speaker mark leaves with its PEER — gone from the doc
+   * peer set and from the roster both (asleep is a state, not an absence: an
+   * offline desktop keeps its row, and its lanes and marks with it) — or with
+   * its DOCUMENT. They grew with every peer ever met, and a peer back as an
+   * older build had its HAVE ignored for good. A peer that returns re-marks
+   * itself with its next VERSION. */
+  #pruneVersionPeers(peers: readonly SyncPeer[]): void {
+    if (this.#versionPeers.size === 0) return;
+    const present = new Set(peers.map((peer) => peer.id));
+    for (const row of this.#liveness?.list() ?? []) present.add(row.id);
+    const docs = new Set([
+      ...this.#docs.list().map((entry) => entry.docId),
+      ...this.#docs.systemDocIds(),
+    ]);
+    for (const key of [...this.#versionPeers]) {
+      const split = key.indexOf("\u0000");
+      if (!present.has(key.slice(split + 1)) || !docs.has(key.slice(0, split))) {
+        this.#versionPeers.delete(key);
+      }
+    }
+  }
+
   /** Lanes are field-native's to reap when fieldd goes away; this only drops
    * our routing so a restarted service does not deliver into dead handlers. */
   stop(): void {
@@ -550,9 +572,9 @@ export class DocSyncService {
     if (!this.#started || this.#beating) return;
     this.#beating = true;
     try {
-      const online = new Set(
-        (await this.#peers()).filter((peer) => peer.online).map((peer) => peer.id),
-      );
+      const peers = await this.#peers();
+      this.#pruneVersionPeers(peers);
+      const online = new Set(peers.filter((peer) => peer.online).map((peer) => peer.id));
       const now = this.#now();
       const owed = new Set<string>();
       for (const [docId, facts] of this.#facts) {
