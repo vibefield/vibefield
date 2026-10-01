@@ -44,9 +44,21 @@ describe("refuseBoardAsk — who may ask which board", () => {
       "PRECONDITION_FAILED",
     );
     expect(refused("local-token", { heartbeatMs: 1_000 })?.kind).toBe("PRECONDITION_FAILED");
-    // …and a window, the shell and the phone read it here as they always have
-    for (const principal of ["local-token", "shell-main", "tailnet", "plugin"])
+    // …and a window, the shell and a plugin read it here as they always have
+    for (const principal of ["local-token", "shell-main", "plugin"])
       expect(refused(principal, {}), principal).toBeNull();
+  });
+
+  it("keeps the full fold off the phone too (SP-L4, DS wave 2 landing): a bare ask from a tailnet principal is refused, field stands", () => {
+    // a phone's `agent.subscribe {}` used to be the whole fold at the 16 ms tick
+    expect(refused("tailnet", {})).toEqual({
+      kind: "FORBIDDEN_SCOPE",
+      retryable: false,
+      details: { projection: "full" },
+    });
+    expect(refused("tailnet", { projection: "full" })?.kind).toBe("FORBIDDEN_SCOPE");
+    expect(refused("tailnet", { projection: "field" })).toBeNull();
+    expect(refused("tailnet", { projection: "field", scope: "mesh" })).toBeNull();
   });
 
   it("keeps the desk off the phone (SP-L4) — and serves it to a window and a self peer daemon", () => {

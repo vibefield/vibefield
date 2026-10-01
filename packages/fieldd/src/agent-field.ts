@@ -59,11 +59,16 @@ export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): Rp
   if (projection === "full") {
     // DS-D4 — the whole fold row stays on its device. The door became `stream`
     // for the board's sake (a peer daemon asks it), so the wall that used to
-    // refuse a peer outright is this line for `full`.
-    if (principal === "peer-fieldd")
+    // refuse a peer outright is this line for `full`. SP-L4 (DS wave 2 landing,
+    // 2026-10-01): the PHONE is refused it too — a `tailnet` principal's bare
+    // ask used to be the whole fold at the desktop's 16 ms tick; the phone
+    // reads `field` (and does: FieldLink asks `{projection: "field"}`).
+    if (principal === "peer-fieldd" || principal === "tailnet")
       return new RpcCallError(
         "FORBIDDEN_SCOPE",
-        "the full projection is local to its device; a peer reads field or desk (DS-D4)",
+        principal === "tailnet"
+          ? "the full projection is local to its device; a phone reads field (SP-L4)"
+          : "the full projection is local to its device; a peer reads field or desk (DS-D4)",
         false,
         { projection },
       );
