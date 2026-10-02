@@ -382,6 +382,8 @@ export class AgentStatusLedgers {
       }
       if (id !== undefined) this.ledgers.delete(id);
     }
+    // a ledger held only in memory (its file never written) goes the same way
+    for (const id of [...this.ledgers.keys()]) if (!keep.has(id)) this.ledgers.delete(id);
     if (removed > 0) {
       this.logger.info("fieldd.agents.history_swept", "Status ledgers past retention removed", {
         removed,
