@@ -872,6 +872,13 @@ export const LAYOUT = {
    * it wrote itself — a same-uid file dropped into `agents/sessions/` is set
    * aside, never acted on (EL7). */
   AGENT_SESSIONS_KEY_FILE: ["agents", "sessions.key"],
+  /** TL (2026-10-02, TL-D8) — the status ledger: one `<runtimeRunId>.jsonl`
+   * (0600, the directory 0700) per managed run the fold watched, appended a
+   * line per status change while the run lives (`agent-status-ledger.ts`).
+   * What `agent.history` answers from; content-free by the fold's standard (a
+   * status, its moment, a blocker's words, a working span's last activity
+   * line), kept for `AGENT_HISTORY.HORIZON_MS` after the run exits. */
+  AGENT_HISTORY_DIR: ["agents", "history"],
   /** AR-7 — the spawn-through shim's home under this user (0700): the
    * rendezvous files, one launcher per offered agent's command, the bundled
    * shim and the shell integration. puppeteer's spawn-through kit writes every
