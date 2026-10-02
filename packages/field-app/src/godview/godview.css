@@ -481,13 +481,16 @@
    `GodviewMonitor`, 0 when the strip is empty — which reproduces the package's
    rule exactly). The rain and the swarm keep their full bleed: the swarm steers
    its bodies around chrome by rect, and the rain is a canvas the column already
-   crosses. DESIGN.md §9: two claims that overlap are one unreadable claim. */
+   crosses. DESIGN.md §9: two claims that overlap are one unreadable claim.
+   TL (2026-10-02): the timeline lays out in flow (its map strip is a row at
+   its top), so it starts below the strip as the list does. */
 .vf-godview-monitor-stage {
   /* `@vibecook/puppeteer-views/styles/list.css` — a flow view's own top band. */
   --vf-monitor-flow-band: 11px;
 }
 
-.vf-godview-monitor-stage .vf-monitor-list {
+.vf-godview-monitor-stage .vf-monitor-list,
+.vf-godview-monitor-stage .vf-monitor-timeline {
   padding-top: calc(var(--vf-monitor-claims-bottom, 0px) + var(--vf-monitor-flow-band));
 }
 

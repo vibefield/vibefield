@@ -117,7 +117,7 @@ function afternoon(spec: RunSpec, nowMs: number, rnd: () => number): AgentRunHis
   let state: State = "working";
   let line = 0;
   // the current stretch is the last 1–9 minutes before the end, in `spec.now`
-  const lastFrom = end - (1 + Math.floor(rnd() * 8)) * MIN;
+  const lastFrom = Math.round(end - (1 + rnd() * 8) * MIN);
   while (at < lastFrom) {
     changes.push(change(state, at, spec, line++));
     const [lo, hi] = LENGTH_MIN[state];
