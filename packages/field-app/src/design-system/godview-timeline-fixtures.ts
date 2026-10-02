@@ -1,4 +1,8 @@
-import type { AgentRunHistory, AgentSessionSummary } from "@vibefield/contracts";
+import {
+  AGENT_CATALOG,
+  type AgentRunHistory,
+  type AgentSessionSummary,
+} from "@vibefield/contracts";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 import { aloneOnTheMesh, NO_HISTORY, NO_USAGE } from "./godview-profiles-fixtures";
 
@@ -12,10 +16,16 @@ import { aloneOnTheMesh, NO_HISTORY, NO_USAGE } from "./godview-profiles-fixture
 
 const MIN = 60_000;
 
+/** The catalog's own agents, in its order: a fixture names an agent by row, never by id (AR-L1, R23b). */
+function agentOf(index: number): { id: string; label: string } {
+  const row = AGENT_CATALOG[index % AGENT_CATALOG.length] ?? AGENT_CATALOG[0];
+  return { id: row.id, label: row.label };
+}
+
 interface RunSpec {
   run: string;
-  kind: string;
-  label: string;
+  /** which of the catalog's agents runs it, by position (the ids are the catalog's, never spelled here) */
+  agent: number;
   project: string;
   model: string;
   bornAgoMin: number;
@@ -28,8 +38,7 @@ interface RunSpec {
 const RUNS: readonly RunSpec[] = [
   {
     run: "run-vibe-field",
-    kind: "claude",
-    label: "Claude Code",
+    agent: 0,
     project: "vibe-field",
     model: "opus · high",
     bornAgoMin: 238,
@@ -38,8 +47,7 @@ const RUNS: readonly RunSpec[] = [
   },
   {
     run: "run-puppeteer",
-    kind: "codex",
-    label: "Codex",
+    agent: 1,
     project: "puppeteer",
     model: "gpt-5 · medium",
     bornAgoMin: 191,
@@ -48,8 +56,7 @@ const RUNS: readonly RunSpec[] = [
   },
   {
     run: "run-swarm-lab",
-    kind: "claude",
-    label: "Claude Code",
+    agent: 0,
     project: "swarm-lab",
     model: "sonnet",
     bornAgoMin: 150,
@@ -58,18 +65,16 @@ const RUNS: readonly RunSpec[] = [
   },
   {
     run: "run-rosetta",
-    kind: "grok",
-    label: "Grok",
+    agent: 2,
     project: "rosetta",
-    model: "grok-4",
+    model: "fast-4",
     bornAgoMin: 122,
     now: "working",
     did: ["Read src/index/walk.rs", "Run cargo clippy"],
   },
   {
     run: "run-changelog",
-    kind: "claude",
-    label: "Claude Code",
+    agent: 0,
     project: "changelog",
     model: "haiku",
     bornAgoMin: 96,
@@ -79,8 +84,7 @@ const RUNS: readonly RunSpec[] = [
   },
   {
     run: "run-billing-api",
-    kind: "codex",
-    label: "Codex",
+    agent: 1,
     project: "billing-api",
     model: "gpt-5 · high",
     bornAgoMin: 41,
@@ -161,11 +165,12 @@ function foldRow(spec: RunSpec, history: AgentRunHistory): AgentSessionSummary {
   const last = history.changes[history.changes.length - 1];
   const since = last?.at ?? history.recordedFrom;
   const alive = history.exitedAt === undefined;
+  const agent = agentOf(spec.agent);
   return {
     sessionId: `${spec.run}-native`,
     sessionIdBasis: "observed",
-    kind: spec.kind,
-    label: spec.label,
+    kind: agent.id,
+    label: agent.label,
     device: "this-mac",
     tier: "managed",
     runtimeRunId: spec.run,
