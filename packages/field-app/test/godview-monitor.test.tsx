@@ -858,6 +858,7 @@ describe("the monitor stage", () => {
       "SWARM view",
       "LIST view",
       "RAIN view",
+      "TIMELINE view",
     ]);
     expect(pressedView(host)).toBe("LIST view");
     expect(bar?.querySelector('[role="switch"]')?.getAttribute("aria-checked")).toBe("false");

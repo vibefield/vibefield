@@ -204,7 +204,20 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
     // reduced-motion and animations switches. A keyframe that reappears here
     // is ambient DOM work on every frame the overlay is open — the cost
     // GT-D15.1 measured — and is argued back in by name, not by accident.
-    expect(keyframeBlocks(css).map((block) => block.name)).toEqual([]);
+    // TL (DESIGN §8, 2026-10-02) — argued in: the timeline's owed ring, the
+    // swarm's wave on a DOM body. It is the view's only loop. It animates
+    // transform and opacity alone (the compositor's, no layout or paint). It
+    // runs only while the timeline is the mounted view and a body is owed,
+    // and never under reduced motion or with Godview's animations off.
+    const argued = new Set(["vf-monitor-timeline-ring"]);
+    expect(
+      keyframeBlocks(css)
+        .map((block) => block.name)
+        .filter((name) => !argued.has(name)),
+    ).toEqual([]);
+    const ring = keyframeBlocks(css).find((block) => block.name === "vf-monitor-timeline-ring");
+    expect(ring?.body).toBeDefined();
+    expect(ring?.body).not.toMatch(/\b(width|height|top|left|box-shadow|filter|background)\s*:/);
   });
 
   it("animates filter in NO keyframe, anywhere in the overlay's stylesheets", () => {
