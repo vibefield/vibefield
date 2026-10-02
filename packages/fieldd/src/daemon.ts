@@ -11,6 +11,7 @@ import {
   AgentCatalogParams,
   type AgentFieldDelta,
   type AgentFieldSnapshot,
+  AgentHistoryParams,
   AgentInterruptParams,
   AgentResumeParams,
   AgentSpawnParams,
@@ -2392,6 +2393,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     });
     api.register("agent.list", () => agents.list());
+    // TL (TL-D8) — the status ledger: asked once when Godview opens, and for
+    // a run it has not asked about; read-only and unaudited like the fold.
+    api.register("agent.history", (_ctx, params) => {
+      const parsed = AgentHistoryParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeRunIds? }", false);
+      return agents.history(parsed.data);
+    });
     // DS-3 (DS-L3) — every field and desk subscription is its own revision
     // CHAIN, and its epoch says which: this boot plus the chain's ordinal. Two
     // subscriptions in one boot never share an epoch, so no reader can mistake
