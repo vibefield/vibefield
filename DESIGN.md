@@ -141,6 +141,12 @@ either.
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
 #06B6D4 · #8B5CF6 · #EF4444 · #3B82F6`. Tint recipe: body fill at 12% (`{hex}1F`),
 hairline at ~35%, label at full. These group and label; they never signal state.
+**One exception, carried by shape (TL-D2, TL-D14, 2026-10-02):** in Godview's timeline (§8) a
+working span wears its PROJECT's colour (`MonitorAgent.color`, the host's `projectTint`), because
+across an afternoon colour has to say whose a lane is, and the swarm's one ink made every lane look
+alike. There the shape says what: work is a wide wake, a wait a thin thread, rest a hairline. So a
+project hue that lands near orange (the wheel withholds only the band around `--vf-select`) never
+reads as blocked, and the wheel itself is not changed.
 **Users are not among them (2026-09-22, UA-D17):** a person is known by a face (§2.8), never a
 colour. An accent on a user collided with the project inks and with §2.5 — measured in OKLCH,
 three of the eight slots sat within 3° of green, orange and red, and one inside the band
@@ -770,6 +776,44 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   theme browser's stage), `thumb` (a 600px window scaled, docked in the corner once the big
   one scrolls away, and minimizable to a pill). It is `inert` inside a `role="img"` with a
   description — a picture, never a second UI.
+- **Godview's timeline is the swarm through time** (TL, 2026-10-02 — James ruled design F,
+  Wakes, with its map of the day; `draft/godview-timeline/`). A fourth monitor view (`TIMELINE`,
+  after swarm, list and rain). It is painted into a canvas, like the swarm and the rain. Lanes run
+  in birth order and never move (TL-D4). A lane is 24–36px (18px for a bare terminal, kept in a
+  quiet group under the agents, TL-D7). It opens on the last hour, following now (TL-D5), with
+  presets 15M · 1H · 4H · 12H. Pinch or ⌘-scroll zooms at the pointer (240ms, island) and a drag pans.
+  **Each lane is one wake:** a single variable-width outline that swells into work and narrows
+  through a short S-curve into a wait.
+  - Work: 2 × 22% of the lane height, clamped 8–15px, in the project's colour (§2.6's
+    exception), with a soft glow (the outline's own blur, 5px light at 24% · 6px dark at 62%) and a
+    1px sheen along it.
+  - Blocked and unseen: a 4.4–7.6px thread in `--vf-orange` and the swarm's blue.
+  - Idle: a 1.7px hairline in text-faint.
+  - Time the record does not hold: a dotted text-faint thread, never a state.
+  - An ended agent's lane stays at 45% with a 2px end tick until it scrolls out (TL-D6).
+  **At the head** sit the swarm's bodies, lit as the swarm lights them, the swarm's wave ringing out of
+  one you owe (1.1s, island, the view's only loop). Beside each body is a readout: the current
+  state's length, then its word. Names float over the wakes' far end; there is no rail. **Pointing
+  at a lane (or ↑ ↓) lights it and quiets the rest to 30%.** The lit lane prints each closed span's
+  length: inside the work, or above a wait in that state's ink, haloed in the ground. **Looking back
+  relights the bodies to that moment** (TL-D13). Each readout then says how far into that state it
+  was and of how long ("4:39 idle · of 7m"). The clock chip turns to the outlined head time,
+  and NOW glides back (600ms, island).
+  **The map of the day** is its own 46px strip above the axis (TL-D17). Its right end lines up with
+  the head while following now.
+  - It is drawn as Pulse (TL-D15): the whole field summed into one ridge, smoothed by an ~8px
+    gaussian. Work stacks above a line in each project's colour, its height the number of agents
+    working, drawn and never printed (FC-D18). Waits hang below in orange, then blue.
+  - Only the window in view keeps its colour; the rest of the day is grayed.
+  - The head is a 2px line with a knob, filled while following now and hollow while looking back.
+  - **Pressing the map puts the head there, and dragging plays the day back** on the bodies
+    (TL-D16). It is a `role="slider"`: ← → 5 min, ⇧ 30, Home the day's start, End now.
+  **Colours:** project for work, §2.5's orange for blocked, the swarm's blue for a reply not yet
+  opened (TL-D3), text-faint for idle. Never red; now is ink. One click opens the agent in the pane
+  you are in (the views' `select`).
+  **Reduced motion:** no wave, no glide, no zoom tween; positions jump.
+  **The record** is fieldd's status ledger (`agent.history`, TL-D8). Without it the view still draws
+  each agent's birth and its current state (TL-D9).
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
