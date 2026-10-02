@@ -4,6 +4,7 @@ import { DeviceFilterPreview } from "../DeviceFilterPreview";
 import { GodviewPreview } from "../GodviewPreview";
 import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
+import { timelineDoor } from "../godview-timeline-fixtures";
 import { PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
@@ -13,6 +14,7 @@ import { TerminalSessionPickerPreview } from "../TerminalSessionPickerPreview";
 
 export function GodviewSection(): ReactElement {
   const profilesDoor = useMemo(() => profileTabsDoor(), []);
+  const afternoonDoor = useMemo(() => timelineDoor(), []);
   const meshDoor = useMemo(() => meshBoardDoor(), []);
   return (
     <Section
@@ -24,6 +26,15 @@ export function GodviewSection(): ReactElement {
     >
       <Specimen title="Godview stage" source="godview/GodviewStage.tsx" bleed>
         <GodviewPreview />
+      </Specimen>
+      <Specimen
+        title="Timeline — the swarm through time: an afternoon from fieldd's status ledger"
+        source="@vibecook/puppeteer-views/views/timeline"
+        bleed
+      >
+        <div data-godview-timeline-catalog="">
+          <GodviewPreview door={afternoonDoor} initialView="timeline" />
+        </div>
       </Specimen>
       <Specimen
         title="Profile tabs — a profile's sessions on the stage, the others receded"
