@@ -225,6 +225,17 @@ export const AGENT_FIELD = {
   FULL_TICK_MS: 16,
 } as const;
 
+/** TL (2026-10-02, TL-D8) — the status ledger fieldd's fold keeps per run
+ * (`agent-history.ts`). HORIZON_MS is how far back a run's record reaches and
+ * how long an exited run's record is kept; MAX_CHANGES bounds a run that flips
+ * often (its oldest changes go first); TEXT_CHARS bounds the two texts a change
+ * carries, a blocker's words and a working span's last activity line. */
+export const AGENT_HISTORY = {
+  HORIZON_MS: 24 * 60 * 60 * 1000,
+  MAX_CHANGES: 2000,
+  TEXT_CHARS: 160,
+} as const;
+
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
  * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
  * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept
