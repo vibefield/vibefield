@@ -147,6 +147,10 @@
     "agents",
     "sessions.key"
   ],
+  "AGENT_HISTORY_DIR": [
+    "agents",
+    "history"
+  ],
   "AGENT_SHIMS_DIR": [
     "agents",
     "shims"
