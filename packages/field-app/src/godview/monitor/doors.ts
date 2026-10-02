@@ -18,6 +18,7 @@ import {
   type AgentAccountUsageEntry,
   AgentMeshFrame,
   AgentMeshOpen,
+  AgentRunHistory,
   AgentsProfileSetsListResult,
   DeviceInfo,
   IndexSearchResult,
@@ -31,6 +32,7 @@ import type {
   MonitorFeedState,
   MonitorUsagePort,
   ProfileSetsPort,
+  StatusHistoryPort,
 } from "./remote-door";
 
 // THE TWO PORTS (AR-5, D14): the find sheet and the usage column reach fieldd
@@ -509,6 +511,30 @@ export function profileSetsPortOver(client: DoorClient): ProfileSetsPort {
         cancelled = true;
         unsubscribe?.();
       };
+    },
+  };
+}
+
+/* ── the status ledger: agent.history (TL, TL-D8) ───────────────────────── */
+
+/** fieldd's record of what each run did, read run by run (the tolerant reader):
+ * an answer that is not a list of runs is no record, and a run that does not
+ * parse is dropped while the rest stand. A refusal — a fieldd from before the
+ * door — rejects, and the caller draws what it watched. */
+export function statusHistoryPortOver(client: DoorClient): StatusHistoryPort {
+  return {
+    async load(runtimeRunIds) {
+      const answer = await client.request(
+        "agent.history",
+        runtimeRunIds === undefined ? {} : { runtimeRunIds: [...runtimeRunIds] },
+      );
+      const runs =
+        typeof answer === "object" && answer !== null && "runs" in answer ? answer.runs : undefined;
+      if (!Array.isArray(runs)) return [];
+      return runs.flatMap((run: unknown) => {
+        const parsed = AgentRunHistory.safeParse(run);
+        return parsed.success ? [parsed.data] : [];
+      });
     },
   };
 }

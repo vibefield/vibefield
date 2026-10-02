@@ -1,14 +1,21 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { MonitorUsageState } from "@vibecook/puppeteer-core";
 import {
+  EMPTY_STATUS_LEDGER,
   EMPTY_UNREAD_LEDGER,
   EMPTY_USAGE_LEDGER,
+  endStatusLane,
   exportUsage,
+  type MonitorHistoryBook,
   type MonitorPalette,
+  observeStatuses,
   type PaneAttachment,
   reconcileUnread,
   reconcileUsage,
+  type StatusLedger,
+  seedStatusHistory,
   seedUsage,
+  statusHistoryBook,
   type UnreadLedger,
   USAGE_STEP_MS,
   type UsageLedger,
@@ -19,6 +26,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { blockerTool, projectKey, projectLabel } from "./agent-status";
 import {
   assembleMonitorAgents,
+  endedMonitorAgent,
   type MonitorFloorRecord,
   type MonitorManagedRecord,
   type MonitorMeshRecord,
@@ -167,6 +175,16 @@ export interface MonitorAgentsResult {
   /** DS-3 — every desktop on the mesh board, this one first, each with its
    * standing and how many agents it runs: the device filter's choices. */
   devices: readonly DeviceChoice[];
+  /** TL — what each lane did over time: fieldd's status ledger under what this
+   * window watched (`status-ledger.ts`), with the runs that ended inside the
+   * day. Unfiltered; the stage narrows `ended` as it narrows `agents`. */
+  history: GodviewHistoryBook;
+}
+
+/** The package's book with this host's rows: every row the ledger holds came
+ * from this hook's own projection, so `ended` is Godview's `MonitorAgent`. */
+export interface GodviewHistoryBook extends MonitorHistoryBook {
+  readonly ended: readonly MonitorAgent[];
 }
 
 export interface MonitorSourceCounts {
@@ -465,6 +483,61 @@ export function useMonitorAgents({
     return () => window.removeEventListener("pagehide", save);
   }, [usageKeys, usageStep, usageStore]);
 
+  /**
+   * TL (TL-D8) — what each lane did over time. The package's ledger folds
+   * every projection (so a reply not yet opened is recorded as unseen, and a
+   * peer's run from when this window first heard it); fieldd's ledger is laid
+   * under it once per live fold — asked when the fold goes live, which is when
+   * Godview opens and again after fieldd comes back. A fieldd from before the
+   * door refuses, and the record is then what this window watched.
+   */
+  const statusRef = useRef<StatusLedger>(EMPTY_STATUS_LEDGER);
+  /** Run → when fieldd says it exited, for the runs its ledger answered. */
+  const exitsRef = useRef<ReadonlyMap<string, number>>(new Map());
+  const [statusSeed, setStatusSeed] = useState(0);
+  const statusPort = door?.statusHistory;
+  const foldLive = localField.state === "live";
+  useEffect(() => {
+    if (statusPort === undefined || !foldLive) return;
+    let alive = true;
+    void statusPort
+      .load()
+      .then((runs) => {
+        if (!alive) return;
+        const nowMs = Date.now();
+        const exits = new Map(exitsRef.current);
+        let ledger = statusRef.current;
+        for (const run of runs) {
+          const recordedFromMs = Date.parse(run.recordedFrom);
+          if (!Number.isFinite(recordedFromMs)) continue;
+          const endedAtMs = run.exitedAt === undefined ? Number.NaN : Date.parse(run.exitedAt);
+          ledger = seedStatusHistory(
+            ledger,
+            run.runtimeRunId,
+            {
+              recordedFromMs,
+              changes: run.changes.map((change) => ({
+                status: change.status,
+                atMs: Date.parse(change.at),
+                ...(change.blocker ? { blocker: change.blocker } : {}),
+                ...(change.did ? { did: change.did } : {}),
+              })),
+              ...(Number.isFinite(endedAtMs) ? { endedAtMs } : {}),
+            },
+            nowMs,
+          );
+          if (Number.isFinite(endedAtMs)) exits.set(run.runtimeRunId, endedAtMs);
+        }
+        statusRef.current = ledger;
+        exitsRef.current = exits;
+        setStatusSeed((seed) => seed + 1);
+      })
+      .catch(() => undefined);
+    return () => {
+      alive = false;
+    };
+  }, [statusPort, foldLive]);
+
   /** Unread is a fold over successive projections (the package's ledger). */
   const unreadRef = useRef<UnreadLedger>(EMPTY_UNREAD_LEDGER);
   const visualIdsRef = useRef<ReadonlyMap<string, string>>(new Map());
@@ -596,9 +669,32 @@ export function useMonitorAgents({
       nowMs,
     );
     unreadRef.current = ledger;
-    return assembled.map((agent) =>
+    const projected = assembled.map((agent) =>
       ledger.unreadIds.has(agent.id) ? { ...agent, unread: true } : agent,
     );
+    let status = observeStatuses(statusRef.current, projected, nowMs);
+    // A run fieldd says ended, still in the fold but no longer drawn, keeps
+    // its lane faint (TL-D6): named from its row, ended where fieldd saw it end.
+    const drawn = new Set(projected.map((agent) => agent.id));
+    for (const summary of localRows) {
+      const id = managedRowId(summary);
+      const endedAtMs = exitsRef.current.get(id);
+      if (endedAtMs === undefined || drawn.has(id) || !status.lanes.has(id)) continue;
+      status = endStatusLane(
+        status,
+        endedMonitorAgent(
+          { summary },
+          {
+            colours: { tint: palette.tint, neutral: palette.neutral },
+            projectSeqs: projectLedger.seqByKey,
+            nowMs,
+          },
+        ),
+        endedAtMs,
+      );
+    }
+    statusRef.current = status;
+    return projected;
   }, [
     palette.tint,
     palette.neutral,
@@ -617,7 +713,13 @@ export function useMonitorAgents({
     panes.profileSets,
     usageStep,
     usageSeed,
+    statusSeed,
   ]);
+  const history = useMemo(
+    () => statusHistoryBook(statusRef.current) as GodviewHistoryBook,
+    // the ledger moves only with the projection and with a seed
+    [agents, statusSeed],
+  );
 
   const announce = useCallback((message: string): void => {
     setAcknowledgement((current) => ({ nonce: (current?.nonce ?? 0) + 1, message }));
@@ -901,6 +1003,7 @@ export function useMonitorAgents({
   return {
     agents,
     actions,
+    history,
     sources,
     acknowledgement,
     clearAcknowledgement,

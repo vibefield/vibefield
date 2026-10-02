@@ -258,7 +258,7 @@ export function GodviewMonitor({
   const showTabs = showsProfileTabs(profileSets);
   const chosen = useMemo(() => chosenProfile(profileSets, profileTab), [profileSets, profileTab]);
 
-  const { agents, actions, sources, acknowledgement, clearAcknowledgement, devices } =
+  const { agents, actions, sources, acknowledgement, clearAcknowledgement, devices, history } =
     useMonitorAgents({
       palette,
       door,
@@ -329,6 +329,20 @@ export function GodviewMonitor({
   const shown = useMemo(
     () => (chosenId === undefined ? placed : staged.filter((agent) => agent.receded !== true)),
     [placed, chosenId, staged],
+  );
+  /** TL — the record, its ended lanes narrowed exactly as the live rows are:
+   * an ended run on another desktop, or under another profile, is drawn (or
+   * receded) by the same rule as a live one. */
+  const stagedHistory = useMemo(
+    () => ({
+      ...history,
+      ended: recedeOutside(
+        filterByDevice(withProfileSets(history.ended, personas), deviceChosen),
+        chosenId,
+        personas,
+      ),
+    }),
+    [history, personas, deviceChosen, chosenId],
   );
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
   // AR-7 — the fold's rows for the marker, handed on as the SAME object until
@@ -678,6 +692,7 @@ export function GodviewMonitor({
             parameters={parameters}
             actions={actions}
             palette={palette}
+            history={stagedHistory}
             {...(spawnMenu !== undefined ? { spawnMenu } : {})}
           />
         </SwarmPhysicsProvider>

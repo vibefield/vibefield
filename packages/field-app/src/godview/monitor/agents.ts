@@ -181,6 +181,30 @@ export function monitorAgentFromManaged(
   if (session?.exited) return undefined;
   const status = classifyAgentStatus(summary);
   if (!status) return undefined;
+  return managedAgent(record, status, input, usage);
+}
+
+/**
+ * TL-D6 — an ended run's last row, for the timeline's faint lane: the same
+ * projection as a live one (whose it was, its project's colour, its model),
+ * standing as idle because the view draws an ended lane from its record and
+ * never from this status. Nothing else draws it: it reaches the views only
+ * through the history book's `ended`.
+ */
+export function endedMonitorAgent(
+  record: MonitorManagedRecord,
+  input: Pick<AssembleMonitorAgentsInput, "colours" | "projectSeqs" | "nowMs">,
+): MonitorAgent {
+  return managedAgent(record, "idle", input);
+}
+
+function managedAgent(
+  record: MonitorManagedRecord,
+  status: AgentVisualStatus,
+  input: Pick<AssembleMonitorAgentsInput, "colours" | "projectSeqs" | "nowMs">,
+  usage?: UsageHistory,
+): MonitorAgent {
+  const { summary, session } = record;
   // The mirror is Core's projection carried verbatim (the passthrough, pinned
   // against Core's generation by `agent-monitor-pin.test.ts`); the views read
   // it as Core's type, and this is the one seam that says so.

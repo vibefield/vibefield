@@ -3,6 +3,7 @@ import type {
   AgentMeshFrame,
   AgentMeshOpen,
   AgentProfileSet,
+  AgentRunHistory,
   DeviceInfo,
 } from "@vibefield/contracts";
 import type { AgentSessionSummary } from "./facet-types";
@@ -92,6 +93,17 @@ export interface MonitorDoor {
    * (PF6). Optional, and deliberately: a door without it draws no tabs,
    * which is also what the bar should draw when there is no feed to read. */
   profiles?: ProfileSetsPort;
+  /** TL (TL-D8) — fieldd's status ledger (`agent.history`): what each run did
+   * over the last day, for the timeline. Optional: a door without it (or a
+   * fieldd that predates the door) leaves the timeline drawing what this
+   * window watched. */
+  statusHistory?: StatusHistoryPort;
+}
+
+/** TL — one ask of `agent.history`, read run by run: a run that does not parse
+ * is dropped and the rest stand. Absent ids ask for every run in the horizon. */
+export interface StatusHistoryPort {
+  load(runtimeRunIds?: readonly string[]): Promise<readonly AgentRunHistory[]>;
 }
 
 /** AR-S5 — the Agent Profiles as whole snapshots at fieldd's tick. Returns the
