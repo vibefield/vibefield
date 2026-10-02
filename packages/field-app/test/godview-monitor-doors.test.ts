@@ -868,7 +868,10 @@ describe("TL — the status history port over agent.history", () => {
 
   it("asks for every run, or for the runs named, and reads the answer run by run", async () => {
     const { client, request } = requestingClient({
-      "agent.history": { horizonMs: 86_400_000, runs: [run("r1"), { runtimeRunId: "" }, run("r2")] },
+      "agent.history": {
+        horizonMs: 86_400_000,
+        runs: [run("r1"), { runtimeRunId: "" }, run("r2")],
+      },
     });
     const port = statusHistoryPortOver(client);
     const runs = await port.load();
