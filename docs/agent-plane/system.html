@@ -1941,6 +1941,12 @@
                     <td><p>0600</p></td>
                   </tr>
                   <tr>
+                    <td><span class="route">agents/history/&lt;runtimeRunId&gt;.jsonl</span></td>
+                    <td><p>TL-D8 — the status ledger: one line per status change of a managed run (a status, its moment, a blocker's kind and words, a working span's last activity line, each text cut to <code>AGENT_HISTORY.TEXT_CHARS</code>), appended while the run lives and loaded again when a later boot re-attaches it. Kept until the run exits plus <code>AGENT_HISTORY.HORIZON_MS</code>; a ledger with no verified record goes at the next sweep. Read as untrusted: no links followed, the last MiB at most, bad lines skipped.</p></td>
+                    <td><p><code>AgentRuntimeService</code> (<code>agent-status-ledger.ts</code>), append-only, compacted by rewrite</p></td>
+                    <td><p>0700/0600</p></td>
+                  </tr>
+                  <tr>
                     <td><span class="route">agents/runs/</span></td>
                     <td><p>puppeteer's durable creation registry — the claims a run is restored against. Never written by VibeField; puppeteer owns every byte.</p></td>
                     <td><p>puppeteer</p></td>
