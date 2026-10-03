@@ -250,8 +250,13 @@ describe("DK-2 — an objects row compiles through defineObject", () => {
     expect(() => buildObjectType(notKind, { kind: { name: notKind.type } })).toThrow(
       /holds no desk kind/,
     );
+    // DK-3 (ruling 9): the contract requires the hang now, so a hangless entry is one that reached
+    // the host some other way — typed past the schema here — and the host still refuses it.
     const { hang: _hang, ...unhung } = objectRow("com.example.dk2objects.unhung", "unhung").tray;
-    const hangless = { ...objectRow("com.example.dk2objects.unhung", "unhung"), tray: unhung };
+    const hangless = {
+      ...objectRow("com.example.dk2objects.unhung", "unhung"),
+      tray: unhung,
+    } as unknown as Parameters<typeof buildObjectType>[0];
     expect(() =>
       buildObjectType(hangless, { kind: fakeKind("com.example.dk2objects.unhung") }),
     ).toThrow(/tray\.hang is required/);
