@@ -77,8 +77,10 @@ export function ViewFrame({ godview }: { godview: ReactNode }): ReactElement {
   }, []);
 
   // ⌘1–⌘4 — product chords (GT-D21): the window's capture phase, stopped there,
-  // so a focused pane never sees them and ghostty's goto_tab never runs. A held
-  // key's repeats are claimed too, and do nothing.
+  // so a focused pane never sees them. (Ghostty binds ⌘1–⌘8 to goto_tab; the
+  // workspace's own window listener still hears the key after this one and
+  // consumes it with nothing to do — the deck has no tabs.) A held key's
+  // repeats are claimed too, and do nothing.
   useEffect(
     () =>
       listenForProductChord(
