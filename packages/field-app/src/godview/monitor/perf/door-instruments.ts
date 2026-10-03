@@ -1,0 +1,92 @@
+import type { MonitorDoor } from "../remote-door";
+import {
+  createFrameRecorder,
+  encodeFramesJsonl,
+  type FrameRecorder,
+  type FrameStamp,
+  recordingDoor,
+} from "./frame-recorder";
+
+// THE DOOR'S INSTRUMENTS (MV-0) — the one switch at the renderer's seam.
+//
+// `GodviewDeck` builds the monitor's door and hands it through this function.
+// With no switch set it hands back THE SAME OBJECT: not a wrapper, not a copy —
+// the identity `godview-frame-recorder.test.ts` holds — so the shipping path is
+// the unchanged path and a review of this file is a review of what a lab run
+// adds, never of what every run pays.
+//
+// The switch is a URL parameter, like `godviewMarkers` (`development-console.ts`),
+// and for the same reason: it is set by the HOST that launched the renderer and
+// read once where the door is built, so a renderer that was not launched for a
+// recording cannot be talked into one from inside the page. Electron main sets
+// it from `VF_GODVIEW_RECORD=<dir>` (`main/godview-recording.ts`), which is also
+// where the frames land, gzipped, because the renderer cannot write a file.
+//
+//   godviewRecord=1   the door is teed into a frame recorder, published on
+//                     `window.__vfGodviewRecorder` for the host to drain.
+
+export type GodviewDoorInstrument = "off" | "record";
+
+export const GODVIEW_RECORD_PARAM = "godviewRecord";
+
+export function godviewDoorInstrument(search: string): GodviewDoorInstrument {
+  const params = new URLSearchParams(search);
+  if (params.get(GODVIEW_RECORD_PARAM) === "1") return "record";
+  return "off";
+}
+
+/** What the host pulls over `executeJavaScript`: JSONL, then nothing held. */
+export interface GodviewRecorderBridge {
+  drain(): string;
+  held(): number;
+  dropped(): number;
+  readonly origin: FrameStamp;
+}
+
+declare global {
+  interface Window {
+    __vfGodviewRecorder?: GodviewRecorderBridge;
+  }
+}
+
+let recorder: FrameRecorder | undefined;
+
+/** One recorder per renderer life: a door rebuilt for a new runtime keeps
+ * recording into the same buffer, so a reconnect is one corpus, not two. */
+function publishedRecorder(): FrameRecorder {
+  if (recorder !== undefined) return recorder;
+  const created = createFrameRecorder();
+  recorder = created;
+  if (typeof window !== "undefined") {
+    window.__vfGodviewRecorder = {
+      drain: () => encodeFramesJsonl(created.drain()),
+      held: () => created.held(),
+      dropped: () => created.dropped(),
+      origin: created.origin,
+    };
+  }
+  return created;
+}
+
+function locationSearch(): string {
+  return typeof location === "undefined" ? "" : location.search;
+}
+
+/**
+ * The deck's door, instrumented as the renderer's URL asks — or, with nothing
+ * asked, the door itself.
+ */
+export function instrumentMonitorDoor(door: MonitorDoor, search = locationSearch()): MonitorDoor {
+  switch (godviewDoorInstrument(search)) {
+    case "off":
+      return door;
+    case "record":
+      return recordingDoor(door, publishedRecorder());
+  }
+}
+
+/** Test seam: the published recorder is per-renderer-life by design. */
+export function resetGodviewDoorInstrumentsForTest(): void {
+  recorder = undefined;
+  if (typeof window !== "undefined") delete window.__vfGodviewRecorder;
+}
