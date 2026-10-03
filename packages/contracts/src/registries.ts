@@ -858,9 +858,16 @@ export const SOCKETS = {
 export const PLUGIN_MODULE_SCHEME = "vibefield-plugin" as const;
 
 /** PA-29 / plugin spec §11.6 — the host-singleton externals list. React,
- * ReactDOM, three, R3F/drei, ICE/strata, Loro, and the SDK runtime are
- * host-provided singletons; a plugin bundle that carries a second copy of any
- * of them refuses activation.
+ * ReactDOM, ICE/strata (and the desk's four entries), Loro, and the SDK runtime
+ * are host-provided singletons; a plugin bundle that carries a second copy of
+ * any of them refuses activation.
+ *
+ * DK-1 (2026-10-03, the ICE 0.14.0 pin): `three`, `@react-three/fiber` and
+ * `@react-three/drei` LEFT this list with ICE's R3F islands — the desk draws
+ * every object under the camera with one WebGPU renderer, so the host serves
+ * no three at all (`bundle:assert` forbids it anywhere in the renderer). The
+ * desk's entries took their place: the renderer and `defineObject`, its raw
+ * engine, the six reference kinds and the render kit a plugin kind shares.
  *
  * Declared in EXACTLY ONE place: here. `tooling/plugin-build` re-exports it, so
  * the renderer library-mode bundle, the esbuild service bundle, and the
@@ -879,9 +886,10 @@ export const HOST_SINGLETON_EXTERNALS = [
   "react",
   "react-dom",
   "react/jsx-runtime",
-  "three",
-  "@react-three/fiber",
-  "@react-three/drei",
+  "@vibecook/ice/desk",
+  "@vibecook/ice/desk/engine",
+  "@vibecook/ice/desk/objects",
+  "@vibecook/ice/desk/kit",
   "@vibefield/plugin-sdk",
   "@vibecook/ice",
   "loro-crdt",

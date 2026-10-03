@@ -89,7 +89,15 @@ overrides:
   # switch are gone. Vibe Field defaults glyph:"dot", exposes dot/needle as
   # selected-pass tuning, and wires its runIf-gated cursor halo as an always-
   # live PoleSource.
-  "@vibecook/ice": 0.11.0
+  # 2026-10-03 bumped 0.11.0 → 0.14.0 — the desk (DK-1, desk/landing; DK-D12).
+  # The registry skips 0.12.0 and 0.13.0 (cut, never published), so this one
+  # event meets all three cuts' breaks (ICE CHANGELOG `[0.14.0]` › "Breaking,
+  # at a glance"): `/r3f` and `/ground` are gone, `defineWidget` refuses the
+  # DOM/R3F faces, and an object under the camera is a desk KIND drawn by one
+  # WebGPU renderer. `three` and `@react-three/*` are no longer ICE peers, so
+  # they leave the host singleton lists in this same event; strata stays
+  # 0.13.0 and loro ^1.13.8 (ICE declares both exactly as before).
+  "@vibecook/ice": 0.14.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -204,7 +212,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.11.0'
+  - '@vibecook/ice@0.14.0'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'

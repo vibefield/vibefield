@@ -53,7 +53,13 @@ test("product, Studio, and browser catalog share one dependency optimizer graph"
       "design-system.html",
       "logo-studio.html",
     ]);
-    assert.ok(config.optimizeDeps.include.includes("@vibefield/field-app > @react-three/fiber"));
+    // DK-1 (ICE 0.14.0): the desk's entries took the row R3F's fiber held.
+    assert.ok(config.optimizeDeps.include.includes("@vibefield/field-app > @vibecook/ice/desk"));
+    assert.ok(
+      !config.optimizeDeps.include.some(
+        (id) => id.includes("@react-three/") || id.endsWith("three"),
+      ),
+    );
   }
 });
 

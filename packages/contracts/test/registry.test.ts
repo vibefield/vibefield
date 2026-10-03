@@ -433,13 +433,15 @@ describe("host singleton registries (PA-29 / plugin spec §11.6)", () => {
     // Every entry is a bundler external at pack time AND an import-map key at
     // load time, so adding or renaming one moves both halves of PA-29 at once.
     // The pin is here to make that a deliberate edit against a failing test.
+    // DK-1 (ICE 0.14.0): three and @react-three/* out, the desk's entries in.
     expect(HOST_SINGLETON_EXTERNALS).toEqual([
       "react",
       "react-dom",
       "react/jsx-runtime",
-      "three",
-      "@react-three/fiber",
-      "@react-three/drei",
+      "@vibecook/ice/desk",
+      "@vibecook/ice/desk/engine",
+      "@vibecook/ice/desk/objects",
+      "@vibecook/ice/desk/kit",
       "@vibefield/plugin-sdk",
       "@vibecook/ice",
       "loro-crdt",

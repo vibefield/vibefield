@@ -79,8 +79,8 @@ const PIN_EXPECTATIONS = [
   { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.14"/m, label: 'truffle-core = "=0.7.14"' },
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ice":\s*0\.11\.0/,
-    label: '"@vibecook/ice": 0.11.0',
+    re: /"@vibecook\/ice":\s*0\.14\.0/,
+    label: '"@vibecook/ice": 0.14.0',
   },
   { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.12\.0"/m, label: 'ghosttea = "=0.12.0"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1

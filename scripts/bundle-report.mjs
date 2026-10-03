@@ -134,12 +134,18 @@ for (const [name, c] of Object.entries(shellFiles)) {
 
 // --assert (slice 4, spec §10.2): the initial graph must exclude the heavy
 // world; a lazy chunk must actually carry it; no spike artifacts in prod.
+// DK-1 (2026-10-03, ICE 0.14.0): `three` is forbidden ANYWHERE in the renderer
+// output, initial or lazy — the desk is one WebGPU renderer, ICE dropped its
+// three peer, and the host singleton lists no longer name it. The world a lazy
+// chunk must carry is Loro's wasm alone now.
 if (args.includes("--assert")) {
   const problems = [];
+  for (const [name, c] of chunks) {
+    if (c.markers.includes("three")) problems.push(`${name}: three in the renderer output`);
+  }
   for (const name of initial) {
     const c = chunks.get(name);
     if (!c) continue;
-    if (c.markers.includes("three")) problems.push(`${name}: three in the initial graph`);
     if (c.markers.includes("wasm-base64")) problems.push(`${name}: loro wasm in the initial graph`);
     if (c.markers.includes("logging-contracts")) {
       problems.push(`${name}: logging contracts in the initial renderer graph`);
@@ -152,11 +158,10 @@ if (args.includes("--assert")) {
     if (name.startsWith("spike-")) problems.push(`${name}: spike artifact in production output`);
   }
   const lazyCarriesWorld = [...chunks].some(
-    ([name, c]) =>
-      !initial.has(name) && (c.markers.includes("three") || c.markers.includes("wasm-base64")),
+    ([name, c]) => !initial.has(name) && c.markers.includes("wasm-base64"),
   );
   if (!lazyCarriesWorld) {
-    problems.push("no lazy chunk carries the workspace (three/loro) — the split did not happen");
+    problems.push("no lazy chunk carries the workspace (loro) — the split did not happen");
   }
   // History's room (2026-10-04): its code and its sheet in ONE lazy chunk named
   // for its module — never in the initial graph, never in another chunk (the

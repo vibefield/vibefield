@@ -85,28 +85,23 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: [{ find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],
     // one copy each of the stateful libs (ICE marks them external in its dist).
-    // P8b-3 adds drei: it became a HOST singleton the moment §11.6's map
-    // promised plugins one, so field-app declares it (the anchor the singleton
-    // chunk resolves from) beside widgetlab's own declaration, and this line is
-    // what keeps those two declarations one copy.
-    dedupe: [
-      "react",
-      "react-dom",
-      "three",
-      "@react-three/fiber",
-      "@react-three/drei",
-      "loro-crdt",
-      "@vibecook/strata-ecs",
-    ],
+    // DK-1 (2026-10-03, ICE 0.14.0): three, @react-three/fiber and drei LEFT
+    // with ICE's R3F islands — the desk is one WebGPU renderer and the host
+    // serves no three (`bundle:assert` forbids it anywhere). The desk's entries
+    // need no row here: they are subpaths of the ONE pinned `@vibecook/ice`
+    // package, whose single copy `check:deps` asserts.
+    dedupe: ["react", "react-dom", "loro-crdt", "@vibecook/strata-ecs"],
   },
   // Dev optimizes the union of product, Studio, and browser-catalog graphs. All
   // surfaces share this cache, so changing launch modes must never leave the
-  // product renderer consuming a design-only optimizer result. Fiber is
-  // explicit through its linked-workspace owner (Vite's nested-dependency
-  // syntax); prebundling it is what keeps its Zustand/CommonJS dependencies
-  // behind one Vite-compatible ESM boundary. The explicit include also gives
-  // Vite 8 a config-hash change so historical mode-dependent caches are
-  // invalidated once instead of requiring a manual cache deletion.
+  // product renderer consuming a design-only optimizer result. The desk's
+  // entries are explicit through their linked-workspace owner (Vite's
+  // nested-dependency syntax) — the host singleton chunks name them before any
+  // product import does, so the crawler alone would find them late and
+  // re-optimize mid-session (DK-1 took over the row R3F's fiber held). The
+  // explicit include also gives Vite 8 a config-hash change so historical
+  // mode-dependent caches are invalidated once instead of requiring a manual
+  // cache deletion.
   optimizeDeps: {
     entries:
       mode === "live-surfaces-lab"
@@ -118,7 +113,12 @@ export default defineConfig(({ mode }) => ({
             "design-system.html",
             "logo-studio.html",
           ],
-    include: ["@vibefield/field-app > @react-three/fiber"],
+    include: [
+      "@vibefield/field-app > @vibecook/ice/desk",
+      "@vibefield/field-app > @vibecook/ice/desk/engine",
+      "@vibefield/field-app > @vibecook/ice/desk/objects",
+      "@vibefield/field-app > @vibecook/ice/desk/kit",
+    ],
     // AR-0 sibling mode, corrected 2026-09-13: the optimizer registry is keyed
     // by the BARE specifier, so the whole graph gets ONE `zod` entry — and
     // `tryOptimizedResolve` returns that flat hit before it ever compares the
