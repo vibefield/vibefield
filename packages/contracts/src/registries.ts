@@ -212,6 +212,28 @@ export const PRODUCT_API_LIMITS = {
   WS_MAX_INBOUND_BYTES: 4 * 1024 * 1024,
 } as const;
 
+/** SP-D13 (a), James, 2026-10-03 — the bound on a TAILNET caller's history.
+ * Since that ruling `index.search` is in `TAILNET_SCOPES`, so a self phone may
+ * search and list its own history, and every answer it gets from
+ * `index.search` (either arm), `index.sessions`' listing, `index.projects` and
+ * `index.recent` holds at most MAX_ROWS rows, however many it asked for.
+ * fieldd clamps at the DOOR (`daemon.ts`, through `tailnet-rows.ts`), never in
+ * the index service, which knows no principal: the effective limit is
+ * `min(asked ?? the door's own default, MAX_ROWS)`, and the service sees only
+ * that number — so a search that stopped there still says `clipped`, and a
+ * listing still hands back its `cursor`. A bounded answer is a page, never a
+ * silent cut.
+ *
+ * Why 100: a phone's page is tens of rows, and rosetta's own envelopes weigh
+ * about 1 KB a row before any prose (`thinking-sync-planes.md` §1.9 item 8) —
+ * so a window's default search of 300 hits is some 300 KB, a desktop's budget
+ * and not a radio's. A window keeps every door's own limits, and so does a
+ * self peer DAEMON (`peer-fieldd`): it asks on behalf of a window on another
+ * desktop and carries that window's limits. TS-only: no native reader. */
+export const INDEX_TAILNET_LIMITS = {
+  MAX_ROWS: 100,
+} as const;
+
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
  * seam (so they live in the genned registry, one authority both planes read).
  * This is a byte cap, not a row cap. The 2026-09-27 review corrects BASE-1's
@@ -639,6 +661,13 @@ export const SCOPES = [
   // Both are local-only forever (a person's transcripts and accounts are on
   // the device in front of them) and in NO plugin eligibility table:
   // `plugins.ts` names neither, and absence is the safe default there.
+  // *Corrected 2026-10-03 (SP-D13 RULED (a), James): `index.search` is not
+  // local-only. DS-D8 (ruled 2026-09-30, landed with DS-6 on 2026-10-01)
+  // granted it to a self peer DAEMON (PEER_FIELDD_SCOPES — search by
+  // asking), and SP-D13 admits it to the tailnet preset: a self phone
+  // searches and lists its own history, every answer bounded for a tailnet
+  // caller (INDEX_TAILNET_LIMITS). It is still in no plugin eligibility
+  // table, and `agent.usage` stays local-only.*
   "index.search",
   "agent.usage",
 ] as const;
@@ -650,7 +679,14 @@ export type Scope = (typeof SCOPES)[number];
  * native.admin, push.manage, plugins.*) and MINUS plugin-runtime/shell powers — those are capability
  * grants for local runtimes, meaningless (and dangerous) as remote-caller
  * scopes. Document replication uses its dedicated authenticated sync protocol;
- * the renderer's persistence API and lane tickets never federate. */
+ * the renderer's persistence API and lane tickets never federate.
+ * SP-D13 (a), James, 2026-10-03 — `index.search` joins: a self phone may
+ * search and list its own history (`index.sessions`, `index.search`,
+ * `index.projects`, `index.recent`, and the History page's
+ * `index.changes.subscribe` pings), every answer bounded for a `tailnet`
+ * caller at fieldd's doors (INDEX_TAILNET_LIMITS). `index.catalog.subscribe`
+ * rides the scope but stays the peer daemon's: its handler admits no other
+ * kind. */
 export const TAILNET_SCOPES: readonly Scope[] = [
   "canvas.read",
   "canvas.write",
@@ -659,6 +695,7 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "agent.observe",
   "terminal.attach",
   "index.read",
+  "index.search",
   "approval.respond",
   "workspace.read",
   "mcp.consume",
@@ -677,10 +714,20 @@ export const TAILNET_GUEST_SCOPES: readonly Scope[] = [] as const;
  * behalf. The forwarding daemon checked its OWN caller's `index.search` before
  * it asked (the scope check precedes routing), and the owner still authorizes
  * the carrier by its own rule (DS-L7). DERIVED from the preset, never a copy
- * of it, so the two can only differ by this one scope. The phone's `tailnet`
- * principal keeps `TAILNET_SCOPES`: whether a phone may search is SP-D13's,
- * still open. */
-export const PEER_FIELDD_SCOPES: readonly Scope[] = [...TAILNET_SCOPES, "index.search"] as const;
+ * of it, so the two can only differ by this one scope.
+ * SP-D13 RULED (a), James, 2026-10-03: the phone's preset carries
+ * `index.search` too, so today the derivation adds nothing and the two presets
+ * are EQUAL — the Set keeps the scope once, in the preset's order. The
+ * derivation stays because the two grants are separate rulings: a peer
+ * daemon's search is DS-D8's (a desktop asking for a window on another
+ * desktop), the phone's is SP-D13's, and were the phone's ever withdrawn the
+ * peer's must not go with it. What tells the two callers apart now is the
+ * principal KIND, minted from the transport (D1): a `tailnet` caller's history
+ * answers are bounded (INDEX_TAILNET_LIMITS) and a peer daemon's are not, and
+ * only a peer is served `index.catalog.subscribe`. */
+export const PEER_FIELDD_SCOPES: readonly Scope[] = [
+  ...new Set<Scope>([...TAILNET_SCOPES, "index.search"]),
+] as const;
 
 /** SP-2 (`thinking-sync-planes.md` §6; design-06 §7) — the PHONE's connection
  * budget, as BUILT on 2026-10-01: the most the iOS companion holds open at

@@ -1628,6 +1628,22 @@
               loopback origin never crosses this surface, and an enrolled root's path stays inside fieldd.
             </p>
             <p class="contract-caption">
+              <em>Update 2026-10-03 (SP-D13, ruled (a) by James):</em> <code>index.search</code> is in the
+              tailnet preset, <code>TAILNET_SCOPES</code>, so a self phone may search and list its own
+              history: <code>index.sessions</code>, <code>index.search</code> and <code>index.recent</code> above,
+              and DS-6's <code>index.projects</code> and <code>index.changes.subscribe</code>. Since SP-D13,
+              2026-10-03, every answer of the four that return rows — <code>index.search</code>, the
+              <code>index.sessions</code> listing, <code>index.projects</code> and <code>index.recent</code> — is
+              bounded to <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> (100 rows) for a tailnet caller; a lookup
+              of named sessions is bounded by its own 256 ids. The door clamps the limit before the question reaches the
+              index service (<code>daemon.ts</code>, through <code>tailnet-rows.ts</code>), so a search that
+              stopped there still says <code>clipped</code> and a listing still hands back its
+              <code>cursor</code>. A window keeps every door's own limits, and so does a self peer daemon
+              (<code>peer-fieldd</code>), which asks on behalf of a window on another desktop.
+              <code>index.catalog.subscribe</code> rides the same scope and stays the peer daemon's alone;
+              a guest still holds no scope at all.
+            </p>
+            <p class="contract-caption">
               <code>index.enroll</code> is idempotent by being declarative — it names the complete consented
               set, so the same set twice writes nothing and restarts nothing.
             </p>

@@ -781,7 +781,10 @@ export class ProductApi extends EventEmitter {
           // the desk board), and it used to be minted from the hello's
           // self-declared `clientKind`, the C5 device claim standing in for a
           // node the roster could not correlate — so a self-login phone that
-          // claimed the kind got what SP-D13 (open) and SP-L4 withhold. It is
+          // claimed the kind got what SP-D13 (open) and SP-L4 withhold. *SP-D13
+          // RULED (a), 2026-10-03: `index.search` is the phone's own now, so
+          // what the kind still withholds is the catalog door, the desk board
+          // and history answers unbounded by INDEX_TAILNET_LIMITS.* It is
           // minted now only when the transport says so twice: the node id
           // correlates to a roster device, AND that roster row hosts documents
           // (`capabilities.docHost` — a desktop, DS-D7; DeviceService.isDocHost).
@@ -828,6 +831,11 @@ export class ProductApi extends EventEmitter {
           // phone's preset does not: `index.search`, so a person's desktops
           // can ask each other's history (PEER_FIELDD_SCOPES, derived from the
           // preset). A `tailnet` principal keeps the preset — SP-D13 is open.
+          // *SP-D13 RULED (a), 2026-10-03: the preset carries `index.search`
+          // too, so the two grants are EQUAL today. The branch stays because
+          // they are two rulings (DS-D8's, SP-D13's), and the KIND it mints is
+          // what differs: a `tailnet` caller's history answers are bounded at
+          // the doors (`tailnet-rows.ts`), a peer daemon's are not.*
           state.scopes = peer ? [...PEER_FIELDD_SCOPES] : [...TAILNET_SCOPES];
           state.ctx = {
             principal: peer

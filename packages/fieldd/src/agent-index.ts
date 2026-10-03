@@ -101,7 +101,9 @@ const SESSION_LOOKUP_CHUNK = 64;
 const SESSION_LIST_LIMIT = 1_000;
 /** the AR-4 single-id lookup's limit, unchanged: one native id, its children */
 const SESSION_FACTS_LIMIT = 50;
-const DEFAULT_SEARCH_LIMIT = 300;
+/** `index.search`'s default when nothing is asked — exported for the door's
+ * SP-D13 bound (`tailnet-rows.ts`), which clamps against it. */
+export const DEFAULT_SEARCH_LIMIT = 300;
 /** A search's attribution walk fetches session rows in flights this wide: a
  * local daemon answers a row in milliseconds, and a flat sequential budget
  * (32 lookups) dropped a fifth of a 40-agent board's matches (AR-5b). */

@@ -1579,6 +1579,11 @@ export const METHODS: MethodDef[] = [
   // self desktop (`search`). A peer is granted `index.search` by its own
   // preset (PEER_FIELDD_SCOPES); guests stay refused at the registry, and the
   // phone's preset is unchanged (SP-D13).
+  // *Corrected 2026-10-03 (SP-D13 RULED (a), James): the phone's preset
+  // carries `index.search` now — a self phone searches and lists its own
+  // history through these doors (and `index.projects`, `index.recent`), each
+  // answer bounded for a `tailnet` caller at fieldd's doors
+  // (INDEX_TAILNET_LIMITS). Guests still hold nothing.*
   // At the landing of 2026-10-01 the two lanes' censuses were reconciled: DS-2 had
   // moved every index READ to `federate`; DS-6's doors are the index rows that
   // leave the device — `index.discoveries`, `index.status` and `index.recent`

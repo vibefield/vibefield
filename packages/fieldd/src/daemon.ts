@@ -63,6 +63,7 @@ import {
   DocSetSyncIntentParams,
   IdempotencyKey,
   INDEX_MESH,
+  INDEX_RECENT_DEFAULT_LIMIT,
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
   IndexEnrollParams,
@@ -154,7 +155,7 @@ import {
   AgentGatewayService,
   type ShellIntegration,
 } from "./agent-gateway";
-import { EnrollmentStore, IndexService } from "./agent-index";
+import { DEFAULT_SEARCH_LIMIT, EnrollmentStore, IndexService } from "./agent-index";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
 import {
@@ -218,6 +219,7 @@ import {
 import { ServiceRegistry } from "./service-registry";
 import { SettingsDocService } from "./settings-doc";
 import { createSurfaceService } from "./surface-service";
+import { tailnetRowLimit } from "./tailnet-rows";
 import { runtimeProfileBinding, TerminalBindingStore } from "./terminal-bindings";
 import { createTerminalLinkDoor } from "./terminal-links";
 import {
@@ -1617,6 +1619,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // `index.search {scope: "mesh"}` ASKS every awake self desktop (DS-D8). A
     // peer daemon's call is always answered from THIS desktop's own index — a
     // mesh question never fans out twice.
+    // SP-D13 (a), 2026-10-03 — the phone may search and list its own history,
+    // BOUNDED: for a `tailnet` caller each history door below asks its service
+    // for at most INDEX_TAILNET_LIMITS.MAX_ROWS rows (`tailnetRowLimit`, the
+    // door's own default when nothing is asked), so neither rosettad nor the
+    // catalog's pager is asked for more, and the answer stays honest about the
+    // cut — `clipped` on a search, a `cursor` on a listing. The clamp is the
+    // DOOR's, never the service's: IndexService and IndexMesh know no
+    // principal. A window keeps every door's limits, and so does a self peer
+    // DAEMON (`peer-fieldd`), deliberately: it asks on behalf of a window on
+    // another desktop and carries that window's limits.
     api.register("index.sessions", async (ctx, params) => {
       const parsed = IndexSessionsParams.safeParse(params ?? {});
       if (!parsed.success)
@@ -1625,11 +1637,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           'expected { nativeSessionIds: string[] (1..256) } or { scope?: "local" | "mesh", family?, devices?, projectId?, cursor?, limit? }',
           false,
         );
+      // the LOOKUP names its rows (at most 256 ids, the schema's ceiling): a
+      // question about named runs, not a page, so the SP-D13 bound is the
+      // listing's
       if (parsed.data.nativeSessionIds !== undefined)
         return await index.sessions(parsed.data.nativeSessionIds);
       return requireMesh().sessions({
         ...parsed.data,
         scope: ctx.principal.kind === "peer-fieldd" ? "local" : parsed.data.scope,
+        limit: tailnetRowLimit(ctx.principal, parsed.data.limit, INDEX_MESH.PAGE_DEFAULT_LIMIT),
       });
     });
     api.register("index.search", async (ctx, params) => {
@@ -1640,9 +1656,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           'expected { q, nativeSessionIds?, afterMs?, limit?, prefix?, kind?, scope?: "local" | "mesh", devices? }',
           false,
         );
-      if (parsed.data.scope === "mesh" && ctx.principal.kind !== "peer-fieldd")
-        return await requireMesh().search(parsed.data);
-      if (ctx.principal.kind !== "peer-fieldd") return await index.search(parsed.data);
+      // SP-D13 — one bounded question for every arm: the local search asks
+      // rosettad for that many, and a mesh ask forwards it to each desktop and
+      // cuts the merge at it (index-mesh.ts)
+      const question = {
+        ...parsed.data,
+        limit: tailnetRowLimit(ctx.principal, parsed.data.limit, DEFAULT_SEARCH_LIMIT),
+      };
+      if (question.scope === "mesh" && ctx.principal.kind !== "peer-fieldd")
+        return await requireMesh().search(question);
+      if (ctx.principal.kind !== "peer-fieldd") return await index.search(question);
       // a peer's ask is ANSWERED: an index that is not up is the honest
       // `answered: false`, which the asking desktop's `sources` reads as
       // `building` (as index-mesh's `#askPeer` reads UNAVAILABLE {service:
@@ -1652,7 +1675,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // coded reply through. The answer stays because it is honest, not
       // because a refusal would cut anything.
       try {
-        return await index.search(parsed.data);
+        return await index.search(question);
       } catch (error) {
         if (!(error instanceof RpcCallError) || error.kind !== "UNAVAILABLE") throw error;
         return {
@@ -1674,6 +1697,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       return requireMesh().projects({
         ...parsed.data,
         scope: ctx.principal.kind === "peer-fieldd" ? "local" : parsed.data.scope,
+        limit: tailnetRowLimit(ctx.principal, parsed.data.limit, INDEX_MESH.PAGE_DEFAULT_LIMIT),
       });
     });
     /** SP-1 — a whole-value stream's frame that did not land (`wholeValueDoor`),
@@ -1708,7 +1732,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // QL (QL-D9) — the empty pane launcher's list: a folder's past sessions
     // (its rosetta project) or every project's. A projection like the two
     // above; a daemon that is not ready refuses UNAVAILABLE as they do.
-    api.register("index.recent", async (_ctx, params) => {
+    api.register("index.recent", async (ctx, params) => {
       const parsed = IndexRecentParams.safeParse(params);
       if (!parsed.success)
         throw new RpcCallError(
@@ -1716,7 +1740,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           'expected { cwd? (an absolute folder), scope: "here" | "all", limit? (1..500) }',
           false,
         );
-      return await index.recent(parsed.data);
+      // SP-D13 — bounded for a tailnet caller like the doors above (a peer
+      // daemon never gets here: the door's D36 wall refuses it a `local` door)
+      return await index.recent({
+        ...parsed.data,
+        limit: tailnetRowLimit(ctx.principal, parsed.data.limit, INDEX_RECENT_DEFAULT_LIMIT),
+      });
     });
     // SP-3 — the direct plane's door, declared (methods.ts; index-serve.ts):
     // checks the ask, then says honestly that the grant half is DS-7's
