@@ -6088,6 +6088,195 @@ export async function runSmokeGodview(opts: {
       )
       .catch((error) => ({ unmeasured: error instanceof Error ? error.message : String(error) }));
 
+    // 11i. THE HEAD'S KEYS, FROM A FOCUSED PANE (One Frame FR-3, DK-D24) — the
+    //      probe ⌘+ ⌘− ⌘0 ⇧1 owe before they ship, in 11h's form: a pane holds
+    //      focus, each key is pressed the way a keyboard presses it, and the
+    //      HEAD says what it took (its ZOOM_KEY line). They are Canvas's keys,
+    //      not the product's chords — heard on the window's bubble phase — so a
+    //      pane that holds the keyboard keeps them, and the head takes NOTHING:
+    //      no ZOOM_KEY line, the canvas's readout under the cover unchanged, the
+    //      window still in Godview. The positive control has two ears, because
+    //      the pane takes the two kinds of key at two places: ghostty's app
+    //      binds (⌘+ ⌘− ⌘0, its font sizes) are taken by ghosttea's WORKSPACE on
+    //      the window's capture phase, prevented and stopped before the input
+    //      ever sees them — so an ear on the window's capture phase records that
+    //      each ARRIVED and was TAKEN (its final defaultPrevented, read once the
+    //      dispatch is over); ⇧1 is typed — the input's ear hears its "!", and a
+    //      Backspace takes it back out of the shell. Then the canvas, with
+    //      nothing focused: each key moves the zoom and says so. Then ⇧1 typed
+    //      into the line's draft stays a "!" — never a fit. ⌘K's probe is 11e's,
+    //      unchanged. Before 11h, which must stay last (its ⌘T leaves a fresh
+    //      shell whose launcher holds the keys).
+    const headKeys: Record<string, string> = {};
+    const zoomTaken: string[] = [];
+    const hearHead = (...args: unknown[]): void => {
+      for (const arg of args) {
+        const text = consoleText(arg);
+        if (text.startsWith("ZOOM_KEY ")) zoomTaken.push(text.slice("ZOOM_KEY ".length));
+      }
+    };
+    const READOUT = `(document.querySelector(".vf-head-zoom")?.textContent ?? "absent")`;
+    /** The page's ear: every keydown as the window's capture phase first sees
+     * it, and whether anyone had taken it by the end of its dispatch. */
+    const PAGE_EAR = `(() => {
+      window.__vfPageEar = [];
+      if (!window.__vfPageEarOn) {
+        window.__vfPageEarOn = true;
+        window.addEventListener("keydown", (event) => {
+          const entry = {
+            key: (event.metaKey ? "meta+" : "") + (event.ctrlKey ? "ctrl+" : "") + event.key,
+            taken: false,
+          };
+          window.__vfPageEar.push(entry);
+          setTimeout(() => { entry.taken = event.defaultPrevented; }, 0);
+        }, true);
+      }
+      return "ok";
+    })()`;
+    /** The zoom's keys as a keyboard presses them: ⌘ (Ctrl) with = − 0, and
+     * ⇧1. A terminal types from the KEY, so into a pane ⇧1 is down and up (as
+     * 11h types its b) — a char event as well would type a second "!", and a
+     * stray "!" left in the shell turns 11h's sent line into a history
+     * expansion; an editor inserts the CHARACTER, so into the draft it is down,
+     * the character, up. */
+    const pressZoomKey = (key: "=" | "-" | "0" | "!", into: "pane" | "editor" = "pane"): void => {
+      if (key !== "!") {
+        pressProductChord(win, key);
+        return;
+      }
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "1", modifiers: ["shift"] });
+      if (into === "editor") {
+        win.webContents.sendInputEvent({ type: "char", keyCode: "!", modifiers: ["shift"] });
+      }
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "1", modifiers: ["shift"] });
+    };
+    type ZoomFacts = { key: string; act: string; view: string; from: number; to: number };
+    const zoomFromCanvas = async (key: "=" | "-" | "0" | "!"): Promise<ZoomFacts> => {
+      const heard = waitForConsole(win, "ZOOM_KEY ", 10_000);
+      pressZoomKey(key);
+      return JSON.parse(await heard) as ZoomFacts;
+    };
+    win.webContents.on("console-message", hearHead);
+    try {
+      await focusDeck(win);
+      await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      await untilRenderer(win, "the page's ear", PAGE_EAR, 5_000);
+      const readoutBefore = (await win.webContents.executeJavaScript(READOUT)) as string;
+      for (const key of ["=", "-", "0", "!"] as const) {
+        pressZoomKey(key);
+        await sleep(150);
+      }
+      // An absence can only be watched for a while (⇧⇧'s rule): the head
+      // answers a key in its own handler, inside one frame.
+      await sleep(1_500);
+      const paneHeard = await chordProbeHeard(win);
+      const pageHeard = (await win.webContents.executeJavaScript(
+        `[...(window.__vfPageEar ?? [])]`,
+      )) as { key: string; taken: boolean }[];
+      const mod = process.platform === "darwin" ? "meta+" : "ctrl+";
+      // The POSITIVE CONTROL: every key arrived, and the pane took it — the
+      // chords at its workspace, the "!" at its input — so the head's silence
+      // is routing, not a deaf probe.
+      for (const want of [`${mod}=`, `${mod}-`, `${mod}0`]) {
+        const arrived = pageHeard.find((entry) => entry.key === want);
+        if (arrived === undefined || !arrived.taken) {
+          throw new Error(
+            `the focused pane never took ${want}: page ${JSON.stringify(pageHeard)} · ` +
+              `pane ${JSON.stringify(paneHeard)}`,
+          );
+        }
+      }
+      if (!paneHeard.includes("!")) {
+        throw new Error(`the focused pane never typed ⇧1's "!": ${JSON.stringify(paneHeard)}`);
+      }
+      if (zoomTaken.length > 0) {
+        throw new Error(`the head took a zoom key from a focused pane: ${zoomTaken.join(" · ")}`);
+      }
+      const readoutAfter = (await win.webContents.executeJavaScript(READOUT)) as string;
+      if (readoutAfter !== readoutBefore) {
+        throw new Error(
+          `the canvas zoomed under a focused pane: ${readoutBefore} → ${readoutAfter}`,
+        );
+      }
+      const stayed = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+      if (stayed !== "godview") throw new Error(`the zoom keys moved the window: ${stayed}`);
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Backspace" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Backspace" });
+      headKeys["from a focused pane"] =
+        `godview: the pane took ${mod}= ${mod}- ${mod}0 at its workspace (ghostty's font sizes) ` +
+        `and typed ⇧1's "!" at its input; the head took nothing; the canvas stayed at ${readoutBefore}`;
+
+      pressViewKey(win, "canvas");
+      await untilRenderer(
+        win,
+        "⌘1 to the canvas",
+        `${VIEW_NOW} === "canvas" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      // Nothing focused: whatever held the keyboard lets go of it.
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      const zoomIn = await zoomFromCanvas("=");
+      const zoomOut = await zoomFromCanvas("-");
+      const fit = await zoomFromCanvas("!");
+      const actual = await zoomFromCanvas("0");
+      const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+      if (zoomIn.act !== "in" || !near(zoomIn.to, zoomIn.from * 1.25)) {
+        throw new Error(`⌘+ on the canvas was heard as ${JSON.stringify(zoomIn)}`);
+      }
+      if (zoomOut.act !== "out" || !near(zoomOut.to, zoomOut.from / 1.25)) {
+        throw new Error(`⌘− on the canvas was heard as ${JSON.stringify(zoomOut)}`);
+      }
+      if (fit.act !== "fit")
+        throw new Error(`⇧1 on the canvas was heard as ${JSON.stringify(fit)}`);
+      if (actual.act !== "actual" || actual.to !== 100) {
+        throw new Error(`⌘0 on the canvas was heard as ${JSON.stringify(actual)}`);
+      }
+      await untilRenderer(
+        win,
+        "the readout saying 100% after ⌘0",
+        `${READOUT} === "100%" ? "ok" : ${READOUT}`,
+        5_000,
+      );
+      headKeys["on the canvas"] =
+        `nothing focused: ⌘+ ${zoomIn.from} → ${zoomIn.to} · ⌘− ${zoomOut.from} → ${zoomOut.to} · ` +
+        `⇧1 fit ${fit.from} → ${fit.to} · ⌘0 ${actual.from} → ${actual.to}; the readout said each`;
+
+      const placed = (await win.webContents.executeJavaScript(
+        `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
+          field.focus(); return document.activeElement === field ? "ok" : "focus refused"; })()`,
+      )) as string;
+      if (placed !== "ok") throw new Error(`the line's draft could not take focus: ${placed}`);
+      const takenBefore = zoomTaken.length;
+      pressZoomKey("!", "editor");
+      await sleep(1_500);
+      if (zoomTaken.length > takenBefore) {
+        throw new Error(
+          `⇧1 typed into the draft zoomed: ${zoomTaken.slice(takenBefore).join(" · ")}`,
+        );
+      }
+      const typed = (await win.webContents.executeJavaScript(
+        `document.querySelector(".vf-line-input")?.textContent ?? "no draft"`,
+      )) as string;
+      if (!typed.includes("!")) throw new Error(`⇧1 typed nothing into the draft: ${typed}`);
+      // Clear the draft through the editing pipeline (its input event is what
+      // the line reads back). Not a Backspace: on the Mac a synthesized keyDown
+      // carries no Cocoa edit command, so it deletes nothing in an editor — and
+      // a "!" left here rides 11h's sent line into the shell.
+      const cleared = (await win.webContents.executeJavaScript(
+        `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
+          field.focus(); document.execCommand("selectAll"); document.execCommand("delete");
+          return (field.textContent ?? "") === "" ? "ok" : "left " + JSON.stringify(field.textContent); })()`,
+      )) as string;
+      if (cleared !== "ok") throw new Error(`the draft kept the probe's typing: ${cleared}`);
+      headKeys["typing"] = `⇧1 into the line's draft typed "${typed}" and fit nothing`;
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      pressViewKey(win, "godview");
+      await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+    } finally {
+      win.webContents.off("console-message", hearHead);
+    }
+    verdict["headKeys"] = headKeys;
+
     // 11h. THE LINE'S KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-2,
     //      §11) — the probes B and ⌘T owe before they ship, in 11g's form: a
     //      pane holds focus, the ear listens at every pane input, each key is
