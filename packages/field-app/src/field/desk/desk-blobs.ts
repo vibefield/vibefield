@@ -165,28 +165,29 @@ export function createDeskBlobStore(opts: { root?: DirectorySource } = {}): Desk
     },
     persistence: async () => ((await dir()) === undefined ? "memory" : "opfs"),
     size: () => memory.size,
+    // The keyed shelf holds nothing in memory where the file system keeps it: its readers (the
+    // explorer's `blob:` URLs) hold their own copy, and a board's still need not be held twice.
     async keep(key, bytes, type) {
       const name = keyOf(key);
-      shelf.set(name, { bytes: bytes.slice(), type });
       const at = await keyedDir();
-      if (at === undefined) return;
-      try {
-        await write(at, name, bytes);
-        await write(at, `${name}.type`, type);
-      } catch (error) {
-        log.warn("renderer.desk.blob_keep_failed", "A kept picture stayed in memory only", {
-          key: name,
-          error: String(error),
-        });
+      if (at !== undefined) {
+        try {
+          await write(at, name, bytes);
+          await write(at, `${name}.type`, type);
+          shelf.delete(name);
+          return;
+        } catch (error) {
+          log.warn("renderer.desk.blob_keep_failed", "A kept picture stayed in memory only", {
+            key: name,
+            error: String(error),
+          });
+        }
       }
+      shelf.set(name, { bytes: bytes.slice(), type });
     },
     async kept(key) {
       const name = keyOf(key);
-      const held = shelf.get(name);
-      if (held !== undefined) return held;
-      const found = await readFrom(await keyedDir(), name);
-      if (found !== undefined) shelf.set(name, found);
-      return found;
+      return shelf.get(name) ?? (await readFrom(await keyedDir(), name));
     },
   };
 }

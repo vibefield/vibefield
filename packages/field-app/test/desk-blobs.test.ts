@@ -123,6 +123,18 @@ describe("the desk's byte store", () => {
     expect((await store.get(hash))?.type).toBe("image/png");
   });
 
+  it("DK-4: holds a kept picture in memory only where the origin has no file system", async () => {
+    const store = createDeskBlobStore({
+      root: async () => {
+        throw new Error("SecurityError: no origin-private file system");
+      },
+    });
+    await store.keep("still-doc-b", bytesOf("held for the page"), "image/png");
+    const kept = await store.kept("still-doc-b");
+    expect(kept?.type).toBe("image/png");
+    expect(new TextDecoder().decode(kept?.bytes)).toBe("held for the page");
+  });
+
   it("lays the seed's print only once its picture is in the store, naming the picture's hash", async () => {
     const opfs = memoryOpfs();
     const store = createDeskBlobStore({ root: async () => opfs.root });
