@@ -1,0 +1,255 @@
+// @vitest-environment happy-dom
+/**
+ * One Frame FR-3 (§7) — the ⌘K palette, re-cut: a solid panel under the head
+ * listing every act with its key at the row's end — the frame's acts first
+ * (Views, On this view, App), then the enabled plugins' palette commands under
+ * each plugin's name — run through the frame's own doors (a frame act) or the
+ * spine's command registry (a command), never a waiting row. The registry
+ * snapshot and the command registry are mocked at their module seams; the
+ * chord's delivery over a focused pane is the godview smoke's row 11e.
+ */
+import { createCanvasEngine } from "@vibecook/ice";
+import type { FrameView } from "@vibefield/contracts";
+import { act } from "react";
+import { createRoot, type Root } from "react-dom/client";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { FrameActRun } from "../src/frame/palette-acts";
+import type { ViewKeys } from "../src/frame/views";
+import { CommandPalette } from "../src/hud/CommandPalette";
+
+const registry = vi.hoisted(() => ({
+  snapshot: null as unknown,
+  bound: new Set<string>(),
+  invoke: vi.fn(async () => ({ status: "ok" })),
+}));
+
+vi.mock("../src/plugin-host/plugin-registry-store", () => ({
+  usePluginRegistrySnapshot: () => registry.snapshot,
+}));
+vi.mock("../src/plugin-host/command-registry", () => ({
+  isCommandBound: (id: string) => registry.bound.has(id),
+  invoke: registry.invoke,
+}));
+
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+
+let root: Root | null = null;
+let host: HTMLElement | null = null;
+let dispose: (() => void) | null = null;
+
+beforeEach(() => {
+  registry.snapshot = null;
+  registry.bound.clear();
+  registry.invoke.mockClear();
+});
+
+afterEach(() => {
+  act(() => root?.unmount());
+  host?.remove();
+  dispose?.();
+  root = null;
+  host = null;
+  dispose = null;
+});
+
+function mount(options: { view?: FrameView; keys?: ViewKeys } = {}) {
+  const engine = createCanvasEngine({});
+  dispose = () => engine.dispose();
+  const onAct = vi.fn<(run: FrameActRun) => void>();
+  const onClose = vi.fn();
+  host = document.createElement("div");
+  document.body.appendChild(host);
+  root = createRoot(host);
+  act(() =>
+    root?.render(
+      <CommandPalette
+        ce={engine}
+        open
+        onClose={onClose}
+        windowId="field"
+        view={options.view ?? "canvas"}
+        keys={options.keys ?? "mac"}
+        onAct={onAct}
+      />,
+    ),
+  );
+  return { onAct, onClose };
+}
+
+const $ = <T extends Element = HTMLElement>(selector: string): T | null =>
+  host?.querySelector<T>(selector) ?? null;
+const $$ = (selector: string): HTMLElement[] => [
+  ...(host?.querySelectorAll<HTMLElement>(selector) ?? []),
+];
+const field = (): HTMLInputElement => $(".vf-palette-field input") as HTMLInputElement;
+
+function press(target: EventTarget, init: KeyboardEventInit): void {
+  act(() => {
+    target.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }),
+    );
+  });
+}
+
+function type(text: string): void {
+  const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
+  act(() => {
+    setter?.call(field(), text);
+    field().dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+/** The palette as it reads: each eyebrow, then its rows' names and keys. */
+const reading = (): string[] =>
+  $$(".vf-palette-list > *").map((node) =>
+    node.classList.contains("vf-menu-eye")
+      ? `# ${node.textContent}`
+      : `${node.querySelector(".vf-menu-label")?.firstChild?.textContent ?? ""}${
+          node.querySelector(".vf-menu-key") === null
+            ? ""
+            : ` ${node.querySelector(".vf-menu-key")?.textContent}`
+        }`,
+  );
+
+describe("the palette (One Frame §7)", () => {
+  it("keeps its dialog's name for the ⌘K probe, and says no prose footer", () => {
+    mount();
+    expect($('[role="dialog"][aria-label="Command palette"]')).not.toBeNull();
+    expect(host?.textContent).not.toContain("↵ to run");
+    expect(host?.textContent).not.toContain("esc to close");
+    expect(field().placeholder).toBe("Type a command or a view…");
+  });
+
+  it("lists every act with its key at the row's end: Views, On this view, App", () => {
+    mount();
+    expect(reading()).toEqual([
+      "# Views",
+      "Canvas ⌘1",
+      "Godview ⌘2",
+      "History ⌘3",
+      "Assistant ⌘4",
+      "# On this view",
+      "Objects B",
+      "Zoom in ⌘+",
+      "Zoom out ⌘−",
+      "Zoom to fit ⇧1",
+      "Actual size ⌘0",
+      "# App",
+      "Settings… ⌘,",
+    ]);
+  });
+
+  it("follows the view: Godview's New terminal, and no zoom off Canvas", () => {
+    mount({ view: "godview" });
+    const onView = reading();
+    expect(onView.slice(onView.indexOf("# On this view"), onView.indexOf("# App"))).toEqual([
+      "# On this view",
+      "New terminal ⌘T",
+    ]);
+  });
+
+  it("draws a waiting act and never runs it: the Assistant says it is not built yet", () => {
+    const { onAct, onClose } = mount();
+    const assistant = $('[data-row="view-assistant"]') as HTMLButtonElement;
+    expect(assistant.getAttribute("aria-disabled")).toBe("true");
+    expect(assistant.textContent).toContain("not built yet");
+    act(() => assistant.click());
+    expect(onAct).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it("runs the hot row on Return through the frame's doors, and closes", () => {
+    const { onAct, onClose } = mount();
+    expect($("[data-hot]")?.getAttribute("data-row")).toBe("view-canvas");
+    press(field(), { key: "ArrowDown" });
+    press(field(), { key: "Enter" });
+    expect(onAct).toHaveBeenCalledWith({ kind: "view", view: "godview" });
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it("walks only the rows that can run: ↓ from History skips the waiting Assistant", () => {
+    mount();
+    for (let i = 0; i < 3; i++) press(field(), { key: "ArrowDown" });
+    expect($("[data-hot]")?.getAttribute("data-row")).toBe("create");
+    press(field(), { key: "ArrowUp" });
+    expect($("[data-hot]")?.getAttribute("data-row")).toBe("view-history");
+  });
+
+  it("filters every group as you type, and a click runs a row", () => {
+    const { onAct } = mount();
+    type("zoom");
+    expect(reading()).toEqual([
+      "# On this view",
+      "Zoom in ⌘+",
+      "Zoom out ⌘−",
+      "Zoom to fit ⇧1",
+      "Actual size ⌘0",
+    ]);
+    act(() => ($('[data-row="zoom-fit"]') as HTMLButtonElement).click());
+    expect(onAct).toHaveBeenCalledWith({ kind: "zoom", act: "fit" });
+    type("qqqq");
+    expect(host?.textContent).toContain("Nothing matches");
+  });
+
+  it("lists each plugin's commands under its name; one with no live handler is unavailable", () => {
+    registry.snapshot = {
+      plugins: [
+        {
+          id: "note",
+          title: "Notes",
+          enabled: true,
+          contributions: {
+            commands: [
+              { id: "note.create", title: "Add note", placements: ["palette"] },
+              { id: "note.hidden", title: "Not in the palette", placements: ["hud"] },
+            ],
+          },
+        },
+        {
+          id: "repository",
+          title: "Repository",
+          enabled: true,
+          contributions: {
+            commands: [
+              { id: "repository.open", title: "Open repository", placements: ["palette"] },
+            ],
+          },
+        },
+        {
+          id: "off",
+          title: "Off",
+          enabled: false,
+          contributions: {
+            commands: [{ id: "off.go", title: "Disabled plugin", placements: ["palette"] }],
+          },
+        },
+      ],
+    };
+    registry.bound.add("note.create");
+    mount();
+    const read = reading();
+    expect(read.slice(read.indexOf("# Notes"))).toEqual([
+      "# Notes",
+      "Add note",
+      "# Repository",
+      "Open repository",
+    ]);
+    const open = $('[data-row="repository.open"]') as HTMLButtonElement;
+    expect(open.getAttribute("aria-disabled")).toBe("true");
+    expect(open.textContent).toContain("unavailable");
+    act(() => open.click());
+    expect(registry.invoke).not.toHaveBeenCalled();
+    act(() => ($('[data-row="note.create"]') as HTMLButtonElement).click());
+    expect(registry.invoke).toHaveBeenCalledWith(
+      "note.create",
+      undefined,
+      expect.objectContaining({ source: "palette", windowId: "field", userGesture: true }),
+    );
+  });
+
+  it("closes on Esc", () => {
+    const { onClose } = mount();
+    press(document.body, { key: "Escape" });
+    expect(onClose).toHaveBeenCalled();
+  });
+});

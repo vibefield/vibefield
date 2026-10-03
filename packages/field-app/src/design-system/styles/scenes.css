@@ -68,16 +68,6 @@
   transform: scale(0.98);
 }
 
-.vf-ds-demo-right-chrome {
-  position: absolute;
-  top: 16px;
-  right: 18px;
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 /* UA-D19 — the Me menu's corner, staged where the product puts it: the 44px
    face box 14px in, so the face sits where the old 40px gear did. */
 .vf-ds-demo-me {
@@ -172,6 +162,48 @@
 
 .vf-ds-line-plate[data-state="at"] {
   height: 470px;
+}
+
+/* One Frame FR-3 — the head's plates (the page's §05 and §06): the shipping
+   head at its place at the plate's top, one state each. The plate is the
+   window's top, so a narrow one gives the pill less room, as a narrow window
+   does (FitPath), and a sheet or a menu takes the height it grows into. */
+.vf-ds-head-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-head-plate {
+  position: relative;
+  isolation: isolate;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-head-plate[data-state="narrow"] {
+  width: 480px;
+}
+
+.vf-ds-head-plate[data-state="zoom"] {
+  height: 248px;
+}
+
+.vf-ds-head-plate:is([data-state="explorer"], [data-state="palette"]) {
+  grid-column: 1 / -1;
+  height: 520px;
+}
+
+.vf-ds-head-plate[data-state="palette"] {
+  height: 640px;
 }
 
 /* Objects out: the backdrop's dim over the ground (DESIGN.md §5). */
@@ -1247,10 +1279,6 @@
     height: 590px;
   }
 
-  .vf-ds-field-stage .vf-navigation-breadcrumbs__trail {
-    display: none;
-  }
-
   .vf-ds-agent-bubble-toolbar {
     grid-template-columns: 1fr;
   }
@@ -1379,14 +1407,6 @@
 
   .vf-ds-field-stage {
     height: 560px;
-  }
-
-  .vf-ds-demo-right-chrome {
-    top: 72px;
-  }
-
-  .vf-ds-demo-right-chrome > button:nth-last-child(-n + 2) {
-    display: none;
   }
 
   .vf-ds-stage-card.card-a {

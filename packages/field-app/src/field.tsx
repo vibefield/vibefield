@@ -27,7 +27,7 @@ import { canvasGridConfig } from "./field/canvas-appearance";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
-import type { LineSurface } from "./frame/line-surface";
+import type { FrameSurface } from "./frame/frame-surface";
 import { useCovered } from "./frame/view-state";
 import type { FieldUserProfile } from "./host";
 import { useReactiveResource } from "./hud/use-reactive";
@@ -196,37 +196,25 @@ export function FieldView({
     };
   }, [ce, registry]);
 
-  // THE LINE'S OPEN SURFACE (One Frame FR-2/FR-4, `frame/line-surface.ts`):
-  // its one owner. Objects and @'s list are one value, so either folds the
-  // other; held here because the recede derives from Objects in this render.
-  const [lineSurface, setLineSurfaceRaw] = useState<LineSurface | null>(null);
-  const trayOpen = lineSurface === "objects";
-  const [docsOpen, setDocsOpenRaw] = useState(false);
+  // THE FRAME'S OPEN SURFACE (One Frame FR-2/FR-3/FR-4, `frame/frame-surface.ts`):
+  // its one owner. Objects, @'s list, the fields explorer, the zoom's menu and
+  // the palette are one value, so any one folds the rest; held here because
+  // the recede derives from Objects and the explorer in this render.
+  const [surface, setSurfaceRaw] = useState<FrameSurface | null>(null);
+  const trayOpen = surface === "objects";
+  const docsOpen = surface === "fields";
   const chrome = useChromeState();
   const appearanceSource = appearanceOverrideSource ?? EMPTY_APPEARANCE_SOURCE;
   const appearanceOverride = useSyncExternalStore(
     appearanceSource.subscribe,
     appearanceSource.snapshot,
   );
-  // One modal surface at a time: sheets dismiss Settings when opened, while
-  // ChromeLayer performs the inverse when Settings or the command palette opens.
-  const setLineSurface = useCallback(
-    (next: LineSurface | null) => {
-      setLineSurfaceRaw(next);
-      if (next === "objects") {
-        setDocsOpenRaw(false);
-        chrome.setShowSettings(false);
-      }
-    },
-    [chrome.setShowSettings],
-  );
-  const setDocsOpen = useCallback(
-    (o: boolean) => {
-      setDocsOpenRaw(o);
-      if (o) {
-        setLineSurfaceRaw(null);
-        chrome.setShowSettings(false);
-      }
+  // One surface at a time: any of the frame's surfaces dismisses Settings as
+  // it opens, while ChromeLayer performs the inverse when Settings opens.
+  const setSurface = useCallback(
+    (next: FrameSurface | null) => {
+      setSurfaceRaw(next);
+      if (next !== null) chrome.setShowSettings(false);
     },
     [chrome.setShowSettings],
   );
@@ -316,10 +304,8 @@ export function FieldView({
         onToggleTheme={toggleTheme}
         hudMotion={hudMotion}
         docState={docState}
-        lineSurface={lineSurface}
-        onLineSurfaceChange={setLineSurface}
-        docsOpen={docsOpen}
-        onDocsOpenChange={setDocsOpen}
+        surface={surface}
+        onSurfaceChange={setSurface}
         appearanceControlledByStudio={appearanceOverride.appearance !== null}
         chrome={chrome}
         devtoolsRef={devtoolsRef}

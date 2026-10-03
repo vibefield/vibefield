@@ -12,26 +12,30 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
 import { MeMenu } from "../account/MeMenu";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
-import { foldSurface, type LineSurface } from "../frame/line-surface";
+import type { LineActs } from "../frame/Composer";
+import { type FrameSurface, foldSurface } from "../frame/frame-surface";
+import { Head } from "../frame/Head";
+import { canvasHead } from "../frame/head-canvas";
+import type { FrameActRun } from "../frame/palette-acts";
 import { ViewFrame } from "../frame/ViewFrame";
-import { requestView, useCovered } from "../frame/view-state";
+import { requestView, useActiveView } from "../frame/view-state";
+import { viewKeysOf } from "../frame/views";
+import { runZoom } from "../frame/zoom";
 import { GodviewOverlay } from "../godview";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
 import { ClipboardTray } from "../hud/edge-tray/EdgeTray";
-import { FilePill } from "../hud/FilePill";
 import { LoadingVeil } from "../hud/LoadingVeil";
-import { NavigationBreadcrumbs } from "../hud/NavigationBreadcrumbs";
 import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfaceSlot";
 import { SidePanelStage, SidePanelToggle } from "../hud/SidePanelStage";
 import { WidgetTray } from "../hud/WidgetTray";
-import { ZoomPill } from "../hud/ZoomPill";
 import { SettingsPanel } from "../panels";
 import { ThemeToggleButton } from "../ThemeToggleButton";
 import type { MagnetGridGlyph } from "./canvas-appearance";
@@ -41,7 +45,7 @@ import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-pre
 import { fabCls } from "./theme-constants";
 import { useMagnetGridGlyph } from "./use-magnet-grid-glyph";
 
-// ChromeLayer (§5.4.3): HUD, file pill, Objects' sheet (behind the line),
+// ChromeLayer (§5.4.3): the head, Objects' sheet (behind the line),
 // settings, and overlays — WITHOUT owning document or engine lifetime. All the
 // chrome-scoped effects live here too: the live theme-token writes, the two
 // keyboard additions, the hud-flight dock choreography, the devtools attach,
@@ -86,10 +90,8 @@ export function ChromeLayer({
   onToggleTheme,
   hudMotion,
   docState,
-  lineSurface,
-  onLineSurfaceChange,
-  docsOpen,
-  onDocsOpenChange,
+  surface,
+  onSurfaceChange,
   appearanceControlledByStudio,
   chrome,
   devtoolsRef,
@@ -101,21 +103,21 @@ export function ChromeLayer({
   onToggleTheme: () => void;
   hudMotion: "out" | "in" | "idle";
   docState: DocManagerState;
-  /** The line's open surface (One Frame FR-2/FR-4) and its one owner's
-   * setter — FieldView's, where Objects' recede is computed. */
-  lineSurface: LineSurface | null;
-  onLineSurfaceChange: (next: LineSurface | null) => void;
-  docsOpen: boolean;
-  onDocsOpenChange: (open: boolean) => void;
+  /** The frame's open surface (One Frame FR-2/FR-3/FR-4) and its one owner's
+   * setter — FieldView's, where Objects' and the explorer's recede is
+   * computed. */
+  surface: FrameSurface | null;
+  onSurfaceChange: (next: FrameSurface | null) => void;
   appearanceControlledByStudio: boolean;
   chrome: ChromeState;
   devtoolsRef: MutableRefObject<DevtoolsHandle | null>;
 }): ReactElement {
   const { showSettings, setShowSettings, showEcs } = chrome;
   // Objects, on this build: the widget tray's sheet behind the line.
-  const trayOpen = lineSurface === "objects";
-  const lineOpen = lineSurface !== null;
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  const trayOpen = surface === "objects";
+  const docsOpen = surface === "fields";
+  const paletteOpen = surface === "palette";
+  const surfaceOpen = surface !== null;
   // UA-D19 — the Me menu. One of the expanded surfaces: opening it folds the
   // others, and any of them opening folds it (DESIGN.md §8).
   const [meOpen, setMeOpen] = useState(false);
@@ -129,7 +131,13 @@ export function ChromeLayer({
     sidePanelSurface?.surfaceId === sidePanelSurfaceId ? sidePanelSurface : null;
   // Whether a view covers the field (One Frame FR-1): every view but the
   // canvas. The window's view is main's (one owner); this is its mirror.
-  const covered = useCovered();
+  const view = useActiveView();
+  const covered = view !== "canvas";
+  const [keys] = useState(() => viewKeysOf(getHost().platform));
+  // The head's door over this engine (its path and its zoom), and where the
+  // line lends the palette its create (One Frame FR-3).
+  const head = useMemo(() => canvasHead(ce), [ce]);
+  const lineActs = useRef<LineActs | null>(null);
 
   const closeSidePanel = useCallback((returnFocus: boolean) => {
     setSidePanelSurfaceId(null);
@@ -145,10 +153,8 @@ export function ChromeLayer({
       return;
     }
     const reveal = () => {
-      onLineSurfaceChange(null);
-      onDocsOpenChange(false);
+      onSurfaceChange(null);
       setShowSettings(false);
-      setPaletteOpen(false);
       setSidePanelSurfaceId(sidePanelSurface.surfaceId);
     };
     // The Artifact panel is the canvas's chrome: back to the canvas first.
@@ -160,8 +166,7 @@ export function ChromeLayer({
   }, [
     closeSidePanel,
     covered,
-    onDocsOpenChange,
-    onLineSurfaceChange,
+    onSurfaceChange,
     setShowSettings,
     sidePanelSurface,
     sidePanelSurfaceId,
@@ -183,47 +188,40 @@ export function ChromeLayer({
   const openSettings = useCallback(
     (page: "general" | "account") => {
       setShellPresentation((state) => ({ ...state, target: page }));
-      onLineSurfaceChange(null);
-      onDocsOpenChange(false);
-      setPaletteOpen(false);
+      onSurfaceChange(null);
       closeSidePanel(false);
       setMeOpen(false);
       setShowSettings(true);
     },
-    [closeSidePanel, onDocsOpenChange, onLineSurfaceChange, setShowSettings],
+    [closeSidePanel, onSurfaceChange, setShowSettings],
   );
 
   const onMeOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
-        onLineSurfaceChange(null);
-        onDocsOpenChange(false);
-        setPaletteOpen(false);
+        onSurfaceChange(null);
         closeSidePanel(false);
         setShowSettings(false);
       }
       setMeOpen(open);
     },
-    [closeSidePanel, onDocsOpenChange, onLineSurfaceChange, setShowSettings],
+    [closeSidePanel, onSurfaceChange, setShowSettings],
   );
 
   const foldMe = useCallback(() => setMeOpen(false), []);
   useMeMenuYields(
     meOpen,
-    lineOpen || docsOpen || showSettings || paletteOpen || covered || sidePanelSurfaceId !== null,
+    surfaceOpen || showSettings || covered || sidePanelSurfaceId !== null,
     foldMe,
   );
 
   // Expanded focus surfaces remain exclusive. The Artifact panel itself is
   // non-modal, so this arbitration does not recede or hold the canvas.
   useEffect(() => {
-    if (
-      sidePanelSurfaceId !== null &&
-      (lineOpen || docsOpen || showSettings || paletteOpen || covered)
-    ) {
+    if (sidePanelSurfaceId !== null && (surfaceOpen || showSettings || covered)) {
       closeSidePanel(false);
     }
-  }, [closeSidePanel, covered, docsOpen, lineOpen, paletteOpen, showSettings, sidePanelSurfaceId]);
+  }, [closeSidePanel, covered, surfaceOpen, showSettings, sidePanelSurfaceId]);
 
   useEffect(() => {
     if (activeSidePanel === null) return;
@@ -242,13 +240,11 @@ export function ChromeLayer({
     if (onShellCommand === undefined) return;
     return onShellCommand((command) => {
       setShellPresentation((state) => reduceShellPresentation(state, command));
-      onLineSurfaceChange(null);
-      onDocsOpenChange(false);
-      setPaletteOpen(false);
+      onSurfaceChange(null);
       closeSidePanel(false);
       setShowSettings(true);
     });
-  }, [closeSidePanel, setShowSettings, onLineSurfaceChange, onDocsOpenChange]);
+  }, [closeSidePanel, setShowSettings, onSurfaceChange]);
 
   useEffect(() => {
     const onDesktopState = getHost().onDesktopState;
@@ -308,27 +304,48 @@ export function ChromeLayer({
     };
   }, [ce, showSettings]);
 
-  // ⌘K / Ctrl+K toggles the command palette (§8.3). ⌘K is free — the ICE keymap
-  // and the line's B and the tray's Esc never claim it. Opening it folds the
-  // line's surfaces and the docs sheet (one modal at a time — the FieldView
-  // mutual-exclusion rule).
+  // ⌘K / Ctrl+K toggles the command palette (§8.3; One Frame §7). ⌘K is free —
+  // the ICE keymap, the line's B and the tray's Esc never claim it. The palette
+  // is one of the frame's surfaces, so opening it folds whichever was open
+  // (and the owner folds Settings); it folds the Artifact panel here.
   // GT-D21: caught in the window's capture phase, so a focused Godview pane
   // (whose Ghostty default for ⌘K is clear_screen) never sees it.
   useEffect(
     () =>
       listenForProductChord(isCommandPaletteChord, () => {
-        setPaletteOpen((v) => {
-          const next = !v;
-          if (next) {
-            onLineSurfaceChange(null);
-            onDocsOpenChange(false);
-            setShowSettings(false);
-            closeSidePanel(false);
-          }
-          return next;
-        });
+        if (surface === "palette") {
+          onSurfaceChange(null);
+          return;
+        }
+        onSurfaceChange("palette");
+        closeSidePanel(false);
       }),
-    [closeSidePanel, onLineSurfaceChange, onDocsOpenChange, setShowSettings],
+    [closeSidePanel, onSurfaceChange, surface],
+  );
+
+  // The palette's frame acts, run through the frame's own doors: the view's
+  // one owner, the line's create, the head's zoom, Settings.
+  const runFrameAct = useCallback(
+    (run: FrameActRun) => {
+      switch (run.kind) {
+        case "view":
+          void requestView(run.view);
+          return;
+        case "create":
+          lineActs.current?.create();
+          return;
+        case "zoom":
+          runZoom(head, run.act);
+          return;
+        case "settings":
+          openSettings("general");
+      }
+    },
+    [head, openSettings],
+  );
+  const closePalette = useCallback(
+    () => onSurfaceChange(foldSurface(surface, "palette")),
+    [onSurfaceChange, surface],
   );
 
   // ⌘, / Ctrl+, — Settings from anywhere (DESIGN.md §8, the Me menu).
@@ -377,27 +394,33 @@ export function ChromeLayer({
   return (
     <>
       {/* Chrome overlays sit OUTSIDE the recede wrapper — they never scale. */}
-      <NavigationBreadcrumbs engine={ce} />
-      {/* The file pill (B4): top-center — new doc, the editable name, and the
-          morph-open docs explorer. */}
-      <FilePill manager={manager} open={docsOpen} onOpenChange={onDocsOpenChange} />
-      {/* DESIGN §8: one no-drag top-right cluster. Artifact is outermost so its
-          control stays physically attached to the edge it opens from. */}
-      <div
-        data-hud-flight="top-right"
-        className="hud-flight no-drag absolute top-4 right-4 z-50 flex items-center gap-2"
-      >
-        <ZoomPill ce={ce} />
-        <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
-        {sidePanelSurface !== null && (
-          <SidePanelToggle
-            entry={sidePanelSurface}
-            active={activeSidePanel !== null}
-            buttonRef={sidePanelToggleRef}
-            onToggle={toggleSidePanel}
-          />
-        )}
-      </div>
+      {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
+          pill with the crumbs folded in, which grows the fields explorer, and
+          the zoom readout at the right. Until FR-4 moves them, the theme
+          button and the Artifacts toggle stand beside the readout where the
+          cluster held them — Artifacts outermost, attached to the edge it
+          opens from. Still the canvas's chrome: under the cover. */}
+      <Head
+        manager={manager}
+        canvas={head}
+        view={view}
+        keys={keys}
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        aside={
+          <>
+            <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
+            {sidePanelSurface !== null && (
+              <SidePanelToggle
+                entry={sidePanelSurface}
+                active={activeSidePanel !== null}
+                buttonRef={sidePanelToggleRef}
+                onToggle={toggleSidePanel}
+              />
+            )}
+          </>
+        }
+      />
 
       <SidePanelStage
         entry={activeSidePanel}
@@ -429,9 +452,7 @@ export function ChromeLayer({
         ce={ce}
         registry={registry}
         open={trayOpen}
-        onOpenChange={(open) =>
-          onLineSurfaceChange(open ? "objects" : foldSurface(lineSurface, "objects"))
-        }
+        onOpenChange={(open) => onSurfaceChange(open ? "objects" : foldSurface(surface, "objects"))}
       />
 
       {/* UA-D19 — the owner's face, where the Settings gear was: the account's
@@ -493,13 +514,16 @@ export function ChromeLayer({
         <PluginSurfaceHost slot="hud.panel" windowId={FIELD_WINDOW_ID} />
       </div>
 
-      {/* The ⌘K command palette (§8.3) — a floating overlay above the field
-          chrome, below the modal loading veil. */}
+      {/* The ⌘K command palette (§8.3; One Frame §7) — a solid panel under
+          the head, above the frame, below the modal loading veil. */}
       <CommandPalette
         ce={ce}
         open={paletteOpen}
-        onClose={() => setPaletteOpen(false)}
+        onClose={closePalette}
         windowId={FIELD_WINDOW_ID}
+        view={view}
+        keys={keys}
+        onAct={runFrameAct}
       />
 
       {/* THE FRAME (One Frame FR-1, DESIGN.md §10): the cover the covered views
@@ -509,8 +533,9 @@ export function ChromeLayer({
           owns the window more than any view does. */}
       <ViewFrame
         godview={<GodviewOverlay />}
-        surface={lineSurface}
-        onSurfaceChange={onLineSurfaceChange}
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        lineActs={lineActs}
       />
 
       {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}

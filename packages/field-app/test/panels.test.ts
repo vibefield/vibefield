@@ -20,7 +20,6 @@ import { act, createElement, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { type FieldHost, setHost } from "../src/host";
-import { NavigationBreadcrumbs } from "../src/hud/NavigationBreadcrumbs";
 import { SettingsPanel } from "../src/panels";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -196,16 +195,5 @@ describe("widgetlab panels", () => {
     await act(async () => undo?.click());
     expect(request).toHaveBeenCalledWith("storage.settings.undo", {});
     expect(container?.textContent).toContain("Last synced change undone");
-  });
-
-  it("NavigationBreadcrumbs renders the root state at depth 0", () => {
-    const engine = makeEngine();
-    mount(createElement(NavigationBreadcrumbs, { engine }));
-
-    // Root crumb present; back button disabled at the root of the nav stack.
-    expect(container?.textContent).toContain("Root");
-    const back = container?.querySelector("button") as HTMLButtonElement | null;
-    expect(back).not.toBeNull();
-    expect(back?.disabled).toBe(true);
   });
 });

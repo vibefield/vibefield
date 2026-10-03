@@ -20,8 +20,8 @@ import {
   sendNote,
   spliceDraft,
 } from "../src/frame/draft";
+import { foldSurface } from "../src/frame/frame-surface";
 import type { LinePane } from "../src/frame/line-door";
-import { foldSurface } from "../src/frame/line-surface";
 import { linePanesOf, newTerminalOutcome } from "../src/godview/line-panes";
 
 const chip = { id: "c1", kind: "capture", label: "1440 × 900", path: "/stills/a.png" } as const;

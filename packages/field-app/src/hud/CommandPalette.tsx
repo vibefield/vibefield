@@ -1,30 +1,36 @@
 import { type CanvasEngine, selectedEntities } from "@vibecook/ice";
-import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import type { FrameView } from "@vibefield/contracts";
+import { FieldGlyph, type GlyphName } from "@vibefield/design-kit/glyphs";
 import {
+  Fragment,
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,
   type RefObject,
   useEffect,
+  useId,
   useMemo,
   useRef,
   useState,
 } from "react";
+import { type FrameActRun, frameActGroups } from "../frame/palette-acts";
+import type { ViewKeys } from "../frame/views";
 import { invoke as invokeCommand, isCommandBound } from "../plugin-host/command-registry";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import "../frame/menu.css";
 import "./CommandPalette.css";
 
-// The ⌘K command palette (P6, spec §8.3/§13.1). Lists the palette-placement
-// commands of ENABLED plugins from the fieldd snapshot (P5: the snapshot is
-// truth — no optimistic list); a declared command with no live handler renders
-// as an UNAVAILABLE row (§8.3 "visible as unavailable when useful"). Enter (or a
-// click) invokes through the spine command registry with a {source:"palette"}
-// invocation carrying the current selection and a real user gesture (§13.1).
-//
-// DESIGN.md governs every pixel: §5 overlay material (surface/90 + backdrop
-// blur, hairline, island shadow) over the §5 backdrop dim; §3 type ramp; §6
-// named easings (pop-in, reduced-motion aware — M6); §9 voice (sentence case,
-// honest states). The palette is chrome: near-colorless, the drama stays on the
-// field.
+// The ⌘K command palette (P6, spec §8.3/§13.1; re-cut for One Frame FR-3, §7 —
+// DESIGN.md §8 "The head"). A solid panel under the head, over the stage, in
+// every view: the frame's acts first — the views, this view's acts, the app's —
+// each with its key at the row's end (FR-5: the palette is where keys are
+// said), then the palette-placement commands of ENABLED plugins from the
+// fieldd snapshot (P5: the snapshot is truth — no optimistic list), each under
+// its plugin's name; a declared command with no live handler is drawn
+// "unavailable" and never run (§8.3). Enter (or a click) runs a frame act
+// through the frame's own doors, or invokes a command through the spine
+// registry with a {source:"palette"} invocation carrying the current selection
+// and a real user gesture (§13.1). Open and closed is the frame's one owner's
+// (`frame-surface.ts`); this draws and runs.
 
 export interface PaletteCommand {
   id: string;
@@ -35,109 +41,127 @@ export interface PaletteCommand {
   available: boolean;
 }
 
-/** Controller-free production composition. Runtime discovery and command
- * invocation stay in CommandPalette; the catalog can supply deterministic
- * commands without maintaining a second DOM or visual recipe. */
+/** One row as the palette draws it. */
+export interface PaletteRow {
+  readonly id: string;
+  readonly name: string;
+  readonly glyph: GlyphName | null;
+  /** The key, said at the row's end; null where there is none. */
+  readonly key: string | null;
+  /** A small line under the name: a command's description. */
+  readonly sub?: string;
+  /** Why it cannot run, said under its name; null when it can. */
+  readonly waits: string | null;
+  /** More words it answers to when typed. */
+  readonly terms?: string;
+}
+
+export interface PaletteGroup {
+  readonly id: string;
+  readonly eyebrow: string;
+  readonly rows: readonly PaletteRow[];
+}
+
+/** Controller-free production composition. What the rows are and what running
+ * one does stay in CommandPalette; the catalog supplies deterministic groups
+ * without maintaining a second DOM or visual recipe. */
 export function CommandPaletteView({
   visible,
   query,
-  commands,
-  matched,
-  activeId,
+  groups,
+  hotId,
   inputRef,
   onQueryChange,
   onInputKeyDown,
   onRun,
+  onHot,
   onClose,
 }: {
   visible: boolean;
   query: string;
-  commands: readonly PaletteCommand[];
-  matched: readonly PaletteCommand[];
-  activeId?: string;
+  groups: readonly PaletteGroup[];
+  /** The hot row: what Return runs. */
+  hotId?: string;
   inputRef?: RefObject<HTMLInputElement | null>;
   onQueryChange: (query: string) => void;
   onInputKeyDown: (event: ReactKeyboardEvent<HTMLInputElement>) => void;
-  onRun: (commandId: string) => void;
+  onRun: (rowId: string) => void;
+  onHot?: (rowId: string) => void;
   onClose: () => void;
 }): ReactElement {
+  const empty = groups.every((group) => group.rows.length === 0);
+  const listId = useId();
+  const rowDomId = (id: string): string => `${listId}-${id.replace(/[^\w-]/gu, "_")}`;
   return (
-    <div
-      className={`absolute inset-0 z-[70] flex items-start justify-center transition-opacity duration-200 ease-out ${
-        visible ? "opacity-100" : "opacity-0"
-      }`}
-    >
-      <div className="vf-ui-backdrop absolute inset-0" onClick={onClose} aria-hidden />
-
-      <div
-        role="dialog"
-        aria-label="Command palette"
-        className={`vf-command-palette relative mt-[16vh] flex max-h-[60vh] w-[min(92%,40rem)] flex-col overflow-hidden ${
-          visible ? "scale-100" : "scale-95"
-        }`}
-      >
-        <div className="flex items-center gap-3 border-b border-black/5 px-4 py-3.5 dark:border-white/10">
-          <FieldGlyph
-            name="search"
-            size={16}
-            className="shrink-0 text-black/40 dark:text-white/40"
-          />
+    <div className="vf-palette-layer" {...(visible ? { "data-visible": "true" } : {})}>
+      <div className="vf-palette-dim" onClick={onClose} aria-hidden />
+      <div role="dialog" aria-label="Command palette" className="vf-menu vf-command-palette">
+        <div className="vf-palette-field">
+          <FieldGlyph name="search" size={16} />
           <input
             ref={inputRef}
             value={query}
             onChange={(event) => onQueryChange(event.target.value)}
             onKeyDown={onInputKeyDown}
-            placeholder="Search commands"
-            className="w-full bg-transparent text-[15px] text-black outline-none placeholder:text-black/40 dark:text-white dark:placeholder:text-white/40"
+            placeholder="Type a command or a view…"
+            role="combobox"
+            aria-expanded="true"
+            aria-controls={listId}
+            aria-autocomplete="list"
+            {...(hotId === undefined ? {} : { "aria-activedescendant": rowDomId(hotId) })}
             spellCheck={false}
             autoComplete="off"
           />
         </div>
-
-        <div className="min-h-0 flex-1 overflow-y-auto py-1.5">
-          {matched.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[13px] text-black/40 dark:text-white/40">
-              {commands.length === 0 ? "No commands available" : "No commands match"}
-            </div>
+        <div id={listId} className="vf-palette-list vf-no-scrollbar" role="listbox">
+          {empty ? (
+            <div className="vf-palette-empty">Nothing matches</div>
           ) : (
-            matched.map((command) => {
-              const isActive = command.available && command.id === activeId;
-              return (
-                <button
-                  key={command.id}
-                  type="button"
-                  disabled={!command.available}
-                  onClick={() => command.available && onRun(command.id)}
-                  className={`flex w-full items-center gap-3 px-4 py-2.5 text-left transition-colors duration-150 ${
-                    command.available
-                      ? isActive
-                        ? "bg-black/5 dark:bg-white/10"
-                        : "hover:bg-black/5 dark:hover:bg-white/10"
-                      : "cursor-default opacity-40"
-                  }`}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-[13px] font-medium text-black dark:text-white">
-                      {command.title}
-                    </div>
-                    {command.description !== undefined && (
-                      <div className="truncate text-[12px] text-black/50 dark:text-white/50">
-                        {command.description}
-                      </div>
-                    )}
+            groups.map((group) =>
+              group.rows.length === 0 ? null : (
+                <Fragment key={group.id}>
+                  <div className="vf-menu-eye" aria-hidden>
+                    {group.eyebrow}
                   </div>
-                  <span className="shrink-0 text-[11px] font-medium text-black/40 dark:text-white/40">
-                    {command.available ? command.pluginTitle : "unavailable"}
-                  </span>
-                </button>
-              );
-            })
+                  {group.rows.map((row) => (
+                    <button
+                      key={row.id}
+                      id={rowDomId(row.id)}
+                      type="button"
+                      role="option"
+                      aria-selected={row.id === hotId}
+                      className="vf-menu-row"
+                      data-row={row.id}
+                      tabIndex={-1}
+                      {...(row.id === hotId ? { "data-hot": "true" } : {})}
+                      {...(row.waits === null ? {} : { "aria-disabled": true })}
+                      // The field keeps the keyboard while a row is pointed at.
+                      onMouseDown={(event) => event.preventDefault()}
+                      onPointerEnter={() => {
+                        if (row.waits === null) onHot?.(row.id);
+                      }}
+                      onClick={() => {
+                        if (row.waits === null) onRun(row.id);
+                      }}
+                    >
+                      <span className="vf-menu-ico">
+                        {row.glyph === null ? null : <FieldGlyph name={row.glyph} size={16} />}
+                      </span>
+                      <span className="vf-menu-label">
+                        {row.name}
+                        {row.waits !== null ? (
+                          <small>{row.waits}</small>
+                        ) : row.sub !== undefined ? (
+                          <small>{row.sub}</small>
+                        ) : null}
+                      </span>
+                      {row.key === null ? null : <kbd className="vf-menu-key">{row.key}</kbd>}
+                    </button>
+                  ))}
+                </Fragment>
+              ),
+            )
           )}
-        </div>
-
-        <div className="flex items-center gap-4 border-t border-black/5 px-4 py-2 text-[11px] text-black/40 dark:border-white/10 dark:text-white/40">
-          <span>↵ to run</span>
-          <span>esc to close</span>
         </div>
       </div>
     </div>
@@ -162,31 +186,69 @@ function fuzzyScore(query: string, text: string): number | null {
   return qi === q.length ? score : null;
 }
 
+/** The rows that match `query` — by a row's name, its terms or its group's
+ * name — the groups kept in their order and each group's rows ranked: those
+ * that can run first, then by score (ties keep their order). */
+export function filterPalette(
+  groups: readonly PaletteGroup[],
+  query: string,
+): readonly PaletteGroup[] {
+  if (query === "") return groups;
+  return groups.map((group) => {
+    const scored: Array<{ row: PaletteRow; score: number }> = [];
+    for (const row of group.rows) {
+      const score = fuzzyScore(query, `${row.name} ${row.terms ?? ""} ${group.eyebrow}`);
+      if (score !== null) scored.push({ row, score });
+    }
+    scored.sort((a, b) =>
+      (a.row.waits === null) !== (b.row.waits === null)
+        ? a.row.waits === null
+          ? -1
+          : 1
+        : b.score - a.score,
+    );
+    return { ...group, rows: scored.map((entry) => entry.row) };
+  });
+}
+
+/** The rows Return and the arrows walk: every row that can run, in order. */
+function runnable(groups: readonly PaletteGroup[]): PaletteRow[] {
+  return groups.flatMap((group) => group.rows.filter((row) => row.waits === null));
+}
+
 export function CommandPalette({
   ce,
   open,
   onClose,
   windowId,
+  view,
+  keys,
+  onAct,
 }: {
   ce: CanvasEngine;
   open: boolean;
   onClose: () => void;
   windowId: string;
+  /** The window's view: its acts are "On this view". */
+  view: FrameView;
+  keys: ViewKeys;
+  /** Run one of the frame's acts — through the frame's own doors. */
+  onAct: (run: FrameActRun) => void;
 }): ReactElement | null {
   const snapshot = usePluginRegistrySnapshot();
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
+  const [hot, setHot] = useState<string | null>(null);
   const [rendered, setRendered] = useState(open);
   const [visible, setVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Enter/exit choreography (M1/M4): mount on open, fade+pop in next frame,
-  // fade out then unmount after the transition — never a hard vanish.
+  // Enter/exit choreography (M1/M4): mount on open, grow in the next frame,
+  // fade out and then unmount — never a hard vanish.
   useEffect(() => {
     if (open) {
       setRendered(true);
       setQuery("");
-      setActiveIndex(0);
+      setHot(null);
       const id = requestAnimationFrame(() => setVisible(true));
       return () => cancelAnimationFrame(id);
     }
@@ -214,8 +276,12 @@ export function CommandPalette({
     return () => window.removeEventListener("keydown", onKey, true);
   }, [open, onClose]);
 
-  // All palette-placement commands of enabled plugins (§8.3). null snapshot →
-  // empty (honest: fieldd has not told us what exists yet), never a guess.
+  // The frame's acts, as this view has them.
+  const acts = useMemo(() => frameActGroups(view, keys), [view, keys]);
+
+  // All palette-placement commands of enabled plugins (§8.3), each plugin's
+  // under its own name. null snapshot → none (honest: fieldd has not told us
+  // what exists yet), never a guess.
   const commands = useMemo<PaletteCommand[]>(() => {
     if (snapshot === null) return [];
     const out: PaletteCommand[] = [];
@@ -236,54 +302,82 @@ export function CommandPalette({
     return out;
   }, [snapshot]);
 
-  // Filter + rank: available first (by score, then title), unavailable after.
-  const matched = useMemo(() => {
-    const scored: Array<{ cmd: PaletteCommand; score: number }> = [];
-    for (const cmd of commands) {
-      const score = fuzzyScore(query, `${cmd.title} ${cmd.pluginTitle}`);
-      if (score !== null) scored.push({ cmd, score });
+  const groups = useMemo<PaletteGroup[]>(() => {
+    const out: PaletteGroup[] = acts.map((group) => ({
+      id: group.id,
+      eyebrow: group.eyebrow,
+      rows: group.acts.map((act) => ({
+        id: act.id,
+        name: act.name,
+        glyph: act.glyph,
+        key: act.key,
+        waits: act.waits,
+        ...(act.terms === undefined ? {} : { terms: act.terms }),
+      })),
+    }));
+    const byPlugin = new Map<string, PaletteRow[]>();
+    const titles = new Map<string, string>();
+    for (const command of commands) {
+      const rows = byPlugin.get(command.pluginId) ?? [];
+      rows.push({
+        id: command.id,
+        name: command.title,
+        glyph: "plugin",
+        key: null,
+        ...(command.description !== undefined ? { sub: command.description } : {}),
+        waits: command.available ? null : "unavailable",
+      });
+      byPlugin.set(command.pluginId, rows);
+      titles.set(command.pluginId, command.pluginTitle);
     }
-    scored.sort((a, b) => {
-      if (a.cmd.available !== b.cmd.available) return a.cmd.available ? -1 : 1;
-      if (a.score !== b.score) return b.score - a.score;
-      return a.cmd.title.localeCompare(b.cmd.title);
-    });
-    return scored.map((s) => s.cmd);
-  }, [commands, query]);
+    for (const [pluginId, rows] of byPlugin) {
+      // Available first, then by title (the old ranking, within the plugin).
+      rows.sort((a, b) =>
+        (a.waits === null) !== (b.waits === null)
+          ? a.waits === null
+            ? -1
+            : 1
+          : a.name.localeCompare(b.name),
+      );
+      out.push({ id: `plugin:${pluginId}`, eyebrow: titles.get(pluginId) ?? pluginId, rows });
+    }
+    return out;
+  }, [acts, commands]);
 
-  // Keyboard nav rides the AVAILABLE subset only (§8.3: unavailable rows are
-  // shown for diagnosis, not run).
-  const availableIds = useMemo(
-    () => matched.filter((c) => c.available).map((c) => c.id),
-    [matched],
-  );
-  const clampedActive =
-    availableIds.length === 0 ? -1 : Math.min(activeIndex, availableIds.length - 1);
+  const matched = useMemo(() => filterPalette(groups, query), [groups, query]);
+  const walk = useMemo(() => runnable(matched), [matched]);
+  // The hot row: the one pointed at or walked to, while it still matches;
+  // else the first that can run.
+  const hotId = walk.some((row) => row.id === hot) ? (hot ?? undefined) : walk[0]?.id;
 
-  const run = (commandId: string): void => {
+  const run = (rowId: string): void => {
+    const act = acts.flatMap((group) => group.acts).find((entry) => entry.id === rowId);
+    onClose();
+    if (act !== undefined) {
+      onAct(act.run);
+      return;
+    }
     const selection = selectedEntities(ce.world).map((e) => String(e));
-    void invokeCommand(commandId, undefined, {
+    void invokeCommand(rowId, undefined, {
       source: "palette",
       windowId,
       selection,
       userGesture: true,
     });
-    onClose();
   };
 
   const onInputKeyDown = (e: ReactKeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === "ArrowDown") {
+    if (e.nativeEvent.isComposing) return;
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
       e.preventDefault();
-      setActiveIndex((i) => (availableIds.length === 0 ? 0 : (i + 1) % availableIds.length));
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      setActiveIndex((i) =>
-        availableIds.length === 0 ? 0 : (i - 1 + availableIds.length) % availableIds.length,
-      );
+      if (walk.length === 0) return;
+      const at = walk.findIndex((row) => row.id === hotId);
+      const next =
+        e.key === "ArrowDown" ? (at + 1) % walk.length : (at - 1 + walk.length) % walk.length;
+      setHot(walk[next]?.id ?? null);
     } else if (e.key === "Enter") {
       e.preventDefault();
-      const id = availableIds[clampedActive];
-      if (id !== undefined) run(id);
+      if (hotId !== undefined) run(hotId);
     }
   };
 
@@ -293,18 +387,16 @@ export function CommandPalette({
     <CommandPaletteView
       visible={visible}
       query={query}
-      commands={commands}
-      matched={matched}
-      {...(availableIds[clampedActive] === undefined
-        ? {}
-        : { activeId: availableIds[clampedActive] })}
+      groups={matched}
+      {...(hotId === undefined ? {} : { hotId })}
       inputRef={inputRef}
       onQueryChange={(nextQuery) => {
         setQuery(nextQuery);
-        setActiveIndex(0);
+        setHot(null);
       }}
       onInputKeyDown={onInputKeyDown}
       onRun={run}
+      onHot={setHot}
       onClose={onClose}
     />
   );

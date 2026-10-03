@@ -4,11 +4,10 @@ import { MeMenuView } from "../../account/MeMenu";
 import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../../field/canvas-appearance";
 import { roundButtonCls } from "../../field/theme-constants";
 import { ComposerLineView } from "../../frame/ComposerLine";
+import type { FrameSurface } from "../../frame/frame-surface";
 import { ViewsTrackView } from "../../frame/ViewsTrack";
 import { type EdgeTrayTile, EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
-import { NavigationBreadcrumbsView } from "../../hud/NavigationBreadcrumbs";
 import { WidgetTrayFrame } from "../../hud/WidgetTray";
-import { ZoomPillView } from "../../hud/ZoomPill";
 import { ThemeToggleButton } from "../../ThemeToggleButton";
 import {
   FIXTURE_ME,
@@ -77,7 +76,7 @@ const TRAY_TILES: readonly EdgeTrayTile[] = [
 ];
 
 import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
-import { FilePillPreview } from "../FilePillPreview";
+import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
 import { SwitchPreview } from "../SwitchPreview";
 import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
@@ -91,10 +90,11 @@ export function ChromeSection({
   magnetGridGlyph: MagnetGridGlyph;
   onToggleTheme: () => void;
 }): ReactElement {
-  const [docsOpen, setDocsOpen] = useState(false);
-  const [trayOpen, setTrayOpen] = useState(false);
+  // The frame's one owner of the open surface, in fixture: the head's
+  // explorer and zoom menu and the line's Objects are one value here too.
+  const [surface, setSurface] = useState<FrameSurface | null>(null);
+  const trayOpen = surface === "objects";
   const [trayCategory, setTrayCategory] = useState("All");
-  const [zoom, setZoom] = useState(100);
   const [meOpen, setMeOpen] = useState(false);
   const [meSpecimenOpen, setMeSpecimenOpen] = useState(true);
   const [trayState, setTrayState] = useState<TrayState>("Pinned");
@@ -112,10 +112,9 @@ export function ChromeSection({
     [dark, magnetGridGlyph],
   );
 
-  const openDocs = (): void => {
-    setDocsOpen((open) => !open);
-    setTrayOpen(false);
-    setMeOpen(false);
+  const changeSurface = (next: FrameSurface | null): void => {
+    setSurface(next);
+    if (next !== null) setMeOpen(false);
   };
 
   return (
@@ -126,8 +125,12 @@ export function ChromeSection({
       title="Islands over the canvas"
       description="The window stays a field. Controls float at the edges, while one physical object morphs between a compact island and its expanded role."
     >
-      <Specimen title="Field chrome playground" source="hud/*" bleed>
-        <div className="vf-ds-field-stage" data-docs-open={docsOpen} data-tray-open={trayOpen}>
+      <Specimen title="Field chrome playground" source="frame/* · hud/*" bleed>
+        <div
+          className="vf-ds-field-stage"
+          data-docs-open={surface === "fields"}
+          data-tray-open={trayOpen}
+        >
           <InfiniteCanvasGroundPreview
             grid={groundGrid}
             background="var(--vf-canvas-bg)"
@@ -137,40 +140,26 @@ export function ChromeSection({
           />
           <div className="vf-ds-stage-card card-a" />
           <div className="vf-ds-stage-card card-b" />
-          <NavigationBreadcrumbsView
-            crumbs={[
-              { depth: 0, containerId: null, label: "Root" },
-              { depth: 1, containerId: null, label: "Launch notes" },
-            ]}
-            onBack={() => {}}
-            onJump={() => {}}
+          {/* The head on its real controller (One Frame FR-3), in a folder;
+              the theme button and Artifacts beside the readout until FR-4. */}
+          <HeadLive
+            surface={surface}
+            onSurfaceChange={changeSurface}
+            aside={
+              <>
+                <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
+                <button type="button" className={roundButtonCls(false)} aria-label="Open artifacts">
+                  <Icon name="layers" />
+                </button>
+              </>
+            }
           />
-
-          <div className="vf-ds-demo-right-chrome">
-            <ZoomPillView
-              percent={zoom}
-              onZoomOut={() => setZoom((value) => Math.max(25, value - 10))}
-              onReset={() => setZoom(100)}
-              onZoomToFit={() => setZoom(86)}
-              onZoomIn={() => setZoom((value) => Math.min(400, value + 10))}
-            />
-            <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
-            <button type="button" className={roundButtonCls(false)} aria-label="Open artifacts">
-              <Icon name="layers" />
-            </button>
-          </div>
-
-          <FilePillPreview open={docsOpen} onOpenChange={openDocs} />
 
           <WidgetTrayFrame
             open={trayOpen}
-            onOpenChange={(nextOpen) => {
-              setTrayOpen(nextOpen);
-              if (nextOpen) {
-                setDocsOpen(false);
-                setMeOpen(false);
-              }
-            }}
+            onOpenChange={(nextOpen) =>
+              changeSurface(nextOpen ? "objects" : surface === "objects" ? null : surface)
+            }
           >
             <div className="vf-no-scrollbar vf-mask-fade-right mb-3 flex w-full items-center gap-2 overflow-x-auto px-8">
               {["All", "Writing", "Agents"].map((category) => (
@@ -201,11 +190,7 @@ export function ChromeSection({
             keys="mac"
             track={<ViewsTrackView view="canvas" keys="mac" />}
             objectsOpen={trayOpen}
-            onCreate={() => {
-              setTrayOpen((open) => !open);
-              setDocsOpen(false);
-              setMeOpen(false);
-            }}
+            onCreate={() => changeSurface(trayOpen ? null : "objects")}
           />
 
           <div className="vf-ds-demo-me">
@@ -215,10 +200,7 @@ export function ChromeSection({
               open={meOpen}
               onOpenChange={(nextOpen) => {
                 setMeOpen(nextOpen);
-                if (nextOpen) {
-                  setDocsOpen(false);
-                  setTrayOpen(false);
-                }
+                if (nextOpen) setSurface(null);
               }}
               onOpenSettings={() => undefined}
               onOpenAccount={() => undefined}
@@ -229,8 +211,29 @@ export function ChromeSection({
           </div>
         </div>
         <p className="vf-ds-stage-caption">
-          The document pill, the line's Objects and your face are interactive. Open one to inspect
-          its motion and the rule that only one of them is open at a time.
+          The head — the field's name pill with its crumbs, which grows the fields explorer, and the
+          zoom readout, which grows its menu — the line's Objects and your face are interactive.
+          Open one to inspect its motion and the rule that only one of them is open at a time.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The head — the name pill, the zoom readout, the palette"
+        source="frame/HeadView.tsx · hud/CommandPalette.tsx · DESIGN.md §8, §5, §10"
+        bleed
+      >
+        <div className="vf-ds-head-plates">
+          {HEAD_STATES.map((state) => (
+            <HeadPlate key={state} state={state} />
+          ))}
+          <HeadPlate state="zoom" keys="other" />
+        </div>
+        <p className="vf-ds-stage-caption">
+          Every state the page's head plates draw — the field's top as one name, the crumbs folded
+          into the pill inside a folder, a long path in a narrow window dropping whole leading
+          names, renaming in place, the fields explorer grown from the pill, the zoom's solid menu
+          with its keys, and the palette under the head — then the zoom's keys as Windows says them,
+          in this page's theme. No keycaps and no plus in the head.
         </p>
       </Specimen>
 

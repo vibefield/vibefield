@@ -4,7 +4,7 @@ import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../field/canvas-appearance";
 import { Composer } from "../frame/Composer";
 import { ComposerLineView } from "../frame/ComposerLine";
-import type { LineSurface } from "../frame/line-surface";
+import type { FrameSurface } from "../frame/frame-surface";
 import {
   type CoverState,
   coverAfter,
@@ -106,7 +106,7 @@ export function ViewFramePreview({
   const [cover, setCover] = useState<CoverState>(() => coverAt("canvas"));
   const [press, setPress] = useState<ViewKeyPress | null>(null);
   const [note, setNote] = useState<number | null>(null);
-  const [surface, setSurface] = useState<LineSurface | null>(null);
+  const [surface, setSurface] = useState<FrameSurface | null>(null);
   const [clipboard] = useState(fixtureClipboardStore);
   const grid = useMemo(
     () => defaultCanvasGridConfig(dark, magnetGridGlyph),

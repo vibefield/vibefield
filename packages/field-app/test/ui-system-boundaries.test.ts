@@ -55,7 +55,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history-room|line\b|line-|at-)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history-room|line\b|line-|at-|head\b|head-|menu\b|menu-)/m,
     );
   });
 
@@ -133,6 +133,27 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("getHost");
   });
 
+  it("keeps the head's fixture an ADAPTER — the doors' facts, never the head's markup (FR-3)", () => {
+    // The catalog stands in for what a host supplies — the document manager,
+    // the head's canvas door (the path, the zoom) and the frame's one owner of
+    // the open surface — and mounts the shipping head over them: the view on
+    // fixture props for the plates, the real controller for the playground.
+    const fixture = source("design-system/HeadPreview.tsx");
+    expect(fixture).toContain("HeadView");
+    expect(fixture).toMatch(/<Head\s/u);
+    expect(fixture).not.toMatch(/className="vf-(?:head|menu)/);
+    expect(fixture).not.toContain("<style");
+    // …and never the engine a host would hold, or the host itself.
+    expect(fixture).not.toContain("canvasHead");
+    expect(fixture).not.toContain("createCanvasEngine");
+    expect(fixture).not.toContain("getHost");
+    // The palette's fixture draws the product's own table of the frame's acts.
+    const palette = source("design-system/CommandPalettePreview.tsx");
+    expect(palette).toContain("CommandPaletteView");
+    expect(palette).toContain("frameActGroups");
+    expect(palette).not.toMatch(/className="vf-(?:palette|menu|command-palette)/);
+  });
+
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
     // The temptation for a widget whose pixels need a privileged producer is to
     // draw convincing ones. The catalog is held to supplying what a HOST
@@ -205,14 +226,15 @@ describe("UI system ownership boundaries", () => {
     const deviceFilter = source("design-system/DeviceFilterPreview.tsx");
     const viewFrame = source("design-system/ViewFramePreview.tsx");
     const line = source("design-system/ComposerLinePreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}`;
+    const head = source("design-system/HeadPreview.tsx");
+    const palette = source("design-system/CommandPalettePreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
+      "CommandPaletteView",
       "GodviewPreview",
-      "FilePillPreview",
       "LoadingVeilView",
-      "NavigationBreadcrumbsView",
       "SettingsDialog",
       "MeMenuView",
       "SwitchSceneView",
@@ -221,7 +243,6 @@ describe("UI system ownership boundaries", () => {
       // One Frame FR-2 — the tray keeps its sheet only (its island, tool
       // switcher and ⊕ retired into the line)
       "WidgetTrayFrame",
-      "ZoomPillView",
       "EdgeTrayView",
       "OnboardingConnectPaneView",
       "OnboardingDerivingPaneView",
@@ -261,12 +282,19 @@ describe("UI system ownership boundaries", () => {
       "ComposerLinePlate",
       "ComposerLineView",
       "AtMenuView",
+      // One Frame FR-3 — the head: its view, a plate per state, and the live
+      // head on its real controller over fixture doors (the file pill, the
+      // breadcrumbs and the − % + pill retired into it)
+      "HeadPlate",
+      "HeadView",
+      "HeadLive",
     ]) {
       expect(catalog).toContain(productionView);
     }
-    // …and the line's own controller, live on fixture doors — the element, not
-    // the view's name it prefixes.
+    // …and the line's and the head's own controllers, live on fixture doors —
+    // the elements, not the views' names they prefix.
     expect(catalog).toMatch(/<Composer\s/u);
+    expect(catalog).toMatch(/<Head\s/u);
 
     for (const retiredReplica of [
       "vf-ds-artifact-panel",
@@ -303,7 +331,6 @@ describe("UI system ownership boundaries", () => {
       "hud/CommandPalette.tsx",
       "hud/edge-tray/EdgeTray.tsx",
       "hud/edge-tray/EdgeTrayView.tsx",
-      "hud/FilePill.tsx",
       "hud/LoadingVeil.tsx",
       "hud/WidgetTray.tsx",
       "boot/onboarding/wizard-ui.tsx",
@@ -314,6 +341,8 @@ describe("UI system ownership boundaries", () => {
       "frame/ViewCover.tsx",
       "frame/Composer.tsx",
       "frame/ComposerLine.tsx",
+      "frame/Head.tsx",
+      "frame/HeadView.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -328,17 +357,16 @@ describe("UI system ownership boundaries", () => {
       "cursor/overlay.css",
       "hud/CommandPalette.css",
       "hud/edge-tray/edge-tray.css",
-      "hud/FilePill.css",
       "hud/LoadingVeil.css",
-      "hud/NavigationBreadcrumbs.css",
       "hud/PluginSurfaceSlot.css",
       "hud/WidgetTray.css",
-      "hud/ZoomPill.css",
       "panels/settings.css",
       "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",
       "frame/view-frame.css",
       "frame/composer.css",
+      "frame/head.css",
+      "frame/menu.css",
       "terminal/mirror/mirror.css",
       "terminal/widget/mirror-widget.css",
     ]) {

@@ -1,10 +1,18 @@
 import { type FrameView, frameViewBuilt } from "@vibefield/contracts";
-import { type ReactElement, type ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type MutableRefObject,
+  type ReactElement,
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+} from "react";
 import { emitViewKeyMarker } from "../development-console";
 import { listenForProductChord } from "../field/product-chords";
 import { getHost } from "../host";
-import { Composer } from "./Composer";
-import type { LineSurface } from "./line-surface";
+import { Composer, type LineActs } from "./Composer";
+import type { FrameSurface } from "./frame-surface";
 import {
   type CoverState,
   coverAfter,
@@ -23,8 +31,8 @@ import { FRAME_VIEWS, viewForKey, viewKeysOf } from "./views";
 // views track at its left end (FR-2; the line's own controller is
 // `Composer.tsx`). What it owns is only presentation — the ⌘-held light, the
 // key's dip, the Assistant's note, and which motion the cover is making —
-// never the view, and never which of the line's surfaces is open, which has
-// its own one owner (`line-surface.ts`).
+// never the view, and never which of the frame's surfaces is open, which has
+// its own one owner (`frame-surface.ts`).
 
 /** How long ⌘ is held alone before the keys light (DESIGN.md §8): long enough
  * that ⌘C and ⌘V never set it off. */
@@ -36,11 +44,14 @@ export function ViewFrame({
   godview,
   surface,
   onSurfaceChange,
+  lineActs,
 }: {
   godview: ReactNode;
-  /** The line's open surface, from its one owner. */
-  surface: LineSurface | null;
-  onSurfaceChange: (next: LineSurface | null) => void;
+  /** The frame's open surface, from its one owner. */
+  surface: FrameSurface | null;
+  onSurfaceChange: (next: FrameSurface | null) => void;
+  /** Where the line lends its acts to the palette (One Frame FR-3). */
+  lineActs?: MutableRefObject<LineActs | null>;
 }): ReactElement {
   const view = useActiveView();
   const [keys] = useState(() => viewKeysOf(getHost().platform));
@@ -191,6 +202,7 @@ export function ViewFrame({
         keys={keys}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
+        {...(lineActs === undefined ? {} : { actsRef: lineActs })}
         track={
           <ViewsTrackView
             view={view}

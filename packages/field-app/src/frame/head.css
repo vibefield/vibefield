@@ -1,0 +1,513 @@
+/* The head (One Frame FR-2, FR-6, §4, §6, §7; FC-D8, FC-D9): the frame's top
+   row on the lights' axis — every control 40 tall at top 8, centred on y 28.
+   Every number is DESIGN.md's — §8 "The head", §5 the line's glass, the sheet
+   tier and the solid menu, §6 the island curve, §10 the place. Tokens only;
+   the ready fill is the foreground at 8% (14% where it is pressed), as the
+   line mixes it. The menus' rows are menu.css's. */
+
+/* ── THE NAME PILL ⇄ THE FIELDS EXPLORER — one element (M1) ───────────────
+   Closed, the pill is as wide as what it says, centred on the window, and
+   never wider than the window less the wider side's slot on both sides
+   (`--vf-head-side`, measured by the view; the lights' 96 until it is) — past
+   that, FitPath drops names.
+   Open, the same element grows into the sheet in 600ms on the island curve
+   (the file pill's own 560ms curve retired, F14). Canvas chrome: 50, below
+   the cover (60). */
+.vf-head-place {
+  position: absolute;
+  z-index: 50;
+  top: 8px;
+  left: 50%;
+  display: flex;
+  width: max-content;
+  max-width: calc(100% - 2 * var(--vf-head-side, 96px));
+  height: 40px;
+  flex-direction: column;
+  overflow: hidden;
+  isolation: isolate;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+  transform: translateX(-50%);
+  interpolate-size: allow-keywords;
+  transition:
+    width 600ms var(--vf-ease-island),
+    max-width 600ms var(--vf-ease-island),
+    height 600ms var(--vf-ease-island),
+    border-radius 600ms var(--vf-ease-island),
+    background-color 240ms ease,
+    box-shadow 600ms var(--vf-ease-island),
+    backdrop-filter 600ms var(--vf-ease-island);
+}
+
+.dark .vf-head-place {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+/* Open: the sheet tier, the top sheet's shadow cast down, corners 22 at the
+   top (concentric with the pill it was) and the sheet's 40 at the foot. */
+.vf-head-place[data-open="true"] {
+  width: min(56%, 34rem);
+  max-width: calc(100% - 32px);
+  height: min(46vh, 420px);
+  border-radius: 22px 22px 40px 40px;
+  background: var(--vf-chrome-surface);
+  backdrop-filter: blur(64px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-top-sheet);
+}
+
+/* The pill's own row — closed it IS the pill; open it heads the sheet. */
+.vf-head-row {
+  display: flex;
+  height: 40px;
+  min-width: 0;
+  flex: none;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px 0 16px;
+}
+
+.vf-head-place[data-open="true"] .vf-head-row {
+  justify-content: center;
+}
+
+/* The path: the field's name, and inside a folder the crumbs folded in
+   (FC-D9). Every name keeps its whole width — FitPath drops a leading name
+   rather than cut one (F13) — until only the last is left, which then may
+   end in an ellipsis (`data-fit="floor"`). */
+.vf-head-path {
+  display: flex;
+  min-width: 0;
+  flex: 0 1 auto;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.vf-head-crumb {
+  flex: none;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--vf-text-tertiary);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.vf-head-crumb:hover {
+  color: var(--vf-text-primary);
+}
+
+.vf-head-sep {
+  flex: none;
+  color: var(--vf-text-faint);
+}
+
+.vf-head-name,
+.vf-head-here {
+  flex: none;
+  overflow: hidden;
+  padding: 6px 0;
+  border: 0;
+  border-radius: 6px;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-overflow: ellipsis;
+}
+
+.vf-head-name {
+  cursor: default;
+}
+
+.vf-head-path[data-fit="floor"] :is(.vf-head-name, .vf-head-here) {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+/* Renaming in place: a transparent input on the ready fill, as wide as what
+   is typed, the caret in the select blue. */
+.vf-head-rename {
+  width: auto;
+  min-width: 4ch;
+  max-width: 100%;
+  height: 28px;
+  padding: 0 6px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  font: inherit;
+  caret-color: var(--vf-select);
+  outline: none;
+  field-sizing: content;
+}
+
+.vf-head-rename::placeholder {
+  color: var(--vf-text-faint);
+}
+
+/* The sync dot (C6-4): a standing fact after the name — muted for a fact,
+   orange where something needs attention (§2.5; never red). */
+.vf-head-dot {
+  width: 6px;
+  height: 6px;
+  flex: none;
+  border-radius: 50%;
+  background: rgba(128, 128, 128, 0.45);
+}
+
+.vf-head-dot[data-dot="attention"] {
+  background: var(--vf-orange);
+}
+
+/* The chevron to the explorer: a 28 round button, turned up while open. */
+.vf-head-chev {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: none;
+  padding: 0;
+  place-items: center;
+  border: 0;
+  border-radius: 14px;
+  color: var(--vf-text-tertiary);
+  background: none;
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.vf-head-chev:hover {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-head-chev > .vf-glyph {
+  transition: transform 600ms var(--vf-ease-island);
+}
+
+.vf-head-place[data-open="true"] .vf-head-chev > .vf-glyph {
+  transform: rotate(180deg);
+}
+
+:is(
+  .vf-head-crumb,
+  .vf-head-name,
+  .vf-head-chev,
+  .vf-head-zoom,
+  .vf-head-doc,
+  .vf-head-doc-sync
+):focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* ── THE EXPLORER'S BODY — under the pill's row, rising in behind the morph
+   (the content reveal 180ms behind its container, §6). */
+.vf-head-explorer {
+  position: absolute;
+  top: 40px;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  overflow-y: auto;
+  padding: 12px 20px 22px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(24px);
+  transition:
+    opacity 500ms ease-out,
+    transform 500ms ease-out,
+    visibility 0s linear 500ms;
+}
+
+.vf-head-place[data-open="true"] .vf-head-explorer {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 500ms ease-out 180ms,
+    transform 500ms ease-out 180ms,
+    visibility 0s;
+}
+
+.vf-head-docs {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 16px 14px;
+}
+
+.vf-head-doc-tile {
+  position: relative;
+  transition: transform 200ms ease;
+}
+
+.vf-head-doc-tile:hover {
+  transform: scale(1.03);
+}
+
+.vf-head-doc-tile:active {
+  transform: scale(0.95);
+}
+
+.vf-head-doc {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  color: inherit;
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-head-doc:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+/* A doc's face: a mini empty field (§2.1's CSS-fallback dots) until its
+   thumbnail lands; the current one wears the 1.5px inside select ring. */
+.vf-head-doc-face {
+  position: relative;
+  display: grid;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  place-items: center;
+  border-radius: 10px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px);
+  background-size: 10px 10px;
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+}
+
+.vf-head-doc-face img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  opacity: 0;
+  transition: opacity 500ms ease-out;
+}
+
+.vf-head-doc-face img[data-loaded] {
+  opacity: 1;
+}
+
+.vf-head-doc[aria-current="true"] .vf-head-doc-face::after {
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  box-shadow: inset 0 0 0 1.5px var(--vf-select);
+  content: "";
+}
+
+/* New field (FR-3: every create but Canvas's carries its noun): a doc tile's
+   footprint, its face the fill inside a dashed strong hairline, the words at
+   its centre. */
+.vf-head-doc[data-new] .vf-head-doc-face {
+  border: 1px dashed var(--vf-hairline-strong);
+  color: var(--vf-text-secondary);
+  background: var(--vf-fill);
+  box-shadow: none;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vf-head-doc-name,
+.vf-head-doc-time {
+  overflow: hidden;
+  padding: 0 2px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.vf-head-doc-name {
+  color: var(--vf-text-primary);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.vf-head-doc-time {
+  color: var(--vf-text-tertiary);
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.2;
+}
+
+/* UA-D7's door on a tile: a fact in the text ramp, never hued (§2.5). A gated
+   doc wears its chip always; an ordinary one offers it on hover and focus. */
+.vf-head-doc-sync {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--vf-text-tertiary);
+  background: color-mix(in srgb, var(--vf-foreground) 10%, transparent);
+  backdrop-filter: blur(4px);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.4;
+  opacity: 0;
+  cursor: pointer;
+  transition: opacity 200ms ease-out;
+}
+
+.vf-head-doc-sync[data-sync-intent="local"] {
+  color: var(--vf-text-secondary);
+  opacity: 1;
+}
+
+.vf-head-doc-tile:hover .vf-head-doc-sync,
+.vf-head-doc-sync:focus-visible {
+  opacity: 1;
+}
+
+/* The explorer's dim (§5 backdrop dim) — a click on it closes the sheet. */
+.vf-head-dim {
+  position: absolute;
+  z-index: 40;
+  inset: 0;
+  background: var(--vf-backdrop-dim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 500ms ease;
+}
+
+.vf-head-dim[data-open="true"] {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ── THE HEAD'S RIGHT: the zoom readout (FC-D8) — and, until FR-4, the
+   theme button and the Artifacts toggle beside it, 8 apart. */
+.vf-head-tools {
+  position: absolute;
+  z-index: 50;
+  top: 8px;
+  right: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.vf-head-zoom-at {
+  position: relative;
+}
+
+.vf-head-zoom {
+  min-width: 66px;
+  height: 40px;
+  padding: 0 14px;
+  border: 0;
+  border-radius: 20px;
+  color: var(--vf-text-secondary);
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
+  line-height: 1;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
+.dark .vf-head-zoom {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+.vf-head-zoom:hover,
+.vf-head-zoom[aria-expanded="true"] {
+  color: var(--vf-text-primary);
+}
+
+/* Its menu (FC-D14: solid): 196 wide, 4 under the head, its right edge on the
+   readout's, grown from the readout on the island curve. */
+.vf-head-zoom-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  width: 196px;
+  transform-origin: 100% 0;
+  animation: vf-head-grow 240ms var(--vf-ease-island) both;
+}
+
+@keyframes vf-head-grow {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* M6: fades only, halved. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-head-place,
+  .vf-head-chev > .vf-glyph,
+  .vf-head-explorer,
+  .vf-head-place[data-open="true"] .vf-head-explorer {
+    transition-duration: 90ms;
+    transition-delay: 0ms;
+  }
+
+  .vf-head-explorer {
+    transform: none;
+  }
+
+  .vf-head-doc-tile:hover,
+  .vf-head-doc-tile:active {
+    transform: none;
+  }
+
+  .vf-head-zoom-menu {
+    animation: vf-head-fade 120ms ease both;
+  }
+
+  @keyframes vf-head-fade {
+    from {
+      opacity: 0;
+    }
+
+    to {
+      opacity: 1;
+    }
+  }
+}

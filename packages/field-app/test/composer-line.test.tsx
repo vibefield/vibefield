@@ -12,8 +12,8 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { Composer } from "../src/frame/Composer";
+import type { FrameSurface } from "../src/frame/frame-surface";
 import type { LineViewDoor } from "../src/frame/line-door";
-import type { LineSurface } from "../src/frame/line-surface";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
 import { pasteIntoPane } from "../src/godview/line-panes";
 import { type FieldHost, setHost } from "../src/host";
@@ -25,7 +25,7 @@ import type { RendererLogger } from "../src/logging";
 let root: Root | null = null;
 let host: HTMLElement | null = null;
 let pane: HTMLElement | null = null;
-let surfaceNow: LineSurface | null = null;
+let surfaceNow: FrameSurface | null = null;
 let setViewNow: ((view: FrameView) => void) | null = null;
 
 function door(overrides: Partial<LineViewDoor> = {}): LineViewDoor {
@@ -75,7 +75,7 @@ function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
   };
   function Owner(): React.ReactElement {
     // FieldView's place: the one owner of the line's open surface.
-    const [surface, setSurface] = useState<LineSurface | null>(null);
+    const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [shown, setShown] = useState<FrameView>(view);
     surfaceNow = surface;
     setViewNow = setShown;

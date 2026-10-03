@@ -653,8 +653,8 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
     13/500 in primary ink, then **the chevron** — a 28 round button, `chevron` 12 turned down in
     tertiary ink (the ready fill and primary under the pointer) — which grows the fields explorer.
     **A double-click renames** in place, as do Return and Space on the focused name: the name
-    becomes a transparent input on the ready fill, corners 6, as wide as what is typed; Return or
-    leaving commits, Esc reverts. The sync dot (C6-4, above) follows the field's name. **Inside a
+    becomes an input with no border, on the ready fill, corners 6, as wide as what is typed, all of
+    it chosen; Return or leaving commits, Esc reverts. The sync dot (C6-4, above) follows the field's name. **Inside a
     folder the crumbs fold into the pill** (FC-D9): `Studio desk › Sketches` — the earlier names
     are buttons in tertiary ink (primary under the pointer) that go there in one flight, a
     `chevron` 11 in faint ink stands between names, and the last is the name; **Esc goes up one**,

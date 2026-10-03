@@ -279,6 +279,24 @@ export function emitLineKeyMarker(facts: LineKeyFacts): void {
   console.log(`LINE_KEY ${JSON.stringify(facts)}`);
 }
 
+/** One key the HEAD took for the zoom (One Frame FR-3, §6; DK-D24): ⌘+ ⌘− ⌘0
+ * ⇧1 on Canvas. The delivery probe's ear at the head, in LINE_KEY's form —
+ * said from the head's own handler, so a key a focused pane kept (its font
+ * sizes) says nothing, which is what the probe reads that silence by. */
+export interface ZoomKeyFacts {
+  key: string;
+  act: "in" | "out" | "fit" | "actual";
+  view: string;
+  /** The readout's percent before the act, and after it. */
+  from: number;
+  to: number;
+}
+
+export function emitZoomKeyMarker(facts: ZoomKeyFacts): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`ZOOM_KEY ${JSON.stringify(facts)}`);
+}
+
 /** What the first ⌘G cost, station by station (GT-3p, GT-D15.4).
  *
  * Published once per app life, when the first open reaches a presented frame.

@@ -30,8 +30,9 @@ The catalog currently mounts these shipping views directly:
 - Artifact Hub and all empty/loading/populated/unavailable states
 - Godview stage, monitor registry, tuning panel, unavailable terminal deck, and the complete
   swarm-circle state matrix
-- FilePill, navigation breadcrumbs, ZoomPill, WidgetTray frame/tool switcher
-- command palette, settings dialog, side-panel frame, and loading veil
+- WidgetTray's sheet
+- the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
+  key at its row's end), settings dialog, side-panel frame, and loading veil
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
 - the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
   both face frames at every size, and the face picker
@@ -42,12 +43,18 @@ The catalog currently mounts these shipping views directly:
   plates draw — at rest, typing with a chip, @ open, aimed, Objects out, Godview's New terminal,
   History's Resume, Windows' keys — and the live line on its real controller (`Composer`) over the
   frame's field, with fixture doors for what Godview lends it, the clipboard and the capture
+- the head (One Frame FR-3): `HeadView` in every state the page's head plates draw — the field's
+  name at its top, the crumbs folded in inside a folder, FitPath in a narrow window, renaming in
+  place, the fields explorer grown from the pill, the zoom readout's menu (and Windows' keys), the
+  palette under the head — and the live head on its real controller (`Head`) in the playground,
+  over a fixture document manager and a fixture canvas door (the path, the zoom). It replaced the
+  file pill, the navigation breadcrumbs and the − % + zoom pill
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
-fixture product client and FilePill receives a fixture document manager; their DOM, interaction
-state, accessibility, and CSS are production code. Engine-rendered widget content is represented
-by deterministic card fixtures, while its stable visual identities come from shared content
-tokens and the plugin-owned stylesheets.
+fixture product client and the head receives a fixture document manager and canvas door; their
+DOM, interaction state, accessibility, and CSS are production code. Engine-rendered widget content
+is represented by deterministic card fixtures, while its stable visual identities come from shared
+content tokens and the plugin-owned stylesheets.
 
 Godview's swarm follows the same boundary at a smaller scale. `AgentSwarm.tsx` owns physics,
 placement, drag gestures, and field-level creation; `AgentBubble.tsx` owns the exact circle state

@@ -4,6 +4,7 @@ import {
   type DragEvent,
   type KeyboardEvent,
   type MouseEvent,
+  type MutableRefObject,
   type ReactElement,
   type ReactNode,
   useCallback,
@@ -44,15 +45,15 @@ import {
   sendNote,
   spliceDraft,
 } from "./draft";
+import type { FrameSurface } from "./frame-surface";
 import { type LineViewDoor, newTerminalNote, useGodviewLineDoor } from "./line-door";
-import type { LineSurface } from "./line-surface";
 import type { ViewKeys } from "./views";
 
 // THE LINE'S CONTROLLER (DESIGN.md §8 "The line", §10; One Frame FR-2). It owns
 // what the line does — the draft and its chips, @'s list and its hot row, the
 // aim, the interim send, the view's create and its key — and nothing the line
-// shows, which is `ComposerLineView`'s. Which of the line's surfaces is open is
-// NOT its own: that has one owner (FieldView, `line-surface.ts`), and this
+// shows, which is `ComposerLineView`'s. Which of the frame's surfaces is open
+// is NOT its own: that has one owner (FieldView, `frame-surface.ts`), and this
 // asks it.
 //
 // The draft is an editor (D1: chips inline in the sentence), so while a person
@@ -67,15 +68,24 @@ const NOTE_MS = 2_400;
 /** What a host lends the line: the capture door and the still scheme. */
 export type ComposerHost = Pick<FieldHost, "screenshotCapture" | "screenshotStillUrl">;
 
+/** What the line lends the palette (One Frame FR-3): its create, so the
+ * palette's row for the view's act runs the line's own — Objects on Canvas,
+ * New terminal in Godview, with the line's note saying what came of it. */
+export interface LineActs {
+  create(): void;
+}
+
 export interface ComposerProps {
   /** The window's view. */
   view: FrameView;
   keys: ViewKeys;
   /** The views track, drawn by the frame's controller: the line's left end. */
   track: ReactNode;
-  /** The line's open surface, from its one owner. */
-  surface: LineSurface | null;
-  onSurfaceChange: (next: LineSurface | null) => void;
+  /** The frame's open surface, from its one owner. */
+  surface: FrameSurface | null;
+  onSurfaceChange: (next: FrameSurface | null) => void;
+  /** Where the line lends its acts (the palette's door); left out, it lends none. */
+  actsRef?: MutableRefObject<LineActs | null>;
   /** Adapters — the catalog's fixtures; the product takes the defaults. What
    * Godview lends the line (undefined: the deck's published door). */
   godview?: LineViewDoor | null;
@@ -207,6 +217,7 @@ export function Composer({
   track,
   surface,
   onSurfaceChange,
+  actsRef,
   godview,
   clipboard = clipboardStore,
   host: hostProp,
@@ -287,7 +298,8 @@ export function Composer({
     if (surface === "at") onSurfaceChange(null);
   }, [onSurfaceChange, surface]);
 
-  // A view change is a change of place: whatever the line had open folds.
+  // A view change is a change of place: whatever the frame had open folds —
+  // the line's surfaces and, since the owner holds them too, the head's.
   const shownView = useRef(view);
   useEffect(() => {
     if (shownView.current === view) return;
@@ -296,7 +308,7 @@ export function Composer({
     if (surface !== null) onSurfaceChange(null);
   }, [view, surface, onSurfaceChange]);
 
-  // Another surface folded @'s list (Objects, Settings, the palette): the @
+  // Another surface folded @'s list (Objects, Settings, the head's): the @
   // being typed is just text again.
   useEffect(() => {
     if (surface !== "at") setAt(null);
@@ -473,6 +485,16 @@ export function Composer({
     if (view === "canvas") onSurfaceChange(surface === "objects" ? null : "objects");
     else if (view === "godview") void newTerminal();
   }, [newTerminal, onSurfaceChange, surface, view]);
+
+  // The palette runs the view's act through the line (One Frame FR-3), so the
+  // two doors to one act are one implementation and speak with one note.
+  useLayoutEffect(() => {
+    if (actsRef === undefined) return;
+    actsRef.current = { create };
+    return () => {
+      actsRef.current = null;
+    };
+  }, [actsRef, create]);
 
   // B — Objects, on Canvas only, never while typing (DESIGN.md §10). Heard on
   // the window's bubble phase, so a focused pane, a note being typed in or
