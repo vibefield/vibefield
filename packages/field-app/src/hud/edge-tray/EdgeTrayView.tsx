@@ -4,12 +4,23 @@
  * a concave fillet into the wall, a convex face) and a DRAWER behind it (P4:
  * the same path at the panel's scale, opaque solid chrome, the strong
  * hairline gapped under the notch, the edge shadow when open) holding ONE
- * column of 128px tiles grouped by day, and nothing else — no head, no find
- * line. Controller-free: the tray's grammar (hover, pin, keyboard, the
- * capture door, the fly-in) lives in EdgeTray.tsx; previews mount this.
+ * column — the clipboard's 128px tiles grouped by day, or a drawer's own
+ * content (Artifacts' Hub, One Frame FR-4) — and nothing else: no head, no
+ * find line. Over a covered view the notch rests as its SLIVER (One Frame §10)
+ * and becomes the notch on approach. Controller-free: the trays' grammar
+ * (hover, pin, keyboard, the capture door, the fly-in) lives in EdgeTray.tsx;
+ * previews mount this.
  */
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { type ReactElement, type Ref, useLayoutEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import {
   DRAWER_FILLET,
   DRAWER_WIDTH,
@@ -19,6 +30,7 @@ import {
   notchGap,
   notchHeight,
   notchPath,
+  sliverPath,
 } from "./notch-path";
 import "./edge-tray.css";
 
@@ -50,7 +62,13 @@ export interface EdgeTrayViewProps {
   readonly label: string;
   readonly open: boolean;
   readonly pinned: boolean;
-  readonly count: number;
+  /** The notch's count, or null for a drawer whose count is not the spine's
+   * to say (Artifacts': the plugin says it, in its own header). */
+  readonly count: number | null;
+  /** Over a covered view the notch rests as its sliver (One Frame §10). */
+  readonly sliver?: boolean;
+  /** A drawer's own column, in place of the tiles (Artifacts' Hub). */
+  readonly content?: ReactNode;
   readonly items: readonly EdgeTrayTile[];
   readonly filter: string;
   readonly snap: EdgeTraySnap | null;
@@ -59,6 +77,7 @@ export interface EdgeTrayViewProps {
   readonly hint: string;
   readonly emptyWord: string;
   readonly nubRef?: Ref<HTMLButtonElement>;
+  readonly trayRef?: Ref<HTMLElement>;
   readonly onNubClick: () => void;
   readonly onPointerEnter: () => void;
   readonly onPointerLeave: () => void;
@@ -114,9 +133,21 @@ function DrawerSilhouette({ panelRef }: { panelRef: React.RefObject<HTMLDivEleme
   );
 }
 
+/** The notch and its sliver as CSS paths, for the morph between them: the
+ * drawing keeps the notch's frame, and only `d` travels (DESIGN.md §6). */
+const NUB_PATHS = {
+  "--vf-nub-w": `${NOTCH.w}px`,
+  "--vf-nub-h": `${notchHeight(NOTCH)}px`,
+  "--vf-notch-fill": `path("${notchPath(NOTCH, true)}")`,
+  "--vf-notch-line": `path("${notchPath(NOTCH, false)}")`,
+  "--vf-sliver-fill": `path("${sliverPath(true)}")`,
+  "--vf-sliver-line": `path("${sliverPath(false)}")`,
+} as CSSProperties;
+
 export function EdgeTrayView(props: EdgeTrayViewProps): ReactElement {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const notchOpen = notchPath(NOTCH, false);
+  const resting = props.sliver === true && !props.open;
   const groups = DAYS.map((day) => ({
     day,
     tiles: props.items.filter((tile) => tile.day === day),
@@ -124,6 +155,7 @@ export function EdgeTrayView(props: EdgeTrayViewProps): ReactElement {
   let dealt = 0;
   return (
     <aside
+      ref={props.trayRef}
       className="vf-edge-tray hud-flight"
       data-hud-flight={props.side}
       data-side={props.side}
@@ -143,13 +175,9 @@ export function EdgeTrayView(props: EdgeTrayViewProps): ReactElement {
           title={props.hint}
           aria-label={props.label}
           aria-pressed={props.pinned}
+          data-sliver={resting ? "" : undefined}
           onClick={props.onNubClick}
-          style={
-            {
-              "--vf-nub-w": `${NOTCH.w}px`,
-              "--vf-nub-h": `${notchHeight(NOTCH)}px`,
-            } as React.CSSProperties
-          }
+          style={NUB_PATHS}
         >
           <svg
             className="vf-edge-tray__shape"
@@ -161,13 +189,17 @@ export function EdgeTrayView(props: EdgeTrayViewProps): ReactElement {
             <path className="vf-edge-tray__shape-ring" d={notchOpen} />
           </svg>
           {props.side === "left" ? <ClipboardGlyph /> : <PackageGlyph />}
-          <b className="vf-edge-tray__count">{props.count}</b>
+          {props.count !== null && <b className="vf-edge-tray__count">{props.count}</b>}
         </button>
         <div className="vf-edge-tray__inner">
-          <div className="vf-edge-tray__list">
+          <div
+            className="vf-edge-tray__list"
+            data-content={props.content !== undefined ? "" : undefined}
+          >
+            {props.content}
             {props.filter !== "" && (
               <div className="vf-edge-tray__filter">
-                ⌕ <b>{props.filter}</b>
+                <FieldGlyph name="search" size={12} /> <b>{props.filter}</b>
               </div>
             )}
             {groups.map((group) => (
@@ -224,7 +256,7 @@ export function EdgeTrayView(props: EdgeTrayViewProps): ReactElement {
                             props.onLook?.(tile.id);
                           }}
                         >
-                          ⛶
+                          <FieldGlyph name="outward" size={12} />
                         </button>
                         <button
                           type="button"
@@ -235,7 +267,7 @@ export function EdgeTrayView(props: EdgeTrayViewProps): ReactElement {
                             props.onRemove?.(tile.id);
                           }}
                         >
-                          ×
+                          <FieldGlyph name="close" size={12} />
                         </button>
                       </span>
                     </div>
@@ -243,7 +275,7 @@ export function EdgeTrayView(props: EdgeTrayViewProps): ReactElement {
                 })}
               </div>
             ))}
-            {props.items.length === 0 && (
+            {props.items.length === 0 && props.content === undefined && (
               <div className="vf-edge-tray__empty">{props.emptyWord}</div>
             )}
             {props.notice != null && (

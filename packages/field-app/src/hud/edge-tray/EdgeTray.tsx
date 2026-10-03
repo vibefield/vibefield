@@ -1,19 +1,36 @@
 /**
- * ClipboardTray — the left edge tray's controller (SNAP-3): the hover / pin /
- * keyboard grammar, the store, the capture door, and the fly-in. Mounted once
- * by ChromeLayer; the view it drives is EdgeTrayView, which the catalog mounts
- * on its own with fixtures.
+ * The edge trays' controllers (SNAP-3; One Frame FR-4): the drawers' shared
+ * grammar on the frame's ONE owner of the open surface, the clipboard on the
+ * left — its store, the capture door, the fly-in — and Artifacts on the right,
+ * whose drawer holds the `hud.side-panel` contribution (the Artifact Hub) that
+ * used to slide out as a 26rem side panel. Mounted once each by ChromeLayer;
+ * the view they drive is EdgeTrayView, which the catalog mounts with fixtures.
  *
- * Grammar (compact.md Part II, as ruled): hover opens after 120ms and closes
- * after a 320ms grace; click pins (the pin survives the pointer leaving);
- * ⌘⇧V / Ctrl+Shift+V pins from the keyboard; Escape unpins; typing while
- * pinned filters the column. Non-modal, like the Artifact Hub's panel: no
- * backdrop, no recede, no focus trap.
+ * Grammar (compact.md Part II, as ruled; DESIGN.md §8 edge trays): hover opens
+ * after 120ms and closes after a 320ms grace; click pins (the pin survives the
+ * pointer leaving); ⇧⌘V / Ctrl+Shift+V pins the clipboard from the keyboard;
+ * Escape folds an open drawer; typing while the clipboard is pinned filters
+ * its column. A drawer is one of the frame's open surfaces — opening it folds
+ * every other, and any other opening folds it (F11) — and over a covered view
+ * its notch rests as a sliver whose hover delay waits for it to grow (240ms).
+ * Non-modal: no backdrop, no recede, no focus trap.
  */
 import type { ScreenshotCaptureResult } from "@vibefield/contracts";
-import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactElement,
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { isClipboardTrayChord } from "../../field/product-chords";
+import { type FrameSurface, foldSurface } from "../../frame/frame-surface";
+import { viewKeysOf } from "../../frame/views";
 import { type FieldHost, getHost } from "../../host";
+import type { SurfaceEntry } from "../../plugin-host/surface-registry";
+import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../PluginSurfaceSlot";
 import {
   type ClipboardItem,
   type ClipboardStore,
@@ -30,7 +47,124 @@ import { flightStart, flyToNotch } from "./tray-flight";
 
 export const TRAY_OPEN_DELAY_MS = 120;
 export const TRAY_CLOSE_GRACE_MS = 320;
+/** A sliver's growth into the notch (One Frame §10): a notch reached as a
+ * sliver opens its drawer only once it IS the notch. */
+export const SLIVER_GROW_MS = 240;
 const BUMP_MS = 420;
+/** The drawer's travel out (§8: 600ms, island) — content stays through it. */
+const DRAWER_EXIT_MS = 600;
+
+/** The two drawers, as the frame's owner names them. */
+export type EdgeDrawer = Extract<FrameSurface, "clipboard" | "artifacts">;
+
+export interface EdgeDrawerProps {
+  /** The frame's open surface, from its one owner. */
+  surface: FrameSurface | null;
+  onSurfaceChange: (next: FrameSurface | null) => void;
+  /** A view covers the field: the notch rests as its sliver. */
+  sliver?: boolean;
+}
+
+export interface EdgeDrawerState {
+  readonly open: boolean;
+  readonly pinned: boolean;
+  pin(on: boolean): void;
+  readonly onPointerEnter: () => void;
+  readonly onPointerLeave: () => void;
+  readonly trayRef: RefObject<HTMLElement | null>;
+  readonly nubRef: RefObject<HTMLButtonElement | null>;
+}
+
+/** The drawers' one grammar, on the frame's owner: open is "the owner holds
+ * this drawer", the pin is the drawer's own, and a fold from outside (another
+ * surface, a change of view) takes the pin with it. */
+export function useEdgeDrawer(
+  which: EdgeDrawer,
+  { surface, onSurfaceChange, sliver = false }: EdgeDrawerProps,
+): EdgeDrawerState {
+  const open = surface === which;
+  const [pinned, setPinned] = useState(false);
+  if (!open && pinned) setPinned(false);
+  // The owner as it stands when a timer fires, never as it stood when it was
+  // set: a fold must not fold a surface that opened in between.
+  const live = useRef({ surface, onSurfaceChange });
+  live.current = { surface, onSurfaceChange };
+  const trayRef = useRef<HTMLElement | null>(null);
+  const nubRef = useRef<HTMLButtonElement | null>(null);
+  const openTimer = useRef<number | null>(null);
+  const closeTimer = useRef<number | null>(null);
+
+  const clearTimers = useCallback(() => {
+    if (openTimer.current !== null) window.clearTimeout(openTimer.current);
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    openTimer.current = null;
+    closeTimer.current = null;
+  }, []);
+  useEffect(() => clearTimers, [clearTimers]);
+
+  const setOpen = useCallback(
+    (next: boolean) => {
+      const now = live.current;
+      now.onSurfaceChange(next ? which : foldSurface(now.surface, which));
+    },
+    [which],
+  );
+
+  const pin = useCallback(
+    (on: boolean) => {
+      clearTimers();
+      setPinned(on);
+      setOpen(on);
+    },
+    [clearTimers, setOpen],
+  );
+
+  const onPointerEnter = useCallback(() => {
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    closeTimer.current = null;
+    if (open) return;
+    if (openTimer.current !== null) window.clearTimeout(openTimer.current);
+    openTimer.current = window.setTimeout(
+      () => {
+        openTimer.current = null;
+        setOpen(true);
+      },
+      sliver ? SLIVER_GROW_MS + TRAY_OPEN_DELAY_MS : TRAY_OPEN_DELAY_MS,
+    );
+  }, [open, setOpen, sliver]);
+
+  const onPointerLeave = useCallback(() => {
+    if (openTimer.current !== null) window.clearTimeout(openTimer.current);
+    openTimer.current = null;
+    if (pinned) return;
+    // A drawer that holds the keyboard stays: a field in it is in use.
+    if (trayRef.current?.contains(document.activeElement)) return;
+    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    closeTimer.current = window.setTimeout(() => {
+      closeTimer.current = null;
+      setOpen(false);
+    }, TRAY_CLOSE_GRACE_MS);
+  }, [pinned, setOpen]);
+
+  // Escape folds an open drawer — on the capture phase, as the side panel's
+  // did, so the field's own Esc waits — and gives the keyboard back to its
+  // notch if it was inside.
+  useEffect(() => {
+    if (!open) return;
+    const onEscape = (event: KeyboardEvent): void => {
+      if (event.key !== "Escape") return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      const inside = trayRef.current?.contains(document.activeElement) ?? false;
+      pin(false);
+      if (inside) nubRef.current?.focus({ preventScroll: true });
+    };
+    window.addEventListener("keydown", onEscape, true);
+    return () => window.removeEventListener("keydown", onEscape, true);
+  }, [open, pin]);
+
+  return { open, pinned, pin, onPointerEnter, onPointerLeave, trayRef, nubRef };
+}
 
 export type ClipboardTrayHost = Pick<
   FieldHost,
@@ -115,93 +249,49 @@ function reducedMotion(): boolean {
     : false;
 }
 
+/** The notch's tooltip says its key (FR-5), in Apple's order (⌃⌥⇧⌘). */
+export function clipboardHint(platform: FieldHost["platform"]): string {
+  return `Clipboard  ${viewKeysOf(platform) === "mac" ? "⇧⌘V" : "Ctrl+Shift+V"}`;
+}
+
 export function ClipboardTray({
   store = clipboardStore,
   host: hostProp,
   now = () => Date.now(),
-}: {
+  ...owner
+}: EdgeDrawerProps & {
   store?: ClipboardStore;
-  host?: ClipboardTrayHost;
+  host?: ClipboardTrayHost & Pick<FieldHost, "platform">;
   now?: () => number;
 }): ReactElement {
   const host = hostProp ?? getHost();
   const items = useClipboardItems(store);
-  const [open, setOpen] = useState(false);
-  const [pinned, setPinned] = useState(false);
+  const drawer = useEdgeDrawer("clipboard", owner);
+  const { open, pinned, pin, nubRef } = drawer;
   const [filter, setFilter] = useState("");
   const [busy, setBusy] = useState(false);
   const [last, setLast] = useState<ScreenshotCaptureResult | null>(null);
   const [bumped, setBumped] = useState(false);
   const [previewNotice, setPreviewNotice] = useState<string | null>(null);
   const [broken, setBroken] = useState<ReadonlySet<string>>(() => new Set());
-  const nubRef = useRef<HTMLButtonElement | null>(null);
-  const openTimer = useRef<number | null>(null);
-  const closeTimer = useRef<number | null>(null);
   const bumpTimer = useRef<number | null>(null);
 
-  const clearTimers = useCallback(() => {
-    if (openTimer.current !== null) window.clearTimeout(openTimer.current);
-    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-    openTimer.current = null;
-    closeTimer.current = null;
-  }, []);
+  // Folding clears the filter, whoever folded it.
+  if (!open && filter !== "") setFilter("");
 
-  const setOpenState = useCallback((next: boolean) => {
-    setOpen(next);
-    if (!next) setFilter("");
-  }, []);
-
-  const pin = useCallback(
-    (on: boolean) => {
-      clearTimers();
-      setPinned(on);
-      setOpenState(on);
-    },
-    [clearTimers, setOpenState],
-  );
-
-  const onPointerEnter = useCallback(() => {
-    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-    closeTimer.current = null;
-    if (open) return;
-    if (openTimer.current !== null) window.clearTimeout(openTimer.current);
-    openTimer.current = window.setTimeout(() => {
-      openTimer.current = null;
-      setOpenState(true);
-    }, TRAY_OPEN_DELAY_MS);
-  }, [open, setOpenState]);
-
-  const onPointerLeave = useCallback(() => {
-    if (openTimer.current !== null) window.clearTimeout(openTimer.current);
-    openTimer.current = null;
-    if (pinned) return;
-    if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
-    closeTimer.current = window.setTimeout(() => {
-      closeTimer.current = null;
-      setOpenState(false);
-    }, TRAY_CLOSE_GRACE_MS);
-  }, [pinned, setOpenState]);
-
-  useEffect(() => clearTimers, [clearTimers]);
-
-  // ⌘⇧V pins from the keyboard; Escape unpins; typing while pinned filters.
+  // ⇧⌘V pins from the keyboard; typing while pinned filters. (Escape is the
+  // drawers' own, above.)
   useEffect(() => {
     const onKey = (event: KeyboardEvent): void => {
       if (isClipboardTrayChord(event)) {
         event.preventDefault();
         // GT-D21: stopped here too, or a focused Godview pane would ALSO run
-        // its Ghostty default for ⌘⇧V (paste_from_selection).
+        // its Ghostty default for ⇧⌘V (paste_from_selection).
         event.stopPropagation();
         pin(!pinned);
         return;
       }
-      if (!pinned) return;
-      if (event.key === "Escape") {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        pin(false);
-        return;
-      }
+      if (!pinned || event.key === "Escape") return;
       if (isEditableTarget(event.target) || event.metaKey || event.ctrlKey || event.altKey) return;
       if (event.key === "Backspace") {
         setFilter((f) => f.slice(0, -1));
@@ -247,7 +337,7 @@ export function ClipboardTray({
         host: document.body,
       }).then(land);
     },
-    [bump, host, store],
+    [bump, host, nubRef, store],
   );
 
   // The View menu's capture (SNAP-3): main tells the page; the same landing.
@@ -318,21 +408,89 @@ export function ClipboardTray({
       open={open}
       pinned={pinned}
       count={items.length}
+      sliver={owner.sliver === true}
       items={tiles}
       filter={filter}
       snap={snapFor(host, last, busy)}
       bumped={bumped}
-      hint="Clipboard — hover to open, click to keep open (⌘⇧V)"
+      hint={clipboardHint(host.platform)}
       emptyWord="nothing here yet — take a screenshot and it lands here"
       notice={previewNotice}
       nubRef={nubRef}
+      trayRef={drawer.trayRef}
       onNubClick={() => pin(!pinned)}
-      onPointerEnter={onPointerEnter}
-      onPointerLeave={onPointerLeave}
+      onPointerEnter={drawer.onPointerEnter}
+      onPointerLeave={drawer.onPointerLeave}
       onSnap={snap}
       onLook={look}
       onRemove={remove}
       onImageBroken={onImageBroken}
+    />
+  );
+}
+
+/** Artifacts, behind the right notch (One Frame FR-4, FC-D10 — closes D-7;
+ * F10): the notch is the Artifact Hub's only door, and its drawer holds the
+ * SAME contents the 26rem side panel held — the `hud.side-panel` contribution
+ * — in the drawer's 152 column, where the Hub answers with its narrow form.
+ * No surface bound, no notch: a door to nothing would be a lie (the side
+ * panel's toggle had the same rule). The Hub mounts while the drawer is open
+ * and stays through its travel out, so it never slides away empty; disable or
+ * hot-reload folds it. */
+export function ArtifactsTray({
+  windowId,
+  ...owner
+}: EdgeDrawerProps & { windowId: string }): ReactElement | null {
+  const surfaces = useVisiblePluginSurfaces("hud.side-panel");
+  const entry = surfaces[0] ?? null;
+  const drawer = useEdgeDrawer("artifacts", owner);
+  const { open, pin } = drawer;
+  const [shown, setShown] = useState<SurfaceEntry | null>(open ? entry : null);
+
+  // Unbound (disabled, reloading): the drawer folds with its content.
+  useEffect(() => {
+    if (entry === null && open) pin(false);
+  }, [entry, open, pin]);
+
+  useEffect(() => {
+    if (open && entry !== null) {
+      setShown(entry);
+      return;
+    }
+    const timer = window.setTimeout(() => setShown(null), DRAWER_EXIT_MS);
+    return () => window.clearTimeout(timer);
+  }, [entry, open]);
+
+  if (entry === null) return null;
+  return (
+    <EdgeTrayView
+      side="right"
+      label={entry.title}
+      open={open}
+      pinned={drawer.pinned}
+      count={null}
+      sliver={owner.sliver === true}
+      content={
+        shown === null ? null : (
+          <PluginSurfaceHost
+            slot="hud.side-panel"
+            windowId={windowId}
+            requestClose={() => pin(false)}
+            surfaceId={shown.surfaceId}
+          />
+        )
+      }
+      items={[]}
+      filter=""
+      snap={null}
+      bumped={false}
+      hint={entry.title}
+      emptyWord=""
+      nubRef={drawer.nubRef}
+      trayRef={drawer.trayRef}
+      onNubClick={() => pin(!drawer.pinned)}
+      onPointerEnter={drawer.onPointerEnter}
+      onPointerLeave={drawer.onPointerLeave}
     />
   );
 }

@@ -30,10 +30,9 @@ import { runZoom } from "../frame/zoom";
 import { GodviewOverlay } from "../godview";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
-import { ClipboardTray } from "../hud/edge-tray/EdgeTray";
+import { ArtifactsTray, ClipboardTray } from "../hud/edge-tray/EdgeTray";
 import { LoadingVeil } from "../hud/LoadingVeil";
-import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfaceSlot";
-import { SidePanelStage, SidePanelToggle } from "../hud/SidePanelStage";
+import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
 import { WidgetTray } from "../hud/WidgetTray";
 import { SettingsPanel } from "../panels";
 import type { MagnetGridGlyph } from "./canvas-appearance";
@@ -111,18 +110,14 @@ export function ChromeLayer({
   const trayOpen = surface === "objects";
   const docsOpen = surface === "fields";
   const paletteOpen = surface === "palette";
-  const surfaceOpen = surface !== null;
   // UA-D19 — the Me menu: one of the frame's open surfaces since FR-4, so the
   // one owner folds it when any other opens, and it folds them (DESIGN.md §10).
   const meOpen = surface === "me";
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
-  const sidePanelSurfaces = useVisiblePluginSurfaces("hud.side-panel");
-  const sidePanelSurface = sidePanelSurfaces[0] ?? null;
-  const [sidePanelSurfaceId, setSidePanelSurfaceId] = useState<string | null>(null);
-  const sidePanelToggleRef = useRef<HTMLButtonElement | null>(null);
-  const activeSidePanel =
-    sidePanelSurface?.surfaceId === sidePanelSurfaceId ? sidePanelSurface : null;
+  // Artifacts' drawer is open (One Frame FR-4): the attention stack steps
+  // clear of it, as it stepped clear of the side panel.
+  const artifactsOpen = surface === "artifacts";
   // Whether a view covers the field (One Frame FR-1): every view but the
   // canvas. The window's view is main's (one owner); this is its mirror.
   const view = useActiveView();
@@ -133,91 +128,23 @@ export function ChromeLayer({
   const head = useMemo(() => canvasHead(ce), [ce]);
   const lineActs = useRef<LineActs | null>(null);
 
-  const closeSidePanel = useCallback((returnFocus: boolean) => {
-    setSidePanelSurfaceId(null);
-    if (returnFocus) {
-      window.setTimeout(() => sidePanelToggleRef.current?.focus(), 0);
-    }
-  }, []);
-
-  const toggleSidePanel = useCallback(() => {
-    if (sidePanelSurface === null) return;
-    if (sidePanelSurfaceId === sidePanelSurface.surfaceId) {
-      closeSidePanel(true);
-      return;
-    }
-    const reveal = () => {
-      onSurfaceChange(null);
-      setShowSettings(false);
-      setSidePanelSurfaceId(sidePanelSurface.surfaceId);
-    };
-    // The Artifact panel is the canvas's chrome: back to the canvas first.
-    if (covered) {
-      void requestView("canvas").then(reveal);
-      return;
-    }
-    reveal();
-  }, [
-    closeSidePanel,
-    covered,
-    onSurfaceChange,
-    setShowSettings,
-    sidePanelSurface,
-    sidePanelSurfaceId,
-  ]);
-
-  // Disable/unbind removes both stage and toggle in one render. An existing
-  // toggle receives focus only while it still exists (§13.2).
-  useEffect(() => {
-    if (
-      sidePanelSurfaceId !== null &&
-      !sidePanelSurfaces.some((surface) => surface.surfaceId === sidePanelSurfaceId)
-    ) {
-      setSidePanelSurfaceId(null);
-    }
-  }, [sidePanelSurfaceId, sidePanelSurfaces]);
-
   /** Settings, on the page asked for — the Me menu's Settings… and ⌘, open
    * General; its name row and its Link… open Account (UA-D19). */
   const openSettings = useCallback(
     (page: "general" | "account") => {
       setShellPresentation((state) => ({ ...state, target: page }));
       onSurfaceChange(null);
-      closeSidePanel(false);
       setShowSettings(true);
     },
-    [closeSidePanel, onSurfaceChange, setShowSettings],
+    [onSurfaceChange, setShowSettings],
   );
 
   // Opening it is asking the owner (which folds Settings and every other
   // surface); a fold of its own leaves the others alone.
   const onMeOpenChange = useCallback(
-    (open: boolean) => {
-      if (open) closeSidePanel(false);
-      onSurfaceChange(open ? "me" : foldSurface(surface, "me"));
-    },
-    [closeSidePanel, onSurfaceChange, surface],
+    (open: boolean) => onSurfaceChange(open ? "me" : foldSurface(surface, "me")),
+    [onSurfaceChange, surface],
   );
-
-  // Expanded focus surfaces remain exclusive. The Artifact panel itself is
-  // non-modal, so this arbitration does not recede or hold the canvas.
-  useEffect(() => {
-    if (sidePanelSurfaceId !== null && (surfaceOpen || showSettings || covered)) {
-      closeSidePanel(false);
-    }
-  }, [closeSidePanel, covered, surfaceOpen, showSettings, sidePanelSurfaceId]);
-
-  useEffect(() => {
-    if (activeSidePanel === null) return;
-    const onEscape = (event: KeyboardEvent) => {
-      if (event.key !== "Escape") return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      closeSidePanel(true);
-    };
-    window.addEventListener("keydown", onEscape, true);
-    return () => window.removeEventListener("keydown", onEscape, true);
-  }, [activeSidePanel, closeSidePanel]);
 
   useEffect(() => {
     const onShellCommand = getHost().onShellCommand;
@@ -225,10 +152,9 @@ export function ChromeLayer({
     return onShellCommand((command) => {
       setShellPresentation((state) => reduceShellPresentation(state, command));
       onSurfaceChange(null);
-      closeSidePanel(false);
       setShowSettings(true);
     });
-  }, [closeSidePanel, setShowSettings, onSurfaceChange]);
+  }, [setShowSettings, onSurfaceChange]);
 
   useEffect(() => {
     const onDesktopState = getHost().onDesktopState;
@@ -290,8 +216,8 @@ export function ChromeLayer({
 
   // ⌘K / Ctrl+K toggles the command palette (§8.3; One Frame §7). ⌘K is free —
   // the ICE keymap, the line's B and the tray's Esc never claim it. The palette
-  // is one of the frame's surfaces, so opening it folds whichever was open
-  // (and the owner folds Settings); it folds the Artifact panel here.
+  // is one of the frame's surfaces, so opening it folds whichever was open —
+  // the drawers and the Me menu included — and the owner folds Settings.
   // GT-D21: caught in the window's capture phase, so a focused Godview pane
   // (whose Ghostty default for ⌘K is clear_screen) never sees it.
   useEffect(
@@ -302,9 +228,8 @@ export function ChromeLayer({
           return;
         }
         onSurfaceChange("palette");
-        closeSidePanel(false);
       }),
-    [closeSidePanel, onSurfaceChange, surface],
+    [onSurfaceChange, surface],
   );
 
   // The palette's frame acts, run through the frame's own doors: the view's
@@ -380,10 +305,9 @@ export function ChromeLayer({
       {/* Chrome overlays sit OUTSIDE the recede wrapper — they never scale. */}
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
           pill with the crumbs folded in, which grows the fields explorer, and
-          the zoom readout at the right. Until FR-4 moves them, the theme
-          button and the Artifacts toggle stand beside the readout where the
-          cluster held them — Artifacts outermost, attached to the edge it
-          opens from. Still the canvas's chrome: under the cover. */}
+          the zoom readout — alone at the right since FR-4 took the theme into
+          the Me menu and Artifacts behind the right notch. Still the canvas's
+          chrome: under the cover. */}
       <Head
         manager={manager}
         canvas={head}
@@ -391,37 +315,30 @@ export function ChromeLayer({
         keys={keys}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
-        aside={
-          sidePanelSurface !== null && (
-            <SidePanelToggle
-              entry={sidePanelSurface}
-              active={activeSidePanel !== null}
-              buttonRef={sidePanelToggleRef}
-              onToggle={toggleSidePanel}
-            />
-          )
-        }
       />
 
-      <SidePanelStage
-        entry={activeSidePanel}
+      {/* THE EDGES (SNAP-3; One Frame FR-4, DESIGN.md §8 edge trays, §10): the
+          clipboard's notch on the left and Artifacts' on the right — its
+          drawer the Artifact Hub, the side panel's contents — each a notch at
+          mid-edge with its drawer behind it. The frame's, not the canvas's:
+          they stand above the cover in every view, resting there as slivers,
+          and each drawer is one of the frame's open surfaces. */}
+      <ClipboardTray surface={surface} onSurfaceChange={onSurfaceChange} sliver={covered} />
+      <ArtifactsTray
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        sliver={covered}
         windowId={FIELD_WINDOW_ID}
-        onClose={() => closeSidePanel(true)}
       />
 
-      {/* The clipboard tray (SNAP-3, DESIGN.md §8 edge trays): the notch at
-          the left edge's mid-height and the drawer behind it. Non-modal like
-          the Artifact panel, and self-governing — its hover, pin and keyboard
-          grammar live in the controller; it joins no exclusivity here. */}
-      <ClipboardTray />
-
-      {/* hud.attention (§8.4): the top-right attention stack, below the theme
-          fab. pointer-events-none wrapper so an empty slot never blocks the
-          canvas; the host restores pointer-events on its own content. */}
+      {/* hud.attention (§8.4): the top-right attention stack, under the head.
+          pointer-events-none wrapper so an empty slot never blocks the
+          canvas; the host restores pointer-events on its own content. It
+          steps clear of Artifacts' drawer while that is open. */}
       <div
         data-hud-flight="top-right"
         className="hud-flight pointer-events-none absolute top-16 z-40 flex w-72 max-w-[80vw] flex-col transition-[right] duration-300"
-        style={{ right: activeSidePanel === null ? "1rem" : "calc(min(92vw, 26rem) + 1rem)" }}
+        style={{ right: artifactsOpen ? "calc(152px + 1rem)" : "1rem" }}
       >
         <PluginSurfaceHost slot="hud.attention" windowId={FIELD_WINDOW_ID} />
       </div>

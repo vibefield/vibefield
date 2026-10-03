@@ -1,13 +1,9 @@
 import type { ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl as UiSegmentedControl, UnavailableState } from "@vibefield/design-kit";
-import {
-  ArtifactPanelPreview,
-  type ArtifactPanelPreviewState,
-} from "@vibefield/plugin-browser/design-system";
+import type { ArtifactPanelPreviewState } from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import type { MagnetGridGlyph } from "../../field/canvas-appearance";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
-import { SidePanelFrame } from "../../hud/SidePanelStage";
 import { AppearanceSectionView } from "../../panels/AppearanceSection";
 import { ProfileMark } from "../../panels/agents/ProfilesView";
 import { MagnetGridSection } from "../../panels/MagnetGridSection";
@@ -22,6 +18,7 @@ import { FIXTURE_ME, FIXTURE_OTHERS_WAITING } from "../account-fixtures";
 import { AGENTS_FIXTURE_STATES, type AgentsFixtureState } from "../agents-fixtures";
 import { CommandPalettePreview } from "../CommandPalettePreview";
 import { Section, Specimen } from "../catalog-ui";
+import { ArtifactsDrawer } from "../EdgesPreview";
 import { ProfilesSettingsPreview, profilesPreviewHead } from "../ProfilesSettingsPreview";
 import {
   FIXTURE_PROFILE_SETS,
@@ -125,8 +122,12 @@ export function SurfacesSection({
             <CommandPalettePreview />
           </div>
         </Specimen>
-        <Specimen title="Artifact side panel" source="hud/SidePanelStage.tsx" darkStage>
-          <SidePanelSpecimen />
+        <Specimen
+          title="Artifacts — the Hub in the right edge's drawer"
+          source="hud/edge-tray/EdgeTray.tsx · DESIGN.md §8"
+          darkStage
+        >
+          <ArtifactsSpecimen />
         </Specimen>
       </div>
 
@@ -275,7 +276,10 @@ function ProfilesSettingsSpecimen(): ReactElement {
   );
 }
 
-function SidePanelSpecimen(): ReactElement {
+/** The Artifact Hub in every production state, in the drawer that holds it
+ * since One Frame FR-4 — the side panel's contents in the 152 column, where
+ * the plugin answers with its narrow form. */
+function ArtifactsSpecimen(): ReactElement {
   const [state, setState] = useState<ArtifactPanelPreviewState>("empty");
   const options = ["empty", "populated", "loading", "unavailable"] as const;
   return (
@@ -289,9 +293,7 @@ function SidePanelSpecimen(): ReactElement {
           label="Artifact panel state"
         />
       </div>
-      <SidePanelFrame open label="Artifact Hub preview" className="vf-ds-side-panel-frame">
-        <ArtifactPanelPreview state={state} />
-      </SidePanelFrame>
+      <ArtifactsDrawer state={state} />
     </div>
   );
 }

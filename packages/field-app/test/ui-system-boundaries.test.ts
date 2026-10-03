@@ -168,6 +168,19 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("setAppTheme");
   });
 
+  it("keeps the edges' fixture an ADAPTER — tiles and an open drawer, never the trays' markup (FR-4)", () => {
+    // The catalog stands in for what a host supplies — the stills, which drawer
+    // the owner holds, the view — and mounts the shipping tray view on both
+    // sides, with the Hub through its plugin's own fixture door.
+    const fixture = source("design-system/EdgesPreview.tsx");
+    expect(fixture).toContain("EdgeTrayView");
+    expect(fixture).toContain("ArtifactPanelPreview");
+    expect(fixture).not.toMatch(/className="vf-(?:edge-tray|artifact|side-panel)/);
+    expect(fixture).not.toContain("<style");
+    expect(fixture).not.toContain("getHost");
+    expect(fixture).not.toContain("useVisiblePluginSurfaces");
+  });
+
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
     // The temptation for a widget whose pixels need a privileged producer is to
     // draw convincing ones. The catalog is held to supplying what a HOST
@@ -243,7 +256,8 @@ describe("UI system ownership boundaries", () => {
     const head = source("design-system/HeadPreview.tsx");
     const palette = source("design-system/CommandPalettePreview.tsx");
     const corner = source("design-system/CornerPreview.tsx");
-    const catalog = `${corner}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const edges = source("design-system/EdgesPreview.tsx");
+    const catalog = `${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -308,6 +322,10 @@ describe("UI system ownership boundaries", () => {
       "CornerPlate",
       "AppearancePlate",
       "AppearanceSectionView",
+      // One Frame FR-4 — the edges: both notches in every view, the slivers,
+      // and Artifacts' drawer holding the Hub (the side panel retired into it)
+      "EdgesPlate",
+      "ArtifactsDrawer",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -315,9 +333,12 @@ describe("UI system ownership boundaries", () => {
     // the elements, not the views' names they prefix.
     expect(catalog).toMatch(/<Composer\s/u);
     expect(catalog).toMatch(/<Head\s/u);
-    // …and the corner's plates MOUNTED on the page, not merely defined (FR-4).
+    // …and the corner's and the edges' plates MOUNTED on the page, not merely
+    // defined (FR-4).
     expect(page).toMatch(/<CornerPlate\s/u);
     expect(page).toMatch(/<AppearancePlate\s/u);
+    expect(page).toMatch(/<EdgesPlate\s/u);
+    expect(page).toMatch(/<ArtifactsDrawer\s/u);
 
     // The Settings specimen's Appearance page was a replica the product never
     // had (a system-appearance switch, an interface scale); it is the shipping

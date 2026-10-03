@@ -22,7 +22,11 @@ export type FrameSurface =
   /** The palette (⌘K), under the head. */
   | "palette"
   /** The Me menu, above the line, over your face in the corner. */
-  | "me";
+  | "me"
+  /** The left edge's drawer: the clipboard. */
+  | "clipboard"
+  /** The right edge's drawer: Artifacts (the Artifact Hub). */
+  | "artifacts";
 
 /** What a surface's own close asks of the owner: fold it if it is the one
  * open, and leave the others alone — the tray's Esc must not close @'s list. */

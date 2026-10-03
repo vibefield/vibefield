@@ -3,7 +3,6 @@ import type { DocRegistryEntry, DocSyncStatus, FrameView } from "@vibefield/cont
 import {
   type KeyboardEvent,
   type ReactElement,
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -101,8 +100,6 @@ export interface HeadProps {
   /** The frame's open surface, from its one owner. */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
-  /** Until FR-4 moves them: the theme button and the Artifacts toggle. */
-  aside?: ReactNode;
   /** Whether the head binds the zoom's keys on the window. The catalog's live
    * head does not: its page is not a window the head owns. */
   bindKeys?: boolean;
@@ -115,7 +112,6 @@ export function Head({
   keys,
   surface,
   onSurfaceChange,
-  aside,
   bindKeys = true,
 }: HeadProps): ReactElement {
   const state = useSyncExternalStore(manager.subscribe, manager.getState);
@@ -355,7 +351,6 @@ export function Head({
         onHot: setHot,
         onReadoutKeyDown,
       }}
-      aside={aside}
     />
   );
 }

@@ -26,6 +26,7 @@ import { ViewsTrackView } from "../src/frame/ViewsTrack";
 import { type FieldHost, setHost } from "../src/host";
 import { CommandPalette } from "../src/hud/CommandPalette";
 import { ClipboardStore } from "../src/hud/edge-tray/clipboard-store";
+import { ClipboardTray } from "../src/hud/edge-tray/EdgeTray";
 import type { RendererLogger } from "../src/logging";
 
 vi.mock("../src/plugin-host/plugin-registry-store", () => ({
@@ -143,6 +144,8 @@ function mount(door: LineViewDoor | null = null): void {
           keys="mac"
           onAct={onAct}
         />
+        {/* The left edge (FR-4): the clipboard's drawer is one of the surfaces. */}
+        <ClipboardTray store={clipboard} host={{}} surface={surface} onSurfaceChange={setSurface} />
         {/* ChromeLayer's glue for the corner (FR-4): the Me menu asks the owner. */}
         <MeMenuView
           me={{
@@ -211,6 +214,23 @@ describe("the frame's one owner of the open surface", () => {
     // Its own fold leaves the others alone: a second press on the face.
     click(".vf-me-face");
     expect(surfaceNow).toBeNull();
+  });
+
+  it("holds the edges' drawers in the same one value (FR-4, F11)", () => {
+    mount();
+    click(".vf-line-create");
+    expect(surfaceNow).toBe("objects");
+    click(".vf-edge-tray__nub");
+    expect(surfaceNow).toBe("clipboard");
+    expect($(".vf-line-create")?.getAttribute("aria-expanded")).toBe("false");
+    expect($(".vf-edge-tray")?.dataset.pinned).toBe("true");
+    click(".vf-head-zoom");
+    expect(surfaceNow).toBe("zoom");
+    expect($(".vf-edge-tray")?.dataset.open).toBe("false");
+    expect($(".vf-edge-tray")?.dataset.pinned).toBe("false");
+    click(".vf-me-face");
+    expect(surfaceNow).toBe("me");
+    expect($(".vf-head-zoom-menu")).toBeNull();
   });
 
   it("folds whatever is open when the view changes — a change of place", () => {

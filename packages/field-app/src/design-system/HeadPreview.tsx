@@ -1,5 +1,5 @@
 import type { DocRegistryEntry } from "@vibefield/contracts";
-import { type ReactElement, type ReactNode, useState } from "react";
+import { type ReactElement, useState } from "react";
 import type { DocManagerApi, DocManagerState } from "../doc-manager";
 import type { FrameSurface } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
@@ -196,11 +196,9 @@ export function HeadPlate({
 export function HeadLive({
   surface,
   onSurfaceChange,
-  aside,
 }: {
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
-  aside?: ReactNode;
 }): ReactElement {
   const [manager] = useState(fixtureHeadManager);
   const [canvas] = useState(() => fixtureHeadCanvas({ path: IN_A_FOLDER }));
@@ -212,7 +210,6 @@ export function HeadLive({
       keys="mac"
       surface={surface}
       onSurfaceChange={onSurfaceChange}
-      aside={aside}
       bindKeys={false}
     />
   );

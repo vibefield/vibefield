@@ -5,7 +5,6 @@ import {
   Fragment,
   type KeyboardEvent,
   type ReactElement,
-  type ReactNode,
   type Ref,
   useCallback,
   useEffect,
@@ -427,19 +426,16 @@ export function HeadZoomView({
 export interface HeadViewProps {
   place: HeadPlaceViewProps;
   zoom: HeadZoomViewProps;
-  /** Until FR-4 moves them: the theme button and the Artifacts toggle, which
-   * stand beside the readout where the old cluster held them. */
-  aside?: ReactNode;
 }
 
 /** The whole head: the explorer's dim, the name pill at the centre, and the
- * right slot — the readout, and the aside until FR-4. */
-export function HeadView({ place, zoom, aside }: HeadViewProps): ReactElement {
+ * right slot — the readout alone since FR-4 (the theme went into the Me menu,
+ * Artifacts behind the right notch). */
+export function HeadView({ place, zoom }: HeadViewProps): ReactElement {
   const toolsRef = useRef<HTMLDivElement>(null);
   // The pill stays centred on the window, so it gives up the WIDER side's
   // slot on both sides: the lights' 96 on the left, the right slot as wide as
-  // it stands (+ 12 clear) — measured, because the readout's digits and the
-  // aside's buttons decide it.
+  // it stands (+ 12 clear) — measured, because the readout's digits decide it.
   const [right, setRight] = useState(0);
   useLayoutEffect(() => {
     const tools = toolsRef.current;
@@ -463,7 +459,6 @@ export function HeadView({ place, zoom, aside }: HeadViewProps): ReactElement {
       <HeadPlaceView {...place} side={side} />
       <div ref={toolsRef} className="vf-head-tools no-drag hud-flight" data-hud-flight="top-right">
         <HeadZoomView {...zoom} />
-        {aside}
       </div>
     </>
   );

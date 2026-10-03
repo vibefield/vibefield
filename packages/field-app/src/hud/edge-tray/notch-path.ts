@@ -20,6 +20,12 @@ export interface NotchSpec {
 
 /** N1, as ruled 2026-09-23: 26 wide, 116 tall including the fillets. */
 export const NOTCH: NotchSpec = { w: 26, h: 92, f: 12, c: 14 };
+/** The SLIVER a notch rests as over a covered view (One Frame §10, FR-4): its
+ * own 7 × 96 path — a fillet of 5 into the wall, a face of 2 — in the 8px the
+ * view keeps clear. The same builder draws it, so its path has the notch's
+ * commands one for one, which is what lets the one path morph into the other
+ * on approach (DESIGN.md §6). */
+export const SLIVER: NotchSpec = { w: 7, h: 86, f: 5, c: 2 };
 /** P4's drawer: the notch's geometry at the panel's scale. */
 export const DRAWER_FILLET = 18;
 export const DRAWER_FACE = 22;
@@ -34,18 +40,26 @@ export function drawerSpec(width: number, height: number): NotchSpec {
   return { w: width, h: height, f: DRAWER_FILLET, c: DRAWER_FACE };
 }
 
-function topRun(s: NotchSpec): string {
-  return `M0 0A${s.f} ${s.f} 0 0 0 ${s.f} ${s.f}H${s.w - s.c}A${s.c} ${s.c} 0 0 1 ${s.w} ${s.f + s.c}`;
+function topRun(s: NotchSpec, dy = 0): string {
+  return `M0 ${dy}A${s.f} ${s.f} 0 0 0 ${s.f} ${dy + s.f}H${s.w - s.c}A${s.c} ${s.c} 0 0 1 ${s.w} ${dy + s.f + s.c}`;
 }
 
-function bottomRun(s: NotchSpec): string {
-  return `A${s.c} ${s.c} 0 0 1 ${s.w - s.c} ${s.f + s.h}H${s.f}A${s.f} ${s.f} 0 0 0 0 ${2 * s.f + s.h}`;
+function bottomRun(s: NotchSpec, dy = 0): string {
+  return `A${s.c} ${s.c} 0 0 1 ${s.w - s.c} ${dy + s.f + s.h}H${s.f}A${s.f} ${s.f} 0 0 0 0 ${dy + 2 * s.f + s.h}`;
 }
 
-/** The silhouette; `closed` adds the wall segment for a fill. */
-export function notchPath(s: NotchSpec, closed: boolean): string {
-  const d = `${topRun(s)}V${s.f + s.h - s.c}${bottomRun(s)}`;
+/** The silhouette; `closed` adds the wall segment for a fill. `dy` lowers it,
+ * so a smaller one can stand centred in a larger one's frame (the sliver in
+ * the notch's). */
+export function notchPath(s: NotchSpec, closed: boolean, dy = 0): string {
+  const d = `${topRun(s, dy)}V${dy + s.f + s.h - s.c}${bottomRun(s, dy)}`;
   return closed ? `${d}Z` : d;
+}
+
+/** The sliver, centred in the notch's 26 × 116 frame — the frame the drawing
+ * keeps through the morph, so nothing moves but the path. */
+export function sliverPath(closed: boolean): string {
+  return notchPath(SLIVER, closed, (notchHeight(NOTCH) - notchHeight(SLIVER)) / 2);
 }
 
 /**

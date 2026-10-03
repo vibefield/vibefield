@@ -27,12 +27,14 @@ components. Plugin content styles remain inside their plugin packages.
 
 The catalog currently mounts these shipping views directly:
 
-- Artifact Hub and all empty/loading/populated/unavailable states
+- Artifact Hub and all empty/loading/populated/unavailable states — in the right edge's drawer
+  since One Frame FR-4, where the side panel's contents now live
 - Godview stage, monitor registry, tuning panel, unavailable terminal deck, and the complete
   swarm-circle state matrix
 - WidgetTray's sheet
 - the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
-  key at its row's end), settings dialog, side-panel frame, and loading veil
+  key at its row's end), settings dialog and loading veil (the side-panel frame retired into the
+  right edge's drawer, FR-4)
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
 - the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
   both face frames at every size, and the face picker
@@ -53,6 +55,10 @@ The catalog currently mounts these shipping views directly:
   state, a plate per Theme it holds — Light, Dark, and Auto following the page's own theme — and
   Settings → Appearance (`AppearanceSectionView`) in the shipping dialog, the same setting; the
   Settings specimen's old Appearance replica is gone
+- the edges (One Frame FR-4): `EdgeTrayView` on both sides in every state the page's edges plates
+  draw — both notches whole on Canvas, both slivers over Godview, the notch a sliver grows into
+  (over History), the clipboard's drawer open over Godview, and Artifacts' drawer holding the Hub
+  through the plugin's own fixture door (`ArtifactsDrawer`)
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their

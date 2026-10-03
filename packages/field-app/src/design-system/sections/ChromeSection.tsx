@@ -7,7 +7,7 @@ import { roundButtonCls } from "../../field/theme-constants";
 import { ComposerLineView } from "../../frame/ComposerLine";
 import type { FrameSurface } from "../../frame/frame-surface";
 import { ViewsTrackView } from "../../frame/ViewsTrack";
-import { type EdgeTrayTile, EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
+import { EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
 import { WidgetTrayFrame } from "../../hud/WidgetTray";
 import {
   FIXTURE_ME,
@@ -23,60 +23,9 @@ type MeState = (typeof ME_STATES)[number];
 const TRAY_STATES = ["At rest", "Open", "Pinned", "Empty", "No shell"] as const;
 type TrayState = (typeof TRAY_STATES)[number];
 
-/** A fixture still: an SVG the catalog draws itself, so the tile shows a real
- * image without a screenshot on disk (the product's stills come through the
- * shell's `vibefield-still://` scheme, which the catalog does not have). */
-function fixtureStill(label: string, hue: number): string {
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'>` +
-    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${hue} 70% 62%)'/><stop offset='1' stop-color='hsl(${hue + 30} 70% 40%)'/></linearGradient></defs>` +
-    `<rect width='256' height='256' fill='url(#g)'/>` +
-    `<rect x='28' y='40' width='200' height='120' rx='14' fill='rgba(255,255,255,0.22)'/>` +
-    `<text x='40' y='190' font-family='ui-sans-serif' font-size='18' fill='rgba(255,255,255,0.9)'>${label}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-const TRAY_TILES: readonly EdgeTrayTile[] = [
-  {
-    id: "t1",
-    kind: "capture",
-    label: "Screenshot · 1440 × 900",
-    imageUrl: fixtureStill("Godview · swarm", 214),
-    time: "15:04",
-    day: "today",
-    meta: "Screen · on the clipboard",
-  },
-  {
-    id: "t2",
-    kind: "capture",
-    label: "Screenshot · 820 × 512",
-    imageUrl: fixtureStill("Terminal", 28),
-    time: "14:38",
-    day: "today",
-    meta: "Screen · on the clipboard",
-  },
-  {
-    id: "t3",
-    kind: "capture",
-    label: "Screenshot · 1200 × 750",
-    imageUrl: null,
-    time: "22:12",
-    day: "yesterday",
-    meta: "the still is gone from disk",
-  },
-  {
-    id: "t4",
-    kind: "capture",
-    label: "Screenshot · 640 × 400",
-    imageUrl: fixtureStill("Settings", 150),
-    time: "Tue",
-    day: "earlier",
-    meta: "Screen · on the clipboard",
-  },
-];
-
 import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
+import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
 import { SwitchPreview } from "../SwitchPreview";
@@ -152,18 +101,10 @@ export function ChromeSection({
           />
           <div className="vf-ds-stage-card card-a" />
           <div className="vf-ds-stage-card card-b" />
-          {/* The head on its real controller (One Frame FR-3), in a folder;
-              the theme went into the Me menu at FR-4 (FC-D5), and Artifacts
-              stays beside the readout until it moves behind the right notch. */}
-          <HeadLive
-            surface={surface}
-            onSurfaceChange={changeSurface}
-            aside={
-              <button type="button" className={roundButtonCls(false)} aria-label="Open artifacts">
-                <Icon name="layers" />
-              </button>
-            }
-          />
+          {/* The head on its real controller (One Frame FR-3), in a folder —
+              the readout alone at its right since FR-4 (the theme went into
+              the Me menu, Artifacts behind the right notch). */}
+          <HeadLive surface={surface} onSurfaceChange={changeSurface} />
 
           <WidgetTrayFrame
             open={trayOpen}
@@ -294,6 +235,25 @@ export function ChromeSection({
       </Specimen>
 
       <Specimen
+        title="The edges — both notches in every view, slivers over a covered view"
+        source="hud/edge-tray/* · DESIGN.md §8, §10, §6"
+        bleed
+      >
+        <div className="vf-ds-edges-plates">
+          {EDGE_STATES.map((state) => (
+            <EdgesPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} dark={dark} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          The page's edges plates: the clipboard's notch on the left and Artifacts' on the right,
+          whole on Canvas; over a covered view each rests as its 7 × 96 sliver in the 8 px the view
+          keeps clear — point at one and it grows into the notch (240 ms) — the notch it grows into
+          over History; the clipboard's drawer open over Godview; and Artifacts' drawer open with
+          the Artifact Hub in its 152 column.
+        </p>
+      </Specimen>
+
+      <Specimen
         title="Edge trays — the notch and its drawer"
         source="hud/edge-tray/* · DESIGN.md §8"
         bleed
@@ -334,34 +294,19 @@ export function ChromeSection({
                 : { state: "ready", word: "snap" }
             }
             bumped={trayBumped}
-            hint="Clipboard — hover to open, click to keep open (⌘⇧V)"
+            hint="Clipboard  ⇧⌘V"
             emptyWord="nothing here yet — take a screenshot and it lands here"
             onNubClick={() => setTrayState((s) => (s === "Pinned" ? "At rest" : "Pinned"))}
             onPointerEnter={() => undefined}
             onPointerLeave={() => undefined}
             onSnap={() => undefined}
           />
-          <EdgeTrayView
-            side="right"
-            label="Artifacts"
-            open={false}
-            pinned={false}
-            count={3}
-            items={[]}
-            filter=""
-            snap={null}
-            bumped={false}
-            hint="Artifacts — reserved for the right edge's twin (D-7)"
-            emptyWord="no artifacts yet"
-            onNubClick={() => undefined}
-            onPointerEnter={() => undefined}
-            onPointerLeave={() => undefined}
-          />
+          <ArtifactsDrawer open={false} />
         </div>
         <p className="vf-ds-stage-caption">
           The shipping tray view with fixture stills: the notch (N1, 26 × 116) and the drawer (P4,
           152 wide) are one path in the theme's solid chrome, the drawer's hairline gapped under the
-          notch. The right edge shows the twin at rest, reserved for Artifacts.
+          notch. The right edge is Artifacts' twin at rest — the `package` notch, no count.
         </p>
       </Specimen>
 

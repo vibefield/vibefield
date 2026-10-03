@@ -206,6 +206,41 @@
   height: 640px;
 }
 
+/* One Frame FR-4 — the edges' plates (the page's edges plates): the window at
+   the drawers' height, the shipping trays at their own places — the notches at
+   mid-edge, the drawers from 64 to 80 above the foot — over the canvas or a
+   covered view's own ground. The two whole-window states span the row. */
+.vf-ds-edges-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-edges-plate {
+  position: relative;
+  isolation: isolate;
+  height: 560px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-edges-plate:is([data-state="canvas"], [data-state="godview"]) {
+  grid-column: 1 / -1;
+}
+
+.vf-ds-edges-ground {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
 /* One Frame FR-4 — the corner's plates (the page's "Your face" plates): the
    window's bottom-left — the line at its own place, your face where the
    corner holds it (16 from the left, 24 from the foot), its menu open above
@@ -810,11 +845,6 @@
   text-transform: capitalize;
 }
 
-.vf-ds-side-panel-frame {
-  top: 64px;
-  width: min(94%, 26rem);
-}
-
 .vf-ds-veil-stage {
   position: relative;
   min-height: 156px;
@@ -1021,6 +1051,12 @@
 
 .vf-ds-godview-frame > .vf-godview {
   position: absolute;
+}
+
+/* In an edges plate (FR-4) the stage is the covered view's ground: it fills it. */
+.vf-ds-edges-ground .vf-ds-godview-frame {
+  height: 100%;
+  min-height: 0;
 }
 
 /* The swarm's bodies (AR-5): the views package's lab fixtures on the SHIPPING

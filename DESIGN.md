@@ -444,7 +444,8 @@ Canvas the notch rests whole and nothing grows. **The Me menu** grows upward on 
 (600ms) from a seed the size of the face's circle at its own foot, above the face, the surface
 fading in over 160ms and the rows rising nearest-first as before (§8); folding reverses it, and the
 face, which never moves, stays lifted while it is open. Reduced motion (M6): no growth anywhere —
-the sliver swaps for the notch in a 120ms fade, and the Me menu fades in whole over 120ms.
+the sliver becomes the notch at once, its glyph and count fading in over 120ms, and the Me menu
+fades in whole over 120ms.
 
 ---
 
@@ -556,7 +557,9 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   **Both edges, every view (One Frame §10, FR-1, FR-4; FC-D10; built 2026-10-03):** the clipboard
   on the left as above, and **Artifacts on the right** — the twin, mirrored, its notch wearing
   `package` and no count (the catalog's count is the plugin's to say, in its own header inside the
-  drawer), its drawer the Artifact Hub's column (above); the head's Artifacts button is gone. The
+  drawer), its drawer the Artifact Hub's column (above); the head's Artifacts button is gone. With
+  no Hub bound (its plugin off or reloading) there is no right notch — a door to nothing would lie,
+  as the side panel's toggle had the same rule — and an open drawer folds with it. The
   notches' tooltips say their keys (FR-5): "Clipboard  ⇧⌘V", "Artifacts". **Over a covered view**
   (Godview, History) a notch rests as a **sliver** — its own 7 × 96 path from the notch's builder,
   a fillet of 5 into the wall and a face of 2, in the same solid chrome with its own strong
