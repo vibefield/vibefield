@@ -13,15 +13,16 @@ import { noteManifest, noteRenderer } from "../src";
 // committed artifact is the canonical emission. Host-side integration
 // (prefab building, tray silhouettes) lives in field-app's own suites.
 describe("plugin-note", () => {
-  it("activation binds exactly the manifest's declared widget types", async () => {
+  it("DK-2: activation binds NO face — the host compiles the note's type faceless", async () => {
     const declared = (noteManifest.contributes?.widgets ?? []).map((w) => w.type);
+    expect(declared).toEqual(["vibefield.note"]);
     const session = await activateWithMockHost(noteRenderer, {
       id: noteManifest.id,
       version: noteManifest.version,
       declaredWidgets: declared,
     });
-    expect([...session.bindings.keys()]).toEqual(declared);
-    for (const binding of session.bindings.values()) expect(binding.component).toBeDefined();
+    // the desk draws no DOM under the camera: the React card is gone, nothing is bound
+    expect(session.bindings.size).toBe(0);
   });
 
   it("the committed vibefield.plugin.json is the canonical emission (regen: pnpm gen:manifest)", () => {

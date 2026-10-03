@@ -10,7 +10,7 @@ import {
 import { setBoardStatus } from "../board-status";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
-import { buildRegistry, createFieldEngine, seedField } from "../field-engine";
+import { buildRegistry, createFieldEngine, fieldPackScope, seedField } from "../field-engine";
 import type { FieldUserProfile } from "../host";
 import { getRendererLogger } from "../logging";
 import {
@@ -136,17 +136,19 @@ export function useWorkspaceSession(
   // registry is therefore stable for the whole mount again.
   const registry = useMemo(() => buildRegistry(plugins), [plugins]);
   // Ghost stubs (§12.4 absent case): the pending doc's envelope header names
-  // every widget type + pack version pre-open; types NO present plugin owns
-  // register as preserving placeholders AT THE DOC'S VERSION, so the engine's
-  // pack-marker gate stays satisfied and the board opens writable. Sampled per
-  // generation — ghosts are doc-shaped. Unreadable envelopes yield no stubs;
-  // docs.open's own quarantine stays the honest catch.
+  // every widget type + pack version pre-open; types NO pack of this engine
+  // covers register as FACELESS preserving stubs AT THE DOC'S VERSION, so the
+  // engine's pack-marker gate stays satisfied and the board opens writable.
+  // Sampled per generation — ghosts are doc-shaped. Unreadable envelopes yield
+  // no stubs; docs.open's own quarantine stays the honest catch. DK-2: the
+  // filter is the engine's full pack scope (the desk's kinds and data prefabs
+  // included), never only the plugin registry's types (r2 R4).
   const ghosts = useMemo(() => {
     const bytes = pending?.initialBytes ?? null;
     if (bytes === null) return [];
     try {
       const { header } = decodeEnvelope(bytes);
-      return buildGhostWidgetTypes(header.prefabVersions, new Set(registry.allWidgets().keys()));
+      return buildGhostWidgetTypes(header.prefabVersions, fieldPackScope(registry));
     } catch {
       return [];
     }

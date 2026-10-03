@@ -13,10 +13,17 @@
  * `GlCardBackplate` gradient plane (which also depth-clipped rotating models
  * and could never share CSS effects).
  */
-import type { WidgetComponentProps } from "@vibecook/ice/react";
+import type { Entity, World } from "@vibecook/ice";
 import type { ComponentType, ReactElement } from "react";
 import { CardShell } from "./CardShell";
 import { type GradientStop, gradientCss } from "./visuals";
+
+/** The retired React face's props (ICE 0.14.0 deleted `WidgetComponentProps` with the
+ * widget faces, DK-2). Local until this GL chrome retires at DK-17. */
+interface WidgetComponentProps {
+  readonly world: World;
+  readonly entity: Entity;
+}
 
 /** Build a widget `chrome` component: CardShell with this card's gradient. */
 export function makeGlCardChrome(

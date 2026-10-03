@@ -2,10 +2,17 @@
 // (§11.3 forbids raw @vibecook/ice in plugins; §12.7's ctx.canvas shipped at P6 as the
 // least-power stopgap that PA-27 retires). This list is the union of what the shipped plugins
 // legitimately use to RENDER and to run their host-invoked commands: component
-// read hooks, the widget component prop contract, island frame plumbing for GL
-// cards, and the core symbols command functions read. The deep target
+// read hooks and the core symbols command functions read. The deep target
 // (PluginWidgetProps — 03·A) replaces most of this; until then the door is
 // explicit and additions are deliberate SDK changes.
+//
+// DK-2 (desk/landing, ICE 0.14.0): the WIDGET FACE half of this door is CUT, because ICE
+// deleted what it re-exported — the GL islands' frame plumbing (`useIslandFrame`,
+// `useIslandInvalidate`: ICE's `/r3f` entry is gone), the React face's prop contract
+// (`WidgetComponentProps`: no widget mounts a React component under the camera) and
+// `MeasuredSize` (every effective size is `Size`). A canvas face is an OBJECT KIND the desk
+// draws (`contributes.objects`; the SDK's `/desk` door opens at DK-6). The hooks below stay:
+// they read the world and work in a screen-space DOM half.
 
 export {
   CameraLimits,
@@ -13,7 +20,6 @@ export {
   ChildOf,
   type Entity,
   FIT_DEFAULTS,
-  MeasuredSize,
   Position,
   PrefabId,
   Selected,
@@ -39,14 +45,7 @@ export {
   type World,
   widgetSpawnInits,
 } from "@vibecook/ice";
-export { useIslandFrame, useIslandInvalidate } from "@vibecook/ice/r3f";
-export {
-  useCommit,
-  useOps,
-  useWidgetProps,
-  useWorldComponent,
-  type WidgetComponentProps,
-} from "@vibecook/ice/react";
+export { useCommit, useOps, useWidgetProps, useWorldComponent } from "@vibecook/ice/react";
 
 import type { WidgetType } from "@vibecook/ice";
 import { widgets } from "@vibecook/ice";

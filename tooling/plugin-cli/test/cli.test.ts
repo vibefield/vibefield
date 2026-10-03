@@ -132,6 +132,38 @@ describe("the two registers", () => {
     expect(result.totalStates).toBe(1);
   });
 
+  it("DK-2: lists an object kind with its export and a refusal field that reads null on the desk build", async () => {
+    const io = capture();
+    const clock = `${baseManifest()["id"] as string}.clock`;
+    const root = makePlugin({
+      manifest: {
+        activation: [`onWidget:${clock}`],
+        contributes: {
+          objects: [
+            {
+              type: clock,
+              title: "Clock",
+              schemaVersion: 1,
+              size: { w: 160, h: 160 },
+              provides: ["desk.object"],
+              tray: { category: "things", label: "Clock" },
+              binding: { kind: "clock" },
+            },
+          ],
+        },
+      },
+      files: { "dist/renderer.js": rendererModule({ binds: [] }) },
+    });
+    expect(await runCli(["inspect", root, "--json"], io)).toBe(EXIT_OK);
+    const result = JSON.parse(io.lines[0] ?? "{}") as {
+      contributions: { objects: Array<{ type: string; binding: string; refusal: unknown }> };
+    };
+    // the field stays so an agent branches on it (plan §5 DK-6 inputs (f)); the desk draws objects
+    expect(result.contributions.objects).toEqual([
+      expect.objectContaining({ type: clock, binding: "clock", refusal: null }),
+    ]);
+  });
+
   it("counts the playground's named states when the plugin declares them", async () => {
     const io = capture();
     const root = makePlugin({

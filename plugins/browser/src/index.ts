@@ -1,6 +1,6 @@
 export { ArtifactPanel } from "./ArtifactPanel";
 export { type BrowserPageCommit, BrowserPageView, normalizeAddress } from "./BrowserPageView";
-export { createBrowserPageWidget } from "./BrowserPageWidget";
+export { browserSurfaceOptions, surfaceKeyFor } from "./BrowserPageWidget";
 export {
   ARTIFACT_SURFACE,
   BLANK_PAGE,

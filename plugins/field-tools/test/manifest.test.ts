@@ -15,15 +15,16 @@ import { COMMENT_COMMAND } from "../src/commands";
 // the SDK's mock host — no engine, no registry). Host-side integration
 // (prefab building, tray silhouettes) lives in field-app's own suites.
 describe("plugin-field-tools", () => {
-  it("activation binds exactly the manifest's declared widget types", async () => {
+  it("DK-2: activation binds NO face — the folder and the comment compile faceless", async () => {
     const declared = (fieldToolsManifest.contributes?.widgets ?? []).map((w) => w.type);
     const session = await activateWithMockHost(fieldToolsRenderer, {
       id: fieldToolsManifest.id,
       version: fieldToolsManifest.version,
       declaredWidgets: declared,
     });
-    expect([...session.bindings.keys()]).toEqual(declared);
-    for (const binding of session.bindings.values()) expect(binding.component).toBeDefined();
+    // DK-2: the folder and the comment bind NO face — the host compiles both faceless
+    expect(declared).toHaveLength(2);
+    expect(session.bindings.size).toBe(0);
   });
 
   it("folder is the one container; comment's membership is spatial (sweepContained)", () => {

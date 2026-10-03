@@ -1,5 +1,38 @@
-import type { GridConfig, GridMagnetConfig } from "@vibecook/ice";
 import { hexToRgb01 } from "../appearance/color";
+
+// DK-2 (desk/landing, ICE 0.14.0): ICE deleted core's ground-layer configs —
+// `GridConfig` and `GridMagnetConfig` left with the magnet grid this file tunes
+// (the desk's grid is `/desk`'s own `GridConfig { fadeIn, mat }`). Their 0.11
+// shapes are kept HERE, verbatim, so the appearance document and its Studio
+// controls keep their contract until the retire table's magnet/world-grid row
+// (the appearance document v3 → v4, DK-17); nothing on the desk reads them.
+
+/** ICE 0.11.0's `GridMagnetConfig`, verbatim — the retired magnet grid's tuning. */
+export interface GridMagnetConfig {
+  glyph: "dot" | "needle";
+  reach: number;
+  polarity: 1 | -1;
+  widgets: boolean;
+  widgetStrength: number;
+  widgetRadius: number;
+  alwaysAlign: boolean;
+  needleLength: number;
+  needleWidth: number;
+  maxSources: number;
+  fadeZoom: number;
+}
+
+/** ICE 0.11.0's core `GridConfig`, verbatim — the retired dot/magnet grid's config. */
+export interface GridConfig {
+  spacings: [number, number, number];
+  dotColor: [number, number, number];
+  dotAlpha: number;
+  fadeIn: [number, number];
+  fadeOut: [number, number];
+  dotRadius: [number, number];
+  levelWeight: [number, number];
+  magnet?: Partial<GridMagnetConfig>;
+}
 
 /** Theme-aware colors used by the physical canvas surface. */
 export interface CanvasPalette {

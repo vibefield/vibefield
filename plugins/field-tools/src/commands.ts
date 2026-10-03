@@ -2,18 +2,13 @@
  * C key: wrap the current selection in a comment (widgetlab App.tsx port).
  * The comment spawns at the BOTTOM of the frame (order "first" — ONE undoable
  * tx) so members render and pick above it, sized to the selection bbox
- * (measured-when-real sizes) plus header + padding. Random palette accent per
+ * (`Size` — the effective size since ICE 0.14.0 retired `MeasuredSize`, DK-2)
+ * plus header + padding. Random palette accent per
  * spawn. Exported as a command function — since P6 the spine invokes it through
  * the §13 commands contribution (renderer.ts binds it via ctx.commands.register
  * on the §12.7 canvas handle); the former direct field-app import is retired.
  */
-import {
-  type CanvasEngine,
-  MeasuredSize,
-  Position,
-  Size,
-  selectedEntities,
-} from "@vibefield/plugin-sdk/canvas";
+import { type CanvasEngine, Position, Size, selectedEntities } from "@vibefield/plugin-sdk/canvas";
 
 /** The declared command id (§8.3) — one source of truth for the manifest, the
  * renderer binding, and the spine's canvas-context/palette invocations. */
@@ -46,8 +41,7 @@ export function spawnCommentAroundSelection(ce: CanvasEngine): boolean {
   let any = false;
   for (const e of sel) {
     const p = ce.world.get(e, Position);
-    const m = ce.world.get(e, MeasuredSize);
-    const s = m !== undefined && m.w > 0 ? m : ce.world.get(e, Size);
+    const s = ce.world.get(e, Size);
     if (p === undefined || s === undefined) continue;
     minX = Math.min(minX, p.x);
     minY = Math.min(minY, p.y);

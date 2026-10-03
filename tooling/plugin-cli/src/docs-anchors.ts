@@ -47,8 +47,9 @@ export const RENDERER_CTX_FACES: readonly CtxFaceRow[] = [
   {
     face: "ctx.widgets",
     type: "RendererWidgetAPI",
-    presence: "always; `register` throws on an undeclared type and on a double-bind",
-    anchor: "Bind the implementation for a declared widget type. Throws on undeclared",
+    presence:
+      "always (the legacy door — it retires at DK-8); `register` binds no face on the desk build, and throws on an undeclared type and on a double-bind",
+    anchor: "Acknowledge a declared widget type (§12.1: throws on undeclared types and",
   },
   {
     face: "ctx.client",

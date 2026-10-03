@@ -2,7 +2,8 @@
 // only workspace dependency a plugin declares). Everything a renderer plugin
 // touches arrives either from here (contract types, defineRendererPlugin, the
 // design kit via ./ui, the canvas vocabulary via ./canvas) or as a PA-29
-// singleton bare specifier (react, three, R3F/drei). The HOST implements the
+// singleton bare specifier (react; three and R3F/drei left with ICE 0.14.0's
+// islands at DK-1). The HOST implements the
 // context (field-app's renderer harness); this package ships types + the
 // module normalizer + the testing mock — no host logic.
 //
@@ -37,27 +38,50 @@ export interface PluginLogger {
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
-/** The opaque code-side view registration the host's prefab builder consumes
- * (durable schema lives in the MANIFEST — §12.2; nothing here touches docs). */
-export interface WidgetBinding {
-  component: unknown;
-  /** GL-only: DOM chrome portaled UNDER the canvas (CardChrome sandwich). */
-  chrome?: unknown;
-  /** GL-only: per-frame island repaint opt-in (design-004 §3). */
-  animated?: boolean;
-  /** tray preview override (tri-tier: absent → sandbox-mounted component). */
-  preview?: unknown;
+/** An OBJECT's code half (spec §12.8; DK-0f's contract, consumed at DK-2): the
+ * value of the renderer module's NAMED EXPORT that `contributes.objects[].binding.kind`
+ * names. Static, never registered from `activate` — the desk creates every kind's
+ * pass together at mount, so the HOST reads this export and compiles the prefab
+ * from the manifest's durable half through ICE's `defineObject` (§12.2 unchanged:
+ * plugin code never owns a durable schema).
+ *
+ * OPAQUE here, as the retired widget binding was: the host validates each member
+ * at registration (`kind` must be a desk kind — ICE `isObjectKind` — whose registry
+ * `name` IS the type). The members' real types — `ObjectKind`, the driver factory,
+ * `ObjectHost`, `MenuActionDef` — arrive with the SDK's `/desk` door at DK-6; until
+ * then they are ICE's (`@vibecook/ice/desk`), which only the host imports. */
+export interface ObjectBinding {
+  /** The kind: its program and its world half — ICE `ObjectKind`. Required. */
+  readonly kind: unknown;
+  /** The props chain to the manifest's `schemaVersion`: version → (prev) => next. */
+  readonly migrate?: Readonly<
+    Record<number, (prev: Record<string, unknown>) => Record<string, unknown>>
+  >;
+  /** The hand onto the kind's state, made once per desk — ICE `DriverFactory`. */
+  readonly drivers?: unknown;
+  /** The kind's DOM half (lend · text · mount) — ICE `ObjectHost`. */
+  readonly host?: unknown;
+  /** Selection-menu acts, one undo step each — ICE `MenuActionDef[]`. */
+  readonly menu?: readonly unknown[];
 }
 
+/** The LEGACY widget door (spec §28: `ctx.widgets.register` retires with
+ * `contributes.widgets` at DK-8). Since DK-2 a widget binds to NOTHING the desk
+ * draws: the React binding (`component`, `chrome`, `animated`, `preview`) is gone —
+ * the host compiles every `widgets` type FACELESS from its manifest row (ICE draws
+ * a type with no kind with its missing face from 0.15.0; DK-D18 as amended). The
+ * door keeps only the §12.1 activation laws (declared-by-this-plugin, no double
+ * bind); whatever `binding` carries is held as opaque data and never mounted. */
 export interface WidgetRegistration {
   /** MUST be a widget type this plugin's manifest declares (§12.1). */
   type: string;
-  binding: WidgetBinding;
+  /** Opaque and inert on the desk build — never a face. */
+  binding?: unknown;
 }
 
 export interface RendererWidgetAPI {
-  /** Bind the implementation for a declared widget type. Throws on undeclared
-   * types and double-binds (§12.1). Returns the un-bind handle. */
+  /** Acknowledge a declared widget type (§12.1: throws on undeclared types and
+   * double-binds). Binds no face on the desk build. Returns the un-bind handle. */
   register(registration: WidgetRegistration): Disposable;
 }
 

@@ -1,6 +1,6 @@
-import { createCanvasEngine, type GridConfig } from "@vibecook/ice";
-import { localPointerPoles, type PoleSource } from "@vibecook/ice/ground";
+import { createCanvasEngine } from "@vibecook/ice";
 import { type CSSProperties, type ReactElement, useEffect, useState } from "react";
+import type { GridConfig } from "../field/canvas-appearance";
 import { InfiniteCanvasGround } from "../field/InfiniteCanvasGround";
 
 export interface InfiniteCanvasGroundPreviewProps {
@@ -11,11 +11,14 @@ export interface InfiniteCanvasGroundPreviewProps {
   label?: string;
 }
 
-const PREVIEW_POLE_SOURCES: readonly PoleSource[] = [localPointerPoles()];
-
 /**
  * A controller-free mount of the production ground. The catalog supplies only a
  * disposable empty engine; ICE still owns camera gestures and GPU rendering.
+ *
+ * DK-2 (desk/landing, ICE 0.14.0): the ground it mounted is the DK-3 stub (a plain
+ * container — ICE's `/ground` entry and its local-pointer poles are gone), so this
+ * specimen shows an empty frame until DK-3 mounts the desk; the retire table's
+ * first row takes it at DK-17.
  */
 export function InfiniteCanvasGroundPreview({
   grid,
@@ -65,7 +68,6 @@ function LiveGround({
     <InfiniteCanvasGround
       engine={engine}
       grid={grid}
-      additionalPoleSources={PREVIEW_POLE_SOURCES}
       className="vf-ds-ground-preview__canvas"
       style={style}
     />

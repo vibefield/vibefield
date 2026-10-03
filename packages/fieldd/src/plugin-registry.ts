@@ -5,9 +5,7 @@ import { basename, join } from "node:path";
 import {
   CONTRACTS_VERSION,
   computeEffectiveGrants,
-  declaresObjects,
   isWellFormedPluginId,
-  OBJECTS_NEED_DESK,
   PLUGIN_LIMITS,
   type PluginErrorSummary,
   type PluginManifestV1,
@@ -349,12 +347,10 @@ export class PluginRegistryService extends EventEmitter {
     // engines.app is unchecked in P2 — fieldd does not know the app's version
     // (the shell will supply it when the P3 harness lands); contracts is ours.
     const contractsOk = contractsRangeSatisfied(CONTRACTS_VERSION, m.engines.contracts);
-    // DK-0f: the object door's contract is accepted and recorded (the row lists
-    // the kinds); THIS build draws widgets, so a plugin that declares object
-    // kinds is an honest `incompatible` row — never activated — in the one
-    // sentence every door says. DK-6 deletes this clause with the desk.
-    const drawsObjects = !declaresObjects(m.contributes);
-    const compatible = contractsOk && platformOk && drawsObjects;
+    // DK-2 (desk/landing): the desk draws objects, so a plugin that declares
+    // object kinds is compatible like any other (DK-0f's `objects-need-desk`
+    // clause is flipped off; the row lists its kinds as before).
+    const compatible = contractsOk && platformOk;
     const wantEnabled = records.plugins[m.id]?.enabled ?? true;
     const registered = compatible;
     const enabled = registered && wantEnabled;
@@ -427,9 +423,7 @@ export class PluginRegistryService extends EventEmitter {
           "PLUGIN_INCOMPATIBLE",
           !contractsOk
             ? `requires contracts ${m.engines.contracts}, this device has ${CONTRACTS_VERSION}`
-            : !platformOk
-              ? `not built for platform ${process.platform}`
-              : `${OBJECTS_NEED_DESK.message} (${OBJECTS_NEED_DESK.code})`,
+            : `not built for platform ${process.platform}`,
         ),
       };
     }

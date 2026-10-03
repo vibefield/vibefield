@@ -1,6 +1,7 @@
 import { type CanvasEngine, selectedEntities } from "@vibecook/ice";
 import type { KeymapEntry } from "@vibecook/ice/react";
 import { type MutableRefObject, useMemo, useRef } from "react";
+import { setFieldTool } from "../field-engine";
 import * as commandRegistry from "../plugin-host/command-registry";
 import { FIELD_WINDOW_ID } from "./ChromeLayer";
 
@@ -41,7 +42,11 @@ export function buildFieldKeymapOverrides(
       key: "c",
       run: (engine) => {
         if (!suppressComment.current && spawnCommentAroundSelection(engine)) return;
-        engine.ops.setTool("connect");
+        // DK-2 (ruled DK-D29/D24: Wire waits for STRING, `c` no longer connects):
+        // the desk's canvas allows only `desk.select` and `pan`, and ICE THROWS for
+        // an illegal tool — so the old fallback is REFUSED (logged once), never a
+        // throw out of the keymap. DK-3 removes the override with the desk keymap.
+        setFieldTool(engine, "connect");
       },
     },
     {

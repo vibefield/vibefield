@@ -5,8 +5,9 @@ import {
   type PluginRecord,
   PluginRegistrySnapshot,
 } from "@vibefield/contracts";
-import type { RendererPluginModule } from "@vibefield/plugin-sdk";
+import type { ObjectBinding, RendererPluginModule } from "@vibefield/plugin-sdk";
 import { getRendererLogger, type RendererLogger } from "../logging";
+import { objectBindingsFrom } from "./build-widget";
 import { type PluginClientBackend, setPluginClientBackend } from "./plugin-client";
 import { getPluginRegistrySnapshot } from "./plugin-registry-store";
 import { RendererPluginController, RendererWindowController } from "./renderer-controller";
@@ -52,6 +53,11 @@ export interface PreparedStagedPlugin {
   /** the approved module row this activation belongs to (§11.4 identity) */
   readonly module: PluginModuleUrls;
   readonly activation: ActivatedRenderer;
+  /** DK-2 — the record's object rows' code halves, read off the imported module's
+   * namespace by export name at import (spec §12.8). Fixed for the artifact this
+   * engine generation was built from; an update's kinds arrive with the next
+   * generation (DK-9 verifies that remount). */
+  readonly objectBindings?: ReadonlyMap<string, ObjectBinding>;
   /** Exact plugin/window lifecycle controller for this imported artifact. */
   readonly controller?: RendererPluginController;
 }
@@ -73,6 +79,8 @@ export interface PreparedRendererPlugins {
 export interface BundledRendererPlugin {
   readonly manifest: PluginManifestV1;
   readonly mod: RendererPluginModule;
+  /** DK-2 — the manifest's object rows' code halves (spec §12.8), when it declares any. */
+  readonly objectBindings?: ReadonlyMap<string, ObjectBinding>;
   /** Prepared by the app boot path when a dev fallback needs window-owned behavior intent. */
   readonly activation?: ActivatedRenderer;
 }
@@ -300,6 +308,7 @@ async function stageOne(
       },
     };
   }
+  const objectBindings = objectBindingsFrom(imported, record.contributions.objects ?? []);
   const doc = deps.document ?? (typeof document === "undefined" ? undefined : document);
   const controller = new RendererPluginController(record, module, mod, runtime.windowId, {
     ...(doc === undefined ? {} : { style: { document: doc } }),
@@ -317,7 +326,7 @@ async function stageOne(
         error: "renderer target is unavailable",
       } as const);
     updateChannel?.attach(runtime);
-    return { record, module, activation, controller };
+    return { record, module, activation, controller, objectBindings };
   } catch (error) {
     const detail = error instanceof Error ? error.message : String(error);
     log.error(
@@ -332,6 +341,7 @@ async function stageOne(
       module,
       activation: { state: "failed", bindings: new Map(), behaviors: new Map(), error: detail },
       controller,
+      objectBindings,
     };
   }
 }

@@ -13,7 +13,7 @@ import { widgetlabManifest, widgetlabRenderer } from "../src";
 // Host-side integration (prefab building, tray silhouettes) lives in
 // field-app's own suites.
 describe("plugin-widgetlab", () => {
-  it("activation binds exactly the manifest's declared widget types", async () => {
+  it("DK-2: activation binds NO face — the eighteen types compile faceless", async () => {
     const declared = (widgetlabManifest.contributes?.widgets ?? []).map((w) => w.type);
     expect(declared).toHaveLength(18); // 8 cards + 7 GL + 3 nodes
     const session = await activateWithMockHost(widgetlabRenderer, {
@@ -21,25 +21,9 @@ describe("plugin-widgetlab", () => {
       version: widgetlabManifest.version,
       declaredWidgets: declared,
     });
-    expect([...session.bindings.keys()]).toEqual(declared);
-    for (const binding of session.bindings.values()) expect(binding.component).toBeDefined();
-
-    // the 7 GL islands: chrome + animated flags survive activation verbatim
-    // (the two chromeless islands — crystal, cube — carry no chrome binding).
-    expect(session.bindings.get("vibefield.widgetlab.sphere")?.chrome).toBeDefined();
-    expect(session.bindings.get("vibefield.widgetlab.sphere")?.animated).toBe(false);
-    expect(session.bindings.get("vibefield.widgetlab.crystal")?.chrome).toBeUndefined();
-    expect(session.bindings.get("vibefield.widgetlab.crystal")?.animated).toBe(true);
-    expect(session.bindings.get("vibefield.widgetlab.torus-knot")?.chrome).toBeDefined();
-    expect(session.bindings.get("vibefield.widgetlab.torus-knot")?.animated).toBe(true);
-    expect(session.bindings.get("vibefield.widgetlab.cube")?.chrome).toBeUndefined();
-    expect(session.bindings.get("vibefield.widgetlab.cube")?.animated).toBe(true);
-    expect(session.bindings.get("vibefield.widgetlab.gold-knot")?.chrome).toBeDefined();
-    expect(session.bindings.get("vibefield.widgetlab.gold-knot")?.animated).toBe(true);
-    expect(session.bindings.get("vibefield.widgetlab.shapes")?.chrome).toBeDefined();
-    expect(session.bindings.get("vibefield.widgetlab.shapes")?.animated).toBe(true);
-    expect(session.bindings.get("vibefield.widgetlab.orbit-cube")?.chrome).toBeDefined();
-    expect(session.bindings.get("vibefield.widgetlab.orbit-cube")?.animated).toBe(false);
+    // the DOM cards stood on the SDK's cut card exports and the GL cards on ICE's
+    // removed R3F islands: no face, no chrome, no animated flag is bound any more
+    expect(session.bindings.size).toBe(0);
   });
 
   it("dogfoods the hud.panel status surface; activation binds it (§8.4/§13.2)", async () => {

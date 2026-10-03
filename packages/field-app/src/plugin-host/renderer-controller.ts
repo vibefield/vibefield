@@ -20,15 +20,12 @@ import {
   type RuntimeTargetLifecycleEvent,
   samePluginRuntimeObservation,
 } from "@vibefield/plugin-runtime";
-import type {
-  PluginProductClient,
-  RendererPluginModule,
-  WidgetBinding,
-} from "@vibefield/plugin-sdk";
+import type { PluginProductClient, RendererPluginModule } from "@vibefield/plugin-sdk";
 import { type ComponentType, createElement, type ReactElement, useSyncExternalStore } from "react";
 import type { RendererLogger } from "../logging";
 import { BehaviorBindingCatalog } from "./behavior-binding-catalog";
 import { BehaviorBreakerLedger } from "./behavior-generation-host";
+import type { WidgetBinding } from "./build-widget";
 import { refreshPluginProductClient, retirePluginProductClient } from "./plugin-client";
 import { stagePluginStyleLink } from "./plugin-style";
 import {

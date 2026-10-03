@@ -20,8 +20,7 @@ import {
   Size,
   type World,
 } from "@vibecook/ice";
-import { WidgetHiddenContext } from "@vibecook/ice/react";
-import { useCallback, useContext, useRef, useSyncExternalStore } from "react";
+import { useCallback, useSyncExternalStore } from "react";
 
 export type OverlapTier = "none" | "accept" | "reject";
 
@@ -273,18 +272,16 @@ function projectionFor(world: World): ChromeProjection {
 }
 
 export function useCardChromeProjection(world: World, entity: Entity): CardChromeSnapshot {
-  const hidden = useContext(WidgetHiddenContext);
+  // DK-2 (desk/landing, ICE 0.14.0): `WidgetHiddenContext` left ICE with the hidden
+  // portals it described — nothing under the camera is a DOM card any more, so no
+  // card is ever "hidden under a portal" and the frozen-snapshot branch went with
+  // it. The DOM card chrome itself retires at DK-17 (the retire table's design-kit row).
   const projection = projectionFor(world);
-  const last = useRef(projection.getSnapshot(entity));
   const subscribe = useCallback(
-    (listener: () => void) => (hidden ? () => undefined : projection.subscribe(entity, listener)),
-    [projection, entity, hidden],
+    (listener: () => void) => projection.subscribe(entity, listener),
+    [projection, entity],
   );
-  const getSnapshot = useCallback(() => {
-    if (hidden) return last.current;
-    last.current = projection.getSnapshot(entity);
-    return last.current;
-  }, [projection, entity, hidden]);
+  const getSnapshot = useCallback(() => projection.getSnapshot(entity), [projection, entity]);
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 }
 

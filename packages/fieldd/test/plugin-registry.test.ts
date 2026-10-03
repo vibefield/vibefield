@@ -253,7 +253,7 @@ describe("PluginRegistryService — invalid & incompatible roots", () => {
     expect(row?.lastError?.message).toContain("entries.renderer");
   });
 
-  it("DK-0f: marks a manifest that declares object kinds incompatible — the desk is not here — and still lists the kinds", async () => {
+  it("DK-2: a manifest that declares object kinds is compatible on the desk build — and its row lists the kinds", async () => {
     const root = mkdtempSync(join(tmpdir(), "plugreg-objects-"));
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));
     const id = "vibefield.fixture.clock";
@@ -281,14 +281,13 @@ describe("PluginRegistryService — invalid & incompatible roots", () => {
     const snap = svc.snapshot();
     expect(snap.problems).toEqual([]);
     const row = snap.plugins.find((p) => p.id === id);
-    expect(row?.state).toBe("incompatible");
-    expect(row?.compatible).toBe(false);
-    expect(row?.enabled).toBe(false);
-    expect(row?.lastError?.kind).toBe("PLUGIN_INCOMPATIBLE");
-    expect(row?.lastError?.message).toBe(
-      `${OBJECTS_NEED_DESK.message} (${OBJECTS_NEED_DESK.code})`,
-    );
-    // the contract is recorded: the roster lists the kind it will not activate
+    // DK-0f's `objects-need-desk` incompatible row is flipped off: the desk draws objects.
+    expect(row?.state).toBe("enabled");
+    expect(row?.compatible).toBe(true);
+    expect(row?.enabled).toBe(true);
+    expect(row?.lastError).toBeUndefined();
+    expect(JSON.stringify(row)).not.toContain(OBJECTS_NEED_DESK.code);
+    // the contract is recorded: the roster lists the kind it activates
     expect(row?.contributions.objects.map((o) => o.type)).toEqual([type]);
     expect(row?.contributions.widgets).toEqual([]);
   });

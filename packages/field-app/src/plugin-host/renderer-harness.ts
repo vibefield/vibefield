@@ -31,12 +31,12 @@ import {
   type PluginSurfaceProps,
   type RendererPluginContext,
   type RendererPluginModule,
-  type WidgetBinding,
   type WidgetRegistration,
 } from "@vibefield/plugin-sdk";
 import type { ComponentType } from "react";
 import { getRendererLogger } from "../logging";
 import type { ProductSurfaceFrame, SurfacePool } from "../surfaces/pool";
+import type { WidgetBinding } from "./build-widget";
 import { getActiveCanvasEngine } from "./canvas-engine-ref";
 import * as commandRegistry from "./command-registry";
 import { createPluginProductClient, currentWindowClient } from "./plugin-client";
@@ -299,6 +299,14 @@ function canonicalDescriptorJson(value: unknown): string {
   return JSON.stringify(visit(value));
 }
 
+/** The opaque registration binding, held in the legacy shape the controller's update lane
+ * compares (DK-2). Nothing mounts it: a widget compiles faceless. */
+function legacyWidgetBinding(binding: unknown): WidgetBinding {
+  return typeof binding === "object" && binding !== null
+    ? (binding as WidgetBinding)
+    : { component: undefined };
+}
+
 function behaviorOrderKey(pluginId: string, declarationIndex: number): string {
   return `${pluginId}\0${declarationIndex.toString().padStart(6, "0")}`;
 }
@@ -529,10 +537,14 @@ function buildActivation(
             throw new Error(`${registration.type} is not declared by ${spec.id} (§12.1)`);
           if (bindings.has(registration.type))
             throw new Error(`${registration.type} already bound in this entry (§12.1)`);
-          deps.validateWidgetBinding?.(registration.type, registration.binding);
+          // DK-2: the SDK's registration binding is opaque and binds no face (the host
+          // compiles every widget faceless); it is held only for the legacy update lane's
+          // shape law until `ctx.widgets.register` retires at DK-8.
+          const binding = legacyWidgetBinding(registration.binding);
+          deps.validateWidgetBinding?.(registration.type, binding);
           const generation = Symbol(registration.type);
           widgetGenerations.set(registration.type, generation);
-          bindings.set(registration.type, registration.binding);
+          bindings.set(registration.type, binding);
           deps.onWidgetBindingsChanged?.();
           const resource: Disposable = {
             dispose() {

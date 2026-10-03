@@ -34,7 +34,7 @@ const manifest = (over: Partial<PluginManifestV1> = {}): PluginManifestV1 => ({
 });
 
 describe("PluginRegistry", () => {
-  it("DK-0f: refuses a manifest that declares object kinds — this build draws widgets", () => {
+  it("DK-2: registers a manifest's object kinds beside its widgets — the desk draws objects", () => {
     const r = new PluginRegistry<unknown>();
     const withObjects = manifest({
       activation: ["onWidget:note.clock"],
@@ -53,10 +53,15 @@ describe("PluginRegistry", () => {
         ],
       },
     });
-    expect(() => r.registerV1(withObjects, { "note.card": "impl" })).toThrow(/objects-need-desk/);
-    // refused at the door: nothing of the plugin registered, not even its widget
-    expect(r.hasWidget("note.card")).toBe(false);
-    expect(r.plugin("note")).toBeUndefined();
+    // DK-0f's `objects-need-desk` door is flipped off: an object is a widget type to the
+    // engine, so it joins the exact map under the same declared⇄provided law.
+    expect(() => r.registerV1(withObjects, { "note.card": "impl" })).toThrow(
+      /declares note\.clock but provides no implementation/,
+    );
+    r.registerV1(withObjects, { "note.card": "impl", "note.clock": "kind" });
+    expect(r.ownerOf("note.clock")).toBe("note");
+    expect(r.plugin("note")?.objectContributions.map((o) => o.type)).toEqual(["note.clock"]);
+    expect([...r.allWidgets().keys()]).toEqual(["note.card", "note.clock"]);
   });
 
   it("registers and exposes namespaced widgets through the exact map", () => {
@@ -149,7 +154,7 @@ const record = (over: Partial<PluginRecord> = {}): PluginRecord =>
   });
 
 describe("PluginRegistry.registerRecord (staged)", () => {
-  it("DK-0f: refuses a record that carries object kinds in the same sentence", () => {
+  it("DK-2: registers a record's object kinds under the same ownership law", () => {
     const r = new PluginRegistry<string>();
     const staged = record({
       contributions: {
@@ -167,8 +172,12 @@ describe("PluginRegistry.registerRecord (staged)", () => {
         ],
       },
     });
-    expect(() => r.registerRecord(staged, { "note.card": "impl" })).toThrow(/objects-need-desk/);
-    expect(r.plugin("note")).toBeUndefined();
+    expect(() => r.registerRecord(staged, { "note.card": "impl" })).toThrow(
+      /declares note\.clock but provides no implementation/,
+    );
+    r.registerRecord(staged, { "note.card": "impl", "note.clock": "kind" });
+    expect(r.ownerOf("note.clock")).toBe("note");
+    expect(r.plugin("note")?.objectContributions.map((o) => o.type)).toEqual(["note.clock"]);
   });
 
   it("registers from a sanitized record and owns its types the same way", () => {

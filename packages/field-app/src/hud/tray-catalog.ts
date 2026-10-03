@@ -25,11 +25,7 @@ export interface CatalogEntry<W> {
   def: W;
 }
 
-interface DefLike {
-  surface?: "dom" | "gl";
-}
-
-export function buildCatalog<W extends DefLike>(
+export function buildCatalog<W>(
   registry: PluginRegistry<W>,
   /** P3c — plugins the fieldd registry reports disabled: registered (schemas
    * stay live for existing boards) but never offered for NEW spawns. */
@@ -45,7 +41,9 @@ export function buildCatalog<W extends DefLike>(
       out.push({
         type: w.type,
         title: w.title,
-        category: w.category ?? (def.surface === "gl" ? "3D" : "Cards"),
+        // DK-2 (ICE 0.14.0): `WidgetType.surface` is gone with the widget faces, so
+        // the "3D" fallback for GL cards went with it; an uncategorized row is a Card.
+        category: w.category ?? "Cards",
         ...(preview !== undefined ? { preview } : {}),
         def,
       });

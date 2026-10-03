@@ -728,7 +728,10 @@ export const WidgetContribution = z
     preview: SafePreview.optional(),
 
     schemaVersion: z.number().int().positive(),
-    surface: z.enum(["dom", "gl"]),
+    // `surface` (`"dom" | "gl"`) RETIRED at DK-2 (desk/landing, ICE 0.14.0): the desk
+    // draws no DOM or GL widget face — a widget binds to nothing and its type compiles
+    // FACELESS. An old manifest's `surface` is tolerated by the passthrough and read by
+    // no one; `contributes.widgets` itself is refused with a dated sentence at DK-8.
     /** engine vocabulary (defineWidget): resizability is interaction.resizable */
     sizeMode: z.enum(["fixed", "auto-height", "auto"]),
     defaultSize: SizeSpec,
@@ -768,8 +771,8 @@ export type WidgetContribution = z.infer<typeof WidgetContribution>;
 // (no `surface`), an object is its `size` (no `sizeMode`), the pegboard draws
 // the kind's own specimen (`tray` replaces `preview` and `category`) — and the
 // invariants below refuse each by name, so a ported widget is told what moved.
-// On THIS build nothing draws an object: the schema accepts the contract and
-// every host door refuses to ACTIVATE it with `OBJECTS_NEED_DESK`.
+// On the desk build (`desk/landing`, DK-2) every host door ACCEPTS it; the
+// `OBJECTS_NEED_DESK` refusal it met on the 0.11 build stays enumerated below.
 
 /** The pegboard tray's accessories (ICE kernel `TrayAccessory`): how a specimen hangs. */
 export const TRAY_ACCESSORIES = ["hook", "shelf", "clip", "rail"] as const;
@@ -871,20 +874,22 @@ export const ObjectContribution = z
   .passthrough();
 export type ObjectContribution = z.infer<typeof ObjectContribution>;
 
-/** DK-0f (2026-10-02): THIS build draws widgets. The object door's contract above
- * is accepted and recorded ahead of the desk (ICE 0.14's `@vibecook/ice/desk`,
- * consumed on `desk/landing` at DK-6); until then every host door refuses to
- * ACTIVATE a plugin that declares object kinds with this one stable code and
+/** DK-0f (2026-10-02): the ICE 0.11 build drew widgets, so every host door refused
+ * to ACTIVATE a plugin that declared object kinds with this one stable code and
  * sentence — fieldd's loader (an `incompatible` row, `PLUGIN_INCOMPATIBLE`),
  * `vibefield-plugin check` (the activation row), the renderer's registry (a
- * thrown registration). DK-6 deletes this constant and the branches that read it. */
+ * thrown registration). DK-2 (desk/landing, ICE 0.14.0) FLIPPED all three OFF:
+ * the desk draws objects, so no door reads this any more. The code stays
+ * enumerated for the record (the refusal catalog keeps its row); nothing on
+ * this build says it. */
 export const OBJECTS_NEED_DESK = {
   code: "objects-need-desk",
   message: "object kinds need the desk; this build draws widgets",
 } as const;
 
-/** Does this manifest (or sanitized record) declare object kinds? The one
- * predicate the three refusing doors share. */
+/** Does this manifest (or sanitized record) declare object kinds? The predicate
+ * the three doors shared while they refused objects (DK-0f); kept for callers that
+ * branch on the object door. */
 export function declaresObjects(
   contributes:
     | { readonly objects?: readonly unknown[] | undefined; readonly [key: string]: unknown }

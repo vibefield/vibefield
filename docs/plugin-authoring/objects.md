@@ -16,14 +16,12 @@ prefab (`defineObject`, through the one `defineWidget`); plugin code never does.
 
 ## On this build
 
-The contract below is accepted and recorded ahead of the desk. This build draws
-widgets: a plugin that declares `contributes.objects` loads, is listed by
-`inspect` and the plugin roster, and is REFUSED activation by every door with one
-stable code — `objects-need-desk` (object kinds need the desk; this build draws widgets).
-`check` says it on the activation row; fieldd marks the row `incompatible`
-(`PLUGIN_INCOMPATIBLE`); the renderer's registry refuses the registration. Write
-against the contract now: the desk build (the `desk/landing` branch, DK-6)
-activates the same manifest unchanged, and retires `contributes.widgets` (DK-8).
+The desk build (the `desk/landing` branch) ACCEPTS the contract below at every
+door: fieldd's roster lists the plugin's kinds as an ordinary row, `check`
+activates it like any plugin, and the renderer's registry registers each kind's
+type and compiles it through `defineObject`. The ICE 0.11 build refused it with
+`objects-need-desk` (object kinds need the desk; this build draws widgets); `inspect` keeps
+its `refusal` field, and it reads `null`. `contributes.widgets` retires at DK-8.
 
 ## Declaring
 
@@ -358,10 +356,9 @@ never polls for what an arrival can tell it.
 
 ## Checking it
 
-On this build `vibefield-plugin check` runs the manifest, wall, schema and
-artifact rows as for any plugin; the activation row answers the host's truth —
-`objects-need-desk` — before any import, and `inspect` lists each kind
-with its chip, its export and that code. The desk build brings the rest: the
+On this build `vibefield-plugin check` runs the manifest, wall, schema,
+artifact and activation rows as for any plugin, and `inspect` lists each kind
+with its chip, its export and a `null` refusal. DK-6 and DK-7 bring the rest: the
 activation row holds `binding.kind` to a real export, the playground runs a kind
 through `resolve`/`record`/`hit` over its declared states with no DOM, and a Dawn
 still is held to a per-plugin golden (DK-6, DK-7). Until then the pixel witness is

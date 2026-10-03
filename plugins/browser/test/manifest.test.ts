@@ -60,7 +60,7 @@ describe("plugin-browser", () => {
     expect(page.interaction?.keyboardEscape).toBe("release");
   });
 
-  it("activation binds the side panel and the card, each once", async () => {
+  it("DK-2: activation binds the side panel once — and the page card no face", async () => {
     const session = await activateWithMockHost(browserRenderer, {
       id: browserManifest.id,
       version: browserManifest.version,
@@ -68,10 +68,10 @@ describe("plugin-browser", () => {
       declaredSurfaces: [ARTIFACT_SURFACE],
     });
     expect([...session.surfaces.keys()]).toEqual([ARTIFACT_SURFACE]);
-    expect([...session.bindings.keys()]).toEqual([BROWSER_PAGE_TYPE]);
-    expect(session.bindings.get(BROWSER_PAGE_TYPE)?.component).toBeDefined();
-    // Activation acquires NOTHING: a card claims its surface when it mounts,
-    // so a board with no browser card on it costs no attachment.
+    // the desk draws no DOM under the camera: the page widget compiles faceless
+    expect(session.bindings.has(BROWSER_PAGE_TYPE)).toBe(false);
+    expect(session.bindings.size).toBe(0);
+    // Activation acquires NOTHING: no card exists to claim a surface.
     expect(session.liveSurfaces.size).toBe(0);
   });
 

@@ -18,7 +18,6 @@ prop names and group names outlive any particular implementation.
 | `category` | `Cards` \| `3D` \| `Nodes` \| `Tools` | no | — |
 | `preview` | one of `color`, `gradient`, `asset` | no | discriminated by `kind` |
 | `schemaVersion` | number | yes | `integer; > 0` |
-| `surface` | `dom` \| `gl` | yes | — |
 | `sizeMode` | `fixed` \| `auto-height` \| `auto` | yes | — |
 | `defaultSize` | { w: number, h: number } | yes | — |
 | `minSize` | { w: number, h: number } | no | — |
@@ -31,10 +30,12 @@ prop names and group names outlive any particular implementation.
 | `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
 | `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
 
-`surface` picks the renderer: `dom` for an HTML card, `gl` for a 3D island with
-DOM chrome portaled under it. `sizeMode` and `defaultSize` set the prefab the
-host builds; `interaction` carries the canvas's own flags (selectable, movable,
-resizable, snap, dragOn, solid, sweepContained).
+A widget binds NO face on the desk build: the desk draws object kinds, so the
+host compiles every widget type FACELESS from this row (`surface` is retired — an
+old manifest's value is tolerated and read by no one), and `contributes.widgets`
+itself retires at DK-8 — declare an OBJECT (`objects.md`) for a canvas face.
+`defaultSize` sets the prefab the host builds; `interaction` carries the canvas's
+own flags (selectable, movable, resizable, snap, dragOn, solid, sweepContained).
 
 ## Props
 

@@ -18,7 +18,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { declaresObjects, OBJECTS_NEED_DESK, type PluginManifestV1 } from "@vibefield/contracts";
+import type { PluginManifestV1 } from "@vibefield/contracts";
 import type { RendererPluginModule } from "@vibefield/plugin-sdk";
 import { activateWithMockHost, type MockPluginHostOptions } from "@vibefield/plugin-sdk/testing";
 import { note, pass, refuse, type Verdict } from "./verdict";
@@ -82,19 +82,11 @@ export async function checkActivation(
   const declaredSurfaces = (manifest.contributes?.surfaces ?? []).map((s) => s.id);
   const declaredBehaviors = manifest.contributes?.behaviors ?? [];
 
-  // DK-0f: the object door's contract is accepted (the manifest row passed),
-  // and THIS build draws widgets — so the row that answers "will the host
-  // activate this?" says no, in the host's own sentence, before any import.
-  // Known from the manifest alone, so it never waits on a build. The binding
-  // half of an object plugin is DK-6's harness (the SDK's /desk door).
-  if (declaresObjects(manifest.contributes)) {
-    const types = (manifest.contributes?.objects ?? []).map((o) => o.type).join(", ");
-    return [
-      refuse("activation", OBJECTS_NEED_DESK.code, `${types}: ${OBJECTS_NEED_DESK.message}`, {
-        pointer: "contributes.objects",
-      }),
-    ];
-  }
+  // DK-2 (desk/landing): the desk draws objects, so an object plugin activates
+  // like any other — DK-0f's `objects-need-desk` refusal is flipped off. Holding
+  // `binding.kind` to a real export that is a desk kind is DK-6/DK-7's harness
+  // (a Node kind-conformance host with no device); until then this row runs the
+  // module's activate as for any plugin.
 
   const entry = manifest.entries?.renderer;
   if (entry === undefined)

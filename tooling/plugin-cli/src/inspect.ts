@@ -36,7 +36,6 @@ export interface InspectedObject {
 export interface InspectedWidget {
   readonly type: string;
   readonly title: string;
-  readonly surface: "dom" | "gl";
   readonly schemaVersion: number;
   readonly props: number;
   readonly groups: string[];
@@ -135,7 +134,6 @@ export async function inspectPlugin(
   const widgets: InspectedWidget[] = (c.widgets ?? []).map((w) => ({
     type: w.type,
     title: w.title,
-    surface: w.surface,
     schemaVersion: w.schemaVersion,
     props: Object.keys(w.props).length,
     groups: Object.keys(w.groups),
@@ -151,7 +149,9 @@ export async function inspectPlugin(
     ports: (o.ports ?? []).length,
     tray: o.tray?.category ?? null,
     binding: o.binding.kind,
-    refusal: OBJECTS_NEED_DESK.code,
+    // DK-2: the desk build activates object kinds — the field stays so an agent
+    // branches on it (plan §5 DK-6 inputs (f)), and it reads null here.
+    refusal: null,
   }));
 
   return {
@@ -230,7 +230,7 @@ export function formatInspection(result: InspectionResult): string {
   for (const w of c.widgets)
     push(
       "widget",
-      `${w.type} — ${w.surface}, v${w.schemaVersion}, ${w.props} prop(s), ${w.ports} port(s), ${w.states} state(s)`,
+      `${w.type} — v${w.schemaVersion}, ${w.props} prop(s), ${w.ports} port(s), ${w.states} state(s)`,
     );
   for (const o of c.objects)
     push(

@@ -6,8 +6,15 @@
 // diagnoses, `state-render-failed` (your component threw) only describes.
 
 import { defineRendererPlugin } from "@vibefield/plugin-sdk";
-import { useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
+import { type Entity, useWidgetProps, type World } from "@vibefield/plugin-sdk/canvas";
 import type { ReactElement } from "react";
+
+/** The retired React face's props (the SDK cut `WidgetComponentProps` at DK-2); this
+ * fixture's face is the old runner's subject — DK-7 replaces both. */
+interface WidgetComponentProps {
+  readonly entity: Entity;
+  readonly world: World;
+}
 
 const TYPE = "vibefield.fixture-invalid.card";
 

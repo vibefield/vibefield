@@ -3,7 +3,6 @@ import {
   ChildOf,
   defineQuery,
   type Entity,
-  MeasuredSize,
   Position,
   PrefabId,
   Size,
@@ -11,7 +10,6 @@ import {
   WireFrom,
   WirePorts,
   WireTo,
-  widgets,
 } from "@vibecook/ice";
 import { previewBackground } from "@vibefield/design-kit";
 
@@ -63,12 +61,10 @@ export function captureDocThumbnailScene(ce: CanvasEngine): DocThumbnailScene {
       const parent = ce.world.getRelation(entity, ChildOf);
       if (parent !== undefined && ce.world.get(parent, PrefabId) !== undefined) continue;
       const position = ce.world.get(entity, Position);
-      const measured = ce.world.get(entity, MeasuredSize);
-      const declared = ce.world.get(entity, Size);
-      const size = measured !== undefined && measured.w > 0 ? measured : declared;
+      // DK-2 (ICE 0.14.0): `MeasuredSize` is gone — `Size` IS the effective size.
+      const size = ce.world.get(entity, Size);
       const type = ce.world.get(entity, PrefabId)?.id;
       if (position === undefined || size === undefined || typeof type !== "string") continue;
-      const def = widgets.get(type);
       const card: DocThumbnailWidget & { entity: Entity } = {
         entity,
         type,
@@ -77,7 +73,9 @@ export function captureDocThumbnailScene(ce: CanvasEngine): DocThumbnailScene {
         w: size.w,
         h: size.h,
         z: ce.world.get(entity, StackZ)?.z ?? cards.length,
-        background: previewBackground(type, def?.surface),
+        // `WidgetType.surface` left with ICE 0.14.0's widget faces (DK-2): a type
+        // with no registered silhouette takes the kit's card default.
+        background: previewBackground(type, undefined),
       };
       cards.push(card);
       centers.set(entity, { x: card.x + card.w / 2, y: card.y + card.h / 2 });

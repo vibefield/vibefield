@@ -1,33 +1,36 @@
-import type { PoleSource } from "@vibecook/ice/ground";
-import { ground } from "@vibecook/ice/ground";
-import { InfiniteCanvas, type InfiniteCanvasProps } from "@vibecook/ice/react";
-import { type ReactElement, useMemo } from "react";
-import { haloPoles } from "../cursor/halo-poles";
+import type { CanvasEngine } from "@vibecook/ice";
+import type { KeymapEntry } from "@vibecook/ice/react";
+import type { CSSProperties, ReactElement, ReactNode } from "react";
+import type { GridConfig } from "./canvas-appearance";
 
-export interface InfiniteCanvasGroundProps extends Omit<InfiniteCanvasProps, "ground"> {
-  /** Extra app-owned field sources, used by isolated real-ground specimens. */
-  additionalPoleSources?: readonly PoleSource[];
+// DK-3 STUB (desk/landing, DK-2). This was the field's canonical P0 composition —
+// ICE's `<InfiniteCanvas ground={ground({ poles })}>`: the build-selected magnet
+// grid, wires and snap guides in one GPU canvas, with the cursor halo as a pole
+// source. ICE 0.14.0 deleted every piece of it (ICE's `/ground` entry, the R3F
+// islands, `<InfiniteCanvas>` itself — its successor is `<Desk engine
+// layer={deskLayer(…)}>`), so on this branch the mount is a PLAIN CONTAINER: no
+// engine host, no rAF loop, no pointer adapter, no keymap, nothing drawn. The
+// engine is created (field-engine.ts, the desk preset) and its documents open and
+// persist; nothing mounts it. DK-3 replaces this file and `CanvasStage` with the
+// desk's own mount and deletes the stub.
+
+export interface InfiniteCanvasGroundProps {
+  engine: CanvasEngine;
+  grid?: Partial<GridConfig>;
+  keymapOverrides?: readonly KeymapEntry[];
+  className?: string;
+  style?: CSSProperties;
+  children?: ReactNode;
 }
 
-const NO_ADDITIONAL_POLES: readonly PoleSource[] = [];
-
-/**
- * The field's canonical P0 composition: ICE's build-selected magnet grid,
- * wires, and snap guides in one GPU canvas. Product and Design System specimens
- * mount this same component so the catalog cannot drift into an approximation.
- *
- * The cursor halo is wired as the magnet grid's pole source (ICE design-010;
- * cursor/halo-poles.ts). ICE 0.11 has no runtime classic/magnet switch: the
- * selected pass owns this subscription for the ground's lifetime and its
- * runIf-gated Cur producer settles back to zero idle frames.
- */
-export function InfiniteCanvasGround(props: InfiniteCanvasGroundProps): ReactElement {
-  const { additionalPoleSources = NO_ADDITIONAL_POLES, ...canvasProps } = props;
-  // A ground factory owns one mount's renderer state. Keep it stable for the
-  // component lifetime; InfiniteCanvas disposes the resulting layer on unmount.
-  const groundFactory = useMemo(
-    () => ground({ poles: [haloPoles(), ...additionalPoleSources] }),
-    [additionalPoleSources],
+export function InfiniteCanvasGround({
+  className,
+  style,
+  children,
+}: InfiniteCanvasGroundProps): ReactElement {
+  return (
+    <div className={className} style={style} data-canvas-mount="dk-3-pending">
+      {children}
+    </div>
   );
-  return <InfiniteCanvas {...canvasProps} ground={groundFactory} />;
 }

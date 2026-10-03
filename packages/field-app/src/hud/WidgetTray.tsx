@@ -42,7 +42,7 @@ import {
   InsertGhost,
   type WidgetType,
 } from "@vibecook/ice";
-import { useStageHold, WidgetPreview } from "@vibecook/ice/react";
+import { useStageHold } from "@vibecook/ice/react";
 import { CARD_BG, CARD_RADIUS } from "@vibefield/design-kit";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
@@ -83,11 +83,12 @@ function silhouetteIn(
 }
 
 /**
- * The tile's face = the FRAMEWORK's answer (design-005 §2 preview contract,
- * 2026-07-19): `<WidgetPreview>` owns the whole fallback chain — the def's
- * declared preview (the GL cards declare baked snapshots), else the real
- * component in the framework sandbox (dom), else our silhouette. The last-rung
- * silhouette background is manifest data now (`preview`), not a code map.
+ * The tile's face. Until ICE 0.14.0 it was the FRAMEWORK's answer (design-005 §2
+ * preview contract): `<WidgetPreview>` owned the fallback chain — the def's
+ * declared preview, else the real component in the framework sandbox, else our
+ * silhouette. DK-2 (desk/landing): `WidgetPreview` left with the widget faces
+ * (a desk kind draws its own specimen on the pegboard, which replaces this tray
+ * at DK-13), so every tile is the last rung — the manifest's silhouette.
  */
 function TileFace({
   entry,
@@ -97,19 +98,14 @@ function TileFace({
   sil: { w: number; h: number; r: number; s: number };
 }) {
   return (
-    <WidgetPreview
-      type={entry.type}
-      width={sil.w}
-      height={sil.h}
-      fallback={
-        <div
-          className="vf-widget-tray__preview-fallback"
-          style={{
-            borderRadius: sil.r,
-            background: entry.preview ?? CARD_BG,
-          }}
-        />
-      }
+    <div
+      className="vf-widget-tray__preview-fallback"
+      style={{
+        width: sil.w,
+        height: sil.h,
+        borderRadius: sil.r,
+        background: entry.preview ?? CARD_BG,
+      }}
     />
   );
 }

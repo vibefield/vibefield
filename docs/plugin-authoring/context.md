@@ -52,7 +52,7 @@ you ask for something optional.
 | `ctx.plugin` | { id, version, manifestHash?, installRevision? } | always; `manifestHash`/`installRevision` are present iff a staged loader supplied them (the dev bundled path has neither) |
 | `ctx.signal` | AbortSignal | always; aborts on deactivation, and every API rejects use after it fires |
 | `ctx.logger` | PluginLogger (debug/info/warn/error) | always; the host stamps provenance — never log secrets |
-| `ctx.widgets` | RendererWidgetAPI | always; `register` throws on an undeclared type and on a double-bind |
+| `ctx.widgets` | RendererWidgetAPI | always (the legacy door — it retires at DK-8); `register` binds no face on the desk build, and throws on an undeclared type and on a double-bind |
 | `ctx.client` | PluginProductClient (request/subscribe) | always; calls arrive at fieldd as THIS plugin, with its granted scopes |
 | `ctx.commands` | RendererCommandAPI | present iff the manifest DECLARES `contributes.commands` |
 | `ctx.surfaces` | RendererSurfaceAPI | present iff the manifest DECLARES `contributes.surfaces` |
@@ -166,9 +166,10 @@ copy:
 - `react`
 - `react-dom`
 - `react/jsx-runtime`
-- `three`
-- `@react-three/fiber`
-- `@react-three/drei`
+- `@vibecook/ice/desk`
+- `@vibecook/ice/desk/engine`
+- `@vibecook/ice/desk/objects`
+- `@vibecook/ice/desk/kit`
 - `@vibefield/plugin-sdk`
 - `@vibecook/ice`
 - `loro-crdt`

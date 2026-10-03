@@ -47,7 +47,7 @@ export const fieldToolsManifest: PluginManifestV1 = {
         title: "Folder",
         description: "A container — drop cards in, double-click to enter",
         category: "Tools",
-        preview: { kind: "color", value: "#1D1D2B" }, // FOLDER_BG (folder.tsx keeps the live constant)
+        preview: { kind: "color", value: "#1D1D2B" }, // FOLDER_BG (folder.tsx kept the live constant until DK-2)
         schemaVersion: 1,
         surface: "dom",
         sizeMode: "fixed",

@@ -323,10 +323,10 @@ describe("check — declaration ↔ binding", () => {
   });
 });
 
-// DK-0f: the object door's contract is accepted ahead of the desk, and THIS
-// build draws widgets — so `check` passes the manifest row and refuses the
-// activation row in the host's own sentence, built or not.
-describe("check — objects-need-desk", () => {
+// DK-2 (desk/landing): DK-0f's `objects-need-desk` activation row is FLIPPED OFF —
+// the desk draws objects, so `check` passes an object plugin's manifest AND its
+// activation like any plugin's. (Holding `binding.kind` to a desk kind is DK-7's.)
+describe("check — object kinds on the desk build", () => {
   const CLOCK = `${FIXTURE_ID}.clock`;
   const objects = [
     {
@@ -340,30 +340,24 @@ describe("check — objects-need-desk", () => {
     },
   ];
 
-  it("accepts the manifest, then refuses activation with the stable code — before any import", async () => {
+  it("accepts the manifest and activates it — no objects-need-desk on any row", async () => {
     const root = makePlugin({
       manifest: { activation: [`onWidget:${CLOCK}`], contributes: { objects } },
       files: { "dist/renderer.js": rendererModule({ binds: [] }) },
     });
     const verdicts = await checkPlugin({ dir: root });
 
-    expect(refusalCodes(verdicts)).toEqual(["objects-need-desk"]);
+    expect(refusalCodes(verdicts)).toEqual([]);
+    expect(verdicts.some((v) => v.code === OBJECTS_NEED_DESK.code)).toBe(false);
     expect(verdicts.filter((v) => v.check === "manifest").map((v) => v.level)).toEqual(
       expect.arrayContaining(["pass"]),
     );
-    const row = verdicts.find((v) => v.code === "objects-need-desk");
-    expect(row?.check).toBe("activation");
-    expect(row?.pointer).toBe("contributes.objects");
-    expect(row?.detail).toContain(CLOCK);
-    expect(row?.detail).toContain(OBJECTS_NEED_DESK.message);
-    expect(row?.expected).toBeDefined();
-
-    // the control: the same tree declaring a widget instead passes the row
-    const widgets = makePlugin({ files: { "dist/renderer.js": rendererModule({}) } });
-    expect(refusalCodes(await checkPlugin({ dir: widgets }))).toEqual([]);
+    expect(verdicts.filter((v) => v.check === "activation").map((v) => v.level)).toEqual(
+      expect.arrayContaining(["pass"]),
+    );
   });
 
-  it("refuses the plugin whole when objects stand beside widgets — the host activates none of it", async () => {
+  it("activates objects standing beside widgets — the widget binding rows run as before", async () => {
     const root = makePlugin({
       manifest: {
         activation: [`onWidget:${CLOCK}`, `onWidget:${CARD}`],
@@ -372,9 +366,10 @@ describe("check — objects-need-desk", () => {
       files: { "dist/renderer.js": rendererModule({}) },
     });
     const verdicts = await checkPlugin({ dir: root });
-    expect(refusalCodes(verdicts)).toEqual(["objects-need-desk"]);
-    // the widget binding rows did not run: one honest row answers the question
-    expect(verdicts.filter((v) => v.check === "activation")).toHaveLength(1);
+    expect(refusalCodes(verdicts)).toEqual([]);
+    expect(verdicts.some((v) => v.code === OBJECTS_NEED_DESK.code)).toBe(false);
+    // the ordinary activation rows ran (DK-0f's single refusing row is gone)
+    expect(verdicts.filter((v) => v.check === "activation").length).toBeGreaterThan(1);
   });
 });
 

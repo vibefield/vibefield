@@ -178,7 +178,9 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
   // consumer): the author-facing contract, and — unlike the product harness —
   // carrying no process-global activation memo, so a second run never answers
   // for the first.
-  let bindings: ReadonlyMap<string, { component: unknown }>;
+  // DK-2 (desk/landing): the SDK's widget registration binding is opaque and binds no
+  // face — this runner's React-mount verdict is DK-7's to replace (the kind harness).
+  let bindings: ReadonlyMap<string, unknown>;
   let behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }>;
   try {
     const activation = await activateWithMockHost(mod as never, {
@@ -215,7 +217,6 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
   // recorded here and its states are skipped below.
   const unusable = new Set<string>();
   const owner = { pluginId: manifest.id, pluginTitle: manifest.title };
-  const Unmountable = (): null => null;
   const widgets: Record<string, unknown> = {};
   for (const decl of contributions) {
     const binding = bindings.get(decl.type);
@@ -233,12 +234,8 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
       });
     }
     try {
-      widgets[decl.type] = buildWidgetType(
-        decl,
-        (binding ?? { component: Unmountable }) as never,
-        owner,
-        behaviorBindings,
-      );
+      // DK-2: the host compiles every widget row FACELESS — no binding argument.
+      widgets[decl.type] = buildWidgetType(decl, owner, behaviorBindings);
     } catch (error) {
       unusable.add(decl.type);
       verdicts.push({

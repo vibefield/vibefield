@@ -1,16 +1,15 @@
 import type {
   BehaviorContribution,
+  ObjectContribution,
   PluginManifestV1,
   PluginRecord,
   SafePreview,
   WidgetContribution,
 } from "@vibefield/contracts";
 import {
-  declaresObjects,
   isDistributablePluginId,
   isOwnedName,
   isWellFormedPluginId,
-  OBJECTS_NEED_DESK,
   validatePluginManifest,
 } from "@vibefield/contracts";
 
@@ -59,6 +58,10 @@ export interface RegisteredPlugin<W = unknown> {
   title: string;
   version: string;
   widgetContributions: readonly WidgetContribution[];
+  /** The plugin's DECLARED object rows (spec §12.8; accepted since DK-2 — the desk
+   * draws them). An object is a widget to the engine, so its type joins the same
+   * exact ownership map and the same declared⇄provided law as a widget's. */
+  objectContributions: readonly ObjectContribution[];
   /** Data-only declarations, paired with renderer bindings by the document
    * behavior host in canonical plugin/declaration order. */
   behaviorContributions: readonly BehaviorContribution[];
@@ -105,13 +108,9 @@ export class PluginRegistry<W = unknown> {
   registerV1(v1: PluginManifestV1, widgets: Record<string, W>): void {
     const result = validatePluginManifest(v1);
     if (!result.ok) throw new Error(`plugin manifest invalid: ${result.issues.join(" · ")}`);
-    // DK-0f: THIS build draws widgets — a manifest that declares object kinds is
-    // refused at the door in the host's one sentence, never registered with its
-    // kinds silently dropped. DK-6 binds them instead.
-    if (declaresObjects(result.manifest.contributes))
-      throw new Error(
-        `plugin ${result.manifest.id} declares object kinds — ${OBJECTS_NEED_DESK.message} (${OBJECTS_NEED_DESK.code})`,
-      );
+    // DK-2 (desk/landing): the desk draws objects, so a manifest that declares object
+    // kinds registers them beside its widgets (DK-0f's `objects-need-desk` refusal is
+    // flipped off; the code stays enumerated for the record).
     const contributions = result.manifest.contributes?.widgets ?? [];
     this.bind(
       {
@@ -119,6 +118,7 @@ export class PluginRegistry<W = unknown> {
         title: result.manifest.title,
         version: result.manifest.version,
         widgetContributions: contributions,
+        objectContributions: result.manifest.contributes?.objects ?? [],
         behaviorContributions: result.manifest.contributes?.behaviors ?? [],
         v1: result.manifest,
       },
@@ -135,18 +135,14 @@ export class PluginRegistry<W = unknown> {
   registerRecord(record: PluginRecord, widgets: Record<string, W>): void {
     if (!isWellFormedPluginId(record.id))
       throw new Error(`plugin record invalid: ${record.id} is not a well-formed plugin id`);
-    // DK-0f: fieldd marks such a record incompatible and never enables it; the
-    // same sentence here keeps a hand-built record honest too.
-    if (declaresObjects(record.contributions))
-      throw new Error(
-        `plugin record ${record.id} declares object kinds — ${OBJECTS_NEED_DESK.message} (${OBJECTS_NEED_DESK.code})`,
-      );
     this.bind(
       {
         id: record.id,
         title: record.title,
         version: record.version,
         widgetContributions: record.contributions.widgets,
+        // a record from before the object door (or hand-built) may carry none
+        objectContributions: record.contributions.objects ?? [],
         behaviorContributions: record.contributions.behaviors,
         record,
       },
@@ -180,6 +176,7 @@ export class PluginRegistry<W = unknown> {
         title: contributor.title,
         version: contributor.version,
         widgetContributions: contributions,
+        objectContributions: [],
         behaviorContributions: [],
         builtIn: true,
       },
@@ -189,10 +186,14 @@ export class PluginRegistry<W = unknown> {
 
   /** The registration laws all three authorities obey: one row per id, every
    * declared type implemented, every implementation declared, and no type owned
-   * twice. Written once so the doors cannot drift apart. */
+   * twice. Written once so the doors cannot drift apart. A declared type is a
+   * widget's OR an object's — to the engine both are widget types. */
   private bind(identity: Omit<RegisteredPlugin<W>, "widgets">, widgets: Record<string, W>): void {
     if (this.plugins.has(identity.id)) throw new Error(`plugin already registered: ${identity.id}`);
-    const declared = new Set(identity.widgetContributions.map((w) => w.type));
+    const declared = new Set([
+      ...identity.widgetContributions.map((w) => w.type),
+      ...identity.objectContributions.map((o) => o.type),
+    ]);
     const provided = new Set(Object.keys(widgets));
     for (const t of declared) {
       if (!provided.has(t))

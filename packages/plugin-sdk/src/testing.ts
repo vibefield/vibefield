@@ -1,5 +1,5 @@
 import type { BehaviorContribution } from "@vibefield/contracts";
-import { type ComponentType, createElement, type ReactElement, useSyncExternalStore } from "react";
+import type { ComponentType, ReactElement } from "react";
 import { type AnyBehaviorDef, describeBehavior } from "./behavior";
 import type {
   CommandInvocation,
@@ -20,7 +20,6 @@ import type {
   RendererPluginModule,
   ServicePluginContext,
   ServicePluginModule,
-  WidgetBinding,
   WidgetRegistration,
 } from "./index";
 
@@ -28,13 +27,14 @@ type MockCommandHandler = (args: unknown, invocation: CommandInvocation) => void
 type MockSurfaceComponent = ComponentType<PluginSurfaceProps>;
 
 // §5.4.4 — the mock host lives WITH the SDK contract it mocks. Runs a renderer
-// module's activate against a collecting context: no engine, no daemon, and no
-// React beyond the pool's placeholder view — the one thing a plugin cannot
-// exercise without an element to render. Widget-state fixture rendering (the
-// playground) builds on this later.
+// module's activate against a collecting context: no engine, no daemon, no
+// React (the pool's placeholder view was cut at DK-2 — a typed stub below names
+// DK-7, where the kind-conformance mock host replaces this mock's face half).
 
 export interface MockActivation {
-  bindings: Map<string, WidgetBinding>;
+  /** declared widget type → whatever its legacy registration carried. Inert on the desk build
+   * (DK-2): a widget binds no face; the map witnesses only the §12.1 activation laws. */
+  bindings: Map<string, unknown>;
   /** behavior id → inert code handle bound during the private candidate. */
   behaviors: Map<string, AnyBehaviorDef>;
   /** command id → bound handler (§13.1) — ctx.commands is present iff the
@@ -93,20 +93,15 @@ export interface MockLiveSurface {
   setBrowser(state: PluginSurfaceBrowserState | null): void;
 }
 
-/** The mock's `SurfaceView`: the production view's OBSERVABLE contract — a box
- * carrying `data-live-surface-status` that tracks the handle — and nothing
- * else. No canvas, no frames: a mock that painted would be claiming a
- * presentation path the mock host does not have. */
-function MockSurfaceView(props: PluginSurfaceViewProps): ReactElement {
-  const status = useSyncExternalStore(
-    (onStoreChange) => props.handle.onState(onStoreChange),
-    () => props.handle.status,
+/** CUT at DK-2 (desk/landing, ICE 0.14.0): the mock's `SurfaceView` mounted a
+ * live surface's DOM view — the widget-face path the desk retires (a live surface
+ * returns as an object kind under PORTALS). The kind-conformance mock host that
+ * replaces this mock's face half is DK-7's; this typed stub throws so a caller
+ * sees where it went. */
+function MockSurfaceView(_props: PluginSurfaceViewProps): ReactElement {
+  throw new Error(
+    "plugin-sdk/testing: MockSurfaceView was cut at DK-2 — the kind-conformance mock host arrives at DK-7",
   );
-  return createElement("div", {
-    "data-live-surface-status": status,
-    ...(props.interactive === true ? { "data-live-surface-interactive": "true" } : {}),
-    ...(props.className === undefined ? {} : { className: props.className }),
-  });
 }
 
 function mockLiveSurface(
@@ -312,7 +307,7 @@ export async function activateWithMockHost(
       .filter((row): row is BehaviorContribution => typeof row !== "string")
       .map((row) => [row.id, row]),
   );
-  const bindings = new Map<string, WidgetBinding>();
+  const bindings = new Map<string, unknown>();
   const behaviors = new Map<string, AnyBehaviorDef>();
   const commands = new Map<string, MockCommandHandler>();
   const surfaces = new Map<string, MockSurfaceComponent>();

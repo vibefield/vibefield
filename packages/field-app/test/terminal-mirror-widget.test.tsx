@@ -182,6 +182,8 @@ function registeredComponent(registry: PluginRegistry<WidgetType>): ComponentTyp
 }> {
   const widget = registry.allWidgets().get(TERMINAL_MIRROR_TYPE);
   if (widget === undefined) throw new Error("the built-in mirror is not registered");
+  // @ts-expect-error DK-2 (ICE 0.14.0): a widget type has no React `component` — the mirror
+  // registers FACELESS; these face-mount rows (class A) retire at DK-5.
   return widget.component as ComponentType<{ entity: Entity; world: CanvasEngine["world"] }>;
 }
 

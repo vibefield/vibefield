@@ -19,8 +19,26 @@
  * settled, preserving the measured zero-frame idle behavior.
  */
 import { defineQuery, type World } from "@vibecook/ice";
-import type { Pole, PoleSource } from "@vibecook/ice/ground";
 import { Cur, DOT_SCALE } from "./components";
+
+// DK-2 (desk/landing, ICE 0.14.0): ICE's `/ground` entry — the magnet field and
+// its pole sources — is GONE, and nothing consumes this adapter any more (the
+// ground mount is the DK-3 stub). ICE 0.11's two pole types are kept here,
+// verbatim, until the retire table's `cursor/` row (the halo, DK-17).
+
+/** ICE 0.11.0's `Pole` (ICE's `/ground` entry), verbatim. */
+export interface Pole {
+  readonly x: number;
+  readonly y: number;
+  readonly strength: number;
+  readonly space?: "world" | "screen";
+}
+
+/** ICE 0.11.0's `PoleSource` (ICE's `/ground` entry), verbatim. */
+export interface PoleSource {
+  read(world: World): readonly Pole[];
+  subscribe(world: World, wake: () => void): () => void;
+}
 
 const curQ = defineQuery([Cur]);
 

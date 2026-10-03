@@ -30,13 +30,13 @@ export type {
 } from "@vibecook/ice";
 /** The complete React-free authoring vocabulary. Core read targets are
  * repeated from the canvas door so a definitions-only module need not import
- * the React-bearing `./canvas` subpath. */
+ * the React-bearing `./canvas` subpath. (`MeasuredSize` left with ICE 0.14.0 —
+ * every effective size is `Size` now; DK-2.) */
 export {
   CameraLimits,
   ChildOf,
   defineBehavior,
   describeBehavior,
-  MeasuredSize,
   Position,
   PrefabId,
   p,

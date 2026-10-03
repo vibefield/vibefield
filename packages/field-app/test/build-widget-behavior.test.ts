@@ -26,9 +26,9 @@ describe("host-built widget behavior riders", () => {
       behaviors: [{ id: Rider.name, data: { count: 3 } }],
     });
 
+    // DK-2: a widget row compiles FACELESS — there is no binding argument any more.
     const widget = buildWidgetType(
       contribution,
-      { component: () => null },
       { pluginId, pluginTitle: "Rider" },
       new Map([[Rider.name, { handle: Rider }]]),
     );
@@ -54,16 +54,14 @@ describe("host-built widget behavior riders", () => {
         defaultSize: { w: 100, h: 80 },
         behaviors: [{ id: behaviorId }],
       });
-    const binding = { component: () => null };
     const owner = { pluginId, pluginTitle: "Defense" };
 
-    expect(() => buildWidgetType(contribution(Rider.name, "missing"), binding, owner)).toThrow(
+    expect(() => buildWidgetType(contribution(Rider.name, "missing"), owner)).toThrow(
       /no sealed code binding/,
     );
     expect(() =>
       buildWidgetType(
         contribution(Rider.name, "mismatch"),
-        binding,
         owner,
         new Map([[Rider.name, { handle: Other }]]),
       ),
@@ -71,7 +69,6 @@ describe("host-built widget behavior riders", () => {
     expect(() =>
       buildWidgetType(
         contribution("com.other:rider", "foreign"),
-        binding,
         owner,
         new Map([["com.other:rider", { handle: Rider }]]),
       ),
@@ -79,7 +76,6 @@ describe("host-built widget behavior riders", () => {
     expect(() =>
       buildWidgetType(
         contribution(Ephemeral.name, "ephemeral"),
-        binding,
         owner,
         new Map([[Ephemeral.name, { handle: Ephemeral }]]),
       ),

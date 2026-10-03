@@ -138,9 +138,9 @@ export const REFUSAL_CATALOG = {
   "objects-need-desk": {
     check: "activation",
     level: "refuse",
-    meaning: `the manifest declares object kinds (contributes.objects) — ${OBJECTS_NEED_DESK.message} (§12.8)`,
+    meaning: `the manifest declares object kinds (contributes.objects) — ${OBJECTS_NEED_DESK.message} (§12.8); said only by the ICE 0.11 build — the desk build (DK-2) activates object kinds and no door says it`,
     guidance:
-      "the contract is accepted and recorded; no host activates a kind until the desk lands (DK-6) — ship widgets to run on this build, or keep the kind and wait for the desk",
+      "kept for the record: on the desk build an object kind activates like any plugin; a host that still says this code predates the desk — run the desk build",
   },
   "activation-unbuilt": {
     check: "activation",

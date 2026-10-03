@@ -11,10 +11,16 @@
 // every program that type-checks a GL card through this shared wrapper.
 import type {} from "@react-three/fiber";
 import type { Entity, World } from "@vibecook/ice";
-import { useIslandLift, useIslandOpacity } from "@vibecook/ice/r3f";
 import type { ReactNode } from "react";
 import { LIFT_OPACITY } from "./CardShell";
 import { useDragLift } from "./use-drag-lift";
+
+// DK-2 (desk/landing, ICE 0.14.0): ICE's `/r3f` entry is GONE — the GL islands these two
+// hooks lifted and faded no longer exist, and the SDK's `/ui` door no longer re-exports this
+// file (nothing imports `@vibefield/design-kit/gl` now). Inert stand-ins keep the retired GL
+// card surface compiling until the retire table's design-kit row deletes it at DK-17.
+function useIslandLift(_scale: number): void {}
+function useIslandOpacity(_opacity: number): void {}
 
 export function GlLiftGroup({
   world,

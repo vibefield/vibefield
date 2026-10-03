@@ -1,21 +1,36 @@
 import { type AnyBehaviorDef, defineWidget, p, type WidgetType } from "@vibecook/ice";
-import type { PropSpec, WidgetContribution } from "@vibefield/contracts";
-import type { WidgetBinding } from "@vibefield/plugin-sdk";
-import { withPluginFace } from "./faces";
+import { defineObject, isObjectKind } from "@vibecook/ice/desk";
+import type { ObjectContribution, PropSpec, WidgetContribution } from "@vibefield/contracts";
+import type { ObjectBinding } from "@vibefield/plugin-sdk";
 import { TYPE_RENAMES } from "./type-renames";
 
-// §12.2 — the HOST builds every prefab from manifest data; plugins export
-// components, never call defineWidget (thinking-p1-canonical-manifests.md).
+// §12.2 — the HOST builds every prefab from manifest data; plugins never call
+// defineWidget or defineObject (thinking-p1-canonical-manifests.md; spec §12.8).
 // Doc-compat invariant: for a group-less contribution this call must be
 // indistinguishable from the retired hand call — same `${type}:props` durable
 // component, same prop defaults/bounds, same interaction tags. The contract
 // vocabulary is the engine's verbatim (PLUG-P1a), so mapping is 1:1; anything
 // the engine can't express refuses loudly rather than approximating.
+//
+// DK-2 (desk/landing, ICE 0.14.0): a widget's FACE is its object kind. ICE refuses
+// the DOM/R3F face fields at definition (`surface`, `component`, `chrome`,
+// `animated`, `preview`, `instancePreview`, `sizeMode`, a container's
+// `framePreview`), so a `widgets` row compiles FACELESS — its durable half only,
+// bound to NO kind: the document's data survives and the entity stays pickable by
+// its box (ICE draws it with its missing face from 0.15.0, DK-D18 as amended;
+// until then it is invisible). An `objects` row compiles through `defineObject`
+// with the kind its renderer module exports.
 
-/** The opaque code-side params (view registration, never durable data) —
- * OWNED by the SDK since P3a (plugins author against it); re-exported here for
- * the host-side callers that predate the split. */
-export type { WidgetBinding };
+/** The LEGACY widget binding's shape — the React face the SDK's widget door carried
+ * until DK-2. HOST-LOCAL now: the SDK's registration binding is opaque, this builder
+ * never reads it, and only the renderer controller's stable facade still holds one
+ * (its update lane retires with `ctx.widgets.register` at DK-8). */
+export interface WidgetBinding {
+  component: unknown;
+  chrome?: unknown;
+  animated?: boolean;
+  preview?: unknown;
+}
 
 function buildProp(type: string, name: string, spec: PropSpec) {
   switch (spec.kind) {
@@ -61,72 +76,62 @@ const RENAMED_FROM: Readonly<Record<string, readonly { type: string }[]>> = (() 
 // buildRegistry() calls (tests, multiple windows in one renderer).
 const built = new Map<string, WidgetType>();
 
+/** The durable half both doors share: props, groups, interaction, container,
+ * provides, ports, the behavior riders and the C2 rename history. */
+function durableHalf(
+  row: WidgetContribution | ObjectContribution,
+  owner: { pluginId: string; pluginTitle: string } | undefined,
+  behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }>,
+) {
+  const props = Object.fromEntries(
+    Object.entries(row.props).map(([name, spec]) => [name, buildProp(row.type, name, spec)]),
+  );
+  const behaviors = (row.behaviors ?? []).map((attachment) => {
+    if (owner !== undefined && !attachment.id.startsWith(`${owner.pluginId}:`)) {
+      throw new Error(
+        `widget ${row.type} behavior ${attachment.id} is outside plugin ${owner.pluginId}`,
+      );
+    }
+    const bound = behaviorBindings.get(attachment.id);
+    if (bound === undefined) {
+      throw new Error(`widget ${row.type} behavior ${attachment.id} has no sealed code binding`);
+    }
+    if (bound.handle.name !== attachment.id) {
+      throw new Error(
+        `widget ${row.type} behavior binding ${bound.handle.name} does not match ${attachment.id}`,
+      );
+    }
+    if (bound.handle.store === "ephemeral") {
+      throw new Error(`widget ${row.type} cannot pre-attach ephemeral behavior ${attachment.id}`);
+    }
+    return attachment.data === undefined ? bound.handle : bound.handle.with(attachment.data);
+  });
+  return {
+    type: row.type,
+    version: row.schemaVersion,
+    ...(row.minSize !== undefined ? { minSize: row.minSize } : {}),
+    props,
+    ...(Object.keys(row.groups).length > 0 ? { groups: row.groups } : {}),
+    ...(row.interaction !== undefined ? { interaction: row.interaction } : {}),
+    ...(row.container !== undefined ? { container: row.container } : {}),
+    ...(row.provides !== undefined ? { provides: row.provides } : {}),
+    ...(row.ports !== undefined ? { ports: row.ports } : {}),
+    ...(behaviors.length > 0 ? { behaviors } : {}),
+    ...(RENAMED_FROM[row.type] !== undefined ? { renamedFrom: RENAMED_FROM[row.type] } : {}),
+  };
+}
+
+/** A LEGACY `widgets` row → a FACELESS widget type (DK-2): the manifest's durable half
+ * and its `defaultSize`, no face of any kind — none of the fields ICE 0.14 refuses
+ * ever reaches `defineWidget`. */
 export function buildWidgetType(
   w: WidgetContribution,
-  binding: WidgetBinding,
   owner?: { pluginId: string; pluginTitle: string },
   behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }> = new Map(),
 ): WidgetType {
   const cached = built.get(w.type);
   if (cached !== undefined) return cached;
-
-  const props = Object.fromEntries(
-    Object.entries(w.props).map(([name, spec]) => [name, buildProp(w.type, name, spec)]),
-  );
-  // P3c — the face policy wraps every owned widget component: live
-  // disabled-placeholder swap + the §11.4 per-widget failure boundary. The
-  // cast is the same attested seam as the def below (components are opaque to
-  // this builder; the engine validates at definition).
-  const component =
-    owner !== undefined
-      ? withPluginFace({
-          pluginId: owner.pluginId,
-          pluginTitle: owner.pluginTitle,
-          type: w.type,
-          surface: w.surface,
-          component: binding.component as Parameters<typeof withPluginFace>[0]["component"],
-        })
-      : binding.component;
-  const behaviors = (w.behaviors ?? []).map((attachment) => {
-    if (owner !== undefined && !attachment.id.startsWith(`${owner.pluginId}:`)) {
-      throw new Error(
-        `widget ${w.type} behavior ${attachment.id} is outside plugin ${owner.pluginId}`,
-      );
-    }
-    const bound = behaviorBindings.get(attachment.id);
-    if (bound === undefined) {
-      throw new Error(`widget ${w.type} behavior ${attachment.id} has no sealed code binding`);
-    }
-    if (bound.handle.name !== attachment.id) {
-      throw new Error(
-        `widget ${w.type} behavior binding ${bound.handle.name} does not match ${attachment.id}`,
-      );
-    }
-    if (bound.handle.store === "ephemeral") {
-      throw new Error(`widget ${w.type} cannot pre-attach ephemeral behavior ${attachment.id}`);
-    }
-    return attachment.data === undefined ? bound.handle : bound.handle.with(attachment.data);
-  });
-  const def = {
-    type: w.type,
-    version: w.schemaVersion,
-    surface: w.surface,
-    component,
-    ...(binding.chrome !== undefined ? { chrome: binding.chrome } : {}),
-    ...(binding.animated !== undefined ? { animated: binding.animated } : {}),
-    ...(binding.preview !== undefined ? { preview: binding.preview } : {}),
-    sizeMode: w.sizeMode,
-    defaultSize: w.defaultSize,
-    ...(w.minSize !== undefined ? { minSize: w.minSize } : {}),
-    props,
-    ...(Object.keys(w.groups).length > 0 ? { groups: w.groups } : {}),
-    ...(w.interaction !== undefined ? { interaction: w.interaction } : {}),
-    ...(w.container !== undefined ? { container: w.container } : {}),
-    ...(w.provides !== undefined ? { provides: w.provides } : {}),
-    ...(w.ports !== undefined ? { ports: w.ports } : {}),
-    ...(behaviors.length > 0 ? { behaviors } : {}),
-    ...(RENAMED_FROM[w.type] !== undefined ? { renamedFrom: RENAMED_FROM[w.type] } : {}),
-  };
+  const def = { ...durableHalf(w, owner, behaviorBindings), defaultSize: w.defaultSize };
   // Boundary cast, attested: zod `.optional()` infers `| undefined` on every
   // optional under exactOptionalPropertyTypes, which WidgetDef's optionals
   // reject. Runtime values are parse products — absent keys stay ABSENT (zod
@@ -134,5 +139,88 @@ export function buildWidgetType(
   // definition-time validation is the enforcement net behind this seam.
   const widget = defineWidget(def as Parameters<typeof defineWidget>[0]);
   built.set(w.type, widget);
+  return widget;
+}
+
+/** An `objects` row + the kind its renderer module exports → an OBJECT type, through
+ * ICE's `defineObject` (spec §12.8): the manifest's durable half, its `size`, its
+ * tray entry, and the binding's `kind`, `migrate`, `drivers`, `host` and `menu`.
+ * The host's rules (plan §5, DK-6 inputs): the kind must be a desk kind whose
+ * registry `name` IS the type (one id, no second namespace); a tray entry must say
+ * how it hangs (`tray.hang` — a derived default would be a guess the author never
+ * saw); `provides` is taken as declared, never padded with a key the manifest did
+ * not name. Each refusal names the type. */
+export function buildObjectType(
+  o: ObjectContribution,
+  binding: ObjectBinding,
+  owner?: { pluginId: string; pluginTitle: string },
+  behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }> = new Map(),
+): WidgetType {
+  const cached = built.get(o.type);
+  if (cached !== undefined) return cached;
+  const { kind } = binding;
+  if (!isObjectKind(kind)) {
+    throw new Error(
+      `object ${o.type}: its export \`${o.binding.kind}\` holds no desk kind (ICE \`isObjectKind\`: a program with resolve · record · hit · reach)`,
+    );
+  }
+  if (kind.name !== o.type) {
+    throw new Error(
+      `object ${o.type}: its kind is named "${kind.name}" — a kind's registry name IS its type`,
+    );
+  }
+  if (o.tray !== undefined && o.tray.hang === undefined) {
+    throw new Error(`object ${o.type}: tray.hang is required — say how the specimen hangs`);
+  }
+  const def = {
+    ...durableHalf(o, owner, behaviorBindings),
+    kind,
+    size: o.size,
+    ...(o.tray !== undefined ? { tray: o.tray } : {}),
+    ...(binding.migrate !== undefined ? { migrate: binding.migrate } : {}),
+    ...(binding.drivers !== undefined ? { drivers: binding.drivers } : {}),
+    ...(binding.host !== undefined ? { host: binding.host } : {}),
+    ...(binding.menu !== undefined ? { menu: binding.menu } : {}),
+  };
+  // The same attested boundary as above, plus the binding's opaque members: the SDK
+  // types them `unknown` until its `/desk` door (DK-6); `isObjectKind` checked the
+  // kind, and `defineObject`/`defineWidget` validate the rest at definition.
+  const object = defineObject(def as unknown as Parameters<typeof defineObject>[0]);
+  built.set(o.type, object);
+  return object;
+}
+
+/** The object rows' code halves, read off a renderer module's NAMESPACE by each row's
+ * `binding.kind` export name (spec §12.8: a static export, never a registration from
+ * `activate`), keyed by type. A name the module does not export is simply absent here:
+ * field-engine then compiles that row faceless, its data preserved, and says why. */
+export function objectBindingsFrom(
+  namespace: unknown,
+  objects: readonly ObjectContribution[],
+): Map<string, ObjectBinding> {
+  const out = new Map<string, ObjectBinding>();
+  if (typeof namespace !== "object" || namespace === null) return out;
+  for (const o of objects) {
+    const value = (namespace as Record<string, unknown>)[o.binding.kind];
+    if (typeof value === "object" && value !== null && "kind" in value)
+      out.set(o.type, value as ObjectBinding);
+  }
+  return out;
+}
+
+/** An `objects` row whose kind could not be bound (no such export, not a desk kind, a
+ * refused binding) still keeps its document's data: the type compiles FACELESS from
+ * its durable half — no tray (a specimen is the kind's own drawing) — and ICE draws
+ * it with its missing face from 0.15.0 (DK-D18 as amended). */
+export function buildFacelessObjectType(
+  o: ObjectContribution,
+  owner?: { pluginId: string; pluginTitle: string },
+  behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }> = new Map(),
+): WidgetType {
+  const cached = built.get(o.type);
+  if (cached !== undefined) return cached;
+  const def = { ...durableHalf(o, owner, behaviorBindings), defaultSize: o.size };
+  const widget = defineWidget(def as Parameters<typeof defineWidget>[0]);
+  built.set(o.type, widget);
   return widget;
 }

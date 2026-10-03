@@ -1,4 +1,5 @@
-import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibecook/ice/react";
+import type { Entity, World } from "@vibecook/ice";
+import { useOps, useWidgetProps } from "@vibecook/ice/react";
 import type { ProductSessionRosterItem } from "@vibefield/contracts";
 import { CardShell, UiButton, UnavailableState } from "@vibefield/design-kit";
 import { type ReactElement, useCallback, useEffect, useState } from "react";
@@ -13,6 +14,13 @@ import {
 import { TERMINAL_MIRROR_TYPE } from "./manifest";
 import { SessionPickerView } from "./SessionPickerView";
 import "./mirror-widget.css";
+
+/** The retired React face's props (ICE 0.14.0 deleted `WidgetComponentProps` with the widget
+ * faces; DK-2). Local until this mirror face retires with `terminal/widget/*` at DK-17. */
+interface WidgetComponentProps {
+  readonly world: World;
+  readonly entity: Entity;
+}
 
 // THE BUILT-IN TERMINAL MIRROR WIDGET (TP-S2b-widget; TPv3 §17 mark 21 = (a)).
 //

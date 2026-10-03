@@ -1,10 +1,10 @@
 import {
   type CanvasEngine,
+  type CanvasEngineOpts,
+  compileEngineCatalog,
   createCanvasEngine,
-  createMeasureQueue,
   type DocSession,
   type Entity,
-  type MeasureQueue,
   PrefabId,
   type WidgetType,
   Wire,
@@ -12,17 +12,23 @@ import {
   WirePorts,
   WireTo,
 } from "@vibecook/ice";
-import type { PluginManifestV1, PluginRecord, WidgetContribution } from "@vibefield/contracts";
+import { DESK_ENGINE, DESK_OBJECTS } from "@vibecook/ice/desk/objects";
+import type {
+  ObjectContribution,
+  PluginManifestV1,
+  PluginRecord,
+  WidgetContribution,
+} from "@vibefield/contracts";
 import { setPreviewBackground } from "@vibefield/design-kit";
 import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
-import type { WidgetBinding } from "@vibefield/plugin-sdk";
+import type { ObjectBinding } from "@vibefield/plugin-sdk";
 import { getRendererLogger } from "./logging";
-import { buildWidgetType } from "./plugin-host/build-widget";
-import { failedFaceComponent } from "./plugin-host/faces";
 import {
-  type RendererPluginController,
-  RendererWindowController,
-} from "./plugin-host/renderer-controller";
+  buildFacelessObjectType,
+  buildObjectType,
+  buildWidgetType,
+} from "./plugin-host/build-widget";
+import { RendererWindowController } from "./plugin-host/renderer-controller";
 import { type ActivatedRenderer, activateRenderer } from "./plugin-host/renderer-harness";
 import {
   type BundledRendererPlugin,
@@ -31,7 +37,7 @@ import {
   prepareRendererPlugins,
   type StagedLoaderDeps,
 } from "./plugin-host/staged-loader";
-import { registerBuiltInTerminalWidgets } from "./terminal/widget";
+import { registerBuiltInTerminalWidgets, TERMINAL_BUILT_IN_WIDGETS } from "./terminal/widget";
 
 // The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
 // the headless contract tests (drop-consume) drive it. B3 split the two —
@@ -40,40 +46,42 @@ import { registerBuiltInTerminalWidgets } from "./terminal/widget";
 // blind-seed). `seedField` is the first-run payload — and the persistence
 // tests' named census.
 
-/** Build every declared prefab from DECLARATION data with its code-side binding (§12.2). Every
- * owned component is wrapped in the face policy (live disabled-placeholder + §11.4 boundary).
- * Staged targets receive a stable controller facade so ICE's build-once catalog can follow later
- * authority generations; legacy/uncontrolled missing bindings receive an honest failed face. */
+/** Build every declared prefab from DECLARATION data (§12.2). DK-2 (desk/landing, ICE 0.14.0):
+ * a `widgets` row compiles FACELESS — it binds to nothing the desk draws (its React binding is
+ * gone; `contributes.widgets` is refused with a dated sentence at DK-8) — and an `objects` row
+ * compiles through `defineObject` with the kind its module exports. An object whose kind cannot
+ * be bound (no export, not a desk kind, a refused binding) still registers FACELESS so its
+ * document's data survives (ICE's missing face draws it from 0.15.0), and the host says why. */
 function buildWidgets(
   title: string,
   pluginId: string,
   contributions: readonly WidgetContribution[],
+  objects: readonly ObjectContribution[],
   activation: ActivatedRenderer,
-  controller?: RendererPluginController,
+  objectBindings: ReadonlyMap<string, ObjectBinding> = new Map(),
 ): Record<string, WidgetType> {
   const owner = { pluginId, pluginTitle: title };
-  const activationError =
-    activation.state === "active" ? null : (activation.error ?? activation.state);
-  return Object.fromEntries(
-    contributions.map((w) => {
-      const bound =
-        controller !== undefined
-          ? controller.widgetBinding(w.type, w.surface)
-          : activationError === null
-            ? activation.bindings.get(w.type)
-            : undefined;
-      const binding =
-        bound ??
-        ({
-          component: failedFaceComponent(
-            title,
-            activationError ?? `no binding registered for ${w.type}`,
-            w.surface,
-          ),
-        } satisfies WidgetBinding);
-      return [w.type, buildWidgetType(w, binding, owner, activation.behaviors)];
-    }),
-  );
+  const built: Record<string, WidgetType> = {};
+  for (const w of contributions) built[w.type] = buildWidgetType(w, owner, activation.behaviors);
+  for (const o of objects) {
+    const binding = objectBindings.get(o.type);
+    try {
+      if (binding === undefined)
+        throw new Error(`object ${o.type}: the module exports no \`${o.binding.kind}\``);
+      built[o.type] = buildObjectType(o, binding, owner, activation.behaviors);
+    } catch (error) {
+      getRendererLogger()
+        .child({ component: "plugin.host" })
+        .error(
+          "renderer.plugins.object_kind_unbound",
+          "An object type registered faceless: its kind could not be bound",
+          error,
+          { pluginId, type: o.type },
+        );
+      built[o.type] = buildFacelessObjectType(o, owner, activation.behaviors);
+    }
+  }
+  return built;
 }
 
 /** The canonical path (§12.2), now DEV-ONLY: manifest + implementations as one
@@ -82,10 +90,18 @@ function registerCanonical(
   registry: PluginRegistry<WidgetType>,
   manifest: PluginManifestV1,
   activation: ActivatedRenderer,
+  objectBindings?: ReadonlyMap<string, ObjectBinding>,
 ): void {
   registry.registerV1(
     manifest,
-    buildWidgets(manifest.title, manifest.id, manifest.contributes?.widgets ?? [], activation),
+    buildWidgets(
+      manifest.title,
+      manifest.id,
+      manifest.contributes?.widgets ?? [],
+      manifest.contributes?.objects ?? [],
+      activation,
+      objectBindings,
+    ),
   );
 }
 
@@ -95,11 +111,18 @@ function registerStaged(
   registry: PluginRegistry<WidgetType>,
   record: PluginRecord,
   activation: ActivatedRenderer,
-  controller?: RendererPluginController,
+  objectBindings?: ReadonlyMap<string, ObjectBinding>,
 ): void {
   registry.registerRecord(
     record,
-    buildWidgets(record.title, record.id, record.contributions.widgets, activation, controller),
+    buildWidgets(
+      record.title,
+      record.id,
+      record.contributions.widgets,
+      record.contributions.objects ?? [],
+      activation,
+      objectBindings,
+    ),
   );
 }
 
@@ -152,8 +175,21 @@ export function buildRegistry(
   prepared: PreparedRendererPlugins = EMPTY_PREPARED,
 ): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
-  registerBuiltInTerminalWidgets(registry);
   const log = getRendererLogger().child({ component: "plugin.host" });
+  // DK-2: the built-in's registration is GUARDED (r1 §0.2) — it ran outside every try, so one
+  // refused definition threw out of `buildRegistry` and took the workspace's session memo down
+  // with it. A built-in that cannot register now says which type, and the field opens without it.
+  try {
+    registerBuiltInTerminalWidgets(registry);
+  } catch (error) {
+    const types = TERMINAL_BUILT_IN_WIDGETS.map((w) => w.type).join(", ");
+    log.error(
+      "renderer.plugins.builtin_registration_failed",
+      `The built-in widget type ${types} could not be registered`,
+      error,
+      { type: types },
+    );
+  }
   for (const staged of prepared.staged) {
     if (staged.activation.state !== "active") {
       log.error(
@@ -167,7 +203,7 @@ export function buildRegistry(
     // plugin whose sealed code identities are unavailable cannot be defined
     // honestly; isolate that plugin and leave its document data untouched.
     try {
-      registerStaged(registry, staged.record, staged.activation, staged.controller);
+      registerStaged(registry, staged.record, staged.activation, staged.objectBindings);
     } catch (error) {
       log.error(
         "renderer.plugins.registration_failed",
@@ -183,7 +219,7 @@ export function buildRegistry(
     // whose setup file loads it once. It is null in every production build,
     // where the loader above is compiled away entirely.
     const bundled = prepared.bundled.length > 0 ? prepared.bundled : (devBundled ?? []);
-    for (const { manifest, mod, activation: preparedActivation } of bundled) {
+    for (const { manifest, mod, activation: preparedActivation, objectBindings } of bundled) {
       const activation = preparedActivation ?? activateRenderer(manifest, mod);
       if (activation.state !== "active") {
         log.error(
@@ -194,7 +230,7 @@ export function buildRegistry(
         );
       }
       try {
-        registerCanonical(registry, manifest, activation);
+        registerCanonical(registry, manifest, activation, objectBindings);
       } catch (error) {
         log.error(
           "renderer.plugins.registration_failed",
@@ -243,7 +279,7 @@ export async function prepareFieldPlugins(
   if (bundled.length === 0) return { ...prepared, bundled };
   const runtime = prepared.runtime ?? new RendererWindowController(deps.windowId);
   const log = getRendererLogger().child({ component: "plugin.host" });
-  const activated = bundled.map(({ manifest, mod }) => {
+  const activated = bundled.map(({ manifest, mod, objectBindings }) => {
     const activation = activateRenderer(manifest, mod);
     try {
       runtime.publishBundled(manifest, activation);
@@ -255,7 +291,12 @@ export async function prepareFieldPlugins(
         { pluginId: manifest.id },
       );
     }
-    return { manifest, mod, activation };
+    return {
+      manifest,
+      mod,
+      activation,
+      ...(objectBindings === undefined ? {} : { objectBindings }),
+    };
   });
   return { ...prepared, bundled: activated, runtime };
 }
@@ -357,20 +398,32 @@ function seedWire(
   );
 }
 
-// Auto-size measurement needs the SAME queue on both halves of the pipeline:
-// `createCanvasEngine({ measureQueue })` installs the ingest system that drains
-// it, and the canvas component's `measureQueue` prop owns the ResizeObserver
-// that fills it. Two different instances is not an error anywhere — the RO fills
-// one, ingest drains the other, and nothing ever measures. The queue therefore
-// rides the engine handle in a side table: the pairing cannot come apart, and
-// the host-kit door keeps returning a plain CanvasEngine.
-const measureQueues = new WeakMap<CanvasEngine, MeasureQueue>();
+// DK-2 (desk/landing, ICE 0.14.0): ICE's measurement pipeline is GONE —
+// `createMeasureQueue`, `MeasuredSize` and `CanvasEngineOpts.measureQueue` left with
+// the DOM faces they measured; every effective size is `Size`. The side table that
+// paired the queue with the canvas prop went with it.
 
-/** The engine's measurement queue, for the canvas component's `measureQueue`
- * prop. Undefined for an engine built by any other path — ICE's documented
- * absent case, where measurement is simply skipped. */
-export function measureQueueFor(ce: CanvasEngine): MeasureQueue | undefined {
-  return measureQueues.get(ce);
+/** THE DESK (DK-2, ruled DK-D11/D29): VibeField's engine is ICE's desk preset —
+ * `desk.desk` the root canvas type, its tools (`desk.select` in hand, `pan`), the
+ * scale-free zoom, the plain wheel zooming about the pointer, the zoom-through —
+ * with the desk's six reference kinds FIRST and VibeField's own types after them.
+ * The engine is CREATED here; nothing mounts it until DK-3's `<Desk>`. */
+function fieldEngineOpts(
+  registry: PluginRegistry<WidgetType>,
+  ghosts: readonly WidgetType[],
+): CanvasEngineOpts {
+  return {
+    ...DESK_ENGINE,
+    widgets: [...DESK_OBJECTS, ...registry.allWidgets().values(), ...ghosts],
+  };
+}
+
+/** The engine's full PACK SCOPE for this registry — every pack/version it can
+ * interpret at open: the registry's types, the desk's kinds and their DATA prefabs
+ * (`desk.stroke`, `desk.event`, `desk.pin`), `wire`, the canvas packs. The ghost-stub
+ * filter reads it (r2 R4): nothing the engine already defines is ever stubbed. */
+export function fieldPackScope(registry: PluginRegistry<WidgetType>): ReadonlySet<string> {
+  return new Set(Object.keys(compileEngineCatalog(fieldEngineOpts(registry, [])).localPacks()));
 }
 
 export function createFieldEngine(
@@ -378,10 +431,8 @@ export function createFieldEngine(
   /** P3c — envelope-derived ghost stubs for the pending doc (absent plugins) */
   ghosts: readonly WidgetType[] = [],
 ): CanvasEngine {
-  const measureQueue = createMeasureQueue();
   const ce = createCanvasEngine({
-    widgets: [...registry.allWidgets().values(), ...ghosts],
-    measureQueue,
+    ...fieldEngineOpts(registry, ghosts),
     // ICE keeps generic guest diagnostics and behavior-specific provenance as complementary
     // routes. Preserve both; the renderer logger owns transport, bounds, and redaction.
     onGuestFault(id, error) {
@@ -421,16 +472,39 @@ export function createFieldEngine(
           arguments: [...rest],
         });
     },
-    settings: {
-      zoom: { min: 0.25, max: 3 },
-      snap: { enabled: true, thresholdPx: 5 },
-      // chrome.liftScale mirrors CardShell's lift transform (1.05) so the
-      // multi-select union box keeps wrapping a lifted member (widgetlab law).
-      chrome: { liftScale: 1.05 },
-    },
+    // The desk preset's settings (its scale-free zoom, wheel and zoom-through)
+    // replace VibeField's 0.25–3 clamp and CardShell's 1.05 lift mirror — both
+    // were DOM-card tunings. VibeField keeps its snap threshold.
+    settings: { ...DESK_ENGINE.settings, snap: { enabled: true, thresholdPx: 5 } },
   });
-  measureQueues.set(ce, measureQueue);
   return ce;
+}
+
+/** The tools legal on the canvas in view (the desk's are `desk.select` and `pan`). */
+function legalTool(ce: CanvasEngine, id: string): boolean {
+  return ce.canvas.tools().some((tool) => tool.id === id);
+}
+
+/** `ops.setTool` for callers that name a tool the canvas may not allow (DK-D29: the
+ * Select/Pan/Wire switcher and `c`→connect retire; ICE THROWS for a tool illegal in
+ * the current canvas type). An illegal id is REFUSED — logged once per id, `false`
+ * returned — never a throw out of the renderer. */
+const refusedTools = new Set<string>();
+export function setFieldTool(ce: CanvasEngine, id: string): boolean {
+  if (legalTool(ce, id)) {
+    ce.ops.setTool(id);
+    return true;
+  }
+  if (!refusedTools.has(id)) {
+    refusedTools.add(id);
+    getRendererLogger()
+      .child({ component: "canvas.tools" })
+      .warn("renderer.canvas.tool_refused", "A tool not legal on the desk was refused", {
+        tool: id,
+        legal: ce.canvas.tools().map((tool) => tool.id),
+      });
+  }
+  return false;
 }
 
 function pluginIdForBehavior(behaviorId: string): string | undefined {
@@ -439,14 +513,20 @@ function pluginIdForBehavior(behaviorId: string): string | undefined {
 }
 
 /** The first-run board (widgetlab demo scene). Requires a live doc session.
- * Seeds only REGISTERED types: with a plugin disabled at first boot, its demo
- * widgets are skipped rather than thrown on (the scene degrades honestly). */
+ * Seeds only REGISTERED types the root canvas PLACES: with a plugin disabled at
+ * first boot, its demo widgets are skipped rather than thrown on (the scene
+ * degrades honestly). DK-2: the desk's root places what provides `desk.object`,
+ * which no VibeField widget does — so on the desk this scene seeds nothing until
+ * DK-5 rewrites it with desk objects. */
 export function seedField(
   ce: CanvasEngine,
   session: DocSession,
   registry: PluginRegistry<WidgetType>,
 ): void {
-  const registered = new Set(registry.allWidgets().keys());
+  const placeable = ce.catalog.placementFor(ce.catalog.rootCanvas.id);
+  const registered = new Set(
+    [...registry.allWidgets().keys()].filter((type) => placeable.has(type)),
+  );
   for (const [type, x, y, w, h, props] of SCENE) {
     if (!registered.has(type)) continue;
     ce.ops.spawnWidget(type, {

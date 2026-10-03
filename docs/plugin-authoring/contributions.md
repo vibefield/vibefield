@@ -27,7 +27,6 @@ where every canvas face is an object; a type is one or the other, never both.
 | `category` | `Cards` \| `3D` \| `Nodes` \| `Tools` | no | — |
 | `preview` | one of `color`, `gradient`, `asset` | no | discriminated by `kind` |
 | `schemaVersion` | number | yes | `integer; > 0` |
-| `surface` | `dom` \| `gl` | yes | — |
 | `sizeMode` | `fixed` \| `auto-height` \| `auto` | yes | — |
 | `defaultSize` | { w: number, h: number } | yes | — |
 | `minSize` | { w: number, h: number } | no | — |
@@ -99,8 +98,8 @@ program — declared with the same durable half as a widget and bound by ONE exp
 name instead of a React component; `tray` hangs it on the pegboard. `objects.md`
 is the deep end.
 
-On this build nothing draws an object: the manifest is accepted and recorded, and
-every host refuses to activate it with `objects-need-desk` (object kinds need the desk; this build draws widgets).
+The desk build activates an object like any contribution; the ICE 0.11 build
+refused it with `objects-need-desk` (object kinds need the desk; this build draws widgets).
 
 | field | type | required | rules |
 | --- | --- | --- | --- |

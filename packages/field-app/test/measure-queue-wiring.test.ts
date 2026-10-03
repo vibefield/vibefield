@@ -16,13 +16,21 @@ import {
   createCanvasEngine,
   defineQuery,
   type Entity,
+  // @ts-expect-error DK-2 (ICE 0.14.0): `MeasuredSize` and the whole measurement pipeline left
+  // ICE with the DOM faces — every row here tests the deleted ingest; DK-5 retires the file.
   MeasuredSize,
   Position,
   PrefabId,
   Viewport,
 } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
-import { buildRegistry, createFieldEngine, measureQueueFor, seedField } from "../src/field-engine";
+import {
+  buildRegistry,
+  createFieldEngine,
+  // @ts-expect-error DK-2: `measureQueueFor` went with ICE's measure queue (see above); DK-5.
+  measureQueueFor,
+  seedField,
+} from "../src/field-engine";
 
 const idQ = defineQuery([Position, PrefabId]);
 
