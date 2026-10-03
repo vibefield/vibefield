@@ -109,6 +109,7 @@ export function mountProductHost(
       view: {
         set: (view) => window.vibefield.view.set(view),
         onState: (handler) => window.vibefield.view.onState(handler),
+        onZoom: (handler) => window.vibefield.view.onZoom(handler),
       },
       theme: {
         set: (preference) => window.vibefield.theme.set(preference),

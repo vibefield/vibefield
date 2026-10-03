@@ -10,7 +10,9 @@
  * readout and its solid menu, and the zoom's keys. The model is
  * head-model.test's; delivery from a focused pane is the godview smoke's 11i.
  */
-import type { DocSyncStatus, FrameView } from "@vibefield/contracts";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import type { DocSyncStatus, FrameView, FrameZoomAct } from "@vibefield/contracts";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -169,6 +171,7 @@ function mount(
     view?: FrameView;
     keys?: ViewKeys;
     open?: FrameSurface | null;
+    menuZoom?: (handler: (act: FrameZoomAct) => void) => () => void;
   } = {},
 ): Mounted {
   const used: Mounted = {
@@ -187,6 +190,7 @@ function mount(
         keys={options.keys ?? "mac"}
         surface={surface}
         onSurfaceChange={setSurface}
+        {...(options.menuZoom !== undefined ? { menuZoom: options.menuZoom } : {})}
       />
     );
   }
@@ -739,5 +743,69 @@ describe("the zoom's keys (DK-D24) — Canvas's, on the bubble phase", () => {
       window.removeEventListener("keydown", taker, true);
     }
     expect(canvas.zoomTo).not.toHaveBeenCalled();
+  });
+});
+
+/** The View menu's door, as main and the preload drive it: an item's act,
+ * sent to whoever listens. */
+function fakeMenu() {
+  const handlers = new Set<(act: FrameZoomAct) => void>();
+  return {
+    door: (handler: (act: FrameZoomAct) => void): (() => void) => {
+      handlers.add(handler);
+      return () => {
+        handlers.delete(handler);
+      };
+    },
+    send(which: FrameZoomAct): void {
+      act(() => {
+        for (const handler of handlers) handler(which);
+      });
+    },
+    listening: (): number => handlers.size,
+  };
+}
+
+describe("the View menu's zoom (FR-4, 3b) — an act the head answers, never a page zoom", () => {
+  it("answers Zoom In, Zoom Out and Actual Size on Canvas, and the readout says each", () => {
+    const menu = fakeMenu();
+    const { canvas } = mount({ menuZoom: menu.door });
+    menu.send("in");
+    expect(canvas.zoomTo).toHaveBeenLastCalledWith(1.25);
+    expect($(".vf-head-zoom")?.textContent).toBe("125%");
+    menu.send("in");
+    menu.send("out");
+    expect(canvas.zoomTo).toHaveBeenLastCalledWith(1.25);
+    menu.send("actual");
+    expect(canvas.zoomTo).toHaveBeenLastCalledWith(1);
+    expect($(".vf-head-zoom")?.textContent).toBe("100%");
+    expect(canvas.zoomToFit).not.toHaveBeenCalled();
+  });
+
+  it("does nothing under a cover — an act that raced a change of view", () => {
+    for (const view of ["godview", "history"] as const) {
+      const menu = fakeMenu();
+      const { canvas } = mount({ view, menuZoom: menu.door });
+      menu.send("in");
+      menu.send("actual");
+      expect(canvas.zoomTo).not.toHaveBeenCalled();
+      act(() => root?.unmount());
+      root = null;
+      host?.remove();
+    }
+  });
+
+  it("lets go of the door when it goes", () => {
+    const menu = fakeMenu();
+    mount({ menuZoom: menu.door });
+    expect(menu.listening()).toBe(1);
+    act(() => root?.unmount());
+    root = null;
+    expect(menu.listening()).toBe(0);
+  });
+
+  it("is handed the host's door by the chrome", () => {
+    const chrome = readFileSync(join(process.cwd(), "src/field/ChromeLayer.tsx"), "utf8");
+    expect(chrome).toContain("menuZoom={subscribeMenuZoom}");
   });
 });

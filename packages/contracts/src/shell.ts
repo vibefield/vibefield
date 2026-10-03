@@ -166,6 +166,20 @@ export type FrameViewState = z.infer<typeof FrameViewState>;
 export const FrameViewSetRequest = z.object({ view: FrameView }).passthrough();
 export type FrameViewSetRequest = z.infer<typeof FrameViewSetRequest>;
 
+/** The View menu's zoom (One Frame FR-4, 3b): Actual Size, Zoom In, Zoom Out —
+ * the three items that replaced Electron's `resetZoom`/`zoomIn`/`zoomOut`
+ * roles, which zoomed the WHOLE WINDOW wherever nothing claimed their keys. */
+export const FrameZoomAct = z.enum(["in", "out", "actual"]);
+export type FrameZoomAct = z.infer<typeof FrameZoomAct>;
+
+/** main → renderer: the act a View menu item names, for the window's head to
+ * answer — on Canvas, as it answers ⌘+ ⌘− ⌘0. An act, never a zoom level: the
+ * camera is the page's, and main never learns it. Under a cover the items are
+ * disabled, so none is sent; a page that is not on Canvas when one arrives
+ * does nothing with it. */
+export const FrameZoomRequest = z.object({ act: FrameZoomAct }).passthrough();
+export type FrameZoomRequest = z.infer<typeof FrameZoomRequest>;
+
 /** The app's ONE theme setting (One Frame FR-4, FC-D5): Light, Dark, or Auto,
  * which follows the OS. Main owns it — one value per device, kept by the shell
  * — and projects what it resolves to into Electron's `nativeTheme`; the Me

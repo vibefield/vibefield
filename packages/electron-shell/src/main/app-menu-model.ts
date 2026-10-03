@@ -12,7 +12,7 @@
 // how Electron keeps their labels, accelerators, and platform ordering correct
 // without us restating them.
 
-import type { FrameView } from "@vibefield/contracts";
+import type { FrameView, FrameZoomAct } from "@vibefield/contracts";
 
 export type MenuPlatform = "darwin" | "other";
 
@@ -48,6 +48,10 @@ export interface AppMenuActions {
    * helper exists for the platform or in a mode with no window — the item
    * stays, disabled, the same honest face Godview wears. */
   takeScreenshot?: () => void;
+  /** Send a zoom act to the focused window's head (One Frame FR-4, 3b), which
+   * answers it on Canvas. Undefined in modes with no window: the three items
+   * stay, disabled, the same honest face. */
+  zoom?: (act: FrameZoomAct) => void;
 }
 
 export interface AppMenuState {
@@ -130,6 +134,49 @@ function screenshotItem(platform: MenuPlatform, actions: AppMenuActions): AppMen
   };
 }
 
+/** THE VIEW MENU'S ZOOM (One Frame FR-4, 3b — FR-3's finding). Until FR-4 the
+ * View menu carried Electron's `resetZoom`/`zoomIn`/`zoomOut` ROLES, which
+ * zoom the PAGE: on Canvas the head claimed ⌘0 ⌘+ ⌘− first, but wherever
+ * nothing claimed them — under a cover, nothing focused — the keys scaled the
+ * whole window, the frame's chrome with it, and the items always did. The
+ * three are ours now, with no role (a role would bring its page zoom back as
+ * its default behaviour, `closeWindowItem`'s lesson): each sends the ACT to
+ * the window's head, which answers on Canvas as its keys do — and under a
+ * cover the items are disabled, because the zoom is Canvas's instrument and
+ * a covered canvas has nothing to zoom. Their keys are said as the views'
+ * are (VIEW_KEYS_ROAD): the page answers ⌘0 ⌘+ ⌘− first on Canvas; a key it
+ * leaves unclaimed (a document still loading, a claim that does not use the
+ * key) reaches the item on darwin and lands on the same head, so either way
+ * ONE owner zooms; off the Mac `registerAccelerator: false` keeps them said.
+ * The labels are Electron's role labels, in the roles' order. */
+export const ZOOM_ITEM_IDS: Readonly<Record<FrameZoomAct, string>> = {
+  actual: "zoom-actual",
+  in: "zoom-in",
+  out: "zoom-out",
+};
+
+const ZOOM_ITEMS: readonly { act: FrameZoomAct; label: string; accelerator: string }[] = [
+  { act: "actual", label: "Actual Size", accelerator: "CommandOrControl+0" },
+  { act: "in", label: "Zoom In", accelerator: "CommandOrControl+Plus" },
+  { act: "out", label: "Zoom Out", accelerator: "CommandOrControl+-" },
+];
+
+function zoomItems(
+  platform: MenuPlatform,
+  state: AppMenuState,
+  actions: AppMenuActions,
+): AppMenuItem[] {
+  const zoom = state.view === "canvas" ? actions.zoom : undefined;
+  return ZOOM_ITEMS.map(({ act, label, accelerator }) => ({
+    id: ZOOM_ITEM_IDS[act],
+    label,
+    accelerator,
+    ...(platform === "darwin" ? {} : { registerAccelerator: false }),
+    enabled: zoom !== undefined,
+    ...(zoom !== undefined ? { click: () => zoom(act) } : {}),
+  }));
+}
+
 /** The four views, as radio items: main knows which one is on (§9 voice: a
  * state we hold is stated, not implied). The Assistant waits (FC-D2) — present,
  * disabled, its key still said, the way a disabled Take Screenshot keeps its
@@ -201,7 +248,8 @@ function closeWindowItem(state: AppMenuState, actions: AppMenuActions): AppMenuI
 }
 
 /** The whole template. Roles carry every standard section; the items this
- * shell owns are the four views, Take Screenshot and the conditional close. */
+ * shell owns are the four views, Take Screenshot, the zoom's three and the
+ * conditional close. */
 export function buildAppMenu(
   platform: MenuPlatform,
   state: AppMenuState,
@@ -225,9 +273,7 @@ export function buildAppMenu(
         { type: "separator" },
         screenshotItem(platform, actions),
         { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
+        ...zoomItems(platform, state, actions),
         { type: "separator" },
         { role: "togglefullscreen" },
       ],

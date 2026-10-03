@@ -11,6 +11,7 @@ import type {
   DesktopShellState,
   FrameView,
   FrameViewState,
+  FrameZoomAct,
   RendererParticipantIdentity,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
@@ -79,6 +80,10 @@ export interface FieldDiagnosticsHost {
 export interface FieldViewHost {
   set(view: FrameView): Promise<FrameViewState>;
   onState(handler: (state: FrameViewState) => void): () => void;
+  /** The View menu's Actual Size, Zoom In and Zoom Out (One Frame FR-4, 3b):
+   * main sends the ACT and the head answers it on Canvas. Optional: a host
+   * with no menu bar sends none. */
+  onZoom?(handler: (act: FrameZoomAct) => void): () => void;
 }
 
 /** The app's one theme, which the HOST owns (One Frame FR-4, FC-D5): Light ·

@@ -1252,8 +1252,9 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   BUBBLE phase, so a pane that holds the keyboard keeps its own ⌘+ ⌘− ⌘0 (ghostty's font sizes) and
   a key something else took is left alone; never under a cover, never from inside a keyboard claim
   (design-007's `data-canvas-keyboard` — a terminal or a page on the canvas), and ⇧1 never while
-  typing (it types "!"). A key they take is claimed, so the View menu's page zoom never runs over
-  the canvas. **The frame's open surfaces have ONE owner** (FR-4; the line's, renamed at FR-3 when
+  typing (it types "!"). A key they take is claimed, so the View menu's item never answers it a
+  second time (the menu's zoom is an act the head answers since FR-4, below). **The frame's open
+  surfaces have ONE owner** (FR-4; the line's, renamed at FR-3 when
   the head's joined): @'s list, Objects, the fields explorer, the zoom's menu and the palette are
   one value, so opening any one folds the rest, and every surface that folded the tray folds them.
   *As built (FR-1, 2026-10-03):* the frame so far is the views track, on

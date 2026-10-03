@@ -1,4 +1,4 @@
-import type { FrameView } from "@vibefield/contracts";
+import type { FrameView, FrameZoomAct } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import {
   type AppMenuItem,
@@ -9,6 +9,7 @@ import {
   screenshotAccelerator,
   VIEW_ITEM_IDS,
   viewAccelerator,
+  ZOOM_ITEM_IDS,
 } from "../src/main/app-menu-model";
 
 // The View menu names the frame's four views (One Frame FR-1) and SAYS their
@@ -253,6 +254,95 @@ describe("Take Screenshot (SNAP-D3)", () => {
         items.filter((item) => item.accelerator === screenshotAccelerator(platform)),
       ).toHaveLength(1);
       expect(items.filter((item) => item.id === SCREENSHOT_ITEM_ID)).toHaveLength(1);
+    }
+  });
+});
+
+describe("the View menu's zoom (One Frame FR-4, 3b)", () => {
+  const zoomed: FrameZoomAct[] = [];
+  const withZoom = {
+    ...actions,
+    zoom: (act: FrameZoomAct) => {
+      zoomed.push(act);
+    },
+  };
+  const ZOOM_IDS = [ZOOM_ITEM_IDS.actual, ZOOM_ITEM_IDS.in, ZOOM_ITEM_IDS.out];
+  const PAGE_ZOOM_ROLES = ["resetZoom", "zoomIn", "zoomOut"];
+
+  it.each(PLATFORMS)("carries none of Electron's page-zoom roles, in any view (%s)", (platform) => {
+    // FR-3's finding: the roles zoomed the WHOLE WINDOW wherever nothing
+    // claimed ⌘0 ⌘+ ⌘−, and their items always did. A role on one of these
+    // items would bring that back as its default behaviour.
+    for (const view of VIEWS) {
+      const items = flatten(buildAppMenu(platform, { view }, withZoom));
+      expect(items.filter((item) => PAGE_ZOOM_ROLES.includes(item.role ?? ""))).toEqual([]);
+      for (const id of ZOOM_IDS) {
+        const found = items.filter((item) => item.id === id);
+        expect(found).toHaveLength(1);
+        expect(found[0]?.role).toBeUndefined();
+      }
+    }
+  });
+
+  it.each(PLATFORMS)(
+    "names Actual Size, Zoom In and Zoom Out where the roles stood, their keys said (%s)",
+    (platform) => {
+      const view = buildAppMenu(platform, { view: "canvas" }, withZoom).find(
+        (item) => item.label === "View",
+      );
+      const submenu = view?.submenu ?? [];
+      const at = submenu.findIndex((item) => item.id === ZOOM_ITEM_IDS.actual);
+      expect(submenu[at - 1]?.type).toBe("separator");
+      expect(
+        submenu.slice(at, at + 3).map((item) => [item.id, item.label, item.accelerator]),
+      ).toEqual([
+        [ZOOM_ITEM_IDS.actual, "Actual Size", "CommandOrControl+0"],
+        [ZOOM_ITEM_IDS.in, "Zoom In", "CommandOrControl+Plus"],
+        [ZOOM_ITEM_IDS.out, "Zoom Out", "CommandOrControl+-"],
+      ]);
+      expect(submenu[at + 3]?.type).toBe("separator");
+      // VIEW_KEYS_ROAD: the page answers ⌘0 ⌘+ ⌘− first on Canvas; off the Mac
+      // the menu only SAYS them.
+      for (const id of ZOOM_IDS) {
+        expect(find(submenu, id)?.registerAccelerator).toBe(
+          platform === "darwin" ? undefined : false,
+        );
+      }
+    },
+  );
+
+  it.each(PLATFORMS)("sends each item's act to the head on Canvas (%s)", (platform) => {
+    zoomed.length = 0;
+    const menu = buildAppMenu(platform, { view: "canvas" }, withZoom);
+    for (const id of ZOOM_IDS) {
+      const item = find(menu, id);
+      expect(item?.enabled).toBe(true);
+      item?.click?.();
+    }
+    expect(zoomed).toEqual(["actual", "in", "out"]);
+  });
+
+  it.each(PLATFORMS)("is disabled under a cover, and sends nothing there (%s)", (platform) => {
+    // The zoom is Canvas's instrument: under Godview or History there is no
+    // canvas to zoom, and the menu is told the view by its one owner (FR-1).
+    zoomed.length = 0;
+    for (const view of ["godview", "history", "assistant"] as const) {
+      for (const id of ZOOM_IDS) {
+        const item = find(buildAppMenu(platform, { view }, withZoom), id);
+        expect(item?.enabled).toBe(false);
+        expect(item?.click).toBeUndefined();
+        // still SAID while disabled, as a disabled Take Screenshot keeps its chord
+        expect(item?.accelerator).toBeDefined();
+      }
+    }
+    expect(zoomed).toEqual([]);
+  });
+
+  it.each(PLATFORMS)("stays present-but-disabled where nothing can zoom (%s)", (platform) => {
+    for (const id of ZOOM_IDS) {
+      const item = find(buildAppMenu(platform, { view: "canvas" }, noActions), id);
+      expect(item?.enabled).toBe(false);
+      expect(item?.click).toBeUndefined();
     }
   });
 });

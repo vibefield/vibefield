@@ -1,5 +1,10 @@
 import { isEditableTarget, keyboardClaimOf } from "@vibecook/ice/dom";
-import type { DocRegistryEntry, DocSyncStatus, FrameView } from "@vibefield/contracts";
+import type {
+  DocRegistryEntry,
+  DocSyncStatus,
+  FrameView,
+  FrameZoomAct,
+} from "@vibefield/contracts";
 import {
   type KeyboardEvent,
   type ReactElement,
@@ -10,7 +15,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { emitZoomKeyMarker } from "../development-console";
+import { emitZoomKeyMarker, emitZoomMenuMarker } from "../development-console";
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
 import { getRendererLogger } from "../logging";
@@ -103,6 +108,10 @@ export interface HeadProps {
   /** Whether the head binds the zoom's keys on the window. The catalog's live
    * head does not: its page is not a window the head owns. */
   bindKeys?: boolean;
+  /** The View menu's Actual Size, Zoom In and Zoom Out (FR-4, 3b): main sends
+   * the item's ACT through this door, and the head answers it as it answers
+   * the keys. Absent where there is no menu bar (the catalog). */
+  menuZoom?: (handler: (act: FrameZoomAct) => void) => () => void;
 }
 
 export function Head({
@@ -113,6 +122,7 @@ export function Head({
   surface,
   onSurfaceChange,
   bindKeys = true,
+  menuZoom,
 }: HeadProps): ReactElement {
   const state = useSyncExternalStore(manager.subscribe, manager.getState);
   const path = useSyncExternalStore(canvas.subscribePath, canvas.path, canvas.path);
@@ -197,8 +207,8 @@ export function Head({
   // pane, and never get here) and a key something else took is left alone.
   // Never under a cover, never from inside a keyboard claim (design-007's
   // marker — the canvas keymap's own gate), and ⇧1 never while typing: it
-  // types "!". A key taken is claimed, so the View menu's page zoom never runs
-  // over the canvas.
+  // types "!". A key taken is claimed, so the View menu's item never answers
+  // it a second time (VIEW_KEYS_ROAD).
   useEffect(() => {
     if (!bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
@@ -214,6 +224,20 @@ export function Head({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [bindKeys, canvas, keys, view]);
+
+  // The View menu's zoom (FR-4, 3b): Electron's page-zoom roles are gone, and
+  // each item sends its act here. Canvas's, like the keys: the items are
+  // disabled under a cover, and an act that races a change of view lands on a
+  // covered view and does nothing.
+  useEffect(() => {
+    if (menuZoom === undefined) return;
+    return menuZoom((act) => {
+      if (view !== "canvas") return;
+      const from = canvas.percent();
+      runZoom(canvas, act);
+      emitZoomMenuMarker({ act, view, from, to: canvas.percent() });
+    });
+  }, [canvas, menuZoom, view]);
 
   const onReadoutKeyDown = useCallback(
     (event: KeyboardEvent<HTMLButtonElement>) => {

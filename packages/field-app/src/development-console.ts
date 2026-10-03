@@ -297,6 +297,23 @@ export function emitZoomKeyMarker(facts: ZoomKeyFacts): void {
   console.log(`ZOOM_KEY ${JSON.stringify(facts)}`);
 }
 
+/** One Frame FR-4 (3b) — a View menu zoom item the head ANSWERED. Said from the
+ * head's own handler, on Canvas only, so an item invoked under a cover says
+ * nothing — the silence the godview smoke's row 11i reads, beside the page's
+ * zoom factor, which no item may move any more. */
+export interface ZoomMenuFacts {
+  act: "in" | "out" | "actual";
+  view: string;
+  /** The readout's percent before the act, and after it. */
+  from: number;
+  to: number;
+}
+
+export function emitZoomMenuMarker(facts: ZoomMenuFacts): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`ZOOM_MENU ${JSON.stringify(facts)}`);
+}
+
 /** What the first ⌘G cost, station by station (GT-3p, GT-D15.4).
  *
  * Published once per app life, when the first open reaches a presented frame.

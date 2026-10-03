@@ -2,6 +2,7 @@ import type {
   DesktopShellState,
   FrameView,
   FrameViewState,
+  FrameZoomAct,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
   ShellCommand,
@@ -92,6 +93,8 @@ declare global {
       view: {
         set(view: FrameView): Promise<FrameViewState>;
         onState(handler: (state: FrameViewState) => void): () => void;
+        /** FR-4 (3b) — the View menu's zoom, as an act for the head. */
+        onZoom(handler: (act: FrameZoomAct) => void): () => void;
       };
       /** FR-4 — the app's one theme (FC-D5), which main owns. */
       theme: {

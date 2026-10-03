@@ -1,4 +1,4 @@
-import type { FrameView } from "@vibefield/contracts";
+import type { FrameView, FrameZoomAct } from "@vibefield/contracts";
 import { useSyncExternalStore } from "react";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
@@ -66,6 +66,13 @@ export function requestView(next: FrameView): Promise<void> {
         .error("renderer.frame.view_refused", "The shell refused a view request", error);
     },
   );
+}
+
+/** The View menu's zoom acts (One Frame FR-4, 3b), as main sends them — the
+ * head's door to them. A host with no menu bar (a browser harness) sends none. */
+export function subscribeMenuZoom(handler: (act: FrameZoomAct) => void): () => void {
+  const onZoom = getHost().view?.onZoom;
+  return onZoom === undefined ? () => undefined : onZoom(handler);
 }
 
 /** The one subscription every reader shares. */

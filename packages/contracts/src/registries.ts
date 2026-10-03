@@ -954,6 +954,11 @@ export const IPC_CHANNELS = {
   /** renderer → main invoke: FrameViewSetRequest — the views track and ⌘1–⌘4
    * asking for a view; answers with the resulting FrameViewState */
   viewSet: "vibefield:view:set",
+  /** main → renderer event: FrameZoomRequest — the View menu's Actual Size,
+   * Zoom In and Zoom Out (One Frame FR-4, 3b), sent as the ACT to the window's
+   * head, which answers on Canvas; the items are disabled under a cover. They
+   * replaced Electron's page-zoom roles, so nothing zooms the whole window. */
+  viewZoom: "vibefield:view:zoom",
   /** main → renderer event: ThemeState — the app's one theme, which main owns
    * (One Frame FR-4, FC-D5: Light · Dark · Auto, Auto following the OS through
    * `nativeTheme`); sent on every load and every change, to every window */

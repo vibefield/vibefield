@@ -12,6 +12,7 @@ import {
   FrameView,
   FrameViewSetRequest,
   FrameViewState,
+  FrameZoomRequest,
   frameViewBuilt,
   isUnambiguousLinkText,
   ProductInfo,
@@ -213,7 +214,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the nineteen channel keys, in order", () => {
+  it("exposes exactly the twenty channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -227,6 +228,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       // the renderer dials the cells' T1 doors itself.
       "viewState", // FR-1 — the window's active view (GT-D2's Godview bit, grown into four)
       "viewSet",
+      "viewZoom", // FR-4 — main → renderer: the View menu's zoom, as an act for the head
       "themeState", // FR-4 — the app's one theme, main's (Light · Dark · Auto)
       "themeSet",
       "usersUpdate", // UA-3 — the Account page's profile write (main owns users.json)
@@ -251,6 +253,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       desktopState: "vibefield:shell:desktop-state",
       viewState: "vibefield:view:state",
       viewSet: "vibefield:view:set",
+      viewZoom: "vibefield:view:zoom",
       themeState: "vibefield:theme:state",
       themeSet: "vibefield:theme:set",
       usersUpdate: "vibefield:users:update",
@@ -305,6 +308,17 @@ describe("the frame's active view (FR-1)", () => {
     expect(FrameViewSetRequest.parse({ view: "history" })).toEqual({ view: "history" });
     expect(FrameViewSetRequest.safeParse({}).success).toBe(false);
     expect(FrameViewSetRequest.safeParse({ open: true }).success).toBe(false);
+  });
+
+  it("sends the View menu's zoom as one of its three acts — never a level, never a fit (FR-4, 3b)", () => {
+    for (const act of ["in", "out", "actual"] as const) {
+      expect(FrameZoomRequest.parse({ act })).toEqual({ act });
+    }
+    // ⇧1's fit has no menu item (nothing new in the menu bar), and the camera
+    // is the page's: main sends an act, never a zoom it would have to know.
+    expect(FrameZoomRequest.safeParse({ act: "fit" }).success).toBe(false);
+    expect(FrameZoomRequest.safeParse({ zoom: 1.25 }).success).toBe(false);
+    expect(FrameZoomRequest.safeParse({}).success).toBe(false);
   });
 
   it("keeps the Assistant's cell waiting: every view but it is built (FC-D2)", () => {

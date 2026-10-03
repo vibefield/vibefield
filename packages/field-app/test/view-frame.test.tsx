@@ -6,7 +6,7 @@
  * `electron-shell/test/view-state.test.ts`; the delivery of ⌘1–⌘4 from a
  * focused terminal pane in a live window is the godview smoke's row 11g.
  */
-import type { FrameView, FrameViewState } from "@vibefield/contracts";
+import type { FrameView, FrameViewState, FrameZoomAct } from "@vibefield/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -15,6 +15,7 @@ import {
   getActiveView,
   requestView,
   resetActiveViewForTest,
+  subscribeMenuZoom,
   useActiveView,
 } from "../src/frame/view-state";
 import { type FieldHost, setHost } from "../src/host";
@@ -447,5 +448,38 @@ describe("the cover (DESIGN.md §6)", () => {
     to("history");
     expect(coverView("godview").hasAttribute("inert")).toBe(true);
     expect(coverView("history").hasAttribute("inert")).toBe(false);
+  });
+});
+
+describe("the View menu's zoom door (One Frame FR-4, 3b)", () => {
+  it("relays the acts the host's menu sends, until the head lets go", () => {
+    const sent: { to: ((act: FrameZoomAct) => void) | null } = { to: null };
+    installHost("darwin", {
+      set: (next) => Promise.resolve({ view: next }),
+      onState: () => () => undefined,
+      onZoom: (handler) => {
+        sent.to = handler;
+        return () => {
+          sent.to = null;
+        };
+      },
+    });
+    const heard: FrameZoomAct[] = [];
+    const dispose = subscribeMenuZoom((act) => heard.push(act));
+    sent.to?.("in");
+    sent.to?.("actual");
+    expect(heard).toEqual(["in", "actual"]);
+    dispose();
+    expect(sent.to).toBeNull();
+  });
+
+  it("is quiet, never broken, on a host with no menu bar", () => {
+    installHost("darwin", {
+      set: (next) => Promise.resolve({ view: next }),
+      onState: () => () => undefined,
+    });
+    expect(() => subscribeMenuZoom(() => undefined)()).not.toThrow();
+    installHost(undefined, undefined);
+    expect(() => subscribeMenuZoom(() => undefined)()).not.toThrow();
   });
 });

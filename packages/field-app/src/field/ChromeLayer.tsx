@@ -24,7 +24,7 @@ import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import type { FrameActRun } from "../frame/palette-acts";
 import { ViewFrame } from "../frame/ViewFrame";
-import { requestView, useActiveView } from "../frame/view-state";
+import { requestView, subscribeMenuZoom, useActiveView } from "../frame/view-state";
 import { viewKeysOf } from "../frame/views";
 import { runZoom } from "../frame/zoom";
 import { GodviewOverlay } from "../godview";
@@ -315,6 +315,7 @@ export function ChromeLayer({
         keys={keys}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
+        menuZoom={subscribeMenuZoom}
       />
 
       {/* THE EDGES (SNAP-3; One Frame FR-4, DESIGN.md §8 edge trays, §10): the

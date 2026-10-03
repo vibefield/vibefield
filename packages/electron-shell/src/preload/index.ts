@@ -6,6 +6,7 @@ import {
   FrameViewSetRequest,
   type FrameViewState,
   FrameViewState as FrameViewStateSchema,
+  type FrameZoomAct,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
   ScreenshotCaptureRequest,
@@ -39,7 +40,7 @@ import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadScreenshotResultBridge } from "./screenshot-result";
 import { PreloadShellCommandBridge } from "./shell-commands";
 import { PreloadThemeStateBridge } from "./theme";
-import { PreloadViewStateBridge } from "./view";
+import { PreloadViewStateBridge, PreloadZoomActBridge } from "./view";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
 // Product traffic flows over the loopback WS (D27), never over IPC. BOTH
@@ -171,6 +172,24 @@ const viewState = new PreloadViewStateBridge((issueCount) => {
     }),
   );
 });
+const viewZoom = new PreloadZoomActBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.view_zoom_rejected",
+          msg: "Preload rejected a malformed zoom act",
+          component: "preload.view",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
 const themeState = new PreloadThemeStateBridge((issueCount) => {
   logging.submit(
     JSON.stringify({
@@ -241,6 +260,9 @@ ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
 });
 ipcRenderer.on(IPC_CHANNELS.viewState, (_event, raw: unknown) => {
   viewState.accept(raw);
+});
+ipcRenderer.on(IPC_CHANNELS.viewZoom, (_event, raw: unknown) => {
+  viewZoom.accept(raw);
 });
 ipcRenderer.on(IPC_CHANNELS.themeState, (_event, raw: unknown) => {
   themeState.accept(raw);
@@ -335,6 +357,9 @@ contextBridge.exposeInMainWorld("vibefield", {
       ),
     onState: (handler: (state: FrameViewState) => void): (() => void) =>
       viewState.subscribe(handler),
+    /** The View menu's Actual Size, Zoom In and Zoom Out (FR-4, 3b), as the
+     * act main sends for the head to answer on Canvas. */
+    onZoom: (handler: (act: FrameZoomAct) => void): (() => void) => viewZoom.subscribe(handler),
   },
   theme: {
     /** Choose the app's one theme by name (FR-4, FC-D5); main owns it and the

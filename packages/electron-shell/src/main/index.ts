@@ -11,6 +11,8 @@ import {
   DesktopShellState as DesktopShellStateSchema,
   effectiveFaces,
   type FrameView,
+  type FrameZoomAct,
+  FrameZoomRequest,
   IPC_CHANNELS,
   PluginModuleResolution,
   type ScreenshotCaptureResult,
@@ -1365,6 +1367,17 @@ async function main(
     if (window === null || window.isDestroyed()) return;
     viewStates?.ensure(window.webContents).set(view);
   };
+  /** The View menu's zoom (FR-4, 3b): the ACT, sent to the page whose head
+   * answers it on Canvas — never Electron's page zoom, which scaled the whole
+   * window. The subject is the focused product window, as for a capture, and
+   * the primary when focus is elsewhere (a hidden harness, Studio). */
+  const zoom = (act: FrameZoomAct): void => {
+    const focused = BrowserWindow.getFocusedWindow();
+    const window =
+      focused !== null && registry.owns(focused.webContents) ? focused : registry.primary();
+    if (window === null || window.isDestroyed()) return;
+    window.webContents.send(IPC_CHANNELS.viewZoom, FrameZoomRequest.parse({ act }));
+  };
   /** Close Window's action, needed only while Godview is the view: the item
    * drops `role: "close"` there to release ⌘W for the deck's panes, and the
    * role's own close behaviour has to be supplied by hand with it
@@ -1394,6 +1407,7 @@ async function main(
     redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
       setView,
       closeWindow,
+      zoom,
       // SNAP-D5: no helper for this platform ⇒ the item stays, disabled.
       ...(screenshotHelperAvailable ? { takeScreenshot } : {}),
     });

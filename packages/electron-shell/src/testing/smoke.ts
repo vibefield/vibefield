@@ -36,7 +36,7 @@ import {
   type WebContents,
   webContents,
 } from "electron";
-import { CLOSE_WINDOW_ITEM_ID } from "../main/app-menu-model";
+import { CLOSE_WINDOW_ITEM_ID, ZOOM_ITEM_IDS } from "../main/app-menu-model";
 import { APP_ORIGIN } from "../main/app-protocol";
 import type { WindowRendererBoundary } from "../main/bootstrap";
 import { BrowserControlTargetRegistry } from "../main/live-surfaces/browser-control-target";
@@ -6107,13 +6107,40 @@ export async function runSmokeGodview(opts: {
     //      into the line's draft stays a "!" — never a fit. ⌘K's probe is 11e's,
     //      unchanged. Before 11h, which must stay last (its ⌘T leaves a fresh
     //      shell whose launcher holds the keys).
+    //
+    //      THE VIEW MENU'S ZOOM (FR-4, 3b) rides the same rows: under Godview
+    //      the LIVE menu's Zoom In (main redraws it on every change of view) is
+    //      disabled, and invoked the way the native menu invokes an item — with
+    //      the focused window and its page, which is all Electron's page-zoom
+    //      role needed to scale the whole window — it changes nothing: no act,
+    //      the canvas's readout, the page's zoom level, the view. On the canvas
+    //      the same item is enabled and the HEAD answers it (its ZOOM_MENU
+    //      line): the canvas zooms by the step, Actual Size brings it back, and
+    //      the page's zoom level never moves. The menu is driven, not keyed:
+    //      `sendInputEvent` enters below AppKit's key-equivalent dispatch (the
+    //      ⌘W note above), so a synthesized ⌘+ can never reach a menu item.
     const headKeys: Record<string, string> = {};
     const zoomTaken: string[] = [];
+    const zoomMenuTaken: string[] = [];
     const hearHead = (...args: unknown[]): void => {
       for (const arg of args) {
         const text = consoleText(arg);
         if (text.startsWith("ZOOM_KEY ")) zoomTaken.push(text.slice("ZOOM_KEY ".length));
+        if (text.startsWith("ZOOM_MENU ")) zoomMenuTaken.push(text.slice("ZOOM_MENU ".length));
       }
+    };
+    /** A View menu zoom item as the live menu holds it now. */
+    const zoomItem = (id: string): ReturnType<Menu["getMenuItemById"]> =>
+      Menu.getApplicationMenu()?.getMenuItemById(id) ?? null;
+    /** Invoke an item the way the native menu does: the event, the focused
+     * window, its page. A role item answers through those two (Electron's
+     * `roles.execute`); ours ignore them and ask main's subject themselves. */
+    const invokeMenuItem = (item: NonNullable<ReturnType<Menu["getMenuItemById"]>>): void => {
+      (item.click as (event: unknown, window: BrowserWindow, contents: WebContents) => void)(
+        undefined,
+        win,
+        win.webContents,
+      );
     };
     const READOUT = `(document.querySelector(".vf-head-zoom")?.textContent ?? "absent")`;
     /** The page's ear: every keydown as the window's capture phase first sees
@@ -6206,6 +6233,39 @@ export async function runSmokeGodview(opts: {
         `godview: the pane took ${mod}= ${mod}- ${mod}0 at its workspace (ghostty's font sizes) ` +
         `and typed ⇧1's "!" at its input; the head took nothing; the canvas stayed at ${readoutBefore}`;
 
+      // The View menu's Zoom In under Godview changes nothing (FR-4, 3b).
+      const coveredIn = zoomItem(ZOOM_ITEM_IDS.in);
+      if (coveredIn === null) throw new Error("the View menu has no Zoom In item");
+      if (coveredIn.enabled) throw new Error("the View menu's Zoom In is enabled under Godview");
+      const levelUnderCover = win.webContents.getZoomLevel();
+      const menuHeardBefore = zoomMenuTaken.length;
+      invokeMenuItem(coveredIn);
+      await sleep(1_500);
+      if (zoomMenuTaken.length > menuHeardBefore || zoomTaken.length > 0) {
+        throw new Error(
+          `the View menu's Zoom In zoomed under Godview: ${[...zoomMenuTaken, ...zoomTaken].join(" · ")}`,
+        );
+      }
+      const levelAfterMenu = win.webContents.getZoomLevel();
+      if (levelAfterMenu !== levelUnderCover) {
+        throw new Error(
+          `the View menu's Zoom In zoomed the whole window under Godview: page zoom level ${levelUnderCover} → ${levelAfterMenu}`,
+        );
+      }
+      const readoutAfterMenu = (await win.webContents.executeJavaScript(READOUT)) as string;
+      if (readoutAfterMenu !== readoutBefore) {
+        throw new Error(
+          `the View menu's Zoom In zoomed the canvas under Godview: ${readoutBefore} → ${readoutAfterMenu}`,
+        );
+      }
+      const stayedAfterMenu = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+      if (stayedAfterMenu !== "godview") {
+        throw new Error(`the View menu's Zoom In moved the window: ${stayedAfterMenu}`);
+      }
+      headKeys["the View menu under Godview"] =
+        `Zoom In (${coveredIn.accelerator ?? "no key"}) disabled; invoked as the menu invokes it, ` +
+        `it changed nothing: no act, the canvas still ${readoutAfterMenu}, the page zoom level ${levelAfterMenu}`;
+
       pressViewKey(win, "canvas");
       await untilRenderer(
         win,
@@ -6240,6 +6300,48 @@ export async function runSmokeGodview(opts: {
       headKeys["on the canvas"] =
         `nothing focused: ⌘+ ${zoomIn.from} → ${zoomIn.to} · ⌘− ${zoomOut.from} → ${zoomOut.to} · ` +
         `⇧1 fit ${fit.from} → ${fit.to} · ⌘0 ${actual.from} → ${actual.to}; the readout said each`;
+
+      // …and on the canvas the same item is enabled and the HEAD answers it.
+      const canvasIn = zoomItem(ZOOM_ITEM_IDS.in);
+      if (canvasIn === null || !canvasIn.enabled) {
+        throw new Error("the View menu's Zoom In is not enabled on the canvas");
+      }
+      const levelOnCanvas = win.webContents.getZoomLevel();
+      const menuIn = waitForConsole(win, "ZOOM_MENU ", 10_000);
+      invokeMenuItem(canvasIn);
+      const answeredIn = JSON.parse(await menuIn) as ZoomFacts;
+      if (answeredIn.act !== "in" || !near(answeredIn.to, answeredIn.from * 1.25)) {
+        throw new Error(
+          `the View menu's Zoom In on the canvas was heard as ${JSON.stringify(answeredIn)}`,
+        );
+      }
+      const canvasActual = zoomItem(ZOOM_ITEM_IDS.actual);
+      if (canvasActual === null || !canvasActual.enabled) {
+        throw new Error("the View menu's Actual Size is not enabled on the canvas");
+      }
+      const menuActual = waitForConsole(win, "ZOOM_MENU ", 10_000);
+      invokeMenuItem(canvasActual);
+      const answeredActual = JSON.parse(await menuActual) as ZoomFacts;
+      if (answeredActual.act !== "actual" || answeredActual.to !== 100) {
+        throw new Error(
+          `the View menu's Actual Size on the canvas was heard as ${JSON.stringify(answeredActual)}`,
+        );
+      }
+      await untilRenderer(
+        win,
+        "the readout saying 100% after Actual Size",
+        `${READOUT} === "100%" ? "ok" : ${READOUT}`,
+        5_000,
+      );
+      const levelAfterCanvasMenu = win.webContents.getZoomLevel();
+      if (levelAfterCanvasMenu !== levelOnCanvas) {
+        throw new Error(
+          `the View menu zoomed the whole window on the canvas: page zoom level ${levelOnCanvas} → ${levelAfterCanvasMenu}`,
+        );
+      }
+      headKeys["the View menu on the canvas"] =
+        `Zoom In answered by the head ${answeredIn.from} → ${answeredIn.to} · Actual Size ` +
+        `${answeredActual.from} → ${answeredActual.to}; the page zoom level stayed ${levelAfterCanvasMenu}`;
 
       const placed = (await win.webContents.executeJavaScript(
         `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
