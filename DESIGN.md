@@ -292,9 +292,10 @@ there, 3.1:1 on dark chrome, 5.3:1 on the light ground and 5.5:1 under the white
 *Erratum 2026-10-03 (DK-0d, against the desk — MC-D10 = DK-D23, R17, R22):* on the desk VibeField
 draws the peers' cursors itself (§8, peers on the mat), so the ink is drawn where it is seen rather
 than sent as the sender's colour — and there `#68686B` does not hold: it measures 1.4:1 on the
-Sun-lit sage (`#3D5A30`) and 2.0:1 on the Moon's dapples (`#313C40`), so on the mat the label
-takes the mat's ink per theme (R17, §8). The contrasts above stand for the plain grounds and the
-chrome.
+Sun-lit sage (`#3D5A30`) and 2.0:1 on the Moon's dapples (`#313C40`), so on the mat the label is a
+chip on the line's glass in the chrome's text ink (R17, amended 13:40Z; §8, peers on the mat), and
+the arrow keeps the presence ink on its white edge. The contrasts above stand for the plain grounds
+and the chrome.
 
 ---
 
@@ -1004,17 +1005,18 @@ The hot-point glow and rim retire with CardShell (above).
     `--vf-ink-danger` on `--vf-red` at 12% · focus a 2px `--vf-select` ring, offset 2.
   - **Keyboard** (R9) — a toolbar named "Selection": ← → move between its cells, Esc goes back to
     the desk, and Tab from the draft reaches it. A tooltip says the act and its key, the frame's way
-    (FR-5): "Duplicate  ⌘D", "Delete  ⌫" (DK-D24). Tape prints none (R23: ⇧⌘L is struck); a kind's
-    act prints none on this build — its declared keys are ICE's demo's (R1, DK-D24); Send to… and
-    More have none.
+    (FR-5): "Duplicate  ⌘D", "Tape it down  ⇧⌘L", "Delete  ⌫" — the desk's keymap (DK-D24);
+    ⇧⌘L is the DESK's act, ICE's default keymap's (`keymap.ts:172`), not a kind's, so it is printed
+    (R23, reversed 13:40Z). A kind's act prints none on this build — its declared keys are ICE's
+    demo's (R1, DK-D24); Send to… and More have none.
   - **Motion** — away for a gesture (a drag, a marquee, a pan, a pinch) and while a note is being
     written (the anchor's `gesturing`, `editing`): out in 90ms, back 200ms after it ends, in over
     180ms (ICE's, as built); away too while @'s list is open from Send to… (below). Deselected, it
     fades out over 120ms `ease-out` (R8). Reduced motion (M6) halves every duration, fades only
     (R8).
   - **A missing face** selected (below): the bar names the type where the kind's acts would stand.
-- **The bar grown — More, and right-click** (Chrome on the Mat §3.2; MC-D6 ruled through One
-  Frame's lock; FC-D14 solid; R1, R4, R5, R6, R20, R23; DK-D29, DK-D24; DK-11): **More grows the bar
+- **The bar grown — More, and right-click** (Chrome on the Mat §3.2; MC-D6 ruled through One Frame's
+  lock; FC-D14 solid; R1, R4, R5, R6, R20, R23, R26; DK-D29, DK-D24; DK-11): **More grows the bar
   into its menu** — ONE element (M1), on the island curve over 600ms, the Me menu's grow — upward,
   or downward when its top would cross 94, the bar's own row then heading it (R6); when it fits
   neither way the list scrolls inside it, clamped between 94 and 660 and never over the line (R6).
@@ -1030,22 +1032,24 @@ The hot-point glow and rim retire with CardShell (above).
   its type opens (`engine.catalog.widget(type).openable`), running `ops.open`; a container (the mini
   mat) has no row, ⏎ enters it (R4) · Send to… | Duplicate (⌘D; not while taped) · Bring to front ·
   Send to back (`ops.reorder`) · **Clean up** (two or more selected: `ops.arrange` tidies them into
-  reading-order rows, one undo step — DK-D29) | Tape it down, or Lift the tape (no key, R23) |
-  Delete (⌫, armed red under the pointer). No Copy: the engine has no copy op. Send to…, Bring to
-  front, Send to back and Clean up print no key — DK-D24 binds none. **The eyebrow** names what it
-  acts on, at the far end, in the mat's print: mono 10, capitals, 0.08em, tertiary, padded 8 10 5 —
-  NOTE · 2 OBJECTS · CLOCK, the host's read of the types' names (the doors, above), and a missing
-  face's type with its word: NOTE · PLUGIN OFF. Rows fade and rise 4px nearest first, 160ms + 26ms a
-  row (cap 400ms), and fold back the same way (M4); ↑ ↓ walk, Return takes. **It closes** on Esc, a
-  click elsewhere, a gesture and a change of selection (R5, ICE's rule), and it is one of the
-  frame's open surfaces (§10) — its Esc is taken before the desk's Esc ladder (R5). **Right-click on
-  an object** selects it and grows this same bar into this same menu — never a separate popover
-  (MC-D6) — through a VibeField `contextmenu` listener; the object under the pointer needs the
-  desk's pick, which the desk's handle does not offer (core's `FramePickSource.hit` tests one object
-  it is given), so it is an ICE ask, **I27** (filed 2026-10-03): a screen point's object,
-  `handle.pick({ x, y })`. **The comment command** (DK-D24: the C key's wrap of the selection, which
-  leaves the keymap) becomes a row here when DK-8's comment kind exists. The bare mat's own menu
-  (Paste here, New note here) is not built (a Marks on the Mat item).
+  reading-order rows, one undo step — DK-D29) | Tape it down, or Lift the tape (⇧⌘L, R23) | Delete
+  (⌫, armed red under the pointer). No Copy: the engine has no copy op. Send to…, Bring to front,
+  Send to back and Clean up print no key — DK-D24 binds none. **The eyebrow** names what it acts on,
+  at the far end, in the mat's print: mono 10, capitals, 0.08em, tertiary, padded 8 10 5 — NOTE · 2
+  OBJECTS · CLOCK, the host's read of the types' names (the doors, above), and a missing face's type
+  with its word: NOTE · PLUGIN OFF. Rows fade and rise 4px nearest first, 160ms + 26ms a row (cap
+  400ms), and fold back the same way (M4); ↑ ↓ walk, Return takes. **It closes** on Esc, a click
+  elsewhere, a gesture and a change of selection (R5, ICE's rule), and it is one of the frame's open
+  surfaces (§10) — its Esc is taken before the desk's Esc ladder (R5). **Right-click** grows this
+  same bar into this same menu — never a separate popover (MC-D6) — through a VibeField
+  `contextmenu` listener. Selecting the object under the pointer first needs the desk's pick, which
+  the handle does not offer (core's `FramePickSource.hit` tests one object it is given; the stack's
+  `framePick` is internal): it is ICE ask **I27**, `handle.pick({ x, y })` → the object at a screen
+  point or null (R26). **Until I27 lands, right-click acts on the current selection only** — it
+  grows the menu of what is already selected and selects nothing (R26); with I27 it selects the
+  object under the pointer first. **The comment command** (DK-D24: the C key's wrap of the
+  selection, which leaves the keymap) becomes a row here when DK-8's comment kind exists. The bare
+  mat's own menu (Paste here, New note here) is not built (a Marks on the Mat item).
 - **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
   readouts; One Frame §7; ICE I20, I22; R2, R13; DK-12): when an object is picked up (the anchor's
   `held`), **the same bar travels** with the pickup and becomes the tools in hand — one element
@@ -1125,9 +1129,9 @@ The hot-point glow and rim retire with CardShell (above).
   and send arms (Chrome on the Mat §3.6). It lands as the line's chip (§8, the line: 24 tall,
   corners 7, 12.5/500, the glyph 13). **Its face** (R15): a note wears its paper — its `paper` prop
   through the palette's CSS colour — and its ink, `snippets` and its first 24 characters; any other
-  kind its tray glyph and its name ("Clock"); several, `package` and "N objects"; a missing face,
-  its type's name. (A tray entry carries no glyph today — neither ICE's `TrayEntry` nor the
-  contribution's — so DK-14 gives the entry one, or such a chip wears its name alone.) **What it
+  kind its NAME and no glyph ("Clock") — neither ICE's `TrayEntry` nor DK-0f's contribution carries
+  one (R15, amended 13:40Z); several, `package` and "N objects"; a missing face, its type's name.
+  **What it
   carries** (DK-D26): the objects' names, their durable text and a still through the capture door,
   `handle.capture({ rect })` (ICE I23), of the anchor's box WITHOUT the brackets' 6 / 10 outset,
   the marks hidden first by the host's own doors (R15). The bar steps aside while the list is open
@@ -1182,14 +1186,14 @@ The hot-point glow and rim retire with CardShell (above).
   the mat, **below** the bar and the line (R17). **The arrow** — the pointer's, 18 × 22, its tip at
   2,2 in its box, drawn inline (its path joins §13's allow-list, R17) — with a 1.4 white edge and a
   `0 1px 2px` black/25 drop; **the label** — its box's top-left 14 right of and 18 below the arrow
-  box's top-left corner (R17) — **22 tall**, full round, padded 0 9 0 7, 11.5/500 with a
-  `0 2px 6px` black/18 shadow, reading **the face first, then the name** ("🦊 James", §2.8). **Its
-  ink is the mat's ink per theme** (R17) — the desk's ink as ICE's marks keep it: `#100904` by day
-  with white words (2.5:1 against the Sun-lit sage, the words 19.8:1), and by night the night
-  vellum's cool milk `rgb(214 226 255)` with `#100904` words (8.7:1 against the Moon's dapples, the
-  words 15.2:1) — because `--vf-presence-ink` (`#68686B`) measures 1.4:1 on the Sun-lit sage and
-  2.0:1 by night (§2.8's erratum). Never the peer's own colour (I-1). Your own pointer on the desk is
-  the OS's and the desk's own open hand; the halo is gone (§2.1).
+  box's top-left corner (R17) — a **chip on the line's glass** (R17, amended 13:40Z): 22 tall, full
+  round, padded 0 9 0 7, `--vf-chrome-solid` at 88% (94% by night) with the line's blur and
+  hairline (§5), its words 11.5/500 in the chrome's primary text ink, reading **the face first, then
+  the name** ("🦊 James", §2.8) — never bare text or a bare ink on the mat, where `#68686B` measures
+  1.4:1 on the Sun-lit sage and 2.0:1 by night and even the desk's own ink only 2.5:1 by day (§2.8's
+  erratum), so it reads on any mat; DK-16 measures it on the lit mat. Never the peer's own colour
+  (I-1). Your own pointer on the desk is the OS's and the desk's own open hand; the halo is gone
+  (§2.1).
 - **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3, DK-16):
   the layer's status (`onStatus`) is said in VibeField's words — never ICE's black monospace screen,
   never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or
