@@ -785,9 +785,11 @@ const TrayPropValue = z.union([z.string(), z.number(), z.boolean()]);
  * the pegboard hangs what it says, drawn by the kind itself. `category` is its
  * chip on the tray's bar — the plugin's own string, or a built-in's name to
  * join it; `label` the specimen's name tag; `order` its place in its category;
- * `hang` how it hangs — its size on the board in CSS px, the accessory, the pegs
- * in pitches from the hang point (absent: the host hangs it on a hook at its
- * `size`); `props` the specimen's face over the object's defaults; `take` what
+ * `hang` how it hangs — REQUIRED since DK-3 (ICE's `TrayEntry` requires it, and a
+ * default the host derived would be a guess the author never saw; the plan's
+ * DK-6 input (c)): its size on the board in CSS px, the accessory, the pegs in
+ * pitches from the hang point; `props` the specimen's face over the object's
+ * defaults; `take` what
  * one lifted off the board is made with (absent: the object's defaults;
  * `"face"`: the specimen's props; a record: those); `local`: the specimen is
  * drawn with the kind's desk state. An object without an entry is placeable
@@ -807,8 +809,7 @@ export const TrayEntryContribution = z
           .min(1)
           .max(8),
       })
-      .passthrough()
-      .optional(),
+      .passthrough(),
     props: z.record(TrayPropValue).optional(),
     take: z.union([z.literal("face"), z.record(TrayPropValue)]).optional(),
     local: z.boolean().optional(),

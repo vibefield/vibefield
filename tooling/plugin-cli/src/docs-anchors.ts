@@ -383,7 +383,14 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
       ...base(),
       contributes: {
         objects: [
-          object({ tray: { category: "things", label: "Clock", props: { style: "bogus" } } }),
+          object({
+            tray: {
+              category: "things",
+              label: "Clock",
+              props: { style: "bogus" },
+              hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
+            },
+          }),
         ],
       },
     },

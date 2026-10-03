@@ -146,7 +146,11 @@ describe("the two registers", () => {
               schemaVersion: 1,
               size: { w: 160, h: 160 },
               provides: ["desk.object"],
-              tray: { category: "things", label: "Clock" },
+              tray: {
+                category: "things",
+                label: "Clock",
+                hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
+              },
               binding: { kind: "clock" },
             },
           ],

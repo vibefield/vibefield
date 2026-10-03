@@ -116,7 +116,7 @@ refused it with `objects-need-desk` (object kinds need the desk; this build draw
 | `props` | object mapping name → one of `string`, `number`, `boolean`, `enum`, `json`, `entity-ref`, `session-ref`, `terminal-ref`, `artifact-ref`, `file-ref` | no | discriminated by `kind`; defaults to `{}` |
 | `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
 | `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
-| `tray` | { category: string, label: string, order?: number, hang?: object, props?: object mapping name → one of string, number, boolean, take?: one of `"face"`, object mapping name → one of string, number, boolean, local?: boolean } | no | — |
+| `tray` | { category: string, label: string, order?: number, hang: object, props?: object mapping name → one of string, number, boolean, take?: one of `"face"`, object mapping name → one of string, number, boolean, local?: boolean } | no | — |
 | `binding` | { kind: string } | yes | — |
 
 ```json

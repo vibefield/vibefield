@@ -148,8 +148,9 @@ export function buildWidgetType(
  * The host's rules (plan §5, DK-6 inputs): the kind must be a desk kind whose
  * registry `name` IS the type (one id, no second namespace); a tray entry must say
  * how it hangs (`tray.hang` — a derived default would be a guess the author never
- * saw); `provides` is taken as declared, never padded with a key the manifest did
- * not name. Each refusal names the type. */
+ * saw; the contract requires it too since DK-3, ruling 9, and the host still refuses
+ * a hangless entry that reached it some other way); `provides` is taken as declared,
+ * never padded with a key the manifest did not name. Each refusal names the type. */
 export function buildObjectType(
   o: ObjectContribution,
   binding: ObjectBinding,

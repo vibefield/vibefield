@@ -520,7 +520,13 @@ describe("the object contribution (DK-0f)", () => {
       style: { kind: "enum", options: ["classic", "ink"], default: "classic" },
       seconds: { kind: "boolean", default: true },
     },
-    tray: { category: "things", label: "Clock", props: { style: "ink" }, take: "face" },
+    tray: {
+      category: "things",
+      label: "Clock",
+      props: { style: "ink" },
+      take: "face",
+      hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
+    },
     binding: { kind: "clock" },
     ...over,
   });
@@ -547,6 +553,15 @@ describe("the object contribution (DK-0f)", () => {
     expect(validatePluginManifest(both).ok).toBe(true);
     // the tray entry is optional (placeable, hangs nowhere); hang/order/local ride it
     expect(validatePluginManifest(withObjects([object({ tray: undefined })])).ok).toBe(true);
+    // …and an entry SAYS how it hangs: REQUIRED since DK-3 (ruling 9 — ICE's TrayEntry
+    // requires it; a default the host derived would be a guess the author never saw)
+    const hangless = validatePluginManifest(
+      withObjects([object({ tray: { category: "things", label: "Clock" } })]),
+    );
+    expect(hangless.ok).toBe(false);
+    expect(hangless.ok ? [] : hangless.issueDetails.map((i) => i.path.join("."))).toContain(
+      "contributes.objects.0.tray.hang",
+    );
     const hung = object({
       tray: {
         category: "things",
@@ -637,7 +652,18 @@ describe("the object contribution (DK-0f)", () => {
 
   it("the tray's face and take name declared props, each a value of its prop's kind", () => {
     const tray = (entry: Record<string, unknown>) =>
-      refused(withObjects([object({ tray: { category: "things", label: "Clock", ...entry } })]));
+      refused(
+        withObjects([
+          object({
+            tray: {
+              category: "things",
+              label: "Clock",
+              hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
+              ...entry,
+            },
+          }),
+        ]),
+      );
     expect(tray({ props: { nope: 1 } })).toContain(
       "contributes.objects.0.tray.props.nope: tray props names undeclared prop nope",
     );
