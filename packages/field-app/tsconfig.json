@@ -8,5 +8,5 @@
     // portability errors for types inferred from ice's transitive strata dep
     "declaration": false
   },
-  "include": ["src", "test"]
+  "include": ["src", "test", "perf"]
 }
