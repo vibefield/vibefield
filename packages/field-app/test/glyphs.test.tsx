@@ -46,7 +46,7 @@ const COLOUR_LITERAL = /#[\da-f]{3,8}\b|\b(?:rgba?|hsla?|oklch)\(|\b(?:black|whi
 
 describe("the glyph set", () => {
   it("has every name drawn, in one box, in currentColor and nothing else", () => {
-    expect(GLYPH_NAMES.length).toBe(51);
+    expect(GLYPH_NAMES.length).toBe(59);
     for (const name of GLYPH_NAMES) {
       const svg = glyphSvg(name);
       expect(svg, name).toMatch(

@@ -1410,14 +1410,14 @@ alternate moods retain their individual speed and light settings.
 **Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
 Every functional icon the chrome draws — the HUD's round buttons, the file pill, the Settings rail,
 the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
-marks — is one of **51 named glyphs** in one **24-unit box**, optical centre at 12,12, live area 2 to
-22, drawn in `currentColor` and nothing else. The host says the size and the colour, the way it says
-them for text (§2.4); a glyph never carries state (§2.5, I-5) and never a colour of its own. Two
-constructions, one set:
+marks, the desk's bar and the tools in hand — is one of **59 named glyphs** in one **24-unit box**,
+optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
+the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
+I-5) and never a colour of its own. Two constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (41) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (49) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
@@ -1426,7 +1426,8 @@ Snap tile, the Me menu) · 20 (the 40px round buttons) · 22 (the tray's plus, t
 weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn pointing right and
 *turned* (90 down, 180 left, 270 up); the four cursor keys are one arrow turned; redo is undo
 *flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·
-outward · link · return · backspace · ellipsis · start · resume; navigation: chevron · arrow; places and objects:
+outward · link · return · backspace · ellipsis · start · resume · jump · duplicate · tape · lift · trash ·
+pen · eraser · today; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
 mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame; Studio only:
@@ -1439,6 +1440,19 @@ started, play for one resumed — so the noun travels with the verb (One Frame F
 create is a bare plus). Their Hardware records are the page's T4 column, drawn and not shipped.
 **Send** needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`: the line has no attach
 button (FC-D1 ruled type @).
+**`jump`** (2026-10-03, One Frame §13; Session Glyphs' jump-T3) goes to a session that is running — a
+live row in History, a link in running text: `terminal`'s window with its wall opened on the left for
+the arrow going in, since a box with an arrow leaving it is already `outward`; its Hardware record is
+the page's T4. **The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
+ICE's selection glyphs redrawn in the Instrument construction for the desk's chrome (§8):
+`duplicate` · `tape` · `lift` · `trash` on the selection bar — `tape` and `lift` are one padlock, shut
+and opened — and `pen` · `eraser` · `today`, the modes and the act the held kinds declare; their
+Hardware records are drawn, not shipped. The rest of that chrome borrows the set as drawn: `agents`
+(Send to…), `ellipsis` (More), `plus` (Objects, turned 135° to close), `chevron` (a page or a month,
+turned 180° to go back), `undo` (flipped for redo), `snippets` (a note's chip). **A desk kind may draw
+its own act and tool glyphs beyond the set** (MC-D8) — ICE's `{ path }` drawing, held to this
+construction (the 24-unit box, one 2-unit stroke, `currentColor`) and drawn as the set's are, never as
+an inline `<svg>` in product code; the clock's five are the first.
 
 **Where it lives.** The drawings are `tooling/glyphs/drawings.mjs` (both constructions for every
 name); `build.mjs` emits the kit's `packages/design-kit/src/glyphs/data.ts` and the phone's

@@ -114,6 +114,14 @@ const PAGE = "M6 3h8l4 4v14H6Z";
 const WIN_OPEN = "M11.5 19H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v3.5";
 const WIN_CHEV = "M7 9.5l3 2.5-3 2.5";
 const SOLID_CHEV = "M3 5l8.5 7L3 19v-4.3l4.6-2.7L3 9.3Z";
+// jump-T3: the window's wall opened on the left for the arrow going in — a box
+// with an arrow leaving it is already `outward`.
+const WIN_GAP = "M3 10V8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v8a3 3 0 0 1-3 3H6a3 3 0 0 1-3-3v-2";
+// Chrome on the Mat (2026-09-28, MC-D8): ICE's selection glyphs redrawn in the
+// Instrument construction. The tape is a padlock, shut; the lift the same
+// padlock opened. Their Hardware records are drawn here (none shipped).
+const LOCK_BODY =
+  "A2.5 2.5 0 0 1 20 12.5v6a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-6A2.5 2.5 0 0 1 6.5 10Z";
 
 /**
  * name → { label, group, role, instrument: {s, f?, tf?}, hardware: {d} }
@@ -234,6 +242,93 @@ export const DRAWINGS = {
     // resume-play-T3: the verb is play in the window's open corner.
     instrument: { s: P(`${WIN_OPEN}${WIN_CHEV}M15.5 14.5v7l6-3.5Z`) },
     hardware: { d: `${SOLID_CHEV}M14 9.5v11l8-5.5Z` },
+  },
+  jump: {
+    label: "Jump to",
+    group: "actions",
+    role: "Go to a session that is running: a live row in History, a link in running text",
+    // jump-T3: the arrow goes in through the window's opened wall.
+    instrument: { s: P(`${WIN_GAP}M2.5 12h8M7.5 9l3 3-3 3M13.5 15.5h4`) },
+    hardware: { d: `${SOLID_CHEV}M14.5 10.5h7v7H19v-2.7l-4.2 4.2-1.8-1.8 4.2-4.2H14.5Z` },
+  },
+  duplicate: {
+    label: "Duplicate",
+    group: "actions",
+    role: "Duplicate on the desk's selection bar (⌘D); a taped selection does not offer it",
+    instrument: {
+      s: `${R(8.5, 8.5, 12, 12, 3)}${P("M15.5 8.5V6.5a3 3 0 0 0-3-3h-6a3 3 0 0 0-3 3v6a3 3 0 0 0 3 3h2")}`,
+    },
+    hardware: {
+      d: `M5.5 3H13a2.5 2.5 0 0 1 2.5 2.5V7H7v8.5H5.5A2.5 2.5 0 0 1 3 13V5.5A2.5 2.5 0 0 1 5.5 3Z${rectPath(8.5, 8.5, 12.5, 12.5, 2.5)}`,
+    },
+  },
+  tape: {
+    label: "Tape it down",
+    group: "actions",
+    role: "The desk's selection bar: tape the selection down where it lies (⇧⌘L)",
+    instrument: { s: `${R(4.5, 10.5, 15, 10, 3)}${P("M8 10.5V8a4 4 0 0 1 8 0v2.5M12 14.5v2")}` },
+    hardware: {
+      d: `M6.5 10V8a5.5 5.5 0 0 1 11 0v2${LOCK_BODY}M9 10V8a3 3 0 0 1 6 0v2Z${capsule(12, 14.4, 12, 16.6, 1.1)}`,
+    },
+  },
+  lift: {
+    label: "Lift the tape",
+    group: "actions",
+    role: "The tape button while the selection is taped: on, and lifting the tape",
+    instrument: { s: `${R(4.5, 10.5, 15, 10, 3)}${P("M8 10.5V8a4 4 0 0 1 7.7-1.5M12 14.5v2")}` },
+    hardware: {
+      d: `M6.5 10V8a5.5 5.5 0 0 1 10.6-2.07L14.78 6.87A3 3 0 0 0 9 8v2h8.5${LOCK_BODY}${capsule(12, 14.4, 12, 16.6, 1.1)}`,
+    },
+  },
+  trash: {
+    label: "Delete",
+    group: "actions",
+    role: "Delete, at the far end of the desk's selection bar (⌫); red only while hovered",
+    instrument: {
+      s: P(
+        "M4.5 6.5h15M9.5 6.5V5a1.5 1.5 0 0 1 1.5-1.5h2A1.5 1.5 0 0 1 14.5 5v1.5M6.5 6.5l.9 12.2a2 2 0 0 0 2 1.8h5.2a2 2 0 0 0 2-1.8l.9-12.2M10 10.5v6M14 10.5v6",
+      ),
+    },
+    hardware: {
+      d: `M9.5 5V3.8A1.3 1.3 0 0 1 10.8 2.5h2.4a1.3 1.3 0 0 1 1.3 1.3V5h4.8a1.2 1.2 0 0 1 0 2.4H4.7a1.2 1.2 0 0 1 0-2.4Z${rectPath(11.2, 3.7, 1.6, 1.3)}M5.6 8.7h12.8l-1 11a2 2 0 0 1-2 1.8H8.6a2 2 0 0 1-2-1.8Z${capsule(10, 11.6, 10, 18.4, 0.85)}${capsule(14, 11.6, 14, 18.4, 0.85)}`,
+    },
+  },
+  pen: {
+    label: "Pen",
+    group: "actions",
+    role: "A held kind's pen as a mode (the calendar's): on is the inverted solid",
+    instrument: {
+      s: `${P("M5 19l1.2-4.2L15.6 5.4a2 2 0 0 1 2.8 0l.2.2a2 2 0 0 1 0 2.8L9.2 17.8z")}${P("M13.5 7.5l3 3")}`,
+    },
+    // the barrel and the cap apart, the band between them knocked through
+    hardware: {
+      d: "M3.6 20.4 4.9 15.4 12.6 7.7 16.3 11.4 8.6 19.1ZM13.9 6.4 16.87 3.43A2.62 2.62 0 0 1 20.57 7.13L17.6 10.1Z",
+    },
+  },
+  eraser: {
+    label: "Eraser",
+    group: "actions",
+    role: "A held kind's eraser as a mode (the whiteboard's): on is the inverted solid",
+    instrument: {
+      s: `${P("M4.5 15.5l7-7a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8l-4 4H9.3l-4.8-4z")}${P("M9 19.5h11")}`,
+    },
+    // the rubber and the sleeve apart, standing on the line
+    hardware: {
+      d: `M4.5 14.5 8 11l7 7-.5.5H9.3ZM8.99 10.01 11.5 7.5a2 2 0 0 1 2.8 0l4.2 4.2a2 2 0 0 1 0 2.8l-2.51 2.51Z${capsule(9.8, 20.4, 20, 20.4, 0.8)}`,
+    },
+  },
+  today: {
+    label: "Today",
+    group: "actions",
+    role: "The held calendar's Today: back to this month",
+    instrument: {
+      s: `${R(4.5, 6, 15, 13.5, 2.5)}${P("M4.5 10.5h15M8.5 4v3.5M15.5 4v3.5")}`,
+      f: C(12, 15, 1.6),
+    },
+    // the page knocked out under a solid head, the rings through it, the day solid
+    hardware: {
+      d: `${rectPath(3.5, 5, 17, 16, 2.5)}${rectPath(5.5, 10, 13, 9, 1)}${circlePath(12, 14.5, 2)}${rectPath(7.4, 2.5, 2.2, 4.5, 1.1)}${rectPath(14.4, 2.5, 2.2, 4.5, 1.1)}`,
+    },
   },
   chevron: {
     label: "Chevron",

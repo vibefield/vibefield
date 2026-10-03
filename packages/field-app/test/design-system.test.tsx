@@ -141,8 +141,8 @@ describe("design system page", () => {
       "Swarm bodies — every drawn state, on the package's own fixtures",
     );
     expect(container?.textContent).toContain("The interface, accounted for");
-    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 51.
-    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(51);
+    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 59.
+    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(59);
     // One Frame FR-1: the view frame on fixtures — the shipping track and cover
     // over a field, and a plate per state the page's Chrome & Composer plates
     // show for the frame (the last the keys as Windows prints them).
