@@ -367,6 +367,41 @@ here: the ground reads them by name (`draft/ground` `theme.ts`: `SHADOW`, `LINES
 `HEAT`). The stratified profile keeps its CSS chrome. Nothing here changes for a widget
 author; the change is which layer paints the chrome.
 
+### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
+
+**Ruled 2026-09-25 (DK-D5; thinking-the-desk §6): §5 is the material book.** The desk's materials
+are a fixed vocabulary, each a recipe with a normal response to the mat's one light, and each
+MEANS something; a material is written once by its recipe's name, as a colour is by its token's.
+The book is the desk's — what lies under the camera; the chrome over it keeps the tiers above and
+is lit by nothing (MC-1, §8 the desk's chrome). What an object is — an entity with its kind, its
+rect, its props, its stratum (pads · sheets · things), taped or not — is ICE's object model,
+`design-015` §5; this book says only what each material means and what wears it.
+
+| Material | Means | Wears it | On the desk |
+|---|---|---|---|
+| **paper** | writable | notes, the notebook's pages, the calendar, the whiteboard's face | drawn |
+| **ink** | drawn by hand | strokes on a board or a page, a note's handwriting | drawn |
+| **pictures** | a captured image | prints | drawn — device-local until the upload plane (DK-D21) |
+| **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
+| **boards** (the mat) | a place: it holds a desk | the mat itself, the ground (§2.1); the mini mat, a desk inside the desk | drawn |
+| **stickers** (tape) | an attachment, a label | tags, Fieldmarks (§11) — the masking and label tape are already marks | not yet, as objects |
+| **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
+| **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
+| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures | not yet — PORTALS (DK-D19, DK-D20) |
+
+**The five guardrails** (thinking-the-desk §6): **no material without a meaning** — no ornament
+that does not inform (a glass portal that refracts the mat passes; the stitched-leather calendar
+fails) · **the efficiency clause** — every physical control is at least as fast as its flat equal
+(a knob takes a drag, the wheel and a typed value, and shows its number), and where the physical
+form loses, the flat form wins · **legibility rules the camera** — text at every zoom band, on
+every material, in both lights · **one physics** — one light, one spring set, one mass; no object
+keeps private motion rules · **the agent test** — a material must make working with an agent
+better: the agent sees the same objects by the same names, and a material only the eye can read
+is decoration. *A stub:* the recipes are ICE's (its `theme.ts` names them, each kind's pass draws
+them), and a material's row gains its recipe's name when a VibeField surface first wears it. Not
+yet drawn: string, stickers as objects, instruments and portals — each the desk migration's
+follow-on program, never a half-port.
+
 ---
 
 ## 6. Motion
@@ -840,6 +875,195 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   writes it too, and Godview follows it (§1.1). The menu is one of the frame's open surfaces (§10),
   and stands with the frame above the cover in every view. **Devtools** leave the corner for
   Settings → Advanced, a "Developer" section shown in development builds only (FC-D12, F12).
+- **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
+  lock and MC-D10 with DK-D23, 2026-10-02; built on the desk by DK-11…DK-16): **the mat keeps its
+  marks and the chrome joins the field.** Under the camera is the desk's: the pencil brackets, the
+  laser guides, the masking tape, the label tape and the printed rulers are GPU marks in the mat's
+  own inks, lit by its Sun and Moon (§2.1). Over it is VibeField's: the bar, its menu, the tools in
+  hand, the pegboard's filters and the line's door are screen-space chrome, lit by nothing and
+  following the theme. A control never dresses as a mark and a mark never becomes a control (MC-1),
+  so the desk's ink leaves the bar and the label tape leaves the filters. Every bar is the line's
+  glass and a menu grown from it the same piece, firmed to solid (MC-2, FR-7); colour is content or
+  state only — a toggle inverts, a pen's ink is its own dot, Delete arms in §2.5 red, focus is
+  `--vf-select`, the pencil's twin (MC-4); the bar is one element through every role, and the line
+  keeps the foot (MC-5). **VibeField draws all of it** (MC-D10 = DK-D23): views over ICE's doors —
+  `handle.selection`, `handle.tray`, the layer's status — each a product composition (a controller
+  and a controller-free view) cataloged with fixture anchors; ICE's own `SelectionMenu` and
+  `TrayBar` are inline-styled and constant-placed and cannot be re-skinned to this. **ICE's own
+  desk keeps its demo chrome** (MC-D11's "it follows" deferred, DK-D23): nothing below binds ICE's
+  ink bar, its Objects pill or its demo letter keys.
+- **The selection bar** (Chrome on the Mat §3.1; MC-D2 the line's glass, ruled 2026-10-01; MC-D1;
+  One Frame §7; DK-11): one element over `handle.selection`'s anchor, placed imperatively each time
+  the anchor publishes — never a render per frame.
+  - **Place** — centred over the selection's brackets (the anchor's `box`: 6 out for one object,
+    the union's 10 out for several), its foot **10** above them; when its top would cross the **safe
+    top, 94** (§10) it stands 10 below them instead; kept **42** from each side (the notch's 26 +
+    16); its top never lower than **660** (its foot 8 above the line's top, 708).
+  - **Size and material** — **40** tall (the top chrome's height), padding 4, gap 2, corners 20, on
+    the line's glass (§5) with its hairline and the island shadow; cells **32** × 32, corners 16,
+    their glyphs **16** in secondary ink (primary under the pointer); the rule 1 × 18 in the strong
+    hairline, 5 clear each side.
+  - **Order** — **Send to…** · rule · the kind's acts · Duplicate (`duplicate`) · Tape it down
+    (`tape`) · More (`ellipsis`) · rule · Delete (`trash`). *Send to…* is the bar's one word:
+    `agents` 16 and "Send to…" at 13/500 in primary ink on the ready fill (the foreground at 8%),
+    a 32-tall pill padded 0 12 0 10, gap 7; several selected, it counts them — "Send 2 to…". **The
+    kind's acts** are those every selected object's type declares (the anchor's `menu`, ICE K8a,
+    run through `ops.runMenuAction`), each a 32 cell wearing the act's glyph — one of the set, or
+    the kind's own drawing (§13, MC-D8) — its label the tooltip and the accessible name: the host
+    prints what the kind declares and adds nothing. **Taped** (the anchor's `locked`: every selected
+    object taped): no Duplicate, and the tape button is on — inverted, `aria-pressed`, wearing
+    `lift`: "Lift the tape".
+  - **States** — hover the ready fill (8%) · press the foreground at 14% and scale 0.95 · on, the
+    inverted solid (`--vf-foreground` with the inverse ink) · Delete arms only while hovered:
+    `--vf-ink-danger` on `--vf-red` at 12% · focus a 2px `--vf-select` ring, offset 2; Tab walks
+    the cells.
+  - **Keys** — a tooltip says the act and its key, the frame's way (FR-5): "Duplicate  ⌘D",
+    "Tape it down  ⇧⌘L", "Delete  ⌫" — the desk's keymap (DK-D24). Send to…, More and a kind's act
+    that declares no key say none.
+  - **Motion** — away for a gesture (a drag, a marquee, a pan, a pinch) and while a note is being
+    written (the anchor's `gesturing`, `editing`): out in 90ms, back 200ms after it ends, in over
+    180ms (ICE's, as built); away too while @'s list is open from Send to… (below). Reduced motion
+    (M6): the same fades, no travel.
+  - **A missing face** selected (below): the bar names the type where the kind's acts would stand.
+- **The bar grown — More, and right-click** (Chrome on the Mat §3.2; MC-D6 ruled through One
+  Frame's lock; FC-D14 solid; DK-D29, DK-D24; DK-11): **More grows the bar into its menu** — ONE
+  element (M1), on the island curve over 600ms, the Me menu's grow — upward, or downward when its
+  top would cross 94, the bar's own row then heading it. **The bar's row never moves** (M2): More
+  stays under the pointer, shown on. The menu is **solid** (§5's menus: the glass firms as it
+  grows), corners 20, at least **244** wide (the bar's width when wider), centred on the bar and
+  kept 42 from the sides; its list padded 6 6 2 (2 6 6 grown down). **Rows** 34 tall, corners 12,
+  padded 0 10, 13/500 in primary ink, the nearest hot in the ready fill; **keys at the row's end**,
+  11/500 in tertiary ink; between groups a hairline in the strong hairline, 10 in, 4 above and
+  below; grown upward the list reads bottom-up, nearest first. **The order, nearest first:** the
+  kind's acts · Open (an openable object, ↩) · Send to… | Duplicate (⌘D; not while taped) · Bring
+  to front · Send to back (`ops.reorder`) · **Clean up** (two or more selected: `ops.arrange` tidies
+  them into reading-order rows, one undo step — DK-D29) | Tape it down, or Lift the tape (⇧⌘L) |
+  Delete (⌫, armed red under the pointer). No Copy: the engine has no copy op. Send to…, Bring to
+  front and Send to back print no key — the page's ⌘↩, ⌘] and ⌘[ are bound nowhere (DK-D24).
+  **The eyebrow** names what it acts on, at the far end, in the mat's print: mono 10, capitals,
+  0.08em, tertiary, padded 8 10 5 — NOTE · 2 OBJECTS · CLOCK (a missing face's type:
+  NOTE · PLUGIN OFF). Rows fade and rise 4px nearest first, 160ms + 26ms a row (cap 400ms), and
+  fold back the same way (M4); ↑ ↓ walk, Return takes, Esc or a click elsewhere folds it.
+  **Right-click on an object** selects it and grows this same bar into this same menu — never a
+  separate popover (MC-D6) — through a VibeField `contextmenu` listener over the desk's pick.
+  **The comment command** (DK-D24: the C key's wrap of the selection, which leaves the keymap)
+  becomes a row here when DK-8's comment kind exists. The bare mat's own menu (Paste here, New
+  note here) is not built (a Marks on the Mat item).
+- **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
+  readouts; One Frame §7; ICE I20, I22; DK-12): when an object is picked up (the anchor's `held`),
+  **the same bar travels** with the pickup and becomes the tools in hand — one element (M1),
+  **560ms** on the island curve (I20's `travelMs`, carried as `HeldAnchor.travelMs`) — hides while
+  the object flies home (`landing`) and is back over it 200ms after it lands. **Place:** under the
+  head, its top at **y 64** (centre 84), 16 under the name pill, centred on the window — the field,
+  then what you hold; object chrome, not the head's (FR-1). The held object's **reading fit keeps
+  116** above it (the bar's foot, 104, + 12) **and 100** below (the line's 88 + 12): I20's
+  `deskLayer({ hold: { top: 116, band: 100, travelMs: 560 } })` — ICE's own 56 / 72 are its demo's.
+  **Order:** Send to… · rule · the kind's tools · rule · Done. The kind's tools are its declared
+  slots in its order (`HeldAnchor.tools`, run through `ops.useHeldTool`), grouped — pages, inks,
+  tools — the groups 6 apart. **Inks are dots** (MC-4): 12px in the tool's own ink with a 1px inner
+  ring (black/14; white/20 by night) so a black ink reads on the night glass, in a 28 × 32 cell;
+  the ink in hand wears a 1.5px foreground ring 2px off the dot — the notch pin's ring; a dot grows
+  1.18× under the pointer (160ms, pop). **Modes** (`kind: "mode"` — the eraser, the calendar's pen)
+  are 32 cells, the one in hand the inverted solid (`aria-pressed`); **actions** (`kind: "action"` —
+  undo, today, a page) are 32 cells; a tool declared without either waits, faint by ink. **The
+  readout** (MC-D9, I22's `HeldAnchor.readout`) stands between the controls it reads — "Page 1"
+  between the notebook's pages, "September" between the calendar's months — 12/500 `tabular-nums`
+  in secondary ink, at least 44 wide, padded 0 4; a kind that says none shows none. **Done** is
+  VibeField's primary at 32: the inverted solid, 13/500, padded 0 15, no glyph, the chip shadow
+  (`0 4px 10px` black/14, /40 by night); it puts the object down (`ops.putDown`). Tooltips say the
+  tool and its key — "Felt pen  1", "Eraser  E", "Put it down  Esc". The specimen list is ICE's
+  six as they declare themselves: the notebook ‹ Page 1 › · felt, ball, fountain, red · undo; the
+  whiteboard black, blue, red, green · eraser · undo · redo; the calendar ‹ September › · today ·
+  pen; the clock seconds · the 24-hour ring · an hour back · an hour ahead · the next dial (its own
+  drawings, §13).
+- **The pegboard — Objects, behind the line** (Chrome on the Mat §3.4–§3.5; MC-D7 ⊕ Objects, B,
+  ruled through One Frame's lock; MC-D3 ruled 2026-10-01: segmented; One Frame §7; ICE I21; DK-13):
+  **the door is the line's create on Canvas** (§8, the line): Objects, B, calling
+  `handle.tray.toggle()` and mirroring the tray's `open` — the plus turned 135° into ✕ while the
+  board is out. The desk refuses the board while an object is in hand (`open()` answers false), and
+  the create's tooltip says so. ICE's Objects pill, its ✕ and its ride on the drawer's edge are its
+  demo's: here the drawer's handle is the line. **The board rises behind the line** — the desk's own
+  pegboard, its specimens hung by category over their label tape — and **its lay keeps 88 at the
+  foot** (I21: `deskLayer({ tray: { foot: 88 } })`) so the last row clears the line and the board's
+  scroll still reaches it. It hangs only the kinds whose plugin is on (P3c, the old sheet's filter,
+  now the board's). **The filters are segmented** (MC-D3): the segmented control (above) cut for
+  the wood, centred in the board's clear **header band** (`TrayAnchor.drawer.header`, 48 tall) and
+  12 in from its sides, following the drawer every frame of its slide and fading in over its last
+  40%. The track is the chrome's solid at 55% over a 12px blur, **sunk** — an inset `0 1px 3px`
+  black/16 inside the hairline — padded 3; the thumb is solid chrome with the hairline and
+  `0 2px 6px` black/12, **sliding 300ms on the island curve** across widths; segments 30 tall,
+  padded 0 15, 13/500 sentence case, in tertiary ink at rest and primary on the one chosen.
+  **All** first, then `tray.categories()` in the lay's order — ICE's Paper, Surfaces, Things and
+  any a plugin's kind declares — **no counts**. Past the band's width they scroll inside it, the
+  far end fading under the tray's mask; ← → walk them, Home and End jump, Return or a click
+  chooses (`tray.category(id)`). **Chrome does not dim by night**: the anchor's `night` is not
+  read here.
+  **One surface at a time:** Objects is one of the frame's open surfaces (§10) — it folds @'s list,
+  the explorer, the menus, the drawers and the palette, and they fold it; Esc closes it
+  ("Close  Esc"); B toggles it, never while typing and never under a cover.
+- **Send to…** (Chrome on the Mat §3.6; MC-D5 ruled through One Frame's lock: hand off to the line;
+  DK-D26; One Frame §7, FC-D1; DK-14): **it only drafts** — it never sends and never aims; VibeField
+  aims in one place, the line. Pressed (on the bar, in hand or in the menu), the selection becomes
+  **one chip** in the draft at the caret: a chip of the object's face lifts off the selection and
+  **travels to the draft, 560ms on the island curve, shrinking along its travel** (M4), landing as
+  the line's chip (§8, the line: 24 tall, corners 7, 12.5/500, the glyph 13). **Its face:** a note
+  wears its own paper and ink, `snippets` and its first words; any other kind its name ("Clock");
+  several, their count ("2 objects"); a missing face, its type's name. **What it carries**
+  (DK-D26): the objects' names, their durable text and a still of them through the capture door
+  (`handle.capture({ rect })`, ICE I23). **Then @'s list opens at the caret**, 180ms after the chip
+  lands (§8, the line) — unless the draft is already aimed, when the chip joins it and send arms.
+  The bar steps aside while the list is open and comes back when it folds. Reduced motion (M6): no
+  flight — the chip fades in at the caret. The picker Marks on the Mat drew growing out of the bar
+  was never built and is not; an agent reading or rendering the desk itself is the AGENT'S EYES
+  program, beyond a chip.
+- **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24): an object the
+  desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a type this build
+  never registered: ghost stubs register faceless types only) or its **kind faulted** (refused at
+  create, or quarantined after three strikes: the layer's `status().faults`) — wears **ICE's
+  missing face**: a faint 45° hatched card the size of its box, a hairline edge, no text, pickable,
+  so it still selects, moves, tapes and deletes like any object. VibeField draws no face of its own
+  (the placeholder kind is struck). **The bar names it**, in words where the kind's acts would
+  stand: the type's name and why — **"Note · plugin off"**; a faulted kind "Clock · can't draw" —
+  13/500 in secondary ink, a label and not a control; the grown menu's eyebrow says the same in
+  capitals and Send to… carries the type's name. A kind's fault is heard once (`onStatus`) and said
+  once in words, never painted onto the object as an alarm.
+- **The covers over the desk** (DK-D25 ruled 2026-10-02 — "frozen desk should be still and consume
+  no render time at all"; FC-D13, FC-D15, FC-D16; ICE I23; DK-15): **under a cover the desk is a
+  still and costs nothing** — the moment a cover is called, the desk's last presented frame
+  (`handle.capture()`, I23) is blurred once and laid where the canvas was, the canvas is hidden and
+  `engine.frame.freeze("cover")` parks its loop, so the desk runs zero frames and zero submits for
+  as long as the cover stands (`gpuLedger` reads 0). The numbers: the blur **40px, once**, in an
+  OffscreenCanvas `filter` — never a `backdrop-filter`, which the compositor redraws every frame
+  the cover's own content moves (Godview's swarm moves every frame); the cover's own ground over it
+  at **72%** (FC-D16); the still recedes as the field does (§6, the view switch: 0.98, transform
+  only); a covered view's content ends at **692** (FC-D15, §10). Back to Canvas: thaw, the canvas
+  shown, the still dropped. A capture that answers nothing (a lost device) covers a plain ground in
+  the mat's colour and says so once in the line's note. Until I23 ships, `createImageBitmap` on the
+  desk's own canvas stands in — a bitmap ICE does not promise, so its absence falls back the same
+  way.
+- **Peers on the mat** (DK-16; §2.8 I-1, I-4; Chrome on the Mat §3.7): another person's pointer on
+  the desk is VibeField's own cursor, drawn in screen space from the document's presence
+  (`usePresencePeers`): the pointer's arrow, 18 × 22, filled in `--vf-presence-ink` (`#68686B`)
+  with a 1.4 white edge and a `0 1px 2px` black/25 drop, and its **label**, 14 right of and 18
+  below the arrow's box — **22 tall**, full round, padded 0 9 0 7, the presence ink with white
+  11.5/500 and a `0 2px 6px` black/18 shadow — reading **the face first, then the name**
+  ("🦊 James", §2.8). Never the peer's own colour (I-1): the one ink that is nobody's. Your own
+  pointer on the desk is the OS's and the desk's own open hand; the halo is gone (§2.1).
+- **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; DK-3, DK-16): the
+  desk's layer says `failed` (`onStatus`: WebGPU absent — a remote desktop has none, Windows is
+  unverified — or its device lost), and the Canvas stage shows **VibeField's unavailable state**,
+  never ICE's black monospace screen and never a blank. On the plain ground (`--vf-canvas-bg` and
+  §2.1's CSS-fallback dots — not the mat, which nothing can draw), centred, the kit's dashed card
+  (`UnavailableState`, §8 empty states: the strong hairline dashed, corners 22) at 380 wide, padded
+  26 26 22: **what happened** (14/600, primary), **what to do** (12.5/400, tertiary), **one
+  Reload** (the primary: inverted, 36 tall, padded 0 18, corners 18, 13/500), and **the device's
+  own words last and small** (11 mono, faint, 12 below). Device lost: "The desk lost its graphics
+  device" · "The graphics device was reset while the desk was drawing. Your objects are saved in
+  this document; reload to draw them again." · Reload · `device lost · reason "unknown"`. No
+  WebGPU: "This computer can't draw the desk" · "The desk draws with WebGPU, which this graphics
+  setup doesn't offer — a remote desktop has none. Your objects are saved in this document." ·
+  Reload · `WebGPU is unavailable here (no navigator.gpu)`. No Canvas2D fallback in v1 (DK-D32):
+  the state is the whole answer, and the frame around it still works.
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
   opens it, because that user already exists by then — the chooser is where you choose who to
   enter instead. Eyebrow "Users", one line of voice, then every user on this machine as a tile,
@@ -1229,9 +1453,10 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   traffic lights' centre; everything at the foot on y 734, the line's centre. **The frame stands
   above every view.** The canvas is the ground floor; Godview, History and (once it exists) the
   Assistant are views drawn as ONE cover over it (§6), each on its own ground at the covers' glass,
-  72% (FC-D16) — with no blur until the field's still exists to blur. A covered view ends its
-  content at 692, the **reserve** of 88 above the window's foot, and keeps 8px clear at each edge
-  for the notches' slivers; its own ground runs under the line, and only the canvas runs content
+  72% (FC-D16) — with no blur until the field's still exists to blur (the desk's, DK-15: §8, the
+  covers over the desk). A covered view ends its content at 692, the **reserve** of 88 above the
+  window's foot, and keeps 8px clear at each edge for the notches' slivers; its own ground runs
+  under the line, and only the canvas runs content
   under it. Above the frame stand only Settings, the palette and the loading veil (and, until
   FR-4 opens it above the line, the open Me menu, which grows over the track's left end — *since
   FR-4 it stands with the frame, above the line, and nothing of the frame's is under it*).
@@ -1280,6 +1505,21 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   longer Electron's page-zoom roles: each item sends its act to the window's head, which answers
   on Canvas as its keys do, and the three are disabled under a cover — so nothing in the menu bar
   or its keys zooms the whole window any more (One Frame FR-3's finding).
+- **The mat's places** (Chrome on the Mat §4; One Frame §7; MC-D4 ruled 2026-10-01; ICE I20, I21;
+  built on the desk by DK-11…DK-13): on Canvas the desk's chrome stands in the frame's fifth place,
+  **on its own object** (FR-1). **The bar follows its object** — over the selection's brackets, under
+  them near the top — and travels with it into the hand; **the tools in hand sit under the head**
+  (top y 64, 16 under the name pill), still the object's chrome and not the head's; **the pegboard
+  rises behind the line**, whose create is its door (§8). **The desk keeps two reserves:** the
+  **safe top, 94** — the rulers' band plus 8: the rulers move in to a margin of 60 (DK-3), so the
+  top ruler starts below the head strip and the left ruler clears the notch, and their band ends at
+  86 — above which the bar goes under its object; and **the foot, 88** — the line's reserve, the
+  same 88 a covered view keeps (692): the board's lay ends 88 above the window's foot (I21) so its
+  last row clears the line, and the bar's top never sits below 660 (its foot 8 above the line's 708).
+  Between them the bar keeps **42** from each side (the notch's 26 + 16), and a held object's
+  reading fit keeps **116** above it (the held bar's foot, 104, + 12) and **100** below (the
+  line's 88 + 12, I20). The reserves are measured from the window's edges and hold at every size;
+  the y values here are the default window's (1180 × 780).
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
