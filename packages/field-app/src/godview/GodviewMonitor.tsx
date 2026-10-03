@@ -1,6 +1,5 @@
 import {
   type AccountUsagePort,
-  type AgentVisualStatus,
   BarControl,
   FindSheet,
   type HistoryPort,
@@ -29,7 +28,7 @@ import {
 import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
 import { DeviceFilterChip } from "./DeviceFilterChip";
 import type { GodviewTheme } from "./GodviewTuningPanel";
-import { managedRowId, monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
+import { managedRowId, monitorAgentCounts } from "./monitor/agents";
 import { type DeviceChoice, filterByDevice, standingChoice } from "./monitor/device-filter";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
@@ -188,6 +187,11 @@ const NO_USAGE: AccountUsagePort = {
   snapshot: async () => ({ refreshedAt: new Date().toISOString(), entries: [] }),
   subscribe: () => () => undefined,
 };
+
+/** The counters select nothing any more (FC-D18): the bar still asks for an
+ * answer, and its group is hidden (godview.css) until the views package draws
+ * counters only for a host that passes counts. */
+const noStatusCycle = (): void => undefined;
 
 export interface GodviewMonitorProps {
   view: AgentMonitorView;
@@ -535,18 +539,12 @@ export function GodviewMonitor({
 
   const closeFind = useCallback((): void => setFindOpen(false), []);
 
-  const selectNextStatus = useCallback(
-    (status: AgentVisualStatus): void => {
-      // By ROW id: a managed row with no pane has no session, and a session
-      // id of undefined matched the first sessionless row instead of cycling.
-      // AR-S5: through what the chosen tab shows, as the counters count it.
-      const currentId = shown.find((agent) => agent.active)?.id;
-      const next = nextMonitorAgentForStatus(shown, status, currentId);
-      if (next) actions.select(next);
-    },
-    [actions, shown],
-  );
-
+  // FC-D18 (ruled 2026-10-01): the counters and their ⌘1–⌘3 are removed —
+  // ⌘1–⌘4 are the frame's views now (One Frame FR-1), and a third digit family
+  // would throw a missed ⌥ out of Godview. Blocked agents still show where they
+  // are: an orange body in the swarm, a list row naming what it waits on. The
+  // bar's counters group is hidden by godview.css until the views package
+  // draws it only for a host that passes counts (the ask, One Frame §21).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
@@ -557,19 +555,11 @@ export function GodviewMonitor({
         event.preventDefault();
         event.stopImmediatePropagation();
         setFindOpen((current) => !current);
-        return;
       }
-      const status = ({ Digit1: "blocked", Digit2: "working", Digit3: "idle" } as const)[
-        event.code as "Digit1" | "Digit2" | "Digit3"
-      ];
-      if (!status) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      selectNextStatus(status);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [selectNextStatus]);
+  }, []);
 
   // AR-S5 — ⌥0 is All, ⌥1…⌥n the tabs, while the strip is drawn: captured
   // like the chords above, and only for the digits that have a tab, so ⌥ and
@@ -603,7 +593,7 @@ export function GodviewMonitor({
     <>
       <InstrumentBar
         counts={counts}
-        onSelectStatus={selectNextStatus}
+        onSelectStatus={noStatusCycle}
         views={MONITOR_VIEWS}
         viewId={view.id}
         onSelectView={(viewId) => onSelectView?.(viewId)}

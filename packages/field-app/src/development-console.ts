@@ -240,6 +240,29 @@ export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {
   console.log(`GODVIEW_MONITOR ${JSON.stringify(facts)}`);
 }
 
+/** One view key the frame claimed (One Frame FR-1, FC-D4): which key, the
+ * view it names, the view the window was in, and what the frame did with it.
+ *
+ * The delivery probe's ear at the FRAME. A chord can be caught and change
+ * nothing a harness can see — ⌘2 inside Godview, ⌘4 while the Assistant waits —
+ * so the frame says what it heard, and the probe sets that beside the pane's
+ * own ear (which must stay deaf) and the view the window ends in. Emitted from
+ * the frame's own handler, never from a harness's wishes, and only in the
+ * godview smoke's modes. */
+export interface ViewKeyFacts {
+  key: string;
+  view: string;
+  from: string;
+  /** "moved": the frame asked for another view; "stayed": the window was
+   * already there; "waits": the view is not built (its note said so). */
+  outcome: "moved" | "stayed" | "waits";
+}
+
+export function emitViewKeyMarker(facts: ViewKeyFacts): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`VIEW_KEY ${JSON.stringify(facts)}`);
+}
+
 /** What the first ⌘G cost, station by station (GT-3p, GT-D15.4).
  *
  * Published once per app life, when the first open reaches a presented frame.

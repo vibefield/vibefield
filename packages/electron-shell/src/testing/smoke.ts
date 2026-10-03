@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   catalogEntry,
+  type FrameView,
   LAYOUT,
   TerminalConfigDocument,
   TerminalConfigValidation,
@@ -2560,6 +2561,24 @@ function pressProductChord(win: BrowserWindow, keyCode: string): void {
   win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
 }
 
+/** One Frame FR-1 — the view keys as a keyboard presses them: ⌘1–⌘4 on darwin,
+ * Ctrl+1–4 elsewhere, through `pressProductChord`. This is the road a person
+ * takes to a view, so the harness takes it too rather than asking main's view
+ * owner directly (the old `toggleGodview` handed it main's own action). */
+const VIEW_DIGIT: Readonly<Record<FrameView, string>> = {
+  canvas: "1",
+  godview: "2",
+  history: "3",
+  assistant: "4",
+};
+
+function pressViewKey(win: BrowserWindow, view: FrameView): void {
+  pressProductChord(win, VIEW_DIGIT[view]);
+}
+
+/** The window's view as the frame draws it (the views track's `data-view`). */
+const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-view") ?? "absent")`;
+
 /** Row 11e's ear at the pane: a target-phase keydown listener on every deck
  * input, beside ghosttea's own. A key that reaches the pane at all is heard
  * here — ghosttea stops PROPAGATION, never the listeners on its own target. */
@@ -2812,10 +2831,9 @@ async function readDeckLayout(win: BrowserWindow): Promise<string | null> {
 async function reopenAfterReload(opts: {
   win: BrowserWindow;
   deck: MarkerWatch<DeckFacts>;
-  toggleGodview: () => void;
   viteUrl: string;
 }): Promise<void> {
-  opts.toggleGodview();
+  pressViewKey(opts.win, "canvas");
   await opts.deck.until((facts) => !facts.active, "the overlay to close", 20_000);
   const reloaded = waitForConsole(opts.win, "CANVAS_READY ", 60_000);
   reloaded.catch(() => undefined);
@@ -2824,7 +2842,7 @@ async function reopenAfterReload(opts: {
   await reloaded;
   opts.win.focus();
   opts.win.webContents.focus();
-  opts.toggleGodview();
+  pressViewKey(opts.win, "godview");
 }
 
 /** Report-only keystroke-echo latency — SKIPPED since TP-S3e: the probe
@@ -4049,7 +4067,6 @@ export async function runSmokeGodview(opts: {
   registry: WindowRegistry;
   preloadPath: string;
   viteUrl: string;
-  toggleGodview: () => void;
   beforeExit: () => Promise<void>;
   /** Short, gated G22/G23 proof selected by --terminal-direct-proof. */
   terminalDirectProof?: boolean;
@@ -4106,7 +4123,7 @@ export async function runSmokeGodview(opts: {
     // previous run's saved layout is still sitting there — and since GT-3 that
     // layout is not silently dropped, it is a QUESTION (every session it names
     // died with the last run's floor). Clearing here rather than reloading
-    // because nothing has mounted yet: the deck is not built until ⇧⇧.
+    // because nothing has mounted yet: the deck is not built until ⌘2.
     await win.webContents.executeJavaScript("localStorage.clear()");
 
     // GT-3m: armed BEFORE the toggle, because the monitor stage mounts WITH the
@@ -4120,17 +4137,18 @@ export async function runSmokeGodview(opts: {
     const coldOpenLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 90_000);
     coldOpenLine.catch(() => undefined);
 
-    // 1. ⇧⇧'s own action. The overlay opens, the deck redeems a ticket for the
-    //    CONNECTION — no session — and the workspace then creates its own first
-    //    pane through its own door (GT-D10). Nothing outside it asked for a
-    //    shell; there is one because the workspace decided there should be.
+    // 1. ⌘2 — the frame's key to Godview (One Frame FR-1; until FR-1 this row
+    //    called ⇧⇧'s own action). Godview opens, the deck redeems a ticket for
+    //    the CONNECTION — no session — and the workspace then creates its own
+    //    first pane through its own door (GT-D10). Nothing outside it asked for
+    //    a shell; there is one because the workspace decided there should be.
     //
     //    The persistence sampler starts HERE, before the key, because the fact
     //    the flip rows below need is the state a session was born in and that
     //    state is gone within one management round trip. Started after the
     //    birth, a sampler can only ever record the destination.
     const persistence = new PersistenceSampler(opts.handle);
-    opts.toggleGodview();
+    pressViewKey(win, "godview");
     const opened = await deck.until(
       (facts) => facts.active && facts.panes >= 1,
       "the overlay to open with the workspace's own first pane",
@@ -4806,7 +4824,7 @@ export async function runSmokeGodview(opts: {
     const stranger = TerminalCreateOpenResult.parse(
       await opts.handle.client.request("terminal.create", {}),
     ).sessionId;
-    opts.toggleGodview(); // closed, so the reload comes up with the deck unmounted
+    pressViewKey(win, "canvas"); // ⌘1: back to the canvas, so the reload comes up with the deck unmounted
     await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
     // The arbitration's OTHER state, read here because this is the one moment
     // the overlay is closed with the menu installed and the deck still
@@ -4846,7 +4864,7 @@ export async function runSmokeGodview(opts: {
     await reloaded;
     win.focus();
     win.webContents.focus();
-    opts.toggleGodview(); // the fresh document's FIRST open
+    pressViewKey(win, "godview"); // ⌘2: the fresh document's FIRST open
     const claimed = await deck.until(
       (facts) => facts.active && facts.sessionIds.includes(stranger),
       "the workspace to claim the floor session nothing in this deck created",
@@ -4947,7 +4965,6 @@ export async function runSmokeGodview(opts: {
     await reopenAfterReload({
       win,
       deck,
-      toggleGodview: opts.toggleGodview,
       viteUrl: opts.viteUrl,
     });
     const restored = await deck.until(
@@ -5127,7 +5144,6 @@ export async function runSmokeGodview(opts: {
       await reopenAfterReload({
         win,
         deck,
-        toggleGodview: opts.toggleGodview,
         viteUrl: opts.viteUrl,
       });
       const asking = await deck.until(
@@ -5566,6 +5582,106 @@ export async function runSmokeGodview(opts: {
       10_000,
     );
 
+    // 11g. THE VIEW KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-1,
+    //      FC-D4) — the probe each of ⌘1–⌘4 owes before it ships (⌘⎋ never
+    //      arrived: app-menu-model's VIEW_KEYS_ROAD), in 11e's form: a pane
+    //      holds focus, the ear listens at every pane input, and each key is
+    //      pressed the way a keyboard presses it. Three facts per key: the
+    //      FRAME heard it (its VIEW_KEY line says what it did), the PANE never
+    //      did (ghostty's goto_tab), and the window ends in the view the key
+    //      names. ⌘2 and ⌘4 move nothing a screen shows from here — the window
+    //      is already in Godview, and the Assistant waits — so for them the
+    //      frame's own line is the proof of delivery. `sendInputEvent`, like
+    //      11e's keys: below AppKit's key-equivalent dispatch, so this is the
+    //      page's road; the View menu's darwin accelerators stand behind it and
+    //      are not what this row measures.
+    const viewKeyFromPane = async (
+      view: FrameView,
+      want: { outcome: "moved" | "stayed" | "waits"; endsIn: FrameView },
+    ): Promise<string> => {
+      const digit = VIEW_DIGIT[view];
+      await focusDeck(win);
+      await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      const heard = waitForConsole(win, "VIEW_KEY ", 10_000);
+      pressViewKey(win, view);
+      const facts = JSON.parse(await heard) as { view: string; from: string; outcome: string };
+      if (facts.view !== view || facts.outcome !== want.outcome) {
+        throw new Error(
+          `the frame heard key ${digit} as ${JSON.stringify(facts)}, not ${view} · ${want.outcome}`,
+        );
+      }
+      await untilRenderer(
+        win,
+        `the window in ${want.endsIn} after key ${digit}`,
+        `${VIEW_NOW} === ${JSON.stringify(want.endsIn)} ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      const paneHeard = await chordProbeHeard(win);
+      if (paneHeard.some((key) => key.endsWith(`+${digit}`))) {
+        throw new Error(
+          `the pane heard view key ${digit} too (ghostty's goto_tab): ${JSON.stringify(paneHeard)}`,
+        );
+      }
+      return `${facts.from} → ${want.endsIn} (${facts.outcome}); the pane never heard it`;
+    };
+    const viewKeys: Record<string, string> = {};
+    viewKeys["4"] = await viewKeyFromPane("assistant", { outcome: "waits", endsIn: "godview" });
+    await untilRenderer(
+      win,
+      "the Assistant's note over its cell",
+      `(document.querySelector(".vf-views-note")?.textContent ?? "").includes("not built yet") ? "ok" : "no note"`,
+      5_000,
+    );
+    viewKeys["2"] = await viewKeyFromPane("godview", { outcome: "stayed", endsIn: "godview" });
+    viewKeys["3"] = await viewKeyFromPane("history", { outcome: "moved", endsIn: "history" });
+    // A view that is not showing is INERT: under History the pane has let go of
+    // the keyboard, so nothing typed there reaches a hidden shell.
+    await untilRenderer(
+      win,
+      "the pane letting go of the keyboard under History",
+      `document.activeElement?.classList.contains("terminal-input") ? "still focused" : "ok"`,
+      5_000,
+    );
+    pressViewKey(win, "godview");
+    await untilRenderer(
+      win,
+      "⌘2 back to Godview",
+      `${VIEW_NOW} === "godview" ? "ok" : ${VIEW_NOW}`,
+      10_000,
+    );
+    viewKeys["1"] = await viewKeyFromPane("canvas", { outcome: "moved", endsIn: "canvas" });
+    await deck.until((facts) => !facts.active, "the deck going quiet on the canvas", 20_000);
+    verdict["viewKeys"] = viewKeys;
+
+    // ⇧⇧ RETIRED (FC-D4): two Shift taps open nothing from the canvas, and close
+    // nothing from a focused pane — main's detector and its toggle are gone,
+    // and nothing in the page took their place. An absence can only be watched
+    // for a while: the detector it replaces answered within one tap's 300ms, so
+    // a second and a half is a generous window, not a guess at a race.
+    const tapShiftTwice = async (): Promise<void> => {
+      for (let tap = 0; tap < 2; tap++) {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Shift", modifiers: ["shift"] });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Shift", modifiers: [] });
+        await sleep(60);
+      }
+      await sleep(1_500);
+    };
+    await tapShiftTwice();
+    const afterCanvasTaps = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+    if (afterCanvasTaps !== "canvas") {
+      throw new Error(`⇧⇧ still moves the window: canvas → ${afterCanvasTaps}`);
+    }
+    pressViewKey(win, "godview");
+    await deck.until((facts) => facts.active && facts.panes >= 1, "⌘2 back to the deck", 30_000);
+    await focusDeck(win);
+    await tapShiftTwice();
+    const afterPaneTaps = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+    if (afterPaneTaps !== "godview") {
+      throw new Error(`⇧⇧ over a focused pane still moves the window: godview → ${afterPaneTaps}`);
+    }
+    verdict["doubleShift"] = "retired: two Shift taps moved no view, from the canvas or a pane";
+    await focusDeck(win);
+
     // 11f. THE LINK ROW (GT-8, GT-D22). ghosttea 0.12.0 finds links in a
     //      pane's output. A ⌘-click hands the runtime platform's `openExternal`
     //      the URL; the deck's opener asks fieldd's `terminal.link.open`; the
@@ -5970,7 +6086,7 @@ export async function runSmokeGodview(opts: {
     try {
       const warmLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 60_000);
       warmLine.catch(() => undefined);
-      opts.toggleGodview();
+      pressViewKey(win, "canvas");
       await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
       const reloaded = waitForConsole(win, "CANVAS_READY ", 60_000);
       reloaded.catch(() => undefined);
@@ -5982,7 +6098,7 @@ export async function runSmokeGodview(opts: {
       // Long enough for the idle callback (2s ceiling) plus a ticket, a bridge
       // fork and a device request on a loaded machine.
       await sleep(5_000);
-      opts.toggleGodview();
+      pressViewKey(win, "godview");
       const asked = await deck.until(
         (facts) => facts.active && (facts.panes >= 1 || facts.consent !== undefined),
         "the warm open to reach a pane or the restore question",

@@ -2,9 +2,10 @@ import {
   CloseRequest,
   CloseResult,
   type DesktopShellState,
-  GodviewSetRequest,
-  type GodviewState,
-  GodviewState as GodviewStateSchema,
+  type FrameView,
+  FrameViewSetRequest,
+  type FrameViewState,
+  FrameViewState as FrameViewStateSchema,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
   ScreenshotCaptureRequest,
@@ -25,7 +26,6 @@ import {
 import { contextBridge, ipcRenderer, sharedTexture } from "electron";
 import { PreloadDesktopStateBridge } from "./desktop-state";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
-import { PreloadGodviewStateBridge } from "./godview";
 import {
   PreloadLiveSurfaceFrameMux,
   type PreloadLiveSurfacePort,
@@ -34,6 +34,7 @@ import {
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadScreenshotResultBridge } from "./screenshot-result";
 import { PreloadShellCommandBridge } from "./shell-commands";
+import { PreloadViewStateBridge } from "./view";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
 // Product traffic flows over the loopback WS (D27), never over IPC. BOTH
@@ -147,7 +148,7 @@ const screenshotResults = new PreloadScreenshotResultBridge((issueCount) => {
     }),
   );
 });
-const godviewState = new PreloadGodviewStateBridge((issueCount) => {
+const viewState = new PreloadViewStateBridge((issueCount) => {
   logging.submit(
     JSON.stringify({
       v: 1,
@@ -156,9 +157,9 @@ const godviewState = new PreloadGodviewStateBridge((issueCount) => {
           v: 1,
           time: Date.now(),
           level: "error",
-          event: "renderer.preload.godview_state_rejected",
-          msg: "Preload rejected a malformed Godview state",
-          component: "preload.godview",
+          event: "renderer.preload.view_state_rejected",
+          msg: "Preload rejected a malformed view state",
+          component: "preload.view",
           attrs: { issueCount },
         },
       ],
@@ -215,8 +216,8 @@ ipcRenderer.on(IPC_CHANNELS.screenshotResult, (_event, raw: unknown) => {
 ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
   desktopState.accept(raw);
 });
-ipcRenderer.on(IPC_CHANNELS.godviewState, (_event, raw: unknown) => {
-  godviewState.accept(raw);
+ipcRenderer.on(IPC_CHANNELS.viewState, (_event, raw: unknown) => {
+  viewState.accept(raw);
 });
 
 contextBridge.exposeInMainWorld("vibefield", {
@@ -299,18 +300,15 @@ contextBridge.exposeInMainWorld("vibefield", {
   // TP-S3e: the `terminal` namespace (bridge connect + status) retired — the
   // renderer dials the cells' T1 doors itself; shell/home policy rides the
   // window bootstrap.
-  godview: {
-    /** `open` omitted = flip. The page never sends the value it believes,
-     * because main is the one holding it (GT-D2). */
-    set: async (open?: boolean): Promise<GodviewState> =>
-      GodviewStateSchema.parse(
-        await ipcRenderer.invoke(
-          IPC_CHANNELS.godviewSet,
-          GodviewSetRequest.parse(open === undefined ? {} : { open }),
-        ),
+  view: {
+    /** Ask for a view by name; main owns the window's view (FR-1) and the
+     * answer is what it holds now — a refused view answers unchanged. */
+    set: async (view: FrameView): Promise<FrameViewState> =>
+      FrameViewStateSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.viewSet, FrameViewSetRequest.parse({ view })),
       ),
-    onState: (handler: (state: GodviewState) => void): (() => void) =>
-      godviewState.subscribe(handler),
+    onState: (handler: (state: FrameViewState) => void): (() => void) =>
+      viewState.subscribe(handler),
   },
   /** SNAP-D3 — one native screenshot through main: the still's path on disk
    * (it is on the clipboard too), a cancel, or a typed error. Main serialises

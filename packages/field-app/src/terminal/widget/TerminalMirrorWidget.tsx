@@ -2,7 +2,7 @@ import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibecook/ice
 import type { ProductSessionRosterItem } from "@vibefield/contracts";
 import { CardShell, UiButton, UnavailableState } from "@vibefield/design-kit";
 import { type ReactElement, useCallback, useEffect, useState } from "react";
-import { useGodviewOpen } from "../../godview/overlay-state";
+import { useCovered } from "../../frame/view-state";
 import { TerminalMirrorSurface } from "../mirror";
 import {
   isSessionUnavailable,
@@ -49,9 +49,10 @@ import "./mirror-widget.css";
 // world units and never changes with zoom. Passing the camera here would apply
 // the scale a second time on top of the plane's — a visible bug, not a
 // refinement. Geometric culling stays with the surface's IntersectionObserver.
-// Host coverage is separate: Godview freezes the field (DESIGN.md §6 M5),
-// including mirror pixels beneath a translucent/blurred backdrop. Its covered
-// mirrors release demand and catch up when the field is uncovered.
+// Host coverage is separate: a covered view freezes the field (DESIGN.md §6
+// M5, One Frame FR-1's cover — Godview or History), including mirror pixels
+// beneath the cover's glass. Covered mirrors release demand and catch up when
+// the field is uncovered.
 
 interface MirrorWidgetProps extends Record<string, unknown> {
   sessionId: string;
@@ -73,7 +74,7 @@ function readRosterOnce(): void {
 export function TerminalMirrorWidget({ entity, world }: WidgetComponentProps): ReactElement {
   const props = useWidgetProps<MirrorWidgetProps>(world, entity, TERMINAL_MIRROR_TYPE);
   const ops = useOps();
-  const godviewOpen = useGodviewOpen();
+  const covered = useCovered();
   const sessionId = props?.sessionId ?? "";
   const label = props?.label ?? "";
 
@@ -159,7 +160,7 @@ export function TerminalMirrorWidget({ entity, world }: WidgetComponentProps): R
           <>
             <TerminalMirrorSurface
               sessionId={sessionId}
-              {...(godviewOpen ? { culled: true } : {})}
+              {...(covered ? { culled: true } : {})}
               {...(label === "" ? {} : { label })}
             />
             {/* The way back. A card bound to a session that has since exited

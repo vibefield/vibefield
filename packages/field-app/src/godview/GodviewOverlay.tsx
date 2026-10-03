@@ -1,5 +1,6 @@
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type CSSProperties, type ReactElement, useCallback, useEffect, useState } from "react";
+import { useActiveView } from "../frame/view-state";
 import { getHost } from "../host";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
@@ -26,7 +27,6 @@ import {
   VIGNETTE_OPACITY_KEY,
 } from "./monitor/stage-parameters";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
-import { useGodviewOpen } from "./overlay-state";
 
 /** The prewarm's off switch (GT-3p). A DIAGNOSTIC, not a product setting: the
  * smoke sets it to measure a genuinely cold open, and the only supported value
@@ -74,8 +74,11 @@ function bridgeNotice(): string | null {
   return "TERMINAL BRIDGE UNAVAILABLE · RECONNECTING";
 */
 
+/** Godview as the cover's content (One Frame FR-1): a VIEW now, drawn below
+ * the frame inside the one cover, open exactly while it is the window's view —
+ * there is no bit of its own any more. */
 export function GodviewOverlay(): ReactElement | null {
-  const open = useGodviewOpen();
+  const open = useActiveView() === "godview";
   const [everOpened, setEverOpened] = useState(false);
   const [theme, setTheme] = useState<GodviewTheme>(storedGodviewTheme);
   const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning(theme));
@@ -164,7 +167,9 @@ export function GodviewOverlay(): ReactElement | null {
   // One door instead: ⇧⇧, a double tap of Shift detected in main from
   // `before-input-event`, which reaches it whatever holds focus (GT-D2) — so
   // nothing on this page needs to race the terminal for a key, and Escape now
-  // belongs entirely to whatever has focus.
+  // belongs entirely to whatever has focus. (Since One Frame, FR-1: ⌘1 leaves
+  // Godview and ⌘2 comes back, as product chords the frame takes first; ⇧⇧
+  // retired. Escape is still never Godview's.)
   // The panel keeps its own × (`Close system controls`) and its toolbar toggle,
   // so the affordance is lost only from the keyboard, and only for the panel.
   // (Until GT-6a the deck's kill chip kept a bubble-phase Esc of its own to

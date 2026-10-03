@@ -35,6 +35,9 @@ The catalog currently mounts these shipping views directly:
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
 - the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
   both face frames at every size, and the face picker
+- the view frame (One Frame FR-1): the views track in every state the design's plates show — at
+  rest, ⌘ held, Godview, History, the Assistant's note, Windows' keys — and the cover rising,
+  swapping and lowering over a field with Godview's stage and History's room, on fixture state
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and FilePill receives a fixture document manager; their DOM, interaction

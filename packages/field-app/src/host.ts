@@ -9,7 +9,8 @@
 
 import type {
   DesktopShellState,
-  GodviewState,
+  FrameView,
+  FrameViewState,
   RendererParticipantIdentity,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
@@ -69,13 +70,13 @@ export interface FieldDiagnosticsHost {
 // RETIRED at TP-S3e: the renderer dials the cells' T1 doors itself over the
 // routed runtime, and shell/home policy rides the window bootstrap.
 
-/** The Godview overlay's open bit, which the HOST owns (GT-D2): ⇧⇧ is detected
- * in main and answered before this page is offered the keystroke, so the
- * renderer reads the state rather than keeping one. `set` with no argument is a
- * flip. */
-export interface FieldGodviewHost {
-  set(open?: boolean): Promise<GodviewState>;
-  onState(handler: (state: GodviewState) => void): () => void;
+/** The window's active view, which the HOST owns (One Frame FR-1; GT-D2's
+ * Godview bit grown into the four views): main's View menu marks it and lends
+ * ⌘W to Godview's panes by it, so the renderer reads the view rather than
+ * keeping one. `set` asks for a view by name and answers what main holds. */
+export interface FieldViewHost {
+  set(view: FrameView): Promise<FrameViewState>;
+  onState(handler: (state: FrameViewState) => void): () => void;
 }
 
 /** The Live Surfaces seam (DT-2a). The renderer host claims the main-world port
@@ -84,7 +85,7 @@ export interface FieldGodviewHost {
  * and hands the resulting transport through here.
  *
  * A promise, not a transport: the claim happens at host bootstrap and the ports
- * arrive one window message later. Optional like `diagnostics`/`godview`: the
+ * arrive one window message later. Optional like `diagnostics`/`view`: the
  * browser-only catalog has no privileged main process to claim from, and
  * `getSurfacePool` answers null there rather than pretending.
  *
@@ -144,7 +145,7 @@ export interface FieldHost {
   readonly forceOnboarding?: boolean;
   readonly diagnostics?: FieldDiagnosticsHost;
   readonly platform?: ShellPlatform;
-  readonly godview?: FieldGodviewHost;
+  readonly view?: FieldViewHost;
   readonly liveSurfaces?: FieldLiveSurfacesHost;
   /** The profile write seam (UA-3). `users.json` is SUPERVISOR-owned, not
    * fieldd's (UA-D10), so the one door to it is main — which is why this is a
@@ -152,7 +153,7 @@ export interface FieldHost {
    * a caller changes one thing at a time; an EMPTY params object is the read,
    * and must not write.
    *
-   * Optional like `diagnostics`/`terminal`/`godview`: a browser harness has no
+   * Optional like `diagnostics`/`terminal`/`view`: a browser harness has no
    * supervisor to ask, and the Account surface renders its controls disabled
    * and says so rather than pretending it can write. */
   readonly usersUpdate?: (params: {

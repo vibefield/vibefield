@@ -23,6 +23,9 @@ function template(items: readonly AppMenuItem[]): MenuItemConstructorOptions[] {
     ...(item.type !== undefined ? { type: item.type } : {}),
     ...(item.label !== undefined ? { label: item.label } : {}),
     ...(item.accelerator !== undefined ? { accelerator: item.accelerator } : {}),
+    ...(item.registerAccelerator !== undefined
+      ? { registerAccelerator: item.registerAccelerator }
+      : {}),
     ...(item.enabled !== undefined ? { enabled: item.enabled } : {}),
     ...(item.checked !== undefined ? { checked: item.checked } : {}),
     ...(item.click !== undefined ? { click: item.click } : {}),
@@ -33,7 +36,7 @@ function template(items: readonly AppMenuItem[]): MenuItemConstructorOptions[] {
 /** Install the application menu, and hand back the way to redraw it.
  *
  * A redraw rather than a mutation: the accelerator on the close item exists or
- * does not exist depending on the overlay, and Electron binds accelerators when
+ * does not exist depending on the view, and Electron binds accelerators when
  * the menu is SET. Rebuilding is how the binding actually changes; poking
  * `menuItem.checked` alone would leave ⌘W wherever it was. */
 export function installAppMenu(
@@ -45,6 +48,6 @@ export function installAppMenu(
       Menu.buildFromTemplate(template(buildAppMenu(platform, state, actions))),
     );
   };
-  apply({ godviewOpen: false });
+  apply({ view: "canvas" });
   return apply;
 }

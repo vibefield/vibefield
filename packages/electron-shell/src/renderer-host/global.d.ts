@@ -1,6 +1,7 @@
 import type {
   DesktopShellState,
-  GodviewState,
+  FrameView,
+  FrameViewState,
   ScreenshotCaptureResult,
   ScreenshotPreviewResult,
   ShellCommand,
@@ -86,9 +87,9 @@ declare global {
       completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
       onShellCommand(handler: (command: ShellCommand) => void): () => void;
       onDesktopState(handler: (state: DesktopShellState) => void): () => void;
-      godview: {
-        set(open?: boolean): Promise<GodviewState>;
-        onState(handler: (state: GodviewState) => void): () => void;
+      view: {
+        set(view: FrameView): Promise<FrameViewState>;
+        onState(handler: (state: FrameViewState) => void): () => void;
       };
       /** SNAP-D3 — the native screenshot helper through main; the answer is
        * the contract's own result (still on disk + clipboard, cancel, or a

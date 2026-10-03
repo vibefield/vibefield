@@ -1,6 +1,6 @@
 import {
-  GodviewSetRequest,
-  GodviewState as GodviewStateSchema,
+  FrameViewSetRequest,
+  FrameViewState as FrameViewStateSchema,
   IPC_CHANNELS,
   type ScreenshotCaptureResult,
   ScreenshotPreviewResult,
@@ -14,11 +14,11 @@ import type { FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { Logger } from "@vibefield/logging";
 import { ipcMain, type WebContents } from "electron";
 import { createBootstrapHandler, type WindowRendererBoundary } from "./bootstrap";
-import type { GodviewRegistry } from "./godview";
 import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
 import type { StillResolution } from "./still-protocol";
+import type { ViewRegistry } from "./view";
 import type { WindowRegistry } from "./window-policy";
 
 // The closed IPC surface, main side (ESR §6.2–6.3): handlers wiring pure policy
@@ -168,27 +168,27 @@ export function registerUsersRoster(
  * machine that a sandboxed page cannot read, and the deck needs them before it
  * may mount a workspace. Composed HERE rather than inside the Backend host,
  * which stays exactly what it was — a ticket in, a bridge out. */
-/** The Godview door (GT-D2). The toolbar button's request and the menu
- * accelerator's are the SAME transition applied to the same bit — this handler
- * exists so the button can reach it, not so the renderer can hold an opinion.
- * Same registered-sender gate as the others: a window this shell did not make
- * cannot flip a window it does not own. */
-export function registerGodviewToggle(
+/** The view door (FR-1). The views track's cells and ⌘1–⌘4 ask for a view by
+ * name and main's owner answers (`view.ts`) — this handler exists so the page
+ * can reach the owner, not so the renderer can hold an opinion. Same
+ * registered-sender gate as the others: a window this shell did not make cannot
+ * move a window it does not own. */
+export function registerViewSet(
   registry: WindowRegistry,
-  godview: GodviewRegistry,
+  views: ViewRegistry,
   logger?: Logger,
 ): void {
-  ipcMain.handle(IPC_CHANNELS.godviewSet, async (event, raw: unknown) => {
+  ipcMain.handle(IPC_CHANNELS.viewSet, async (event, raw: unknown) => {
     if (!registry.owns(event.sender)) {
       logger?.warn(
-        "desktop.ipc.godview_set_refused",
-        "Electron refused a Godview transition from an unregistered sender",
+        "desktop.ipc.view_set_refused",
+        "Electron refused a view request from an unregistered sender",
         { webContentsId: event.sender.id },
       );
-      throw new Error("godview set refused: unregistered sender");
+      throw new Error("view set refused: unregistered sender");
     }
-    const request = GodviewSetRequest.parse(raw);
-    return GodviewStateSchema.parse(godview.ensure(event.sender).set(request.open));
+    const request = FrameViewSetRequest.parse(raw);
+    return FrameViewStateSchema.parse(views.ensure(event.sender).set(request.view));
   });
 }
 

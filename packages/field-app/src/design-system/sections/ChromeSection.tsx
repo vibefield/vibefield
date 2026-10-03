@@ -77,6 +77,7 @@ const TRAY_TILES: readonly EdgeTrayTile[] = [
 import { FilePillPreview } from "../FilePillPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
 import { SwitchPreview } from "../SwitchPreview";
+import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
 
 export function ChromeSection({
   dark,
@@ -227,6 +228,30 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           The document pill, the tray and your face are interactive. Open one to inspect its morph
           and the rule that only one of them is open at a time.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The view frame — the views track and the cover"
+        source="frame/* · DESIGN.md §10, §8, §6"
+        bleed
+      >
+        <ViewFramePreview magnetGridGlyph={magnetGridGlyph} dark={dark} />
+        <p className="vf-ds-stage-caption">
+          The canvas is the ground floor; Godview and History are one cover over it, each on its own
+          ground at the covers' 72% glass, their content ending 88 above the foot. The track stands
+          above every view at the line's left end, each key printed under its glyph. Pick a state,
+          or click a cell: the cover rises, swaps in place and lowers, and only the thumb travels.
+        </p>
+        <div className="vf-ds-views-plates">
+          {FRAME_STATES.map((state) => (
+            <ViewsTrackSpecimen key={state} state={state} />
+          ))}
+          <ViewsTrackSpecimen state="rest" keys="other" />
+        </div>
+        <p className="vf-ds-stage-caption">
+          Every state the page's plates show for the track — at rest, ⌘ held, Godview, History, ⌘4's
+          note, and the keys as Windows prints them — in this page's theme.
         </p>
       </Specimen>
 

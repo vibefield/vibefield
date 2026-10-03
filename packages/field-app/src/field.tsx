@@ -27,6 +27,7 @@ import { canvasGridConfig } from "./field/canvas-appearance";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
+import { useCovered } from "./frame/view-state";
 import type { FieldUserProfile } from "./host";
 import { useReactiveResource } from "./hud/use-reactive";
 import { getRendererLogger } from "./logging";
@@ -225,6 +226,9 @@ export function FieldView({
     [chrome.setShowSettings],
   );
   const sheetOpen = trayOpen || docsOpen || chrome.showSettings;
+  // A covered view (One Frame FR-1) recedes the field too — and ChromeLayer
+  // freezes it, since a cover covers (DESIGN.md §6).
+  const covered = useCovered();
 
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");
@@ -284,6 +288,10 @@ export function FieldView({
         key={generation}
         className="field-scene"
         data-sheet-open={sheetOpen ? "true" : "false"}
+        data-covered={covered ? "true" : "false"}
+        // Under a cover the field is out of reach: nothing in it may hold the
+        // keyboard (a note being typed in when ⌘2 was pressed lets go of it).
+        inert={covered}
         data-doc-loading={docState.phase === "loading" ? "true" : "false"}
       >
         <CanvasStage

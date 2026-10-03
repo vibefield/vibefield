@@ -38,6 +38,7 @@ import {
   emitGodviewDeckMarker,
   emitGodviewDirectTerminalMarker,
 } from "../development-console";
+import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import {
@@ -1856,12 +1857,13 @@ export function GodviewDeck({
             readClipboard: () => navigator.clipboard?.readText() ?? "",
             showContextMenu: () => undefined,
             toggleFullscreen: () => undefined,
-            // The deck's "window" is the overlay. Ghosttea calls this when the
+            // The deck's "window" is Godview. Ghosttea calls this when the
             // LAST pane closes, and taking the Electron window down there would
-            // close the canvas because a terminal ran out — so it closes the
-            // overlay instead, which is what the gesture meant.
+            // close the canvas because a terminal ran out — so it goes back to
+            // the canvas instead, which is what the gesture meant (FR-1: the
+            // view's one owner is asked, the same door ⌘1 knocks on).
             closeWindow: () => {
-              void getHost().godview?.set(false);
+              void requestView("canvas");
             },
             onMenuAction: () => () => undefined,
           },

@@ -605,7 +605,9 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   yet carries another user's link. Another user's row, like New user…, leaves through the switch
   (below). A refusal (a switch or a new user main will not do) reopens
   the menu with main's sentence at its top, in words, until it folds. Open, the menu stands one
-  z-step above Godview's button, which it grows over (*retired with the button, FR-1*). Under
+  z-step above Godview's button, which it grows over. *Since FR-1 (2026-10-03) the button is gone
+  and what it grows over is the views track's left end, so open it stands above the frame until
+  FR-4 opens it above the line (FC-D14); its rows are never under the track.* Under
   reduced motion the seed circle's
   hover fill does not show — the panel waits at full size, invisible.
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
@@ -992,7 +994,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   72% (FC-D16) — with no blur until the field's still exists to blur. A covered view ends its
   content at 692, the **reserve** of 88 above the window's foot, and keeps 8px clear at each edge
   for the notches' slivers; its own ground runs under the line, and only the canvas runs content
-  under it. Above the frame stand only Settings, the palette and the loading veil.
+  under it. Above the frame stand only Settings, the palette and the loading veil (and, until
+  FR-4 opens it above the line, the open Me menu, which grows over the track's left end).
   **The active view has ONE owner** — the window's, held in main beside the menu that names it,
   persisted for the window's life and Canvas at launch; the views track, the keys and the View
   menu all ask that owner and draw what it answers. **The keys:** ⌘1–⌘4 (Ctrl 1–4 on Windows) go

@@ -947,13 +947,13 @@ export const IPC_CHANNELS = {
   // GT-D3's bridge channels (`vibefield:terminal:connect` invoke,
   // `vibefield:terminal:status` event) RETIRED at TP-S3e: the renderer dials
   // the cells' T1 doors directly and main runs no terminal Backend.
-  /** main → renderer event: GodviewState — this window's overlay truth, which
-   * main owns (GT-D2: the accelerator intercepts before the renderer, so the
-   * menu item and the renderer must read ONE state, and it has to be main's) */
-  godviewState: "vibefield:godview:state",
-  /** renderer → main invoke: GodviewSetRequest — the toolbar button asking for
-   * the same transition ⇧⇧ asks for; answers with the resulting GodviewState */
-  godviewSet: "vibefield:godview:set",
+  /** main → renderer event: FrameViewState — this window's active view, which
+   * main owns (FR-1, grown from GT-D2's Godview bit: the View menu and the
+   * close item read it, so the menu and the renderer read ONE state, main's) */
+  viewState: "vibefield:view:state",
+  /** renderer → main invoke: FrameViewSetRequest — the views track and ⌘1–⌘4
+   * asking for a view; answers with the resulting FrameViewState */
+  viewSet: "vibefield:view:set",
   /** renderer → main invoke: UsersUpdateParams → UserRecord — the Account
    * page's profile write. Main owns users.json (UA-D10); fieldd never writes
    * it, which is what keeps the boundary lint honest. */

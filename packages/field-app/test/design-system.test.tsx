@@ -143,6 +143,16 @@ describe("design system page", () => {
     expect(container?.textContent).toContain("The interface, accounted for");
     // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 49.
     expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(49);
+    // One Frame FR-1: the view frame on fixtures — the shipping track and cover
+    // over a field, and a plate per state the page's Chrome & Composer plates
+    // show for the frame (the last the keys as Windows prints them).
+    expect(container?.querySelector(".vf-ds-frame-stage .vf-views-line")).not.toBeNull();
+    expect(container?.querySelector(".vf-ds-frame-stage .vf-cover")).not.toBeNull();
+    expect(
+      [...(container?.querySelectorAll(".vf-ds-views-plate") ?? [])].map((plate) =>
+        plate.getAttribute("data-state"),
+      ),
+    ).toEqual(["rest", "cmd", "gv", "hx", "note", "rest"]);
   });
 
   it("exposes theme and representative component-state controls", async () => {
@@ -213,7 +223,8 @@ describe("design system page", () => {
     expect(container?.querySelector(".vf-zoom-pill")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
-    expect(container?.querySelectorAll('[data-ground-renderer="unavailable"]')).toHaveLength(2);
+    // the chrome playground's, the workbench's, and the view frame's stage (FR-1)
+    expect(container?.querySelectorAll('[data-ground-renderer="unavailable"]')).toHaveLength(3);
     expect(container?.textContent).toContain("No artifacts yet");
 
     await act(async () => {

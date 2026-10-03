@@ -18,7 +18,9 @@ import {
 import { MeMenu } from "../account/MeMenu";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
-import { GodviewOverlay, GodviewToggle, useGodviewOpen } from "../godview";
+import { ViewFrame } from "../frame/ViewFrame";
+import { requestView, useCovered } from "../frame/view-state";
+import { GodviewOverlay } from "../godview";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
 import { ClipboardTray } from "../hud/edge-tray/EdgeTray";
@@ -119,9 +121,9 @@ export function ChromeLayer({
   const sidePanelToggleRef = useRef<HTMLButtonElement | null>(null);
   const activeSidePanel =
     sidePanelSurface?.surfaceId === sidePanelSurfaceId ? sidePanelSurface : null;
-  // One state, three readers: the overlay, the toolbar button, and the stage
-  // hold. Owned by main (GT-D2) because ⇧⇧ never reaches this page.
-  const godviewOpen = useGodviewOpen();
+  // Whether a view covers the field (One Frame FR-1): every view but the
+  // canvas. The window's view is main's (one owner); this is its mirror.
+  const covered = useCovered();
 
   const closeSidePanel = useCallback((returnFocus: boolean) => {
     setSidePanelSurfaceId(null);
@@ -143,16 +145,15 @@ export function ChromeLayer({
       setPaletteOpen(false);
       setSidePanelSurfaceId(sidePanelSurface.surfaceId);
     };
-    if (godviewOpen && getHost().godview !== undefined) {
-      void getHost()
-        .godview?.set(false)
-        .then(reveal, () => undefined);
+    // The Artifact panel is the canvas's chrome: back to the canvas first.
+    if (covered) {
+      void requestView("canvas").then(reveal);
       return;
     }
     reveal();
   }, [
     closeSidePanel,
-    godviewOpen,
+    covered,
     onDocsOpenChange,
     onTrayOpenChange,
     setShowSettings,
@@ -203,12 +204,7 @@ export function ChromeLayer({
   const foldMe = useCallback(() => setMeOpen(false), []);
   useMeMenuYields(
     meOpen,
-    trayOpen ||
-      docsOpen ||
-      showSettings ||
-      paletteOpen ||
-      godviewOpen ||
-      sidePanelSurfaceId !== null,
+    trayOpen || docsOpen || showSettings || paletteOpen || covered || sidePanelSurfaceId !== null,
     foldMe,
   );
 
@@ -217,19 +213,11 @@ export function ChromeLayer({
   useEffect(() => {
     if (
       sidePanelSurfaceId !== null &&
-      (trayOpen || docsOpen || showSettings || paletteOpen || godviewOpen)
+      (trayOpen || docsOpen || showSettings || paletteOpen || covered)
     ) {
       closeSidePanel(false);
     }
-  }, [
-    closeSidePanel,
-    docsOpen,
-    godviewOpen,
-    paletteOpen,
-    showSettings,
-    sidePanelSurfaceId,
-    trayOpen,
-  ]);
+  }, [closeSidePanel, covered, docsOpen, paletteOpen, showSettings, sidePanelSurfaceId, trayOpen]);
 
   useEffect(() => {
     if (activeSidePanel === null) return;
@@ -267,16 +255,17 @@ export function ChromeLayer({
   useStageHold(ce, docsOpen, "docs-explorer");
   useStageHold(ce, showSettings, "settings-panel");
   useStageHold(ce, docState.phase === "loading", "loading-veil");
-  // Godview gets the STRICTER gate (ice 0.3.0). A stage hold is
+  // A covered view gets the STRICTER gate (ice 0.3.0). A stage hold is
   // presentation policy over a world that keeps stepping — right for the
   // sheets above, which recede a canvas that stays visible behind them. But
-  // Godview COVERS the window, so the engine was still ticking at display rate
-  // for pixels nobody could see: the hold quiets the GL compositor and nothing
-  // else. A freeze parks the loop outright — no step, no systems, no notify,
-  // no reflectors, no rAF — after walking a settle so the frozen image is
-  // whole. Thaw drops the input banked behind the overlay and resumes on a
-  // clamped dt, so nothing teleports.
-  useFrameFreeze(ce, godviewOpen, "godview");
+  // the cover (One Frame FR-1 — Godview, History) is over the field, so the
+  // engine would still tick at display rate for pixels only its glass lets
+  // through: the hold quiets the GL compositor and nothing else. A freeze parks
+  // the loop outright — no step, no systems, no notify, no reflectors, no rAF —
+  // after walking a settle so the frozen image is whole (DESIGN.md §6: the
+  // field recedes and freezes). Thaw drops the input banked behind the cover
+  // and resumes on a clamped dt, so nothing teleports.
+  useFrameFreeze(ce, covered, "cover");
   // The switch covers the window too (DESIGN.md §8): the field it leaves is
   // frozen whole under the frost, and thaws if a refused switch hands it back.
   const switchCovering = isSwitchCovering(useSwitchState());
@@ -430,12 +419,14 @@ export function ChromeLayer({
 
       {/* UA-D19 — the owner's face, where the Settings gear was: the account's
           one door, and the menu grows out of it (DESIGN.md §8). Placed so the
-          40px face sits exactly where the 40px gear did — Godview does not
-          move. Open, the menu grows over Godview's button (z-50, later in the
-          DOM), so it stands one step above it. */}
+          40px face sits exactly where the 40px gear did. Open, it still grows
+          up and right around the face, over the views track's left end — so it
+          stands above the frame (62, One Frame FR-1) until FR-4 opens it above
+          the line instead; its rows are never under the track. (Godview's
+          button beside it retired with FR-1: the views track is the way in.) */}
       <div
         data-hud-flight="bottom-left"
-        className={`hud-flight no-drag absolute bottom-[14px] left-[14px] ${meOpen ? "z-[51]" : "z-50"}`}
+        className={`hud-flight no-drag absolute bottom-[14px] left-[14px] ${meOpen ? "z-[63]" : "z-50"}`}
       >
         <MeMenu
           open={meOpen}
@@ -444,7 +435,6 @@ export function ChromeLayer({
           shortcut={getHost().platform === "darwin" ? "⌘," : "Ctrl+,"}
         />
       </div>
-      <GodviewToggle active={godviewOpen} />
       <button
         type="button"
         onClick={() => chrome.setShowEcs((s) => !s)}
@@ -495,10 +485,12 @@ export function ChromeLayer({
         windowId={FIELD_WINDOW_ID}
       />
 
-      {/* The Godview stage (GT-D2): above every piece of field chrome, below
-          the loading veil — a document that is still opening owns the window
-          more than a terminal deck does. */}
-      <GodviewOverlay />
+      {/* THE FRAME (One Frame FR-1, DESIGN.md §10): the cover the covered views
+          live in — Godview, History — over every piece of the canvas's own
+          chrome, and the views track standing above the cover. Below Settings,
+          the palette and the loading veil: a document that is still opening
+          owns the window more than any view does. */}
+      <ViewFrame godview={<GodviewOverlay />} />
 
       {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}
       <LoadingVeil loading={docState.loading} />

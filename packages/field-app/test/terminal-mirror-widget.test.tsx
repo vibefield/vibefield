@@ -35,7 +35,7 @@ import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import { act, type ComponentType, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { resetGodviewOpenForTest } from "../src/godview/overlay-state";
+import { resetActiveViewForTest } from "../src/frame/view-state";
 import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 
@@ -145,7 +145,7 @@ const ROSTER = [
 ];
 
 let rosterAnswer: () => Promise<unknown> = () => Promise.resolve({ items: ROSTER });
-let godviewState: ((state: { open: boolean }) => void) | undefined;
+let viewState: ((state: { view: "canvas" | "godview" | "history" }) => void) | undefined;
 
 type PoolClient = Parameters<typeof pool.openTerminalPool>[0];
 const fieldd = {
@@ -278,17 +278,17 @@ async function mountWidget(props: Record<string, unknown> = {}): Promise<{
 }
 
 beforeEach(() => {
-  resetGodviewOpenForTest();
-  godviewState = undefined;
+  resetActiveViewForTest();
+  viewState = undefined;
   runtimeCalls = [];
   sessions = [SESSION];
   rosterAnswer = () => Promise.resolve({ items: ROSTER });
   pool.disposeTerminalPool();
   (globalThis as { ResizeObserver?: unknown }).ResizeObserver = InertResizeObserver;
   setHost({
-    godview: {
-      onState: (listener: (state: { open: boolean }) => void) => {
-        godviewState = listener;
+    view: {
+      onState: (listener: (state: { view: "canvas" | "godview" | "history" }) => void) => {
+        viewState = listener;
         return () => undefined;
       },
     },
@@ -495,7 +495,7 @@ describe("TP-R4a — the mirror is watch-only in its widget form too", () => {
     expect(pool.terminalSessionDemand("session-a")).toBe("live");
     const mounts = runtimeCalls.filter((call) => call.verb === "mount").length;
     await act(async () => {
-      godviewState?.({ open: true });
+      viewState?.({ view: "godview" });
       await settle();
     });
     expect(mirror().getAttribute("data-mirror-state")).toBe("culled");
@@ -504,13 +504,29 @@ describe("TP-R4a — the mirror is watch-only in its widget form too", () => {
       true,
     );
     await act(async () => {
-      godviewState?.({ open: false });
+      viewState?.({ view: "canvas" });
       await settle();
     });
     expect(mirror().getAttribute("data-mirror-state")).toBe("watching");
     expect(pool.terminalSessionDemand("session-a")).toBe("live");
     expect(runtimeCalls.filter((call) => call.verb === "mount")).toHaveLength(mounts);
     expect(claims()).toEqual([]);
+  });
+
+  it("parks under ANY cover — History's freezes the field as Godview's does (One Frame FR-1)", async () => {
+    await mountWidget({ sessionId: "session-a" });
+    expect(pool.terminalSessionDemand("session-a")).toBe("live");
+    await act(async () => {
+      viewState?.({ view: "history" });
+      await settle();
+    });
+    expect(mirror().getAttribute("data-mirror-state")).toBe("culled");
+    expect(pool.terminalSessionDemand("session-a")).toBe("none");
+    await act(async () => {
+      viewState?.({ view: "canvas" });
+      await settle();
+    });
+    expect(mirror().getAttribute("data-mirror-state")).toBe("watching");
   });
 
   it("mounts the session's real surface and reaches the runtime only to WATCH", async () => {

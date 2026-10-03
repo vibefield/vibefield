@@ -94,11 +94,11 @@ vi.mock("@vibefield/fieldd-client/react", () => ({
 }));
 
 const { GodviewOverlay } = await import("../src/godview/GodviewOverlay");
-const { resetGodviewOpenForTest } = await import("../src/godview/overlay-state");
+const { resetActiveViewForTest } = await import("../src/frame/view-state");
 
 let root: Root | null = null;
 let container: HTMLElement | null = null;
-let publishOpen: ((state: { open: boolean }) => void) | null = null;
+let publishView: ((state: { view: "canvas" | "godview" }) => void) | null = null;
 let openedIntervals: number[] = [];
 let clearedIntervals: number[] = [];
 
@@ -109,19 +109,20 @@ beforeEach(() => {
   doorFacts.observeDisposals = 0;
   doorFacts.rows = [managedSummary({ runtimeRunId: "run-1", kind: "claude", label: "Claude" })];
   localStorage.clear();
-  resetGodviewOpenForTest();
+  resetActiveViewForTest();
   setHost({
     platform: "darwin",
     // Present, so the overlay renders its deck branch rather than the
     // no-terminal-bridge face — the monitor must be there either way, but the
     // realistic tree is the one worth asserting on.
     terminal: { connect: () => Promise.resolve({}), onStatus: () => () => undefined },
-    godview: {
-      set: () => Promise.resolve({ open: false }),
-      onState: (handler: (state: { open: boolean }) => void) => {
-        publishOpen = handler;
+    // One Frame FR-1: Godview is open exactly while it is the window's view.
+    view: {
+      set: () => Promise.resolve({ view: "canvas" }),
+      onState: (handler: (state: { view: "canvas" | "godview" }) => void) => {
+        publishView = handler;
         return () => {
-          publishOpen = null;
+          publishView = null;
         };
       },
     },
@@ -145,7 +146,7 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
-  publishOpen = null;
+  publishView = null;
   vi.restoreAllMocks();
 });
 
@@ -170,7 +171,7 @@ async function mountOverlay(): Promise<HTMLElement> {
 
 async function setOpen(open: boolean): Promise<void> {
   await act(async () => {
-    publishOpen?.({ open });
+    publishView?.({ view: open ? "godview" : "canvas" });
   });
 }
 

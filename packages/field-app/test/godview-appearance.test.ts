@@ -83,13 +83,17 @@ describe("the deck appearance store", () => {
     expect(stack.length).toBeLessThanOrEqual(8);
   });
 
-  it("clamps the backdrop into its ranges and defaults it to the flat, opaque stage", () => {
+  it("clamps the backdrop into its ranges and defaults it to the covers' glass (FC-D16)", () => {
     expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: 3 })).backdropOpacity).toBe(1);
     expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: -1 })).backdropOpacity).toBe(0);
     expect(parseDeckAppearance(JSON.stringify({ backdropBlur: 500 })).backdropBlur).toBe(80);
     expect(parseDeckAppearance(JSON.stringify({ backdropBlur: "soft" })).backdropBlur).toBe(0);
-    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(1);
+    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(0.72);
     expect(DEFAULT_DECK_APPEARANCE.backdropBlur).toBe(0);
+    // A record that never named a backdrop takes the new default; one that did
+    // keeps its own, opaque included.
+    expect(parseDeckAppearance(JSON.stringify({ opacity: 0.5 })).backdropOpacity).toBe(0.72);
+    expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: 1 })).backdropOpacity).toBe(1);
   });
 
   it("reads a record written before shaders existed as no shader", () => {
@@ -133,7 +137,8 @@ describe("the deck appearance store", () => {
       opacityCells: false,
       shaderEffects: [],
       shaderAnimate: false,
-      backdropOpacity: 1,
+      // a record that never named a backdrop takes the covers' glass (FC-D16)
+      backdropOpacity: 0.72,
       backdropBlur: 0,
     });
   });
@@ -293,9 +298,9 @@ describe("the viewer's shader, as the effects prop", () => {
  * from ONE projection the overlay, the catalog and Settings all use.
  */
 describe("the viewer's backdrop, as the stage's variables", () => {
-  it("projects the default as the reference's flat, opaque stage", () => {
+  it("projects the default as the covers' glass, sharp (FC-D16 — it was the flat, opaque stage)", () => {
     expect(godviewBackdropStyle(DEFAULT_DECK_APPEARANCE)).toEqual({
-      "--vf-godview-stage-opacity": "100%",
+      "--vf-godview-stage-opacity": "72%",
       "--vf-godview-stage-blur": "0px",
     });
   });

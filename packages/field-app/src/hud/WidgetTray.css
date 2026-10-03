@@ -21,6 +21,15 @@
   background: var(--vf-chrome-surface);
 }
 
+/* One Frame FR-1: the views track stands at the line's left end, never nearer
+   the left than 76 (DESIGN.md §10) — a 208 pill ending at 284 in a window under
+   ~1030 wide. The closed island keeps 12 clear of it by stepping right only as
+   far as that needs (its centre at least 296 + its half-width 220); at the
+   default window it stays centred. The open sheet centres as before. */
+.vf-widget-tray:not([data-tray-open="true"]) {
+  left: max(50%, 516px);
+}
+
 .vf-widget-tray[data-tray-open="true"] {
   bottom: 0;
   width: min(80%, 64rem);

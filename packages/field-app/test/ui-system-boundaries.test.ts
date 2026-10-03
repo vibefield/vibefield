@@ -55,7 +55,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history-room)/m,
     );
   });
 
@@ -113,6 +113,24 @@ describe("UI system ownership boundaries", () => {
     // And it must not reach the pool: the picker's whole seam is its props.
     expect(fixture).not.toContain("refreshTerminalRoster");
     expect(fixture).not.toContain("useTerminalPool");
+  });
+
+  it("keeps the view frame's fixture an ADAPTER — the owner's value, never the frame's markup (FR-1)", () => {
+    // The catalog stands in for the one thing a host supplies — the window's
+    // view, which main owns in the product — and for the keys' timing, which the
+    // controller owns. The track, the cover and History's room are the shipping
+    // views, and their selectors are the product's alone.
+    const fixture = source("design-system/ViewFramePreview.tsx");
+    expect(fixture).toContain("ViewsTrackView");
+    expect(fixture).toContain("ViewCoverView");
+    expect(fixture).toContain("HistoryPlaceholderView");
+    // the cover's motion is the product's own rule, not a fixture's copy of it
+    expect(fixture).toContain("coverAfter");
+    expect(fixture).not.toMatch(/className="vf-(?:views|cover|history-room)/);
+    expect(fixture).not.toContain("<style");
+    // and the fixture never reaches the owner a host would hold
+    expect(fixture).not.toContain("requestView");
+    expect(fixture).not.toContain("getHost");
   });
 
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
@@ -185,7 +203,8 @@ describe("UI system ownership boundaries", () => {
     const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
     const deviceFilter = source("design-system/DeviceFilterPreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}`;
+    const viewFrame = source("design-system/ViewFramePreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -230,6 +249,11 @@ describe("UI system ownership boundaries", () => {
       // DS-3 — the device filter's shipping chip, on fixtures, never a copy
       "DeviceFilterPreview",
       "DeviceFilterChip",
+      // One Frame FR-1 — the view frame: the track, the cover, History's room
+      "ViewFramePreview",
+      "ViewsTrackView",
+      "ViewCoverView",
+      "HistoryPlaceholderView",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -275,6 +299,9 @@ describe("UI system ownership boundaries", () => {
       "boot/onboarding/wizard-ui.tsx",
       "godview/GodviewMonitor.tsx",
       "plugin-host/faces.tsx",
+      "frame/ViewFrame.tsx",
+      "frame/ViewsTrack.tsx",
+      "frame/ViewCover.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -298,6 +325,7 @@ describe("UI system ownership boundaries", () => {
       "panels/settings.css",
       "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",
+      "frame/view-frame.css",
       "terminal/mirror/mirror.css",
       "terminal/widget/mirror-widget.css",
     ]) {
