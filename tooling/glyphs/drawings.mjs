@@ -391,6 +391,22 @@ export const DRAWINGS = {
       d: `${circlePath(12, 12, 9)}${circlePath(12, 12, 6.15)}${circlePath(12, 12, 4.85)}${bar(12, 12, 18.5, 5.5, 0.65)}${circlePath(15.5, 14.5, 1.2)}`,
     },
   },
+  history: {
+    label: "History",
+    group: "objects",
+    role: "The views track's History cell: a clock turning back",
+    // One Frame's `g-history` (§13 of the round): the dial as `globe`'s circle
+    // (radius 8.4, live 2.6–21.4), opened at the upper left where the arrow
+    // turns it back, and the hands at ten past.
+    instrument: {
+      s: `${P("M3.6 12a8.4 8.4 0 1 0 2.46-5.94")}${P("M3.4 4.4v3.8h3.8")}${P("M12 7.8v4.6l3 1.8")}`,
+    },
+    // `reset`'s ring and arrowhead turned to go back (mirrored), the hands a
+    // body inside its counter.
+    hardware: {
+      d: "M4.21 16.5A9 9 0 1 0 4.21 7.5L7.24 9.25A5.5 5.5 0 1 1 7.24 14.75ZM8.5 9.97L2.95 6.77L4.1 11.1ZM11.1 8h1.8v3.6l2.6 1.5-.9 1.56-3.5-2.02Z",
+    },
+  },
   sidepanel: {
     label: "Artifacts",
     group: "objects",

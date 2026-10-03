@@ -20,7 +20,7 @@ export interface GlyphMeta {
   readonly role: string;
 }
 
-export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","document","layers","sparkle"] as const;
+export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","document","layers","sparkle"] as const;
 export type GlyphName = (typeof GLYPH_NAMES)[number];
 
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
@@ -55,6 +55,7 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   package: {"label":"Package","group":"objects","role":"The right-edge notch, reserved for the Artifacts twin"},
   capture: {"label":"Capture","group":"objects","role":"The Snap tile and the empty still"},
   panes: {"label":"Godview","group":"objects","role":"The Godview toggle: the deck's own silhouette"},
+  history: {"label":"History","group":"objects","role":"The views track's History cell: a clock turning back"},
   sidepanel: {"label":"Artifacts","group":"objects","role":"The Artifact Hub toggle, outermost in the top-right cluster"},
   bug: {"label":"Devtools","group":"objects","role":"ICE Devtools, a development-only button"},
   globe: {"label":"Proxy","group":"objects","role":"The Add-artifact choice: a local port, served on the tailnet"},
@@ -106,6 +107,7 @@ export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
   package: {"kind":"instrument","strokes":[["path",{"d":"M12 2.8 20 7.2v9.6l-8 4.4-8-4.4V7.2Z"}],["path",{"d":"M4.3 7.4 12 11.7l7.7-4.3M12 11.7v9.3M8 4.9l8 4.4"}]],"fills":[]},
   capture: {"kind":"instrument","strokes":[["path",{"d":"M8.5 5.5l1.3-2h4.4l1.3 2H19a2.5 2.5 0 0 1 2.5 2.5v9A2.5 2.5 0 0 1 19 19.5H5A2.5 2.5 0 0 1 2.5 17V8A2.5 2.5 0 0 1 5 5.5h3.5Z"}],["circle",{"cx":"12","cy":"12.5","r":"3.5"}]],"fills":[]},
   panes: {"kind":"instrument","strokes":[["rect",{"x":"3","y":"4","width":"18","height":"16","rx":"3"}],["path",{"d":"M10.5 4v16M10.5 12H21"}]],"fills":[]},
+  history: {"kind":"instrument","strokes":[["path",{"d":"M3.6 12a8.4 8.4 0 1 0 2.46-5.94"}],["path",{"d":"M3.4 4.4v3.8h3.8"}],["path",{"d":"M12 7.8v4.6l3 1.8"}]],"fills":[]},
   sidepanel: {"kind":"instrument","strokes":[["rect",{"x":"3","y":"5","width":"18","height":"14","rx":"3"}],["path",{"d":"M15 5v14"}]],"fills":[]},
   bug: {"kind":"instrument","strokes":[["path",{"d":"M9 3l1.5 2M15 3l-1.5 2M3.5 11H6M18 11h2.5M4.5 17.5l2-1.5M19.5 17.5l-2-1.5"}],["rect",{"x":"6","y":"5","width":"12","height":"16","rx":"6"}],["path",{"d":"M6 12h12M12 5v16"}]],"fills":[]},
   globe: {"kind":"instrument","strokes":[["circle",{"cx":"12","cy":"12","r":"8.5"}],["path",{"d":"M3.5 12h17M12 3.5a13 13 0 0 1 0 17M12 3.5a13 13 0 0 0 0 17"}]],"fills":[]},

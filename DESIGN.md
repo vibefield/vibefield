@@ -1060,14 +1060,14 @@ alternate moods retain their individual speed and light settings.
 **Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
 Every functional icon the chrome draws — the HUD's round buttons, the file pill, the Settings rail,
 the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
-marks — is one of **48 named glyphs** in one **24-unit box**, optical centre at 12,12, live area 2 to
+marks — is one of **49 named glyphs** in one **24-unit box**, optical centre at 12,12, live area 2 to
 22, drawn in `currentColor` and nothing else. The host says the size and the colour, the way it says
 them for text (§2.4); a glyph never carries state (§2.5, I-5) and never a colour of its own. Two
 constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (38) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (39) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
@@ -1078,9 +1078,10 @@ weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn poin
 *flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·
 outward · link · return · backspace · ellipsis; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
-moon · clipboard · package · capture · panes · sidepanel · bug · globe · folder · keyboard · mic ·
-scantext · snippets · prompt; signals: message · key · question · exclaim · flame; Studio only:
-document · layers · sparkle.
+moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
+mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame; Studio only:
+document · layers · sparkle. **`history`** (2026-10-03, One Frame §13) is the views track's History
+cell (§10): a clock turning back, the dial at `globe`'s radius opened where its arrow turns it.
 
 **Where it lives.** The drawings are `tooling/glyphs/drawings.mjs` (both constructions for every
 name); `build.mjs` emits the kit's `packages/design-kit/src/glyphs/data.ts` and the phone's

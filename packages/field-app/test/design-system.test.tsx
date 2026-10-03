@@ -141,8 +141,8 @@ describe("design system page", () => {
       "Swarm bodies — every drawn state, on the package's own fixtures",
     );
     expect(container?.textContent).toContain("The interface, accounted for");
-    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 48.
-    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(48);
+    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 49.
+    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(49);
   });
 
   it("exposes theme and representative component-state controls", async () => {
