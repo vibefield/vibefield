@@ -30,7 +30,7 @@ Categories: `Cards`, `3D`, `Nodes`, `Tools`.
 | `minSize` | { w: number, h: number } | no | — |
 | `maxSize` | { w: number, h: number } | no | — |
 | `interaction` | { selectable?: boolean, movable?: boolean, resizable?: boolean, snap?: `source` \| `target` \| `both` \| `none`, dragOn?: `press` \| `longPress`, solid?: boolean, sweepContained?: boolean, keyboard?: `shared` \| `exclusive`, keyboardEscape?: `release` \| `widget` } | no | — |
-| `container` | `{ accepts: string[], provides?: string[] }` | no | — |
+| `container` | `{ accepts: string[], provides?: string[], portal?: object }` | no | — |
 | `provides` | `string[]` | no | at most 16 item(s) |
 | `ports` | { id: string, side: `n` \| `e` \| `s` \| `w`, index?: number, accepts?: string[] }[] | no | at most 16 item(s) |
 | `props` | object mapping name → one of `string`, `number`, `boolean`, `enum`, `json`, `entity-ref`, `session-ref`, `terminal-ref`, `artifact-ref`, `file-ref` | no | discriminated by `kind`; defaults to `{}` |

@@ -700,6 +700,18 @@ export const WidgetContribution = z
       .object({
         accepts: z.array(z.string()).min(1).max(16),
         provides: z.array(z.string()).max(16).optional(),
+        /** The FACE the container shows its inside through, as insets from its body
+         * (widget-local px; ICE `resolvePortal`): the nav flight maps the arrival onto
+         * it and the preview places the children in it. All four, non-negative;
+         * absent = the whole body. Insets that leave no area are ignored by ICE. */
+        portal: z
+          .object({
+            top: z.number().nonnegative(),
+            right: z.number().nonnegative(),
+            bottom: z.number().nonnegative(),
+            left: z.number().nonnegative(),
+          })
+          .optional(),
       })
       .passthrough()
       .optional(),
