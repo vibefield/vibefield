@@ -55,7 +55,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history-room)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history-room|line\b|line-|at-)/m,
     );
   });
 
@@ -204,7 +204,8 @@ describe("UI system ownership boundaries", () => {
     const switchScene = source("design-system/SwitchPreview.tsx");
     const deviceFilter = source("design-system/DeviceFilterPreview.tsx");
     const viewFrame = source("design-system/ViewFramePreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}`;
+    const line = source("design-system/ComposerLinePreview.tsx");
+    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -217,8 +218,9 @@ describe("UI system ownership boundaries", () => {
       "SwitchSceneView",
       "FacePicker",
       "UserFaceView",
+      // One Frame FR-2 — the tray keeps its sheet only (its island, tool
+      // switcher and ⊕ retired into the line)
       "WidgetTrayFrame",
-      "WidgetTrayToolSwitcherView",
       "ZoomPillView",
       "EdgeTrayView",
       "OnboardingConnectPaneView",
@@ -254,9 +256,17 @@ describe("UI system ownership boundaries", () => {
       "ViewsTrackView",
       "ViewCoverView",
       "HistoryPlaceholderView",
+      // One Frame FR-2 — the line: its view, @'s list, the plates, and the
+      // live line on its real controller with fixture doors
+      "ComposerLinePlate",
+      "ComposerLineView",
+      "AtMenuView",
     ]) {
       expect(catalog).toContain(productionView);
     }
+    // …and the line's own controller, live on fixture doors — the element, not
+    // the view's name it prefixes.
+    expect(catalog).toMatch(/<Composer\s/u);
 
     for (const retiredReplica of [
       "vf-ds-artifact-panel",
@@ -302,6 +312,8 @@ describe("UI system ownership boundaries", () => {
       "frame/ViewFrame.tsx",
       "frame/ViewsTrack.tsx",
       "frame/ViewCover.tsx",
+      "frame/Composer.tsx",
+      "frame/ComposerLine.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -326,6 +338,7 @@ describe("UI system ownership boundaries", () => {
       "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",
       "frame/view-frame.css",
+      "frame/composer.css",
       "terminal/mirror/mirror.css",
       "terminal/widget/mirror-widget.css",
     ]) {

@@ -186,15 +186,43 @@ describe("FilePill", () => {
     expect(manager.refreshDocs).toHaveBeenCalledTimes(1);
   });
 
-  it("busy (loading) disables new + rename but never the chevron", () => {
+  it("busy (loading) disables New field + rename but never the chevron", () => {
     const manager = fakeManager({ phase: "loading", loading: { progress: 0.5, stage: "x" } });
     mount(manager, false);
-    const plus = container?.querySelector('button[title="New field"]') as HTMLButtonElement;
+    const newField = container?.querySelector('button[title="New field"]') as HTMLButtonElement;
     const name = container?.querySelector('button[title="Rename this field"]') as HTMLButtonElement;
     const chevron = container?.querySelector('button[title="Browse fields"]') as HTMLButtonElement;
-    expect(plus.disabled).toBe(true);
+    expect(newField.disabled).toBe(true);
     expect(name.disabled).toBe(true);
     expect(chevron.disabled).toBe(false);
+  });
+
+  // One Frame FR-3 (one plus): the line's create on Canvas is the only bare
+  // plus on screen, so the pill's ⊕ retired and New field carries its noun.
+  it("draws no plus — the pill keeps the name and the chevron", () => {
+    mount(fakeManager(), false);
+    const pill = container?.querySelector("[data-file-pill]");
+    expect(pill?.querySelector('[data-glyph="plus"]')).toBeNull();
+    expect(pill?.textContent).not.toMatch(/[⊕+]/u);
+  });
+
+  it("puts New field first in the explorer, in words; it closes the sheet and creates", () => {
+    const manager = fakeManager();
+    const onOpen = vi.fn();
+    mount(manager, true, onOpen);
+    const grid = container?.querySelector("[data-file-pill] .grid");
+    const first = grid?.firstElementChild as HTMLButtonElement;
+    expect(first.getAttribute("title")).toBe("New field");
+    expect(first.textContent).toBe("New field");
+    act(() => first.click());
+    expect(onOpen).toHaveBeenCalledWith(false);
+    expect(manager.createDoc).toHaveBeenCalledTimes(1);
+  });
+
+  it("says an empty explorer is empty in words, never '⊕ creates one'", () => {
+    mount(fakeManager({ docs: [] }), true);
+    expect(container?.textContent).toContain("No fields yet");
+    expect(container?.textContent).not.toContain("⊕");
   });
 });
 

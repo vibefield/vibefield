@@ -1,25 +1,27 @@
 /**
- * The bottom toolbar ↔ widget tray (2026-07-19, rev 2 — James: the temp/
- * "Design Bottom Toolbar Features" reference: "do its bottom toolbar and how
- * it expand into the widget tray").
+ * The widget tray's SHEET — Objects, behind the line (One Frame FR-2, DK-D29;
+ * DESIGN.md §8 "HUD island", "The line").
  *
- * ONE morphing element (the reference's dynamic-island move): a 420×64 pill
- * — tool switcher, Clean Up, a morphing ⊕ — that expands into a 60vh sheet
- * (pull bar, category pills, iOS-cell widget grid) with a single
- * `600ms cubic-bezier(0.25,1,0.3,1)` transition over width/height/bottom/
- * radius; the ⊕ rotates 135° into a ✕. A backdrop dims the canvas while
- * open (the field scales its canvas wrapper to 0.98 — the reference's recede).
+ * It was ONE morphing element (2026-07-19, rev 2): a 420×64 island — tool
+ * switcher, Clean Up, a morphing ⊕ — that expanded into this sheet. The island
+ * retired into the line on 2026-10-03: the line's create is the door (Objects,
+ * B) and its ⊕ is what turns to ✕; Select and Pan stay on V and H, Wire on C,
+ * and Clean up waits for the desk bar's More. What is left rises from the
+ * window's foot behind the line on the island curve (pull bar, category pills,
+ * iOS-cell widget grid), with the backdrop and the field's 0.98 recede — a
+ * transitional door until the desk's pegboard replaces it (DK-13).
  *
  * DEFERRED SPAWN (rev 2, the GL-layer workaround): pressing a tile drags a
  * pure-DOM PROXY of the tile (body-level, above every canvas plane — GL
  * included, by construction). The real widget does not exist yet. The moment
  * the proxy leaves the sheet: `ops.insertByDrag` spawns the ghost under the
- * pointer (`home` aimed at the toolbar for cancel fly-backs), the sheet
+ * pointer (`home` aimed at the line for cancel fly-backs), the sheet
  * recedes, the proxy zooms-in-and-vanishes while the widget host pops out
  * 0.3→1 (WAAPI on the mounted host — "like the item just spawned it"), and
  * the tray tile pops back into its slot. Release INSIDE the sheet = the
- * proxy glides home; nothing was ever spawned. Release over the TOOLBAR
- * mid-insert = cancel (the put-back; CancelRequest outruns the queued up).
+ * proxy glides home; nothing was ever spawned. Release over the LINE
+ * mid-insert = cancel (the put-back, drawn over the line now that the line is
+ * the tray's door; CancelRequest outruns the queued up).
  *
  * This component lives OUTSIDE the canvas container (a field-wrap sibling of
  * InfiniteCanvas): its events never reach the pointer adapter, so no opt-out
@@ -32,7 +34,6 @@
  */
 
 import {
-  ActiveTool,
   Camera,
   type CanvasEngine,
   defineQuery,
@@ -43,7 +44,6 @@ import {
 } from "@vibecook/ice";
 import { useStageHold, WidgetPreview } from "@vibecook/ice/react";
 import { CARD_BG, CARD_RADIUS } from "@vibefield/design-kit";
-import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type ReactElement,
@@ -56,7 +56,6 @@ import {
 } from "react";
 import { usePluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import { buildCatalog, CATEGORIES, type CatalogEntry } from "./tray-catalog";
-import { useReactiveResource } from "./use-reactive";
 import "./WidgetTray.css";
 
 const ghostQ = defineQuery([InsertGhost]);
@@ -404,8 +403,9 @@ function Tile({
             // The grab point carries over: the cursor pins the SAME (u,v)
             // of the widget it pinned in the tile — no re-anchor snap.
             anchor,
-            // Cancel fly-backs aim at the persistent toolbar, not open canvas.
-            home: { x: container.clientWidth / 2, y: container.clientHeight - 64 },
+            // Cancel fly-backs aim at the line — the put-back, on the foot
+            // axis 46 above the window's foot — not open canvas.
+            home: { x: container.clientWidth / 2, y: container.clientHeight - 46 },
           });
           onHandoff(); // the sheet recedes; the drag continues on full canvas
           // The ghost's on-screen width (visual px) — the proxy morphs to it.
@@ -460,81 +460,28 @@ function Tile({
   );
 }
 
-// --- the tool switcher (the reference's mode pill, on engine tools) ---------
+// --- the sheet ---------------------------------------------------------------
 
-const TOOLS = [
-  { id: "select", label: "Select", key: "V" },
-  { id: "pan", label: "Pan", key: "H" },
-  { id: "connect", label: "Wire", key: "C" },
-] as const;
-const SEG_W = 72;
-
-const activeToolId = (t: { id: string | null } | undefined): string => t?.id ?? "select";
-
-function ToolSwitcher({ ce }: { ce: CanvasEngine }) {
-  // Reactive subscription (3b amendment) — fires only when the tool changes.
-  const active = useReactiveResource(ce, ActiveTool, activeToolId);
-  return <WidgetTrayToolSwitcherView active={active} onChange={(tool) => ce.ops.setTool(tool)} />;
-}
-
-/** Exact tool-pill composition with controller-free state for the catalog. */
-export function WidgetTrayToolSwitcherView({
-  active,
-  onChange,
-}: {
-  active: string;
-  onChange: (tool: (typeof TOOLS)[number]["id"]) => void;
-}): ReactElement {
-  const idx = Math.max(
-    0,
-    TOOLS.findIndex((tool) => tool.id === active),
-  );
-  return (
-    <div className="vf-widget-tray__tools">
-      <div
-        className="vf-widget-tray__tool-indicator"
-        style={{
-          transform: `translateX(${idx * SEG_W}px)`,
-        }}
-      />
-      {TOOLS.map((t) => (
-        <button
-          key={t.id}
-          type="button"
-          onClick={() => onChange(t.id)}
-          className={`vf-widget-tray__tool relative z-10 py-1.5 text-[13px] font-medium transition-colors ${
-            active === t.id ? "is-active" : ""
-          }`}
-          title={`${t.label} tool (${t.key})`}
-        >
-          {t.label}
-        </button>
-      ))}
-    </div>
-  );
-}
-
-// --- the morphing island -----------------------------------------------------
-
-/** One physical tray shell shared by the live engine controller and the
- * design catalog. Its callers provide toolbar and tile content; this component
- * exclusively owns the morph, material, layer order, and accessibility. */
+/** One physical tray sheet shared by the live engine controller and the
+ * design catalog. Its callers provide the tile content; this component
+ * exclusively owns the rise, material, layer order, and accessibility — and
+ * the put-back, drawn over the line, which is where a ghost goes home. */
 export function WidgetTrayFrame({
   open,
   onOpenChange,
-  toolbar,
   children,
   ghostLive = false,
   panelRef,
   backdropRef,
+  putBackRef,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  toolbar: ReactNode;
   children: ReactNode;
   ghostLive?: boolean;
   panelRef?: RefObject<HTMLDivElement | null>;
   backdropRef?: RefObject<HTMLDivElement | null>;
+  putBackRef?: RefObject<HTMLDivElement | null>;
 }): ReactElement {
   return (
     <>
@@ -551,61 +498,45 @@ export function WidgetTrayFrame({
         ref={panelRef}
         data-tray-panel=""
         data-tray-open={open ? "true" : "false"}
-        data-hud-flight="bottom-center"
-        className="vf-widget-tray hud-flight absolute left-1/2 z-50 -translate-x-1/2 overflow-hidden"
+        className="vf-widget-tray absolute left-1/2 z-50 overflow-hidden"
+        aria-label="Objects"
+        role="dialog"
+        aria-hidden={!open}
+        inert={!open}
       >
-        <div className="relative flex h-full w-full flex-col">
+        <div className="relative flex h-full w-full flex-col pt-12">
           <button
             type="button"
-            aria-label="Close the widget tray"
+            aria-label="Close the objects"
             className={`absolute top-3 left-1/2 h-1.5 w-12 -translate-x-1/2 cursor-pointer rounded-full bg-black/20 transition-all duration-300 hover:bg-black/40 dark:bg-white/20 dark:hover:bg-white/40 ${
               open ? "opacity-100 delay-200" : "pointer-events-none opacity-0"
             }`}
             onClick={() => onOpenChange(false)}
           />
 
-          <button
-            type="button"
-            data-tray-toggle=""
-            onClick={() => onOpenChange(!open)}
-            className={`vf-widget-tray__toggle absolute z-50 flex items-center justify-center rounded-full ${
-              open
-                ? "top-5 right-8 h-10 w-10 rotate-[135deg] bg-black/5 text-black/70 shadow-none hover:bg-black/10 hover:text-black dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20 dark:hover:text-white"
-                : "top-2 right-2 h-12 w-12 rotate-0 bg-black text-white shadow-md hover:scale-105 hover:bg-black/90 active:scale-95 dark:bg-white dark:text-black dark:hover:bg-white/90"
-            }`}
-            title={open ? "Close (Esc)" : "Widget tray (B)"}
-          >
-            <FieldGlyph name="plus" size={22} />
-          </button>
-
-          <div
-            className={`vf-widget-tray__header relative z-40 flex w-full shrink-0 items-center ${
-              open ? "h-20 px-8 pr-[100px]" : "h-16 px-2 pr-[64px]"
-            }`}
-          >
-            {toolbar}
-          </div>
-
-          <div
-            className={`vf-widget-tray__putback pointer-events-none absolute inset-0 z-[60] flex items-center justify-center text-[13px] font-medium backdrop-blur-xl transition-opacity duration-200 ${
-              ghostLive && !open ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            <span className="rounded-full border border-dashed border-neutral-400/60 px-4 py-1.5 dark:border-neutral-500/60">
-              Release here to put it back
-            </span>
-          </div>
-
           <div
             className={`relative flex min-h-0 flex-1 flex-col transition-all duration-500 ease-out ${
               open
                 ? "translate-y-0 opacity-100 delay-150"
-                : "pointer-events-none absolute inset-x-0 top-16 translate-y-12 opacity-0"
+                : "pointer-events-none translate-y-12 opacity-0"
             }`}
           >
             {children}
           </div>
         </div>
+      </div>
+
+      {/* The put-back, over the line: releasing a ghost here cancels it. */}
+      <div
+        ref={putBackRef}
+        aria-hidden
+        className={`vf-widget-tray__putback pointer-events-none absolute flex items-center justify-center text-[13px] font-medium backdrop-blur-xl transition-opacity duration-200 ${
+          ghostLive && !open ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <span className="rounded-full border border-dashed border-neutral-400/60 px-4 py-1.5 dark:border-neutral-500/60">
+          Release here to put it back
+        </span>
       </div>
     </>
   );
@@ -626,6 +557,7 @@ export function WidgetTray({
   const [ghostLive, setGhostLive] = useState(false);
   const panelRef = useRef<HTMLDivElement>(null);
   const backdropRef = useRef<HTMLDivElement>(null);
+  const putBackRef = useRef<HTMLDivElement>(null);
 
   // P3c: disabled plugins keep their schemas (existing boards render
   // placeholders) but never offer NEW spawns — the tray follows the live
@@ -671,7 +603,7 @@ export function WidgetTray({
   // Ghost scan, EVENT-DRIVEN (3b amendment): Tier-1 observeQuery fires on any
   // InsertGhost archetype move — spawn, the GhostRetiring tag flip, despawn —
   // so the scan runs exactly when ghosts change, never on a clock. It drives
-  // the toolbar's put-back affordance AND the fly-back shrink (2026-07-19,
+  // the line's put-back affordance AND the fly-back shrink (2026-07-19,
   // James: "also shrink its size, do a scale down to 0 transition along with
   // the fly") — a retiring ghost's host scales to nothing while the engine
   // tween carries it home; the reap despawns it at arrival, so the
@@ -701,18 +633,18 @@ export function WidgetTray({
     });
   }, [ce]);
 
-  // Release over the toolbar mid-insert = cancel (the put-back). Event-time
+  // Release over the line mid-insert = cancel (the put-back). Event-time
   // CancelRequest beats the queued up by phase order (ctl:spawn sweep first).
   useEffect(() => {
     const onUp = (e: PointerEvent): void => {
-      const panel = panelRef.current;
-      if (panel === null) return;
+      const putBack = putBackRef.current;
+      if (putBack === null) return;
       let live = false;
       ce.world.query(ghostQ).each((b) => {
         if (b.count > 0) live = true;
       });
       if (!live) return;
-      const r = panel.getBoundingClientRect();
+      const r = putBack.getBoundingClientRect();
       if (
         e.clientX >= r.left &&
         e.clientX <= r.right &&
@@ -726,8 +658,9 @@ export function WidgetTray({
     return () => window.removeEventListener("pointerup", onUp);
   }, [ce]);
 
-  // B toggles; Escape closes when open (capture — the app's exit-container
-  // handler and the engine keymap must not also act on the same press).
+  // Escape closes when open (capture — the app's exit-container handler and
+  // the engine keymap must not also act on the same press). B is the line's
+  // now (One Frame FR-2): the line's create owns its key.
   useEffect(() => {
     const isEditable = (t: EventTarget | null): boolean =>
       t instanceof HTMLElement &&
@@ -735,29 +668,14 @@ export function WidgetTray({
         t.tagName === "TEXTAREA" ||
         t.tagName === "SELECT" ||
         t.isContentEditable);
-    const onKey = (e: KeyboardEvent): void => {
-      if (
-        (e.key === "b" || e.key === "B") &&
-        !e.metaKey &&
-        !e.ctrlKey &&
-        !e.altKey &&
-        !isEditable(e.target)
-      ) {
-        onOpenChange(!open);
-      }
-    };
     const onEscCapture = (e: KeyboardEvent): void => {
       if (e.key !== "Escape" || !open || isEditable(e.target)) return;
       if (document.querySelector("[data-tray-proxy]") !== null) return; // the proxy's own Esc glides it back
       e.stopPropagation();
       onOpenChange(false);
     };
-    window.addEventListener("keydown", onKey);
     window.addEventListener("keydown", onEscCapture, true);
-    return () => {
-      window.removeEventListener("keydown", onKey);
-      window.removeEventListener("keydown", onEscCapture, true);
-    };
+    return () => window.removeEventListener("keydown", onEscCapture, true);
   }, [open, onOpenChange]);
 
   return (
@@ -767,20 +685,7 @@ export function WidgetTray({
       ghostLive={ghostLive}
       panelRef={panelRef}
       backdropRef={backdropRef}
-      toolbar={
-        <>
-          <ToolSwitcher ce={ce} />
-          <div className="flex-1" />
-          <button
-            type="button"
-            onClick={() => ce.ops.arrange()}
-            className="flex h-11 w-11 items-center justify-center rounded-full text-[17px] transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
-            title="Clean up: pack widgets into tidy rows (arranges the selection when 2+ are selected)"
-          >
-            ✨
-          </button>
-        </>
-      }
+      putBackRef={putBackRef}
     >
       <div className="vf-no-scrollbar vf-mask-fade-right mb-3 flex w-full items-center gap-2 overflow-x-auto px-8">
         {CATEGORIES.map((cat) => (

@@ -3,6 +3,8 @@ import { type ReactElement, type ReactNode, useCallback, useEffect, useRef, useS
 import { emitViewKeyMarker } from "../development-console";
 import { listenForProductChord } from "../field/product-chords";
 import { getHost } from "../host";
+import { Composer } from "./Composer";
+import type { LineSurface } from "./line-surface";
 import {
   type CoverState,
   coverAfter,
@@ -17,9 +19,12 @@ import { FRAME_VIEWS, viewForKey, viewKeysOf } from "./views";
 // THE VIEW FRAME (One Frame FR-1; DESIGN.md §10, §8, §6) — the controller.
 // It reads the window's view from its one owner (main, mirrored by
 // `view-state.ts`), asks that owner for another, and draws the frame over the
-// views: the cover the covered views live in, and the views track above it.
-// What it owns is only presentation — the ⌘-held light, the key's dip, the
-// Assistant's note, and which motion the cover is making — never the view.
+// views: the cover the covered views live in, and the line above it with the
+// views track at its left end (FR-2; the line's own controller is
+// `Composer.tsx`). What it owns is only presentation — the ⌘-held light, the
+// key's dip, the Assistant's note, and which motion the cover is making —
+// never the view, and never which of the line's surfaces is open, which has
+// its own one owner (`line-surface.ts`).
 
 /** How long ⌘ is held alone before the keys light (DESIGN.md §8): long enough
  * that ⌘C and ⌘V never set it off. */
@@ -27,7 +32,16 @@ const HOLD_MS = 400;
 /** How long the waiting cell says "not built yet". */
 const NOTE_MS = 1400;
 
-export function ViewFrame({ godview }: { godview: ReactNode }): ReactElement {
+export function ViewFrame({
+  godview,
+  surface,
+  onSurfaceChange,
+}: {
+  godview: ReactNode;
+  /** The line's open surface, from its one owner. */
+  surface: LineSurface | null;
+  onSurfaceChange: (next: LineSurface | null) => void;
+}): ReactElement {
   const view = useActiveView();
   const [keys] = useState(() => viewKeysOf(getHost().platform));
   const [held, setHeld] = useState(false);
@@ -172,13 +186,21 @@ export function ViewFrame({ godview }: { godview: ReactNode }): ReactElement {
         godview={godview}
         history={<HistoryPlaceholderView />}
       />
-      <ViewsTrackView
+      <Composer
         view={view}
         keys={keys}
-        held={held}
-        press={press}
-        note={note}
-        onSelect={select}
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        track={
+          <ViewsTrackView
+            view={view}
+            keys={keys}
+            held={held}
+            press={press}
+            note={note}
+            onSelect={select}
+          />
+        }
       />
     </>
   );

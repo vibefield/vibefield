@@ -78,35 +78,20 @@
   place-items: center;
 }
 
-/* ── THE VIEWS TRACK (§8) on the line's glass (§5) ─────────────────────────
-   Until the line exists the track stands alone at the line's left end — 880
-   wide centred, never nearer the left than 76 — so the line grows around it
-   without the track moving (§10). */
+/* ── THE VIEWS TRACK (§8) at the line's left end ───────────────────────────
+   FR-1 drew it alone on the line's glass where the line's left end would be;
+   since FR-2 the line carries the glass (composer.css) and the track is its
+   first piece, in the same place — nothing about it moved. */
 .vf-views-line {
   --vf-views-thumb-down: 0 0 0 1px var(--vf-hairline), 0 1px 2px rgb(0 0 0 / 6%);
-  position: absolute;
-  z-index: 62;
-  left: max(76px, calc(50% - 440px));
-  bottom: 20px;
+  position: relative;
   display: flex;
+  flex: none;
   align-items: center;
-  height: 52px;
-  padding: 5px 6px;
-  border-radius: 26px;
-  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
-  backdrop-filter: blur(24px);
-  box-shadow:
-    0 0 0 1px var(--vf-hairline),
-    var(--vf-shadow-island);
 }
 
 .dark .vf-views-line {
   --vf-views-thumb-down: inset 0 0.5px 0 rgb(255 255 255 / 5%);
-  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
-  box-shadow:
-    0 0 0 1px var(--vf-hairline-strong),
-    var(--vf-shadow-island),
-    inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
 .vf-views {
@@ -278,11 +263,13 @@
 }
 
 /* "Assistant · not built yet" — over the waiting cell (the track's fourth:
-   6 + 3 + 3 × 48 + 23 from the line's left), 10 above the line, for 1.4s. */
+   3 + 3 × 48 + 23 from the track's left, which stands 6 in from the line's),
+   10 above the line (the track is 42 tall, centred in the line's 52), for
+   1.4s. */
 .vf-views-note {
   position: absolute;
-  bottom: calc(100% + 10px);
-  left: 176px;
+  bottom: calc(100% + 15px);
+  left: 170px;
   padding: 7px 10px;
   border-radius: 10px;
   color: var(--vf-text-secondary);

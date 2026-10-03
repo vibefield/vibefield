@@ -53,6 +53,19 @@
   box-shadow: inset 0 0 0 1.5px var(--vf-select);
 }
 
+/* New field (One Frame FR-3, DESIGN.md §8 the file pill): a doc tile's
+   footprint, its face the fill inside a dashed strong hairline, the words at
+   its centre — the create that carries its noun, where the pill's ⊕ was. */
+.vf-file-pill__new {
+  display: grid;
+  place-items: center;
+  border: 1px dashed var(--vf-hairline-strong);
+  color: var(--vf-text-secondary);
+  background: var(--vf-fill);
+  font-size: 12px;
+  font-weight: 500;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .vf-file-pill,
   .vf-file-pill__header,

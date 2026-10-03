@@ -84,7 +84,15 @@ function mountFrame(): HTMLElement {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  act(() => root?.render(<ViewFrame godview={<div data-testid="godview-content" />} />));
+  act(() =>
+    root?.render(
+      <ViewFrame
+        godview={<div data-testid="godview-content" />}
+        surface={null}
+        onSurfaceChange={() => undefined}
+      />,
+    ),
+  );
   return host;
 }
 

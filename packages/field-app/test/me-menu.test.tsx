@@ -132,6 +132,10 @@ describe("MeMenuView", () => {
     expect(labels[1]).toContain("Sandbox");
     expect(labels[2]).toContain("New user…");
     expect(labels[3]).toContain("Settings…");
+    // New user… wears a person, not a plus (One Frame FR-3: one plus on screen).
+    expect(item("New user…")?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe(
+      "person",
+    );
     // You are the row nearest the face: the name, then the login.
     expect(labels[4]).toContain("James");
     expect(labels[4]).toContain("james@example.com");

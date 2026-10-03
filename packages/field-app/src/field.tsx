@@ -27,6 +27,7 @@ import { canvasGridConfig } from "./field/canvas-appearance";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
+import type { LineSurface } from "./frame/line-surface";
 import { useCovered } from "./frame/view-state";
 import type { FieldUserProfile } from "./host";
 import { useReactiveResource } from "./hud/use-reactive";
@@ -195,7 +196,11 @@ export function FieldView({
     };
   }, [ce, registry]);
 
-  const [trayOpen, setTrayOpenRaw] = useState(false);
+  // THE LINE'S OPEN SURFACE (One Frame FR-2/FR-4, `frame/line-surface.ts`):
+  // its one owner. Objects and @'s list are one value, so either folds the
+  // other; held here because the recede derives from Objects in this render.
+  const [lineSurface, setLineSurfaceRaw] = useState<LineSurface | null>(null);
+  const trayOpen = lineSurface === "objects";
   const [docsOpen, setDocsOpenRaw] = useState(false);
   const chrome = useChromeState();
   const appearanceSource = appearanceOverrideSource ?? EMPTY_APPEARANCE_SOURCE;
@@ -205,10 +210,10 @@ export function FieldView({
   );
   // One modal surface at a time: sheets dismiss Settings when opened, while
   // ChromeLayer performs the inverse when Settings or the command palette opens.
-  const setTrayOpen = useCallback(
-    (o: boolean) => {
-      setTrayOpenRaw(o);
-      if (o) {
+  const setLineSurface = useCallback(
+    (next: LineSurface | null) => {
+      setLineSurfaceRaw(next);
+      if (next === "objects") {
         setDocsOpenRaw(false);
         chrome.setShowSettings(false);
       }
@@ -219,7 +224,7 @@ export function FieldView({
     (o: boolean) => {
       setDocsOpenRaw(o);
       if (o) {
-        setTrayOpenRaw(false);
+        setLineSurfaceRaw(null);
         chrome.setShowSettings(false);
       }
     },
@@ -311,8 +316,8 @@ export function FieldView({
         onToggleTheme={toggleTheme}
         hudMotion={hudMotion}
         docState={docState}
-        trayOpen={trayOpen}
-        onTrayOpenChange={setTrayOpen}
+        lineSurface={lineSurface}
+        onLineSurfaceChange={setLineSurface}
         docsOpen={docsOpen}
         onDocsOpenChange={setDocsOpen}
         appearanceControlledByStudio={appearanceOverride.appearance !== null}

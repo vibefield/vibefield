@@ -590,8 +590,10 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   deck is showing, the draft is PASTED into that pane's input — the road ⌘V takes, bracketed, Return
   never pressed for you — and the line's note says "Pasted into vibe-field"; otherwise it goes to the
   clipboard, and the note says that and why: "Copied — no agent takes a message from here yet". The
-  note is the views track's note (solid, 12/500 in secondary ink, rising 4px as it fades in), centred
-  over send, for 2.4s. Sending clears the draft's words and chips and keeps the aim.
+  note is the views track's note (solid, 12/500 in secondary ink, rising 4px as it fades in), over
+  send with its right edge on send's (so a long sentence never leaves the window) — or, for create's
+  outcomes ("Terminal opened in the active pane"), centred over create — for 2.4s. Sending clears
+  the draft's words and chips and keeps the aim.
   **One surface at a time, at the line** (One Frame FR-4, F11): @'s list and the objects are ONE
   owner's two surfaces — opening either folds the other — and Settings, the palette, the docs
   explorer, the Artifact panel and the Me menu fold them as they folded the tray. The Me menu and

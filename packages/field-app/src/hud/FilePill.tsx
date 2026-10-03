@@ -198,15 +198,10 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
               open ? "h-12 px-4" : "h-10 px-1"
             }`}
           >
-            <button
-              type="button"
-              onClick={() => void manager.createDoc()}
-              disabled={busy}
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-black/60 transition-all hover:bg-black/5 hover:text-black active:scale-95 disabled:pointer-events-none disabled:opacity-40 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white"
-              title="New field"
-            >
-              <FieldGlyph name="plus" size={15} />
-            </button>
+            {/* One plus (One Frame FR-3): the pill's ⊕ retired — the line's
+                create on Canvas is the only bare plus on screen, and New field
+                is the explorer's first tile, in words. */}
+            <span className="h-8 w-8 shrink-0" aria-hidden />
 
             <div className="flex min-w-0 flex-1 justify-center">
               {editing ? (
@@ -271,84 +266,97 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                 : "pointer-events-none translate-y-6 opacity-0"
             }`}
           >
-            {state.docs.length === 0 ? (
-              <div className="flex h-full items-center justify-center">
-                <span className="rounded-full border border-dashed border-neutral-400/60 px-4 py-1.5 text-[13px] font-medium text-neutral-500 dark:border-neutral-500/60 dark:text-neutral-400">
-                  No fields yet — ⊕ creates one
-                </span>
-              </div>
-            ) : (
-              <div className="grid grid-cols-3 gap-4">
-                {state.docs.map((d: DocRegistryEntry) => {
-                  const current = d.docId === state.doc?.docId;
-                  const thumbnailUrl = state.thumbnailUrls[d.docId];
-                  // UA-D7: the REGISTRY's answer, not the sync stream's — a
-                  // gated doc has no sync status at all to read (§8).
-                  const local = d.syncIntent === "local";
-                  return (
-                    // The tile is two controls now, so the scaling element is
-                    // the wrapper: the chip rides the hover with the face
-                    // instead of hanging off a corner that moved without it.
-                    <div
-                      key={d.docId}
-                      className="group relative transition-transform duration-200 hover:scale-[1.03] active:scale-95"
+            <div className="grid grid-cols-3 gap-4">
+              {/* New field — the explorer's first tile, in words (One Frame
+                  FR-3: every create but Canvas's carries its noun). */}
+              <button
+                type="button"
+                onClick={() => {
+                  onOpenChange(false);
+                  void manager.createDoc();
+                }}
+                disabled={busy}
+                className="flex w-full flex-col gap-1.5 text-left transition-transform duration-200 hover:scale-[1.03] active:scale-95 disabled:pointer-events-none disabled:opacity-40"
+                title="New field"
+              >
+                <div className="vf-file-pill__new aspect-[16/10] w-full rounded-[10px]">
+                  New field
+                </div>
+                {state.docs.length === 0 ? (
+                  <div className="px-0.5 text-[10px] text-black/40 dark:text-white/40">
+                    No fields yet
+                  </div>
+                ) : null}
+              </button>
+              {state.docs.map((d: DocRegistryEntry) => {
+                const current = d.docId === state.doc?.docId;
+                const thumbnailUrl = state.thumbnailUrls[d.docId];
+                // UA-D7: the REGISTRY's answer, not the sync stream's — a
+                // gated doc has no sync status at all to read (§8).
+                const local = d.syncIntent === "local";
+                return (
+                  // The tile is two controls now, so the scaling element is
+                  // the wrapper: the chip rides the hover with the face
+                  // instead of hanging off a corner that moved without it.
+                  <div
+                    key={d.docId}
+                    className="group relative transition-transform duration-200 hover:scale-[1.03] active:scale-95"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => {
+                        onOpenChange(false);
+                        if (!current) void manager.switchTo(d.docId);
+                      }}
+                      className="flex w-full flex-col gap-1.5 text-left"
+                      title={current ? `${d.name} — current` : `Open ${d.name}`}
                     >
-                      <button
-                        type="button"
-                        onClick={() => {
-                          onOpenChange(false);
-                          if (!current) void manager.switchTo(d.docId);
-                        }}
-                        className="flex w-full flex-col gap-1.5 text-left"
-                        title={current ? `${d.name} — current` : `Open ${d.name}`}
-                      >
-                        <div className="vf-doc-face relative aspect-[16/10] w-full overflow-hidden rounded-[10px] border border-black/5 dark:border-white/10">
-                          {thumbnailUrl !== undefined && <DocThumbnailImage src={thumbnailUrl} />}
-                          {current && <div className="vf-doc-face__selection" aria-hidden />}
+                      <div className="vf-doc-face relative aspect-[16/10] w-full overflow-hidden rounded-[10px] border border-black/5 dark:border-white/10">
+                        {thumbnailUrl !== undefined && <DocThumbnailImage src={thumbnailUrl} />}
+                        {current && <div className="vf-doc-face__selection" aria-hidden />}
+                      </div>
+                      <div className="min-w-0 px-0.5">
+                        <div className="truncate text-[12px] font-medium text-black/80 dark:text-white/80">
+                          {d.name}
                         </div>
-                        <div className="min-w-0 px-0.5">
-                          <div className="truncate text-[12px] font-medium text-black/80 dark:text-white/80">
-                            {d.name}
-                          </div>
-                          <div className="truncate text-[10px] text-black/40 tabular-nums dark:text-white/40">
-                            {fmtRelative(d.updatedAt)}
-                            {/* C6-4: the honest sync word, only when there is one */}
-                            {(() => {
-                              const caption = syncCaption(
-                                syncStatuses.find((s) => s.docId === d.docId),
-                              );
-                              return caption !== null ? ` · ${caption}` : null;
-                            })()}
-                          </div>
+                        <div className="truncate text-[10px] text-black/40 tabular-nums dark:text-white/40">
+                          {fmtRelative(d.updatedAt)}
+                          {/* C6-4: the honest sync word, only when there is one */}
+                          {(() => {
+                            const caption = syncCaption(
+                              syncStatuses.find((s) => s.docId === d.docId),
+                            );
+                            return caption !== null ? ` · ${caption}` : null;
+                          })()}
                         </div>
-                      </button>
-                      {/* UA-D7 — the per-doc door. Muted, never hued: staying
+                      </div>
+                    </button>
+                    {/* UA-D7 — the per-doc door. Muted, never hued: staying
                           home is a FACT about a doc, not a status (§2.5), so
                           it gets the text ramp and no system color. A gated
                           doc wears its chip always; an ordinary one offers the
                           action on hover and on keyboard focus. */}
-                      <button
-                        type="button"
-                        data-sync-intent={local ? "local" : "sync"}
-                        onClick={() => toggleSyncIntent(d)}
-                        title={
-                          local
-                            ? `${d.name} stays on this device — sync it across your devices`
-                            : `Keep ${d.name} on this device`
-                        }
-                        className={`absolute top-1.5 right-1.5 rounded-full bg-black/10 px-1.5 py-0.5 text-[9px] leading-[1.4] font-medium backdrop-blur-sm transition-opacity duration-200 ease-out focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vf-select)] dark:bg-white/15 ${
-                          local
-                            ? "text-black/55 opacity-100 dark:text-white/60"
-                            : "text-black/45 opacity-0 group-hover:opacity-100 dark:text-white/50"
-                        }`}
-                      >
-                        {local ? "local" : "keep local"}
-                      </button>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
+                    <button
+                      type="button"
+                      data-sync-intent={local ? "local" : "sync"}
+                      onClick={() => toggleSyncIntent(d)}
+                      title={
+                        local
+                          ? `${d.name} stays on this device — sync it across your devices`
+                          : `Keep ${d.name} on this device`
+                      }
+                      className={`absolute top-1.5 right-1.5 rounded-full bg-black/10 px-1.5 py-0.5 text-[9px] leading-[1.4] font-medium backdrop-blur-sm transition-opacity duration-200 ease-out focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-[var(--vf-select)] dark:bg-white/15 ${
+                        local
+                          ? "text-black/55 opacity-100 dark:text-white/60"
+                          : "text-black/45 opacity-0 group-hover:opacity-100 dark:text-white/50"
+                      }`}
+                    >
+                      {local ? "local" : "keep local"}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>

@@ -38,6 +38,7 @@ import {
   emitGodviewDeckMarker,
   emitGodviewDirectTerminalMarker,
 } from "../development-console";
+import { type LinePane, publishGodviewLineDoor } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
@@ -73,6 +74,7 @@ import {
 } from "./deck-restore";
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
+import { linePanesOf, newTerminalOutcome, pasteIntoPane } from "./line-panes";
 import type { MonitorFloorRecord } from "./monitor/agents";
 import {
   devicesPortOver,
@@ -1310,6 +1312,34 @@ export function GodviewDeck({
   const paneAgents = useDeckAgentFacts();
   const paneRuns = useRef(paneAgents.runs);
   paneRuns.current = paneAgents.runs;
+
+  // WHAT GODVIEW LENDS THE LINE (One Frame FR-2, `frame/line-door.ts`). The
+  // line's New terminal (⌘T, its create in Godview) is this door's
+  // `createTerminal` — what the swarm's hold does, without a spot to land on —
+  // and the interim send pastes into a pane through the pane's own input. The
+  // rows are the panes this deck shows, named as the swarm names their bodies.
+  // Published on change only; the deck going away takes the door with it.
+  const linePanesKey = JSON.stringify(
+    linePanesOf(workspace?.panes ?? [], paneAgents.agents, workspace?.activePaneId, (id) =>
+      bornCwd.current.get(id),
+    ),
+  );
+  useEffect(() => {
+    publishGodviewLineDoor({
+      panes: JSON.parse(linePanesKey) as LinePane[],
+      onScreen: active,
+      newTerminal: async () =>
+        door === null
+          ? { state: "refused", reason: "the deck has no connection yet" }
+          : newTerminalOutcome(await door.createTerminal()),
+      paste: (sessionId, text) => {
+        const pane = workspaceRef.current?.panes.find((entry) => entry.session.id === sessionId);
+        const root = zoomHostRef.current;
+        return pane !== undefined && root !== null && pasteIntoPane(root, pane.id, text);
+      },
+    });
+  }, [linePanesKey, active, door]);
+  useEffect(() => () => publishGodviewLineDoor(null), []);
 
   useCompletedAgentPanes(
     runtime,

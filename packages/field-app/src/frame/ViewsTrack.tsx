@@ -7,8 +7,8 @@ import "./view-frame.css";
 // THE VIEWS TRACK (DESIGN.md §8; One Frame FC-D2, FC-D11, FC-D17) — the frame's
 // way to each view, controller-free so the catalog mounts this exact markup on
 // fixtures. Four cells, each printing its key under its glyph; the thumb is the
-// key that is down. Until the line exists it stands alone on the line's glass,
-// at the line's left end (§10), so the line can grow around it.
+// key that is down. It is the line's left end (FR-2: `ComposerLineView` takes
+// it as a slot), on the line's glass; FR-1 drew it there alone.
 
 /** One press of a view's key (⌘ + a digit), for the thumb's 1px dip. `seq`
  * counts presses, so the same key pressed twice dips twice; `moved` holds the

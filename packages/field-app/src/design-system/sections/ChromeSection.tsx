@@ -3,9 +3,11 @@ import { type ReactElement, useMemo, useState } from "react";
 import { MeMenuView } from "../../account/MeMenu";
 import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../../field/canvas-appearance";
 import { roundButtonCls } from "../../field/theme-constants";
+import { ComposerLineView } from "../../frame/ComposerLine";
+import { ViewsTrackView } from "../../frame/ViewsTrack";
 import { type EdgeTrayTile, EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
 import { NavigationBreadcrumbsView } from "../../hud/NavigationBreadcrumbs";
-import { WidgetTrayFrame, WidgetTrayToolSwitcherView } from "../../hud/WidgetTray";
+import { WidgetTrayFrame } from "../../hud/WidgetTray";
 import { ZoomPillView } from "../../hud/ZoomPill";
 import { ThemeToggleButton } from "../../ThemeToggleButton";
 import {
@@ -74,6 +76,7 @@ const TRAY_TILES: readonly EdgeTrayTile[] = [
   },
 ];
 
+import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
 import { FilePillPreview } from "../FilePillPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
 import { SwitchPreview } from "../SwitchPreview";
@@ -90,7 +93,6 @@ export function ChromeSection({
 }): ReactElement {
   const [docsOpen, setDocsOpen] = useState(false);
   const [trayOpen, setTrayOpen] = useState(false);
-  const [trayTool, setTrayTool] = useState<"select" | "pan" | "connect">("select");
   const [trayCategory, setTrayCategory] = useState("All");
   const [zoom, setZoom] = useState(100);
   const [meOpen, setMeOpen] = useState(false);
@@ -169,19 +171,6 @@ export function ChromeSection({
                 setMeOpen(false);
               }
             }}
-            toolbar={
-              <>
-                <WidgetTrayToolSwitcherView active={trayTool} onChange={setTrayTool} />
-                <div className="flex-1" />
-                <button
-                  type="button"
-                  className="flex h-11 w-11 items-center justify-center rounded-full text-[17px] transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
-                  title="Clean up"
-                >
-                  ✨
-                </button>
-              </>
-            }
           >
             <div className="vf-no-scrollbar vf-mask-fade-right mb-3 flex w-full items-center gap-2 overflow-x-auto px-8">
               {["All", "Writing", "Agents"].map((category) => (
@@ -205,6 +194,20 @@ export function ChromeSection({
             </div>
           </WidgetTrayFrame>
 
+          {/* The line is the tray's door (One Frame FR-2): its create raises
+              the sheet behind it, and its ⊕ is what turns to ✕. */}
+          <ComposerLineView
+            view="canvas"
+            keys="mac"
+            track={<ViewsTrackView view="canvas" keys="mac" />}
+            objectsOpen={trayOpen}
+            onCreate={() => {
+              setTrayOpen((open) => !open);
+              setDocsOpen(false);
+              setMeOpen(false);
+            }}
+          />
+
           <div className="vf-ds-demo-me">
             <MeMenuView
               me={FIXTURE_ME}
@@ -226,8 +229,8 @@ export function ChromeSection({
           </div>
         </div>
         <p className="vf-ds-stage-caption">
-          The document pill, the tray and your face are interactive. Open one to inspect its morph
-          and the rule that only one of them is open at a time.
+          The document pill, the line's Objects and your face are interactive. Open one to inspect
+          its motion and the rule that only one of them is open at a time.
         </p>
       </Specimen>
 
@@ -252,6 +255,25 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           Every state the page's plates show for the track — at rest, ⌘ held, Godview, History, ⌘4's
           note, and the keys as Windows prints them — in this page's theme.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The line — [views] create │ draft mic send"
+        source="frame/ComposerLine.tsx · DESIGN.md §8, §5, §10"
+        bleed
+      >
+        <div className="vf-ds-line-plates">
+          {LINE_STATES.map((state) => (
+            <ComposerLinePlate key={state} state={state} />
+          ))}
+          <ComposerLinePlate state="gv" keys="other" />
+        </div>
+        <p className="vf-ds-stage-caption">
+          Every state the page's §03 plates draw for the line — at rest, typing with a chip in the
+          sentence, @ open, aimed, Objects out, Godview's New terminal, History's Resume waiting —
+          and Godview's keys as Windows prints them, in this page's theme. One plus: Canvas's
+          create.
         </p>
       </Specimen>
 

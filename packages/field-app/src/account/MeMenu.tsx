@@ -66,7 +66,7 @@ const MENU_WIDTH = 256;
 /** The seed: the 44px face plus the 6px it sits inside on every side. */
 const SEED = 56;
 
-function MenuIcon({ name }: { name: "gear" | "plus" | "link" }): ReactElement {
+function MenuIcon({ name }: { name: "gear" | "person" | "link" }): ReactElement {
   return <FieldGlyph name={name} size={18} />;
 }
 
@@ -295,7 +295,8 @@ export function MeMenuView({
           onClick={() => act(onNewUser)}
         >
           <span className="vf-me-slot vf-me-icon">
-            <MenuIcon name="plus" />
+            {/* A person, not a plus (One Frame FR-3: one plus on screen). */}
+            <MenuIcon name="person" />
           </span>
           <span className="vf-me-row-label">New user…</span>
         </button>

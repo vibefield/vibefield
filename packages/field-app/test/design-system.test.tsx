@@ -153,6 +153,33 @@ describe("design system page", () => {
         plate.getAttribute("data-state"),
       ),
     ).toEqual(["rest", "cmd", "gv", "hx", "note", "rest"]);
+    // One Frame FR-2: the line — live on its real controller over the frame's
+    // field (the track at its left end), and a plate per state the page's §03
+    // plates draw for it, the last Godview's keys as Windows prints them.
+    expect(container?.querySelector(".vf-ds-frame-stage .vf-line > .vf-views-line")).not.toBeNull();
+    expect(
+      [...(container?.querySelectorAll(".vf-ds-line-plate") ?? [])].map(
+        (plate) => `${plate.getAttribute("data-state")}:${plate.getAttribute("data-keys")}`,
+      ),
+    ).toEqual([
+      "rest:mac",
+      "typing:mac",
+      "at:mac",
+      "aimed:mac",
+      "objects:mac",
+      "gv:mac",
+      "hx:mac",
+      "gv:other",
+    ]);
+    const plate = (state: string): Element | null =>
+      container?.querySelector(`.vf-ds-line-plate[data-state="${state}"]`) ?? null;
+    expect(plate("at")?.querySelector(".vf-at-menu")).not.toBeNull();
+    expect(plate("typing")?.querySelector(".vf-line-chip")).not.toBeNull();
+    expect(plate("aimed")?.querySelector(".vf-line-ph")?.textContent).toBe("Message vibe-field…");
+    expect(plate("objects")?.querySelector('.vf-line-create[aria-expanded="true"]')).not.toBeNull();
+    expect(plate("hx")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
+      "true",
+    );
   });
 
   it("exposes theme and representative component-state controls", async () => {
@@ -202,6 +229,13 @@ describe("design system page", () => {
     expect(container?.querySelector(".vf-navigation-breadcrumbs__trail")).not.toBeNull();
     expect(container?.querySelector(".vf-settings-dialog")).not.toBeNull();
     expect(container?.querySelector(".vf-widget-tray")).not.toBeNull();
+    // The playground's tray has no island of its own (One Frame FR-2): the
+    // line's create raises its sheet, and its ⊕ is what turns to ✕.
+    const playground = container?.querySelector(".vf-ds-field-stage");
+    expect(playground?.querySelector("[data-tray-toggle]")).toBeNull();
+    await act(async () => playground?.querySelector<HTMLButtonElement>(".vf-line-create")?.click());
+    expect(playground?.querySelector('.vf-widget-tray[data-tray-open="true"]')).not.toBeNull();
+    expect(playground?.querySelector('.vf-line-create[aria-expanded="true"]')).not.toBeNull();
     expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(12);
     for (const state of [
       "welcome",

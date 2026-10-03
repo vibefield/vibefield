@@ -38,6 +38,10 @@ The catalog currently mounts these shipping views directly:
 - the view frame (One Frame FR-1): the views track in every state the design's plates show — at
   rest, ⌘ held, Godview, History, the Assistant's note, Windows' keys — and the cover rising,
   swapping and lowering over a field with Godview's stage and History's room, on fixture state
+- the line (One Frame FR-2): `ComposerLineView` and @'s `AtMenuView` in every state the page's §03
+  plates draw — at rest, typing with a chip, @ open, aimed, Objects out, Godview's New terminal,
+  History's Resume, Windows' keys — and the live line on its real controller (`Composer`) over the
+  frame's field, with fixture doors for what Godview lends it, the clipboard and the capture
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and FilePill receives a fixture document manager; their DOM, interaction

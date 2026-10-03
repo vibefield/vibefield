@@ -2,6 +2,9 @@ import type { FrameView } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../field/canvas-appearance";
+import { Composer } from "../frame/Composer";
+import { ComposerLineView } from "../frame/ComposerLine";
+import type { LineSurface } from "../frame/line-surface";
 import {
   type CoverState,
   coverAfter,
@@ -11,14 +14,20 @@ import {
 } from "../frame/ViewCover";
 import { type ViewKeyPress, ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
+import { WidgetTrayFrame } from "../hud/WidgetTray";
+import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
 import { GodviewPreview } from "./GodviewPreview";
 import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 
-// The view frame's fixture ADAPTER (One Frame FR-1; docs/UI_SYSTEM.md): the
-// shipping views — the views track, the cover, History's room — on fixture
-// state. What it replaces is only what a host supplies: the window's view
-// (main's owner, here a local value) and the keys' timing (the controller's,
-// here the state controls). The markup and the CSS are the product's.
+// The view frame's fixture ADAPTER (One Frame FR-1, FR-2; docs/UI_SYSTEM.md):
+// the shipping views — the line with the views track at its left end, the
+// cover, History's room — on fixture state. What it replaces is only what a
+// host supplies: the window's view (main's owner, here a local value), the
+// keys' timing (the controller's, here the state controls), the line's open
+// surface (FieldView's owner, here a local value) and what Godview lends the
+// line (a fixture door). The line itself runs on its REAL controller, so the
+// draft takes typing, @ opens its list and send says what it did. The markup
+// and the CSS are the product's.
 
 /** The states the One Frame page's Chrome & Composer plates show for the
  * frame (`data-state`): at rest on the canvas, ⌘ held, Godview, History, and
@@ -42,7 +51,8 @@ const VIEW_OF: Record<FrameState, FrameView> = {
   note: "canvas",
 };
 
-/** One state of the track, alone on its glass — the page's §04 plates. */
+/** One state of the track, at the line's left end — the page's §04 plates,
+ * which crop the line there. */
 export function ViewsTrackSpecimen({
   state,
   keys = "mac",
@@ -61,12 +71,21 @@ export function ViewsTrackSpecimen({
   }, [state]);
   return (
     <div className="vf-ds-views-plate" data-state={state}>
-      <ViewsTrackView
-        view={VIEW_OF[state]}
-        keys={keys}
-        held={state === "cmd"}
-        note={state === "note" ? said : null}
-      />
+      <div className="vf-ds-line-stage">
+        <ComposerLineView
+          view={VIEW_OF[state]}
+          keys={keys}
+          createWaits={VIEW_OF[state] === "history" ? "choose a session first" : null}
+          track={
+            <ViewsTrackView
+              view={VIEW_OF[state]}
+              keys={keys}
+              held={state === "cmd"}
+              note={state === "note" ? said : null}
+            />
+          }
+        />
+      </div>
     </div>
   );
 }
@@ -87,6 +106,8 @@ export function ViewFramePreview({
   const [cover, setCover] = useState<CoverState>(() => coverAt("canvas"));
   const [press, setPress] = useState<ViewKeyPress | null>(null);
   const [note, setNote] = useState<number | null>(null);
+  const [surface, setSurface] = useState<LineSurface | null>(null);
+  const [clipboard] = useState(fixtureClipboardStore);
   const grid = useMemo(
     () => defaultCanvasGridConfig(dark, magnetGridGlyph),
     [dark, magnetGridGlyph],
@@ -155,16 +176,39 @@ export function ViewFramePreview({
           godview={<GodviewPreview />}
           history={<HistoryPlaceholderView />}
         />
-        <ViewsTrackView
+        <WidgetTrayFrame
+          open={surface === "objects"}
+          onOpenChange={(open) => setSurface(open ? "objects" : null)}
+        >
+          <div className="vf-ds-widget-tiles">
+            <span className="vf-ds-line-tile">Note</span>
+            <span className="vf-ds-line-tile">Terminal</span>
+            <span className="vf-ds-line-tile">Folder</span>
+          </div>
+        </WidgetTrayFrame>
+        <Composer
           view={view}
           keys={keys === "Mac" ? "mac" : "other"}
-          held={state === "cmd"}
-          press={press}
-          note={note}
-          onSelect={(asked) => {
-            if (asked === "assistant") choose("note");
-            else choose(asked === "canvas" ? "rest" : asked === "godview" ? "gv" : "hx");
-          }}
+          surface={surface}
+          onSurfaceChange={setSurface}
+          godview={FIXTURE_LINE_DOOR}
+          clipboard={clipboard}
+          host={{ screenshotStillUrl: fixtureStillUrl }}
+          writeClipboard={async () => undefined}
+          bindKeys={false}
+          track={
+            <ViewsTrackView
+              view={view}
+              keys={keys === "Mac" ? "mac" : "other"}
+              held={state === "cmd"}
+              press={press}
+              note={note}
+              onSelect={(asked) => {
+                if (asked === "assistant") choose("note");
+                else choose(asked === "canvas" ? "rest" : asked === "godview" ? "gv" : "hx");
+              }}
+            />
+          }
         />
       </div>
     </div>

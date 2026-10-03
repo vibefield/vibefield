@@ -263,6 +263,22 @@ export function emitViewKeyMarker(facts: ViewKeyFacts): void {
   console.log(`VIEW_KEY ${JSON.stringify(facts)}`);
 }
 
+/** One key the LINE took for its create (One Frame FR-2, §11): B on Canvas,
+ * ⌘T in Godview. The delivery probe's ear at the line, in VIEW_KEY's form —
+ * said from the line's own handler, so a key that never arrived says nothing,
+ * which is what the probe from a focused pane reads B's silence by. */
+export interface LineKeyFacts {
+  key: string;
+  view: string;
+  /** "opened" / "closed": Objects; "new-terminal": the deck was asked. */
+  outcome: "opened" | "closed" | "new-terminal";
+}
+
+export function emitLineKeyMarker(facts: LineKeyFacts): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`LINE_KEY ${JSON.stringify(facts)}`);
+}
+
 /** What the first ⌘G cost, station by station (GT-3p, GT-D15.4).
  *
  * Published once per app life, when the first open reaches a presented frame.

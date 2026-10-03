@@ -18,6 +18,7 @@ import {
 import { MeMenu } from "../account/MeMenu";
 import { isSwitchCovering, useSwitchState } from "../boot/switch";
 import type { DocManager, DocManagerState } from "../doc-manager";
+import { foldSurface, type LineSurface } from "../frame/line-surface";
 import { ViewFrame } from "../frame/ViewFrame";
 import { requestView, useCovered } from "../frame/view-state";
 import { GodviewOverlay } from "../godview";
@@ -40,7 +41,7 @@ import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-pre
 import { fabCls } from "./theme-constants";
 import { useMagnetGridGlyph } from "./use-magnet-grid-glyph";
 
-// ChromeLayer (§5.4.3): HUD, file pill, the tray (DESIGN.md's bottom toolbar),
+// ChromeLayer (§5.4.3): HUD, file pill, Objects' sheet (behind the line),
 // settings, and overlays — WITHOUT owning document or engine lifetime. All the
 // chrome-scoped effects live here too: the live theme-token writes, the two
 // keyboard additions, the hud-flight dock choreography, the devtools attach,
@@ -85,8 +86,8 @@ export function ChromeLayer({
   onToggleTheme,
   hudMotion,
   docState,
-  trayOpen,
-  onTrayOpenChange,
+  lineSurface,
+  onLineSurfaceChange,
   docsOpen,
   onDocsOpenChange,
   appearanceControlledByStudio,
@@ -100,8 +101,10 @@ export function ChromeLayer({
   onToggleTheme: () => void;
   hudMotion: "out" | "in" | "idle";
   docState: DocManagerState;
-  trayOpen: boolean;
-  onTrayOpenChange: (open: boolean) => void;
+  /** The line's open surface (One Frame FR-2/FR-4) and its one owner's
+   * setter — FieldView's, where Objects' recede is computed. */
+  lineSurface: LineSurface | null;
+  onLineSurfaceChange: (next: LineSurface | null) => void;
   docsOpen: boolean;
   onDocsOpenChange: (open: boolean) => void;
   appearanceControlledByStudio: boolean;
@@ -109,6 +112,9 @@ export function ChromeLayer({
   devtoolsRef: MutableRefObject<DevtoolsHandle | null>;
 }): ReactElement {
   const { showSettings, setShowSettings, showEcs } = chrome;
+  // Objects, on this build: the widget tray's sheet behind the line.
+  const trayOpen = lineSurface === "objects";
+  const lineOpen = lineSurface !== null;
   const [paletteOpen, setPaletteOpen] = useState(false);
   // UA-D19 — the Me menu. One of the expanded surfaces: opening it folds the
   // others, and any of them opening folds it (DESIGN.md §8).
@@ -139,7 +145,7 @@ export function ChromeLayer({
       return;
     }
     const reveal = () => {
-      onTrayOpenChange(false);
+      onLineSurfaceChange(null);
       onDocsOpenChange(false);
       setShowSettings(false);
       setPaletteOpen(false);
@@ -155,7 +161,7 @@ export function ChromeLayer({
     closeSidePanel,
     covered,
     onDocsOpenChange,
-    onTrayOpenChange,
+    onLineSurfaceChange,
     setShowSettings,
     sidePanelSurface,
     sidePanelSurfaceId,
@@ -177,20 +183,20 @@ export function ChromeLayer({
   const openSettings = useCallback(
     (page: "general" | "account") => {
       setShellPresentation((state) => ({ ...state, target: page }));
-      onTrayOpenChange(false);
+      onLineSurfaceChange(null);
       onDocsOpenChange(false);
       setPaletteOpen(false);
       closeSidePanel(false);
       setMeOpen(false);
       setShowSettings(true);
     },
-    [closeSidePanel, onDocsOpenChange, onTrayOpenChange, setShowSettings],
+    [closeSidePanel, onDocsOpenChange, onLineSurfaceChange, setShowSettings],
   );
 
   const onMeOpenChange = useCallback(
     (open: boolean) => {
       if (open) {
-        onTrayOpenChange(false);
+        onLineSurfaceChange(null);
         onDocsOpenChange(false);
         setPaletteOpen(false);
         closeSidePanel(false);
@@ -198,13 +204,13 @@ export function ChromeLayer({
       }
       setMeOpen(open);
     },
-    [closeSidePanel, onDocsOpenChange, onTrayOpenChange, setShowSettings],
+    [closeSidePanel, onDocsOpenChange, onLineSurfaceChange, setShowSettings],
   );
 
   const foldMe = useCallback(() => setMeOpen(false), []);
   useMeMenuYields(
     meOpen,
-    trayOpen || docsOpen || showSettings || paletteOpen || covered || sidePanelSurfaceId !== null,
+    lineOpen || docsOpen || showSettings || paletteOpen || covered || sidePanelSurfaceId !== null,
     foldMe,
   );
 
@@ -213,11 +219,11 @@ export function ChromeLayer({
   useEffect(() => {
     if (
       sidePanelSurfaceId !== null &&
-      (trayOpen || docsOpen || showSettings || paletteOpen || covered)
+      (lineOpen || docsOpen || showSettings || paletteOpen || covered)
     ) {
       closeSidePanel(false);
     }
-  }, [closeSidePanel, covered, docsOpen, paletteOpen, showSettings, sidePanelSurfaceId, trayOpen]);
+  }, [closeSidePanel, covered, docsOpen, lineOpen, paletteOpen, showSettings, sidePanelSurfaceId]);
 
   useEffect(() => {
     if (activeSidePanel === null) return;
@@ -236,13 +242,13 @@ export function ChromeLayer({
     if (onShellCommand === undefined) return;
     return onShellCommand((command) => {
       setShellPresentation((state) => reduceShellPresentation(state, command));
-      onTrayOpenChange(false);
+      onLineSurfaceChange(null);
       onDocsOpenChange(false);
       setPaletteOpen(false);
       closeSidePanel(false);
       setShowSettings(true);
     });
-  }, [closeSidePanel, setShowSettings, onTrayOpenChange, onDocsOpenChange]);
+  }, [closeSidePanel, setShowSettings, onLineSurfaceChange, onDocsOpenChange]);
 
   useEffect(() => {
     const onDesktopState = getHost().onDesktopState;
@@ -303,8 +309,9 @@ export function ChromeLayer({
   }, [ce, showSettings]);
 
   // ⌘K / Ctrl+K toggles the command palette (§8.3). ⌘K is free — the ICE keymap
-  // and the tray's B/Esc/C additions never claim it. Opening it closes the tray
-  // and docs sheets (one modal at a time — the FieldView mutual-exclusion rule).
+  // and the line's B and the tray's Esc never claim it. Opening it folds the
+  // line's surfaces and the docs sheet (one modal at a time — the FieldView
+  // mutual-exclusion rule).
   // GT-D21: caught in the window's capture phase, so a focused Godview pane
   // (whose Ghostty default for ⌘K is clear_screen) never sees it.
   useEffect(
@@ -313,7 +320,7 @@ export function ChromeLayer({
         setPaletteOpen((v) => {
           const next = !v;
           if (next) {
-            onTrayOpenChange(false);
+            onLineSurfaceChange(null);
             onDocsOpenChange(false);
             setShowSettings(false);
             closeSidePanel(false);
@@ -321,7 +328,7 @@ export function ChromeLayer({
           return next;
         });
       }),
-    [closeSidePanel, onTrayOpenChange, onDocsOpenChange, setShowSettings],
+    [closeSidePanel, onLineSurfaceChange, onDocsOpenChange, setShowSettings],
   );
 
   // ⌘, / Ctrl+, — Settings from anywhere (DESIGN.md §8, the Me menu).
@@ -415,7 +422,17 @@ export function ChromeLayer({
         <PluginSurfaceHost slot="hud.attention" windowId={FIELD_WINDOW_ID} />
       </div>
 
-      <WidgetTray ce={ce} registry={registry} open={trayOpen} onOpenChange={onTrayOpenChange} />
+      {/* Objects (One Frame FR-2, DK-D29): the old tray's SHEET, risen behind
+          the line by the line's create or B; its island is gone, so the
+          line's ⊕ is its only door until the pegboard replaces it (DK-13). */}
+      <WidgetTray
+        ce={ce}
+        registry={registry}
+        open={trayOpen}
+        onOpenChange={(open) =>
+          onLineSurfaceChange(open ? "objects" : foldSurface(lineSurface, "objects"))
+        }
+      />
 
       {/* UA-D19 — the owner's face, where the Settings gear was: the account's
           one door, and the menu grows out of it (DESIGN.md §8). Placed so the
@@ -468,7 +485,7 @@ export function ChromeLayer({
       )}
 
       {/* hud.panel (§8.4): the bottom-anchored panel area, above the Me menu's
-          face and Godview, clear of the centered tray. Empty → invisible (host null). */}
+          face, clear of the line. Empty → invisible (host null). */}
       <div
         data-hud-flight="bottom-left"
         className="hud-flight pointer-events-none absolute bottom-20 left-4 z-40 flex w-72 max-w-[80vw] flex-col"
@@ -490,7 +507,11 @@ export function ChromeLayer({
           chrome, and the views track standing above the cover. Below Settings,
           the palette and the loading veil: a document that is still opening
           owns the window more than any view does. */}
-      <ViewFrame godview={<GodviewOverlay />} />
+      <ViewFrame
+        godview={<GodviewOverlay />}
+        surface={lineSurface}
+        onSurfaceChange={onLineSurfaceChange}
+      />
 
       {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}
       <LoadingVeil loading={docState.loading} />

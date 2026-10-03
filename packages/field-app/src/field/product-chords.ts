@@ -1,4 +1,4 @@
-import { FRAME_VIEWS, viewForKey, viewKeysOf } from "../frame/views";
+import { FRAME_VIEWS, type ViewKeys, viewForKey, viewKeysOf } from "../frame/views";
 import { getHost } from "../host";
 import { isSettingsChord } from "./me-menu-wiring";
 
@@ -19,6 +19,11 @@ import { isSettingsChord } from "./me-menu-wiring";
 // ⌘1–⌘4 (One Frame FR-1, FC-D4) are the frame's four views. Ghostty binds
 // ⌘1–⌘8 to goto_tab, and a pane in the deck has no tabs; the frame takes them
 // first, so ⌘1 leaves Godview from inside a focused pane and ⌘2 comes back.
+//
+// ⌘T (One Frame FR-2, §11) is Godview's create in the line — New terminal —
+// over ghostty's new_tab, which the deck has no tabs for either. The line
+// claims it only while the window is in Godview; the table names it so
+// Settings can say which Ghostty default it keeps from a pane.
 
 type ChordKey = Pick<
   KeyboardEvent,
@@ -43,11 +48,21 @@ export function isClipboardTrayChord(event: ChordKey): boolean {
   );
 }
 
+/** ⌘T (Ctrl+T off the Mac): New terminal, Godview's create. Never with ⇧ or
+ * ⌥, and never the other platform's modifier. */
+export function isNewTerminalChord(event: ChordKey, keys: ViewKeys): boolean {
+  const command =
+    keys === "mac" ? event.metaKey && !event.ctrlKey : event.ctrlKey && !event.metaKey;
+  if (!command || event.altKey || event.shiftKey) return false;
+  return event.key === "t" || event.key === "T";
+}
+
 export interface ProductChord {
   readonly id:
     | "palette"
     | "settings"
     | "clipboard-tray"
+    | "new-terminal"
     | "view-canvas"
     | "view-godview"
     | "view-history"
@@ -67,6 +82,12 @@ export const PRODUCT_CHORDS: readonly ProductChord[] = [
     trigger: "super+shift+v",
     label: "Clipboard tray",
     matches: isClipboardTrayChord,
+  },
+  {
+    id: "new-terminal",
+    trigger: "super+t",
+    label: "New terminal",
+    matches: (event) => isNewTerminalChord(event, viewKeysOf(getHost().platform)),
   },
   // The four views, in the track's order. Off the Mac they are Ctrl+1–4; the
   // trigger keeps ghostty's macOS spelling, which is what names the default
