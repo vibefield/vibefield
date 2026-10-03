@@ -139,6 +139,7 @@ What plugin runtime code may import, and nothing else:
 - `@vibefield/plugin-sdk/ui`
 - `@vibefield/plugin-sdk/canvas`
 - `@vibefield/plugin-sdk/behavior`
+- `@vibefield/plugin-sdk/desk`
 - `@vibefield/contracts`
 - `react`
 
@@ -176,6 +177,7 @@ copy:
 - `@vibefield/plugin-sdk/ui`
 - `@vibefield/plugin-sdk/canvas`
 - `@vibefield/plugin-sdk/behavior`
+- `@vibefield/plugin-sdk/desk`
 
 The two lists overlap on purpose and do not contradict each other: the canvas
 engine is resolvable at runtime because the SDK's own re-exports need it, while

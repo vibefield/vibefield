@@ -464,6 +464,7 @@ describe("host singleton registries (PA-29 / plugin spec §11.6)", () => {
       "@vibefield/plugin-sdk/ui",
       "@vibefield/plugin-sdk/canvas",
       "@vibefield/plugin-sdk/behavior",
+      "@vibefield/plugin-sdk/desk",
     ]);
     for (const extra of extras) {
       expect(

@@ -10,7 +10,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { R10_FORBIDDEN_MODULES, R10_FORBIDDEN_PREFIXES, violatesR10 } from "../src/wall";
+import {
+  R10_ALLOWED_DOOR,
+  R10_FORBIDDEN_MODULES,
+  R10_FORBIDDEN_PREFIXES,
+  violatesR10,
+} from "../src/wall";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 const SCRIPT = join(REPO_ROOT, "scripts", "check-import-boundaries.mjs");
@@ -44,14 +49,34 @@ describe("R10 parity with the repo's import-boundary checker", () => {
   it("matches subpaths the way the script's importsModule does, and not impostors", () => {
     expect(violatesR10("@vibecook/ice")).toBe(true);
     expect(violatesR10("@vibecook/ice/react")).toBe(true);
+    // DK-6: a kind's ICE arrives through the SDK's `/desk` door alone — the desk's
+    // published entries are walled like the root, the built-ins' entry first of all
+    // (K-L4: a plugin never imports a built-in kind).
+    expect(violatesR10("@vibecook/ice/desk")).toBe(true);
+    expect(violatesR10("@vibecook/ice/desk/kit")).toBe(true);
+    expect(violatesR10("@vibecook/ice/desk/objects")).toBe(true);
     expect(violatesR10("node:fs")).toBe(true);
     // The SDK door and its subpaths are the sanctioned imports.
     expect(violatesR10("@vibefield/plugin-sdk")).toBe(false);
     expect(violatesR10("@vibefield/plugin-sdk/canvas")).toBe(false);
     expect(violatesR10("@vibefield/plugin-sdk/behavior")).toBe(false);
+    expect(violatesR10("@vibefield/plugin-sdk/desk")).toBe(false);
     expect(violatesR10("react")).toBe(false);
     // A same-prefix impostor is not the forbidden module.
     expect(violatesR10("electronics")).toBe(false);
     expect(violatesR10("wsx")).toBe(false);
+  });
+
+  it("states the door as the SDK ships it: every runtime subpath, none of them walled", () => {
+    // The SDK's exports map is the door's truth; `./testing` is authoring-time (the mock host).
+    const sdk = JSON.parse(
+      readFileSync(join(REPO_ROOT, "packages", "plugin-sdk", "package.json"), "utf8"),
+    ) as { name: string; exports: Record<string, string> };
+    const runtime = Object.keys(sdk.exports)
+      .filter((sub) => sub !== "./testing")
+      .map((sub) => (sub === "." ? sdk.name : `${sdk.name}${sub.slice(1)}`));
+    expect(runtime).toContain("@vibefield/plugin-sdk/desk");
+    for (const spec of runtime) expect(R10_ALLOWED_DOOR, spec).toContain(spec);
+    for (const spec of R10_ALLOWED_DOOR) expect(violatesR10(spec), spec).toBe(false);
   });
 });

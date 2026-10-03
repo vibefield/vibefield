@@ -40,6 +40,7 @@ export const R10_ALLOWED_DOOR = [
   "@vibefield/plugin-sdk/ui",
   "@vibefield/plugin-sdk/canvas",
   "@vibefield/plugin-sdk/behavior",
+  "@vibefield/plugin-sdk/desk",
   "@vibefield/contracts",
   "react",
 ] as const;

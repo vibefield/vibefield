@@ -9,7 +9,7 @@
 import { type CanvasEngine, createCanvasEngine, decodeEnvelope, type Entity } from "@vibecook/ice";
 import { DESK_ENGINE, NOTE_TYPE } from "@vibecook/ice/desk/objects";
 import { type PluginManifestV1, PluginRecord } from "@vibefield/contracts";
-import type { ObjectBinding } from "@vibefield/plugin-sdk";
+import type { ObjectBinding, ObjectKind } from "@vibefield/plugin-sdk/desk";
 import { LoroDoc } from "loro-crdt";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
@@ -27,7 +27,7 @@ const PLUGIN = "com.example.dk4caps";
 const CLOCK = `${PLUGIN}.clock`;
 
 /** A desk kind's shape, headless (DK-2's clock): `isObjectKind` holds it; nothing creates its pass. */
-function fakeKind(name: string) {
+function fakeKind(name: string): ObjectKind {
   return {
     name,
     stratum: "things",

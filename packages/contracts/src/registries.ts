@@ -920,6 +920,9 @@ export const HOST_SINGLETON_MODULE_SPECIFIERS = [
   "@vibefield/plugin-sdk/ui",
   "@vibefield/plugin-sdk/canvas",
   "@vibefield/plugin-sdk/behavior",
+  // DK-6: the object door — every plugin KIND's bundle names it bare (the example
+  // clock's `dist/renderer.js` does), and its chunk re-exports the app's one ICE.
+  "@vibefield/plugin-sdk/desk",
 ] as const;
 
 export type HostSingletonModuleSpecifier = (typeof HOST_SINGLETON_MODULE_SPECIFIERS)[number];

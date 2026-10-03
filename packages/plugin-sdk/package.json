@@ -8,6 +8,7 @@
     "./ui": "./src/ui.ts",
     "./canvas": "./src/canvas.ts",
     "./behavior": "./src/behavior.ts",
+    "./desk": "./src/desk.ts",
     "./testing": "./src/testing.ts"
   },
   "scripts": {

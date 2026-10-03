@@ -38,32 +38,11 @@ export interface PluginLogger {
   error(message: string, fields?: Record<string, unknown>): void;
 }
 
-/** An OBJECT's code half (spec §12.8; DK-0f's contract, consumed at DK-2): the
- * value of the renderer module's NAMED EXPORT that `contributes.objects[].binding.kind`
- * names. Static, never registered from `activate` — the desk creates every kind's
- * pass together at mount, so the HOST reads this export and compiles the prefab
- * from the manifest's durable half through ICE's `defineObject` (§12.2 unchanged:
- * plugin code never owns a durable schema).
- *
- * OPAQUE here, as the retired widget binding was: the host validates each member
- * at registration (`kind` must be a desk kind — ICE `isObjectKind` — whose registry
- * `name` IS the type). The members' real types — `ObjectKind`, the driver factory,
- * `ObjectHost`, `MenuActionDef` — arrive with the SDK's `/desk` door at DK-6; until
- * then they are ICE's (`@vibecook/ice/desk`), which only the host imports. */
-export interface ObjectBinding {
-  /** The kind: its program and its world half — ICE `ObjectKind`. Required. */
-  readonly kind: unknown;
-  /** The props chain to the manifest's `schemaVersion`: version → (prev) => next. */
-  readonly migrate?: Readonly<
-    Record<number, (prev: Record<string, unknown>) => Record<string, unknown>>
-  >;
-  /** The hand onto the kind's state, made once per desk — ICE `DriverFactory`. */
-  readonly drivers?: unknown;
-  /** The kind's DOM half (lend · text · mount) — ICE `ObjectHost`. */
-  readonly host?: unknown;
-  /** Selection-menu acts, one undo step each — ICE `MenuActionDef[]`. */
-  readonly menu?: readonly unknown[];
-}
+/** An OBJECT's code half (spec §12.8) — DEFINED at the SDK's `/desk` door, where the
+ * kind's own types are (DK-6: no longer opaque). Re-exported here, type-only, for the
+ * host and for callers that name it from the root; the root's runtime graph stays
+ * ICE-free. */
+export type { ObjectBinding } from "./desk";
 
 /** The LEGACY widget door (spec §28: `ctx.widgets.register` retires with
  * `contributes.widgets` at DK-8). Since DK-2 a widget binds to NOTHING the desk

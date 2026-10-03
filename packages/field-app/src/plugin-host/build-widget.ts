@@ -183,10 +183,11 @@ export function buildObjectType(
     ...(binding.host !== undefined ? { host: binding.host } : {}),
     ...(binding.menu !== undefined ? { menu: binding.menu } : {}),
   };
-  // The same attested boundary as above, plus the binding's opaque members: the SDK
-  // types them `unknown` until its `/desk` door (DK-6); `isObjectKind` checked the
-  // kind, and `defineObject`/`defineWidget` validate the rest at definition.
-  const object = defineObject(def as unknown as Parameters<typeof defineObject>[0]);
+  // The same attested zod boundary as above. The binding's members are typed since the
+  // SDK's `/desk` door (DK-6) — ICE's own `ObjectKind`, `DriverFactory`, `ObjectHost`,
+  // `MenuActionDef` — yet they are a plugin's DATA at run time, so `isObjectKind` checked
+  // the kind and `defineObject`/`defineWidget` validate the rest at definition.
+  const object = defineObject(def as Parameters<typeof defineObject>[0]);
   built.set(o.type, object);
   return object;
 }

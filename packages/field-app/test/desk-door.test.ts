@@ -17,7 +17,7 @@ import {
 } from "@vibecook/ice";
 import { objectKindOf } from "@vibecook/ice/desk";
 import { type PluginManifestV1, WidgetContribution } from "@vibefield/contracts";
-import type { ObjectBinding } from "@vibefield/plugin-sdk";
+import type { ObjectBinding, ObjectKind } from "@vibefield/plugin-sdk/desk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   buildRegistry,
@@ -54,7 +54,7 @@ function recordingLogger(lines: Logged[]): RendererLogger {
 }
 
 /** A desk kind's shape, headless: `isObjectKind` holds it, and nothing here ever creates its pass. */
-function fakeKind(name: string) {
+function fakeKind(name: string): ObjectKind {
   return {
     name,
     stratum: "things",
@@ -246,10 +246,11 @@ describe("DK-2 — an objects row compiles through defineObject", () => {
     expect(() => buildObjectType(row, { kind: fakeKind("misnamed") })).toThrow(
       /kind is named "misnamed" — a kind's registry name IS its type/,
     );
+    // DK-6: `ObjectBinding` is typed at the SDK's `/desk` door, but a module's export is a plugin's
+    // DATA at run time — one typed past the SDK here, and the host still refuses it.
     const notKind = objectRow("com.example.dk2objects.notkind", "notkind");
-    expect(() => buildObjectType(notKind, { kind: { name: notKind.type } })).toThrow(
-      /holds no desk kind/,
-    );
+    const notABinding = { kind: { name: notKind.type } } as unknown as ObjectBinding;
+    expect(() => buildObjectType(notKind, notABinding)).toThrow(/holds no desk kind/);
     // DK-3 (ruling 9): the contract requires the hang now, so a hangless entry is one that reached
     // the host some other way — typed past the schema here — and the host still refuses it.
     const { hang: _hang, ...unhung } = objectRow("com.example.dk2objects.unhung", "unhung").tray;
