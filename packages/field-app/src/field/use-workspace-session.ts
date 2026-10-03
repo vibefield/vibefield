@@ -362,11 +362,31 @@ export function useWorkspaceSession(
       return () => closeDocument("degraded-document-close");
     }
     const unbindPersistence = bindPersistence({ ce, manager, pending, lane });
+    // THE BOARD'S STILLS (DK-4, DK-D27): the explorer's picture of this board, taken from
+    // the desk the stage mounted for THIS generation — once on the desk's idle after an
+    // edit settles (the persistence path owes it), and at the board's close (the manager
+    // asks before a switch takes the desk away). Bound HERE, with the persistence: only a
+    // board whose saves reach fieldd is pictured — a quarantined board shows a blank in
+    // place of bytes it never opened, and a read-only, refused or degraded one saves
+    // nothing, so none of them ever replaces a board's picture.
+    const stills = createDeskStills({
+      engine: ce,
+      desk: () => {
+        const desk = currentDesk();
+        return desk !== null && desk.engine === ce && desk.generation === pending.generation
+          ? desk.handle
+          : null;
+      },
+      keep: (png) => manager.keepStill(pending.docId, png),
+    });
+    const unregisterStills = manager.registerStills(pending.generation, pending.docId, stills);
     manager.contentApplied(pending.generation);
     return () => {
       behaviorConnection?.close("document-close");
       closePresence();
       unbindCapabilities();
+      unregisterStills();
+      stills.dispose();
       unbindPersistence();
       ce.docs.close();
     };
@@ -403,31 +423,6 @@ export function useWorkspaceSession(
       if (presentFrame !== null) cancelAnimationFrame(presentFrame);
     };
   }, [ce, generation, manager]);
-
-  // THE BOARD'S STILLS (DK-4, DK-D27): the explorer's picture of this board, taken
-  // from the desk the stage mounted for THIS generation — once on the desk's idle
-  // after an edit settles (the persistence path owes it), and at the board's close
-  // (the manager asks before a switch takes the desk away). A refused board has no
-  // desk, a degraded one no library row: neither is pictured.
-  useEffect(() => {
-    if (pending === null || pending.lane === null || beforeTheDesk) return;
-    const { generation: mounted, docId } = pending;
-    const stills = createDeskStills({
-      engine: ce,
-      desk: () => {
-        const desk = currentDesk();
-        return desk !== null && desk.engine === ce && desk.generation === mounted
-          ? desk.handle
-          : null;
-      },
-      keep: (png) => manager.keepStill(docId, png),
-    });
-    const unregister = manager.registerStills(mounted, docId, stills);
-    return () => {
-      unregister();
-      stills.dispose();
-    };
-  }, [ce, manager, pending, beforeTheDesk]);
 
   // Engine lifecycle (one per doc): when the generation re-keys `ce`, tear the
   // PRIOR engine's wiring down and dispose it. Ordering is safe by React's
