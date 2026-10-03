@@ -524,7 +524,6 @@ describe("UI system ownership boundaries", () => {
       "account/MeMenu.css",
       "boot/boot.css",
       "boot/onboarding/wizard-ui.css",
-      "cursor/overlay.css",
       "hud/CommandPalette.css",
       "hud/edge-tray/edge-tray.css",
       "hud/LoadingVeil.css",
