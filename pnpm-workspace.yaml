@@ -175,8 +175,10 @@ overrides:
   "@vibecook/puppeteer-views": link:../puppeteer/packages/views
   # rosetta's TypeScript client (types + the REST/WS client); rosettad itself is
   # built from the same checkout by `pnpm siblings:build` and reaches fieldd as
-  # FIELDD_ROSETTAD_BIN, never through npm.
-  "@rosetta/protocol": link:../rosetta/clients/ts
+  # FIELDD_ROSETTAD_BIN, never through npm. The checkout is DEDICATED to the pin
+  # (`../rosetta-pin`, 2026-10-03; `node scripts/siblings.mjs fetch rosetta`): James's
+  # working checkout `../rosetta` is nothing this tree reads.
+  "@rosetta/protocol": link:../rosetta-pin/clients/ts
 # Shared dependency versions, declared ONCE — packages reference "catalog:".
 catalog:
   "@tailwindcss/vite": ^4.0.0

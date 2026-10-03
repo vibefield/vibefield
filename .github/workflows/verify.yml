@@ -2,7 +2,7 @@
 # mirrors the dev machine (darwin) exactly — the desktop/Electron tests and the
 # @vibecook/truffle-sidecar-darwin-* bits are native; green here must mean green there.
 # AR-0 SIBLING MODE (2026-09-12): this repo consumes TWO sibling checkouts again —
-# ../puppeteer (the agent runtime; its packages are `link:` rows) and ../rosetta (agent
+# ../puppeteer (the agent runtime; its packages are `link:` rows) and ../rosetta-pin (agent
 # history; its TS client is a `link:` row and `rosettad` is built from its source) — both
 # pinned by revision in siblings.lock.json. EL8: the pins move only as deliberate upgrade
 # events, and preflight hard-fails when a checkout does not match the lock. The clone step
@@ -44,7 +44,7 @@ jobs:
       - uses: actions/checkout@v4
 
       # The sibling checkouts, at the EXACT pinned SHAs, in the relative locations the
-      # lock names (preflight resolves ../puppeteer and ../rosetta from siblings.lock.json).
+      # lock names (preflight resolves ../puppeteer and ../rosetta-pin from siblings.lock.json).
       # Both repos are private under the same org, so a plain clone needs a read token:
       # SIBLINGS_TOKEN is a fine-grained PAT with Contents:read on vibefield/puppeteer and
       # vibefield/rosetta. Missing token ⇒ this step FAILS with the reason, never a silent
@@ -115,7 +115,7 @@ jobs:
           cache-bin: "false"
           workspaces: |
             . -> target
-            ../rosetta -> target
+            ../rosetta-pin -> target
 
       - run: pnpm install --frozen-lockfile
 

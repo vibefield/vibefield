@@ -122,11 +122,11 @@ pnpm link ../infinite-canvas-engine/packages/ice   # undo: pnpm unlink
 
 **AR-0 sibling mode (2026-09-12):** the agent runtime is **puppeteer** and agent history is
 **rosetta** (chopsticks and spaghetti retired 2026-09-04). Neither is published, so this repo
-consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta` (three since 2026-09-16 —
+consumes two SIBLING CHECKOUTS, `../puppeteer` and `../rosetta-pin` (three since 2026-09-16 —
 `../truffle-rfc025` still serves the RFC 025 window's SwiftPM half above), pinned by revision in
 `siblings.lock.json`: puppeteer's packages and rosetta's TypeScript client enter as `link:` rows in
 the fenced block of `pnpm-workspace.yaml` (packages ask for `"*"`; only directly imported packages
-are rows; adapters never — walls R20–R22), and `rosettad` is built from the rosetta checkout by
+are rows; adapters never — walls R20–R22), and `rosettad` is built from the pinned rosetta checkout by
 `pnpm siblings:build` (cargo's own target dir, the SSD) and reaches fieldd as `FIELDD_ROSETTAD_BIN`.
 `pnpm preflight` fails on a missing checkout or a revision ≠ the pin and warns on a dirty tree;
 `pnpm siblings` prints the state; `pnpm siblings:pin` is the deliberate upgrade event (EL8).
@@ -135,6 +135,14 @@ and the dev runner all go through it). Sibling *sources* reach the fieldd and re
 through esbuild's and Vite's own input tracking, never through the runner's watchers, so the
 "never watches sibling trees" law below stands. Exit (W-D8) is a version edit: replace each
 `link:` row with an exact version and delete the lock entry.
+
+**rosetta's checkout is dedicated to its pin (W-D10, 2026-10-03):** `../rosetta-pin` is a DETACHED
+checkout at the lock's revision, with its `repository` in the lock so `node scripts/siblings.mjs fetch rosetta`
+creates it on a machine that lacks it (once the pin is on the remote; today's was a local clone of
+`../rosetta`, origin re-pointed at GitHub). James's working checkout `../rosetta` is nothing this repo
+reads — his commits there no longer redden preflight. A pin move is
+`git -C ../rosetta-pin fetch && git -C ../rosetta-pin checkout --detach <sha>`, then `pnpm siblings:pin rosetta`
+(which builds rosettad from that checkout; its machine-local `.cargo/config.toml` keeps the target on the SSD).
 
 **Terminal performance source window (2026-09-27):** `../ghosttea-0.11.2` is also pinned in
 the lock, supplying six Cargo patches and the React renderer. Run

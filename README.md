@@ -34,7 +34,8 @@ a private mesh across machines, and an iPhone companion.
 ## Getting started
 
 Prereqs: node per `.nvmrc` (`corepack enable` for pnpm) · Rust stable · `cargo install cargo-typify` ·
-four SIBLING CHECKOUTS beside this one: `../puppeteer` and `../rosetta` (AR-0),
+four SIBLING CHECKOUTS beside this one: `../puppeteer` and `../rosetta-pin` (AR-0; the rosetta
+checkout is dedicated to its pin since 2026-10-03 — `node scripts/siblings.mjs fetch rosetta` creates it),
 `../truffle-rfc025`, and `../ghosttea-0.11.2` (the terminal performance source window).
 **The RFC 025 petition window (2026-09-16) closed on two planes of three:** truffle 0.7.14
 shipped, so `truffle-core` is an exact registry pin again, the `[patch.crates-io]` row is gone,

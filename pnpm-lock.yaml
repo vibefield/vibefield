@@ -53,7 +53,7 @@ overrides:
   '@vibecook/puppeteer-record': link:../puppeteer/packages/record
   '@vibecook/puppeteer-monitor': link:../puppeteer/packages/monitor
   '@vibecook/puppeteer-views': link:../puppeteer/packages/views
-  '@rosetta/protocol': link:../rosetta/clients/ts
+  '@rosetta/protocol': link:../rosetta-pin/clients/ts
 
 importers:
 
@@ -393,8 +393,8 @@ importers:
         specifier: ^9.6.1
         version: 9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
       '@rosetta/protocol':
-        specifier: link:../../../rosetta/clients/ts
-        version: link:../../../rosetta/clients/ts
+        specifier: link:../../../rosetta-pin/clients/ts
+        version: link:../../../rosetta-pin/clients/ts
       '@vibecook/ghosttea-protocol':
         specifier: 0.12.0
         version: 0.12.0
@@ -490,8 +490,8 @@ importers:
   packages/fieldd:
     dependencies:
       '@rosetta/protocol':
-        specifier: link:../../../rosetta/clients/ts
-        version: link:../../../rosetta/clients/ts
+        specifier: link:../../../rosetta-pin/clients/ts
+        version: link:../../../rosetta-pin/clients/ts
       '@vibecook/ghosttea-client':
         specifier: 0.12.0
         version: 0.12.0
