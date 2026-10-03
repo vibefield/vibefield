@@ -24,7 +24,7 @@ const ARRIVAL_STAGES: readonly SplashStatusView[] = [
   { stage: FIRST_STAGE, progress: null, unavailable: null },
   { stage: "loading the field", progress: null, unavailable: null },
   { stage: "opening doc", progress: 0.25, unavailable: null },
-  { stage: "preparing previews", progress: 0.75, unavailable: null },
+  { stage: "drawing the board", progress: 0.75, unavailable: null },
   { stage: "settling", progress: 1, unavailable: null },
 ];
 

@@ -91,6 +91,27 @@ describe("the desk's byte store", () => {
     expect(await store.get("../escape")).toBeUndefined();
   });
 
+  it("DK-4: keeps bytes on its KEYED shelf in place of what the key held — never by content", async () => {
+    const opfs = memoryOpfs();
+    const store = createDeskBlobStore({ root: async () => opfs.root });
+    await store.keep("still-doc-a", bytesOf("first picture"), "image/png");
+    await store.keep("still-doc-a", bytesOf("second picture"), "image/png");
+    // one file per key, replaced: a board holds one picture, not every one it ever was
+    expect(
+      new TextDecoder().decode(
+        opfs.files.get("vibefield-desk-blobs/keyed/still-doc-a") as Uint8Array,
+      ),
+    ).toBe("second picture");
+    expect([...opfs.files.keys()].filter((path) => path.includes("/keyed/"))).toHaveLength(2);
+    expect(store.size()).toBe(0); // the content-addressed side holds none of it
+    const relaunched = createDeskBlobStore({ root: async () => opfs.root });
+    const kept = await relaunched.kept("still-doc-a");
+    expect(kept?.type).toBe("image/png");
+    expect(new TextDecoder().decode(kept?.bytes)).toBe("second picture");
+    expect(await relaunched.kept("still-never")).toBeUndefined();
+    await expect(store.keep("../escape", bytesOf("x"), "image/png")).rejects.toThrow(/not a key/);
+  });
+
   it("keeps prints in memory alone where the origin has no file system", async () => {
     const store = createDeskBlobStore({
       root: async () => {

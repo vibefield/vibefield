@@ -127,6 +127,21 @@ describe("buildCsp", () => {
     expect(csp).not.toContain("connect-src https://");
   });
 
+  it.each(NON_DEV)(
+    "%s admits blob: images — the explorer's own stills — and blob: nowhere else (DK-4)",
+    (mode) => {
+      const directives = (buildCsp(mode) as string).split(";").map((d) => d.trim());
+      const img = directives.find((d) => d.startsWith("img-src "));
+      expect(img?.split(" ")).toContain("blob:");
+      for (const directive of directives) {
+        if (directive.startsWith("img-src ")) continue;
+        // smoke-like modes keep their blob: WORKERS (TP-S3a, above); nothing else gains blob:
+        if (mode !== "production" && directive.startsWith("worker-src ")) continue;
+        expect(directive.split(" "), directive).not.toContain("blob:");
+      }
+    },
+  );
+
   describe("import-map hashes (P8b-3, §11.6)", () => {
     it("appends each hash to script-src ONLY — style-src never gains it", () => {
       const csp = buildCsp("production", ["sha256-abc123"]) as string;

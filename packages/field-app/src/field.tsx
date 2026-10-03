@@ -24,7 +24,6 @@ import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { BEFORE_THE_DESK } from "./field/desk/desk-words";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
-import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import type { FrameSurface } from "./frame/frame-surface";
 import { useCovered } from "./frame/view-state";
@@ -49,8 +48,7 @@ import { useTheme } from "./theme";
 //   PersistenceController — doc changes → lane, durable flush on close
 //   CanvasStage — the desk drawn (ICE's `<Desk>`, inside the generation-keyed wrapper)
 //   ChromeLayer — HUD, pills, tray, panels, overlays + chrome effects
-//   usePreviewWarmup — preview discovery/chunking into the loading pipeline
-//   DocManager — launch, metadata, lanes, switching (React-free; no UI)
+//   DocManager — launch, metadata, lanes, switching, stills (React-free; no UI)
 // The window IS the field (2026-07-21): no app bar — diagnostics live inside
 // Settings, and the theme is the Me menu's (One Frame FC-D5).
 
@@ -130,7 +128,11 @@ export function FieldView({
   const refused =
     beforeTheDesk ||
     (docState.pending !== null && (docState.beforeTheDesk ?? []).includes(docState.pending.docId));
-  usePreviewWarmup(manager, registry);
+  // The manager's launch. Its veil waits for the board presented, never on previews (DK-4: the
+  // preview warm-up that ran here left with the R3F capture at DK-2).
+  useEffect(() => {
+    void manager.boot();
+  }, [manager]);
 
   const stagedPlugins = plugins?.staged.length ?? 0;
   useEffect(() => {

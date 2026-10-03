@@ -44,8 +44,9 @@ const INDEX_FILE = "index.html";
  * - `secure` — the scheme counts as a secure context, which the renderer needs
  *   for crypto/IndexedDB and which keeps Chromium from treating our own assets
  *   as mixed content.
- * - `supportFetchAPI` — `fetch()` against our own origin. The doc-thumbnail
- *   module Worker is loaded through the fetch stack, and so are its imports.
+ * - `supportFetchAPI` — `fetch()` against our own origin. A module Worker
+ *   (Godview's swarm physics) is loaded through the fetch stack, and so are its
+ *   imports.
  * - `stream` — responses with a streamed body, which is how the handler serves
  *   files without buffering a multi-megabyte chunk into main-process memory.
  * - `codeCache` — V8 code cache for the renderer bundle (valid only alongside

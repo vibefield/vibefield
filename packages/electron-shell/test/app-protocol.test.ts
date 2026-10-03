@@ -157,14 +157,15 @@ describe("resolveAppAsset — what the renderer legitimately asks for", () => {
     expect(mimeOf("/assets/main-CXh9HwVS.js")).toBe("text/javascript; charset=utf-8");
   });
 
-  it("serves the doc-thumbnail worker chunk as script", () => {
-    // The Worker is constructed from `new URL(..., import.meta.url)`, so it
-    // arrives as an ordinary same-origin asset request — and Chromium refuses to
-    // start a worker whose script is not a JavaScript MIME type.
-    expect(at("/assets/doc-thumbnail-worker-7oAO7Sth.js")).toBe(
-      under("assets", "doc-thumbnail-worker-7oAO7Sth.js"),
+  it("serves a module worker's chunk as script", () => {
+    // A Worker constructed from `new URL(..., import.meta.url)` (Godview's swarm
+    // physics; the doc-thumbnail worker until DK-4 retired it) arrives as an
+    // ordinary same-origin asset request — and Chromium refuses to start a
+    // worker whose script is not a JavaScript MIME type.
+    expect(at("/assets/swarm-physics.worker-7oAO7Sth.js")).toBe(
+      under("assets", "swarm-physics.worker-7oAO7Sth.js"),
     );
-    expect(mimeOf("/assets/doc-thumbnail-worker-7oAO7Sth.js")).toBe(
+    expect(mimeOf("/assets/swarm-physics.worker-7oAO7Sth.js")).toBe(
       "text/javascript; charset=utf-8",
     );
   });

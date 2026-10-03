@@ -3,7 +3,6 @@ import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import { setBoardStatus } from "../board-status";
 import type { DocManager, DocManagerState } from "../doc-manager";
-import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 import { buildRegistry, createFieldEngine, fieldPackScope, seedField } from "../field-engine";
 import type { FieldUserProfile } from "../host";
 import { getRendererLogger } from "../logging";
@@ -17,6 +16,8 @@ import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 import { deskBlobs } from "./desk/desk-blobs";
 import { bindCapabilityUpgrades } from "./desk/desk-capabilities";
+import { currentDesk, deskCensus } from "./desk/desk-door";
+import { createDeskStills } from "./desk/desk-stills";
 import { isBeforeTheDesk, rootIsBeforeTheDesk } from "./desk/pre-desk";
 import { attachDocumentPresence } from "./document-presence";
 import { bindPersistence } from "./persistence-controller";
@@ -383,7 +384,7 @@ export function useWorkspaceSession(
     };
     // An empty field has nothing to frame, but still needs one painted frame
     // before the cover reveals it.
-    if (captureDocThumbnailScene(ce).widgets.length === 0 || ce.ops.frameContent()) {
+    if (Object.keys(deskCensus(ce)).length === 0 || ce.ops.frameContent()) {
       present();
       return () => {
         if (presentFrame !== null) cancelAnimationFrame(presentFrame);
@@ -402,6 +403,31 @@ export function useWorkspaceSession(
       if (presentFrame !== null) cancelAnimationFrame(presentFrame);
     };
   }, [ce, generation, manager]);
+
+  // THE BOARD'S STILLS (DK-4, DK-D27): the explorer's picture of this board, taken
+  // from the desk the stage mounted for THIS generation — once on the desk's idle
+  // after an edit settles (the persistence path owes it), and at the board's close
+  // (the manager asks before a switch takes the desk away). A refused board has no
+  // desk, a degraded one no library row: neither is pictured.
+  useEffect(() => {
+    if (pending === null || pending.lane === null || beforeTheDesk) return;
+    const { generation: mounted, docId } = pending;
+    const stills = createDeskStills({
+      engine: ce,
+      desk: () => {
+        const desk = currentDesk();
+        return desk !== null && desk.engine === ce && desk.generation === mounted
+          ? desk.handle
+          : null;
+      },
+      keep: (png) => manager.keepStill(docId, png),
+    });
+    const unregister = manager.registerStills(mounted, docId, stills);
+    return () => {
+      unregister();
+      stills.dispose();
+    };
+  }, [ce, manager, pending, beforeTheDesk]);
 
   // Engine lifecycle (one per doc): when the generation re-keys `ce`, tear the
   // PRIOR engine's wiring down and dispose it. Ordering is safe by React's

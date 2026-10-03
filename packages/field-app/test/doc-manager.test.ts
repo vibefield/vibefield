@@ -21,7 +21,7 @@ import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_DOC_NAME, DocManager } from "../src/doc-manager";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { SEED_TYPES } from "../src/field/desk/desk-seed";
@@ -350,5 +350,34 @@ describe("boards from before the desk (DK-3, ruling 7)", () => {
     expect(manager.getState().beforeTheDesk).toEqual([docId]);
     manager.contentApplied(manager.getState().pending?.generation ?? -1);
     expect(localStorage.getItem("vf-last-doc")).toBeNull();
+  });
+});
+
+describe("the explorer's stills (DK-4, DK-D27)", () => {
+  it("a switch takes the closing board's still BEFORE the next board opens, and the explorer shows it", async () => {
+    const { daemon } = await stack();
+    const manager = managerFor(daemon);
+    await manager.boot();
+    const first = manager.getState().pending;
+    if (first === null) throw new Error("no pending session");
+    await applyPending(manager);
+    await until(() => manager.getState().phase === "ready");
+    vi.spyOn(URL, "createObjectURL").mockImplementation(() => "blob:the-closing-still");
+    const trace: string[] = [];
+    // what the workspace session registers per generation (field/desk/desk-stills.ts)
+    manager.registerStills(first.generation, first.docId, {
+      owe: () => trace.push("owe"),
+      close: async () => {
+        const open = manager.getState().pending?.docId === first.docId;
+        trace.push(open ? "close, the board still open" : "close, after the swap");
+        await manager.keepStill(first.docId, new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+      },
+    });
+    manager.stillOwed(first.docId); // an acknowledged save of the open board
+    manager.stillOwed("another-board"); // …never another's
+    await manager.createDoc();
+    expect(trace).toEqual(["owe", "close, the board still open"]);
+    expect(manager.getState().pending?.docId).not.toBe(first.docId);
+    expect(manager.getState().thumbnailUrls[first.docId]).toBe("blob:the-closing-still");
   });
 });

@@ -76,6 +76,11 @@ export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = [
   // "this origin" is a much narrower claim than a directory would be.
   const pluginModules = `${PLUGIN_MODULE_SCHEME}:`;
   const hashes = importMapHashes.map((h) => ` '${h}'`).join("");
+  // DK-4 (DK-D27), DELIBERATE: `img-src` admits `blob:` — the renderer's OWN object URLs, never a
+  // remote. The fields explorer shows each board as a still of its desk, PNG bytes the renderer keeps
+  // in its own byte store (OPFS) and hands an <img> as a `blob:` URL it minted itself; a `blob:` URL
+  // is this document's alone, so the token admits nothing from outside it. `img-src` only: workers,
+  // scripts and connections gain nothing.
   return (
     `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' ${pluginModules}${hashes}; ` +
     `style-src 'self' 'unsafe-inline' ${pluginModules}; ` +

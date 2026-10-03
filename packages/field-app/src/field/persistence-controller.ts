@@ -2,7 +2,6 @@ import { type CanvasEngine, ENGINE_SCHEMA_VERSION } from "@vibecook/ice";
 import type { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { setBoardStatus } from "../board-status";
 import type { DocManager, DocSessionPending } from "../doc-manager";
-import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 
 // PersistenceController (§5.4.3): binds committed ICE document changes to the
 // current doc lane and coordinates durable flush on close. Extracted VERBATIM
@@ -19,6 +18,10 @@ import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
 // re-journals it (ICE journals applied remote updates), which fieldd absorbs
 // and takes as the next proof. A push the store refuses (strata quarantines a
 // store on a pending import) leaves the board quarantined, never diverged.
+//
+// DK-4 (DK-D27): an acknowledged save — a local edit or a peer's, re-journaled —
+// owes the board a STILL, which its desk takes once at its next rest
+// (field/desk/desk-stills.ts); the 2D silhouette captured here per save retired.
 
 export function bindPersistence(opts: {
   ce: CanvasEngine;
@@ -29,14 +32,11 @@ export function bindPersistence(opts: {
   const { ce, manager, pending, lane } = opts;
   const persist = async (kind: "checkpoint" | "update", bytes: Uint8Array): Promise<void> => {
     const savedAt = Date.now();
-    // Capture only durable structural state, synchronously, while this
-    // engine is still alive. Rendering/encoding happens later in a worker.
-    const thumbnailScene = captureDocThumbnailScene(ce);
     setBoardStatus({ state: "saving", lastSavedAt: lane.lastPutAt });
-    const receipt = await (kind === "checkpoint"
+    await (kind === "checkpoint"
       ? lane.put(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt })
       : lane.putUpdate(bytes, { engineSchema: ENGINE_SCHEMA_VERSION, savedAt }));
-    manager.thumbnailCheckpoint(pending.docId, receipt.revisionId, thumbnailScene);
+    manager.stillOwed(pending.docId);
     setBoardStatus({ state: "live", lastSavedAt: lane.lastPutAt });
   };
   const autosave = ce.docs.autosave({

@@ -7,8 +7,7 @@ import {
 import { type FielddClient, FielddRpcError } from "@vibefield/fieldd-client";
 import { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { setBoardStatus } from "./board-status";
-import type { DocThumbnailScene } from "./doc-thumbnail-scene";
-import { DocThumbnailCache } from "./doc-thumbnails";
+import { DocStillShelf } from "./doc-stills";
 import { registryBeforeTheDesk } from "./field/desk/pre-desk";
 import { getRendererLogger } from "./logging";
 
@@ -55,7 +54,8 @@ export interface DocManagerState {
   doc: { docId: string; name: string } | null;
   /** explorer cache, most recently updated first */
   docs: DocRegistryEntry[];
-  /** Device-local persisted derived artifacts; blob URLs are renderer-lifetime only. */
+  /** The boards' STILLS (DK-4, DK-D27): device-local, kept on the desk's byte store's keyed shelf;
+   * `blob:` URLs, renderer-lifetime only. A board never captured has none (the placeholder tile). */
   thumbnailUrls: Readonly<Record<string, string>>;
   pending: DocSessionPending | null;
   /** Boards FROM BEFORE THE DESK (DK-3, ruling 7): the registry's (last saved below schema 3) and
@@ -63,8 +63,12 @@ export interface DocManagerState {
   beforeTheDesk?: readonly string[];
 }
 
-/** Chunked preview capture, injected by FieldView (it owns the three/R3F imports). */
-export type PreviewRunner = (onTick: (done: number, total: number) => void) => Promise<void>;
+/** A board's stills while it is open (DK-4, field/desk/desk-stills.ts): owed one after an edit
+ * settles, and one taken at its close — registered per generation by the workspace session. */
+export interface DocStillTaker {
+  owe(): void;
+  close(): Promise<void>;
+}
 
 /** The consumer surface (the head et al) — chrome takes this, not the class,
  * so UI tests drive a plain fake instead of a socket-backed manager. */
@@ -144,7 +148,6 @@ export class DocManager {
   private generation = 0;
   private booted = false;
   private appliedGeneration = 0;
-  private previewRunner: PreviewRunner | null = null;
   /** lanes awaiting retirement — drained (chain settles, then close) once the
    * SUCCESSOR session's content is applied, i.e. after React cleanup queued the
    * old autosave's final flush PUT onto them. */
@@ -161,10 +164,11 @@ export class DocManager {
   private readonly presentationWaiters = new Map<number, () => void>();
   /** Boards the open refused as from before the desk (ruling 7) — beside the registry's own word. */
   private readonly refused = new Set<string>();
-  private readonly thumbnails = new DocThumbnailCache((docId, url) => {
+  private readonly stills = new DocStillShelf((docId, url) => {
     if (this.state.thumbnailUrls[docId] === url) return;
     this.patch({ thumbnailUrls: { ...this.state.thumbnailUrls, [docId]: url } });
   });
+  private activeStills: { generation: number; docId: string; taker: DocStillTaker } | null = null;
 
   constructor(
     private readonly client: FielddClient,
@@ -190,10 +194,6 @@ export class DocManager {
   }
 
   // ---- lifecycle ----
-
-  setPreviewRunner(run: PreviewRunner | null): void {
-    this.previewRunner = run;
-  }
 
   /** Launch: pick the doc (last-open → most-recent → create the default) and open it. */
   async boot(): Promise<void> {
@@ -249,6 +249,7 @@ export class DocManager {
       // Let the opaque cover reach full opacity before the keyed engine swap.
       // This small, fixed handoff is cheaper than exposing teardown/rebuild.
       await this.waitForSwitchCover();
+      await this.closeActiveStills();
       await this.flushActivePersistence();
       await this.openSession(entry, false);
     } catch (e) {
@@ -261,6 +262,7 @@ export class DocManager {
     this.stage(0, "opening doc");
     try {
       await this.waitForSwitchCover();
+      await this.closeActiveStills();
       await this.flushActivePersistence();
       const entry = DocRegistryEntry.parse(await this.request("doc.create", { name: "Untitled" }));
       await this.refreshDocs();
@@ -354,24 +356,35 @@ export class DocManager {
     );
     const sorted = [...docs].sort((a, b) => b.updatedAt - a.updatedAt);
     this.patch({ docs: sorted, beforeTheDesk: this.beforeTheDeskOf(sorted) });
-    void this.thumbnails
-      .hydrate(sorted.map((doc) => doc.docId))
+    void this.stills
+      .hydrate(sorted.filter((doc) => !this.isBeforeTheDesk(doc)).map((doc) => doc.docId))
       .catch((error: unknown) =>
         getRendererLogger()
-          .child({ component: "docs.thumbnails" })
-          .error(
-            "renderer.docs.thumbnail_cache_hydrate_failed",
-            "Document thumbnail cache hydration failed",
-            error,
-          ),
+          .child({ component: "docs.stills" })
+          .error("renderer.docs.still_hydrate_failed", "The boards' stills were not read", error),
       );
     return sorted;
   }
 
-  /** Called only after fieldd acknowledges the matching autosave checkpoint. */
-  thumbnailCheckpoint(docId: string, revision: string, scene: DocThumbnailScene): void {
-    if (docId.length === 0) return;
-    this.thumbnails.schedule(docId, revision, scene);
+  /** An edit to `docId` settled — fieldd acknowledged its save: its desk owes a still at its next
+   * rest (DK-4, DK-D27). */
+  stillOwed(docId: string): void {
+    const active = this.activeStills;
+    if (active !== null && active.docId === docId) active.taker.owe();
+  }
+
+  /** A still of `docId`, taken by its desk: kept on the shelf, the explorer's tile shown it. */
+  keepStill(docId: string, png: Uint8Array<ArrayBuffer>): Promise<void> {
+    return this.stills.keep(docId, png);
+  }
+
+  /** The open board's stills, per generation (the workspace session's). */
+  registerStills(generation: number, docId: string, taker: DocStillTaker): () => void {
+    const registration = { generation, docId, taker };
+    this.activeStills = registration;
+    return () => {
+      if (this.activeStills === registration) this.activeStills = null;
+    };
   }
 
   registerPersistence(generation: number, lease: DocPersistenceLease): () => void {
@@ -385,6 +398,7 @@ export class DocManager {
   async shutdown(): Promise<void> {
     this.stage(0, "saving document");
     await this.waitForSwitchCover();
+    await this.closeActiveStills();
     const persistence = this.activePersistence;
     if (persistence !== null) await persistence.lease.close();
 
@@ -410,7 +424,7 @@ export class DocManager {
   }
 
   /** FieldView calls this at the end of its attach effect: the doc is on the
-   * canvas — retire predecessors, run the previews stage, land on ready. */
+   * canvas — retire predecessors, wait for the desk to present it, land on ready. */
   contentApplied(generation: number): void {
     if (generation !== this.generation) return; // a newer session superseded this apply
     const firstApply = this.appliedGeneration !== generation;
@@ -420,7 +434,7 @@ export class DocManager {
     // a refused board is never the next launch's (ruling 7)
     if (pending !== null && pending.lane !== null && firstApply && !this.refused.has(pending.docId))
       writeLastDocId(pending.docId);
-    void this.runPreviewsStage(generation);
+    void this.presentStage(generation);
   }
 
   // ---- internals ----
@@ -471,6 +485,14 @@ export class DocManager {
     });
   }
 
+  /** The board on screen closes (a switch, a new board, the window's end): its desk's last still,
+   * taken before the stage lets the desk go — bounded, so a desk that cannot answer never holds it. */
+  private async closeActiveStills(): Promise<void> {
+    const active = this.activeStills;
+    if (active === null || active.generation !== this.appliedGeneration) return;
+    await active.taker.close();
+  }
+
   private async flushActivePersistence(): Promise<void> {
     const persistence = this.activePersistence;
     if (persistence === null || persistence.generation !== this.appliedGeneration) return;
@@ -519,27 +541,10 @@ export class DocManager {
     this.patch({ doc: { docId: pending.docId, name: pending.name }, pending });
   }
 
-  private async runPreviewsStage(generation: number): Promise<void> {
-    this.stage(0.6, "preparing previews");
-    const run = this.previewRunner;
-    if (run !== null) {
-      try {
-        await run((done, total) => {
-          if (generation !== this.generation) return;
-          const frac = total === 0 ? 1 : done / total;
-          this.stage(0.6 + 0.4 * frac, "preparing previews");
-        });
-      } catch (e) {
-        // previews fail soft — tray tiles keep their manifest fallbacks
-        getRendererLogger()
-          .child({ component: "docs.manager", docId: this.state.doc?.docId })
-          .error(
-            "renderer.docs.preview_capture_failed",
-            "Document preview capture failed softly",
-            e,
-          );
-      }
-    }
+  /** The veil's last stage (DK-4): the board is applied, and the desk draws it — the veil waits for
+   * the arrival framed and presented, never on previews (the R3F preview capture retired at DK-2). */
+  private async presentStage(generation: number): Promise<void> {
+    this.stage(0.6, "drawing the board");
     await this.waitForCanvasPresentation(generation);
     if (generation !== this.generation) return;
     this.patch({ phase: "ready", loading: null });

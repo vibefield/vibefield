@@ -15,7 +15,7 @@ import {
 //
 // The worker is bundled the way this package already bundles one — the
 // `new Worker(new URL(...), { type: "module" })` form Vite resolves at build
-// time, exactly as `doc-thumbnails.ts` has been doing since B-track. That form
+// time, exactly as `doc-thumbnails.ts` did from B-track until DK-4. That form
 // needs no config, emits a same-origin chunk, and satisfies the shell's CSP
 // (`script-src 'self'`, which `worker-src` falls back to) without a `blob:`
 // exemption.

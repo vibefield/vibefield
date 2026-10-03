@@ -53,7 +53,7 @@ export function StatusSection(): ReactElement {
             <div className="vf-ds-progress-track">
               <span style={{ width: "62%" }} />
             </div>
-            <p>preparing previews · 62%</p>
+            <p>drawing the board · 62%</p>
           </div>
         </Specimen>
         <Specimen title="Empty" source="DESIGN.md §8">

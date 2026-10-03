@@ -1239,7 +1239,8 @@ The hot-point glow and rim retire with CardShell (above).
 - **The loading veil** (B4): a full-window chrome frost (`white/60 + backdrop-blur-xl`,
   dark `#171717/60`) while a doc loads — centered thin bar (`3px × 220px`, colorless
   fill: loading is not a §2.5 state) over an 11px/50% lowercase stage label
-  ("preparing previews"). **Late-veil rule:** invisible until 120ms of loading elapse
+  ("drawing the board" — its last; DK-4 retired "preparing previews" with the
+  R3F preview capture). **Late-veil rule:** invisible until 120ms of loading elapse
   (a cached switch never flashes); 240ms fade-out. Loading is modal; the stage holds.
 - **The boot splash** (ESR slice 4; design-03 §4.3 v0.3): the app's first face, painted
   before anything heavy loads — the canvas ground itself (`--vf-canvas-bg` + the §2.1
@@ -1247,7 +1248,7 @@ The hot-point glow and rim retire with CardShell (above).
   "VibeField" centered (13px medium, `/50` — quiet), the veil's thin bar
   (`3px × 220px`, colorless) beneath it over an 11px/50% lowercase stage label. Stages
   are REAL, never theater: "waking the daemon" → the DocManager's own strings
-  ("opening doc" … "preparing previews") → "settling". Unlike the veil the splash is
+  ("opening doc" … "drawing the board") → "settling". Unlike the veil the splash is
   NOT late (there is nothing behind it yet) and NOT frost (nothing to frost).
   Unavailable is honest voice (§9): the stage line becomes the plain reason and a
   ghost "Retry" appears — no apology, no spinner theater.

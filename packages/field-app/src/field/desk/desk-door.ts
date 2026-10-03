@@ -130,6 +130,9 @@ export interface VfDeskDoor {
   perf(): DeskLayerPerf;
   /** Every queue submit since the mount (the instrument installs at the mount); null before the device. */
   submits(): { readonly total: number; readonly buffers: number } | null;
+  /** The engine's loop at rest (K7a): asleep, or parked under a freeze — the idle a still waits for
+   * and the idle-zero row reads (DK-4). */
+  rest(): { readonly asleep: boolean; readonly parked: boolean; readonly sleeps: number };
   pick(point: { readonly x: number; readonly y: number }): {
     readonly entity: number;
     readonly type: string;
@@ -177,6 +180,10 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     submits: () => {
       const s = handle.submits();
       return s === undefined ? null : { total: s.total(), buffers: s.buffers() };
+    },
+    rest: () => {
+      const stats = engine.frame.sleepStats();
+      return { asleep: stats.asleep, parked: engine.frame.isParked(), sleeps: stats.sleeps };
     },
     pick: (point) => pickOf(handle.pick(point)),
     capture: (opts) => handle.capture(opts),
