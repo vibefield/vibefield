@@ -16,6 +16,7 @@ import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 import { deskBlobs } from "./desk/desk-blobs";
+import { bindCapabilityUpgrades } from "./desk/desk-capabilities";
 import { isBeforeTheDesk, rootIsBeforeTheDesk } from "./desk/pre-desk";
 import { attachDocumentPresence } from "./document-presence";
 import { bindPersistence } from "./persistence-controller";
@@ -107,6 +108,11 @@ function logBehaviorGenerationEvent(event: BehaviorGenerationEvent): void {
 // envelope says so before anything is imported, so it is never opened —
 // no ghost stubs, no `docs.open`, no presence, no persistence — and the stage
 // shows the card in its place while the library marks it.
+//
+// THE PACK MARKERS (DK-4, DK-D17): every writable board this session opens or
+// makes gains the packs of what is on — the desk's kinds and the enabled
+// plugins' object kinds — at the open, and again when a plugin is enabled
+// mid-session; ICE refuses to place a kind whose pack the board lacks.
 
 export interface WorkspaceSession {
   ce: CanvasEngine;
@@ -217,6 +223,7 @@ export function useWorkspaceSession(
     let behaviorConnection = connectBehaviorEpisode();
     const lane = pending.lane;
     let closePresence = (): void => {};
+    let unbindCapabilities = (): void => {};
     const connectPresence = (): void => {
       if (lane === null || profile === undefined) return;
       try {
@@ -238,6 +245,7 @@ export function useWorkspaceSession(
       // Registration is execution authority: withdraw it before persistence and document close.
       behaviorConnection?.close(reason);
       closePresence();
+      unbindCapabilities();
       ce.docs.close();
     };
     if (pending.initialBytes !== null) {
@@ -281,12 +289,16 @@ export function useWorkspaceSession(
         manager.contentApplied(pending.generation);
         return;
       }
+      // DK-D17: the packs of what is on, upgraded at the open — before the journal, while the
+      // facade's gate is clean (each applied record leaves it to be judged at the next publish).
+      if (!res.session.readOnly) unbindCapabilities = bindCapabilityUpgrades(ce, registry);
       try {
         for (const update of pending.initialUpdates) res.session.applyRemote(update);
       } catch (error) {
         // The failed session is a real close edge. Reverse its exact behavior generation before
         // closing, then create a fresh generation before the quarantined blank document.
         behaviorConnection?.close("quarantined-journal-reset");
+        unbindCapabilities();
         ce.docs.close();
         const detail = error instanceof Error ? error.message : String(error);
         getRendererLogger()
@@ -327,6 +339,8 @@ export function useWorkspaceSession(
       }
     } else {
       const session = ce.docs.create();
+      // ICE stamps the whole catalog on a new board; the binding keeps a plugin enabled later
+      unbindCapabilities = bindCapabilityUpgrades(ce, registry);
       connectPresence();
       behaviorConnection?.refresh();
       // The first-run board belongs to the bootstrap default doc alone (seed
@@ -351,10 +365,11 @@ export function useWorkspaceSession(
     return () => {
       behaviorConnection?.close("document-close");
       closePresence();
+      unbindCapabilities();
       unbindPersistence();
       ce.docs.close();
     };
-  }, [ce, manager, pending, plugins, profile, runtimeGeneration, beforeTheDesk]);
+  }, [ce, manager, pending, plugins, profile, registry, runtimeGeneration, beforeTheDesk]);
 
   // Natural boot framing (widgetlab, 2026-07-18: "zoom to fit, but with an
   // upper and bottom cap"): frame the content once the viewport is measured
