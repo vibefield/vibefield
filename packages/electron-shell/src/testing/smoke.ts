@@ -1568,17 +1568,19 @@ export async function runSmokePluginRestart(opts: {
         censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
       );
       if (gpu) {
-        // the desk REMOUNTED in each replaced renderer, on the same board, its six intact
+        // the desk REMOUNTED in each replaced renderer, on a board drawn BEFORE the restart, its six
+        // intact — a board created now would have been seeded afresh, not survived. (The windows
+        // share one profile and so one `vf-last-doc`: a window may reopen its neighbour's board.)
         const read = await windowDesks(windows, replacementDeskReady);
         console.log(
           `SMOKE_PLUGIN_RESTART_DESK ${JSON.stringify({ phase: "recovered", cycle, windows: read.desks })}`,
         );
         replacementProblems.push(...read.problems);
+        const drawn = new Set(desks.map((desk) => desk.docId));
         for (const [index, desk] of read.desks.entries()) {
-          const before = desks[index]?.docId ?? null;
-          if (desk.docId === null || desk.docId !== before) {
+          if (desk.docId === null || !drawn.has(desk.docId)) {
             replacementProblems.push(
-              `window ${index + 1} reopened ${desk.docId ?? "no board"}, not ${before ?? "no board"}`,
+              `window ${index + 1} reopened ${desk.docId ?? "no board"}, not a board drawn before the restart (${[...drawn].join(", ")})`,
             );
           }
         }
