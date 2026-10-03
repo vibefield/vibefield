@@ -16,7 +16,7 @@
     "rosetta": {
       "path": "../rosetta-pin",
       "repository": "https://github.com/vibefield/rosetta.git",
-      "sha": "886baede9542fb062372b229f05b1e2bcb5499fd",
+      "sha": "ee6724e14aea0359853598a4516e607c89bf3597",
       "packages": {
         "@rosetta/protocol": "clients/ts"
       },
