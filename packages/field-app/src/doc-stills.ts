@@ -21,6 +21,8 @@ export class DocStillShelf {
   constructor(
     private readonly publish: (docId: string, url: string) => void,
     private readonly store: () => DeskBlobStore = deskBlobs,
+    /** A board's still taken away (`forget`): the explorer's tile goes back to the placeholder. */
+    private readonly withdraw: (docId: string) => void = () => {},
   ) {}
 
   /** Publish the stills this device keeps for `docIds` — each document's once per page. */
@@ -50,6 +52,20 @@ export class DocStillShelf {
           error: error instanceof Error ? error.message : String(error),
         });
     }
+  }
+
+  /** A board DELETED (DK-5; DK-4's open item): its still leaves the explorer and the shelf — the
+   * page's URL let go and withdrawn, the kept bytes removed — and is never read back. */
+  async forget(docId: string): Promise<void> {
+    if (docId.length === 0) return;
+    this.hydrated.add(docId);
+    const url = this.urls.get(docId);
+    if (url !== undefined) {
+      this.urls.delete(docId);
+      if (typeof URL.revokeObjectURL === "function") URL.revokeObjectURL(url);
+      this.withdraw(docId);
+    }
+    await this.store().forget(stillKey(docId));
   }
 
   private publishBytes(docId: string, bytes: Uint8Array<ArrayBuffer>): void {

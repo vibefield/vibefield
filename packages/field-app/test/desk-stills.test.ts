@@ -272,6 +272,9 @@ describe("the explorer's shelf — one still per board, a blob: URL", () => {
         if (!files.has(path) && opts?.create !== true) throw notFound();
         return file(path);
       },
+      async removeEntry(name: string) {
+        if (!files.delete(`${prefix}${name}`)) throw notFound();
+      },
     });
     return { root: dir("") as unknown as FileSystemDirectoryHandle, files };
   }
@@ -306,6 +309,29 @@ describe("the explorer's shelf — one still per board, a blob: URL", () => {
     expect(shown.at(-1)).toEqual(["doc-a", "blob:still-2"]);
     expect(u.revoked).toEqual(["blob:still-1"]); // the last picture's URL let go
     expect(opfs.files.get(`vibefield-desk-blobs/keyed/${stillKey("doc-a")}`)).toEqual(next);
+  });
+
+  it("DK-5: forgets a deleted board's still — its URL let go and withdrawn, its bytes removed, never read back", async () => {
+    const u = urls();
+    const opfs = memoryOpfs();
+    const store = createDeskBlobStore({ root: async () => opfs.root });
+    const shown: Array<[string, string]> = [];
+    const withdrawn: string[] = [];
+    const shelf = new DocStillShelf(
+      (docId, url) => shown.push([docId, url]),
+      () => store,
+      (docId) => withdrawn.push(docId),
+    );
+    await shelf.keep("doc-a", PNG.slice());
+    await shelf.forget("doc-a");
+    expect(withdrawn).toEqual(["doc-a"]);
+    expect(u.revoked).toEqual(["blob:still-1"]);
+    expect(opfs.files.has(`vibefield-desk-blobs/keyed/${stillKey("doc-a")}`)).toBe(false);
+    expect(opfs.files.has(`vibefield-desk-blobs/keyed/${stillKey("doc-a")}.type`)).toBe(false);
+    await shelf.hydrate(["doc-a"]);
+    expect(shown).toEqual([["doc-a", "blob:still-1"]]); // nothing shown again
+    await shelf.forget("doc-never-pictured"); // no URL to withdraw, nothing kept to remove
+    expect(withdrawn).toEqual(["doc-a"]);
   });
 
   it("finds the stills a former launch kept; a board never captured shows none (the placeholder)", async () => {

@@ -52,6 +52,9 @@ function memoryOpfs(): {
       if (!files.has(path) && opts?.create !== true) throw notFound();
       return file(path);
     },
+    async removeEntry(name: string) {
+      if (!files.delete(`${prefix}${name}`)) throw notFound();
+    },
   });
   return { root: dir("") as unknown as FileSystemDirectoryHandle, files };
 }
@@ -110,6 +113,30 @@ describe("the desk's byte store", () => {
     expect(new TextDecoder().decode(kept?.bytes)).toBe("second picture");
     expect(await relaunched.kept("still-never")).toBeUndefined();
     await expect(store.keep("../escape", bytesOf("x"), "image/png")).rejects.toThrow(/not a key/);
+  });
+
+  it("DK-5: forgets what a key keeps — its bytes and its type, from the file system and from memory", async () => {
+    const opfs = memoryOpfs();
+    const store = createDeskBlobStore({ root: async () => opfs.root });
+    await store.keep("still-doc-a", bytesOf("a picture"), "image/png");
+    await store.keep("still-doc-b", bytesOf("its neighbour"), "image/png");
+    await store.forget("still-doc-a");
+    expect(opfs.files.has("vibefield-desk-blobs/keyed/still-doc-a")).toBe(false);
+    expect(opfs.files.has("vibefield-desk-blobs/keyed/still-doc-a.type")).toBe(false);
+    expect(await store.kept("still-doc-a")).toBeUndefined();
+    expect(await createDeskBlobStore({ root: async () => opfs.root }).kept("still-doc-a")).toBe(
+      undefined,
+    );
+    expect(new TextDecoder().decode((await store.kept("still-doc-b"))?.bytes)).toBe(
+      "its neighbour",
+    );
+    await store.forget("still-never-kept"); // nothing kept is nothing to forget
+    await expect(store.forget("../escape")).rejects.toThrow(/not a key/);
+
+    const memoryOnly = createDeskBlobStore({ root: async () => undefined });
+    await memoryOnly.keep("still-doc-c", bytesOf("held for the page"), "image/png");
+    await memoryOnly.forget("still-doc-c");
+    expect(await memoryOnly.kept("still-doc-c")).toBeUndefined();
   });
 
   it("keeps prints in memory alone where the origin has no file system", async () => {

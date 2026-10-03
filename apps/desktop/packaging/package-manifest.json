@@ -18,10 +18,6 @@
           "count": 1,
           "bytes": [20413]
         },
-        "dist/renderer/assets/doc-thumbnail-worker-[hash].js": {
-          "count": 1,
-          "bytes": [3050]
-        },
         "dist/renderer/assets/main-[hash].css": {
           "count": 1,
           "bytes": [55735]
@@ -48,8 +44,8 @@
           "neverShip": ["testing-tree", "smoke-or-spike-entry"]
         }
       },
-      "bytes": 7621309,
-      "installedBytes": 7647232
+      "bytes": 7618259,
+      "installedBytes": 7643136
     },
     "packages/fieldd": {
       "name": "@vibefield/fieldd",
@@ -72,8 +68,8 @@
     }
   },
   "totals": {
-    "files": 14,
-    "bytes": 12455521,
-    "installedBytes": 12488704
+    "files": 13,
+    "bytes": 12452471,
+    "installedBytes": 12484608
   }
 }

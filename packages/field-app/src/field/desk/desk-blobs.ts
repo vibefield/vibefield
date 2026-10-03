@@ -35,6 +35,9 @@ export interface DeskBlobStore extends BlobStore {
   keep(key: string, bytes: Uint8Array<ArrayBuffer>, type: string): Promise<void>;
   /** What the shelf keeps under `key` — this page's or a former launch's — or undefined. */
   kept(key: string): Promise<StoredBlob | undefined>;
+  /** Forget what the shelf keeps under `key`: its bytes and its type, in memory and in the file
+   * system (DK-5 — a deleted board's still). Nothing kept is nothing to forget. */
+  forget(key: string): Promise<void>;
 }
 
 type DirectorySource = () => Promise<FileSystemDirectoryHandle | undefined>;
@@ -188,6 +191,23 @@ export function createDeskBlobStore(opts: { root?: DirectorySource } = {}): Desk
     async kept(key) {
       const name = keyOf(key);
       return shelf.get(name) ?? (await readFrom(await keyedDir(), name));
+    },
+    async forget(key) {
+      const name = keyOf(key);
+      shelf.delete(name);
+      const at = await keyedDir();
+      if (at === undefined) return;
+      for (const entry of [name, `${name}.type`]) {
+        try {
+          await at.removeEntry(entry);
+        } catch (error) {
+          if ((error as { name?: string }).name === "NotFoundError") continue;
+          log.warn("renderer.desk.blob_forget_failed", "A kept picture could not be removed", {
+            key: name,
+            error: String(error),
+          });
+        }
+      }
     },
   };
 }

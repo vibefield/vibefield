@@ -23,7 +23,8 @@ import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_DOC_NAME, DocManager } from "../src/doc-manager";
-import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
+import { stillKey } from "../src/doc-stills";
+import { createDeskBlobStore, deskBlobs } from "../src/field/desk/desk-blobs";
 import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
@@ -380,4 +381,27 @@ describe("the explorer's stills (DK-4, DK-D27)", () => {
     expect(manager.getState().pending?.docId).not.toBe(first.docId);
     expect(manager.getState().thumbnailUrls[first.docId]).toBe("blob:the-closing-still");
   });
+
+  it("DK-5: Delete takes a board's still away — off the explorer and off the shelf", async () => {
+    const { daemon } = await stack();
+    const manager = managerFor(daemon);
+    await manager.boot();
+    await applyPending(manager);
+    await until(() => manager.getState().phase === "ready");
+    const kept = manager.getState().pending?.docId ?? "";
+    await manager.createDoc();
+    await applyPending(manager);
+    await until(() => manager.getState().phase === "ready");
+    vi.spyOn(URL, "createObjectURL").mockImplementation(() => "blob:the-kept-still");
+    const revoked = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => {});
+    await manager.keepStill(kept, new Uint8Array([0x89, 0x50, 0x4e, 0x47]));
+    expect(manager.getState().thumbnailUrls[kept]).toBe("blob:the-kept-still");
+    expect(await deskBlobs().kept(stillKey(kept))).toBeDefined();
+
+    await manager.deleteDoc(kept);
+    expect(manager.getState().docs.map((d) => d.docId)).not.toContain(kept);
+    expect(manager.getState().thumbnailUrls[kept]).toBeUndefined();
+    expect(revoked).toHaveBeenCalledWith("blob:the-kept-still");
+    expect(await deskBlobs().kept(stillKey(kept))).toBeUndefined();
+  }, 30_000);
 });

@@ -164,10 +164,19 @@ export class DocManager {
   private readonly presentationWaiters = new Map<number, () => void>();
   /** Boards the open refused as from before the desk (ruling 7) — beside the registry's own word. */
   private readonly refused = new Set<string>();
-  private readonly stills = new DocStillShelf((docId, url) => {
-    if (this.state.thumbnailUrls[docId] === url) return;
-    this.patch({ thumbnailUrls: { ...this.state.thumbnailUrls, [docId]: url } });
-  });
+  private readonly stills = new DocStillShelf(
+    (docId, url) => {
+      if (this.state.thumbnailUrls[docId] === url) return;
+      this.patch({ thumbnailUrls: { ...this.state.thumbnailUrls, [docId]: url } });
+    },
+    undefined,
+    (docId) => {
+      if (this.state.thumbnailUrls[docId] === undefined) return;
+      const thumbnailUrls = { ...this.state.thumbnailUrls };
+      delete thumbnailUrls[docId];
+      this.patch({ thumbnailUrls });
+    },
+  );
   private activeStills: { generation: number; docId: string; taker: DocStillTaker } | null = null;
 
   constructor(
@@ -318,15 +327,18 @@ export class DocManager {
 
   /** DS-5's tombstone: the board leaves every list (its bytes stay on disk). Deleting the board in
    * view — a refused one from before the desk — moves the field to the newest openable board, or a
-   * new one when none is left. */
+   * new one when none is left. DK-5: its STILL leaves the explorer and the shelf with it — after
+   * the switch, whose close may have taken one. */
   async deleteDoc(docId: string): Promise<void> {
     await this.request("doc.delete", { docId });
     this.refused.delete(docId);
     const docs = await this.refreshDocs();
-    if (this.state.doc?.docId !== docId) return;
-    const next = docs.find((d) => d.deletedAt === undefined && !this.isBeforeTheDesk(d));
-    if (next !== undefined) await this.switchTo(next.docId);
-    else await this.createDoc();
+    if (this.state.doc?.docId === docId) {
+      const next = docs.find((d) => d.deletedAt === undefined && !this.isBeforeTheDesk(d));
+      if (next !== undefined) await this.switchTo(next.docId);
+      else await this.createDoc();
+    }
+    await this.stills.forget(docId);
   }
 
   /** The open refused this board as from before the desk (ruling 7): the library marks it. */
