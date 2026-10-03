@@ -11,6 +11,7 @@
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
     "./visuals": "./src/visuals.ts",
+    "./icons": "./src/icons/index.tsx",
     "./glyphs": "./src/glyphs/index.ts"
   },
   "sideEffects": [

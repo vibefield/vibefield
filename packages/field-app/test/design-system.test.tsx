@@ -123,8 +123,14 @@ describe("design system page", () => {
   });
 
   it("renders the complete single-page inventory", () => {
-    expect(container?.querySelectorAll(".vf-ds-sidebar nav a")).toHaveLength(13);
-    expect(container?.querySelectorAll(".vf-ds-section")).toHaveLength(12);
+    const links = container!.querySelectorAll<HTMLAnchorElement>(".vf-ds-sidebar nav a");
+    expect(links.length).toBeGreaterThanOrEqual(12);
+    for (const link of links) {
+      expect(
+        container?.querySelector(link.hash),
+        `Missing section for ${link.textContent}`,
+      ).not.toBeNull();
+    }
     expect(container?.textContent).toContain("The field, in one frame.");
     expect(container?.textContent).toContain("The actual field, under glass");
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");

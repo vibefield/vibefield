@@ -936,6 +936,55 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
 
 ---
 
+## 11. Fieldmarks / AFTER HOURS — sticker edition
+
+**Edition 02, 2026-09-22.** The requested direction is retro sticker illustration: expressive,
+specific, and collectible. AFTER HOURS replaces edition 01's minimalist geometry with 77 new
+drawings plus the exact existing logo. The cultural vocabulary comes from VibeField: a personal
+field, physical cards, agent work, old computers, private connections, and accumulated creations.
+
+The collection has three related drawing registers:
+
+| Register | Artboard | Recommended floor | Typical subjects |
+|---|---|---|---|
+| Character / brand sticker | 112 units (logo retains 480) | 48px (logo 32px) | skewed CRTs, rubber gloves, floppy creatures, cassette workers, odd personal characters |
+| Desk object | 72 units | 32px | hardware, folders, paper, patch leads, crates, layered windows |
+| Action stamp / state signal | 48 / 50 units | 24 / 28px | heavy positive/negative shapes, cut-paper arrows, glove, sun, speech flag, radio |
+
+Contours are deliberately unequal; black side planes, hatching, scratched highlights, bitmap
+lettering, and offset eyes carry character. There is no single nominal line weight. Detailed
+characters are not reduced to tiny toolbar glyphs; functional controls have their own simpler
+geometry. Actual controls keep §4's hit areas and explicit accessible names.
+
+Two exports share the same original drawing: **sticker** adds a white backing and die-cut
+keyline; **artwork** omits that outer keyline. Both have an ink layer (`currentColor`) and an
+interior paper layer (`--vf-sticker-paper`, falling back to the canvas and then white). Paper
+is intentionally opaque inside the illustrations; empty space outside is transparent. This
+supersedes edition 01's all-transparent knockout claim. No raster or generated-image texture
+is required; every shape is an editable vector.
+
+The catalogue is a **committed editorial art surface**, not a new product chrome recipe. Its
+print palette is ink `#171815`, stock `#F1EDDF`, acid-yellow sheet `#E5E549`, and proof inks
+cobalt `#214ACC` / vermilion `#C53D25`; the night wall is `#232720`. Sticker backing stays white
+in both themes. These inks are presentation choices and never encode account identity or state.
+The sheet can use hard borders, pasted rotations, checker fields, and condensed display type.
+Other product surfaces continue to follow the existing quiet-chrome rules.
+
+Identity, assigned role, provider, and observed state stay independent. §2.8's emoji sticker/coin
+account face remains current; the new vector alter egos are an additional identity-art study.
+The agent characters are role proposals, not vendor marks or asserted capabilities. §2.5 still
+governs product-state color, and state words remain visible. Existing Godview bodies and the
+upstream file-tree icon family are unchanged.
+
+The packaged app, tray, and Icon Composer masters remain exact. `@vibefield/design-kit/icons`
+exports the shared `FieldIcon`, typed names, metadata, and `fieldIconSvg(name, finish)`.
+`finish="sticker"` adds the paper cut; the component defaults to `"artwork"` and decorative
+semantics inside labelled controls. The drawing source is `tooling/fieldmarks/generate.py`.
+Studio and the offline `docs/design/fieldmarks.html` mount the same `IconsSection`. The HTML
+bundles its CSS, React, vectors, and downloadable archive without network dependencies.
+
+---
+
 ## 13. Glyphs — the chrome's icon law
 
 **Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
