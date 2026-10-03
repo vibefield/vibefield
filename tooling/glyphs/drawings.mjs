@@ -107,6 +107,13 @@ const LINK =
 const CUBE = "M12 2.8 20 7.2v9.6l-8 4.4-8-4.4V7.2Z";
 const SPARK = "M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9Z";
 const PAGE = "M6 3h8l4 4v14H6Z";
+// Session Glyphs (30 Sep picks, T3 · the window): `terminal`'s window with its
+// chevron, the frame opened at the lower right to hold the verb. Their
+// Hardware records are the page's T4 column — the Hardware prompt's band,
+// narrowed, with a solid verb beside it.
+const WIN_OPEN = "M11.5 19H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v3.5";
+const WIN_CHEV = "M7 9.5l3 2.5-3 2.5";
+const SOLID_CHEV = "M3 5l8.5 7L3 19v-4.3l4.6-2.7L3 9.3Z";
 
 /**
  * name → { label, group, role, instrument: {s, f?, tf?}, hardware: {d} }
@@ -117,14 +124,14 @@ export const DRAWINGS = {
   plus: {
     label: "Plus",
     group: "actions",
-    role: "New field, the widget tray, New user, New profile, Add artifact",
+    role: "Objects — the composer's create on Canvas, the one bare plus on screen; New profile and Add artifact inside their sheets",
     instrument: { s: P("M12 5v14M5 12h14") },
     hardware: { d: "M10.5 4h3v6.5H20v3h-6.5V20h-3v-6.5H4v-3h6.5Z" },
   },
   close: {
     label: "Close",
     group: "actions",
-    role: "Close settings, stop loading; the tray's plus turned 135°",
+    role: "Close settings, stop loading; the composer's plus turned 135°",
     instrument: { s: P("M6.5 6.5l11 11M17.5 6.5l-11 11") },
     hardware: { d: xPoly(12, 12, 7.6, 1.5) },
   },
@@ -211,6 +218,22 @@ export const DRAWINGS = {
     hardware: {
       d: `${rectPath(3, 10.4, 3.3, 3.3, 0.7)}${rectPath(10.35, 10.4, 3.3, 3.3, 0.7)}${rectPath(17.7, 10.4, 3.3, 3.3, 0.7)}`,
     },
+  },
+  start: {
+    label: "New terminal",
+    group: "actions",
+    role: "Godview's create in the composer: a session started, the window holding a plus",
+    // spawn-T3: the verb is a plus in the window's open corner.
+    instrument: { s: P(`${WIN_OPEN}${WIN_CHEV}M18 14.5v7M14.5 18h7`) },
+    hardware: { d: `${SOLID_CHEV}M16 10.5h3v3h3v3h-3v3h-3v-3h-3v-3h3Z` },
+  },
+  resume: {
+    label: "Resume",
+    group: "actions",
+    role: "History's create in the composer: a past session resumed, the window holding play",
+    // resume-play-T3: the verb is play in the window's open corner.
+    instrument: { s: P(`${WIN_OPEN}${WIN_CHEV}M15.5 14.5v7l6-3.5Z`) },
+    hardware: { d: `${SOLID_CHEV}M14 9.5v11l8-5.5Z` },
   },
   chevron: {
     label: "Chevron",

@@ -20,12 +20,12 @@ export interface GlyphMeta {
   readonly role: string;
 }
 
-export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","document","layers","sparkle"] as const;
+export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","document","layers","sparkle"] as const;
 export type GlyphName = (typeof GLYPH_NAMES)[number];
 
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
-  plus: {"label":"Plus","group":"actions","role":"New field, the widget tray, New user, New profile, Add artifact"},
-  close: {"label":"Close","group":"actions","role":"Close settings, stop loading; the tray's plus turned 135°"},
+  plus: {"label":"Plus","group":"actions","role":"Objects — the composer's create on Canvas, the one bare plus on screen; New profile and Add artifact inside their sheets"},
+  close: {"label":"Close","group":"actions","role":"Close settings, stop loading; the composer's plus turned 135°"},
   check: {"label":"Check","group":"actions","role":"An agent row's done mark; the row paints it green (§2.5)"},
   search: {"label":"Search","group":"actions","role":"The command palette's field"},
   pencil: {"label":"Rename","group":"actions","role":"Rename this field, beside the doc name in the pill"},
@@ -36,6 +36,8 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   return: {"label":"Return","group":"actions","role":"Enter on the composer and the keypad; a snippet that sends Enter"},
   backspace: {"label":"Backspace","group":"actions","role":"The keypad's delete key"},
   ellipsis: {"label":"More","group":"actions","role":"The rail's last key: the terminal keypad"},
+  start: {"label":"New terminal","group":"actions","role":"Godview's create in the composer: a session started, the window holding a plus"},
+  resume: {"label":"Resume","group":"actions","role":"History's create in the composer: a past session resumed, the window holding play"},
   chevron: {"label":"Chevron","group":"navigation","role":"Right: a row that opens, the separator, forward. Turned: back, browse, a menu"},
   arrow: {"label":"Arrow","group":"navigation","role":"Send (up), and the four cursor keys on the rail and the keypad"},
   gear: {"label":"Settings","group":"objects","role":"Settings… in the Me menu; the Settings head tile without an account door"},
@@ -88,6 +90,8 @@ export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
   return: { kind: "hardware", d: "M17.5 4h3v7.5a3 3 0 0 1-3 3H10.5V18L4 13l6.5-5v3.5h7Z" },
   backspace: { kind: "hardware", d: "M9 4.5h10.5a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H9l-7-7.5ZM14 10.66L15.59 9.07L16.93 10.41L15.34 12L16.93 13.59L15.59 14.93L14 13.34L12.41 14.93L11.07 13.59L12.66 12L11.07 10.41L12.41 9.07Z" },
   ellipsis: { kind: "hardware", d: "M3.7 10.4h1.9a0.7 0.7 0 0 1 0.7 0.7v1.9a0.7 0.7 0 0 1 -0.7 0.7h-1.9a0.7 0.7 0 0 1 -0.7 -0.7v-1.9a0.7 0.7 0 0 1 0.7 -0.7ZM11.05 10.4h1.9a0.7 0.7 0 0 1 0.7 0.7v1.9a0.7 0.7 0 0 1 -0.7 0.7h-1.9a0.7 0.7 0 0 1 -0.7 -0.7v-1.9a0.7 0.7 0 0 1 0.7 -0.7ZM18.4 10.4h1.9a0.7 0.7 0 0 1 0.7 0.7v1.9a0.7 0.7 0 0 1 -0.7 0.7h-1.9a0.7 0.7 0 0 1 -0.7 -0.7v-1.9a0.7 0.7 0 0 1 0.7 -0.7Z" },
+  start: {"kind":"instrument","strokes":[["path",{"d":"M11.5 19H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v3.5M7 9.5l3 2.5-3 2.5M18 14.5v7M14.5 18h7"}]],"fills":[]},
+  resume: {"kind":"instrument","strokes":[["path",{"d":"M11.5 19H6a3 3 0 0 1-3-3V8a3 3 0 0 1 3-3h12a3 3 0 0 1 3 3v3.5M7 9.5l3 2.5-3 2.5M15.5 14.5v7l6-3.5Z"}]],"fills":[]},
   chevron: {"kind":"instrument","strokes":[["path",{"d":"M9.5 6l6 6-6 6"}]],"fills":[]},
   arrow: { kind: "hardware", d: "M12 3l7.5 8.5h-4.8V21h-5.4V11.5H4.5Z" },
   gear: {"kind":"instrument","strokes":[["path",{"d":"M10.4 4.78L10.83 2.47L13.17 2.47L13.6 4.78A7.4 7.4 0 0 1 15.98 5.76L17.91 4.44L19.56 6.09L18.24 8.02A7.4 7.4 0 0 1 19.22 10.4L21.53 10.83L21.53 13.17L19.22 13.6A7.4 7.4 0 0 1 18.24 15.98L19.56 17.91L17.91 19.56L15.98 18.24A7.4 7.4 0 0 1 13.6 19.22L13.17 21.53L10.83 21.53L10.4 19.22A7.4 7.4 0 0 1 8.02 18.24L6.09 19.56L4.44 17.91L5.76 15.98A7.4 7.4 0 0 1 4.78 13.6L2.47 13.17L2.47 10.83L4.78 10.4A7.4 7.4 0 0 1 5.76 8.02L4.44 6.09L6.09 4.44L8.02 5.76A7.4 7.4 0 0 1 10.4 4.78Z"}],["circle",{"cx":"12","cy":"12","r":"2.75"}]],"fills":[]},
