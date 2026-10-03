@@ -26,7 +26,7 @@
     "smoke:godview": "pnpm build:all && electron . --smoke-godview",
     "smoke:terminal-direct": "pnpm build:all && electron . --smoke-godview --terminal-direct-proof",
     "smoke:canvas": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-canvas",
-    "smoke:browser-widget": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-browser-widget",
+    "//smoke:browser-widget": "RETIRED at DK-5 with the browser page widget it drove (DK-D20) — its DOM card, `BrowserPageView` and `--smoke-browser-widget` are gone; the page returns under PORTALS",
     "smoke:studio": "node ../../tooling/dev-runner/src/cli.mjs --studio-physical",
     "smoke:plugin-restart": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && electron . --smoke-plugin-restart",
     "lab:plugin-runtime:soak": "pnpm build:all && node ../../scripts/bundle-report.mjs --dist ../../packages/electron-shell/dist --assert && node packaging/run-plugin-runtime-soak.mjs",

@@ -15,7 +15,7 @@
     "dev:onboarding": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --force-onboarding",
     "smoke": "pnpm --filter @vibefield/desktop smoke",
     "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",
-    "smoke:browser-widget": "pnpm --filter @vibefield/desktop smoke:browser-widget",
+    "//smoke:browser-widget": "RETIRED at DK-5 with the browser page widget it drove (DK-D20: vibefield.browser keeps only its Artifacts panel; the page returns under PORTALS)",
     "smoke:studio": "pnpm --filter @vibefield/desktop smoke:studio",
     "smoke:plugin-restart": "pnpm --filter @vibefield/desktop smoke:plugin-restart",
     "playground": "node apps/plugin-playground/bin/plugin-playground.mjs",

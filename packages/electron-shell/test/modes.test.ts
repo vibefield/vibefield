@@ -92,7 +92,6 @@ describe("shutdownPolicy", () => {
     dev: "leave-running",
     smoke: "stop-owned",
     "smoke-canvas": "stop-owned",
-    "smoke-browser-widget": "stop-owned",
     "smoke-plugin-restart": "stop-owned",
     "smoke-godview": "stop-owned",
     "live-surfaces-lab": "leave-running",

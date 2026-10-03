@@ -3,10 +3,10 @@ import { createElement } from "react";
 import { ArtifactPanel } from "./ArtifactPanel";
 import { ARTIFACT_SURFACE } from "./manifest";
 
-// DK-2 (desk/landing, ICE 0.14.0): the page widget binds NO face — the desk draws
-// no DOM under the camera, so the card (its controller, its tray tile) has
-// nowhere to mount; the host compiles `vibefield.browser.page` FACELESS from the
-// manifest. The Artifacts side panel is screen-space chrome and stays (DK-D20).
+// DK-5 (DK-D20): the plugin is its Artifacts side panel alone — screen-space chrome.
+// The canvas page widget (`vibefield.browser.page`, DT-3) retired with its card face
+// and `BrowserPageView`: the desk draws no DOM under the camera, and the page returns
+// as an object kind under PORTALS.
 
 export default defineRendererPlugin({
   activate(ctx) {

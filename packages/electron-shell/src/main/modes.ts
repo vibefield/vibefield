@@ -6,7 +6,6 @@ export type ShellMode =
   | "dev"
   | "smoke"
   | "smoke-canvas"
-  | "smoke-browser-widget"
   | "smoke-plugin-restart"
   | "smoke-godview"
   | "live-surfaces-lab"
@@ -22,7 +21,6 @@ export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--spike-loro")) return "spike-loro";
   if (argv.includes("--smoke-plugin-restart")) return "smoke-plugin-restart";
   if (argv.includes("--smoke-godview")) return "smoke-godview";
-  if (argv.includes("--smoke-browser-widget")) return "smoke-browser-widget";
   if (argv.includes("--smoke")) return "smoke";
   if (argv.includes("--smoke-canvas")) return "smoke-canvas";
   if (argv.includes("--dev")) return "dev";
@@ -36,7 +34,6 @@ export function isSmokeLike(mode: ShellMode): boolean {
   return (
     mode === "smoke" ||
     mode === "smoke-canvas" ||
-    mode === "smoke-browser-widget" ||
     mode === "smoke-plugin-restart" ||
     mode === "smoke-godview" ||
     mode === "live-surfaces-lab" ||
@@ -68,7 +65,6 @@ export function isSmokeLike(mode: ShellMode): boolean {
 export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" {
   return mode === "smoke" ||
     mode === "smoke-canvas" ||
-    mode === "smoke-browser-widget" ||
     mode === "smoke-plugin-restart" ||
     mode === "smoke-godview" ||
     mode === "terminal-perf-lab" ||
