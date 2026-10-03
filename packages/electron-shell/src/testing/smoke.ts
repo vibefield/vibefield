@@ -480,6 +480,9 @@ export async function runSmokeCanvas(opts: {
       cspViolations.push(text.replace(/blob:[^'"\s]+/gu, "blob:…").slice(0, 240));
     }
   });
+  // The desk's verdicts in the order said (DK-5): GPU-less, the boot's no-adapter is retried ONCE
+  // (the relaunch heal) before the card — DESK_RETRY, then DESK_UNAVAILABLE.
+  const deskSaid = deskMarkerLog(win);
   let ok = false;
   try {
     const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
@@ -497,10 +500,20 @@ export async function runSmokeCanvas(opts: {
     const verdict = await deskVerdict;
     console.log(`SMOKE_CANVAS_DESK ${gpu ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
     problems.push(...(await deskSeedFailures(win)));
-    if (gpu) problems.push(...(await deskWitnesses(win, shotDir)));
-    else {
+    if (gpu) {
+      problems.push(...(await deskWitnesses(win, shotDir)));
+      console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
+      deskSaid.stop();
+      problems.push(...(await deskRetryRow(win, opts.viteUrl)));
+    } else {
       const card = await expectDeskUnavailableCard(win);
       console.log(`SMOKE_CANVAS_CARD ${JSON.stringify(card)}`);
+      console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
+      if (deskSaid.said[0] !== "DESK_RETRY" || deskSaid.said[1] !== "DESK_UNAVAILABLE") {
+        problems.push(
+          `the boot's no-adapter was not retried once before the card (${deskSaid.said.join(" → ")})`,
+        );
+      }
       if (card.title.length === 0) problems.push("the unavailable card has no words");
       if (card.detail === null || card.detail.length === 0) {
         problems.push("the unavailable card does not carry ICE's message");
@@ -634,6 +647,51 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   // rest — and its capture submits GPU work, so the idle row waits until it has been taken
   problems.push(...(await explorerStillRow(win, shotDir)));
   problems.push(...(await deskIdleRow(win)));
+  return problems;
+}
+
+/** The desk's verdict markers (`DESK_RETRY`, `DESK_READY`, `DESK_UNAVAILABLE`) as a window says
+ * them, in order — the marker names only; `stop()` ends the listening. */
+function deskMarkerLog(win: BrowserWindow): { readonly said: string[]; stop(): void } {
+  const said: string[] = [];
+  const listen = (...args: unknown[]): void => {
+    for (const a of args) {
+      const name = /^(DESK_(?:RETRY|READY|UNAVAILABLE)) /u.exec(consoleText(a))?.[1];
+      if (name !== undefined) said.push(name);
+    }
+  };
+  win.webContents.on("console-message", listen);
+  return { said, stop: () => win.webContents.off("console-message", listen) };
+}
+
+/**
+ * DK-5 — THE RELAUNCH HEAL, forced (the plan's T8): a desk whose device never arrived at boot is
+ * retried once by the stage, a second later — Chromium's GPU process can be late — before any
+ * card. The window reloads with the door that makes the boot's FIRST adapter request answer null
+ * (field/desk/desk-gpu.ts `deskRefuseFirstDevice`): the stage must say DESK_RETRY, say no card,
+ * and draw on its retry's mount (DESK_READY with `mount: 1`).
+ */
+async function deskRetryRow(win: BrowserWindow, viteUrl: string): Promise<string[]> {
+  const log = deskMarkerLog(win);
+  const problems: string[] = [];
+  try {
+    const ready = waitForConsole(win, "DESK_READY ", 60_000);
+    await loadRenderer(win, "smoke-canvas", viteUrl, { deskRefuseFirstDevice: "1" });
+    const facts = JSON.parse(await ready) as { mount: number; boot: Record<string, number> };
+    const card = (await win.webContents.executeJavaScript(
+      'document.querySelector("[data-desk-unavailable]") !== null',
+      true,
+    )) as boolean;
+    console.log(`SMOKE_CANVAS_RETRY ${JSON.stringify({ said: log.said, ready: facts, card })}`);
+    if (log.said[0] !== "DESK_RETRY") {
+      problems.push(`the refused boot was not retried first (${log.said.join(" → ")})`);
+    }
+    if (log.said.includes("DESK_UNAVAILABLE")) problems.push("the card was said before the retry");
+    if (facts.mount !== 1) problems.push(`the desk drew on mount ${facts.mount}, not the retry's`);
+    if (card) problems.push("the unavailable card is in the DOM after the retry drew");
+  } finally {
+    log.stop();
+  }
   return problems;
 }
 

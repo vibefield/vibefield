@@ -69,17 +69,22 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
  * what makes CSP `'self'` a precise statement — and let the fuse close.
  *
  * Smoke-canvas takes this path too, deliberately: it means the custom origin is
- * exercised on every `pnpm smoke:canvas`, not only when someone builds a package. */
+ * exercised on every `pnpm smoke:canvas`, not only when someone builds a package.
+ *
+ * `search` adds a harness's own doors to the production URL (DK-5: `smoke:canvas`'s
+ * relaunch-heal row loads `deskRefuseFirstDevice=1`); nothing but a smoke passes one. */
 export async function loadRenderer(
   win: BrowserWindow,
   mode: ShellMode,
   viteUrl: string,
+  search: Readonly<Record<string, string>> = {},
 ): Promise<void> {
   if (mode !== "dev") {
     const url = new URL(APP_ENTRY_URL);
     if (mode === "smoke-godview" || mode === "terminal-perf-lab") {
       url.searchParams.set("godviewMarkers", "1");
     }
+    for (const [key, value] of Object.entries(search)) url.searchParams.set(key, value);
     await win.loadURL(url.href);
     return;
   }

@@ -43,6 +43,9 @@ export interface FieldDeskLayerOptions {
   readonly mount?: number;
   /** The device's live GPU memory by label from the boot on (dev builds — Settings → Advanced). */
   readonly gpuLedger?: boolean;
+  /** Where the layer acquires its device — `navigator.gpu` unless given (desk-gpu.ts's forced
+   * first failure, the relaunch heal's smoke door). */
+  readonly gpu?: GPU;
 }
 
 /**
@@ -62,5 +65,6 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     blobs: deskBlobs(),
     grid: DESK_GRID,
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
+    ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
   });
 }

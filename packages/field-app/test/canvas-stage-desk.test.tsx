@@ -10,6 +10,8 @@
  *   DESK_READY — said once the layer is ready AND its first frame presented, after CANVAS_READY;
  *   `failed` — the unavailable card in ICE's words, Reload a REMOUNT (a new layer on this engine),
  *     none where reloading won't help; `degraded` — the status line's banner and its Reload;
+ *   THE RELAUNCH HEAL (DK-5) — a boot whose device never arrived is retried once, a second later,
+ *     as a new mount, before any card (`DESK_RETRY`); a device that arrived is never retried;
  *   a board from before the desk — its card, and no desk mounted at all;
  *   `window.__vfDesk` — installed for the mount, gone with it.
  * The real `<Desk>` with no GPU at all is `smoke:canvas --disable-gpu`'s (the card, nothing crashed).
@@ -26,6 +28,8 @@ interface FakeHandle {
   readonly opts: DeskLayerOptions;
   state: DeskLayerStatus;
   frames: number;
+  /** ms since the mount the device arrived — undefined until it does (ICE's `perf().boot.device`). */
+  device: number | undefined;
   presented: number | undefined;
   readonly listeners: Set<(s: DeskLayerStatus) => void>;
   readonly setTheme: ReturnType<typeof vi.fn>;
@@ -40,6 +44,7 @@ function fakeHandle(opts: DeskLayerOptions): FakeHandle & Record<string, unknown
     opts,
     state: { state: "pending" } as DeskLayerStatus,
     frames: 0,
+    device: undefined as number | undefined,
     presented: undefined as number | undefined,
     listeners: new Set<(s: DeskLayerStatus) => void>(),
     setTheme: vi.fn(),
@@ -61,7 +66,10 @@ function fakeHandle(opts: DeskLayerOptions): FakeHandle & Record<string, unknown
       frameMs: 0,
       kindTicks: {},
       driverAsks: 0,
-      boot: h.presented === undefined ? {} : { device: 1, compiled: 2, presented: h.presented },
+      boot: {
+        ...(h.device === undefined ? {} : { device: h.device }),
+        ...(h.presented === undefined ? {} : { compiled: 2, presented: h.presented }),
+      },
     }),
     submits: () => undefined,
     setGlyphs: vi.fn(),
@@ -119,6 +127,7 @@ const { emitCanvasReadyMarker, resetDeskMarkersForTest } = await import(
 const { getStatusNotice, resetStatusLineForTest } = await import("../src/frame/status-line");
 const { resetAppThemeForTest, setAppTheme } = await import("../src/theme");
 const { BEFORE_THE_DESK } = await import("../src/field/desk/desk-words");
+const { DEVICE_RETRY_MS, REFUSE_FIRST_DEVICE } = await import("../src/field/desk/desk-gpu");
 
 const NO_GPU =
   "no desk — the adapter, the device or the pipelines were refused: WebGPU is unavailable here (no navigator.gpu)";
@@ -215,6 +224,7 @@ describe("the Canvas stage mounts the desk", () => {
     await new Promise((r) => setTimeout(r, 50));
     expect(logs.some((l) => l.startsWith("DESK_READY "))).toBe(false); // no frame yet
     h.frames = 1;
+    h.device = 1;
     h.presented = 12;
     await new Promise((r) => setTimeout(r, 50));
     expect(logs.some((l) => l.startsWith("DESK_READY "))).toBe(false); // CANVAS_READY first
@@ -232,6 +242,7 @@ describe("the Canvas stage mounts the desk", () => {
   it("shows the card when the desk fails, ICE's message verbatim, and Reload REMOUNTS the layer", async () => {
     await mountStage();
     const first = current();
+    first.device = 3; // the device arrived; its pipelines were refused — nothing late to retry
     await act(async () => first.move({ state: "failed", message: PIPELINES }));
     const card = host.querySelector("[data-desk-unavailable]");
     expect(card?.getAttribute("data-desk-unavailable")).toBe("refused");
@@ -247,22 +258,95 @@ describe("the Canvas stage mounts the desk", () => {
     expect(host.querySelector("[data-desk-unavailable]")).toBeNull(); // pending again
   });
 
-  it("offers no Reload where there is no WebGPU at all, nor where it finds no adapter (DK-4)", async () => {
+  it("offers no Reload — and no retry — where there is no WebGPU at all", async () => {
     await mountStage();
     await act(async () => current().move({ state: "failed", message: NO_GPU }));
     const card = host.querySelector("[data-desk-unavailable]");
+    expect(card?.getAttribute("data-desk-unavailable")).toBe("no-webgpu");
     expect(card?.querySelector("strong")?.textContent).toBe("This computer can't draw the desk");
     expect([...(card?.querySelectorAll("button") ?? [])]).toHaveLength(0);
+    expect(layers).toHaveLength(1); // a page with no WebGPU cannot grow one: no retry
+    expect(logs.some((l) => l.startsWith("DESK_RETRY "))).toBe(false);
+  });
+
+  it("retries a boot whose device never arrived ONCE, a second later, with no card meanwhile (the relaunch heal)", async () => {
+    await mountStage();
+    emitCanvasReadyMarker(1, 1, 0);
+    const first = current();
+    await act(async () => first.move({ state: "failed", message: NO_ADAPTER }));
+    expect(host.querySelector("[data-desk-unavailable]")).toBeNull();
+    expect(host.querySelector('[data-desk="retrying"]')).not.toBeNull();
+    expect(layers).toHaveLength(1);
+    expect(logs.some((l) => l.startsWith("DESK_UNAVAILABLE "))).toBe(false);
+    const retry = logs.find((l) => l.startsWith("DESK_RETRY "));
+    expect(JSON.parse(retry?.slice("DESK_RETRY ".length) ?? "{}")).toEqual({
+      generation: 7,
+      mount: 0,
+      kind: "no-adapter",
+      message: NO_ADAPTER,
+      afterMs: DEVICE_RETRY_MS,
+    });
+    await act(async () => new Promise((r) => setTimeout(r, DEVICE_RETRY_MS + 60)));
+    expect(layers).toHaveLength(2); // a new mount on the same engine
+    expect(first.disposed).toBe(true);
+    const second = current();
+    expect(second.opts.name).toBe("vibefield/desk#1");
+    expect(host.querySelector("[data-desk-unavailable]")).toBeNull();
+    await act(async () => second.move({ state: "ready" }));
+    second.frames = 1;
+    second.device = 2;
+    second.presented = 9;
+    await new Promise((r) => setTimeout(r, 50));
+    const ready = logs.find((l) => l.startsWith("DESK_READY "));
+    expect(JSON.parse(ready?.slice("DESK_READY ".length) ?? "{}")).toMatchObject({
+      generation: 7,
+      mount: 1,
+    });
+  });
+
+  it("shows the card when the retry finds no device either — no Reload where it finds no adapter — and retries no more", async () => {
+    await mountStage();
+    emitCanvasReadyMarker(1, 1, 0);
     await act(async () => current().move({ state: "failed", message: NO_ADAPTER }));
-    const adapterless = host.querySelector("[data-desk-unavailable]");
-    expect(adapterless?.getAttribute("data-desk-unavailable")).toBe("no-adapter");
-    expect(adapterless?.querySelector("strong")?.textContent).toBe(
-      "This computer can't draw the desk",
+    await act(async () => new Promise((r) => setTimeout(r, DEVICE_RETRY_MS + 60)));
+    await act(async () => current().move({ state: "failed", message: NO_ADAPTER }));
+    const card = host.querySelector("[data-desk-unavailable]");
+    expect(card?.getAttribute("data-desk-unavailable")).toBe("no-adapter");
+    expect(card?.querySelector("strong")?.textContent).toBe("This computer can't draw the desk");
+    expect(card?.querySelector(".vf-ui-unavailable-state__detail")?.textContent).toBe(NO_ADAPTER);
+    expect([...(card?.querySelectorAll("button") ?? [])]).toHaveLength(0);
+    expect(logs.filter((l) => l.startsWith("DESK_RETRY "))).toHaveLength(1);
+    expect(logs.filter((l) => l.startsWith("DESK_UNAVAILABLE "))).toHaveLength(1);
+    await new Promise((r) => setTimeout(r, DEVICE_RETRY_MS + 60));
+    expect(layers).toHaveLength(2); // once means once
+  });
+
+  it("hands the boot's FIRST mount a GPU with no adapter under the smoke's door — and the retry the real one", async () => {
+    const before = `${location.pathname}${location.search}`;
+    const gpu = {
+      requestAdapter: async () => ({ fake: true }),
+      getPreferredCanvasFormat: () => "bgra8unorm",
+      wgslLanguageFeatures: new Set<string>(),
+    };
+    Object.defineProperty(navigator, "gpu", { value: gpu, configurable: true });
+    history.replaceState(
+      null,
+      "",
+      `${location.pathname}?godviewMarkers=1&${REFUSE_FIRST_DEVICE}=1`,
     );
-    expect(adapterless?.querySelector(".vf-ui-unavailable-state__detail")?.textContent).toBe(
-      NO_ADAPTER,
-    );
-    expect([...(adapterless?.querySelectorAll("button") ?? [])]).toHaveLength(0);
+    try {
+      await mountStage();
+      const refusing = current().opts.gpu;
+      expect(refusing).toBeDefined();
+      expect(await refusing?.requestAdapter()).toBeNull();
+      await act(async () => current().move({ state: "failed", message: NO_ADAPTER }));
+      await act(async () => new Promise((r) => setTimeout(r, DEVICE_RETRY_MS + 60)));
+      expect(layers).toHaveLength(2);
+      expect(current().opts.gpu).toBeUndefined(); // the layer's own navigator.gpu
+    } finally {
+      history.replaceState(null, "", before);
+      Reflect.deleteProperty(navigator, "gpu");
+    }
   });
 
   it("puts a degraded desk on the status line with its Reload, and withdraws it when it clears", async () => {

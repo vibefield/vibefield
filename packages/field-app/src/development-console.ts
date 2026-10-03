@@ -73,6 +73,22 @@ export function emitDeskUnavailableMarker(facts: DeskUnavailableFacts): void {
   else afterCanvasReady.push(say);
 }
 
+/** DK-5 — the relaunch heal (field/desk/desk-gpu.ts): a desk whose device never arrived at boot
+ * is retried once, after `afterMs`, before any card — said with what failed. */
+export interface DeskRetryFacts {
+  readonly generation: number;
+  readonly mount: number;
+  readonly kind: string;
+  readonly message?: string;
+  readonly afterMs: number;
+}
+
+export function emitDeskRetryMarker(facts: DeskRetryFacts): void {
+  const say = (): void => console.log(`DESK_RETRY ${JSON.stringify(facts)}`);
+  if (canvasReadySaid) say();
+  else afterCanvasReady.push(say);
+}
+
 /** Test seam: CANVAS_READY not yet said, nothing waiting on it. */
 export function resetDeskMarkersForTest(): void {
   canvasReadySaid = false;

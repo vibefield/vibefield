@@ -2,13 +2,18 @@ import type { CanvasEngine } from "@vibecook/ice";
 import type { DeskLayerHandle, DeskLayerStatus } from "@vibecook/ice/desk";
 import { Desk, type KeymapEntry, type LayerFactory } from "@vibecook/ice/react";
 import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { emitDeskReadyMarker, emitDeskUnavailableMarker } from "../development-console";
+import {
+  emitDeskReadyMarker,
+  emitDeskRetryMarker,
+  emitDeskUnavailableMarker,
+} from "../development-console";
 import { sayStatus, withdrawStatus } from "../frame/status-line";
 import { getRendererLogger } from "../logging";
 import { useAppTheme } from "../theme";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
 import { feedDesk } from "./desk/desk-feed";
+import { DEVICE_RETRY_MS, deskGpu, deviceNeverArrived } from "./desk/desk-gpu";
 import { deskLook, fieldDeskLayer } from "./desk/desk-layer";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
 
@@ -24,6 +29,8 @@ import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./d
 //   the plates (a lazy module — no `fetch`, ruling 8) and the rulers' glyph atlas, once the mat is here;
 //   the status: `failed` → the unavailable card (Reload = a desk remount, a new layer on this engine);
 //     `degraded` → the status line's banner with its Reload, the desk drawing on beneath it;
+//   THE RELAUNCH HEAL (DK-5, desk-gpu.ts): the boot's first mount `failed` with no device yet is
+//     retried ONCE, after `DEVICE_RETRY_MS`, as a new mount — the card only if that fails too;
 //   DESK_READY (ready AND the first frame presented, after CANVAS_READY) and `window.__vfDesk`.
 // The old composition — `<InfiniteCanvas>`, the GL bridge and router, the R3F portal, the GL lanes,
 // the cursor halo — left with ICE 0.14.0; `InfiniteCanvasGround` (DK-2's stub) folded in here: the
@@ -57,15 +64,20 @@ export function CanvasStage({
   const [mount, setMount] = useState(0);
   const [status, setStatus] = useState<DeskLayerStatus>({ state: "pending" });
   const remount = useCallback(() => setMount((n) => n + 1), []);
+  // The relaunch heal's one retry, per stage — per engine generation: armed until the boot uses it.
+  const [retrying, setRetrying] = useState(false);
+  const retryArmedRef = useRef(true);
 
   // A new factory per engine and per remount: `<Desk>` re-boots on a new identity, never on a render.
   const layer = useMemo<LayerFactory>(() => {
     const dressed = themeRef.current;
+    const gpu = deskGpu(mount, typeof location === "undefined" ? "" : location.search);
     const factory = fieldDeskLayer({
       engine: ce,
       theme: dressed,
       mount,
       gpuLedger: import.meta.env.DEV,
+      ...(gpu === undefined ? {} : { gpu }),
     });
     return (ctx) => {
       const handle = factory(ctx);
@@ -94,6 +106,7 @@ export function CanvasStage({
     let ended = false;
     let readySaid = false;
     let frame: number | null = null;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const desk: MountedDesk = { engine: ce, handle, generation, mount, theme: themeRef.current };
     deskRef.current = desk;
     const unpublish = publishDesk(desk);
@@ -115,6 +128,33 @@ export function CanvasStage({
 
     const heard = (next: DeskLayerStatus): void => {
       if (ended) return;
+      // THE RELAUNCH HEAL: the boot's device never arrived (a late GPU process answers an adapter
+      // request with null) — no card yet, no DESK_UNAVAILABLE: one new mount after a second.
+      if (mount === 0 && retryArmedRef.current && deviceNeverArrived(next, handle.perf().boot)) {
+        retryArmedRef.current = false;
+        const failed = unavailableWords(next);
+        setRetrying(true);
+        log.warn("renderer.desk.retrying", "The desk found no device at boot; retrying once", {
+          kind: failed?.kind ?? "refused",
+          message: failed?.detail ?? "",
+          generation,
+          afterMs: DEVICE_RETRY_MS,
+        });
+        emitDeskRetryMarker({
+          generation,
+          mount,
+          kind: failed?.kind ?? "refused",
+          ...(failed?.detail === undefined ? {} : { message: failed.detail }),
+          afterMs: DEVICE_RETRY_MS,
+        });
+        retryTimer = setTimeout(() => {
+          retryTimer = null;
+          setStatus({ state: "pending" });
+          setRetrying(false);
+          remount();
+        }, DEVICE_RETRY_MS);
+        return;
+      }
       setStatus(next);
       if (next.state === "ready") awaitFirstFrame();
       const notice = degradedNotice(next);
@@ -142,6 +182,7 @@ export function CanvasStage({
     return () => {
       ended = true;
       if (frame !== null) cancelAnimationFrame(frame);
+      if (retryTimer !== null) clearTimeout(retryTimer);
       offStatus();
       feed.dispose();
       withdrawStatus("desk-degraded");
@@ -159,9 +200,9 @@ export function CanvasStage({
       </div>
     );
   }
-  const words = unavailableWords(status);
+  const words = retrying ? null : unavailableWords(status);
   return (
-    <div className="field-canvas" data-desk={status.state}>
+    <div className="field-canvas" data-desk={retrying ? "retrying" : status.state}>
       <Desk engine={ce} layer={layer} keymapOverrides={keymapOverrides} onReady={onReady} />
       {words === null ? null : <DeskUnavailableView words={words} onReload={remount} />}
     </div>
