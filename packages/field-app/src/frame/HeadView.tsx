@@ -7,6 +7,7 @@ import {
   type ReactElement,
   type ReactNode,
   type Ref,
+  useCallback,
   useEffect,
   useId,
   useLayoutEffect,
@@ -76,9 +77,16 @@ const SEPARATOR = " › ";
 /** FitPath (One Project, Many Places): how many leading names to drop so the
  * path fits its pill — never a name cut mid-word. A layout effect drops one
  * more while the path overflows and something is left to drop, so the pill
- * never paints overflowing; a new path, or a window that changed size, starts
- * again from none dropped. */
-function useFitDrop(key: string, names: number, pathRef: { current: HTMLElement | null }): number {
+ * never paints overflowing. Whatever changes the ROOM starts it again from
+ * none dropped: a new path or side (the key), a window that changed size, and
+ * the end of the pill's own morph — closing the explorer measures at the start
+ * of a 600ms shrink, when there is room to spare, so the end is measured too.
+ * Returns the drop and the "start again". */
+function useFitDrop(
+  key: string,
+  names: number,
+  pathRef: { current: HTMLElement | null },
+): [number, () => void] {
   const [state, setState] = useState({ key, drop: 0 });
   const drop = state.key === key ? state.drop : 0;
   useLayoutEffect(() => {
@@ -88,12 +96,12 @@ function useFitDrop(key: string, names: number, pathRef: { current: HTMLElement 
       setState({ key, drop: drop + 1 });
     }
   });
+  const again = useCallback(() => setState({ key, drop: 0 }), [key]);
   useEffect(() => {
-    const again = (): void => setState({ key, drop: 0 });
     window.addEventListener("resize", again);
     return () => window.removeEventListener("resize", again);
-  }, [key]);
-  return drop;
+  }, [again]);
+  return [drop, again];
 }
 
 function DocThumbnail({ src }: { src: string }): ReactElement {
@@ -137,7 +145,11 @@ export function HeadPlaceView({
   // Open, the row heads the sheet with the field's name alone (One Frame §7).
   const names = open ? [name] : [name, ...path.map((crumb) => crumb.label)];
   const depths = open ? [0] : [0, ...path.map((crumb) => crumb.depth)];
-  const drop = useFitDrop(names.join("\u0000"), names.length, pathRef);
+  const [drop, fitAgain] = useFitDrop(
+    `${names.join("\u0000")}|${side ?? 96}`,
+    names.length,
+    pathRef,
+  );
   const last = names.length - 1;
   const hidden = names.slice(0, drop);
 
@@ -216,6 +228,10 @@ export function HeadPlaceView({
       role="group"
       aria-label="Where you are"
       {...(side === undefined ? {} : { style: { "--vf-head-side": `${side}px` } as CSSProperties })}
+      onTransitionEnd={(event) => {
+        if (event.target !== event.currentTarget) return;
+        if (event.propertyName === "width" || event.propertyName === "max-width") fitAgain();
+      }}
     >
       <div className="vf-head-row">
         <div

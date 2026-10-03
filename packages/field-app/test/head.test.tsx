@@ -278,15 +278,16 @@ describe("the name pill (FR-3, FC-D9)", () => {
     expect(pathNames()).toEqual(["Field"]);
   });
 
-  it("drops whole leading names when the path is too long — FitPath, never a name cut (F13)", () => {
-    // A layout stand-in: 8px a character, and a pill with 160px for its path.
+  /** A layout stand-in for FitPath: 8px a character, and `room()` px for the
+   * path. Returns the restore. */
+  function stubLayout(room: () => number): () => void {
     const proto = HTMLElement.prototype;
     const client = Object.getOwnPropertyDescriptor(proto, "clientWidth");
     const scroll = Object.getOwnPropertyDescriptor(proto, "scrollWidth");
     Object.defineProperty(proto, "clientWidth", {
       configurable: true,
       get(this: HTMLElement) {
-        return this.classList.contains("vf-head-path") ? 160 : 0;
+        return this.classList.contains("vf-head-path") ? room() : 0;
       },
     });
     Object.defineProperty(proto, "scrollWidth", {
@@ -295,15 +296,23 @@ describe("the name pill (FR-3, FC-D9)", () => {
         return this.classList.contains("vf-head-path") ? (this.textContent ?? "").length * 8 : 0;
       },
     });
+    return () => {
+      if (client !== undefined) Object.defineProperty(proto, "clientWidth", client);
+      else Reflect.deleteProperty(proto, "clientWidth");
+      if (scroll !== undefined) Object.defineProperty(proto, "scrollWidth", scroll);
+      else Reflect.deleteProperty(proto, "scrollWidth");
+    };
+  }
+
+  const LONG: readonly HeadCrumb[] = [
+    { depth: 1, label: "Launch notes" },
+    { depth: 2, label: "Sketches" },
+  ];
+
+  it("drops whole leading names when the path is too long — FitPath, never a name cut (F13)", () => {
+    const restore = stubLayout(() => 160);
     try {
-      const { canvas } = mount({
-        canvas: fakeCanvas({
-          path: [
-            { depth: 1, label: "Launch notes" },
-            { depth: 2, label: "Sketches" },
-          ],
-        }),
-      });
+      const { canvas } = mount({ canvas: fakeCanvas({ path: LONG }) });
       // "FieldLaunch notesSketches" is 200px: the field's name goes, then
       // "Launch notes" — whole — behind one "…" that names them both.
       expect(pathNames()).toEqual(["…", "Sketches"]);
@@ -318,10 +327,27 @@ describe("the name pill (FR-3, FC-D9)", () => {
       act(() => canvas.goTo([{ depth: 1, label: "Moodboard" }]));
       expect(pathNames()).toEqual(["Field", "Moodboard"]);
     } finally {
-      if (client !== undefined) Object.defineProperty(proto, "clientWidth", client);
-      else Reflect.deleteProperty(proto, "clientWidth");
-      if (scroll !== undefined) Object.defineProperty(proto, "scrollWidth", scroll);
-      else Reflect.deleteProperty(proto, "scrollWidth");
+      restore();
+    }
+  });
+
+  it("starts FitPath again when the pill's morph ends — closing the explorer leaves no name cut", () => {
+    // Closing measures at the START of the shrink, with room to spare; the
+    // END is where the room runs out.
+    let room = 400;
+    const restore = stubLayout(() => room);
+    try {
+      mount({ canvas: fakeCanvas({ path: LONG }) });
+      expect(pathNames()).toEqual(["Field", "Launch notes", "Sketches"]);
+      room = 160;
+      const end = new Event("transitionend", { bubbles: true });
+      Object.defineProperty(end, "propertyName", { value: "width" });
+      act(() => {
+        $("[data-head-place]")?.dispatchEvent(end);
+      });
+      expect(pathNames()).toEqual(["…", "Sketches"]);
+    } finally {
+      restore();
     }
   });
 
