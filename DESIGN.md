@@ -340,10 +340,17 @@ claim it.
 | Tier | Recipe | Use |
 |---|---|---|
 | Island | surface `/80` + `backdrop-blur-xl` (hover `/90`) | closed pill, toolbars |
-| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the composer line — and, until the line grows around it, the views track's own pill (§8, §10) |
+| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the composer line (§8), the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2) |
 | Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | put-back affordance, HUD toasts |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
+
+**Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
+is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
+the island shadow and corners 18 (the Me menu keeps its 28, concentric with the face). The Me menu
+(2026-09-22) was the first; @'s list in the line (§8) is the second; the zoom's menu and the palette
+follow with the head (FR-3). A menu opens over the stage and never over the frame: the line's menus
+grow upward from the line, 8 above it.
 
 **The composited profile draws the card's material on the ground (2026-09-07; ICE
 design-013 Q8, ratified 2026-09-06).** In ICE's composited profile the resting and lifted
@@ -452,6 +459,13 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
 - **HUD island**: one morphing element (§6 M1), island material, centered-bottom;
   `64px` closed; opens to a sheet with pull bar (48×6 rounded-full, `black/20`),
   morphing ⊕→✕ (135° rotation), edge-fade scroll masks, no visible scrollbars.
+  *Retired into the line 2026-10-03 (One Frame FR-2; DK-D29):* the closed pill is gone — its 48px
+  ⊕ disc, its Select · Pan · Wire switch and its ✨ Clean up with it (Select and Pan stay on V and
+  H, Wire on C; Clean up waits for the selection bar's More, on the desk) — and the line's create
+  is the door: Objects (B) raises the SHEET behind the line, and the create's ⊕ is what turns to ✕.
+  The sheet is the old catalog, unchanged (the backdrop, the recede and the stage hold, the category
+  pills, the drag-out insert, its pull bar), a transitional door until the desk's pegboard replaces
+  it (DK-13).
 - **Artifact Hub side panel** (AH-3/4; amended 2026-08-03): a `vibefield.browser`
   contribution inside the spine-owned `hud.side-panel` stage, separate from the bottom island.
   Its persistent 40px round toggle is the outermost control in the top-right chrome cluster:
@@ -527,7 +541,61 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   tooltip and its accessible name (`aria-keyshortcuts`); how the keys reach the frame is §10's.
   *As built (FR-1):* until the line exists the track sits alone in the line's material (§5) — a
   208 × 52 pill, padding 5 × 6, at the line's left end (§10) — so the line can grow around it
-  without the track moving.
+  without the track moving. *Folded into the line 2026-10-03 (FR-2):* the same track and keys at
+  the line's left end, on the line's glass; its own pill is gone, and nothing about it moved.
+- **The line** (One Frame FR-2, FR-3, §5; FC-D1, FC-D3, FC-D14 ruled 2026-10-01; built
+  2026-10-03): the frame's foot (§10), the same in every view — `[views] create │ draft mic send`,
+  the composer as one product composition. 880 × 52 on the line's glass (§5), padding 5 × 6, its
+  pieces 2 apart and centred on the foot axis. From the left:
+  - **the views track** (above), its left end;
+  - **create** — 32 round in the ready fill (the foreground at 8%; 14% under the pointer, where it
+    grows 1.06 on the pop curve), 6 clear of the track, its glyph 16 in secondary ink (primary while
+    open or hovered). It is the view's own act (FC-D3), and only Canvas's is a bare plus (FR-3):
+    **Canvas — Objects** (`plus`, B): the objects rise behind the line and the plus turns 135° into
+    ✕ over 600ms on the island curve; **Godview — New terminal** (`start`, ⌘T): a fresh shell in the
+    active pane, which shows its launcher; **History — Resume** (`resume`): waiting, faint by ink as
+    the Assistant's cell is, until a session is chosen. Between views the glyph cross-fades in place,
+    200ms `ease` (One Frame §12); the tooltip says the act and its key ("Objects  B", "New terminal
+    ⌘T", "Resume this session — choose a session first"), open it says "Close  Esc";
+  - **the rule** — 1 × 18 in the strong hairline, 8 after create and 6 before the draft;
+  - **the draft** — an editor, not a field: 14px body (§3 — the page drew 15, off the ramp, F15) in
+    primary ink, padded 10, one line that keeps the caret in view (typing past one line is the
+    page's next drawing, One Frame §21, and is not built). Its placeholder, tertiary, teaches the one
+    way in at rest — **"Message, or type @ to add…"** in every view (the page's own ruling of its
+    text, One Frame §21) — and once a chip aims it, says who it goes to: **"Message vibe-field…"**;
+  - **mic** — 36 round in the ready fill, `mic` 17. The desktop has no dictation door yet, so the
+    mic waits, faint by ink, and says so in its tooltip ("Dictation — not on the desktop yet");
+    nothing is faked;
+  - **send** — 40 round, 4 after the mic, `arrow` (up) 17: the ready fill and tertiary ink while there
+    is nothing to send, **inverted** (`--vf-foreground`, the inverse ink) once there is (D1). Return
+    sends.
+  **@ is typed, never a button** (FC-D1; no attach button either). An @ typed at the start of a word
+  opens **@'s list** — a menu (§5: solid, the strong hairline, the island shadow, corners 18,
+  padding 6), 316 wide, grown upward from the caret (its left 10 before the @, its foot 8 above the
+  line), read bottom-up, nearest first: **Send to** nearest the line ("Send to a pane" in Godview,
+  where the panes lead) — what the deck shows, each named by its folder as the swarm names its body,
+  with what runs there and its state word; above it **Add** — From the clipboard (its three newest as
+  34px thumbnails, corners 8), File…, Capture…, Past session…. Rows 36 tall (Send to's 46, a name
+  over a small line), corners 12, 13/500; eyebrows 10px mono capitals in tertiary ink; the hot row
+  in the ready fill. Typing after the @ filters both groups; ↑ ↓ move, Return or Tab takes the row,
+  Esc closes the list and keeps what was typed. A row with no door behind it says why and cannot be
+  taken (File… "no file door on the desktop yet", Past session… "History is not wired yet") — never
+  faked. A paste or a drop lands at the caret, as plain text.
+  **The chip** (D1, ruled 12 Sep): a token in the sentence, 24 tall, corners 7, 12.5/500, its glyph
+  13, padded 0 8 0 6, ringed 1px; it never splits a word, Backspace takes it as one character and ×
+  on hover removes it. A capture wears `capture` on the select blue at 14%. **The aim** — a Send to
+  row taken — is the chip that leads the draft (`@vibe-field`, the fill, primary ink): the target is
+  always named (CB-1), and it stays across sends until changed or removed.
+  **Send, until the agent seam** (thinking-four-views §11, the interim send): aimed at a pane the
+  deck is showing, the draft is PASTED into that pane's input — the road ⌘V takes, bracketed, Return
+  never pressed for you — and the line's note says "Pasted into vibe-field"; otherwise it goes to the
+  clipboard, and the note says that and why: "Copied — no agent takes a message from here yet". The
+  note is the views track's note (solid, 12/500 in secondary ink, rising 4px as it fades in), centred
+  over send, for 2.4s. Sending clears the draft's words and chips and keeps the aim.
+  **One surface at a time, at the line** (One Frame FR-4, F11): @'s list and the objects are ONE
+  owner's two surfaces — opening either folds the other — and Settings, the palette, the docs
+  explorer, the Artifact panel and the Me menu fold them as they folded the tray. The Me menu and
+  the edges' drawers join the owner with FR-4.
 - **Chips / category pills**: full-round, `--vf-fill` resting; active = **inverted solid**
   (black-on-light / white-on-dark) with `shadow-md`; `active:scale-95`.
 - **Status badge** (`StateBadge`, 03·A C-7): dot or pill in §2.5 color + label; always
@@ -553,6 +621,12 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   flickers with routine traffic. The title carries the words, numbers, and the
   last-exchange time. Explorer tiles append the honest sync word to their time caption
   ("· syncing", "· waiting on 3", "· peer offline") only when there is one.
+  *Its ⊕ retired 2026-10-03 (One Frame FR-3: one plus — the line's create on Canvas is the only
+  bare plus on screen):* the pill keeps the name and the chevron, and **New field** is the
+  explorer's first tile, in words — a doc tile's footprint whose face is the fill inside a dashed
+  strong hairline, the words 12/500 in secondary ink at its centre, hover 1.03 / active 0.95 like
+  its neighbours. The empty explorer says "No fields yet" in words beside it, never "⊕ creates
+  one". The pill itself becomes the head's name pill with FR-3.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -565,7 +639,8 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   opens up and to the right around it, so the second click lands on the same face and folds it
   away. It reads bottom-up, nearest first: *you* (the name and login beside the face; clicking
   them opens Settings → Account) · Settings… `⌘,` · Link Tailscale account… (only while
-  unlinked) · New user… · then, under a "Switch to" eyebrow, the other users — a 26px face,
+  unlinked) · New user… (wearing `person` — *it wore a plus until 2026-10-03, One Frame FR-3*) ·
+  then, under a "Switch to" eyebrow, the other users — a 26px face,
   the name, the tailnet as one mono word, and "N waiting" in words after a 6px orange dot. A
   machine with one user shows no switch list. Faces and row icons share one 44px column
   centred on the owner's face. **Choreography** (§6's constants): the surface fades in over
@@ -979,7 +1054,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   *(Godview's button retired 2026-10-03 — the views track below is the way in.)*
   **The left edge (2026-09-23, SNAP-3):** the clipboard tray's notch at mid-height, its drawer
   from `top-16` to `bottom-20` (clearing the Me menu and Godview); the right edge is reserved
-  for its twin.
+  for its twin. **Bottom-centre:** the HUD island — *retired into the line 2026-10-03 (One Frame
+  FR-2): the bottom centre is the line's, and the island's sheet rises behind it (§8).*
 - **One frame, every view — five places, two axes** (One Frame FR-1 and FR-6, ruled
   2026-10-01; first built 2026-10-03). Chrome lives in FIVE places: **the head** (the window's top
   0–52, its controls 40 tall at `top-2`, centred on the lights' axis), **the line** (the foot:
@@ -1002,10 +1078,17 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   to Canvas, Godview, History and the Assistant (which waits: ⌘4 says so and nothing moves), and
   nothing else switches views (FC-D4) — they are the product's own chords, taken on the window's
   capture phase before a focused pane can see them, printed on the views track's cells (§8) and
-  said in the View menu. *As built (FR-1, 2026-10-03):* the frame so far is the views track, on the
-  line's glass at the line's left end; the line (FR-2), the head (FR-3), the edges and the corner
-  (FR-4) join it next. Until they do, the slots above stay the canvas's own chrome and lie under
-  the cover with the field.
+  said in the View menu. **The line's own keys** (One Frame §11) belong to its create and are SAID,
+  never printed (FR-5): **B** toggles Objects on Canvas — never while typing (the draft, a note, any
+  field) and never under a cover; **⌘T** (Ctrl+T) is Godview's New terminal, a product chord taken
+  on the capture phase in Godview so a focused pane never sees it (ghostty's new_tab); and **@ is
+  never a shortcut** — it is typed in the draft. **The line's open surfaces have ONE owner** (FR-4):
+  @'s list and Objects are one value, so opening either folds the other, and every surface that
+  folded the tray folds them. *As built (FR-1, 2026-10-03):* the frame so far is the views track, on
+  the line's glass at the line's left end; the line (FR-2), the head (FR-3), the edges and the
+  corner (FR-4) join it next. Until they do, the slots above stay the canvas's own chrome and lie
+  under the cover with the field. *As built (FR-2, 2026-10-03):* the line is whole, the track at its
+  left end; the head (FR-3), the edges and the corner (FR-4) are next.
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
