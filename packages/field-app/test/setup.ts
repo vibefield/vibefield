@@ -37,6 +37,46 @@ if (typeof globalThis.localStorage === "undefined") {
 }
 
 /**
+ * Test-env shim (DK-3, 2026-10-03): happy-dom 20's MutationObserverListener holds
+ * each observed target's report callback ONLY in a WeakRef (`callback: new
+ * WeakRef((record) => this.report(record))` — nothing else references the arrow),
+ * so a garbage collection between `observe()` and a mutation deafens the observer
+ * for good: no record, no error. Under the monorepo's whole `pnpm test` the heap
+ * churns enough for one to land there — godview-monitor's no-GPU row read the
+ * marker's `starting` forever, four whole runs in six, never alone. A browser
+ * keeps a connected observer's registrations alive; so does this: `observe()`
+ * builds its listener while `WeakRef` holds strongly, and nothing else changes.
+ * test/mutation-observer-gc.test.ts forces the collection. (The `node`
+ * environment's files have no MutationObserver, and keep none.)
+ */
+class StrongRef<T extends object> {
+  readonly #target: T;
+  constructor(target: T) {
+    this.#target = target;
+  }
+  deref(): T {
+    return this.#target;
+  }
+}
+
+if (typeof globalThis.MutationObserver === "function") {
+  class HeldMutationObserver extends globalThis.MutationObserver {
+    override observe(target: Node, options?: MutationObserverInit): void {
+      const weakRef = globalThis.WeakRef;
+      globalThis.WeakRef = StrongRef as unknown as WeakRefConstructor;
+      try {
+        super.observe(target, options);
+      } finally {
+        globalThis.WeakRef = weakRef;
+      }
+    }
+  }
+  globalThis.MutationObserver = HeldMutationObserver;
+  const windowObject = (globalThis as { window?: { MutationObserver: unknown } }).window;
+  if (windowObject !== undefined) windowObject.MutationObserver = HeldMutationObserver;
+}
+
+/**
  * P8b-3: load the dev-bundled plugin set once, for the whole file.
  *
  * The four built-in plugins stopped being static imports of `field-engine` —
