@@ -1,24 +1,38 @@
-// THE RUN — one plugin directory in, a verdict per declared widget state out.
+// THE RUN — one plugin directory in, a verdict per declared widget state and a
+// row per declared object kind out.
 //
 // The order below is the order the product uses, and the refusal classes fall
-// out of it: manifest → renderer module → activation → prefab build → engine →
-// spawn → mount. Each stage can only fail in its own way, which is what lets a
-// caller act on `code` without reading `detail`.
+// out of it: manifest → renderer module → activation → prefab build → states.
+// Each stage can only fail in its own way, which is what lets a caller act on
+// `code` without reading `detail`.
+//
+// DK-5 (desk/landing): NOTHING MOUNTS. The verdict for a widget state was "its
+// React face mounts in happy-dom", and the desk draws object KINDS — a widget row
+// compiles faceless since DK-2, so there is no face to mount, nor a desk root that
+// admits one (`desk.desk` refuses a type that is not `desk.object`). What a widget
+// state is judged on now is what needs no face: its props against the declared
+// schema. An OBJECT kind is listed — its type, the export its binding names, the
+// states its fixture declares, and the refusal this build answers (`null`: the
+// desk draws object kinds), the field `inspect` carries too. DK-7's kind-
+// conformance harness judges each kind's states (`resolve`/`record`/`hit`, no
+// DOM) on that same row.
 //
 // Source, not artifact. The runner loads `src/renderer.tsx` rather than
 // `dist/renderer.js` for two reasons that both matter: an author (or an agent)
-// iterating on a widget should get a verdict without a build step in the way,
+// iterating on a plugin should get a verdict without a build step in the way,
 // and `pnpm test` must never depend on `pnpm build`. The staged-artifact path is
 // already witnessed by smoke:canvas (P8-D2); this is the authoring path.
 import { existsSync, readFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { PluginManifestV1, type WidgetContribution } from "@vibefield/contracts";
-import { buildWidgetType, createFieldEngine } from "@vibefield/field-app/host-kit";
+import {
+  type ObjectContribution,
+  PluginManifestV1,
+  type WidgetContribution,
+} from "@vibefield/contracts";
+import { buildWidgetType } from "@vibefield/field-app/host-kit";
 import { RENDERER_SOURCES } from "@vibefield/plugin-build/build";
-import { PluginRegistry } from "@vibefield/plugin-runtime";
 import type { AnyBehaviorDef } from "@vibefield/plugin-sdk/behavior";
 import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
-import { mountState } from "./render";
 import {
   DEFAULT_STATE,
   readStatesModule,
@@ -49,14 +63,21 @@ export interface RunOptions {
   readonly only?: string | undefined;
 }
 
-function summarize(plugin: string, widgets: number, verdicts: readonly Verdict[]): RunSummary {
+function summarize(
+  plugin: string,
+  widgets: number,
+  objects: number,
+  verdicts: readonly Verdict[],
+): RunSummary {
   let passed = 0;
   let skipped = 0;
   let refused = 0;
   let states = 0;
   for (const v of verdicts) {
     if (v.kind === "summary") continue;
-    if (v.kind === "state") {
+    if (v.kind === "object") {
+      if (v.refusal !== null) refused += 1;
+    } else if (v.kind === "state") {
       states += 1;
       if (v.status === "pass") passed += 1;
       else if (v.status === "note") skipped += 1;
@@ -69,6 +90,7 @@ function summarize(plugin: string, widgets: number, verdicts: readonly Verdict[]
     kind: "summary",
     plugin,
     widgets,
+    objects,
     states,
     passed,
     skipped,
@@ -77,9 +99,9 @@ function summarize(plugin: string, widgets: number, verdicts: readonly Verdict[]
   };
 }
 
-function stopAt(plugin: string, verdict: Verdict, widgets = 0): RunResult {
+function stopAt(plugin: string, verdict: Verdict, widgets = 0, objects = 0): RunResult {
   const verdicts = [verdict];
-  return { verdicts, summary: summarize(plugin, widgets, verdicts) };
+  return { verdicts, summary: summarize(plugin, widgets, objects, verdicts) };
 }
 
 /** `--state <type>[:<state>]`. */
@@ -125,17 +147,19 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
   }
   const manifest = parsed.data;
   const contributions: readonly WidgetContribution[] = manifest.contributes?.widgets ?? [];
+  const objects: readonly ObjectContribution[] = manifest.contributes?.objects ?? [];
+  const declaredCount = contributions.length + objects.length;
 
   // --- the renderer module --------------------------------------------------
   const source = RENDERER_SOURCES.map((s) => join(root, s)).find((p) => existsSync(p));
   if (source === undefined) {
-    if (contributions.length === 0) {
-      // A plugin with no canvas widgets is a complete, correct plugin (services,
-      // surfaces, commands). Zero states is the honest answer, and saying it out
-      // loud beats an empty table that reads like a failure.
+    if (declaredCount === 0) {
+      // A plugin with no canvas widgets or objects is a complete, correct plugin
+      // (services, surfaces, commands). Zero states is the honest answer, and
+      // saying it out loud beats an empty table that reads like a failure.
       return {
         verdicts: [],
-        summary: summarize(manifest.id, 0, []),
+        summary: summarize(manifest.id, 0, 0, []),
       };
     }
     return stopAt(manifest.id, {
@@ -143,7 +167,7 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
       plugin: manifest.id,
       status: "refused",
       code: "renderer-entry-missing",
-      detail: `${manifest.id} declares ${contributions.length} widget(s) but has no renderer source`,
+      detail: `${manifest.id} declares ${contributions.length} widget(s) and ${objects.length} object(s) but has no renderer source`,
       expected: `one of ${RENDERER_SOURCES.join(", ")} under ${root}`,
     });
   }
@@ -177,10 +201,8 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
   // The SDK's own mock host (§5.4 item 4, whose header names this runner as its
   // consumer): the author-facing contract, and — unlike the product harness —
   // carrying no process-global activation memo, so a second run never answers
-  // for the first.
-  // DK-2 (desk/landing): the SDK's widget registration binding is opaque and binds no
-  // face — this runner's React-mount verdict is DK-7's to replace (the kind harness).
-  let bindings: ReadonlyMap<string, unknown>;
+  // for the first. A widget row binds NO face since DK-2 (the host compiles it
+  // faceless), so an activation that registers none is the expected one.
   let behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }>;
   try {
     const activation = await activateWithMockHost(mod as never, {
@@ -191,7 +213,6 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
       declaredCommands: manifest.contributes?.commands?.map((c) => c.id) ?? [],
       declaredSurfaces: manifest.contributes?.surfaces?.map((s) => s.id) ?? [],
     });
-    bindings = activation.bindings;
     behaviorBindings = new Map(
       [...activation.behaviors].map(([id, handle]) => [id, { handle }] as const),
     );
@@ -202,40 +223,22 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
       status: "refused",
       code: "activation-failed",
       detail: messageOf(error),
-      expected: "activate() binds each declared widget exactly once and returns without throwing",
+      expected: "activate() returns without throwing and binds only what the manifest declares",
     });
   }
 
   const verdicts: Verdict[] = [];
 
   // --- the prefab build (§12.2) --------------------------------------------
-  // Every declared type must produce a WidgetType before the engine exists,
-  // because the engine is constructed from the catalogue. A type that cannot be
-  // built loses its state rows and nothing else (§11.4 containment): it still
-  // gets a placeholder entry so the registry's declared⇄provided law holds for
-  // its healthy peers, and that placeholder is never mounted — its refusal is
-  // recorded here and its states are skipped below.
+  // Every declared widget must produce a WidgetType from its DECLARATION — the
+  // host compiles each row faceless (DK-2), exactly as the window does. A type
+  // that cannot be built loses its state rows and nothing else (§11.4
+  // containment).
   const unusable = new Set<string>();
   const owner = { pluginId: manifest.id, pluginTitle: manifest.title };
-  const widgets: Record<string, unknown> = {};
   for (const decl of contributions) {
-    const binding = bindings.get(decl.type);
-    if (binding === undefined) {
-      unusable.add(decl.type);
-      verdicts.push({
-        kind: "widget",
-        plugin: manifest.id,
-        type: decl.type,
-        status: "refused",
-        code: "widget-unbound",
-        pointer: pointer("contributes", "widgets", decl.type),
-        detail: `${decl.type} is declared by the manifest but activate() never registered it`,
-        expected: `ctx.widgets.register({ type: "${decl.type}", binding: { component } })`,
-      });
-    }
     try {
-      // DK-2: the host compiles every widget row FACELESS — no binding argument.
-      widgets[decl.type] = buildWidgetType(decl, owner, behaviorBindings);
+      buildWidgetType(decl, owner, behaviorBindings);
     } catch (error) {
       unusable.add(decl.type);
       verdicts.push({
@@ -270,6 +273,7 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
           expected: "a module that imports cleanly and default-exports the states record",
         },
         contributions.length,
+        objects.length,
       );
     }
     const read = readStatesModule(statesModule);
@@ -286,10 +290,14 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
           detail: `${STATES_RELATIVE_PATH}: ${read.detail}`,
         },
         contributions.length,
+        objects.length,
       );
     }
     authored = read.states;
-    const declaredTypes = new Set(contributions.map((w) => w.type));
+    const declaredTypes = new Set([
+      ...contributions.map((w) => w.type),
+      ...objects.map((o) => o.type),
+    ]);
     for (const type of Object.keys(authored)) {
       if (declaredTypes.has(type)) continue;
       verdicts.push({
@@ -303,36 +311,27 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
         expected:
           declaredTypes.size > 0
             ? `one of ${[...declaredTypes].join(", ")}`
-            : "this plugin contributes no widgets",
+            : "this plugin contributes no widgets or objects",
       });
     }
   }
 
-  // --- the engine -----------------------------------------------------------
-  // The real one, with the product's own canvas settings: `createFieldEngine`
-  // through field-app's declared host-kit door, not a second construction of it.
-  const registry = new PluginRegistry<unknown>();
-  let engine: { world: unknown; ops: never; docs: { create(): unknown } };
-  try {
-    registry.registerV1(manifest, widgets);
-    engine = createFieldEngine(registry as never) as never;
-    engine.docs.create();
-  } catch (error) {
-    return stopAt(
-      manifest.id,
-      {
-        kind: "plugin",
-        plugin: manifest.id,
-        status: "refused",
-        code: "widget-unbuildable",
-        detail: `the canvas engine could not be built for ${manifest.id}: ${messageOf(error)}`,
-        expected: "a widget catalogue the engine accepts",
-      },
-      contributions.length,
-    );
+  // --- the object kinds -----------------------------------------------------
+  // Listed, never drawn here: the desk builds each from its binding's export at
+  // the mount, and DK-7's harness judges its declared states.
+  for (const object of objects) {
+    const declared = authored[object.type];
+    verdicts.push({
+      kind: "object",
+      plugin: manifest.id,
+      type: object.type,
+      binding: object.binding.kind,
+      states: declared === undefined ? 1 : Object.keys(declared).length,
+      refusal: null,
+    });
   }
 
-  // --- the states -----------------------------------------------------------
+  // --- the widget states ----------------------------------------------------
   for (const decl of contributions) {
     if (unusable.has(decl.type)) continue;
     const declared = authored[decl.type];
@@ -353,51 +352,34 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
     for (const [state, props] of Object.entries(states)) {
       if (!matches(options.only, decl.type, state)) continue;
       const invalid = validateState(decl, state, props);
-      if (invalid !== null) {
-        const row: StateVerdict = {
-          kind: "state",
-          plugin: manifest.id,
-          type: decl.type,
-          state,
-          status: "refused",
-          code: invalid.code,
-          ...(invalid.pointer !== undefined ? { pointer: invalid.pointer } : {}),
-          ...(invalid.expected !== undefined ? { expected: invalid.expected } : {}),
-          detail: invalid.detail,
-        };
-        verdicts.push(row);
-        continue;
-      }
-      if (decl.surface === "gl") {
-        // Honest, and deliberately NOT a pass: a GL widget renders inside an
-        // island backed by a real WebGL context, which a DOM-only harness does
-        // not have. Mounting it anyway throws at the first island hook — an
-        // answer about this runner, not about the widget. Counted apart, and
-        // exit stays 0 because nothing was refused.
-        verdicts.push({
-          kind: "state",
-          plugin: manifest.id,
-          type: decl.type,
-          state,
-          status: "note",
-          code: "skipped-gl",
-          detail: "gl surface — no GL island in a headless DOM harness, so no verdict is possible",
-          expected: 'a GL-capable harness (not this one) to answer for surface: "gl" widgets',
-        });
-        continue;
-      }
-      verdicts.push(
-        await mountState({
-          plugin: manifest.id,
-          decl,
-          state,
-          props,
-          component: (widgets[decl.type] as { component: unknown }).component,
-          engine: engine as never,
-        }),
-      );
+      const row: StateVerdict =
+        invalid === null
+          ? {
+              kind: "state",
+              plugin: manifest.id,
+              type: decl.type,
+              state,
+              status: "pass",
+              detail:
+                "its props agree with the declared schema — a widget row mounts no face on the desk",
+            }
+          : {
+              kind: "state",
+              plugin: manifest.id,
+              type: decl.type,
+              state,
+              status: "refused",
+              code: invalid.code,
+              ...(invalid.pointer !== undefined ? { pointer: invalid.pointer } : {}),
+              ...(invalid.expected !== undefined ? { expected: invalid.expected } : {}),
+              detail: invalid.detail,
+            };
+      verdicts.push(row);
     }
   }
 
-  return { verdicts, summary: summarize(manifest.id, contributions.length, verdicts) };
+  return {
+    verdicts,
+    summary: summarize(manifest.id, contributions.length, objects.length, verdicts),
+  };
 }

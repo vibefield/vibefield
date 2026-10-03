@@ -38,6 +38,18 @@ function rowsOf(result: RunResult): Row[] {
   const rows: Row[] = [];
   for (const v of result.verdicts) {
     if (v.kind === "summary") continue;
+    if (v.kind === "object") {
+      // DK-5: an object kind is LISTED — its export, its declared states, the
+      // refusal this build answers (none: the desk draws it). DK-7 judges it.
+      rows.push({
+        mark: v.refusal === null ? "KIND" : "FAIL",
+        type: shortType(v.type, plugin),
+        state: "—",
+        note: `export ${v.binding} · ${v.states} state${v.states === 1 ? "" : "s"} for the kind harness (DK-7) · refusal: ${v.refusal ?? "none"}`,
+        under: [],
+      });
+      continue;
+    }
     const under: string[] = [];
     // Everything a refusal knows goes directly beneath its own row — an author
     // fixing a state should neither re-run with --json to see the pointer nor
@@ -75,17 +87,19 @@ export function toTable(result: RunResult): string {
     );
     for (const line of row.under) lines.push(`          ${line}`);
   }
-  if (summary.states === 0 && summary.refused === 0) {
-    lines.push("  no canvas widgets declared — nothing to render, and that is a pass");
+  if (summary.widgets === 0 && summary.objects === 0 && summary.refused === 0) {
+    lines.push("  no canvas widgets or objects declared — nothing to judge, and that is a pass");
   }
   lines.push(
     `  ${summary.passed} passed · ${summary.skipped} skipped · ${summary.refused} refused ` +
-      `(${summary.widgets} widget${summary.widgets === 1 ? "" : "s"}, ${summary.states} state${summary.states === 1 ? "" : "s"})`,
+      `(${summary.widgets} widget${summary.widgets === 1 ? "" : "s"}, ${summary.states} state${summary.states === 1 ? "" : "s"}, ` +
+      `${summary.objects} object${summary.objects === 1 ? "" : "s"})`,
   );
   return `${lines.join("\n")}\n`;
 }
 
 /** For a caller that wants the rows without the process. */
 export function isRefusal(v: Verdict): boolean {
-  return v.kind !== "summary" && v.status === "refused";
+  if (v.kind === "summary") return false;
+  return v.kind === "object" ? v.refusal !== null : v.status === "refused";
 }

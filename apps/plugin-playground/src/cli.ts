@@ -8,13 +8,15 @@ import type { RunResult } from "./verdict";
 
 const USAGE = `plugin-playground <pluginDir> [--json] [--state <type>[:<name>]]
 
-Renders every declared widget state of a plugin headlessly and answers pass/fail
-per state (plugin spec §5.4 item 5, §24.2).
+Judges every declared widget state of a plugin headlessly against its declared
+prop schema, and lists its object kinds with their refusal (plugin spec §5.4
+item 5, §24.2). Nothing mounts: the desk draws object kinds, and the kind
+harness that judges their states is DK-7's.
 
   --json                NDJSON: one verdict per line, then a summary line
   --state <type>[:<n>]  run one widget type, or one state of it
 
-exit 0  every state passed (skipped GL states do not fail a run)
+exit 0  every state passed and no kind is refused
 exit 1  at least one refusal
 exit 2  the harness itself failed
 `;

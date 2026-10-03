@@ -35,7 +35,8 @@ export type RefusalCode =
   /** `activate` threw, or bound a type the manifest does not declare */
   | "activation-failed"
   // --- widget-level: the state list for one type could not be built ---
-  /** a declared widget type that `activate` never bound */
+  /** NOT EMITTED since DK-5: a widget row binds no face on the desk (the host
+   * compiles it faceless since DK-2), so an unbound widget is the expected one */
   | "widget-unbound"
   /** the host could not build the prefab from this declaration (§12.2) */
   | "widget-unbuildable"
@@ -48,13 +49,14 @@ export type RefusalCode =
   // --- state-level: the row itself ---
   /** the fixture's props violate the manifest's declared prop schema */
   | "state-invalid"
-  /** the engine refused the props when spawning the entity */
+  /** NOT EMITTED since DK-5 (nothing mounts — no entity is spawned for a face) */
   | "state-spawn-failed"
-  /** the component threw during mount (the §11.4 boundary caught it, or it escaped) */
+  /** NOT EMITTED since DK-5 (the "React mounts in happy-dom" verdict retired) */
   | "state-render-failed";
 
-/** The only NOTE class today: a GL widget has no island to mount into in a
- * DOM-only harness, so no mount can answer for it. Named rather than hidden. */
+/** NOT EMITTED since DK-5: a GL widget was skipped because no GL island could
+ * mount in a DOM-only harness, and nothing mounts now. DK-7 retires the class
+ * with the kind-conformance harness. */
 export type NoteCode = "skipped-gl";
 
 export interface StateVerdict {
@@ -86,6 +88,24 @@ export interface PluginVerdict {
   readonly detail: string;
 }
 
+/**
+ * DK-5 — an OBJECT KIND as this harness speaks of it: listed from the manifest,
+ * with the export its binding names, the states its fixture declares (or the one
+ * synthesized `default`), and the refusal this build answers — `null`, because
+ * the desk draws object kinds (the field `inspect` carries too, so an agent
+ * branches on the field, never on a code's absence). DK-7's kind-conformance
+ * harness judges those states (`resolve`/`record`/`hit`, no DOM) on this row.
+ */
+export interface ObjectVerdict {
+  readonly kind: "object";
+  readonly plugin: string;
+  readonly type: string;
+  /** the renderer module's export that draws the kind (`binding.kind`) */
+  readonly binding: string;
+  readonly states: number;
+  readonly refusal: RefusalCode | null;
+}
+
 /** A refusal that costs ONE widget its state rows while its peers still run —
  * §11.4's containment law applied to the verdict table. */
 export interface WidgetVerdict {
@@ -103,6 +123,8 @@ export interface RunSummary {
   readonly kind: "summary";
   readonly plugin: string;
   readonly widgets: number;
+  /** the manifest's object kinds, each listed on its own row (DK-5) */
+  readonly objects: number;
   readonly states: number;
   readonly passed: number;
   readonly skipped: number;
@@ -110,7 +132,7 @@ export interface RunSummary {
   readonly exit: 0 | 1;
 }
 
-export type Verdict = StateVerdict | PluginVerdict | WidgetVerdict | RunSummary;
+export type Verdict = StateVerdict | ObjectVerdict | PluginVerdict | WidgetVerdict | RunSummary;
 
 export interface RunResult {
   readonly verdicts: readonly Verdict[];
