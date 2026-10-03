@@ -30,8 +30,9 @@ export const CLOSE_BUDGET_MS = 1_500;
  * MEASURED (DK-4, 2026-10-03, the packaged app on Dawn at dpr 2, the seeded board): `capture({ scale: 0.25 })` — a ratio of
  * 0.5 — draws the calendar and the notebook and NONE of the card kinds (the note, the mini mat, the whiteboard, the print),
  * while 0.5 and 1 draw all six (ICE's rig:capture checks the quarter still's size, never its picture). So the still is asked at
- * `max(0.25, 1 / dpr)` and brought down to the quarter as it is encoded — the same size, every object in it. An ICE petition
- * is owed; when the door draws every kind at a quarter, this asks `STILL_SCALE` again.
+ * `max(0.25, 1 / dpr)` and brought down to the quarter as it is encoded — the same size, every object in it. ICE petition
+ * I29 (filed 3 Oct, `draft/petitions/I29-ice-capture-quarter-drops-card-kinds.md`): this RETIRES at the first
+ * `0.15.0-desk.N` carrying it — the door is then asked `STILL_SCALE` itself and the encoder keeps the still's own size.
  */
 export function captureScale(dpr: number): number {
   return Math.max(STILL_SCALE, dpr > 0 ? 1 / dpr : 1);

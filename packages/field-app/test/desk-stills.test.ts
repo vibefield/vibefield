@@ -1,7 +1,7 @@
 /**
  * DK-4 — THE EXPLORER'S STILLS (DK-D27, the orchestrator's ruling on DK-3's q3): a board's picture is
  * a still of its desk through ICE's capture door — a quarter of the view, asked at a device ratio of
- * at least 1 (`captureScale`: the door's 0.25 at dpr 2 draws no card kind, measured) and brought down
+ * at least 1 (`captureScale`: the door's 0.25 at dpr 2 draws no card kind, measured — ICE I29) and brought down
  * to the quarter as it is encoded — taken at the
  * board's CLOSE and ONCE on the desk's idle after an edit settles — never per frame — its PNG bytes
  * kept on the renderer's byte store's keyed shelf under the document id, and shown in the explorer as
