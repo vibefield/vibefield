@@ -5602,6 +5602,48 @@ export async function runSmokeGodview(opts: {
       10_000,
     );
 
+    // ⇧⌘V OVER A FOCUSED PANE (One Frame FR-4's exit; GT-D21) — 11e's form for
+    //      the clipboard's chord, which had no row of its own: the pin reaches
+    //      the frame's ONE owner from inside a pane — the left edge's drawer
+    //      open over the cover, where its notch rests as a sliver — and the
+    //      pane never hears it, so ghostty's paste_from_selection never runs.
+    //      ⇧⌘V again puts it away.
+    await focusDeck(win);
+    await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+    const CLIPBOARD_TRAY = `document.querySelector('.vf-edge-tray[data-side="left"]')`;
+    const pressClipboardChord = (): void => {
+      const modifiers: ("meta" | "control" | "shift")[] = [
+        process.platform === "darwin" ? "meta" : "control",
+        "shift",
+      ];
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "V", modifiers });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "V", modifiers });
+    };
+    pressClipboardChord();
+    await untilRenderer(
+      win,
+      "⇧⌘V pinning the clipboard over a focused pane",
+      `(() => { const tray = ${CLIPBOARD_TRAY}; if (!tray) return "no clipboard tray";
+        return tray.dataset.pinned === "true" && tray.dataset.open === "true"
+          ? "ok" : JSON.stringify({ ...tray.dataset }); })()`,
+      10_000,
+    );
+    const heardV = await chordProbeHeard(win);
+    if (heardV.some((key) => key.toLowerCase().endsWith("+v"))) {
+      throw new Error(
+        `the pane heard ⇧⌘V too (Ghostty's paste_from_selection): ${JSON.stringify(heardV)}`,
+      );
+    }
+    pressClipboardChord();
+    await untilRenderer(
+      win,
+      "⇧⌘V putting the clipboard away",
+      `${CLIPBOARD_TRAY}?.dataset.pinned === "false" ? "ok" : "still pinned"`,
+      10_000,
+    );
+    verdict["chordClipboard"] =
+      "⇧⌘V pinned the clipboard over a focused pane (its drawer open over Godview) and put it away; the pane never heard it";
+
     // 11g. THE VIEW KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-1,
     //      FC-D4) — the probe each of ⌘1–⌘4 owes before it ships (⌘⎋ never
     //      arrived: app-menu-model's VIEW_KEYS_ROAD), in 11e's form: a pane

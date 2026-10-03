@@ -516,6 +516,47 @@ describe("the edges on the frame's one owner (One Frame FR-4, F11)", () => {
     expect(document.activeElement).toBe(el.querySelector(".vf-edge-tray__nub"));
   });
 
+  it("pins from inside a focused pane on ⇧⌘V, and the pane never hears it (GT-D21)", () => {
+    // A focused Godview pane consumes its keys at the target and stops them,
+    // as ghosttea's TerminalSurface does (product-chords.test's stand-in). The
+    // tray's chord is caught on the window's capture phase, before the pane,
+    // and stopped there: the pin reaches the frame's one owner and ghostty's
+    // paste_from_selection never runs.
+    const el = mount(<Owned store={new ClipboardStore()} host={fakeHost()} sliver />);
+    const tray = el.querySelector(".vf-edge-tray") as HTMLElement;
+    const heard: string[] = [];
+    const pane = document.createElement("div");
+    pane.tabIndex = 0;
+    pane.addEventListener("keydown", (event) => {
+      heard.push(event.key);
+      event.preventDefault();
+      event.stopPropagation();
+    });
+    document.body.appendChild(pane);
+    pane.focus();
+    const press = (init: KeyboardEventInit): void => {
+      act(() => {
+        pane.dispatchEvent(
+          new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init }),
+        );
+      });
+    };
+    try {
+      // An ordinary key still belongs to the pane.
+      press({ key: "l" });
+      press({ key: "V", metaKey: true, shiftKey: true });
+      expect(surfaceNow).toBe("clipboard");
+      expect(tray.dataset.pinned).toBe("true");
+      expect(tray.dataset.open).toBe("true");
+      press({ key: "V", metaKey: true, shiftKey: true });
+      expect(surfaceNow).toBeNull();
+      expect(tray.dataset.pinned).toBe("false");
+      expect(heard).toEqual(["l"]);
+    } finally {
+      pane.remove();
+    }
+  });
+
   it("says the clipboard's key in its tooltip, in Apple's order (FR-5)", () => {
     expect(clipboardHint("darwin")).toBe("Clipboard  ⇧⌘V");
     expect(clipboardHint("win32")).toBe("Clipboard  Ctrl+Shift+V");
