@@ -1,0 +1,82 @@
+/* The glyph catalog's own layout (harness only; the glyph's look is the kit's). */
+
+.vf-ds-glyph-sizes {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 28px;
+  align-items: flex-end;
+}
+
+.vf-ds-glyph-size {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: var(--vf-text-secondary);
+}
+
+.vf-ds-glyph-size > span {
+  min-width: 56px;
+  font-size: 11px;
+  color: var(--vf-text-tertiary);
+  font-variant-numeric: tabular-nums;
+}
+
+.vf-ds-glyph-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.vf-ds-glyph {
+  display: grid;
+  grid-template-columns: auto auto 1fr;
+  gap: 10px;
+  align-items: center;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid var(--vf-hairline);
+  border-radius: var(--vf-radius-control);
+}
+
+.vf-ds-glyph-light,
+.vf-ds-glyph-dark {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  place-items: center;
+}
+
+.vf-ds-glyph-light {
+  color: var(--vf-foreground);
+  background: var(--vf-chrome-solid);
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+}
+
+.vf-ds-glyph-dark {
+  color: var(--vf-foreground-inverse);
+  background: var(--vf-foreground);
+}
+
+.vf-ds-glyph figcaption {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.vf-ds-glyph figcaption strong {
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.vf-ds-glyph figcaption code,
+.vf-ds-glyph figcaption small {
+  font-size: 10px;
+  color: var(--vf-text-tertiary);
+}
+
+.vf-ds-glyph-turns {
+  display: flex;
+  gap: 14px;
+  color: var(--vf-text-secondary);
+}

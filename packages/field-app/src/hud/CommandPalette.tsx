@@ -1,4 +1,5 @@
 import { type CanvasEngine, selectedEntities } from "@vibecook/ice";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import {
   type ReactElement,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -76,18 +77,11 @@ export function CommandPaletteView({
         }`}
       >
         <div className="flex items-center gap-3 border-b border-black/5 px-4 py-3.5 dark:border-white/10">
-          <svg
-            aria-hidden="true"
-            className="h-4 w-4 shrink-0 text-black/40 dark:text-white/40"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.8"
-            strokeLinecap="round"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <path d="m20 20-3.2-3.2" />
-          </svg>
+          <FieldGlyph
+            name="search"
+            size={16}
+            className="shrink-0 text-black/40 dark:text-white/40"
+          />
           <input
             ref={inputRef}
             value={query}

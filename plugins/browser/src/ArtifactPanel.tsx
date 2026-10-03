@@ -6,6 +6,7 @@ import {
 import type { PluginProductClient, PluginSurfaceProps } from "@vibefield/plugin-sdk";
 import {
   EmptyState,
+  FieldGlyph,
   InlineNotice,
   PlaceholderFace,
   StatusDot,
@@ -475,9 +476,7 @@ export function ArtifactPanel({
               setScreen({ kind: "choose" });
             }}
           >
-            <svg aria-hidden="true" viewBox="0 0 24 24">
-              <path d="M12 5v14M5 12h14" />
-            </svg>
+            <FieldGlyph name="plus" size={18} />
           </button>
         )}
       </header>
@@ -869,26 +868,21 @@ function TailnetFact(): ReactElement {
 }
 
 function ChoiceIcon({ kind }: { kind: "proxy" | "folder" }): ReactElement {
-  return kind === "proxy" ? (
-    <svg className="vf-artifact-choice-icon" aria-hidden="true" viewBox="0 0 24 24">
-      <circle cx="12" cy="12" r="8" />
-      <path d="M4 12h16M12 4a13 13 0 0 1 0 16M12 4a13 13 0 0 0 0 16" />
-    </svg>
-  ) : (
-    <svg className="vf-artifact-choice-icon" aria-hidden="true" viewBox="0 0 24 24">
-      <path d="M3 7.5h7l2-2h9v13H3z" />
-    </svg>
+  return (
+    <FieldGlyph
+      name={kind === "proxy" ? "globe" : "folder"}
+      size={22}
+      className="vf-artifact-choice-icon"
+    />
   );
 }
 
 function Chevron({ back = false }: { back?: boolean }): ReactElement {
   return (
-    <svg
-      aria-hidden="true"
-      viewBox="0 0 24 24"
+    <FieldGlyph
+      name="chevron"
+      size={15}
       className={`vf-artifact-chevron${back ? " is-back" : ""}`}
-    >
-      <path d="m9 5 7 7-7 7" />
-    </svg>
+    />
   );
 }

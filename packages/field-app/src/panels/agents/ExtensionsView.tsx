@@ -8,6 +8,7 @@ import type {
   AgentsExtensionsListResult,
   AgentsExtensionsPlanSkillResult,
 } from "@vibefield/contracts";
+import { FieldGlyph, type GlyphName as KitGlyphName } from "@vibefield/design-kit/glyphs";
 import {
   InlineNotice,
   SegmentedControl,
@@ -93,51 +94,19 @@ import { ProfileMark } from "./ProfilesView";
 
 const KINDS: ExtensionKindKey[] = ["servers", "skills"];
 
-/** The design kit's names for these marks (pass 23 and 24 draw the kit's
- * plugin, globe and snippets): every icon here is drawn by this one component. */
-type GlyphName =
-  | "check"
-  | "chevron"
-  | "plugin"
-  | "folder"
-  | "globe"
-  | "prompt"
-  | "snippets"
-  | "search"
-  | "plus";
+/** The design kit's glyphs these marks are (DESIGN.md §13; pass 23 and 24 draw the
+ * kit's plugin, globe and snippets): every icon here is drawn by this one component. */
+type GlyphName = Extract<
+  KitGlyphName,
+  "check" | "chevron" | "plugin" | "folder" | "globe" | "prompt" | "snippets" | "search" | "plus"
+>;
 
+/** The host's sheet says each mark's box and ink (`.vf-ext-glyph` and its places). */
 function Glyph({ name, className = "vf-ext-glyph" }: { name: GlyphName; className?: string }) {
-  const paths: Record<GlyphName, ReactElement> = {
-    check: <path d="M4.5 10.5l3.2 3.2 7.8-7.8" />,
-    chevron: <path d="m7.5 5 5 5-5 5" />,
-    plugin: (
-      <path d="M7 4.5h2.5a1.5 1.5 0 013 0H15v3a1.5 1.5 0 010 3v3.5h-3.5a1.5 1.5 0 00-3 0H5v-3.5a1.5 1.5 0 010-3V4.5h2z" />
-    ),
-    folder: <path d="M3.5 6.5v8h13v-7h-6.5l-1.5-1.5h-5z" />,
-    globe: (
-      <>
-        <circle cx="10" cy="10" r="6.5" />
-        <path d="M3.5 10h13M10 3.5c-2 2-2 11 0 13M10 3.5c2 2 2 11 0 13" />
-      </>
-    ),
-    prompt: <path d="M4.5 6.5l3.5 3.5-3.5 3.5M10 14h5.5" />,
-    snippets: <path d="M6 3.5h6l3 3v10H6zM12 3.5v3h3M8.5 10h4M8.5 13h4" />,
-    search: (
-      <>
-        <circle cx="9" cy="9" r="5" />
-        <path d="m12.8 12.8 3.7 3.7" />
-      </>
-    ),
-    plus: <path d="M10 4.5v11M4.5 10h11" />,
-  };
-  return (
-    <svg className={className} viewBox="0 0 20 20" aria-hidden="true">
-      {paths[name]}
-    </svg>
-  );
+  return <FieldGlyph name={name} size={14} className={className} />;
 }
 
-/** The door's chevron, stroked by this file's sheet so no other sheet's glyph rules reach it. */
+/** The door's chevron, inked by this file's sheet so no other sheet's glyph rules reach it. */
 function Chevron(): ReactElement {
   return <Glyph name="chevron" className="vf-ext-chevron" />;
 }

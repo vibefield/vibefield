@@ -47,8 +47,7 @@ struct ClosedRow: View {
     Button {
       model.requestKeyboard()
     } label: {
-      Image(systemName: "keyboard")
-        .font(.system(size: InputCardMetrics.glyphSize(for: dynamicTypeSize), weight: .semibold))
+      FieldGlyph(.keyboard, size: FieldGlyph.box(for: InputCardMetrics.glyphSize(for: dynamicTypeSize)))
         .foregroundStyle(ChromePalette.ink)
         .frame(width: side, height: side)
         .chromeGlass(radius: side / 2)

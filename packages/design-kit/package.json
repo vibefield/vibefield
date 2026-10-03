@@ -10,7 +10,8 @@
     "./gl": "./src/gl.ts",
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
-    "./visuals": "./src/visuals.ts"
+    "./visuals": "./src/visuals.ts",
+    "./glyphs": "./src/glyphs/index.ts"
   },
   "sideEffects": [
     "*.css"

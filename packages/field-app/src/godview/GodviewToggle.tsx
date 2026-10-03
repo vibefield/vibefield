@@ -1,3 +1,4 @@
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { ReactElement } from "react";
 import { fabCls } from "../field/theme-constants";
 import { requestGodviewToggle } from "./overlay-state";
@@ -21,20 +22,8 @@ export function GodviewToggle({ active }: { active: boolean }): ReactElement {
       title="Godview (⇧ ⇧)"
       aria-pressed={active}
     >
-      {/* Panes: the deck's own silhouette, at the 1.8 stroke the neighbours use. */}
-      <svg
-        aria-hidden="true"
-        className="h-5 w-5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="3" y="4" width="18" height="16" rx="3" />
-        <path d="M11 4v16M11 12h10" />
-      </svg>
+      {/* Panes: the deck's own silhouette (DESIGN.md §13). */}
+      <FieldGlyph name="panes" size={20} />
     </button>
   );
 }

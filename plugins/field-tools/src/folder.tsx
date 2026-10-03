@@ -36,7 +36,7 @@ import {
   Viewport,
   type World,
 } from "@vibefield/plugin-sdk/canvas";
-import { CARD_RADIUS, CardShell, previewBackground } from "@vibefield/plugin-sdk/ui";
+import { CARD_RADIUS, CardShell, FieldGlyph, previewBackground } from "@vibefield/plugin-sdk/ui";
 import {
   type CSSProperties,
   type ReactElement,
@@ -233,19 +233,7 @@ function FolderView({ entity, world }: { entity: Entity; world: World }): ReactE
 
         {/* Bottom bar: accent folder icon · name · count pill (mock .bar). */}
         <div className="vf-folder-card__bar">
-          <svg
-            width="14"
-            height="12"
-            viewBox="0 0 14 12"
-            fill="none"
-            aria-hidden="true"
-            className="vf-folder-card__icon"
-          >
-            <path
-              d="M1 3.2C1 2.1 1.9 1.2 3 1.2h2.4l1.4 1.6H11c1.1 0 2 .9 2 2v4C13 9.9 12.1 10.8 11 10.8H3c-1.1 0-2-.9-2-2V3.2Z"
-              fill="var(--vf-folder-accent)"
-            />
-          </svg>
+          <FieldGlyph name="folder" size={14} className="vf-folder-card__icon" />
           <span className="vf-folder-card__title">{title}</span>
           <span className="vf-folder-card__count">{placed.length}</span>
         </div>

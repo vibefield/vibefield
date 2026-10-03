@@ -58,10 +58,8 @@ struct DictationKey: View {
         InputHaptics.arm()
       }
     } label: {
-      Image(systemName: "mic")
-        .font(
-          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .semibold)
-        )
+      FieldGlyph(
+        .mic, size: FieldGlyph.box(for: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize)))
         .foregroundStyle(
           listening ? ChromePalette.circleProminentInk : ChromePalette.circleQuietInk
         )

@@ -55,8 +55,7 @@ public struct ScanTextCover: View {
   /// version of the same fact. Every simulator lands here.
   private var unsupported: some View {
     VStack(spacing: 10) {
-      Image(systemName: "text.viewfinder")
-        .font(.system(size: 26, weight: .regular))
+      FieldGlyph(.scanText, size: FieldGlyph.box(for: 26))
         .foregroundStyle(ChromePalette.inkTertiary)
       Text("Text scanning needs a camera on this device")
         .font(ChromeType.sans(ChromeType.sheetTitleSize, .semibold))

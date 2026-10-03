@@ -30,24 +30,18 @@
 .vf-profiles-down,
 .vf-profiles-reset {
   flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 .vf-profiles-plus {
   width: 13px;
   height: 13px;
   margin-left: -2px;
-  stroke-width: 1.7;
 }
 
 .vf-profiles-down {
   width: 10px;
   height: 10px;
   opacity: 0.55;
-  stroke-width: 2;
 }
 
 /* ── a row that carries usage grows to hold it ── */
@@ -219,7 +213,6 @@
 .vf-profiles-reset {
   width: 10px;
   height: 10px;
-  stroke-width: 1.8;
 }
 
 /* Pending usage uses the meter's silhouette; the soft sweep is indeterminate. */

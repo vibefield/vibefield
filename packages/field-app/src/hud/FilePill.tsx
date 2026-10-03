@@ -1,4 +1,5 @@
 import type { DocRegistryEntry, DocSyncStatus } from "@vibefield/contracts";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { type ReactElement, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import type { DocManagerApi } from "../doc-manager";
 import { useDocSyncStatuses } from "../doc-sync-store";
@@ -204,14 +205,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
               className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-black/60 transition-all hover:bg-black/5 hover:text-black active:scale-95 disabled:pointer-events-none disabled:opacity-40 dark:text-white/60 dark:hover:bg-white/10 dark:hover:text-white"
               title="New field"
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M12 5v14M5 12h14"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                />
-              </svg>
+              <FieldGlyph name="plus" size={15} />
             </button>
 
             <div className="flex min-w-0 flex-1 justify-center">
@@ -241,18 +235,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
                   className="inline-flex h-7 max-w-full items-center gap-1 rounded-md px-2 text-[13px] font-medium text-black/80 transition-colors hover:bg-black/5 hover:text-black disabled:pointer-events-none dark:text-white/80 dark:hover:bg-white/10 dark:hover:text-white"
                   title="Rename this field"
                 >
-                  <svg
-                    aria-hidden="true"
-                    className="h-[13px] w-[13px] shrink-0 opacity-45"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="m15 5 4 4M4 20l1-4L16.5 4.5a2.12 2.12 0 0 1 3 3L8 19Z" />
-                  </svg>
+                  <FieldGlyph name="pencil" size={13} className="shrink-0 opacity-45" />
                   <span className="block min-w-0 truncate leading-4">{docName}</span>
                   {/* C6-4: the sync dot — a standing fact beside the name,
                       never a spinner; the title says the words and numbers. */}
@@ -276,15 +259,7 @@ export function FilePill({ manager, open, onOpenChange }: FilePillProps): ReactE
               }`}
               title={open ? "Close (Esc)" : "Browse fields"}
             >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" aria-hidden="true">
-                <path
-                  d="M6 9l6 6 6-6"
-                  stroke="currentColor"
-                  strokeWidth="2.2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
+              <FieldGlyph name="chevron" size={15} turn={90} />
             </button>
           </div>
 

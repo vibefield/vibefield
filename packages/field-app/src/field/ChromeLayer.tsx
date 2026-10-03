@@ -2,6 +2,7 @@ import type { CanvasEngine, WidgetType } from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type Dispatch,
@@ -452,20 +453,7 @@ export function ChromeLayer({
         style={{ right: activeSidePanel === null ? "1rem" : "calc(min(92vw, 26rem) + 1rem)" }}
         title="ICE Devtools"
       >
-        <svg
-          aria-hidden="true"
-          className="h-5 w-5"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="m8 2 1.5 2M16 2l-1.5 2M3 13h3M18 13h3M5 7l2 1M19 7l-2 1" />
-          <rect x="6" y="5" width="12" height="16" rx="6" />
-          <path d="M6 13h12M12 5v16" />
-        </svg>
+        <FieldGlyph name="bug" size={20} />
       </button>
 
       {showSettings && (

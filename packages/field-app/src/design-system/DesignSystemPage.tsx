@@ -8,6 +8,7 @@ import { CardsSection } from "./sections/CardsSection";
 import { ChromeSection } from "./sections/ChromeSection";
 import { ControlsSection } from "./sections/ControlsSection";
 import { FoundationsSection } from "./sections/FoundationsSection";
+import { GlyphsSection } from "./sections/GlyphsSection";
 import { GodviewSection } from "./sections/GodviewSection";
 import { InventorySection } from "./sections/InventorySection";
 import { LiveSurfacesSection } from "./sections/LiveSurfacesSection";
@@ -20,6 +21,7 @@ import type { DesignSystemStudioController, DesignSystemStudioState } from "./st
 const NAV_ITEMS = [
   ["overview", "Overview", "01"],
   ["foundations", "Foundations", "02"],
+  ["glyphs", "Glyphs", "02d"],
   ["canvas-ground", "Canvas ground", "03"],
   ["controls", "Controls", "04"],
   ["status", "Status & feedback", "05"],
@@ -112,6 +114,7 @@ export function DesignSystemPage({
       <main className="vf-ds-main">
         <OverviewSection studio={studio} state={studioState} />
         <FoundationsSection />
+        <GlyphsSection />
         <CanvasGroundSection
           dark={dark}
           appearance={appearance}

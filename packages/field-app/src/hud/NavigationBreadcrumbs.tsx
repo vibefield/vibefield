@@ -20,6 +20,7 @@
  *    while nested. The port-era note "v3 has no per-frame hook for chrome"
  *    was outdated — the reactive layer fires every engine step.
  */
+
 import {
   type CanvasEngine,
   defineQuery,
@@ -30,6 +31,7 @@ import {
   widgets,
 } from "@vibecook/ice";
 import { UiIconButton } from "@vibefield/design-kit";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { useCallback, useRef, useSyncExternalStore } from "react";
 import "./NavigationBreadcrumbs.css";
 
@@ -194,20 +196,7 @@ export function NavigationBreadcrumbsView({
         disabled={!canGoBack}
         title={canGoBack ? "Back (Esc)" : "Already at root"}
       >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          width="18"
-          height="18"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <title>Back</title>
-          <path d="m15 18-6-6 6-6" />
-        </svg>
+        <FieldGlyph name="chevron" size={18} turn={180} />
       </UiIconButton>
 
       {/* Breadcrumb pill */}
@@ -221,22 +210,11 @@ export function NavigationBreadcrumbsView({
               className="flex items-center"
             >
               {i > 0 && (
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="12"
-                  height="12"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
+                <FieldGlyph
+                  name="chevron"
+                  size={12}
                   className="vf-navigation-breadcrumbs__separator"
-                  aria-hidden="true"
-                >
-                  <title>Separator</title>
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
+                />
               )}
               {isClickable ? (
                 <button

@@ -30,6 +30,7 @@
  * widgetlab's module-global `widgetRegistry.all()` and its hardcoded
  * LABELS/categoryOf are gone. The proxy machine and the morph are verbatim.
  */
+
 import {
   ActiveTool,
   Camera,
@@ -42,6 +43,7 @@ import {
 } from "@vibecook/ice";
 import { useStageHold, WidgetPreview } from "@vibecook/ice/react";
 import { CARD_BG, CARD_RADIUS } from "@vibefield/design-kit";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type ReactElement,
@@ -573,21 +575,7 @@ export function WidgetTrayFrame({
             }`}
             title={open ? "Close (Esc)" : "Widget tray (B)"}
           >
-            <svg
-              width="22"
-              height="22"
-              viewBox="0 0 24 24"
-              fill="none"
-              aria-hidden="true"
-              role="presentation"
-            >
-              <path
-                d="M12 5v14M5 12h14"
-                stroke="currentColor"
-                strokeWidth="2.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <FieldGlyph name="plus" size={22} />
           </button>
 
           <div

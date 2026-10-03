@@ -172,8 +172,8 @@ struct TerminalKeypad: View {
       HStack(spacing: Self.gap) {
         keyLabel("Esc", spoken: "Escape") { model.tapKey(.escape) }
         keyLabel("Tab", spoken: "Tab") { model.tapKey(.tab) }
-        keyGlyph("return", spoken: "Enter") { model.tapKey(.enter) }
-        keyGlyph("delete.left", spoken: "Backspace") { model.tapKey(.backspace) }
+        keyGlyph(.return, spoken: "Enter") { model.tapKey(.enter) }
+        keyGlyph(.backspace, spoken: "Backspace") { model.tapKey(.backspace) }
       }
       HStack(spacing: Self.gap) {
         keyLabel("Home", spoken: "Home") { model.tapKey(.home) }
@@ -182,10 +182,10 @@ struct TerminalKeypad: View {
         keyLabel("PgDn", spoken: "Page down") { model.tapKey(.pageDown) }
       }
       HStack(spacing: Self.gap) {
-        keyGlyph("arrow.left", spoken: "Left arrow", special: false) { model.tapKey(.arrowLeft) }
-        keyGlyph("arrow.down", spoken: "Down arrow", special: false) { model.tapKey(.arrowDown) }
-        keyGlyph("arrow.up", spoken: "Up arrow", special: false) { model.tapKey(.arrowUp) }
-        keyGlyph("arrow.right", spoken: "Right arrow", special: false) { model.tapKey(.arrowRight) }
+        keyGlyph(.arrow, turn: -90, spoken: "Left arrow", special: false) { model.tapKey(.arrowLeft) }
+        keyGlyph(.arrow, turn: 180, spoken: "Down arrow", special: false) { model.tapKey(.arrowDown) }
+        keyGlyph(.arrow, spoken: "Up arrow", special: false) { model.tapKey(.arrowUp) }
+        keyGlyph(.arrow, turn: 90, spoken: "Right arrow", special: false) { model.tapKey(.arrowRight) }
       }
       functionRow
       latchRow
@@ -441,11 +441,11 @@ struct TerminalKeypad: View {
   }
 
   private func keyGlyph(
-    _ glyph: String, spoken: String, special: Bool = true, action: @escaping () -> Void
+    _ glyph: FieldGlyphName, turn: Double = 0, spoken: String, special: Bool = true,
+    action: @escaping () -> Void
   ) -> some View {
     Button(action: action) {
-      Image(systemName: glyph)
-        .font(.system(size: glyphSize, weight: .regular))
+      FieldGlyph(glyph, size: FieldGlyph.box(for: glyphSize), turn: turn)
         .foregroundStyle(ChromePalette.keypadKeyInk)
         .frame(maxWidth: .infinity)
         .frame(height: keyHeight)

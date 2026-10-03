@@ -49,6 +49,7 @@
 
 .vf-folder-card__icon {
   flex: none;
+  color: var(--vf-folder-accent);
 }
 
 .vf-folder-card__title {

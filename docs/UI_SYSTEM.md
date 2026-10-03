@@ -62,6 +62,9 @@ catalog stays the single composition root without ever owning foreign markup. (A
 
 - Add or change visual constants in `DESIGN.md`, then project them into `tokens.css`.
 - Reuse a shell primitive before creating domain-specific control anatomy.
+- An icon is a `FieldGlyph` from the kit's `/glyphs` leaf (DESIGN.md §13; plugins reach it through
+  `@vibefield/plugin-sdk/ui`). An inline `<svg>` that is an icon fails `glyphs.test.tsx`; the
+  allowlist is geometry that is not an icon, such as the edge tray's notch and drawer.
 - Put static styling in CSS. Inline styles are reserved for runtime geometry, progress, user data,
   or CSS custom-property projection.
 - Give domain selectors a namespace and keep their CSS beside the component. Do not add another

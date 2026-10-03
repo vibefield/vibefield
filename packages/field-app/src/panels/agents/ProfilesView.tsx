@@ -7,6 +7,7 @@ import {
   suggestProfileGlyph,
 } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet, AgentSignInRoute, AgentSignInService } from "@vibefield/contracts";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { EmptyState, InlineNotice, UiButton, UiSwitch } from "@vibefield/design-kit/primitives";
 import {
   type KeyboardEvent,
@@ -108,36 +109,19 @@ function ServiceTile({
 }
 
 function Chevron(): ReactElement {
-  return (
-    <svg className="vf-agents-chevron" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="m7.5 5 5 5-5 5" />
-    </svg>
-  );
+  return <FieldGlyph name="chevron" size={14} className="vf-agents-chevron" />;
 }
 
 function PlusIcon(): ReactElement {
-  return (
-    <svg className="vf-profiles-plus" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M10 4.5v11M4.5 10h11" />
-    </svg>
-  );
+  return <FieldGlyph name="plus" size={13} className="vf-profiles-plus" />;
 }
 
 function ResetIcon(): ReactElement {
-  return (
-    <svg className="vf-profiles-reset" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M15.5 10a5.5 5.5 0 1 1-1.6-3.9" />
-      <path d="M14.5 3.5v3h-3" />
-    </svg>
-  );
+  return <FieldGlyph name="reset" size={10} className="vf-profiles-reset" />;
 }
 
 function DownIcon(): ReactElement {
-  return (
-    <svg className="vf-profiles-down" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="m5.5 8 4.5 4.5L14.5 8" />
-    </svg>
-  );
+  return <FieldGlyph name="chevron" size={10} turn={90} className="vf-profiles-down" />;
 }
 
 /** How the page of one agent inside a profile names itself in the header: the

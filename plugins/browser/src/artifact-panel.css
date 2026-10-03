@@ -67,10 +67,6 @@
 }
 .vf-artifact-add svg {
   width: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
 }
 
 .vf-artifact-list {
@@ -391,20 +387,10 @@
   width: 22px;
   height: 22px;
   justify-self: center;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 .vf-artifact-chevron {
   width: 15px;
   height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 .vf-artifact-chevron.is-back {
   transform: rotate(180deg);

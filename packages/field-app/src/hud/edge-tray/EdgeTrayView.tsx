@@ -8,6 +8,7 @@
  * line. Controller-free: the tray's grammar (hover, pin, keyboard, the
  * capture door, the fly-in) lives in EdgeTray.tsx; previews mount this.
  */
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { type ReactElement, type Ref, useLayoutEffect, useRef, useState } from "react";
 import {
   DRAWER_FILLET,
@@ -70,57 +71,15 @@ export interface EdgeTrayViewProps {
 const DAYS: readonly EdgeTrayDay[] = ["today", "yesterday", "earlier"];
 
 function ClipboardGlyph(): ReactElement {
-  return (
-    <svg
-      className="vf-edge-tray__glyph"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="8" y="3" width="8" height="4" rx="1.2" />
-      <path d="M16 5h1.5A2.5 2.5 0 0 1 20 7.5v11a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 18.5v-11A2.5 2.5 0 0 1 6.5 5H8" />
-      <path d="M8.5 12h7M8.5 16h4.5" />
-    </svg>
-  );
+  return <FieldGlyph name="clipboard" size={16} className="vf-edge-tray__glyph" />;
 }
 
 function PackageGlyph(): ReactElement {
-  return (
-    <svg
-      className="vf-edge-tray__glyph"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.9"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M12 2.8 20 7.2v9.6l-8 4.4-8-4.4V7.2z" />
-      <path d="M4.3 7.4 12 11.7l7.7-4.3M12 11.7v9.3M8 4.9l8 4.4" />
-    </svg>
-  );
+  return <FieldGlyph name="package" size={16} className="vf-edge-tray__glyph" />;
 }
 
 function CaptureGlyph(): ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.7"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <rect x="3.5" y="5" width="17" height="14" rx="2.5" />
-      <circle cx="12" cy="12" r="3.2" />
-    </svg>
-  );
+  return <FieldGlyph name="capture" size={18} />;
 }
 
 /** The drawer's silhouette, drawn from the panel's rendered box — one path,

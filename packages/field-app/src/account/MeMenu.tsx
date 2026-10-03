@@ -1,4 +1,5 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import {
   type CSSProperties,
   Fragment,
@@ -66,23 +67,7 @@ const MENU_WIDTH = 256;
 const SEED = 56;
 
 function MenuIcon({ name }: { name: "gear" | "plus" | "link" }): ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      {name === "gear" ? (
-        <>
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.55v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.86-2.86.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-1.5-1H2.5V10h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06L6.56 4.2l.06.06A1.7 1.7 0 0 0 8.5 4.6a1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 18.9 9a1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
-        </>
-      ) : name === "plus" ? (
-        <path d="M12 5v14M5 12h14" />
-      ) : (
-        <>
-          <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2" />
-          <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2" />
-        </>
-      )}
-    </svg>
-  );
+  return <FieldGlyph name={name} size={18} />;
 }
 
 /** One row's reveal delay: nearest first, 160ms + 26ms per row, capped at

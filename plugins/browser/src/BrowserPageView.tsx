@@ -4,7 +4,7 @@ import type {
   PluginSurfaceState,
   PluginSurfaceViewProps,
 } from "@vibefield/plugin-sdk";
-import { UiIconButton, uiFieldClass } from "@vibefield/plugin-sdk/ui";
+import { FieldGlyph, UiIconButton, uiFieldClass } from "@vibefield/plugin-sdk/ui";
 import {
   type ComponentType,
   type ReactElement,
@@ -85,76 +85,19 @@ function readState(handle: PluginSurfaceHandle): PluginSurfaceState {
 }
 
 function BackIcon(): ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <title>Back</title>
-      <path d="m15 18-6-6 6-6" />
-    </svg>
-  );
+  return <FieldGlyph name="chevron" size={16} turn={180} />;
 }
 
 function ForwardIcon(): ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <title>Forward</title>
-      <path d="m9 18 6-6-6-6" />
-    </svg>
-  );
+  return <FieldGlyph name="chevron" size={16} />;
 }
 
 function ReloadIcon(): ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <title>Reload</title>
-      <path d="M21 12a9 9 0 1 1-2.64-6.36" />
-      <path d="M21 3v6h-6" />
-    </svg>
-  );
+  return <FieldGlyph name="reset" size={16} />;
 }
 
 function StopIcon(): ReactElement {
-  return (
-    <svg
-      viewBox="0 0 24 24"
-      width="16"
-      height="16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <title>Stop</title>
-      <path d="M18 6 6 18M6 6l12 12" />
-    </svg>
-  );
+  return <FieldGlyph name="close" size={16} />;
 }
 
 export function BrowserPageView({

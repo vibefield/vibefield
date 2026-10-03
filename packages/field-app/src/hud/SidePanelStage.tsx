@@ -1,3 +1,4 @@
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { type ReactElement, type ReactNode, type RefObject, useEffect, useState } from "react";
 import { roundButtonCls } from "../field/theme-constants";
 import type { SurfaceEntry } from "../plugin-host/surface-registry";
@@ -58,19 +59,7 @@ export function SidePanelToggle({
     >
       {/* A quiet stack/window glyph. A future packaged-asset resolver may use
           entry.icon; the neutral fallback is deliberately host-owned. */}
-      <svg
-        aria-hidden="true"
-        className="h-5 w-5"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <rect x="4" y="5" width="16" height="14" rx="3" />
-        <path d="M14 5v14M8 9h2M8 12h2M8 15h2" />
-      </svg>
+      <FieldGlyph name="sidepanel" size={20} />
     </button>
   );
 }

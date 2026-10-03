@@ -1,5 +1,6 @@
 import { AgentIcon } from "@vibecook/puppeteer-views";
 import type { AgentInstall, AgentOperation, AgentProfileSet } from "@vibefield/contracts";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import {
   EmptyState,
   InlineNotice,
@@ -55,27 +56,15 @@ function AgentMark({ provider, size = "row" }: { provider: string; size?: "row" 
 }
 
 function Chevron(): ReactElement {
-  return (
-    <svg className="vf-agents-chevron" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="m7.5 5 5 5-5 5" />
-    </svg>
-  );
+  return <FieldGlyph name="chevron" size={14} className="vf-agents-chevron" />;
 }
 
 function OutwardArrow(): ReactElement {
-  return (
-    <svg className="vf-agents-outward" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="M8.5 5H6a1.5 1.5 0 0 0-1.5 1.5v7.5A1.5 1.5 0 0 0 6 15.5h7.5A1.5 1.5 0 0 0 15 14v-2.5M11 4.5h4.5V9M15.5 4.5 9 11" />
-    </svg>
-  );
+  return <FieldGlyph name="outward" size={13} className="vf-agents-outward" />;
 }
 
 function CheckMark(): ReactElement {
-  return (
-    <svg className="vf-agents-check" viewBox="0 0 20 20" aria-hidden="true">
-      <path d="m4.5 10.5 3.5 3.5 7.5-8" />
-    </svg>
-  );
+  return <FieldGlyph name="check" size={13} className="vf-agents-check" />;
 }
 
 /** Whether Update can run for this install from here: something newer is on
@@ -276,14 +265,7 @@ function AgentShelfRow({
 }
 
 function AgentsGlyph(): ReactElement {
-  return (
-    <svg className="vf-agents-glyph" viewBox="0 0 20 20" aria-hidden="true">
-      <circle cx="10" cy="10.5" r="2.7" />
-      <circle cx="4.6" cy="5.6" r="1.7" />
-      <circle cx="15.4" cy="5.6" r="1.7" />
-      <circle cx="10" cy="16.6" r="1.4" />
-    </svg>
-  );
+  return <FieldGlyph name="agents" size={28} className="vf-agents-glyph" />;
 }
 
 /* ── one agent's page ─────────────────────────────────────────────────────── */

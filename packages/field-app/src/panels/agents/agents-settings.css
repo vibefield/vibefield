@@ -134,11 +134,7 @@
 .vf-agents-chevron {
   width: 14px;
   height: 14px;
-  fill: none;
-  stroke: var(--vf-text-faint);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.6;
+  color: var(--vf-text-faint);
 }
 
 .vf-agents-row--placeholder {
@@ -170,9 +166,6 @@
 .vf-agents-glyph {
   width: 28px;
   height: 28px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.3;
 }
 
 /* ── one agent's page ── */
@@ -218,11 +211,7 @@
 .vf-agents-check {
   width: 13px;
   height: 13px;
-  fill: none;
-  stroke: var(--vf-green);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.8;
+  color: var(--vf-green);
 }
 
 .vf-agents-value {
@@ -253,11 +242,6 @@
 .vf-agents-outward {
   width: 13px;
   height: 13px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.7;
 }
 
 /* ── the update's own output ── */

@@ -415,3 +415,9 @@
     transition-duration: 90ms;
   }
 }
+
+/* DESIGN.md §13 — a glyph is a block that keeps its box; the host sizes and colours it. */
+.vf-glyph {
+  display: block;
+  flex: none;
+}

@@ -933,3 +933,52 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
+
+---
+
+## 13. Glyphs — the chrome's icon law
+
+**Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
+Every functional icon the chrome draws — the HUD's round buttons, the file pill, the Settings rail,
+the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
+marks — is one of **48 named glyphs** in one **24-unit box**, optical centre at 12,12, live area 2 to
+22, drawn in `currentColor` and nothing else. The host says the size and the colour, the way it says
+them for text (§2.4); a glyph never carries state (§2.5, I-5) and never a colour of its own. Two
+constructions, one set:
+
+| Construction | Glyphs | Law |
+|---|---|---|
+| **Instrument** (38) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
+
+**Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
+Snap tile, the Me menu) · 20 (the 40px round buttons) · 22 (the tray's plus, the artifact choices) ·
+28 (the Agents head). Instrument's stroke therefore renders 1 px at 12 and 1.67 px at 20 — one
+weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn pointing right and
+*turned* (90 down, 180 left, 270 up); the four cursor keys are one arrow turned; redo is undo
+*flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·
+outward · link · return · backspace · ellipsis; navigation: chevron · arrow; places and objects:
+gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
+moon · clipboard · package · capture · panes · sidepanel · bug · globe · folder · keyboard · mic ·
+scantext · snippets · prompt; signals: message · key · question · exclaim · flame; Studio only:
+document · layers · sparkle.
+
+**Where it lives.** The drawings are `tooling/glyphs/drawings.mjs` (both constructions for every
+name); `build.mjs` emits the kit's `packages/design-kit/src/glyphs/data.ts` and the phone's
+`FieldGlyphs.xcassets` (FieldDesign) from `picks.json`, and `glyphs.test.tsx` fails when either
+output is stale. Product code draws `<FieldGlyph name size turn flip label>` from
+`@vibefield/design-kit/glyphs`; plugins take it through `@vibefield/plugin-sdk/ui` (R10). On the
+phone, `FieldGlyph(.name, size:)` draws the template asset at `FieldGlyph.box(for:)` of the point
+size the SF Symbol had, and the swarm's CoreGraphics sprites are the Instrument drawings by hand.
+**An inline `<svg>` that is an icon is refused by test**; what may stay inline is geometry that is
+not an icon — the edge tray's notch and drawer (§8), the coin's marks (§2.8), the catalog's fixture
+stills. **Kept exact, outside this set:** the tray and app masters, the three vendor marks (AR-L1),
+the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
+other allowed file), the Face Club and AFTER HOURS art (§11), the file-tree family (§8).
+
+*History:* pass 1 (2026-09-23) redrew the set at three stroke treatments and was rejected as three
+weights of one drawing; pass 2 drew three constructions — a 9×9 dot matrix on the ground's grid,
+solid hardware with transport-control verbs, and generated brush strokes — beside the quiet
+monoline baseline. The choice mixed the baseline with ten hardware verbs; the other constructions
+remain in `drawings.mjs` and on the page, not in the product.
+
