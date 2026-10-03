@@ -68,16 +68,6 @@
   transform: scale(0.98);
 }
 
-.vf-ds-demo-right-chrome {
-  position: absolute;
-  top: 16px;
-  right: 18px;
-  z-index: 6;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
 /* UA-D19 — the Me menu's corner, staged where the product puts it: the 44px
    face box 14px in, so the face sits where the old 40px gear did. */
 .vf-ds-demo-me {
@@ -85,6 +75,225 @@
   bottom: 14px;
   left: 14px;
   z-index: 6;
+}
+
+/* One Frame FR-1 — the view frame's stage: a small window with the canvas
+   ground, two cards, and the shipping cover and views track over them. The
+   stage isolates so the frame's z-indexes stay inside it; the cards recede the
+   way the field does under a cover (DESIGN.md §6). Nothing here styles the
+   frame's own selectors. */
+.vf-ds-frame-preview {
+  display: grid;
+  gap: 12px;
+}
+
+.vf-ds-frame-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.vf-ds-frame-stage {
+  position: relative;
+  isolation: isolate;
+  height: 640px;
+  overflow: hidden;
+  background: var(--vf-canvas-bg);
+}
+
+.vf-ds-frame-stage[data-covered="true"] .vf-ds-stage-card {
+  transform: scale(0.98);
+}
+
+/* The page's §04 plates: the track, one state each — since FR-2 at the line's
+   left end, cropped out of a 1180 window so the line keeps its own width. */
+.vf-ds-views-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-views-plate {
+  position: relative;
+  isolation: isolate;
+  height: 116px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-line-stage {
+  position: absolute;
+  bottom: 0;
+  left: -134px;
+  width: 1180px;
+  height: 100%;
+}
+
+/* One Frame FR-2 — the line's plates (the page's §03): the shipping line at
+   its place at the plate's foot, one state each. The plate is the window, so a
+   narrow one narrows the line as a narrow window does (the draft gives first). */
+.vf-ds-line-plates {
+  display: grid;
+  gap: 12px;
+}
+
+.vf-ds-line-plate {
+  position: relative;
+  isolation: isolate;
+  height: 112px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-line-plate[data-state="at"] {
+  height: 470px;
+}
+
+/* One Frame FR-3 — the head's plates (the page's §05 and §06): the shipping
+   head at its place at the plate's top, one state each. The plate is the
+   window's top, so a narrow one gives the pill less room, as a narrow window
+   does (FitPath), and a sheet or a menu takes the height it grows into. */
+.vf-ds-head-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-head-plate {
+  position: relative;
+  isolation: isolate;
+  height: 72px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-head-plate[data-state="narrow"] {
+  width: 480px;
+}
+
+.vf-ds-head-plate[data-state="zoom"] {
+  height: 248px;
+}
+
+.vf-ds-head-plate:is([data-state="explorer"], [data-state="palette"]) {
+  grid-column: 1 / -1;
+  height: 520px;
+}
+
+.vf-ds-head-plate[data-state="palette"] {
+  height: 640px;
+}
+
+/* One Frame FR-4 — the edges' plates (the page's edges plates): the window at
+   the drawers' height, the shipping trays at their own places — the notches at
+   mid-edge, the drawers from 64 to 80 above the foot — over the canvas or a
+   covered view's own ground. The two whole-window states span the row. */
+.vf-ds-edges-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-edges-plate {
+  position: relative;
+  isolation: isolate;
+  height: 560px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-edges-plate:is([data-state="canvas"], [data-state="godview"]) {
+  grid-column: 1 / -1;
+}
+
+.vf-ds-edges-ground {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+}
+
+/* One Frame FR-4 — the corner's plates (the page's "Your face" plates): the
+   window's bottom-left — the line at its own place, your face where the
+   corner holds it (16 from the left, 24 from the foot), its menu open above
+   the line. The face's place is ChromeLayer's; this only stages it. */
+.vf-ds-corner-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-corner-plate {
+  position: relative;
+  isolation: isolate;
+  height: 460px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-corner-face {
+  position: absolute;
+  z-index: 62;
+  bottom: 24px;
+  left: 16px;
+}
+
+/* Objects out: the backdrop's dim over the ground (DESIGN.md §5). */
+.vf-ds-line-plate-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.1);
+}
+
+.dark .vf-ds-line-plate-dim {
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.vf-ds-line-tile {
+  display: grid;
+  width: 132px;
+  height: 132px;
+  place-items: center;
+  border-radius: 22px;
+  color: var(--vf-text-secondary);
+  background: var(--vf-fill);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 .vf-ds-me-stage {
@@ -636,11 +845,6 @@
   text-transform: capitalize;
 }
 
-.vf-ds-side-panel-frame {
-  top: 64px;
-  width: min(94%, 26rem);
-}
-
 .vf-ds-veil-stage {
   position: relative;
   min-height: 156px;
@@ -847,6 +1051,12 @@
 
 .vf-ds-godview-frame > .vf-godview {
   position: absolute;
+}
+
+/* In an edges plate (FR-4) the stage is the covered view's ground: it fills it. */
+.vf-ds-edges-ground .vf-ds-godview-frame {
+  height: 100%;
+  min-height: 0;
 }
 
 /* The swarm's bodies (AR-5): the views package's lab fixtures on the SHIPPING
@@ -1137,10 +1347,6 @@
     height: 590px;
   }
 
-  .vf-ds-field-stage .vf-navigation-breadcrumbs__trail {
-    display: none;
-  }
-
   .vf-ds-agent-bubble-toolbar {
     grid-template-columns: 1fr;
   }
@@ -1269,14 +1475,6 @@
 
   .vf-ds-field-stage {
     height: 560px;
-  }
-
-  .vf-ds-demo-right-chrome {
-    top: 72px;
-  }
-
-  .vf-ds-demo-right-chrome > button:nth-last-child(-n + 2) {
-    display: none;
   }
 
   .vf-ds-stage-card.card-a {

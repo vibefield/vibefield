@@ -5,7 +5,9 @@ import { basename, join } from "node:path";
 import {
   CONTRACTS_VERSION,
   computeEffectiveGrants,
+  declaresObjects,
   isWellFormedPluginId,
+  OBJECTS_NEED_DESK,
   PLUGIN_LIMITS,
   type PluginErrorSummary,
   type PluginManifestV1,
@@ -327,6 +329,7 @@ export class PluginRegistryService extends EventEmitter {
         grantGeneration: this.grantGenerations.get(idCandidate) ?? 0,
         contributions: {
           widgets: [],
+          objects: [],
           behaviors: [],
           commands: [],
           surfaces: [],
@@ -346,7 +349,12 @@ export class PluginRegistryService extends EventEmitter {
     // engines.app is unchecked in P2 — fieldd does not know the app's version
     // (the shell will supply it when the P3 harness lands); contracts is ours.
     const contractsOk = contractsRangeSatisfied(CONTRACTS_VERSION, m.engines.contracts);
-    const compatible = contractsOk && platformOk;
+    // DK-0f: the object door's contract is accepted and recorded (the row lists
+    // the kinds); THIS build draws widgets, so a plugin that declares object
+    // kinds is an honest `incompatible` row — never activated — in the one
+    // sentence every door says. DK-6 deletes this clause with the desk.
+    const drawsObjects = !declaresObjects(m.contributes);
+    const compatible = contractsOk && platformOk && drawsObjects;
     const wantEnabled = records.plugins[m.id]?.enabled ?? true;
     const registered = compatible;
     const enabled = registered && wantEnabled;
@@ -377,6 +385,7 @@ export class PluginRegistryService extends EventEmitter {
       grantGeneration: this.grantGenerations.get(m.id) ?? 0,
       contributions: {
         widgets: m.contributes?.widgets ?? [],
+        objects: m.contributes?.objects ?? [],
         // PRC-4d: renderer-safe, code-free canonical ICE descriptors. Widget
         // riders and their declaration table must cross this boundary together.
         behaviors: m.contributes?.behaviors ?? [],
@@ -416,9 +425,11 @@ export class PluginRegistryService extends EventEmitter {
         state: "incompatible",
         lastError: summary(
           "PLUGIN_INCOMPATIBLE",
-          contractsOk
-            ? `not built for platform ${process.platform}`
-            : `requires contracts ${m.engines.contracts}, this device has ${CONTRACTS_VERSION}`,
+          !contractsOk
+            ? `requires contracts ${m.engines.contracts}, this device has ${CONTRACTS_VERSION}`
+            : !platformOk
+              ? `not built for platform ${process.platform}`
+              : `${OBJECTS_NEED_DESK.message} (${OBJECTS_NEED_DESK.code})`,
         ),
       };
     }

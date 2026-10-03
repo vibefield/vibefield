@@ -2090,6 +2090,18 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "stream",
   }),
+  // TL (2026-10-02, TL-D8) — the status ledger (`agent-history.ts`): what each
+  // run was doing over the last day, asked once when Godview opens rather than
+  // carried on every frame of the fold. Read-only and content-free like
+  // `agent.list`, so `agent.observe`; `local`, because the record is this
+  // device's fold's own and no peer or phone draws it yet.
+  defineMethod({
+    surface: "product",
+    method: "agent.history",
+    scope: "agent.observe",
+    idempotent: true,
+    locality: "local",
+  }),
   // MF-1 — the row is unchanged; its PARAMS are now `AgentSubscribeParams`
   // (agent-field.ts): absent or `{projection: "full"}` is today's subscription
   // byte for byte, `{projection: "field"}` answers the content-free projection

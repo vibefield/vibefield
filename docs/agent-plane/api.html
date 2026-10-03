@@ -1516,6 +1516,15 @@
                     <td><p><code>agent-runtime.test.ts</code></p></td>
                   </tr>
                   <tr>
+                    <td><span class="route">agent.history</span></td>
+                    <td><p><code>AgentHistoryParams {runtimeRunIds?}</code> → <code>AgentHistoryResult {horizonMs, runs}</code></p></td>
+                    <td><p><code>agent.observe</code></p></td>
+                    <td><p>yes</p></td>
+                    <td><p>the fold's status ledger (TL-D8, <code>agent-status-ledger.ts</code>) — the runs the fold holds, and runs whose verified record exited inside <code>AGENT_HISTORY.HORIZON_MS</code>, read from <code>agents/history/</code>; a run with no record or no ledger is left out, never guessed. Each run's changes are oldest first and trimmed to the horizon (the change straddling the cut starts at it, and <code>recordedFrom</code> moves up to it). <code>local</code>: asked once when Godview opens, never carried on a frame. A malformed ask is <code>PRECONDITION_FAILED</code></p></td>
+                    <td><span class="badge tone-built">Built</span></td>
+                    <td><p><code>agent-status-ledger.test.ts</code>, <code>agent-session.test.ts</code></p></td>
+                  </tr>
+                  <tr>
                     <td><span class="route">agent.subscribe</span></td>
                     <td><p><code>AgentSubscribeParams</code> → <code>AgentListResult</code> frames, or <code>AgentFieldSnapshot</code> + <code>AgentFieldDelta</code></p></td>
                     <td><p><code>agent.observe</code></p></td>

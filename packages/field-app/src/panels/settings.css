@@ -64,11 +64,19 @@
 /* UA-D19 — Settings, headed by you. The account card replaces the gear tile and
    the wordmark; the other users sit under it as faces. The card is the Account
    page's door, so its current state is the nav's own selected fill. */
+/* The head is one tile (DESIGN.md §8, refined 2026-09-22): the Settings
+   sections' own material — settings-ui's borderCls: the hairline, the whisper
+   fill, 18px corners — holding the card, a hairline, then the switch row, and
+   standing clear of the nav so that row never reads as a nav group. The card's
+   14px corners sit concentric inside it (18 − the 4px padding). */
 .vf-settings-account {
   display: flex;
   flex-direction: column;
-  gap: 6px;
-  padding-bottom: 4px;
+  margin-bottom: 12px;
+  padding: 4px;
+  border: 1px solid var(--vf-hairline);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--vf-foreground) 2%, transparent);
 }
 
 .vf-settings-account-card {
@@ -135,23 +143,31 @@
   font-size: 16px;
 }
 
+/* "Switch user" and the faces it names, bottom-aligned: the eyebrow's baseline
+   sits on the faces' bottom edge, not floating at their middle. It starts in
+   line with the card's face (the tile's 4px + this row's 8px = the card's 12px). */
 .vf-settings-account-others {
   display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 0 8px 6px;
+  align-items: flex-end;
+  gap: 2px;
+  margin: 4px 4px 0;
+  padding: 6px 0 0 4px;
+  border-top: 1px solid var(--vf-hairline);
 }
 
 .vf-settings-account-notice {
   margin: 0;
-  padding: 0 8px 8px;
+  padding: 6px 8px 4px;
   color: var(--vf-orange);
   font-size: 12px;
   line-height: 1.35;
 }
 
+/* Its baseline 1px above the faces' box: where an emoji's ink ends (measured —
+   the padding here IS the baseline's height over that edge). */
 .vf-settings-account-eyebrow {
-  margin-right: 4px;
+  margin-right: 6px;
+  padding-bottom: 1px;
   color: var(--vf-text-faint);
   font-size: 10px;
   font-weight: 600;
@@ -230,6 +246,10 @@
   .vf-settings-account-chevron,
   .vf-settings-account-others {
     display: none;
+  }
+
+  .vf-settings-account {
+    padding: 2px;
   }
 
   .vf-settings-account-card {

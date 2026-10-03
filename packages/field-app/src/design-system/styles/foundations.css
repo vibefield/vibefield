@@ -299,8 +299,7 @@
   opacity: 0.35;
 }
 
-.vf-ds-floating-controls svg,
-.vf-ds-demo-right-chrome svg {
+.vf-ds-floating-controls svg {
   width: 18px;
   height: 18px;
 }

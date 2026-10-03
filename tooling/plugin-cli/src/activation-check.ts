@@ -18,7 +18,7 @@
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import type { PluginManifestV1 } from "@vibefield/contracts";
+import { declaresObjects, OBJECTS_NEED_DESK, type PluginManifestV1 } from "@vibefield/contracts";
 import type { RendererPluginModule } from "@vibefield/plugin-sdk";
 import { activateWithMockHost, type MockPluginHostOptions } from "@vibefield/plugin-sdk/testing";
 import { note, pass, refuse, type Verdict } from "./verdict";
@@ -81,6 +81,20 @@ export async function checkActivation(
   const declaredCommands = (manifest.contributes?.commands ?? []).map((c) => c.id);
   const declaredSurfaces = (manifest.contributes?.surfaces ?? []).map((s) => s.id);
   const declaredBehaviors = manifest.contributes?.behaviors ?? [];
+
+  // DK-0f: the object door's contract is accepted (the manifest row passed),
+  // and THIS build draws widgets — so the row that answers "will the host
+  // activate this?" says no, in the host's own sentence, before any import.
+  // Known from the manifest alone, so it never waits on a build. The binding
+  // half of an object plugin is DK-6's harness (the SDK's /desk door).
+  if (declaresObjects(manifest.contributes)) {
+    const types = (manifest.contributes?.objects ?? []).map((o) => o.type).join(", ");
+    return [
+      refuse("activation", OBJECTS_NEED_DESK.code, `${types}: ${OBJECTS_NEED_DESK.message}`, {
+        pointer: "contributes.objects",
+      }),
+    ];
+  }
 
   const entry = manifest.entries?.renderer;
   if (entry === undefined)

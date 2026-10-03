@@ -358,7 +358,8 @@ public enum SwarmSprites {
     context.strokePath()
   }
 
-  /// `M9 9.5a3 3 0 1 1 4.2 2.7c-.8.4-1.2 1-1.2 1.8v.5` and a dot at (12, 17.5).
+  /// `M9 9.5a3 3 0 1 1 4.2 2.7c-.8.4-1.2 1-1.2 1.8v.5` and a dot at (12, 17.75), r 1.35 —
+  /// the Instrument drawing (DESIGN.md §13).
   public static func question(_ context: CGContext) {
     stroked(context)
     // The hook: a large clockwise arc of radius 3 about (12, 9.5), from the
@@ -370,7 +371,7 @@ public enum SwarmSprites {
     context.addCurve(to: CGPoint(x: 12, y: 14), control1: CGPoint(x: 12.4, y: 12.6), control2: CGPoint(x: 12, y: 13.2))
     context.addLine(to: CGPoint(x: 12, y: 14.5))
     context.strokePath()
-    context.fillEllipse(in: CGRect(x: 11, y: 16.5, width: 2, height: 2))
+    context.fillEllipse(in: CGRect(x: 10.65, y: 16.4, width: 2.7, height: 2.7))
   }
 
   /// `M12 5v9` and a dot at (12, 18): the exclamation.
@@ -379,7 +380,7 @@ public enum SwarmSprites {
     context.move(to: CGPoint(x: 12, y: 5))
     context.addLine(to: CGPoint(x: 12, y: 14))
     context.strokePath()
-    context.fillEllipse(in: CGRect(x: 10.9, y: 16.9, width: 2.2, height: 2.2))
+    context.fillEllipse(in: CGRect(x: 10.65, y: 16.65, width: 2.7, height: 2.7))
   }
 
   /// The burn mark: a leaning flame with a sharp tip, so it reads as fire and

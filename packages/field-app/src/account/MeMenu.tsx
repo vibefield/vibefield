@@ -1,4 +1,8 @@
+import type { ThemeName, ThemePreference } from "@vibefield/contracts";
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
+import { SegmentedControl } from "@vibefield/design-kit/primitives";
+import { useFielddClient, useSubscription } from "@vibefield/fieldd-client/react";
 import {
   type CSSProperties,
   Fragment,
@@ -13,6 +17,8 @@ import {
 import { leaveFor } from "../boot/switch";
 import { roundButtonCls } from "../field/theme-constants";
 import { getHost } from "../host";
+import { setAppTheme, THEME_LABELS, themeChoice, themeLabel, useAppTheme } from "../theme";
+import type { UserLinkStatus } from "./link";
 import {
   type AccountMe,
   type AccountPerson,
@@ -22,18 +28,26 @@ import {
 import "./MeMenu.css";
 
 // The Me menu (UA-D19; DESIGN.md §8 "The Me menu") — the owner's face in the
-// bottom-left corner, where the Settings gear was, and the account's one door.
+// corner, and the account's one door.
 //
-// It is ONE element that changes role (M1): a 56px circle sits around the face
-// — faint on hover, invisible otherwise — and that circle IS the menu, grown on
-// the island's curve into a 256px panel. The face never moves (M2), so the
-// second click lands on the same face and folds it away. The panel reads
-// bottom-up, nearest first: you · Settings… · Link… (unlinked only) · New
-// user… · then the other users.
+// The face sits in the corner, centred on the foot axis, and NEVER MOVES (M2):
+// the second click lands on the same face and folds the menu. Since One Frame
+// FR-4 the menu opens ABOVE the line, never around the face (FC-D14 — a menu
+// never covers the frame): one panel, grown upward on the island's curve from
+// a seed at its own foot, above the face (M1). It reads bottom-up, nearest
+// first: you · Settings… · Theme (the app's one theme control, FC-D5) · Link…
+// (unlinked only) · New user… · then the other users.
 //
 // Split like every runtime-bound view (UI_SYSTEM.md): `MeMenuView` owns the
 // DOM, motion, keyboard and focus and takes plain data; `MeMenu` is the
 // controller that reads the account and runs the acts.
+
+/** The app's theme as the Theme row draws it: the choice, and what it
+ * resolves to (the row's sun or moon). */
+export interface MeMenuTheme {
+  readonly preference: ThemePreference;
+  readonly resolved: ThemeName;
+}
 
 export interface MeMenuViewProps {
   me: AccountMe;
@@ -44,45 +58,34 @@ export interface MeMenuViewProps {
   onOpenSettings: () => void;
   /** Your name and login open Settings → Account. */
   onOpenAccount: () => void;
-  /** Link Tailscale account… (offered only while unlinked) — the link block
-   * lives on the Account page, so this opens it there. */
+  /** Link Tailscale account… (offered only while unlinked) STARTS the link
+   * (One Frame F16): the menu folds and the controller asks the daemon. */
   onLink: () => void;
   /** Absent: this host cannot switch, and the rows say nothing false. `from`
    * is the row that was pressed — the switch carries its face (§8). */
   onSwitch?: ((userId: string, from?: Element) => void) | undefined;
   onNewUser?: (() => void) | undefined;
+  /** The app's one theme (FC-D5). Absent with its setter: no Theme row. */
+  theme?: MeMenuTheme | undefined;
+  /** Choose a theme. The menu stays open — the app changes behind it. */
+  onThemeChange?: ((preference: ThemePreference) => void) | undefined;
   /** A switch or create is in flight: the window is about to reload. */
   busy?: boolean;
   /** The Settings chord as this platform spells it. */
   shortcut?: string;
-  /** A switch or new user main refused, in its words: said at the top of the
-   * menu (and to assistive tech) until the menu next folds. */
+  /** A switch, a new user or a link main or the daemon refused, in its words:
+   * said at the top of the menu (and to assistive tech) until it next folds. */
   notice?: string | null;
   className?: string;
 }
 
 const MENU_WIDTH = 256;
-/** The seed: the 44px face plus the 6px it sits inside on every side. */
+/** The seed: the face's 44px plus the 6px it sits inside on every side — the
+ * size the panel grows from, at its own foot. */
 const SEED = 56;
 
-function MenuIcon({ name }: { name: "gear" | "plus" | "link" }): ReactElement {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      {name === "gear" ? (
-        <>
-          <circle cx="12" cy="12" r="3" />
-          <path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.86 2.86-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.55v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.86-2.86.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-1.5-1H2.5V10h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.34-1.88l-.06-.06L6.56 4.2l.06.06A1.7 1.7 0 0 0 8.5 4.6a1.7 1.7 0 0 0 1-1.5V3h4v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.88-.34l.06-.06 2.86 2.86-.06.06A1.7 1.7 0 0 0 18.9 9a1.7 1.7 0 0 0 1.5 1h.1v4h-.1a1.7 1.7 0 0 0-1.5 1Z" />
-        </>
-      ) : name === "plus" ? (
-        <path d="M12 5v14M5 12h14" />
-      ) : (
-        <>
-          <path d="M10 14a4 4 0 0 0 5.66 0l3-3a4 4 0 0 0-5.66-5.66l-1.2 1.2" />
-          <path d="M14 10a4 4 0 0 0-5.66 0l-3 3a4 4 0 0 0 5.66 5.66l1.2-1.2" />
-        </>
-      )}
-    </svg>
-  );
+function MenuIcon({ name }: { name: "gear" | "person" | "link" | "sun" | "moon" }): ReactElement {
+  return <FieldGlyph name={name} size={18} />;
 }
 
 /** One row's reveal delay: nearest first, 160ms + 26ms per row, capped at
@@ -99,6 +102,8 @@ export function MeMenuView({
   onLink,
   onSwitch,
   onNewUser,
+  theme,
+  onThemeChange,
   busy = false,
   shortcut = "⌘,",
   notice = null,
@@ -120,7 +125,7 @@ export function MeMenuView({
   useLayoutEffect(() => {
     const list = listRef.current;
     if (list === null) return;
-    const measure = (): void => setPanelHeight(SEED + list.offsetHeight);
+    const measure = (): void => setPanelHeight(Math.max(SEED, list.offsetHeight));
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const observer = new ResizeObserver(measure);
@@ -128,11 +133,15 @@ export function MeMenuView({
     return () => observer.disconnect();
   }, []);
 
+  /** The stops ↑ ↓ walk, in the order they stand: every live row, and the
+   * Theme row once — at the theme it holds. */
   const items = useCallback(
     (): HTMLElement[] =>
-      Array.from(rootRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? []).filter(
-        (item) => !(item as HTMLButtonElement).disabled,
-      ),
+      Array.from(
+        rootRef.current?.querySelectorAll<HTMLElement>(
+          '[role="menuitem"], [data-me-theme] button[aria-pressed="true"]',
+        ) ?? [],
+      ).filter((item) => !(item as HTMLButtonElement).disabled),
     [],
   );
 
@@ -150,8 +159,8 @@ export function MeMenuView({
   // canvas under it never has to know a menu was open. Esc folds it from
   // ANYWHERE, not only from inside the rows: a menu opened with the pointer
   // leaves focus on the face, outside them. Capture + stopImmediatePropagation,
-  // as the side panel does, so the field's own Esc (leave a container) waits
-  // for the next press.
+  // as the drawers do, so the field's own Esc (leave a container) waits for the
+  // next press.
   useEffect(() => {
     if (!open) return;
     const onPointerDown = (event: PointerEvent): void => {
@@ -173,10 +182,10 @@ export function MeMenuView({
     };
   }, [open, onOpenChange]);
 
-  // Folded from OUTSIDE while focus was on a row — ⌘, or the tray's
-  // Settings… — the rows go inert, so focus comes back to the face first.
-  // Settings records what had focus as it opens and returns it there on close.
-  // A click outside moves focus itself, after this; Tab is left alone.
+  // Folded from OUTSIDE while focus was on a row — ⌘, or another of the
+  // frame's surfaces — the rows go inert, so focus comes back to the face
+  // first. Settings records what had focus as it opens and returns it there on
+  // close. A click outside moves focus itself, after this; Tab is left alone.
   useLayoutEffect(() => {
     const folded = wasOpen.current && !open;
     wasOpen.current = open;
@@ -199,8 +208,23 @@ export function MeMenuView({
   };
 
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    const active = document.activeElement as HTMLElement | null;
+    // On Theme, ← → choose (the selection follows the focus, as a radio's does).
+    const themeRow = active?.closest("[data-me-theme]");
+    if (themeRow !== null && themeRow !== undefined && onThemeChange !== undefined) {
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        event.preventDefault();
+        const buttons = Array.from(themeRow.querySelectorAll<HTMLButtonElement>("button"));
+        const at = buttons.indexOf(active as HTMLButtonElement);
+        const to = (at + (event.key === "ArrowRight" ? 1 : buttons.length - 1)) % buttons.length;
+        const option = THEME_LABELS[to];
+        if (option !== undefined) onThemeChange(themeChoice(option));
+        buttons[to]?.focus({ preventScroll: true });
+        return;
+      }
+    }
     const list = items();
-    const index = list.indexOf(document.activeElement as HTMLElement);
+    const index = list.indexOf(active as HTMLElement);
     const move = (to: number): void => {
       event.preventDefault();
       list[(to + list.length) % list.length]?.focus({ preventScroll: true });
@@ -295,6 +319,15 @@ export function MeMenuView({
         ),
       });
     }
+    rows.push({
+      key: "sep-people",
+      node: (delay) => (
+        <hr
+          className="vf-me-separator"
+          style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
+        />
+      ),
+    });
   }
   if (onNewUser !== undefined) {
     rows.push({
@@ -310,21 +343,11 @@ export function MeMenuView({
           onClick={() => act(onNewUser)}
         >
           <span className="vf-me-slot vf-me-icon">
-            <MenuIcon name="plus" />
+            {/* A person, not a plus (One Frame FR-3: one plus on screen). */}
+            <MenuIcon name="person" />
           </span>
           <span className="vf-me-row-label">New user…</span>
         </button>
-      ),
-    });
-  }
-  if (rows.length > 0) {
-    rows.push({
-      key: "sep-people",
-      node: (delay) => (
-        <hr
-          className="vf-me-separator"
-          style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
-        />
       ),
     });
   }
@@ -345,6 +368,31 @@ export function MeMenuView({
           </span>
           <span className="vf-me-row-label">Link Tailscale account…</span>
         </button>
+      ),
+    });
+  }
+  if (theme !== undefined && onThemeChange !== undefined) {
+    rows.push({
+      key: "theme",
+      node: (delay) => (
+        <div
+          className="vf-me-row vf-me-row--theme"
+          data-me-theme=""
+          style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
+        >
+          <span className="vf-me-slot vf-me-icon">
+            <MenuIcon name={theme.resolved === "dark" ? "moon" : "sun"} />
+          </span>
+          <span className="vf-me-row-label">Theme</span>
+          <SegmentedControl
+            options={THEME_LABELS}
+            value={themeLabel(theme.preference)}
+            onChange={(option) => onThemeChange(themeChoice(option))}
+            label="Theme"
+            size="small"
+            className="vf-me-theme"
+          />
+        </div>
       ),
     });
   }
@@ -369,9 +417,24 @@ export function MeMenuView({
     ),
   });
   rows.push({
-    key: "sep-you",
+    key: "you",
     node: (delay) => (
-      <hr className="vf-me-separator" style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties} />
+      <button
+        type="button"
+        role="menuitem"
+        className="vf-me-you"
+        tabIndex={-1}
+        style={{ "--vf-me-delay": `${delay}ms` } as CSSProperties}
+        aria-label={`${me.name}${me.detail.length > 0 ? `, ${me.detail}` : ""} — account settings`}
+        onClick={() => act(onOpenAccount)}
+      >
+        <span className="vf-me-you-name">{me.name}</span>
+        {me.detail.length > 0 && (
+          <span className={`vf-me-you-detail${me.detailIsLogin ? " vf-ui-mono" : ""}`}>
+            {me.detail}
+          </span>
+        )}
+      </button>
     ),
   });
 
@@ -437,24 +500,6 @@ export function MeMenuView({
               <Fragment key={row.key}>{row.node(revealDelay(rows.length - 1 - index))}</Fragment>
             ))}
           </div>
-          <button
-            type="button"
-            role="menuitem"
-            className="vf-me-you"
-            tabIndex={-1}
-            aria-label={`${me.name}${me.detail.length > 0 ? `, ${me.detail}` : ""} — account settings`}
-            onClick={() => act(onOpenAccount)}
-          >
-            <span className="vf-me-you-name">{me.name}</span>
-            {me.detail.length > 0 && (
-              <span className={`vf-me-you-detail${me.detailIsLogin ? " vf-ui-mono" : ""}`}>
-                {me.detail}
-              </span>
-            )}
-            <span className="vf-me-you-chevron" aria-hidden="true">
-              ›
-            </span>
-          </button>
         </div>
       </div>
 
@@ -471,10 +516,17 @@ export function MeMenuView({
   );
 }
 
-/** The controller: the account snapshot, and the four acts. Renders nothing
- * while it learns who this window belongs to — the corner never shows a face
- * it has to take back — and falls back to the plain Settings button on a host
- * with no account door at all, so the corner is never a dead end. */
+/** Open a sign-in address in the browser: a window the shell denies and hands
+ * to the OS (design-03 §5.1), a tab in a browser harness. */
+function openSignIn(url: string): void {
+  window.open(url, "_blank", "noopener,noreferrer");
+}
+
+/** The controller: the account snapshot, the app's one theme, and the acts.
+ * Renders nothing while it learns who this window belongs to — the corner
+ * never shows a face it has to take back — and falls back to the plain
+ * Settings button on a host with no account door at all, so the corner is never
+ * a dead end. */
 export function MeMenu({
   open,
   onOpenChange,
@@ -489,8 +541,14 @@ export function MeMenu({
   className?: string;
 }): ReactElement | null {
   const account = useAccountSnapshot();
+  // The app's ONE theme (FC-D5): the same store Settings → Appearance reads.
+  const theme = useAppTheme();
+  const client = useFielddClient();
+  const link = useSubscription<UserLinkStatus>("user.link.subscribe");
   const [busy, setBusy] = useState(false);
   const [refusal, setRefusal] = useState<string | null>(null);
+  /** A link this menu started is waiting for the node's sign-in address. */
+  const [signingIn, setSigningIn] = useState(false);
   const host = getHost();
   // Folding the menu clears a refusal: it is said once, where the act was.
   const onMenuOpenChange = useCallback(
@@ -500,6 +558,16 @@ export function MeMenu({
     },
     [onOpenChange],
   );
+
+  // F16 — the link's second half: the moment the node offers its sign-in
+  // address, the browser opens it, once.
+  const authUrl = link.status === "live" ? (link.data?.authUrl ?? null) : null;
+  useEffect(() => {
+    if (!signingIn || authUrl === null) return;
+    setSigningIn(false);
+    openSignIn(authUrl);
+  }, [authUrl, signingIn]);
+
   if (account.me === null) {
     if (account.status === "loading") return null;
     return (
@@ -530,6 +598,29 @@ export function MeMenu({
     });
   };
 
+  /** Link Tailscale account… STARTS the link (One Frame F16 — it opened
+   * Settings → Account, as the name row does). The daemon's own act, the one
+   * Account's button runs: the face beside you moves on the subscription, the
+   * sign-in opens in the browser when the node offers it, and a refusal comes
+   * back to the top of the menu in the daemon's words. */
+  const beginLink = (): void => {
+    setRefusal(null);
+    setSigningIn(true);
+    client.request("user.link.begin", {}).then(
+      (answer) => {
+        const url = (answer as Partial<UserLinkStatus> | null)?.authUrl ?? null;
+        if (url === null) return;
+        setSigningIn(false);
+        openSignIn(url);
+      },
+      (cause: unknown) => {
+        setSigningIn(false);
+        setRefusal(refusalSentence("Couldn't link this device", cause));
+        onOpenChange(true);
+      },
+    );
+  };
+
   return (
     <MeMenuView
       me={account.me}
@@ -538,7 +629,7 @@ export function MeMenu({
       onOpenChange={onMenuOpenChange}
       onOpenSettings={() => onOpenSettings("general")}
       onOpenAccount={() => onOpenSettings("account")}
-      onLink={() => onOpenSettings("account")}
+      onLink={beginLink}
       onSwitch={
         account.canSwitch && host.usersSwitch !== undefined
           ? (userId, from) => {
@@ -569,6 +660,8 @@ export function MeMenu({
             }
           : undefined
       }
+      theme={theme}
+      onThemeChange={setAppTheme}
       busy={busy}
       notice={refusal}
       {...(shortcut !== undefined ? { shortcut } : {})}

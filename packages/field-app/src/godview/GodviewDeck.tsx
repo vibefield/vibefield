@@ -43,6 +43,8 @@ import {
   emitGodviewDeckMarker,
   emitGodviewDirectTerminalMarker,
 } from "../development-console";
+import { type LinePane, publishGodviewLineDoor } from "../frame/line-door";
+import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import {
@@ -80,6 +82,7 @@ import {
 } from "./deck-restore";
 import { godviewTerminalEffects, godviewTerminalTheme, terminalGround } from "./deck-theme";
 import type { GodviewTheme } from "./GodviewTuningPanel";
+import { linePanesOf, newTerminalOutcome, pasteIntoPane } from "./line-panes";
 import type { MonitorFloorRecord } from "./monitor/agents";
 import { RosterFlips, teeDevicesPort } from "./monitor/devices";
 import {
@@ -87,6 +90,7 @@ import {
   historyPortOver,
   meshBoardOver,
   profileSetsPortOver,
+  statusHistoryPortOver,
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
@@ -1140,6 +1144,8 @@ export function GodviewDeck({
       // The views never dial rosettad; the daemon's origin stays in fieldd.
       history: historyPortOver(doorClient),
       usage: usagePortOver(doorClient),
+      // TL — fieldd's status ledger, for the timeline's past (TL-D8).
+      statusHistory: statusHistoryPortOver(doorClient),
       // The profile tabs filter existing sessions; terminal birth is independent.
       profiles: profileSetsPortOver(doorClient),
       // DS-4e (2026-10-01; `thinking-desktop-sync-plane.md` §6.3) — ANOTHER
@@ -1340,6 +1346,34 @@ export function GodviewDeck({
   const paneAgents = useDeckAgentFacts();
   const paneRuns = useRef(paneAgents.runs);
   paneRuns.current = paneAgents.runs;
+
+  // WHAT GODVIEW LENDS THE LINE (One Frame FR-2, `frame/line-door.ts`). The
+  // line's New terminal (⌘T, its create in Godview) is this door's
+  // `createTerminal` — what the swarm's hold does, without a spot to land on —
+  // and the interim send pastes into a pane through the pane's own input. The
+  // rows are the panes this deck shows, named as the swarm names their bodies.
+  // Published on change only; the deck going away takes the door with it.
+  const linePanesKey = JSON.stringify(
+    linePanesOf(workspace?.panes ?? [], paneAgents.agents, workspace?.activePaneId, (id) =>
+      bornCwd.current.get(id),
+    ),
+  );
+  useEffect(() => {
+    publishGodviewLineDoor({
+      panes: JSON.parse(linePanesKey) as LinePane[],
+      onScreen: active,
+      newTerminal: async () =>
+        door === null
+          ? { state: "refused", reason: "the deck has no connection yet" }
+          : newTerminalOutcome(await door.createTerminal()),
+      paste: (sessionId, text) => {
+        const pane = workspaceRef.current?.panes.find((entry) => entry.session.id === sessionId);
+        const root = zoomHostRef.current;
+        return pane !== undefined && root !== null && pasteIntoPane(root, pane.id, text);
+      },
+    });
+  }, [linePanesKey, active, door]);
+  useEffect(() => () => publishGodviewLineDoor(null), []);
 
   useCompletedAgentPanes(
     runtime,
@@ -1645,7 +1679,13 @@ export function GodviewDeck({
    * (`DEFAULT_DECK_APPEARANCE.opacity`, premultiplied by ghosttea's renderer),
    * so publishing `--vf-godview-terminal-bg` gave every reader in the tree a
    * variable nothing read. It returns with the rule that needs it, if James
-   * rules the deck should carry the tint. */
+   * rules the deck should carry the tint.
+   *
+   * Errata (2026-09-28): James ruled it — the deck sheet is always the
+   * terminal's colour (DESIGN.md §8). `--vf-godview-terminal-bg` is published
+   * again, from the overlay's stage style (`godviewTerminalGroundStyle`), where
+   * the sheet that reads it lives; the panes keep their own translucent ground,
+   * which over a sheet of the same colour composites to it exactly. */
   const ground = useMemo(() => terminalGround(terminalTheme), [terminalTheme]);
 
   // DEMAND (TP-L-E'), declared where the views are.
@@ -1890,12 +1930,13 @@ export function GodviewDeck({
             readClipboard: () => navigator.clipboard?.readText() ?? "",
             showContextMenu: () => undefined,
             toggleFullscreen: () => undefined,
-            // The deck's "window" is the overlay. Ghosttea calls this when the
+            // The deck's "window" is Godview. Ghosttea calls this when the
             // LAST pane closes, and taking the Electron window down there would
-            // close the canvas because a terminal ran out — so it closes the
-            // overlay instead, which is what the gesture meant.
+            // close the canvas because a terminal ran out — so it goes back to
+            // the canvas instead, which is what the gesture meant (FR-1: the
+            // view's one owner is asked, the same door ⌘1 knocks on).
             closeWindow: () => {
-              void getHost().godview?.set(false);
+              void requestView("canvas");
             },
             onMenuAction: () => () => undefined,
           },

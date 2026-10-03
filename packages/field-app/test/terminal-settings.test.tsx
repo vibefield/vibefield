@@ -17,6 +17,7 @@ import {
   FIXTURE_SAVED_SNAPSHOT,
   FIXTURE_SAVED_TEXT,
 } from "../src/design-system/terminal-settings-fixtures";
+import { getDeckAppearance, resetDeckAppearanceForTest } from "../src/godview/deck-appearance";
 import type { SettingsSubpage } from "../src/panels/SettingsDialog";
 import {
   MANAGED_BLOCK_START,
@@ -351,6 +352,26 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
       "The loader hasn't read these edits; this is the saved file.",
     );
     expect(host?.textContent).toContain("saved line 3");
+  });
+
+  it("keeps Godview's one override — As the app, or a mode of its own (FC-D7)", async () => {
+    resetDeckAppearanceForTest();
+    await mount();
+    const mode = host?.querySelector('fieldset[aria-label="Godview\'s mode"]');
+    const options = Array.from(mode?.querySelectorAll("button") ?? []);
+    expect(options.map((option) => option.textContent)).toEqual(["As the app", "Light", "Dark"]);
+    const pressedNow = (): string | null | undefined =>
+      options.find((option) => option.getAttribute("aria-pressed") === "true")?.textContent;
+    // Godview follows the app until the viewer says otherwise.
+    expect(pressedNow()).toBe("As the app");
+    expect(host?.textContent).toContain("As the app: light or dark with your theme");
+    act(() => options[2]?.click());
+    expect(getDeckAppearance().modeOverride).toBe("dark");
+    expect(pressedNow()).toBe("Dark");
+    expect(host?.textContent).toContain("Always dark, whatever the app's theme is.");
+    act(() => options[0]?.click());
+    expect(getDeckAppearance().modeOverride).toBeNull();
+    resetDeckAppearanceForTest();
   });
 
   it("opens the theme browser as the dialog's subpage, with the way back", async () => {

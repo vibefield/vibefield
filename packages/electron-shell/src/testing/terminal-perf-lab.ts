@@ -39,7 +39,7 @@ import {
 } from "node:fs";
 import { cpus, loadavg, tmpdir, totalmem } from "node:os";
 import { join } from "node:path";
-import { TerminalListResult } from "@vibefield/contracts";
+import { type FrameView, TerminalListResult } from "@vibefield/contracts";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { buildLabReport, parseLabJsonl } from "@vibefield/terminal-perf/lab-report";
 import {
@@ -930,7 +930,9 @@ export async function runTerminalPerfLab(opts: {
   registry: WindowRegistry;
   preloadPath: string;
   viteUrl: string;
-  toggleGodview: () => void;
+  /** The View menu's own action (One Frame FR-1): the lab asks the window's
+   * view owner the way the menu does. */
+  setView: (view: FrameView) => void;
   beforeExit: () => Promise<void>;
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
@@ -1131,7 +1133,7 @@ export async function runTerminalPerfLab(opts: {
       emit({ kind: "long-frames-armed", at: Date.now(), armed });
     }
 
-    opts.toggleGodview();
+    opts.setView("godview");
     const opened = await deck.until(
       (facts) => facts.active && facts.panes >= 1,
       "the overlay to open with its first pane",

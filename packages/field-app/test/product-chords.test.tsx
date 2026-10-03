@@ -58,6 +58,13 @@ describe("the product chords (GT-D21)", () => {
       "super+k",
       "super+,",
       "super+shift+v",
+      // One Frame FR-2 (§11): Godview's New terminal, over ghostty's new_tab
+      "super+t",
+      // One Frame FR-1 (FC-D4): the four views, over ghostty's goto_tab
+      "super+1",
+      "super+2",
+      "super+3",
+      "super+4",
     ]);
     expect(
       isCommandPaletteChord({

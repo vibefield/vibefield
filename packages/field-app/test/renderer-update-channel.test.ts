@@ -51,7 +51,14 @@ const record = (identity: PluginUpdateArtifact): PluginRecord => ({
   grantedCapabilities: [],
   deniedCapabilities: [],
   grantGeneration: 3,
-  contributions: { widgets: [], commands: [], surfaces: [], behaviors: [], capabilities: [] },
+  contributions: {
+    widgets: [],
+    objects: [],
+    commands: [],
+    surfaces: [],
+    behaviors: [],
+    capabilities: [],
+  },
   renderer: "inactive",
   service: "none",
 });

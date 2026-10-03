@@ -1,0 +1,16 @@
+{
+  "initial": {
+    "tiles": 78,
+    "errors": [],
+    "requests": 0
+  },
+  "family_counts": [78, 6, 12, 8, 16, 28, 8],
+  "clipped_geometry": [],
+  "search": "single match, empty state, reset passed",
+  "ink_proofs": "black/cobalt/vermilion controls passed",
+  "size_slider": "keyboard step updates artwork size",
+  "finishes": "both SVG variants match the packaged geometry; copy handler passed",
+  "downloads": "both SVG variants and complete ZIP downloaded correctly",
+  "responsive": [1440, 1024, 768, 390, 320],
+  "final_errors": []
+}

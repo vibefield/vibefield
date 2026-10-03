@@ -42,6 +42,7 @@ interface ZodDefLike {
   keyType?: unknown;
   valueType?: unknown;
   options?: readonly unknown[];
+  items?: readonly unknown[];
   minLength?: { value: number } | null;
   maxLength?: { value: number } | null;
   defaultValue?: () => unknown;
@@ -211,6 +212,11 @@ export function describe(schema: unknown, depth = 0): Described {
     }
     case "ZodLazy":
       return { type: "recursive shape", constraints: [], optional: false };
+    case "ZodTuple": {
+      // A fixed-length list reads as its items (DK-0f: a tray peg is `[dx, dy]`).
+      const items = [...(def.items ?? [])].map((item) => describe(item, depth + 1).type);
+      return { type: `[${items.join(", ")}]`, constraints: [], optional: false };
+    }
     case "ZodUnion":
     case "ZodDiscriminatedUnion": {
       const variants = [...(def.options ?? [])].map((option) => {

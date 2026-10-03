@@ -1,11 +1,17 @@
-/* The Me menu (UA-D19; DESIGN.md §8 "The Me menu"). One element changes role:
- * the 56px seed around the owner's face grows into the menu on the island's
- * curve (M1), and the face never moves (M2). Tokens only.
+/* The Me menu (UA-D19; DESIGN.md §8 "The Me menu"; One Frame FR-4). The face
+ * sits in the corner and never moves (M2); the menu opens ABOVE the line —
+ * never around the face (FC-D14) — one panel grown upward on the island's
+ * curve from a seed at its own foot (M1). Tokens only.
  *
- * Choreography, open: the shape 600ms island · the glass 160ms ease · the
- * name and login 140ms behind the shape · rows nearest-first, 160ms + 26ms per
- * row (cap 400ms), 240ms each. Closing reverses it (M4): content out in 120ms,
- * the shape folds from 80ms over 600ms, the glass fades as it reaches the face.
+ * Where it stands: the corner holds the 44px face at 16 from the window's left
+ * and 24 from its foot (centred on the foot axis, y 734). The panel stands 8
+ * from the window's left (−8 from the face) with its foot 8 above the line —
+ * the line's top is 80 from the window's foot, so 56 above the face's.
+ *
+ * Choreography, open: the shape 600ms island · the surface 160ms ease · rows
+ * nearest-first (you first), 160ms + 26ms per row (cap 400ms), 240ms each.
+ * Closing reverses it (M4): content out in 120ms, the shape folds from 80ms
+ * over 600ms, the surface fades as it reaches its seed.
  */
 
 .vf-me {
@@ -28,18 +34,34 @@
   cursor: pointer;
 }
 
+/* The circle around the face — 56, the face's 44 and the 6 it sits inside —
+   shows on hover only (§7's fill step); it is no longer the menu. */
+.vf-me-face::before {
+  position: absolute;
+  z-index: -1;
+  inset: -6px;
+  border-radius: 50%;
+  background-color: transparent;
+  content: "";
+  transition: background-color 160ms ease;
+}
+
+.vf-me:not([data-open]) .vf-me-face:hover::before {
+  background-color: var(--vf-hairline);
+}
+
 .vf-me-face:focus-visible {
   outline: 2px solid var(--vf-select);
   outline-offset: 2px;
 }
 
-/* ---- the shape: the seed at rest, the menu when open --------------------- */
+/* ---- the panel: above the line, grown from its own foot ------------------- */
 
 .vf-me-panel {
   position: absolute;
   z-index: 2;
-  bottom: -6px;
-  left: -6px;
+  bottom: 56px;
+  left: -8px;
   width: 56px;
   height: 56px;
   overflow: hidden;
@@ -50,27 +72,21 @@
   transition:
     width 600ms var(--vf-ease-island) 80ms,
     height 600ms var(--vf-ease-island) 80ms,
-    box-shadow 600ms var(--vf-ease-island) 80ms,
-    background-color 160ms ease;
+    box-shadow 600ms var(--vf-ease-island) 80ms;
 }
 
-/* The island material, on its own layer so the glass can fade on its own beat
-   while the shape travels (§5: surface /80 + blur, hairline). */
+/* Solid chrome, on its own layer so the surface can fade on its own beat while
+   the shape travels. Opaque, never glass (§8, James 2026-09-22: "do not make
+   it transparent") — nothing shows through an open menu. */
 .vf-me-panel::before {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: color-mix(in srgb, var(--vf-chrome-solid) 80%, transparent);
-  box-shadow: inset 0 0 0 1px var(--vf-hairline);
+  background: var(--vf-chrome-solid);
+  box-shadow: inset 0 0 0 1px var(--vf-hairline-strong);
   content: "";
   opacity: 0;
-  backdrop-filter: blur(24px);
   transition: opacity 160ms ease 440ms;
-}
-
-/* The seed: point at the face and the circle that becomes the menu shows. */
-.vf-me:not([data-open]) .vf-me-face:hover ~ .vf-me-panel {
-  background-color: var(--vf-hairline);
 }
 
 .vf-me[data-open] .vf-me-panel {
@@ -81,8 +97,7 @@
   transition:
     width 600ms var(--vf-ease-island),
     height 600ms var(--vf-ease-island),
-    box-shadow 600ms var(--vf-ease-island),
-    background-color 160ms ease;
+    box-shadow 600ms var(--vf-ease-island);
 }
 
 .vf-me[data-open] .vf-me-panel::before {
@@ -95,15 +110,16 @@
   inset: 0;
 }
 
+/* The rows stand on the panel's foot, so the nearest show first as it grows. */
 .vf-me-list {
   position: absolute;
-  bottom: 56px;
+  bottom: 0;
   left: 0;
   display: flex;
   width: var(--vf-me-width);
   flex-direction: column;
   gap: 1px;
-  padding: 6px 6px 0;
+  padding: 8px;
 }
 
 /* ---- rows ------------------------------------------------------------------ */
@@ -111,7 +127,8 @@
 .vf-me-row,
 .vf-me-eyebrow,
 .vf-me-notice,
-.vf-me-separator {
+.vf-me-separator,
+.vf-me-you {
   opacity: 0;
   transform: translateY(4px);
   transition:
@@ -123,7 +140,8 @@
 .vf-me[data-open] .vf-me-row,
 .vf-me[data-open] .vf-me-eyebrow,
 .vf-me[data-open] .vf-me-notice,
-.vf-me[data-open] .vf-me-separator {
+.vf-me[data-open] .vf-me-separator,
+.vf-me[data-open] .vf-me-you {
   opacity: 1;
   transform: none;
   transition:
@@ -175,7 +193,8 @@
   cursor: progress;
 }
 
-/* Faces and row icons share one 44px column, centred on the owner's face. */
+/* Faces and row icons share one 44px column — centred on x 38, the face's own
+   centre below (the panel's 8 from the window and its 8 of padding). */
 .vf-me-slot {
   display: grid;
   width: 44px;
@@ -190,11 +209,6 @@
 .vf-me-icon svg {
   width: 18px;
   height: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.7;
 }
 
 .vf-me-row-label {
@@ -229,7 +243,31 @@
   background: var(--vf-orange);
 }
 
-/* A refusal from main (a switch, a new user), said where the act was — at the
+/* Theme (FC-D5): the app's one theme control, a small segmented control at the
+   row's end. A row to read, not to press — it takes no hover fill of its own. */
+.vf-me-row--theme {
+  cursor: default;
+}
+
+.vf-me-row--theme:hover {
+  background-color: transparent;
+}
+
+.vf-me-theme {
+  margin-left: auto;
+}
+
+/* The three at the page's 38 each (One Frame §10), so the row keeps its word
+   in the menu's 256: the small size's padding would otherwise crowd "Theme". */
+.vf-me-row--theme .vf-me-theme[data-size="small"] {
+  grid-auto-columns: 38px;
+}
+
+.vf-me-row--theme .vf-me-theme[data-size="small"] button {
+  padding: 0;
+}
+
+/* A refusal (a switch, a new user, a link), said where the act was — at the
    top of the menu, in words, until the menu folds (I-5: state stays in words). */
 .vf-me-notice {
   padding: 8px 14px 6px 12px;
@@ -254,40 +292,24 @@
   background: var(--vf-hairline-strong);
 }
 
-/* ---- you: beside the face, which never moves -------------------------------- */
+/* ---- you: the nearest row, under a hairline -------------------------------- */
 
 .vf-me-you {
-  position: absolute;
-  bottom: 6px;
-  left: 50px;
   display: flex;
-  width: calc(var(--vf-me-width) - 56px);
-  height: 44px;
+  width: 100%;
+  min-height: 48px;
   flex-direction: column;
   align-items: flex-start;
   justify-content: center;
-  gap: 1px;
-  padding: 0 28px 0 6px;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 2px 10px 0 14px;
   border: 0;
-  border-radius: 12px;
+  border-top: 1px solid var(--vf-hairline-strong);
+  border-radius: 0 0 20px 20px;
   background: none;
   text-align: left;
   cursor: pointer;
-  opacity: 0;
-  transform: translateX(-6px);
-  transition:
-    opacity 120ms ease,
-    transform 120ms ease,
-    background-color 120ms ease;
-}
-
-.vf-me[data-open] .vf-me-you {
-  opacity: 1;
-  transform: none;
-  transition:
-    opacity 240ms ease 140ms,
-    transform 240ms ease 140ms,
-    background-color 120ms ease;
 }
 
 .vf-me-you:hover,
@@ -310,23 +332,13 @@
 
 .vf-me-you-name {
   color: var(--vf-text-primary);
-  font: 500 14px / 1.25 var(--vf-font-sans);
+  font: 600 13px / 1.2 var(--vf-font-sans);
 }
 
 .vf-me-you-detail {
   color: var(--vf-text-tertiary);
   font-size: 11px;
-  line-height: 1.35;
-}
-
-.vf-me-you-chevron {
-  position: absolute;
-  top: 50%;
-  right: 10px;
-  color: var(--vf-text-faint);
-  font-size: 16px;
-  line-height: 1;
-  transform: translateY(-50%);
+  line-height: 1.2;
 }
 
 /* ---- another user is waiting: a count BESIDE the face, never on it (I-5) --- */
@@ -375,6 +387,10 @@
     opacity: 1;
     visibility: visible;
     transition: opacity 120ms ease;
+  }
+
+  .vf-me-face::before {
+    transition: none;
   }
 
   .vf-me-row,

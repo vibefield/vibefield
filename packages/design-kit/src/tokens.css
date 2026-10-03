@@ -157,7 +157,7 @@
   /* §2.7 — the launcher's clearing is never thinner than this, whatever the
      stage's glass: the prompt beneath must not read through its rows */
   --vf-godview-launcher-clearing-floor: 92%;
-  --vf-godview-deck-grip-width: 36px;
+  --vf-godview-deck-grip-width: 72px;
   --vf-godview-deck-grip-height: 4px;
 
   --vf-godview-rain-green: #4ade80;

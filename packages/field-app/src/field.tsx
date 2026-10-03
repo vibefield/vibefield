@@ -27,6 +27,8 @@ import { canvasGridConfig } from "./field/canvas-appearance";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
+import type { FrameSurface } from "./frame/frame-surface";
+import { useCovered } from "./frame/view-state";
 import type { FieldUserProfile } from "./host";
 import { useReactiveResource } from "./hud/use-reactive";
 import { getRendererLogger } from "./logging";
@@ -50,8 +52,8 @@ import { useTheme } from "./theme";
 //   ChromeLayer — HUD, pills, tray, panels, overlays + chrome effects
 //   usePreviewWarmup — preview discovery/chunking into the loading pipeline
 //   DocManager — launch, metadata, lanes, switching (React-free; no UI)
-// The window IS the field (2026-07-21): no app bar — the theme toggle floats
-// top-right, diagnostics live inside Settings.
+// The window IS the field (2026-07-21): no app bar — diagnostics live inside
+// Settings, and the theme is the Me menu's (One Frame FC-D5).
 
 const EMPTY_APPEARANCE_SNAPSHOT: AppearanceOverrideSnapshot = Object.freeze({
   revision: 0,
@@ -81,7 +83,9 @@ export function FieldView({
   appearanceOverrideSource?: AppearanceOverrideSource;
   onPresentationContextChange?: ProductPresentationContextReporter;
 }): ReactElement {
-  const { dark, toggle: toggleTheme } = useTheme();
+  // The app's one theme (One Frame FC-D5), main's — read here for the field's
+  // own appearance; the controls that choose it ask the owner themselves.
+  const { dark } = useTheme();
   // Shared seams between units: the stage publishes its GL/halo teardown for
   // the session's engine disposal (the GL disposal order invariant); chrome
   // publishes the live devtools handle for the stage's GL profiling lanes.
@@ -194,37 +198,32 @@ export function FieldView({
     };
   }, [ce, registry]);
 
-  const [trayOpen, setTrayOpenRaw] = useState(false);
-  const [docsOpen, setDocsOpenRaw] = useState(false);
+  // THE FRAME'S OPEN SURFACE (One Frame FR-2/FR-3/FR-4, `frame/frame-surface.ts`):
+  // its one owner. Objects, @'s list, the fields explorer, the zoom's menu and
+  // the palette are one value, so any one folds the rest; held here because
+  // the recede derives from Objects and the explorer in this render.
+  const [surface, setSurfaceRaw] = useState<FrameSurface | null>(null);
+  const trayOpen = surface === "objects";
+  const docsOpen = surface === "fields";
   const chrome = useChromeState();
   const appearanceSource = appearanceOverrideSource ?? EMPTY_APPEARANCE_SOURCE;
   const appearanceOverride = useSyncExternalStore(
     appearanceSource.subscribe,
     appearanceSource.snapshot,
   );
-  // One modal surface at a time: sheets dismiss Settings when opened, while
-  // ChromeLayer performs the inverse when Settings or the command palette opens.
-  const setTrayOpen = useCallback(
-    (o: boolean) => {
-      setTrayOpenRaw(o);
-      if (o) {
-        setDocsOpenRaw(false);
-        chrome.setShowSettings(false);
-      }
-    },
-    [chrome.setShowSettings],
-  );
-  const setDocsOpen = useCallback(
-    (o: boolean) => {
-      setDocsOpenRaw(o);
-      if (o) {
-        setTrayOpenRaw(false);
-        chrome.setShowSettings(false);
-      }
+  // One surface at a time: any of the frame's surfaces dismisses Settings as
+  // it opens, while ChromeLayer performs the inverse when Settings opens.
+  const setSurface = useCallback(
+    (next: FrameSurface | null) => {
+      setSurfaceRaw(next);
+      if (next !== null) chrome.setShowSettings(false);
     },
     [chrome.setShowSettings],
   );
   const sheetOpen = trayOpen || docsOpen || chrome.showSettings;
+  // A covered view (One Frame FR-1) recedes the field too — and ChromeLayer
+  // freezes it, since a cover covers (DESIGN.md §6).
+  const covered = useCovered();
 
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");
@@ -284,6 +283,10 @@ export function FieldView({
         key={generation}
         className="field-scene"
         data-sheet-open={sheetOpen ? "true" : "false"}
+        data-covered={covered ? "true" : "false"}
+        // Under a cover the field is out of reach: nothing in it may hold the
+        // keyboard (a note being typed in when ⌘2 was pressed lets go of it).
+        inert={covered}
         data-doc-loading={docState.phase === "loading" ? "true" : "false"}
       >
         <CanvasStage
@@ -299,14 +302,10 @@ export function FieldView({
         ce={ce}
         manager={manager}
         registry={registry}
-        dark={dark}
-        onToggleTheme={toggleTheme}
         hudMotion={hudMotion}
         docState={docState}
-        trayOpen={trayOpen}
-        onTrayOpenChange={setTrayOpen}
-        docsOpen={docsOpen}
-        onDocsOpenChange={setDocsOpen}
+        surface={surface}
+        onSurfaceChange={setSurface}
         appearanceControlledByStudio={appearanceOverride.appearance !== null}
         chrome={chrome}
         devtoolsRef={devtoolsRef}

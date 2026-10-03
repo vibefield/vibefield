@@ -122,8 +122,7 @@ public struct SnippetsSheet: View {
       // The one mark that changes what a tap DOES, so it is on the row rather
       // than inside the snippet.
       if snippet.sendsEnter {
-        Image(systemName: "return")
-          .font(.system(size: 13, weight: .semibold))
+        FieldGlyph(.return, size: FieldGlyph.box(for: 13))
           .foregroundStyle(ChromePalette.inkTertiary)
           .accessibilityLabel("sends Enter")
       }
@@ -185,8 +184,7 @@ struct SnippetEditor: View {
           sendsEnter.toggle()
         } label: {
           HStack(spacing: 6) {
-            Image(systemName: "return")
-              .font(.system(size: 12, weight: .semibold))
+            FieldGlyph(.return, size: FieldGlyph.box(for: 12))
             Text("Sends Enter")
           }
           .font(ChromeType.sans(ChromeType.rowSummarySize, .semibold))

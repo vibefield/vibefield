@@ -53,7 +53,6 @@ function mountPanel(
         // readout renders as "no deck opened yet" rather than guessing one.
         rendererBackend={null}
         onClose={onClose}
-        onThemeChange={vi.fn()}
         onChange={onChange}
         onReset={onReset}
         onResetMonitor={vi.fn()}
@@ -98,8 +97,8 @@ describe("the temporary Godview surface lab", () => {
     expect(Object.keys(style)).not.toContain("--vf-godview-pane-opacity");
   });
 
-  it("defaults the stage to the flat Chopsticks reference surface", () => {
-    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(1);
+  it("defaults the stage to the covers' glass, sharp (FC-D16)", () => {
+    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(0.72);
     expect(DEFAULT_DECK_APPEARANCE.backdropBlur).toBe(0);
   });
 

@@ -185,8 +185,7 @@ public struct InputCard: View {
       PlusMenu(model: model)
       // --- end IOS-5d
       HStack(spacing: 8) {
-        Image(systemName: "terminal")
-          .font(.system(size: glyphSize, weight: .semibold))
+        FieldGlyph(.prompt, size: FieldGlyph.box(for: glyphSize))
         Text("Typing into terminal")
           .font(
             ChromeType.sans(InputCardMetrics.stripSize(for: dynamicTypeSize), .semibold)
@@ -209,7 +208,7 @@ public struct InputCard: View {
       .accessibilityLabel("Typing into terminal")
 
       key(
-        glyph: "return", label: "Enter", width: rowHeight,
+        glyph: .return, label: "Enter", width: rowHeight,
         action: { model.tapKey(.enter) })
     }
   }
@@ -228,7 +227,7 @@ public struct InputCard: View {
       if carried { InputHaptics.sent() }
     } label: {
       circleFace(
-        glyph: "arrow.up",
+        glyph: .arrow,
         fill: carries ? ChromePalette.circleProminentFill : ChromePalette.circleQuietFill,
         hairline: carries ? nil : ChromePalette.circleHairline,
         ink: carries ? ChromePalette.circleProminentInk : ChromePalette.circleQuietInk)
@@ -246,10 +245,9 @@ public struct InputCard: View {
   /// by Send here and restated by `PlusMenu` and `DictationKey`, which are
   /// their own views for reasons that have nothing to do with their chrome.
   private func circleFace(
-    glyph: String, fill: Color, hairline: Color?, ink: Color
+    glyph: FieldGlyphName, fill: Color, hairline: Color?, ink: Color
   ) -> some View {
-    Image(systemName: glyph)
-      .font(.system(size: actionGlyph, weight: .semibold))
+    FieldGlyph(glyph, size: FieldGlyph.box(for: actionGlyph))
       .foregroundStyle(ink)
       .frame(width: circleSide, height: circleSide)
       .background { ChromeMaterial.circle(fill: fill, hairline: hairline) }
@@ -266,7 +264,7 @@ public struct InputCard: View {
   private var rail: some View {
     HStack(spacing: Self.keyGap) {
       key(
-        glyph: "terminal",
+        glyph: .prompt,
         label: model.mode == .live ? "Typing into terminal" : "Type into terminal",
         tone: model.mode == .live ? .on : .normal,
         action: {
@@ -280,16 +278,16 @@ public struct InputCard: View {
       controlKey
       key(text: "Tab", label: "Tab", fan: .tab, action: { model.tapKey(.tab) })
       key(
-        glyph: "arrow.left", label: "Left arrow", tone: .nav, fan: KeyFan.arrow(.arrowLeft),
+        glyph: .arrow, turn: -90, label: "Left arrow", tone: .nav, fan: KeyFan.arrow(.arrowLeft),
         action: { model.tapKey(.arrowLeft) })
       key(
-        glyph: "arrow.down", label: "Down arrow", tone: .nav, fan: KeyFan.arrow(.arrowDown),
+        glyph: .arrow, turn: 180, label: "Down arrow", tone: .nav, fan: KeyFan.arrow(.arrowDown),
         action: { model.tapKey(.arrowDown) })
       key(
-        glyph: "arrow.up", label: "Up arrow", tone: .nav, fan: KeyFan.arrow(.arrowUp),
+        glyph: .arrow, label: "Up arrow", tone: .nav, fan: KeyFan.arrow(.arrowUp),
         action: { model.tapKey(.arrowUp) })
       key(
-        glyph: "arrow.right", label: "Right arrow", tone: .nav, fan: KeyFan.arrow(.arrowRight),
+        glyph: .arrow, turn: 90, label: "Right arrow", tone: .nav, fan: KeyFan.arrow(.arrowRight),
         action: { model.tapKey(.arrowRight) })
       // --- IOS-5d ------------------------------------------------------------
       // The keypad key. It lights while the keypad is up, like every other key
@@ -297,7 +295,7 @@ public struct InputCard: View {
       // design's long-press (the keypad's last page) is what a tap already
       // does, the page being remembered.
       key(
-        glyph: "ellipsis",
+        glyph: .ellipsis,
         label: model.keypadShown ? "Letters" : "Terminal keypad",
         tone: model.keypadShown ? .on : .normal,
         action: {
@@ -444,7 +442,8 @@ public struct InputCard: View {
   /// `width` is the strip's Enter and nothing else: rail keys are equal-width
   /// by division, and a fixed one among them would break the grid.
   private func key(
-    glyph: String,
+    glyph: FieldGlyphName,
+    turn: Double = 0,
     label: String,
     tone: KeyTone = .normal,
     width: CGFloat? = nil,
@@ -455,8 +454,7 @@ public struct InputCard: View {
       guard model.openFan == nil else { return }
       action()
     } label: {
-      Image(systemName: glyph)
-        .font(.system(size: glyphSize, weight: .semibold))
+      FieldGlyph(glyph, size: FieldGlyph.box(for: glyphSize), turn: turn)
         .foregroundStyle(tone.ink)
         .frame(maxWidth: width == nil ? .infinity : nil)
         .frame(width: width, height: rowHeight)

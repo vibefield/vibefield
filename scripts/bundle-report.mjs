@@ -154,7 +154,7 @@ if (args.includes("--assert")) {
   // plugin-build emits a separately tested, selector-scoped renderer.css for
   // each artifact (§11.5). Keeping a plugin utility canary here would require
   // recreating the global source scan whose leakage this boundary removed.
-  const CSS_CANARIES = [["tabular-nums", "field-app (ZoomPill)"]];
+  const CSS_CANARIES = [["tabular-nums", "field-app (the head's zoom readout)"]];
   // Read EVERY built stylesheet, not the first one: the renderer emits one CSS
   // per chunk (main + workspace + shared), so a `find` first-match graded a
   // canary against whichever name sorted first and reported utilities missing

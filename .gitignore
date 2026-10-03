@@ -9,6 +9,7 @@ target/
 /target
 coverage/
 *.tsbuildinfo
+__pycache__/
 .turbo/
 .nx/
 .vibefield/

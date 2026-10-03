@@ -188,8 +188,27 @@ describe("coverage of what an author has to know", () => {
       "onStartup",
       "hud.side-panel",
       "x.<pluginId>",
+      // DK-0f — the object door: the key, the placement key, the export name, the
+      // host's refusal on this build, and what a kind must answer
+      "contributes.objects",
+      "desk.object",
+      "binding.kind",
+      "objects-need-desk",
+      "resolve(ctx)",
+      "KindLocal.due",
     ])
       expect(all, `nothing tells an author about ${topic}`).toContain(topic);
+  });
+
+  it("DK-0f: objects.md shows the golden object manifest, and names the retired widget fields", () => {
+    const objects = docs.get("objects.md") ?? "";
+    const start = objects.indexOf("```json\n");
+    expect(start).toBeGreaterThan(0);
+    const block = objects.slice(start + "```json\n".length, objects.indexOf("\n```", start));
+    const slice = JSON.parse(block) as unknown[];
+    expect(Array.isArray(slice) && slice.length).toBe(1);
+    for (const field of ["surface", "sizeMode", "preview", "category", "defaultSize", "maxSize"])
+      expect(objects, `objects.md never says where ${field} went`).toContain(`\`${field}\``);
   });
 
   it("shows a complete minimal manifest an author can copy", () => {

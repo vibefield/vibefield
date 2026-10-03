@@ -34,6 +34,31 @@ const manifest = (over: Partial<PluginManifestV1> = {}): PluginManifestV1 => ({
 });
 
 describe("PluginRegistry", () => {
+  it("DK-0f: refuses a manifest that declares object kinds — this build draws widgets", () => {
+    const r = new PluginRegistry<unknown>();
+    const withObjects = manifest({
+      activation: ["onWidget:note.clock"],
+      contributes: {
+        ...manifest().contributes,
+        objects: [
+          {
+            type: "note.clock",
+            title: "Clock",
+            schemaVersion: 1,
+            size: { w: 160, h: 160 },
+            props: {},
+            groups: {},
+            binding: { kind: "clock" },
+          },
+        ],
+      },
+    });
+    expect(() => r.registerV1(withObjects, { "note.card": "impl" })).toThrow(/objects-need-desk/);
+    // refused at the door: nothing of the plugin registered, not even its widget
+    expect(r.hasWidget("note.card")).toBe(false);
+    expect(r.plugin("note")).toBeUndefined();
+  });
+
   it("registers and exposes namespaced widgets through the exact map", () => {
     const r = new PluginRegistry<string>();
     r.registerV1(manifest(), { "note.card": "impl" });
@@ -124,6 +149,28 @@ const record = (over: Partial<PluginRecord> = {}): PluginRecord =>
   });
 
 describe("PluginRegistry.registerRecord (staged)", () => {
+  it("DK-0f: refuses a record that carries object kinds in the same sentence", () => {
+    const r = new PluginRegistry<string>();
+    const staged = record({
+      contributions: {
+        ...record().contributions,
+        objects: [
+          {
+            type: "note.clock",
+            title: "Clock",
+            schemaVersion: 1,
+            size: { w: 160, h: 160 },
+            props: {},
+            groups: {},
+            binding: { kind: "clock" },
+          },
+        ],
+      },
+    });
+    expect(() => r.registerRecord(staged, { "note.card": "impl" })).toThrow(/objects-need-desk/);
+    expect(r.plugin("note")).toBeUndefined();
+  });
+
   it("registers from a sanitized record and owns its types the same way", () => {
     const r = new PluginRegistry<string>();
     r.registerRecord(record(), { "note.card": "impl" });

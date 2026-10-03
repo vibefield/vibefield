@@ -1,3 +1,4 @@
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { type KeyboardEvent, type ReactElement, useEffect, useId, useRef, useState } from "react";
 import { choiceNote, type DeviceChoice } from "./monitor/device-filter";
 import { OS_LABEL, OsMark } from "./os-marks";
@@ -31,13 +32,9 @@ export interface DeviceFilterChipProps {
   defaultOpen?: boolean;
 }
 
-/** The caret every dropdown in the bar wears (§2.3 hairline weight). */
+/** The caret every dropdown in the bar wears: the kit's chevron turned down (DESIGN.md §13). */
 function Caret(): ReactElement {
-  return (
-    <svg className="vf-device-filter-caret" viewBox="0 0 8 8" aria-hidden="true" focusable="false">
-      <path d="M1.5 3 4 5.5 6.5 3" fill="none" stroke="currentColor" strokeWidth="1.25" />
-    </svg>
-  );
+  return <FieldGlyph name="chevron" size={10} turn={90} className="vf-device-filter-caret" />;
 }
 
 export function DeviceFilterChip({

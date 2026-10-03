@@ -1,8 +1,7 @@
 import { useEffect } from "react";
 
 // UA-D19 — how the spine holds the Me menu (DESIGN.md §8), at the grain a test
-// can reach without mounting ChromeLayer: the Settings chord, and the rule
-// that the menu is one of the spine's expanded surfaces.
+// can reach without mounting ChromeLayer: the Settings chord.
 
 type ChordKey = Pick<
   KeyboardEvent,
@@ -42,11 +41,8 @@ export function useSettingsChord(open: boolean, onOpen: () => void, onClose: () 
   }, [open, onOpen, onClose]);
 }
 
-/** The Me menu is one of the spine's expanded surfaces: whatever else opens —
- * the tray, the docs explorer, Settings, the palette, Godview, a side panel —
- * folds it. (Opening the menu folds them; that half is ChromeLayer's opener.) */
-export function useMeMenuYields(meOpen: boolean, anotherOpen: boolean, fold: () => void): void {
-  useEffect(() => {
-    if (meOpen && anotherOpen) fold();
-  }, [meOpen, anotherOpen, fold]);
-}
+// The Me menu's other half — that it is one of the expanded surfaces, folded by
+// whatever else opens — retired here at One Frame FR-4: it is one of the
+// frame's open surfaces now (`frame/frame-surface.ts`), so the one owner folds
+// it by construction, and Godview no longer folds it (the corner stands above
+// the cover; DESIGN.md §10).

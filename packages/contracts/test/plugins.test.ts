@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  declaresObjects,
   findUnknownManifestKeys,
   isDistributablePluginId,
   isSafeRelativePath,
+  OBJECT_RETIRED_FIELDS,
+  OBJECTS_NEED_DESK,
   PLUGIN_LIMITS,
   PluginManifestV1,
   validatePluginManifest,
@@ -498,6 +501,166 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     const raw = { ...base(), futureField: { keep: 1 } };
     const parsed = PluginManifestV1.parse(raw);
     expect(JSON.parse(JSON.stringify(parsed))).toEqual(raw);
+  });
+});
+
+// DK-0f — the object door's CONTRACT, ahead of the desk: the schema accepts a
+// kind's durable half plus its tray entry and its export name, refuses the
+// widget's view fields BY NAME, holds one type to one contribution, and names
+// the one refusal every host door gives on this build.
+describe("the object contribution (DK-0f)", () => {
+  const CLOCK = "com.example.demo.clock";
+  const object = (over: Record<string, unknown> = {}) => ({
+    type: CLOCK,
+    title: "Clock",
+    schemaVersion: 1,
+    size: { w: 160, h: 160 },
+    provides: [CLOCK, "desk.object", "desk.containable"],
+    props: {
+      style: { kind: "enum", options: ["classic", "ink"], default: "classic" },
+      seconds: { kind: "boolean", default: true },
+    },
+    tray: { category: "things", label: "Clock", props: { style: "ink" }, take: "face" },
+    binding: { kind: "clock" },
+    ...over,
+  });
+  const withObjects = (objects: unknown[], over: Record<string, unknown> = {}) => ({
+    ...base(),
+    activation: [`onWidget:${CLOCK}`],
+    contributes: { objects },
+    ...over,
+  });
+  const refused = (m: unknown): string[] => {
+    const r = validatePluginManifest(m);
+    expect(r.ok).toBe(false);
+    return r.ok ? [] : r.issues;
+  };
+
+  it("accepts a well-formed objects manifest — alone, and beside widgets on this build", () => {
+    expect(validatePluginManifest(withObjects([object()])).ok).toBe(true);
+    expect(findUnknownManifestKeys(withObjects([object()]))).toEqual([]);
+    const both = {
+      ...base(),
+      activation: [...base().activation, `onWidget:${CLOCK}`],
+      contributes: { ...base().contributes, objects: [object()] },
+    };
+    expect(validatePluginManifest(both).ok).toBe(true);
+    // the tray entry is optional (placeable, hangs nowhere); hang/order/local ride it
+    expect(validatePluginManifest(withObjects([object({ tray: undefined })])).ok).toBe(true);
+    const hung = object({
+      tray: {
+        category: "things",
+        label: "Clock",
+        order: 2,
+        local: true,
+        hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
+      },
+    });
+    expect(validatePluginManifest(withObjects([hung])).ok).toBe(true);
+  });
+
+  it("refuses each retired widget field by name, saying where it went", () => {
+    const retired: Record<string, unknown> = {
+      surface: "dom",
+      sizeMode: "fixed",
+      preview: { kind: "color", value: "#FFFFFF" },
+      category: "Cards",
+      defaultSize: { w: 1, h: 1 },
+      maxSize: { w: 1, h: 1 },
+    };
+    expect(Object.keys(retired).sort()).toEqual(Object.keys(OBJECT_RETIRED_FIELDS).sort());
+    for (const [field, value] of Object.entries(retired)) {
+      const issues = refused(withObjects([object({ [field]: value })]));
+      expect(issues).toContain(`contributes.objects.0.${field}: ${OBJECT_RETIRED_FIELDS[field]}`);
+    }
+  });
+
+  it("holds the durable half to the widget's laws: size, binding, props, groups, ports", () => {
+    expect(refused(withObjects([object({ size: undefined })]))).toContainEqual(
+      expect.stringContaining("contributes.objects.0.size"),
+    );
+    expect(refused(withObjects([object({ binding: undefined })]))).toContainEqual(
+      expect.stringContaining("contributes.objects.0.binding"),
+    );
+    expect(
+      refused(withObjects([object({ binding: { kind: "not an identifier" } })])),
+    ).toContainEqual(expect.stringContaining("an export name: an identifier"));
+    expect(refused(withObjects([object({ groups: { look: ["missing"] } })]))).toContain(
+      "contributes.objects.0: group names undeclared prop missing",
+    );
+    expect(
+      refused(
+        withObjects([
+          object({
+            ports: [
+              { id: "out", side: "e" },
+              { id: "out", side: "w" },
+            ],
+          }),
+        ]),
+      ),
+    ).toContain("contributes.objects.0: duplicate port ids: out");
+  });
+
+  it("one type, one contribution — a widget and an object never share a type", () => {
+    const shared = {
+      ...base(),
+      contributes: { ...base().contributes, objects: [object({ type: "com.example.demo" })] },
+    };
+    expect(refused(shared)).toContain(
+      "contributes.objects: type com.example.demo is declared as both a widget and an object — one type, one contribution",
+    );
+  });
+
+  it("objects need a renderer entry, stay in the plugin's namespace, and are unique", () => {
+    expect(refused(withObjects([object()], { entries: undefined }))).toContain(
+      "entries: objects require entries.renderer",
+    );
+    expect(
+      refused(withObjects([object({ type: "someone.else.clock" })], { activation: [] })),
+    ).toContain(
+      "contributes.objects: object type someone.else.clock must be com.example.demo or com.example.demo.<name>",
+    );
+    expect(refused(withObjects([object(), object()]))).toContain(
+      `contributes: duplicate object types: ${CLOCK}`,
+    );
+  });
+
+  it("an object type is an onWidget activation target — an object is a widget to the engine", () => {
+    expect(validatePluginManifest(withObjects([object()])).ok).toBe(true);
+    expect(
+      refused(withObjects([object()], { activation: ["onWidget:com.example.demo.nothing"] })),
+    ).toContain(
+      "activation: activation event onWidget:com.example.demo.nothing names no owned declaration",
+    );
+  });
+
+  it("the tray's face and take name declared props, each a value of its prop's kind", () => {
+    const tray = (entry: Record<string, unknown>) =>
+      refused(withObjects([object({ tray: { category: "things", label: "Clock", ...entry } })]));
+    expect(tray({ props: { nope: 1 } })).toContain(
+      "contributes.objects.0.tray.props.nope: tray props names undeclared prop nope",
+    );
+    expect(tray({ props: { style: "bogus" } })).toContain(
+      "contributes.objects.0.tray.props.style: tray props value for style is not one of its options",
+    );
+    expect(tray({ take: { seconds: "yes" } })).toContain(
+      "contributes.objects.0.tray.take.seconds: tray take value for seconds is not a boolean",
+    );
+    expect(tray({ hang: { w: 1, h: 1, accessory: "nail", pegs: [[0, 0]] } })).toContainEqual(
+      expect.stringContaining("contributes.objects.0.tray.hang.accessory"),
+    );
+  });
+
+  it("names the one refusal every host door gives on this build", () => {
+    expect(OBJECTS_NEED_DESK).toEqual({
+      code: "objects-need-desk",
+      message: "object kinds need the desk; this build draws widgets",
+    });
+    expect(declaresObjects(withObjects([object()]).contributes)).toBe(true);
+    expect(declaresObjects(base().contributes)).toBe(false);
+    expect(declaresObjects({ objects: [] })).toBe(false);
+    expect(declaresObjects(undefined)).toBe(false);
   });
 });
 

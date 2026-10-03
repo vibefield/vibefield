@@ -10,6 +10,9 @@ import {
   type DesktopShellState,
   DesktopShellState as DesktopShellStateSchema,
   effectiveFaces,
+  type FrameView,
+  type FrameZoomAct,
+  FrameZoomRequest,
   IPC_CHANNELS,
   PluginModuleResolution,
   type ScreenshotCaptureResult,
@@ -39,6 +42,7 @@ import {
   globalShortcut,
   MessageChannelMain,
   nativeImage,
+  nativeTheme,
   screen,
   session,
   shell,
@@ -55,13 +59,13 @@ import { desktopDevelopmentExtension } from "./development-extension";
 import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
-import { GodviewRegistry, installGodviewDoubleShift } from "./godview";
 import {
-  registerGodviewToggle,
   registerScreenshotCapture,
   registerScreenshotPreview,
+  registerThemeSet,
   registerUsersRoster,
   registerUsersUpdate,
+  registerViewSet,
   registerWindowBootstrap,
 } from "./ipc";
 import { installLifecycle } from "./lifecycle";
@@ -108,11 +112,13 @@ import { backfillMigratedSetupVariant } from "./setup-variant";
 import { RecoveringShellProvider } from "./shell-provider";
 import { installStillProtocol, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
+import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
 import type { TrayLinkState, TraySnapshot } from "./tray-model";
 import { createElectronTrayRuntime } from "./tray-native";
 import { applyProfileUpdate, dealOwedFace } from "./users-profile";
+import { ViewRegistry } from "./view";
 import { WindowRegistry } from "./window-policy";
 import { createMainWindow, loadRenderer } from "./windows";
 
@@ -168,7 +174,9 @@ let localDiagnostics: ElectronLocalDiagnostics | null = null;
 let crashArtifacts: CrashArtifactManager | null = null;
 let supportBundles: SupportBundleService | null = null;
 let trayController: TrayController | null = null;
-let godviewStates: GodviewRegistry | null = null;
+let viewStates: ViewRegistry | null = null;
+// FR-4 — the app's one theme (FC-D5), main's; null outside the windowed modes.
+let themeOwner: ThemeOwner | null = null;
 // SNAP-D1 — the one screenshot tool per shell boot; null before the windowed
 // modes construct it and after teardown (the door answers `disposed`).
 let screenshotTool: ScreenshotTool | null = null;
@@ -201,8 +209,10 @@ function disposeShellState(): void {
   DEVELOPMENT_EXTENSION?.dispose();
   trayController?.dispose();
   trayController = null;
-  godviewStates?.dispose();
-  godviewStates = null;
+  viewStates?.dispose();
+  viewStates = null;
+  themeOwner?.dispose();
+  themeOwner = null;
   // A live helper dies with the shell: an overlay must never outlive the app
   // that asked for it, and its capture settles `disposed` rather than hanging.
   screenshotTool?.dispose();
@@ -1190,16 +1200,28 @@ async function main(
   // GT-D3's terminal Backend RETIRED at TP-S3e: the renderer dials the cells'
   // T1 doors directly — main forks no bridge and holds no terminal transport.
 
-  // GT-D2: main owns the overlay bit, the menu draws it, the renderer reads it.
-  // `redrawMenu` is assigned below for the modes that have a menu; the states
-  // exist in every windowed mode because the renderer needs its truth either
-  // way.
-  let redrawMenu: (state: { godviewOpen: boolean }) => void = () => undefined;
-  godviewStates = new GodviewRegistry({
-    logger: logger.child({ component: "godview" }),
-    onChanged: (state) => redrawMenu({ godviewOpen: state.open }),
+  // FR-1: main owns each window's view (GT-D2's Godview bit, grown into the
+  // frame's four), the menu names it, the renderer mirrors it. `redrawMenu` is
+  // assigned below for the modes that have a menu; the states exist in every
+  // windowed mode because the renderer needs its truth either way.
+  let redrawMenu: (state: { view: FrameView }) => void = () => undefined;
+  viewStates = new ViewRegistry({
+    logger: logger.child({ component: "view" }),
+    onChanged: (state) => redrawMenu({ view: state.view }),
   });
-  registerGodviewToggle(registry, godviewStates, logger.child({ component: "ipc.godview" }));
+  registerViewSet(registry, viewStates, logger.child({ component: "ipc.view" }));
+
+  // FR-4: main owns the app's one theme (FC-D5) — Light · Dark · Auto, kept in
+  // the shell's own profile, Auto following the OS through `nativeTheme`, and
+  // projected back into it so a window's first frame already wears it. Built
+  // before any window exists for exactly that reason.
+  const themeLogger = logger.child({ component: "theme" });
+  themeOwner = new ThemeOwner(
+    nativeTheme,
+    fileThemeStore(join(app.getPath("userData"), THEME_FILE), themeLogger),
+    { logger: themeLogger },
+  );
+  registerThemeSet(registry, themeOwner, logger.child({ component: "ipc.theme" }));
 
   // SNAP-D1/D3 — the native screenshot helper. One tool per shell boot, one
   // capture at a time; the IPC door and the View menu's item ask it for the
@@ -1337,19 +1359,29 @@ async function main(
       if (trayController !== null) publishDesktopState(trayController.desktopState());
     },
   });
-  /** The accelerator's and the menu item's one action. The focused window is
-   * the subject — that is what "toggle" means from a menu — falling back to the
-   * primary window, which is the only one v1 has and the one a hidden harness
-   * drives. */
-  const toggleGodview = (): void => {
+  /** The View menu's one action. The focused window is the subject — that is
+   * what a menu item means — falling back to the primary window, which is the
+   * only one v1 has and the one a hidden harness drives. */
+  const setView = (view: FrameView): void => {
     const window = BrowserWindow.getFocusedWindow() ?? registry.primary();
     if (window === null || window.isDestroyed()) return;
-    godviewStates?.ensure(window.webContents).set();
+    viewStates?.ensure(window.webContents).set(view);
   };
-  /** Close Window's action, needed only while the overlay is open: the item
+  /** The View menu's zoom (FR-4, 3b): the ACT, sent to the page whose head
+   * answers it on Canvas — never Electron's page zoom, which scaled the whole
+   * window. The subject is the focused product window, as for a capture, and
+   * the primary when focus is elsewhere (a hidden harness, Studio). */
+  const zoom = (act: FrameZoomAct): void => {
+    const focused = BrowserWindow.getFocusedWindow();
+    const window =
+      focused !== null && registry.owns(focused.webContents) ? focused : registry.primary();
+    if (window === null || window.isDestroyed()) return;
+    window.webContents.send(IPC_CHANNELS.viewZoom, FrameZoomRequest.parse({ act }));
+  };
+  /** Close Window's action, needed only while Godview is the view: the item
    * drops `role: "close"` there to release ⌘W for the deck's panes, and the
    * role's own close behaviour has to be supplied by hand with it
-   * (`app-menu-model`'s `closeWindowItem`). Same subject as the toggle. */
+   * (`app-menu-model`'s `closeWindowItem`). Same subject as `setView`. */
   const closeWindow = (): void => {
     const window = BrowserWindow.getFocusedWindow() ?? registry.primary();
     if (window === null || window.isDestroyed()) return;
@@ -1373,8 +1405,9 @@ async function main(
   // for nobody.
   if (MODE !== "smoke-canvas" && MODE !== "smoke-plugin-restart") {
     redrawMenu = installAppMenu(process.platform === "darwin" ? "darwin" : "other", {
-      toggleGodview,
+      setView,
       closeWindow,
+      zoom,
       // SNAP-D5: no helper for this platform ⇒ the item stays, disabled.
       ...(screenshotHelperAvailable ? { takeScreenshot } : {}),
     });
@@ -1393,7 +1426,7 @@ async function main(
       registry,
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
-      toggleGodview,
+      setView,
       beforeExit: closeEvidence,
       onWindow: (window) => {
         installRendererLogging({
@@ -1447,9 +1480,6 @@ async function main(
       registry,
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
-      // The accelerator's own action, handed over rather than re-implemented:
-      // the harness must exercise the path ⇧⇧ takes, not a parallel one.
-      toggleGodview,
       beforeExit: closeEvidence,
       terminalDirectProof: process.argv.includes("--terminal-direct-proof"),
       ...(harnessShellOpens === null ? {} : { shellOpens: harnessShellOpens }),
@@ -1618,16 +1648,14 @@ async function main(
             },
           });
           installDiagnostics(window);
-          // ⇧⇧ — the whole binding, since a double tap is a rhythm and no menu
-          // accelerator can express one. Installed per window and dies with its
-          // webContents, so it cannot outlive what it toggles.
-          installGodviewDoubleShift(window.webContents, toggleGodview);
           // ⌃⌘A — above the page too (SNAP-3): the canvas keymap's ⌘A select-all
           // swallows the menu accelerator, so the chord is taken here first.
           if (screenshotHelperAvailable) {
             installScreenshotChord(window.webContents, takeScreenshot);
           }
           installNavigationPolicy(window, MODE);
+          // FR-4: told the theme on every load (a reload included) and change.
+          themeOwner?.watch(window.webContents);
           installDurableClose(
             window,
             logger.child({ component: "window.close", windowId: String(window.id) }),
@@ -1652,10 +1680,10 @@ async function main(
           if (latestDesktopState !== null) {
             window.webContents.send(IPC_CHANNELS.desktopState, latestDesktopState);
           }
-          // A fresh document believes the overlay is closed; main knows whether
-          // it is. Correcting it here means a reload never leaves the toolbar
-          // button and the menu checkmark disagreeing.
-          godviewStates?.ensure(window.webContents).republish();
+          // A fresh document believes it is on the canvas; main knows which view
+          // the window is in. Correcting it here means a reload never leaves the
+          // views track and the menu's mark disagreeing.
+          viewStates?.ensure(window.webContents).republish();
           logger.info("desktop.window.renderer_loaded", "The main renderer finished loading", {
             windowId: String(window.id),
             webContentsId: window.webContents.id,

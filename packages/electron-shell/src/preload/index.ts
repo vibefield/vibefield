@@ -2,9 +2,11 @@ import {
   CloseRequest,
   CloseResult,
   type DesktopShellState,
-  GodviewSetRequest,
-  type GodviewState,
-  GodviewState as GodviewStateSchema,
+  type FrameView,
+  FrameViewSetRequest,
+  type FrameViewState,
+  FrameViewState as FrameViewStateSchema,
+  type FrameZoomAct,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
   ScreenshotCaptureRequest,
@@ -14,6 +16,10 @@ import {
   ScreenshotPreviewResult,
   type ShellCommand,
   ShellPlatform,
+  type ThemePreference,
+  ThemeSetRequest,
+  type ThemeState,
+  ThemeState as ThemeStateSchema,
   type UserRecord,
   UserRecord as UserRecordSchema,
   UsersCreateParams,
@@ -25,7 +31,6 @@ import {
 import { contextBridge, ipcRenderer, sharedTexture } from "electron";
 import { PreloadDesktopStateBridge } from "./desktop-state";
 import { type DiagnosticsRendererPort, PreloadDiagnosticsBridge } from "./diagnostics";
-import { PreloadGodviewStateBridge } from "./godview";
 import {
   PreloadLiveSurfaceFrameMux,
   type PreloadLiveSurfacePort,
@@ -34,6 +39,8 @@ import {
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadScreenshotResultBridge } from "./screenshot-result";
 import { PreloadShellCommandBridge } from "./shell-commands";
+import { PreloadThemeStateBridge } from "./theme";
+import { PreloadViewStateBridge, PreloadZoomActBridge } from "./view";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
 // Product traffic flows over the loopback WS (D27), never over IPC. BOTH
@@ -147,7 +154,7 @@ const screenshotResults = new PreloadScreenshotResultBridge((issueCount) => {
     }),
   );
 });
-const godviewState = new PreloadGodviewStateBridge((issueCount) => {
+const viewState = new PreloadViewStateBridge((issueCount) => {
   logging.submit(
     JSON.stringify({
       v: 1,
@@ -156,9 +163,45 @@ const godviewState = new PreloadGodviewStateBridge((issueCount) => {
           v: 1,
           time: Date.now(),
           level: "error",
-          event: "renderer.preload.godview_state_rejected",
-          msg: "Preload rejected a malformed Godview state",
-          component: "preload.godview",
+          event: "renderer.preload.view_state_rejected",
+          msg: "Preload rejected a malformed view state",
+          component: "preload.view",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
+const viewZoom = new PreloadZoomActBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.view_zoom_rejected",
+          msg: "Preload rejected a malformed zoom act",
+          component: "preload.view",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
+const themeState = new PreloadThemeStateBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.theme_state_rejected",
+          msg: "Preload rejected a malformed theme state",
+          component: "preload.theme",
           attrs: { issueCount },
         },
       ],
@@ -215,8 +258,14 @@ ipcRenderer.on(IPC_CHANNELS.screenshotResult, (_event, raw: unknown) => {
 ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
   desktopState.accept(raw);
 });
-ipcRenderer.on(IPC_CHANNELS.godviewState, (_event, raw: unknown) => {
-  godviewState.accept(raw);
+ipcRenderer.on(IPC_CHANNELS.viewState, (_event, raw: unknown) => {
+  viewState.accept(raw);
+});
+ipcRenderer.on(IPC_CHANNELS.viewZoom, (_event, raw: unknown) => {
+  viewZoom.accept(raw);
+});
+ipcRenderer.on(IPC_CHANNELS.themeState, (_event, raw: unknown) => {
+  themeState.accept(raw);
 });
 
 contextBridge.exposeInMainWorld("vibefield", {
@@ -299,18 +348,27 @@ contextBridge.exposeInMainWorld("vibefield", {
   // TP-S3e: the `terminal` namespace (bridge connect + status) retired — the
   // renderer dials the cells' T1 doors itself; shell/home policy rides the
   // window bootstrap.
-  godview: {
-    /** `open` omitted = flip. The page never sends the value it believes,
-     * because main is the one holding it (GT-D2). */
-    set: async (open?: boolean): Promise<GodviewState> =>
-      GodviewStateSchema.parse(
-        await ipcRenderer.invoke(
-          IPC_CHANNELS.godviewSet,
-          GodviewSetRequest.parse(open === undefined ? {} : { open }),
-        ),
+  view: {
+    /** Ask for a view by name; main owns the window's view (FR-1) and the
+     * answer is what it holds now — a refused view answers unchanged. */
+    set: async (view: FrameView): Promise<FrameViewState> =>
+      FrameViewStateSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.viewSet, FrameViewSetRequest.parse({ view })),
       ),
-    onState: (handler: (state: GodviewState) => void): (() => void) =>
-      godviewState.subscribe(handler),
+    onState: (handler: (state: FrameViewState) => void): (() => void) =>
+      viewState.subscribe(handler),
+    /** The View menu's Actual Size, Zoom In and Zoom Out (FR-4, 3b), as the
+     * act main sends for the head to answer on Canvas. */
+    onZoom: (handler: (act: FrameZoomAct) => void): (() => void) => viewZoom.subscribe(handler),
+  },
+  theme: {
+    /** Choose the app's one theme by name (FR-4, FC-D5); main owns it and the
+     * answer is what it holds now. */
+    set: async (preference: ThemePreference): Promise<ThemeState> =>
+      ThemeStateSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.themeSet, ThemeSetRequest.parse({ preference })),
+      ),
+    onState: (handler: (state: ThemeState) => void): (() => void) => themeState.subscribe(handler),
   },
   /** SNAP-D3 — one native screenshot through main: the still's path on disk
    * (it is on the clipboard too), a cancel, or a typed error. Main serialises

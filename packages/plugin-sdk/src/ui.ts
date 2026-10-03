@@ -32,3 +32,12 @@ export {
 // were; a plugin that mounts GL cards is a lazy chunk and pays for the 3D
 // world only when it loads.
 export { GlLiftGroup, makeGlCardChrome } from "@vibefield/design-kit/gl";
+// The chrome's glyph set (DESIGN.md §13) rides the kit's dedicated /glyphs leaf;
+// a plugin draws its icons with the same drawings the shell does, through this door.
+export {
+  FieldGlyph,
+  type FieldGlyphProps,
+  GLYPH_NAMES,
+  type GlyphName,
+  glyphSvg,
+} from "@vibefield/design-kit/glyphs";

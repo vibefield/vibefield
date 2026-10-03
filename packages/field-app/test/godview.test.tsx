@@ -1,14 +1,11 @@
 // @vitest-environment happy-dom
 /**
  * The Godview's renderer-side laws (GT-2), at the grain the repo tests chrome:
- * the pure pane rules, and the overlay state that ⇧⇧, the View menu, and the
- * toolbar button all move. The deck itself is not mounted here — it needs a
- * bridge, a floor, and a GPU, and `pnpm smoke:godview` drives all three.
+ * the pure pane rules. (The state that opens it is the frame's since One Frame
+ * FR-1 — `view-frame.test.tsx`.) The deck itself is not mounted here — it needs
+ * a bridge, a floor, and a GPU, and `pnpm smoke:godview` drives all three.
  */
-import type { GodviewState } from "@vibefield/contracts";
-import { act } from "react";
-import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   paneCwd,
   readDeviceHost,
@@ -17,19 +14,7 @@ import {
   restoreSentence,
   savedPaneSessionIds,
 } from "../src/godview/deck-restore";
-import { GodviewToggle } from "../src/godview/GodviewToggle";
-import {
-  isGodviewOpen,
-  requestGodviewToggle,
-  resetGodviewOpenForTest,
-  useGodviewOpen,
-} from "../src/godview/overlay-state";
 import { type DeckSession, describePane } from "../src/godview/pane-faces";
-import { type FieldHost, setHost } from "../src/host";
-import type { RendererLogger } from "../src/logging";
-import { setRendererLogger } from "../src/logging";
-
-(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 /** A SessionSummary is wide and only a few fields carry meaning here. */
 function session(overrides: Partial<DeckSession> & { id: string }): DeckSession {
@@ -256,113 +241,10 @@ describe("the device host, learned rather than asked for (GT-5c)", () => {
 // If an end-a-session gesture comes back, these rows are in this file's
 // history at 522065df and should come back with it.
 
-// ---- the overlay state -------------------------------------------------------
-
-let publishState: ((state: GodviewState) => void) | null = null;
-let setCalls: (boolean | undefined)[] = [];
-let root: Root | null = null;
-let host: HTMLElement | null = null;
-
-function installHost(godview: FieldHost["godview"]): void {
-  setRendererLogger({
-    child: () => ({ error: () => undefined }) as unknown as RendererLogger,
-    error: () => undefined,
-  } as unknown as RendererLogger);
-  setHost({
-    logger: {} as RendererLogger,
-    getConnection: () => Promise.resolve({ port: 1, token: "t" }),
-    onPrepareClose: () => () => undefined,
-    completeClose: () => undefined,
-    ...(godview !== undefined ? { godview } : {}),
-  });
-}
-
-beforeEach(() => {
-  resetGodviewOpenForTest();
-  setCalls = [];
-  publishState = null;
-  installHost({
-    set: (open) => {
-      setCalls.push(open);
-      return Promise.resolve({ open: open ?? !isGodviewOpen() });
-    },
-    onState: (handler) => {
-      publishState = handler;
-      return () => {
-        publishState = null;
-      };
-    },
-  });
-});
-
-afterEach(() => {
-  act(() => root?.unmount());
-  host?.remove();
-  root = null;
-  host = null;
-});
-
-function Probe(): React.ReactElement {
-  return <GodviewToggle active={useGodviewOpen()} />;
-}
-
-function mountProbe(): HTMLButtonElement {
-  host = document.createElement("div");
-  document.body.appendChild(host);
-  root = createRoot(host);
-  act(() => root?.render(<Probe />));
-  const button = host.querySelector("button");
-  if (button === null) throw new Error("the toggle did not render");
-  return button;
-}
-
-describe("the overlay state", () => {
-  it("starts closed and follows the host, which owns the value", () => {
-    const button = mountProbe();
-    expect(button.getAttribute("aria-pressed")).toBe("false");
-    act(() => publishState?.({ open: true }));
-    expect(isGodviewOpen()).toBe(true);
-    expect(button.getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("asks for a FLIP without sending its own idea of the value", () => {
-    // The accelerator is consumed by the menu before this page sees it, so a
-    // renderer that sent `open: !mine` could be arguing with a value main had
-    // already changed. It sends no value at all.
-    mountProbe();
-    requestGodviewToggle();
-    expect(setCalls).toEqual([undefined]);
-  });
-
-  it("does not light the button until the host says so — no optimistic echo", () => {
-    const button = mountProbe();
-    requestGodviewToggle();
-    expect(button.getAttribute("aria-pressed")).toBe("false");
-    act(() => publishState?.({ open: true }));
-    expect(button.getAttribute("aria-pressed")).toBe("true");
-  });
-
-  it("stays closed on a host with no Godview — nothing there can open it", () => {
-    resetGodviewOpenForTest();
-    installHost(undefined);
-    const button = mountProbe();
-    requestGodviewToggle();
-    expect(button.getAttribute("aria-pressed")).toBe("false");
-    expect(isGodviewOpen()).toBe(false);
-  });
-});
-
-// ("the bridge notice" RETIRED at TP-S3e with TerminalBridgeStatus itself.)
-
-describe("the toggle button", () => {
-  it("presses the same door ⇧⇧ presses", () => {
-    const button = mountProbe();
-    const click = vi.fn();
-    button.addEventListener("click", click);
-    act(() => {
-      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
-    expect(click).toHaveBeenCalledTimes(1);
-    expect(setCalls).toEqual([undefined]);
-  });
-});
+// ---- the overlay state and the toggle button, RETIRED with One Frame FR-1 ---
+//
+// Godview's open bit and its corner button gave way to the window's one view
+// owner and the views track (main's `view.ts`, the renderer's
+// `frame/view-state.ts`); their rows — follows the host, no optimistic echo,
+// stays put on a host with no door, the button presses the owner's door — are
+// rewritten against the view in `view-frame.test.tsx`.

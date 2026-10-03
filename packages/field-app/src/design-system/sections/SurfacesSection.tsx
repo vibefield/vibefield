@@ -1,12 +1,10 @@
+import type { ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl as UiSegmentedControl, UnavailableState } from "@vibefield/design-kit";
-import {
-  ArtifactPanelPreview,
-  type ArtifactPanelPreviewState,
-} from "@vibefield/plugin-browser/design-system";
+import type { ArtifactPanelPreviewState } from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
 import type { MagnetGridGlyph } from "../../field/canvas-appearance";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
-import { SidePanelFrame } from "../../hud/SidePanelStage";
+import { AppearanceSectionView } from "../../panels/AppearanceSection";
 import { ProfileMark } from "../../panels/agents/ProfilesView";
 import { MagnetGridSection } from "../../panels/MagnetGridSection";
 import {
@@ -14,12 +12,13 @@ import {
   type SettingsPage,
   type SettingsSubpage,
 } from "../../panels/SettingsDialog";
-import { buttonCls, SettingsRow, SettingsSection, SettingsSwitch } from "../../panels/settings-ui";
+import { buttonCls } from "../../panels/settings-ui";
 import { AgentsSettingsPreview } from "../AgentsSettingsPreview";
 import { FIXTURE_ME, FIXTURE_OTHERS_WAITING } from "../account-fixtures";
 import { AGENTS_FIXTURE_STATES, type AgentsFixtureState } from "../agents-fixtures";
 import { CommandPalettePreview } from "../CommandPalettePreview";
 import { Section, Specimen } from "../catalog-ui";
+import { ArtifactsDrawer } from "../EdgesPreview";
 import { ProfilesSettingsPreview, profilesPreviewHead } from "../ProfilesSettingsPreview";
 import {
   FIXTURE_PROFILE_SETS,
@@ -36,7 +35,7 @@ export function SurfacesSection({
   magnetGridGlyph: MagnetGridGlyph;
   onMagnetGridGlyphChange: (glyph: MagnetGridGlyph) => void;
 }): ReactElement {
-  const [settingsOn, setSettingsOn] = useState(true);
+  const [appearancePick, setAppearancePick] = useState<ThemePreference>("auto");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   // A press on a nav item returns to that page's top (the Agents shelf).
   const [settingsVisit, setSettingsVisit] = useState(0);
@@ -74,33 +73,8 @@ export function SurfacesSection({
             }
           >
             {settingsPage === "appearance" ? (
-              <SettingsSection
-                title="Theme"
-                description="Set the color mode used by app chrome and cards."
-              >
-                <SettingsRow
-                  title="Use system appearance"
-                  description="Follow this device when its appearance changes."
-                >
-                  <SettingsSwitch
-                    checked={settingsOn}
-                    onChange={setSettingsOn}
-                    label="Use system appearance"
-                  />
-                </SettingsRow>
-                <SettingsRow
-                  title="Interface scale"
-                  description="Keep controls comfortable without changing canvas zoom."
-                  divider={false}
-                >
-                  <UiSegmentedControl
-                    options={["Compact", "Default"]}
-                    value="Default"
-                    onChange={() => {}}
-                    label="Interface scale"
-                  />
-                </SettingsRow>
-              </SettingsSection>
+              // The shipping Appearance page (One Frame FC-D5), on fixture state.
+              <AppearanceSectionView preference={appearancePick} onChange={setAppearancePick} />
             ) : settingsPage === "canvas" ? (
               <MagnetGridSection glyph={magnetGridGlyph} onGlyphChange={onMagnetGridGlyphChange} />
             ) : settingsPage === "agents" ? (
@@ -148,8 +122,12 @@ export function SurfacesSection({
             <CommandPalettePreview />
           </div>
         </Specimen>
-        <Specimen title="Artifact side panel" source="hud/SidePanelStage.tsx" darkStage>
-          <SidePanelSpecimen />
+        <Specimen
+          title="Artifacts — the Hub in the right edge's drawer"
+          source="hud/edge-tray/EdgeTray.tsx · DESIGN.md §8"
+          darkStage
+        >
+          <ArtifactsSpecimen />
         </Specimen>
       </div>
 
@@ -298,7 +276,10 @@ function ProfilesSettingsSpecimen(): ReactElement {
   );
 }
 
-function SidePanelSpecimen(): ReactElement {
+/** The Artifact Hub in every production state, in the drawer that holds it
+ * since One Frame FR-4 — the side panel's contents in the 152 column, where
+ * the plugin answers with its narrow form. */
+function ArtifactsSpecimen(): ReactElement {
   const [state, setState] = useState<ArtifactPanelPreviewState>("empty");
   const options = ["empty", "populated", "loading", "unavailable"] as const;
   return (
@@ -312,9 +293,7 @@ function SidePanelSpecimen(): ReactElement {
           label="Artifact panel state"
         />
       </div>
-      <SidePanelFrame open label="Artifact Hub preview" className="vf-ds-side-panel-frame">
-        <ArtifactPanelPreview state={state} />
-      </SidePanelFrame>
+      <ArtifactsDrawer state={state} />
     </div>
   );
 }

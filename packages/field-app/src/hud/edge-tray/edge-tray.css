@@ -1,8 +1,10 @@
 /* ═══ THE EDGE TRAY (DESIGN.md §8, edge trays — ruled 2026-09-23) ═══════════════
    A notch at mid-edge (N1) and a drawer behind it (P4): one object in the
    theme's solid chrome, drawn from the wall by the same path at two scales.
-   The drawer holds one column of tiles and nothing else. Both edges are the
-   same object mirrored; the product mounts the left one (the clipboard). */
+   The drawer holds one column and nothing else. Both edges are the same object
+   mirrored — the clipboard on the left, Artifacts on the right (One Frame
+   FR-4) — and both are the FRAME's: they stand above the cover (60) with the
+   line (62), in every view. */
 .vf-edge-tray {
   --vf-edge-tray-w: 152px;
   --vf-edge-tray-f: 18px;
@@ -12,7 +14,7 @@
   --vf-nub-w: 26px;
   --vf-nub-h: 116px;
   position: absolute;
-  z-index: 45;
+  z-index: 62;
   top: 4rem;
   bottom: 5rem;
   width: var(--vf-edge-tray-w);
@@ -105,7 +107,10 @@
   transform: translateY(-50%);
   cursor: pointer;
   pointer-events: auto;
-  transition: color 160ms ease;
+  transition:
+    color 160ms ease,
+    width 240ms var(--vf-ease-island),
+    height 240ms var(--vf-ease-island);
 }
 
 .vf-edge-tray[data-side="left"] .vf-edge-tray__nub {
@@ -128,12 +133,17 @@
   color: var(--vf-text-primary);
 }
 
+/* The drawing keeps the notch's 26 × 116 frame, centred on the nub and drawn
+   from the wall, whatever the nub's box is — so as a sliver grows into the
+   notch only its path travels. */
 .vf-edge-tray__shape {
   position: absolute;
-  inset: 0;
+  top: 50%;
+  left: 0;
   z-index: -1;
-  width: 100%;
-  height: 100%;
+  width: var(--vf-nub-w);
+  height: var(--vf-nub-h);
+  margin-top: calc(var(--vf-nub-h) / -2);
   overflow: visible;
   pointer-events: none;
   transform-origin: 0 50%;
@@ -145,6 +155,8 @@
 }
 
 .vf-edge-tray[data-side="right"] .vf-edge-tray__shape {
+  right: 0;
+  left: auto;
   transform: translateX(100%) scaleX(calc(-1 * var(--vf-nub-sx, 1)));
 }
 
@@ -176,6 +188,52 @@
 
 .vf-edge-tray[data-pinned="true"] .vf-edge-tray__shape-ring {
   opacity: 1;
+}
+
+/* ── THE SLIVER (One Frame §10, FR-4; DESIGN.md §8 edge trays, §6) ──────────
+   Over a covered view a notch at rest is its sliver — its own 7 × 96 path, in
+   the 8px the view keeps clear, the same chrome, hairline and drop — with the
+   glyph and count hidden and NO wider hit target: its hit box is the sliver,
+   so a pane's text beside it never takes a stray press. On approach (the
+   pointer reaching it, or the keyboard's focus) it becomes the notch: the box
+   grows and the ONE path morphs, 240ms on the island curve; the glyph and the
+   count fade in behind it. */
+.vf-edge-tray__nub[data-sliver]:not(:hover, :focus-visible) {
+  width: 8px;
+  height: 96px;
+}
+
+.vf-edge-tray__nub[data-sliver]:not(:hover, :focus-visible)::after {
+  content: none;
+}
+
+.vf-edge-tray__nub[data-sliver] :is(.vf-edge-tray__shape-fill, .vf-edge-tray__shape-line) {
+  transition: d 240ms var(--vf-ease-island);
+}
+
+.vf-edge-tray__nub[data-sliver] .vf-edge-tray__shape-fill {
+  d: var(--vf-notch-fill);
+}
+
+.vf-edge-tray__nub[data-sliver] .vf-edge-tray__shape-line {
+  d: var(--vf-notch-line);
+}
+
+.vf-edge-tray__nub[data-sliver]:not(:hover, :focus-visible) .vf-edge-tray__shape-fill {
+  d: var(--vf-sliver-fill);
+}
+
+.vf-edge-tray__nub[data-sliver]:not(:hover, :focus-visible) .vf-edge-tray__shape-line {
+  d: var(--vf-sliver-line);
+}
+
+.vf-edge-tray__nub[data-sliver] :is(.vf-edge-tray__glyph, .vf-edge-tray__count) {
+  transition: opacity 160ms ease;
+}
+
+.vf-edge-tray__nub[data-sliver]:not(:hover, :focus-visible)
+  :is(.vf-edge-tray__glyph, .vf-edge-tray__count) {
+  opacity: 0;
 }
 
 .vf-edge-tray__glyph {
@@ -236,6 +294,12 @@
 
 .vf-edge-tray__list::-webkit-scrollbar {
   display: none;
+}
+
+/* A drawer's own column (Artifacts' Hub, One Frame FR-4): a container, so the
+   content can answer the drawer's 128 with its narrow form. */
+.vf-edge-tray__list[data-content] {
+  container-type: inline-size;
 }
 
 .vf-edge-tray__group {
@@ -548,6 +612,17 @@
   .vf-edge-tray__shape,
   .vf-edge-tray__tile {
     transition-duration: 1ms;
+  }
+
+  /* M6: the sliver becomes the notch at once — no growth, no morph — and its
+     glyph and count fade in over 120ms. */
+  .vf-edge-tray__nub,
+  .vf-edge-tray__nub[data-sliver] :is(.vf-edge-tray__shape-fill, .vf-edge-tray__shape-line) {
+    transition: color 160ms ease;
+  }
+
+  .vf-edge-tray__nub[data-sliver] :is(.vf-edge-tray__glyph, .vf-edge-tray__count) {
+    transition: opacity 120ms ease;
   }
 
   .vf-edge-tray[data-open="true"] .vf-edge-tray__tile {

@@ -38,6 +38,7 @@ describe("the deck appearance store", () => {
           shaderAnimate: true,
           backdropOpacity: 0.6,
           backdropBlur: 18,
+          modeOverride: "light",
         }),
       ),
     ).toEqual({
@@ -49,6 +50,7 @@ describe("the deck appearance store", () => {
       shaderAnimate: true,
       backdropOpacity: 0.6,
       backdropBlur: 18,
+      modeOverride: "light",
     });
   });
 
@@ -83,13 +85,17 @@ describe("the deck appearance store", () => {
     expect(stack.length).toBeLessThanOrEqual(8);
   });
 
-  it("clamps the backdrop into its ranges and defaults it to the flat, opaque stage", () => {
+  it("clamps the backdrop into its ranges and defaults it to the covers' glass (FC-D16)", () => {
     expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: 3 })).backdropOpacity).toBe(1);
     expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: -1 })).backdropOpacity).toBe(0);
     expect(parseDeckAppearance(JSON.stringify({ backdropBlur: 500 })).backdropBlur).toBe(80);
     expect(parseDeckAppearance(JSON.stringify({ backdropBlur: "soft" })).backdropBlur).toBe(0);
-    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(1);
+    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(0.72);
     expect(DEFAULT_DECK_APPEARANCE.backdropBlur).toBe(0);
+    // A record that never named a backdrop takes the new default; one that did
+    // keeps its own, opaque included.
+    expect(parseDeckAppearance(JSON.stringify({ opacity: 0.5 })).backdropOpacity).toBe(0.72);
+    expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: 1 })).backdropOpacity).toBe(1);
   });
 
   it("reads a record written before shaders existed as no shader", () => {
@@ -133,9 +139,26 @@ describe("the deck appearance store", () => {
       opacityCells: false,
       shaderEffects: [],
       shaderAnimate: false,
-      backdropOpacity: 1,
+      // a record that never named a backdrop takes the covers' glass (FC-D16)
+      backdropOpacity: 0.72,
       backdropBlur: 0,
+      // …and one from before FR-4 follows the app's theme (FC-D7)
+      modeOverride: null,
     });
+  });
+
+  it("reads Godview's mode as the app's unless the viewer overrode it (FC-D7)", () => {
+    // The one override the ruling kept — Settings → Terminal → Look. Only the
+    // two modes are overrides; anything else, and every record from before
+    // FR-4, follows the app.
+    expect(DEFAULT_DECK_APPEARANCE.modeOverride).toBeNull();
+    expect(parseDeckAppearance(JSON.stringify({ modeOverride: "dark" })).modeOverride).toBe("dark");
+    expect(parseDeckAppearance(JSON.stringify({ modeOverride: "light" })).modeOverride).toBe(
+      "light",
+    );
+    for (const odd of ["auto", "app", 1, true, null]) {
+      expect(parseDeckAppearance(JSON.stringify({ modeOverride: odd })).modeOverride).toBeNull();
+    }
   });
 
   it("clamps an out-of-range opacity rather than discarding the record", () => {
@@ -160,6 +183,7 @@ describe("the deck appearance store", () => {
       shaderAnimate: false,
       backdropOpacity: 0.5,
       backdropBlur: 12,
+      modeOverride: "dark",
     });
 
     expect(announced).toBe(1);
@@ -175,6 +199,7 @@ describe("the deck appearance store", () => {
       shaderAnimate: false,
       backdropOpacity: 0.5,
       backdropBlur: 12,
+      modeOverride: "dark",
     });
     stop();
   });
@@ -293,9 +318,9 @@ describe("the viewer's shader, as the effects prop", () => {
  * from ONE projection the overlay, the catalog and Settings all use.
  */
 describe("the viewer's backdrop, as the stage's variables", () => {
-  it("projects the default as the reference's flat, opaque stage", () => {
+  it("projects the default as the covers' glass, sharp (FC-D16 — it was the flat, opaque stage)", () => {
     expect(godviewBackdropStyle(DEFAULT_DECK_APPEARANCE)).toEqual({
-      "--vf-godview-stage-opacity": "100%",
+      "--vf-godview-stage-opacity": "72%",
       "--vf-godview-stage-blur": "0px",
     });
   });

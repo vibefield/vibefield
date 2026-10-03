@@ -162,7 +162,6 @@ export function GodviewTuningPanel({
   monitorSections,
   rendererBackend,
   onClose,
-  onThemeChange,
   onChange,
   onReset,
   onResetMonitor,
@@ -174,7 +173,6 @@ export function GodviewTuningPanel({
   monitorSections: readonly MonitorTuningSection[];
   rendererBackend: string | null;
   onClose: () => void;
-  onThemeChange: (theme: GodviewTheme) => void;
   onChange: (patch: Partial<GodviewTuning>) => void;
   onReset: () => void;
   onResetMonitor: () => void;
@@ -204,16 +202,8 @@ export function GodviewTuningPanel({
         </button>
       </header>
 
-      <label className="vf-godview-tweak-theme">
-        <span>Theme</span>
-        <select
-          value={theme}
-          onChange={(event) => onThemeChange(event.currentTarget.value as GodviewTheme)}
-        >
-          <option value="light">Light</option>
-          <option value="dark">Dark</option>
-        </select>
-      </label>
+      {/* Godview's mode is the app's (FC-D7) — or Settings → Terminal's one
+          override — so the panel no longer carries a Theme of its own. */}
 
       <fieldset className="vf-godview-tweak-group">
         <legend>STAGE SURFACE</legend>

@@ -43,6 +43,13 @@ floating pills — with ONE named exception, the terminal deck's sheet edge (§8
 James). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
 composites those status-body colors at 72% by default so they remain legible glass over the field;
 the temporary system-control panel exposes that alpha for live tuning.
+**Since One Frame (FR-1, 2026-10-03) Godview is a view, not an overlay:** it is drawn inside the
+cover BELOW the frame (§10), reached by ⌘2 or its cell in the views track (§8), and keeps this
+instrument bar as its head for now — without the blocked · working · idle counters (FC-D18).
+**Since FR-4 (2026-10-03) Godview follows the app's theme (FC-D7):** its ☼◐ switch and its own
+remembered light are gone, and the parchment or graphite deck is whichever the app's one theme
+control (§8, the Me menu) resolves to — unless Settings → Terminal → Look holds the one override,
+Godview's mode (As the app · Light · Dark), saved with the rest of this viewer's deck appearance.
 
 **The two signatures** (spend boldness here, keep everything else quiet):
 1. **The living card** — CardShell physics: lift-on-grab, hot-point glow and rim on overlap,
@@ -62,6 +69,7 @@ the temporary system-control panel exposes that alpha for live tuning.
 | `--vf-canvas-dot` (classic alternate build) | `#A6A6A6` | `#1C1C1C` |
 | `--vf-canvas-magnet-ink` (selected GL ground) | `#A6A6A6` | `#8A8A8A` |
 | `--vf-canvas-dot` (CSS fallback) | `rgba(0,0,0,0.16)` | `rgba(255,255,255,0.08)` |
+| the cutting mat (`glyph: "mat"`, `draft/ground/MAT.md`) — sage `#86A078`, cream lines `#E8DCBE`, a material carried across both themes | lit by the **Sun**: the tree-shadow reference's chain — the sage shows `#3D5A30` | lit by the **Moon**: 4100 K through the Purkinje shift — `#313C40` in the dapples, `#1C2027` in the palm's shadow, Eigengrau `#16161D` under all; half the sunlit luminance |
 
 The ICE ground projection uses `spacings: [25, 50, 100]`, `dotAlpha: 1`,
 `fadeIn: [20, 30]`, `fadeOut: [90, 100]`, `dotRadius: [1.5, 1.5]`, and
@@ -83,6 +91,25 @@ is the experiment's `#8A8A8A`; light keeps `#A6A6A6`. The classic alternate's
 but it does not ride the current production path. Dot/needle is tuning inside
 the selected magnet implementation: Dot is the default, and Canvas Settings
 may persist either glyph as a device presentation preference.
+*Erratum 2026-10-03 (DK-0d, against the desk — DK-D2, R22):* ICE retired the magnet grid with the
+cards and the dot and needle grids on 2026-09-25 (`@ice/objects` `palette.ts`), so this default
+holds only while VibeField stays pinned at ICE 0.11. On the desk (DK-3) the ground is the cutting
+mat below — its sage and cream, its rulers at a margin of 60, its lattice's fade-in
+(`GridConfig { fadeIn, mat }`) — and the world grid's projection, the magnet's config and ink, the
+classic alternate's dot, Canvas Settings' Dot/Needle preference, Studio's grid controls and the
+appearance document's grid half have no consumer and retire with the old ground (DK-17). The
+CSS-fallback dots stay the splash's, the loading veil's and the explorer tiles' ground until DK-16,
+which dresses those three in the mat; after it they stay only where nothing can draw the mat (the
+unavailable state, §8).
+*Erratum 2026-10-03 (DK-0d — DK-D2, R22) — the cursor's halo, which this file never described:* the
+field above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
+the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
+above). It retires with the field (DK-16): on the desk your pointer is the OS cursor and the
+desk's own open hand, and other people's are §8's peers on the mat.
+
+**The cutting mat (2026-09-07).** The third ground is a material, not a token: its sage and
+cream are the same in both themes and the theme changes the light that falls on it. The
+gobo plates are the product's assets; the engine ships the mat's law and its two lights.
 
 ### 2.2 Surfaces
 
@@ -141,6 +168,12 @@ either.
 Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E · #F59E0B ·
 #06B6D4 · #8B5CF6 · #EF4444 · #3B82F6`. Tint recipe: body fill at 12% (`{hex}1F`),
 hairline at ~35%, label at full. These group and label; they never signal state.
+**One exception, carried by shape (TL-D2, TL-D14, 2026-10-02):** in Godview's timeline (§8) a
+working span wears its PROJECT's colour (`MonitorAgent.color`, the host's `projectTint`), because
+across an afternoon colour has to say whose a lane is, and the swarm's one ink made every lane look
+alike. There the shape says what: work is a wide wake, a wait a thin thread, rest a hairline. So a
+project hue that lands near orange (the wheel withholds only the band around `--vf-select`) never
+reads as blocked, and the wheel itself is not changed.
 **Users are not among them (2026-09-22, UA-D17):** a person is known by a face (§2.8), never a
 colour. An accent on a user collided with the project inks and with §2.5 — measured in OKLCH,
 three of the eight slots sat within 3° of green, orange and red, and one inside the band
@@ -166,7 +199,7 @@ The deck sheet's shadow is §5's *Sheet* recipe, keyed to Godview's OWN mode swi
 the app's theme (Godview can be dark over a light field). Its geometry: top corners
 `--vf-godview-deck-radius` 12px; the lip (the band the grip sits in) `--vf-godview-deck-lip`
 14px — never less than the radius, so no pane corner meets the curve; the grip
-`--vf-godview-deck-grip` 36×4, fully round — the island's pull bar (§8) at instrument scale.
+`--vf-godview-deck-grip` 72×4, fully round — the island's pull bar (§8), longer and thinner: it names a full-width edge (James, 2026-09-28: 36 read too short).
 The empty pane launcher's clearing (QL-1, pass 3 §22) is the sheet's own paint, but never
 thinner than `--vf-godview-launcher-clearing-floor` 92% of the ground: a viewer who thins the
 stage thins the sheet, and at the sheet's glass the prompt beneath would read through the
@@ -256,6 +289,13 @@ receiver's theme, with white label text on it — so the colour that is nobody's
 neutral grey that holds on both grounds and under white text.* *Corrected again the same day
 (review): `#636366` measured 2.99:1 on the dark ground, just under 3:1; `#68686B` holds 3.2:1
 there, 3.1:1 on dark chrome, 5.3:1 on the light ground and 5.5:1 under the white label.*
+*Erratum 2026-10-03 (DK-0d, against the desk — MC-D10 = DK-D23, R17, R22):* on the desk VibeField
+draws the peers' cursors itself (§8, peers on the mat), so the ink is drawn where it is seen rather
+than sent as the sender's colour — and there `#68686B` does not hold: it measures 1.4:1 on the
+Sun-lit sage (`#3D5A30`) and 2.0:1 on the Moon's dapples (`#313C40`), so on the mat the label is a
+chip on the line's glass in the chrome's text ink (R17, amended 13:40Z; §8, peers on the mat), and
+the arrow keeps the presence ink on its white edge. The contrasts above stand for the plain grounds
+and the chrome.
 
 ---
 
@@ -325,9 +365,73 @@ claim it.
 | Tier | Recipe | Use |
 |---|---|---|
 | Island | surface `/80` + `backdrop-blur-xl` (hover `/90`) | closed pill, toolbars |
-| Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels |
+| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the composer line (§8), the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2); the head's name pill and zoom readout, the frame's floating controls at the top (FR-3, 2026-10-03); on the desk, the selection bar and the tools in hand (§8; MC-D2, R20) |
+| Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels, the fields explorer grown from the head's pill (FR-3) |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | put-back affordance, HUD toasts |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
+
+**Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
+is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
+the island shadow and corners 18 (the Me menu keeps its 28, concentric with the face). The Me menu
+(2026-09-22) was the first; @'s list in the line (§8) is the second; the zoom's menu and the palette
+are the third and fourth (the head, §8; FR-3, 2026-10-03). A menu opens over the stage and never over
+the frame: the line's menus grow upward from the line, 8 above it; the head's grow downward from the
+head — the zoom's 4 under it, the palette 16 — and end 8 above the line; the corner's, the Me menu,
+grows upward from your face's column and stands 8 above the line with the face beneath it (FR-4,
+2026-10-03 — it grew around the face until then, over the line's left end). **The desk's grown bar**
+(§8, the bar grown) is the fifth, with two exceptions (R20, 2026-10-03): its corners are 20, the
+bar's own, and it is placed from its own row — the bar's row stays where the bar stood and the rows
+grow away from it — rather than grown from a control in the frame.
+
+**The composited profile draws the card's material on the ground (2026-09-07; ICE
+design-013 Q8, ratified 2026-09-06).** In ICE's composited profile the resting and lifted
+card shadows above, §7's lift, selection ring and buttons, and §2.3's hairline are rendered
+by the ground's card frame — one SDF fragment per card, at true z — and the DOM card carries
+none of them; the notched frame is the selection chrome. The recipes stay exactly as written
+here: the ground reads them by name (`draft/ground` `theme.ts`: `SHADOW`, `LINES`, `LIFT`,
+`HEAT`). The stratified profile keeps its CSS chrome. Nothing here changes for a widget
+author; the change is which layer paints the chrome.
+*Erratum 2026-10-03 (DK-0d, against the desk):* ICE deleted its presentation profiles — the
+composited and the stratified, with the ground — at design-015 D5b (2026-09-26), so the composited
+profile never reached VibeField (pinned at ICE 0.11, where the DOM card still carries this chrome)
+and never will. On the desk (DK-D2) each object kind draws its own face, shadow and lift on the GPU
+under the mat's one light, the selection is the mat's pencil brackets (§8, the desk's chrome), and
+the recipes above stay the chrome's; what the desk's materials mean is the material book's (§5.1).
+
+### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
+
+**Ruled 2026-09-25 (DK-D5; thinking-the-desk §6): §5 is the material book.** The desk's materials
+are a fixed vocabulary, each a recipe with a normal response to the mat's one light, and each
+MEANS something; a material is written once by its recipe's name, as a colour is by its token's.
+The book is the desk's — what lies under the camera; the chrome over it keeps the tiers above and
+is lit by nothing (MC-1, §8 the desk's chrome). What an object is — an entity with its kind, its
+rect, its props, its stratum (pads · sheets · things), taped or not — is ICE's object model,
+`design-015` §5; this book says only what each material means and what wears it.
+
+| Material | Means | Wears it | On the desk |
+|---|---|---|---|
+| **paper** | writable | notes, the notebook's pages, the calendar, the whiteboard's face | drawn |
+| **ink** | drawn by hand | strokes on a board or a page, a note's handwriting | drawn |
+| **pictures** | a captured image | prints | drawn — device-local until the upload plane (DK-D21) |
+| **string** | a relation | wires, mind-map edges, patch cables | not yet — STRING |
+| **boards** (the mat) | a place: it holds a desk | the mat itself, the ground (§2.1); the mini mat, a desk inside the desk | drawn |
+| **stickers** (tape) | an attachment, a label | tags, Fieldmarks (§11) — the masking and label tape are already marks | not yet, as objects |
+| **tools** (metal) | a tool | rulers, clips, scissors | the mat's rulers and its lamp |
+| **instruments** (panel, plastic) | an instrument | the packs — shader, 8-bit, arduino: a panel, controls, screens, cables | not yet — the OBJECT KIT |
+| **portals** (glass) | a window onto something live | artifacts, pages, terminals, captures | not yet — PORTALS (DK-D19, DK-D20) |
+
+**The five guardrails** (thinking-the-desk §6): **no material without a meaning** — no ornament
+that does not inform (a glass portal that refracts the mat passes; the stitched-leather calendar
+fails) · **the efficiency clause** — every physical control is at least as fast as its flat equal
+(a knob takes a drag, the wheel and a typed value, and shows its number), and where the physical
+form loses, the flat form wins · **legibility rules the camera** — text at every zoom band, on
+every material, in both lights · **one physics** — one light, one spring set, one mass; no object
+keeps private motion rules · **the agent test** — a material must make working with an agent
+better: the agent sees the same objects by the same names, and a material only the eye can read
+is decoration. *A stub:* the recipes are ICE's (its `theme.ts` names them, each kind's pass draws
+them), and a material's row gains its recipe's name when a VibeField surface first wears it. Not
+yet drawn: string, stickers as objects, instruments and portals — each the desk migration's
+follow-on program, never a half-port.
 
 ---
 
@@ -374,8 +478,46 @@ arrives, and neither runs under reduced motion.
   keeps stepping, which is what keeps undo and collab landing visibly behind a partial
   overlay. Chrome that COVERS the window instead takes `useFrameFreeze` (ice 0.3.0), which
   parks the engine outright. Sheets recede → hold. Godview covers → freeze.
+  *Erratum 2026-10-03 (DK-0d, against the desk — DK-D2, R22):* the desk has no GL islands and no
+  stage hold — ICE retired the islands with its planes at design-015 D5b, and `useStageHold`'s call
+  sites go inert at the pin and leave at DK-17. A sheet still recedes (the transform above); behind
+  it the desk keeps its own idle — zero submits while nothing moves (design-015 §2), its wind the
+  host's to quiet (`deskLayer({ ambient })`). A cover still freezes: `engine.frame.freeze("cover")`,
+  now over a still of the desk (§8, the covers over the desk).
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
+
+**The view switch (One Frame §12, FC-D13; ruled 2026-10-01, built 2026-10-03).** The canvas is the
+ground floor (FV-D1); every other view is ONE cover over it (§10). From Canvas the cover fades in
+over 240ms plain `ease` and settles `scale(1.012) → 1` over 560ms on the island curve — Godview's
+open as it shipped — while the field recedes to `scale(0.98)` (600ms, island) and freezes: a cover
+covers, so it takes M5's freeze, not the sheets' hold. Between covered views the cover stays put
+and only its content changes, in place: a 180ms `ease` fade, no second settle. Back to Canvas the
+cover lowers — the rise reversed, 240ms out to 1.012 — and the field comes forward and thaws.
+**The frame never moves**: only the views track's thumb travels (300ms, island; §8). Reduced
+motion (M6): fades only, halved — the cover 120ms, its content 90ms; no settle, no recede, the
+thumb lands without travelling or dipping.
+
+**The file pill's own curve retired (One Frame F14; 2026-10-03, FR-3).** The head's name pill grows
+into the fields explorer as every other morph does — 600ms on the island curve (M1), the pill's own
+row staying its head — and the 560ms `cubic-bezier(0.32, 0.72, 0, 1)` it alone carried is gone. The
+head's menus grow from their control on the island curve in 240ms (the zoom's from the readout, the
+palette from the head); the zoom's folds at once, as @'s list does, and the palette fades out over
+200ms `ease`. Reduced motion fades them in over 120ms at full size.
+
+**The edges and the corner (One Frame §10, §12; FR-4, 2026-10-03).** Over a covered view a notch
+rests as its **sliver** (§8, edge trays) and on approach — the pointer reaching the 8px it rests in,
+or the keyboard's focus — becomes the notch in **240ms on the island curve**: ONE path morphing (M1),
+the sliver's 7 × 96 drawing into the notch's 26 × 116 (both drawn by the notch's builder, so every
+point has a partner), its hit box growing with it, and the glyph and the count fading in over 160ms
+plain `ease` behind it; leaving, it goes back the same way. A notch reached that way opens its drawer
+only once it IS the notch: its hover delay is the growth plus the notch's own (240 + 120ms). On
+Canvas the notch rests whole and nothing grows. **The Me menu** grows upward on the island curve
+(600ms) from a seed the size of the face's circle at its own foot, above the face, the surface
+fading in over 160ms and the rows rising nearest-first as before (§8); folding reverses it, and the
+face, which never moves, stays lifted while it is open. Reduced motion (M6): no growth anywhere —
+the sliver becomes the notch at once, its glyph and count fading in over 120ms, and the Me menu
+fades in whole over 120ms.
 
 ---
 
@@ -396,6 +538,23 @@ Glow/rim knobs are live CSS vars (Studio adjustable, defaults in code):
 light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
 `--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` · `--ic-rim-alpha-t: 0.85` /
 `-c: 0.55`.
+*Erratum 2026-10-03 (DK-0d, against the desk):* these knobs are CardShell's — the DOM card's
+overlap glow and rim — and the desk draws no DOM card (DK-D2): on the desk they have no consumer,
+and they leave `tokens.css` with CardShell, `card-appearance` and the appearance document's
+`overlapFeedback` at DK-17. Until the cutover they still dress the 0.11 canvas.
+
+**In the composited profile (2026-09-07)** these states are the ground's frame terms, not
+CSS: lift is `Motion.lift` (the same `liftScale`), the selection ring rides the frame's edge,
+and the overlap glow and rim become the CAST LIGHT — the lifted card lights the card under
+it through its own distance field (`draft/ground/GLOW.md`); the hot-point anatomy above is
+the DOM chrome's and retires with it. The tier alphas, the rim width and the colours stay the
+`--ic-*` values listed here; the size, offset and radial knobs have no meaning for the light.
+*Erratum 2026-10-03 (DK-0d, against the desk — DK-D2, R22):* no composited profile ships (§5's
+erratum). On the desk the living card's states are the kinds' and the mat's (ICE design-015 §7–§8):
+hover is a rise, never an outline; a drag lifts and carries the object; a sole selection wears the
+pencil brackets 6 out and several one union, so the select ring stays the chrome's focus (MC-4); a
+picked-up object rises into the hand (§8, tools in hand) while the desk behind it goes out of focus.
+The hot-point glow and rim retire with CardShell (above).
 
 ---
 
@@ -406,15 +565,47 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   `pointer-events: none` and ride the base transform. Header = eyebrow row (label left,
   meta right). Every widget ships a **compact face** for the zoom readability floor
   (03·A D15): title + badge, no micro-text.
+  *Erratum 2026-10-03 (DK-0d, against the desk):* the DOM card under the camera ends with the desk
+  (DK-D2, ruled 2026-09-25; ICE design-015 §2): on the Canvas view no widget is a DOM tree in a
+  DOM plane — an object kind draws its face, its compact form at a small zoom, its shadow and its
+  lift on the GPU, the mat's marks are its selection (the desk's chrome, below), and the only DOM
+  over the desk is screen-space chrome and the one focused editor. This anatomy stays true of the
+  0.11 canvas until the cutover; CardShell retires at DK-17.
 - **HUD island**: one morphing element (§6 M1), island material, centered-bottom;
   `64px` closed; opens to a sheet with pull bar (48×6 rounded-full, `black/20`),
   morphing ⊕→✕ (135° rotation), edge-fade scroll masks, no visible scrollbars.
+  *Retired into the line 2026-10-03 (One Frame FR-2; DK-D29):* the closed pill is gone — its 48px
+  ⊕ disc, its Select · Pan · Wire switch and its ✨ Clean up with it (Select and Pan stay on V and
+  H, Wire on C; Clean up waits for the selection bar's More, on the desk) — and the line's create
+  is the door: Objects (B) raises the SHEET behind the line, and the create's ⊕ is what turns to ✕.
+  The sheet is the old catalog, unchanged (the backdrop, the recede and the stage hold, the category
+  pills, the drag-out insert, its pull bar), a transitional door until the desk's pegboard replaces
+  it (DK-13).
+  *Erratum 2026-10-03 (DK-0d, against the desk — R14, R21):* on the desk the sheet goes too: Objects
+  raises the pegboard (below) — the desk's own drawer, behind the line — and **the tray island and
+  its state are deleted at DK-13** (R21), the catalog's tiles, its category pills and its drag-out
+  insert with them, as are §4's tray grid (132 cells, 18 gap) and §5's tray-tile shadow; DK-17
+  sweeps what remains. The pegboard keeps none of the sheet's backdrop, recede or stage hold: the
+  stage neither recedes nor dims behind it, the desk dimming under the board itself (R14). Select
+  and Pan retire too — the desk's one tool pans the bare mat and with Space — C no longer connects,
+  and Clean up is More's (DK-D29, DK-D24).
 - **Artifact Hub side panel** (AH-3/4; amended 2026-08-03): a `vibefield.browser`
   contribution inside the spine-owned `hud.side-panel` stage, separate from the bottom island.
   Its persistent 40px round toggle is the outermost control in the top-right chrome cluster:
   zoom pill · theme · Artifacts, with 8px gaps, anchored `top-4 right-4`. It uses the floating
   round-button recipe and the inverted active state; the same button toggles open/closed and
-  carries the matching tooltip/accessible name.
+  carries the matching tooltip/accessible name. *Since 2026-10-03 (One Frame FR-3) that cluster is
+  the head's right slot — the zoom readout · theme · Artifacts, 8 apart, on the head's axis
+  (`top-2 right-4`) — until FR-4 moves the toggle behind the right notch (FC-D10).*
+  *Retired into the right edge 2026-10-03 (One Frame FR-4, FC-D10 — closes D-7; F10):* the toggle
+  and the 26rem stage below are gone. The right notch (`package`) is Artifacts' only door and its
+  drawer holds the SAME contents — the `hud.side-panel` contribution, mounted in the drawer's
+  152-wide column (edge trays, below) — where the panel reads in its narrow form: the plugin's own
+  stylesheet answers a narrow container (under 200 wide) by stacking each row into a 128-wide card,
+  the preview on top (16:10, full width), the title, the fact line and the status below, the
+  overflow on a chip over the preview, the Add step's choices stacked; the wide form below stays
+  for any host that is wider. Escape, focus back to the notch, plugin disable or hot-reload folding
+  it, and M6 stand as written; the spine's arbitration is the frame's one owner now (§10).
   The panel is fixed `top-16 right-0 bottom-0 w-[min(92vw,26rem)]`, with
   `rounded-l-[2.5rem]`, sheet material, a left-cast side-panel shadow from §5, and internal
   edge-faded scrolling. The same physical panel translates from the right on the 600ms island
@@ -453,16 +644,117 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   between them, grouped by day under a 9px mono caption, dealt in 26ms apart on the island
   curve; no head, no find line, no pills — the notch carries the count and the pin; typing
   while pinned filters. Hover opens after 120ms and closes after a 320ms grace; click pins;
-  ⌘⇧V pins from the keyboard; Escape unpins. Non-modal like the Artifact panel: no backdrop,
+  ⇧⌘V pins from the keyboard; Escape unpins. Non-modal like the Artifact panel: no backdrop,
   recede, stage hold or focus trap. A capture (SNAP-3) **flies in**: a ghost of the still
   travels from where the capture was to the notch on the island curve (560ms), shrinking along
   its travel (M4), then the notch bumps on the pop and the count ticks; reduced motion fades it
   at the notch (M6). The column ends with the **Snap** tile, the product's door to the capture,
   disabled with the honest word when the door is absent or refused.
+  **Both edges, every view (One Frame §10, FR-1, FR-4; FC-D10; built 2026-10-03):** the clipboard
+  on the left as above, and **Artifacts on the right** — the twin, mirrored, its notch wearing
+  `package` and no count (the catalog's count is the plugin's to say, in its own header inside the
+  drawer), its drawer the Artifact Hub's column (above); the head's Artifacts button is gone. With
+  no Hub bound (its plugin off or reloading) there is no right notch — a door to nothing would lie,
+  as the side panel's toggle had the same rule — and an open drawer folds with it. The
+  notches' tooltips say their keys (FR-5): "Clipboard  ⇧⌘V", "Artifacts". **Over a covered view**
+  (Godview, History) a notch rests as a **sliver** — its own 7 × 96 path from the notch's builder,
+  a fillet of 5 into the wall and a face of 2, in the same solid chrome with its own strong
+  hairline and the island's drop, glyph and count hidden — in the 8px the view keeps clear at each
+  edge; **its hit box is the sliver** (no wider target), so a pane's text beside it never takes a
+  stray press, and on approach it becomes the notch (§6: 240ms, island; its hover delay the growth
+  plus the notch's own); on Canvas it rests whole. The edges are the frame's, not the canvas's:
+  they stand above the cover with the line (§10), so a drawer opens over Godview's deck or History's
+  room as it does over the field. **One owner:** each drawer is one of the frame's open surfaces
+  (§10) — opening one, by hover or by pin, folds @'s list, Objects, the fields explorer, the zoom's
+  menu, the palette, the Me menu and the other drawer, and any of them opening folds it (F11). A
+  drawer that holds the keyboard's focus — a field in the Hub's Add step — stays open when the
+  pointer leaves it; Escape folds it and gives focus back to its notch.
 - **Segmented control**: full-round track in `--vf-fill`, sliding solid thumb
   (white / `#2C2C2E`, hairline + `shadow-sm`), 300ms island ease; labels 13px medium,
   active full-opacity, rest `/50`. A **small** size (26px thumb, 11px labels) for a switch that
-  sits inside a composition rather than heading a section — the face's Sticker / Coin in Setup.
+  sits inside a composition rather than heading a section — the face's Sticker / Coin in Setup,
+  and the Me menu's Theme, Light · Dark · Auto (FR-4).
+- **The views track** (One Frame FR-1; FC-D2, FC-D4, FC-D11, FC-D17 ruled 2026-10-01; built
+  2026-10-03): the frame's way to each view (§10), the segmented control at the line's left end.
+  Four cells — Canvas (`canvas`), Godview (`panes`), History (`history`), and Assistant (`message`),
+  whose cell waits, faint by ink (the faint text at 55%), named "not built yet" — each **printing
+  its key under its glyph**, the way a Mac keyboard prints F1 under its brightness mark. Cells
+  46 × 36 on a 48 pitch (the track 196: padding 3, gap 2), the glyph 15 (the views' glyphs at rest
+  tertiary, secondary under the pointer, primary on the cell that is on), the key 3 below it at 9 —
+  the digit 600 in secondary ink, the ⌘ 500 a step lighter in tertiary, both a step darker on the
+  cell that is on or hovered. The track is `--vf-fill` (by night the foreground at 9%); the thumb is
+  the segmented thumb (`--vf-chrome-solid`, the hairline and `0 2px 6px` black/8; by night the
+  foreground at 20%, no shadow) wearing a key's skirt — a 1.5px black/10 lower edge, and by night a
+  0.5px white/10 top light over a black/55 skirt — because the button is the key. It slides 300ms
+  on the island curve. **⌘ held alone for 400ms** (so ⌘C and ⌘V never light it; another key with ⌘,
+  a pointerdown, a wheel or the window's blur puts it out): the keys go primary and the glyphs to
+  45%, in 160ms. **⌘ + a digit** presses its cell: the thumb slides and lands with a 1px dip (240ms,
+  the lift curve); ⌘4 says "Assistant · not built yet" over its cell for 1.4s — solid chrome, 12px
+  medium in secondary ink, the strong hairline ring and the island shadow, rising 4px as it fades
+  in — and nothing moves. On Windows the keys read Ctrl 1…Ctrl 4. A cell carries its key in its
+  tooltip and its accessible name (`aria-keyshortcuts`); how the keys reach the frame is §10's.
+  *As built (FR-1):* until the line exists the track sits alone in the line's material (§5) — a
+  208 × 52 pill, padding 5 × 6, at the line's left end (§10) — so the line can grow around it
+  without the track moving. *Folded into the line 2026-10-03 (FR-2):* the same track and keys at
+  the line's left end, on the line's glass; its own pill is gone, and nothing about it moved.
+- **The line** (One Frame FR-2, FR-3, §5; FC-D1, FC-D3, FC-D14 ruled 2026-10-01; built
+  2026-10-03): the frame's foot (§10), the same in every view — `[views] create │ draft mic send`,
+  the composer as one product composition. 880 × 52 on the line's glass (§5), padding 5 × 6, its
+  pieces 2 apart and centred on the foot axis. From the left:
+  - **the views track** (above), its left end;
+  - **create** — 32 round in the ready fill (the foreground at 8%; 14% under the pointer, where it
+    grows 1.06 on the pop curve), 6 clear of the track, its glyph 16 in secondary ink (primary while
+    open or hovered). It is the view's own act (FC-D3), and only Canvas's is a bare plus (FR-3):
+    **Canvas — Objects** (`plus`, B): the objects rise behind the line and the plus turns 135° into
+    ✕ over 600ms on the island curve; **Godview — New terminal** (`start`, ⌘T): a fresh shell in the
+    active pane, which shows its launcher; **History — Resume** (`resume`): waiting, faint by ink as
+    the Assistant's cell is, until a session is chosen. Between views the glyph cross-fades in place,
+    200ms `ease` (One Frame §12); the tooltip says the act and its key ("Objects  B", "New terminal
+    ⌘T", "Resume this session — choose a session first"), open it says "Close  Esc";
+  - **the rule** — 1 × 18 in the strong hairline, 8 after create and 6 before the draft;
+  - **the draft** — an editor, not a field: 14px body (§3 — the page drew 15, off the ramp, F15) in
+    primary ink, padded 10, one line that keeps the caret in view (typing past one line is the
+    page's next drawing, One Frame §21, and is not built). Its placeholder, tertiary, teaches the one
+    way in at rest — **"Message, or type @ to add…"** in every view (the page's own ruling of its
+    text, One Frame §21) — and once a chip aims it, says who it goes to: **"Message vibe-field…"**;
+  - **mic** — 36 round in the ready fill, `mic` 17. The desktop has no dictation door yet, so the
+    mic waits, faint by ink, and says so in its tooltip ("Dictation — not on the desktop yet");
+    nothing is faked;
+  - **send** — 40 round, 4 after the mic, `arrow` (up) 17: the ready fill and tertiary ink while there
+    is nothing to send, **inverted** (`--vf-foreground`, the inverse ink) once there is (D1). Return
+    sends.
+  **@ is typed, never a button** (FC-D1; no attach button either). An @ typed at the start of a word
+  opens **@'s list** — a menu (§5: solid, the strong hairline, the island shadow, corners 18,
+  padding 6), 316 wide, grown upward from the caret (its left 10 before the @, its foot 8 above the
+  line), read bottom-up, nearest first: **Send to** nearest the line ("Send to a pane" in Godview,
+  where the panes lead) — what the deck shows, each named by its folder as the swarm names its body,
+  with what runs there and its state word; above it **Add** — From the clipboard (its three newest as
+  34px thumbnails, corners 8), File…, Capture…, Past session…. Rows 36 tall (Send to's 46, a name
+  over a small line), corners 12, 13/500; eyebrows 10px mono capitals in tertiary ink; the hot row
+  in the ready fill. Typing after the @ filters both groups; ↑ ↓ move, Return or Tab takes the row,
+  Esc closes the list and keeps what was typed. A row with no door behind it says why and cannot be
+  taken (File… "no file door on the desktop yet", Past session… "History is not wired yet") — never
+  faked. A paste or a drop lands at the caret, as plain text.
+  **The chip** (D1, ruled 12 Sep): a token in the sentence, 24 tall, corners 7, 12.5/500, its glyph
+  13, padded 0 8 0 6, ringed 1px; it never splits a word, Backspace takes it as one character and ×
+  on hover removes it. A capture wears `capture` on the select blue at 14%. **The aim** — a Send to
+  row taken — is the chip that leads the draft (`@vibe-field`, the fill, primary ink): the target is
+  always named (CB-1), and it stays across sends until changed or removed.
+  **Send, until the agent seam** (thinking-four-views §11, the interim send): aimed at a pane the
+  deck is showing, the draft is PASTED into that pane's input — the road ⌘V takes, bracketed, Return
+  never pressed for you — and the line's note says "Pasted into vibe-field"; otherwise it goes to the
+  clipboard, and the note says that and why: "Copied — no agent takes a message from here yet". The
+  note is the views track's note (solid, 12/500 in secondary ink, rising 4px as it fades in), over
+  send with its right edge on send's (so a long sentence never leaves the window) — or, for create's
+  outcomes ("Terminal opened in the active pane"), centred over create — for 2.4s. Sending clears
+  the draft's words and chips and keeps the aim.
+  **One surface at a time, at the line** (One Frame FR-4, F11): @'s list and the objects are ONE
+  owner's two surfaces — opening either folds the other — and Settings, the palette, the docs
+  explorer, the Artifact panel and the Me menu fold them as they folded the tray. The Me menu and
+  the edges' drawers join the owner with FR-4. *Since FR-3 (2026-10-03) the owner is the frame's,
+  not the line's: the head's three surfaces — the fields explorer, the zoom's menu, the palette —
+  are in the same one value (the head, below). Since FR-4 (2026-10-03) the Me menu and the two
+  drawers are in it too (§10).*
 - **Chips / category pills**: full-round, `--vf-fill` resting; active = **inverted solid**
   (black-on-light / white-on-dark) with `shadow-md`; `active:scale-95`.
 - **Status badge** (`StateBadge`, 03·A C-7): dot or pill in §2.5 color + label; always
@@ -488,24 +780,102 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   flickers with routine traffic. The title carries the words, numbers, and the
   last-exchange time. Explorer tiles append the honest sync word to their time caption
   ("· syncing", "· waiting on 3", "· peer offline") only when there is one.
+  *Its ⊕ retired 2026-10-03 (One Frame FR-3: one plus — the line's create on Canvas is the only
+  bare plus on screen):* the pill keeps the name and the chevron, and **New field** is the
+  explorer's first tile, in words — a doc tile's footprint whose face is the fill inside a dashed
+  strong hairline, the words 12/500 in secondary ink at its centre, hover 1.03 / active 0.95 like
+  its neighbours. The empty explorer says "No fields yet" in words beside it, never "⊕ creates
+  one". *Became the head's name pill 2026-10-03 (One Frame FR-3, below):* its place (`top-4`,
+  280 wide), its single-click rename, the separate breadcrumbs beside it and its own 560ms curve
+  (F14 — this entry already said the island's 600ms) retired; the explorer, its tiles, New field
+  and the sync dot stand, as written here.
+- **The head** (One Frame FR-2 "the head says where", FR-6, §4, §6, §7; FC-D8, FC-D9 ruled
+  2026-10-01; built 2026-10-03, FR-3): the frame's top (§10) on the lights' axis — every control
+  40 tall at `top-2`, centred on y 28. On Canvas the left slot (from 96, clear of the lights) is
+  empty, **the name pill** stands centred on the window and **the zoom readout** at the right, 16
+  in. No keycaps and no plus anywhere in it (FR-3, FR-5; F1, F2).
+  - **The name pill** — the line's glass (§5), corners 20, padded 0 6 0 16: the field's name at
+    13/500 in primary ink, then **the chevron** — a 28 round button, `chevron` 12 turned down in
+    tertiary ink (the ready fill and primary under the pointer) — which grows the fields explorer.
+    **A double-click renames** in place, as do Return and Space on the focused name: the name
+    becomes an input with no border, on the ready fill, corners 6, as wide as what is typed, all of
+    it chosen; Return or leaving commits, Esc reverts. The sync dot (C6-4, above) follows the field's name. **Inside a
+    folder the crumbs fold into the pill** (FC-D9): `Studio desk › Sketches` — the earlier names
+    are buttons in tertiary ink (primary under the pointer) that go there in one flight, a
+    `chevron` 11 in faint ink stands between names, and the last is the name; **Esc goes up one**,
+    said in the parent's tooltip. **At the field's top it is one name**: no back button, no "Root"
+    (F12). **FitPath** (One Project, Many Places): the pill stays centred on the window and never
+    wider than the window less the wider side's slot on both sides; a path too long for that drops
+    whole leading names, one at a time, behind a `…` that is itself a button (it goes to the
+    nearest name it hides, and its tooltip names them all) — never a name cut mid-word (F13). Only
+    the last name, if even it alone cannot fit, ends in an ellipsis.
+  - **The fields explorer** grows FROM the pill (M1): one element, 600ms on the island curve,
+    still at `top-2`, to `min(56%, 34rem)` × `min(46vh, 420px)` (544 wide at the default window),
+    corners 22 22 40 40, the sheet tier (§5) ringed by the strong hairline with the top sheet's
+    shadow; the backdrop dim, the field's recede and the stage hold behind it, as before. Its head
+    row is the pill's own: the field's name and the chevron turned up ("Close  Esc"). Below, the
+    doc tiles (the file pill, above) in three columns, **New field** first, in words. Esc or the
+    dim closes it.
+  - **The zoom readout** (FC-D8; Canvas's one instrument): at least 66 wide, the line's glass,
+    corners 20, the zoom as one number at 13/500 `tabular-nums` in secondary ink (primary under
+    the pointer or while its menu is open). **A click grows its menu** (FC-D14, §5: solid), 4
+    under the head with its right edge on the readout's: 196 wide, corners 18, padding 6 —
+    **Zoom in ⌘+ · Zoom out ⌘− · Zoom to fit ⇧1 · Actual size ⌘0**, rows 36 tall at 13/500 with
+    each key at the row's end (11/500, tertiary: said, never printed — FR-5), the hot row in the
+    ready fill (the first, until the pointer or ↑ ↓ moves it); Return takes it, Esc or a click
+    elsewhere folds the menu. **A double-click fits.** In and out step ×1.25 and ×0.8, as the old
+    − + did; to fit frames everything in the folder you are in; actual size is 100%. Off the Mac
+    the keys read Ctrl+Plus · Ctrl+Minus · Shift+1 · Ctrl+0. The − % + cluster it replaces
+    retired with its text marks (F2, F9).
+  - **The palette** (⌘K, in every view): a solid panel (§5, corners 22, padding 6 6 8), 560 wide,
+    centred under the head at `top-16` (64), over the stage — never over the line, which it ends
+    8 above. Its field heads it: 46 tall, `search` 16 in secondary ink and the words at 14 (§3;
+    the page drew 15, F15) under the strong hairline — "Type a command or a view…". Below it every
+    act, **its key at the row's end**: **Views** — Canvas ⌘1 · Godview ⌘2 · History ⌘3 ·
+    Assistant ⌘4, which waits ("not built yet"); **On this view** — the line's create (Objects B
+    on Canvas, New terminal ⌘T in Godview, Resume this session in History, waiting until a session
+    is chosen) and on Canvas the four zoom acts; **App** — Settings… ⌘,; then each enabled
+    plugin's palette commands under the plugin's name, one no live handler answers drawn
+    "unavailable" and never run. Eyebrows 10px mono capitals in tertiary ink; rows 36, a 16 glyph
+    in a 24 column in secondary ink (the zoom acts carry none), 13/500, the hot row in the ready
+    fill; a row that waits says why under its name. Typing filters every group; ↑ ↓ move,
+    Return runs, Esc or the dim closes it. The prose footer ("↵ to run · esc to close") retired
+    (F7, F15): the keys are said in the rows. The backdrop dim behind it, no recede.
+  - **One surface at a time** (FR-4): the explorer, the zoom's menu and the palette are three of
+    **the frame's open surface** — the line's owner, renamed now that it holds the head's too:
+    `objects · @ · fields · zoom · palette`, one value, so opening any one folds the rest by
+    construction; Settings, the Artifact panel and the Me menu fold them and are folded by them as
+    before. A change of view folds whichever is open.
+  - *As built (FR-3, 2026-10-03):* until FR-4 moves them, the theme button and the Artifacts
+    toggle stand beside the readout in the head's right slot, 8 apart, on the head's axis where
+    the cluster stood (FR-4 takes the theme into the Me menu, FC-D5, and Artifacts behind the
+    right notch, FC-D10). The head is still the canvas's own chrome: it lies under the cover with
+    the field, and Godview's and History's heads are their own bands (FC-D6). Full screen's left
+    slot (16 rather than 96) waits for a host signal; none exists.
+  - *Since FR-4 (2026-10-03) the right cluster is GONE:* the theme went into the Me menu (FC-D5,
+    F3) and Artifacts behind the right notch (FC-D10, F10), so the head's right slot is the zoom
+    readout alone, 16 in, and the pill gives up only the wider of the lights' 96 and that slot.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
-  it, `hud.panel` above both) and is the account's one door. A 44px button holds the 40px face
+  it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
+  track is the way in*) and is the account's one door. A 44px button holds the 40px face
   (§2.8). Around it sits a 56px circle — `--vf-hairline` on hover (§7's fill step), invisible otherwise — and
   **that circle is the menu**: a click grows it (M1) on `--vf-ease-island` 600ms into a
-  256px-wide panel in island material (§5) with the island shadow and a hairline, its corners
-  28px so the arc stays concentric with the face. **The face never moves** (M2): the panel
+  256px-wide panel of solid chrome (`--vf-chrome-solid` — opaque, nothing shows through;
+  *changed 2026-09-22, James: "do not make it transparent" — it was island material*) with the
+  island shadow and a hairline, its corners 28px so the arc stays concentric with the face. **The face never moves** (M2): the panel
   opens up and to the right around it, so the second click lands on the same face and folds it
   away. It reads bottom-up, nearest first: *you* (the name and login beside the face; clicking
   them opens Settings → Account) · Settings… `⌘,` · Link Tailscale account… (only while
-  unlinked) · New user… · then, under a "Switch to" eyebrow, the other users — a 26px face,
+  unlinked) · New user… (wearing `person` — *it wore a plus until 2026-10-03, One Frame FR-3*) ·
+  then, under a "Switch to" eyebrow, the other users — a 26px face,
   the name, the tailnet as one mono word, and "N waiting" in words after a 6px orange dot. A
   machine with one user shows no switch list. Faces and row icons share one 44px column
-  centred on the owner's face. **Choreography** (§6's constants): the glass fades in over
+  centred on the owner's face. **Choreography** (§6's constants): the surface fades in over
   160ms plain `ease`; the name and login reveal 140ms behind the shape (240ms `ease`, sliding in 6px); rows
   fade and rise 4px nearest-first, 160ms + 26ms per row (cap 400ms); the face stays lifted
   while open. **Closing reverses it** (M4): the content goes in 120ms, the shape folds from
-  80ms over 600ms, and the glass fades as it reaches the face. Return/Space opens it with
+  80ms over 600ms, and the surface fades as it reaches the face. Return/Space opens it with
   focus on Settings…, the nearest act; arrows move. Esc or a second click folds it and returns
   focus to the face, as does anything else that folds it while focus is inside (`⌘,`, the tray's
   Settings…); a click outside folds it and leaves focus where the click put it, and Tab folds it
@@ -517,7 +887,12 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   name, the login; it opens the Account page — in place of the gear tile and the word
   "Settings"; the other users sit under it as 24px faces, each with its waiting count, and a
   switch main refuses is said under them in its words; and the Account nav group is gone,
-  because the head is the account.
+  because the head is the account. **The head is one tile** (*refined 2026-09-22, James: "self
+  contained and seperated from below sections"*): the card, the switch row and any refusal sit
+  inside the Settings sections' own material — the hairline, the whisper fill, 18px corners —
+  with a hairline between the card and the switch row, and the tile stands 12px clear of the
+  nav, so the switch row never reads as one more nav group. The row's eyebrow says "Switch
+  user", bottom-aligned with the faces it names.
   **Waiting, offline.** A resident user's waiting agents (UA-D3) show as a §2.5 orange count
   *beside* the owner's face (top-right, ringed 2px in the ground), never on it (I-5); it fades
   as the menu opens and the words take over in that user's row. An unlinked user reads
@@ -533,8 +908,316 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   yet carries another user's link. Another user's row, like New user…, leaves through the switch
   (below). A refusal (a switch or a new user main will not do) reopens
   the menu with main's sentence at its top, in words, until it folds. Open, the menu stands one
-  z-step above Godview's button, which it grows over. Under reduced motion the seed circle's
+  z-step above Godview's button, which it grows over. *Since FR-1 (2026-10-03) the button is gone
+  and what it grows over is the views track's left end, so open it stands above the frame until
+  FR-4 opens it above the line (FC-D14); its rows are never under the track.* Under
+  reduced motion the seed circle's
   hover fill does not show — the panel waits at full size, invisible.
+  **Above the line, with Theme (One Frame §10, FR-4; FC-D5, FC-D12, FC-D14; built 2026-10-03).**
+  *The corner* is the face's alone: the 44px button holding the 40px face at x 16–60, **centred on
+  the foot axis, y 734** (§10) — the devtools button and Godview's are gone from the corners. The
+  56px circle around the face is now only its hover (§7's fill step); **the menu opens ABOVE the
+  line, never around the face** (a menu never covers the frame, FR-4): a 256-wide panel of the same
+  solid chrome, corners 28, padded 8, its left at 8 and its foot 8 above the line (y 700 at the
+  default window), grown upward on the island curve from its own foot (§6) while **the face stays
+  put beneath it, lifted**. Nearest first, from the foot: **you** (the name 13/600 over the login in
+  11px mono, under a strong hairline; it opens Settings → Account) · **Settings…** `⌘,` · **Theme**
+  — a row whose `sun` (or `moon`, by night) heads a **small segmented control, Light · Dark · Auto**
+  (§8's small size): the app's ONE theme control (FC-D5, F3) · **Link Tailscale account…** (only
+  while unlinked) — which **starts the link itself** (F16: it no longer opens Account, which the name
+  row does): the menu folds, the daemon is asked to begin, and the sign-in opens in the browser the
+  moment the node offers its address; a refusal reopens the menu with the daemon's sentence at its
+  top · **New user…** · then the other users under "Switch to", above a hairline. The icons stand in
+  the 44px column centred on x 38, the face's own. Choosing a theme keeps the menu open (the app
+  changes behind it); ↑ ↓ walk the rows and stop once on Theme, where ← → choose. **One theme, one
+  owner:** the choice is MAIN's — one value per device (Light · Dark · Auto), Auto following the
+  OS through Electron's `nativeTheme` — and the renderer is told; **Settings → Appearance is the same
+  setting** (the same three, the regular segmented control), the Setup Assistant's sun/moon button
+  writes it too, and Godview follows it (§1.1). The menu is one of the frame's open surfaces (§10),
+  and stands with the frame above the cover in every view. **Devtools** leave the corner for
+  Settings → Advanced, a "Developer" section shown in development builds only (FC-D12, F12).
+- **The desk's chrome** (Chrome on the Mat MC-1…MC-6, 2026-09-28; MC-D1 ruled through One Frame's
+  lock and MC-D10 with DK-D23, 2026-10-02; the orchestrator's Phase 4 rulings R1–R25, 2026-10-03,
+  cited below as Rn; built on the desk by DK-11…DK-16): **the mat keeps its marks and the chrome
+  joins the field.** Under the camera is the desk's: the pencil brackets, the laser guides, the
+  masking tape, the label tape and the printed rulers are GPU marks in the mat's own inks, lit by
+  its Sun and Moon (§2.1). Over it is VibeField's: the bar, its menu, the tools in hand, the
+  pegboard's filters and the line's door are screen-space chrome, lit by nothing and following the
+  theme; they stand over the desk and under the frame (§10) — the head, the line, the edges and the
+  corner are above them. A control never dresses as a mark and a mark never becomes a control
+  (MC-1), so the desk's ink leaves the bar and the label tape leaves the filters. Every bar is the
+  line's glass and a menu grown from it the same piece, firmed to solid (MC-2, FR-7); colour is
+  content or state only — the mode in hand inverts, a pen's ink is its own dot, Delete arms in §2.5
+  red, focus is `--vf-select`, the pencil's twin (MC-4); the bar is one element through every role,
+  and the line keeps the foot (MC-5). **VibeField draws all of it** (MC-D10 = DK-D23): views over
+  ICE's doors, each a product composition (a controller and a controller-free view) cataloged with
+  fixture anchors; ICE's own `SelectionMenu` and `TrayBar` are inline-styled and constant-placed and
+  cannot be re-skinned to this. **ICE's own desk keeps its demo chrome** (MC-D11's "it follows"
+  deferred, DK-D23): nothing below binds ICE's ink bar, its Objects pill or its demo letter keys.
+  **The doors** — ICE gives the chrome data, never pixels. `handle.selection` offers `anchor()` and
+  `subscribe()` only, and the anchor (`SelectionAnchor`) carries the brackets' `box`, `count`,
+  `locked`, `gesturing`, `editing`, the `view`, the `rulers`, the hand (`held`) and the kinds' acts
+  (`menu`) — no ids, no types, no names. So the host reads the rest itself, in one place: the
+  selection's entities (`selectedEntities(engine.world)`), each one's type (`PrefabId`), its
+  definition (`engine.catalog.widget(type)` — `openable`, its container, its tray entry) and its
+  human name — the manifest's (a built-in's tray label), else the type id. The acts run through the
+  engine's ops: `ops.duplicateSelection`, `ops.setLocked(ids, locked)`, `ops.deleteSelection`,
+  `ops.reorder`, `ops.arrange`, `ops.open`, `ops.runMenuAction(id)`, `ops.useHeldTool(id)`,
+  `ops.putDown`. The pegboard is `handle.tray` (`anchor()`, `subscribe()`, `toggle()`,
+  `category(id)`); the desk's health is the layer's `status()` and `onStatus`.
+- **The status line** (R12, R16, R18 — the orchestrator, 2026-10-03; the head's place, FR-1): the
+  frame's one line for the desk's notices, under the head — where what the desk says once is said:
+  a type it cannot draw (the missing face, below), a type to remount, a capture that failed (the
+  covers), a degraded desk. It is the line's note (§8, the line) moved under the head: solid chrome
+  ringed by the strong hairline with the island shadow, corners 10, padded 7 10, 12/500 in
+  secondary ink, centred on the window with its top 8 under the head (y 56) — 8 under the tools in
+  hand (y 112) while an object is held — rising 4px as it fades in and gone after 2.4s. One notice
+  at a time, each said once, never per frame. A notice that carries an act — the degraded desk's
+  Reload (R18) — holds until the act is taken or the state clears, the act at its end as a text
+  button in primary ink. It stands with the frame, above the cover (§10).
+- **The selection bar** (Chrome on the Mat §3.1; MC-D2 the line's glass, ruled 2026-10-01; MC-D1;
+  One Frame §7; R1, R2, R3, R7–R10, R23, R25; DK-11): one element over `handle.selection`'s anchor,
+  placed imperatively each time the anchor publishes — never a render per frame.
+  - **Place** — centred over the selection's brackets (the anchor's `box`: 6 out for one object,
+    the union's 10 out for several), its foot **10** above them; when its top would cross the
+    **safe top, 94** (§10) it stands 10 below them instead, and a bar flipped below clamps at 94
+    (R7); kept **42** from each side (the notch's 26 + 16); its top never lower than **660** (its
+    foot 8 above the line's top, 708). A selection wholly off-screen hides the bar (R7).
+  - **Size and material** — **40** tall (the top chrome's height), padding 4, gap 2, corners 20, on
+    the line's glass (§5) with its hairline and the island shadow; cells **32** × 32, corners 16,
+    their glyphs **16** in secondary ink (primary under the pointer); the rule 1 × 18 in the strong
+    hairline, 5 clear each side.
+  - **Order** — **Send to…** · rule · the kind's acts · Duplicate (`duplicate`) · Tape it down
+    (`tape`) · More (`ellipsis`) · rule · Delete (`trash`). *Send to…* is the bar's one word:
+    `agents` 16 and "Send to…" at 13/500 in primary ink, resting on the ready fill (the foreground
+    at 8%), a 32-tall pill padded 0 12 0 10, gap 7; several selected, it counts them — "Send 2 to…".
+    **The kind's acts** are those every selected object's type declares (the anchor's `menu`, ICE
+    K8a), each a 32 cell wearing its glyph by §13's table (R2) — a `{ path, fill? }` drawing
+    through the bar's one path renderer, a name the set lacks as `missing`, said once — and an act
+    with no glyph as its label alone, a text cell (R3); its label is its tooltip and accessible
+    name; the host prints what the kind declares and adds nothing. **Taped** (the anchor's
+    `locked`: every selected object taped): no Duplicate, and the tape act becomes **Lift the
+    tape**, wearing `lift` — an ACTION whose name changes, never a toggle and never `aria-pressed`
+    (R10).
+  - **States** — hover the ready fill (8%) · press the foreground at 14% and scale 0.95 · Send to…,
+    which rests on the ready fill, steps to 14% under the pointer and 0.97 pressed (R25) · More,
+    its menu open, shown on — the inverted solid · Delete arms only while hovered:
+    `--vf-ink-danger` on `--vf-red` at 12% · focus a 2px `--vf-select` ring, offset 2.
+  - **Keyboard** (R9) — a toolbar named "Selection": ← → move between its cells, Esc goes back to
+    the desk, and Tab from the draft reaches it. A tooltip says the act and its key, the frame's way
+    (FR-5): "Duplicate  ⌘D", "Tape it down  ⇧⌘L", "Delete  ⌫" — the desk's keymap (DK-D24);
+    ⇧⌘L is the DESK's act, ICE's default keymap's (`keymap.ts:172`), not a kind's, so it is printed
+    (R23, reversed 13:40Z). A kind's act prints none on this build — its declared keys are ICE's
+    demo's (R1, DK-D24); Send to… and More have none.
+  - **Motion** — away for a gesture (a drag, a marquee, a pan, a pinch) and while a note is being
+    written (the anchor's `gesturing`, `editing`): out in 90ms, back 200ms after it ends, in over
+    180ms (ICE's, as built); away too while @'s list is open from Send to… (below). Deselected, it
+    fades out over 120ms `ease-out` (R8). Reduced motion (M6) halves every duration, fades only
+    (R8).
+  - **A missing face** selected (below): the bar names the type where the kind's acts would stand.
+- **The bar grown — More, and right-click** (Chrome on the Mat §3.2; MC-D6 ruled through One Frame's
+  lock; FC-D14 solid; R1, R4, R5, R6, R20, R23, R26; DK-D29, DK-D24; DK-11): **More grows the bar
+  into its menu** — ONE element (M1), on the island curve over 600ms, the Me menu's grow — upward,
+  or downward when its top would cross 94, the bar's own row then heading it (R6); when it fits
+  neither way the list scrolls inside it, clamped between 94 and 660 and never over the line (R6).
+  **The bar's row never moves** (M2): More stays under the pointer, shown on. The menu is **solid**
+  (§5's menus, with the grown bar's two exceptions — R20: corners 20, the bar's own, and placed from
+  its own row), at least **244** wide (the bar's width when wider), centred on the bar and kept 42
+  from the sides; its list padded 6 6 2 (2 6 6 grown down), and a hairline in the strong hairline,
+  12 in from each side, between the list and the bar's own row. **Rows** 34 tall, corners 12, padded
+  0 10, 13/500 in primary ink, the nearest hot in the ready fill; **keys at the row's end**, 11/500
+  in tertiary ink; between groups a hairline in the strong hairline, 10 in, 4 above and below; grown
+  upward the list reads bottom-up, nearest first. **The order, nearest first:** the kind's acts
+  (`ops.runMenuAction`; no keys, R1) · **Open** (↩) — only when exactly one object is selected and
+  its type opens (`engine.catalog.widget(type).openable`), running `ops.open`; a container (the mini
+  mat) has no row, ⏎ enters it (R4) · Send to… | Duplicate (⌘D; not while taped) · Bring to front ·
+  Send to back (`ops.reorder`) · **Clean up** (two or more selected: `ops.arrange` tidies them into
+  reading-order rows, one undo step — DK-D29) | Tape it down, or Lift the tape (⇧⌘L, R23) | Delete
+  (⌫, armed red under the pointer). No Copy: the engine has no copy op. Send to…, Bring to front,
+  Send to back and Clean up print no key — DK-D24 binds none. **The eyebrow** names what it acts on,
+  at the far end, in the mat's print: mono 10, capitals, 0.08em, tertiary, padded 8 10 5 — NOTE · 2
+  OBJECTS · CLOCK, the host's read of the types' names (the doors, above), and a missing face's type
+  with its word: NOTE · PLUGIN OFF. Rows fade and rise 4px nearest first, 160ms + 26ms a row (cap
+  400ms), and fold back the same way (M4); ↑ ↓ walk, Return takes. **It closes** on Esc, a click
+  elsewhere, a gesture and a change of selection (R5, ICE's rule), and it is one of the frame's open
+  surfaces (§10) — its Esc is taken before the desk's Esc ladder (R5). **Right-click** grows this
+  same bar into this same menu — never a separate popover (MC-D6) — through a VibeField
+  `contextmenu` listener. Selecting the object under the pointer first needs the desk's pick, which
+  the handle does not offer (core's `FramePickSource.hit` tests one object it is given; the stack's
+  `framePick` is internal): it is ICE ask **I27**, `handle.pick({ x, y })` → the object at a screen
+  point or null (R26). **Until I27 lands, right-click acts on the current selection only** — it
+  grows the menu of what is already selected and selects nothing (R26); with I27 it selects the
+  object under the pointer first. **The comment command** (DK-D24: the C key's wrap of the
+  selection, which leaves the keymap) becomes a row here when DK-8's comment kind exists. The bare
+  mat's own menu (Paste here, New note here) is not built (a Marks on the Mat item).
+- **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
+  readouts; One Frame §7; ICE I20, I22; R2, R13; DK-12): when an object is picked up (the anchor's
+  `held`), **the same bar travels** with the pickup and becomes the tools in hand — one element
+  (M1), **560ms** on the island curve (I20's `travelMs`, carried as `HeldAnchor.travelMs`), its
+  contents swapping by a 120ms cross-fade at the travel's end (R13; reduced motion, a fade only) —
+  hides while the object flies home (`landing`) and is back over it 200ms after it lands.
+  **Place:** under the head, its top at **y 64** (centre 84), 16 under the name pill, centred on
+  the window — the field, then what you hold; object chrome, not the head's (FR-1). The held
+  object's **reading fit keeps 116** above it (the bar's foot, 104, + 12) **and 100** below (the
+  line's 88 + 12): I20's `deskLayer({ hold: { top: 116, band: 100, travelMs: 560 } })` — ICE's own
+  56 / 72 are its demo's. **Order:** Send to… · rule · the kind's tools · the readout · rule · Done.
+  **The tools** are the anchor's slots (`HeldAnchor.tools`; each `HeldSlot` an `id`, a `label`, a
+  `kind`, a `hint`, a `glyph`, a `swatch`), **in their declared order, never regrouped** (R13), a 6
+  gap where the run changes between pages, inks and tools; each runs through `ops.useHeldTool(id)`.
+  A **mode with a swatch** (`kind: "mode"` and a `swatch` — ICE's pens) is a **dot** (R13, MC-4):
+  12px in the slot's own ink with a 1px inner ring (black/14; white/20 by night) so a black ink
+  reads on the night glass, in a 28 × 32 cell; the one in hand wears a 1.5px foreground ring 2px
+  off the dot — the notch pin's ring; a dot grows 1.18× under the pointer (160ms, pop). A **mode
+  without one** (the eraser, the calendar's pen) is a 32 cell, the inverted solid while it is the
+  one in hand (`aria-pressed`); an **action** (`kind: "action"` — undo, today, a page) is a 32
+  cell; a slot with no `kind` waits, faint by ink. Glyphs by §13's table (R2). **The readout**
+  (MC-D9, I22's `HeldAnchor.readout` — "Page 1", "September") is ONE slot after the tools, before
+  Done, since the string carries no position (R13): 12/500 `tabular-nums` in secondary ink, at
+  least 44 wide, padded 0 4; a kind that says none shows none. **Done** is VibeField's primary at
+  32: the inverted solid, 13/500, padded 0 15, no glyph, the chip shadow (`0 4px 10px` black/14,
+  /40 by night); 0.9 opacity under the pointer and 0.96 pressed (R13); it runs `ops.putDown()`.
+  Tooltips say the slot's `label` and its `hint` the frame's way — "Felt pen  1", "Eraser  E",
+  "Put it down  Esc". **The specimens:** of ICE's six built-ins (the note, the print, the notebook,
+  the whiteboard, the calendar, the mini mat) three open — the notebook ‹ › · felt, ball, fountain,
+  red · undo, reading "Page 1"; the whiteboard black, blue, red, green · eraser · undo · redo; the
+  calendar ‹ › · today · pen, reading "September" — and the example plugin's clock
+  (`@ice-examples/desk-clock`) holds seconds · the 24-hour ring · an hour back · an hour ahead · the
+  next dial, its own five drawings (§13), reading its time.
+- **The pegboard — Objects, behind the line** (Chrome on the Mat §3.4–§3.5; MC-D7 ⊕ Objects, B,
+  ruled through One Frame's lock; MC-D3 ruled 2026-10-01: segmented; One Frame §7; ICE I21; R14,
+  R19, R21; DK-13): **the door is the line's create on Canvas** (§8, the line): Objects, B, calling
+  `handle.tray.toggle()` and mirroring the tray's `open` — the plus turned 135° into ✕ while the
+  board is out. While an object is in hand the desk refuses the board (`open()` answers false), and
+  the create is **faint by ink** with the tooltip **"Put it down first"** (R14). ICE's Objects pill,
+  its ✕ and its ride on the drawer's edge are its demo's: here the drawer's handle is the line.
+  **The board rises behind the line** — the desk's own pegboard, its specimens hung by category
+  over their label tape — and **its lay keeps 88 at the foot** (I21:
+  `deskLayer({ tray: { foot: 88 } })`) so the last row clears the line and the board's scroll still
+  reaches it. **The stage behind it neither recedes nor dims** — the desk dims under the board
+  itself (design-017), so the old sheet's backdrop, recede and stage hold do not come with it (R14).
+  It hangs only the kinds whose plugin is on: the install set's disabled list filters the entries
+  `tray.categories()` offers (P3c — the old sheet's filter, now the board's). **The filters are
+  segmented** (MC-D3): the kit's `SegmentedControl` **extended** — a thumb element, ids distinct
+  from labels, ← → Home End (R19; a kit change, UI_SYSTEM — today the primitive renders each
+  option's string as both its id and its label, with no thumb and no keys) — cut for the wood,
+  centred in the board's clear **header band** (`TrayAnchor.drawer.header`, 48 tall), 12 in from
+  its sides, following the drawer every frame of its slide and fading in over its last 40%. The
+  track is the chrome's solid at 55% over a 12px blur, **sunk** — an inset `0 1px 3px` black/16
+  inside the hairline — padded 3; the thumb is solid chrome with the hairline (by night the line's
+  edge, the strong hairline — R19) and `0 2px 6px` black/12, **sliding 300ms on the island curve**
+  across widths; segments 30 tall, padded 0 15, 13/500 sentence case, in tertiary ink at rest and
+  primary on the one chosen. **All** first, then `tray.categories()` in the lay's order — the six
+  built-ins' Paper and Surfaces, the example clock's Things, and whatever a plugin's kind declares —
+  **no counts**. Past the band's width
+  they scroll inside it, the far end fading under the tray's mask; a click, or ← → Home End,
+  chooses (`tray.category(id)`). **Chrome does not dim by night**: the anchor's `night` is not read
+  here. **Inserting by keyboard** (R14): in the board the arrows move between the specimens, ⏎ lays
+  the focused one at the view's centre, Esc closes the board; the filters and the board are two
+  stops of Tab. **One surface at a time:** Objects is one of the frame's open surfaces (§10) — it
+  folds @'s list, the explorer, the menus, the drawers and the palette, and they fold it; Esc
+  closes it ("Close  Esc"); B toggles it, never while typing and never under a cover. **The tray
+  island and its state are deleted at DK-13** (R21) — the pegboard replaces them; DK-17 is the
+  sweep.
+- **Send to…** (Chrome on the Mat §3.6; MC-D5 ruled through One Frame's lock: hand off to the line;
+  DK-D26; One Frame §7, FC-D1; R15, R25; DK-14): **it only drafts** — it never sends and never
+  aims; VibeField aims in one place, the line. Pressed (on the bar, in hand or in the menu), the
+  selection becomes **one chip** in the draft: the host inserts it at the caret, focuses the draft
+  and **types the @**, so @'s list opens exactly as typing opens it (FC-D1), the caret after the
+  chip (R15). Before it lands, a chip of the object's face **flies from the selection to the caret
+  on a straight line, 1.25 → 0.86, 560ms on the island curve** (R15; M4, shrinking along its
+  travel), and the @ comes 180ms after it lands; a draft already aimed takes the chip with no @,
+  and send arms (Chrome on the Mat §3.6). It lands as the line's chip (§8, the line: 24 tall,
+  corners 7, 12.5/500, the glyph 13). **Its face** (R15): a note wears its paper — its `paper` prop
+  through the palette's CSS colour — and its ink, `snippets` and its first 24 characters; any other
+  kind its NAME and no glyph ("Clock") — neither ICE's `TrayEntry` nor DK-0f's contribution carries
+  one (R15, amended 13:40Z); several, `package` and "N objects"; a missing face, its type's name.
+  **What it
+  carries** (DK-D26): the objects' names, their durable text and a still through the capture door,
+  `handle.capture({ rect })` (ICE I23), of the anchor's box WITHOUT the brackets' 6 / 10 outset,
+  the marks hidden first by the host's own doors (R15). The bar steps aside while the list is open
+  and comes back when it folds. Reduced motion (M6): no flight — the chip fades in at the caret.
+  The picker Marks on the Mat drew growing out of the bar was never built and is not; an agent
+  reading or rendering the desk itself is the AGENT'S EYES program, beyond a chip.
+- **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24; R11, R12, R24):
+  an object the desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a
+  type this build never registered — ghost stubs register faceless types only — or one registered
+  after the desk mounted, I25) or its **kind faulted** (refused at create, or quarantined after
+  three strikes: the layer's `status().faults`) — wears **ICE's missing face**: a faint 45° hatched
+  card the size of its box, a hairline edge, no text, pickable, so it still selects, moves,
+  duplicates (the data — R11), tapes and deletes like any object. VibeField draws no face of its
+  own (the placeholder kind is struck). **The bar names it**, in words where the kind's acts would
+  stand: the type's human name — the manifest's when there is one, else the type id (R12) — and
+  why, in one of five words (R12, R24): **"plugin off"** (its plugin disabled) · **"plugin gone"**
+  (uninstalled) · **"no kind"** (never registered) · **"remount to draw it"** (registered after the
+  mount, I25) · **"can't draw"** (its kind faulted) — "Note · plugin off" — 13/500 in secondary
+  ink, a label and not a control; the grown menu's eyebrow says the same in capitals, and Send to…
+  carries the type's name. It is said once, in the status line (R12, above), never painted onto the
+  object as an alarm.
+- **The covers over the desk** (DK-D25 ruled 2026-10-02 — "frozen desk should be still and consume
+  no render time at all"; FC-D13, FC-D15, FC-D16; ICE I23; R16; DK-15): **under a cover the desk is
+  a still and costs nothing** — the cover fades in over the LIVE desk (240ms) while
+  `handle.capture()` (I23) takes its last presented frame; when the capture resolves, the still,
+  blurred once, swaps in under the cover's tint and the canvas is hidden — by `visibility`, never
+  `display:none`, which the host's ResizeObserver would read as 0 × 0 — and then
+  `engine.frame.freeze("cover")` parks the loop, so the desk runs zero frames and zero submits for
+  as long as the cover stands (the witnesses: the layer's `submits()` and `perf().frames`; the GPU
+  memory ledger never reads 0) (R16). The numbers: the blur **40 CSS px** — 40 × the still's bitmap
+  px per CSS px — **once**, in an OffscreenCanvas `filter`, never a `backdrop-filter`, which the
+  compositor redraws every frame the cover's own content moves (Godview's swarm moves every frame);
+  the cover's own ground over it at **72%** (FC-D16), holding over the live desk until the still
+  arrives — never a blank; the still recedes to 0.98 over **560ms**, transform only — the cover's
+  settle (One Frame §12; §6's 600 for the field is the island curve's morph, not this recede); a
+  covered view's content ends at **692** (FC-D15, §10). Back to Canvas: thaw first, the live canvas
+  shown at once under the lowering cover, the still dropped. A resize or a theme change while
+  covered re-captures: thaw → one frame → capture → freeze (R16). A capture that answers nothing (a
+  lost device) covers the mat's ground as the theme lights it — `--vf-mat-ground`, `#3D5A30` by day
+  and `#313C40` by night (§2.1's lit values; the token is DK-15's to add) — and says so once in the
+  status line (R16), in the card's own words: "The desk lost its graphics device". Until I23 ships,
+  `createImageBitmap` on the desk's own canvas stands in — a bitmap ICE does not promise, so its
+  absence falls back the same way. **Godview's live backdrop** (GT-7's viewer glass,
+  `backdropOpacity` / `backdropBlur`) **and rosetta's room glass retire on the desk**: the cover is
+  a tint over the still, and their settings rows go (R16; the deck's note, below).
+- **Peers on the mat** (DK-16; MC-D10 = DK-D23, R22; UA-D17, §2.8 I-1, I-4; R17): another person's
+  pointer on the desk is VibeField's own cursor — ICE's are turned off,
+  `deskLayer({ cursors: false })` (petition I26, being built), so nobody is drawn twice (R17).
+  **Where:** each peer's `PresenceCursor` world x/y through the camera every frame, in a reflector;
+  `usePresencePeers` gives only the roster's names (R17). **When not:** an idle peer hides after
+  8s, a pointer that left its window hides, and a peer inside another canvas hides (R17). **Above**
+  the mat, **below** the bar and the line (R17). **The arrow** — the pointer's, 18 × 22, its tip at
+  2,2 in its box, drawn inline (its path joins §13's allow-list, R17) — with a 1.4 white edge and a
+  `0 1px 2px` black/25 drop; **the label** — its box's top-left 14 right of and 18 below the arrow
+  box's top-left corner (R17) — a **chip on the line's glass** (R17, amended 13:40Z): 22 tall, full
+  round, padded 0 9 0 7, `--vf-chrome-solid` at 88% (94% by night) with the line's blur and
+  hairline (§5), its words 11.5/500 in the chrome's primary text ink, reading **the face first, then
+  the name** ("🦊 James", §2.8) — never bare text or a bare ink on the mat, where `#68686B` measures
+  1.4:1 on the Sun-lit sage and 2.0:1 by night and even the desk's own ink only 2.5:1 by day (§2.8's
+  erratum), so it reads on any mat; DK-16 measures it on the lit mat. Never the peer's own colour
+  (I-1). Your own pointer on the desk is the OS's and the desk's own open hand; the halo is gone
+  (§2.1).
+- **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3, DK-16):
+  the layer's status (`onStatus`) is said in VibeField's words — never ICE's black monospace screen,
+  never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or
+  the device lost — shows the full **unavailable card** in the Canvas stage: the kit's
+  `UnavailableState` **extended** — a detail slot, a Reload act and a 380-wide variant (R18; a kit
+  change, UI_SYSTEM) — on the plain ground (`--vf-canvas-bg` and §2.1's CSS-fallback dots — not the
+  mat, which nothing can draw), centred, the strong hairline dashed, corners 22, padded 26 26 22:
+  **what happened** (14/600, primary), **what to do** (12.5/400, tertiary), **one Reload** (the
+  primary: inverted, 36 tall, padded 0 18, corners 18, 13/500) — a desk remount, not a window reload
+  (R18) — and in the detail slot **ICE's message, verbatim**, last and small (11 mono, faint, 12
+  below; R18). ICE says why in that one string, so the card reads it: **the device lost**
+  (`the device was lost: <reason>: <message>`) — "The desk lost its graphics device" · "The graphics
+  device was reset while the desk was drawing. Your objects are saved in this document; reload to
+  draw them again." · Reload · the message; **no WebGPU** (a boot refusal ending
+  `WebGPU is unavailable here (no navigator.gpu)`) — "This computer can't draw the desk" · "The desk
+  draws with WebGPU, which this graphics setup doesn't offer — a remote desktop has none — so
+  reloading won't help. Your objects are saved in this document." · no Reload, since it would not
+  help (R18) · the message; **any other refusal**
+  (`no desk — the adapter, the device or the pipelines were refused: …`) — "The desk couldn't start
+  its graphics" · "Your objects are saved in this document; reload to try again." · Reload · the
+  message. **`degraded`** (an uncaptured GPU error; the desk still draws) is a banner, not the card:
+  the status line holding ICE's message and a Reload until the state clears, the desk drawing on
+  beneath it (R18). No Canvas2D fallback in v1 (DK-D32): the state is the whole answer, and the
+  frame around it still works.
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
   opens it, because that user already exists by then — the chooser is where you choose who to
   enter instead. Eyebrow "Users", one line of voice, then every user on this machine as a tile,
@@ -606,6 +1289,8 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   pill for drop affordances ("Release here to put it back"), progress with numbers
   ("index rebuilding · 42%"), placeholder faces for missing plugins (A6/A8). Empty
   screens invite the next action.
+  *Erratum 2026-10-03 (DK-0d, against the desk):* on the desk a missing plugin's object wears ICE's
+  missing face, never a VibeField placeholder (DK-D18 as amended; the missing face, above).
 - **Doc sync state** (C6-4; Settings Mesh section): one row per doc sync has FACTS
   for — no facts, no row (with no peers, quiet IS the honesty; never a vacuous
   "synced"). Vocabulary: `in step` · `syncing` (green — healthy work) · `pending`
@@ -673,15 +1358,26 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   theme the panes are handed (a catalog theme, the per-mode choice, or §2.7's terminal
   grounds), at the stage's glass (`--vf-godview-stage-opacity`). A pane's translucent ground
   over a sheet of its own colour composites to that colour exactly, so lip, gaps and panes are
-  one surface — at the default opaque backdrop; a viewer who thins the backdrop thins the
+  one surface — at an opaque backdrop; a viewer who thins the backdrop thins the
   sheet with the rest of Godview, and the panes then read a shade denser than the lip (the
   panes cannot shed their ground: ghosttea draws inverse video and glyph backdrops from it).
+  *Since 2026-10-03 (FC-D16) the backdrop's default is the covers' glass, 72%*, so that shade is
+  the default look; the panes keep their own 82% and the launcher its 92% floor (§2.7), so text
+  never sits on the field. **Inside the cover (§10, FC-D15)** the sheet's ground still runs to the
+  window's foot and edges, under the line, but the panes stop at 692 — the 88px reserve above the
+  foot — and keep 8px clear of each edge.
+  *Erratum 2026-10-03 (DK-0d, against the desk — DK-D25, R16):* on the desk Godview's LIVE backdrop
+  — the viewer's glass, `backdropOpacity` / `backdropBlur` (GT-7), and with it the terminal
+  preview's middle layer — retires, as does rosetta's room glass in History: the cover is a tint at
+  the covers' 72% over a still of the desk blurred once (§8, the covers over the desk), and their
+  settings rows go.
   Over the monitor the card occludes the bodies exactly as much as Godview occludes the field. **The edge moves:** a
   grip in the lip (`role="separator"`, ↑/↓ 24px, ⇧ ×4, Home/End, double-click to rest) drags it.
   Downward the monitor grows and the swarm's field grows with it; upward the monitor does NOT
   shrink — its tuned height (`Monitor height`, 35%, 170px floor) is its minimum — and the sheet
   slides OVER it, up to the bar's bottom edge, the bodies still moving beneath. The deck keeps
-  at least 120px. Terminals resize live (rows only, so no reflow of history). The position is
+  at least 120px — above the cover's reserve, inside the cover. Terminals resize live (rows only,
+  so no reflow of history). The position is
   the viewer's (`localStorage`), re-clamped to each window, never a shared setting. No
   transition on the edge: every frame of an animated edge would be a PTY resize.
 - **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
@@ -766,10 +1462,49 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   saved backdrop, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
   imitation of a terminal. Its glass is named in the order light passes through it: the
   pane's opacity · Godview's backdrop (opacity and blur, `--vf-godview-stage-opacity/-blur`;
-  opaque and sharp by default) · your canvas. Variants: `window` (on the page), `deck` (the
+  the covers' 72% and sharp by default — FC-D16, 2026-10-03; it was opaque) · your canvas.
+  Variants: `window` (on the page), `deck` (the
   theme browser's stage), `thumb` (a 600px window scaled, docked in the corner once the big
   one scrolls away, and minimizable to a pill). It is `inert` inside a `role="img"` with a
   description — a picture, never a second UI.
+- **Godview's timeline is the swarm through time** (TL, 2026-10-02 — James ruled design F,
+  Wakes, with its map of the day; `draft/godview-timeline/`). A fourth monitor view (`TIMELINE`,
+  after swarm, list and rain). It is painted into a canvas, like the swarm and the rain. Lanes run
+  in birth order and never move (TL-D4). A lane is 24–36px (18px for a bare terminal, kept in a
+  quiet group under the agents, TL-D7). It opens on the last hour, following now (TL-D5), with
+  presets 15M · 1H · 4H · 12H. Pinch or ⌘-scroll zooms at the pointer (240ms, island) and a drag pans.
+  **Each lane is one wake:** a single variable-width outline that swells into work and narrows
+  through a short S-curve into a wait.
+  - Work: 2 × 22% of the lane height, clamped 8–15px, in the project's colour (§2.6's
+    exception), with a soft glow (the outline's own blur, 5px light at 24% · 6px dark at 62%) and a
+    1px sheen along it.
+  - Blocked and unseen: a 4.4–7.6px thread in `--vf-orange` and the swarm's blue.
+  - Idle: a 1.7px hairline in text-faint.
+  - Time the record does not hold: a dotted text-faint thread, never a state.
+  - An ended agent's lane stays at 45% with a 2px end tick until it scrolls out (TL-D6).
+  **At the head** sit the swarm's bodies, lit as the swarm lights them, the swarm's wave ringing out of
+  one you owe (1.1s, island, the view's only loop). Beside each body is a readout: the current
+  state's length, then its word. Names float over the wakes' far end; there is no rail. **Pointing
+  at a lane (or ↑ ↓) lights it and quiets the rest to 30%.** The lit lane prints each closed span's
+  length: inside the work, or above a wait in that state's ink, haloed in the ground. **Looking back
+  relights the bodies to that moment** (TL-D13). Each readout then says how far into that state it
+  was and of how long ("4:39 idle · of 7m"). The clock chip turns to the outlined head time,
+  and NOW glides back (600ms, island).
+  **The map of the day** is its own 46px strip above the axis (TL-D17). Its right end lines up with
+  the head while following now.
+  - It is drawn as Pulse (TL-D15): the whole field summed into one ridge, smoothed by an ~8px
+    gaussian. Work stacks above a line in each project's colour, its height the number of agents
+    working, drawn and never printed (FC-D18). Waits hang below in orange, then blue.
+  - Only the window in view keeps its colour; the rest of the day is grayed.
+  - The head is a 2px line with a knob, filled while following now and hollow while looking back.
+  - **Pressing the map puts the head there, and dragging plays the day back** on the bodies
+    (TL-D16). It is a `role="slider"`: ← → 5 min, ⇧ 30, Home the day's start, End now.
+  **Colours:** project for work, §2.5's orange for blocked, the swarm's blue for a reply not yet
+  opened (TL-D3), text-faint for idle. Never red; now is ink. One click opens the agent in the pane
+  you are in (the views' `select`).
+  **Reduced motion:** no wave, no glide, no zoom tween; positions jump.
+  **The record** is fieldd's status ledger (`agent.history`, TL-D8). Without it the view still draws
+  each agent's birth and its current state (TL-D9).
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -854,11 +1589,314 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   Top-row slots (all inside the 52px drag strip, all `no-drag`): breadcrumbs left
   (`left-24`, clearing the traffic lights) · **the file pill center** · the right chrome
   cluster anchored `top-4 right-4` (zoom pill · theme FAB · Artifact FAB outermost).
+  *(Superseded 2026-10-03 by the head — the five places below, §8 "The head": the crumbs fold
+  into the name pill, the cluster goes and only the zoom readout is the head's right; the window
+  still drags by the strip between the pills.)*
   **Bottom-left (2026-09-22, UA-D19):** the Me menu — the owner's face, §8 — then Godview,
   with the `hud.panel` slot above them; the Settings gear retires into the menu and `⌘,`.
+  *(Godview's button retired 2026-10-03 — the views track below is the way in. Since FR-4 the
+  corner is the face's alone, centred on the foot axis, and its menu opens above the line; the
+  bottom-right corner's devtools button is gone — into Settings → Advanced, development builds
+  only, a section like every other dev-facing diagnostic (FC-D12).)*
   **The left edge (2026-09-23, SNAP-3):** the clipboard tray's notch at mid-height, its drawer
   from `top-16` to `bottom-20` (clearing the Me menu and Godview); the right edge is reserved
-  for its twin.
+  for its twin — *Artifacts', since FR-4 (§8, edge trays): the right edge is Artifacts' door and
+  nothing else's.* **Bottom-centre:** the HUD island — *retired into the line 2026-10-03 (One Frame
+  FR-2): the bottom centre is the line's, and the island's sheet rises behind it (§8).*
+- **One frame, every view — five places, two axes** (One Frame FR-1 and FR-6, ruled
+  2026-10-01; first built 2026-10-03). Chrome lives in FIVE places: **the head** (the window's top
+  0–52, its controls 40 tall at `top-2`, centred on the lights' axis), **the line** (the foot:
+  880 × 52 at 20 from the bottom — x 150–1030, y 708–760 at the default 1180 × 780 — never
+  starting nearer the left than 76, so it never meets the corner), **the two edges** (the notches
+  and their drawers, §8), **the corner** (your face, centred on the foot axis), or **on its own
+  object** (a card's bar, the tools in hand, a pane's band; object chrome stays with its object,
+  even where it stands under the head). **Two axes:** everything in the head centres on y 28, the
+  traffic lights' centre; everything at the foot on y 734, the line's centre. **The frame stands
+  above every view.** The canvas is the ground floor; Godview, History and (once it exists) the
+  Assistant are views drawn as ONE cover over it (§6), each on its own ground at the covers' glass,
+  72% (FC-D16) — with no blur until the field's still exists to blur (the desk's, DK-15: §8, the
+  covers over the desk). A covered view ends its content at 692, the **reserve** of 88 above the
+  window's foot, and keeps 8px clear at each edge for the notches' slivers; its own ground runs
+  under the line, and only the canvas runs content
+  under it. Above the frame stand only Settings, the palette and the loading veil (and, until
+  FR-4 opens it above the line, the open Me menu, which grows over the track's left end — *since
+  FR-4 it stands with the frame, above the line, and nothing of the frame's is under it*).
+  **The active view has ONE owner** — the window's, held in main beside the menu that names it,
+  persisted for the window's life and Canvas at launch; the views track, the keys and the View
+  menu all ask that owner and draw what it answers. **The keys:** ⌘1–⌘4 (Ctrl 1–4 on Windows) go
+  to Canvas, Godview, History and the Assistant (which waits: ⌘4 says so and nothing moves), and
+  nothing else switches views (FC-D4) — they are the product's own chords, taken on the window's
+  capture phase before a focused pane can see them, printed on the views track's cells (§8) and
+  said in the View menu. **The line's own keys** (One Frame §11) belong to its create and are SAID,
+  never printed (FR-5): **B** toggles Objects on Canvas — never while typing (the draft, a note, any
+  field) and never under a cover; **⌘T** (Ctrl+T) is Godview's New terminal, a product chord taken
+  on the capture phase in Godview so a focused pane never sees it (ghostty's new_tab); and **@ is
+  never a shortcut** — it is typed in the draft. **The head's keys** (DK-D24; One Frame §6) are
+  the zoom's, SAID in its menu and the palette, never printed: **⌘+** (⌘= or ⌘+, the keypad's too)
+  zooms in, **⌘−** out, **⌘0** to actual size and **⇧1** to fit — Ctrl+Plus, Ctrl+Minus, Ctrl+0
+  and Shift+1 off the Mac. They are Canvas's, not the product's chords: heard on the window's
+  BUBBLE phase, so a pane that holds the keyboard keeps its own ⌘+ ⌘− ⌘0 (ghostty's font sizes) and
+  a key something else took is left alone; never under a cover, never from inside a keyboard claim
+  (design-007's `data-canvas-keyboard` — a terminal or a page on the canvas), and ⇧1 never while
+  typing (it types "!"). A key they take is claimed, so the View menu's item never answers it a
+  second time (the menu's zoom is an act the head answers since FR-4, below). **The frame's open
+  surfaces have ONE owner** (FR-4; the line's, renamed at FR-3 when
+  the head's joined): @'s list, Objects, the fields explorer, the zoom's menu and the palette are
+  one value, so opening any one folds the rest, and every surface that folded the tray folds them.
+  *As built (FR-1, 2026-10-03):* the frame so far is the views track, on
+  the line's glass at the line's left end; the line (FR-2), the head (FR-3), the edges and the
+  corner (FR-4) join it next. Until they do, the slots above stay the canvas's own chrome and lie
+  under the cover with the field. *As built (FR-2, 2026-10-03):* the line is whole, the track at its
+  left end; the head (FR-3), the edges and the corner (FR-4) are next. *As built (FR-3,
+  2026-10-03):* the head is the name pill and the zoom readout on y 28 (§8 "The head"), still the
+  canvas's chrome under the cover; until FR-4 the theme button and the Artifacts toggle stand
+  beside the readout. The edges and the corner (FR-4) are next.
+  *As built (FR-4, 2026-10-03):* **the edges and the corner join the frame** and stand above the
+  cover with the line in every view: the clipboard's notch on the left, Artifacts' on the right,
+  each resting as a sliver over a covered view (§8, edge trays), and your face in the corner with
+  its menu above the line (§8, the Me menu). **The frame's one owner now holds all of its open
+  surfaces** — `objects · @ · fields · zoom · palette · me · clipboard · artifacts`, one value, so
+  any one opening folds every other (F11); Settings still folds them and is folded by them. **The
+  app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
+  shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
+  resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
+  `prefers-color-scheme` agree with it from the first frame — and tells every window; the Me menu's
+  Theme, Settings → Appearance and the Setup Assistant's button all ask it, and Godview follows what
+  it answers (§1.1). **The View menu's zoom** (Actual Size ⌘0 · Zoom In ⌘+ · Zoom Out ⌘−) is no
+  longer Electron's page-zoom roles: each item sends its act to the window's head, which answers
+  on Canvas as its keys do, and the three are disabled under a cover — so nothing in the menu bar
+  or its keys zooms the whole window any more (One Frame FR-3's finding).
+- **The mat's places** (Chrome on the Mat §4; One Frame §7; MC-D4 ruled 2026-10-01; ICE I20, I21;
+  R5, R7, R12; built on the desk by DK-11…DK-13): on Canvas the desk's chrome stands in the frame's
+  fifth place, **on its own object** (FR-1). **The bar follows its object** — over the selection's
+  brackets, under them near the top — and travels with it into the hand; **the tools in hand sit
+  under the head** (top y 64, 16 under the name pill), still the object's chrome and not the head's;
+  **the pegboard rises behind the line**, whose create is its door (§8). **The desk keeps two
+  reserves:** the **safe top, 94** — the rulers' band plus 8: the rulers move in to a margin of 60
+  (DK-3), so the top ruler starts below the head strip and the left ruler clears the notch, and
+  their band ends at 86 — above which the bar goes under its object; and **the foot, 88** — the
+  line's reserve, the same 88 a covered view keeps (692): the board's lay ends 88 above the window's
+  foot (I21) so its last row clears the line, and the bar's top never sits below 660 (its foot 8
+  above the line's 708). Between them the bar keeps **42** from each side (the notch's 26 + 16), and
+  a held object's reading fit keeps **116** above it (the held bar's foot, 104, + 12) and **100**
+  below (the line's 88 + 12, I20). The reserves are measured from the window's edges and hold at
+  every size; the y values here are the default window's (1180 × 780). A selection wholly off-screen
+  has no bar (R7). **The bar's grown menu is one of the frame's open surfaces** — the one owner's
+  ninth, `objects · @ · fields · zoom · palette · me · clipboard · artifacts · selection menu` — so
+  opening it folds the rest, any of them opening folds it, and its Esc is taken before the desk's
+  Esc ladder (R5). **The status line** (§8) is the head's: centred under it at y 56, or under the
+  tools in hand at y 112 while an object is held (R12).
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
+
+---
+
+## 11. Fieldmarks / AFTER HOURS — sticker edition
+
+**Edition 02, 2026-09-22.** The requested direction is retro sticker illustration: expressive,
+specific, and collectible. AFTER HOURS replaces edition 01's minimalist geometry with 77 new
+drawings plus the exact existing logo. The cultural vocabulary comes from VibeField: a personal
+field, physical cards, agent work, old computers, private connections, and accumulated creations.
+
+The collection has three related drawing registers:
+
+| Register | Artboard | Recommended floor | Typical subjects |
+|---|---|---|---|
+| Character / brand sticker | 112 units (logo retains 480) | 48px (logo 32px) | skewed CRTs, rubber gloves, floppy creatures, cassette workers, odd personal characters |
+| Desk object | 72 units | 32px | hardware, folders, paper, patch leads, crates, layered windows |
+| Action stamp / state signal | 48 / 50 units | 24 / 28px | heavy positive/negative shapes, cut-paper arrows, glove, sun, speech flag, radio |
+
+Contours are deliberately unequal; black side planes, hatching, scratched highlights, bitmap
+lettering, and offset eyes carry character. There is no single nominal line weight. Detailed
+characters are not reduced to tiny toolbar glyphs; functional controls have their own simpler
+geometry. Actual controls keep §4's hit areas and explicit accessible names.
+
+Two exports share the same original drawing: **sticker** adds a white backing and die-cut
+keyline; **artwork** omits that outer keyline. Both have an ink layer (`currentColor`) and an
+interior paper layer (`--vf-sticker-paper`, falling back to the canvas and then white). Paper
+is intentionally opaque inside the illustrations; empty space outside is transparent. This
+supersedes edition 01's all-transparent knockout claim. No raster or generated-image texture
+is required; every shape is an editable vector.
+
+The catalogue is a **committed editorial art surface**, not a new product chrome recipe. Its
+print palette is ink `#171815`, stock `#F1EDDF`, acid-yellow sheet `#E5E549`, and proof inks
+cobalt `#214ACC` / vermilion `#C53D25`; the night wall is `#232720`. Sticker backing stays white
+in both themes. These inks are presentation choices and never encode account identity or state.
+The sheet can use hard borders, pasted rotations, checker fields, and condensed display type.
+Other product surfaces continue to follow the existing quiet-chrome rules.
+
+Identity, assigned role, provider, and observed state stay independent. §2.8's emoji sticker/coin
+account face remains current; the new vector alter egos are an additional identity-art study.
+The agent characters are role proposals, not vendor marks or asserted capabilities. §2.5 still
+governs product-state color, and state words remain visible. Existing Godview bodies and the
+upstream file-tree icon family are unchanged.
+
+The packaged app, tray, and Icon Composer masters remain exact. `@vibefield/design-kit/icons`
+exports the shared `FieldIcon`, typed names, metadata, and `fieldIconSvg(name, finish)`.
+`finish="sticker"` adds the paper cut; the component defaults to `"artwork"` and decorative
+semantics inside labelled controls. The drawing source is `tooling/fieldmarks/generate.py`.
+Studio and the offline `docs/design/fieldmarks.html` mount the same `IconsSection`. The HTML
+bundles its CSS, React, vectors, and downloadable archive without network dependencies.
+
+
+### 11.1 Face Club — the account deck, drawn in After Hours ink
+
+**Account artwork study, 2026-09-22.** The 48 selected emoji in contracts' `FACE_DECK`
+receive 48 original black-and-white sticker interpretations. This is a complete one-to-one
+artwork proposal, preserving the exact deck order and the stored emoji. §2.8 remains the
+shipping face policy and renderer; adoption of vector art is a separate integration step.
+
+Each subject has two authored optical masters: **112 units, detailed, from 40px** and
+**56 units, simplified, at 16–39px**. Small masters enlarge distinguishing features and
+remove hatching, fine fur, and secondary marks. They are separate geometry, not a filter or
+an automatically shrunk full illustration. The switch aligns with the face's existing 40px
+tilt threshold. The neutral ink is `#171815`, paper is explicit white, and the surrounding
+wall uses §11's print palette. The sticker finish grows a white cut edge; artwork omits it.
+Interior paper remains opaque, including the doughnut's central knockout.
+
+Animal anatomy and object silhouette precede expression: fox wedge, raccoon mask, wolf
+profile, panda patches, two camel humps, snail spiral, and ringed planet. Color never deals
+or disambiguates users. The drawings contain no system emoji glyphs, traced reference paths,
+fonts, filters, or embedded raster art. The original emoji appears only as a comparison,
+through the shipping `UserFaceView`.
+
+`@vibefield/design-kit/face-stickers` owns `FaceSticker`, typed ids and metadata,
+`findFaceSticker(emoji)`, and portable `faceStickerSvg` export. The mapping ignores only
+text/emoji variation selectors, like `faceKey`. Unknown/custom emoji return `undefined`
+and retain native rendering when integrated. Account dealing, collision validation,
+per-user tilt, coin choice, and persistence remain in their existing owners.
+
+`tooling/face-stickers/art.py` is the editable drawing source. Its generator verifies all
+48 emoji against the current policy before producing 192 SVG exports and two sprites.
+Studio and the self-contained `docs/design/face-stickers.html` mount the same
+`FaceStickersSection`, with all emoji/sticker pairs, an inspector, actual-size light/dark
+proofs, and downloads. Recognition at tiny sizes is an explicit design review concern,
+not a claim established by a bounds test.
+
+## 12. Living mark — spectral ribbon study
+
+The September 22 logo study develops the existing infinity/RGB identity into a continuous
+paper-white ribbon with a fine spectral edge, suspended in a radial field of light. The
+crossing has a definite over/under order. Shape stays readable while light travels; motion
+combines breathing, flowing filaments, and restrained pointer parallax. This is authored brand
+artwork: its pink, cobalt, amber, and mint belong to the artwork, not interface or status ink.
+
+The Logo studio uses the §2 neutral chrome, system typography, hairlines, and shared controls.
+Its shader palette is editable content data. Prism is the reference direction; Afterglow,
+Daylight, Signal, and Ink demonstrate atmospheric, quiet, chromatic, and monochrome uses.
+Geometry, edge color, field, grain, and movement are independent parameters. The same native
+WebGPU renderer lives behind the design kit's `./logo` leaf and powers the catalog specimen
+and full studio. A static SVG of the same curve covers unavailable GPUs and exports the
+flat mark. Reduced motion starts still; explicit playback is available in the studio.
+Hidden/offscreen canvases stop rendering. The study does not replace packaged icon masters.
+
+The Möbius extension gives the ribbon a thin, rounded physical profile and separates the
+crossing in depth. A half-twist circulates continuously along the ribbon's fixed infinity
+path. Its faces turn locally while both lobes remain readable; the overall view tilt stays
+within a safe angle. The half-twist connects the apparent two rims into one continuous edge,
+with color and light flowing smoothly across the join. Perspective and lighting reveal the
+depth without spinning the surrounding field. Halos narrow around tight bends to avoid
+overlapping fans of light. View tilt, twist focus, circulation speed, depth, perspective,
+and pulse brightness/speed/length/count are independent controls. Depth testing applies to
+both the ribbon and its edge light. Pause, reduced motion, and PNG capture retain the exact
+same pose and light phase.
+
+Edge light is a colored reflection: a fine spectral rim with broad highlights and soft
+diffusion close to the ribbon. Brightness has a soft ceiling, and the halo follows the
+surface angle and curvature. The highlights retain the palette's saturation and remain
+visible on the light field without washing out to white. The reference motion uses the
+user's selected seven highlights, full overall speed, and distributed Möbius twist; the
+alternate moods retain their individual speed and light settings.
+
+---
+
+## 13. Glyphs — the chrome's icon law
+
+**Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
+Every functional icon the chrome draws — the HUD's round buttons, the file pill, the Settings rail,
+the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
+marks, the desk's bar and the tools in hand — is one of **60 named glyphs** in one **24-unit box**,
+optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
+the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
+I-5) and never a colour of its own. Two constructions, one set:
+
+| Construction | Glyphs | Law |
+|---|---|---|
+| **Instrument** (50) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
+
+**Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
+Snap tile, the Me menu) · 20 (the 40px round buttons) · 22 (the tray's plus, the artifact choices) ·
+28 (the Agents head). Instrument's stroke therefore renders 1 px at 12 and 1.67 px at 20 — one
+weight, scaled, never nine. **One drawing per meaning:** a chevron is drawn pointing right and
+*turned* (90 down, 180 left, 270 up); the four cursor keys are one arrow turned; redo is undo
+*flipped*. The set, by group — actions: plus · close · check · search · pencil · undo · reset ·
+outward · link · return · backspace · ellipsis · start · resume · jump · duplicate · tape · lift · trash ·
+pen · eraser · today; navigation: chevron · arrow; places and objects:
+gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
+moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
+mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame · missing;
+Studio only: document · layers · sparkle. **`history`** (2026-10-03, One Frame §13) is the views
+track's History cell (§10): a clock turning back, the dial at `globe`'s radius opened where its arrow
+turns it.
+**`start`** and **`resume`** (2026-10-03, One Frame §13; Session Glyphs' picks of 30 Sep, spawn-T3
+and resume-play-T3) are the composer's create in Godview and in History (§8, the line): `terminal`'s
+window with its chevron, the frame opened at the lower right to hold the verb — a plus for a session
+started, play for one resumed — so the noun travels with the verb (One Frame FR-3: only Canvas's
+create is a bare plus). Their Hardware records are the page's T4 column, drawn and not shipped.
+**Send** needs no glyph of its own: it is `arrow`, as drawn (up). No `attach`: the line has no attach
+button (FC-D1 ruled type @).
+**`jump`** (2026-10-03, One Frame §13; Session Glyphs' jump-T3) goes to a session that is running — a
+live row in History, a link in running text: `terminal`'s window with its wall opened on the left for
+the arrow going in, since a box with an arrow leaving it is already `outward`; its Hardware record is
+the page's T4. **The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
+ICE's selection glyphs redrawn in the Instrument construction for the desk's chrome (§8):
+`duplicate` · `tape` · `lift` · `trash` on the selection bar — `tape` and `lift` are one padlock, shut
+and opened — and `pen` · `eraser` · `today`, the modes and the act the held kinds declare; their
+Hardware records are drawn, not shipped. The rest of that chrome borrows the set as drawn: `agents`
+(Send to…), `ellipsis` (More), `plus` (Objects, turned 135° to close), `chevron` (a page or a month,
+turned 180° to go back), `undo` (flipped for redo), `snippets` (a note's chip). **A desk kind may draw
+its own act and tool glyphs beyond the set** (MC-D8) — ICE's `{ path }` drawing, held to this
+construction (the 24-unit box, one 2-unit stroke, `currentColor`) and drawn as the set's are, never as
+an inline `<svg>` in product code; the mini mat's "Change the vinyl" is the first built-in to (the
+example plugin's clock draws five).
+**ICE's glyph names, mapped** (R2 — the orchestrator's Phase 4 rulings, 2026-10-03): a kind declares
+a glyph by a NAME of ICE's set or by its own drawing (`HeldGlyph = string | { path, fill? }`), and
+the desk's chrome draws it from this set by this table, never by a guess:
+
+| ICE's name | Drawn as |
+|---|---|
+| `chevron` · `chevron-left` | `chevron` · `chevron` turned 180 |
+| `undo` · `redo` | `undo` · `undo` flipped |
+| `pen` · `eraser` · `today` | `pen` · `eraser` · `today` |
+| `duplicate` · `lock` · `unlock` · `trash` | `duplicate` · `tape` · `lift` · `trash` |
+| `agents` · `ellipsis` · `check` | `agents` · `ellipsis` · `check` |
+| `{ path }` · `{ path, fill: true }` | the bar's own path renderer: the path in the 24-unit box, stroked 2 in the bar's ink, or filled |
+| any other name | **`missing`** — said once, never another glyph |
+
+**`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
+hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
+instead (R3).
+
+**Where it lives.** The drawings are `tooling/glyphs/drawings.mjs` (both constructions for every
+name); `build.mjs` emits the kit's `packages/design-kit/src/glyphs/data.ts` and the phone's
+`FieldGlyphs.xcassets` (FieldDesign) from `picks.json`, and `glyphs.test.tsx` fails when either
+output is stale. Product code draws `<FieldGlyph name size turn flip label>` from
+`@vibefield/design-kit/glyphs`; plugins take it through `@vibefield/plugin-sdk/ui` (R10). On the
+phone, `FieldGlyph(.name, size:)` draws the template asset at `FieldGlyph.box(for:)` of the point
+size the SF Symbol had, and the swarm's CoreGraphics sprites are the Instrument drawings by hand.
+**An inline `<svg>` that is an icon is refused by test**; what may stay inline is geometry that is
+not an icon — the edge tray's notch and drawer (§8), the coin's marks (§2.8), the catalog's fixture
+stills — and, on the desk, two named exceptions: the bar's ONE path renderer for a kind's own drawing
+(R2; one component, allow-listed) and the peers' pointer arrow (R17; §8, peers on the mat).
+**Kept exact, outside this set:** the tray and app masters, the three vendor marks (AR-L1),
+the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
+other allowed file), the Face Club and AFTER HOURS art (§11), the file-tree family (§8).
+
+*History:* pass 1 (2026-09-23) redrew the set at three stroke treatments and was rejected as three
+weights of one drawing; pass 2 drew three constructions — a 9×9 dot matrix on the ground's grid,
+solid hardware with transport-control verbs, and generated brush strokes — beside the quiet
+monoline baseline. The choice mixed the baseline with ten hardware verbs; the other constructions
+remain in `drawings.mjs` and on the page, not in the product.
+

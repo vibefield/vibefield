@@ -223,27 +223,6 @@
   background: var(--control-hover-bg);
 }
 
-.vf-godview-tweak-theme {
-  height: 36px;
-  display: grid;
-  grid-template-columns: 1fr 112px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 11px;
-  border-bottom: 1px solid var(--panel-border);
-  color: var(--text-muted);
-}
-
-.vf-godview-tweak-theme select {
-  width: 100%;
-  height: 23px;
-  padding: 0 6px;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  color: var(--text-main);
-  background: var(--control-hover-bg);
-}
-
 .vf-godview-tweak-group {
   min-width: 0;
   margin: 0;
@@ -481,13 +460,16 @@
    `GodviewMonitor`, 0 when the strip is empty — which reproduces the package's
    rule exactly). The rain and the swarm keep their full bleed: the swarm steers
    its bodies around chrome by rect, and the rain is a canvas the column already
-   crosses. DESIGN.md §9: two claims that overlap are one unreadable claim. */
+   crosses. DESIGN.md §9: two claims that overlap are one unreadable claim.
+   TL (2026-10-02): the timeline lays out in flow (its map strip is a row at
+   its top), so it starts below the strip as the list does. */
 .vf-godview-monitor-stage {
   /* `@vibecook/puppeteer-views/styles/list.css` — a flow view's own top band. */
   --vf-monitor-flow-band: 11px;
 }
 
-.vf-godview-monitor-stage .vf-monitor-list {
+.vf-godview-monitor-stage .vf-monitor-list,
+.vf-godview-monitor-stage .vf-monitor-timeline {
   padding-top: calc(var(--vf-monitor-claims-bottom, 0px) + var(--vf-monitor-flow-band));
 }
 
@@ -604,8 +586,8 @@
 }
 
 .vf-device-filter-caret {
-  width: 8px;
-  height: 8px;
+  width: 10px;
+  height: 10px;
   opacity: 0.6;
 }
 
@@ -1113,4 +1095,52 @@
   .vf-monitor-profile-empty {
     transition: none;
   }
+}
+
+/* ── GODVIEW INSIDE THE COVER (One Frame FR-1; DESIGN.md §6, §8, §10) ───────
+   Godview is a view now, not an overlay: the frame's cover rises and lowers
+   around it (the 240ms fade and the 1.012 settle above are the cover's own), so
+   the stage inside it is simply there, and only the cover's 180ms content fade
+   moves it between covered views. Outside a cover — the catalog's specimen,
+   Settings' miniature — the rules above still hold. */
+.vf-cover .vf-godview,
+.vf-cover .vf-godview[data-godview-open="true"] {
+  z-index: auto;
+  opacity: 1;
+  transform: none;
+  visibility: inherit;
+  pointer-events: inherit;
+  transition:
+    color 240ms ease,
+    background-color 240ms ease;
+}
+
+/* FC-D15: the content ends at 692 — the 88 reserve above the window's foot,
+   where the frame's line floats over the deck's own ground — and keeps 8px
+   clear of each edge for the notches' slivers. The sheet's ground still runs to
+   the foot and to the edges; only what it holds stops short. */
+.vf-cover .vf-godview-monitor-stage {
+  width: auto;
+  margin-inline: 8px;
+}
+
+.vf-cover .vf-godview-terminal-deck-body {
+  margin: 0 8px 88px;
+}
+
+/* FC-D18: the counters are removed (`GodviewMonitor` retired their ⌘1–⌘3 and
+   their cycling). The views package's bar draws its counters group whatever a
+   host passes, so the host hides it until the package draws it only for counts
+   it is handed — the ask on record (One Frame §21). */
+.vf-godview-header [role="group"][aria-label="Agent status"] {
+  display: none;
+}
+
+/* FC-D7: Godview follows the app's theme (One Frame FR-4), so its ☼◐ switch is
+   gone. The views package's bar draws it whatever a host passes, so the host
+   hides it — with the tooltip host the package wraps it in — until the package
+   draws it only for a host that hands it a handler (the ask on record, beside
+   the counters'). */
+.vf-godview-header .vf-godview-bar-tip-host:has(> .vf-godview-theme-switch) {
+  display: none;
 }

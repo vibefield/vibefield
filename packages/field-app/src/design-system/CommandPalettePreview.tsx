@@ -1,72 +1,100 @@
+import type { FrameView } from "@vibefield/contracts";
 import { type KeyboardEvent, type ReactElement, useMemo, useState } from "react";
-import { CommandPaletteView, type PaletteCommand } from "../hud/CommandPalette";
+import { frameActGroups } from "../frame/palette-acts";
+import type { ViewKeys } from "../frame/views";
+import { CommandPaletteView, filterPalette, type PaletteGroup } from "../hud/CommandPalette";
 
-const PREVIEW_COMMANDS: readonly PaletteCommand[] = [
+// The palette's fixture ADAPTER (One Frame FR-3, §7): the production view on
+// the frame's own acts — built by the product's table for the view — and two
+// fixture plugins' commands, one of them declared with no live handler. What
+// running a row does is the controller's; here a row is only pointed at.
+
+const FIXTURE_COMMANDS: readonly PaletteGroup[] = [
   {
-    id: "note.create",
-    title: "Add note",
-    description: "Create a writing card on the field",
-    pluginId: "note",
-    pluginTitle: "Notes",
-    available: true,
+    id: "plugin:note",
+    eyebrow: "Notes",
+    rows: [
+      {
+        id: "note.create",
+        name: "Add note",
+        glyph: "plugin",
+        key: null,
+        sub: "Create a writing card on the field",
+        waits: null,
+      },
+    ],
   },
   {
-    id: "artifact.open",
-    title: "Open Artifact Hub",
-    description: "Browse shared proxies and folders",
-    pluginId: "browser",
-    pluginTitle: "Browser",
-    available: true,
-  },
-  {
-    id: "repository.open",
-    title: "Open repository",
-    description: "Open the selected repository",
-    pluginId: "repository",
-    pluginTitle: "Repository",
-    available: false,
+    id: "plugin:repository",
+    eyebrow: "Repository",
+    rows: [
+      {
+        id: "repository.open",
+        name: "Open repository",
+        glyph: "plugin",
+        key: null,
+        sub: "Open the selected repository",
+        waits: "unavailable",
+      },
+    ],
   },
 ];
 
 /** Runtime-free adapter around the production command-palette composition. */
-export function CommandPalettePreview(): ReactElement {
+export function CommandPalettePreview({
+  view = "canvas",
+  keys = "mac",
+}: {
+  view?: FrameView;
+  keys?: ViewKeys;
+}): ReactElement {
   const [query, setQuery] = useState("");
-  const [activeIndex, setActiveIndex] = useState(0);
-  const matched = useMemo(() => {
-    const needle = query.trim().toLowerCase();
-    if (needle === "") return PREVIEW_COMMANDS;
-    return PREVIEW_COMMANDS.filter((command) =>
-      `${command.title} ${command.pluginTitle}`.toLowerCase().includes(needle),
-    );
-  }, [query]);
-  const available = matched.filter((command) => command.available);
-  const activeId = available[Math.min(activeIndex, Math.max(0, available.length - 1))]?.id;
+  const [hot, setHot] = useState<string | null>(null);
+  const groups = useMemo<PaletteGroup[]>(
+    () => [
+      ...frameActGroups(view, keys).map((group) => ({
+        id: group.id,
+        eyebrow: group.eyebrow,
+        rows: group.acts.map((act) => ({
+          id: act.id,
+          name: act.name,
+          glyph: act.glyph,
+          key: act.key,
+          waits: act.waits,
+          ...(act.terms === undefined ? {} : { terms: act.terms }),
+        })),
+      })),
+      ...FIXTURE_COMMANDS,
+    ],
+    [view, keys],
+  );
+  const matched = useMemo(() => filterPalette(groups, query), [groups, query]);
+  const walk = matched.flatMap((group) => group.rows.filter((row) => row.waits === null));
+  const hotId = walk.some((row) => row.id === hot) ? (hot ?? undefined) : walk[0]?.id;
 
   const onInputKeyDown = (event: KeyboardEvent<HTMLInputElement>): void => {
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setActiveIndex((index) => (available.length === 0 ? 0 : (index + 1) % available.length));
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setActiveIndex((index) =>
-        available.length === 0 ? 0 : (index - 1 + available.length) % available.length,
-      );
-    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    if (walk.length === 0) return;
+    const at = walk.findIndex((row) => row.id === hotId);
+    const next =
+      event.key === "ArrowDown" ? (at + 1) % walk.length : (at - 1 + walk.length) % walk.length;
+    setHot(walk[next]?.id ?? null);
   };
 
   return (
     <CommandPaletteView
       visible
       query={query}
-      commands={PREVIEW_COMMANDS}
-      matched={matched}
-      {...(activeId === undefined ? {} : { activeId })}
+      groups={matched}
+      {...(hotId === undefined ? {} : { hotId })}
       onQueryChange={(nextQuery) => {
         setQuery(nextQuery);
-        setActiveIndex(0);
+        setHot(null);
       }}
       onInputKeyDown={onInputKeyDown}
       onRun={() => undefined}
+      onHot={setHot}
       onClose={() => undefined}
     />
   );

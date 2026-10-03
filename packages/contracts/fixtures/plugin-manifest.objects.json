@@ -1,0 +1,71 @@
+{
+  "manifestVersion": 1,
+  "id": "com.example.clock",
+  "version": "0.1.0",
+  "title": "Example Clock",
+  "description": "An analogue desk clock — the minimal real OBJECT plugin (the desk draws it; DK-0f)",
+  "engines": {
+    "app": "^0.1.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "activation": ["onWidget:com.example.clock"],
+  "capabilities": ["doc.write"],
+  "contributes": {
+    "objects": [
+      {
+        "type": "com.example.clock",
+        "title": "Clock",
+        "description": "An analogue clock on the desk",
+        "schemaVersion": 1,
+        "size": {
+          "w": 160,
+          "h": 160
+        },
+        "interaction": {
+          "selectable": true,
+          "movable": true,
+          "resizable": false,
+          "snap": "both"
+        },
+        "provides": ["com.example.clock", "desk.object", "desk.containable"],
+        "props": {
+          "style": {
+            "kind": "enum",
+            "options": ["classic", "minimal", "ink"],
+            "default": "classic"
+          },
+          "seconds": {
+            "kind": "boolean",
+            "default": true
+          },
+          "zone": {
+            "kind": "string",
+            "default": "local",
+            "maxLength": 32
+          }
+        },
+        "tray": {
+          "category": "things",
+          "label": "Clock",
+          "order": 0,
+          "hang": {
+            "w": 110,
+            "h": 110,
+            "accessory": "hook",
+            "pegs": [[0, -0.5]]
+          },
+          "props": {
+            "style": "classic"
+          },
+          "take": "face"
+        },
+        "binding": {
+          "kind": "clock"
+        }
+      }
+    ]
+  }
+}

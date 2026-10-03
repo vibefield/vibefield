@@ -9,11 +9,15 @@ import {
   CloseRequest,
   CloseResult,
   DesktopShellState,
-  GodviewSetRequest,
-  GodviewState,
+  FrameView,
+  FrameViewSetRequest,
+  FrameViewState,
+  FrameZoomRequest,
+  frameViewBuilt,
   isUnambiguousLinkText,
   ProductInfo,
   RendererParticipantIdentity,
+  resolveTheme,
   SHELL_INTERNAL_PROVIDER_METHODS,
   SHELL_PROVIDER_METHODS,
   ShellCommandRequest,
@@ -30,6 +34,9 @@ import {
   ShellRendererRequestReplacementResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
+  ThemePreference,
+  ThemeSetRequest,
+  ThemeState,
   WindowConnection,
   WindowTerminalBootstrap,
 } from "../src/shell";
@@ -207,7 +214,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the seventeen channel keys, in order", () => {
+  it("exposes exactly the twenty channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -219,8 +226,11 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "desktopState",
       // TP-S3e: terminalConnect + terminalStatus retired with the bridge —
       // the renderer dials the cells' T1 doors itself.
-      "godviewState",
-      "godviewSet",
+      "viewState", // FR-1 — the window's active view (GT-D2's Godview bit, grown into four)
+      "viewSet",
+      "viewZoom", // FR-4 — main → renderer: the View menu's zoom, as an act for the head
+      "themeState", // FR-4 — the app's one theme, main's (Light · Dark · Auto)
+      "themeSet",
       "usersUpdate", // UA-3 — the Account page's profile write (main owns users.json)
       "usersList", // UA-5 — the roster; one truth for switcher + tray submenu
       "usersCreate", // UA-5 — mint user N under the §3.3 lock, then attach
@@ -241,8 +251,11 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       liveSurfacePorts: "vibefield:live-surfaces:host-ports",
       shellCommand: "vibefield:shell:command",
       desktopState: "vibefield:shell:desktop-state",
-      godviewState: "vibefield:godview:state",
-      godviewSet: "vibefield:godview:set",
+      viewState: "vibefield:view:state",
+      viewSet: "vibefield:view:set",
+      viewZoom: "vibefield:view:zoom",
+      themeState: "vibefield:theme:state",
+      themeSet: "vibefield:theme:set",
       usersUpdate: "vibefield:users:update",
       usersList: "vibefield:users:list",
       usersCreate: "vibefield:users:create",
@@ -254,25 +267,67 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
   });
 });
 
-describe("Godview overlay state (GT-D2)", () => {
-  it("carries one boolean — the overlay bit main owns", () => {
-    expect(GodviewState.parse({ open: true })).toEqual({ open: true });
-    expect(GodviewState.safeParse({}).success).toBe(false);
-    expect(GodviewState.safeParse({ open: "yes" }).success).toBe(false);
+describe("the app's one theme (FR-4, FC-D5)", () => {
+  it("is three states — Light, Dark, Auto — and resolves to two themes", () => {
+    expect(ThemePreference.options).toEqual(["light", "dark", "auto"]);
+    expect(ThemeState.parse({ preference: "auto", resolved: "dark" })).toEqual({
+      preference: "auto",
+      resolved: "dark",
+    });
+    // The old sticky boolean is not a theme: a `{dark}` from an older page is refused.
+    expect(ThemeState.safeParse({ dark: true }).success).toBe(false);
+    expect(ThemeState.safeParse({ preference: "auto", resolved: "auto" }).success).toBe(false);
+    expect(ThemeState.safeParse({ preference: "sepia", resolved: "light" }).success).toBe(false);
   });
 
-  it("lets a request omit `open`, which is how the renderer asks for a FLIP", () => {
-    // The accelerator is consumed before any renderer sees the keystroke, so a
-    // page that sent the value it believed could be arguing with one main had
-    // already changed. Omission means "whatever it is, change it".
-    expect(GodviewSetRequest.parse({})).toEqual({});
-    expect(GodviewSetRequest.parse({ open: false })).toEqual({ open: false });
-    expect(GodviewSetRequest.safeParse({ open: 1 }).success).toBe(false);
+  it("chooses by name — there is no toggle to argue with", () => {
+    expect(ThemeSetRequest.parse({ preference: "dark" })).toEqual({ preference: "dark" });
+    expect(ThemeSetRequest.safeParse({}).success).toBe(false);
+    expect(ThemeSetRequest.safeParse({ dark: true }).success).toBe(false);
+  });
+
+  it("reads Auto as the OS's theme and the other two as themselves", () => {
+    expect(resolveTheme("auto", true)).toBe("dark");
+    expect(resolveTheme("auto", false)).toBe("light");
+    expect(resolveTheme("light", true)).toBe("light");
+    expect(resolveTheme("dark", false)).toBe("dark");
+  });
+});
+
+describe("the frame's active view (FR-1)", () => {
+  it("names the four views in the track's order, the canvas first", () => {
+    expect(FrameView.options).toEqual(["canvas", "godview", "history", "assistant"]);
+    expect(FrameViewState.parse({ view: "godview" })).toEqual({ view: "godview" });
+    expect(FrameViewState.safeParse({}).success).toBe(false);
+    // GT-D2's bit is gone, not aliased: an old main's `{open}` is not a view.
+    expect(FrameViewState.safeParse({ open: true }).success).toBe(false);
+    expect(FrameViewState.safeParse({ view: "rooms" }).success).toBe(false);
+  });
+
+  it("asks for a view by name — there is no flip to argue with", () => {
+    expect(FrameViewSetRequest.parse({ view: "history" })).toEqual({ view: "history" });
+    expect(FrameViewSetRequest.safeParse({}).success).toBe(false);
+    expect(FrameViewSetRequest.safeParse({ open: true }).success).toBe(false);
+  });
+
+  it("sends the View menu's zoom as one of its three acts — never a level, never a fit (FR-4, 3b)", () => {
+    for (const act of ["in", "out", "actual"] as const) {
+      expect(FrameZoomRequest.parse({ act })).toEqual({ act });
+    }
+    // ⇧1's fit has no menu item (nothing new in the menu bar), and the camera
+    // is the page's: main sends an act, never a zoom it would have to know.
+    expect(FrameZoomRequest.safeParse({ act: "fit" }).success).toBe(false);
+    expect(FrameZoomRequest.safeParse({ zoom: 1.25 }).success).toBe(false);
+    expect(FrameZoomRequest.safeParse({}).success).toBe(false);
+  });
+
+  it("keeps the Assistant's cell waiting: every view but it is built (FC-D2)", () => {
+    expect(FrameView.options.filter(frameViewBuilt)).toEqual(["canvas", "godview", "history"]);
   });
 
   it("passes unknown fields through, like every other inbound shape (EL9)", () => {
-    expect(GodviewState.parse({ open: false, future: "field" })).toEqual({
-      open: false,
+    expect(FrameViewState.parse({ view: "canvas", future: "field" })).toEqual({
+      view: "canvas",
       future: "field",
     });
   });

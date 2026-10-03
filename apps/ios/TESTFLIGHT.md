@@ -4,23 +4,43 @@ TestFlight delivers the signed app and future builds over the internet. The
 iPhone does not need a cable connection to this Mac. Use **internal testing**
 for your own Apple account; this is separate from publishing to the App Store.
 
-Build **0.1 (1)** was uploaded and processed on September 13, 2026. Its test
-notes are saved, export compliance is complete, and App Store Connect marks
-the build **Testing** in **Personal iPhone**. The group has one internal tester
-and uses manual distribution. App Store Connect shows the tester as **Invited**;
-open the TestFlight invitation email on the iPhone to accept and install.
+Build **0.1 (3)** is uploaded, processed, and assigned to **Personal iPhone**.
+Its test notes are saved and export compliance is complete. Open TestFlight on
+the iPhone to install or update to **0.1 (3)**. The group has one internal tester
+and uses manual distribution. If the original invitation has not yet been
+accepted, open its email on the iPhone first. Build 1 remains available too.
 
 Build **0.1 (2)** was archived on September 13, 2026 from main `09c526ab`: the first
 build carrying the keyboard track (IOS-3c…5v — the write key's Keychain home and the
-input card) and the swarm on Metal (IOS-6). **Its upload is still owed.** Two runs of
+input card) and the swarm on Metal (IOS-6). Two runs of
 `testflight.sh upload 2` that afternoon stopped at the account step with
 **Failed to Use Accounts** — xcodebuild found no Apple account with App Store Connect
 access for team `9F79X9D26S`, two hours after build 1 uploaded with the same helper
-(the archive, signing and network were all fine). Sign in again in Xcode > Settings >
-Apple Accounts, then run the upload command below for build 2: the archive at
-`apps/ios/build/testflight/VibeField-2.xcarchive` persists and the helper never
-rebuilds an existing one. After Apple's processing, answer the export-compliance
-questionnaire for build 2 (the same answers as build 1) and add it to Personal iPhone.
+(the archive, signing and network were all fine). Its local archive is retained;
+the uploaded build 3 below supersedes it.
+
+Build **0.1 (3)** was archived from main `a8691ead` on September 13, 2026, with
+the same keyboard and Metal swarm changes. All **424 package tests passed**;
+the archive signature and matching app dSYM were verified. Its upload also
+stopped at **Failed to Use Accounts** before any transfer, including a retry
+after Xcode visibly showed the correct signed-in account and Shikang Yong team.
+The account was valid: **Xcode Organizer uploaded build 3 successfully at
+13:47 PDT**.
+This was a command-line account lookup failure; repeated sign-ins did not fix it.
+The command-line upload command remains:
+
+```sh
+bash apps/ios/scripts/testflight.sh upload 3
+```
+
+The verified archive is `apps/ios/build/testflight/VibeField-3.xcarchive`;
+`validation-3.json` and `tests-3.log` beside it record the source revision and
+checks. A matching copy was imported into Xcode's standard Archives directory
+at `~/Library/Developer/Xcode/Archives/2026-09-13/VibeField-0.1-build-3.xcarchive`.
+For this account lookup failure on future uploads, use **Xcode > Window >
+Organizer**, select the verified archive, then **Distribute App > TestFlight
+Internal Only > Distribute**. Build 3's processing, encryption questionnaire,
+test notes, and assignment to **Personal iPhone** are complete.
 
 ## App identity and prerequisites
 
@@ -75,11 +95,11 @@ Each build is available for up to **90 days**.
 Run from the repository root:
 
 ```sh
-# Builds 1 and 2 are archived (build 2's upload is owed — see above). Use 3, 4, ... for new builds.
-bash apps/ios/scripts/testflight.sh archive 3
+# Builds 1–3 are archived and build 3 is uploaded. Use 4, 5, ... for new builds.
+bash apps/ios/scripts/testflight.sh archive 4
 
 # Upload that exact archive using the Apple account already in Xcode.
-bash apps/ios/scripts/testflight.sh upload 3
+bash apps/ios/scripts/testflight.sh upload 4
 ```
 
 For build N, the archive is `apps/ios/build/testflight/VibeField-N.xcarchive`. Logs and
@@ -112,8 +132,8 @@ that report's reproducer is a different failure from this app's archive crash.
 Use the helper for archives on this toolchain instead of plain Product > Archive.
 
 The package tests were verified on an iPhone 17 Pro simulator with iOS 26.5:
-135 tests for build 1, 424 for build 2 (the README's gate, run verbatim on
-`09c526ab`, seven suites). To repeat that gate on this Xcode build:
+135 tests for build 1, 424 for build 2, and 424 for build 3 (on `a8691ead`,
+using the command below). To repeat that gate on this Xcode build:
 
 ```sh
 cd apps/ios/VibeFieldKit
@@ -147,7 +167,7 @@ for. Only restore a fixed exemption value or add an export-compliance code
 after that determination is established for this app.
 [Apple's encryption documentation workflow](https://developer.apple.com/help/app-store-connect/manage-app-information/determine-and-upload-app-encryption-documentation).
 
-For build **0.1 (1)**, the account owner authorized **standard encryption
+For builds **0.1 (1)** and **0.1 (3)**, the account owner authorized **standard encryption
 implemented outside or alongside Apple's operating system** and **no
 distribution in France**. These answers were submitted and accepted on
 September 13, 2026. The questionnaire remains explicit for future builds;
@@ -183,7 +203,7 @@ rounded corners.
 5. Turn off Wi-Fi and repeat over cellular. Background and reopen VibeField,
    check reconnection, and confirm the desktop terminal session is still alive.
 
-**Current product limits (build 2):** the write key landed with IOS-3c — entered on
+**Current product limits (build 3):** the write key landed with IOS-3c — entered on
 the card (ENTER KEY) from the desktop's `FIELD_NATIVE_TERMINAL_MIRROR_WRITE` value,
 kept in the Keychain per host, managed under WRITE KEYS in settings — so a host
 whose key this phone holds accepts typing from the input card (Draft and Live

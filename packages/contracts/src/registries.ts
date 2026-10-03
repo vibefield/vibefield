@@ -266,6 +266,17 @@ export const AGENT_FIELD = {
   FULL_TICK_MS: 16,
 } as const;
 
+/** TL (2026-10-02, TL-D8) — the status ledger fieldd's fold keeps per run
+ * (`agent-history.ts`). HORIZON_MS is how far back a run's record reaches and
+ * how long an exited run's record is kept; MAX_CHANGES bounds a run that flips
+ * often (its oldest changes go first); TEXT_CHARS bounds the two texts a change
+ * carries, a blocker's words and a working span's last activity line. */
+export const AGENT_HISTORY = {
+  HORIZON_MS: 24 * 60 * 60 * 1000,
+  MAX_CHANGES: 2000,
+  TEXT_CHARS: 160,
+} as const;
+
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
  * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
  * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept
@@ -921,6 +932,13 @@ export const LAYOUT = {
    * it wrote itself — a same-uid file dropped into `agents/sessions/` is set
    * aside, never acted on (EL7). */
   AGENT_SESSIONS_KEY_FILE: ["agents", "sessions.key"],
+  /** TL (2026-10-02, TL-D8) — the status ledger: one `<runtimeRunId>.jsonl`
+   * (0600, the directory 0700) per managed run the fold watched, appended a
+   * line per status change while the run lives (`agent-status-ledger.ts`).
+   * What `agent.history` answers from; content-free by the fold's standard (a
+   * status, its moment, a blocker's words, a working span's last activity
+   * line), kept for `AGENT_HISTORY.HORIZON_MS` after the run exits. */
+  AGENT_HISTORY_DIR: ["agents", "history"],
   /** AR-7 — the spawn-through shim's home under this user (0700): the
    * rendezvous files, one launcher per offered agent's command, the bundled
    * shim and the shell integration. puppeteer's spawn-through kit writes every
@@ -989,13 +1007,25 @@ export const IPC_CHANNELS = {
   // GT-D3's bridge channels (`vibefield:terminal:connect` invoke,
   // `vibefield:terminal:status` event) RETIRED at TP-S3e: the renderer dials
   // the cells' T1 doors directly and main runs no terminal Backend.
-  /** main → renderer event: GodviewState — this window's overlay truth, which
-   * main owns (GT-D2: the accelerator intercepts before the renderer, so the
-   * menu item and the renderer must read ONE state, and it has to be main's) */
-  godviewState: "vibefield:godview:state",
-  /** renderer → main invoke: GodviewSetRequest — the toolbar button asking for
-   * the same transition ⇧⇧ asks for; answers with the resulting GodviewState */
-  godviewSet: "vibefield:godview:set",
+  /** main → renderer event: FrameViewState — this window's active view, which
+   * main owns (FR-1, grown from GT-D2's Godview bit: the View menu and the
+   * close item read it, so the menu and the renderer read ONE state, main's) */
+  viewState: "vibefield:view:state",
+  /** renderer → main invoke: FrameViewSetRequest — the views track and ⌘1–⌘4
+   * asking for a view; answers with the resulting FrameViewState */
+  viewSet: "vibefield:view:set",
+  /** main → renderer event: FrameZoomRequest — the View menu's Actual Size,
+   * Zoom In and Zoom Out (One Frame FR-4, 3b), sent as the ACT to the window's
+   * head, which answers on Canvas; the items are disabled under a cover. They
+   * replaced Electron's page-zoom roles, so nothing zooms the whole window. */
+  viewZoom: "vibefield:view:zoom",
+  /** main → renderer event: ThemeState — the app's one theme, which main owns
+   * (One Frame FR-4, FC-D5: Light · Dark · Auto, Auto following the OS through
+   * `nativeTheme`); sent on every load and every change, to every window */
+  themeState: "vibefield:theme:state",
+  /** renderer → main invoke: ThemeSetRequest — the Me menu's Theme, Settings →
+   * Appearance and the Setup Assistant choosing a theme; answers ThemeState */
+  themeSet: "vibefield:theme:set",
   /** renderer → main invoke: UsersUpdateParams → UserRecord — the Account
    * page's profile write. Main owns users.json (UA-D10); fieldd never writes
    * it, which is what keeps the boundary lint honest. */

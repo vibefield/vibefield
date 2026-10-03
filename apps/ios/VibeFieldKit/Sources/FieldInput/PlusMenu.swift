@@ -39,10 +39,8 @@ struct PlusMenu: View {
       guard model.openFan == nil else { return }
       model.showPlusMenu()
     } label: {
-      Image(systemName: "plus")
-        .font(
-          .system(size: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize), weight: .semibold)
-        )
+      FieldGlyph(
+        .plus, size: FieldGlyph.box(for: InputCardMetrics.actionGlyphSize(for: dynamicTypeSize)))
         .foregroundStyle(ChromePalette.ink)
         // --- IOS-5e ---------------------------------------------------------
         // The design turns this glyph 45° into a `×` while the menu is open.
@@ -86,11 +84,11 @@ struct PlusMenuList: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
-      row("Scan text", glyph: "text.viewfinder", surface: .scanText)
+      row("Scan text", glyph: .scanText, surface: .scanText)
       divider
-      row("Snippets", glyph: "text.append", surface: .snippets)
+      row("Snippets", glyph: .snippets, surface: .snippets)
       divider
-      row("Clipboard history", glyph: "list.clipboard", surface: .clipboardHistory)
+      row("Clipboard history", glyph: .clipboard, surface: .clipboardHistory)
     }
     // `.menu` — `padding: 4` around 44 pt rows.
     .padding(4)
@@ -112,7 +110,7 @@ struct PlusMenuList: View {
   /// `.mi` — the word at the left, its glyph at the right, 44 pt tall. The
   /// canvas puts the symbol on the trailing edge, which is where iOS puts a
   /// menu's own; the word is what the eye lands on first either way.
-  private func row(_ title: String, glyph: String, surface: CardSurface) -> some View {
+  private func row(_ title: String, glyph: FieldGlyphName, surface: CardSurface) -> some View {
     Button {
       model.requestSurface(surface)
     } label: {
@@ -122,10 +120,8 @@ struct PlusMenuList: View {
           .foregroundStyle(ChromePalette.ink)
           .lineLimit(1)
         Spacer(minLength: 0)
-        Image(systemName: glyph)
-          .font(.system(size: ChromeType.menuGlyphSize, weight: .regular))
+        FieldGlyph(glyph, size: FieldGlyph.box(for: ChromeType.menuGlyphSize))
           .foregroundStyle(ChromePalette.ink.opacity(0.85))
-          .frame(width: ChromeType.menuGlyphSize)
       }
       .padding(.horizontal, 14)
       .frame(height: InputCardMetrics.rowHeight(for: dynamicTypeSize))

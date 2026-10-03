@@ -1,4 +1,5 @@
 import { faceLiftHostClass, UserFaceView } from "@vibefield/design-kit/face";
+import { FieldGlyph, type GlyphName } from "@vibefield/design-kit/glyphs";
 import {
   Fragment,
   type ReactElement,
@@ -213,7 +214,7 @@ function AccountHead({
       </button>
       {others.length > 0 && (
         <div className="vf-settings-account-others">
-          <span className="vf-settings-account-eyebrow">Switch</span>
+          <span className="vf-settings-account-eyebrow">Switch user</span>
           {others.map((other) => {
             const waiting = other.waiting ?? 0;
             return (
@@ -299,9 +300,7 @@ function ProfilesNavGroup({
           onClick={profiles.onNew}
         >
           <span className="h-[18px] w-[18px] flex-none [&>svg]:h-full [&>svg]:w-full [&>svg]:fill-none [&>svg]:stroke-current [&>svg]:[stroke-linecap:round] [&>svg]:[stroke-linejoin:round] [&>svg]:[stroke-width:1.5]">
-            <svg viewBox="0 0 20 20" aria-hidden="true">
-              <path d="M10 4.5v11M4.5 10h11" />
-            </svg>
+            <FieldGlyph name="plus" size={18} />
           </span>
           <span className="vf-settings-nav-label truncate">New profile…</span>
         </button>
@@ -310,105 +309,26 @@ function ProfilesNavGroup({
   );
 }
 
+const PAGE_GLYPH: Record<PageMeta["icon"], GlyphName> = {
+  person: "person",
+  sliders: "sliders",
+  sun: "sun",
+  canvas: "canvas",
+  agents: "agents",
+  profiles: "profiles",
+  plugin: "plugin",
+  mesh: "mesh",
+  terminal: "terminal",
+  pulse: "pulse",
+  code: "code",
+};
+
 function PageIcon({ name }: { name: PageMeta["icon"] }): ReactElement {
-  if (name === "person") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <circle cx="10" cy="6.8" r="3.3" />
-        <path d="M3.8 16.8a6.2 6.2 0 0 1 12.4 0" />
-      </svg>
-    );
-  }
-  if (name === "sliders") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M4 5h12M4 10h12M4 15h12M7 3v4M13 8v4M9 13v4" />
-      </svg>
-    );
-  }
-  if (name === "sun") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <circle cx="10" cy="10" r="3.1" />
-        <path d="M10 2.5v2M10 15.5v2M2.5 10h2M15.5 10h2M4.7 4.7l1.4 1.4M13.9 13.9l1.4 1.4M4.7 15.3l1.4-1.4M13.9 6.1l1.4-1.4" />
-      </svg>
-    );
-  }
-  if (name === "canvas") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <rect x="3" y="3" width="14" height="14" rx="2.5" />
-        <path d="M7 3v14M13 3v14M3 7h14M3 13h14" />
-      </svg>
-    );
-  }
-  if (name === "agents") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <circle cx="10" cy="10.5" r="2.7" />
-        <circle cx="4.6" cy="5.6" r="1.7" />
-        <circle cx="15.4" cy="5.6" r="1.7" />
-        <circle cx="10" cy="16.6" r="1.4" />
-      </svg>
-    );
-  }
-  if (name === "profiles") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <rect x="3.5" y="5" width="13" height="10" rx="2.5" />
-        <path d="M7 5V3.8M13 5V3.8M7 15v1.2M13 15v1.2" />
-      </svg>
-    );
-  }
-  if (name === "plugin") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M8 3h4v3a2 2 0 1 0 0 4v7H8v-3a2 2 0 1 0-4 0v-4h3a2 2 0 1 0 0-4H4V3h4Z" />
-      </svg>
-    );
-  }
-  if (name === "mesh") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <circle cx="5" cy="5" r="2" />
-        <circle cx="15" cy="6" r="2" />
-        <circle cx="10" cy="15" r="2" />
-        <path d="m6.8 5.4 6.2.4M6.2 6.8l2.7 6.3M13.9 7.7l-2.8 5.5" />
-      </svg>
-    );
-  }
-  if (name === "terminal") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <rect x="2.5" y="4" width="15" height="12" rx="2.5" />
-        <path d="m6 8.5 2.5 2L6 13M10.5 13h3.5" />
-      </svg>
-    );
-  }
-  if (name === "pulse") {
-    return (
-      <svg viewBox="0 0 20 20" aria-hidden="true">
-        <path d="M2.5 10h3l1.6-4.5 3.2 9 2.2-6 1.3 1.5h3.7" />
-      </svg>
-    );
-  }
-  return (
-    <svg viewBox="0 0 20 20" aria-hidden="true">
-      <path d="m7 5-4 5 4 5M13 5l4 5-4 5M11.5 3.5l-3 13" />
-    </svg>
-  );
+  return <FieldGlyph name={PAGE_GLYPH[name]} size={18} />;
 }
 
 function HistoryIcon({ direction }: { direction: "undo" | "redo" }): ReactElement {
-  return (
-    <svg
-      viewBox="0 0 20 20"
-      aria-hidden="true"
-      className={direction === "redo" ? "scale-x-[-1]" : undefined}
-    >
-      <path d="M7.2 5.2 3.5 8.8l3.7 3.7M4 8.8h6.3a5.2 5.2 0 0 1 5.2 5.2v.5" />
-    </svg>
-  );
+  return <FieldGlyph name="undo" size={16} flip={direction === "redo"} />;
 }
 
 /** Controller-free settings composition shared by the modal and catalog. */
@@ -480,14 +400,7 @@ export function SettingsDialog({
         ) : (
           <div className="flex h-[58px] items-center gap-2.5 px-2">
             <span className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-black text-white shadow-sm dark:bg-white dark:text-black">
-              <svg
-                viewBox="0 0 20 20"
-                aria-hidden="true"
-                className="h-4 w-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.6]"
-              >
-                <circle cx="10" cy="10" r="2.3" />
-                <path d="M15.8 11.8a1.3 1.3 0 0 0 .3 1.4l.1.1-2.3 2.3-.1-.1a1.3 1.3 0 0 0-1.4-.3 1.3 1.3 0 0 0-.8 1.2v.2H8.4v-.2a1.3 1.3 0 0 0-.8-1.2 1.3 1.3 0 0 0-1.4.3l-.1.1-2.3-2.3.1-.1a1.3 1.3 0 0 0 .3-1.4A1.3 1.3 0 0 0 3 11H2.8V8H3a1.3 1.3 0 0 0 1.2-.8 1.3 1.3 0 0 0-.3-1.4l-.1-.1 2.3-2.3.1.1a1.3 1.3 0 0 0 1.4.3A1.3 1.3 0 0 0 8.4 3v-.2h3.2V3a1.3 1.3 0 0 0 .8 1.2 1.3 1.3 0 0 0 1.4-.3l.1-.1 2.3 2.3-.1.1a1.3 1.3 0 0 0-.3 1.4 1.3 1.3 0 0 0 1.2.8h.2v3H17a1.3 1.3 0 0 0-1.2.8Z" />
-              </svg>
+              <FieldGlyph name="gear" size={16} />
             </span>
             <span
               id="vf-settings-title"
@@ -555,13 +468,7 @@ export function SettingsDialog({
                 className="vf-settings-back flex h-9 w-9 flex-none items-center justify-center rounded-full bg-black/[0.045] text-black/45 transition-[background-color,color,transform] hover:bg-black/[0.08] hover:text-black active:scale-95 dark:bg-white/[0.08] dark:text-white/45 dark:hover:bg-white/[0.13] dark:hover:text-white"
                 onClick={subpage.onBack}
               >
-                <svg
-                  viewBox="0 0 20 20"
-                  aria-hidden="true"
-                  className="h-4 w-4 fill-none stroke-current [stroke-linecap:round] [stroke-linejoin:round] [stroke-width:1.6]"
-                >
-                  <path d="m12 4.5-5.5 5.5 5.5 5.5" />
-                </svg>
+                <FieldGlyph name="chevron" size={16} turn={180} />
               </button>
             )}
             <div className="min-w-0">
@@ -609,13 +516,7 @@ export function SettingsDialog({
               className="flex h-9 w-9 items-center justify-center rounded-full bg-black/[0.045] text-black/45 transition-[background-color,color,transform] hover:bg-black/[0.08] hover:text-black active:scale-95 dark:bg-white/[0.08] dark:text-white/45 dark:hover:bg-white/[0.13] dark:hover:text-white"
               onClick={onClose}
             >
-              <svg
-                viewBox="0 0 20 20"
-                aria-hidden="true"
-                className="h-4 w-4 fill-none stroke-current [stroke-linecap:round] [stroke-width:1.6]"
-              >
-                <path d="m5 5 10 10M15 5 5 15" />
-              </svg>
+              <FieldGlyph name="close" size={16} />
             </button>
           </div>
         </header>

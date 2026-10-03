@@ -20,6 +20,11 @@ import { type FieldHost, setHost } from "../src/host";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const ME_CSS = readFileSync(join(process.cwd(), "src/account/MeMenu.css"), "utf8");
+const CHROME = readFileSync(join(process.cwd(), "src/field/ChromeLayer.tsx"), "utf8");
+const ruleOf = (css: string, selector: string): string => {
+  const from = css.indexOf(`${selector} {`);
+  return from < 0 ? "" : css.slice(from, css.indexOf("}", from));
+};
 
 const ME: AccountMe = {
   userId: "01J8Z3K6W9QX2M4N7P5R8T1V3B",
@@ -132,6 +137,10 @@ describe("MeMenuView", () => {
     expect(labels[1]).toContain("Sandbox");
     expect(labels[2]).toContain("New user…");
     expect(labels[3]).toContain("Settings…");
+    // New user… wears a person, not a plus (One Frame FR-3: one plus on screen).
+    expect(item("New user…")?.querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe(
+      "person",
+    );
     // You are the row nearest the face: the name, then the login.
     expect(labels[4]).toContain("James");
     expect(labels[4]).toContain("james@example.com");
@@ -303,6 +312,92 @@ describe("MeMenuView", () => {
     expect((item("Settings…") as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("opens ABOVE the line, never around the face, the face staying put beneath it (FC-D14)", async () => {
+    await mountView({}, true);
+    // The face is the corner's; the menu is a panel of its own above it.
+    const panel = container?.querySelector(".vf-me-panel");
+    expect(panel?.contains(face())).toBe(false);
+    // 8 from the window's left (the face stands at 16) and its foot 8 above the
+    // line (the line's top is 80 from the window's foot, the face's 24): from
+    // the face, −8 and 56.
+    const rule = ruleOf(ME_CSS, ".vf-me-panel");
+    expect(rule).toContain("bottom: 56px;");
+    expect(rule).toContain("left: -8px;");
+    // The rows stand on the panel's foot, so the nearest show first as it grows.
+    expect(ruleOf(ME_CSS, ".vf-me-list")).toContain("bottom: 0;");
+    // You are the nearest row, inside the menu — and the text › is gone (F9).
+    const list = container?.querySelector(".vf-me-list");
+    expect(list?.lastElementChild?.classList.contains("vf-me-you")).toBe(true);
+    expect(item("James")?.textContent).not.toContain("›");
+    // The 56 circle around the face is its hover now, not the menu.
+    expect(ME_CSS).toContain(".vf-me:not([data-open]) .vf-me-face:hover::before {");
+  });
+
+  it("holds Theme — Light · Dark · Auto — and choosing one keeps the menu open (FC-D5)", async () => {
+    const onThemeChange = vi.fn();
+    const spies = await mountView(
+      { theme: { preference: "auto", resolved: "light" }, onThemeChange },
+      true,
+    );
+    const group = container?.querySelector<HTMLFieldSetElement>("[data-me-theme] fieldset");
+    expect(group?.getAttribute("aria-label")).toBe("Theme");
+    expect(group?.getAttribute("data-size")).toBe("small");
+    const options = Array.from(group?.querySelectorAll("button") ?? []);
+    expect(options.map((button) => button.textContent)).toEqual(["Light", "Dark", "Auto"]);
+    expect(
+      options.find((button) => button.getAttribute("aria-pressed") === "true")?.textContent,
+    ).toBe("Auto");
+    // Nearest first: Theme stands just above Settings…, the nearest act.
+    const rows = Array.from(container?.querySelectorAll(".vf-me-list > *") ?? []);
+    const at = (node: Element | null | undefined): number => rows.indexOf(node as Element);
+    expect(at(container?.querySelector("[data-me-theme]"))).toBe(at(item("Settings…")) - 1);
+    // The row's mark says what Auto resolves to.
+    expect(
+      container?.querySelector("[data-me-theme] [data-glyph]")?.getAttribute("data-glyph"),
+    ).toBe("sun");
+    await act(async () => options[1]?.click());
+    expect(onThemeChange).toHaveBeenCalledWith("dark");
+    expect(spies.onOpenChange).not.toHaveBeenCalledWith(false);
+    expect(face().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("walks Theme once with ↑ ↓, at the theme it holds, and chooses with ← →", async () => {
+    const onThemeChange = vi.fn();
+    await mountView({ theme: { preference: "dark", resolved: "dark" }, onThemeChange });
+    face().focus();
+    await key(face(), "ArrowUp");
+    expect(document.activeElement).toBe(item("Settings…"));
+    await key(document.activeElement as Element, "ArrowUp");
+    const held = document.activeElement as HTMLElement;
+    expect(held.closest("[data-me-theme]")).not.toBeNull();
+    expect(held.textContent).toBe("Dark");
+    await key(held, "ArrowRight");
+    expect(onThemeChange).toHaveBeenLastCalledWith("auto");
+    expect(document.activeElement?.textContent).toBe("Auto");
+    await key(document.activeElement as Element, "ArrowLeft");
+    expect(onThemeChange).toHaveBeenLastCalledWith("dark");
+    await key(document.activeElement as Element, "ArrowUp");
+    expect(document.activeElement).toBe(item("New user…"));
+  });
+
+  it("keeps the corner the face's alone: on the foot axis, above the cover, no devtools (FR-4)", () => {
+    // The 44 button at 16 from the left and 24 from the foot — x 16–60, y
+    // 712–756 at 1180 × 780, centred on the line's axis, 734 — in the frame's
+    // z (62), above the cover (60) in every view.
+    expect(CHROME).toContain('className="hud-flight no-drag absolute bottom-[24px] left-4 z-[62]"');
+    // Devtools left the corner for Settings → Advanced (FC-D12).
+    expect(CHROME).not.toContain("ICE Devtools");
+    expect(CHROME).not.toContain('name="bug"');
+  });
+
+  it("is solid chrome, never glass: nothing shows through an open menu", () => {
+    const from = ME_CSS.indexOf(".vf-me-panel::before {");
+    const rule = ME_CSS.slice(from, ME_CSS.indexOf("}", from));
+    expect(rule).toContain("background: var(--vf-chrome-solid);");
+    expect(rule).not.toContain("backdrop-filter");
+    expect(rule).not.toContain("transparent");
+  });
+
   it("grows on the island curve and, under reduced motion, only fades (M1, M6)", () => {
     expect(ME_CSS).toContain("width 600ms var(--vf-ease-island)");
     expect(ME_CSS).toContain("height 600ms var(--vf-ease-island)");
@@ -392,6 +487,60 @@ describe("MeMenu (controller)", () => {
     return onOpenSettings;
   }
 
+  /** The controller over a fieldd whose link is OFFLINE (so Link… is offered),
+   * with the link act's answer and the subscription's later words in hand. */
+  async function mountWith(
+    link: {
+      request: (...args: unknown[]) => Promise<unknown>;
+      onLink?: (push: (s: unknown) => void) => void;
+    },
+    onOpenSettings: ReturnType<typeof vi.fn>,
+    {
+      open = false,
+      onOpenChange = () => undefined,
+    }: { open?: boolean; onOpenChange?: (open: boolean) => void } = {},
+  ): Promise<void> {
+    const client = {
+      status: "ready",
+      onStatusChange: () => () => undefined,
+      subscribe: vi.fn(
+        async (method: string, _params: unknown, onEvent?: (event: unknown) => void) => {
+          if (method === "user.link.subscribe") {
+            link.onLink?.((status) => onEvent?.(status));
+            return {
+              subId: `user-link-${Math.random()}`,
+              snapshot: {
+                link: null,
+                meshEnabled: false,
+                nodeState: null,
+                authUrl: null,
+                linkState: "offline",
+                linkDetail: null,
+              },
+              unsubscribe: () => undefined,
+            };
+          }
+          throw new Error(`unexpected subscribe: ${method}`);
+        },
+      ),
+      request: vi.fn((method: string, params: unknown) => link.request(method, params)),
+    } as unknown as FielddClient;
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        createElement(
+          FielddProvider,
+          { client },
+          createElement(MeMenu, { open, onOpenChange, onOpenSettings }),
+        ),
+      );
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+  }
+
   const USERS = [
     { userId: "me", fuid: 1, name: "James", resident: true, onboarded: true },
     {
@@ -456,6 +605,105 @@ describe("MeMenu (controller)", () => {
     expect(reads).toBe(2);
     expect(container?.querySelector(".vf-me-face")?.getAttribute("aria-label")).toBe(
       "James: account menu",
+    );
+  });
+
+  it("starts the link from Link Tailscale account… — never Account (F16) — and opens the sign-in", async () => {
+    const opened = vi.spyOn(window, "open").mockImplementation(() => null);
+    const request = vi.fn(async () => ({
+      link: null,
+      meshEnabled: false,
+      nodeState: "NeedsLogin",
+      authUrl: "https://login.tailscale.com/a/abc123",
+      linkState: "capturing",
+      linkDetail: null,
+    }));
+    baseHost({ usersList: vi.fn(async () => ({ attachedUserId: "me", users: USERS })) });
+    const onOpenSettings = vi.fn();
+    const onOpenChange = vi.fn();
+    await mountWith({ request }, onOpenSettings, { open: true, onOpenChange });
+    await act(async () => {
+      item("Link Tailscale account…")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(request).toHaveBeenCalledWith("user.link.begin", {});
+    expect(onOpenSettings).not.toHaveBeenCalled();
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+    expect(opened).toHaveBeenCalledWith(
+      "https://login.tailscale.com/a/abc123",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    opened.mockRestore();
+  });
+
+  it("opens the sign-in when the node offers it later, and says a refusal where the act was", async () => {
+    const opened = vi.spyOn(window, "open").mockImplementation(() => null);
+    let push: ((status: unknown) => void) | null = null;
+    const request = vi.fn(async () => ({
+      link: null,
+      meshEnabled: false,
+      nodeState: "Starting",
+      authUrl: null,
+      linkState: "capturing",
+      linkDetail: null,
+    }));
+    baseHost({ usersList: vi.fn(async () => ({ attachedUserId: "me", users: USERS })) });
+    await mountWith(
+      {
+        request,
+        onLink: (next) => {
+          push = next;
+        },
+      },
+      vi.fn(),
+      { open: true },
+    );
+    await act(async () => {
+      item("Link Tailscale account…")?.click();
+      await Promise.resolve();
+    });
+    expect(opened).not.toHaveBeenCalled();
+    await act(async () =>
+      push?.({
+        link: null,
+        meshEnabled: false,
+        nodeState: "NeedsLogin",
+        authUrl: "https://login.tailscale.com/a/later",
+        linkState: "capturing",
+        linkDetail: null,
+      }),
+    );
+    expect(opened).toHaveBeenCalledTimes(1);
+    expect(opened).toHaveBeenCalledWith(
+      "https://login.tailscale.com/a/later",
+      "_blank",
+      "noopener,noreferrer",
+    );
+    opened.mockRestore();
+
+    // A refusal: the daemon's words at the top of the reopened menu.
+    root?.unmount();
+    container?.remove();
+    const onOpenChange = vi.fn();
+    await mountWith(
+      {
+        request: vi.fn(async () => {
+          throw new Error("this user is already linked to a tailscale account; unlink first");
+        }),
+      },
+      vi.fn(),
+      { open: true, onOpenChange },
+    );
+    await act(async () => {
+      item("Link Tailscale account…")?.click();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(onOpenChange).toHaveBeenLastCalledWith(true);
+    expect(container?.querySelector(".vf-me-notice")?.textContent).toBe(
+      "Couldn't link this device — this user is already linked to a tailscale account; unlink first.",
     );
   });
 

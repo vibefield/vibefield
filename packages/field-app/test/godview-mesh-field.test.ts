@@ -289,6 +289,26 @@ describe("another desktop's runs, as rows", () => {
     expect(agent?.stale).toBeUndefined();
   });
 
+  it("SV — carries the owner's estimated total, and no steps it never sent", () => {
+    const [record] = meshRecords(field, view);
+    if (record === undefined) throw new Error("no record");
+    const priced = (usage: Record<string, unknown> | undefined) =>
+      monitorAgentFromMesh(
+        { ...record, row: { ...record.row, usage } as typeof record.row },
+        COLOURS,
+      );
+    expect(priced({ costUsd: 4.2, costCoverage: "partial" })?.agent?.usage).toEqual({
+      total: 4.2,
+      coverage: "partial",
+      steps: [],
+      stepMs: 30_000,
+    });
+    expect(priced({ costUsd: 1 })?.agent?.usage?.coverage).toBe("complete");
+    // a run its owner could not price, or no price at all: no usage, never $0
+    expect(priced({ costUsd: 0, costCoverage: "unavailable" })?.agent?.usage).toBeUndefined();
+    expect(priced(undefined)?.agent?.usage).toBeUndefined();
+  });
+
   it("a desktop that is not answering greys its rows and keeps them (DS-L8)", () => {
     const [record] = meshRecords(field, view);
     if (record === undefined) throw new Error("no record");

@@ -123,8 +123,15 @@ describe("design system page", () => {
   });
 
   it("renders the complete single-page inventory", () => {
-    expect(container?.querySelectorAll(".vf-ds-sidebar nav a")).toHaveLength(12);
-    expect(container?.querySelectorAll(".vf-ds-section")).toHaveLength(11);
+    const links = container!.querySelectorAll<HTMLAnchorElement>(".vf-ds-sidebar nav a");
+    expect(links.length).toBeGreaterThanOrEqual(12);
+    for (const link of links) {
+      expect(
+        container?.querySelector(link.hash),
+        `Missing section for ${link.textContent}`,
+      ).not.toBeNull();
+    }
+    expect(container?.querySelector('#living-mark a[href="./logo-studio.html"]')).not.toBeNull();
     expect(container?.textContent).toContain("The field, in one frame.");
     expect(container?.textContent).toContain("The actual field, under glass");
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");
@@ -134,6 +141,92 @@ describe("design system page", () => {
       "Swarm bodies — every drawn state, on the package's own fixtures",
     );
     expect(container?.textContent).toContain("The interface, accounted for");
+    // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 60.
+    expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(60);
+    // One Frame FR-1: the view frame on fixtures — the shipping track and cover
+    // over a field, and a plate per state the page's Chrome & Composer plates
+    // show for the frame (the last the keys as Windows prints them).
+    expect(container?.querySelector(".vf-ds-frame-stage .vf-views-line")).not.toBeNull();
+    expect(container?.querySelector(".vf-ds-frame-stage .vf-cover")).not.toBeNull();
+    expect(
+      [...(container?.querySelectorAll(".vf-ds-views-plate") ?? [])].map((plate) =>
+        plate.getAttribute("data-state"),
+      ),
+    ).toEqual(["rest", "cmd", "gv", "hx", "note", "rest"]);
+    // One Frame FR-2: the line — live on its real controller over the frame's
+    // field (the track at its left end), and a plate per state the page's §03
+    // plates draw for it, the last Godview's keys as Windows prints them.
+    expect(container?.querySelector(".vf-ds-frame-stage .vf-line > .vf-views-line")).not.toBeNull();
+    expect(
+      [...(container?.querySelectorAll(".vf-ds-line-plate") ?? [])].map(
+        (plate) => `${plate.getAttribute("data-state")}:${plate.getAttribute("data-keys")}`,
+      ),
+    ).toEqual([
+      "rest:mac",
+      "typing:mac",
+      "at:mac",
+      "aimed:mac",
+      "objects:mac",
+      "gv:mac",
+      "hx:mac",
+      "gv:other",
+    ]);
+    // One Frame FR-3: the head — a plate per state the page's head plates draw
+    // (and FitPath and renaming, which the brief adds), the zoom's keys as
+    // Windows says them last; the live head in the playground.
+    expect(
+      [...(container?.querySelectorAll(".vf-ds-head-plate") ?? [])].map(
+        (plate) => `${plate.getAttribute("data-state")}:${plate.getAttribute("data-keys")}`,
+      ),
+    ).toEqual([
+      "top:mac",
+      "folder:mac",
+      "narrow:mac",
+      "renaming:mac",
+      "explorer:mac",
+      "zoom:mac",
+      "palette:mac",
+      "zoom:other",
+    ]);
+    const headPlate = (state: string, keys = "mac"): Element | null =>
+      container?.querySelector(`.vf-ds-head-plate[data-state="${state}"][data-keys="${keys}"]`) ??
+      null;
+    expect(headPlate("top")?.querySelector(".vf-head-path")?.textContent).toBe("Studio desk");
+    expect(headPlate("top")?.textContent).not.toContain("Root");
+    expect(
+      [...(headPlate("folder")?.querySelectorAll(".vf-head-crumb, .vf-head-here") ?? [])].map(
+        (name) => name.textContent,
+      ),
+    ).toEqual(["Studio desk", "Sketches"]);
+    expect(headPlate("renaming")?.querySelector<HTMLInputElement>(".vf-head-rename")?.value).toBe(
+      "Studio desk",
+    );
+    expect(headPlate("explorer")?.querySelector(".vf-head-docs > :first-child")?.textContent).toBe(
+      "New field",
+    );
+    expect(
+      [...(headPlate("zoom")?.querySelectorAll(".vf-head-zoom-menu .vf-menu-key") ?? [])].map(
+        (key) => key.textContent,
+      ),
+    ).toEqual(["⌘+", "⌘−", "⇧1", "⌘0"]);
+    expect(
+      [
+        ...(headPlate("zoom", "other")?.querySelectorAll(".vf-head-zoom-menu .vf-menu-key") ?? []),
+      ].map((key) => key.textContent),
+    ).toEqual(["Ctrl+Plus", "Ctrl+Minus", "Shift+1", "Ctrl+0"]);
+    expect(
+      headPlate("palette")?.querySelector('[role="dialog"][aria-label="Command palette"]'),
+    ).not.toBeNull();
+    expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
+    const plate = (state: string): Element | null =>
+      container?.querySelector(`.vf-ds-line-plate[data-state="${state}"]`) ?? null;
+    expect(plate("at")?.querySelector(".vf-at-menu")).not.toBeNull();
+    expect(plate("typing")?.querySelector(".vf-line-chip")).not.toBeNull();
+    expect(plate("aimed")?.querySelector(".vf-line-ph")?.textContent).toBe("Message vibe-field…");
+    expect(plate("objects")?.querySelector('.vf-line-create[aria-expanded="true"]')).not.toBeNull();
+    expect(plate("hx")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
+      "true",
+    );
   });
 
   it("exposes theme and representative component-state controls", async () => {
@@ -149,12 +242,14 @@ describe("design system page", () => {
       ),
     ).toHaveLength(12);
 
-    const filePill = container?.querySelector<HTMLElement>("[data-file-pill]");
-    expect(filePill?.dataset.filePillOpen).toBe("false");
+    // One Frame FR-3: the playground's head runs on its real controller — its
+    // chevron grows the pill into the fields explorer through the one owner.
+    const place = container?.querySelector<HTMLElement>(".vf-ds-field-stage [data-head-place]");
+    expect(place?.dataset.open).toBe("false");
     await act(async () =>
-      filePill?.querySelector<HTMLButtonElement>('[title="Browse fields"]')?.click(),
+      place?.querySelector<HTMLButtonElement>('button[aria-label="Fields"]')?.click(),
     );
-    expect(filePill?.dataset.filePillOpen).toBe("true");
+    expect(place?.dataset.open).toBe("true");
 
     await act(async () => button("Accept").click());
     expect(container?.querySelector(".vf-ds-living-card")?.getAttribute("data-state")).toBe(
@@ -180,9 +275,15 @@ describe("design system page", () => {
     expect(container?.querySelector(".vf-artifact-panel")).not.toBeNull();
     expect(container?.querySelector(".vf-command-palette")).not.toBeNull();
     expect(container?.querySelector(".vf-loading-veil")).not.toBeNull();
-    expect(container?.querySelector(".vf-navigation-breadcrumbs__trail")).not.toBeNull();
     expect(container?.querySelector(".vf-settings-dialog")).not.toBeNull();
     expect(container?.querySelector(".vf-widget-tray")).not.toBeNull();
+    // The playground's tray has no island of its own (One Frame FR-2): the
+    // line's create raises its sheet, and its ⊕ is what turns to ✕.
+    const playground = container?.querySelector(".vf-ds-field-stage");
+    expect(playground?.querySelector("[data-tray-toggle]")).toBeNull();
+    await act(async () => playground?.querySelector<HTMLButtonElement>(".vf-line-create")?.click());
+    expect(playground?.querySelector('.vf-widget-tray[data-tray-open="true"]')).not.toBeNull();
+    expect(playground?.querySelector('.vf-line-create[aria-expanded="true"]')).not.toBeNull();
     expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(12);
     for (const state of [
       "welcome",
@@ -201,10 +302,11 @@ describe("design system page", () => {
       expect(container?.querySelector(`[data-onboarding-preview="${state}"]`)).not.toBeNull();
     }
     expect(container?.querySelectorAll(".vf-wizard-shell")).toHaveLength(12);
-    expect(container?.querySelector(".vf-zoom-pill")).not.toBeNull();
+    expect(container?.querySelector(".vf-ds-field-stage .vf-head-zoom")).not.toBeNull();
     expect(container?.querySelector("[data-ground-workbench]")).not.toBeNull();
     expect(container?.querySelector("[data-visual-tweak-controls]")).not.toBeNull();
-    expect(container?.querySelectorAll('[data-ground-renderer="unavailable"]')).toHaveLength(2);
+    // the chrome playground's, the workbench's, and the view frame's stage (FR-1)
+    expect(container?.querySelectorAll('[data-ground-renderer="unavailable"]')).toHaveLength(3);
     expect(container?.textContent).toContain("No artifacts yet");
 
     await act(async () => {

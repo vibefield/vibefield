@@ -11,8 +11,27 @@ import { createHash } from "node:crypto";
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
-import { computeEffectiveGrants, type PluginManifestV1 } from "@vibefield/contracts";
+import {
+  computeEffectiveGrants,
+  OBJECTS_NEED_DESK,
+  type PluginManifestV1,
+} from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
+
+/** DK-0f — an object kind as the host will see it: its durable half, the chip
+ * it hangs under, the export that draws it, and what THIS build answers when
+ * asked to activate it (the stable refusal code; null once the desk draws). */
+export interface InspectedObject {
+  readonly type: string;
+  readonly title: string;
+  readonly schemaVersion: number;
+  readonly props: number;
+  readonly groups: string[];
+  readonly ports: number;
+  readonly tray: string | null;
+  readonly binding: string;
+  readonly refusal: string | null;
+}
 
 export interface InspectedWidget {
   readonly type: string;
@@ -42,6 +61,7 @@ export interface InspectionResult {
   };
   readonly contributions: {
     readonly widgets: InspectedWidget[];
+    readonly objects: InspectedObject[];
     readonly commands: Array<{ id: string; title: string; placements: string[] }>;
     readonly surfaces: Array<{ id: string; title: string; slot: string }>;
     readonly behaviors: Array<{
@@ -122,6 +142,17 @@ export async function inspectPlugin(
     ports: (w.ports ?? []).length,
     states: states.byType.get(w.type) ?? 1,
   }));
+  const objects: InspectedObject[] = (c.objects ?? []).map((o) => ({
+    type: o.type,
+    title: o.title,
+    schemaVersion: o.schemaVersion,
+    props: Object.keys(o.props).length,
+    groups: Object.keys(o.groups),
+    ports: (o.ports ?? []).length,
+    tray: o.tray?.category ?? null,
+    binding: o.binding.kind,
+    refusal: OBJECTS_NEED_DESK.code,
+  }));
 
   return {
     id: manifest.id,
@@ -141,6 +172,7 @@ export async function inspectPlugin(
     },
     contributions: {
       widgets,
+      objects,
       commands: (c.commands ?? []).map((x) => ({
         id: x.id,
         title: x.title,
@@ -199,6 +231,11 @@ export function formatInspection(result: InspectionResult): string {
     push(
       "widget",
       `${w.type} — ${w.surface}, v${w.schemaVersion}, ${w.props} prop(s), ${w.ports} port(s), ${w.states} state(s)`,
+    );
+  for (const o of c.objects)
+    push(
+      "object",
+      `${o.type} — v${o.schemaVersion}, ${o.props} prop(s), ${o.ports} port(s), tray ${o.tray ?? "none"}, export ${o.binding}${o.refusal === null ? "" : ` — ${o.refusal}: ${OBJECTS_NEED_DESK.message}`}`,
     );
   for (const x of c.commands) push("command", `${x.id} [${x.placements.join(", ")}]`);
   for (const x of c.surfaces) push("surface", `${x.id} → ${x.slot}`);

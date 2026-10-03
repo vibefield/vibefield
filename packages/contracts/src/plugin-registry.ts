@@ -5,6 +5,7 @@ import { DeniedCapability } from "./plugin-runtime";
 import {
   BehaviorContribution,
   CommandContribution,
+  ObjectContribution,
   PluginCapabilityContribution,
   PluginId,
   SettingsContribution,
@@ -103,6 +104,10 @@ export type SanitizedMcp = z.infer<typeof SanitizedMcp>;
 export const SanitizedContributions = z
   .object({
     widgets: z.array(WidgetContribution).default([]),
+    /** DK-0f — object kinds, carried so the roster and `inspect` list them;
+     * on this build the row that declares any is `incompatible`
+     * (`OBJECTS_NEED_DESK`), never activated. */
+    objects: z.array(ObjectContribution).default([]),
     /** Full data-only behavior descriptors are public renderer authority. */
     behaviors: z.array(BehaviorContribution).default([]),
     commands: z.array(CommandContribution).default([]),

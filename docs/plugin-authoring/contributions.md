@@ -15,6 +15,9 @@ the deep end; the field table is here.
 
 Categories: `Cards`, `3D`, `Nodes`, `Tools`.
 
+Widgets are the canvas face of THIS build. They retire with the desk build (DK-8),
+where every canvas face is an object; a type is one or the other, never both.
+
 | field | type | required | rules |
 | --- | --- | --- | --- |
 | `type` | string | yes | at most 128 characters |
@@ -30,7 +33,7 @@ Categories: `Cards`, `3D`, `Nodes`, `Tools`.
 | `minSize` | { w: number, h: number } | no | — |
 | `maxSize` | { w: number, h: number } | no | — |
 | `interaction` | { selectable?: boolean, movable?: boolean, resizable?: boolean, snap?: `source` \| `target` \| `both` \| `none`, dragOn?: `press` \| `longPress`, solid?: boolean, sweepContained?: boolean, keyboard?: `shared` \| `exclusive`, keyboardEscape?: `release` \| `widget` } | no | — |
-| `container` | `{ accepts: string[], provides?: string[] }` | no | — |
+| `container` | `{ accepts: string[], provides?: string[], portal?: object }` | no | — |
 | `provides` | `string[]` | no | at most 16 item(s) |
 | `ports` | { id: string, side: `n` \| `e` \| `s` \| `w`, index?: number, accepts?: string[] }[] | no | at most 16 item(s) |
 | `props` | object mapping name → one of `string`, `number`, `boolean`, `enum`, `json`, `entity-ref`, `session-ref`, `terminal-ref`, `artifact-ref`, `file-ref` | no | discriminated by `kind`; defaults to `{}` |
@@ -88,6 +91,105 @@ Categories: `Cards`, `3D`, `Nodes`, `Tools`.
 ```
 
 *(@vibefield/contracts fixtures/plugin-manifest.valid.json)*
+
+## Objects
+
+An object is a kind the desk DRAWS — one WebGPU renderer, the kind's own GPU
+program — declared with the same durable half as a widget and bound by ONE export
+name instead of a React component; `tray` hangs it on the pegboard. `objects.md`
+is the deep end.
+
+On this build nothing draws an object: the manifest is accepted and recorded, and
+every host refuses to activate it with `objects-need-desk` (object kinds need the desk; this build draws widgets).
+
+| field | type | required | rules |
+| --- | --- | --- | --- |
+| `type` | string | yes | at most 128 characters |
+| `title` | string | yes | at least 1 character; at most 80 characters |
+| `description` | string | no | at most 500 characters |
+| `schemaVersion` | number | yes | `integer; > 0` |
+| `size` | { w: number, h: number } | yes | — |
+| `minSize` | { w: number, h: number } | no | — |
+| `interaction` | { selectable?: boolean, movable?: boolean, resizable?: boolean, snap?: `source` \| `target` \| `both` \| `none`, dragOn?: `press` \| `longPress`, solid?: boolean, sweepContained?: boolean, keyboard?: `shared` \| `exclusive`, keyboardEscape?: `release` \| `widget` } | no | — |
+| `container` | `{ accepts: string[], provides?: string[], portal?: object }` | no | — |
+| `provides` | `string[]` | no | at most 16 item(s) |
+| `ports` | { id: string, side: `n` \| `e` \| `s` \| `w`, index?: number, accepts?: string[] }[] | no | at most 16 item(s) |
+| `props` | object mapping name → one of `string`, `number`, `boolean`, `enum`, `json`, `entity-ref`, `session-ref`, `terminal-ref`, `artifact-ref`, `file-ref` | no | discriminated by `kind`; defaults to `{}` |
+| `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
+| `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
+| `tray` | { category: string, label: string, order?: number, hang?: object, props?: object mapping name → one of string, number, boolean, take?: one of `"face"`, object mapping name → one of string, number, boolean, local?: boolean } | no | — |
+| `binding` | { kind: string } | yes | — |
+
+```json
+[
+  {
+    "type": "com.example.clock",
+    "title": "Clock",
+    "description": "An analogue clock on the desk",
+    "schemaVersion": 1,
+    "size": {
+      "w": 160,
+      "h": 160
+    },
+    "interaction": {
+      "selectable": true,
+      "movable": true,
+      "resizable": false,
+      "snap": "both"
+    },
+    "provides": [
+      "com.example.clock",
+      "desk.object",
+      "desk.containable"
+    ],
+    "props": {
+      "style": {
+        "kind": "enum",
+        "options": [
+          "classic",
+          "minimal",
+          "ink"
+        ],
+        "default": "classic"
+      },
+      "seconds": {
+        "kind": "boolean",
+        "default": true
+      },
+      "zone": {
+        "kind": "string",
+        "default": "local",
+        "maxLength": 32
+      }
+    },
+    "tray": {
+      "category": "things",
+      "label": "Clock",
+      "order": 0,
+      "hang": {
+        "w": 110,
+        "h": 110,
+        "accessory": "hook",
+        "pegs": [
+          [
+            0,
+            -0.5
+          ]
+        ]
+      },
+      "props": {
+        "style": "classic"
+      },
+      "take": "face"
+    },
+    "binding": {
+      "kind": "clock"
+    }
+  }
+]
+```
+
+*(@vibefield/contracts fixtures/plugin-manifest.objects.json)*
 
 ## Commands
 

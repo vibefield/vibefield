@@ -91,7 +91,13 @@ export default defineConfig(({ mode }) => ({
     entries:
       mode === "live-surfaces-lab"
         ? ["spike-live-surfaces-lab.html"]
-        : ["index.html", "studio-product.html", "studio.html", "design-system.html"],
+        : [
+            "index.html",
+            "studio-product.html",
+            "studio.html",
+            "design-system.html",
+            "logo-studio.html",
+          ],
     include: ["@vibefield/field-app > @react-three/fiber"],
     // AR-0 sibling mode, corrected 2026-09-13: the optimizer registry is keyed
     // by the BARE specifier, so the whole graph gets ONE `zod` entry — and
@@ -145,6 +151,7 @@ export default defineConfig(({ mode }) => ({
         mode === "design"
           ? {
               "design-system": designSystemEntry,
+              "logo-studio": join(rendererRoot, "logo-studio.html"),
             }
           : mode === "live-surfaces-lab"
             ? {

@@ -6,9 +6,11 @@ import type {
   WidgetContribution,
 } from "@vibefield/contracts";
 import {
+  declaresObjects,
   isDistributablePluginId,
   isOwnedName,
   isWellFormedPluginId,
+  OBJECTS_NEED_DESK,
   validatePluginManifest,
 } from "@vibefield/contracts";
 
@@ -103,6 +105,13 @@ export class PluginRegistry<W = unknown> {
   registerV1(v1: PluginManifestV1, widgets: Record<string, W>): void {
     const result = validatePluginManifest(v1);
     if (!result.ok) throw new Error(`plugin manifest invalid: ${result.issues.join(" · ")}`);
+    // DK-0f: THIS build draws widgets — a manifest that declares object kinds is
+    // refused at the door in the host's one sentence, never registered with its
+    // kinds silently dropped. DK-6 binds them instead.
+    if (declaresObjects(result.manifest.contributes))
+      throw new Error(
+        `plugin ${result.manifest.id} declares object kinds — ${OBJECTS_NEED_DESK.message} (${OBJECTS_NEED_DESK.code})`,
+      );
     const contributions = result.manifest.contributes?.widgets ?? [];
     this.bind(
       {
@@ -126,6 +135,12 @@ export class PluginRegistry<W = unknown> {
   registerRecord(record: PluginRecord, widgets: Record<string, W>): void {
     if (!isWellFormedPluginId(record.id))
       throw new Error(`plugin record invalid: ${record.id} is not a well-formed plugin id`);
+    // DK-0f: fieldd marks such a record incompatible and never enables it; the
+    // same sentence here keeps a hand-built record honest too.
+    if (declaresObjects(record.contributions))
+      throw new Error(
+        `plugin record ${record.id} declares object kinds — ${OBJECTS_NEED_DESK.message} (${OBJECTS_NEED_DESK.code})`,
+      );
     this.bind(
       {
         id: record.id,

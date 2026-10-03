@@ -106,9 +106,14 @@ export function mountProductHost(
       completeClose: (result) => window.vibefield.completeClose(result),
       onShellCommand: (handler) => window.vibefield.onShellCommand(handler),
       onDesktopState: (handler) => window.vibefield.onDesktopState(handler),
-      godview: {
-        set: (open) => window.vibefield.godview.set(open),
-        onState: (handler) => window.vibefield.godview.onState(handler),
+      view: {
+        set: (view) => window.vibefield.view.set(view),
+        onState: (handler) => window.vibefield.view.onState(handler),
+        onZoom: (handler) => window.vibefield.view.onZoom(handler),
+      },
+      theme: {
+        set: (preference) => window.vibefield.theme.set(preference),
+        onState: (handler) => window.vibefield.theme.onState(handler),
       },
       // DT-2a: the claimed transport reaches the product instead of only being
       // parked here. The promise is handed over as-is — the pool behind the seam

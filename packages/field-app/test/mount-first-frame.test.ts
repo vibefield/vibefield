@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetSwitchForTests } from "../src/boot/switch";
 import type { FieldHost } from "../src/host";
 import { mountFieldApp } from "../src/mount";
+import { resetAppThemeForTest } from "../src/theme";
 
 const logger: FieldHost["logger"] = {
   child: () => logger,
@@ -37,6 +38,7 @@ let container: HTMLElement;
 
 beforeEach(() => {
   resetSwitchForTests();
+  resetAppThemeForTest();
   sessionStorage.clear();
   localStorage.clear();
   document.documentElement.className = "";

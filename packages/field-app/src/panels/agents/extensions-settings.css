@@ -34,11 +34,6 @@
   width: 14px;
   height: 14px;
   flex: none;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 
 /* The table scrolls sideways inside its section, never the page. */
@@ -207,11 +202,6 @@
   color: var(--vf-foreground-inverse);
 }
 
-.vf-ext-cell--on .vf-ext-glyph,
-.vf-ext-cell--app .vf-ext-glyph {
-  stroke-width: 2.4;
-}
-
 .vf-ext-cell--attn::after {
   content: "";
   position: absolute;
@@ -287,11 +277,7 @@
 .vf-ext-chevron {
   width: 14px;
   height: 14px;
-  fill: none;
-  stroke: var(--vf-text-faint);
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 1.6;
+  color: var(--vf-text-faint);
 }
 
 .vf-ext-kind-title {
@@ -926,10 +912,7 @@
   left: 11px;
   width: 15px;
   height: 15px;
-  fill: none;
-  stroke: var(--vf-text-tertiary);
-  stroke-width: 1.6;
-  stroke-linecap: round;
+  color: var(--vf-text-tertiary);
   pointer-events: none;
 }
 
@@ -959,11 +942,7 @@
 .vf-ext-installed .vf-ext-installed-mark {
   width: 13px;
   height: 13px;
-  fill: none;
-  stroke: var(--vf-green);
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
+  color: var(--vf-green);
 }
 
 /* No marketplace yet: the kit's empty state, one sentence and its acts. */
@@ -998,10 +977,7 @@
 .vf-ext-browse-empty-mark svg {
   width: 22px;
   height: 22px;
-  fill: none;
-  stroke: var(--vf-text-tertiary);
-  stroke-width: 1.5;
-  stroke-linejoin: round;
+  color: var(--vf-text-tertiary);
 }
 
 .vf-ext-browse-empty-acts {

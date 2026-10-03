@@ -1,0 +1,103 @@
+/* The frame's solid menus (DESIGN.md §5 "Menus are solid, floating controls
+   are glass", FC-D14; §8 "The head"): rows to be read, so opaque — the theme's
+   solid chrome ringed by the strong hairline, with the island shadow and
+   corners 18. One anatomy for the zoom's menu and the palette: 10px mono
+   eyebrows, rows 36 tall at 13/500, a 24 column for a row's mark, the hot row
+   in the ready fill, and a key SAID at the row's end (FR-5: never a cap).
+   Tokens only; the ready fill is the foreground at 8%, as the line mixes it. */
+
+.vf-menu {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 6px;
+  border-radius: 18px;
+  color: var(--vf-text-primary);
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.vf-menu-eye {
+  padding: 8px 10px 5px;
+  color: var(--vf-text-tertiary);
+  font-family: var(--vf-font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.vf-menu-row {
+  display: flex;
+  width: 100%;
+  min-height: 36px;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--vf-text-primary);
+  background: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-menu-row[data-hot] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-menu-row:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -2px;
+}
+
+/* A row that waits says why under its name, and cannot be run. */
+.vf-menu-row[aria-disabled="true"] {
+  color: var(--vf-text-tertiary);
+  cursor: default;
+}
+
+.vf-menu-ico {
+  display: grid;
+  width: 24px;
+  flex: none;
+  place-items: center;
+  color: var(--vf-text-secondary);
+}
+
+.vf-menu-row[aria-disabled="true"] .vf-menu-ico {
+  color: var(--vf-text-faint);
+}
+
+.vf-menu-label {
+  min-width: 0;
+  padding: 5px 0;
+}
+
+.vf-menu-label small {
+  display: block;
+  margin-top: 3px;
+  color: var(--vf-text-tertiary);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.25;
+}
+
+.vf-menu-key {
+  flex: none;
+  margin-left: auto;
+  padding: 0 0 0 12px;
+  color: var(--vf-text-tertiary);
+  background: none;
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+}

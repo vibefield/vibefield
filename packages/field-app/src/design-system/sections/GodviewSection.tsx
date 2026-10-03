@@ -4,6 +4,7 @@ import { DeviceFilterPreview } from "../DeviceFilterPreview";
 import { GodviewPreview } from "../GodviewPreview";
 import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
+import { timelineDoor } from "../godview-timeline-fixtures";
 import { PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
@@ -11,8 +12,11 @@ import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 import { TerminalMirrorPreview } from "../TerminalMirrorPreview";
 import { TerminalSessionPickerPreview } from "../TerminalSessionPickerPreview";
 
-export function GodviewSection(): ReactElement {
+export function GodviewSection({ dark = false }: { dark?: boolean } = {}): ReactElement {
+  // Godview follows the app's theme (FC-D7): in the catalog, the page's.
+  const theme = dark ? "dark" : "light";
   const profilesDoor = useMemo(() => profileTabsDoor(), []);
+  const afternoonDoor = useMemo(() => timelineDoor(), []);
   const meshDoor = useMemo(() => meshBoardDoor(), []);
   return (
     <Section
@@ -23,7 +27,16 @@ export function GodviewSection(): ReactElement {
       description="Godview is the instrument-stage exception: compact monospace controls, flat geometry, stark status bodies, and a parchment or graphite terminal deck. The swarm's bodies below are the views package's own fixtures drawn by the shipping renderer, so its state grammar is read as the pixels Godview paints."
     >
       <Specimen title="Godview stage" source="godview/GodviewStage.tsx" bleed>
-        <GodviewPreview />
+        <GodviewPreview theme={theme} />
+      </Specimen>
+      <Specimen
+        title="Timeline — the swarm through time: an afternoon from fieldd's status ledger"
+        source="@vibecook/puppeteer-views/views/timeline"
+        bleed
+      >
+        <div data-godview-timeline-catalog="">
+          <GodviewPreview door={afternoonDoor} initialView="timeline" theme={theme} />
+        </div>
       </Specimen>
       <Specimen
         title="Profile tabs — a profile's sessions on the stage, the others receded"
@@ -31,7 +44,7 @@ export function GodviewSection(): ReactElement {
         bleed
       >
         <div data-godview-profiles-catalog="">
-          <GodviewPreview door={profilesDoor} />
+          <GodviewPreview door={profilesDoor} theme={theme} />
         </div>
       </Specimen>
       <Specimen
@@ -40,7 +53,7 @@ export function GodviewSection(): ReactElement {
         bleed
       >
         <div data-godview-mesh-catalog="">
-          <GodviewPreview door={meshDoor} />
+          <GodviewPreview door={meshDoor} theme={theme} />
         </div>
       </Specimen>
       <Specimen

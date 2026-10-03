@@ -1,5 +1,6 @@
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import { type CSSProperties, type ReactElement, useCallback, useEffect, useState } from "react";
+import { useActiveView } from "../frame/view-state";
 import { getHost } from "../host";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
@@ -10,12 +11,11 @@ import { GodviewMonitor } from "./GodviewMonitor";
 import { GodviewStage, GodviewUnavailableDeck } from "./GodviewStage";
 import {
   defaultGodviewTuning,
-  type GodviewTheme,
   type GodviewTuning,
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "./GodviewTuningPanel";
-import { GODVIEW_THEME_STORAGE_KEY, storedGodviewTheme } from "./godview-theme";
+import { useGodviewTheme } from "./godview-theme";
 import { useLabSwitches } from "./lab-switches";
 import { GodviewAgentsProvider } from "./monitor/GodviewAgentsProvider";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
@@ -26,7 +26,6 @@ import {
   VIGNETTE_OPACITY_KEY,
 } from "./monitor/stage-parameters";
 import type { MonitorPaneFacts } from "./monitor/useMonitorAgents";
-import { useGodviewOpen } from "./overlay-state";
 
 /** The prewarm's off switch (GT-3p). A DIAGNOSTIC, not a product setting: the
  * smoke sets it to measure a genuinely cold open, and the only supported value
@@ -74,11 +73,23 @@ function bridgeNotice(): string | null {
   return "TERMINAL BRIDGE UNAVAILABLE · RECONNECTING";
 */
 
+/** Godview as the cover's content (One Frame FR-1): a VIEW now, drawn below
+ * the frame inside the one cover, open exactly while it is the window's view —
+ * there is no bit of its own any more. */
 export function GodviewOverlay(): ReactElement | null {
-  const open = useGodviewOpen();
+  const open = useActiveView() === "godview";
   const [everOpened, setEverOpened] = useState(false);
-  const [theme, setTheme] = useState<GodviewTheme>(storedGodviewTheme);
+  // FC-D7: the app's theme, unless Settings → Terminal overrides it — never a
+  // mode of Godview's own (its ☼◐ switch retired at FR-4).
+  const theme = useGodviewTheme();
   const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning(theme));
+  // A change of mode resets the stage's tuning to that mode's defaults, as the
+  // switch used to (React's state-from-the-previous-render pattern).
+  const [tunedFor, setTunedFor] = useState(theme);
+  if (tunedFor !== theme) {
+    setTunedFor(theme);
+    setTuning(defaultGodviewTuning(theme));
+  }
   const [tuningOpen, setTuningOpen] = useState(false);
   const appearance = useDeckAppearance();
   const monitor = useMonitorTuning();
@@ -99,10 +110,6 @@ export function GodviewOverlay(): ReactElement | null {
     setTuning((current) => ({ ...current, ...patch }));
   }, []);
   const resetTuning = useCallback(() => setTuning(defaultGodviewTuning(theme)), [theme]);
-  const changeTheme = useCallback((next: GodviewTheme) => {
-    setTheme(next);
-    setTuning(defaultGodviewTuning(next));
-  }, []);
 
   useEffect(() => {
     if (open) {
@@ -137,14 +144,6 @@ export function GodviewOverlay(): ReactElement | null {
     return whenIdle(() => prewarmTerminalPool(fieldd, godviewColdOpen), 2_000);
   }, [fieldd, everOpened]);
 
-  useEffect(() => {
-    try {
-      localStorage.setItem(GODVIEW_THEME_STORAGE_KEY, theme);
-    } catch {
-      // A disabled storage partition should not disable the switch itself.
-    }
-  }, [theme]);
-
   // The bridge NOTICE, and only the notice (TP-S0b). This used to be half of the
   // recovery ladder as well: GT-D14's custody clause (discard a warm whose
   // bridge died before anyone used it) and the one lazy re-warm lived here,
@@ -164,7 +163,9 @@ export function GodviewOverlay(): ReactElement | null {
   // One door instead: ⇧⇧, a double tap of Shift detected in main from
   // `before-input-event`, which reaches it whatever holds focus (GT-D2) — so
   // nothing on this page needs to race the terminal for a key, and Escape now
-  // belongs entirely to whatever has focus.
+  // belongs entirely to whatever has focus. (Since One Frame, FR-1: ⌘1 leaves
+  // Godview and ⌘2 comes back, as product chords the frame takes first; ⇧⇧
+  // retired. Escape is still never Godview's.)
   // The panel keeps its own × (`Close system controls`) and its toolbar toggle,
   // so the affordance is lost only from the keyboard, and only for the panel.
   // (Until GT-6a the deck's kill chip kept a bubble-phase Esc of its own to
@@ -218,7 +219,6 @@ export function GodviewOverlay(): ReactElement | null {
               reserveWindowControls={getHost().platform === "darwin"}
               onSelectView={monitor.selectView}
               onToggleTuning={() => setTuningOpen((current) => !current)}
-              onThemeChange={changeTheme}
             />
           ) : undefined
         }
@@ -231,7 +231,6 @@ export function GodviewOverlay(): ReactElement | null {
             monitorSections={monitorTuningSections(monitor)}
             rendererBackend={rendererBackend}
             onClose={() => setTuningOpen(false)}
-            onThemeChange={changeTheme}
             onChange={changeTuning}
             onReset={resetTuning}
             onResetMonitor={monitor.resetParameters}

@@ -1,6 +1,5 @@
 import {
   type AccountUsagePort,
-  type AgentVisualStatus,
   BarControl,
   FindSheet,
   type HistoryPort,
@@ -29,7 +28,7 @@ import {
 import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
 import { DeviceFilterChip } from "./DeviceFilterChip";
 import type { GodviewTheme } from "./GodviewTuningPanel";
-import { managedRowId, monitorAgentCounts, nextMonitorAgentForStatus } from "./monitor/agents";
+import { managedRowId, monitorAgentCounts } from "./monitor/agents";
 import { type DeviceChoice, filterByDevice, standingChoice } from "./monitor/device-filter";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
@@ -189,6 +188,17 @@ const NO_USAGE: AccountUsagePort = {
   subscribe: () => () => undefined,
 };
 
+/** The counters select nothing any more (FC-D18): the bar still asks for an
+ * answer, and its group is hidden (godview.css) until the views package draws
+ * counters only for a host that passes counts. */
+const noStatusCycle = (): void => undefined;
+
+/** Godview follows the app's theme (FC-D7): the bar's ☼◐ switch changes
+ * nothing. The views package draws it whatever a host passes, so it is hidden
+ * (godview.css) until the package draws it only for a host that hands it a
+ * handler — the ask on record, beside the counters'. */
+const noThemeSwitch = (): void => undefined;
+
 export interface GodviewMonitorProps {
   view: AgentMonitorView;
   parameters: MonitorParameters;
@@ -205,7 +215,6 @@ export interface GodviewMonitorProps {
   reserveWindowControls?: boolean;
   onSelectView?: (viewId: string) => void;
   onToggleTuning?: () => void;
-  onThemeChange?: (theme: GodviewTheme) => void;
 }
 
 export function GodviewMonitor({
@@ -219,7 +228,6 @@ export function GodviewMonitor({
   reserveWindowControls = false,
   onSelectView,
   onToggleTuning,
-  onThemeChange,
 }: GodviewMonitorProps): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
   // The palette reads THIS stage's Godview root, never the document's first:
@@ -258,7 +266,7 @@ export function GodviewMonitor({
   const showTabs = showsProfileTabs(profileSets);
   const chosen = useMemo(() => chosenProfile(profileSets, profileTab), [profileSets, profileTab]);
 
-  const { agents, actions, sources, acknowledgement, clearAcknowledgement, devices } =
+  const { agents, actions, sources, acknowledgement, clearAcknowledgement, devices, history } =
     useMonitorAgents({
       palette,
       door,
@@ -329,6 +337,20 @@ export function GodviewMonitor({
   const shown = useMemo(
     () => (chosenId === undefined ? placed : staged.filter((agent) => agent.receded !== true)),
     [placed, chosenId, staged],
+  );
+  /** TL — the record, its ended lanes narrowed exactly as the live rows are:
+   * an ended run on another desktop, or under another profile, is drawn (or
+   * receded) by the same rule as a live one. */
+  const stagedHistory = useMemo(
+    () => ({
+      ...history,
+      ended: recedeOutside(
+        filterByDevice(withProfileSets(history.ended, personas), deviceChosen),
+        chosenId,
+        personas,
+      ),
+    }),
+    [history, personas, deviceChosen, chosenId],
   );
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
   // AR-7 — the fold's rows for the marker, handed on as the SAME object until
@@ -521,18 +543,12 @@ export function GodviewMonitor({
 
   const closeFind = useCallback((): void => setFindOpen(false), []);
 
-  const selectNextStatus = useCallback(
-    (status: AgentVisualStatus): void => {
-      // By ROW id: a managed row with no pane has no session, and a session
-      // id of undefined matched the first sessionless row instead of cycling.
-      // AR-S5: through what the chosen tab shows, as the counters count it.
-      const currentId = shown.find((agent) => agent.active)?.id;
-      const next = nextMonitorAgentForStatus(shown, status, currentId);
-      if (next) actions.select(next);
-    },
-    [actions, shown],
-  );
-
+  // FC-D18 (ruled 2026-10-01): the counters and their ⌘1–⌘3 are removed —
+  // ⌘1–⌘4 are the frame's views now (One Frame FR-1), and a third digit family
+  // would throw a missed ⌥ out of Godview. Blocked agents still show where they
+  // are: an orange body in the swarm, a list row naming what it waits on. The
+  // bar's counters group is hidden by godview.css until the views package
+  // draws it only for a host that passes counts (the ask, One Frame §21).
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
@@ -543,19 +559,11 @@ export function GodviewMonitor({
         event.preventDefault();
         event.stopImmediatePropagation();
         setFindOpen((current) => !current);
-        return;
       }
-      const status = ({ Digit1: "blocked", Digit2: "working", Digit3: "idle" } as const)[
-        event.code as "Digit1" | "Digit2" | "Digit3"
-      ];
-      if (!status) return;
-      event.preventDefault();
-      event.stopImmediatePropagation();
-      selectNextStatus(status);
     };
     window.addEventListener("keydown", onKeyDown, true);
     return () => window.removeEventListener("keydown", onKeyDown, true);
-  }, [selectNextStatus]);
+  }, []);
 
   // AR-S5 — ⌥0 is All, ⌥1…⌥n the tabs, while the strip is drawn: captured
   // like the chords above, and only for the digits that have a tab, so ⌥ and
@@ -589,12 +597,12 @@ export function GodviewMonitor({
     <>
       <InstrumentBar
         counts={counts}
-        onSelectStatus={selectNextStatus}
+        onSelectStatus={noStatusCycle}
         views={MONITOR_VIEWS}
         viewId={view.id}
         onSelectView={(viewId) => onSelectView?.(viewId)}
         theme={theme}
-        onThemeChange={(next) => onThemeChange?.(next)}
+        onThemeChange={noThemeSwitch}
         leading={
           <>
             {reserveWindowControls ? (
@@ -678,6 +686,7 @@ export function GodviewMonitor({
             parameters={parameters}
             actions={actions}
             palette={palette}
+            history={stagedHistory}
             {...(spawnMenu !== undefined ? { spawnMenu } : {})}
           />
         </SwarmPhysicsProvider>

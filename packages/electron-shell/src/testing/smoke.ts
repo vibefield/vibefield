@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   catalogEntry,
+  type FrameView,
   LAYOUT,
   TerminalConfigDocument,
   TerminalConfigValidation,
@@ -35,7 +36,7 @@ import {
   type WebContents,
   webContents,
 } from "electron";
-import { CLOSE_WINDOW_ITEM_ID } from "../main/app-menu-model";
+import { CLOSE_WINDOW_ITEM_ID, ZOOM_ITEM_IDS } from "../main/app-menu-model";
 import { APP_ORIGIN } from "../main/app-protocol";
 import type { WindowRendererBoundary } from "../main/bootstrap";
 import { BrowserControlTargetRegistry } from "../main/live-surfaces/browser-control-target";
@@ -2527,6 +2528,26 @@ async function untilRenderer(
   throw new Error(`${label} did not happen within ${timeoutMs}ms (${seen})`);
 }
 
+/** `untilRenderer` for a value (One Frame FR-2's row 11h): poll until `accept`
+ * takes what the page answers, and hand that answer back. */
+async function untilRendererValue(
+  win: BrowserWindow,
+  label: string,
+  expression: string,
+  timeoutMs: number,
+  accept: (value: string) => boolean,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const answer = (await win.webContents.executeJavaScript(expression)) as string;
+    if (accept(answer)) return answer;
+    seen = answer;
+    await sleep(200);
+  }
+  throw new Error(`${label} did not happen within ${timeoutMs}ms (${seen})`);
+}
+
 /** Click the first button inside `scope` whose text or accessible name is
  * `label` — polled, like `clickDeckButton`, and scoped, because a settings
  * page and the deck behind it can both hold a "Save" or a "Terminal". */
@@ -2559,6 +2580,24 @@ function pressProductChord(win: BrowserWindow, keyCode: string): void {
   win.webContents.sendInputEvent({ type: "keyDown", keyCode, modifiers });
   win.webContents.sendInputEvent({ type: "keyUp", keyCode, modifiers });
 }
+
+/** One Frame FR-1 — the view keys as a keyboard presses them: ⌘1–⌘4 on darwin,
+ * Ctrl+1–4 elsewhere, through `pressProductChord`. This is the road a person
+ * takes to a view, so the harness takes it too rather than asking main's view
+ * owner directly (the old `toggleGodview` handed it main's own action). */
+const VIEW_DIGIT: Readonly<Record<FrameView, string>> = {
+  canvas: "1",
+  godview: "2",
+  history: "3",
+  assistant: "4",
+};
+
+function pressViewKey(win: BrowserWindow, view: FrameView): void {
+  pressProductChord(win, VIEW_DIGIT[view]);
+}
+
+/** The window's view as the frame draws it (the views track's `data-view`). */
+const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-view") ?? "absent")`;
 
 /** Row 11e's ear at the pane: a target-phase keydown listener on every deck
  * input, beside ghosttea's own. A key that reaches the pane at all is heard
@@ -2812,10 +2851,9 @@ async function readDeckLayout(win: BrowserWindow): Promise<string | null> {
 async function reopenAfterReload(opts: {
   win: BrowserWindow;
   deck: MarkerWatch<DeckFacts>;
-  toggleGodview: () => void;
   viteUrl: string;
 }): Promise<void> {
-  opts.toggleGodview();
+  pressViewKey(opts.win, "canvas");
   await opts.deck.until((facts) => !facts.active, "the overlay to close", 20_000);
   const reloaded = waitForConsole(opts.win, "CANVAS_READY ", 60_000);
   reloaded.catch(() => undefined);
@@ -2824,7 +2862,7 @@ async function reopenAfterReload(opts: {
   await reloaded;
   opts.win.focus();
   opts.win.webContents.focus();
-  opts.toggleGodview();
+  pressViewKey(opts.win, "godview");
 }
 
 /** Report-only keystroke-echo latency — SKIPPED since TP-S3e: the probe
@@ -4049,7 +4087,6 @@ export async function runSmokeGodview(opts: {
   registry: WindowRegistry;
   preloadPath: string;
   viteUrl: string;
-  toggleGodview: () => void;
   beforeExit: () => Promise<void>;
   /** Short, gated G22/G23 proof selected by --terminal-direct-proof. */
   terminalDirectProof?: boolean;
@@ -4106,7 +4143,7 @@ export async function runSmokeGodview(opts: {
     // previous run's saved layout is still sitting there — and since GT-3 that
     // layout is not silently dropped, it is a QUESTION (every session it names
     // died with the last run's floor). Clearing here rather than reloading
-    // because nothing has mounted yet: the deck is not built until ⇧⇧.
+    // because nothing has mounted yet: the deck is not built until ⌘2.
     await win.webContents.executeJavaScript("localStorage.clear()");
 
     // GT-3m: armed BEFORE the toggle, because the monitor stage mounts WITH the
@@ -4120,17 +4157,18 @@ export async function runSmokeGodview(opts: {
     const coldOpenLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 90_000);
     coldOpenLine.catch(() => undefined);
 
-    // 1. ⇧⇧'s own action. The overlay opens, the deck redeems a ticket for the
-    //    CONNECTION — no session — and the workspace then creates its own first
-    //    pane through its own door (GT-D10). Nothing outside it asked for a
-    //    shell; there is one because the workspace decided there should be.
+    // 1. ⌘2 — the frame's key to Godview (One Frame FR-1; until FR-1 this row
+    //    called ⇧⇧'s own action). Godview opens, the deck redeems a ticket for
+    //    the CONNECTION — no session — and the workspace then creates its own
+    //    first pane through its own door (GT-D10). Nothing outside it asked for
+    //    a shell; there is one because the workspace decided there should be.
     //
     //    The persistence sampler starts HERE, before the key, because the fact
     //    the flip rows below need is the state a session was born in and that
     //    state is gone within one management round trip. Started after the
     //    birth, a sampler can only ever record the destination.
     const persistence = new PersistenceSampler(opts.handle);
-    opts.toggleGodview();
+    pressViewKey(win, "godview");
     const opened = await deck.until(
       (facts) => facts.active && facts.panes >= 1,
       "the overlay to open with the workspace's own first pane",
@@ -4806,7 +4844,7 @@ export async function runSmokeGodview(opts: {
     const stranger = TerminalCreateOpenResult.parse(
       await opts.handle.client.request("terminal.create", {}),
     ).sessionId;
-    opts.toggleGodview(); // closed, so the reload comes up with the deck unmounted
+    pressViewKey(win, "canvas"); // ⌘1: back to the canvas, so the reload comes up with the deck unmounted
     await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
     // The arbitration's OTHER state, read here because this is the one moment
     // the overlay is closed with the menu installed and the deck still
@@ -4846,7 +4884,7 @@ export async function runSmokeGodview(opts: {
     await reloaded;
     win.focus();
     win.webContents.focus();
-    opts.toggleGodview(); // the fresh document's FIRST open
+    pressViewKey(win, "godview"); // ⌘2: the fresh document's FIRST open
     const claimed = await deck.until(
       (facts) => facts.active && facts.sessionIds.includes(stranger),
       "the workspace to claim the floor session nothing in this deck created",
@@ -4947,7 +4985,6 @@ export async function runSmokeGodview(opts: {
     await reopenAfterReload({
       win,
       deck,
-      toggleGodview: opts.toggleGodview,
       viteUrl: opts.viteUrl,
     });
     const restored = await deck.until(
@@ -5127,7 +5164,6 @@ export async function runSmokeGodview(opts: {
       await reopenAfterReload({
         win,
         deck,
-        toggleGodview: opts.toggleGodview,
         viteUrl: opts.viteUrl,
       });
       const asking = await deck.until(
@@ -5566,6 +5602,148 @@ export async function runSmokeGodview(opts: {
       10_000,
     );
 
+    // ⇧⌘V OVER A FOCUSED PANE (One Frame FR-4's exit; GT-D21) — 11e's form for
+    //      the clipboard's chord, which had no row of its own: the pin reaches
+    //      the frame's ONE owner from inside a pane — the left edge's drawer
+    //      open over the cover, where its notch rests as a sliver — and the
+    //      pane never hears it, so ghostty's paste_from_selection never runs.
+    //      ⇧⌘V again puts it away.
+    await focusDeck(win);
+    await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+    const CLIPBOARD_TRAY = `document.querySelector('.vf-edge-tray[data-side="left"]')`;
+    const pressClipboardChord = (): void => {
+      const modifiers: ("meta" | "control" | "shift")[] = [
+        process.platform === "darwin" ? "meta" : "control",
+        "shift",
+      ];
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "V", modifiers });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "V", modifiers });
+    };
+    pressClipboardChord();
+    await untilRenderer(
+      win,
+      "⇧⌘V pinning the clipboard over a focused pane",
+      `(() => { const tray = ${CLIPBOARD_TRAY}; if (!tray) return "no clipboard tray";
+        return tray.dataset.pinned === "true" && tray.dataset.open === "true"
+          ? "ok" : JSON.stringify({ ...tray.dataset }); })()`,
+      10_000,
+    );
+    const heardV = await chordProbeHeard(win);
+    if (heardV.some((key) => key.toLowerCase().endsWith("+v"))) {
+      throw new Error(
+        `the pane heard ⇧⌘V too (Ghostty's paste_from_selection): ${JSON.stringify(heardV)}`,
+      );
+    }
+    pressClipboardChord();
+    await untilRenderer(
+      win,
+      "⇧⌘V putting the clipboard away",
+      `${CLIPBOARD_TRAY}?.dataset.pinned === "false" ? "ok" : "still pinned"`,
+      10_000,
+    );
+    verdict["chordClipboard"] =
+      "⇧⌘V pinned the clipboard over a focused pane (its drawer open over Godview) and put it away; the pane never heard it";
+
+    // 11g. THE VIEW KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-1,
+    //      FC-D4) — the probe each of ⌘1–⌘4 owes before it ships (⌘⎋ never
+    //      arrived: app-menu-model's VIEW_KEYS_ROAD), in 11e's form: a pane
+    //      holds focus, the ear listens at every pane input, and each key is
+    //      pressed the way a keyboard presses it. Three facts per key: the
+    //      FRAME heard it (its VIEW_KEY line says what it did), the PANE never
+    //      did (ghostty's goto_tab), and the window ends in the view the key
+    //      names. ⌘2 and ⌘4 move nothing a screen shows from here — the window
+    //      is already in Godview, and the Assistant waits — so for them the
+    //      frame's own line is the proof of delivery. `sendInputEvent`, like
+    //      11e's keys: below AppKit's key-equivalent dispatch, so this is the
+    //      page's road; the View menu's darwin accelerators stand behind it and
+    //      are not what this row measures.
+    const viewKeyFromPane = async (
+      view: FrameView,
+      want: { outcome: "moved" | "stayed" | "waits"; endsIn: FrameView },
+    ): Promise<string> => {
+      const digit = VIEW_DIGIT[view];
+      await focusDeck(win);
+      await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      const heard = waitForConsole(win, "VIEW_KEY ", 10_000);
+      pressViewKey(win, view);
+      const facts = JSON.parse(await heard) as { view: string; from: string; outcome: string };
+      if (facts.view !== view || facts.outcome !== want.outcome) {
+        throw new Error(
+          `the frame heard key ${digit} as ${JSON.stringify(facts)}, not ${view} · ${want.outcome}`,
+        );
+      }
+      await untilRenderer(
+        win,
+        `the window in ${want.endsIn} after key ${digit}`,
+        `${VIEW_NOW} === ${JSON.stringify(want.endsIn)} ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      const paneHeard = await chordProbeHeard(win);
+      if (paneHeard.some((key) => key.endsWith(`+${digit}`))) {
+        throw new Error(
+          `the pane heard view key ${digit} too (ghostty's goto_tab): ${JSON.stringify(paneHeard)}`,
+        );
+      }
+      return `${facts.from} → ${want.endsIn} (${facts.outcome}); the pane never heard it`;
+    };
+    const viewKeys: Record<string, string> = {};
+    viewKeys["4"] = await viewKeyFromPane("assistant", { outcome: "waits", endsIn: "godview" });
+    await untilRenderer(
+      win,
+      "the Assistant's note over its cell",
+      `(document.querySelector(".vf-views-note")?.textContent ?? "").includes("not built yet") ? "ok" : "no note"`,
+      5_000,
+    );
+    viewKeys["2"] = await viewKeyFromPane("godview", { outcome: "stayed", endsIn: "godview" });
+    viewKeys["3"] = await viewKeyFromPane("history", { outcome: "moved", endsIn: "history" });
+    // A view that is not showing is INERT: under History the pane has let go of
+    // the keyboard, so nothing typed there reaches a hidden shell.
+    await untilRenderer(
+      win,
+      "the pane letting go of the keyboard under History",
+      `document.activeElement?.classList.contains("terminal-input") ? "still focused" : "ok"`,
+      5_000,
+    );
+    pressViewKey(win, "godview");
+    await untilRenderer(
+      win,
+      "⌘2 back to Godview",
+      `${VIEW_NOW} === "godview" ? "ok" : ${VIEW_NOW}`,
+      10_000,
+    );
+    viewKeys["1"] = await viewKeyFromPane("canvas", { outcome: "moved", endsIn: "canvas" });
+    await deck.until((facts) => !facts.active, "the deck going quiet on the canvas", 20_000);
+    verdict["viewKeys"] = viewKeys;
+
+    // ⇧⇧ RETIRED (FC-D4): two Shift taps open nothing from the canvas, and close
+    // nothing from a focused pane — main's detector and its toggle are gone,
+    // and nothing in the page took their place. An absence can only be watched
+    // for a while: the detector it replaces answered within one tap's 300ms, so
+    // a second and a half is a generous window, not a guess at a race.
+    const tapShiftTwice = async (): Promise<void> => {
+      for (let tap = 0; tap < 2; tap++) {
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Shift", modifiers: ["shift"] });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Shift", modifiers: [] });
+        await sleep(60);
+      }
+      await sleep(1_500);
+    };
+    await tapShiftTwice();
+    const afterCanvasTaps = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+    if (afterCanvasTaps !== "canvas") {
+      throw new Error(`⇧⇧ still moves the window: canvas → ${afterCanvasTaps}`);
+    }
+    pressViewKey(win, "godview");
+    await deck.until((facts) => facts.active && facts.panes >= 1, "⌘2 back to the deck", 30_000);
+    await focusDeck(win);
+    await tapShiftTwice();
+    const afterPaneTaps = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+    if (afterPaneTaps !== "godview") {
+      throw new Error(`⇧⇧ over a focused pane still moves the window: godview → ${afterPaneTaps}`);
+    }
+    verdict["doubleShift"] = "retired: two Shift taps moved no view, from the canvas or a pane";
+    await focusDeck(win);
+
     // 11f. THE LINK ROW (GT-8, GT-D22). ghosttea 0.12.0 finds links in a
     //      pane's output. A ⌘-click hands the runtime platform's `openExternal`
     //      the URL; the deck's opener asks fieldd's `terminal.link.open`; the
@@ -5952,6 +6130,477 @@ export async function runSmokeGodview(opts: {
       )
       .catch((error) => ({ unmeasured: error instanceof Error ? error.message : String(error) }));
 
+    // 11i. THE HEAD'S KEYS, FROM A FOCUSED PANE (One Frame FR-3, DK-D24) — the
+    //      probe ⌘+ ⌘− ⌘0 ⇧1 owe before they ship, in 11h's form: a pane holds
+    //      focus, each key is pressed the way a keyboard presses it, and the
+    //      HEAD says what it took (its ZOOM_KEY line). They are Canvas's keys,
+    //      not the product's chords — heard on the window's bubble phase — so a
+    //      pane that holds the keyboard keeps them, and the head takes NOTHING:
+    //      no ZOOM_KEY line, the canvas's readout under the cover unchanged, the
+    //      window still in Godview. The positive control has two ears, because
+    //      the pane takes the two kinds of key at two places: ghostty's app
+    //      binds (⌘+ ⌘− ⌘0, its font sizes) are taken by ghosttea's WORKSPACE on
+    //      the window's capture phase, prevented and stopped before the input
+    //      ever sees them — so an ear on the window's capture phase records that
+    //      each ARRIVED and was TAKEN (its final defaultPrevented, read once the
+    //      dispatch is over); ⇧1 is typed — the input's ear hears its "!", and a
+    //      Backspace takes it back out of the shell. Then the canvas, with
+    //      nothing focused: each key moves the zoom and says so. Then ⇧1 typed
+    //      into the line's draft stays a "!" — never a fit. ⌘K's probe is 11e's,
+    //      unchanged. Before 11h, which must stay last (its ⌘T leaves a fresh
+    //      shell whose launcher holds the keys).
+    //
+    //      THE VIEW MENU'S ZOOM (FR-4, 3b) rides the same rows: under Godview
+    //      the LIVE menu's Zoom In (main redraws it on every change of view) is
+    //      disabled, and invoked the way the native menu invokes an item — with
+    //      the focused window and its page, which is all Electron's page-zoom
+    //      role needed to scale the whole window — it changes nothing: no act,
+    //      the canvas's readout, the page's zoom level, the view. On the canvas
+    //      the same item is enabled and the HEAD answers it (its ZOOM_MENU
+    //      line): the canvas zooms by the step, Actual Size brings it back, and
+    //      the page's zoom level never moves. The menu is driven, not keyed:
+    //      `sendInputEvent` enters below AppKit's key-equivalent dispatch (the
+    //      ⌘W note above), so a synthesized ⌘+ can never reach a menu item.
+    const headKeys: Record<string, string> = {};
+    const zoomTaken: string[] = [];
+    const zoomMenuTaken: string[] = [];
+    const hearHead = (...args: unknown[]): void => {
+      for (const arg of args) {
+        const text = consoleText(arg);
+        if (text.startsWith("ZOOM_KEY ")) zoomTaken.push(text.slice("ZOOM_KEY ".length));
+        if (text.startsWith("ZOOM_MENU ")) zoomMenuTaken.push(text.slice("ZOOM_MENU ".length));
+      }
+    };
+    /** A View menu zoom item as the live menu holds it now. */
+    const zoomItem = (id: string): ReturnType<Menu["getMenuItemById"]> =>
+      Menu.getApplicationMenu()?.getMenuItemById(id) ?? null;
+    /** Invoke an item the way the native menu does: the event, the focused
+     * window, its page. A role item answers through those two (Electron's
+     * `roles.execute`); ours ignore them and ask main's subject themselves. */
+    const invokeMenuItem = (item: NonNullable<ReturnType<Menu["getMenuItemById"]>>): void => {
+      (item.click as (event: unknown, window: BrowserWindow, contents: WebContents) => void)(
+        undefined,
+        win,
+        win.webContents,
+      );
+    };
+    const READOUT = `(document.querySelector(".vf-head-zoom")?.textContent ?? "absent")`;
+    /** The page's ear: every keydown as the window's capture phase first sees
+     * it, and whether anyone had taken it by the end of its dispatch. */
+    const PAGE_EAR = `(() => {
+      window.__vfPageEar = [];
+      if (!window.__vfPageEarOn) {
+        window.__vfPageEarOn = true;
+        window.addEventListener("keydown", (event) => {
+          const entry = {
+            key: (event.metaKey ? "meta+" : "") + (event.ctrlKey ? "ctrl+" : "") + event.key,
+            taken: false,
+          };
+          window.__vfPageEar.push(entry);
+          setTimeout(() => { entry.taken = event.defaultPrevented; }, 0);
+        }, true);
+      }
+      return "ok";
+    })()`;
+    /** The zoom's keys as a keyboard presses them: ⌘ (Ctrl) with = − 0, and
+     * ⇧1. A terminal types from the KEY, so into a pane ⇧1 is down and up (as
+     * 11h types its b) — a char event as well would type a second "!", and a
+     * stray "!" left in the shell turns 11h's sent line into a history
+     * expansion; an editor inserts the CHARACTER, so into the draft it is down,
+     * the character, up. */
+    const pressZoomKey = (key: "=" | "-" | "0" | "!", into: "pane" | "editor" = "pane"): void => {
+      if (key !== "!") {
+        pressProductChord(win, key);
+        return;
+      }
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "1", modifiers: ["shift"] });
+      if (into === "editor") {
+        win.webContents.sendInputEvent({ type: "char", keyCode: "!", modifiers: ["shift"] });
+      }
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "1", modifiers: ["shift"] });
+    };
+    type ZoomFacts = { key: string; act: string; view: string; from: number; to: number };
+    const zoomFromCanvas = async (key: "=" | "-" | "0" | "!"): Promise<ZoomFacts> => {
+      const heard = waitForConsole(win, "ZOOM_KEY ", 10_000);
+      pressZoomKey(key);
+      return JSON.parse(await heard) as ZoomFacts;
+    };
+    win.webContents.on("console-message", hearHead);
+    try {
+      await focusDeck(win);
+      await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      await untilRenderer(win, "the page's ear", PAGE_EAR, 5_000);
+      const readoutBefore = (await win.webContents.executeJavaScript(READOUT)) as string;
+      for (const key of ["=", "-", "0", "!"] as const) {
+        pressZoomKey(key);
+        await sleep(150);
+      }
+      // An absence can only be watched for a while (⇧⇧'s rule): the head
+      // answers a key in its own handler, inside one frame.
+      await sleep(1_500);
+      const paneHeard = await chordProbeHeard(win);
+      const pageHeard = (await win.webContents.executeJavaScript(
+        `[...(window.__vfPageEar ?? [])]`,
+      )) as { key: string; taken: boolean }[];
+      const mod = process.platform === "darwin" ? "meta+" : "ctrl+";
+      // The POSITIVE CONTROL: every key arrived, and the pane took it — the
+      // chords at its workspace, the "!" at its input — so the head's silence
+      // is routing, not a deaf probe.
+      for (const want of [`${mod}=`, `${mod}-`, `${mod}0`]) {
+        const arrived = pageHeard.find((entry) => entry.key === want);
+        if (arrived === undefined || !arrived.taken) {
+          throw new Error(
+            `the focused pane never took ${want}: page ${JSON.stringify(pageHeard)} · ` +
+              `pane ${JSON.stringify(paneHeard)}`,
+          );
+        }
+      }
+      if (!paneHeard.includes("!")) {
+        throw new Error(`the focused pane never typed ⇧1's "!": ${JSON.stringify(paneHeard)}`);
+      }
+      if (zoomTaken.length > 0) {
+        throw new Error(`the head took a zoom key from a focused pane: ${zoomTaken.join(" · ")}`);
+      }
+      const readoutAfter = (await win.webContents.executeJavaScript(READOUT)) as string;
+      if (readoutAfter !== readoutBefore) {
+        throw new Error(
+          `the canvas zoomed under a focused pane: ${readoutBefore} → ${readoutAfter}`,
+        );
+      }
+      const stayed = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+      if (stayed !== "godview") throw new Error(`the zoom keys moved the window: ${stayed}`);
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Backspace" });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Backspace" });
+      headKeys["from a focused pane"] =
+        `godview: the pane took ${mod}= ${mod}- ${mod}0 at its workspace (ghostty's font sizes) ` +
+        `and typed ⇧1's "!" at its input; the head took nothing; the canvas stayed at ${readoutBefore}`;
+
+      // The View menu's Zoom In under Godview changes nothing (FR-4, 3b).
+      const coveredIn = zoomItem(ZOOM_ITEM_IDS.in);
+      if (coveredIn === null) throw new Error("the View menu has no Zoom In item");
+      if (coveredIn.enabled) throw new Error("the View menu's Zoom In is enabled under Godview");
+      const levelUnderCover = win.webContents.getZoomLevel();
+      const menuHeardBefore = zoomMenuTaken.length;
+      invokeMenuItem(coveredIn);
+      await sleep(1_500);
+      if (zoomMenuTaken.length > menuHeardBefore || zoomTaken.length > 0) {
+        throw new Error(
+          `the View menu's Zoom In zoomed under Godview: ${[...zoomMenuTaken, ...zoomTaken].join(" · ")}`,
+        );
+      }
+      const levelAfterMenu = win.webContents.getZoomLevel();
+      if (levelAfterMenu !== levelUnderCover) {
+        // Put the window back before saying so: Chromium keeps a page zoom per
+        // origin in the PROFILE, which this smoke shares with the app on the
+        // machine, so a regression must not leave every later window zoomed.
+        // (This row's own red-proof did, 2026-10-03: "shell" at 0.5.)
+        win.webContents.setZoomLevel(levelUnderCover);
+        throw new Error(
+          `the View menu's Zoom In zoomed the whole window under Godview: page zoom level ${levelUnderCover} → ${levelAfterMenu}`,
+        );
+      }
+      const readoutAfterMenu = (await win.webContents.executeJavaScript(READOUT)) as string;
+      if (readoutAfterMenu !== readoutBefore) {
+        throw new Error(
+          `the View menu's Zoom In zoomed the canvas under Godview: ${readoutBefore} → ${readoutAfterMenu}`,
+        );
+      }
+      const stayedAfterMenu = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+      if (stayedAfterMenu !== "godview") {
+        throw new Error(`the View menu's Zoom In moved the window: ${stayedAfterMenu}`);
+      }
+      headKeys["the View menu under Godview"] =
+        `Zoom In (${coveredIn.accelerator ?? "no key"}) disabled; invoked as the menu invokes it, ` +
+        `it changed nothing: no act, the canvas still ${readoutAfterMenu}, the page zoom level ${levelAfterMenu}`;
+
+      pressViewKey(win, "canvas");
+      await untilRenderer(
+        win,
+        "⌘1 to the canvas",
+        `${VIEW_NOW} === "canvas" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      // Nothing focused: whatever held the keyboard lets go of it.
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      const zoomIn = await zoomFromCanvas("=");
+      const zoomOut = await zoomFromCanvas("-");
+      const fit = await zoomFromCanvas("!");
+      const actual = await zoomFromCanvas("0");
+      const near = (a: number, b: number): boolean => Math.abs(a - b) <= 1;
+      if (zoomIn.act !== "in" || !near(zoomIn.to, zoomIn.from * 1.25)) {
+        throw new Error(`⌘+ on the canvas was heard as ${JSON.stringify(zoomIn)}`);
+      }
+      if (zoomOut.act !== "out" || !near(zoomOut.to, zoomOut.from / 1.25)) {
+        throw new Error(`⌘− on the canvas was heard as ${JSON.stringify(zoomOut)}`);
+      }
+      if (fit.act !== "fit")
+        throw new Error(`⇧1 on the canvas was heard as ${JSON.stringify(fit)}`);
+      if (actual.act !== "actual" || actual.to !== 100) {
+        throw new Error(`⌘0 on the canvas was heard as ${JSON.stringify(actual)}`);
+      }
+      await untilRenderer(
+        win,
+        "the readout saying 100% after ⌘0",
+        `${READOUT} === "100%" ? "ok" : ${READOUT}`,
+        5_000,
+      );
+      headKeys["on the canvas"] =
+        `nothing focused: ⌘+ ${zoomIn.from} → ${zoomIn.to} · ⌘− ${zoomOut.from} → ${zoomOut.to} · ` +
+        `⇧1 fit ${fit.from} → ${fit.to} · ⌘0 ${actual.from} → ${actual.to}; the readout said each`;
+
+      // …and on the canvas the same item is enabled and the HEAD answers it.
+      const canvasIn = zoomItem(ZOOM_ITEM_IDS.in);
+      if (canvasIn === null || !canvasIn.enabled) {
+        throw new Error("the View menu's Zoom In is not enabled on the canvas");
+      }
+      const levelOnCanvas = win.webContents.getZoomLevel();
+      const menuIn = waitForConsole(win, "ZOOM_MENU ", 10_000);
+      invokeMenuItem(canvasIn);
+      const answeredIn = JSON.parse(await menuIn) as ZoomFacts;
+      if (answeredIn.act !== "in" || !near(answeredIn.to, answeredIn.from * 1.25)) {
+        throw new Error(
+          `the View menu's Zoom In on the canvas was heard as ${JSON.stringify(answeredIn)}`,
+        );
+      }
+      const canvasActual = zoomItem(ZOOM_ITEM_IDS.actual);
+      if (canvasActual === null || !canvasActual.enabled) {
+        throw new Error("the View menu's Actual Size is not enabled on the canvas");
+      }
+      const menuActual = waitForConsole(win, "ZOOM_MENU ", 10_000);
+      invokeMenuItem(canvasActual);
+      const answeredActual = JSON.parse(await menuActual) as ZoomFacts;
+      if (answeredActual.act !== "actual" || answeredActual.to !== 100) {
+        throw new Error(
+          `the View menu's Actual Size on the canvas was heard as ${JSON.stringify(answeredActual)}`,
+        );
+      }
+      await untilRenderer(
+        win,
+        "the readout saying 100% after Actual Size",
+        `${READOUT} === "100%" ? "ok" : ${READOUT}`,
+        5_000,
+      );
+      const levelAfterCanvasMenu = win.webContents.getZoomLevel();
+      if (levelAfterCanvasMenu !== levelOnCanvas) {
+        win.webContents.setZoomLevel(levelOnCanvas); // the profile's, as above
+        throw new Error(
+          `the View menu zoomed the whole window on the canvas: page zoom level ${levelOnCanvas} → ${levelAfterCanvasMenu}`,
+        );
+      }
+      headKeys["the View menu on the canvas"] =
+        `Zoom In answered by the head ${answeredIn.from} → ${answeredIn.to} · Actual Size ` +
+        `${answeredActual.from} → ${answeredActual.to}; the page zoom level stayed ${levelAfterCanvasMenu}`;
+
+      const placed = (await win.webContents.executeJavaScript(
+        `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
+          field.focus(); return document.activeElement === field ? "ok" : "focus refused"; })()`,
+      )) as string;
+      if (placed !== "ok") throw new Error(`the line's draft could not take focus: ${placed}`);
+      const takenBefore = zoomTaken.length;
+      pressZoomKey("!", "editor");
+      await sleep(1_500);
+      if (zoomTaken.length > takenBefore) {
+        throw new Error(
+          `⇧1 typed into the draft zoomed: ${zoomTaken.slice(takenBefore).join(" · ")}`,
+        );
+      }
+      const typed = (await win.webContents.executeJavaScript(
+        `document.querySelector(".vf-line-input")?.textContent ?? "no draft"`,
+      )) as string;
+      if (!typed.includes("!")) throw new Error(`⇧1 typed nothing into the draft: ${typed}`);
+      // Clear the draft through the editing pipeline (its input event is what
+      // the line reads back). Not a Backspace: on the Mac a synthesized keyDown
+      // carries no Cocoa edit command, so it deletes nothing in an editor — and
+      // a "!" left here rides 11h's sent line into the shell.
+      const cleared = (await win.webContents.executeJavaScript(
+        `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
+          field.focus(); document.execCommand("selectAll"); document.execCommand("delete");
+          return (field.textContent ?? "") === "" ? "ok" : "left " + JSON.stringify(field.textContent); })()`,
+      )) as string;
+      if (cleared !== "ok") throw new Error(`the draft kept the probe's typing: ${cleared}`);
+      headKeys["typing"] = `⇧1 into the line's draft typed "${typed}" and fit nothing`;
+      await win.webContents.executeJavaScript(`document.activeElement?.blur?.(); "ok"`);
+      pressViewKey(win, "godview");
+      await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+    } finally {
+      win.webContents.off("console-message", hearHead);
+    }
+    verdict["headKeys"] = headKeys;
+
+    // 11h. THE LINE'S KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-2,
+    //      §11) — the probes B and ⌘T owe before they ship, in 11g's form: a
+    //      pane holds focus, the ear listens at every pane input, each key is
+    //      pressed the way a keyboard presses it, and the LINE says what it
+    //      took (its LINE_KEY line). Last among the deck's rows on purpose: ⌘T
+    //      leaves a fresh shell in the active pane, and a fresh shell shows its
+    //      launcher, which holds the keys the rows above type into a shell.
+    //
+    //      B is a letter, and a pane that holds the keyboard keeps its letters:
+    //      the PANE hears it and the LINE takes nothing — no LINE_KEY line,
+    //      Objects shut, the window still in Godview — an absence, watched for
+    //      a while as ⇧⇧'s is; a Backspace then takes the b back out of the
+    //      shell. The interim send (four-views §11) goes next, end to end: @
+    //      typed into the line, Return takes the nearest pane (the active one),
+    //      a line typed and sent is PASTED into that pane — and the shell runs
+    //      it only when the harness presses Return there, because the send
+    //      never presses it. ⌘T is the line's in Godview: the LINE asked the
+    //      deck, the PANE never heard it (ghostty's new_tab), and the deck
+    //      shows a session it did not before. Then B on the canvas with
+    //      nothing focused raises Objects behind the line, and B puts it away.
+    const lineKeys: Record<string, string> = {};
+    const lineTaken: string[] = [];
+    const hearLine = (...args: unknown[]): void => {
+      for (const arg of args) {
+        const text = consoleText(arg);
+        if (text.startsWith("LINE_KEY ")) lineTaken.push(text.slice("LINE_KEY ".length));
+      }
+    };
+    /** Type into whatever holds focus as a keyboard does — a key down, the
+     * character it types, the key up — which is what an editor needs (a
+     * terminal reads the key; a contenteditable inserts the character). */
+    const typeChars = async (text: string): Promise<void> => {
+      for (const character of text) {
+        const keyCode = character === " " ? "Space" : character;
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+        win.webContents.sendInputEvent({ type: "char", keyCode });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+        await sleep(3);
+      }
+    };
+    const pressKey = (keyCode: string): void => {
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+    };
+    const objectsNow = `(document.querySelector('[data-tray-open="true"]') ? "open" : "shut")`;
+    win.webContents.on("console-message", hearLine);
+    try {
+      await focusDeck(win);
+      await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      pressKey("b");
+      await sleep(1_500);
+      const paneHeardB = await chordProbeHeard(win);
+      if (!paneHeardB.includes("b")) {
+        throw new Error(`the focused pane never heard B: ${JSON.stringify(paneHeardB)}`);
+      }
+      if (lineTaken.length > 0) {
+        throw new Error(`the line took B from a focused pane: ${lineTaken.join(" · ")}`);
+      }
+      if ((await win.webContents.executeJavaScript(objectsNow)) !== "shut") {
+        throw new Error("B from a focused pane opened Objects");
+      }
+      const afterB = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+      if (afterB !== "godview")
+        throw new Error(`B from a focused pane moved the window: ${afterB}`);
+      pressKey("Backspace");
+      lineKeys["B"] = "godview, a pane focused: the pane typed it; the line took nothing";
+
+      if (process.platform !== "win32") {
+        const nonce = `fr2${Math.random().toString(36).slice(2, 10)}`;
+        const sentPath = `/tmp/${nonce}.txt`;
+        const placed = (await win.webContents.executeJavaScript(
+          `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
+            field.focus(); return document.activeElement === field ? "ok" : "focus refused"; })()`,
+        )) as string;
+        if (placed !== "ok") throw new Error(`the line's draft could not take focus: ${placed}`);
+        await typeChars("@");
+        const aimedAt = await untilRendererValue(
+          win,
+          "@'s list, the active pane hot",
+          `document.querySelector(".vf-at-menu .vf-at-row.is-aim[data-hot] b")?.textContent ?? "no list"`,
+          5_000,
+          (value) => value !== "no list",
+        );
+        pressKey("Return");
+        await untilRenderer(
+          win,
+          "the aim leading the draft",
+          `document.querySelector('.vf-line-chip[data-chip="aim"]') ? "ok" : "unaimed"`,
+          5_000,
+        );
+        await typeChars(`echo ${nonce} > ${sentPath}`);
+        pressKey("Return");
+        const said = await untilRendererValue(
+          win,
+          "the line saying where the send went",
+          `document.querySelector(".vf-line-note")?.textContent ?? "no note"`,
+          5_000,
+          (value) => value !== "no note",
+        );
+        if (!said.startsWith("Pasted into")) throw new Error(`the send did not paste: ${said}`);
+        await sleep(400);
+        if (existsSync(sentPath)) {
+          throw new Error("the send pressed Return for the pane — the shell ran it unasked");
+        }
+        pressKey("Return");
+        await waitForShellMarker(sentPath, 10_000, nonce);
+        lineKeys["send"] =
+          `aimed at ${aimedAt}: ${said}; the shell ran it on the pane's own Return`;
+      }
+
+      await focusDeck(win);
+      await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      const sessionsBefore = new Set(deck.current()?.sessionIds ?? []);
+      const heardT = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressProductChord(win, "t");
+      const tFacts = JSON.parse(await heardT) as { key: string; view: string; outcome: string };
+      if (tFacts.view !== "godview" || tFacts.outcome !== "new-terminal") {
+        throw new Error(`the line heard ⌘T as ${JSON.stringify(tFacts)}`);
+      }
+      const grown = await deck.until(
+        (facts) => facts.sessionIds.some((id) => !sessionsBefore.has(id)),
+        "⌘T's new terminal in the deck",
+        30_000,
+      );
+      const paneHeardT = await chordProbeHeard(win);
+      if (paneHeardT.some((key) => /\+t$/iu.test(key))) {
+        throw new Error(`the pane heard ⌘T too (ghostty's new_tab): ${JSON.stringify(paneHeardT)}`);
+      }
+      // A new terminal takes the ACTIVE pane (the deck's `createTerminal`, the
+      // swarm's hold's door): a session the deck did not show, in a pane it had.
+      const born = grown.sessionIds.find((id) => !sessionsBefore.has(id)) ?? "?";
+      lineKeys["⌘T"] =
+        `godview, a pane focused: the line asked the deck; a new shell ${born.slice(0, 8)}… in the ` +
+        `active pane (${grown.panes} panes); the pane never heard it`;
+
+      pressViewKey(win, "canvas");
+      await untilRenderer(
+        win,
+        "⌘1 to the canvas",
+        `${VIEW_NOW} === "canvas" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      const opened = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressKey("b");
+      const openFacts = JSON.parse(await opened) as { view: string; outcome: string };
+      if (openFacts.view !== "canvas" || openFacts.outcome !== "opened") {
+        throw new Error(`B on the canvas was heard as ${JSON.stringify(openFacts)}`);
+      }
+      await untilRenderer(
+        win,
+        "Objects behind the line",
+        `${objectsNow} === "open" ? "ok" : "shut"`,
+        5_000,
+      );
+      const closed = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressKey("b");
+      const closeFacts = JSON.parse(await closed) as { outcome: string };
+      if (closeFacts.outcome !== "closed")
+        throw new Error(`B again: ${JSON.stringify(closeFacts)}`);
+      await untilRenderer(
+        win,
+        "Objects put away",
+        `${objectsNow} === "shut" ? "ok" : "open"`,
+        5_000,
+      );
+      lineKeys["B on the canvas"] =
+        "nothing focused: Objects rose behind the line; B again put it away";
+      pressViewKey(win, "godview");
+      await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+    } finally {
+      win.webContents.off("console-message", hearLine);
+    }
+    verdict["lineKeys"] = lineKeys;
+
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //
     // A renderer reload resets the page's module state, so the next open is a
@@ -5970,7 +6619,7 @@ export async function runSmokeGodview(opts: {
     try {
       const warmLine = waitForConsole(win, "GODVIEW_COLD_OPEN ", 60_000);
       warmLine.catch(() => undefined);
-      opts.toggleGodview();
+      pressViewKey(win, "canvas");
       await deck.until((facts) => !facts.active, "the overlay to close", 20_000);
       const reloaded = waitForConsole(win, "CANVAS_READY ", 60_000);
       reloaded.catch(() => undefined);
@@ -5982,7 +6631,7 @@ export async function runSmokeGodview(opts: {
       // Long enough for the idle callback (2s ceiling) plus a ticket, a bridge
       // fork and a device request on a loaded machine.
       await sleep(5_000);
-      opts.toggleGodview();
+      pressViewKey(win, "godview");
       const asked = await deck.until(
         (facts) => facts.active && (facts.panes >= 1 || facts.consent !== undefined),
         "the warm open to reach a pane or the restore question",

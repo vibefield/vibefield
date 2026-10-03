@@ -55,7 +55,7 @@ export interface DocManagerState {
 /** Chunked preview capture, injected by FieldView (it owns the three/R3F imports). */
 export type PreviewRunner = (onTick: (done: number, total: number) => void) => Promise<void>;
 
-/** The consumer surface (FilePill et al) — chrome takes this, not the class,
+/** The consumer surface (the head et al) — chrome takes this, not the class,
  * so UI tests drive a plain fake instead of a socket-backed manager. */
 export interface DocManagerApi {
   subscribe(fn: () => void): () => void;

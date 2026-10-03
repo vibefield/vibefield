@@ -29,6 +29,8 @@
  * workspace's copy that the package would never have called.
  */
 
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   type AccountUsagePort,
@@ -492,20 +494,36 @@ describe("the monitor stage", () => {
     // and a swarm that answered that with a blank canvas would look exactly
     // like a field with nothing in it. The section says what painted, the
     // marker repeats it, and the rows are still reachable underneath.
+    // The marker follows the attribute through a MutationObserver. happy-dom
+    // (20.11) hands each observed node its report callback through a WeakRef
+    // nothing else holds, so a collection mid-run silenced it (~2 in 10
+    // whole-file runs, always green alone) — the observer's word is delivered by
+    // hand, as in the spawn-bloom row below; the stage's reading of it is what
+    // is under test.
+    const observers = new Set<{ callback: MutationCallback }>();
+    class HandDeliveredObserver {
+      constructor(readonly callback: MutationCallback) {}
+      observe(): void {
+        observers.add(this);
+      }
+      disconnect(): void {
+        observers.delete(this);
+      }
+      takeRecords(): MutationRecord[] {
+        return [];
+      }
+    }
+    vi.stubGlobal("MutationObserver", HandDeliveredObserver);
     const host = await mountMonitor();
     const swarm = host.querySelector(".vf-monitor-swarm");
     expect(swarm?.getAttribute("data-swarm-renderer")).toBe("unavailable");
     expect(swarm?.querySelector(".vf-monitor-empty")?.textContent).toContain("WEBGPU UNAVAILABLE");
-    // The marker follows this attribute through a MutationObserver task.
-    await vi.waitFor(
-      async () => {
-        await act(async () => {
-          await new Promise((resolve) => setTimeout(resolve, 0));
-        });
-        expect(latest().swarmRenderer).toBe("unavailable");
-      },
-      { timeout: 3_000 },
-    );
+    await act(async () => {
+      for (const observer of [...observers]) {
+        observer.callback([], observer as unknown as MutationObserver);
+      }
+    });
+    expect(latest().swarmRenderer).toBe("unavailable");
     // …and the physics still ran: what is missing is the painter, not the world.
     expect(latest().swarmPhysics).toBe("inline");
   });
@@ -858,14 +876,14 @@ describe("the monitor stage", () => {
       "SWARM view",
       "LIST view",
       "RAIN view",
+      "TIMELINE view",
     ]);
     expect(pressedView(host)).toBe("LIST view");
     expect(bar?.querySelector('[role="switch"]')?.getAttribute("aria-checked")).toBe("false");
   });
 
-  it("chooses the view with the bar's marks and the theme with its switch", async () => {
+  it("chooses the view with the bar's marks; its theme switch is retired (FC-D7)", async () => {
     const selected: string[] = [];
-    const themes: string[] = [];
     const view = monitorViewFor("swarm");
     container = document.createElement("div");
     document.body.appendChild(container);
@@ -880,7 +898,6 @@ describe("the monitor stage", () => {
             door={door}
             panes={PANES}
             onSelectView={(viewId) => selected.push(viewId)}
-            onThemeChange={(theme) => themes.push(theme)}
           />
         </GodviewAgentsProvider>,
       );
@@ -891,9 +908,19 @@ describe("the monitor stage", () => {
     await act(async () => list?.click());
     expect(selected).toEqual(["list"]);
 
-    await act(async () => container?.querySelector<HTMLButtonElement>('[role="switch"]')?.click());
-    // The switch offers the OTHER theme, which is what makes it a switch.
-    expect(themes).toEqual(["dark"]);
+    // Godview follows the app's theme (One Frame FR-4): the views package still
+    // draws its ☼◐ switch, pressing it changes nothing, and the host hides it —
+    // with the tooltip host around it — until the package draws it only for a
+    // host that hands it a handler (the ask on record).
+    const themeSwitch = (): HTMLButtonElement | null =>
+      container?.querySelector<HTMLButtonElement>('[role="switch"]') ?? null;
+    const before = themeSwitch()?.getAttribute("aria-checked");
+    await act(async () => themeSwitch()?.click());
+    expect(themeSwitch()?.getAttribute("aria-checked")).toBe(before);
+    const css = readFileSync(join(process.cwd(), "src/godview/godview.css"), "utf8");
+    expect(css).toMatch(
+      /\.vf-godview-header \.vf-godview-bar-tip-host:has\(> \.vf-godview-theme-switch\) \{\s*display: none;/,
+    );
   });
 
   it("with NO door: no invented rows and terminal creation explains the missing connection", async () => {

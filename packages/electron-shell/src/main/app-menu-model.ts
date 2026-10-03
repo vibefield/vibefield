@@ -2,17 +2,17 @@
 // function, Electron is a thin adapter in app-menu.ts).
 //
 // The shell had no application menu until GT-2 — Electron's built-in default
-// was serving. Godview's toggle has to be answered ABOVE the page (GT-D2 /
-// design-04 §8.3) so it reaches the overlay even while a terminal pane holds
-// keyboard focus, which a renderer-level listener could never promise. A menu
-// key equivalent was how that was done until 2026-08-04; it no longer is — the
-// gesture became ⇧⇧, which no accelerator can express. See
-// GODVIEW_GESTURE_HINT below and `installGodviewDoubleShift`. Owning
-// the menu means owning the whole thing — replacing Electron's default with one
-// that omits Copy or Quit would be a regression the accelerator paid for — so
-// every standard section below is present by ROLE, which is how Electron keeps
-// their labels, accelerators, and platform ordering correct without us
-// restating them.
+// was serving. Godview's toggle had to be answered ABOVE the page (GT-D2 /
+// design-04 §8.3) so it reached the overlay even while a terminal pane held
+// keyboard focus, which is how this menu came to exist; since One Frame (FR-1)
+// it names the frame's four views instead, and their keys are the product's own
+// chords (see VIEW_KEYS_ROAD below). Owning the menu means owning the whole
+// thing — replacing Electron's default with one that omits Copy or Quit would be
+// a regression — so every standard section below is present by ROLE, which is
+// how Electron keeps their labels, accelerators, and platform ordering correct
+// without us restating them.
+
+import type { FrameView, FrameZoomAct } from "@vibefield/contracts";
 
 export type MenuPlatform = "darwin" | "other";
 
@@ -22,9 +22,13 @@ export type MenuPlatform = "darwin" | "other";
 export interface AppMenuItem {
   readonly id?: string;
   readonly role?: string;
-  readonly type?: "normal" | "checkbox" | "separator";
+  readonly type?: "normal" | "checkbox" | "radio" | "separator";
   readonly label?: string;
   readonly accelerator?: string;
+  /** Linux and Windows only (Electron's own limit): false SHOWS the
+   * accelerator without registering it. On darwin a shown key equivalent is a
+   * registered one, which VIEW_KEYS_ROAD explains is harmless here. */
+  readonly registerAccelerator?: boolean;
   readonly enabled?: boolean;
   readonly checked?: boolean;
   readonly click?: () => void;
@@ -32,11 +36,11 @@ export interface AppMenuItem {
 }
 
 export interface AppMenuActions {
-  /** Flip the focused window's Godview. Undefined in modes with no window to
-   * flip — the item still appears (an absent menu item reads as a missing
-   * feature), disabled, which is the honest face of "not here yet". */
-  toggleGodview?: () => void;
-  /** Close the focused window. Needed only while the overlay is open, when the
+  /** Ask the focused window's owner for a view. Undefined in modes with no
+   * window to switch — the items still appear (an absent menu item reads as a
+   * missing feature), disabled, which is the honest face of "not here yet". */
+  setView?: (view: FrameView) => void;
+  /** Close the focused window. Needed only while Godview is the view, when the
    * close item drops `role: "close"` to release ⌘W (see `closeWindowItem`) and
    * therefore loses the role's built-in behaviour along with its accelerator. */
   closeWindow?: () => void;
@@ -44,46 +48,69 @@ export interface AppMenuActions {
    * helper exists for the platform or in a mode with no window — the item
    * stays, disabled, the same honest face Godview wears. */
   takeScreenshot?: () => void;
+  /** Send a zoom act to the focused window's head (One Frame FR-4, 3b), which
+   * answers it on Canvas. Undefined in modes with no window: the three items
+   * stay, disabled, the same honest face. */
+  zoom?: (act: FrameZoomAct) => void;
 }
 
 export interface AppMenuState {
-  /** Whether the focused window's overlay is open — the checkmark's fact.
-   * Main owns it (contracts GodviewState), so this is not a guess. */
-  godviewOpen: boolean;
+  /** The focused window's active view — the mark's fact and ⌘W's. Main owns
+   * it (contracts FrameViewState, `view.ts`), so this is not a guess. */
+  view: FrameView;
 }
 
-/** THE GODVIEW ITEM CARRIES NO ACCELERATOR, and the absence is the design.
- *
- * The gesture is ⇧⇧ — a double tap of Shift, WebStorm's Search Everywhere
- * gesture — and an accelerator cannot express it. Accelerators describe chords,
- * one key held with modifiers; this is a rhythm, two taps inside 300ms. It is
- * detected in main by `installGodviewDoubleShift` (main/godview.ts), which keeps
- * GT-D2's actual requirement: answered above the page, so it works while a
- * terminal pane holds focus.
- *
- * The road here, so nobody re-walks it (all three states were shipped):
+/** THE ROAD TO THE VIEW KEYS (FC-D4, ruled 2026-10-01), so nobody re-walks it.
+ * Every state below shipped:
  *   ⌘G  — worked, but IS find-next in ghostty and every macOS text surface, and
- *         an application accelerator always wins, so the deck lost search-next
- *         for as long as the overlay was up. GT-2 named that cost and paid it.
+ *         as a menu accelerator it took search-next from the deck. GT-2 named
+ *         that cost and paid it.
  *   ⌘⎋  — never worked, and never can: macOS eats Command+Escape before the
  *         application sees it. MEASURED, with the app focused — ⌘G and a bare ⎋
- *         both arrived at `before-input-event`, ⌘⎋ never did. (⇧⌘⎋ and ⌃⌘⎋ do
- *         arrive, if a chord is ever wanted again.) A menu accelerator, a
- *         `before-input-event` interceptor and a globalShortcut would all fail
- *         identically, because the key never reaches the process.
- *   ⇧⇧  — costs no chord at all. Nothing in ghostty, macOS or this shell binds a
- *         lone Shift, so there is no collision to arbitrate and ⌘G stays the
- *         panes' — which is why the close item's conditional ⌘W dance below has
- *         no twin here. */
-export const GODVIEW_GESTURE_HINT = "⇧ ⇧";
+ *         both arrived at `before-input-event`, ⌘⎋ never did.
+ *   ⇧⇧  — a double tap of Shift detected in main (`before-input-event`), which a
+ *         menu could not express, so the Godview row carried "(⇧ ⇧)" in its
+ *         label. RETIRED with FC-D4: four keys for four views and nothing else.
+ *   ⌘1–⌘4 (Ctrl 1–4 elsewhere) — the frame's views. They are PRODUCT CHORDS
+ *         (GT-D21: field-app's `product-chords.ts`), caught on the page's
+ *         window in the capture phase and stopped there, so a focused pane —
+ *         whose ghostty default for ⌘1–⌘8 is goto_tab — never sees them, and
+ *         each is proven delivered from a focused pane by the godview smoke's
+ *         probe rows. The View menu SAYS them (One Frame FR-5: the menu bar is
+ *         where a key is said), and does not deliver them: on Linux and Windows
+ *         `registerAccelerator: false` keeps them said-only; on darwin a shown
+ *         key equivalent is necessarily registered, but the page answers first —
+ *         a chord the page claims never reaches the menu (SNAP-3 measured it:
+ *         the canvas keymap's ⌘A swallowed ⌃⌘A's menu accelerator, which is why
+ *         that chord is taken in main) — and a chord the page did not claim (a
+ *         document still loading) lands on the same owner through `setView`, so
+ *         either way ONE owner moves. */
+export const VIEW_ITEM_IDS: Readonly<Record<FrameView, string>> = {
+  canvas: "view-canvas",
+  godview: "view-godview",
+  history: "view-history",
+  assistant: "view-assistant",
+};
+
+const VIEW_LABELS: Readonly<Record<FrameView, string>> = {
+  canvas: "Canvas",
+  godview: "Godview",
+  history: "History",
+  assistant: "Assistant",
+};
+
+const VIEW_ORDER: readonly FrameView[] = ["canvas", "godview", "history", "assistant"];
+
+/** ⌘1–⌘4 on darwin, Ctrl+1–4 elsewhere — one spelling for both. */
+export function viewAccelerator(view: FrameView): string {
+  return `CommandOrControl+${VIEW_ORDER.indexOf(view) + 1}`;
+}
 
 /** The id the Window section's close item carries, so the adapter can find it
  * again when the overlay opens. Named here because the reason is policy: the
  * deck's own close-pane gesture is ⌘W (ghostty's `close_surface`), and an
  * application accelerator would eat it before the pane could answer. */
 export const CLOSE_WINDOW_ITEM_ID = "window-close";
-
-export const GODVIEW_ITEM_ID = "view-godview";
 
 export const SCREENSHOT_ITEM_ID = "view-screenshot";
 
@@ -107,23 +134,72 @@ function screenshotItem(platform: MenuPlatform, actions: AppMenuActions): AppMen
   };
 }
 
-/** `Godview` — a checkbox, because main knows the answer (§9 voice: buttons say
- * what they do; a state we hold is stated, not implied).
- *
- * The gesture rides in the LABEL because it cannot ride in the accelerator
- * column (see GODVIEW_GESTURE_HINT). The menu is still where a user looks to
- * learn a gesture, and a Godview row that showed no way to reach it by keyboard
- * would teach that there isn't one. WebStorm does the same for Search
- * Everywhere, for the same reason. */
-function godviewItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
-  return {
-    id: GODVIEW_ITEM_ID,
-    type: "checkbox",
-    label: `Godview  (${GODVIEW_GESTURE_HINT})`,
-    checked: state.godviewOpen,
-    enabled: actions.toggleGodview !== undefined,
-    ...(actions.toggleGodview !== undefined ? { click: actions.toggleGodview } : {}),
-  };
+/** THE VIEW MENU'S ZOOM (One Frame FR-4, 3b — FR-3's finding). Until FR-4 the
+ * View menu carried Electron's `resetZoom`/`zoomIn`/`zoomOut` ROLES, which
+ * zoom the PAGE: on Canvas the head claimed ⌘0 ⌘+ ⌘− first, but wherever
+ * nothing claimed them — under a cover, nothing focused — the keys scaled the
+ * whole window, the frame's chrome with it, and the items always did. The
+ * three are ours now, with no role (a role would bring its page zoom back as
+ * its default behaviour, `closeWindowItem`'s lesson): each sends the ACT to
+ * the window's head, which answers on Canvas as its keys do — and under a
+ * cover the items are disabled, because the zoom is Canvas's instrument and
+ * a covered canvas has nothing to zoom. Their keys are said as the views'
+ * are (VIEW_KEYS_ROAD): the page answers ⌘0 ⌘+ ⌘− first on Canvas; a key it
+ * leaves unclaimed (a document still loading, a claim that does not use the
+ * key) reaches the item on darwin and lands on the same head, so either way
+ * ONE owner zooms; off the Mac `registerAccelerator: false` keeps them said.
+ * The labels are Electron's role labels, in the roles' order. */
+export const ZOOM_ITEM_IDS: Readonly<Record<FrameZoomAct, string>> = {
+  actual: "zoom-actual",
+  in: "zoom-in",
+  out: "zoom-out",
+};
+
+const ZOOM_ITEMS: readonly { act: FrameZoomAct; label: string; accelerator: string }[] = [
+  { act: "actual", label: "Actual Size", accelerator: "CommandOrControl+0" },
+  { act: "in", label: "Zoom In", accelerator: "CommandOrControl+Plus" },
+  { act: "out", label: "Zoom Out", accelerator: "CommandOrControl+-" },
+];
+
+function zoomItems(
+  platform: MenuPlatform,
+  state: AppMenuState,
+  actions: AppMenuActions,
+): AppMenuItem[] {
+  const zoom = state.view === "canvas" ? actions.zoom : undefined;
+  return ZOOM_ITEMS.map(({ act, label, accelerator }) => ({
+    id: ZOOM_ITEM_IDS[act],
+    label,
+    accelerator,
+    ...(platform === "darwin" ? {} : { registerAccelerator: false }),
+    enabled: zoom !== undefined,
+    ...(zoom !== undefined ? { click: () => zoom(act) } : {}),
+  }));
+}
+
+/** The four views, as radio items: main knows which one is on (§9 voice: a
+ * state we hold is stated, not implied). The Assistant waits (FC-D2) — present,
+ * disabled, its key still said, the way a disabled Take Screenshot keeps its
+ * chord. */
+function viewItems(
+  platform: MenuPlatform,
+  state: AppMenuState,
+  actions: AppMenuActions,
+): AppMenuItem[] {
+  return VIEW_ORDER.map((view) => {
+    const built = view !== "assistant";
+    const setView = actions.setView;
+    return {
+      id: VIEW_ITEM_IDS[view],
+      type: "radio",
+      label: built ? VIEW_LABELS[view] : `${VIEW_LABELS[view]} · not built yet`,
+      accelerator: viewAccelerator(view),
+      ...(platform === "darwin" ? {} : { registerAccelerator: false }),
+      checked: state.view === view,
+      enabled: built && setView !== undefined,
+      ...(built && setView !== undefined ? { click: () => setView(view) } : {}),
+    };
+  });
 }
 
 /** The Window section's close item, whose accelerator is CONDITIONAL.
@@ -150,9 +226,17 @@ function godviewItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem 
  *
  * The cost, stated: the overlay-open label is ours rather than Electron's, so it
  * is English where the role would have been localized. The alternative is a menu
- * that eats the deck's ⌘W in every language. */
+ * that eats the deck's ⌘W in every language.
+ *
+ * *Note (2026-10-03, FR-1):* "an application accelerator always wins" holds for
+ * a chord the page leaves UNCLAIMED. SNAP-3 measured the other half on darwin —
+ * a chord the page claims never reaches the menu (VIEW_KEYS_ROAD) — so the
+ * handover stays for the panes that leave ⌘W unclaimed, and since FR-1 it is
+ * keyed on Godview being the window's view rather than on an overlay bit. */
 function closeWindowItem(state: AppMenuState, actions: AppMenuActions): AppMenuItem {
-  if (!state.godviewOpen) {
+  // Keyed on GODVIEW being the view, not on "covered": History has no panes to
+  // lend ⌘W to, so there it closes the window as it always did.
+  if (state.view !== "godview") {
     return { id: CLOSE_WINDOW_ITEM_ID, role: "close", accelerator: "CommandOrControl+W" };
   }
   return {
@@ -163,8 +247,9 @@ function closeWindowItem(state: AppMenuState, actions: AppMenuActions): AppMenuI
   };
 }
 
-/** The whole template. Roles carry every standard section; the two items this
- * shell owns are Godview and the conditional close. */
+/** The whole template. Roles carry every standard section; the items this
+ * shell owns are the four views, Take Screenshot, the zoom's three and the
+ * conditional close. */
 export function buildAppMenu(
   platform: MenuPlatform,
   state: AppMenuState,
@@ -184,12 +269,11 @@ export function buildAppMenu(
     {
       label: "View",
       submenu: [
-        godviewItem(state, actions),
+        ...viewItems(platform, state, actions),
+        { type: "separator" },
         screenshotItem(platform, actions),
         { type: "separator" },
-        { role: "resetZoom" },
-        { role: "zoomIn" },
-        { role: "zoomOut" },
+        ...zoomItems(platform, state, actions),
         { type: "separator" },
         { role: "togglefullscreen" },
       ],

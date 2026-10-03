@@ -644,6 +644,73 @@ function fakeRuntime(pollIntervalMs: number): FakeRuntime {
 }
 
 describe("the reading's own rules (AR-5d)", () => {
+  it("rechecks only the newly signed-in account instead of keeping its pre-login failure for 30 minutes", async () => {
+    let ms = 0;
+    const runtime = fakeRuntime(30 * 60_000);
+    runtime.profiles = async () =>
+      ["personal", "work"].map((id) => ({
+        id,
+        provider: "scripted",
+        label: id,
+        kind: "managed" as const,
+        dataRoot: `/unused/${id}`,
+        createdAt: new Date(0).toISOString(),
+      }));
+    runtime.answers.push(
+      available("scripted", new Date(ms).toISOString(), 10),
+      unauthenticated("scripted"),
+    );
+    const service = new AccountUsageService({ runtime, now: () => new Date(ms) });
+    cleanup.push(() => service.stop());
+    service.start();
+    service.subscribe(() => undefined);
+    await until(() => service.snapshot().entries.length === 2);
+    expect(runtime.asked).toBe(2);
+    expect(service.snapshot().entries[1]?.state).toBe("unauthenticated");
+
+    ms = 10_000; // the vendor login has finished, well before the next usage poll
+    await service.refresh({ force: true, profileIds: ["work"] });
+    expect(runtime.asked).toBe(2);
+    runtime.answers.push(available("scripted", new Date(ms).toISOString(), 25));
+    await service.signedIn("work");
+    expect(runtime.asked).toBe(3);
+    expect(
+      service
+        .snapshot()
+        .entries.map((entry) => [entry.profileId, entry.state, entry.metrics[0]?.usedPercent]),
+    ).toEqual([
+      ["personal", "available", 10],
+      ["work", "available", 25],
+    ]);
+  });
+
+  it("clears a completed login's old usage while unwatched and waits for a subscriber to read again", async () => {
+    const runtime = fakeRuntime(30 * 60_000);
+    runtime.profiles = async () => [
+      {
+        id: "work",
+        provider: "scripted",
+        label: "Work",
+        kind: "managed",
+        dataRoot: "/unused/work",
+        createdAt: new Date(0).toISOString(),
+      },
+    ];
+    const service = new AccountUsageService({ runtime, now: () => new Date(10_000) });
+    cleanup.push(() => service.stop());
+    service.start();
+    await service.refresh({ force: true, profileIds: ["work"] });
+    expect(service.snapshot().entries[0]?.state).toBe("unauthenticated");
+    expect(runtime.asked).toBe(1);
+    await service.signedIn("work");
+    expect(runtime.asked).toBe(1);
+    expect(service.snapshot().entries[0]?.state).not.toBe("unauthenticated");
+    runtime.answers.push(available("scripted", new Date(10_000).toISOString()));
+    service.subscribe(() => undefined);
+    await until(() => service.snapshot().entries[0]?.state === "available");
+    expect(runtime.asked).toBe(2);
+  });
+
   it("manual refresh bypasses the normal interval, retains provider backoff, and stops with the service", async () => {
     let ms = 0;
     const runtime = fakeRuntime(30 * 60_000);

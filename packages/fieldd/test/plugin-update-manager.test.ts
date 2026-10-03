@@ -54,6 +54,7 @@ function record(character: string, overrides: Partial<PluginRecord> = {}): Plugi
     grantGeneration: 3,
     contributions: {
       widgets: [],
+      objects: [],
       behaviors: [],
       commands: [],
       surfaces: [],

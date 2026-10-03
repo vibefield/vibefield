@@ -1,52 +1,42 @@
+/* Objects, on this build (One Frame FR-2, DK-D29): the tray's SHEET, risen
+   from the window's foot behind the line (62 over its 50) on the island curve.
+   The 64px island it morphed from retired into the line, so there is no
+   closed shape: closed, the sheet waits below the window, out of reach. */
 .vf-widget-tray {
-  bottom: 2rem;
-  width: 440px;
-  height: 4rem;
-  border: 1px solid var(--vf-hairline);
-  border-radius: var(--vf-radius-island);
-  background: color-mix(in srgb, var(--vf-chrome-solid) 80%, transparent);
-  box-shadow: var(--vf-shadow-island);
-  backdrop-filter: blur(24px);
-  transition:
-    width 600ms var(--vf-ease-island),
-    height 600ms var(--vf-ease-island),
-    bottom 600ms var(--vf-ease-island),
-    border-radius 600ms var(--vf-ease-island),
-    background-color 160ms ease,
-    box-shadow 600ms var(--vf-ease-island);
-  will-change: width, height, bottom, border-radius;
-}
-
-.vf-widget-tray:hover {
-  background: var(--vf-chrome-surface);
-}
-
-.vf-widget-tray[data-tray-open="true"] {
   bottom: 0;
   width: min(80%, 64rem);
   height: 60vh;
+  border: 1px solid var(--vf-hairline);
   border-bottom: 0;
   border-radius: 2.5rem 2.5rem 0 0;
   background: var(--vf-chrome-surface);
   box-shadow: var(--vf-shadow-sheet);
   backdrop-filter: blur(64px);
+  transform: translate(-50%, calc(100% + 24px));
+  visibility: hidden;
+  transition:
+    transform 600ms var(--vf-ease-island),
+    visibility 0s linear 600ms;
 }
 
-.vf-widget-tray__toggle,
-.vf-widget-tray__header {
-  transition-duration: 600ms;
-  transition-timing-function: var(--vf-ease-island);
+.vf-widget-tray[data-tray-open="true"] {
+  transform: translate(-50%, 0);
+  visibility: visible;
+  transition:
+    transform 600ms var(--vf-ease-island),
+    visibility 0s linear;
 }
 
-.vf-widget-tray__toggle {
-  transition-property: inset, width, height, color, background-color, box-shadow, transform;
-}
-
-.vf-widget-tray__header {
-  transition-property: height, padding;
-}
-
+/* The put-back sits ON the line — the tray's door now — over the same 880 ×
+   52 (DESIGN.md §10), and only while a ghost is out: releasing there cancels
+   the insert. */
 .vf-widget-tray__putback {
+  z-index: 63;
+  left: max(76px, calc(50% - 440px));
+  bottom: 20px;
+  width: min(880px, calc(100% - 96px));
+  height: 52px;
+  border-radius: 26px;
   color: var(--vf-text-tertiary);
   background: var(--vf-sheet-surface);
 }
@@ -102,42 +92,24 @@
   will-change: transform, opacity;
 }
 
-.vf-widget-tray__tools {
-  position: relative;
-  display: flex;
-  padding: 4px;
-  border: 1px solid var(--vf-hairline);
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--vf-fill) 80%, transparent);
-  box-shadow: inset 0 1px 3px rgb(0 0 0 / 8%);
-}
-
-.vf-widget-tray__tool-indicator {
-  position: absolute;
-  top: 4px;
-  bottom: 4px;
-  width: 72px;
-  border: 1px solid var(--vf-hairline);
-  border-radius: 999px;
-  background: var(--vf-chrome-solid);
-  box-shadow: 0 1px 3px rgb(0 0 0 / 10%);
-  transition: transform 300ms var(--vf-ease-island);
-}
-
-.vf-widget-tray__tool {
-  width: 72px;
-  color: var(--vf-text-tertiary);
-}
-
-.vf-widget-tray__tool:hover,
-.vf-widget-tray__tool.is-active {
-  color: var(--vf-foreground);
-}
-
+/* M6: the sheet fades in place rather than rising. */
 @media (prefers-reduced-motion: reduce) {
   .vf-widget-tray,
-  .vf-widget-tray__toggle,
-  .vf-widget-tray__header {
-    transition-duration: 90ms;
+  .vf-widget-tray[data-tray-open="true"] {
+    transform: translate(-50%, 0);
+  }
+
+  .vf-widget-tray {
+    opacity: 0;
+    transition:
+      opacity 120ms ease,
+      visibility 0s linear 120ms;
+  }
+
+  .vf-widget-tray[data-tray-open="true"] {
+    opacity: 1;
+    transition:
+      opacity 120ms ease,
+      visibility 0s linear;
   }
 }

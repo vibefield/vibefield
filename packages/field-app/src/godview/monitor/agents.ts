@@ -8,6 +8,7 @@ import {
   type PaneAttachment,
   type ProjectTint,
   projectTint,
+  USAGE_STEP_MS,
   type UsageHistory,
 } from "@vibecook/puppeteer-views";
 import {
@@ -21,7 +22,7 @@ import {
 } from "./agent-status";
 import type { AgentSessionSummary } from "./facet-types";
 import { folderName } from "./folder-name";
-import { classifyRemoteStatus, type MonitorMeshRecord, remoteDetail } from "./mesh-rows";
+import { classifyRemoteStatus, deskCost, type MonitorMeshRecord, remoteDetail } from "./mesh-rows";
 import { remoteRowId } from "./remote-door";
 import type { MonitorAgent, MonitorDeviceFacet } from "./types";
 
@@ -181,6 +182,30 @@ export function monitorAgentFromManaged(
   if (session?.exited) return undefined;
   const status = classifyAgentStatus(summary);
   if (!status) return undefined;
+  return managedAgent(record, status, input, usage);
+}
+
+/**
+ * TL-D6 — an ended run's last row, for the timeline's faint lane: the same
+ * projection as a live one (whose it was, its project's colour, its model),
+ * standing as idle because the view draws an ended lane from its record and
+ * never from this status. Nothing else draws it: it reaches the views only
+ * through the history book's `ended`.
+ */
+export function endedMonitorAgent(
+  record: MonitorManagedRecord,
+  input: Pick<AssembleMonitorAgentsInput, "colours" | "projectSeqs" | "nowMs">,
+): MonitorAgent {
+  return managedAgent(record, "idle", input);
+}
+
+function managedAgent(
+  record: MonitorManagedRecord,
+  status: AgentVisualStatus,
+  input: Pick<AssembleMonitorAgentsInput, "colours" | "projectSeqs" | "nowMs">,
+  usage?: UsageHistory,
+): MonitorAgent {
+  const { summary, session } = record;
   // The mirror is Core's projection carried verbatim (the passthrough, pinned
   // against Core's generation by `agent-monitor-pin.test.ts`); the views read
   // it as Core's type, and this is the one seam that says so.
@@ -324,6 +349,7 @@ export function monitorAgentFromMesh(
   // its ticket by device). A run whose PTY the owner does not name — none
   // known, or one on a third desktop — has nothing a pane here can take.
   const pty = row.terminal?.hosted === "local" ? row.terminal.runtimeSessionId : undefined;
+  const usage = deskUsage(row);
   return {
     id: remoteRowId(device.id, row.runtimeRunId),
     createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : 0,
@@ -365,8 +391,28 @@ export function monitorAgentFromMesh(
       // no evidence clock crosses desktops: unknown while the desktop answers,
       // stale once it does not
       recency: live ? "unknown" : "stale",
+      ...(usage !== undefined ? { usage } : {}),
       remoteRow: row,
     },
+  };
+}
+
+/**
+ * SV — what another desktop's run has spent, as its owner's desk row says
+ * (`usage.costUsd`, puppeteer's estimate): the total and nothing else. No
+ * steps cross desktops, so `steps` is empty, never a row of zeros a view would
+ * read as ten quiet minutes. A run its owner could not price has none.
+ */
+function deskUsage(row: MonitorMeshRecord["row"]): UsageHistory | undefined {
+  const total = deskCost(row);
+  if (total === undefined || total < 0) return undefined;
+  const coverage = (row.usage as Record<string, unknown> | undefined)?.["costCoverage"];
+  if (coverage === "unavailable") return undefined;
+  return {
+    total,
+    coverage: coverage === "partial" ? "partial" : "complete",
+    steps: [],
+    stepMs: USAGE_STEP_MS,
   };
 }
 

@@ -133,22 +133,83 @@ export const ShellCommandRequest = z
   .passthrough();
 export type ShellCommandRequest = z.infer<typeof ShellCommandRequest>;
 
-/** main → renderer: whether THIS window's Godview overlay is open (GT-D2).
- *
- * Main owns this bit rather than the renderer because the toggle is answered
- * above the page: ⇧⇧ is detected in main before any renderer sees a keystroke,
- * so a renderer-owned flag would be a second copy that main must be told about
- * to keep its own menu honest. One owner, one truth, and the menu's checkmark
- * is a fact instead of a guess. */
-export const GodviewState = z.object({ open: z.boolean() }).passthrough();
-export type GodviewState = z.infer<typeof GodviewState>;
+/** The frame's four views (One Frame FR-1; FC-D2, FV-D7), in the views
+ * track's order. The canvas is the ground floor (FV-D1) and the others are
+ * drawn as one cover over it. The Assistant's cell exists and waits: it is not
+ * built, so no window is ever in it ({@link frameViewBuilt}). */
+export const FrameView = z.enum(["canvas", "godview", "history", "assistant"]);
+export type FrameView = z.infer<typeof FrameView>;
 
-/** renderer → main: the toolbar button asking for the transition ⇧⇧ asks for.
- * `open` omitted means "flip whatever it is" — the button and the accelerator
- * are the same request, so neither can drift by holding its own idea of the
- * current value. */
-export const GodviewSetRequest = z.object({ open: z.boolean().optional() }).passthrough();
-export type GodviewSetRequest = z.infer<typeof GodviewSetRequest>;
+/** Whether a view can be the active one yet — every view but the Assistant
+ * (FC-D2: its cell is drawn, faint, "not built yet"). Main refuses the rest,
+ * and the frame says so instead of asking. */
+export function frameViewBuilt(view: FrameView): boolean {
+  return view !== "assistant";
+}
+
+/** main → renderer: THIS window's active view (FR-1; GT-D2's Godview bit,
+ * grown into the four views and retired into them).
+ *
+ * Main owns it, per window, because main also has to KNOW it: the View menu
+ * marks the view it names, and the close item gives ⌘W to Godview's panes
+ * only while Godview is the view. A renderer-owned view would be a second copy
+ * main had to be told about to keep its own menu honest. One owner, one
+ * truth; the views track, the keys and the menu all ask it, and draw what it
+ * answers. Not persisted: a window opens on the canvas, the ground floor. */
+export const FrameViewState = z.object({ view: FrameView }).passthrough();
+export type FrameViewState = z.infer<typeof FrameViewState>;
+
+/** renderer → main: ask for a view — the views track's cells and ⌘1–⌘4 send
+ * the view they name, never a flip, so a request cannot argue with a value main
+ * already changed. Answered with the resulting state (a refused view answers
+ * with the unchanged one). */
+export const FrameViewSetRequest = z.object({ view: FrameView }).passthrough();
+export type FrameViewSetRequest = z.infer<typeof FrameViewSetRequest>;
+
+/** The View menu's zoom (One Frame FR-4, 3b): Actual Size, Zoom In, Zoom Out —
+ * the three items that replaced Electron's `resetZoom`/`zoomIn`/`zoomOut`
+ * roles, which zoomed the WHOLE WINDOW wherever nothing claimed their keys. */
+export const FrameZoomAct = z.enum(["in", "out", "actual"]);
+export type FrameZoomAct = z.infer<typeof FrameZoomAct>;
+
+/** main → renderer: the act a View menu item names, for the window's head to
+ * answer — on Canvas, as it answers ⌘+ ⌘− ⌘0. An act, never a zoom level: the
+ * camera is the page's, and main never learns it. Under a cover the items are
+ * disabled, so none is sent; a page that is not on Canvas when one arrives
+ * does nothing with it. */
+export const FrameZoomRequest = z.object({ act: FrameZoomAct }).passthrough();
+export type FrameZoomRequest = z.infer<typeof FrameZoomRequest>;
+
+/** The app's ONE theme setting (One Frame FR-4, FC-D5): Light, Dark, or Auto,
+ * which follows the OS. Main owns it — one value per device, kept by the shell
+ * — and projects what it resolves to into Electron's `nativeTheme`; the Me
+ * menu's Theme, Settings → Appearance and the Setup Assistant's button all ask
+ * it, and every window is told. A renderer never keeps a theme of its own. */
+export const ThemePreference = z.enum(["light", "dark", "auto"]);
+export type ThemePreference = z.infer<typeof ThemePreference>;
+
+/** What a preference resolves to: the two themes a surface is drawn in. */
+export const ThemeName = z.enum(["light", "dark"]);
+export type ThemeName = z.infer<typeof ThemeName>;
+
+/** Auto is the OS's theme; Light and Dark are themselves. One reading, so the
+ * owner and a harness without one can never resolve the same choice two ways. */
+export function resolveTheme(preference: ThemePreference, osDark: boolean): ThemeName {
+  if (preference === "auto") return osDark ? "dark" : "light";
+  return preference;
+}
+
+/** main → renderer: the theme as main's owner holds it — what was chosen and
+ * what it resolves to now (Auto's answer moves when the OS flips). */
+export const ThemeState = z
+  .object({ preference: ThemePreference, resolved: ThemeName })
+  .passthrough();
+export type ThemeState = z.infer<typeof ThemeState>;
+
+/** renderer → main: choose the theme by name, never a flip. Answered with the
+ * resulting state. */
+export const ThemeSetRequest = z.object({ preference: ThemePreference }).passthrough();
+export type ThemeSetRequest = z.infer<typeof ThemeSetRequest>;
 
 /** Small host fact used only to describe platform-specific desktop behavior in
  * Settings. Unknown Electron platforms collapse to `other` at the preload

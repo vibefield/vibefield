@@ -26,7 +26,7 @@ import {
   setDeckAppearance,
   useDeckAppearance,
 } from "../../godview/deck-appearance";
-import { storedGodviewTheme } from "../../godview/godview-theme";
+import { useGodviewTheme } from "../../godview/godview-theme";
 import type { SettingsSubpage } from "../SettingsDialog";
 import { labelCls } from "../settings-ui";
 import { BehaviorTab } from "./BehaviorTab";
@@ -669,7 +669,9 @@ export function TerminalSettings({
 }): ReactElement {
   const client = useFielddClient();
   const appearance = useDeckAppearance();
-  const [previewMode, setPreviewMode] = useState<PreviewMode>(storedGodviewTheme);
+  // The preview opens on the mode Godview is in now: the app's, or the override.
+  const godviewTheme = useGodviewTheme();
+  const [previewMode, setPreviewMode] = useState<PreviewMode>(godviewTheme);
   const [tab, setTab] = useState<TerminalTab>("look");
   const [query, setQuery] = useState("");
   const [browser, setBrowser] = useState<ThemeBrowserTarget | null>(null);

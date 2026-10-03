@@ -240,6 +240,80 @@ export function emitGodviewMonitorMarker(facts: GodviewMonitorFacts): void {
   console.log(`GODVIEW_MONITOR ${JSON.stringify(facts)}`);
 }
 
+/** One view key the frame claimed (One Frame FR-1, FC-D4): which key, the
+ * view it names, the view the window was in, and what the frame did with it.
+ *
+ * The delivery probe's ear at the FRAME. A chord can be caught and change
+ * nothing a harness can see — ⌘2 inside Godview, ⌘4 while the Assistant waits —
+ * so the frame says what it heard, and the probe sets that beside the pane's
+ * own ear (which must stay deaf) and the view the window ends in. Emitted from
+ * the frame's own handler, never from a harness's wishes, and only in the
+ * godview smoke's modes. */
+export interface ViewKeyFacts {
+  key: string;
+  view: string;
+  from: string;
+  /** "moved": the frame asked for another view; "stayed": the window was
+   * already there; "waits": the view is not built (its note said so). */
+  outcome: "moved" | "stayed" | "waits";
+}
+
+export function emitViewKeyMarker(facts: ViewKeyFacts): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`VIEW_KEY ${JSON.stringify(facts)}`);
+}
+
+/** One key the LINE took for its create (One Frame FR-2, §11): B on Canvas,
+ * ⌘T in Godview. The delivery probe's ear at the line, in VIEW_KEY's form —
+ * said from the line's own handler, so a key that never arrived says nothing,
+ * which is what the probe from a focused pane reads B's silence by. */
+export interface LineKeyFacts {
+  key: string;
+  view: string;
+  /** "opened" / "closed": Objects; "new-terminal": the deck was asked. */
+  outcome: "opened" | "closed" | "new-terminal";
+}
+
+export function emitLineKeyMarker(facts: LineKeyFacts): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`LINE_KEY ${JSON.stringify(facts)}`);
+}
+
+/** One key the HEAD took for the zoom (One Frame FR-3, §6; DK-D24): ⌘+ ⌘− ⌘0
+ * ⇧1 on Canvas. The delivery probe's ear at the head, in LINE_KEY's form —
+ * said from the head's own handler, so a key a focused pane kept (its font
+ * sizes) says nothing, which is what the probe reads that silence by. */
+export interface ZoomKeyFacts {
+  key: string;
+  act: "in" | "out" | "fit" | "actual";
+  view: string;
+  /** The readout's percent before the act, and after it. */
+  from: number;
+  to: number;
+}
+
+export function emitZoomKeyMarker(facts: ZoomKeyFacts): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`ZOOM_KEY ${JSON.stringify(facts)}`);
+}
+
+/** One Frame FR-4 (3b) — a View menu zoom item the head ANSWERED. Said from the
+ * head's own handler, on Canvas only, so an item invoked under a cover says
+ * nothing — the silence the godview smoke's row 11i reads, beside the page's
+ * zoom factor, which no item may move any more. */
+export interface ZoomMenuFacts {
+  act: "in" | "out" | "actual";
+  view: string;
+  /** The readout's percent before the act, and after it. */
+  from: number;
+  to: number;
+}
+
+export function emitZoomMenuMarker(facts: ZoomMenuFacts): void {
+  if (!godviewMarkersEnabled()) return;
+  console.log(`ZOOM_MENU ${JSON.stringify(facts)}`);
+}
+
 /** What the first ⌘G cost, station by station (GT-3p, GT-D15.4).
  *
  * Published once per app life, when the first open reaches a presented frame.

@@ -4,6 +4,7 @@
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { OBJECTS_NEED_DESK } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { checkPlugin } from "../src/check";
 import {
@@ -319,6 +320,61 @@ describe("check — declaration ↔ binding", () => {
 
     const clean = makePlugin({ files: { "dist/renderer.js": rendererModule({}) } });
     expect(refusalCodes(await checkPlugin({ dir: clean }))).toEqual([]);
+  });
+});
+
+// DK-0f: the object door's contract is accepted ahead of the desk, and THIS
+// build draws widgets — so `check` passes the manifest row and refuses the
+// activation row in the host's own sentence, built or not.
+describe("check — objects-need-desk", () => {
+  const CLOCK = `${FIXTURE_ID}.clock`;
+  const objects = [
+    {
+      type: CLOCK,
+      title: "Clock",
+      schemaVersion: 1,
+      size: { w: 160, h: 160 },
+      provides: ["desk.object"],
+      tray: { category: "things", label: "Clock" },
+      binding: { kind: "clock" },
+    },
+  ];
+
+  it("accepts the manifest, then refuses activation with the stable code — before any import", async () => {
+    const root = makePlugin({
+      manifest: { activation: [`onWidget:${CLOCK}`], contributes: { objects } },
+      files: { "dist/renderer.js": rendererModule({ binds: [] }) },
+    });
+    const verdicts = await checkPlugin({ dir: root });
+
+    expect(refusalCodes(verdicts)).toEqual(["objects-need-desk"]);
+    expect(verdicts.filter((v) => v.check === "manifest").map((v) => v.level)).toEqual(
+      expect.arrayContaining(["pass"]),
+    );
+    const row = verdicts.find((v) => v.code === "objects-need-desk");
+    expect(row?.check).toBe("activation");
+    expect(row?.pointer).toBe("contributes.objects");
+    expect(row?.detail).toContain(CLOCK);
+    expect(row?.detail).toContain(OBJECTS_NEED_DESK.message);
+    expect(row?.expected).toBeDefined();
+
+    // the control: the same tree declaring a widget instead passes the row
+    const widgets = makePlugin({ files: { "dist/renderer.js": rendererModule({}) } });
+    expect(refusalCodes(await checkPlugin({ dir: widgets }))).toEqual([]);
+  });
+
+  it("refuses the plugin whole when objects stand beside widgets — the host activates none of it", async () => {
+    const root = makePlugin({
+      manifest: {
+        activation: [`onWidget:${CLOCK}`, `onWidget:${CARD}`],
+        contributes: { ...(baseManifest()["contributes"] as object), objects },
+      },
+      files: { "dist/renderer.js": rendererModule({}) },
+    });
+    const verdicts = await checkPlugin({ dir: root });
+    expect(refusalCodes(verdicts)).toEqual(["objects-need-desk"]);
+    // the widget binding rows did not run: one honest row answers the question
+    expect(verdicts.filter((v) => v.check === "activation")).toHaveLength(1);
   });
 });
 

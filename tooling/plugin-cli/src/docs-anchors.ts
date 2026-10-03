@@ -168,6 +168,19 @@ function widget(overrides: Record<string, unknown> = {}): Record<string, unknown
   };
 }
 
+/** DK-0f — the object door's probes mutate this minimal kind. */
+function object(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+  return {
+    type: "com.example.demo.clock",
+    title: "Clock",
+    schemaVersion: 1,
+    size: { w: 160, h: 160 },
+    props: { style: { kind: "enum", options: ["classic", "ink"], default: "classic" } },
+    binding: { kind: "clock" },
+    ...overrides,
+  };
+}
+
 function behavior(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     id: "com.example.demo:counter",
@@ -343,6 +356,36 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
   {
     topic: "an activation event names something the plugin declares",
     manifest: { ...base(), activation: ["onWidget:com.example.demo.nothing"] },
+  },
+  // --- the object door (DK-0f) ---
+  {
+    topic: "an object kind renders too, so it needs the renderer entry",
+    manifest: { ...base(), entries: undefined, contributes: { objects: [object()] } },
+  },
+  {
+    topic: "a widget's view fields are retired on an object, each refused by name",
+    manifest: { ...base(), contributes: { objects: [object({ surface: "dom" })] } },
+  },
+  {
+    topic: "one type, one contribution — never both a widget and an object",
+    manifest: {
+      ...base(),
+      contributes: {
+        widgets: [widget({ type: "com.example.demo.clock" })],
+        objects: [object()],
+      },
+    },
+  },
+  {
+    topic: "a tray entry's face names declared props, each a value of its prop's kind",
+    manifest: {
+      ...base(),
+      contributes: {
+        objects: [
+          object({ tray: { category: "things", label: "Clock", props: { style: "bogus" } } }),
+        ],
+      },
+    },
   },
 ];
 

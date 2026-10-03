@@ -27,20 +27,44 @@ components. Plugin content styles remain inside their plugin packages.
 
 The catalog currently mounts these shipping views directly:
 
-- Artifact Hub and all empty/loading/populated/unavailable states
+- Artifact Hub and all empty/loading/populated/unavailable states — in the right edge's drawer
+  since One Frame FR-4, where the side panel's contents now live
 - Godview stage, monitor registry, tuning panel, unavailable terminal deck, and the complete
   swarm-circle state matrix
-- FilePill, navigation breadcrumbs, ZoomPill, WidgetTray frame/tool switcher
-- command palette, settings dialog, side-panel frame, and loading veil
+- WidgetTray's sheet
+- the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
+  key at its row's end), settings dialog and loading veil (the side-panel frame retired into the
+  right edge's drawer, FR-4)
 - shared controls/states and every onboarding pane, alternate entry, and completion failure
 - the account's face (UA-7): the Me menu open, closed, waiting and offline, the Settings head,
   both face frames at every size, and the face picker
+- the view frame (One Frame FR-1): the views track in every state the design's plates show — at
+  rest, ⌘ held, Godview, History, the Assistant's note, Windows' keys — and the cover rising,
+  swapping and lowering over a field with Godview's stage and History's room, on fixture state
+- the line (One Frame FR-2): `ComposerLineView` and @'s `AtMenuView` in every state the page's §03
+  plates draw — at rest, typing with a chip, @ open, aimed, Objects out, Godview's New terminal,
+  History's Resume, Windows' keys — and the live line on its real controller (`Composer`) over the
+  frame's field, with fixture doors for what Godview lends it, the clipboard and the capture
+- the head (One Frame FR-3): `HeadView` in every state the page's head plates draw — the field's
+  name at its top, the crumbs folded in inside a folder, FitPath in a narrow window, renaming in
+  place, the fields explorer grown from the pill, the zoom readout's menu (and Windows' keys), the
+  palette under the head — and the live head on its real controller (`Head`) in the playground,
+  over a fixture document manager and a fixture canvas door (the path, the zoom). It replaced the
+  file pill, the navigation breadcrumbs and the − % + zoom pill
+- the corner (One Frame FR-4): `MeMenuView` open above the line over fixture account and theme
+  state, a plate per Theme it holds — Light, Dark, and Auto following the page's own theme — and
+  Settings → Appearance (`AppearanceSectionView`) in the shipping dialog, the same setting; the
+  Settings specimen's old Appearance replica is gone
+- the edges (One Frame FR-4): `EdgeTrayView` on both sides in every state the page's edges plates
+  draw — both notches whole on Canvas, both slivers over Godview, the notch a sliver grows into
+  (over History), the clipboard's drawer open over Godview, and Artifacts' drawer holding the Hub
+  through the plugin's own fixture door (`ArtifactsDrawer`)
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
-fixture product client and FilePill receives a fixture document manager; their DOM, interaction
-state, accessibility, and CSS are production code. Engine-rendered widget content is represented
-by deterministic card fixtures, while its stable visual identities come from shared content
-tokens and the plugin-owned stylesheets.
+fixture product client and the head receives a fixture document manager and canvas door; their
+DOM, interaction state, accessibility, and CSS are production code. Engine-rendered widget content
+is represented by deterministic card fixtures, while its stable visual identities come from shared
+content tokens and the plugin-owned stylesheets.
 
 Godview's swarm follows the same boundary at a smaller scale. `AgentSwarm.tsx` owns physics,
 placement, drag gestures, and field-level creation; `AgentBubble.tsx` owns the exact circle state
@@ -62,6 +86,9 @@ catalog stays the single composition root without ever owning foreign markup. (A
 
 - Add or change visual constants in `DESIGN.md`, then project them into `tokens.css`.
 - Reuse a shell primitive before creating domain-specific control anatomy.
+- An icon is a `FieldGlyph` from the kit's `/glyphs` leaf (DESIGN.md §13; plugins reach it through
+  `@vibefield/plugin-sdk/ui`). An inline `<svg>` that is an icon fails `glyphs.test.tsx`; the
+  allowlist is geometry that is not an icon, such as the edge tray's notch and drawer.
 - Put static styling in CSS. Inline styles are reserved for runtime geometry, progress, user data,
   or CSS custom-property projection.
 - Give domain selectors a namespace and keep their CSS beside the component. Do not add another

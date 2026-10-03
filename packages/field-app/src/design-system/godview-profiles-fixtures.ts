@@ -192,7 +192,7 @@ export const PROFILE_TAB_SETS: readonly AgentProfileSet[] = [
   },
 ];
 
-const NO_HISTORY: HistoryPort = {
+export const NO_HISTORY: HistoryPort = {
   status: async () => ({ reachable: false, detail: "catalog", checkedAt: AT }),
   facts: async () => [],
   search: async () => ({
@@ -203,7 +203,7 @@ const NO_HISTORY: HistoryPort = {
   }),
 };
 
-const NO_USAGE: AccountUsagePort = {
+export const NO_USAGE: AccountUsagePort = {
   snapshot: async () => ({ refreshedAt: AT, entries: [] }),
   subscribe: () => () => undefined,
 };

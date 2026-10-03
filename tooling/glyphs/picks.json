@@ -1,0 +1,29 @@
+{
+  "chosen": "2026-09-24",
+  "source": "Field Glyphs — https://claude.ai/artifact/2RaqJxZvmALN9paNTGZgJH (pass 2)",
+  "hardware": [
+    "close",
+    "check",
+    "search",
+    "pencil",
+    "return",
+    "backspace",
+    "ellipsis",
+    "arrow",
+    "sliders",
+    "keyboard"
+  ],
+  "ios": [
+    "keyboard",
+    "mic",
+    "prompt",
+    "plus",
+    "return",
+    "arrow",
+    "ellipsis",
+    "backspace",
+    "scantext",
+    "snippets",
+    "clipboard"
+  ]
+}

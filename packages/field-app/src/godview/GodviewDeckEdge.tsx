@@ -10,6 +10,7 @@ import {
 } from "react";
 import {
   clampDeckShift,
+  DECK_MIN_HEIGHT,
   DECK_SHIFT_PROPERTY,
   type DeckEdgeBounds,
   deckEdgeBounds,
@@ -78,9 +79,16 @@ export function GodviewDeckEdge({ persist, monitorPresent }: GodviewDeckEdgeProp
 
   const measure = useCallback((): DeckEdgeBounds | null => {
     const found = stage();
-    return found
-      ? deckEdgeBounds(measureDeckEdge(found.root, found.monitor, applied.current))
-      : null;
+    if (!found) return null;
+    // Inside the frame's cover the deck's body keeps the window's reserve
+    // clear (One Frame FC-D15, godview.css), so its minimum stands ABOVE that
+    // reserve: the lip and a few rows, never a sliver of one under the line.
+    const body = found.root.querySelector(".vf-godview-terminal-deck-body");
+    const reserve = body === null ? 0 : Number.parseFloat(getComputedStyle(body).marginBottom) || 0;
+    return deckEdgeBounds(
+      measureDeckEdge(found.root, found.monitor, applied.current),
+      DECK_MIN_HEIGHT + reserve,
+    );
   }, [stage]);
 
   const commit = useCallback(

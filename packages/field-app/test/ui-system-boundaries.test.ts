@@ -55,7 +55,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|settings-dialog\b|loading-veil\b|zoom-pill\b|navigation-breadcrumbs|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history-room|line\b|line-|at-|head\b|head-|menu\b|menu-)/m,
     );
   });
 
@@ -113,6 +113,72 @@ describe("UI system ownership boundaries", () => {
     // And it must not reach the pool: the picker's whole seam is its props.
     expect(fixture).not.toContain("refreshTerminalRoster");
     expect(fixture).not.toContain("useTerminalPool");
+  });
+
+  it("keeps the view frame's fixture an ADAPTER — the owner's value, never the frame's markup (FR-1)", () => {
+    // The catalog stands in for the one thing a host supplies — the window's
+    // view, which main owns in the product — and for the keys' timing, which the
+    // controller owns. The track, the cover and History's room are the shipping
+    // views, and their selectors are the product's alone.
+    const fixture = source("design-system/ViewFramePreview.tsx");
+    expect(fixture).toContain("ViewsTrackView");
+    expect(fixture).toContain("ViewCoverView");
+    expect(fixture).toContain("HistoryPlaceholderView");
+    // the cover's motion is the product's own rule, not a fixture's copy of it
+    expect(fixture).toContain("coverAfter");
+    expect(fixture).not.toMatch(/className="vf-(?:views|cover|history-room)/);
+    expect(fixture).not.toContain("<style");
+    // and the fixture never reaches the owner a host would hold
+    expect(fixture).not.toContain("requestView");
+    expect(fixture).not.toContain("getHost");
+  });
+
+  it("keeps the head's fixture an ADAPTER — the doors' facts, never the head's markup (FR-3)", () => {
+    // The catalog stands in for what a host supplies — the document manager,
+    // the head's canvas door (the path, the zoom) and the frame's one owner of
+    // the open surface — and mounts the shipping head over them: the view on
+    // fixture props for the plates, the real controller for the playground.
+    const fixture = source("design-system/HeadPreview.tsx");
+    expect(fixture).toContain("HeadView");
+    expect(fixture).toMatch(/<Head\s/u);
+    expect(fixture).not.toMatch(/className="vf-(?:head|menu)/);
+    expect(fixture).not.toContain("<style");
+    // …and never the engine a host would hold, or the host itself.
+    expect(fixture).not.toContain("canvasHead");
+    expect(fixture).not.toContain("createCanvasEngine");
+    expect(fixture).not.toContain("getHost");
+    // The palette's fixture draws the product's own table of the frame's acts.
+    const palette = source("design-system/CommandPalettePreview.tsx");
+    expect(palette).toContain("CommandPaletteView");
+    expect(palette).toContain("frameActGroups");
+    expect(palette).not.toMatch(/className="vf-(?:palette|menu|command-palette)/);
+  });
+
+  it("keeps the corner's fixture an ADAPTER — the account's and the theme's facts, never the menu's markup (FR-4)", () => {
+    // The catalog stands in for what a host supplies — the account and the
+    // theme's owner (main's) — and mounts the shipping Me menu and Settings →
+    // Appearance over them. Never the menu's own classes, never the owner.
+    const fixture = source("design-system/CornerPreview.tsx");
+    expect(fixture).toContain("MeMenuView");
+    expect(fixture).toContain("AppearanceSectionView");
+    expect(fixture).not.toMatch(/className="vf-(?:me|ui-segmented)/);
+    expect(fixture).not.toContain("<style");
+    expect(fixture).not.toContain("getHost");
+    expect(fixture).not.toContain("useAppTheme");
+    expect(fixture).not.toContain("setAppTheme");
+  });
+
+  it("keeps the edges' fixture an ADAPTER — tiles and an open drawer, never the trays' markup (FR-4)", () => {
+    // The catalog stands in for what a host supplies — the stills, which drawer
+    // the owner holds, the view — and mounts the shipping tray view on both
+    // sides, with the Hub through its plugin's own fixture door.
+    const fixture = source("design-system/EdgesPreview.tsx");
+    expect(fixture).toContain("EdgeTrayView");
+    expect(fixture).toContain("ArtifactPanelPreview");
+    expect(fixture).not.toMatch(/className="vf-(?:edge-tray|artifact|side-panel)/);
+    expect(fixture).not.toContain("<style");
+    expect(fixture).not.toContain("getHost");
+    expect(fixture).not.toContain("useVisiblePluginSurfaces");
   });
 
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
@@ -185,22 +251,27 @@ describe("UI system ownership boundaries", () => {
     const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
     const deviceFilter = source("design-system/DeviceFilterPreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}`;
+    const viewFrame = source("design-system/ViewFramePreview.tsx");
+    const line = source("design-system/ComposerLinePreview.tsx");
+    const head = source("design-system/HeadPreview.tsx");
+    const palette = source("design-system/CommandPalettePreview.tsx");
+    const corner = source("design-system/CornerPreview.tsx");
+    const edges = source("design-system/EdgesPreview.tsx");
+    const catalog = `${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
+      "CommandPaletteView",
       "GodviewPreview",
-      "FilePillPreview",
       "LoadingVeilView",
-      "NavigationBreadcrumbsView",
       "SettingsDialog",
       "MeMenuView",
       "SwitchSceneView",
       "FacePicker",
       "UserFaceView",
+      // One Frame FR-2 — the tray keeps its sheet only (its island, tool
+      // switcher and ⊕ retired into the line)
       "WidgetTrayFrame",
-      "WidgetTrayToolSwitcherView",
-      "ZoomPillView",
       "EdgeTrayView",
       "OnboardingConnectPaneView",
       "OnboardingDerivingPaneView",
@@ -230,10 +301,50 @@ describe("UI system ownership boundaries", () => {
       // DS-3 — the device filter's shipping chip, on fixtures, never a copy
       "DeviceFilterPreview",
       "DeviceFilterChip",
+      // One Frame FR-1 — the view frame: the track, the cover, History's room
+      "ViewFramePreview",
+      "ViewsTrackView",
+      "ViewCoverView",
+      "HistoryPlaceholderView",
+      // One Frame FR-2 — the line: its view, @'s list, the plates, and the
+      // live line on its real controller with fixture doors
+      "ComposerLinePlate",
+      "ComposerLineView",
+      "AtMenuView",
+      // One Frame FR-3 — the head: its view, a plate per state, and the live
+      // head on its real controller over fixture doors (the file pill, the
+      // breadcrumbs and the − % + pill retired into it)
+      "HeadPlate",
+      "HeadView",
+      "HeadLive",
+      // One Frame FR-4 — the corner: the Me menu above the line with Theme, a
+      // plate per Theme it holds, and Settings → Appearance, the same setting
+      "CornerPlate",
+      "AppearancePlate",
+      "AppearanceSectionView",
+      // One Frame FR-4 — the edges: both notches in every view, the slivers,
+      // and Artifacts' drawer holding the Hub (the side panel retired into it)
+      "EdgesPlate",
+      "ArtifactsDrawer",
     ]) {
       expect(catalog).toContain(productionView);
     }
+    // …and the line's and the head's own controllers, live on fixture doors —
+    // the elements, not the views' names they prefix.
+    expect(catalog).toMatch(/<Composer\s/u);
+    expect(catalog).toMatch(/<Head\s/u);
+    // …and the corner's and the edges' plates MOUNTED on the page, not merely
+    // defined (FR-4).
+    expect(page).toMatch(/<CornerPlate\s/u);
+    expect(page).toMatch(/<AppearancePlate\s/u);
+    expect(page).toMatch(/<EdgesPlate\s/u);
+    expect(page).toMatch(/<ArtifactsDrawer\s/u);
 
+    // The Settings specimen's Appearance page was a replica the product never
+    // had (a system-appearance switch, an interface scale); it is the shipping
+    // view now (FR-4).
+    expect(page).not.toContain("Use system appearance");
+    expect(page).not.toContain("Interface scale");
     for (const retiredReplica of [
       "vf-ds-artifact-panel",
       "vf-ds-file-island",
@@ -269,12 +380,20 @@ describe("UI system ownership boundaries", () => {
       "hud/CommandPalette.tsx",
       "hud/edge-tray/EdgeTray.tsx",
       "hud/edge-tray/EdgeTrayView.tsx",
-      "hud/FilePill.tsx",
       "hud/LoadingVeil.tsx",
       "hud/WidgetTray.tsx",
       "boot/onboarding/wizard-ui.tsx",
       "godview/GodviewMonitor.tsx",
       "plugin-host/faces.tsx",
+      "frame/ViewFrame.tsx",
+      "frame/ViewsTrack.tsx",
+      "frame/ViewCover.tsx",
+      "frame/Composer.tsx",
+      "frame/ComposerLine.tsx",
+      "frame/Head.tsx",
+      "frame/HeadView.tsx",
+      "account/MeMenu.tsx",
+      "panels/AppearanceSection.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -289,15 +408,16 @@ describe("UI system ownership boundaries", () => {
       "cursor/overlay.css",
       "hud/CommandPalette.css",
       "hud/edge-tray/edge-tray.css",
-      "hud/FilePill.css",
       "hud/LoadingVeil.css",
-      "hud/NavigationBreadcrumbs.css",
       "hud/PluginSurfaceSlot.css",
       "hud/WidgetTray.css",
-      "hud/ZoomPill.css",
       "panels/settings.css",
       "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",
+      "frame/view-frame.css",
+      "frame/composer.css",
+      "frame/head.css",
+      "frame/menu.css",
       "terminal/mirror/mirror.css",
       "terminal/widget/mirror-widget.css",
     ]) {

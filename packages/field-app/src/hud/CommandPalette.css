@@ -1,14 +1,104 @@
-.vf-command-palette {
-  border: 1px solid var(--vf-hairline);
-  border-radius: var(--vf-radius-card);
-  background: var(--vf-chrome-surface);
-  box-shadow: var(--vf-shadow-island);
-  backdrop-filter: blur(24px);
-  transition: transform 280ms var(--vf-ease-pop);
+/* The palette (⌘K; One Frame §7, FR-3 — DESIGN.md §8 "The head", §5): a solid
+   menu (menu.css's anatomy) under the head, over the stage, in every view —
+   560 wide, centred, at 64 (16 under the head) and never over the line, which
+   it ends 8 above (20 + 52 + 8). Above the frame: 70, under the veil (80).
+   Tokens only. */
+.vf-palette-layer {
+  position: absolute;
+  z-index: 70;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 200ms ease;
 }
 
+.vf-palette-layer[data-visible] {
+  opacity: 1;
+}
+
+/* The backdrop dim (§5) — a click on it closes the palette. No recede. */
+.vf-palette-dim {
+  position: absolute;
+  inset: 0;
+  background: var(--vf-backdrop-dim);
+}
+
+/* It grows from the head on the island curve. */
+.vf-command-palette {
+  position: absolute;
+  top: 64px;
+  right: 0;
+  left: 0;
+  width: min(560px, calc(100% - 32px));
+  max-height: calc(100% - 64px - 80px);
+  margin-inline: auto;
+  padding: 6px 6px 8px;
+  border-radius: 22px;
+  transform: translateY(-6px) scale(0.98);
+  transform-origin: 50% 0;
+  transition: transform 240ms var(--vf-ease-island);
+}
+
+.vf-palette-layer[data-visible] .vf-command-palette {
+  transform: none;
+}
+
+/* The field heads it: 46 tall, the search mark in secondary ink, the words at
+   14 (§3's body; the page drew 15, off the ramp — F15). */
+.vf-palette-field {
+  display: flex;
+  height: 46px;
+  flex: none;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 4px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--vf-hairline-strong);
+  color: var(--vf-text-secondary);
+}
+
+.vf-palette-field input {
+  min-width: 0;
+  flex: 1;
+  padding: 0;
+  border: 0;
+  color: var(--vf-text-primary);
+  background: none;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 400;
+  caret-color: var(--vf-select);
+  outline: none;
+}
+
+.vf-palette-field input::placeholder {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-palette-list {
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 1px;
+  overflow-y: auto;
+}
+
+.vf-palette-empty {
+  padding: 24px 10px;
+  color: var(--vf-text-tertiary);
+  font-size: 13px;
+  font-weight: 400;
+  text-align: center;
+}
+
+/* M6: a fade at full size. */
 @media (prefers-reduced-motion: reduce) {
+  .vf-palette-layer {
+    transition-duration: 120ms;
+  }
+
   .vf-command-palette {
+    transform: none;
     transition: none;
   }
 }

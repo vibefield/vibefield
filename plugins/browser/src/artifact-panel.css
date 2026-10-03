@@ -67,10 +67,6 @@
 }
 .vf-artifact-add svg {
   width: 18px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
 }
 
 .vf-artifact-list {
@@ -391,20 +387,10 @@
   width: 22px;
   height: 22px;
   justify-self: center;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 .vf-artifact-chevron {
   width: 15px;
   height: 15px;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
 }
 .vf-artifact-chevron.is-back {
   transform: rotate(180deg);
@@ -531,6 +517,118 @@
 }
 .vf-artifact-close:hover {
   color: inherit;
+}
+
+/* One Frame FR-4 — THE NARROW FORM. The Hub's door is the right edge's notch,
+   and its drawer is a 152 column (VibeField DESIGN.md §8, edge trays): the
+   drawer's column is a container, and under 200 wide the panel reads as that
+   column — each row a 128-wide card, the preview full width on top, the title,
+   the fact line and the status under it, the overflow on a chip over the
+   preview; the Add step's choices and fields stacked. The wide form above stays
+   for any host that is wider. */
+@container (max-width: 200px) {
+  .vf-artifact-panel {
+    min-height: 0;
+    padding: 0;
+  }
+
+  .vf-artifact-header {
+    min-height: 32px;
+    margin: 0 0 12px;
+    padding: 0 0 0 2px;
+  }
+
+  .vf-artifact-header h2 {
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0;
+  }
+
+  .vf-artifact-add {
+    width: 28px;
+    height: 28px;
+  }
+
+  .vf-artifact-add svg {
+    width: 14px;
+  }
+
+  .vf-artifact-list {
+    gap: 10px;
+  }
+
+  .vf-artifact-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    overflow: hidden;
+    padding: 0;
+    border-radius: 14px;
+  }
+
+  .vf-artifact-row__open {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .vf-artifact-preview {
+    width: 100%;
+    border-radius: 0;
+  }
+
+  .vf-artifact-row__facts {
+    padding: 8px 10px 10px;
+  }
+
+  .vf-artifact-menu {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+  }
+
+  .vf-artifact-menu summary {
+    width: 26px;
+    height: 26px;
+    background: var(--vf-chrome-solid);
+    box-shadow: 0 0 0 1px var(--vf-hairline);
+  }
+
+  .vf-artifact-menu > div {
+    width: 120px;
+  }
+
+  .vf-artifact-rename {
+    flex-wrap: wrap;
+    padding: 6px 8px 8px;
+  }
+
+  .vf-artifact-quiet {
+    min-height: 0;
+    padding: 20px 0;
+  }
+
+  .vf-artifact-placeholder {
+    width: 100%;
+  }
+
+  .vf-artifact-flow {
+    padding: 0;
+  }
+
+  .vf-artifact-choice,
+  .vf-artifact-folder-picked {
+    grid-template-columns: 28px minmax(0, 1fr);
+    gap: 8px;
+    min-height: 0;
+    padding: 10px;
+  }
+
+  .vf-artifact-choice .vf-artifact-chevron {
+    display: none;
+  }
+
+  .vf-artifact-close {
+    margin-top: 12px;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

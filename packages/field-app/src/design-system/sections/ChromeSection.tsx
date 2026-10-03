@@ -1,13 +1,14 @@
+import { resolveTheme, type ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useMemo, useState } from "react";
 import { MeMenuView } from "../../account/MeMenu";
 import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../../field/canvas-appearance";
 import { roundButtonCls } from "../../field/theme-constants";
-import { type EdgeTrayTile, EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
-import { NavigationBreadcrumbsView } from "../../hud/NavigationBreadcrumbs";
-import { WidgetTrayFrame, WidgetTrayToolSwitcherView } from "../../hud/WidgetTray";
-import { ZoomPillView } from "../../hud/ZoomPill";
-import { ThemeToggleButton } from "../../ThemeToggleButton";
+import { ComposerLineView } from "../../frame/ComposerLine";
+import type { FrameSurface } from "../../frame/frame-surface";
+import { ViewsTrackView } from "../../frame/ViewsTrack";
+import { EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
+import { WidgetTrayFrame } from "../../hud/WidgetTray";
 import {
   FIXTURE_ME,
   FIXTURE_ME_OFFLINE,
@@ -22,61 +23,13 @@ type MeState = (typeof ME_STATES)[number];
 const TRAY_STATES = ["At rest", "Open", "Pinned", "Empty", "No shell"] as const;
 type TrayState = (typeof TRAY_STATES)[number];
 
-/** A fixture still: an SVG the catalog draws itself, so the tile shows a real
- * image without a screenshot on disk (the product's stills come through the
- * shell's `vibefield-still://` scheme, which the catalog does not have). */
-function fixtureStill(label: string, hue: number): string {
-  const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='256' height='256'>` +
-    `<defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='hsl(${hue} 70% 62%)'/><stop offset='1' stop-color='hsl(${hue + 30} 70% 40%)'/></linearGradient></defs>` +
-    `<rect width='256' height='256' fill='url(#g)'/>` +
-    `<rect x='28' y='40' width='200' height='120' rx='14' fill='rgba(255,255,255,0.22)'/>` +
-    `<text x='40' y='190' font-family='ui-sans-serif' font-size='18' fill='rgba(255,255,255,0.9)'>${label}</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-}
-
-const TRAY_TILES: readonly EdgeTrayTile[] = [
-  {
-    id: "t1",
-    kind: "capture",
-    label: "Screenshot · 1440 × 900",
-    imageUrl: fixtureStill("Godview · swarm", 214),
-    time: "15:04",
-    day: "today",
-    meta: "Screen · on the clipboard",
-  },
-  {
-    id: "t2",
-    kind: "capture",
-    label: "Screenshot · 820 × 512",
-    imageUrl: fixtureStill("Terminal", 28),
-    time: "14:38",
-    day: "today",
-    meta: "Screen · on the clipboard",
-  },
-  {
-    id: "t3",
-    kind: "capture",
-    label: "Screenshot · 1200 × 750",
-    imageUrl: null,
-    time: "22:12",
-    day: "yesterday",
-    meta: "the still is gone from disk",
-  },
-  {
-    id: "t4",
-    kind: "capture",
-    label: "Screenshot · 640 × 400",
-    imageUrl: fixtureStill("Settings", 150),
-    time: "Tue",
-    day: "earlier",
-    meta: "Screen · on the clipboard",
-  },
-];
-
-import { FilePillPreview } from "../FilePillPreview";
+import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
+import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
+import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
+import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
 import { SwitchPreview } from "../SwitchPreview";
+import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
 
 export function ChromeSection({
   dark,
@@ -87,11 +40,11 @@ export function ChromeSection({
   magnetGridGlyph: MagnetGridGlyph;
   onToggleTheme: () => void;
 }): ReactElement {
-  const [docsOpen, setDocsOpen] = useState(false);
-  const [trayOpen, setTrayOpen] = useState(false);
-  const [trayTool, setTrayTool] = useState<"select" | "pan" | "connect">("select");
+  // The frame's one owner of the open surface, in fixture: the head's
+  // explorer and zoom menu and the line's Objects are one value here too.
+  const [surface, setSurface] = useState<FrameSurface | null>(null);
+  const trayOpen = surface === "objects";
   const [trayCategory, setTrayCategory] = useState("All");
-  const [zoom, setZoom] = useState(100);
   const [meOpen, setMeOpen] = useState(false);
   const [meSpecimenOpen, setMeSpecimenOpen] = useState(true);
   const [trayState, setTrayState] = useState<TrayState>("Pinned");
@@ -104,15 +57,25 @@ export function ChromeSection({
         ? TRAY_TILES.map((tile) => ({ ...tile, imageUrl: null }))
         : TRAY_TILES;
   const [meState, setMeState] = useState<MeState>("Three users");
+  // The playground's Theme drives this page's own theme (the app's stand-in):
+  // Auto reads the OS's query, as main's owner reads nativeTheme.
+  const [themePick, setThemePick] = useState<ThemePreference>(dark ? "dark" : "light");
+  const chooseTheme = (pick: ThemePreference): void => {
+    setThemePick(pick);
+    const osDark =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if ((resolveTheme(pick, osDark) === "dark") !== dark) onToggleTheme();
+  };
+  const playgroundTheme = { preference: themePick, resolved: dark ? "dark" : "light" } as const;
   const groundGrid = useMemo(
     () => defaultCanvasGridConfig(dark, magnetGridGlyph),
     [dark, magnetGridGlyph],
   );
 
-  const openDocs = (): void => {
-    setDocsOpen((open) => !open);
-    setTrayOpen(false);
-    setMeOpen(false);
+  const changeSurface = (next: FrameSurface | null): void => {
+    setSurface(next);
+    if (next !== null) setMeOpen(false);
   };
 
   return (
@@ -123,8 +86,12 @@ export function ChromeSection({
       title="Islands over the canvas"
       description="The window stays a field. Controls float at the edges, while one physical object morphs between a compact island and its expanded role."
     >
-      <Specimen title="Field chrome playground" source="hud/*" bleed>
-        <div className="vf-ds-field-stage" data-docs-open={docsOpen} data-tray-open={trayOpen}>
+      <Specimen title="Field chrome playground" source="frame/* · hud/*" bleed>
+        <div
+          className="vf-ds-field-stage"
+          data-docs-open={surface === "fields"}
+          data-tray-open={trayOpen}
+        >
           <InfiniteCanvasGroundPreview
             grid={groundGrid}
             background="var(--vf-canvas-bg)"
@@ -134,52 +101,15 @@ export function ChromeSection({
           />
           <div className="vf-ds-stage-card card-a" />
           <div className="vf-ds-stage-card card-b" />
-          <NavigationBreadcrumbsView
-            crumbs={[
-              { depth: 0, containerId: null, label: "Root" },
-              { depth: 1, containerId: null, label: "Launch notes" },
-            ]}
-            onBack={() => {}}
-            onJump={() => {}}
-          />
-
-          <div className="vf-ds-demo-right-chrome">
-            <ZoomPillView
-              percent={zoom}
-              onZoomOut={() => setZoom((value) => Math.max(25, value - 10))}
-              onReset={() => setZoom(100)}
-              onZoomToFit={() => setZoom(86)}
-              onZoomIn={() => setZoom((value) => Math.min(400, value + 10))}
-            />
-            <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
-            <button type="button" className={roundButtonCls(false)} aria-label="Open artifacts">
-              <Icon name="layers" />
-            </button>
-          </div>
-
-          <FilePillPreview open={docsOpen} onOpenChange={openDocs} />
+          {/* The head on its real controller (One Frame FR-3), in a folder —
+              the readout alone at its right since FR-4 (the theme went into
+              the Me menu, Artifacts behind the right notch). */}
+          <HeadLive surface={surface} onSurfaceChange={changeSurface} />
 
           <WidgetTrayFrame
             open={trayOpen}
-            onOpenChange={(nextOpen) => {
-              setTrayOpen(nextOpen);
-              if (nextOpen) {
-                setDocsOpen(false);
-                setMeOpen(false);
-              }
-            }}
-            toolbar={
-              <>
-                <WidgetTrayToolSwitcherView active={trayTool} onChange={setTrayTool} />
-                <div className="flex-1" />
-                <button
-                  type="button"
-                  className="flex h-11 w-11 items-center justify-center rounded-full text-[17px] transition-all hover:bg-black/5 active:scale-95 dark:hover:bg-white/10"
-                  title="Clean up"
-                >
-                  ✨
-                </button>
-              </>
+            onOpenChange={(nextOpen) =>
+              changeSurface(nextOpen ? "objects" : surface === "objects" ? null : surface)
             }
           >
             <div className="vf-no-scrollbar vf-mask-fade-right mb-3 flex w-full items-center gap-2 overflow-x-auto px-8">
@@ -204,6 +134,16 @@ export function ChromeSection({
             </div>
           </WidgetTrayFrame>
 
+          {/* The line is the tray's door (One Frame FR-2): its create raises
+              the sheet behind it, and its ⊕ is what turns to ✕. */}
+          <ComposerLineView
+            view="canvas"
+            keys="mac"
+            track={<ViewsTrackView view="canvas" keys="mac" />}
+            objectsOpen={trayOpen}
+            onCreate={() => changeSurface(trayOpen ? null : "objects")}
+          />
+
           <div className="vf-ds-demo-me">
             <MeMenuView
               me={FIXTURE_ME}
@@ -211,22 +151,105 @@ export function ChromeSection({
               open={meOpen}
               onOpenChange={(nextOpen) => {
                 setMeOpen(nextOpen);
-                if (nextOpen) {
-                  setDocsOpen(false);
-                  setTrayOpen(false);
-                }
+                if (nextOpen) setSurface(null);
               }}
               onOpenSettings={() => undefined}
               onOpenAccount={() => undefined}
               onLink={() => undefined}
               onSwitch={() => undefined}
               onNewUser={() => undefined}
+              theme={playgroundTheme}
+              onThemeChange={chooseTheme}
             />
           </div>
         </div>
         <p className="vf-ds-stage-caption">
-          The document pill, the tray and your face are interactive. Open one to inspect its morph
-          and the rule that only one of them is open at a time.
+          The head — the field's name pill with its crumbs, which grows the fields explorer, and the
+          zoom readout, which grows its menu — the line's Objects and your face are interactive.
+          Open one to inspect its motion and the rule that only one of them is open at a time. Your
+          menu's Theme sets this page's theme, as it sets the app's.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The head — the name pill, the zoom readout, the palette"
+        source="frame/HeadView.tsx · hud/CommandPalette.tsx · DESIGN.md §8, §5, §10"
+        bleed
+      >
+        <div className="vf-ds-head-plates">
+          {HEAD_STATES.map((state) => (
+            <HeadPlate key={state} state={state} />
+          ))}
+          <HeadPlate state="zoom" keys="other" />
+        </div>
+        <p className="vf-ds-stage-caption">
+          Every state the page's head plates draw — the field's top as one name, the crumbs folded
+          into the pill inside a folder, a long path in a narrow window dropping whole leading
+          names, renaming in place, the fields explorer grown from the pill, the zoom's solid menu
+          with its keys, and the palette under the head — then the zoom's keys as Windows says them,
+          in this page's theme. No keycaps and no plus in the head.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The view frame — the views track and the cover"
+        source="frame/* · DESIGN.md §10, §8, §6"
+        bleed
+      >
+        <ViewFramePreview magnetGridGlyph={magnetGridGlyph} dark={dark} />
+        <p className="vf-ds-stage-caption">
+          The canvas is the ground floor; Godview and History are one cover over it, each on its own
+          ground at the covers' 72% glass, their content ending 88 above the foot. The track stands
+          above every view at the line's left end, each key printed under its glyph. Pick a state,
+          or click a cell: the cover rises, swaps in place and lowers, and only the thumb travels.
+        </p>
+        <div className="vf-ds-views-plates">
+          {FRAME_STATES.map((state) => (
+            <ViewsTrackSpecimen key={state} state={state} />
+          ))}
+          <ViewsTrackSpecimen state="rest" keys="other" />
+        </div>
+        <p className="vf-ds-stage-caption">
+          Every state the page's plates show for the track — at rest, ⌘ held, Godview, History, ⌘4's
+          note, and the keys as Windows prints them — in this page's theme.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The line — [views] create │ draft mic send"
+        source="frame/ComposerLine.tsx · DESIGN.md §8, §5, §10"
+        bleed
+      >
+        <div className="vf-ds-line-plates">
+          {LINE_STATES.map((state) => (
+            <ComposerLinePlate key={state} state={state} />
+          ))}
+          <ComposerLinePlate state="gv" keys="other" />
+        </div>
+        <p className="vf-ds-stage-caption">
+          Every state the page's §03 plates draw for the line — at rest, typing with a chip in the
+          sentence, @ open, aimed, Objects out, Godview's New terminal, History's Resume waiting —
+          and Godview's keys as Windows prints them, in this page's theme. One plus: Canvas's
+          create.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The edges — both notches in every view, slivers over a covered view"
+        source="hud/edge-tray/* · DESIGN.md §8, §10, §6"
+        bleed
+      >
+        <div className="vf-ds-edges-plates">
+          {EDGE_STATES.map((state) => (
+            <EdgesPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} dark={dark} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          The page's edges plates: the clipboard's notch on the left and Artifacts' on the right,
+          whole on Canvas; over a covered view each rests as its 7 × 96 sliver in the 8 px the view
+          keeps clear — point at one and it grows into the notch (240 ms) — the notch it grows into
+          over History; the clipboard's drawer open over Godview; and Artifacts' drawer open with
+          the Artifact Hub in its 152 column.
         </p>
       </Specimen>
 
@@ -271,34 +294,41 @@ export function ChromeSection({
                 : { state: "ready", word: "snap" }
             }
             bumped={trayBumped}
-            hint="Clipboard — hover to open, click to keep open (⌘⇧V)"
+            hint="Clipboard  ⇧⌘V"
             emptyWord="nothing here yet — take a screenshot and it lands here"
             onNubClick={() => setTrayState((s) => (s === "Pinned" ? "At rest" : "Pinned"))}
             onPointerEnter={() => undefined}
             onPointerLeave={() => undefined}
             onSnap={() => undefined}
           />
-          <EdgeTrayView
-            side="right"
-            label="Artifacts"
-            open={false}
-            pinned={false}
-            count={3}
-            items={[]}
-            filter=""
-            snap={null}
-            bumped={false}
-            hint="Artifacts — reserved for the right edge's twin (D-7)"
-            emptyWord="no artifacts yet"
-            onNubClick={() => undefined}
-            onPointerEnter={() => undefined}
-            onPointerLeave={() => undefined}
-          />
+          <ArtifactsDrawer open={false} />
         </div>
         <p className="vf-ds-stage-caption">
           The shipping tray view with fixture stills: the notch (N1, 26 × 116) and the drawer (P4,
           152 wide) are one path in the theme's solid chrome, the drawer's hairline gapped under the
-          notch. The right edge shows the twin at rest, reserved for Artifacts.
+          notch. The right edge is Artifacts' twin at rest — the `package` notch, no count.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The corner — your face, and the Me menu above the line with Theme"
+        source="account/MeMenu.tsx · panels/AppearanceSection.tsx · DESIGN.md §8, §10"
+        bleed
+      >
+        <div className="vf-ds-corner-plates">
+          {CORNER_PICKS.map((pick) => (
+            <CornerPlate key={`${pick}-${dark ? "dark" : "light"}`} pick={pick} dark={dark} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          The page's "Your face" plates: the face on the foot axis at the corner, its menu opening
+          above the line — never around the face — nearest first: you, Settings… ⌘,, Theme, New
+          user…, the switch list. Theme is the app's one theme control, held at Light, Dark and
+          Auto; Auto follows this page's theme, as it follows the OS in the app.
+        </p>
+        <AppearancePlate pick="auto" />
+        <p className="vf-ds-stage-caption">
+          Settings → Appearance — the same setting, the same three (FC-D5).
         </p>
       </Specimen>
 
@@ -329,12 +359,14 @@ export function ChromeSection({
               onLink={() => undefined}
               onSwitch={() => undefined}
               onNewUser={() => undefined}
+              theme={playgroundTheme}
+              onThemeChange={chooseTheme}
             />
           </div>
         </div>
         <p className="vf-ds-stage-caption">
-          Your face, where the Settings gear was. The circle around it grows into the menu on the
-          island curve, and your face never moves — click it again to fold the menu back.
+          Your face, where the Settings gear was. The menu grows above it on the island curve, and
+          your face never moves — click it again to fold the menu back.
         </p>
       </Specimen>
 

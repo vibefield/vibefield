@@ -75,6 +75,16 @@ export function serviceExample(): ExampleManifest {
   };
 }
 
+/** The object door (DK-0f): one kind on the desk — its durable half, its tray
+ * entry, the export that draws it. The §24.1 golden fixture for
+ * `contributes.objects`, verbatim. */
+export function objectsExample(): ExampleManifest {
+  return {
+    source: "@vibefield/contracts fixtures/plugin-manifest.objects.json",
+    manifest: readFixture("plugin-manifest.objects.json"),
+  };
+}
+
 /** Commands and surfaces have no golden fixture, so this one is authored here
  * and validated at generation time. Kept deliberately small: it exists to show
  * the two declaration shapes and their owned-id rule, not to be a tour. */
@@ -121,6 +131,7 @@ export interface ValidatedExamples {
   readonly minimal: ExampleManifest;
   readonly service: ExampleManifest;
   readonly commandsAndSurfaces: ExampleManifest;
+  readonly objects: ExampleManifest;
 }
 
 /** Load every example and PROVE it — generation fails loudly if a doc example
@@ -130,6 +141,7 @@ export function loadExamples(): ValidatedExamples {
     minimal: minimalExample(),
     service: serviceExample(),
     commandsAndSurfaces: commandsAndSurfacesExample(),
+    objects: objectsExample(),
   };
   for (const [name, example] of Object.entries(examples)) {
     const result = validatePluginManifest(example.manifest);

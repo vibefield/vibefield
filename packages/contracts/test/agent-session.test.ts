@@ -93,6 +93,15 @@ describe("agent.* registry rows (AR-3)", () => {
         locality: "stream",
         subscription: false,
       },
+      // TL (TL-D8) — the status ledger: a read on `agent.observe`, `local`
+      // because the record is this device's fold's own.
+      {
+        method: "agent.history",
+        scope: "agent.observe",
+        idempotent: true,
+        locality: "local",
+        subscription: false,
+      },
       {
         method: "agent.subscribe",
         scope: "agent.observe",

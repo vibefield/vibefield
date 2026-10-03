@@ -54,8 +54,17 @@ body {
     opacity 420ms var(--vf-ease-island);
 }
 
-.field-scene[data-sheet-open="true"] {
+.field-scene[data-sheet-open="true"],
+.field-scene[data-covered="true"] {
   transform: scale(0.98);
+}
+
+/* The view switch's recede (DESIGN.md §6): M6 keeps the cover's fade and drops
+   the travel under it. */
+@media (prefers-reduced-motion: reduce) {
+  .field-scene[data-covered="true"] {
+    transform: scale(1);
+  }
 }
 
 .field-scene[data-doc-loading="true"] {

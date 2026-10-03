@@ -79,9 +79,18 @@ export interface DeckAppearance {
    * backdrop filter on the overlay, over a field Godview holds still (DESIGN.md
    * §6 M5), never one per pane. Until GT-7 these were the system panel's
    * memory-only STAGE knobs; they are the viewer's now, saved with the rest of
-   * its glass. The defaults are the reference's flat, opaque stage. */
+   * its glass. The default opacity is the covers' glass, 72% (One Frame
+   * FC-D16, 2026-10-03 — it was the reference's flat, opaque stage); the blur
+   * stays 0 until the field under a cover is a still worth blurring. */
   backdropOpacity: number;
   backdropBlur: number;
+  /** Godview's mode, OVERRIDDEN (One Frame FC-D7, FR-4): null — the default,
+   * and what every record from before FR-4 reads as — follows the app's one
+   * theme; "light" or "dark" keeps Godview there whatever the app is. The one
+   * override the ruling left, set in Settings → Terminal → Look; Godview's own
+   * ☼◐ switch and the mode it remembered (`vf-godview-color-theme-v1`) are
+   * gone, so nothing else writes it. */
+  modeOverride: DeckAppearanceMode | null;
 }
 
 /** The backdrop blur's ceiling — the system panel's own range since GT-3v. */
@@ -100,10 +109,15 @@ export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
   // viewer's panes on its way in.
   shaderEffects: [],
   shaderAnimate: false,
-  // The reference's stage: flat and opaque (GodviewTuningPanel's defaults since
-  // the Godview visual pass). Promoting the knobs must not restyle anyone.
-  backdropOpacity: 1,
+  // FC-D16 (ruled 2026-10-01): the covers' glass is 72%, the view's own ground
+  // over the frozen field (DESIGN.md §10). A viewer who saved a backdrop keeps
+  // it — the tolerant reader below only falls back to this for a record that
+  // never named one. No blur on this canvas: FC-D13's blur waits for the desk's
+  // still, which is a later slice on another branch.
+  backdropOpacity: 0.72,
   backdropBlur: 0,
+  // FC-D7: Godview follows the app until the viewer says otherwise.
+  modeOverride: null,
 };
 
 export type DeckAppearanceMode = "light" | "dark";
@@ -183,6 +197,11 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
       DECK_BACKDROP_BLUR_MAX,
       DEFAULT_DECK_APPEARANCE.backdropBlur,
     ),
+    // Only the two modes override; anything else is no override at all.
+    modeOverride:
+      record.modeOverride === "light" || record.modeOverride === "dark"
+        ? record.modeOverride
+        : null,
   };
 }
 

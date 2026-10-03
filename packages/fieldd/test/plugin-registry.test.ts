@@ -11,7 +11,7 @@ import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { PLUGIN_LIMITS, PluginRegistrySnapshot } from "@vibefield/contracts";
+import { OBJECTS_NEED_DESK, PLUGIN_LIMITS, PluginRegistrySnapshot } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { RpcCallError } from "../src/native-link";
 import { type PluginRegistryConfig, PluginRegistryService } from "../src/plugin-registry";
@@ -251,6 +251,46 @@ describe("PluginRegistryService — invalid & incompatible roots", () => {
     expect(row?.contributions.widgets).toEqual([]); // invalid rows carry no contributions
     expect(row?.lastError?.kind).toBe("PLUGIN_INVALID");
     expect(row?.lastError?.message).toContain("entries.renderer");
+  });
+
+  it("DK-0f: marks a manifest that declares object kinds incompatible — the desk is not here — and still lists the kinds", async () => {
+    const root = mkdtempSync(join(tmpdir(), "plugreg-objects-"));
+    cleanup.push(() => rmSync(root, { recursive: true, force: true }));
+    const id = "vibefield.fixture.clock";
+    const type = `${id}.face`;
+    writePluginDir(root, "clock", {
+      ...validManifest(id),
+      activation: [`onWidget:${type}`],
+      contributes: {
+        objects: [
+          {
+            type,
+            title: "Clock",
+            schemaVersion: 1,
+            size: { w: 160, h: 160 },
+            provides: ["desk.object"],
+            tray: { category: "things", label: "Clock" },
+            binding: { kind: "clock" },
+          },
+        ],
+      },
+    });
+    const svc = newService({ bundled: [], devLinked: [root] });
+    await svc.refresh();
+
+    const snap = svc.snapshot();
+    expect(snap.problems).toEqual([]);
+    const row = snap.plugins.find((p) => p.id === id);
+    expect(row?.state).toBe("incompatible");
+    expect(row?.compatible).toBe(false);
+    expect(row?.enabled).toBe(false);
+    expect(row?.lastError?.kind).toBe("PLUGIN_INCOMPATIBLE");
+    expect(row?.lastError?.message).toBe(
+      `${OBJECTS_NEED_DESK.message} (${OBJECTS_NEED_DESK.code})`,
+    );
+    // the contract is recorded: the roster lists the kind it will not activate
+    expect(row?.contributions.objects.map((o) => o.type)).toEqual([type]);
+    expect(row?.contributions.widgets).toEqual([]);
   });
 
   it("marks a manifest with an unsatisfiable contracts range incompatible (a row, not a problem)", async () => {
