@@ -45,8 +45,11 @@ composites those status-body colors at 72% by default so they remain legible gla
 the temporary system-control panel exposes that alpha for live tuning.
 **Since One Frame (FR-1, 2026-10-03) Godview is a view, not an overlay:** it is drawn inside the
 cover BELOW the frame (§10), reached by ⌘2 or its cell in the views track (§8), and keeps this
-instrument bar as its head for now — without the blocked · working · idle counters (FC-D18) — and
-its own light switch until the app's one theme control lands (FC-D7).
+instrument bar as its head for now — without the blocked · working · idle counters (FC-D18).
+**Since FR-4 (2026-10-03) Godview follows the app's theme (FC-D7):** its ☼◐ switch and its own
+remembered light are gone, and the parchment or graphite deck is whichever the app's one theme
+control (§8, the Me menu) resolves to — unless Settings → Terminal → Look holds the one override,
+Godview's mode (As the app · Light · Dark), saved with the rest of this viewer's deck appearance.
 
 **The two signatures** (spend boldness here, keep everything else quiet):
 1. **The living card** — CardShell physics: lift-on-grab, hot-point glow and rim on overlap,
@@ -351,7 +354,9 @@ the island shadow and corners 18 (the Me menu keeps its 28, concentric with the 
 (2026-09-22) was the first; @'s list in the line (§8) is the second; the zoom's menu and the palette
 are the third and fourth (the head, §8; FR-3, 2026-10-03). A menu opens over the stage and never over
 the frame: the line's menus grow upward from the line, 8 above it; the head's grow downward from the
-head — the zoom's 4 under it, the palette 16 — and end 8 above the line.
+head — the zoom's 4 under it, the palette 16 — and end 8 above the line; the corner's, the Me menu,
+grows upward from your face's column and stands 8 above the line with the face beneath it (FR-4,
+2026-10-03 — it grew around the face until then, over the line's left end).
 
 **The composited profile draws the card's material on the ground (2026-09-07; ICE
 design-013 Q8, ratified 2026-09-06).** In ICE's composited profile the resting and lifted
@@ -428,6 +433,19 @@ head's menus grow from their control on the island curve in 240ms (the zoom's fr
 palette from the head); the zoom's folds at once, as @'s list does, and the palette fades out over
 200ms `ease`. Reduced motion fades them in over 120ms at full size.
 
+**The edges and the corner (One Frame §10, §12; FR-4, 2026-10-03).** Over a covered view a notch
+rests as its **sliver** (§8, edge trays) and on approach — the pointer reaching the 8px it rests in,
+or the keyboard's focus — becomes the notch in **240ms on the island curve**: ONE path morphing (M1),
+the sliver's 7 × 96 drawing into the notch's 26 × 116 (both drawn by the notch's builder, so every
+point has a partner), its hit box growing with it, and the glyph and the count fading in over 160ms
+plain `ease` behind it; leaving, it goes back the same way. A notch reached that way opens its drawer
+only once it IS the notch: its hover delay is the growth plus the notch's own (240 + 120ms). On
+Canvas the notch rests whole and nothing grows. **The Me menu** grows upward on the island curve
+(600ms) from a seed the size of the face's circle at its own foot, above the face, the surface
+fading in over 160ms and the rows rising nearest-first as before (§8); folding reverses it, and the
+face, which never moves, stays lifted while it is open. Reduced motion (M6): no growth anywhere —
+the sliver swaps for the notch in a 120ms fade, and the Me menu fades in whole over 120ms.
+
 ---
 
 ## 7. Interactive states (the living card)
@@ -482,6 +500,15 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   carries the matching tooltip/accessible name. *Since 2026-10-03 (One Frame FR-3) that cluster is
   the head's right slot — the zoom readout · theme · Artifacts, 8 apart, on the head's axis
   (`top-2 right-4`) — until FR-4 moves the toggle behind the right notch (FC-D10).*
+  *Retired into the right edge 2026-10-03 (One Frame FR-4, FC-D10 — closes D-7; F10):* the toggle
+  and the 26rem stage below are gone. The right notch (`package`) is Artifacts' only door and its
+  drawer holds the SAME contents — the `hud.side-panel` contribution, mounted in the drawer's
+  152-wide column (edge trays, below) — where the panel reads in its narrow form: the plugin's own
+  stylesheet answers a narrow container (under 200 wide) by stacking each row into a 128-wide card,
+  the preview on top (16:10, full width), the title, the fact line and the status below, the
+  overflow on a chip over the preview, the Add step's choices stacked; the wide form below stays
+  for any host that is wider. Escape, focus back to the notch, plugin disable or hot-reload folding
+  it, and M6 stand as written; the spine's arbitration is the frame's one owner now (§10).
   The panel is fixed `top-16 right-0 bottom-0 w-[min(92vw,26rem)]`, with
   `rounded-l-[2.5rem]`, sheet material, a left-cast side-panel shadow from §5, and internal
   edge-faded scrolling. The same physical panel translates from the right on the 600ms island
@@ -520,16 +547,34 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   between them, grouped by day under a 9px mono caption, dealt in 26ms apart on the island
   curve; no head, no find line, no pills — the notch carries the count and the pin; typing
   while pinned filters. Hover opens after 120ms and closes after a 320ms grace; click pins;
-  ⌘⇧V pins from the keyboard; Escape unpins. Non-modal like the Artifact panel: no backdrop,
+  ⇧⌘V pins from the keyboard; Escape unpins. Non-modal like the Artifact panel: no backdrop,
   recede, stage hold or focus trap. A capture (SNAP-3) **flies in**: a ghost of the still
   travels from where the capture was to the notch on the island curve (560ms), shrinking along
   its travel (M4), then the notch bumps on the pop and the count ticks; reduced motion fades it
   at the notch (M6). The column ends with the **Snap** tile, the product's door to the capture,
   disabled with the honest word when the door is absent or refused.
+  **Both edges, every view (One Frame §10, FR-1, FR-4; FC-D10; built 2026-10-03):** the clipboard
+  on the left as above, and **Artifacts on the right** — the twin, mirrored, its notch wearing
+  `package` and no count (the catalog's count is the plugin's to say, in its own header inside the
+  drawer), its drawer the Artifact Hub's column (above); the head's Artifacts button is gone. The
+  notches' tooltips say their keys (FR-5): "Clipboard  ⇧⌘V", "Artifacts". **Over a covered view**
+  (Godview, History) a notch rests as a **sliver** — its own 7 × 96 path from the notch's builder,
+  a fillet of 5 into the wall and a face of 2, in the same solid chrome with its own strong
+  hairline and the island's drop, glyph and count hidden — in the 8px the view keeps clear at each
+  edge; **its hit box is the sliver** (no wider target), so a pane's text beside it never takes a
+  stray press, and on approach it becomes the notch (§6: 240ms, island; its hover delay the growth
+  plus the notch's own); on Canvas it rests whole. The edges are the frame's, not the canvas's:
+  they stand above the cover with the line (§10), so a drawer opens over Godview's deck or History's
+  room as it does over the field. **One owner:** each drawer is one of the frame's open surfaces
+  (§10) — opening one, by hover or by pin, folds @'s list, Objects, the fields explorer, the zoom's
+  menu, the palette, the Me menu and the other drawer, and any of them opening folds it (F11). A
+  drawer that holds the keyboard's focus — a field in the Hub's Add step — stays open when the
+  pointer leaves it; Escape folds it and gives focus back to its notch.
 - **Segmented control**: full-round track in `--vf-fill`, sliding solid thumb
   (white / `#2C2C2E`, hairline + `shadow-sm`), 300ms island ease; labels 13px medium,
   active full-opacity, rest `/50`. A **small** size (26px thumb, 11px labels) for a switch that
-  sits inside a composition rather than heading a section — the face's Sticker / Coin in Setup.
+  sits inside a composition rather than heading a section — the face's Sticker / Coin in Setup,
+  and the Me menu's Theme, Light · Dark · Auto (FR-4).
 - **The views track** (One Frame FR-1; FC-D2, FC-D4, FC-D11, FC-D17 ruled 2026-10-01; built
   2026-10-03): the frame's way to each view (§10), the segmented control at the line's left end.
   Four cells — Canvas (`canvas`), Godview (`panes`), History (`history`), and Assistant (`message`),
@@ -609,7 +654,8 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   explorer, the Artifact panel and the Me menu fold them as they folded the tray. The Me menu and
   the edges' drawers join the owner with FR-4. *Since FR-3 (2026-10-03) the owner is the frame's,
   not the line's: the head's three surfaces — the fields explorer, the zoom's menu, the palette —
-  are in the same one value (the head, below).*
+  are in the same one value (the head, below). Since FR-4 (2026-10-03) the Me menu and the two
+  drawers are in it too (§10).*
 - **Chips / category pills**: full-round, `--vf-fill` resting; active = **inverted solid**
   (black-on-light / white-on-dark) with `shadow-md`; `active:scale-95`.
 - **Status badge** (`StateBadge`, 03·A C-7): dot or pill in §2.5 color + label; always
@@ -707,6 +753,9 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
     right notch, FC-D10). The head is still the canvas's own chrome: it lies under the cover with
     the field, and Godview's and History's heads are their own bands (FC-D6). Full screen's left
     slot (16 rather than 96) waits for a host signal; none exists.
+  - *Since FR-4 (2026-10-03) the right cluster is GONE:* the theme went into the Me menu (FC-D5,
+    F3) and Artifacts behind the right notch (FC-D10, F10), so the head's right slot is the zoom
+    readout alone, 16 in, and the pill gives up only the wider of the lights' 96 and that slot.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -765,6 +814,29 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   FR-4 opens it above the line (FC-D14); its rows are never under the track.* Under
   reduced motion the seed circle's
   hover fill does not show — the panel waits at full size, invisible.
+  **Above the line, with Theme (One Frame §10, FR-4; FC-D5, FC-D12, FC-D14; built 2026-10-03).**
+  *The corner* is the face's alone: the 44px button holding the 40px face at x 16–60, **centred on
+  the foot axis, y 734** (§10) — the devtools button and Godview's are gone from the corners. The
+  56px circle around the face is now only its hover (§7's fill step); **the menu opens ABOVE the
+  line, never around the face** (a menu never covers the frame, FR-4): a 256-wide panel of the same
+  solid chrome, corners 28, padded 8, its left at 8 and its foot 8 above the line (y 700 at the
+  default window), grown upward on the island curve from its own foot (§6) while **the face stays
+  put beneath it, lifted**. Nearest first, from the foot: **you** (the name 13/600 over the login in
+  11px mono, under a strong hairline; it opens Settings → Account) · **Settings…** `⌘,` · **Theme**
+  — a row whose `sun` (or `moon`, by night) heads a **small segmented control, Light · Dark · Auto**
+  (§8's small size): the app's ONE theme control (FC-D5, F3) · **Link Tailscale account…** (only
+  while unlinked) — which **starts the link itself** (F16: it no longer opens Account, which the name
+  row does): the menu folds, the daemon is asked to begin, and the sign-in opens in the browser the
+  moment the node offers its address; a refusal reopens the menu with the daemon's sentence at its
+  top · **New user…** · then the other users under "Switch to", above a hairline. The icons stand in
+  the 44px column centred on x 38, the face's own. Choosing a theme keeps the menu open (the app
+  changes behind it); ↑ ↓ walk the rows and stop once on Theme, where ← → choose. **One theme, one
+  owner:** the choice is MAIN's — one value per device (Light · Dark · Auto), Auto following the
+  OS through Electron's `nativeTheme` — and the renderer is told; **Settings → Appearance is the same
+  setting** (the same three, the regular segmented control), the Setup Assistant's sun/moon button
+  writes it too, and Godview follows it (§1.1). The menu is one of the frame's open surfaces (§10),
+  and stands with the frame above the cover in every view. **Devtools** leave the corner for
+  Settings → Advanced, a "Developer" section shown in development builds only (FC-D12, F12).
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
   opens it, because that user already exists by then — the chooser is where you choose who to
   enter instead. Eyebrow "Users", one line of voice, then every user on this machine as a tile,
@@ -1134,10 +1206,14 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   still drags by the strip between the pills.)*
   **Bottom-left (2026-09-22, UA-D19):** the Me menu — the owner's face, §8 — then Godview,
   with the `hud.panel` slot above them; the Settings gear retires into the menu and `⌘,`.
-  *(Godview's button retired 2026-10-03 — the views track below is the way in.)*
+  *(Godview's button retired 2026-10-03 — the views track below is the way in. Since FR-4 the
+  corner is the face's alone, centred on the foot axis, and its menu opens above the line; the
+  bottom-right corner's devtools button is gone — into Settings → Advanced, development builds
+  only, a section like every other dev-facing diagnostic (FC-D12).)*
   **The left edge (2026-09-23, SNAP-3):** the clipboard tray's notch at mid-height, its drawer
   from `top-16` to `bottom-20` (clearing the Me menu and Godview); the right edge is reserved
-  for its twin. **Bottom-centre:** the HUD island — *retired into the line 2026-10-03 (One Frame
+  for its twin — *Artifacts', since FR-4 (§8, edge trays): the right edge is Artifacts' door and
+  nothing else's.* **Bottom-centre:** the HUD island — *retired into the line 2026-10-03 (One Frame
   FR-2): the bottom centre is the line's, and the island's sheet rises behind it (§8).*
 - **One frame, every view — five places, two axes** (One Frame FR-1 and FR-6, ruled
   2026-10-01; first built 2026-10-03). Chrome lives in FIVE places: **the head** (the window's top
@@ -1154,7 +1230,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   content at 692, the **reserve** of 88 above the window's foot, and keeps 8px clear at each edge
   for the notches' slivers; its own ground runs under the line, and only the canvas runs content
   under it. Above the frame stand only Settings, the palette and the loading veil (and, until
-  FR-4 opens it above the line, the open Me menu, which grows over the track's left end).
+  FR-4 opens it above the line, the open Me menu, which grows over the track's left end — *since
+  FR-4 it stands with the frame, above the line, and nothing of the frame's is under it*).
   **The active view has ONE owner** — the window's, held in main beside the menu that names it,
   persisted for the window's life and Canvas at launch; the views track, the keys and the View
   menu all ask that owner and draw what it answers. **The keys:** ⌘1–⌘4 (Ctrl 1–4 on Windows) go
@@ -1184,6 +1261,21 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   2026-10-03):* the head is the name pill and the zoom readout on y 28 (§8 "The head"), still the
   canvas's chrome under the cover; until FR-4 the theme button and the Artifacts toggle stand
   beside the readout. The edges and the corner (FR-4) are next.
+  *As built (FR-4, 2026-10-03):* **the edges and the corner join the frame** and stand above the
+  cover with the line in every view: the clipboard's notch on the left, Artifacts' on the right,
+  each resting as a sliver over a covered view (§8, edge trays), and your face in the corner with
+  its menu above the line (§8, the Me menu). **The frame's one owner now holds all of its open
+  surfaces** — `objects · @ · fields · zoom · palette · me · clipboard · artifacts`, one value, so
+  any one opening folds every other (F11); Settings still folds them and is folded by them. **The
+  app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
+  shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
+  resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
+  `prefers-color-scheme` agree with it from the first frame — and tells every window; the Me menu's
+  Theme, Settings → Appearance and the Setup Assistant's button all ask it, and Godview follows what
+  it answers (§1.1). **The View menu's zoom** (Actual Size ⌘0 · Zoom In ⌘+ · Zoom Out ⌘−) is no
+  longer Electron's page-zoom roles: each item sends its act to the window's head, which answers
+  on Canvas as its keys do, and the three are disabled under a cover — so nothing in the menu bar
+  or its keys zooms the whole window any more (One Frame FR-3's finding).
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
