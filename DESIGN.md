@@ -98,8 +98,9 @@ mat below — its sage and cream, its rulers at a margin of 60, its lattice's fa
 (`GridConfig { fadeIn, mat }`) — and the world grid's projection, the magnet's config and ink, the
 classic alternate's dot, Canvas Settings' Dot/Needle preference, Studio's grid controls and the
 appearance document's grid half have no consumer and retire with the old ground (DK-17). The
-CSS-fallback dots stay only where nothing can draw the mat (the unavailable state, §8); the splash,
-the loading veil and the explorer's tiles come to wear the mat (DK-16).
+CSS-fallback dots stay the splash's, the loading veil's and the explorer tiles' ground until DK-16,
+which dresses those three in the mat; after it they stay only where nothing can draw the mat (the
+unavailable state, §8).
 *Erratum 2026-10-03 (DK-0d — DK-D2, R22) — the cursor's halo, which this file never described:* the
 field above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
 the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
@@ -1018,33 +1019,33 @@ The hot-point glow and rim retire with CardShell (above).
   or downward when its top would cross 94, the bar's own row then heading it (R6); when it fits
   neither way the list scrolls inside it, clamped between 94 and 660 and never over the line (R6).
   **The bar's row never moves** (M2): More stays under the pointer, shown on. The menu is **solid**
-  (§5's menus, with the grown bar's two exceptions — R20: corners 20, the bar's own, and placed
-  from its own row), at least **244** wide (the bar's width when wider), centred on the bar and
-  kept 42 from the sides; its list padded 6 6 2 (2 6 6 grown down), and a hairline in the strong
-  hairline, 12 in from each side, between the list and the bar's own row. **Rows** 34 tall,
-  corners 12, padded 0 10, 13/500 in primary ink, the nearest hot in the ready fill; **keys at the
-  row's end**, 11/500 in tertiary ink; between groups a hairline in the strong hairline, 10 in, 4
-  above and below; grown upward the list reads bottom-up, nearest first. **The order, nearest
-  first:** the kind's acts (`ops.runMenuAction`; no keys, R1) · **Open** (↩) — only when exactly one
-  object is selected and its type opens (`engine.catalog.widget(type).openable`), running
-  `ops.open`; a container (the mini mat) has no row, ⏎ enters it (R4) · Send to… | Duplicate (⌘D;
-  not while taped) · Bring to front · Send to back (`ops.reorder`) · **Clean up** (two or more
-  selected: `ops.arrange` tidies them into reading-order rows, one undo step — DK-D29) | Tape it
-  down, or Lift the tape (no key, R23) | Delete (⌫, armed red under the pointer). No Copy: the
-  engine has no copy op. Send to…, Bring to front, Send to back and Clean up print no key — DK-D24
-  binds none. **The eyebrow** names what it acts on, at the far end, in the mat's print: mono 10,
-  capitals, 0.08em, tertiary, padded 8 10 5 — NOTE · 2 OBJECTS · CLOCK, the host's read of the
-  types' names (the doors, above), and a missing face's type with its word: NOTE · PLUGIN OFF. Rows
-  fade and rise 4px nearest first, 160ms + 26ms a row (cap 400ms), and fold back the same way (M4);
-  ↑ ↓ walk, Return takes. **It closes** on Esc, a click elsewhere, a gesture and a change of
-  selection (R5, ICE's rule), and it is one of the frame's open surfaces (§10) — its Esc is taken
-  before the desk's Esc ladder (R5). **Right-click on an object** selects it and grows this same bar
-  into this same menu — never a separate popover (MC-D6) — through a VibeField `contextmenu`
-  listener; the object under the pointer needs the desk's pick, which the desk's handle does not
-  offer (core's `FramePickSource.hit` tests one object it is given), so it is an ICE ask, **I27**: a
-  screen point's object, on the handle. **The comment command** (DK-D24: the C key's wrap of the
-  selection, which leaves the keymap) becomes a row here when DK-8's comment kind exists. The bare
-  mat's own menu (Paste here, New note here) is not built (a Marks on the Mat item).
+  (§5's menus, with the grown bar's two exceptions — R20: corners 20, the bar's own, and placed from
+  its own row), at least **244** wide (the bar's width when wider), centred on the bar and kept 42
+  from the sides; its list padded 6 6 2 (2 6 6 grown down), and a hairline in the strong hairline,
+  12 in from each side, between the list and the bar's own row. **Rows** 34 tall, corners 12, padded
+  0 10, 13/500 in primary ink, the nearest hot in the ready fill; **keys at the row's end**, 11/500
+  in tertiary ink; between groups a hairline in the strong hairline, 10 in, 4 above and below; grown
+  upward the list reads bottom-up, nearest first. **The order, nearest first:** the kind's acts
+  (`ops.runMenuAction`; no keys, R1) · **Open** (↩) — only when exactly one object is selected and
+  its type opens (`engine.catalog.widget(type).openable`), running `ops.open`; a container (the mini
+  mat) has no row, ⏎ enters it (R4) · Send to… | Duplicate (⌘D; not while taped) · Bring to front ·
+  Send to back (`ops.reorder`) · **Clean up** (two or more selected: `ops.arrange` tidies them into
+  reading-order rows, one undo step — DK-D29) | Tape it down, or Lift the tape (no key, R23) |
+  Delete (⌫, armed red under the pointer). No Copy: the engine has no copy op. Send to…, Bring to
+  front, Send to back and Clean up print no key — DK-D24 binds none. **The eyebrow** names what it
+  acts on, at the far end, in the mat's print: mono 10, capitals, 0.08em, tertiary, padded 8 10 5 —
+  NOTE · 2 OBJECTS · CLOCK, the host's read of the types' names (the doors, above), and a missing
+  face's type with its word: NOTE · PLUGIN OFF. Rows fade and rise 4px nearest first, 160ms + 26ms a
+  row (cap 400ms), and fold back the same way (M4); ↑ ↓ walk, Return takes. **It closes** on Esc, a
+  click elsewhere, a gesture and a change of selection (R5, ICE's rule), and it is one of the
+  frame's open surfaces (§10) — its Esc is taken before the desk's Esc ladder (R5). **Right-click on
+  an object** selects it and grows this same bar into this same menu — never a separate popover
+  (MC-D6) — through a VibeField `contextmenu` listener; the object under the pointer needs the
+  desk's pick, which the desk's handle does not offer (core's `FramePickSource.hit` tests one object
+  it is given), so it is an ICE ask, **I27** (filed 2026-10-03): a screen point's object,
+  `handle.pick({ x, y })`. **The comment command** (DK-D24: the C key's wrap of the selection, which
+  leaves the keymap) becomes a row here when DK-8's comment kind exists. The bare mat's own menu
+  (Paste here, New note here) is not built (a Marks on the Mat item).
 - **Tools in hand** (Chrome on the Mat §3.3; MC-D4 ruled 2026-10-01: under the head; MC-D9
   readouts; One Frame §7; ICE I20, I22; R2, R13; DK-12): when an object is picked up (the anchor's
   `held`), **the same bar travels** with the pickup and becomes the tools in hand — one element
@@ -1101,8 +1102,9 @@ The hot-point glow and rim retire with CardShell (above).
   inside the hairline — padded 3; the thumb is solid chrome with the hairline (by night the line's
   edge, the strong hairline — R19) and `0 2px 6px` black/12, **sliding 300ms on the island curve**
   across widths; segments 30 tall, padded 0 15, 13/500 sentence case, in tertiary ink at rest and
-  primary on the one chosen. **All** first, then `tray.categories()` in the lay's order — ICE's
-  Paper, Surfaces, Things and any a plugin's kind declares — **no counts**. Past the band's width
+  primary on the one chosen. **All** first, then `tray.categories()` in the lay's order — the six
+  built-ins' Paper and Surfaces, the example clock's Things, and whatever a plugin's kind declares —
+  **no counts**. Past the band's width
   they scroll inside it, the far end fading under the tray's mask; a click, or ← → Home End,
   chooses (`tray.category(id)`). **Chrome does not dim by night**: the anchor's `night` is not read
   here. **Inserting by keyboard** (R14): in the board the arrows move between the specimens, ⏎ lays
@@ -1166,11 +1168,11 @@ The hot-point glow and rim retire with CardShell (above).
   covered re-captures: thaw → one frame → capture → freeze (R16). A capture that answers nothing (a
   lost device) covers the mat's ground as the theme lights it — `--vf-mat-ground`, `#3D5A30` by day
   and `#313C40` by night (§2.1's lit values; the token is DK-15's to add) — and says so once in the
-  status line (R16). Until I23 ships, `createImageBitmap` on the desk's own canvas stands in — a
-  bitmap ICE does not promise, so its absence falls back the same way. **Godview's live backdrop**
-  (GT-7's viewer glass, `backdropOpacity` / `backdropBlur`) **and rosetta's room glass retire on the
-  desk**: the cover is a tint over the still, and their settings rows go (R16; the deck's note,
-  below).
+  status line (R16), in the card's own words: "The desk lost its graphics device". Until I23 ships,
+  `createImageBitmap` on the desk's own canvas stands in — a bitmap ICE does not promise, so its
+  absence falls back the same way. **Godview's live backdrop** (GT-7's viewer glass,
+  `backdropOpacity` / `backdropBlur`) **and rosetta's room glass retire on the desk**: the cover is
+  a tint over the still, and their settings rows go (R16; the deck's note, below).
 - **Peers on the mat** (DK-16; MC-D10 = DK-D23, R22; UA-D17, §2.8 I-1, I-4; R17): another person's
   pointer on the desk is VibeField's own cursor — ICE's are turned off,
   `deskLayer({ cursors: false })` (petition I26, being built), so nobody is drawn twice (R17).
@@ -1188,26 +1190,30 @@ The hot-point glow and rim retire with CardShell (above).
   words 15.2:1) — because `--vf-presence-ink` (`#68686B`) measures 1.4:1 on the Sun-lit sage and
   2.0:1 by night (§2.8's erratum). Never the peer's own colour (I-1). Your own pointer on the desk is
   the OS's and the desk's own open hand; the halo is gone (§2.1).
-- **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3,
-  DK-16): the layer's status (`onStatus`) is said in VibeField's words — never ICE's black
-  monospace screen, never a blank. **`failed`** — WebGPU absent (a remote desktop has none,
-  Windows is unverified) or the device lost — shows the full **unavailable card** in the Canvas
-  stage: the kit's `UnavailableState` **extended** — a detail slot, a Reload act and a 380-wide
-  variant (R18; a kit change, UI_SYSTEM) — on the plain ground (`--vf-canvas-bg` and §2.1's
-  CSS-fallback dots — not the mat, which nothing can draw), centred, the strong hairline dashed,
-  corners 22, padded 26 26 22: **what happened** (14/600, primary), **what to do** (12.5/400,
-  tertiary), **one Reload** (the primary: inverted, 36 tall, padded 0 18, corners 18, 13/500) — a
-  desk remount, not a window reload (R18) — and in the detail slot **ICE's message, verbatim**,
-  last and small (11 mono, faint, 12 below; R18). Device lost: "The desk lost its graphics device"
-  · "The graphics device was reset while the desk was drawing. Your objects are saved in this
-  document; reload to draw them again." · Reload · `the device was lost: …`. No WebGPU: "This
-  computer can't draw the desk" · "The desk draws with WebGPU, which this graphics setup doesn't
-  offer — a remote desktop has none — so reloading won't help. Your objects are saved in this
-  document." · no Reload, since it would not help (R18) ·
-  `WebGPU is unavailable here (no navigator.gpu)`. **`degraded`** (an uncaptured GPU error; the
-  desk still draws) is a banner, not the card: the status line holding ICE's message and a Reload
-  until the state clears, the desk drawing on beneath it (R18). No Canvas2D fallback in v1
-  (DK-D32): the state is the whole answer, and the frame around it still works.
+- **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3, DK-16):
+  the layer's status (`onStatus`) is said in VibeField's words — never ICE's black monospace screen,
+  never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or
+  the device lost — shows the full **unavailable card** in the Canvas stage: the kit's
+  `UnavailableState` **extended** — a detail slot, a Reload act and a 380-wide variant (R18; a kit
+  change, UI_SYSTEM) — on the plain ground (`--vf-canvas-bg` and §2.1's CSS-fallback dots — not the
+  mat, which nothing can draw), centred, the strong hairline dashed, corners 22, padded 26 26 22:
+  **what happened** (14/600, primary), **what to do** (12.5/400, tertiary), **one Reload** (the
+  primary: inverted, 36 tall, padded 0 18, corners 18, 13/500) — a desk remount, not a window reload
+  (R18) — and in the detail slot **ICE's message, verbatim**, last and small (11 mono, faint, 12
+  below; R18). ICE says why in that one string, so the card reads it: **the device lost**
+  (`the device was lost: <reason>: <message>`) — "The desk lost its graphics device" · "The graphics
+  device was reset while the desk was drawing. Your objects are saved in this document; reload to
+  draw them again." · Reload · the message; **no WebGPU** (a boot refusal ending
+  `WebGPU is unavailable here (no navigator.gpu)`) — "This computer can't draw the desk" · "The desk
+  draws with WebGPU, which this graphics setup doesn't offer — a remote desktop has none — so
+  reloading won't help. Your objects are saved in this document." · no Reload, since it would not
+  help (R18) · the message; **any other refusal**
+  (`no desk — the adapter, the device or the pipelines were refused: …`) — "The desk couldn't start
+  its graphics" · "Your objects are saved in this document; reload to try again." · Reload · the
+  message. **`degraded`** (an uncaptured GPU error; the desk still draws) is a banner, not the card:
+  the status line holding ICE's message and a Reload until the state clears, the desk drawing on
+  beneath it (R18). No Canvas2D fallback in v1 (DK-D32): the state is the whole answer, and the
+  frame around it still works.
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
   opens it, because that user already exists by then — the chooser is where you choose who to
   enter instead. Eyebrow "Users", one line of voice, then every user on this machine as a tile,
