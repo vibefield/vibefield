@@ -11,6 +11,7 @@
     "dev:studio": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --studio",
     "dev:design": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --studio=design",
     "dev:design:web": "pnpm --filter @vibefield/electron-shell dev:design:web",
+    "dev:logo": "pnpm --filter @vibefield/electron-shell exec vite --mode design --open /logo-studio.html",
     "dev:onboarding": "node --env-file-if-exists=.env tooling/dev-runner/src/cli.mjs --force-onboarding",
     "smoke": "pnpm --filter @vibefield/desktop smoke",
     "smoke:canvas": "pnpm --filter @vibefield/desktop smoke:canvas",

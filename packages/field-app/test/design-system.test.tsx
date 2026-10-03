@@ -131,6 +131,7 @@ describe("design system page", () => {
         `Missing section for ${link.textContent}`,
       ).not.toBeNull();
     }
+    expect(container?.querySelector('#living-mark a[href="./logo-studio.html"]')).not.toBeNull();
     expect(container?.textContent).toContain("The field, in one frame.");
     expect(container?.textContent).toContain("The actual field, under glass");
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");

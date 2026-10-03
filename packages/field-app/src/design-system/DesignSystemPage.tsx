@@ -14,6 +14,7 @@ import { GodviewSection } from "./sections/GodviewSection";
 import { IconsSection } from "./sections/IconsSection";
 import { InventorySection } from "./sections/InventorySection";
 import { LiveSurfacesSection } from "./sections/LiveSurfacesSection";
+import { LogoSection } from "./sections/LogoSection";
 import { OnboardingSection } from "./sections/OnboardingSection";
 import { OverviewSection } from "./sections/OverviewSection";
 import { StatusSection } from "./sections/StatusSection";
@@ -25,6 +26,7 @@ const NAV_ITEMS = [
   ["foundations", "Foundations", "02"],
   ["fieldmarks", "After Hours", "02a"],
   ["face-stickers", "Face Club", "02b"],
+  ["living-mark", "Living mark", "02c"],
   ["glyphs", "Glyphs", "02d"],
   ["canvas-ground", "Canvas ground", "03"],
   ["controls", "Controls", "04"],
@@ -120,6 +122,7 @@ export function DesignSystemPage({
         <FoundationsSection />
         <IconsSection />
         <FaceStickersSection />
+        <LogoSection />
         <GlyphsSection />
         <CanvasGroundSection
           dark={dark}

@@ -1018,6 +1018,41 @@ Studio and the self-contained `docs/design/face-stickers.html` mount the same
 proofs, and downloads. Recognition at tiny sizes is an explicit design review concern,
 not a claim established by a bounds test.
 
+## 12. Living mark — spectral ribbon study
+
+The September 22 logo study develops the existing infinity/RGB identity into a continuous
+paper-white ribbon with a fine spectral edge, suspended in a radial field of light. The
+crossing has a definite over/under order. Shape stays readable while light travels; motion
+combines breathing, flowing filaments, and restrained pointer parallax. This is authored brand
+artwork: its pink, cobalt, amber, and mint belong to the artwork, not interface or status ink.
+
+The Logo studio uses the §2 neutral chrome, system typography, hairlines, and shared controls.
+Its shader palette is editable content data. Prism is the reference direction; Afterglow,
+Daylight, Signal, and Ink demonstrate atmospheric, quiet, chromatic, and monochrome uses.
+Geometry, edge color, field, grain, and movement are independent parameters. The same native
+WebGPU renderer lives behind the design kit's `./logo` leaf and powers the catalog specimen
+and full studio. A static SVG of the same curve covers unavailable GPUs and exports the
+flat mark. Reduced motion starts still; explicit playback is available in the studio.
+Hidden/offscreen canvases stop rendering. The study does not replace packaged icon masters.
+
+The Möbius extension gives the ribbon a thin, rounded physical profile and separates the
+crossing in depth. A half-twist circulates continuously along the ribbon's fixed infinity
+path. Its faces turn locally while both lobes remain readable; the overall view tilt stays
+within a safe angle. The half-twist connects the apparent two rims into one continuous edge,
+with color and light flowing smoothly across the join. Perspective and lighting reveal the
+depth without spinning the surrounding field. Halos narrow around tight bends to avoid
+overlapping fans of light. View tilt, twist focus, circulation speed, depth, perspective,
+and pulse brightness/speed/length/count are independent controls. Depth testing applies to
+both the ribbon and its edge light. Pause, reduced motion, and PNG capture retain the exact
+same pose and light phase.
+
+Edge light is a colored reflection: a fine spectral rim with broad highlights and soft
+diffusion close to the ribbon. Brightness has a soft ceiling, and the halo follows the
+surface angle and curvature. The highlights retain the palette's saturation and remain
+visible on the light field without washing out to white. The reference motion uses the
+user's selected seven highlights, full overall speed, and distributed Möbius twist; the
+alternate moods retain their individual speed and light settings.
+
 ---
 
 ## 13. Glyphs — the chrome's icon law
