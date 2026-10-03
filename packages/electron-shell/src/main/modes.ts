@@ -43,6 +43,21 @@ export function isSmokeLike(mode: ShellMode): boolean {
   );
 }
 
+/** Whether the mode keeps hardware acceleration. Main disables it for every other
+ * smoke-like mode: a smoke must run over ssh and on a GPU-less runner, where Chromium's
+ * GPU init fails outright. The two labs measure the GPU path itself. The canvas and
+ * plugin-restart smokes draw the DESK — WebGPU alone, no Canvas2D fallback (DK-D32) —
+ * so a software run would prove only that the registry loaded (r6b risk 1); each keeps
+ * the GPU unless run with `--disable-gpu`, the smokes' GPU-less mode, where the desk's
+ * unavailable card is what it asserts instead (DK-3 canvas, DK-5 plugin-restart). */
+export function keepsGpu(mode: ShellMode, argv: readonly string[]): boolean {
+  if (!isSmokeLike(mode)) return true;
+  if (mode === "live-surfaces-lab" || mode === "terminal-perf-lab") return true;
+  return (
+    (mode === "smoke-canvas" || mode === "smoke-plugin-restart") && !argv.includes("--disable-gpu")
+  );
+}
+
 // The `--terminal-direct-door` rollback flag RETIRED at TP-S3e: the routed
 // transport is the only one, the production CSP admits the cells' loopback
 // WebSockets unconditionally (security-policy.ts), and the bridge it selected

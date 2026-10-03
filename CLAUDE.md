@@ -173,7 +173,12 @@ sidecar was built from source while the window's Go half was open, and comes fro
   `pnpm dev:design:web` for the catalog-only browser loop. Rules in `docs/UI_SYSTEM.md`.
 - `pnpm smoke:studio` — opt-in physical Electron gate for Studio/product session and preload
   isolation, real UI edit/apply, product reload replay, Studio-close restoration, and fieldd.
-- `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` — headless desktop smoke checks
+- `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` / `pnpm smoke:plugin-restart` —
+  desktop smoke checks. Each runs Electron on its OWN profile, fresh under the OS temp and removed
+  after (`apps/desktop/packaging/run-smoke.mjs`; main mints one for a hand-started smoke), never
+  the app's shared one. `smoke:canvas` and `smoke:plugin-restart` keep the GPU and draw the desk
+  (`--disable-gpu` asserts its unavailable card instead). `smoke:browser-widget` RETIRED at DK-5
+  with the page widget it drove.
 - `pnpm --filter @vibefield/desktop build:screenshot-helper` / `test:screenshot-helper` /
   `verify:screenshot-helper` — the native screenshot helper (Swift on macOS, Rust on Windows;
   `apps/desktop/native/*/screenshot-helper`). Outside `pnpm verify` like the SCK helper and the

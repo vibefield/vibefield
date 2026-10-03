@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isSmokeLike, parseMode, type ShellMode, shutdownPolicy } from "../src/main/modes";
+import {
+  isSmokeLike,
+  keepsGpu,
+  parseMode,
+  type ShellMode,
+  shutdownPolicy,
+} from "../src/main/modes";
 
 // Mode selection is parsed ONCE (ESR §5.2.6). These lock the precedence, the
 // smoke-like classification, and the daemon-lifetime policy so no downstream
@@ -79,6 +85,30 @@ describe("isSmokeLike", () => {
 
   it.each(ALL_MODES)("classifies %s", (mode) => {
     expect(isSmokeLike(mode)).toBe(smokeLike.has(mode));
+  });
+});
+
+describe("keepsGpu", () => {
+  // DK-5: the desk-drawing smokes keep the GPU unless run GPU-less on purpose; every other
+  // smoke-like mode drops it (ssh, GPU-less runners); the labs measure it; the app keeps it.
+  const kept = new Set<ShellMode>([
+    "production",
+    "dev",
+    "smoke-canvas",
+    "smoke-plugin-restart",
+    "live-surfaces-lab",
+    "terminal-perf-lab",
+  ]);
+
+  it.each(ALL_MODES)("%s", (mode) => {
+    expect(keepsGpu(mode, [])).toBe(kept.has(mode));
+  });
+
+  it("drops it for the desk smokes run with --disable-gpu, and only for them", () => {
+    expect(keepsGpu("smoke-canvas", ["--disable-gpu"])).toBe(false);
+    expect(keepsGpu("smoke-plugin-restart", ["--disable-gpu"])).toBe(false);
+    expect(keepsGpu("live-surfaces-lab", ["--disable-gpu"])).toBe(true);
+    expect(keepsGpu("production", ["--disable-gpu"])).toBe(true);
   });
 });
 

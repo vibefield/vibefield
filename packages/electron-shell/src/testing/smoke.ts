@@ -16,6 +16,7 @@ import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   catalogEntry,
+  DocListResult,
   type FrameView,
   LAYOUT,
   TerminalConfigDocument,
@@ -369,9 +370,12 @@ async function deskCounters(win: BrowserWindow): Promise<DeskCounters> {
   return counters;
 }
 
-/** The first-run board's census (DK-3): the desk seed's six kinds, one each, in the open
- * document — polled, since the seed's print lands once its picture is in the byte store. */
-async function deskSeedFailures(win: BrowserWindow, timeoutMs = 15_000): Promise<string[]> {
+/** The open board's census through the door (DK-3): polled until it is the desk seed's six kinds,
+ * one each — the seed's print lands once its picture is in the byte store — or the budget runs out. */
+async function readDeskCensus(
+  win: BrowserWindow,
+  timeoutMs = 15_000,
+): Promise<{ census: Record<string, number> | null; problems: string[] }> {
   const deadline = Date.now() + timeoutMs;
   let census: Record<string, number> | null = null;
   const wrong = (c: Record<string, number> | null): string[] =>
@@ -388,11 +392,21 @@ async function deskSeedFailures(win: BrowserWindow, timeoutMs = 15_000): Promise
     if (wrong(census).length === 0) break;
     await sleep(100);
   }
-  console.log(`SMOKE_CANVAS_SEED ${JSON.stringify(census)}`);
   const problems = wrong(census);
-  return problems.length === 0
-    ? []
-    : [`the seeded desk is not one of each kind: ${problems.join(", ")}`];
+  return {
+    census,
+    problems:
+      problems.length === 0
+        ? []
+        : [`the seeded desk is not one of each kind: ${problems.join(", ")}`],
+  };
+}
+
+/** The first-run board's census (DK-3): the desk seed's six kinds, one each, in the open document. */
+async function deskSeedFailures(win: BrowserWindow, timeoutMs = 15_000): Promise<string[]> {
+  const { census, problems } = await readDeskCensus(win, timeoutMs);
+  console.log(`SMOKE_CANVAS_SEED ${JSON.stringify(census)}`);
+  return problems;
 }
 
 /** The stage's unavailable card (DESIGN.md §8 "When the desk can't draw") — what every GPU-OFF
@@ -1191,10 +1205,83 @@ function physicalSoakOptions(
   };
 }
 
+/** A `DESK_READY {…}` line (field-app development-console.ts): `boot` is the mount's own cost,
+ * ms since the mount — `device`, `compiled`, `presented` (ICE I25 `perf().boot`). */
+interface DeskReadyLine {
+  readonly generation: number;
+  readonly mount: number;
+  readonly boot: Readonly<Record<string, number>>;
+  readonly frames: number;
+}
+
+/** DK-5 — one window's DESK across the plugin-restart soak: the board open in it
+ * (`vf-last-doc`), the seed's census there, and its DESK_READY. */
+interface WindowDesk {
+  readonly docId: string | null;
+  readonly census: Record<string, number> | null;
+  readonly ready: DeskReadyLine;
+}
+
+async function windowDesks(
+  windows: readonly BrowserWindow[],
+  readies: readonly Promise<string>[],
+): Promise<{ desks: WindowDesk[]; problems: string[] }> {
+  const desks: WindowDesk[] = [];
+  const problems: string[] = [];
+  for (const [index, win] of windows.entries()) {
+    const ready = JSON.parse(
+      await (readies[index] ?? Promise.reject(new Error("no wait"))),
+    ) as DeskReadyLine;
+    const read = await readDeskCensus(win);
+    const docId = (await win.webContents.executeJavaScript(
+      'localStorage.getItem("vf-last-doc")',
+      true,
+    )) as string | null;
+    desks.push({ docId, census: read.census, ready });
+    problems.push(...read.problems.map((problem) => `window ${index + 1}: ${problem}`));
+  }
+  return { desks, problems };
+}
+
+/** Before a restart (DK-5): each window's board SAVED at fieldd — listed with its schema and its
+ * bytes, and its `updatedAt` steady for two seconds (the autosave debounces at 800 ms) — so the
+ * board the recovered windows reopen is the one they drew. */
+async function boardsSettledAtFieldd(
+  handle: FielddHandle,
+  docIds: readonly string[],
+  timeoutMs = 20_000,
+): Promise<void> {
+  const deadline = Date.now() + timeoutMs;
+  let last = "";
+  let steady = 0;
+  while (Date.now() < deadline) {
+    const { docs } = DocListResult.parse(await handle.client.request("doc.list", {}));
+    const rows = docIds.map((id) => docs.find((doc) => doc.docId === id));
+    const saved = rows.every(
+      (doc) => doc !== undefined && doc.engineSchema !== null && doc.sizeBytes > 0,
+    );
+    const stamp = JSON.stringify(rows.map((doc) => doc?.updatedAt ?? null));
+    steady = saved && stamp === last ? steady + 1 : 0;
+    last = stamp;
+    if (steady >= 8) return;
+    await sleep(250);
+  }
+  throw new Error(`the boards did not settle at fieldd within ${timeoutMs}ms (${last})`);
+}
+
 /** PRC-5g/PRC-6c2 physical witness: two real sandboxed renderer documents
  * load the production custom origin. The bounded soak mode repeats the exact
  * supervisor crash/boot-fence path inside one Electron owner and emits a
- * machine-readable structural + OS sample after every quiescent cycle. */
+ * machine-readable structural + OS sample after every quiescent cycle.
+ *
+ * DK-5 — WITH THE DESK (the plan's T8 soak rig): GPU on (`keepsGpu`; shown windows, for the
+ * desk's frame loop), each window's desk says DESK_READY and holds the seed's six; a restart
+ * REPLACES each renderer, and one engine per document generation REMOUNTS the desk (ICE I25):
+ * each window says DESK_READY again — its `boot` is the remount's cost, recorded — and reopens
+ * the SAME board (`vf-last-doc`) with its six kinds, which proves they survived rather than were
+ * re-seeded. GPU off (`--disable-gpu`), the windows assert the desk's card as before. The
+ * per-widget CSS census is DROPPED: the desk scopes no CSS per widget (the HUD surface scope
+ * stays, and `smoke:canvas` still counts its stylesheets). On the run's own profile. */
 export async function runSmokePluginRestart(opts: {
   handle: FielddHandle;
   onHandle: (listener: (handle: FielddHandle) => void) => () => void;
@@ -1209,15 +1296,17 @@ export async function runSmokePluginRestart(opts: {
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
   const config = pluginRuntimeSoakConfig();
+  const gpu = !process.argv.includes("--disable-gpu");
+  // Shown with the GPU on: a hidden window presents no frames, and DESK_READY waits for one.
   const primary = createMainWindow({
     mode: "smoke-plugin-restart",
     preloadPath: opts.preloadPath,
-    show: false,
+    show: gpu,
   });
   const auxiliary = createMainWindow({
     mode: "smoke-plugin-restart",
     preloadPath: opts.preloadPath,
-    show: false,
+    show: gpu,
   });
   opts.registry.adopt(primary);
   opts.registry.adoptAuxiliary(auxiliary);
@@ -1248,6 +1337,10 @@ export async function runSmokePluginRestart(opts: {
       powerSaveBlockerId = powerSaveBlocker.start("prevent-app-suspension");
     }
     const initialReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
+    const initialDeskReady = gpu
+      ? windows.map((win) => waitForConsole(win, "DESK_READY ", 60_000))
+      : [];
+    for (const wait of initialDeskReady) wait.catch(() => undefined);
     await Promise.all(
       windows.map((win) => loadRenderer(win, "smoke-plugin-restart", opts.viteUrl)),
     );
@@ -1255,17 +1348,26 @@ export async function runSmokePluginRestart(opts: {
       (raw) => JSON.parse(raw) as CanvasFacts,
     );
     console.log(`SMOKE_PLUGIN_RESTART_INITIAL ${JSON.stringify(currentCanvas)}`);
-    // DK-3: GPU-less, each window's desk says it cannot draw — its card, in ICE's words
-    const initialCards = await Promise.all(windows.map((win) => expectDeskUnavailableCard(win)));
-    console.log(`SMOKE_PLUGIN_RESTART_DESK_CARDS ${JSON.stringify(initialCards)}`);
-    const initialStyles = await Promise.all(windows.map((win) => waitForPluginStyles(win)));
-    console.log(`SMOKE_PLUGIN_RESTART_INITIAL_STYLES ${JSON.stringify(initialStyles)}`);
-    const initialProblems = currentCanvas.flatMap((facts, index) => [
-      ...censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
-      ...pluginStyleFailures(initialStyles[index]!).map(
-        (problem) => `window ${index + 1}: ${problem}`,
+    const initialProblems = [
+      ...smokeProfileFailures(),
+      ...currentCanvas.flatMap((facts, index) =>
+        censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
       ),
-    ]);
+    ];
+    let desks: WindowDesk[] = [];
+    const remounts: Readonly<Record<string, number>>[][] = [];
+    if (gpu) {
+      const read = await windowDesks(windows, initialDeskReady);
+      desks = read.desks;
+      initialProblems.push(...read.problems);
+      console.log(
+        `SMOKE_PLUGIN_RESTART_DESK ${JSON.stringify({ phase: "initial", windows: desks })}`,
+      );
+    } else {
+      // DK-3: GPU-less, each window's desk says it cannot draw — its card, in ICE's words
+      const initialCards = await Promise.all(windows.map((win) => expectDeskUnavailableCard(win)));
+      console.log(`SMOKE_PLUGIN_RESTART_DESK_CARDS ${JSON.stringify(initialCards)}`);
+    }
     if (initialProblems.length > 0) throw new Error(initialProblems.join(" · "));
 
     const expectedBootstrap = countVector(
@@ -1432,7 +1534,17 @@ export async function runSmokePluginRestart(opts: {
       }
       const oldHandle = currentHandle;
       const oldRendererPids = windows.map((window) => window.webContents.getOSProcessId());
+      // DK-5: what the recovered windows must reopen is SAVED before fieldd dies
+      if (gpu) {
+        await boardsSettledAtFieldd(currentHandle, [
+          ...new Set(desks.flatMap((desk) => (desk.docId === null ? [] : [desk.docId]))),
+        ]);
+      }
       const replacementReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
+      const replacementDeskReady = gpu
+        ? windows.map((win) => waitForConsole(win, "DESK_READY ", 90_000))
+        : [];
+      for (const wait of replacementDeskReady) wait.catch(() => undefined);
       const replacementHandle = waitForReplacementHandle(
         opts.onHandle,
         oldHandle.info.bootId,
@@ -1452,18 +1564,32 @@ export async function runSmokePluginRestart(opts: {
         (raw) => JSON.parse(raw) as CanvasFacts,
       );
       console.log(`SMOKE_PLUGIN_RESTART_RECOVERED ${JSON.stringify(currentCanvas)}`);
-      const recoveredCards = await Promise.all(
-        windows.map((win) => expectDeskUnavailableCard(win)),
+      const replacementProblems = currentCanvas.flatMap((facts, index) =>
+        censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
       );
-      console.log(`SMOKE_PLUGIN_RESTART_RECOVERED_DESK_CARDS ${JSON.stringify(recoveredCards)}`);
-      const replacementStyles = await Promise.all(windows.map((win) => waitForPluginStyles(win)));
-      console.log(`SMOKE_PLUGIN_RESTART_RECOVERED_STYLES ${JSON.stringify(replacementStyles)}`);
-      const replacementProblems = currentCanvas.flatMap((facts, index) => [
-        ...censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
-        ...pluginStyleFailures(replacementStyles[index]!).map(
-          (problem) => `window ${index + 1}: ${problem}`,
-        ),
-      ]);
+      if (gpu) {
+        // the desk REMOUNTED in each replaced renderer, on the same board, its six intact
+        const read = await windowDesks(windows, replacementDeskReady);
+        console.log(
+          `SMOKE_PLUGIN_RESTART_DESK ${JSON.stringify({ phase: "recovered", cycle, windows: read.desks })}`,
+        );
+        replacementProblems.push(...read.problems);
+        for (const [index, desk] of read.desks.entries()) {
+          const before = desks[index]?.docId ?? null;
+          if (desk.docId === null || desk.docId !== before) {
+            replacementProblems.push(
+              `window ${index + 1} reopened ${desk.docId ?? "no board"}, not ${before ?? "no board"}`,
+            );
+          }
+        }
+        remounts.push(read.desks.map((desk) => desk.ready.boot));
+        desks = read.desks;
+      } else {
+        const recoveredCards = await Promise.all(
+          windows.map((win) => expectDeskUnavailableCard(win)),
+        );
+        console.log(`SMOKE_PLUGIN_RESTART_RECOVERED_DESK_CARDS ${JSON.stringify(recoveredCards)}`);
+      }
       if (replacementProblems.length > 0) throw new Error(replacementProblems.join(" · "));
       const newConnections = await Promise.all(windows.map(rendererConnection));
       for (let index = 0; index < windows.length; index += 1) {
@@ -1524,6 +1650,8 @@ export async function runSmokePluginRestart(opts: {
         freshIncarnations: true,
         widgetTypes: currentCanvas.map((facts) => facts.widgetTypes),
         stagedPlugins: currentCanvas.map((facts) => facts.stagedPlugins),
+        // DK-5: each restart's desk REMOUNT, per window, ms since its mount (I25 `perf().boot`)
+        deskRemounts: gpu ? remounts : "GPU off — the desk's card",
         soakVerdict: verdict.verdict,
       })}`,
     );

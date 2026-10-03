@@ -85,7 +85,7 @@ import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
-import { isSmokeLike, parseMode } from "./modes";
+import { isSmokeLike, keepsGpu, parseMode } from "./modes";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
@@ -148,13 +148,10 @@ const MODE = parseMode(process.argv);
 // WebGPU alone (no Canvas2D fallback, DK-D32), so a software run proves only
 // that the registry loaded (r6b risk 1). The canvas smoke asserts DESK_READY
 // and a pixel with the GPU on; `--disable-gpu` runs it the smokes' way, where
-// the stage must show the unavailable card instead.
-if (
-  isSmokeLike(MODE) &&
-  MODE !== "live-surfaces-lab" &&
-  MODE !== "terminal-perf-lab" &&
-  !(MODE === "smoke-canvas" && !process.argv.includes("--disable-gpu"))
-) {
+// the stage must show the unavailable card instead. DK-5: `smoke-plugin-restart`
+// joins it — its soak remounts the desk across the restart. The rule is
+// `keepsGpu` (modes.ts).
+if (!keepsGpu(MODE, process.argv)) {
   app.disableHardwareAcceleration();
 }
 // TP-S0c: an OCCLUDED Chromium window stops presenting. Chromium suspends rAF
