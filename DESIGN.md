@@ -91,6 +91,19 @@ is the experiment's `#8A8A8A`; light keeps `#A6A6A6`. The classic alternate's
 but it does not ride the current production path. Dot/needle is tuning inside
 the selected magnet implementation: Dot is the default, and Canvas Settings
 may persist either glyph as a device presentation preference.
+*Erratum 2026-10-03 (DK-0d, against the desk):* ICE retired the magnet grid with the cards and
+the dot and needle grids on 2026-09-25 (`@ice/objects` `palette.ts`), so this default holds only
+while VibeField stays pinned at ICE 0.11. On the desk (DK-3) the ground is the cutting mat below —
+its sage and cream, its rulers at a margin of 60, its lattice's fade-in
+(`GridConfig { fadeIn, mat }`) — and the world grid's projection, the magnet's config and ink, the
+classic alternate's dot, Canvas Settings' Dot/Needle preference, Studio's grid controls and the
+appearance document's grid half have no consumer and retire with the old ground (DK-17); the
+CSS-fallback dots stay the plain ground's (the splash, the unavailable state).
+*Erratum 2026-10-03 (DK-0d) — the cursor's halo, which this file never described:* the field
+above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
+the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
+above). It retires with the field (DK-16): on the desk your pointer is the OS cursor and the
+desk's own open hand, and other people's are §8's peers on the mat.
 
 **The cutting mat (2026-09-07).** The third ground is a material, not a token: its sage and
 cream are the same in both themes and the theme changes the light that falls on it. The
@@ -274,6 +287,9 @@ receiver's theme, with white label text on it — so the colour that is nobody's
 neutral grey that holds on both grounds and under white text.* *Corrected again the same day
 (review): `#636366` measured 2.99:1 on the dark ground, just under 3:1; `#68686B` holds 3.2:1
 there, 3.1:1 on dark chrome, 5.3:1 on the light ground and 5.5:1 under the white label.*
+*Erratum 2026-10-03 (DK-0d, against the desk):* on the desk VibeField draws the peers' cursors
+itself (DK-16; §8, peers on the mat), so the ink is drawn where it is seen rather than sent as
+the sender's colour; `#68686B` and its measured contrasts stand.
 
 ---
 
@@ -366,6 +382,12 @@ none of them; the notched frame is the selection chrome. The recipes stay exactl
 here: the ground reads them by name (`draft/ground` `theme.ts`: `SHADOW`, `LINES`, `LIFT`,
 `HEAT`). The stratified profile keeps its CSS chrome. Nothing here changes for a widget
 author; the change is which layer paints the chrome.
+*Erratum 2026-10-03 (DK-0d, against the desk):* ICE deleted its presentation profiles — the
+composited and the stratified, with the ground — at design-015 D5b (2026-09-26), so the composited
+profile never reached VibeField (pinned at ICE 0.11, where the DOM card still carries this chrome)
+and never will. On the desk (DK-D2) each object kind draws its own face, shadow and lift on the GPU
+under the mat's one light, the selection is the mat's pencil brackets (§8, the desk's chrome), and
+the recipes above stay the chrome's; what the desk's materials mean is the material book's (§5.1).
 
 ### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
 
@@ -447,6 +469,12 @@ arrives, and neither runs under reduced motion.
   keeps stepping, which is what keeps undo and collab landing visibly behind a partial
   overlay. Chrome that COVERS the window instead takes `useFrameFreeze` (ice 0.3.0), which
   parks the engine outright. Sheets recede → hold. Godview covers → freeze.
+  *Erratum 2026-10-03 (DK-0d, against the desk):* the desk has no GL islands and no stage hold —
+  ICE retired the islands with its planes at design-015 D5b, and `useStageHold`'s call sites go
+  inert at the pin and leave at DK-17. A sheet still recedes (the transform above); behind it the
+  desk keeps its own idle — zero submits while nothing moves (design-015 §2), its wind the host's
+  to quiet (`deskLayer({ ambient })`). A cover still freezes: `engine.frame.freeze("cover")`, now
+  over a still of the desk (§8, the covers over the desk).
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
 
@@ -501,6 +529,10 @@ Glow/rim knobs are live CSS vars (Studio adjustable, defaults in code):
 light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
 `--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` · `--ic-rim-alpha-t: 0.85` /
 `-c: 0.55`.
+*Erratum 2026-10-03 (DK-0d, against the desk):* these knobs are CardShell's — the DOM card's
+overlap glow and rim — and the desk draws no DOM card (DK-D2): on the desk they have no consumer,
+and they leave `tokens.css` with CardShell, `card-appearance` and the appearance document's
+`overlapFeedback` at DK-17. Until the cutover they still dress the 0.11 canvas.
 
 **In the composited profile (2026-09-07)** these states are the ground's frame terms, not
 CSS: lift is `Motion.lift` (the same `liftScale`), the selection ring rides the frame's edge,
@@ -508,6 +540,12 @@ and the overlap glow and rim become the CAST LIGHT — the lifted card lights th
 it through its own distance field (`draft/ground/GLOW.md`); the hot-point anatomy above is
 the DOM chrome's and retires with it. The tier alphas, the rim width and the colours stay the
 `--ic-*` values listed here; the size, offset and radial knobs have no meaning for the light.
+*Erratum 2026-10-03 (DK-0d, against the desk):* no composited profile ships (§5's erratum). On the
+desk the living card's states are the kinds' and the mat's (ICE design-015 §7–§8): hover is a
+rise, never an outline; a drag lifts and carries the object; a sole selection wears the pencil
+brackets 6 out and several one union, so the select ring stays the chrome's focus (MC-4); a
+picked-up object rises into the hand (§8, tools in hand) while the desk behind it goes out of
+focus. The hot-point glow and rim retire with CardShell (above).
 
 ---
 
@@ -518,6 +556,12 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   `pointer-events: none` and ride the base transform. Header = eyebrow row (label left,
   meta right). Every widget ships a **compact face** for the zoom readability floor
   (03·A D15): title + badge, no micro-text.
+  *Erratum 2026-10-03 (DK-0d, against the desk):* the DOM card under the camera ends with the desk
+  (DK-D2, ruled 2026-09-25; ICE design-015 §2): on the Canvas view no widget is a DOM tree in a
+  DOM plane — an object kind draws its face, its compact form at a small zoom, its shadow and its
+  lift on the GPU, the mat's marks are its selection (the desk's chrome, below), and the only DOM
+  over the desk is screen-space chrome and the one focused editor. This anatomy stays true of the
+  0.11 canvas until the cutover; CardShell retires at DK-17.
 - **HUD island**: one morphing element (§6 M1), island material, centered-bottom;
   `64px` closed; opens to a sheet with pull bar (48×6 rounded-full, `black/20`),
   morphing ⊕→✕ (135° rotation), edge-fade scroll masks, no visible scrollbars.
@@ -528,6 +572,12 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   The sheet is the old catalog, unchanged (the backdrop, the recede and the stage hold, the category
   pills, the drag-out insert, its pull bar), a transitional door until the desk's pegboard replaces
   it (DK-13).
+  *Erratum 2026-10-03 (DK-0d, against the desk):* on the desk the sheet goes too (DK-13): Objects
+  raises the pegboard (below) — the desk's own drawer, behind the line — and the catalog's tiles,
+  its category pills, its drag-out insert and the tray's state retire with `WidgetTray` (DK-17), as
+  do §4's tray grid (132 cells, 18 gap) and §5's tray-tile shadow. Select and Pan retire too — the
+  desk's one tool pans the bare mat and with Space — C no longer connects, and Clean up is More's
+  (DK-D29, DK-D24).
 - **Artifact Hub side panel** (AH-3/4; amended 2026-08-03): a `vibefield.browser`
   contribution inside the spine-owned `hud.side-panel` stage, separate from the bottom island.
   Its persistent 40px round toggle is the outermost control in the top-right chrome cluster:
@@ -1135,6 +1185,8 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   pill for drop affordances ("Release here to put it back"), progress with numbers
   ("index rebuilding · 42%"), placeholder faces for missing plugins (A6/A8). Empty
   screens invite the next action.
+  *Erratum 2026-10-03 (DK-0d, against the desk):* on the desk a missing plugin's object wears ICE's
+  missing face, never a VibeField placeholder (DK-D18 as amended; the missing face, above).
 - **Doc sync state** (C6-4; Settings Mesh section): one row per doc sync has FACTS
   for — no facts, no row (with no peers, quiet IS the honesty; never a vacuous
   "synced"). Vocabulary: `in step` · `syncing` (green — healthy work) · `pending`
