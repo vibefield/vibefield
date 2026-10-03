@@ -100,7 +100,11 @@ describe("the peer-fieldd door branch (C5)", () => {
     // PEER preset whatever it claims — the tailnet preset plus `index.search`
     // (DS-D8, search by asking), never anything a local token holds
     expect(ack.result.grantedScopes).toEqual([...PEER_FIELDD_SCOPES]);
-    expect(PEER_FIELDD_SCOPES).toEqual([...TAILNET_SCOPES, "index.search"]);
+    // SP-D13 (a), 2026-10-03: the phone's preset carries `index.search` too,
+    // so the derivation adds nothing — the PEER preset equals the tailnet
+    // preset, and what this hello bought is the KIND the probe below reads
+    expect(PEER_FIELDD_SCOPES).toEqual([...new Set([...TAILNET_SCOPES, "index.search"])]);
+    expect(PEER_FIELDD_SCOPES).toEqual([...TAILNET_SCOPES]);
     const probe = (await call(ws, 2, "device.list", {})) as {
       result: { principal: { kind: string; deviceId: string } };
     };

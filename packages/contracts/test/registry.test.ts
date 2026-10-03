@@ -208,7 +208,11 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
         locality,
       });
     expect(row("workspace.read", "local")).toBe(true);
-    expect(TAILNET_SCOPES).not.toContain("index.search");
+    // SP-D13 (a), 2026-10-03: `index.search` was the scope only a peer daemon
+    // held; the phone holds it now, so the two presets are equal and no scope
+    // is the peer's alone. `reachableFromTailnet` keeps reading both presets —
+    // the peer's is still DERIVED (DS-D8) and could grow a scope of its own.
+    expect(TAILNET_SCOPES).toContain("index.search");
     expect(PEER_FIELDD_SCOPES).toContain("index.search");
     expect(row("index.search", "local")).toBe(true);
     expect(row("settings.manage", "stream")).toBe(true);

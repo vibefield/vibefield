@@ -8,21 +8,26 @@ import {
   INDEX_PHASES,
   IndexEnrollmentRecord,
   IndexPhase,
+  IndexProjectsParams,
   IndexProjectsResponse,
   IndexRecentParams,
   IndexRecentResult,
   IndexRecentSession,
+  IndexSearchParams,
   IndexSessionRow,
+  IndexSessionsParams,
   IndexSessionsResponse,
   IndexStatus,
 } from "../src/agent-index";
-import { METHODS } from "../src/methods";
+import { METHODS, reachableFromTailnet } from "../src/methods";
 import { PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
 import {
+  INDEX_TAILNET_LIMITS,
   LAYOUT,
   LAYOUT_ROOT_LEVEL,
   PEER_FIELDD_SCOPES,
   SCOPES,
+  TAILNET_GUEST_SCOPES,
   TAILNET_SCOPES,
 } from "../src/registries";
 
@@ -310,11 +315,18 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
     }
   });
 
-  it("a self peer DAEMON may search; the phone's preset is unchanged (DS-D8; SP-D13 open)", () => {
+  it("a self peer DAEMON may search, and since SP-D13 the phone may too (DS-D8; SP-D13 (a), 2026-10-03)", () => {
     expect(PEER_FIELDD_SCOPES).toContain("index.search");
-    expect(TAILNET_SCOPES).not.toContain("index.search");
-    // derived, never a copy: the two differ by exactly the one scope
-    expect([...PEER_FIELDD_SCOPES].sort()).toEqual([...TAILNET_SCOPES, "index.search"].sort());
+    // SP-D13 RULED (a), James, 2026-10-03: a self phone may search and list
+    // its own history — bounded for a tailnet caller (INDEX_TAILNET_LIMITS,
+    // applied at fieldd's doors), so the content scope joins its preset
+    expect(TAILNET_SCOPES).toContain("index.search");
+    // derived, never a copy: the peer preset is still the tailnet preset plus
+    // `index.search` — which since SP-D13 adds nothing, so the two are equal,
+    // scope for scope and in the preset's order, with no scope twice
+    expect([...PEER_FIELDD_SCOPES]).toEqual([...new Set([...TAILNET_SCOPES, "index.search"])]);
+    expect([...PEER_FIELDD_SCOPES]).toEqual([...TAILNET_SCOPES]);
+    expect(new Set(PEER_FIELDD_SCOPES).size).toBe(PEER_FIELDD_SCOPES.length);
     expect(PEER_FIELDD_SCOPES).not.toContain("index.manage");
   });
 
@@ -323,6 +335,55 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       expect(SCOPES).toContain(scope);
       expect(TAILNET_SCOPES).not.toContain(scope);
       expect(PLUGIN_CAPABILITY_ELIGIBILITY[scope]).toBeUndefined();
+    }
+  });
+});
+
+// SP-D13 (a), James, 2026-10-03 — the phone may search and list its own
+// history. `index.search` joins the tailnet preset, and a tailnet caller's
+// answers are bounded by ONE registry number, clamped at fieldd's doors (the
+// fieldd half: `test/index-tailnet-bound.test.ts`).
+describe("SP-D13 — the phone's own history, bounded", () => {
+  it("every door on index.search is reachable from the phone's OWN preset, and each subscription among them declares its frames", () => {
+    const doors = METHODS.filter((m) => m.surface === "product" && m.scope === "index.search");
+    expect(doors.map((m) => m.method).sort()).toEqual([
+      "index.catalog.subscribe",
+      "index.changes.subscribe",
+      "index.projects",
+      "index.recent",
+      "index.search",
+      "index.sessions",
+    ]);
+    for (const m of doors) {
+      // the phone's preset, not the peer daemon's: before SP-D13 these were
+      // reachable from the tailnet only through PEER_FIELDD_SCOPES
+      expect(TAILNET_SCOPES, m.method).toContain("index.search");
+      expect(reachableFromTailnet(m), m.method).toBe(true);
+      // SP-1's lint, read for this family: a bare `true` never reaches a phone
+      if (m.subscription !== undefined) expect(m.subscription, m.method).not.toBe(true);
+      // a guest still holds nothing and calls none of them
+      expect(m.guestOk ?? false, m.method).toBe(false);
+    }
+    expect(TAILNET_GUEST_SCOPES).toEqual([]);
+  });
+
+  it("the bound is one registry number, a limit every bounded door's own schema admits — and below what each admits", () => {
+    expect(INDEX_TAILNET_LIMITS).toEqual({ MAX_ROWS: 100 });
+    const max = INDEX_TAILNET_LIMITS.MAX_ROWS;
+    expect(Number.isSafeInteger(max) && max >= 1).toBe(true);
+    // the clamped ask is one the door already accepts, so fieldd hands its
+    // service a limit the contract admits — and each schema admits MORE, which
+    // is why the bound is a door's clamp and not a schema's ceiling (a
+    // window keeps every one of these limits)
+    const asks: Array<[string, (limit: number) => boolean]> = [
+      ["index.search", (limit) => IndexSearchParams.safeParse({ q: "x", limit }).success],
+      ["index.sessions", (limit) => IndexSessionsParams.safeParse({ limit }).success],
+      ["index.projects", (limit) => IndexProjectsParams.safeParse({ limit }).success],
+      ["index.recent", (limit) => IndexRecentParams.safeParse({ scope: "all", limit }).success],
+    ];
+    for (const [door, admits] of asks) {
+      expect(admits(max), door).toBe(true);
+      expect(admits(max + 1), door).toBe(true);
     }
   });
 });

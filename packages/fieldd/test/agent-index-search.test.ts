@@ -617,7 +617,7 @@ describe("the doors' posture", () => {
     }
   });
 
-  it("DS-6 (DS-D8): a self peer DAEMON is served both doors; index.recent stays local; the phone's preset still lacks the scope", async () => {
+  it("DS-6 (DS-D8): a self peer DAEMON is served both doors; index.recent stays local; since SP-D13 the phone is served all three", async () => {
     // Search is BY ASKING (DS-D8, RULED 2026-09-30): one desktop asks another's
     // index on its person's behalf, so `index.sessions` and `index.search`
     // FEDERATE and a peer-fieldd principal is minted PEER_FIELDD_SCOPES (the
@@ -626,6 +626,11 @@ describe("the doors' posture", () => {
     // scope is read), and a `tailnet` principal — the phone — keeps the preset
     // without the content scope until SP-D13 rules (the harness
     // device-routing.test.ts uses for agent.spawn).
+    // *SP-D13 RULED (a), James, 2026-10-03:* the phone's preset carries
+    // `index.search` now, so it is served all three — `index.recent` too, since
+    // the D36 wall refuses a `local` door to a peer daemon, never to a phone.
+    // Its answers are bounded at the real doors (index-tailnet-bound.test.ts);
+    // this harness's handlers are stand-ins.
     const secret = "3q2fN8pXvKb0aH5sYw1LrTz9cUeD7RgM";
     const api = new ProductApi({
       port: 0,
@@ -703,17 +708,19 @@ describe("the doors' posture", () => {
     expect(called).toBe(2); // the locality wall fired before the handler
 
     const phone = await dial("ios");
-    expect(phone.granted).not.toContain("index.search");
+    expect(phone.granted).toContain("index.search");
     for (const [id, method] of [
       [2, "index.sessions"],
       [3, "index.search"],
       [4, "index.recent"],
     ] as const) {
       const res = (await phone.call(id, method, params)) as Reply;
-      expect(res.error?.data.kind, method).toBe("FORBIDDEN_SCOPE");
-      expect(res.error?.data.details).toMatchObject({ required: "index.search" });
+      // no refusal of any kind — the scope wall passes it, and so does D36's
+      expect(res.error, method).toBeUndefined();
+      // the handler answered it: the stand-in's own empty answer came back
+      expect(res.result, method).toEqual({});
     }
-    expect(called).toBe(2);
+    expect(called).toBe(5);
   });
 });
 
