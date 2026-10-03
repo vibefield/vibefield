@@ -222,4 +222,56 @@ describe("workspace behavior generation ownership", () => {
     expect(current.ce.engine.guests.list()).toEqual([]);
     await runtime.close();
   });
+
+  it("DK-5: opens a DEGRADED session's in-memory board with no behaviors bound — never a white window", async () => {
+    // DocManager.degradedSession: no lane, no document (`docId` ""), the board seeded in memory
+    // (B3: the field still opens). The behavior host refuses an empty document with a throw, and
+    // that throw in the attach effect unmounted the whole window — found by the restart soak, where
+    // a window that lost the board's writer lock after a daemon restart degrades.
+    const { plugins, runtime } = preparedBehaviorRuntime("com.example.workspace-behavior-degraded");
+    const state: DocManagerState = {
+      phase: "loading",
+      loading: { progress: 0, stage: "opening doc" },
+      doc: null,
+      docs: [],
+      thumbnailUrls: {},
+      pending: {
+        generation: 3,
+        docId: "",
+        name: "Field",
+        lane: null,
+        initialBytes: null,
+        initialUpdates: [],
+        seed: false,
+      },
+    };
+    const trace: string[] = [];
+    const manager = {
+      subscribe: () => () => undefined,
+      getState: () => state,
+      contentApplied: () => trace.push("content-applied"),
+      canvasPresented: () => undefined,
+    } as unknown as DocManager;
+    let session: WorkspaceSession | undefined;
+    setRendererLogger(
+      recordingLogger((event) => {
+        if (event === "renderer.plugin.behavior_registered") trace.push("register");
+      }),
+    );
+
+    function Harness() {
+      const stageDisposeRef = useRef<(() => void) | null>(null);
+      session = useWorkspaceSession(manager, stageDisposeRef, plugins);
+      return null;
+    }
+
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    await act(async () => root.render(<Harness />));
+    expect(trace).toEqual(["content-applied"]); // the board opened; nothing was attributed to it
+    expect(session?.ce.docs.current()).toBeDefined();
+    expect(session?.ce.engine.guests.list()).toEqual([]);
+    await act(async () => root.unmount());
+    await runtime.close();
+  });
 });

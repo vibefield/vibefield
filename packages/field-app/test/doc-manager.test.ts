@@ -215,6 +215,47 @@ describe("DocManager launch pipeline (B4)", () => {
     expect(Array.from(pending2?.initialBytes ?? [])).toEqual(Array.from(bytes));
   });
 
+  it("DK-5: a window reopens ITS board — not the last board another window opened; a new window reads the launch's", async () => {
+    // sessionStorage is the window's own and outlives its renderer: a renderer replaced after a
+    // daemon restart reopens what it held. Two windows on one shared `vf-last-doc` both reopened
+    // the last board, and fieldd's single-writer lock refused the second (the restart soak).
+    const store = new Map<string, string>();
+    const session = {
+      getItem: (key: string) => store.get(key) ?? null,
+      setItem: (key: string, value: string) => void store.set(key, String(value)),
+      removeItem: (key: string) => void store.delete(key),
+      clear: () => store.clear(),
+    };
+    Object.defineProperty(globalThis, "sessionStorage", { value: session, configurable: true });
+    cleanup.push(() => {
+      Reflect.deleteProperty(globalThis, "sessionStorage");
+    });
+    const { daemon } = await stack();
+    const first = managerFor(daemon);
+    await first.boot();
+    const mine = first.getState().pending?.docId ?? "";
+    await putCurrent(first, await applyPending(first));
+    await until(() => first.getState().phase === "ready");
+    expect(store.get("vf-window-doc")).toBe(mine);
+    await first.createDoc(); // the board another window opened last
+    const theirs = first.getState().pending?.docId ?? "";
+    await putCurrent(first, await applyPending(first));
+    await until(() => first.getState().phase === "ready");
+    await first.shutdown();
+    expect(localStorage.getItem("vf-last-doc")).toBe(theirs);
+    store.set("vf-window-doc", mine); // this window held `mine`
+
+    const replaced = managerFor(daemon); // this window's renderer, replaced
+    await replaced.boot();
+    expect(replaced.getState().pending?.docId).toBe(mine);
+    await replaced.shutdown();
+
+    store.clear(); // a NEW window: no board of its own yet
+    const fresh = managerFor(daemon);
+    await fresh.boot();
+    expect(fresh.getState().pending?.docId).toBe(theirs);
+  }, 30_000);
+
   it("a stale vf-last-doc falls back to the most recent doc, never a blind seed", async () => {
     const { daemon } = await stack();
     const manager = managerFor(daemon);

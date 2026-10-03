@@ -17,13 +17,20 @@ import { getRendererLogger } from "./logging";
 // useSyncExternalStore and APPLIES sessions to the engine (the manager never
 // touches the CanvasEngine — the StrictMode twin-engine law stays React-side).
 //
-// Registry-open law (B3): the launch NEVER blind-seeds — localStorage's last
-// doc, else the most recently updated, else doc.create("Field") which alone
-// carries seed:true (the demo scene belongs to the bootstrap default doc only;
-// user-created docs open empty). Persistence status still flows through the
-// board-status store (SystemSection's row); this store owns phase/doc/docs.
+// Registry-open law (B3): the launch NEVER blind-seeds — this window's own
+// board, else localStorage's last doc, else the most recently updated, else
+// doc.create("Field") which alone carries seed:true (the demo scene belongs to
+// the bootstrap default doc only; user-created docs open empty). Persistence
+// status still flows through the board-status store (SystemSection's row); this
+// store owns phase/doc/docs.
 
 const LAST_DOC_KEY = "vf-last-doc";
+/** THIS WINDOW'S board (DK-5): sessionStorage is the window's own and outlives its renderer, so a
+ * renderer replaced after a daemon restart reopens the board IT held — not the last board any
+ * window opened, which two windows would both reopen and the single-writer lock would refuse to
+ * the second (found by `smoke:plugin-restart`'s soak with the desk). A new window has none and
+ * reads the launch's `vf-last-doc`. */
+const WINDOW_DOC_KEY = "vf-window-doc";
 export const DEFAULT_DOC_NAME = "Field";
 const SWITCH_COVER_MS = 220;
 const CANVAS_PRESENT_TIMEOUT_MS = 2_500;
@@ -101,9 +108,18 @@ function readLastDocId(): string | null {
   }
 }
 
+function readWindowDocId(): string | null {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage.getItem(WINDOW_DOC_KEY);
+  } catch {
+    return null;
+  }
+}
+
 function writeLastDocId(docId: string): void {
   try {
     if (typeof localStorage !== "undefined") localStorage.setItem(LAST_DOC_KEY, docId);
+    if (typeof sessionStorage !== "undefined") sessionStorage.setItem(WINDOW_DOC_KEY, docId);
   } catch {
     /* private-mode class failures — last-doc is a convenience, never load-bearing */
   }
@@ -178,9 +194,13 @@ export class DocManager {
     this.stage(0, "opening doc");
     try {
       const docs = await this.refreshDocs();
-      const last = readLastDocId();
+      const remembered = (docId: string | null): DocRegistryEntry | undefined =>
+        docId === null
+          ? undefined
+          : docs.find((d) => d.docId === docId && d.deletedAt === undefined);
       let entry =
-        (last !== null ? docs.find((d) => d.docId === last && d.deletedAt === undefined) : null) ??
+        remembered(readWindowDocId()) ?? // this window's own board (DK-5)
+        remembered(readLastDocId()) ??
         docs.find((d) => d.deletedAt === undefined) ?? // list is updatedAt-desc
         null;
       let seed = false;

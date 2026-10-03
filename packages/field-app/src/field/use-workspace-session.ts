@@ -170,6 +170,12 @@ export function useWorkspaceSession(
     let behaviorEpisode = 0;
     const connectBehaviorEpisode = () => {
       if (behaviorRuntime === undefined) return undefined;
+      // DK-5: a DEGRADED session (the manager's in-memory board — no document, `docId` "")
+      // binds no behaviors: they are attributed to a document, and the host refuses an empty
+      // one with a throw that unmounted the whole window (white) where B3 says the field
+      // still opens. The soak with the desk found it: a window that lost the board's writer
+      // lock after a daemon restart degrades.
+      if (pending.docId.length === 0) return undefined;
       behaviorEpisode += 1;
       return connectBehaviorGenerationHost(
         new BehaviorGenerationHost({
