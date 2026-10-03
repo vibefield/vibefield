@@ -81,7 +81,29 @@ function coreUsage(usage: Readonly<Record<string, unknown>>): MonitorUsageState 
     cacheCreationTokens: num("cacheCreationTokens"),
     reasoningTokens: num("reasoningTokens"),
     burnRatePerMin: num("burnRatePerMin"),
+    // SV — the estimate the usage ledger holds (its total and its 30 s steps).
+    // Until SV this projection dropped them, so no local row ever had a cost.
+    costUsd: num("costUsd"),
+    costRatePerMin: num("costRatePerMin"),
+    ...(usage.costCoverage === "complete" ||
+    usage.costCoverage === "partial" ||
+    usage.costCoverage === "unavailable"
+      ? { costCoverage: usage.costCoverage }
+      : {}),
+    ...(Array.isArray(usage.costHistory) ? { costHistory: costBuckets(usage.costHistory) } : {}),
   };
+}
+
+/** Core's 30 s cost buckets, each one checked: a bucket without a moment and a finite cost is dropped. */
+function costBuckets(ring: readonly unknown[]): NonNullable<MonitorUsageState["costHistory"]> {
+  return ring.flatMap((bucket) => {
+    if (typeof bucket !== "object" || bucket === null) return [];
+    const { at, costUsd } = bucket as { at?: unknown; costUsd?: unknown };
+    if (typeof at !== "string" || typeof costUsd !== "number" || !Number.isFinite(costUsd)) {
+      return [];
+    }
+    return [{ at, costUsd }];
+  });
 }
 
 /** Where the renderer keeps what it dealt and what it counted (D3, D7): cache. */

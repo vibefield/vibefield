@@ -66,7 +66,10 @@ const noUsage: AccountUsagePort = {
   subscribe: () => () => undefined,
 };
 
-function door(statusHistory?: StatusHistoryPort): MonitorDoor {
+function door(
+  statusHistory?: StatusHistoryPort,
+  rows: readonly AgentSessionSummary[] = ROWS,
+): MonitorDoor {
   return {
     observeMesh: ({ onOpen }) => {
       onOpen({ devices: [] } as never);
@@ -74,7 +77,7 @@ function door(statusHistory?: StatusHistoryPort): MonitorDoor {
     },
     attach: async () => ({ state: "attached" as const, sessionId: "r", readWrite: true }),
     observe: ({ onFrame }) => {
-      onFrame(ROWS);
+      onFrame(rows);
       return () => undefined;
     },
     createTerminal: async () => ({ state: "mounted" as const, sessionId: "born-1" }),
@@ -161,6 +164,32 @@ describe("TL — the record a view is handed", () => {
     expect(seen?.history?.lanes.get("run-gone")).toMatchObject({
       endedAtMs: Date.parse("2026-10-02T12:50:00.000Z"),
     });
+  });
+
+  it("a local run's cost reaches the view (the projection used to drop it)", async () => {
+    const live = managedSummary({ runtimeRunId: "run-live", status: "working", createdAt: CREATED });
+    const now = Date.now();
+    const bucket = (agoMs: number, costUsd: number) => ({
+      at: new Date(Math.floor((now - agoMs) / 30_000) * 30_000).toISOString(),
+      costUsd,
+    });
+    const priced = {
+      ...live,
+      monitor: {
+        ...live.monitor,
+        usage: {
+          costUsd: 2.5,
+          costCoverage: "partial",
+          costHistory: [bucket(60_000, 0.2), bucket(0, 0.3), { at: 7, costUsd: 1 }],
+        },
+      },
+    } as AgentSessionSummary;
+    await mount(door(undefined, [priced]));
+    const usage = seen?.agents.find((agent) => agent.id === "run-live")?.agent?.usage;
+    expect(usage?.total).toBe(2.5);
+    expect(usage?.coverage).toBe("partial");
+    // the malformed bucket is dropped; the two that stand are in the ledger's steps
+    expect(usage?.steps.reduce((sum, step) => sum + step, 0)).toBeCloseTo(0.5);
   });
 
   it("without the door (or refused), records from where Core says the current state began", async () => {

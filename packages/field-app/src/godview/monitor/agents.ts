@@ -8,6 +8,7 @@ import {
   type PaneAttachment,
   type ProjectTint,
   projectTint,
+  USAGE_STEP_MS,
   type UsageHistory,
 } from "@vibecook/puppeteer-views";
 import {
@@ -21,7 +22,7 @@ import {
 } from "./agent-status";
 import type { AgentSessionSummary } from "./facet-types";
 import { folderName } from "./folder-name";
-import { classifyRemoteStatus, type MonitorMeshRecord, remoteDetail } from "./mesh-rows";
+import { classifyRemoteStatus, deskCost, type MonitorMeshRecord, remoteDetail } from "./mesh-rows";
 import { remoteRowId } from "./remote-door";
 import type { MonitorAgent, MonitorDeviceFacet } from "./types";
 
@@ -343,6 +344,7 @@ export function monitorAgentFromMesh(
   const createdAtMs = Date.parse(row.createdAt);
   const branch = row.project?.branch ?? undefined;
   const model = row.model?.displayName || row.model?.id;
+  const usage = deskUsage(row);
   return {
     id: remoteRowId(device.id, row.runtimeRunId),
     createdAtMs: Number.isFinite(createdAtMs) ? createdAtMs : 0,
@@ -384,8 +386,28 @@ export function monitorAgentFromMesh(
       // no evidence clock crosses desktops: unknown while the desktop answers,
       // stale once it does not
       recency: live ? "unknown" : "stale",
+      ...(usage !== undefined ? { usage } : {}),
       remoteRow: row,
     },
+  };
+}
+
+/**
+ * SV — what another desktop's run has spent, as its owner's desk row says
+ * (`usage.costUsd`, puppeteer's estimate): the total and nothing else. No
+ * steps cross desktops, so `steps` is empty, never a row of zeros a view would
+ * read as ten quiet minutes. A run its owner could not price has none.
+ */
+function deskUsage(row: MonitorMeshRecord["row"]): UsageHistory | undefined {
+  const total = deskCost(row);
+  if (total === undefined || total < 0) return undefined;
+  const coverage = (row.usage as Record<string, unknown> | undefined)?.["costCoverage"];
+  if (coverage === "unavailable") return undefined;
+  return {
+    total,
+    coverage: coverage === "partial" ? "partial" : "complete",
+    steps: [],
+    stepMs: USAGE_STEP_MS,
   };
 }
 
