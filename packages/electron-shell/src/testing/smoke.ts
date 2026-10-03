@@ -523,9 +523,16 @@ export async function runSmokeCanvas(opts: {
       const card = await expectDeskUnavailableCard(win);
       console.log(`SMOKE_CANVAS_CARD ${JSON.stringify(card)}`);
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
-      if (deskSaid.said[0] !== "DESK_RETRY" || deskSaid.said[1] !== "DESK_UNAVAILABLE") {
+      // a retry first (one per stage that booted — the boot's transient generation may be one), the
+      // card said once, and last
+      const said = deskSaid.said;
+      if (
+        said[0] !== "DESK_RETRY" ||
+        said.filter((name) => name === "DESK_UNAVAILABLE").length !== 1 ||
+        said.at(-1) !== "DESK_UNAVAILABLE"
+      ) {
         problems.push(
-          `the boot's no-adapter was not retried once before the card (${deskSaid.said.join(" → ")})`,
+          `the boot's no-adapter was not retried before the card (${said.join(" → ")})`,
         );
       }
       if (card.title.length === 0) problems.push("the unavailable card has no words");
@@ -669,10 +676,11 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
 function deskMarkerLog(win: BrowserWindow): { readonly said: string[]; stop(): void } {
   const said: string[] = [];
   const listen = (...args: unknown[]): void => {
-    for (const a of args) {
-      const name = /^(DESK_(?:RETRY|READY|UNAVAILABLE)) /u.exec(consoleText(a))?.[1];
-      if (name !== undefined) said.push(name);
-    }
+    // ONE line per event: Electron hands both the event (carrying `message`) and the positional
+    // message, so reading every argument would count each line twice
+    const text = args.map(consoleText).find((candidate) => candidate.length > 0) ?? "";
+    const name = /^(DESK_(?:RETRY|READY|UNAVAILABLE)) /u.exec(text)?.[1];
+    if (name !== undefined) said.push(name);
   };
   win.webContents.on("console-message", listen);
   return { said, stop: () => win.webContents.off("console-message", listen) };
@@ -1205,40 +1213,74 @@ function physicalSoakOptions(
   };
 }
 
-/** A `DESK_READY {…}` line (field-app development-console.ts): `boot` is the mount's own cost,
- * ms since the mount — `device`, `compiled`, `presented` (ICE I25 `perf().boot`). */
-interface DeskReadyLine {
+/** One window's desk as the door tells it (field-app field/desk/desk-door.ts `window.__vfDesk`): the
+ * mount it is, its status, its boot — ms since the mount, `device`, `compiled`, `presented` (ICE I25
+ * `perf().boot`) — its frames and its census. Null while no desk is mounted. */
+interface DoorDesk {
   readonly generation: number;
   readonly mount: number;
+  readonly state: string;
   readonly boot: Readonly<Record<string, number>>;
   readonly frames: number;
+  readonly census: Record<string, number>;
 }
 
-/** DK-5 — one window's DESK across the plugin-restart soak: the board open in it
- * (`vf-last-doc`), the seed's census there, and its DESK_READY. */
+const DOOR_DESK = `(() => {
+  const d = globalThis.__vfDesk;
+  if (d === undefined) return null;
+  const perf = d.perf();
+  return { generation: d.generation, mount: d.mount, state: d.status().state, boot: perf.boot, frames: perf.frames, census: d.census() };
+})()`;
+
+/** Where a window stands when it shows no desk — the stage, the document's load, the card. */
+const SCENE_DIAGNOSIS = `({
+  desk: document.querySelector("[data-desk]")?.getAttribute("data-desk") ?? null,
+  loading: document.querySelector(".field-scene")?.getAttribute("data-doc-loading") ?? null,
+  card: document.querySelector("[data-desk-unavailable]")?.getAttribute("data-desk-unavailable") ?? null,
+})`;
+
+/** DK-5 — one window's DESK across the plugin-restart soak: the board open in it (its own
+ * `vf-window-doc`, sessionStorage — the window's, outliving its renderer), and the desk that holds
+ * it, as its door tells it. */
 interface WindowDesk {
   readonly docId: string | null;
-  readonly census: Record<string, number> | null;
-  readonly ready: DeskReadyLine;
+  readonly desk: DoorDesk | null;
 }
 
+/** Each window's desk HOLDING THE SEED'S SIX — drawn (`ready`, a frame presented) and one of each
+ * kind — read through the door, not the first DESK_READY line: a booting window can mount a desk
+ * for the transient generation before its board opens (a warm device presents before the open
+ * lands), and that desk is not the one that holds the board. */
 async function windowDesks(
   windows: readonly BrowserWindow[],
-  readies: readonly Promise<string>[],
+  timeoutMs = 60_000,
 ): Promise<{ desks: WindowDesk[]; problems: string[] }> {
   const desks: WindowDesk[] = [];
   const problems: string[] = [];
+  const holdsTheSeed = (desk: DoorDesk | null): desk is DoorDesk =>
+    desk !== null &&
+    desk.state === "ready" &&
+    desk.frames >= 1 &&
+    desk.boot["presented"] !== undefined &&
+    CANVAS_CENSUS.seed.every((type) => desk.census[type] === 1);
   for (const [index, win] of windows.entries()) {
-    const ready = JSON.parse(
-      await (readies[index] ?? Promise.reject(new Error("no wait"))),
-    ) as DeskReadyLine;
-    const read = await readDeskCensus(win);
-    const docId = (await win.webContents.executeJavaScript(
-      'localStorage.getItem("vf-last-doc")',
-      true,
-    )) as string | null;
-    desks.push({ docId, census: read.census, ready });
-    problems.push(...read.problems.map((problem) => `window ${index + 1}: ${problem}`));
+    const js = <T>(expression: string): Promise<T> =>
+      win.webContents.executeJavaScript(expression, true) as Promise<T>;
+    const deadline = Date.now() + timeoutMs;
+    let desk = await js<DoorDesk | null>(DOOR_DESK);
+    while (!holdsTheSeed(desk) && Date.now() < deadline) {
+      await sleep(100);
+      desk = await js<DoorDesk | null>(DOOR_DESK);
+    }
+    const docId = await js<string | null>('sessionStorage.getItem("vf-window-doc")');
+    desks.push({ docId, desk });
+    if (!holdsTheSeed(desk)) {
+      problems.push(
+        `window ${index + 1}: no desk holding the seed's six within ${timeoutMs}ms (${JSON.stringify(
+          desk ?? (await js<unknown>(SCENE_DIAGNOSIS)),
+        )})`,
+      );
+    }
   }
   return { desks, problems };
 }
@@ -1337,10 +1379,6 @@ export async function runSmokePluginRestart(opts: {
       powerSaveBlockerId = powerSaveBlocker.start("prevent-app-suspension");
     }
     const initialReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
-    const initialDeskReady = gpu
-      ? windows.map((win) => waitForConsole(win, "DESK_READY ", 60_000))
-      : [];
-    for (const wait of initialDeskReady) wait.catch(() => undefined);
     await Promise.all(
       windows.map((win) => loadRenderer(win, "smoke-plugin-restart", opts.viteUrl)),
     );
@@ -1357,7 +1395,7 @@ export async function runSmokePluginRestart(opts: {
     let desks: WindowDesk[] = [];
     const remounts: Readonly<Record<string, number>>[][] = [];
     if (gpu) {
-      const read = await windowDesks(windows, initialDeskReady);
+      const read = await windowDesks(windows);
       desks = read.desks;
       initialProblems.push(...read.problems);
       console.log(
@@ -1541,10 +1579,6 @@ export async function runSmokePluginRestart(opts: {
         ]);
       }
       const replacementReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
-      const replacementDeskReady = gpu
-        ? windows.map((win) => waitForConsole(win, "DESK_READY ", 90_000))
-        : [];
-      for (const wait of replacementDeskReady) wait.catch(() => undefined);
       const replacementHandle = waitForReplacementHandle(
         opts.onHandle,
         oldHandle.info.bootId,
@@ -1568,23 +1602,22 @@ export async function runSmokePluginRestart(opts: {
         censusFailures(facts).map((problem) => `window ${index + 1}: ${problem}`),
       );
       if (gpu) {
-        // the desk REMOUNTED in each replaced renderer, on a board drawn BEFORE the restart, its six
-        // intact — a board created now would have been seeded afresh, not survived. (The windows
-        // share one profile and so one `vf-last-doc`: a window may reopen its neighbour's board.)
-        const read = await windowDesks(windows, replacementDeskReady);
+        // the desk REMOUNTED in each replaced renderer, on the SAME board it drew (its own
+        // `vf-window-doc`), its six intact — a board made now would have been seeded afresh
+        const read = await windowDesks(windows);
         console.log(
           `SMOKE_PLUGIN_RESTART_DESK ${JSON.stringify({ phase: "recovered", cycle, windows: read.desks })}`,
         );
         replacementProblems.push(...read.problems);
-        const drawn = new Set(desks.map((desk) => desk.docId));
         for (const [index, desk] of read.desks.entries()) {
-          if (desk.docId === null || !drawn.has(desk.docId)) {
+          const before = desks[index]?.docId ?? null;
+          if (desk.docId === null || desk.docId !== before) {
             replacementProblems.push(
-              `window ${index + 1} reopened ${desk.docId ?? "no board"}, not a board drawn before the restart (${[...drawn].join(", ")})`,
+              `window ${index + 1} reopened ${desk.docId ?? "no board"}, not its own ${before ?? "(none)"}`,
             );
           }
         }
-        remounts.push(read.desks.map((desk) => desk.ready.boot));
+        remounts.push(read.desks.map((desk) => desk.desk?.boot ?? {}));
         desks = read.desks;
       } else {
         const recoveredCards = await Promise.all(
