@@ -1780,7 +1780,7 @@
               The shape of this dependency is worth stating plainly, because it is easy to assume
               otherwise: VibeField does not use a rosetta client object. It imports response
               <em>types</em> from <code>@rosetta/protocol</code> in one file (seven generated response
-              types), the <code>PROTOCOL_VERSION</code> constant (<code>20</code>) in one other, and
+              types), the <code>PROTOCOL_VERSION</code> constant (<code>26</code> since the 2026-10-03 pin move to <code>886baede</code>; <code>20</code> when this page was written) in one other, and
               dials the routes with its own fetch over the loopback origin the supervisor keeps private.
               rosettad's router registers 24 routes — 21 under <code>/api/</code> and 3 WebSocket routes
               under <code>/ws/</code>. fieldd fetches seven of them (<code>/api/projects</code> since QL,
@@ -1841,7 +1841,7 @@
               <div class="card">
                 <h3>rosetta's assets, timelines and projects</h3>
                 <p>
-                  Of rosettad's 24 routes, VibeField dials six. Untouched: the eight session-scoped routes (collaboration, plan revisions, the timeline and its entry, command, plan, read, work), the four project routes, <code>/api/assets/{name}</code>,
+                  Of rosettad's 24 routes, VibeField dials seven (<code>/api/projects</code> since QL, 2026-09-28; six when this page was written). Untouched: the eight session-scoped routes (collaboration, plan revisions, the timeline and its entry, command, plan, read, work), the four project routes, <code>/api/assets/{name}</code>,
                   <code>/api/ingest/boost</code> and <code>/api/runtimes/enable</code> — the last one
                   deliberately, since the enrollment file is authoritative.
                 </p>
@@ -2054,7 +2054,7 @@
           <footer>
             <p>
               Agent plane · vibe-field. Written against vibe-field <code>b7ebb444</code>, puppeteer
-              <code>2f5ce002</code>, rosetta <code>e8d907ab</code>; the AC notes and the
+              <code>2f5ce002</code>, rosetta <code>e8d907ab</code>; <em>Pin note, 2026-10-03: the rosetta pin moved to <code>886baede</code> (protocol 26) on 2026-10-03 after <code>d3cf325e</code> (protocol 23) on 2026-09-28; the seams this page cites were re-checked at the move — fieldd's seven imported types and the session, project and search rows are byte-identical to <code>e8d907ab</code>; only the constant and the route count above moved.</em> The AC notes and the
               <code>agent.catalog</code> row (LANDED §AC) were read at the AC chain's tip, 2026-09-22. The registry is the authority on a
               door's scope and locality; where this page and
               <code>packages/contracts/src/methods.ts</code> disagree, the registry is right and this page
