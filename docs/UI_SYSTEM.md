@@ -136,3 +136,17 @@ boundary.
 The ownership test intentionally rejects old catalog-only replicas and production selector
 definitions in catalog CSS. That makes fidelity a maintained boundary rather than a one-time
 cleanup.
+
+## Test environments
+
+Renderer-side suites run under happy-dom: field-app's and the browser plugin's (vitest's
+`happy-dom` environment), and the plugin playground's, which installs its own happy-dom window.
+Every one of them loads the repo's shared shim, `@vibefield/test-env` (`tooling/test-env`) —
+through `setupFiles` (`@vibefield/test-env/happy-dom/setup`), or, in the playground, on the window
+it creates before binding its classes. The reason: happy-dom 20 holds a `MutationObserver`'s
+report callback only in a `WeakRef`, so a garbage collection between `observe()` and the mutation
+deafens the observer for good — no record, no error. A loaded `pnpm test` collects often enough to
+land there (DK-3: godview-monitor's no-GPU row failed four whole runs in six, never alone). The shim
+makes `observe()` hold its listener strongly, as a browser does. Its forced-GC witness runs once, in
+`tooling/test-env`; each suite carries a one-line wiring row. A new happy-dom suite loads the same
+setup file. Drop the shim when happy-dom holds the callback itself.

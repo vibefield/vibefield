@@ -20,6 +20,7 @@
     "@vibefield/plugin-build": "workspace:*",
     "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",
+    "@vibefield/test-env": "workspace:*",
     "happy-dom": "^20.0.0",
     "react": "catalog:",
     "react-dom": "catalog:",

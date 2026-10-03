@@ -18,6 +18,7 @@
 import { existsSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { holdMutationObserverCallbacks } from "@vibefield/test-env/happy-dom";
 
 /** This package's own directory, so the loader can find `src/cli.ts` no matter
  * which directory the bin was invoked from. */
@@ -79,6 +80,10 @@ export async function installDom(): Promise<void> {
   if (globalThis.document !== undefined) return;
   const { Window } = await import("happy-dom");
   const win = new Window({ url: "https://plugin-playground.vibefield.local/" });
+  // The repo's shared happy-dom shim (DK-5; tooling/test-env), on this window's
+  // own class BEFORE the copy below binds it: an observer here survives a garbage
+  // collection, as in every happy-dom suite.
+  holdMutationObserverCallbacks(win as unknown as { MutationObserver: unknown });
   const source = win as unknown as Record<string, unknown>;
   const target = globalThis as unknown as Record<string, unknown>;
   for (const key of DOM_GLOBALS) {
@@ -141,7 +146,7 @@ export async function createHarness(extraRoots: readonly string[] = []): Promise
     // A loader, not a server: no HTTP listener, no HMR socket, no file watcher.
     server: { middlewareMode: true, hmr: false, watch: null, fs: { allow: [...allow] } },
     // Workspace packages export .ts sources, which Node cannot load — they must
-    // ride the transform. Everything else (react, react-dom, ice, three) stays
+    // ride the transform. Everything else (react, react-dom, ice) stays
     // EXTERNAL so each is the single real instance Node resolved, which is what
     // keeps hooks and ICE's process-global widget catalog working across the
     // host/plugin boundary.

@@ -57,6 +57,17 @@ describe("the repo's own plugins", () => {
   });
 });
 
+describe("the DOM it installs", () => {
+  // DK-5: the repo's SHARED happy-dom shim (tooling/test-env) on the playground's own
+  // window, applied before its classes are bound onto globalThis — an observer here
+  // survives a garbage collection. The forced-GC witness runs once, in test-env.
+  it("observes through the shared shim's held MutationObserver", () => {
+    const observer = new MutationObserver(() => undefined);
+    const held = Symbol.for("vibefield.test-env.held-mutation-observer");
+    expect((Object.getPrototypeOf(observer) as Record<symbol, unknown>)[held]).toBe(true);
+  });
+});
+
 describe("controls", () => {
   it("a widget-less fixture passes with zero states", async () => {
     const result = await run({ pluginDir: join(FIXTURES, "no-widgets"), loader: harness });

@@ -61,6 +61,7 @@
     "@types/react-dom": "catalog:",
     "@types/three": "^0.185.0",
     "@vibefield/fieldd": "workspace:*",
+    "@vibefield/test-env": "workspace:*",
     "happy-dom": "^20.0.0",
     "typescript": "catalog:",
     "vitest": "catalog:"
