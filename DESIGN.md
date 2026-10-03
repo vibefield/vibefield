@@ -1213,7 +1213,12 @@ The hot-point glow and rim retire with CardShell (above).
   `WebGPU is unavailable here (no navigator.gpu)`) — "This computer can't draw the desk" · "The desk
   draws with WebGPU, which this graphics setup doesn't offer — a remote desktop has none — so
   reloading won't help. Your objects are saved in this document." · no Reload, since it would not
-  help (R18) · the message; **any other refusal**
+  help (R18) · the message; **no adapter** (a boot refusal ending `requestAdapter() returned null` —
+  WebGPU is there, the computer's graphics offered it nothing; hardware acceleration off among the
+  causes; DK-4) — "This computer can't draw the desk" · "The desk draws with WebGPU, and this
+  computer's graphics offered it no adapter — hardware acceleration may be off — so reloading won't
+  help. Your objects are saved in this document." · no Reload, for the same reason · the message;
+  **any other refusal**
   (`no desk — the adapter, the device or the pipelines were refused: …`) — "The desk couldn't start
   its graphics" · "Your objects are saved in this document; reload to try again." · Reload · the
   message. **`degraded`** (an uncaptured GPU error; the desk still draws) is a banner, not the card:

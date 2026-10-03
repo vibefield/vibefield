@@ -124,6 +124,8 @@ const NO_GPU =
   "no desk — the adapter, the device or the pipelines were refused: WebGPU is unavailable here (no navigator.gpu)";
 const NO_ADAPTER =
   "no desk — the adapter, the device or the pipelines were refused: WebGPU: requestAdapter() returned null";
+const PIPELINES =
+  "no desk — the adapter, the device or the pipelines were refused: GPUPipelineError: invalid shader module";
 
 let host: HTMLDivElement;
 let root: Root;
@@ -230,11 +232,11 @@ describe("the Canvas stage mounts the desk", () => {
   it("shows the card when the desk fails, ICE's message verbatim, and Reload REMOUNTS the layer", async () => {
     await mountStage();
     const first = current();
-    await act(async () => first.move({ state: "failed", message: NO_ADAPTER }));
+    await act(async () => first.move({ state: "failed", message: PIPELINES }));
     const card = host.querySelector("[data-desk-unavailable]");
     expect(card?.getAttribute("data-desk-unavailable")).toBe("refused");
     expect(card?.querySelector("strong")?.textContent).toBe("The desk couldn't start its graphics");
-    expect(card?.querySelector(".vf-ui-unavailable-state__detail")?.textContent).toBe(NO_ADAPTER);
+    expect(card?.querySelector(".vf-ui-unavailable-state__detail")?.textContent).toBe(PIPELINES);
     const reload = [...(card?.querySelectorAll("button") ?? [])].find(
       (b) => b.textContent === "Reload",
     );
@@ -245,12 +247,22 @@ describe("the Canvas stage mounts the desk", () => {
     expect(host.querySelector("[data-desk-unavailable]")).toBeNull(); // pending again
   });
 
-  it("offers no Reload where there is no WebGPU at all", async () => {
+  it("offers no Reload where there is no WebGPU at all, nor where it finds no adapter (DK-4)", async () => {
     await mountStage();
     await act(async () => current().move({ state: "failed", message: NO_GPU }));
     const card = host.querySelector("[data-desk-unavailable]");
     expect(card?.querySelector("strong")?.textContent).toBe("This computer can't draw the desk");
     expect([...(card?.querySelectorAll("button") ?? [])]).toHaveLength(0);
+    await act(async () => current().move({ state: "failed", message: NO_ADAPTER }));
+    const adapterless = host.querySelector("[data-desk-unavailable]");
+    expect(adapterless?.getAttribute("data-desk-unavailable")).toBe("no-adapter");
+    expect(adapterless?.querySelector("strong")?.textContent).toBe(
+      "This computer can't draw the desk",
+    );
+    expect(adapterless?.querySelector(".vf-ui-unavailable-state__detail")?.textContent).toBe(
+      NO_ADAPTER,
+    );
+    expect([...(adapterless?.querySelectorAll("button") ?? [])]).toHaveLength(0);
   });
 
   it("puts a degraded desk on the status line with its Reload, and withdraws it when it clears", async () => {

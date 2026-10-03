@@ -4,13 +4,21 @@ import type { DeskLayerStatus } from "@vibecook/ice/desk";
 // 2026-10-02; R18): the layer's status said in VibeField's words, never ICE's black screen, never a
 // blank. ICE says WHY in one string (`status().message`), so the card reads it: the device lost
 // (`the device was lost: <reason>: <message>`), no WebGPU (a boot refusal ending `WebGPU is
-// unavailable here (no navigator.gpu)` — reloading won't help, so no Reload), any other refusal
-// (`no desk — the adapter, the device or the pipelines were refused: …`). The message itself rides
-// the card's detail slot VERBATIM. `degraded` (an uncaptured GPU error; the desk still draws) is the
-// status line's banner, not the card. And a board from BEFORE the desk (ruling 7, DK-D13…D16) is
-// refused at open — never opened, never converted — with words of its own.
+// unavailable here (no navigator.gpu)` — reloading won't help, so no Reload), no ADAPTER (one ending
+// `requestAdapter() returned null` — WebGPU is here but this computer's graphics offered it nothing,
+// hardware acceleration off among the causes; a reload can't help that either — DK-4, the
+// orchestrator's ruling on DK-3's q2), any other refusal (`no desk — the adapter, the device or the
+// pipelines were refused: …`). The message itself rides the card's detail slot VERBATIM. `degraded`
+// (an uncaptured GPU error; the desk still draws) is the status line's banner, not the card. And a
+// board from BEFORE the desk (ruling 7, DK-D13…D16) is refused at open — never opened, never
+// converted — with words of its own.
 
-export type DeskUnavailableKind = "lost" | "no-webgpu" | "refused" | "before-the-desk";
+export type DeskUnavailableKind =
+  | "lost"
+  | "no-webgpu"
+  | "no-adapter"
+  | "refused"
+  | "before-the-desk";
 
 export interface DeskUnavailableWords {
   readonly kind: DeskUnavailableKind;
@@ -25,6 +33,7 @@ export interface DeskUnavailableWords {
 }
 
 const NO_WEBGPU = "WebGPU is unavailable here (no navigator.gpu)";
+const NO_ADAPTER = "requestAdapter() returned null";
 const LOST = "the device was lost";
 
 /** The card for a `failed` desk, by what ICE said. */
@@ -44,6 +53,15 @@ export function failedWords(message: string | undefined): DeskUnavailableWords {
       kind: "no-webgpu",
       title: "This computer can't draw the desk",
       body: "The desk draws with WebGPU, which this graphics setup doesn't offer — a remote desktop has none — so reloading won't help. Your objects are saved in this document.",
+      reload: false,
+      detail,
+    };
+  }
+  if (detail.endsWith(NO_ADAPTER)) {
+    return {
+      kind: "no-adapter",
+      title: "This computer can't draw the desk",
+      body: "The desk draws with WebGPU, and this computer's graphics offered it no adapter — hardware acceleration may be off — so reloading won't help. Your objects are saved in this document.",
       reload: false,
       detail,
     };
