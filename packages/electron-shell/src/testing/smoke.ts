@@ -1696,6 +1696,9 @@ export async function runSmokePluginRestart(opts: {
       (raw) => JSON.parse(raw) as CanvasFacts,
     );
     console.log(`SMOKE_PLUGIN_RESTART_INITIAL ${JSON.stringify(currentCanvas)}`);
+    // DK-3: GPU-less, each window's desk says it cannot draw — its card, in ICE's words
+    const initialCards = await Promise.all(windows.map((win) => expectDeskUnavailableCard(win)));
+    console.log(`SMOKE_PLUGIN_RESTART_DESK_CARDS ${JSON.stringify(initialCards)}`);
     const initialStyles = await Promise.all(windows.map((win) => waitForPluginStyles(win)));
     console.log(`SMOKE_PLUGIN_RESTART_INITIAL_STYLES ${JSON.stringify(initialStyles)}`);
     const initialProblems = currentCanvas.flatMap((facts, index) => [
@@ -1890,6 +1893,10 @@ export async function runSmokePluginRestart(opts: {
         (raw) => JSON.parse(raw) as CanvasFacts,
       );
       console.log(`SMOKE_PLUGIN_RESTART_RECOVERED ${JSON.stringify(currentCanvas)}`);
+      const recoveredCards = await Promise.all(
+        windows.map((win) => expectDeskUnavailableCard(win)),
+      );
+      console.log(`SMOKE_PLUGIN_RESTART_RECOVERED_DESK_CARDS ${JSON.stringify(recoveredCards)}`);
       const replacementStyles = await Promise.all(windows.map((win) => waitForPluginStyles(win)));
       console.log(`SMOKE_PLUGIN_RESTART_RECOVERED_STYLES ${JSON.stringify(replacementStyles)}`);
       const replacementProblems = currentCanvas.flatMap((facts, index) => [
@@ -4345,6 +4352,10 @@ export async function runSmokeGodview(opts: {
     canvas.catch(() => undefined);
     await loadRenderer(win, "smoke-godview", opts.viteUrl);
     await canvas;
+    // DK-3: this smoke runs GPU-less, so the Canvas view's desk cannot draw — it must say so in
+    // its card (DESIGN.md §8 "When the desk can't draw"), not crash and not go blank.
+    const deskCard = await expectDeskUnavailableCard(win);
+    console.log(`SMOKE_GODVIEW_DESK_CARD ${JSON.stringify(deskCard)}`);
     win.focus();
     win.webContents.focus();
 

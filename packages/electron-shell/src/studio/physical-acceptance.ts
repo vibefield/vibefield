@@ -5,8 +5,14 @@ const PREVIEW_TIMEOUT_MS = 20_000;
 
 interface ProductProbe {
   appearanceRevision: string | null;
-  magnetReach: string | null;
-  rimRadius: string;
+  /** The product's theme, so the canvas ground probed is the one it projects. */
+  theme: "light" | "dark";
+  /** `.field-wrap`'s `--vf-canvas-bg` — the appearance a DESK build still consumes (DK-3): the
+   * body's ground, the unavailable card's. The magnet reach and the `--ic-rim-radius` these probes
+   * read until DK-3 drove the 0.11 magnet grid and the DOM card rim, neither of which exists. */
+  canvasBg: string;
+  /** The product's own disclosure of the preview it shows (studio-product-indicator.ts). */
+  indicatorRevision: string | null;
   fielddPort: number;
   hasFielddToken: boolean;
   bridgeState: unknown;
@@ -46,22 +52,17 @@ export async function runStudioPhysicalAcceptance(opts: {
     const before = await productProbe(opts.productWindow);
     assertFieldd(before, "before preview");
 
-    await editStudioAppearance(opts.studioWindow, { reach: 480, rimRadius: 720 });
-    await waitFor(
-      "the Studio specimen to commit its local grid and overlap projections",
-      PREVIEW_TIMEOUT_MS,
-      async () =>
-        opts.studioWindow.webContents.executeJavaScript(
-          `(() => {
+    await editStudioAppearance(opts.studioWindow, PREVIEW_GROUND);
+    await waitFor("the Studio specimen to commit its canvas ground", PREVIEW_TIMEOUT_MS, async () =>
+      opts.studioWindow.webContents.executeJavaScript(
+        `(() => {
             const workbench = document.querySelector("[data-ground-workbench]");
-            const reach = [...document.querySelectorAll("dt")].find(
-              (term) => term.textContent?.trim() === "Reach",
-            )?.nextElementSibling?.textContent?.trim();
-            return reach === "480 px" && workbench instanceof HTMLElement &&
-              workbench.style.getPropertyValue("--ic-rim-radius") === "720px";
+            if (!(workbench instanceof HTMLElement)) return false;
+            const ground = workbench.style.getPropertyValue("--vf-canvas-bg").toUpperCase();
+            return ground === ${JSON.stringify(PREVIEW_GROUND.light)} || ground === ${JSON.stringify(PREVIEW_GROUND.dark)};
           })()`,
-          true,
-        ),
+        true,
+      ),
     );
     await enableStudioLive(opts.studioWindow);
     await waitFor(
@@ -70,14 +71,10 @@ export async function runStudioPhysicalAcceptance(opts: {
       async () => (await studioProbe(opts.studioWindow)).live === "true",
     );
     let lastProduct = await productProbe(opts.productWindow);
-    await waitFor(
-      "the product to apply Studio grid and overlap values",
-      PREVIEW_TIMEOUT_MS,
-      async () => {
-        lastProduct = await productProbe(opts.productWindow);
-        return lastProduct.magnetReach === "480" && lastProduct.rimRadius === "720px";
-      },
-    ).catch(async (error) => {
+    await waitFor("the product to apply Studio's canvas ground", PREVIEW_TIMEOUT_MS, async () => {
+      lastProduct = await productProbe(opts.productWindow);
+      return lastProduct.canvasBg === PREVIEW_GROUND[lastProduct.theme];
+    }).catch(async (error) => {
       throw new Error(
         `${error instanceof Error ? error.message : String(error)}; Studio=${JSON.stringify(
           await studioProbe(opts.studioWindow),
@@ -89,6 +86,11 @@ export async function runStudioPhysicalAcceptance(opts: {
     if (applied.appearanceRevision === null) {
       throw new Error("the real product renderer exposed no applied Studio revision");
     }
+    if (applied.indicatorRevision !== applied.appearanceRevision) {
+      throw new Error(
+        `the product's preview indicator says revision ${applied.indicatorRevision}, the field ${applied.appearanceRevision}`,
+      );
+    }
 
     opts.productWindow.webContents.reload();
     await waitForProduct(opts.productWindow);
@@ -99,8 +101,7 @@ export async function runStudioPhysicalAcceptance(opts: {
         const probe = await productProbe(opts.productWindow);
         return (
           probe.appearanceRevision === applied.appearanceRevision &&
-          probe.magnetReach === "480" &&
-          probe.rimRadius === "720px"
+          probe.canvasBg === PREVIEW_GROUND[probe.theme]
         );
       },
     );
@@ -112,11 +113,7 @@ export async function runStudioPhysicalAcceptance(opts: {
       PREVIEW_TIMEOUT_MS,
       async () => {
         const probe = await productProbe(opts.productWindow);
-        return (
-          probe.appearanceRevision === null &&
-          probe.magnetReach === null &&
-          probe.rimRadius === "600px"
-        );
+        return probe.appearanceRevision === null && probe.canvasBg === REVIEWED_GROUND[probe.theme];
       },
     );
     const restored = await productProbe(opts.productWindow);
@@ -221,29 +218,34 @@ async function waitForStudio(window: BrowserWindow): Promise<void> {
   );
 }
 
+/** The canvas ground Studio previews (both themes, so either product theme shows it), and the
+ * reviewed ground a closed Studio restores (`canvas-appearance.ts`'s defaults; DESIGN.md §2.1). */
+const PREVIEW_GROUND = { light: "#F2EAD3", dark: "#1E2A22" } as const;
+const REVIEWED_GROUND = { light: "#FAFAFA", dark: "#171717" } as const;
+
 async function editStudioAppearance(
   window: BrowserWindow,
-  values: { reach: number; rimRadius: number },
+  ground: { light: string; dark: string },
 ): Promise<void> {
   const changed = (await window.webContents.executeJavaScript(
     `(() => {
-      const setNumber = (groupTitle, label, value) => {
+      const setColor = (groupTitle, label, value) => {
         const group = [...document.querySelectorAll(".vf-ds-tweak-group")].find(
           (candidate) => candidate.querySelector("h4")?.textContent?.trim() === groupTitle,
         );
-        const input = [...(group?.querySelectorAll("input[type=number]") ?? [])].find(
+        const input = [...(group?.querySelectorAll("input[type=color]") ?? [])].find(
           (candidate) => candidate.getAttribute("aria-label") === label,
         );
         if (!(input instanceof HTMLInputElement)) return false;
         const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-        setter?.call(input, String(value));
+        setter?.call(input, value.toLowerCase());
         input.dispatchEvent(new Event("input", { bubbles: true }));
         input.dispatchEvent(new Event("change", { bubbles: true }));
         return true;
       };
-      const reach = setNumber("Magnet grid", "Reach", ${values.reach});
-      const radius = setNumber("Overlap feedback", "Radius", ${values.rimRadius});
-      return reach && radius;
+      const light = setColor("Canvas palette", "Background · light", ${JSON.stringify(ground.light)});
+      const dark = setColor("Canvas palette", "Background · dark", ${JSON.stringify(ground.dark)});
+      return light && dark;
     })()`,
     true,
   )) as boolean;
@@ -272,10 +274,11 @@ async function productProbe(window: BrowserWindow): Promise<ProductProbe> {
       const connection = await globalThis.vibefield.getConnection();
       return {
         appearanceRevision: field?.getAttribute("data-appearance-override-revision") ?? null,
-        magnetReach: indicator?.getAttribute("data-magnet-reach") ?? null,
-        rimRadius: field instanceof HTMLElement
-          ? field.style.getPropertyValue("--ic-rim-radius")
+        theme: document.documentElement.dataset.theme === "dark" ? "dark" : "light",
+        canvasBg: field instanceof HTMLElement
+          ? field.style.getPropertyValue("--vf-canvas-bg").trim().toUpperCase()
           : "",
+        indicatorRevision: indicator?.getAttribute("data-revision") ?? null,
         fielddPort: connection.port,
         hasFielddToken: typeof connection.token === "string" && connection.token.length > 0,
         bridgeState: globalThis.vibefieldStudioAppearance.physicalState?.() ?? null,

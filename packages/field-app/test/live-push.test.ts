@@ -11,6 +11,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { defineQuery, ENGINE_SCHEMA_VERSION, Position, PrefabId } from "@vibecook/ice";
+import { NOTE_TYPE } from "@vibecook/ice/desk/objects";
 import { DOC_SYNC_RECORD, LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
@@ -96,7 +97,8 @@ describe("DS-5 — an open window is pushed a peer desktop's edit", () => {
     } else {
       const session = ce.docs.create();
       ce.world.sync();
-      if (pending.seed) void seedField(ce, session);
+      // the desk's first-run board, its print laid before the window's count is taken
+      if (pending.seed) await seedField(ce, session);
     }
     ce.world.sync();
     manager.contentApplied(pending.generation);
@@ -120,9 +122,10 @@ describe("DS-5 — an open window is pushed a peer desktop's edit", () => {
     peer.world.sync();
     const outbound: Uint8Array[] = [];
     opened.session.store.subscribeOutbound((bytes) => outbound.push(bytes.slice()));
-    const type = [...registry.allWidgets().keys()][0];
-    if (type === undefined) throw new Error("no widget type registered");
-    peer.ops.spawnWidget(type, { x: 4_000, y: 4_000, w: 200, h: 120 });
+    // DK-3: on the desk the peer lays a desk OBJECT — the root places what provides
+    // `desk.object`, and a VibeField widget type (the registry's first, the terminal
+    // mirror) is refused `widget-not-allowed` there; the push is the same either way.
+    peer.ops.spawnWidget(NOTE_TYPE, { x: 4_000, y: 4_000, w: 200, h: 200 });
     peer.world.sync();
     await until(() => outbound.length > 0, "the peer's outbound record");
 
