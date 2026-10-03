@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import { gunzipSync, gzipSync } from "node:zlib";
+import { constants, gunzipSync, gzipSync } from "node:zlib";
 import type { Corpus } from "../../src/godview/monitor/perf/corpus";
 import {
   type DecodedCorpus,
@@ -21,7 +21,11 @@ export function writeCorpusGz(path: string, corpus: Corpus): number {
 
 export function readCorpusGz(path: string): DecodedCorpus {
   const raw = readFileSync(path);
-  const text = path.endsWith(".gz") ? gunzipSync(raw).toString("utf8") : raw.toString("utf8");
+  // `Z_SYNC_FLUSH`: a file the recording sink was still writing when its app
+  // exited has every drained block and no trailer; it reads to its last flush.
+  const text = path.endsWith(".gz")
+    ? gunzipSync(raw, { finishFlush: constants.Z_SYNC_FLUSH }).toString("utf8")
+    : raw.toString("utf8");
   return decodeCorpusJsonl(text);
 }
 
