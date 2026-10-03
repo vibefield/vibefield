@@ -77,10 +77,12 @@ const PIN_EXPECTATIONS = [
   // Cargo.toml's closure note carries what that window was and every place its
   // exit touched.
   { file: "Cargo.toml", re: /^truffle-core\s*=\s*"=0\.7\.14"/m, label: 'truffle-core = "=0.7.14"' },
+  // An exact PRERELEASE since DK-3 (0.15.0-desk.N on `next`, DK-D12): anchored to
+  // the line's end, so `0.15.0-desk.1` never passes for a later `…desk.10`.
   {
     file: "pnpm-workspace.yaml",
-    re: /"@vibecook\/ice":\s*0\.14\.0/,
-    label: '"@vibecook/ice": 0.14.0',
+    re: /"@vibecook\/ice":\s*0\.15\.0-desk\.1\s*$/m,
+    label: '"@vibecook/ice": 0.15.0-desk.1',
   },
   { file: "Cargo.toml", re: /^ghosttea\s*=\s*"=0\.12\.0"/m, label: 'ghosttea = "=0.12.0"' },
   // TM-1 (2026-09-14): the ghosttea-truffle row is GONE with the crate — the TSP1
