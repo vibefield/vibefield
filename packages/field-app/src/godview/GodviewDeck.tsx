@@ -1605,7 +1605,13 @@ export function GodviewDeck({
    * (`DEFAULT_DECK_APPEARANCE.opacity`, premultiplied by ghosttea's renderer),
    * so publishing `--vf-godview-terminal-bg` gave every reader in the tree a
    * variable nothing read. It returns with the rule that needs it, if James
-   * rules the deck should carry the tint. */
+   * rules the deck should carry the tint.
+   *
+   * Errata (2026-09-28): James ruled it — the deck sheet is always the
+   * terminal's colour (DESIGN.md §8). `--vf-godview-terminal-bg` is published
+   * again, from the overlay's stage style (`godviewTerminalGroundStyle`), where
+   * the sheet that reads it lives; the panes keep their own translucent ground,
+   * which over a sheet of the same colour composites to it exactly. */
   const ground = useMemo(() => terminalGround(terminalTheme), [terminalTheme]);
 
   // DEMAND (TP-L-E'), declared where the views are.

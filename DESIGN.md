@@ -172,7 +172,7 @@ The deck sheet's shadow is §5's *Sheet* recipe, keyed to Godview's OWN mode swi
 the app's theme (Godview can be dark over a light field). Its geometry: top corners
 `--vf-godview-deck-radius` 12px; the lip (the band the grip sits in) `--vf-godview-deck-lip`
 14px — never less than the radius, so no pane corner meets the curve; the grip
-`--vf-godview-deck-grip` 36×4, fully round — the island's pull bar (§8) at instrument scale.
+`--vf-godview-deck-grip` 72×4, fully round — the island's pull bar (§8), longer and thinner: it names a full-width edge (James, 2026-09-28: 36 read too short).
 The empty pane launcher's clearing (QL-1, pass 3 §22) is the sheet's own paint, but never
 thinner than `--vf-godview-launcher-clearing-floor` 92% of the ground: a viewer who thins the
 stage thins the sheet, and at the sheet's glass the prompt beneath would read through the
