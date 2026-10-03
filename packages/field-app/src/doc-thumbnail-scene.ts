@@ -3,9 +3,11 @@ import {
   ChildOf,
   defineQuery,
   type Entity,
+  Not,
   Position,
   PrefabId,
   Size,
+  Specimen,
   StackZ,
   WireFrom,
   WirePorts,
@@ -40,7 +42,9 @@ export interface DocThumbnailScene {
   wires: DocThumbnailWire[];
 }
 
-const widgetQ = defineQuery([Position, PrefabId]);
+// DK-3: the desk hangs a SPECIMEN of each kind on its pegboard — a runtime entity with a
+// `PrefabId`, never in the document — so the document's widgets are those that are not one.
+const widgetQ = defineQuery([Position, PrefabId, Not(Specimen)]);
 const wireQ = defineQuery([WirePorts]);
 const DEFAULT_CANVAS_BACKGROUND = "#f6f6f8";
 

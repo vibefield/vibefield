@@ -9,6 +9,7 @@ import { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { setBoardStatus } from "./board-status";
 import type { DocThumbnailScene } from "./doc-thumbnail-scene";
 import { DocThumbnailCache } from "./doc-thumbnails";
+import { registryBeforeTheDesk } from "./field/desk/pre-desk";
 import { getRendererLogger } from "./logging";
 
 // B4 DocManager (thinking-b4-doc-ux §1): the renderer-spine lifecycle owner for
@@ -57,6 +58,9 @@ export interface DocManagerState {
   /** Device-local persisted derived artifacts; blob URLs are renderer-lifetime only. */
   thumbnailUrls: Readonly<Record<string, string>>;
   pending: DocSessionPending | null;
+  /** Boards FROM BEFORE THE DESK (DK-3, ruling 7): the registry's (last saved below schema 3) and
+   * any the open refused — listed by the explorer with Delete, never opened. Absent: none. */
+  beforeTheDesk?: readonly string[];
 }
 
 /** Chunked preview capture, injected by FieldView (it owns the three/R3F imports). */
@@ -73,6 +77,8 @@ export interface DocManagerApi {
   switchTo(docId: string): Promise<void>;
   /** UA-D7 — say whether this doc may leave the device. */
   setSyncIntent(docId: string, intent: DocSyncIntent): Promise<void>;
+  /** DS-5's tombstone (`doc.delete`) — the explorer offers it for a board from before the desk. */
+  deleteDoc?(docId: string): Promise<void>;
 }
 
 export interface DocPersistenceLease {
@@ -153,6 +159,8 @@ export class DocManager {
   } | null = null;
   private readonly presentedGenerations = new Set<number>();
   private readonly presentationWaiters = new Map<number, () => void>();
+  /** Boards the open refused as from before the desk (ruling 7) — beside the registry's own word. */
+  private readonly refused = new Set<string>();
   private readonly thumbnails = new DocThumbnailCache((docId, url) => {
     if (this.state.thumbnailUrls[docId] === url) return;
     this.patch({ thumbnailUrls: { ...this.state.thumbnailUrls, [docId]: url } });
@@ -194,14 +202,16 @@ export class DocManager {
     this.stage(0, "opening doc");
     try {
       const docs = await this.refreshDocs();
+      // A board from before the desk is never the launch's (ruling 7): it is
+      // listed, refused, and offered for deletion — never opened.
+      const openable = (d: DocRegistryEntry): boolean =>
+        d.deletedAt === undefined && !this.isBeforeTheDesk(d);
       const remembered = (docId: string | null): DocRegistryEntry | undefined =>
-        docId === null
-          ? undefined
-          : docs.find((d) => d.docId === docId && d.deletedAt === undefined);
+        docId === null ? undefined : docs.find((d) => d.docId === docId && openable(d));
       let entry =
         remembered(readWindowDocId()) ?? // this window's own board (DK-5)
         remembered(readLastDocId()) ??
-        docs.find((d) => d.deletedAt === undefined) ?? // list is updatedAt-desc
+        docs.find(openable) ?? // list is updatedAt-desc
         null;
       let seed = false;
       if (entry === null) {
@@ -226,6 +236,12 @@ export class DocManager {
       getRendererLogger()
         .child({ component: "docs.manager", docId })
         .warn("renderer.docs.switch_rejected", "Document switch targeted an unknown document");
+      return;
+    }
+    if (this.isBeforeTheDesk(entry)) {
+      getRendererLogger()
+        .child({ component: "docs.manager", docId })
+        .warn("renderer.docs.switch_before_the_desk", "A board from before the desk is not opened");
       return;
     }
     this.stage(0, "opening doc");
@@ -298,6 +314,36 @@ export class DocManager {
     this.patch({ docs: this.state.docs.map((d) => (d.docId === docId ? entry : d)) });
   }
 
+  /** DS-5's tombstone: the board leaves every list (its bytes stay on disk). Deleting the board in
+   * view — a refused one from before the desk — moves the field to the newest openable board, or a
+   * new one when none is left. */
+  async deleteDoc(docId: string): Promise<void> {
+    await this.request("doc.delete", { docId });
+    this.refused.delete(docId);
+    const docs = await this.refreshDocs();
+    if (this.state.doc?.docId !== docId) return;
+    const next = docs.find((d) => d.deletedAt === undefined && !this.isBeforeTheDesk(d));
+    if (next !== undefined) await this.switchTo(next.docId);
+    else await this.createDoc();
+  }
+
+  /** The open refused this board as from before the desk (ruling 7): the library marks it. */
+  refuseBeforeTheDesk(docId: string): void {
+    if (docId.length === 0 || this.refused.has(docId)) return;
+    this.refused.add(docId);
+    this.patch({ beforeTheDesk: this.beforeTheDeskOf(this.state.docs) });
+  }
+
+  private isBeforeTheDesk(entry: DocRegistryEntry): boolean {
+    return registryBeforeTheDesk(entry.engineSchema) || this.refused.has(entry.docId);
+  }
+
+  private beforeTheDeskOf(docs: readonly DocRegistryEntry[]): string[] {
+    const ids = docs.filter((d) => this.isBeforeTheDesk(d)).map((d) => d.docId);
+    for (const id of this.refused) if (!ids.includes(id)) ids.push(id);
+    return ids;
+  }
+
   async refreshDocs(): Promise<DocRegistryEntry[]> {
     const { docs } = DocListResult.parse(
       await withTimeout(
@@ -307,7 +353,7 @@ export class DocManager {
       ),
     );
     const sorted = [...docs].sort((a, b) => b.updatedAt - a.updatedAt);
-    this.patch({ docs: sorted });
+    this.patch({ docs: sorted, beforeTheDesk: this.beforeTheDeskOf(sorted) });
     void this.thumbnails
       .hydrate(sorted.map((doc) => doc.docId))
       .catch((error: unknown) =>
@@ -371,7 +417,9 @@ export class DocManager {
     this.appliedGeneration = generation;
     for (const lane of this.retiring.splice(0)) this.drains.push(lane.drain());
     const pending = this.state.pending;
-    if (pending !== null && pending.lane !== null && firstApply) writeLastDocId(pending.docId);
+    // a refused board is never the next launch's (ruling 7)
+    if (pending !== null && pending.lane !== null && firstApply && !this.refused.has(pending.docId))
+      writeLastDocId(pending.docId);
     void this.runPreviewsStage(generation);
   }
 

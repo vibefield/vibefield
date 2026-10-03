@@ -26,6 +26,57 @@ export function emitCanvasReadyMarker(
   runtime?: object,
 ): void {
   console.log(`CANVAS_READY ${JSON.stringify({ widgetTypes, plugins, stagedPlugins, runtime })}`);
+  canvasReadySaid = true;
+  for (const say of afterCanvasReady.splice(0)) say();
+}
+
+// The desk's markers (DK-3; r6b risk 2: CANVAS_READY proves only the registry — it fires before the
+// mount and before the document — so `smoke:canvas` passed with a dead desk). DESK_READY is the
+// DRAWING fact: the adapter and the device acquired, the passes compiled (`onStatus` ready) AND the
+// first frame presented (`perf().frames ≥ 1`, its GPU work done) — and it is said AFTER CANVAS_READY,
+// whichever lands first, so a harness reads the two in one order. DESK_UNAVAILABLE is the other
+// verdict: the stage shows the unavailable card (a GPU-less run — the smokes' mode — a lost device,
+// a board from before the desk), with the words it shows.
+let canvasReadySaid = false;
+const afterCanvasReady: (() => void)[] = [];
+
+export interface DeskReadyFacts {
+  /** The document generation and the desk's own mount within it. */
+  readonly generation: number;
+  readonly mount: number;
+  /** The mount's boot, ms since the mount (ICE I25 `perf().boot`). */
+  readonly boot: {
+    readonly device?: number;
+    readonly compiled?: number;
+    readonly presented?: number;
+  };
+  readonly frames: number;
+}
+
+export function emitDeskReadyMarker(facts: DeskReadyFacts): void {
+  const say = (): void => console.log(`DESK_READY ${JSON.stringify(facts)}`);
+  if (canvasReadySaid) say();
+  else afterCanvasReady.push(say);
+}
+
+export interface DeskUnavailableFacts {
+  readonly kind: string;
+  readonly title: string;
+  /** ICE's message, verbatim (absent for a board refused before any desk). */
+  readonly message?: string;
+  readonly reload: boolean;
+}
+
+export function emitDeskUnavailableMarker(facts: DeskUnavailableFacts): void {
+  const say = (): void => console.log(`DESK_UNAVAILABLE ${JSON.stringify(facts)}`);
+  if (canvasReadySaid) say();
+  else afterCanvasReady.push(say);
+}
+
+/** Test seam: CANVAS_READY not yet said, nothing waiting on it. */
+export function resetDeskMarkersForTest(): void {
+  canvasReadySaid = false;
+  afterCanvasReady.length = 0;
 }
 
 /** What the Godview deck currently IS, as one line per settled change.

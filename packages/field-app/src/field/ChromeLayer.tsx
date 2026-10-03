@@ -1,11 +1,10 @@
 import type { CanvasEngine, WidgetType } from "@vibecook/ice";
-import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
+import { attachDevtools } from "@vibecook/ice/devtools";
 import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type Dispatch,
-  type MutableRefObject,
   type ReactElement,
   type SetStateAction,
   useCallback,
@@ -23,6 +22,7 @@ import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
 import type { FrameActRun } from "../frame/palette-acts";
+import { StatusLine } from "../frame/StatusLine";
 import { ViewFrame } from "../frame/ViewFrame";
 import { requestView, subscribeMenuZoom, useActiveView } from "../frame/view-state";
 import { viewKeysOf } from "../frame/views";
@@ -91,7 +91,6 @@ export function ChromeLayer({
   onSurfaceChange,
   appearanceControlledByStudio,
   chrome,
-  devtoolsRef,
 }: {
   ce: CanvasEngine;
   manager: DocManager;
@@ -105,7 +104,6 @@ export function ChromeLayer({
   onSurfaceChange: (next: FrameSurface | null) => void;
   appearanceControlledByStudio: boolean;
   chrome: ChromeState;
-  devtoolsRef: MutableRefObject<DevtoolsHandle | null>;
 }): ReactElement {
   const { showSettings, setShowSettings, showEcs } = chrome;
   // Objects, on this build: the widget tray's sheet behind the line.
@@ -203,33 +201,12 @@ export function ChromeLayer({
     if (docsOpen || showSettings) ce.ops.cancelActiveGestures();
   }, [docsOpen, showSettings, ce]);
 
-  // Keyboard shortcuts. <InfiniteCanvas> already installs the engine default
-  // keymap (⌘Z undo, ⇧⌘Z redo, ⌫ delete, Esc cancel, v/h/c tools — all
-  // skipping editable targets), and since ice 0.4.0 the C-with-selection
-  // behavior rides the keymap's OWN override surface (field-keymap.ts, wired
-  // through CanvasStage) — the capture-phase stopPropagation trap this layer
-  // carried retired with petition I1. This handler adds ONLY the one piece the
-  // default keymap lacks (widgetlab App law — a duplicate listener would fire
-  // engine actions twice): Esc exits the current container when nested.
-  useEffect(() => {
-    const isEditableTarget = (target: EventTarget | null): boolean => {
-      if (!(target instanceof HTMLElement)) return false;
-      const tag = target.tagName;
-      return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT" || target.isContentEditable;
-    };
-    const onKeyDown = (e: KeyboardEvent) => {
-      if (showSettings) return;
-      if (e.key !== "Escape" || isEditableTarget(e.target)) return;
-      if (ce.nav.depth() > 0) {
-        e.preventDefault();
-        ce.ops.exitContainer();
-      }
-    };
-    window.addEventListener("keydown", onKeyDown);
-    return () => {
-      window.removeEventListener("keydown", onKeyDown);
-    };
-  }, [ce, showSettings]);
+  // Keyboard shortcuts: the DESK's keymap is the one (DK-D24; ruling 4) — `<Desk>`
+  // attaches it (⌫, ⌘Z/⇧⌘Z, ⌘D, ⌘A, ⇧⌘L, ⏎ open/enter, arrows, and the Esc
+  // ladder: close the drawer → put down → fly out of the frame), with the
+  // field's `c` override riding its override surface (field-keymap.ts). The
+  // Escape → `exitContainer` handler this layer carried is GONE: it fired a
+  // second exit beside the ladder's (r1 §3).
 
   // ⌘K / Ctrl+K toggles the command palette (§8.3; One Frame §7). ⌘K is free —
   // the ICE keymap, the line's B and the tray's Esc never claim it. The palette
@@ -279,19 +256,15 @@ export function ChromeLayer({
   const closeSettings = useCallback(() => setShowSettings(false), [setShowSettings]);
   useSettingsChord(showSettings, openGeneralSettings, closeSettings);
 
-  // ECS devtools while the button is active (v1's EcsDevtools panel slot).
+  // ECS devtools while the switch is on (Settings → Advanced → Developer).
   // The FACADE goes in (not ce.engine): the strata observer's durable tab
-  // tracks docs.current() live only through it. The handle also rides the
-  // shared ref so CanvasStage's GL profiling callback can feed the HUD lanes.
+  // tracks docs.current() live only through it. (The handle no longer rides a
+  // ref to the stage: the GL lanes it fed left with the islands, DK-3.)
   useEffect(() => {
     if (!showEcs) return;
     const d = attachDevtools(ce, { presence: () => ce.docs.presence() });
-    devtoolsRef.current = d;
-    return () => {
-      devtoolsRef.current = null;
-      d.detach();
-    };
-  }, [showEcs, ce, devtoolsRef]);
+    return () => d.detach();
+  }, [showEcs, ce]);
 
   useLayoutEffect(() => {
     const dock = document.querySelector<HTMLElement>(".ice-dock");
@@ -443,6 +416,11 @@ export function ChromeLayer({
         onSurfaceChange={onSurfaceChange}
         lineActs={lineActs}
       />
+
+      {/* THE STATUS LINE (DESIGN.md §8, §10): the desk's notices under the
+          head — a degraded desk's banner and its Reload (R18) — standing
+          with the frame, above the cover. */}
+      <StatusLine />
 
       {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}
       <LoadingVeil loading={docState.loading} />

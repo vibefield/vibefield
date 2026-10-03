@@ -10,13 +10,21 @@
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { defineQuery, ENGINE_SCHEMA_VERSION, Position, PrefabId } from "@vibecook/ice";
+import {
+  createCanvasEngine,
+  defineQuery,
+  ENGINE_SCHEMA_VERSION,
+  Position,
+  PrefabId,
+} from "@vibecook/ice";
 import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DEFAULT_DOC_NAME, DocManager } from "../src/doc-manager";
+import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
+import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -69,7 +77,7 @@ function managerFor(daemon: FielddDaemon): DocManager {
 }
 
 /** Play FieldView: apply the pending session to a real engine, report applied. */
-function applyPending(manager: DocManager): ReturnType<typeof createFieldEngine> {
+async function applyPending(manager: DocManager): Promise<ReturnType<typeof createFieldEngine>> {
   const pending = manager.getState().pending;
   if (pending === null) throw new Error("no pending session");
   const registry = buildRegistry();
@@ -82,7 +90,7 @@ function applyPending(manager: DocManager): ReturnType<typeof createFieldEngine>
     ce.world.sync();
   } else {
     const session = ce.docs.create();
-    if (pending.seed) seedField(ce, session, registry);
+    if (pending.seed) await seedField(ce, session, createDeskBlobStore());
     else ce.world.sync();
   }
   manager.contentApplied(pending.generation);
@@ -110,7 +118,7 @@ describe("DocManager launch pipeline (B4)", () => {
     expect(pending?.initialBytes).toBeNull();
     expect(pending?.lane).not.toBeNull();
 
-    const ce = applyPending(manager);
+    const ce = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
     expect(localStorage.getItem("vf-last-doc")).toBe(pending?.docId);
     await putCurrent(manager, ce);
@@ -121,7 +129,7 @@ describe("DocManager launch pipeline (B4)", () => {
     const { daemon } = await stack();
     const manager = managerFor(daemon);
     await manager.boot();
-    applyPending(manager);
+    await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
 
     const before = daemon.docs.list()[0];
@@ -137,7 +145,7 @@ describe("DocManager launch pipeline (B4)", () => {
     const manager = managerFor(daemon);
     await manager.boot();
     const first = manager.getState().pending;
-    const ce1 = applyPending(manager);
+    const ce1 = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
     await putCurrent(manager, ce1);
 
@@ -148,7 +156,7 @@ describe("DocManager launch pipeline (B4)", () => {
     expect(second?.seed).toBe(false); // user docs open empty — never the demo scene
     expect(second?.initialBytes).toBeNull();
 
-    applyPending(manager);
+    await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
     // the drain law: the retired lane settles + closes once the successor applied
     await until(() => first?.lane?.status === "closed");
@@ -167,31 +175,31 @@ describe("DocManager launch pipeline (B4)", () => {
     const manager = managerFor(daemon);
     await manager.boot();
     const original = manager.getState().pending;
-    const ce1 = applyPending(manager);
+    const ce1 = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
     const originalBytes = await putCurrent(manager, ce1);
 
     await manager.createDoc();
-    const ce2 = applyPending(manager);
+    const ce2 = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
     let widgets = 0;
     ce2.world.query(defineQuery([Position, PrefabId])).each((b) => {
       for (const _ of b) widgets += 1;
     });
-    expect(widgets).toBe(0); // the new field is EMPTY — no leftover 3D cards/wires
+    expect(widgets).toBe(0); // the new field is EMPTY — nothing left of the seeded desk
     await putCurrent(manager, ce2);
 
     await manager.switchTo(original?.docId ?? "");
     const restored = manager.getState().pending;
     expect(restored?.docId).toBe(original?.docId);
     expect(Array.from(restored?.initialBytes ?? [])).toEqual(Array.from(originalBytes));
-    const ce3 = applyPending(manager);
+    const ce3 = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
     let restoredWidgets = 0;
     ce3.world.query(defineQuery([Position, PrefabId])).each((b) => {
       for (const _ of b) restoredWidgets += 1;
     });
-    expect(restoredWidgets).toBe(21); // everything recovers
+    expect(restoredWidgets).toBe(SEED_TYPES.length); // everything recovers
     // 30s: three engine seeds/opens + two switches (the same parallel-load flag).
   }, 30_000);
 
@@ -200,7 +208,7 @@ describe("DocManager launch pipeline (B4)", () => {
     const manager = managerFor(daemon);
     await manager.boot();
     const docId = manager.getState().pending?.docId;
-    const ce = applyPending(manager);
+    const ce = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
     const bytes = await putCurrent(manager, ce);
     await manager.getState().pending?.lane?.drain();
@@ -261,7 +269,7 @@ describe("DocManager launch pipeline (B4)", () => {
     const manager = managerFor(daemon);
     await manager.boot();
     const docId = manager.getState().pending?.docId;
-    const ce = applyPending(manager);
+    const ce = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
     await putCurrent(manager, ce);
     await manager.getState().pending?.lane?.drain();
@@ -283,7 +291,64 @@ describe("DocManager launch pipeline (B4)", () => {
     const pending = manager.getState().pending;
     expect(pending?.lane).toBeNull();
     expect(pending?.seed).toBe(true);
-    applyPending(manager);
+    await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
+  });
+});
+
+describe("boards from before the desk (DK-3, ruling 7)", () => {
+  /** An `ice.default` board — what the pre-desk build saved — PUT under the last schema it knew. */
+  async function putBeforeTheDesk(manager: DocManager): Promise<void> {
+    const pending = manager.getState().pending;
+    if (pending?.lane == null) throw new Error("no lane to put");
+    const old = createCanvasEngine();
+    const bytes = old.docs.create().exportEnvelope(Date.now());
+    old.dispose();
+    await pending.lane.put(bytes, { engineSchema: 2, savedAt: Date.now() });
+  }
+
+  it("never opens one: the launch passes it by, the explorer lists it, Delete tombstones it", async () => {
+    const { daemon } = await stack();
+    const manager = managerFor(daemon);
+    await manager.boot(); // the first run's desk board
+    const field = manager.getState().pending?.docId;
+    await putCurrent(manager, await applyPending(manager));
+    await until(() => manager.getState().phase === "ready");
+    await manager.createDoc();
+    const old = manager.getState().pending?.docId;
+    await applyPending(manager);
+    await until(() => manager.getState().phase === "ready");
+    await putBeforeTheDesk(manager);
+    await manager.getState().pending?.lane?.drain();
+
+    // a relaunch whose last board is the old one
+    localStorage.setItem("vf-last-doc", old ?? "");
+    const relaunch = managerFor(daemon);
+    await relaunch.boot();
+    expect(relaunch.getState().pending?.docId).toBe(field); // passed by, never opened
+    expect(relaunch.getState().beforeTheDesk).toEqual([old]);
+    await applyPending(relaunch);
+    await until(() => relaunch.getState().phase === "ready");
+
+    // the explorer cannot open it either
+    await relaunch.switchTo(old ?? "");
+    expect(relaunch.getState().pending?.docId).toBe(field);
+
+    // Delete: DS-5's tombstone — it leaves the list (the bytes stay on disk)
+    await relaunch.deleteDoc(old ?? "");
+    expect(relaunch.getState().docs.map((d) => d.docId)).not.toContain(old);
+    expect(relaunch.getState().beforeTheDesk).toEqual([]);
+  }, 30_000);
+
+  it("keeps a board the open refused as from before the desk, and never relaunches into it", async () => {
+    const { daemon } = await stack();
+    const manager = managerFor(daemon);
+    await manager.boot();
+    const docId = manager.getState().pending?.docId ?? "";
+    // the workspace session judged its bytes (its header) and refused it at open
+    manager.refuseBeforeTheDesk(docId);
+    expect(manager.getState().beforeTheDesk).toEqual([docId]);
+    manager.contentApplied(manager.getState().pending?.generation ?? -1);
+    expect(localStorage.getItem("vf-last-doc")).toBeNull();
   });
 });

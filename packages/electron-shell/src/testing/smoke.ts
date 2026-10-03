@@ -240,30 +240,26 @@ interface PluginStyleCensus {
   }[];
 }
 
-/** The census this smoke defends, and why it takes two numbers (P8-D2).
+/** The census this smoke defends (P8-D2; rewritten at DK-3).
  *
- * `widgetTypes` is the product fact — 24 types: 23 across the five
- * renderer-bearing plugins plus the HOST'S OWN built-in terminal mirror
- * (TP-S2b-widget, 2026-08-22) — and it is what a loading regression actually
- * costs a user. The 23rd plugin-side type is DT-3's `vibefield.browser.page`,
- * and it moves this number WITHOUT moving `stagedPlugins`: `vibefield.browser`
- * was already one of the five (it staged a renderer module for the Artifact Hub
- * side panel) and has gained a second, unrelated contribution rather than
- * becoming a sixth plugin. `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback
- * can satisfy the census on its own, so without this number a renderer that
- * quietly fell back would look exactly like one that staged correctly.
- * Asserting both is what keeps the two loaders from diverging — the field must
- * be full AND it must have been filled the real way. behavior-conformance
- * contributes the fifth renderer module and its one card; kv-service remains
- * service-only and stages no renderer module.
+ * `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback can satisfy
+ * a registry census on its own, so without this number a renderer that quietly
+ * fell back would look exactly like one that staged correctly — the field must
+ * be filled the real way. behavior-conformance contributes the fifth renderer
+ * module; kv-service remains service-only and stages no renderer module.
  *
- * The built-in deliberately moves only ONE of the two numbers, and that is
- * itself a witness: `vibefield.terminal.mirror` reaches the canvas without
- * fieldd staging anything, so a rise in `widgetTypes` with `stagedPlugins`
- * unmoved is precisely what "the host registers it outside the plugin door"
- * looks like from here. */
+ * The PRODUCT fact moved at DK-3 (the plan's retire table: "the 24-type census
+ * → the new seed's census"). It was `widgetTypes === 24` — the registry's
+ * types, 23 across the five plugins plus the host's terminal mirror, seven of
+ * them R3F islands — a count the desk no longer draws a single one of (every
+ * VibeField widget type is faceless on the desk until DK-8). What a first-run
+ * board must hold now is the DESK's seed (field/desk/desk-seed.ts, ruling 6):
+ * one of each reference kind, read off the open document through
+ * `window.__vfDesk.census()` — GPU on or off, since it counts the world, not
+ * pixels. `widgetTypes` is still printed, and no longer judged. */
 const CANVAS_CENSUS = {
-  widgetTypes: 24,
+  /** The desk seed's types, one object each (ICE `@vibecook/ice/desk/objects`'s ids). */
+  seed: ["desk.note", "desk.minimat", "desk.board", "desk.notebook", "desk.calendar", "desk.photo"],
   minStagedPlugins: 5,
   // The current five renderer plugins all ship scoped CSS. A link alone is not
   // evidence: the 2026-08-25 regression left all five links published but their
@@ -275,9 +271,6 @@ const CANVAS_CENSUS = {
  * should say what it saw, not that something was wrong. */
 function censusFailures(facts: CanvasFacts): string[] {
   const problems: string[] = [];
-  if (facts.widgetTypes !== CANVAS_CENSUS.widgetTypes) {
-    problems.push(`${facts.widgetTypes} widget types, expected ${CANVAS_CENSUS.widgetTypes}`);
-  }
   if (facts.stagedPlugins < CANVAS_CENSUS.minStagedPlugins) {
     problems.push(
       `${facts.stagedPlugins} staged plugin(s), expected at least ${CANVAS_CENSUS.minStagedPlugins} — the renderer did not load through the staged path`,
@@ -343,9 +336,101 @@ async function waitForPluginStyles(win: BrowserWindow, timeoutMs = 10_000) {
   return last;
 }
 
-/** Full spine + real renderer, hidden: pass iff the canvas reports in WITH its
- * census. Teardown runs on EVERY path — the old failure path leaked the spawned
- * daemons (slice-0 finding 3). */
+/** A captured still read back in the renderer (field/desk/desk-door.ts `DeskSample`). */
+interface DeskSampleFacts {
+  readonly width: number;
+  readonly height: number;
+  readonly colors: number;
+  readonly lumaMin: number;
+  readonly lumaMax: number;
+  readonly lumaMean: number;
+}
+
+/** The desk's counters as the door reads them: the frames it drew and the queue's submits. */
+interface DeskCounters {
+  readonly frames: number;
+  readonly submits: number;
+}
+
+const DESK_COUNTERS = `(() => {
+  const d = globalThis.__vfDesk;
+  if (d === undefined) return null;
+  return { frames: d.perf().frames, submits: d.submits()?.total ?? -1 };
+})()`;
+
+async function deskCounters(win: BrowserWindow): Promise<DeskCounters> {
+  const counters = (await win.webContents.executeJavaScript(
+    DESK_COUNTERS,
+    true,
+  )) as DeskCounters | null;
+  if (counters === null) throw new Error("window.__vfDesk is not installed");
+  return counters;
+}
+
+/** The first-run board's census (DK-3): the desk seed's six kinds, one each, in the open
+ * document — polled, since the seed's print lands once its picture is in the byte store. */
+async function deskSeedFailures(win: BrowserWindow, timeoutMs = 15_000): Promise<string[]> {
+  const deadline = Date.now() + timeoutMs;
+  let census: Record<string, number> | null = null;
+  const wrong = (c: Record<string, number> | null): string[] =>
+    c === null
+      ? ["window.__vfDesk is not installed"]
+      : CANVAS_CENSUS.seed
+          .filter((type) => c[type] !== 1)
+          .map((type) => `${type} × ${c[type] ?? 0}`);
+  while (Date.now() < deadline) {
+    census = (await win.webContents.executeJavaScript(
+      "globalThis.__vfDesk?.census() ?? null",
+      true,
+    )) as Record<string, number> | null;
+    if (wrong(census).length === 0) break;
+    await sleep(100);
+  }
+  console.log(`SMOKE_CANVAS_SEED ${JSON.stringify(census)}`);
+  const problems = wrong(census);
+  return problems.length === 0
+    ? []
+    : [`the seeded desk is not one of each kind: ${problems.join(", ")}`];
+}
+
+/** The stage's unavailable card (DESIGN.md §8 "When the desk can't draw") — what every GPU-OFF
+ * smoke now asserts where the desk cannot draw (DK-3; r6b risk 1): the card in the DOM, its words
+ * and ICE's message, and the window still alive. Returns the card's account of itself. */
+export async function expectDeskUnavailableCard(
+  win: BrowserWindow,
+  timeoutMs = 30_000,
+): Promise<{ kind: string; title: string; detail: string | null; reload: boolean }> {
+  await waitForRendererFact(
+    win,
+    "the desk's unavailable card",
+    timeoutMs,
+    'document.querySelector("[data-desk-unavailable]") !== null',
+    '({ desk: document.querySelector("[data-desk]")?.getAttribute("data-desk") ?? null, status: globalThis.__vfDesk?.status() ?? null })',
+  );
+  return (await win.webContents.executeJavaScript(
+    `(() => {
+      const card = document.querySelector("[data-desk-unavailable]");
+      return {
+        kind: card.getAttribute("data-desk-unavailable"),
+        title: card.querySelector("strong")?.textContent ?? "",
+        detail: card.querySelector(".vf-ui-unavailable-state__detail")?.textContent ?? null,
+        reload: [...card.querySelectorAll("button")].some((b) => b.textContent === "Reload"),
+      };
+    })()`,
+    true,
+  )) as { kind: string; title: string; detail: string | null; reload: boolean };
+}
+
+/** Full spine + real renderer: pass iff the canvas reports in WITH its census AND the desk
+ * gives its verdict (DK-3). GPU ON (the default since DK-3 — main keeps hardware acceleration
+ * for this mode): DESK_READY (device, passes, first frame presented) after CANVAS_READY, a
+ * NON-UNIFORM still read back through the capture door, the seed's census, the plates and the
+ * faces loaded under the packaged CSP with no violation said, the theme flipping the desk, and a
+ * cover PARKING it (`submits()` and `perf().frames` unmoved while the desk was made busy first).
+ * GPU OFF (`--disable-gpu`, the smokes' mode): the unavailable card, in ICE's words, and the
+ * window alive. `VF_SMOKE_SHOT_DIR` keeps the window's stills (`dk-3-desk-{light,dark}.png`).
+ * Teardown runs on EVERY path — the old failure path leaked the spawned daemons (slice-0
+ * finding 3). */
 export async function runSmokeCanvas(opts: {
   handle: FielddHandle;
   supervisor: FielddSupervisor;
@@ -356,10 +441,14 @@ export async function runSmokeCanvas(opts: {
   beforeExit: () => Promise<void>;
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
+  const gpu = !process.argv.includes("--disable-gpu");
+  const shotDir = process.env["VF_SMOKE_SHOT_DIR"];
+  // Shown with the GPU on: a still of the window (the desk under the frame) is the grader's, and
+  // a shown window is what the desk's frame loop and the capture door are made for.
   const win = createMainWindow({
     mode: "smoke-canvas",
     preloadPath: opts.preloadPath,
-    show: false,
+    show: gpu,
   });
   opts.registry.adopt(win); // the bootstrap sender policy admits only registered windows
   opts.onWindow?.(win);
@@ -372,10 +461,26 @@ export async function runSmokeCanvas(opts: {
       console.log(`[renderer] ${args.map((a) => JSON.stringify(a)).join(" ")}`);
     });
   }
+  // The packaged CSP is this mode's too (main/security-policy.ts: every non-dev mode), and a
+  // refusal is said on the console — so a plate or a face that took a forbidden road shows here:
+  // the roads the desk's assets travel are `connect-src` (a fetch), `font-src` (a face) and
+  // `script-src` (a bundled module). Any other refusal is printed, and judged by its own owner.
+  const cspViolations: string[] = [];
+  const cspNotes = new Set<string>();
+  win.webContents.on("console-message", (...args: unknown[]) => {
+    for (const a of args) {
+      const text = consoleText(a);
+      if (!text.includes("Content Security Policy")) continue;
+      if (/"(connect|font|script)-src/u.test(text)) cspViolations.push(text.slice(0, 240));
+      else cspNotes.add(text.replace(/blob:[^']+/gu, "blob:…").slice(0, 240));
+    }
+  });
   let ok = false;
   try {
+    const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
+    const deskVerdict = waitForConsole(win, gpu ? "DESK_READY " : "DESK_UNAVAILABLE ", 60_000);
     await loadRenderer(win, "smoke-canvas", opts.viteUrl);
-    const raw = await waitForConsole(win, "CANVAS_READY ", 45_000);
+    const raw = await canvasReady;
     console.log(`SMOKE_CANVAS ${raw}`);
     const styles = await waitForPluginStyles(win);
     console.log(`SMOKE_CANVAS_STYLES ${JSON.stringify(styles)}`);
@@ -383,6 +488,21 @@ export async function runSmokeCanvas(opts: {
       ...censusFailures(JSON.parse(raw) as CanvasFacts),
       ...pluginStyleFailures(styles),
     ];
+    const verdict = await deskVerdict;
+    console.log(`SMOKE_CANVAS_DESK ${gpu ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
+    problems.push(...(await deskSeedFailures(win)));
+    if (gpu) problems.push(...(await deskWitnesses(win, shotDir)));
+    else {
+      const card = await expectDeskUnavailableCard(win);
+      console.log(`SMOKE_CANVAS_CARD ${JSON.stringify(card)}`);
+      if (card.title.length === 0) problems.push("the unavailable card has no words");
+      if (card.detail === null || card.detail.length === 0) {
+        problems.push("the unavailable card does not carry ICE's message");
+      }
+      if (win.webContents.isCrashed()) problems.push("the renderer crashed");
+    }
+    if (cspNotes.size > 0) console.log(`SMOKE_CANVAS_CSP_NOTE ${JSON.stringify([...cspNotes])}`);
+    if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
     if (problems.length > 0) throw new Error(problems.join(" · "));
     ok = true;
   } catch (e) {
@@ -390,6 +510,102 @@ export async function runSmokeCanvas(opts: {
   }
   await teardown(opts.supervisor, opts.root, opts.beforeExit);
   app.exit(ok ? 0 : 2);
+}
+
+/** The GPU-on rows (DK-3), each a fact read off the desk through `window.__vfDesk`. */
+async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): Promise<string[]> {
+  const problems: string[] = [];
+  const js = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+
+  // A PIXEL: the last presented frame read back through the capture door — the mat, its rulers
+  // and the seeded kinds are anything but one colour.
+  const sample = await js<DeskSampleFacts | null>("globalThis.__vfDesk.sample()");
+  console.log(`SMOKE_CANVAS_PIXEL ${JSON.stringify(sample)}`);
+  if (sample === null) problems.push("the capture door answered nothing");
+  else if (sample.colors < 2 || sample.lumaMax <= sample.lumaMin) {
+    problems.push(`the desk's still is uniform (${JSON.stringify(sample)})`);
+  }
+
+  // THE PACKAGED CSP: the plates set and every face loaded by the roads it admits.
+  const assets = await js<{ plates: boolean; faces: Record<string, boolean>; blobs: string }>(
+    `(async () => {
+      const d = globalThis.__vfDesk;
+      const deadline = Date.now() + 10000;
+      let a = await d.assets();
+      while (!a.plates && Date.now() < deadline) { await new Promise((r) => setTimeout(r, 100)); a = await d.assets(); }
+      return a;
+    })()`,
+  );
+  console.log(`SMOKE_CANVAS_ASSETS ${JSON.stringify(assets)}`);
+  if (!assets.plates) problems.push("the gobo plates never reached the mat");
+  const unloaded = Object.entries(assets.faces).filter(([, loaded]) => !loaded);
+  if (unloaded.length > 0) {
+    problems.push(`faces not loaded: ${unloaded.map(([name]) => name).join(", ")}`);
+  }
+
+  // THE THEME: the app's one owner (main) moves, and the desk is re-dressed — its still changes,
+  // darker by night. The window's stills are kept here for the grader.
+  const dressed = async (name: "light" | "dark"): Promise<DeskSampleFacts | null> => {
+    await js(`globalThis.vibefield.theme.set(${JSON.stringify(name)})`);
+    await waitForRendererFact(
+      win,
+      `the desk dressed ${name}`,
+      10_000,
+      `globalThis.__vfDesk.theme() === ${JSON.stringify(name)}`,
+    );
+    const from = (await deskCounters(win)).frames;
+    await waitForRendererFact(
+      win,
+      `a frame drawn ${name}`,
+      10_000,
+      `globalThis.__vfDesk.perf().frames > ${from}`,
+    );
+    await sleep(400);
+    if (shotDir !== undefined) {
+      mkdirSync(shotDir, { recursive: true });
+      writeFileSync(join(shotDir, `dk-3-desk-${name}.png`), (await win.capturePage()).toPNG());
+    }
+    return js<DeskSampleFacts | null>("globalThis.__vfDesk.sample()");
+  };
+  const light = await dressed("light");
+  const dark = await dressed("dark");
+  console.log(`SMOKE_CANVAS_THEME ${JSON.stringify({ light, dark })}`);
+  if (light === null || dark === null) problems.push("no still to compare the themes by");
+  else if (dark.lumaMean >= light.lumaMean) {
+    problems.push(`the desk did not darken by night (${light.lumaMean} → ${dark.lumaMean})`);
+  }
+
+  // THE FREEZE UNDER A COVER (FR-1's `engine.frame.freeze("cover")`): the wind made to blow first
+  // (`ambient("live")`), so the desk is BUSY and frames move — then a covered view parks it: not one
+  // frame, not one submit, for a whole second. Back to Canvas, it draws again.
+  await js(`globalThis.__vfDesk.ambient("live")`);
+  const busy0 = await deskCounters(win);
+  await sleep(500);
+  const busy1 = await deskCounters(win);
+  await js(`globalThis.vibefield.view.set("history")`);
+  await waitForRendererFact(
+    win,
+    "the cover over the canvas",
+    10_000,
+    `document.querySelector('.field-scene[data-covered="true"]') !== null`,
+  );
+  await sleep(700); // the freeze walks its settle before it parks
+  const parked0 = await deskCounters(win);
+  await sleep(1000);
+  const parked1 = await deskCounters(win);
+  await js(`globalThis.vibefield.view.set("canvas")`);
+  await sleep(700);
+  const thawed = await deskCounters(win);
+  await js(`globalThis.__vfDesk.ambient("idle")`);
+  const freeze = { busy0, busy1, parked0, parked1, thawed };
+  console.log(`SMOKE_CANVAS_FREEZE ${JSON.stringify(freeze)}`);
+  if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
+  if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
+    problems.push(`a cover did not park the desk (${JSON.stringify({ parked0, parked1 })})`);
+  }
+  if (thawed.frames <= parked1.frames) problems.push("the desk did not draw again after the cover");
+  return problems;
 }
 
 const BROWSER_WIDGET_TYPE = "vibefield.browser.page";

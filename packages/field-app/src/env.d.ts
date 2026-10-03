@@ -10,6 +10,19 @@ declare module "*?worker" {
   export default WorkerConstructor;
 }
 
+// Vite's asset queries (DK-3, the desk's assets — field/desk/desk-assets.ts): `?url` is a file's
+// served URL (the pen faces, loaded by `FontFace(url)`); `?raw` is a text file's contents as a string
+// (the plates' and the seed print's base64 — bundled modules, never a request).
+declare module "*?url" {
+  const url: string;
+  export default url;
+}
+
+declare module "*?raw" {
+  const text: string;
+  export default text;
+}
+
 /** The renderer is built by Vite, but field-app deliberately has no build-tool dependency. */
 interface ImportMetaEnv {
   readonly DEV: boolean;

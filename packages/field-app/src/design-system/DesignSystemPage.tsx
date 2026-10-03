@@ -133,11 +133,7 @@ export function DesignSystemPage({
         />
         <ControlsSection />
         <StatusSection />
-        <ChromeSection
-          dark={dark}
-          magnetGridGlyph={magnetGridGlyph}
-          onToggleTheme={() => setDark((value) => !value)}
-        />
+        <ChromeSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <CardsSection />
         <SurfacesSection
           magnetGridGlyph={magnetGridGlyph}

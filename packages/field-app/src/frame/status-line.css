@@ -1,0 +1,70 @@
+/* THE STATUS LINE (DESIGN.md §8 "The status line", §10): centred under the head at y 56, above the
+   cover (60) and below the line (62); one notice at a time. */
+.vf-status-line {
+  position: absolute;
+  z-index: 61;
+  top: 56px;
+  left: 50%;
+  display: inline-flex;
+  max-width: min(560px, calc(100vw - 84px));
+  align-items: baseline;
+  gap: 10px;
+  padding: 7px 10px;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 10px;
+  color: var(--vf-text-secondary);
+  background: var(--vf-chrome-solid);
+  box-shadow: var(--vf-shadow-island);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1.35;
+  transform: translateX(-50%);
+  animation: vf-status-line-in 240ms var(--vf-ease-island) both;
+}
+
+.vf-status-line__text {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.vf-status-line__act {
+  flex: none;
+  padding: 0;
+  border: 0;
+  color: var(--vf-text-primary);
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.vf-status-line__act:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+@keyframes vf-status-line-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 4px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .vf-status-line {
+    animation-name: vf-status-line-fade;
+  }
+
+  @keyframes vf-status-line-fade {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+}

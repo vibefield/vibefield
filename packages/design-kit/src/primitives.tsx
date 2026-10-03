@@ -147,26 +147,46 @@ export function EmptyState({
   );
 }
 
-/** A preserving placeholder for content whose backing renderer is unavailable. */
+/** A preserving placeholder for content whose backing renderer is unavailable.
+ *
+ * DESIGN.md §8 "When the desk can't draw" (R18, DK-3) extends it for a whole view that cannot draw:
+ * `card` is the 380-wide variant — centred on its ground, corners 22, padded 26 26 22, what happened
+ * at 14/600 and what to do at 12.5/400 — with an `action` slot (one act: the desk's Reload, a
+ * primary 36 tall) and a `detail` slot, last and small (11 mono, faint, 12 below): the renderer's
+ * own words, verbatim. */
 export function UnavailableState({
   title,
   description,
   compact = false,
+  card = false,
+  action,
+  detail,
   className = "",
 }: {
   title: ReactNode;
   description: ReactNode;
   compact?: boolean;
+  /** The 380-wide card a whole view shows when it cannot draw (DESIGN.md §8, R18). */
+  card?: boolean;
+  /** The one act under the words — the primary `UiButton` (a Reload). */
+  action?: ReactNode;
+  /** The renderer's own message, verbatim, last and small. */
+  detail?: ReactNode;
   className?: string;
 }): ReactElement {
   return (
     <div
       className={`vf-ui-unavailable-state ${className}`.trim()}
       data-compact={compact ? "true" : "false"}
+      {...(card ? { "data-card": "true" } : {})}
       role="status"
     >
       <strong>{title}</strong>
       <span>{description}</span>
+      {action === undefined ? null : (
+        <div className="vf-ui-unavailable-state__action">{action}</div>
+      )}
+      {detail === undefined ? null : <p className="vf-ui-unavailable-state__detail">{detail}</p>}
     </div>
   );
 }

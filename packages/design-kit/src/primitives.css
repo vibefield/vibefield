@@ -357,6 +357,54 @@
   text-align: left;
 }
 
+/* The card (DESIGN.md §8 "When the desk can't draw", R18): 380 wide on its ground, corners 22,
+   padded 26 26 22 — what happened (14/600), what to do (12.5/400), one act, the detail last. */
+.vf-ui-unavailable-state[data-card="true"] {
+  width: 380px;
+  max-width: calc(100% - 32px);
+  height: auto;
+  min-height: 0;
+  gap: 6px;
+  padding: 26px 26px 22px;
+  border-radius: 22px;
+  line-height: 1.45;
+}
+
+.vf-ui-unavailable-state[data-card="true"] strong {
+  font-size: 14px;
+}
+
+.vf-ui-unavailable-state[data-card="true"] span {
+  font-size: 12.5px;
+  font-weight: 400;
+}
+
+.vf-ui-unavailable-state__action {
+  display: flex;
+  justify-content: center;
+  margin-top: 12px;
+  user-select: none;
+}
+
+/* The card's one act: the primary, inverted, 36 tall, padded 0 18, corners 18, 13/500. */
+.vf-ui-unavailable-state[data-card="true"] .vf-ui-button[data-variant="primary"] {
+  height: 36px;
+  padding-inline: 18px;
+  border-radius: 18px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.vf-ui-unavailable-state__detail {
+  margin: 12px 0 0;
+  color: var(--vf-text-faint);
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .vf-ui-inline-notice {
   padding: 9px 11px;
   border-radius: 12px;

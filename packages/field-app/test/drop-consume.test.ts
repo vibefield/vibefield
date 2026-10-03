@@ -26,7 +26,7 @@ function makeEngine() {
   // B3 split: the engine boots doc-less; this suite drives the seeded board.
   const registry = buildRegistry();
   const ce = createFieldEngine(registry);
-  seedField(ce, ce.docs.create(), registry);
+  void seedField(ce, ce.docs.create());
   return ce;
 }
 

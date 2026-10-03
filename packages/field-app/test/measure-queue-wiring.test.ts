@@ -38,7 +38,7 @@ const idQ = defineQuery([Position, PrefabId]);
 function makeEngine() {
   const registry = buildRegistry();
   const ce = createFieldEngine(registry);
-  seedField(ce, ce.docs.create(), registry);
+  void seedField(ce, ce.docs.create());
   ce.world.setResource(Viewport, { w: 1900, h: 1100, dpr: 1 });
   return ce;
 }

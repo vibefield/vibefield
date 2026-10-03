@@ -1,12 +1,6 @@
 import { type CanvasEngine, decodeEnvelope, type WidgetType } from "@vibecook/ice";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
-import {
-  type MutableRefObject,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useSyncExternalStore,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react";
 import { setBoardStatus } from "../board-status";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { captureDocThumbnailScene } from "../doc-thumbnail-scene";
@@ -21,6 +15,8 @@ import {
 import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
+import { deskBlobs } from "./desk/desk-blobs";
+import { isBeforeTheDesk, rootIsBeforeTheDesk } from "./desk/pre-desk";
 import { attachDocumentPresence } from "./document-presence";
 import { bindPersistence } from "./persistence-controller";
 
@@ -100,25 +96,29 @@ function logBehaviorGenerationEvent(event: BehaviorGenerationEvent): void {
 // ONE ENGINE PER DOC (B4 fix, 2026-07-21): a doc switch REMOUNTS the engine
 // and the whole canvas stack (FieldView keys the stage on generation). The
 // store layer supports in-place close→open (doc-swap.test pins it), but the
-// composition stacks six stateful layers on the engine (GL bridge/router/
-// plane, halo, ground, devtools) and the retained GL + WebGPU frames survive
-// a world reset — field report: stale 3D cards + wires after "new field".
-// Remounting lands every switch on the exact path boot/restart already
-// prove, behind the veil. The extra virgin engine at first boot (generation
-// 0 → 1) is the accepted cost of uniformity.
+// composition stacked stateful layers on the engine and the retained frames
+// survived a world reset — field report: stale 3D cards + wires after "new
+// field". Remounting lands every switch on the exact path boot/restart
+// already prove, behind the veil. The extra virgin engine at first boot
+// (generation 0 → 1) is the accepted cost of uniformity. On the desk (DK-3,
+// ruling 1) the stage's layer is per generation too: a switch is a new desk.
+//
+// A BOARD FROM BEFORE THE DESK (ruling 7) is refused here, at open: its
+// envelope says so before anything is imported, so it is never opened —
+// no ghost stubs, no `docs.open`, no presence, no persistence — and the stage
+// shows the card in its place while the library marks it.
 
 export interface WorkspaceSession {
   ce: CanvasEngine;
   registry: PluginRegistry<WidgetType>;
   generation: number;
   docState: DocManagerState;
+  /** The pending board is from before the desk: refused at open, never opened. */
+  beforeTheDesk: boolean;
 }
 
 export function useWorkspaceSession(
   manager: DocManager,
-  /** CanvasStage publishes its GL/halo teardown here; engine disposal runs it
-   * FIRST — the GL disposal order invariant, structural. */
-  stageDisposeRef: MutableRefObject<(() => void) | null>,
   /** P8b-3 — the plugins the boot phase staged and activated. Passed in rather
    * than fetched here: the registry is built synchronously in the memo below,
    * so every import had to finish before this hook ever ran. */
@@ -130,6 +130,10 @@ export function useWorkspaceSession(
   const docState = useSyncExternalStore(manager.subscribe, manager.getState);
   const pending = docState.pending;
   const generation = pending?.generation ?? 0;
+  const beforeTheDesk = useMemo(
+    () => pending?.initialBytes != null && isBeforeTheDesk(pending.initialBytes),
+    [pending],
+  );
   // P3c: every PRESENT plugin registers unconditionally (ICE's catalog is
   // process-permanent — the only way enable/disable round-trips in-session);
   // disabled plugins swap FACES live (faces.tsx), never registrations. The
@@ -145,14 +149,15 @@ export function useWorkspaceSession(
   // included), never only the plugin registry's types (r2 R4).
   const ghosts = useMemo(() => {
     const bytes = pending?.initialBytes ?? null;
-    if (bytes === null) return [];
+    // a refused board stubs nothing: it is never opened
+    if (bytes === null || beforeTheDesk) return [];
     try {
       const { header } = decodeEnvelope(bytes);
       return buildGhostWidgetTypes(header.prefabVersions, fieldPackScope(registry));
     } catch {
       return [];
     }
-  }, [pending, registry]);
+  }, [pending, registry, beforeTheDesk]);
   const engineGeneration = useMemo(
     () => ({
       ce: createFieldEngine(registry, ghosts),
@@ -168,6 +173,16 @@ export function useWorkspaceSession(
   // flushed it, then lands the new one before paint.
   useLayoutEffect(() => {
     if (pending === null) return;
+    if (beforeTheDesk) {
+      // Ruling 7: refused with words, never opened, never converted — the
+      // at-rest bytes untouched, nothing bound that could write them.
+      getRendererLogger()
+        .child({ component: "board.session", docId: pending.docId })
+        .warn("renderer.board.before_the_desk", "A board from before the desk was refused at open");
+      manager.refuseBeforeTheDesk(pending.docId);
+      manager.contentApplied(pending.generation);
+      return;
+    }
     const behaviorRuntime = plugins?.runtime;
     let behaviorEpisode = 0;
     const connectBehaviorEpisode = () => {
@@ -250,6 +265,22 @@ export function useWorkspaceSession(
         manager.contentApplied(pending.generation);
         return () => closeDocument("quarantined-document-close");
       }
+      if (rootIsBeforeTheDesk(res.session.report?.rootCanvas)) {
+        // The belt under the header's mirror: the document's OWN root is the
+        // authority, and it says `ice.default`. Closed before anything binds —
+        // no journal applied, no presence, no persistence — and refused as above.
+        behaviorConnection?.close("before-the-desk-close");
+        ce.docs.close();
+        getRendererLogger()
+          .child({ component: "board.session", docId: pending.docId })
+          .warn(
+            "renderer.board.before_the_desk",
+            "A board from before the desk was refused at open",
+          );
+        manager.refuseBeforeTheDesk(pending.docId);
+        manager.contentApplied(pending.generation);
+        return;
+      }
       try {
         for (const update of pending.initialUpdates) res.session.applyRemote(update);
       } catch (error) {
@@ -298,10 +329,17 @@ export function useWorkspaceSession(
       const session = ce.docs.create();
       connectPresence();
       behaviorConnection?.refresh();
-      // The demo scene belongs to the bootstrap default doc alone (seed flag);
-      // user-created docs open as an empty field.
-      if (pending.seed) seedField(ce, session, registry);
-      else ce.world.sync();
+      // The first-run board belongs to the bootstrap default doc alone (seed
+      // flag); user-created docs open as an empty field. On the desk (ruling 6)
+      // it is one of each reference kind — five laid now, the print once its
+      // picture is in the byte store.
+      if (pending.seed) {
+        void seedField(ce, session, deskBlobs()).catch((error: unknown) =>
+          getRendererLogger()
+            .child({ component: "board.session", docId: pending.docId })
+            .error("renderer.board.seed_failed", "The first-run board's print was not laid", error),
+        );
+      } else ce.world.sync();
     }
     if (lane === null) {
       // degraded (in-memory) session — the manager already set the board row
@@ -316,7 +354,7 @@ export function useWorkspaceSession(
       unbindPersistence();
       ce.docs.close();
     };
-  }, [ce, manager, pending, plugins, profile, registry, runtimeGeneration]);
+  }, [ce, manager, pending, plugins, profile, runtimeGeneration, beforeTheDesk]);
 
   // Natural boot framing (widgetlab, 2026-07-18: "zoom to fit, but with an
   // upper and bottom cap"): frame the content once the viewport is measured
@@ -353,17 +391,17 @@ export function useWorkspaceSession(
   // Engine lifecycle (one per doc): when the generation re-keys `ce`, tear the
   // PRIOR engine's wiring down and dispose it. Ordering is safe by React's
   // rules: the attach layout-effect's cleanup (final flush → stop → close)
-  // runs in the commit phase, BEFORE this passive cleanup disposes the engine;
-  // the stage's GL/halo teardown runs FIRST via the shared ref (idempotent —
-  // the stage's own unmount cleanups may already have run it).
+  // runs in the commit phase, BEFORE this passive cleanup disposes the engine,
+  // and the keyed stage's `<Desk>` — a deleted subtree's passive cleanup —
+  // disposes its host (the layer, its device) before this one runs. (The GL
+  // disposal-order ref the stage published into retired with the GL, DK-3.)
   useEffect(() => {
     setActiveCanvasEngine(ce); // P6 §12.7 — publish the live engine for ctx.canvas
     return () => {
       setActiveCanvasEngine(null); // cleared first — never hand out a disposed engine
-      stageDisposeRef.current?.();
       ce.dispose();
     };
-  }, [ce, stageDisposeRef]);
+  }, [ce]);
 
-  return { ce, registry, generation, docState };
+  return { ce, registry, generation, docState, beforeTheDesk };
 }

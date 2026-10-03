@@ -613,6 +613,23 @@
   font-weight: 550;
 }
 
+/* Staging for the Canvas stage's unavailable card and the status line (DK-3): the shipping views
+   position themselves against the stage they stand in, so the specimen supplies one. */
+.vf-ds-desk-stage {
+  position: relative;
+  height: 320px;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.vf-ds-status-line-stage {
+  position: relative;
+  height: 120px;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--vf-canvas-bg);
+}
+
 .vf-ds-feedback-strip {
   display: grid;
   grid-template-columns: repeat(3, 1fr);

@@ -1,7 +1,6 @@
 import type { FrameView } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
-import { type ReactElement, useEffect, useMemo, useState } from "react";
-import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../field/canvas-appearance";
+import { type ReactElement, useEffect, useState } from "react";
 import { Composer } from "../frame/Composer";
 import { ComposerLineView } from "../frame/ComposerLine";
 import type { FrameSurface } from "../frame/frame-surface";
@@ -87,13 +86,7 @@ export function ViewsTrackSpecimen({
 
 /** The whole frame over a field: the cover rising, swapping and lowering on
  * the shipping CSS, the track above it, the keys' states on a control. */
-export function ViewFramePreview({
-  magnetGridGlyph,
-  dark,
-}: {
-  magnetGridGlyph: MagnetGridGlyph;
-  dark: boolean;
-}): ReactElement {
+export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
   const [state, setState] = useState<FrameState>("rest");
   const [keys, setKeys] = useState<"Mac" | "Windows">("Mac");
   const [view, setView] = useState<FrameView>("canvas");
@@ -103,10 +96,6 @@ export function ViewFramePreview({
   const [note, setNote] = useState<number | null>(null);
   const [surface, setSurface] = useState<FrameSurface | null>(null);
   const [clipboard] = useState(fixtureClipboardStore);
-  const grid = useMemo(
-    () => defaultCanvasGridConfig(dark, magnetGridGlyph),
-    [dark, magnetGridGlyph],
-  );
 
   // The owner, in fixture: the window moves as soon as it is asked.
   if (shown !== view) {
@@ -156,7 +145,7 @@ export function ViewFramePreview({
         data-covered={view === "canvas" ? "false" : "true"}
       >
         <InfiniteCanvasGroundPreview
-          grid={grid}
+          dark={dark}
           background="var(--vf-canvas-bg)"
           className="vf-ds-stage-ground"
           interactive={false}

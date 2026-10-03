@@ -4,14 +4,9 @@ import {
   compileEngineCatalog,
   createCanvasEngine,
   type DocSession,
-  type Entity,
-  PrefabId,
   type WidgetType,
-  Wire,
-  WireFrom,
-  WirePorts,
-  WireTo,
 } from "@vibecook/ice";
+import type { BlobStore } from "@vibecook/ice/desk/kit";
 import { DESK_ENGINE, DESK_OBJECTS } from "@vibecook/ice/desk/objects";
 import type {
   ObjectContribution,
@@ -22,6 +17,8 @@ import type {
 import { setPreviewBackground } from "@vibefield/design-kit";
 import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
+import { deskBlobs } from "./field/desk/desk-blobs";
+import { seedDesk } from "./field/desk/desk-seed";
 import { getRendererLogger } from "./logging";
 import {
   buildFacelessObjectType,
@@ -301,103 +298,6 @@ export async function prepareFieldPlugins(
   return { ...prepared, bundled: activated, runtime };
 }
 
-// === the demo scene — widgetlab App.tsx coordinates verbatim ===
-// (debug-resizable is the one widgetlab row not ported — a dev widget, cut.)
-
-const GX = 50;
-const GY = 50;
-const PITCH = 174;
-const G3X = GX + PITCH * 2 + 19 + 329 + 19; // 765
-const G6X = G3X + PITCH * 2 + 40 + 329 + 30; // 1512
-
-/** type id → [x, y, w, h, props?] in v1 spawn (zIndex) order. */
-const SCENE: Array<[string, number, number, number, number, Record<string, unknown>?]> = [
-  [
-    "vibefield.note",
-    GX,
-    GY - 240,
-    420,
-    190,
-    {
-      text: "Welcome to your field.\n\nDrag to move · scroll to pan · ⌘/ctrl+wheel to zoom · B opens the widget tray · select cards and press C to wrap them in a comment · double-click a folder to enter it.",
-    },
-  ],
-  ["vibefield.widgetlab.clock", GX, GY, 155, 155],
-  ["vibefield.widgetlab.battery", GX + PITCH, GY, 155, 155],
-  [
-    "vibefield.widgetlab.calendar",
-    GX,
-    GY + PITCH,
-    155,
-    155,
-    { dateIso: "", nextEvent: "Design review", nextEventTime: "3:30 PM" },
-  ],
-  [
-    "vibefield.widgetlab.weather",
-    GX,
-    GY + PITCH * 2,
-    329,
-    155,
-    { location: "Cupertino", temp: 72, high: 78, low: 60, condition: "sunny" },
-  ],
-  ["vibefield.widgetlab.stocks", GX, GY + PITCH * 3, 329, 155],
-  ["vibefield.widgetlab.fitness", GX, GY + PITCH * 4, 329, 345],
-  ["vibefield.widgetlab.photos", GX + PITCH * 2 + 19, GY, 329, 535],
-  ["vibefield.widgetlab.sphere", G3X, GY, 155, 155],
-  ["vibefield.widgetlab.crystal", G3X + PITCH, GY, 155, 155],
-  ["vibefield.widgetlab.torus-knot", G3X, GY + PITCH, 329, 155],
-  ["vibefield.widgetlab.cube", G3X, GY + PITCH * 2, 329, 155],
-  ["vibefield.widgetlab.gold-knot", G3X, GY + PITCH * 3, 329, 345],
-  [
-    "vibefield.field-tools.folder",
-    G3X + PITCH * 2 + 40,
-    GY + 220,
-    329,
-    345,
-    { title: "Widgets", accent: "#6366F1" },
-  ],
-  [
-    "vibefield.field-tools.folder",
-    G3X + PITCH * 2 + 40,
-    GY + 220 + 345 + 19,
-    329,
-    345,
-    { title: "Saved", accent: "#EC4899" },
-  ],
-  ["vibefield.widgetlab.todo", G6X, GY, 329, 345],
-  ["vibefield.widgetlab.shapes", G6X, GY + 345 + 19, 329, 345],
-  ["vibefield.widgetlab.orbit-cube", G6X, GY + (345 + 19) * 2, 329, 155],
-];
-
-/**
- * Seed one wire between two node widgets — nodeboard's `seedWire` verbatim on
- * a doc session (design-001 §5.3: a `Wire`-tagged entity carrying
- * `WirePorts{from,to}` + the endpoint relations; geometry never stores a port
- * entity).
- */
-function seedWire(
-  session: DocSession,
-  from: Entity,
-  fromPort: string,
-  to: Entity,
-  toPort: string,
-): void {
-  session.store.transaction(
-    (tx) => {
-      const wire = tx.spawn({
-        components: [
-          [PrefabId, { id: "wire" }],
-          [WirePorts, { from: fromPort, to: toPort }],
-        ],
-        tags: [Wire],
-      });
-      tx.setRelation(wire, WireFrom, from);
-      tx.setRelation(wire, WireTo, to);
-    },
-    { undoable: false }, // seeds — the user's first ⌘Z stays clean (moodboard rule)
-  );
-}
-
 // DK-2 (desk/landing, ICE 0.14.0): ICE's measurement pipeline is GONE —
 // `createMeasureQueue`, `MeasuredSize` and `CanvasEngineOpts.measureQueue` left with
 // the DOM faces they measured; every effective size is `Size`. The side table that
@@ -512,61 +412,15 @@ function pluginIdForBehavior(behaviorId: string): string | undefined {
   return separator > 0 ? behaviorId.slice(0, separator) : undefined;
 }
 
-/** The first-run board (widgetlab demo scene). Requires a live doc session.
- * Seeds only REGISTERED types the root canvas PLACES: with a plugin disabled at
- * first boot, its demo widgets are skipped rather than thrown on (the scene
- * degrades honestly). DK-2: the desk's root places what provides `desk.object`,
- * which no VibeField widget does — so on the desk this scene seeds nothing until
- * DK-5 rewrites it with desk objects. */
+/** THE FIRST-RUN BOARD (DK-3, ruling 6) — one of each reference kind, the print through the byte
+ * store (field/desk/desk-seed.ts). Requires a live doc session. The five land before this returns;
+ * the promise resolves once the print is laid. The widgetlab demo scene it replaced seeded nothing
+ * on the desk (no VibeField widget provides `desk.object`) and retires with its plugin (DK-8). */
 export function seedField(
   ce: CanvasEngine,
   session: DocSession,
-  registry: PluginRegistry<WidgetType>,
-): void {
-  const placeable = ce.catalog.placementFor(ce.catalog.rootCanvas.id);
-  const registered = new Set(
-    [...registry.allWidgets().keys()].filter((type) => placeable.has(type)),
-  );
-  for (const [type, x, y, w, h, props] of SCENE) {
-    if (!registered.has(type)) continue;
-    ce.ops.spawnWidget(type, {
-      x,
-      y,
-      w,
-      h,
-      undoable: false, // seeds — the user's first ⌘Z stays clean (moodboard rule)
-      ...(props !== undefined ? { props } : {}),
-    });
-  }
-  // Node trio (widgetlab 2026-07-16): a wire-able signal → filter → scope
-  // chain in its own column right of the todo column. Hover a node to
-  // materialize its port dots, drag dot-to-dot to connect (ports accept
-  // "signal"; the dashed preview goes solid on a compatible target).
-  const NX = G6X + 329 + 39; // 1880 — the next column in the v1 grid rhythm
-  if (["signal", "filter", "scope"].every((n) => registered.has(`vibefield.widgetlab.${n}`))) {
-    const signal = ce.ops.spawnWidget("vibefield.widgetlab.signal", {
-      x: NX,
-      y: 50,
-      w: 170,
-      h: 96,
-      undoable: false,
-    });
-    const filter = ce.ops.spawnWidget("vibefield.widgetlab.filter", {
-      x: NX + 240,
-      y: 170,
-      w: 170,
-      h: 96,
-      undoable: false,
-    });
-    const scope = ce.ops.spawnWidget("vibefield.widgetlab.scope", {
-      x: NX + 480,
-      y: 62,
-      w: 170,
-      h: 96,
-      undoable: false,
-    });
-    seedWire(session, signal, "out", filter, "in");
-    seedWire(session, filter, "out", scope, "in-a");
-  }
-  ce.world.sync(); // project the seeds before the first frame
+  blobs: BlobStore = deskBlobs(),
+  now?: Date,
+): Promise<void> {
+  return seedDesk(ce, session, blobs, now);
 }

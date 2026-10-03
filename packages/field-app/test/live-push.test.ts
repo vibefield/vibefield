@@ -96,7 +96,7 @@ describe("DS-5 — an open window is pushed a peer desktop's edit", () => {
     } else {
       const session = ce.docs.create();
       ce.world.sync();
-      if (pending.seed) seedField(ce, session, registry);
+      if (pending.seed) void seedField(ce, session);
     }
     ce.world.sync();
     manager.contentApplied(pending.generation);

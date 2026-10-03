@@ -18,6 +18,8 @@ import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DocManager } from "../src/doc-manager";
+import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
+import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -69,7 +71,7 @@ function managerFor(daemon: FielddDaemon): DocManager {
   return new DocManager(client, { timeoutMs: 5_000 });
 }
 
-function applyPending(manager: DocManager): ReturnType<typeof createFieldEngine> {
+async function applyPending(manager: DocManager): Promise<ReturnType<typeof createFieldEngine>> {
   const pending = manager.getState().pending;
   if (pending === null) throw new Error("no pending session");
   const registry = buildRegistry();
@@ -82,7 +84,7 @@ function applyPending(manager: DocManager): ReturnType<typeof createFieldEngine>
     ce.world.sync();
   } else {
     const session = ce.docs.create();
-    if (pending.seed) seedField(ce, session, registry);
+    if (pending.seed) await seedField(ce, session, createDeskBlobStore());
     else ce.world.sync();
   }
   manager.contentApplied(pending.generation);
@@ -116,7 +118,7 @@ describe("the persistence exemption (hidden windows still persist)", () => {
     const { dataDir, daemon } = await stack();
     const manager = managerFor(daemon);
     await manager.boot();
-    const ce = applyPending(manager);
+    const ce = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
 
     stubHiddenDocument();
@@ -138,9 +140,9 @@ describe("the persistence exemption (hidden windows still persist)", () => {
     await manager2.boot();
     const restored = manager2.getState().pending;
     expect(restored?.initialBytes).not.toBeNull();
-    const ce2 = applyPending(manager2);
+    const ce2 = await applyPending(manager2);
     await until(() => manager2.getState().phase === "ready");
-    expect(widgetCount(ce2)).toBe(21); // the seeded board, byte-survived
+    expect(widgetCount(ce2)).toBe(SEED_TYPES.length); // the seeded board, byte-survived
     await manager2.shutdown();
   }, 30_000);
 

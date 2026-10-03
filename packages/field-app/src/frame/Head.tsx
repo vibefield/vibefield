@@ -326,9 +326,24 @@ export function Head({
           entry,
           caption: `${fmtRelative(entry.updatedAt)}${word === null ? "" : ` · ${word}`}`,
           ...(thumbnailUrl === undefined ? {} : { thumbnailUrl }),
+          ...((state.beforeTheDesk ?? []).includes(entry.docId) ? { beforeTheDesk: true } : {}),
         };
       }),
-    [state.docs, state.thumbnailUrls, syncStatuses],
+    [state.docs, state.thumbnailUrls, state.beforeTheDesk, syncStatuses],
+  );
+
+  /** DS-5's tombstone for a board from before the desk (ruling 7): the library's Delete. */
+  const deleteDoc = useCallback(
+    (entry: DocRegistryEntry) => {
+      void manager
+        .deleteDoc?.(entry.docId)
+        .catch((error: unknown) =>
+          getRendererLogger()
+            .child({ component: "docs.head", docId: entry.docId })
+            .error("renderer.docs.delete_failed", "Deleting a document failed", error),
+        );
+    },
+    [manager],
   );
   const current = syncStatuses.find((s) => s.docId === state.doc?.docId);
   const currentId = state.doc?.docId ?? null;
@@ -359,6 +374,7 @@ export function Head({
           void manager.createDoc();
         },
         onToggleSync: toggleSync,
+        onDeleteDoc: deleteDoc,
       }}
       zoom={{
         percent,

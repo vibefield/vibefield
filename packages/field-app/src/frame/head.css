@@ -390,6 +390,40 @@
   opacity: 1;
 }
 
+/* A board from before the desk (DK-3, ruling 7): listed, never opened — the tile holds still, its
+   face the plain fallback ground at rest, and Delete stands where the sync chip would. */
+.vf-head-doc-tile[data-before-the-desk] {
+  transform: none;
+}
+
+.vf-head-doc-tile[data-before-the-desk] .vf-head-doc {
+  cursor: default;
+}
+
+.vf-head-doc-tile[data-before-the-desk] .vf-head-doc-face {
+  opacity: 0.55;
+}
+
+.vf-head-doc-delete {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  padding: 2px 6px;
+  border: 0;
+  border-radius: 999px;
+  color: var(--vf-red);
+  background: color-mix(in srgb, var(--vf-red) 12%, transparent);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+}
+
+.vf-head-doc-delete:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
 /* The explorer's dim (§5 backdrop dim) — a click on it closes the sheet. */
 .vf-head-dim {
   position: absolute;

@@ -481,6 +481,24 @@ describe("the fields explorer, grown from the pill", () => {
     expect(host?.textContent).toContain("No fields yet");
     expect(host?.textContent).not.toContain("⊕");
   });
+  it("lists a board from before the desk with Delete — its tile never opens it (DK-3, ruling 7)", () => {
+    const manager = fakeManager({ beforeTheDesk: [DOC_B] });
+    const deleteDoc = vi.fn(async () => {});
+    manager.deleteDoc = deleteDoc;
+    mount({ manager, open: "fields" });
+    const tile = $("[data-before-the-desk]");
+    expect(tile?.querySelector(".vf-head-doc-name")?.textContent).toBe("Studio");
+    expect(tile?.querySelector(".vf-head-doc-time")?.textContent).toBe("before the desk");
+    // not a door: no open button, no sync chip, the old thumbnail not shown
+    expect($('button[title="Open Studio"]')).toBeNull();
+    expect(tile?.querySelector(".vf-head-doc-sync")).toBeNull();
+    expect(tile?.querySelector("img")).toBeNull();
+    const remove = tile?.querySelector<HTMLButtonElement>('button[title="Delete Studio"]');
+    if (remove == null) throw new Error("no Delete on the tile");
+    act(() => remove.click());
+    expect(deleteDoc).toHaveBeenCalledWith(DOC_B);
+    expect(manager.switchTo).not.toHaveBeenCalled();
+  });
 });
 
 describe("the sync dot and the tiles' sync words (C6-4, UA-D7)", () => {

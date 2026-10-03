@@ -1,9 +1,12 @@
 import { defineQuery, Position, PrefabId, WirePorts } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
+import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
+import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
-// B3 restart survival, headless: the demo scene is the persistence test payload
-// (thinking-widgetlab-port §5 named it so). Seed → exportEnvelope → a FRESH
+// B3 restart survival, headless: the first-run board is the persistence test
+// payload (thinking-widgetlab-port §5 named it so; since DK-3 it is the desk's
+// seed — one of each reference kind, ruling 6). Seed → exportEnvelope → a FRESH
 // engine docs.open()s the bytes → identical census. This is the renderer half
 // of the P0 exit criterion; the daemon half (bytes at rest across bootstrap
 // cycles) lives in packages/fieldd/test/doc-service.test.ts.
@@ -29,23 +32,20 @@ function census(ce: ReturnType<typeof createFieldEngine>) {
 }
 
 describe("board persistence (headless)", () => {
-  it("seedField produces the named census: 21 widgets, 2 wires", () => {
-    const registry = buildRegistry();
-    const ce = createFieldEngine(registry);
-    seedField(ce, ce.docs.create(), registry);
+  it("seedField produces the desk's census: one of each reference kind, no wires", async () => {
+    const ce = createFieldEngine(buildRegistry());
+    await seedField(ce, ce.docs.create(), createDeskBlobStore());
     const c = census(ce);
-    expect(c.widgets).toBe(21);
-    expect(c.wires).toBe(2);
-    expect(c.types["vibefield.field-tools.folder"]).toBe(2);
-    expect(c.types["vibefield.note"]).toBe(1);
+    expect(c.widgets).toBe(SEED_TYPES.length);
+    expect(c.wires).toBe(0);
+    expect(c.types).toEqual(Object.fromEntries([...SEED_TYPES].sort().map((t) => [t, 1])));
     ce.dispose();
   });
 
-  it("an exported envelope reopens on a fresh engine with an identical census", () => {
-    const registry = buildRegistry();
-    const seeder = createFieldEngine(registry);
+  it("an exported envelope reopens on a fresh engine with an identical census", async () => {
+    const seeder = createFieldEngine(buildRegistry());
     const session = seeder.docs.create();
-    seedField(seeder, session, registry);
+    await seedField(seeder, session, createDeskBlobStore());
     const before = census(seeder);
     const bytes = session.exportEnvelope(1_753_142_400_000);
     seeder.dispose();

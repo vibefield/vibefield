@@ -3,7 +3,6 @@ import {
   type ProductAppearance,
   productAppearanceCssVariables,
 } from "../appearance/product-appearance";
-import { canvasGridConfig } from "../field/canvas-appearance";
 import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 import { VisualTweakControls } from "./tweaks/VisualTweakControls";
 
@@ -16,7 +15,6 @@ export function CanvasGroundWorkbench({
   value: ProductAppearance;
   onChange: (value: ProductAppearance) => void;
 }): ReactElement {
-  const grid = useMemo(() => canvasGridConfig(value, dark), [dark, value]);
   const scopedVariables = useMemo(
     () => productAppearanceCssVariables(value, dark) as CSSProperties,
     [dark, value],
@@ -27,7 +25,7 @@ export function CanvasGroundWorkbench({
       <div className="vf-ds-ground-workbench__previews">
         <div className="vf-ds-ground-lab">
           <InfiniteCanvasGroundPreview
-            grid={grid}
+            dark={dark}
             background="var(--vf-canvas-bg)"
             label="Live ICE infinite-canvas magnet grid"
           />

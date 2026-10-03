@@ -1,8 +1,7 @@
 import { resolveTheme, type ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
-import { type ReactElement, useMemo, useState } from "react";
+import { type ReactElement, useState } from "react";
 import { MeMenuView } from "../../account/MeMenu";
-import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../../field/canvas-appearance";
 import { roundButtonCls } from "../../field/theme-constants";
 import { ComposerLineView } from "../../frame/ComposerLine";
 import type { FrameSurface } from "../../frame/frame-surface";
@@ -33,11 +32,9 @@ import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFrame
 
 export function ChromeSection({
   dark,
-  magnetGridGlyph,
   onToggleTheme,
 }: {
   dark: boolean;
-  magnetGridGlyph: MagnetGridGlyph;
   onToggleTheme: () => void;
 }): ReactElement {
   // The frame's one owner of the open surface, in fixture: the head's
@@ -68,10 +65,6 @@ export function ChromeSection({
     if ((resolveTheme(pick, osDark) === "dark") !== dark) onToggleTheme();
   };
   const playgroundTheme = { preference: themePick, resolved: dark ? "dark" : "light" } as const;
-  const groundGrid = useMemo(
-    () => defaultCanvasGridConfig(dark, magnetGridGlyph),
-    [dark, magnetGridGlyph],
-  );
 
   const changeSurface = (next: FrameSurface | null): void => {
     setSurface(next);
@@ -93,7 +86,7 @@ export function ChromeSection({
           data-tray-open={trayOpen}
         >
           <InfiniteCanvasGroundPreview
-            grid={groundGrid}
+            dark={dark}
             background="var(--vf-canvas-bg)"
             className="vf-ds-stage-ground"
             interactive={false}
@@ -196,7 +189,7 @@ export function ChromeSection({
         source="frame/* · DESIGN.md §10, §8, §6"
         bleed
       >
-        <ViewFramePreview magnetGridGlyph={magnetGridGlyph} dark={dark} />
+        <ViewFramePreview dark={dark} />
         <p className="vf-ds-stage-caption">
           The canvas is the ground floor; Godview and History are one cover over it, each on its own
           ground at the covers' 72% glass, their content ending 88 above the foot. The track stands

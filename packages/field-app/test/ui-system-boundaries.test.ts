@@ -375,8 +375,12 @@ describe("UI system ownership boundaries", () => {
       "SwarmBodiesPreview",
       "swarmMonitorView",
       "CanvasGroundWorkbench",
+      // the ground specimen mounts the desk through the field's own layer (DK-3)
       "InfiniteCanvasGroundPreview",
-      "InfiniteCanvasGround",
+      "fieldDeskLayer",
+      // DK-3 — when the desk can't draw: the stage's card and the status line's banner
+      "DeskUnavailableView",
+      "StatusLineView",
       "LiveSurfaceView",
       "TerminalMirrorPreview",
       "TerminalMirrorSurface",
@@ -475,9 +479,14 @@ describe("UI system ownership boundaries", () => {
     expect(boot).not.toContain("dev-tweaks");
     expect(field).not.toContain("VisualTweak");
     expect(field).toContain("effectiveProductAppearance");
-    expect(field).toContain("canvasGridConfig(effectiveAppearance, dark)");
     expect(field).toContain("productAppearanceCssVariables(effectiveAppearance, dark)");
-    expect(stage).toContain("InfiniteCanvasGround");
+    // DK-3 (the host swap): the stage mounts ICE's desk with the field's own layer,
+    // and the appearance document's GRID half no longer reaches it — the desk's
+    // grid is the layer's (the mat, rulers at 60; DESIGN.md §2.1's erratum), so the
+    // 0.11 magnet projection the field once handed the ground has no consumer.
+    expect(stage).toMatch(/<Desk\s+engine=\{ce\}\s+layer=\{layer\}/u);
+    expect(stage).toContain("fieldDeskLayer(");
+    expect(field).not.toContain("canvasGridConfig(");
     expect(workbench).toContain("ProductAppearance");
     expect(workbench).not.toContain("useState");
   });

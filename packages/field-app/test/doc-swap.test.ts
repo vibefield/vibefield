@@ -7,6 +7,8 @@
 // test is the canary that tells us the day the in-place path becomes viable.
 import { defineQuery, Position, PrefabId, WirePorts } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
+import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
+import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
 const widgetQ = defineQuery([Position, PrefabId]);
@@ -25,12 +27,12 @@ function census(ce: ReturnType<typeof createFieldEngine>) {
 }
 
 describe("in-place doc swap on one engine", () => {
-  it("close → create empties the world; close → open restores", () => {
-    const registry = buildRegistry();
-    const ce = createFieldEngine(registry);
+  it("close → create empties the world; close → open restores", async () => {
+    const ce = createFieldEngine(buildRegistry());
     const a = ce.docs.create();
-    seedField(ce, a, registry);
-    expect(census(ce)).toEqual({ widgets: 21, wires: 2 });
+    await seedField(ce, a, createDeskBlobStore());
+    const seeded = { widgets: SEED_TYPES.length, wires: 0 };
+    expect(census(ce)).toEqual(seeded);
     const bytesA = a.exportEnvelope(Date.now());
 
     ce.docs.close();
@@ -45,7 +47,7 @@ describe("in-place doc swap on one engine", () => {
     expect(res.ok, res.ok ? "" : res.reason).toBe(true);
     ce.world.sync();
     console.log("after reopen A:", JSON.stringify(census(ce)));
-    expect(census(ce)).toEqual({ widgets: 21, wires: 2 });
+    expect(census(ce)).toEqual(seeded);
     ce.dispose();
   });
 });

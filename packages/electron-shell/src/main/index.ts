@@ -143,7 +143,17 @@ const MODE = parseMode(process.argv);
 // TP-S0c: `terminal-perf-lab` joins `live-surfaces-lab` in KEEPING hardware
 // acceleration. A perf lab that measured a software rasteriser would publish
 // numbers for a renderer nobody runs — the GPU path is the thing under test.
-if (isSmokeLike(MODE) && MODE !== "live-surfaces-lab" && MODE !== "terminal-perf-lab") {
+// DK-3: `smoke-canvas` keeps it too — the Canvas view is ICE's desk, drawn by
+// WebGPU alone (no Canvas2D fallback, DK-D32), so a software run proves only
+// that the registry loaded (r6b risk 1). The canvas smoke asserts DESK_READY
+// and a pixel with the GPU on; `--disable-gpu` runs it the smokes' way, where
+// the stage must show the unavailable card instead.
+if (
+  isSmokeLike(MODE) &&
+  MODE !== "live-surfaces-lab" &&
+  MODE !== "terminal-perf-lab" &&
+  !(MODE === "smoke-canvas" && !process.argv.includes("--disable-gpu"))
+) {
   app.disableHardwareAcceleration();
 }
 // TP-S0c: an OCCLUDED Chromium window stops presenting. Chromium suspends rAF

@@ -38,6 +38,9 @@ export interface HeadDocTile {
   readonly thumbnailUrl?: string;
   /** "2h ago", and the honest sync word when there is one ("· syncing"). */
   readonly caption: string;
+  /** A board from BEFORE THE DESK (DK-3, ruling 7): listed, never opened — its tile says so and
+   * offers Delete where the others keep their sync chip. */
+  readonly beforeTheDesk?: boolean;
 }
 
 export interface HeadPlaceViewProps {
@@ -66,6 +69,8 @@ export interface HeadPlaceViewProps {
   onOpenDoc?: (docId: string) => void;
   onNewField?: () => void;
   onToggleSync?: (entry: DocRegistryEntry) => void;
+  /** Delete a board (DS-5's tombstone) — offered on a board from before the desk. */
+  onDeleteDoc?: (entry: DocRegistryEntry) => void;
   /** The slot the pill leaves free on EACH side, so it stays centred on the
    * window: the wider of the two sides (HeadView measures it). */
   side?: number;
@@ -138,6 +143,7 @@ export function HeadPlaceView({
   onOpenDoc,
   onNewField,
   onToggleSync,
+  onDeleteDoc,
   side,
 }: HeadPlaceViewProps): ReactElement {
   const pathRef = useRef<HTMLDivElement>(null);
@@ -304,10 +310,35 @@ export function HeadPlaceView({
               {docs.length === 0 ? <span className="vf-head-doc-time">No fields yet</span> : null}
             </button>
           </div>
-          {docs.map(({ entry, thumbnailUrl, caption }) => {
+          {docs.map(({ entry, thumbnailUrl, caption, beforeTheDesk = false }) => {
             const current = entry.docId === currentId;
             // UA-D7: the REGISTRY's answer, never the sync stream's.
             const local = entry.syncIntent === "local";
+            if (beforeTheDesk) {
+              // Ruling 7: never opened, never converted — the tile names it and offers Delete.
+              return (
+                <div key={entry.docId} className="vf-head-doc-tile" data-before-the-desk="">
+                  <div
+                    className="vf-head-doc"
+                    aria-disabled="true"
+                    {...(current ? { "aria-current": "true" } : {})}
+                    title={`${entry.name} is from before the desk — it doesn't open here`}
+                  >
+                    <span className="vf-head-doc-face" />
+                    <span className="vf-head-doc-name">{entry.name}</span>
+                    <span className="vf-head-doc-time">before the desk</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="vf-head-doc-delete"
+                    title={`Delete ${entry.name}`}
+                    onClick={() => onDeleteDoc?.(entry)}
+                  >
+                    Delete
+                  </button>
+                </div>
+              );
+            }
             return (
               <div key={entry.docId} className="vf-head-doc-tile">
                 <button

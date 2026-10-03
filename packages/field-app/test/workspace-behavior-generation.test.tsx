@@ -1,7 +1,8 @@
 import { createCanvasEngine, defineBehavior, describeBehavior } from "@vibecook/ice";
+import { DESK_ENGINE } from "@vibecook/ice/desk/objects";
 import type { BehaviorDefinition } from "@vibefield/contracts";
 import type { RendererRuntimeTarget } from "@vibefield/plugin-runtime";
-import { act, useRef } from "react";
+import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
 import type { DocManager, DocManagerState } from "../src/doc-manager";
@@ -125,8 +126,7 @@ describe("workspace behavior generation ownership", () => {
     );
 
     function Harness() {
-      const stageDisposeRef = useRef<(() => void) | null>(null);
-      session = useWorkspaceSession(manager, stageDisposeRef, plugins);
+      session = useWorkspaceSession(manager, plugins);
       return null;
     }
 
@@ -152,7 +152,9 @@ describe("workspace behavior generation ownership", () => {
 
   it("ends the failed journal generation before opening its quarantined replacement", async () => {
     const { plugins, runtime } = preparedBehaviorRuntime("com.example.workspace-behavior-journal");
-    const source = createCanvasEngine();
+    // A DESK board (DK-3): one rooted at `ice.default` is refused at open before
+    // any journal is read, which is not the path this row walks.
+    const source = createCanvasEngine(DESK_ENGINE);
     const initialBytes = source.docs.create().exportEnvelope(1);
     source.docs.close();
     source.dispose();
@@ -199,8 +201,7 @@ describe("workspace behavior generation ownership", () => {
     );
 
     function Harness() {
-      const stageDisposeRef = useRef<(() => void) | null>(null);
-      session = useWorkspaceSession(manager, stageDisposeRef, plugins);
+      session = useWorkspaceSession(manager, plugins);
       return null;
     }
 
@@ -260,8 +261,7 @@ describe("workspace behavior generation ownership", () => {
     );
 
     function Harness() {
-      const stageDisposeRef = useRef<(() => void) | null>(null);
-      session = useWorkspaceSession(manager, stageDisposeRef, plugins);
+      session = useWorkspaceSession(manager, plugins);
       return null;
     }
 

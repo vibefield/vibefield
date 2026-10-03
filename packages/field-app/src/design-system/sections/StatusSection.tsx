@@ -1,6 +1,17 @@
 import { EmptyState, StatusDot, UnavailableState } from "@vibefield/design-kit";
 import type { ReactElement, ReactNode } from "react";
+import { DeskUnavailableView } from "../../field/desk/DeskUnavailableView";
+import { BEFORE_THE_DESK, failedWords } from "../../field/desk/desk-words";
+import { StatusLineView } from "../../frame/StatusLine";
 import { Icon, Section, Specimen } from "../catalog-ui";
+
+// ICE's own words, as its desk layer composes them (`${what}: ${error.message}`) — fixtures for the
+// shipping card, which reads them verbatim (DESIGN.md §8 "When the desk can't draw", R18).
+const DESK_LOST = "the device was lost: unknown: GPU process exited";
+const DESK_NO_GPU =
+  "no desk — the adapter, the device or the pipelines were refused: WebGPU is unavailable here (no navigator.gpu)";
+const DESK_DEGRADED = "an uncaptured GPU error — GPUOutOfMemoryError: out of memory";
+const reloadFixture = (): void => undefined;
 
 export function StatusSection(): ReactElement {
   return (
@@ -57,6 +68,37 @@ export function StatusSection(): ReactElement {
             title="Plugin unavailable"
             description="The card is kept. Enable Notes to restore it."
           />
+        </Specimen>
+      </div>
+      {/* When the desk can't draw (DESIGN.md §8, R18; DK-3): the shipping card in the Canvas stage on
+          its plain ground — a Reload where one could help, ICE's message verbatim — and the status
+          line's banner for a degraded desk that still draws. */}
+      <div className="vf-ds-grid vf-ds-grid-2">
+        <Specimen title="The desk lost its device" source="field/desk/DeskUnavailableView.tsx">
+          <div className="vf-ds-desk-stage">
+            <DeskUnavailableView words={failedWords(DESK_LOST)} onReload={reloadFixture} />
+          </div>
+        </Specimen>
+        <Specimen title="No WebGPU here — no Reload" source="field/desk/DeskUnavailableView.tsx">
+          <div className="vf-ds-desk-stage">
+            <DeskUnavailableView words={failedWords(DESK_NO_GPU)} onReload={reloadFixture} />
+          </div>
+        </Specimen>
+        <Specimen title="A board from before the desk" source="field/desk/desk-words.ts">
+          <div className="vf-ds-desk-stage">
+            <DeskUnavailableView words={BEFORE_THE_DESK} />
+          </div>
+        </Specimen>
+        <Specimen title="The status line — a degraded desk" source="frame/StatusLine.tsx">
+          <div className="vf-ds-status-line-stage">
+            <StatusLineView
+              notice={{
+                id: "desk-degraded",
+                text: DESK_DEGRADED,
+                act: { label: "Reload", run: reloadFixture },
+              }}
+            />
+          </div>
         </Specimen>
       </div>
       <div className="vf-ds-feedback-strip">

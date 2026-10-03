@@ -1,0 +1,218 @@
+import {
+  type CanvasEngine,
+  defineQuery,
+  Not,
+  Position,
+  PrefabId,
+  Size,
+  Specimen,
+} from "@vibecook/ice";
+import type {
+  AmbientMode,
+  CaptureOptions,
+  DeskLayerHandle,
+  DeskLayerPerf,
+  DeskLayerStatus,
+  GpuMemory,
+  PickResult,
+  ThemeName,
+} from "@vibecook/ice/desk";
+import { DESK_FACE_URLS, deskText } from "./desk-assets";
+import { deskBlobs } from "./desk-blobs";
+
+// THE DESK MOUNTED NOW, and its DOOR (DK-3). One desk draws in the Canvas stage at a time — one layer
+// per committed engine generation, remounted by Reload (ruling 1) — and two readers want it outside
+// the stage: Settings → Advanced → Developer (its numbers — ruling 2: `status()`, `perf()`'s boot and
+// frames, `submits()`, the memory ledger; no panel of ICE's) and the smokes and rigs, through
+// `window.__vfDesk` (the shape of ICE's own `window.__desk`, narrowed to what a harness reads). The
+// CANVAS_READY bargain (development-console.ts), extended one door: reads, plus the ambient switch a
+// freeze witness needs to make the desk busy before it covers it. No document authority.
+
+export interface MountedDesk {
+  readonly engine: CanvasEngine;
+  readonly handle: DeskLayerHandle;
+  /** The document generation the stage was mounted for (FieldView's key). */
+  readonly generation: number;
+  /** The desk's own remounts within that generation (Reload). */
+  readonly mount: number;
+  /** The theme the bridge last dressed the desk in. */
+  theme: ThemeName;
+}
+
+let current: MountedDesk | null = null;
+const listeners = new Set<() => void>();
+
+export function publishDesk(desk: MountedDesk): () => void {
+  current = desk;
+  for (const fn of listeners) fn();
+  return () => {
+    if (current !== desk) return;
+    current = null;
+    for (const fn of listeners) fn();
+  };
+}
+
+export function currentDesk(): MountedDesk | null {
+  return current;
+}
+
+export function subscribeDesk(fn: () => void): () => void {
+  listeners.add(fn);
+  return () => {
+    listeners.delete(fn);
+  };
+}
+
+/** A still read back as numbers — a harness cannot carry an ImageBitmap across `executeJavaScript`. */
+export interface DeskSample {
+  readonly width: number;
+  readonly height: number;
+  /** Distinct colours, each channel quantized to 32 levels: 1 is a uniform frame. */
+  readonly colors: number;
+  /** Rec. 709 luma over the still, 0–255. */
+  readonly lumaMin: number;
+  readonly lumaMax: number;
+  readonly lumaMean: number;
+}
+
+/** Read a captured still back through a 2D canvas. */
+export async function sampleBitmap(bitmap: ImageBitmap): Promise<DeskSample> {
+  const { width, height } = bitmap;
+  const canvas = new OffscreenCanvas(width, height);
+  const ctx = canvas.getContext("2d");
+  if (ctx === null) throw new Error("desk sample: no 2d context");
+  ctx.drawImage(bitmap, 0, 0);
+  const data = ctx.getImageData(0, 0, width, height).data;
+  const colors = new Set<number>();
+  let min = 255;
+  let max = 0;
+  let sum = 0;
+  for (let i = 0; i < data.length; i += 4) {
+    const r = data[i] as number;
+    const g = data[i + 1] as number;
+    const b = data[i + 2] as number;
+    colors.add(((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3));
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    if (luma < min) min = luma;
+    if (luma > max) max = luma;
+    sum += luma;
+  }
+  const n = Math.max(1, width * height);
+  return {
+    width,
+    height,
+    colors: colors.size,
+    lumaMin: Math.round(min),
+    lumaMax: Math.round(max),
+    lumaMean: Math.round(sum / n),
+  };
+}
+
+// not the pegboard's specimens: runtime entities of each kind, hung by the desk, never in the document
+const objectsQ = defineQuery([Position, Size, PrefabId, Not(Specimen)]);
+
+/** The document's objects by type — what the seed laid, a census a harness can hold. */
+export function deskCensus(engine: CanvasEngine): Record<string, number> {
+  const out: Record<string, number> = {};
+  engine.world.query(objectsQ).each((batch) => {
+    for (const row of batch) {
+      const type = engine.world.get(batch.entity(row), PrefabId)?.id;
+      if (typeof type === "string") out[type] = (out[type] ?? 0) + 1;
+    }
+  });
+  return out;
+}
+
+export interface VfDeskDoor {
+  readonly generation: number;
+  readonly mount: number;
+  status(): DeskLayerStatus;
+  perf(): DeskLayerPerf;
+  /** Every queue submit since the mount (the instrument installs at the mount); null before the device. */
+  submits(): { readonly total: number; readonly buffers: number } | null;
+  pick(point: { readonly x: number; readonly y: number }): {
+    readonly entity: number;
+    readonly type: string;
+    readonly canvas: number;
+    readonly part: string;
+  } | null;
+  capture(opts?: CaptureOptions): Promise<ImageBitmap | undefined>;
+  /** A capture read back as numbers (DESK_READY's pixel witness); null while the desk has none. */
+  sample(opts?: CaptureOptions): Promise<DeskSample | null>;
+  theme(): ThemeName;
+  census(): Record<string, number>;
+  /** What the desk was fed, by the routes the packaged CSP admits (ruling 8): the plates set, each
+   * face loaded through `FontFace(url)`, where the byte store keeps its prints. */
+  assets(): Promise<{
+    readonly plates: boolean;
+    readonly faces: Readonly<Record<string, boolean>>;
+    readonly blobs: string;
+  }>;
+  /** The wind's policy: read, or set (a freeze witness makes the desk busy before covering it). */
+  ambient(mode?: AmbientMode): AmbientMode;
+  memory(): GpuMemory | null;
+}
+
+const pickOf = (
+  hit: PickResult | null,
+): { entity: number; type: string; canvas: number; part: string } | null =>
+  hit === null
+    ? null
+    : {
+        entity: hit.entity as number,
+        type: hit.type,
+        canvas: hit.canvas as number,
+        part: hit.part,
+      };
+
+/** Install `window.__vfDesk` for one mount; the returned undo removes it if it is still this one's. */
+export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): () => void {
+  const { handle, engine } = desk;
+  let ambient: AmbientMode = "idle";
+  const door: VfDeskDoor = {
+    generation: desk.generation,
+    mount: desk.mount,
+    status: () => handle.status(),
+    perf: () => handle.perf(),
+    submits: () => {
+      const s = handle.submits();
+      return s === undefined ? null : { total: s.total(), buffers: s.buffers() };
+    },
+    pick: (point) => pickOf(handle.pick(point)),
+    capture: (opts) => handle.capture(opts),
+    async sample(opts) {
+      const still = await handle.capture(opts);
+      if (still === undefined) return null;
+      try {
+        return await sampleBitmap(still);
+      } finally {
+        still.close();
+      }
+    },
+    theme: () => desk.theme,
+    census: () => deskCensus(engine),
+    async assets() {
+      const text = deskText();
+      const names = Object.keys(DESK_FACE_URLS);
+      const loaded = await Promise.all(names.map((name) => text.load(name)));
+      return {
+        plates: platesSet(),
+        faces: Object.fromEntries(names.map((name, i) => [name, loaded[i] === true])),
+        blobs: await deskBlobs().persistence(),
+      };
+    },
+    ambient(mode) {
+      if (mode !== undefined) {
+        ambient = mode;
+        handle.setAmbient(mode);
+      }
+      return ambient;
+    },
+    memory: () => handle.gpuMemory()?.read() ?? null,
+  };
+  const scope = globalThis as Record<string, unknown>;
+  scope["__vfDesk"] = door;
+  return () => {
+    if (scope["__vfDesk"] === door) delete scope["__vfDesk"];
+  };
+}

@@ -1,5 +1,4 @@
 import { Camera, type CanvasEngine } from "@vibecook/ice";
-import type { DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type CSSProperties,
@@ -23,7 +22,7 @@ import type { DocManager } from "./doc-manager";
 import { useDocSyncFeed } from "./doc-sync-store";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
-import { canvasGridConfig } from "./field/canvas-appearance";
+import { BEFORE_THE_DESK } from "./field/desk/desk-words";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { usePreviewWarmup } from "./field/use-preview-warmup";
 import { useWorkspaceSession } from "./field/use-workspace-session";
@@ -48,7 +47,7 @@ import { useTheme } from "./theme";
 // lives with its owners:
 //   useWorkspaceSession — one engine generation + one document-attach lifetime
 //   PersistenceController — doc changes → lane, durable flush on close
-//   CanvasStage — ICE/DOM/GL composition (inside the generation-keyed wrapper)
+//   CanvasStage — the desk drawn (ICE's `<Desk>`, inside the generation-keyed wrapper)
 //   ChromeLayer — HUD, pills, tray, panels, overlays + chrome effects
 //   usePreviewWarmup — preview discovery/chunking into the loading pipeline
 //   DocManager — launch, metadata, lanes, switching (React-free; no UI)
@@ -84,13 +83,9 @@ export function FieldView({
   onPresentationContextChange?: ProductPresentationContextReporter;
 }): ReactElement {
   // The app's one theme (One Frame FC-D5), main's — read here for the field's
-  // own appearance; the controls that choose it ask the owner themselves.
+  // own appearance (and by the stage, whose desk it dresses); the controls that
+  // choose it ask the owner themselves.
   const { dark } = useTheme();
-  // Shared seams between units: the stage publishes its GL/halo teardown for
-  // the session's engine disposal (the GL disposal order invariant); chrome
-  // publishes the live devtools handle for the stage's GL profiling lanes.
-  const stageDisposeRef = useRef<(() => void) | null>(null);
-  const devtoolsRef = useRef<DevtoolsHandle | null>(null);
 
   // PLUG-P2: stream the fieldd plugin-registry snapshot into the module store
   // (session sampling + Settings section read it; daemon-away stays honest).
@@ -125,12 +120,16 @@ export function FieldView({
     return subscribePluginRegistry(reconcile);
   }, [plugins]);
 
-  const { ce, registry, generation, docState } = useWorkspaceSession(
+  const { ce, registry, generation, docState, beforeTheDesk } = useWorkspaceSession(
     manager,
-    stageDisposeRef,
     plugins,
     profile,
   );
+  // Ruling 7: a board from before the desk is refused at open — by its header
+  // here, or by the open's own word the manager keeps.
+  const refused =
+    beforeTheDesk ||
+    (docState.pending !== null && (docState.beforeTheDesk ?? []).includes(docState.pending.docId));
   usePreviewWarmup(manager, registry);
 
   const stagedPlugins = plugins?.staged.length ?? 0;
@@ -248,10 +247,6 @@ export function FieldView({
     () => effectiveProductAppearance(appearanceOverride.appearance, chrome.magnetGridGlyph),
     [appearanceOverride.appearance, chrome.magnetGridGlyph],
   );
-  const effectiveGrid = useMemo(
-    () => canvasGridConfig(effectiveAppearance, dark),
-    [dark, effectiveAppearance],
-  );
   const effectiveAppearanceStyle = useMemo(
     () => productAppearanceCssVariables(effectiveAppearance, dark) as CSSProperties,
     [dark, effectiveAppearance],
@@ -278,7 +273,7 @@ export function FieldView({
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.
           KEYED by doc generation: a switch remounts the whole canvas stack
-          (engine + InfiniteCanvas + GL Canvas + ground) — see the session. */}
+          (engine + the desk's layer and its device) — see the session. */}
       <div
         key={generation}
         className="field-scene"
@@ -291,11 +286,9 @@ export function FieldView({
       >
         <CanvasStage
           ce={ce}
-          grid={effectiveGrid}
           keymapOverrides={keymapOverrides}
-          ecsOpen={chrome.showEcs}
-          devtoolsRef={devtoolsRef}
-          disposeRef={stageDisposeRef}
+          generation={generation}
+          refused={refused ? BEFORE_THE_DESK : null}
         />
       </div>
       <ChromeLayer
@@ -308,7 +301,6 @@ export function FieldView({
         onSurfaceChange={setSurface}
         appearanceControlledByStudio={appearanceOverride.appearance !== null}
         chrome={chrome}
-        devtoolsRef={devtoolsRef}
       />
     </div>
   );
