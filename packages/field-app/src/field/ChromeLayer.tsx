@@ -2,7 +2,6 @@ import type { CanvasEngine, WidgetType } from "@vibecook/ice";
 import { attachDevtools, type DevtoolsHandle } from "@vibecook/ice/devtools";
 import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
-import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type Dispatch,
@@ -37,21 +36,20 @@ import { PluginSurfaceHost, useVisiblePluginSurfaces } from "../hud/PluginSurfac
 import { SidePanelStage, SidePanelToggle } from "../hud/SidePanelStage";
 import { WidgetTray } from "../hud/WidgetTray";
 import { SettingsPanel } from "../panels";
-import { ThemeToggleButton } from "../ThemeToggleButton";
 import type { MagnetGridGlyph } from "./canvas-appearance";
-import { useMeMenuYields, useSettingsChord } from "./me-menu-wiring";
+import { useSettingsChord } from "./me-menu-wiring";
 import { isCommandPaletteChord, listenForProductChord } from "./product-chords";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
-import { fabCls } from "./theme-constants";
 import { useMagnetGridGlyph } from "./use-magnet-grid-glyph";
 
-// ChromeLayer (§5.4.3): the head, Objects' sheet (behind the line),
-// settings, and overlays — WITHOUT owning document or engine lifetime. All the
-// chrome-scoped effects live here too: the live theme-token writes, the two
+// ChromeLayer (§5.4.3): the head, Objects' sheet (behind the line), the
+// edges, the corner, settings, and overlays — WITHOUT owning document or
+// engine lifetime. All the chrome-scoped effects live here too: the two
 // keyboard additions, the hud-flight dock choreography, the devtools attach,
 // and the sheet/loading stage holds. Sheet open/close STATE stays in FieldView
 // (the canvas recede transform derives from it in the same render — a
-// callback-up would land the recede one frame late).
+// callback-up would land the recede one frame late). The theme is not here:
+// it has one owner, main's, and `theme.ts` is its mirror (One Frame FC-D5).
 
 // §13.1 windowId: the renderer has no per-window identity yet (v1 is one field
 // window). A stable constant names it honestly; the id becomes real when
@@ -86,8 +84,6 @@ export function ChromeLayer({
   ce,
   manager,
   registry,
-  dark,
-  onToggleTheme,
   hudMotion,
   docState,
   surface,
@@ -99,8 +95,6 @@ export function ChromeLayer({
   ce: CanvasEngine;
   manager: DocManager;
   registry: PluginRegistry<WidgetType>;
-  dark: boolean;
-  onToggleTheme: () => void;
   hudMotion: "out" | "in" | "idle";
   docState: DocManagerState;
   /** The frame's open surface (One Frame FR-2/FR-3/FR-4) and its one owner's
@@ -118,9 +112,9 @@ export function ChromeLayer({
   const docsOpen = surface === "fields";
   const paletteOpen = surface === "palette";
   const surfaceOpen = surface !== null;
-  // UA-D19 — the Me menu. One of the expanded surfaces: opening it folds the
-  // others, and any of them opening folds it (DESIGN.md §8).
-  const [meOpen, setMeOpen] = useState(false);
+  // UA-D19 — the Me menu: one of the frame's open surfaces since FR-4, so the
+  // one owner folds it when any other opens, and it folds them (DESIGN.md §10).
+  const meOpen = surface === "me";
   const [shellPresentation, setShellPresentation] = useState(INITIAL_SHELL_PRESENTATION);
   const [desktopState, setDesktopState] = useState<DesktopShellState | null>(null);
   const sidePanelSurfaces = useVisiblePluginSurfaces("hud.side-panel");
@@ -190,29 +184,19 @@ export function ChromeLayer({
       setShellPresentation((state) => ({ ...state, target: page }));
       onSurfaceChange(null);
       closeSidePanel(false);
-      setMeOpen(false);
       setShowSettings(true);
     },
     [closeSidePanel, onSurfaceChange, setShowSettings],
   );
 
+  // Opening it is asking the owner (which folds Settings and every other
+  // surface); a fold of its own leaves the others alone.
   const onMeOpenChange = useCallback(
     (open: boolean) => {
-      if (open) {
-        onSurfaceChange(null);
-        closeSidePanel(false);
-        setShowSettings(false);
-      }
-      setMeOpen(open);
+      if (open) closeSidePanel(false);
+      onSurfaceChange(open ? "me" : foldSurface(surface, "me"));
     },
-    [closeSidePanel, onSurfaceChange, setShowSettings],
-  );
-
-  const foldMe = useCallback(() => setMeOpen(false), []);
-  useMeMenuYields(
-    meOpen,
-    surfaceOpen || showSettings || covered || sidePanelSurfaceId !== null,
-    foldMe,
+    [closeSidePanel, onSurfaceChange, surface],
   );
 
   // Expanded focus surfaces remain exclusive. The Artifact panel itself is
@@ -408,17 +392,14 @@ export function ChromeLayer({
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         aside={
-          <>
-            <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
-            {sidePanelSurface !== null && (
-              <SidePanelToggle
-                entry={sidePanelSurface}
-                active={activeSidePanel !== null}
-                buttonRef={sidePanelToggleRef}
-                onToggle={toggleSidePanel}
-              />
-            )}
-          </>
+          sidePanelSurface !== null && (
+            <SidePanelToggle
+              entry={sidePanelSurface}
+              active={activeSidePanel !== null}
+              buttonRef={sidePanelToggleRef}
+              onToggle={toggleSidePanel}
+            />
+          )
         }
       />
 
@@ -455,16 +436,16 @@ export function ChromeLayer({
         onOpenChange={(open) => onSurfaceChange(open ? "objects" : foldSurface(surface, "objects"))}
       />
 
-      {/* UA-D19 — the owner's face, where the Settings gear was: the account's
-          one door, and the menu grows out of it (DESIGN.md §8). Placed so the
-          40px face sits exactly where the 40px gear did. Open, it still grows
-          up and right around the face, over the views track's left end — so it
-          stands above the frame (62, One Frame FR-1) until FR-4 opens it above
-          the line instead; its rows are never under the track. (Godview's
-          button beside it retired with FR-1: the views track is the way in.) */}
+      {/* THE CORNER (One Frame FR-4, DESIGN.md §8 "The Me menu", §10): the
+          owner's face, the account's one door — the 44px button at 16 from
+          the left and 24 from the foot, centred on the foot axis (y 734). Its
+          menu opens ABOVE the line, never around the face (FC-D14), and it is
+          the frame's, not the canvas's: it stands above the cover with the
+          line (62) in every view. The corner keeps only the face — the
+          devtools button left for Settings → Advanced (FC-D12). */}
       <div
         data-hud-flight="bottom-left"
-        className={`hud-flight no-drag absolute bottom-[14px] left-[14px] ${meOpen ? "z-[63]" : "z-50"}`}
+        className="hud-flight no-drag absolute bottom-[24px] left-4 z-[62]"
       >
         <MeMenu
           open={meOpen}
@@ -473,16 +454,6 @@ export function ChromeLayer({
           shortcut={getHost().platform === "darwin" ? "⌘," : "Ctrl+,"}
         />
       </div>
-      <button
-        type="button"
-        onClick={() => chrome.setShowEcs((s) => !s)}
-        data-hud-flight="bottom-right"
-        className={`hud-flight ${fabCls(showEcs)} bottom-4`}
-        style={{ right: activeSidePanel === null ? "1rem" : "calc(min(92vw, 26rem) + 1rem)" }}
-        title="ICE Devtools"
-      >
-        <FieldGlyph name="bug" size={20} />
-      </button>
 
       {showSettings && (
         <SettingsPanel
@@ -490,14 +461,13 @@ export function ChromeLayer({
           stressWidgetType="vibefield.widgetlab.clock"
           platform={getHost().platform ?? "other"}
           desktopState={desktopState}
-          dark={dark}
-          onToggleTheme={onToggleTheme}
           magnetGridGlyph={chrome.magnetGridGlyph}
           onMagnetGridGlyphChange={chrome.setMagnetGridGlyph}
           appearanceControlledByStudio={appearanceControlledByStudio}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
           initialPage={shellPresentation.target === "account" ? "account" : "general"}
+          devtools={{ open: showEcs, onToggle: () => chrome.setShowEcs((open) => !open) }}
           onClose={() => {
             setShellPresentation((state) => ({ ...state, target: "general" }));
             setShowSettings(false);

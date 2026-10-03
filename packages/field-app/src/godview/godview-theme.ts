@@ -1,14 +1,24 @@
+import type { ThemeName } from "@vibefield/contracts";
+import { useAppTheme } from "../theme";
+import { type DeckAppearance, useDeckAppearance } from "./deck-appearance";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 
-/** Godview's own light/dark mode, remembered per renderer — independent of
- * the app theme (the bar's switch sets it). */
-export const GODVIEW_THEME_STORAGE_KEY = "vf-godview-color-theme-v1";
+// GODVIEW'S LIGHT (One Frame FC-D7; DESIGN.md §1.1): the app's one theme. Until
+// FR-4 Godview kept a mode of its own — its bar's ☼◐ switch, remembered per
+// renderer under `vf-godview-color-theme-v1` — independent of the app's; both
+// retired, and the key is read by nothing. What is left is the one override
+// the ruling kept, in Settings → Terminal → Look (`DeckAppearance.modeOverride`):
+// set, it wins; unset, Godview is whatever the app resolves to.
 
-/** The mode Godview opens in: the one last chosen, else light. */
-export function storedGodviewTheme(): GodviewTheme {
-  try {
-    return localStorage.getItem(GODVIEW_THEME_STORAGE_KEY) === "dark" ? "dark" : "light";
-  } catch {
-    return "light";
-  }
+export function godviewThemeFor(
+  app: ThemeName,
+  appearance: Pick<DeckAppearance, "modeOverride">,
+): GodviewTheme {
+  return appearance.modeOverride ?? app;
+}
+
+/** The mode Godview draws in now — the app's, or the override's. */
+export function useGodviewTheme(): GodviewTheme {
+  const { resolved } = useAppTheme();
+  return godviewThemeFor(resolved, useDeckAppearance());
 }

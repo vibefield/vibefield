@@ -16,6 +16,8 @@ import type {
   ScreenshotPreviewResult,
   ShellCommand,
   ShellPlatform,
+  ThemePreference,
+  ThemeState,
   WindowTerminalBootstrap,
 } from "@vibefield/contracts";
 import type {
@@ -77,6 +79,15 @@ export interface FieldDiagnosticsHost {
 export interface FieldViewHost {
   set(view: FrameView): Promise<FrameViewState>;
   onState(handler: (state: FrameViewState) => void): () => void;
+}
+
+/** The app's one theme, which the HOST owns (One Frame FR-4, FC-D5): Light ·
+ * Dark · Auto, Auto following the OS — main's, because main is where the OS's
+ * theme is known. The renderer draws what it is told and asks by name; it
+ * never keeps a theme of its own (`theme.ts`). */
+export interface FieldThemeHost {
+  set(preference: ThemePreference): Promise<ThemeState>;
+  onState(handler: (state: ThemeState) => void): () => void;
 }
 
 /** The Live Surfaces seam (DT-2a). The renderer host claims the main-world port
@@ -146,6 +157,10 @@ export interface FieldHost {
   readonly diagnostics?: FieldDiagnosticsHost;
   readonly platform?: ShellPlatform;
   readonly view?: FieldViewHost;
+  /** Optional like `view`: a browser harness has no main to own the theme, and
+   * `theme.ts` keeps a stand-in there (the OS's theme, and a choice for the
+   * page's life). */
+  readonly theme?: FieldThemeHost;
   readonly liveSurfaces?: FieldLiveSurfacesHost;
   /** The profile write seam (UA-3). `users.json` is SUPERVISOR-owned, not
    * fieldd's (UA-D10), so the one door to it is main — which is why this is a
@@ -221,5 +236,12 @@ export function setHost(host: FieldHost): void {
 
 export function getHost(): FieldHost {
   if (current === null) throw new Error("FieldHost not set — mountFieldApp wires it first");
+  return current;
+}
+
+/** The host if one is wired, else null — for the few readers that also serve a
+ * page with none (the catalog, a component's own test) and keep a stand-in
+ * there: the app's theme (`theme.ts`). Everything else asks `getHost()`. */
+export function peekHost(): FieldHost | null {
   return current;
 }

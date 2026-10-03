@@ -193,6 +193,12 @@ const NO_USAGE: AccountUsagePort = {
  * counters only for a host that passes counts. */
 const noStatusCycle = (): void => undefined;
 
+/** Godview follows the app's theme (FC-D7): the bar's ☼◐ switch changes
+ * nothing. The views package draws it whatever a host passes, so it is hidden
+ * (godview.css) until the package draws it only for a host that hands it a
+ * handler — the ask on record, beside the counters'. */
+const noThemeSwitch = (): void => undefined;
+
 export interface GodviewMonitorProps {
   view: AgentMonitorView;
   parameters: MonitorParameters;
@@ -209,7 +215,6 @@ export interface GodviewMonitorProps {
   reserveWindowControls?: boolean;
   onSelectView?: (viewId: string) => void;
   onToggleTuning?: () => void;
-  onThemeChange?: (theme: GodviewTheme) => void;
 }
 
 export function GodviewMonitor({
@@ -223,7 +228,6 @@ export function GodviewMonitor({
   reserveWindowControls = false,
   onSelectView,
   onToggleTuning,
-  onThemeChange,
 }: GodviewMonitorProps): ReactElement {
   const stageRef = useRef<HTMLElement>(null);
   // The palette reads THIS stage's Godview root, never the document's first:
@@ -598,7 +602,7 @@ export function GodviewMonitor({
         viewId={view.id}
         onSelectView={(viewId) => onSelectView?.(viewId)}
         theme={theme}
-        onThemeChange={(next) => onThemeChange?.(next)}
+        onThemeChange={noThemeSwitch}
         leading={
           <>
             {reserveWindowControls ? (

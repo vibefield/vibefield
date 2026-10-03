@@ -6,8 +6,9 @@
 // construction rather than by effects racing each other.
 //
 // FR-2 built it as the LINE's owner (Objects and @'s list); FR-3 renamed it
-// the FRAME's when the head's three surfaces joined. FR-4 adds the Me menu and
-// the edges' drawers to the union.
+// the FRAME's when the head's three surfaces joined; FR-4 added the corner's
+// Me menu and the two edges' drawers, so every surface the frame opens is in
+// this one value (DESIGN.md §10).
 
 export type FrameSurface =
   /** Objects — on this build the widget tray's sheet behind the line. */
@@ -19,7 +20,9 @@ export type FrameSurface =
   /** The zoom's menu, grown from the head's readout. */
   | "zoom"
   /** The palette (⌘K), under the head. */
-  | "palette";
+  | "palette"
+  /** The Me menu, above the line, over your face in the corner. */
+  | "me";
 
 /** What a surface's own close asks of the owner: fold it if it is the one
  * open, and leave the others alone — the tray's Esc must not close @'s list. */

@@ -4,6 +4,8 @@ import {
   IPC_CHANNELS,
   type ScreenshotCaptureResult,
   ScreenshotPreviewResult,
+  ThemeSetRequest,
+  ThemeState as ThemeStateSchema,
   type UserRecord,
   UsersCreateParams,
   type UsersListSnapshot,
@@ -18,6 +20,7 @@ import { shellIdentity } from "./login-shell";
 import { createScreenshotDoor } from "./screenshot-door";
 import { createScreenshotPreviewDoor } from "./screenshot-preview";
 import type { StillResolution } from "./still-protocol";
+import type { ThemeOwner } from "./theme";
 import type { ViewRegistry } from "./view";
 import type { WindowRegistry } from "./window-policy";
 
@@ -189,6 +192,30 @@ export function registerViewSet(
     }
     const request = FrameViewSetRequest.parse(raw);
     return FrameViewStateSchema.parse(views.ensure(event.sender).set(request.view));
+  });
+}
+
+/** The theme door (FR-4, FC-D5). The Me menu's Theme, Settings → Appearance and
+ * the Setup Assistant's button ask main's one owner (`theme.ts`) by name and
+ * draw what it answers. Same registered-sender gate; a window that asks is told
+ * every change from then on, whichever window made it. */
+export function registerThemeSet(
+  registry: WindowRegistry,
+  theme: ThemeOwner,
+  logger?: Logger,
+): void {
+  ipcMain.handle(IPC_CHANNELS.themeSet, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) {
+      logger?.warn(
+        "desktop.ipc.theme_set_refused",
+        "Electron refused a theme request from an unregistered sender",
+        { webContentsId: event.sender.id },
+      );
+      throw new Error("theme set refused: unregistered sender");
+    }
+    const request = ThemeSetRequest.parse(raw);
+    theme.watch(event.sender);
+    return ThemeStateSchema.parse(theme.set(request.preference));
   });
 }
 

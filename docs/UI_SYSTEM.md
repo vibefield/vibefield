@@ -49,6 +49,10 @@ The catalog currently mounts these shipping views directly:
   palette under the head — and the live head on its real controller (`Head`) in the playground,
   over a fixture document manager and a fixture canvas door (the path, the zoom). It replaced the
   file pill, the navigation breadcrumbs and the − % + zoom pill
+- the corner (One Frame FR-4): `MeMenuView` open above the line over fixture account and theme
+  state, a plate per Theme it holds — Light, Dark, and Auto following the page's own theme — and
+  Settings → Appearance (`AppearanceSectionView`) in the shipping dialog, the same setting; the
+  Settings specimen's old Appearance replica is gone
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their

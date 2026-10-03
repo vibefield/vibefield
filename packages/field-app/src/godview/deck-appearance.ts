@@ -84,6 +84,13 @@ export interface DeckAppearance {
    * stays 0 until the field under a cover is a still worth blurring. */
   backdropOpacity: number;
   backdropBlur: number;
+  /** Godview's mode, OVERRIDDEN (One Frame FC-D7, FR-4): null — the default,
+   * and what every record from before FR-4 reads as — follows the app's one
+   * theme; "light" or "dark" keeps Godview there whatever the app is. The one
+   * override the ruling left, set in Settings → Terminal → Look; Godview's own
+   * ☼◐ switch and the mode it remembered (`vf-godview-color-theme-v1`) are
+   * gone, so nothing else writes it. */
+  modeOverride: DeckAppearanceMode | null;
 }
 
 /** The backdrop blur's ceiling — the system panel's own range since GT-3v. */
@@ -109,6 +116,8 @@ export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
   // still, which is a later slice on another branch.
   backdropOpacity: 0.72,
   backdropBlur: 0,
+  // FC-D7: Godview follows the app until the viewer says otherwise.
+  modeOverride: null,
 };
 
 export type DeckAppearanceMode = "light" | "dark";
@@ -188,6 +197,11 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
       DECK_BACKDROP_BLUR_MAX,
       DEFAULT_DECK_APPEARANCE.backdropBlur,
     ),
+    // Only the two modes override; anything else is no override at all.
+    modeOverride:
+      record.modeOverride === "light" || record.modeOverride === "dark"
+        ? record.modeOverride
+        : null,
   };
 }
 

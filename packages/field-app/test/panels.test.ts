@@ -110,6 +110,12 @@ describe("widgetlab panels", () => {
 
     act(() => category("Appearance")?.click());
     expect(container?.textContent).toContain("Theme");
+    // One Frame FC-D5: the Me menu's Theme, the same setting — three states.
+    const appearance = container?.querySelector('fieldset[aria-label="Appearance"]');
+    expect(
+      Array.from(appearance?.querySelectorAll("button") ?? []).map((b) => b.textContent),
+    ).toEqual(["Light", "Dark", "Auto"]);
+    expect(container?.textContent).toContain("The same setting as Theme in your menu");
     expect(container?.textContent).not.toContain("Canvas palette");
     expect(container?.textContent).not.toContain("Overlap feedback");
 
@@ -131,6 +137,8 @@ describe("widgetlab panels", () => {
     expect(numberInputs?.length ?? 0).toBeGreaterThan(0);
 
     act(() => category("Advanced")?.click());
+    // No devtools door lent: no Developer section.
+    expect(container?.textContent).not.toContain("ICE devtools");
     expect(container?.textContent).toContain("Breakpoint preview");
     expect(container?.textContent).toContain("Canvas stress test");
     // Stress buttons are disabled without a stressWidgetType.
@@ -150,6 +158,34 @@ describe("widgetlab panels", () => {
     expect(container?.textContent).toContain("System status");
     expect(container?.textContent).toContain("connection");
     expect(container?.textContent).toContain("board");
+  });
+
+  it("carries ICE's devtools in Settings → Advanced, in development builds (FC-D12)", () => {
+    // They left the corner (F12: "in every build"); a section here is their
+    // home, shown only where `import.meta.env.DEV` is — as it is under vitest.
+    expect(import.meta.env.DEV).toBe(true);
+    const engine = makeEngine();
+    const onToggle = vi.fn();
+    const client = new FielddClient({ url: "ws://127.0.0.1:1", token: "test" });
+    mount(
+      createElement(
+        FielddProvider,
+        { client },
+        createElement(SettingsPanel, {
+          engine,
+          magnetGridGlyph: "dot",
+          onMagnetGridGlyphChange: () => undefined,
+          initialPage: "advanced",
+          devtools: { open: false, onToggle },
+          onClose: () => {},
+        }),
+      ),
+    );
+    expect(container?.textContent).toContain("Developer");
+    const toggle = container?.querySelector<HTMLElement>('[aria-label="ICE devtools"]');
+    expect(toggle?.getAttribute("aria-checked")).toBe("false");
+    act(() => toggle?.click());
+    expect(onToggle).toHaveBeenCalledOnce();
   });
 
   it("routes settings undo through the global Loro history toolbar", async () => {

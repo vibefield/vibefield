@@ -143,7 +143,7 @@ export function DesignSystemPage({
         />
         <LiveSurfacesSection />
         <OnboardingSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
-        <GodviewSection />
+        <GodviewSection dark={dark} />
         <InventorySection />
       </main>
 

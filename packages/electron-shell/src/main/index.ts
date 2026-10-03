@@ -40,6 +40,7 @@ import {
   globalShortcut,
   MessageChannelMain,
   nativeImage,
+  nativeTheme,
   screen,
   session,
   shell,
@@ -59,6 +60,7 @@ import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-
 import {
   registerScreenshotCapture,
   registerScreenshotPreview,
+  registerThemeSet,
   registerUsersRoster,
   registerUsersUpdate,
   registerViewSet,
@@ -108,6 +110,7 @@ import { backfillMigratedSetupVariant } from "./setup-variant";
 import { RecoveringShellProvider } from "./shell-provider";
 import { installStillProtocol, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
+import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
 import { TrayController } from "./tray-controller";
 import { TrayEvidenceMonitor } from "./tray-evidence";
 import type { TrayLinkState, TraySnapshot } from "./tray-model";
@@ -170,6 +173,8 @@ let crashArtifacts: CrashArtifactManager | null = null;
 let supportBundles: SupportBundleService | null = null;
 let trayController: TrayController | null = null;
 let viewStates: ViewRegistry | null = null;
+// FR-4 — the app's one theme (FC-D5), main's; null outside the windowed modes.
+let themeOwner: ThemeOwner | null = null;
 // SNAP-D1 — the one screenshot tool per shell boot; null before the windowed
 // modes construct it and after teardown (the door answers `disposed`).
 let screenshotTool: ScreenshotTool | null = null;
@@ -204,6 +209,8 @@ function disposeShellState(): void {
   trayController = null;
   viewStates?.dispose();
   viewStates = null;
+  themeOwner?.dispose();
+  themeOwner = null;
   // A live helper dies with the shell: an overlay must never outlive the app
   // that asked for it, and its capture settles `disposed` rather than hanging.
   screenshotTool?.dispose();
@@ -1202,6 +1209,18 @@ async function main(
   });
   registerViewSet(registry, viewStates, logger.child({ component: "ipc.view" }));
 
+  // FR-4: main owns the app's one theme (FC-D5) — Light · Dark · Auto, kept in
+  // the shell's own profile, Auto following the OS through `nativeTheme`, and
+  // projected back into it so a window's first frame already wears it. Built
+  // before any window exists for exactly that reason.
+  const themeLogger = logger.child({ component: "theme" });
+  themeOwner = new ThemeOwner(
+    nativeTheme,
+    fileThemeStore(join(app.getPath("userData"), THEME_FILE), themeLogger),
+    { logger: themeLogger },
+  );
+  registerThemeSet(registry, themeOwner, logger.child({ component: "ipc.theme" }));
+
   // SNAP-D1/D3 — the native screenshot helper. One tool per shell boot, one
   // capture at a time; the IPC door and the View menu's item ask it for the
   // SAME capture, so neither can hold an idea of "live" the other cannot see.
@@ -1621,6 +1640,8 @@ async function main(
             installScreenshotChord(window.webContents, takeScreenshot);
           }
           installNavigationPolicy(window, MODE);
+          // FR-4: told the theme on every load (a reload included) and change.
+          themeOwner?.watch(window.webContents);
           installDurableClose(
             window,
             logger.child({ component: "window.close", windowId: String(window.id) }),

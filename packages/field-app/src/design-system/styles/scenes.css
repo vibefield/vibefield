@@ -206,6 +206,38 @@
   height: 640px;
 }
 
+/* One Frame FR-4 — the corner's plates (the page's "Your face" plates): the
+   window's bottom-left — the line at its own place, your face where the
+   corner holds it (16 from the left, 24 from the foot), its menu open above
+   the line. The face's place is ChromeLayer's; this only stages it. */
+.vf-ds-corner-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(440px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-corner-plate {
+  position: relative;
+  isolation: isolate;
+  height: 460px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-corner-face {
+  position: absolute;
+  z-index: 62;
+  bottom: 24px;
+  left: 16px;
+}
+
 /* Objects out: the backdrop's dim over the ground (DESIGN.md §5). */
 .vf-ds-line-plate-dim {
   position: absolute;

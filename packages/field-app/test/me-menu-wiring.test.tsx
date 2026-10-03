@@ -3,7 +3,7 @@
 import { act, createElement, type ReactElement, useCallback, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { isSettingsChord, useMeMenuYields, useSettingsChord } from "../src/field/me-menu-wiring";
+import { isSettingsChord, useSettingsChord } from "../src/field/me-menu-wiring";
 
 // UA-D19 — the spine's half of the Me menu (DESIGN.md §8), which ChromeLayer
 // holds: ⌘, toggles Settings from anywhere, and the menu is one of the
@@ -152,34 +152,5 @@ describe("useSettingsChord", () => {
     settingsOpen = false;
     await press({ key: ",", metaKey: true });
     expect(settingsOpen).toBe(false);
-  });
-});
-
-describe("useMeMenuYields", () => {
-  let setters: { me: (open: boolean) => void; other: (open: boolean) => void } | null = null;
-  let meOpen = false;
-  function Spine(): ReactElement {
-    const [me, setMe] = useState(false);
-    const [other, setOther] = useState(false);
-    meOpen = me;
-    setters = { me: setMe, other: setOther };
-    const fold = useCallback(() => setMe(false), []);
-    useMeMenuYields(me, other, fold);
-    return createElement("div");
-  }
-
-  it("folds the menu when another expanded surface opens", async () => {
-    await mount(createElement(Spine));
-    await act(async () => setters?.me(true));
-    expect(meOpen).toBe(true);
-    await act(async () => setters?.other(true));
-    expect(meOpen).toBe(false);
-  });
-
-  it("leaves the menu open while nothing else is", async () => {
-    await mount(createElement(Spine));
-    await act(async () => setters?.me(true));
-    await act(async () => setters?.other(false));
-    expect(meOpen).toBe(true);
   });
 });

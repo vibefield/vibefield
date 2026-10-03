@@ -166,6 +166,37 @@ export type FrameViewState = z.infer<typeof FrameViewState>;
 export const FrameViewSetRequest = z.object({ view: FrameView }).passthrough();
 export type FrameViewSetRequest = z.infer<typeof FrameViewSetRequest>;
 
+/** The app's ONE theme setting (One Frame FR-4, FC-D5): Light, Dark, or Auto,
+ * which follows the OS. Main owns it — one value per device, kept by the shell
+ * — and projects what it resolves to into Electron's `nativeTheme`; the Me
+ * menu's Theme, Settings → Appearance and the Setup Assistant's button all ask
+ * it, and every window is told. A renderer never keeps a theme of its own. */
+export const ThemePreference = z.enum(["light", "dark", "auto"]);
+export type ThemePreference = z.infer<typeof ThemePreference>;
+
+/** What a preference resolves to: the two themes a surface is drawn in. */
+export const ThemeName = z.enum(["light", "dark"]);
+export type ThemeName = z.infer<typeof ThemeName>;
+
+/** Auto is the OS's theme; Light and Dark are themselves. One reading, so the
+ * owner and a harness without one can never resolve the same choice two ways. */
+export function resolveTheme(preference: ThemePreference, osDark: boolean): ThemeName {
+  if (preference === "auto") return osDark ? "dark" : "light";
+  return preference;
+}
+
+/** main → renderer: the theme as main's owner holds it — what was chosen and
+ * what it resolves to now (Auto's answer moves when the OS flips). */
+export const ThemeState = z
+  .object({ preference: ThemePreference, resolved: ThemeName })
+  .passthrough();
+export type ThemeState = z.infer<typeof ThemeState>;
+
+/** renderer → main: choose the theme by name, never a flip. Answered with the
+ * resulting state. */
+export const ThemeSetRequest = z.object({ preference: ThemePreference }).passthrough();
+export type ThemeSetRequest = z.infer<typeof ThemeSetRequest>;
+
 /** Small host fact used only to describe platform-specific desktop behavior in
  * Settings. Unknown Electron platforms collapse to `other` at the preload
  * boundary rather than leaking Node's process object into the renderer. */

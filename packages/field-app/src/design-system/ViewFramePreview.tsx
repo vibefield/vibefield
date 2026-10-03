@@ -173,7 +173,7 @@ export function ViewFramePreview({
           view={view}
           content={cover.content}
           motion={cover.motion}
-          godview={<GodviewPreview />}
+          godview={<GodviewPreview theme={dark ? "dark" : "light"} />}
           history={<HistoryPlaceholderView />}
         />
         <WidgetTrayFrame

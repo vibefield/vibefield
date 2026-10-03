@@ -1,3 +1,4 @@
+import { resolveTheme, type ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl } from "@vibefield/design-kit/primitives";
 import { type ReactElement, useMemo, useState } from "react";
 import { MeMenuView } from "../../account/MeMenu";
@@ -8,7 +9,6 @@ import type { FrameSurface } from "../../frame/frame-surface";
 import { ViewsTrackView } from "../../frame/ViewsTrack";
 import { type EdgeTrayTile, EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
 import { WidgetTrayFrame } from "../../hud/WidgetTray";
-import { ThemeToggleButton } from "../../ThemeToggleButton";
 import {
   FIXTURE_ME,
   FIXTURE_ME_OFFLINE,
@@ -76,6 +76,7 @@ const TRAY_TILES: readonly EdgeTrayTile[] = [
 ];
 
 import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
+import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
 import { SwitchPreview } from "../SwitchPreview";
@@ -107,6 +108,17 @@ export function ChromeSection({
         ? TRAY_TILES.map((tile) => ({ ...tile, imageUrl: null }))
         : TRAY_TILES;
   const [meState, setMeState] = useState<MeState>("Three users");
+  // The playground's Theme drives this page's own theme (the app's stand-in):
+  // Auto reads the OS's query, as main's owner reads nativeTheme.
+  const [themePick, setThemePick] = useState<ThemePreference>(dark ? "dark" : "light");
+  const chooseTheme = (pick: ThemePreference): void => {
+    setThemePick(pick);
+    const osDark =
+      typeof window.matchMedia === "function" &&
+      window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if ((resolveTheme(pick, osDark) === "dark") !== dark) onToggleTheme();
+  };
+  const playgroundTheme = { preference: themePick, resolved: dark ? "dark" : "light" } as const;
   const groundGrid = useMemo(
     () => defaultCanvasGridConfig(dark, magnetGridGlyph),
     [dark, magnetGridGlyph],
@@ -141,17 +153,15 @@ export function ChromeSection({
           <div className="vf-ds-stage-card card-a" />
           <div className="vf-ds-stage-card card-b" />
           {/* The head on its real controller (One Frame FR-3), in a folder;
-              the theme button and Artifacts beside the readout until FR-4. */}
+              the theme went into the Me menu at FR-4 (FC-D5), and Artifacts
+              stays beside the readout until it moves behind the right notch. */}
           <HeadLive
             surface={surface}
             onSurfaceChange={changeSurface}
             aside={
-              <>
-                <ThemeToggleButton dark={dark} onToggle={onToggleTheme} />
-                <button type="button" className={roundButtonCls(false)} aria-label="Open artifacts">
-                  <Icon name="layers" />
-                </button>
-              </>
+              <button type="button" className={roundButtonCls(false)} aria-label="Open artifacts">
+                <Icon name="layers" />
+              </button>
             }
           />
 
@@ -207,13 +217,16 @@ export function ChromeSection({
               onLink={() => undefined}
               onSwitch={() => undefined}
               onNewUser={() => undefined}
+              theme={playgroundTheme}
+              onThemeChange={chooseTheme}
             />
           </div>
         </div>
         <p className="vf-ds-stage-caption">
           The head — the field's name pill with its crumbs, which grows the fields explorer, and the
           zoom readout, which grows its menu — the line's Objects and your face are interactive.
-          Open one to inspect its motion and the rule that only one of them is open at a time.
+          Open one to inspect its motion and the rule that only one of them is open at a time. Your
+          menu's Theme sets this page's theme, as it sets the app's.
         </p>
       </Specimen>
 
@@ -352,6 +365,28 @@ export function ChromeSection({
         </p>
       </Specimen>
 
+      <Specimen
+        title="The corner — your face, and the Me menu above the line with Theme"
+        source="account/MeMenu.tsx · panels/AppearanceSection.tsx · DESIGN.md §8, §10"
+        bleed
+      >
+        <div className="vf-ds-corner-plates">
+          {CORNER_PICKS.map((pick) => (
+            <CornerPlate key={`${pick}-${dark ? "dark" : "light"}`} pick={pick} dark={dark} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          The page's "Your face" plates: the face on the foot axis at the corner, its menu opening
+          above the line — never around the face — nearest first: you, Settings… ⌘,, Theme, New
+          user…, the switch list. Theme is the app's one theme control, held at Light, Dark and
+          Auto; Auto follows this page's theme, as it follows the OS in the app.
+        </p>
+        <AppearancePlate pick="auto" />
+        <p className="vf-ds-stage-caption">
+          Settings → Appearance — the same setting, the same three (FC-D5).
+        </p>
+      </Specimen>
+
       <Specimen title="Me menu" source="account/MeMenu.tsx · DESIGN.md §8" bleed>
         <div className="vf-ds-me-stage">
           <div className="vf-ds-me-controls">
@@ -379,12 +414,14 @@ export function ChromeSection({
               onLink={() => undefined}
               onSwitch={() => undefined}
               onNewUser={() => undefined}
+              theme={playgroundTheme}
+              onThemeChange={chooseTheme}
             />
           </div>
         </div>
         <p className="vf-ds-stage-caption">
-          Your face, where the Settings gear was. The circle around it grows into the menu on the
-          island curve, and your face never moves — click it again to fold the menu back.
+          Your face, where the Settings gear was. The menu grows above it on the island curve, and
+          your face never moves — click it again to fold the menu back.
         </p>
       </Specimen>
 

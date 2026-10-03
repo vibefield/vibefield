@@ -954,6 +954,13 @@ export const IPC_CHANNELS = {
   /** renderer → main invoke: FrameViewSetRequest — the views track and ⌘1–⌘4
    * asking for a view; answers with the resulting FrameViewState */
   viewSet: "vibefield:view:set",
+  /** main → renderer event: ThemeState — the app's one theme, which main owns
+   * (One Frame FR-4, FC-D5: Light · Dark · Auto, Auto following the OS through
+   * `nativeTheme`); sent on every load and every change, to every window */
+  themeState: "vibefield:theme:state",
+  /** renderer → main invoke: ThemeSetRequest — the Me menu's Theme, Settings →
+   * Appearance and the Setup Assistant choosing a theme; answers ThemeState */
+  themeSet: "vibefield:theme:set",
   /** renderer → main invoke: UsersUpdateParams → UserRecord — the Account
    * page's profile write. Main owns users.json (UA-D10); fieldd never writes
    * it, which is what keeps the boundary lint honest. */

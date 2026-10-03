@@ -53,7 +53,6 @@ function mountPanel(
         // readout renders as "no deck opened yet" rather than guessing one.
         rendererBackend={null}
         onClose={onClose}
-        onThemeChange={vi.fn()}
         onChange={onChange}
         onReset={onReset}
         onResetMonitor={vi.fn()}

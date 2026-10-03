@@ -32,6 +32,7 @@ import { leaveFor } from "../boot/switch";
 import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { getHost } from "../host";
 import { AccountSection } from "./AccountSection";
+import { AppearanceSection } from "./AppearanceSection";
 import { AgentsSection } from "./agents/AgentsSection";
 import { type ProfilesRoute, ProfilesSection } from "./agents/ProfilesSection";
 import { ProfileMark } from "./agents/ProfilesView";
@@ -70,8 +71,6 @@ interface SettingsPanelProps {
   stressWidgetType?: string;
   platform?: ShellPlatform;
   desktopState?: DesktopShellState | null;
-  dark?: boolean;
-  onToggleTheme?: () => void;
   magnetGridGlyph: MagnetGridGlyph;
   onMagnetGridGlyphChange: (glyph: MagnetGridGlyph) => void;
   appearanceControlledByStudio?: boolean;
@@ -80,6 +79,10 @@ interface SettingsPanelProps {
   /** The page to open on when diagnostics was not asked for — the Me menu
    * opens Account from its name row (UA-D19). */
   initialPage?: SettingsPage;
+  /** ICE's devtools, which left the corner for Settings → Advanced (One Frame
+   * FC-D12): shown in development builds only, and only where a host lends
+   * the switch. */
+  devtools?: { open: boolean; onToggle: () => void };
   onClose: () => void;
 }
 
@@ -172,14 +175,13 @@ export function SettingsPanel({
   stressWidgetType,
   platform = "other",
   desktopState = null,
-  dark = false,
-  onToggleTheme,
   magnetGridGlyph,
   onMagnetGridGlyphChange,
   appearanceControlledByStudio = false,
   diagnosticsRequest = 0,
   diagnosticsInitiallyOpen = false,
   initialPage = "general",
+  devtools,
   onClose,
 }: SettingsPanelProps): ReactElement {
   const client = useFielddClient();
@@ -494,39 +496,8 @@ export function SettingsPanel({
       </div>
     );
   } else if (activePage === "appearance") {
-    pageContent = (
-      <SettingsSection title="Theme" description="Set the color mode used by app chrome and cards.">
-        <SettingsRow
-          title="Appearance"
-          description="Choose the mode used across app chrome, cards, and the canvas."
-          divider={false}
-        >
-          <div className="flex rounded-full bg-black/5 p-1 dark:bg-white/10">
-            {([false, true] as const).map((nextDark) => {
-              const selected = dark === nextDark;
-              return (
-                <button
-                  key={nextDark ? "dark" : "light"}
-                  type="button"
-                  aria-pressed={selected}
-                  disabled={onToggleTheme === undefined}
-                  className={`h-8 rounded-full px-4 text-[12px] font-medium transition-[background-color,color,box-shadow] ${
-                    selected
-                      ? "bg-white text-black shadow-sm dark:bg-white dark:text-black"
-                      : "text-black/45 hover:text-black/75 dark:text-white/45 dark:hover:text-white/75"
-                  }`}
-                  onClick={() => {
-                    if (!selected) onToggleTheme?.();
-                  }}
-                >
-                  {nextDark ? "Dark" : "Light"}
-                </button>
-              );
-            })}
-          </div>
-        </SettingsRow>
-      </SettingsSection>
-    );
+    // One Frame FC-D5: the SAME setting as the Me menu's Theme.
+    pageContent = <AppearanceSection />;
   } else if (activePage === "canvas") {
     pageContent = (
       <div className="space-y-4">
@@ -709,6 +680,26 @@ export function SettingsPanel({
             </div>
           </SettingsRow>
         </SettingsSection>
+        {import.meta.env.DEV && devtools !== undefined && (
+          // FC-D12: devtools left the corner (F12, "in every build") for a
+          // section here, in development builds only.
+          <SettingsSection
+            title="Developer"
+            description="Tools for working on VibeField itself. Development builds only."
+          >
+            <SettingsRow
+              title="ICE devtools"
+              description="The canvas engine's inspector — the world, the systems, the documents — docked over the canvas."
+              divider={false}
+            >
+              <SettingsSwitch
+                label="ICE devtools"
+                checked={devtools.open}
+                onChange={() => devtools.onToggle()}
+              />
+            </SettingsRow>
+          </SettingsSection>
+        )}
         <SettingsSection
           title="Canvas stress test"
           description="Spawn a grid of test widgets in the current document, then zoom to fit."

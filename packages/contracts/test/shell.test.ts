@@ -16,6 +16,7 @@ import {
   isUnambiguousLinkText,
   ProductInfo,
   RendererParticipantIdentity,
+  resolveTheme,
   SHELL_INTERNAL_PROVIDER_METHODS,
   SHELL_PROVIDER_METHODS,
   ShellCommandRequest,
@@ -32,6 +33,9 @@ import {
   ShellRendererRequestReplacementResult,
   ShellWebContentsCaptureArtifactPreviewParams,
   ShellWebContentsCaptureArtifactPreviewResult,
+  ThemePreference,
+  ThemeSetRequest,
+  ThemeState,
   WindowConnection,
   WindowTerminalBootstrap,
 } from "../src/shell";
@@ -209,7 +213,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the seventeen channel keys, in order", () => {
+  it("exposes exactly the nineteen channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -223,6 +227,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       // the renderer dials the cells' T1 doors itself.
       "viewState", // FR-1 — the window's active view (GT-D2's Godview bit, grown into four)
       "viewSet",
+      "themeState", // FR-4 — the app's one theme, main's (Light · Dark · Auto)
+      "themeSet",
       "usersUpdate", // UA-3 — the Account page's profile write (main owns users.json)
       "usersList", // UA-5 — the roster; one truth for switcher + tray submenu
       "usersCreate", // UA-5 — mint user N under the §3.3 lock, then attach
@@ -245,6 +251,8 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       desktopState: "vibefield:shell:desktop-state",
       viewState: "vibefield:view:state",
       viewSet: "vibefield:view:set",
+      themeState: "vibefield:theme:state",
+      themeSet: "vibefield:theme:set",
       usersUpdate: "vibefield:users:update",
       usersList: "vibefield:users:list",
       usersCreate: "vibefield:users:create",
@@ -253,6 +261,33 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotResult: "vibefield:screenshot:result",
       screenshotPreview: "vibefield:screenshot:preview",
     });
+  });
+});
+
+describe("the app's one theme (FR-4, FC-D5)", () => {
+  it("is three states — Light, Dark, Auto — and resolves to two themes", () => {
+    expect(ThemePreference.options).toEqual(["light", "dark", "auto"]);
+    expect(ThemeState.parse({ preference: "auto", resolved: "dark" })).toEqual({
+      preference: "auto",
+      resolved: "dark",
+    });
+    // The old sticky boolean is not a theme: a `{dark}` from an older page is refused.
+    expect(ThemeState.safeParse({ dark: true }).success).toBe(false);
+    expect(ThemeState.safeParse({ preference: "auto", resolved: "auto" }).success).toBe(false);
+    expect(ThemeState.safeParse({ preference: "sepia", resolved: "light" }).success).toBe(false);
+  });
+
+  it("chooses by name — there is no toggle to argue with", () => {
+    expect(ThemeSetRequest.parse({ preference: "dark" })).toEqual({ preference: "dark" });
+    expect(ThemeSetRequest.safeParse({}).success).toBe(false);
+    expect(ThemeSetRequest.safeParse({ dark: true }).success).toBe(false);
+  });
+
+  it("reads Auto as the OS's theme and the other two as themselves", () => {
+    expect(resolveTheme("auto", true)).toBe("dark");
+    expect(resolveTheme("auto", false)).toBe("light");
+    expect(resolveTheme("light", true)).toBe("light");
+    expect(resolveTheme("dark", false)).toBe("dark");
   });
 });
 

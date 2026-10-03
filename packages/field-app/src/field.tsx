@@ -52,8 +52,8 @@ import { useTheme } from "./theme";
 //   ChromeLayer — HUD, pills, tray, panels, overlays + chrome effects
 //   usePreviewWarmup — preview discovery/chunking into the loading pipeline
 //   DocManager — launch, metadata, lanes, switching (React-free; no UI)
-// The window IS the field (2026-07-21): no app bar — the theme toggle floats
-// top-right, diagnostics live inside Settings.
+// The window IS the field (2026-07-21): no app bar — diagnostics live inside
+// Settings, and the theme is the Me menu's (One Frame FC-D5).
 
 const EMPTY_APPEARANCE_SNAPSHOT: AppearanceOverrideSnapshot = Object.freeze({
   revision: 0,
@@ -83,7 +83,9 @@ export function FieldView({
   appearanceOverrideSource?: AppearanceOverrideSource;
   onPresentationContextChange?: ProductPresentationContextReporter;
 }): ReactElement {
-  const { dark, toggle: toggleTheme } = useTheme();
+  // The app's one theme (One Frame FC-D5), main's — read here for the field's
+  // own appearance; the controls that choose it ask the owner themselves.
+  const { dark } = useTheme();
   // Shared seams between units: the stage publishes its GL/halo teardown for
   // the session's engine disposal (the GL disposal order invariant); chrome
   // publishes the live devtools handle for the stage's GL profiling lanes.
@@ -300,8 +302,6 @@ export function FieldView({
         ce={ce}
         manager={manager}
         registry={registry}
-        dark={dark}
-        onToggleTheme={toggleTheme}
         hudMotion={hudMotion}
         docState={docState}
         surface={surface}

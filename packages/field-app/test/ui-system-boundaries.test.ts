@@ -154,6 +154,20 @@ describe("UI system ownership boundaries", () => {
     expect(palette).not.toMatch(/className="vf-(?:palette|menu|command-palette)/);
   });
 
+  it("keeps the corner's fixture an ADAPTER — the account's and the theme's facts, never the menu's markup (FR-4)", () => {
+    // The catalog stands in for what a host supplies — the account and the
+    // theme's owner (main's) — and mounts the shipping Me menu and Settings →
+    // Appearance over them. Never the menu's own classes, never the owner.
+    const fixture = source("design-system/CornerPreview.tsx");
+    expect(fixture).toContain("MeMenuView");
+    expect(fixture).toContain("AppearanceSectionView");
+    expect(fixture).not.toMatch(/className="vf-(?:me|ui-segmented)/);
+    expect(fixture).not.toContain("<style");
+    expect(fixture).not.toContain("getHost");
+    expect(fixture).not.toContain("useAppTheme");
+    expect(fixture).not.toContain("setAppTheme");
+  });
+
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
     // The temptation for a widget whose pixels need a privileged producer is to
     // draw convincing ones. The catalog is held to supplying what a HOST
@@ -228,7 +242,8 @@ describe("UI system ownership boundaries", () => {
     const line = source("design-system/ComposerLinePreview.tsx");
     const head = source("design-system/HeadPreview.tsx");
     const palette = source("design-system/CommandPalettePreview.tsx");
-    const catalog = `${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const corner = source("design-system/CornerPreview.tsx");
+    const catalog = `${corner}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -288,6 +303,11 @@ describe("UI system ownership boundaries", () => {
       "HeadPlate",
       "HeadView",
       "HeadLive",
+      // One Frame FR-4 — the corner: the Me menu above the line with Theme, a
+      // plate per Theme it holds, and Settings → Appearance, the same setting
+      "CornerPlate",
+      "AppearancePlate",
+      "AppearanceSectionView",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -295,7 +315,15 @@ describe("UI system ownership boundaries", () => {
     // the elements, not the views' names they prefix.
     expect(catalog).toMatch(/<Composer\s/u);
     expect(catalog).toMatch(/<Head\s/u);
+    // …and the corner's plates MOUNTED on the page, not merely defined (FR-4).
+    expect(page).toMatch(/<CornerPlate\s/u);
+    expect(page).toMatch(/<AppearancePlate\s/u);
 
+    // The Settings specimen's Appearance page was a replica the product never
+    // had (a system-appearance switch, an interface scale); it is the shipping
+    // view now (FR-4).
+    expect(page).not.toContain("Use system appearance");
+    expect(page).not.toContain("Interface scale");
     for (const retiredReplica of [
       "vf-ds-artifact-panel",
       "vf-ds-file-island",
@@ -343,6 +371,8 @@ describe("UI system ownership boundaries", () => {
       "frame/ComposerLine.tsx",
       "frame/Head.tsx",
       "frame/HeadView.tsx",
+      "account/MeMenu.tsx",
+      "panels/AppearanceSection.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }

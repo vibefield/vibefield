@@ -14,6 +14,7 @@ import type { FrameView } from "@vibefield/contracts";
 import { act, useRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { MeMenuView } from "../src/account/MeMenu";
 import type { DocManagerApi } from "../src/doc-manager";
 import { Composer, type LineActs } from "../src/frame/Composer";
 import { type FrameSurface, foldSurface } from "../src/frame/frame-surface";
@@ -142,6 +143,24 @@ function mount(door: LineViewDoor | null = null): void {
           keys="mac"
           onAct={onAct}
         />
+        {/* ChromeLayer's glue for the corner (FR-4): the Me menu asks the owner. */}
+        <MeMenuView
+          me={{
+            userId: "me",
+            name: "James",
+            face: { emoji: "🦊" },
+            waiting: 0,
+            detail: "james@example.com",
+            detailIsLogin: true,
+            canLink: false,
+          }}
+          others={[]}
+          open={surface === "me"}
+          onOpenChange={(open) => setSurface(open ? "me" : foldSurface(surface, "me"))}
+          onOpenSettings={() => undefined}
+          onOpenAccount={() => undefined}
+          onLink={() => undefined}
+        />
       </>
     );
   }
@@ -174,6 +193,24 @@ describe("the frame's one owner of the open surface", () => {
     act(() => setSurfaceNow?.("palette"));
     expect($('[role="dialog"][aria-label="Command palette"]')).not.toBeNull();
     expect($("[data-head-place]")?.dataset.open).toBe("false");
+  });
+
+  it("holds the Me menu in the same one value — it folds the head's and the line's, and they fold it (FR-4)", () => {
+    mount();
+    click(".vf-line-create");
+    expect(surfaceNow).toBe("objects");
+    click(".vf-me-face");
+    expect(surfaceNow).toBe("me");
+    expect($(".vf-line-create")?.getAttribute("aria-expanded")).toBe("false");
+    expect($(".vf-me")?.hasAttribute("data-open")).toBe(true);
+    click(".vf-head-zoom");
+    expect(surfaceNow).toBe("zoom");
+    expect($(".vf-me")?.hasAttribute("data-open")).toBe(false);
+    act(() => setSurfaceNow?.("me"));
+    expect($(".vf-head-zoom-menu")).toBeNull();
+    // Its own fold leaves the others alone: a second press on the face.
+    click(".vf-me-face");
+    expect(surfaceNow).toBeNull();
   });
 
   it("folds whatever is open when the view changes — a change of place", () => {

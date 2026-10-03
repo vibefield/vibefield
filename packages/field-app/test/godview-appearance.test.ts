@@ -38,6 +38,7 @@ describe("the deck appearance store", () => {
           shaderAnimate: true,
           backdropOpacity: 0.6,
           backdropBlur: 18,
+          modeOverride: "light",
         }),
       ),
     ).toEqual({
@@ -49,6 +50,7 @@ describe("the deck appearance store", () => {
       shaderAnimate: true,
       backdropOpacity: 0.6,
       backdropBlur: 18,
+      modeOverride: "light",
     });
   });
 
@@ -140,7 +142,23 @@ describe("the deck appearance store", () => {
       // a record that never named a backdrop takes the covers' glass (FC-D16)
       backdropOpacity: 0.72,
       backdropBlur: 0,
+      // …and one from before FR-4 follows the app's theme (FC-D7)
+      modeOverride: null,
     });
+  });
+
+  it("reads Godview's mode as the app's unless the viewer overrode it (FC-D7)", () => {
+    // The one override the ruling kept — Settings → Terminal → Look. Only the
+    // two modes are overrides; anything else, and every record from before
+    // FR-4, follows the app.
+    expect(DEFAULT_DECK_APPEARANCE.modeOverride).toBeNull();
+    expect(parseDeckAppearance(JSON.stringify({ modeOverride: "dark" })).modeOverride).toBe("dark");
+    expect(parseDeckAppearance(JSON.stringify({ modeOverride: "light" })).modeOverride).toBe(
+      "light",
+    );
+    for (const odd of ["auto", "app", 1, true, null]) {
+      expect(parseDeckAppearance(JSON.stringify({ modeOverride: odd })).modeOverride).toBeNull();
+    }
   });
 
   it("clamps an out-of-range opacity rather than discarding the record", () => {
@@ -165,6 +183,7 @@ describe("the deck appearance store", () => {
       shaderAnimate: false,
       backdropOpacity: 0.5,
       backdropBlur: 12,
+      modeOverride: "dark",
     });
 
     expect(announced).toBe(1);
@@ -180,6 +199,7 @@ describe("the deck appearance store", () => {
       shaderAnimate: false,
       backdropOpacity: 0.5,
       backdropBlur: 12,
+      modeOverride: "dark",
     });
     stop();
   });

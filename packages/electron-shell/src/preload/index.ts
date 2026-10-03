@@ -15,6 +15,10 @@ import {
   ScreenshotPreviewResult,
   type ShellCommand,
   ShellPlatform,
+  type ThemePreference,
+  ThemeSetRequest,
+  type ThemeState,
+  ThemeState as ThemeStateSchema,
   type UserRecord,
   UserRecord as UserRecordSchema,
   UsersCreateParams,
@@ -34,6 +38,7 @@ import {
 import { PreloadLogBridge, type RendererLogPort } from "./logging";
 import { PreloadScreenshotResultBridge } from "./screenshot-result";
 import { PreloadShellCommandBridge } from "./shell-commands";
+import { PreloadThemeStateBridge } from "./theme";
 import { PreloadViewStateBridge } from "./view";
 
 // The bridge (ESR §5.2.5): contextBridge adaptation + validation, nothing else.
@@ -166,6 +171,24 @@ const viewState = new PreloadViewStateBridge((issueCount) => {
     }),
   );
 });
+const themeState = new PreloadThemeStateBridge((issueCount) => {
+  logging.submit(
+    JSON.stringify({
+      v: 1,
+      records: [
+        {
+          v: 1,
+          time: Date.now(),
+          level: "error",
+          event: "renderer.preload.theme_state_rejected",
+          msg: "Preload rejected a malformed theme state",
+          component: "preload.theme",
+          attrs: { issueCount },
+        },
+      ],
+    }),
+  );
+});
 /** A rejected `ipcMain.handle` reaches the page as `Error invoking remote method
  * '<channel>': Error: <message>`: main replies with the error's `toString()` and
  * `invoke` rewraps it (Electron #24427, verified in 43.1.1's own bundle). A users
@@ -218,6 +241,9 @@ ipcRenderer.on(IPC_CHANNELS.desktopState, (_event, raw: unknown) => {
 });
 ipcRenderer.on(IPC_CHANNELS.viewState, (_event, raw: unknown) => {
   viewState.accept(raw);
+});
+ipcRenderer.on(IPC_CHANNELS.themeState, (_event, raw: unknown) => {
+  themeState.accept(raw);
 });
 
 contextBridge.exposeInMainWorld("vibefield", {
@@ -309,6 +335,15 @@ contextBridge.exposeInMainWorld("vibefield", {
       ),
     onState: (handler: (state: FrameViewState) => void): (() => void) =>
       viewState.subscribe(handler),
+  },
+  theme: {
+    /** Choose the app's one theme by name (FR-4, FC-D5); main owns it and the
+     * answer is what it holds now. */
+    set: async (preference: ThemePreference): Promise<ThemeState> =>
+      ThemeStateSchema.parse(
+        await ipcRenderer.invoke(IPC_CHANNELS.themeSet, ThemeSetRequest.parse({ preference })),
+      ),
+    onState: (handler: (state: ThemeState) => void): (() => void) => themeState.subscribe(handler),
   },
   /** SNAP-D3 — one native screenshot through main: the still's path on disk
    * (it is on the clipboard too), a cancel, or a typed error. Main serialises

@@ -223,27 +223,6 @@
   background: var(--control-hover-bg);
 }
 
-.vf-godview-tweak-theme {
-  height: 36px;
-  display: grid;
-  grid-template-columns: 1fr 112px;
-  align-items: center;
-  gap: 8px;
-  padding: 0 11px;
-  border-bottom: 1px solid var(--panel-border);
-  color: var(--text-muted);
-}
-
-.vf-godview-tweak-theme select {
-  width: 100%;
-  height: 23px;
-  padding: 0 6px;
-  border: 1px solid var(--panel-border);
-  border-radius: 4px;
-  color: var(--text-main);
-  background: var(--control-hover-bg);
-}
-
 .vf-godview-tweak-group {
   min-width: 0;
   margin: 0;
@@ -1084,5 +1063,14 @@
    host passes, so the host hides it until the package draws it only for counts
    it is handed — the ask on record (One Frame §21). */
 .vf-godview-header [role="group"][aria-label="Agent status"] {
+  display: none;
+}
+
+/* FC-D7: Godview follows the app's theme (One Frame FR-4), so its ☼◐ switch is
+   gone. The views package's bar draws it whatever a host passes, so the host
+   hides it — with the tooltip host the package wraps it in — until the package
+   draws it only for a host that hands it a handler (the ask on record, beside
+   the counters'). */
+.vf-godview-header .vf-godview-bar-tip-host:has(> .vf-godview-theme-switch) {
   display: none;
 }

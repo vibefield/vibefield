@@ -29,23 +29,26 @@ export function GodviewPreview({
   door = null,
   panes,
   initialView = "list",
+  theme = "light",
 }: {
   door?: MonitorDoor | null;
   panes?: MonitorPaneFacts;
   initialView?: string;
+  /** Godview follows the app's theme (FC-D7) — here, the catalog page's. */
+  theme?: GodviewTheme;
 } = {}): ReactElement {
   const [viewId, setViewId] = useState(initialView);
-  const [theme, setTheme] = useState<GodviewTheme>("light");
   const [tuningOpen, setTuningOpen] = useState(false);
-  const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning("light"));
+  const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning(theme));
+  const [tunedFor, setTunedFor] = useState(theme);
+  if (tunedFor !== theme) {
+    setTunedFor(theme);
+    setTuning(defaultGodviewTuning(theme));
+  }
   const appearance = useDeckAppearance();
   const view = monitorViewFor(viewId);
   const parameters = useMemo(() => monitorParameterDefaults(view.parameterGroups), [view]);
 
-  const changeTheme = (next: GodviewTheme): void => {
-    setTheme(next);
-    setTuning(defaultGodviewTuning(next));
-  };
   const screenStyle = {
     ...godviewTuningStyle(tuning),
     ...godviewBackdropStyle(appearance),
@@ -78,7 +81,6 @@ export function GodviewPreview({
               tuningOpen={tuningOpen}
               onSelectView={setViewId}
               onToggleTuning={() => setTuningOpen((current) => !current)}
-              onThemeChange={changeTheme}
             />
           }
           tuningPanel={
@@ -90,7 +92,6 @@ export function GodviewPreview({
               monitorSections={[]}
               rendererBackend="design preview"
               onClose={() => setTuningOpen(false)}
-              onThemeChange={changeTheme}
               onChange={(patch) => setTuning((current) => ({ ...current, ...patch }))}
               onReset={() => setTuning(defaultGodviewTuning(theme))}
               onResetMonitor={() => undefined}

@@ -25,6 +25,10 @@ import {
 
 const MODE_LABEL: Record<PreviewMode, "Light" | "Dark"> = { light: "Light", dark: "Dark" };
 
+/** Godview's mode (One Frame FC-D7): the app's theme, or the one override. */
+const GODVIEW_MODES = ["As the app", "Light", "Dark"] as const;
+type GodviewModeChoice = (typeof GODVIEW_MODES)[number];
+
 /** A window theme in miniature: its ground, a prompt, and this Mac's colours. */
 export function ThemeSwatch({
   theme,
@@ -154,6 +158,32 @@ export function LookTab({
         scope="window"
         description="One for each of Godview's modes. It sets this window's ground, text, cursor and selection, and applies as you pick."
       >
+        {/* FC-D7: Godview follows the app's theme — its own switch is gone —
+            and this is the one place that can keep it in a mode of its own. */}
+        <SettingsRow
+          title="Godview's mode"
+          description={
+            appearance.modeOverride === null
+              ? "As the app: light or dark with your theme, set in your menu in the corner."
+              : `Always ${MODE_LABEL[appearance.modeOverride].toLowerCase()}, whatever the app's theme is.`
+          }
+        >
+          <SegmentedControl
+            options={GODVIEW_MODES}
+            value={
+              appearance.modeOverride === null
+                ? "As the app"
+                : (MODE_LABEL[appearance.modeOverride] as GodviewModeChoice)
+            }
+            onChange={(choice) =>
+              set({
+                modeOverride: choice === "Light" ? "light" : choice === "Dark" ? "dark" : null,
+              })
+            }
+            label="Godview's mode"
+            size="small"
+          />
+        </SettingsRow>
         <div className="vf-ts-slots">
           {(["light", "dark"] as const).map((mode) => {
             const slotTheme = previewTheme(deckThemeNameForMode(appearance, mode), mode);

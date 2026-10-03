@@ -6,6 +6,8 @@ import type {
   ScreenshotPreviewResult,
   ShellCommand,
   ShellPlatform,
+  ThemePreference,
+  ThemeState,
   WindowConnection,
 } from "@vibefield/contracts";
 import type {
@@ -90,6 +92,11 @@ declare global {
       view: {
         set(view: FrameView): Promise<FrameViewState>;
         onState(handler: (state: FrameViewState) => void): () => void;
+      };
+      /** FR-4 — the app's one theme (FC-D5), which main owns. */
+      theme: {
+        set(preference: ThemePreference): Promise<ThemeState>;
+        onState(handler: (state: ThemeState) => void): () => void;
       };
       /** SNAP-D3 — the native screenshot helper through main; the answer is
        * the contract's own result (still on disk + clipboard, cancel, or a

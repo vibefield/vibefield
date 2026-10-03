@@ -11,12 +11,11 @@ import { GodviewMonitor } from "./GodviewMonitor";
 import { GodviewStage, GodviewUnavailableDeck } from "./GodviewStage";
 import {
   defaultGodviewTuning,
-  type GodviewTheme,
   type GodviewTuning,
   GodviewTuningPanel,
   godviewTuningStyle,
 } from "./GodviewTuningPanel";
-import { GODVIEW_THEME_STORAGE_KEY, storedGodviewTheme } from "./godview-theme";
+import { useGodviewTheme } from "./godview-theme";
 import { useLabSwitches } from "./lab-switches";
 import { GodviewAgentsProvider } from "./monitor/GodviewAgentsProvider";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
@@ -80,8 +79,17 @@ function bridgeNotice(): string | null {
 export function GodviewOverlay(): ReactElement | null {
   const open = useActiveView() === "godview";
   const [everOpened, setEverOpened] = useState(false);
-  const [theme, setTheme] = useState<GodviewTheme>(storedGodviewTheme);
+  // FC-D7: the app's theme, unless Settings → Terminal overrides it — never a
+  // mode of Godview's own (its ☼◐ switch retired at FR-4).
+  const theme = useGodviewTheme();
   const [tuning, setTuning] = useState<GodviewTuning>(() => defaultGodviewTuning(theme));
+  // A change of mode resets the stage's tuning to that mode's defaults, as the
+  // switch used to (React's state-from-the-previous-render pattern).
+  const [tunedFor, setTunedFor] = useState(theme);
+  if (tunedFor !== theme) {
+    setTunedFor(theme);
+    setTuning(defaultGodviewTuning(theme));
+  }
   const [tuningOpen, setTuningOpen] = useState(false);
   const appearance = useDeckAppearance();
   const monitor = useMonitorTuning();
@@ -102,10 +110,6 @@ export function GodviewOverlay(): ReactElement | null {
     setTuning((current) => ({ ...current, ...patch }));
   }, []);
   const resetTuning = useCallback(() => setTuning(defaultGodviewTuning(theme)), [theme]);
-  const changeTheme = useCallback((next: GodviewTheme) => {
-    setTheme(next);
-    setTuning(defaultGodviewTuning(next));
-  }, []);
 
   useEffect(() => {
     if (open) {
@@ -139,14 +143,6 @@ export function GodviewOverlay(): ReactElement | null {
     // done look the same in a breakdown otherwise.
     return whenIdle(() => prewarmTerminalPool(fieldd, godviewColdOpen), 2_000);
   }, [fieldd, everOpened]);
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(GODVIEW_THEME_STORAGE_KEY, theme);
-    } catch {
-      // A disabled storage partition should not disable the switch itself.
-    }
-  }, [theme]);
 
   // The bridge NOTICE, and only the notice (TP-S0b). This used to be half of the
   // recovery ladder as well: GT-D14's custody clause (discard a warm whose
@@ -223,7 +219,6 @@ export function GodviewOverlay(): ReactElement | null {
               reserveWindowControls={getHost().platform === "darwin"}
               onSelectView={monitor.selectView}
               onToggleTuning={() => setTuningOpen((current) => !current)}
-              onThemeChange={changeTheme}
             />
           ) : undefined
         }
@@ -236,7 +231,6 @@ export function GodviewOverlay(): ReactElement | null {
             monitorSections={monitorTuningSections(monitor)}
             rendererBackend={rendererBackend}
             onClose={() => setTuningOpen(false)}
-            onThemeChange={changeTheme}
             onChange={changeTuning}
             onReset={resetTuning}
             onResetMonitor={monitor.resetParameters}
