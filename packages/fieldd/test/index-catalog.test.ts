@@ -106,6 +106,7 @@ interface World {
 async function startFake(
   initial: { sessions?: unknown; projects?: unknown; runtimes?: unknown } = {},
   env: Record<string, string> = {},
+  extraArgs: readonly string[] = [],
 ): Promise<World> {
   const dir = mkdtempSync(join(tmpdir(), "vf-ixc-"));
   cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
@@ -121,7 +122,7 @@ async function startFake(
   write("projects", initial.projects ?? PROJECTS);
   write("runtimes", initial.runtimes ?? RUNTIMES);
   write("control", {});
-  const child = spawn(process.execPath, [FAKE, "serve", "--json"], {
+  const child = spawn(process.execPath, [FAKE, "serve", "--json", ...extraArgs], {
     env: {
       ...process.env,
       FAKE_ROSETTAD_MODE: "ok",
@@ -160,7 +161,7 @@ async function startFake(
 
 /** A supervisor that is only what the follower reads: its state and its
  * transitions. */
-function supervisorAt(origin: string | null) {
+function supervisorAt(origin: string | null, authorization?: string) {
   const events = new EventEmitter();
   let state: RosettadState = {
     phase: origin === null ? "starting" : "ready",
@@ -174,6 +175,13 @@ function supervisorAt(origin: string | null) {
   const supervisor = Object.assign(events, {
     state: () => state,
     health: () => state,
+    // AR-8b — what the real supervisor holds beside a ready origin
+    ...(authorization !== undefined
+      ? {
+          credentials: () =>
+            state.origin === null ? null : { authorization, grantKey: new Uint8Array(32) },
+        }
+      : {}),
   }) as unknown as RosettadSupervisor;
   return {
     supervisor,
@@ -483,18 +491,56 @@ describe("IndexCatalog — following rosetta's /ws/meta (DS-6)", () => {
   });
 });
 
+describe("IndexCatalog — the bearer on /ws/meta (AR-8b)", () => {
+  it("a daemon behind a bearer serves the stream to the follower that presents the supervisor's; the same daemon refuses one that does not", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "vf-ixb-"));
+    cleanup.push(() => rmSync(dir, { recursive: true, force: true }));
+    const token = "b".repeat(43);
+    const tokenFile = join(dir, "token");
+    writeFileSync(tokenFile, token, { mode: 0o600 });
+    const world = await startFake(
+      { sessions: [session("s1", { activity: { first_at: 1, last_at: 2 } })] },
+      {},
+      ["--token-file", tokenFile],
+    );
+    // presented: rows
+    const control = supervisorAt(world.origin, `Bearer ${token}`);
+    const catalog = new IndexCatalog({
+      supervisor: control.supervisor,
+      expectedProtocolVersion: PROTOCOL_VERSION,
+      deviceId: () => "dev-a",
+      epoch: "boot-test",
+      batchMs: 20,
+      reconnectMinMs: 50,
+      reconnectMaxMs: 200,
+      resnapshotMs: 0,
+    });
+    cleanup.push(() => catalog.dispose());
+    catalog.start();
+    await until(() => catalog.sessions.rows().length === 1, 5_000, "the session row");
+    expect(catalog.phase).toBe("live");
+    // not presented: the same daemon says no, and the follower says refused
+    const bare = follower(world.origin);
+    await until(() => bare.catalog.phase === "refused", 5_000, "refused");
+    expect(bare.catalog.sessions.rows()).toEqual([]);
+  });
+});
+
 // The real binary (`pnpm siblings:build`; FIELDD_ROSETTAD_BIN): the follower
 // against rosetta's OWN /ws/meta, over its ground-truth transcript seeded into
 // an empty home (nothing of the developer's is ever read). This is the row
 // that says the stream reading above is the wire, not the fake's opinion of it.
 const REAL_BIN = process.env["FIELDD_ROSETTAD_BIN"];
+// AR-8b (2026-10-03): read from `../rosetta-pin`, the checkout dedicated to the
+// pin since W-D10 — this said `../rosetta` (James's working tree, nothing this
+// repo reads), so the row skipped in every lane and read his tree in his own.
 const GROUNDTRUTH = join(
   HERE,
   "..",
   "..",
   "..",
   "..",
-  "rosetta",
+  "rosetta-pin",
   "groundtruth",
   "claude-code",
   "fixtures",

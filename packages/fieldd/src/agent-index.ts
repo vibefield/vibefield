@@ -24,13 +24,18 @@ import {
   AgentKind,
   createAgentCatalogReaders,
   INDEX_RECENT_DEFAULT_LIMIT,
+  IndexContributionResponse,
+  IndexDayUsageResponse,
   type IndexDiscoveriesResult,
   type IndexEnrollmentRecord,
   IndexEnrollmentRecord as IndexEnrollmentRecordSchema,
   type IndexEnrollmentSummary,
+  IndexHeatmapResponse,
   type IndexMutationResult,
   type IndexPhase,
   IndexPhase as IndexPhaseSchema,
+  type IndexProjectDayResult,
+  type IndexProjectResult,
   type IndexProjectRow,
   IndexProjectsResponse,
   type IndexRecentParams,
@@ -47,10 +52,12 @@ import {
   type IndexSearchState,
   type IndexSession,
   IndexSessionResponse,
+  type IndexSessionResult,
   type IndexSessionRow,
   IndexSessionsResponse,
   type IndexSessionsResult,
   type IndexStatus,
+  IndexUsageResponse,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
 import { RpcCallError } from "./native-link";
@@ -84,6 +91,11 @@ import {
 // rosettad is unauthenticated; the origin is the secret and stays in
 // RosettadState) and an enrolled root's path (a persona is named by its
 // profile id; where fieldd keeps its root is fieldd's business).
+// *Corrected 2026-10-03 (AR-8b): rosettad authenticates now — every route
+// wants the bearer the supervisor mints per start, which every read below
+// carries and no door ever answers. The doors still carry no origin; the one
+// answer that names it is `index.openTicket`'s, for a window on this desktop,
+// beside a per-session grant (index-serve.ts).*
 
 const DEFAULT_REQUEST_TIMEOUT_MS = 3_000;
 /** the roll call's poll while a ready daemon has not published its census
@@ -463,6 +475,49 @@ export interface IndexSessionFacts {
 /** The `/api/sessions` envelope's OWN keys, read off the schema so the two
  * can never drift apart: everything else at that level is unknown-field news. */
 const SESSIONS_BODY_KEYS = Object.keys(IndexSessionsResponse.shape);
+/** the same, for `/api/sessions/{id}` (AR-8b) */
+const SESSION_BODY_KEYS = Object.keys(IndexSessionResponse.shape);
+
+/** AR-8b — the slice of a contracts reader `aggregate` uses: a parse that
+ * answers instead of throwing, and the envelope's own keys. */
+interface BodyReader<T> {
+  safeParse(value: unknown):
+    | { success: true; data: T }
+    | {
+        success: false;
+        error: { issues: ReadonlyArray<{ path: ReadonlyArray<string | number>; message: string }> };
+      };
+  readonly shape: Record<string, unknown>;
+}
+
+/** AR-8b — rosetta's six usage figures in VibeField's spelling. A cost rosetta
+ * could not price (absent or null) stays null — never zero. */
+function usageFigures(row: {
+  tokens: number;
+  cost_micro_usd?: number | null | undefined;
+  billed_micro_usd?: number | null | undefined;
+  unpriced_tokens: number;
+  unrecorded_output: number;
+  reported_cost_adjustment_micro_usd: number;
+}): IndexUsageFiguresProjection {
+  return {
+    tokens: row.tokens,
+    costMicroUsd: row.cost_micro_usd ?? null,
+    billedMicroUsd: row.billed_micro_usd ?? null,
+    unpricedTokens: row.unpriced_tokens,
+    unrecordedOutput: row.unrecorded_output,
+    reportedCostAdjustmentMicroUsd: row.reported_cost_adjustment_micro_usd,
+  };
+}
+
+interface IndexUsageFiguresProjection {
+  tokens: number;
+  costMicroUsd: number | null;
+  billedMicroUsd: number | null;
+  unpricedTokens: number;
+  unrecordedOutput: number;
+  reportedCostAdjustmentMicroUsd: number;
+}
 /** the same, for `/api/search` (AR-5e) */
 const SEARCH_BODY_KEYS = Object.keys(IndexSearchResponse.shape);
 /** the same, for `/api/projects` (QL) */
@@ -1211,6 +1266,203 @@ export class IndexService {
     };
   }
 
+  // ── AR-8b — the History room's reads (thinking-ar-history-room.md §3) ───
+  //
+  // One session's header, a project's panels, one day's hours. Every body is
+  // PARSED against the contracts' protocol-26 readers (never cast) and answered
+  // as a projection; the readiness and degraded states are the other doors':
+  // UNAVAILABLE {service: "index", state}. rosetta's aggregates answer 503 until
+  // its canonical projection is published, which is the honest `building`.
+
+  /** `index.session` — one session's header row by rosetta's canonical id:
+   * the row (`/api/sessions/{id}`), its runtime's kind as the catalog id and
+   * the persona an enrolled root was filed under (`/api/runtimes`), and its
+   * project's name (`/api/projects`) — the two tables `index.recent` caches
+   * per daemon generation. A session the index does not hold is NOT_FOUND. */
+  async session(sessionId: string): Promise<IndexSessionResult> {
+    this.requireReady();
+    const body = await this.getBody(`/api/sessions/${encodeURIComponent(sessionId)}`, {
+      onStatus: (status) =>
+        status === 404
+          ? new RpcCallError("NOT_FOUND", "the agent index holds no such session", false)
+          : undefined,
+    });
+    const parsed = IndexSessionResponse.safeParse(body);
+    if (!parsed.success || parsed.data.session.id !== sessionId) {
+      const issue = parsed.success
+        ? "session.id: not the session asked for"
+        : (() => {
+            const first = parsed.error.issues[0];
+            return first === undefined ? "?" : `${first.path.join(".")}: ${first.message}`;
+          })();
+      this.logger.warn(
+        "fieldd.index.session_malformed",
+        "The index answered a session row fieldd cannot read",
+        { issue },
+      );
+      throw new RpcCallError("UNAVAILABLE", "the agent index answered a malformed session", true, {
+        service: "index",
+        state: "malformed",
+      });
+    }
+    this.noteUnknownFields("session", body, SESSION_BODY_KEYS);
+    const row = parsed.data.session;
+    const projectId =
+      typeof row.project_id === "string" && row.project_id !== "" ? row.project_id : undefined;
+    const [runtimes, project] = await Promise.all([
+      this.recentRuntimeTable([row]),
+      projectId === undefined ? Promise.resolve(undefined) : this.projectById(projectId),
+    ]);
+    const runtime = typeof row.runtime_id === "string" ? runtimes.get(row.runtime_id) : undefined;
+    const provider = runtime === undefined ? undefined : this.catalog.idForKind(runtime.kind);
+    return {
+      session: {
+        ...projectSession(row),
+        ...(projectId !== undefined ? { projectId } : {}),
+        ...(provider !== undefined ? { provider } : {}),
+        ...(typeof row.started_at === "number" ? { startedAt: row.started_at } : {}),
+        ...(typeof row.parent_session_id === "string" && row.parent_session_id !== ""
+          ? { parentSessionId: row.parent_session_id }
+          : {}),
+        ...(runtime?.profileId !== undefined ? { profileId: runtime.profileId } : {}),
+        ...(project !== undefined ? { project: { id: project.id, name: project.name } } : {}),
+      },
+    };
+  }
+
+  /** One project by rosetta's id from the cached table, re-read once on a
+   * miss (a project the index met since the cache was read). */
+  private async projectById(id: string): Promise<IndexProjectRow | undefined> {
+    const cached = (await this.recentProjectTable()).find((project) => project.id === id);
+    if (cached !== undefined) return cached;
+    return (await this.recentProjectTable(RECENT_TABLE_MISS_FLOOR_MS)).find(
+      (project) => project.id === id,
+    );
+  }
+
+  /** `index.project` — a project's panels in one answer (AR-D39 (a)): the
+   * heatmap, its decomposition by model and by hour, and the per-session
+   * contribution, three GETs in one flight over the same window and timezone.
+   * `maxContributionRows` is the DOOR's SP-D13 bound for a tailnet caller —
+   * the rows stop there in rosetta's order and the answer says `clipped`; this
+   * service knows no principal. */
+  async project(params: {
+    projectId: string;
+    sinceMs?: number | undefined;
+    offsetMinutes?: number | undefined;
+    maxContributionRows?: number | undefined;
+  }): Promise<IndexProjectResult> {
+    this.requireReady();
+    const base = `/api/projects/${encodeURIComponent(params.projectId)}`;
+    const window = [
+      ...(params.sinceMs !== undefined ? [`since_ms=${params.sinceMs}`] : []),
+      ...(params.offsetMinutes !== undefined ? [`offset_minutes=${params.offsetMinutes}`] : []),
+    ];
+    const query = window.length > 0 ? `?${window.join("&")}` : "";
+    const [heatmap, usage, contribution] = await Promise.all([
+      this.aggregate(`${base}/heatmap${query}`, IndexHeatmapResponse, "heatmap"),
+      this.aggregate(`${base}/usage${query}`, IndexUsageResponse, "usage"),
+      this.aggregate(`${base}/contribution`, IndexContributionResponse, "contribution"),
+    ]);
+    const limit = params.maxContributionRows;
+    const clipped = limit !== undefined && contribution.rows.length > limit;
+    const rows = clipped ? contribution.rows.slice(0, limit) : contribution.rows;
+    return {
+      projectId: params.projectId,
+      heatmap: heatmap.days.map((day) => ({ day: day.day, ...usageFigures(day) })),
+      usage: {
+        models: usage.models.map((model) => ({
+          day: model.day,
+          model: model.model,
+          ...usageFigures(model),
+        })),
+        hours: usage.hours.map((hour) => ({ hour: hour.hour, ...usageFigures(hour) })),
+      },
+      contribution: rows.map((row) => ({
+        sessionId: row.session_id,
+        projectId:
+          typeof row.project_id === "string" && row.project_id !== "" ? row.project_id : null,
+        commits: row.commits,
+        edits: row.edits,
+        loc: row.loc,
+        messages: row.messages,
+        ...usageFigures(row),
+      })),
+      clipped,
+    };
+  }
+
+  /** `index.projectDay` — one day of a project's hours by model (the heatmap's
+   * drill-down). The day is already a calendar day (the contract's refine);
+   * a 400 from the daemon is its disagreement, answered as the caller's to fix. */
+  async projectDay(params: {
+    projectId: string;
+    day: string;
+    offsetMinutes?: number | undefined;
+  }): Promise<IndexProjectDayResult> {
+    this.requireReady();
+    const query = [
+      `day=${encodeURIComponent(params.day)}`,
+      ...(params.offsetMinutes !== undefined ? [`offset_minutes=${params.offsetMinutes}`] : []),
+    ].join("&");
+    const answer = await this.aggregate(
+      `/api/projects/${encodeURIComponent(params.projectId)}/usage/day?${query}`,
+      IndexDayUsageResponse,
+      "day-usage",
+      (status) =>
+        status === 400
+          ? new RpcCallError("PRECONDITION_FAILED", "the agent index refused the day", false)
+          : undefined,
+    );
+    return {
+      projectId: params.projectId,
+      day: answer.day,
+      models: answer.models.map((model) => ({
+        hour: model.hour,
+        model: model.model,
+        tokens: model.tokens,
+      })),
+    };
+  }
+
+  /** One aggregate GET, parsed. A 503 is rosetta's "not before canonical
+   * publication" (`require_canonical_aggregates`): the honest `building`,
+   * retryable. A body the reader cannot vouch for is `malformed`. */
+  private async aggregate<T>(
+    path: string,
+    schema: BodyReader<T>,
+    shape: string,
+    onStatus?: (status: number) => RpcCallError | undefined,
+  ): Promise<T> {
+    const body = await this.getBody(path, {
+      onStatus: (status) =>
+        onStatus?.(status) ??
+        (status === 503
+          ? new RpcCallError(
+              "UNAVAILABLE",
+              "the agent index has not published its canonical projection yet",
+              true,
+              { service: "index", state: "building" },
+            )
+          : undefined),
+    });
+    const parsed = schema.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      this.logger.warn(
+        "fieldd.index.aggregate_malformed",
+        "The index answered project figures fieldd cannot read",
+        { shape, issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}` },
+      );
+      throw new RpcCallError("UNAVAILABLE", `the agent index answered a malformed ${shape}`, true, {
+        service: "index",
+        state: "malformed",
+      });
+    }
+    this.noteUnknownFields(shape, body, Object.keys(schema.shape));
+    return parsed.data;
+  }
+
   /** QL-D9 — the rosetta project a folder belongs to, or undefined: in a repo,
    * the project holding its git root or its worktree group's root; outside
    * one, the project rooted at exactly the folder. Tried for the folder as
@@ -1506,8 +1758,16 @@ export class IndexService {
    * not JSON at all is an honest UNAVAILABLE {state:"malformed"}, never a raw
    * SyntaxError out of a door. The body comes back UNPARSED — what to make of
    * it is the caller's (`get` casts; `sessionByNativeId` parses). */
-  private async getBody(path: string): Promise<unknown> {
-    const state = this.opts.supervisor?.state();
+  private async getBody(
+    path: string,
+    opts: {
+      /** AR-8b — a status this read answers in its own words (`index.session`'s
+       * 404, an aggregate's 503) before the generic "answered <status>" */
+      onStatus?: (status: number) => RpcCallError | undefined;
+    } = {},
+  ): Promise<unknown> {
+    const supervisor = this.opts.supervisor;
+    const state = supervisor?.state();
     const origin = state?.origin ?? null;
     if (origin === null) {
       throw new RpcCallError("UNAVAILABLE", "the agent index has no origin yet", true, {
@@ -1515,11 +1775,17 @@ export class IndexService {
         state: state?.phase ?? "unconfigured",
       });
     }
+    // AR-8b (RO-1) — every route needs the bearer, read in the same tick as the
+    // origin so the pair is one generation's (a unit seam may stub a supervisor
+    // without credentials: no header, and a daemon that wants one says 401)
+    const credentials =
+      typeof supervisor?.credentials === "function" ? supervisor.credentials() : null;
     let response: Response;
     try {
       response = await this.fetchFn(`${origin}${path}`, {
         signal: AbortSignal.timeout(this.timeoutMs),
         redirect: "error",
+        ...(credentials !== null ? { headers: { authorization: credentials.authorization } } : {}),
       });
     } catch (error) {
       this.logger.warn("fieldd.index.unreachable", "Index daemon did not answer", {
@@ -1546,6 +1812,18 @@ export class IndexService {
       );
     }
     if (!response.ok) {
+      await response.body?.cancel().catch(() => undefined);
+      const own = opts.onStatus?.(response.status);
+      if (own !== undefined) throw own;
+      if (response.status === 401) {
+        // AR-8b — the daemon refused fieldd's own bearer: a generation this
+        // fieldd did not start, or a credential lost across a restart. The
+        // reason header names which, never the credential.
+        this.logger.warn("fieldd.index.unauthorized", "The index daemon refused fieldd's bearer", {
+          route: routeOf(path),
+          reason: response.headers.get("x-rosetta-auth") ?? "unknown",
+        });
+      }
       throw new RpcCallError(
         "UNAVAILABLE",
         `the agent index answered ${response.status} on ${routeOf(path)}`,

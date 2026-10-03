@@ -13,12 +13,14 @@ import {
   readdirSync,
   readFileSync,
   rmSync,
+  statSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
+import { LAYOUT } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ROSETTAD_UNCONFIGURED,
@@ -26,6 +28,7 @@ import {
   type RosettadState,
   RosettadSupervisor,
   type RosettadTimings,
+  rosettadAllowOrigins,
 } from "../src/rosettad-supervisor";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-rosettad.mjs");
@@ -72,6 +75,15 @@ function fakeSpawner(mode: string, extraEnv: Record<string, string> = {}): typeo
     })) as unknown as typeof spawn;
 }
 
+/** AR-8b — where a root's per-start credential files go (LAYOUT's segments,
+ * spelled from the registry like daemon.ts spells them) */
+function authFiles(root: string): { tokenFile: string; grantKeyFile: string } {
+  return {
+    tokenFile: join(root, ...LAYOUT.INDEX_TOKEN_FILE),
+    grantKeyFile: join(root, ...LAYOUT.INDEX_GRANT_KEY_FILE),
+  };
+}
+
 function rig(
   mode: string,
   extra: Partial<ConstructorParameters<typeof RosettadSupervisor>[0]> & { root?: string } = {},
@@ -83,6 +95,7 @@ function rig(
     bin: "/nonexistent/rosettad-stand-in",
     dbPath: join(root, "index", "rosetta.db"),
     announceDir: join(root, "index", "daemons"),
+    ...authFiles(root),
     expectedProtocolVersion: PROTOCOL_VERSION,
     spawnProcess: fakeSpawner(mode),
     timings: T,
@@ -116,6 +129,7 @@ async function orphan(
   bin: string,
   root: string,
   env: Record<string, string> = {},
+  extraArgs: readonly string[] = [],
 ): Promise<{ pid: number; origin: string; announce: string; proc: ChildProcess }> {
   const args = [
     "serve",
@@ -129,6 +143,7 @@ async function orphan(
     join(root, "index", "daemons"),
     "--home",
     join(root, "home"),
+    ...extraArgs,
   ];
   mkdirSync(join(root, "index"), { recursive: true });
   const proc =
@@ -220,6 +235,7 @@ describe("RosettadSupervisor — the index daemon's kill matrix (AR-0 S2)", () =
       bin: join(root, "does-not-exist", "rosettad"),
       dbPath: join(root, "index", "rosetta.db"),
       announceDir: join(root, "index", "daemons"),
+      ...authFiles(root),
       expectedProtocolVersion: PROTOCOL_VERSION,
       timings: T,
     });
@@ -388,6 +404,226 @@ describe("RosettadSupervisor — the index daemon's kill matrix (AR-0 S2)", () =
   });
 });
 
+/** What the supervisor handed one spawn, read AT the spawn — the files exist
+ * then and are gone once the generation is ready. */
+interface Handed {
+  args: string[];
+  tokenFile: string;
+  grantKeyFile: string;
+  token: string;
+  key: Buffer;
+  tokenMode: number;
+  keyMode: number;
+  dirMode: number;
+}
+
+function handingSpawner(mode: string, handed: Handed[]): typeof spawn {
+  return ((_bin: string, args: readonly string[], options: object) => {
+    const value = (flag: string): string => args[args.indexOf(flag) + 1] as string;
+    const tokenFile = value("--token-file");
+    const grantKeyFile = value("--grant-key-file");
+    handed.push({
+      args: [...args],
+      tokenFile,
+      grantKeyFile,
+      token: readFileSync(tokenFile, "latin1"),
+      key: readFileSync(grantKeyFile),
+      tokenMode: statSync(tokenFile).mode & 0o777,
+      keyMode: statSync(grantKeyFile).mode & 0o777,
+      dirMode: statSync(dirname(tokenFile)).mode & 0o777,
+    });
+    return spawn(process.execPath, [FAKE, ...args], {
+      ...options,
+      env: { ...process.env, FAKE_ROSETTAD_MODE: mode },
+    });
+  }) as unknown as typeof spawn;
+}
+
+const statusWith = async (
+  origin: string,
+  authorization?: string,
+): Promise<{ status: number; reason: string | null; protocol: string | null }> => {
+  const response = await fetch(
+    `${origin}/api/status`,
+    authorization === undefined ? {} : { headers: { authorization } },
+  );
+  await response.body?.cancel();
+  return {
+    status: response.status,
+    reason: response.headers.get("x-rosetta-auth"),
+    protocol: response.headers.get("x-rosetta-protocol-version"),
+  };
+};
+
+// AR-8b (RO-1, RO-10; rosetta docs/AUTH.md) — every generation behind a
+// credential: a fresh bearer and grant key per start, owner-only files the
+// daemon reads once and fieldd removes the moment it is ready, the pair held in
+// memory beside the origin and never in the state; a daemon that does not
+// enforce access, or does not know the flags, is the wrong binary.
+describe("RosettadSupervisor — every generation behind a credential (AR-8b)", () => {
+  it("hands each start a fresh bearer and grant key: owner-only files and the three flags, gone once ready; credentials() pairs with the origin", async () => {
+    const handed: Handed[] = [];
+    const { sup, root } = rig("ok", {
+      spawnProcess: handingSpawner("ok", handed),
+      allowOrigins: ["file://", "vibefield-app://shell", "http://localhost:5173"],
+    });
+    expect(sup.credentials()).toBeNull();
+    const origin = (await sup.start()) as string;
+    expect(origin).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(handed).toHaveLength(1);
+    const [first] = handed as [Handed];
+    // where LAYOUT says, both flags, and only the origins rosetta accepts
+    expect(first.tokenFile).toBe(join(root, ...LAYOUT.INDEX_TOKEN_FILE));
+    expect(first.grantKeyFile).toBe(join(root, ...LAYOUT.INDEX_GRANT_KEY_FILE));
+    const flagValues = (flag: string) =>
+      first.args.flatMap((arg, at) => (arg === flag ? [first.args[at + 1]] : []));
+    expect(flagValues("--token-file")).toEqual([first.tokenFile]);
+    expect(flagValues("--grant-key-file")).toEqual([first.grantKeyFile]);
+    expect(flagValues("--allow-origin")).toEqual([
+      "vibefield-app://shell",
+      "http://localhost:5173",
+    ]);
+    // AUTH.md §4's bounds and modes, as rosetta reads them
+    expect(first.token).toMatch(/^[\x21-\x7e]{32,1024}$/);
+    expect(first.key.length).toBeGreaterThanOrEqual(32);
+    expect(first.tokenMode).toBe(0o600);
+    expect(first.keyMode).toBe(0o600);
+    expect(first.dirMode).toBe(0o700);
+    // read once before it bound: gone once it is ready (AUTH.md §7)
+    expect(existsSync(first.tokenFile)).toBe(false);
+    expect(existsSync(first.grantKeyFile)).toBe(false);
+    // the modes it reported, never the secrets
+    expect(sup.state().auth).toEqual({
+      bearer: true,
+      grants: true,
+      origins: ["vibefield-app://shell", "http://localhost:5173"],
+    });
+    const credentials = sup.credentials();
+    expect(credentials?.authorization).toBe(`Bearer ${first.token}`);
+    expect(Buffer.from(credentials?.grantKey ?? []).equals(first.key)).toBe(true);
+    // a copy: a holder that scribbles on it changes nothing
+    credentials?.grantKey.fill(0);
+    expect(Buffer.from(sup.credentials()?.grantKey ?? []).equals(first.key)).toBe(true);
+    // the daemon wants the bearer, and the bearer is what fieldd holds
+    expect(await statusWith(origin)).toMatchObject({ status: 401, reason: "missing" });
+    expect(await statusWith(origin, credentials?.authorization)).toMatchObject({ status: 200 });
+    // and none of it reaches the state, the projection or the log-bound detail
+    const serialized = JSON.stringify([sup.state(), sup.health()]);
+    expect(serialized).not.toContain(first.token);
+    expect(serialized).not.toContain(first.key.toString("base64url"));
+    expect(Object.keys(sup.health()).sort()).toEqual(["detail", "phase", "pid", "protocolVersion"]);
+    await sup.stop();
+    expect(sup.credentials()).toBeNull();
+    expect(existsSync(first.tokenFile)).toBe(false);
+  });
+
+  it("a restart mints both again — the old bearer opens nothing on the new generation — and no phase but ready holds credentials", async () => {
+    const handed: Handed[] = [];
+    const { sup } = rig("ok", { spawnProcess: handingSpawner("ok", handed) });
+    const held: Array<{ phase: RosettadPhase; credentials: boolean; origin: boolean }> = [];
+    sup.on("transition", (state: RosettadState) =>
+      held.push({
+        phase: state.phase,
+        credentials: sup.credentials() !== null,
+        origin: state.origin !== null,
+      }),
+    );
+    await sup.start();
+    const before = sup.credentials()?.authorization as string;
+    await sup.requestRestart();
+    await until(() => sup.state().phase === "ready", 4_000, "the second generation ready");
+    expect(handed).toHaveLength(2);
+    const [first, second] = handed as [Handed, Handed];
+    expect(second.token).not.toBe(first.token);
+    expect(second.key.equals(first.key)).toBe(false);
+    expect(sup.credentials()?.authorization).toBe(`Bearer ${second.token}`);
+    const origin = sup.state().origin as string;
+    expect(await statusWith(origin, before)).toMatchObject({ status: 401, reason: "bad-token" });
+    expect(await statusWith(origin, sup.credentials()?.authorization)).toMatchObject({
+      status: 200,
+    });
+    // the credentials go wherever the origin goes, at every transition
+    expect(held.some((h) => h.phase === "restarting")).toBe(true);
+    for (const h of held) expect(h.credentials, h.phase).toBe(h.origin && h.phase === "ready");
+  });
+
+  it("a daemon whose ready line says nothing about access is the wrong binary: TERMINAL, never retried, no credentials", async () => {
+    const handed: Handed[] = [];
+    const { sup, phases } = rig("no-auth", { spawnProcess: handingSpawner("no-auth", handed) });
+    expect(await sup.start()).toBeNull();
+    await until(() => sup.state().phase === "failed", 3_000, "failed");
+    expect(sup.state().detail).toMatch(/without access control/);
+    await new Promise((resolve) => setTimeout(resolve, 300));
+    expect(sup.state().phase).toBe("failed");
+    expect(handed).toHaveLength(1);
+    expect(phases()).not.toContain("ready");
+    expect(phases()).not.toContain("restarting");
+    expect(sup.credentials()).toBeNull();
+    expect(existsSync(handed[0]?.tokenFile as string)).toBe(false);
+  });
+
+  it("an older binary that does not know --token-file is TERMINAL too, however its exit races its words", async () => {
+    const handed: Handed[] = [];
+    const { sup, phases } = rig("old-binary", {
+      spawnProcess: handingSpawner("old-binary", handed),
+    });
+    expect(await sup.start()).toBeNull();
+    await until(
+      () =>
+        sup.state().phase === "failed" &&
+        /does not know --token-file/.test(sup.state().detail ?? ""),
+      4_000,
+      "failed, naming the flag",
+    );
+    // the exit may overtake the line that says why (one retry can slip out);
+    // the answer settles on the honest terminal one and stays there
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    expect(sup.state().phase).toBe("failed");
+    expect(sup.state().detail).toMatch(/wrong binary/);
+    expect(handed.length).toBeLessThanOrEqual(2);
+    expect(phases().slice(phases().lastIndexOf("failed") + 1)).toEqual([]);
+    expect(sup.credentials()).toBeNull();
+  });
+
+  it("passes rosettad only the origins it accepts at start — a refused one would take the index down", () => {
+    expect(
+      rosettadAllowOrigins([
+        "file://",
+        "null",
+        "*",
+        "",
+        "VibeField-App://Shell",
+        "vibefield-app://shell",
+        "http://localhost:5173",
+        "https://x.test/path",
+        "https://user@x.test",
+        "https://*.x.test",
+        "1http://x",
+      ]),
+    ).toEqual(["vibefield-app://shell", "http://localhost:5173"]);
+  });
+
+  it("an orphan a credentialed fieldd left behind is still identified — its 401 carries the protocol header — and put down", async () => {
+    const root = tmp();
+    const tokenFile = join(root, "orphan.token");
+    writeFileSync(tokenFile, "x".repeat(40), { mode: 0o600 });
+    const left = await orphan(FAKE, root, { FAKE_ROSETTAD_MODE: "ok" }, [
+      "--token-file",
+      tokenFile,
+    ]);
+    const probe = await statusWith(left.origin);
+    expect(probe).toMatchObject({
+      status: 401,
+      reason: "missing",
+      protocol: String(PROTOCOL_VERSION),
+    });
+    const { sup } = rig("ok", { root });
+    expect(await sup.start()).toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+    expect(alive(left.pid)).toBe(false);
+    expect(sup.state().pid).not.toBe(left.pid);
+  });
+});
+
 // The live rows: the REAL rosettad, opt-in. `pnpm siblings:build` then
 // FIELDD_ROSETTAD_BIN=$(node scripts/siblings.mjs bin) \
 //   pnpm --filter @vibefield/fieldd test -- rosettad-supervisor
@@ -404,6 +640,7 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
         // an EMPTY home: the daemon discovers no runtimes and serves a bare
         // projection — the row proves the seam, not the indexing
         home: join(root, "home"),
+        ...authFiles(root),
         expectedProtocolVersion: PROTOCOL_VERSION,
         timings: { STARTUP_TIMEOUT_MS: 30_000 },
       });
@@ -420,6 +657,46 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
       await sup.stop();
       expect(alive(pid)).toBe(false);
       expect(existsSync(join(root, "index", "daemons", `${pid}.json`))).toBe(false);
+    });
+
+    it("AR-8b: the pin's rosettad comes up behind the three flags — its ready line says so, the bearer opens it, nothing else does", async () => {
+      const root = tmp();
+      const sup = new RosettadSupervisor({
+        bin: REAL_BIN as string,
+        dbPath: join(root, "index", "rosetta.db"),
+        announceDir: join(root, "index", "daemons"),
+        home: join(root, "home"),
+        ...authFiles(root),
+        allowOrigins: ["vibefield-app://shell", "file://"],
+        expectedProtocolVersion: PROTOCOL_VERSION,
+        timings: { STARTUP_TIMEOUT_MS: 30_000 },
+      });
+      sups.push(sup);
+      const origin = await sup.start();
+      expect(origin, sup.state().detail ?? "").toMatch(/^http:\/\/127\.0\.0\.1:\d+$/);
+      expect(sup.state().auth).toEqual({
+        bearer: true,
+        grants: true,
+        origins: ["vibefield-app://shell"],
+      });
+      expect(existsSync(join(root, ...LAYOUT.INDEX_TOKEN_FILE))).toBe(false);
+      expect(existsSync(join(root, ...LAYOUT.INDEX_GRANT_KEY_FILE))).toBe(false);
+      const bare = await statusWith(origin as string);
+      expect(bare).toMatchObject({
+        status: 401,
+        reason: "missing",
+        protocol: String(PROTOCOL_VERSION),
+      });
+      expect(
+        await statusWith(origin as string, "Bearer not-the-token-not-the-token-xx"),
+      ).toMatchObject({
+        status: 401,
+        reason: "bad-token",
+      });
+      expect(await statusWith(origin as string, sup.credentials()?.authorization)).toMatchObject({
+        status: 200,
+      });
+      await sup.stop();
     });
 
     it("the projection lock is real (the control): a second rosettad over a live projection exits on it, naming the owner", async () => {
@@ -460,6 +737,7 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
         dbPath: join(root, "index", "rosetta.db"),
         announceDir: join(root, "index", "daemons"),
         home: join(root, "home"),
+        ...authFiles(root),
         expectedProtocolVersion: PROTOCOL_VERSION,
         timings: { STARTUP_TIMEOUT_MS: 30_000 },
       });

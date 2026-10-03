@@ -1802,13 +1802,37 @@
   --addr 127.0.0.1:0 --json \
   --announce --announce-dir &lt;user root&gt;/index/daemons \
   --home &lt;the OS user's home&gt; \
-  --enroll &lt;user root&gt;/index/enrollment.json</code></pre>
+  --enroll &lt;user root&gt;/index/enrollment.json \
+  --token-file &lt;user root&gt;/index/auth/token \
+  --grant-key-file &lt;user root&gt;/index/auth/grant.key \
+  --allow-origin vibefield-app://shell</code></pre>
             <p class="section-note">
               Four of those flags are the seam. <code>--addr 127.0.0.1:0</code> and <code>--json</code>
               make the origin ephemeral and the readiness structured; <code>--announce-dir</code> points
               the daemon at a fieldd-private directory rather than rosetta's shared one;
               <code>--home</code> is the discovery scan root; and <code>--enroll</code> is the consent
               record, written before the spawn.
+            </p>
+            <p class="section-note">
+              <strong>Update 2026-10-03 (AR-8b — RO-1 and RO-10 at the pin, rosetta
+              <code>ee6724e</code>).</strong> Three more flags close the daemon behind a credential
+              (rosetta <code>docs/AUTH.md</code>). Before every start the supervisor mints a fresh bearer
+              (32 random bytes, base64url) and a fresh 32-byte grant key and writes them owner-only —
+              <code>0600</code> files in a <code>0700</code> directory, <code>users/&lt;fuid&gt;/index/auth/</code>,
+              <code>token</code> and <code>grant.key</code> (<code>LAYOUT.INDEX_AUTH_DIR</code>,
+              <code>INDEX_TOKEN_FILE</code>, <code>INDEX_GRANT_KEY_FILE</code>). The daemon reads both
+              once, before it binds; fieldd removes both the moment it says ready, and holds the pair in
+              memory for the generation's life — never in <code>RosettadState</code>, never in health,
+              never in an agent's environment. A restart mints both again, which revokes every grant the
+              previous generation honoured. <code>--allow-origin</code> takes the renderer origins
+              fieldd's own door admits, filtered to what rosetta accepts at start
+              (<code>vibefield-app://shell</code>; dev's loopback origins are admitted already, and
+              <code>file://</code> would be refused, so it is never passed). The ready line says
+              <code>auth: {bearer, grants, origins}</code>; a daemon whose line does not say both — or
+              that answers <code>unknown flag --token-file</code> — is the wrong binary, refused
+              terminally like a protocol mismatch. Every dial fieldd makes, the catalog's
+              <code>/ws/meta</code> included, carries <code>Authorization: Bearer</code>.
+              <span class="badge tone-built">Built</span>
             </p>
             <h3>Consent by construction</h3>
             <p class="section-note">
@@ -1859,6 +1883,13 @@
                   and protocol version. The announce file goes to a fieldd-private directory, never
                   rosetta's shared one.
                 </p>
+                <p>
+                  <em>Corrected 2026-10-03 (AR-8b):</em> rosettad authenticates now, so the secret is
+                  the bearer, which never leaves fieldd. The origin reaches one client, a window on this
+                  desktop, and only inside a ticket beside a per-session grant
+                  (<code>index.openTicket</code>); the origin alone opens nothing — every route answers
+                  <code>401</code> without a credential.
+                </p>
               </div>
               <div class="contract-row">
                 <strong>Shown, never taken back: an Agent Profile's folders</strong>
@@ -1888,6 +1919,22 @@
               <code>index.*</code> doors, adapted to puppeteer's <code>HistoryPort</code>.
               <span class="badge tone-designed">Designed</span>
             </div>
+            <h3>The room's two lanes (AR-8b)</h3>
+            <p class="section-note">
+              The History room (<code>draft/thinking-ar-history-room.md</code>, AR-D36…D43) reads through
+              two lanes, and fieldd's half of both is built. <strong>Lists and figures</strong> ride
+              fieldd's doors as control-rate JSON: <code>index.projects</code>, <code>index.sessions</code>,
+              <code>index.search</code>, <code>index.recent</code>, and since AR-8b
+              <code>index.session</code> (a session's header), <code>index.project</code> (a project's
+              heatmap, usage and contribution in one answer — rosetta's aggregates are bearer-only, so a
+              grant could never read them) and <code>index.projectDay</code>. <strong>Bodies</strong> —
+              one session's transcript, its pages and its assets — ride the ticket:
+              <code>index.openTicket</code> hands a window the loopback pair and an RO-10 grant for that
+              session, ten minutes ahead, and the window's own rosetta client dials rosettad with it, so
+              no transcript byte crosses fieldd (EL2). The phone's and another desktop's tickets wait on
+              the tailnet set (SP-6, DS-7) and answer <code>direct-plane-unbuilt</code> meanwhile; the
+              room and its mount are AR-8a and AR-8c. <span class="badge tone-built">Built</span>
+            </p>
           </section>
 
           <section id="domains">

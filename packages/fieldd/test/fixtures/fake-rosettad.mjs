@@ -12,6 +12,8 @@
 //   silent             never says ready
 //   crash-after-ready  ready, then a line on stderr and exit 3 shortly after
 //   crash-on-start     a line on stderr and exit 2 before saying anything
+//   no-auth            ready, but the line says nothing about access (pre-RO-1)
+//   old-binary         `rosettad: unknown flag --token-file`, exit 2 (pre-RO-1)
 // The supervisor never sees this file's name — it spawns whatever `bin` it was
 // given, so the test passes `process.execPath` with this script as `bin` via
 // the spawnProcess seam.
@@ -83,6 +85,32 @@
 // browser Origin that is not loopback is refused 403, as the real guard does.
 // Bare `/api/sessions` answers the ROOTS (no parent) newest first, 100 by
 // default, and every list clamps its limit to rosetta's 1..1,000.
+//
+// AR-8b — ACCESS CONTROL, as the pin's daemon has it (rosetta docs/AUTH.md,
+// `ee6724e`): `--token-file F` requires a credential on every route and every
+// upgrade; `--grant-key-file K` (only beside a token) admits a grant on the
+// session routes and the assets — never the lists, search, `/ws/meta` or the
+// aggregates; `--allow-origin O` adds browser origins. The files are read ONCE
+// before binding and refused (stderr + exit 2) the way rosetta refuses them: a
+// token outside 32..1,024 visible ASCII, a key under 32 bytes, a key without a
+// token, any group/other permission bit. The ready line carries `auth:
+// {bearer, grants, origins}`; with no flags the daemon is open, as before
+// (the catalog's own rows spawn it that way). A refusal is a 401 with
+// `x-rosetta-auth: <reason>` beside the protocol header, which is how a test
+// tells "wrong credential" from "wrong daemon"; FAKE_ROSETTAD_AUTH_LOG names a
+// file that gets one line per decision (`<METHOD> <path> <credential> <verdict>`,
+// never the credential itself). Grants verify with `@rosetta/protocol/grants`.
+// Modes: `no-auth` (a ready line with no `auth` — a daemon from before RO-1),
+// `old-binary` (`rosettad: unknown flag --token-file` and exit 2, as an older
+// binary answers the flag).
+//
+// AR-8b — the project aggregates `index.project` and `index.projectDay` fold:
+// `/api/projects/{id}/heatmap|usage|contribution` and `…/usage/day?day=…`,
+// scripted by FAKE_ROSETTAD_AGGREGATES (a JSON file re-read per request:
+// `{heatmap, usage, contribution, day_usage}` bodies, each optional with a
+// golden-shaped default, and `status` — e.g. 503 — to answer every aggregate
+// with). And `/ws/sessions/{id}`: a session socket that opens (a `hello` frame,
+// then a `snapshot`) once the upgrade passes the Origin rule and the credential.
 import {
   appendFileSync,
   existsSync,
@@ -94,6 +122,7 @@ import {
 } from "node:fs";
 import { createServer } from "node:http";
 import { join } from "node:path";
+import { verifyGrant } from "@rosetta/protocol/grants";
 import { PROTOCOL_VERSION } from "@rosetta/protocol/protocol-version";
 
 const args = process.argv.slice(2);
@@ -115,6 +144,153 @@ if (mode === "crash-on-start") {
   process.stderr.write("fake rosettad: refusing to start (scripted)\n");
   process.exit(2);
 }
+
+// AR-8b — the access flags, read once before binding (AUTH.md §4)
+const tokenPath = flag("--token-file");
+const grantKeyPath = flag("--grant-key-file");
+const allowOrigins = args.flatMap((arg, at) =>
+  arg === "--allow-origin" && args[at + 1] !== undefined ? [args[at + 1].toLowerCase()] : [],
+);
+if (mode === "old-binary" && tokenPath !== undefined) {
+  // an older daemon's own words for a flag it does not know (main.rs)
+  process.stderr.write("rosettad: unknown flag --token-file\n");
+  process.exit(2);
+}
+/** rosetta's file rule: a regular file, at most 4 KiB, owner-only on Unix */
+const readSecretFile = (path, what) => {
+  let stat;
+  try {
+    stat = statSync(path);
+  } catch (error) {
+    process.stderr.write(`rosettad: reading ${what} ${path}: ${error.message}\n`);
+    process.exit(2);
+  }
+  if (!stat.isFile() || stat.size > 4096) {
+    process.stderr.write(`rosettad: ${what} ${path} is not a regular file of at most 4 KiB\n`);
+    process.exit(2);
+  }
+  if (process.platform !== "win32" && (stat.mode & 0o077) !== 0) {
+    process.stderr.write(
+      `rosettad: ${what} ${path} is readable by others (mode ${(stat.mode & 0o777).toString(8)}); chmod 600 it\n`,
+    );
+    process.exit(2);
+  }
+  return readFileSync(path);
+};
+let bearer = null;
+let grantKey = null;
+if (tokenPath !== undefined) {
+  const token = readSecretFile(tokenPath, "--token-file").toString("latin1").trim();
+  if (!/^[\x21-\x7e]{32,1024}$/.test(token)) {
+    process.stderr.write("rosettad: --token-file must hold 32 to 1024 visible ASCII characters\n");
+    process.exit(2);
+  }
+  bearer = token;
+}
+if (grantKeyPath !== undefined) {
+  if (bearer === null) {
+    process.stderr.write("rosettad: a grant key needs a bearer token\n");
+    process.exit(2);
+  }
+  const key = readSecretFile(grantKeyPath, "--grant-key-file");
+  if (key.length < 32) {
+    process.stderr.write(
+      `rosettad: the grant key is ${key.length} bytes; at least 32 are required\n`,
+    );
+    process.exit(2);
+  }
+  grantKey = new Uint8Array(key);
+}
+/** AUTH.md §5.4 — what a grant opens, by route: the session's own routes (the
+ * id the grant's `sid`) and the assets; everything else needs the bearer */
+const grantRoute = (method, path) => {
+  if (method !== "GET" && method !== "HEAD") return null;
+  const session = /^\/(?:ws\/sessions|ws\/collaboration|api\/sessions)\/([^/?]+)(?:\/[^?]*)?$/.exec(
+    path,
+  );
+  if (session !== null) {
+    // `/api/sessions/{id}/timeline/{t}/read/{n}` reads the disk NOW: never a grant's
+    if (/\/read\/[^/]+$/.test(path)) return null;
+    return { sid: decodeURIComponent(session[1]) };
+  }
+  if (/^\/api\/assets\/[^/?]+$/.test(path)) return { sid: null };
+  return null;
+};
+const authLog = (line) => {
+  const log = process.env.FAKE_ROSETTAD_AUTH_LOG;
+  if (log === undefined) return;
+  try {
+    appendFileSync(log, `${line}\n`);
+  } catch {
+    // a decision log that cannot be written is not worth a refusal
+  }
+};
+/** One request's credential decision: null = admitted, else the 401 reason.
+ * `carrier` is the Authorization header, else the WebSocket subprotocol pair. */
+const credentialRefusal = (method, rawUrl, headers) => {
+  const path = (rawUrl ?? "/").split("?")[0];
+  if (bearer === null) return null;
+  let scheme = null;
+  let value = null;
+  const authorization = headers.authorization;
+  if (typeof authorization === "string" && authorization.trim() !== "") {
+    const match = /^(\S+)\s+(\S+)$/.exec(authorization.trim());
+    if (match === null) return "malformed";
+    scheme = match[1].toLowerCase();
+    value = match[2];
+  } else if (typeof headers["sec-websocket-protocol"] === "string") {
+    const offered = headers["sec-websocket-protocol"].split(",").map((p) => p.trim());
+    const entries = offered.filter((p) => p.startsWith("rosetta."));
+    if (entries.length > 1) return "malformed";
+    if (entries.length === 1) {
+      if (entries[0].startsWith("rosetta.bearer.")) {
+        scheme = "bearer";
+        value = Buffer.from(entries[0].slice("rosetta.bearer.".length), "base64url").toString();
+      } else if (entries[0].startsWith("rosetta.grant.")) {
+        scheme = "rosetta-grant";
+        value = entries[0].slice("rosetta.grant.".length);
+      } else return "malformed";
+    }
+  }
+  const decide = (credential, verdict) => {
+    authLog(`${method} ${path} ${credential} ${verdict}`);
+    return verdict === "ok" ? null : verdict;
+  };
+  if (scheme === null) return decide("none", "missing");
+  if (scheme === "bearer") return decide("bearer", value === bearer ? "ok" : "bad-token");
+  if (scheme !== "rosetta-grant") return decide("unknown", "malformed");
+  if (grantKey === null) return decide("grant", "grants-disabled");
+  const route = grantRoute(method, path);
+  if (route === null) return decide("grant", "wrong-route");
+  const verdict = verifyGrant(grantKey, value, Date.now());
+  if (!verdict.ok) return decide("grant", verdict.reason);
+  if (route.sid !== null && verdict.claims.sid !== route.sid)
+    return decide("grant", "wrong-session");
+  if (!verdict.claims.scope.includes("read")) return decide("grant", "wrong-scope");
+  return decide("grant", "ok");
+};
+/** the 401 rosetta answers (AUTH.md §6) */
+const refuse = (res, reason) => {
+  res.statusCode = 401;
+  res.setHeader("x-rosetta-protocol-version", String(protocol));
+  res.setHeader("x-rosetta-auth", reason);
+  res.setHeader(
+    "www-authenticate",
+    grantKey !== null
+      ? 'Bearer realm="rosetta", Rosetta-Grant realm="rosetta"'
+      : 'Bearer realm="rosetta"',
+  );
+  res.setHeader("cache-control", "no-store");
+  res.setHeader("content-type", "text/plain");
+  res.end(`rosetta: unauthorized (${reason})`);
+};
+/** the Origin rule (AUTH.md §2): loopback any port, the app shells, the extras */
+const originAllowed = (origin) =>
+  origin === undefined ||
+  /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin) ||
+  origin === "tauri://localhost" ||
+  origin === "rosetta://app" ||
+  allowOrigins.includes(origin.toLowerCase());
 
 // --enroll: rosetta's refusals, mirrored (a refused file never binds)
 const INSTALLED = new Set(["claude-code"]);
@@ -306,7 +482,87 @@ if (mode === "silent") {
     ];
   };
   const server = createServer((req, res) => {
+    // AR-8b — the credential first, on every route (CORS preflights aside,
+    // which no native client sends): a 401 still carries the protocol header
+    const refused = credentialRefusal(req.method ?? "GET", req.url, req.headers);
+    if (refused !== null) {
+      refuse(res, refused);
+      return;
+    }
     const rows = runtimeRows();
+    // AR-8b — the project aggregates (bearer-only upstream)
+    const aggregate =
+      req.url === undefined
+        ? null
+        : /^\/api\/projects\/([^/?]+)\/(heatmap|usage|contribution|usage\/day)(?:\?.*)?$/.exec(
+            req.url,
+          );
+    if (aggregate !== null) {
+      logRequest(req.url);
+      const script = scripted("FAKE_ROSETTAD_AGGREGATES", {});
+      const source = script !== null && typeof script === "object" ? script : {};
+      if (typeof source.status === "number" && source.status !== 200) {
+        res.statusCode = source.status;
+        res.setHeader("x-rosetta-protocol-version", String(protocol));
+        res.setHeader("content-type", "application/json");
+        res.end(JSON.stringify({ code: "not_ready", message: "scripted" }));
+        return;
+      }
+      const figures = {
+        tokens: 123,
+        cost_micro_usd: 4210,
+        billed_micro_usd: null,
+        unpriced_tokens: 23,
+        unrecorded_output: 0,
+        reported_cost_adjustment_micro_usd: 0,
+      };
+      const url = new URL(req.url, "http://127.0.0.1");
+      const route = aggregate[2];
+      if (route === "heatmap") {
+        json(res, source.heatmap ?? { days: [{ day: "2026-08-26", ...figures }] });
+      } else if (route === "usage") {
+        json(
+          res,
+          source.usage ?? {
+            models: [{ day: "2026-08-26", model: "claude-opus-5", ...figures }],
+            hours: [{ hour: 15, ...figures }],
+          },
+        );
+      } else if (route === "contribution") {
+        json(
+          res,
+          source.contribution ?? {
+            rows: [
+              {
+                session_id: "s1",
+                project_id: decodeURIComponent(aggregate[1]),
+                commits: 1,
+                edits: 2,
+                loc: 30,
+                messages: 41,
+                ...figures,
+              },
+            ],
+          },
+        );
+      } else {
+        const day = url.searchParams.get("day") ?? "";
+        if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) {
+          res.statusCode = 400;
+          res.setHeader("x-rosetta-protocol-version", String(protocol));
+          res.end(JSON.stringify({ code: "bad_request", message: "Expected a YYYY-MM-DD date" }));
+          return;
+        }
+        json(
+          res,
+          source.day_usage ?? {
+            day,
+            models: [{ hour: 16, model: "claude-opus-5-5", tokens: 123 }],
+          },
+        );
+      }
+      return;
+    }
     if (req.url === "/api/status") {
       const search = searchScript();
       json(res, {
@@ -483,7 +739,12 @@ if (mode === "silent") {
   const metaServer = async () => {
     if (wss === null) {
       const { WebSocketServer } = await import("ws");
-      wss = new WebSocketServer({ noServer: true });
+      wss = new WebSocketServer({
+        noServer: true,
+        // AR-8b — a credentialed browser upgrade offers `rosetta` beside its
+        // credential entry; the daemon selects `rosetta`, never the credential
+        handleProtocols: (protocols) => (protocols.has("rosetta") ? "rosetta" : false),
+      });
       wss.on("headers", (headers) => headers.push(`x-rosetta-protocol-version: ${protocol}`));
     }
     return wss;
@@ -545,19 +806,44 @@ if (mode === "silent") {
     control = { ...next };
   }, 40).unref();
   server.on("upgrade", (req, socket, head) => {
-    if (req.url !== "/ws/meta") {
+    const sessionSocket = /^\/ws\/sessions\/([^/?]+)(?:\?.*)?$/.exec(req.url ?? "");
+    if (req.url !== "/ws/meta" && sessionSocket === null) {
       socket.destroy();
       return;
     }
     // rosetta's `require_local_origin`: a native client sends no Origin; a
-    // browser's must be loopback
+    // browser's must be loopback — or, since RO-1, one `--allow-origin` named
     const origin = req.headers.origin;
-    if (
-      origin !== undefined &&
-      !/^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$/.test(origin)
-    ) {
+    if (!originAllowed(origin)) {
       socket.write("HTTP/1.1 403 Forbidden\r\n\r\n");
       socket.destroy();
+      return;
+    }
+    // AR-8b — the credential, checked at the upgrade (an open socket is not
+    // re-checked: AUTH.md §3)
+    const refusedUpgrade = credentialRefusal("GET", req.url, req.headers);
+    if (refusedUpgrade !== null) {
+      socket.write(
+        `HTTP/1.1 401 Unauthorized\r\nx-rosetta-protocol-version: ${protocol}\r\nx-rosetta-auth: ${refusedUpgrade}\r\ncontent-length: 0\r\n\r\n`,
+      );
+      socket.destroy();
+      return;
+    }
+    if (sessionSocket !== null) {
+      // the session stream, in miniature: a hello, then the snapshot of the
+      // session's row as the scripted index holds it (null when it holds none)
+      const id = decodeURIComponent(sessionSocket[1]);
+      void metaServer().then((sessions) =>
+        sessions.handleUpgrade(req, socket, head, (ws) => {
+          ws.send(JSON.stringify({ frame: "hello", protocol_version: protocol, stamp: null }));
+          ws.send(
+            JSON.stringify({
+              frame: "snapshot",
+              session: sessionRows().find((row) => row.id === id) ?? null,
+            }),
+          );
+        }),
+      );
       return;
     }
     // the stream is a socket, not a READ: it never enters the request log
@@ -599,6 +885,11 @@ if (mode === "silent") {
       event: "ready",
       origin,
       protocol_version: mode === "wrong-protocol" ? 1 : protocol,
+      // AR-8b — which modes are on, never the secrets; a daemon from before
+      // RO-1 (`no-auth`) says nothing about access at all
+      ...(mode === "no-auth"
+        ? {}
+        : { auth: { bearer: bearer !== null, grants: grantKey !== null, origins: allowOrigins } }),
       ...(announce !== null ? { announce } : {}),
     };
     process.stdout.write(`${JSON.stringify(ready)}\n`);

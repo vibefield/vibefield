@@ -729,13 +729,16 @@ describe("the doors' posture", () => {
 // ground-truth transcript, seeded into an empty home so nothing of the
 // developer's is ever read.
 const REAL_BIN = process.env["FIELDD_ROSETTAD_BIN"];
+// AR-8b (2026-10-03): read from `../rosetta-pin`, the checkout dedicated to the
+// pin since W-D10 — this said `../rosetta` (James's working tree, nothing this
+// repo reads), so the row skipped in every lane and read his tree in his own.
 const GROUNDTRUTH = join(
   dirname(fileURLToPath(import.meta.url)),
   "..",
   "..",
   "..",
   "..",
-  "rosetta",
+  "rosetta-pin",
   "groundtruth",
   "claude-code",
   "fixtures",

@@ -67,10 +67,13 @@ import {
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
   IndexEnrollParams,
+  IndexProjectDayParams,
+  IndexProjectParams,
   IndexProjectsParams,
   IndexRecentParams,
   IndexRetireParams,
   IndexSearchParams,
+  IndexSessionParams,
   IndexSessionsParams,
   isAgentResumeRun,
   KvDeleteParams,
@@ -177,7 +180,7 @@ import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
 import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
-import { INDEX_SERVE_ID, IndexServeDriver, indexOpenTicket } from "./index-serve";
+import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } from "./index-serve";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import { DocHoldersService, LibraryDocService, systemAccount, systemDocId } from "./library-doc";
@@ -297,8 +300,16 @@ export interface FielddConfig {
    * verifies no credential (RO-1/RO-10 unmerged) — a serve here would put every
    * transcript one same-login node away. DS-7's pin move, which starts rosettad
    * with RO-1's bearer and RO-10's grant key, turns it on by a code edit. Tests
-   * set it to witness the driver. */
+   * set it to witness the driver.
+   * *AR-8b (2026-10-03): that edit is made. The direct plane — this serve and
+   * `index.openTicket`'s mint — is ON unless this says `false`, and stands only
+   * on a generation whose ready line says it enforces a bearer and verifies
+   * grants (`indexPlaneLive`). Still no environment variable reaches it; `false`
+   * is a code seam whose answer is `direct-plane-off`, never a silent blank.* */
   indexDirectPlane?: boolean;
+  /** AR-8b test seam: the life of a minted index grant (production:
+   * `INDEX_TICKET.TTL_MS`), so a row can watch one expire. */
+  indexTicketTtlMs?: number;
   /** DS-6 test seams: the history catalog's cadences (the epoch, the
    * re-snapshot and batch windows, the reconnect backoff, the journal and page
    * budgets) and the digest heartbeat its peer subscribers hear. Production
@@ -444,7 +455,9 @@ export interface FielddHealth {
    * reason. The PROJECTION only: the loopback origin stays inside fieldd
    * (EL7 — rosettad is unauthenticated and this stream is scope-null). The
    * index doors (AR-1) answer UNAVAILABLE {service:"index", state} from the
-   * same phase. */
+   * same phase. *Corrected 2026-10-03 (AR-8b): rosettad is authenticated now
+   * (a bearer per start, rosettad-supervisor.ts); the projection still carries
+   * neither the origin nor any credential.* */
   rosettad: RosettadHealth;
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
@@ -678,6 +691,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // the OS user's own home, explicitly (topology R7: never a persona root)
           home: config.rosettadHome ?? homedir(),
           enrollFile: enrollment.path(),
+          // AR-8b (RO-1, RO-10) — every generation behind a bearer, with a grant
+          // key, both per start under this user's index directory (owner-only,
+          // removed once the daemon is ready); the renderer's origins are the
+          // ones this daemon's own door admits — one allow-list, one authority
+          tokenFile: join(config.dataDir, ...LAYOUT.INDEX_TOKEN_FILE),
+          grantKeyFile: join(config.dataDir, ...LAYOUT.INDEX_GRANT_KEY_FILE),
+          allowOrigins: config.allowedOrigins ?? [],
           ...(config.rosettadSpawn !== undefined ? { spawnProcess: config.rosettadSpawn } : {}),
           logger: logger.child({ component: "rosettad_supervisor" }),
         });
@@ -687,6 +707,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
     ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
     logger: logger.child({ component: "index_service" }),
+  });
+  // AR-8b — `index.openTicket`'s minter (index-serve.ts): the direct plane is
+  // the owner's word (ON unless config says false) standing on a generation
+  // that enforces access; the device id is read at each mint — the device
+  // service is bound further down, before any door can be called.
+  const indexTickets = new IndexTicketMinter({
+    enabled: config.indexDirectPlane !== false,
+    supervisor: rosettad,
+    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    ...(config.indexTicketTtlMs !== undefined ? { ttlMs: config.indexTicketTtlMs } : {}),
   });
   // DS-6 — the history catalog's source (index-catalog.ts): rosetta's topology
   // stream followed into rows. Constructed beside the index service, STARTED
@@ -1747,9 +1777,62 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         limit: tailnetRowLimit(ctx.principal, parsed.data.limit, INDEX_RECENT_DEFAULT_LIMIT),
       });
     });
-    // SP-3 — the direct plane's door, declared (methods.ts; index-serve.ts):
-    // checks the ask, then says honestly that the grant half is DS-7's
-    api.register("index.openTicket", (_ctx, params) => indexOpenTicket(params));
+    // AR-8b (thinking-ar-history-room.md §3) — the History room's reads:
+    // one session's header row, a project's panels folded into one answer, one
+    // day of a project's hours. `federate` (a foreign `device` forwards whole;
+    // a peer daemon's ask is answered from THIS desktop's index) and, like the
+    // doors above, SP-D13-bounded for a tailnet caller where an answer is a
+    // per-session list — `index.project`'s contribution rows, cut at the bound
+    // with `clipped`; the other figures are bounded by the window asked.
+    api.register("index.session", async (_ctx, params) => {
+      const parsed = IndexSessionParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { sessionId: string, device?: string }",
+          false,
+        );
+      return await index.session(parsed.data.sessionId);
+    });
+    api.register("index.project", async (ctx, params) => {
+      const parsed = IndexProjectParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { projectId: string, sinceMs?: ms ≥ 0, offsetMinutes?: −840…840, device?: string }",
+          false,
+        );
+      return await index.project({
+        projectId: parsed.data.projectId,
+        sinceMs: parsed.data.sinceMs,
+        offsetMinutes: parsed.data.offsetMinutes,
+        maxContributionRows: tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
+      });
+    });
+    api.register("index.projectDay", async (_ctx, params) => {
+      const parsed = IndexProjectDayParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { projectId: string, day: YYYY-MM-DD, offsetMinutes?: −840…840, device?: string }",
+          false,
+        );
+      return await index.projectDay(parsed.data);
+    });
+    // SP-3 — the direct plane's door (methods.ts; index-serve.ts). AR-8b: it
+    // mints for a window on this desktop — every refusal said first, then the
+    // mint inside its audited attempt (a ticket is a grant: D6's rule, the
+    // terminal mint's precedent), the record naming the session and when the
+    // grant expires, never the grant.
+    api.register("index.openTicket", async (ctx, params) => {
+      const ask = indexTickets.check(ctx, params);
+      return await audit.required(
+        ctx,
+        { action: "index.ticket.mint", target: { kind: "index-session", id: ask.auditId } },
+        () => indexTickets.mint(ctx, ask),
+        (ticket) => ({ outcome: "succeeded", attrs: { expiresAt: ticket.expiresAt } }),
+      );
+    });
     // DS-6 — the history catalog, as rows (DS-L3): the PEER replication door.
     // A self peer's daemon lists once and watches from its cursor; nothing else
     // is admitted — a window or the phone pages the merged replica through the
@@ -4662,11 +4745,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // pinned rosettad verifies no credential (index-serve.ts says why that
     // decides it). The declaration is the terminal's remove-then-add, for the
     // same truffle reason and with the same F-M5 answer.
+    // *AR-8b (2026-10-03): ON unless config says false — and only for a
+    // configured daemon (no daemon, no driver: a boot without one stays
+    // byte-for-byte what it was). `enabled` reads the generation, so the serve
+    // stands only on one whose ready line enforces a bearer and grants.*
     const indexServe =
-      config.indexDirectPlane === true
+      config.indexDirectPlane !== false && rosettad !== null
         ? new IndexServeDriver({
-            enabled: () => true,
-            origin: () => rosettad?.state().origin ?? null,
+            enabled: () => indexPlaneLive(rosettad.state()),
+            origin: () => rosettad.state().origin,
             linkedLogin,
             declare: async (spec) => {
               try {

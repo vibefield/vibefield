@@ -6,6 +6,9 @@
 //   · the WIRING, against the mock floor and the scripted rosettad — that
 //     daemon.ts drives it off the supervisor's transitions behind the flag, and
 //     that with the flag OFF (the default, until DS-7) nothing happens at all.
+//     *AR-8b (2026-10-03): the default is ON — rosettad runs behind a bearer
+//     and a grant key now — and OFF is a config's word, still honest; the
+//     serve stands only on a generation whose ready line enforces both.*
 import { spawn } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,6 +21,7 @@ import {
   INDEX_SERVE_ID,
   IndexServeDriver,
   indexEndpointsFrom,
+  indexPlaneLive,
   indexServeSpec,
   indexTargetPort,
 } from "../src/index-serve";
@@ -41,6 +45,30 @@ describe("SP-3 — rosettad's serve, from the readings", () => {
       tls: false,
       allow: [TEST_LOGIN],
     } satisfies ServeSpec);
+  });
+
+  it("AR-8b — the plane stands only on a ready generation that enforces a bearer AND grants", () => {
+    const state = {
+      phase: "ready" as const,
+      origin: ORIGIN,
+      detail: null,
+      pid: 1,
+      protocolVersion: 26,
+      announce: null,
+      enrollRefusals: [],
+      auth: { bearer: true, grants: true, origins: [] },
+    };
+    expect(indexPlaneLive(state)).toBe(true);
+    expect(indexPlaneLive(null)).toBe(false);
+    expect(indexPlaneLive({ ...state, phase: "restarting" })).toBe(false);
+    expect(indexPlaneLive({ ...state, origin: null })).toBe(false);
+    expect(indexPlaneLive({ ...state, auth: null })).toBe(false);
+    expect(indexPlaneLive({ ...state, auth: { bearer: true, grants: false, origins: [] } })).toBe(
+      false,
+    );
+    expect(indexPlaneLive({ ...state, auth: { bearer: false, grants: true, origins: [] } })).toBe(
+      false,
+    );
   });
 
   it("publishes nothing with the flag off, with no linked login, or with no daemon to aim at", () => {
@@ -218,8 +246,15 @@ describe("SP-3 — daemon.ts drives rosettad's serve behind `indexDirectPlane`",
     expect(mock.meshServes.get("product")?.listenPort).toBe(PORTS.FIELDD_PRODUCT_SERVE);
   }, 30_000);
 
-  it("flag off (the default until DS-7): nothing is published, nothing is even asked", async () => {
+  it("AR-8b — the default is ON: a credentialed daemon's listener is published with no flag set", async () => {
     const { daemon, mock } = await boot({});
+    await until(() => indexAdds(mock).length > 0, 15_000);
+    expect(daemon.rosettad?.state().auth).toMatchObject({ bearer: true, grants: true });
+    expect(indexAdds(mock)[0]?.["target"]).toEqual({ kind: "port", port: rosettadPort(daemon) });
+  }, 30_000);
+
+  it("flag OFF by config (the honest off path): nothing is published, nothing is even asked", async () => {
+    const { daemon, mock } = await boot({ indexDirectPlane: false });
     // the daemon got all the way: its door is declared and rosettad is ready
     await until(() => mock.meshServes.get("product") !== undefined, 15_000);
     await until(() => daemon.health().rosettad.phase === "ready", 15_000);

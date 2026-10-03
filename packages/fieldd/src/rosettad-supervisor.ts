@@ -1,6 +1,17 @@
 import { type ChildProcess, spawn as nodeSpawn } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { EventEmitter } from "node:events";
-import { mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  chmodSync,
+  closeSync,
+  fchmodSync,
+  mkdirSync,
+  openSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeSync,
+} from "node:fs";
 import { dirname, join } from "node:path";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 
@@ -35,6 +46,20 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 // principals, a window, the shell, a plugin, and refuses the phone, guests and
 // peer daemons. The projection rule stands regardless: a local window is not
 // the daemon either.)
+//
+// *Errata (2026-10-03, AR-8b): "rosettad has no authentication today" stopped
+// being true at the pin's move to the RO-1 merge (`ee6724e`). Every generation
+// is now started with a bearer (`--token-file`) and a grant key
+// (`--grant-key-file`), minted fresh per start, written owner-only under the
+// user's index directory (LAYOUT.INDEX_TOKEN_FILE, INDEX_GRANT_KEY_FILE),
+// removed the moment the daemon says ready, and held in fieldd's memory for the
+// generation's life — `credentials()`, never part of `RosettadState`, which is
+// spread and emitted. Every route then needs a credential, so the origin is no
+// longer the secret: the bearer is. The origin still stays inside fieldd except
+// inside a ticket (`index.openTicket`), which pairs it with a per-session grant.
+// A daemon whose ready line does not say `auth: {bearer: true, grants: true}` —
+// or that does not know the flags at all — is the wrong binary for this fieldd,
+// and refusing it is TERMINAL, like a protocol mismatch.*
 //
 // Orphans: a fieldd that dies without its stop ladder (SIGKILL, a crash) leaves
 // its rosettad alive, holding rosetta's EXCLUSIVE projection lock (`<db>.lock`,
@@ -83,6 +108,85 @@ export interface RosettadState extends RosettadHealth {
    * path off before the reason; the index service reads these instead. Never
    * projected to a client (the path is inside). Empty while nothing refused. */
   enrollRefusals: readonly string[];
+  /** AR-8b — the access modes the READY line said the generation enforces
+   * (rosetta's `auth`: never the secrets). Absent or null until ready; while
+   * ready it is always `{bearer: true, grants: true}`, because the supervisor
+   * refuses a daemon that says otherwise. */
+  auth?: RosettadAuth | null;
+}
+
+/** AR-8b — rosetta's ready-line `auth` (AUTH.md §1): which modes are on, and
+ * the extra browser origins it admits, normalized. */
+export interface RosettadAuth {
+  bearer: boolean;
+  grants: boolean;
+  origins: readonly string[];
+}
+
+/** AR-8b — what fieldd presents to the CURRENT ready generation (EL7: never
+ * projected, never logged, never in `RosettadState`). Set together with the
+ * origin and cleared with it, so a reader that takes both in one tick always
+ * holds one generation's pair. */
+export interface RosettadCredentials {
+  /** `Bearer <token>` — the `Authorization` value of every fieldd dial */
+  authorization: string;
+  /** the HMAC key this generation verifies RO-10 grants with (a copy) */
+  grantKey: Uint8Array;
+}
+
+/** rosetta's extra-origin grammar (`normalize_origin`, crates/server/src/auth.rs
+ * at the pin): `scheme://authority`, lowercased, the scheme a letter then
+ * letters, digits, `+`, `-` or `.`, the authority visible ASCII without `/`,
+ * `?`, `#`, `@`, `*` or `\`. Anything else the daemon refuses AT START, so it
+ * is never passed: `file://` (no authority) and `null` would take the index
+ * down rather than widen it. */
+const ROSETTA_EXTRA_ORIGIN = /^[a-z][a-z0-9+.-]*:\/\/(?:(?![/?#@*\\])[\x21-\x7e])+$/;
+
+/** AR-8b — the renderer origins rosettad must admit (`--allow-origin`), from
+ * the allow-list fieldd's own door keeps (one list, one authority — the cells'
+ * T1 doors take the same one): each normalized the way rosetta normalizes it,
+ * kept only when rosetta would accept it, deduplicated. A loopback dev origin
+ * passes through harmlessly (rosetta admits every loopback port already). */
+export function rosettadAllowOrigins(origins: readonly string[]): string[] {
+  const kept: string[] = [];
+  for (const origin of origins) {
+    const normalized = origin.trim().toLowerCase();
+    if (ROSETTA_EXTRA_ORIGIN.test(normalized) && !kept.includes(normalized)) kept.push(normalized);
+  }
+  return kept;
+}
+
+/** AR-8b — the bearer's bounds (AUTH.md §4): 32 to 1,024 visible ASCII
+ * characters. Minted as 32 random bytes in base64url (43 characters). */
+function mintBearer(): string {
+  return randomBytes(32).toString("base64url");
+}
+
+/** AR-8b — the grant key: raw bytes, at least 32 (AUTH.md §4). */
+const GRANT_KEY_BYTES = 32;
+
+/** An older rosettad does not know RO-1's flags and says so before it binds
+ * (`rosettad: unknown flag --token-file`, main.rs). Retrying cannot teach it. */
+const UNKNOWN_AUTH_FLAG = /unknown flag (--(?:token-file|grant-key-file|allow-origin))\b/;
+
+/** Write one owner-only secret file: the directory 0700, the file created
+ * EXCLUSIVELY (never through something already at the path — a planted file or
+ * link is removed first and the create still refuses a racing one) and 0600
+ * before a byte is written. rosettad refuses a file with any group or other
+ * bit (AUTH.md §4). */
+function writeSecretFile(path: string, bytes: Uint8Array | string): void {
+  const dir = dirname(path);
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  if (process.platform !== "win32") chmodSync(dir, 0o700);
+  rmSync(path, { force: true });
+  const fd = openSync(path, "wx", 0o600);
+  try {
+    if (process.platform !== "win32") fchmodSync(fd, 0o600);
+    if (typeof bytes === "string") writeSync(fd, bytes);
+    else writeSync(fd, bytes);
+  } finally {
+    closeSync(fd);
+  }
 }
 
 const NO_REFUSALS: readonly string[] = Object.freeze([]);
@@ -174,6 +278,18 @@ export interface RosettadSupervisorOptions {
    * managed roots, read by the daemon once at start. fieldd's EnrollmentStore
    * publishes it before every launch; the supervisor only names it. */
   enrollFile?: string | undefined;
+  /** AR-8b — rosettad `--token-file FILE` (RO-1): where each generation's
+   * bearer is written before its spawn (LAYOUT.INDEX_TOKEN_FILE). Required:
+   * fieldd starts no rosettad that does not demand a credential. */
+  tokenFile: string;
+  /** AR-8b — rosettad `--grant-key-file FILE` (RO-10): where each
+   * generation's grant key is written (LAYOUT.INDEX_GRANT_KEY_FILE). */
+  grantKeyFile: string;
+  /** AR-8b — rosettad `--allow-origin`, repeated: the renderer's origins (the
+   * packaged `vibefield-app://shell`; dev's loopback ones rosetta admits
+   * already). Filtered through `rosettadAllowOrigins` — an origin rosetta
+   * would refuse at start is dropped and logged, never passed. */
+  allowOrigins?: readonly string[];
   /** test seam — a fake daemon script */
   spawnProcess?: typeof nodeSpawn;
   /** test seam; production uses ROSETTAD_SUPERVISION */
@@ -198,6 +314,12 @@ interface Generation {
   stderrTail: string[];
   /** AC-D8 — the `--enroll …` refusal lines, in full (see RosettadState) */
   enrollRefusals: string[];
+  /** AR-8b — the credentials this generation was started with (memory only;
+   * the files are removed once it is ready, or once it is gone) */
+  credentials: RosettadCredentials;
+  /** AR-8b — set when the generation said it does not know RO-1's flags: the
+   * wrong binary, a TERMINAL failure whatever the exit's timing */
+  wrongBinary: string | null;
   startupTimer: NodeJS.Timeout | null;
   stableTimer: NodeJS.Timeout | null;
   killTimer: NodeJS.Timeout | null;
@@ -261,6 +383,21 @@ function loopbackOrigin(value: unknown): string | null {
   return url.origin;
 }
 
+/** AR-8b — the ready line's `auth`, read tolerantly: the two modes as
+ * booleans (anything else is "not on") and the origins as strings; null when
+ * the line carries no `auth` object at all (a daemon from before RO-1). */
+function readyAuth(value: unknown): RosettadAuth | null {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return null;
+  const auth = value as { bearer?: unknown; grants?: unknown; origins?: unknown };
+  return {
+    bearer: auth.bearer === true,
+    grants: auth.grants === true,
+    origins: Array.isArray(auth.origins)
+      ? auth.origins.filter((origin): origin is string => typeof origin === "string")
+      : [],
+  };
+}
+
 function processAlive(pid: number): boolean {
   try {
     process.kill(pid, 0);
@@ -299,22 +436,51 @@ export class RosettadSupervisor extends EventEmitter {
     announce: null,
     protocolVersion: null,
     enrollRefusals: NO_REFUSALS,
+    auth: null,
   };
   private readonly t: RosettadTimings;
   private readonly logger: Logger;
   private readonly spawnProcess: typeof nodeSpawn;
+  /** AR-8b — `--allow-origin`'s values, filtered once */
+  private readonly allowOrigins: readonly string[];
+  /** AR-8b — the READY generation's credentials: set with its origin, cleared
+   * with it (`publish`), so they can never outlive the origin they open */
+  private live: RosettadCredentials | null = null;
 
   constructor(private readonly opts: RosettadSupervisorOptions) {
     super();
     this.t = { ...ROSETTAD_SUPERVISION, ...opts.timings };
     this.logger = opts.logger ?? createNoopLogger();
     this.spawnProcess = opts.spawnProcess ?? nodeSpawn;
+    this.allowOrigins = rosettadAllowOrigins(opts.allowOrigins ?? []);
+    const dropped = (opts.allowOrigins ?? []).filter(
+      (origin) => !this.allowOrigins.includes(origin.trim().toLowerCase()),
+    );
+    if (dropped.length > 0) {
+      this.logger.info(
+        "fieldd.rosettad.origins_dropped",
+        "Renderer origins rosettad would refuse at start were not passed to it",
+        { origins: dropped },
+      );
+    }
   }
 
   /** fieldd's full judgment, a snapshot — never the live object. Internal:
    * the origin is in it. */
   state(): RosettadState {
     return { ...this.stateValue };
+  }
+
+  /** AR-8b — what fieldd presents to the daemon answering NOW: `Authorization`
+   * for every dial, the grant key for every mint. Null whenever there is no
+   * ready generation (the same moments `state().origin` is null). Internal:
+   * never projected, never logged, never handed to a client — a ticket carries
+   * a grant MINTED with the key, never the key. */
+  credentials(): RosettadCredentials | null {
+    const live = this.live;
+    return live === null
+      ? null
+      : { authorization: live.authorization, grantKey: new Uint8Array(live.grantKey) };
   }
 
   /** The client-facing projection (FielddHealth.rosettad). */
@@ -364,7 +530,25 @@ export class RosettadSupervisor extends EventEmitter {
       generation.onExit = "settle";
       await this.terminate(generation);
     }
+    this.removeCredentialFiles();
     this.publish({ phase: "stopped", origin: null, pid: null, announce: null });
+  }
+
+  /** AR-8b — the per-start credential files, gone: the daemon read them once
+   * before it bound (AUTH.md §4), so after `ready` — or once the generation is
+   * over — they are only a same-uid process's opportunity (§7). */
+  private removeCredentialFiles(): void {
+    for (const file of [this.opts.tokenFile, this.opts.grantKeyFile]) {
+      try {
+        rmSync(file, { force: true });
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.rosettad.credential_file_left",
+          "A rosettad credential file could not be removed",
+          { file, error: error instanceof Error ? error.message : String(error) },
+        );
+      }
+    }
   }
 
   private clearRetry(): void {
@@ -375,6 +559,12 @@ export class RosettadSupervisor extends EventEmitter {
   }
 
   private publish(patch: Partial<RosettadState>): void {
+    // AR-8b — the credentials go wherever the origin goes: an origin cleared
+    // (restarting, failed, stopped, a requested restart) takes them with it
+    if (patch.origin === null) {
+      this.live = null;
+      if (patch.auth === undefined) patch = { ...patch, auth: null };
+    }
     const next = { ...this.stateValue, ...patch };
     const changed = (Object.keys(next) as Array<keyof RosettadState>).some(
       (k) => next[k] !== this.stateValue[k],
@@ -458,6 +648,10 @@ export class RosettadSupervisor extends EventEmitter {
 
   // --- the orphan pass -------------------------------------------------------
 
+  /** Identity, not access: a previous fieldd's rosettad was started with a
+   * bearer this fieldd never held, and answers 401 — which still carries the
+   * protocol header (AUTH.md §6: "so a client can tell 'wrong daemon' from
+   * 'wrong credential'"), so the probe reads the header off any answer. */
   private async probeRosettad(origin: string): Promise<boolean> {
     try {
       const response = await fetch(`${origin}/api/status`, {
@@ -585,17 +779,40 @@ export class RosettadSupervisor extends EventEmitter {
       this.opts.announceDir,
       ...(this.opts.home !== undefined ? ["--home", this.opts.home] : []),
       ...(this.opts.enrollFile !== undefined ? ["--enroll", this.opts.enrollFile] : []),
+      // AR-8b (RO-1, RO-10) — every route behind this generation's bearer, a
+      // grant opening one session's history, and the renderer's origins
+      "--token-file",
+      this.opts.tokenFile,
+      "--grant-key-file",
+      this.opts.grantKeyFile,
+      ...this.allowOrigins.flatMap((origin) => ["--allow-origin", origin]),
     ];
+    // a fresh bearer and key per start: a restart revokes every grant the
+    // previous generation honoured, and both rotate together (AUTH.md §5.5)
+    const token = mintBearer();
+    const key = randomBytes(GRANT_KEY_BYTES);
     let proc: ChildProcess;
     try {
       mkdirSync(dirname(this.opts.dbPath), { recursive: true });
       mkdirSync(this.opts.announceDir, { recursive: true });
+      writeSecretFile(this.opts.tokenFile, token);
+      writeSecretFile(this.opts.grantKeyFile, key);
+    } catch (error) {
+      this.removeCredentialFiles();
+      this.publish({
+        phase: "failed",
+        detail: `rosettad's credential files could not be written: ${String(error)}`,
+      });
+      return null;
+    }
+    try {
       proc = this.spawnProcess(this.opts.bin, args, {
         stdio: ["ignore", "pipe", "pipe"],
         // WIN-3 — a background daemon never flashes a console window.
         windowsHide: true,
       });
     } catch (error) {
+      this.removeCredentialFiles();
       this.publish({ phase: "failed", detail: `rosettad could not be spawned: ${String(error)}` });
       return null;
     }
@@ -613,6 +830,8 @@ export class RosettadSupervisor extends EventEmitter {
       stderrLine: "",
       stderrTail: [],
       enrollRefusals: [],
+      credentials: { authorization: `Bearer ${token}`, grantKey: new Uint8Array(key) },
+      wrongBinary: null,
       startupTimer: null,
       stableTimer: null,
       killTimer: null,
@@ -649,6 +868,29 @@ export class RosettadSupervisor extends EventEmitter {
       generation.settle(null);
       void this.terminate(generation);
     };
+    /** AR-8b — a stderr line saying the binary does not know RO-1's flags.
+     * Before the exit it fails the generation on sight; after it (the exit
+     * event can overtake the pipe's last data) it takes back the retry the
+     * exit scheduled — either way the answer is the honest terminal one. */
+    const noteWrongBinary = (line: string): void => {
+      const unknown = UNKNOWN_AUTH_FLAG.exec(line);
+      if (unknown === null || generation.wrongBinary !== null) return;
+      generation.wrongBinary = `rosettad does not know ${unknown[1]} — the wrong binary for this fieldd, which starts every index daemon behind a credential (RO-1); rebuild the sibling (pnpm siblings:build)`;
+      if (!generation.exited) {
+        fail(generation.wrongBinary, true);
+        return;
+      }
+      if (this.current === null && !this.stopped) {
+        this.clearRetry();
+        this.publish({
+          phase: "failed",
+          origin: null,
+          pid: null,
+          announce: null,
+          detail: generation.wrongBinary,
+        });
+      }
+    };
     const exited = (exitDetail: string): void => {
       if (generation.exited) return;
       generation.exited = true;
@@ -656,12 +898,32 @@ export class RosettadSupervisor extends EventEmitter {
       if (generation.stableTimer) clearTimeout(generation.stableTimer);
       if (generation.killTimer) clearTimeout(generation.killTimer);
       const last = generation.stderrLine.trim();
-      if (last.length > 0) generation.stderrTail.push(last.slice(0, 256));
+      if (last.length > 0) {
+        generation.stderrTail.push(last.slice(0, 256));
+        noteWrongBinary(last);
+      }
       generation.settle(null);
       resolveExit();
       if (this.current !== generation) return;
       this.current = null;
+      // AR-8b — a generation that is over needs no files; its successor
+      // writes its own (and a requested restart's successor already may have:
+      // `current` is only ever this generation's here)
+      this.removeCredentialFiles();
       if (this.stopped) return;
+      if (generation.wrongBinary !== null && generation.onExit === "retry") {
+        // AR-8b — the binary does not know RO-1's flags: TERMINAL, like a
+        // protocol mismatch, however the exit raced the line that said so
+        generation.onExit = "settle";
+        this.publish({
+          phase: "failed",
+          origin: null,
+          pid: null,
+          announce: null,
+          detail: generation.wrongBinary,
+        });
+        return;
+      }
       if (generation.onExit === "settle") {
         // ended on purpose (a restart request or a terminal failure): the
         // reason is already published; only the child facts change
@@ -718,6 +980,7 @@ export class RosettadSupervisor extends EventEmitter {
                 origin?: unknown;
                 protocol_version?: unknown;
                 announce?: unknown;
+                auth?: unknown;
               })
             : null;
         if (ready === null || ready.event !== "ready") {
@@ -742,7 +1005,23 @@ export class RosettadSupervisor extends EventEmitter {
           fail("rosettad reported a non-loopback origin", true);
           return;
         }
+        // AR-8b — the generation must enforce what it was told to. A ready
+        // line without `auth: {bearer: true, grants: true}` is a daemon that
+        // ignored the flags: the wrong binary, refused like a protocol skew
+        const auth = readyAuth(ready.auth);
+        if (auth === null || !auth.bearer || !auth.grants) {
+          fail(
+            "rosettad is serving without access control (its ready line names no bearer or no grants) — the wrong binary for this fieldd; rebuild the sibling (pnpm siblings:build)",
+            true,
+          );
+          return;
+        }
         if (generation.startupTimer) clearTimeout(generation.startupTimer);
+        // read once before it bound (AUTH.md §4): the files have done their job
+        this.removeCredentialFiles();
+        // with the origin, in the same publish: a transition's listener that
+        // dials at once holds this generation's pair
+        this.live = generation.credentials;
         this.publish({
           phase: "ready",
           origin,
@@ -750,6 +1029,7 @@ export class RosettadSupervisor extends EventEmitter {
           announce: typeof ready.announce === "string" ? ready.announce : null,
           protocolVersion: this.opts.expectedProtocolVersion,
           enrollRefusals: NO_REFUSALS,
+          auth,
         });
         generation.settle(origin);
         generation.stableTimer = setTimeout(() => {
@@ -777,6 +1057,7 @@ export class RosettadSupervisor extends EventEmitter {
         this.logger.info("fieldd.rosettad.stderr", "rosettad stderr", { line: line.slice(0, 512) });
         generation.stderrTail.push(line.slice(0, 256));
         if (generation.stderrTail.length > STDERR_TAIL_LINES) generation.stderrTail.shift();
+        noteWrongBinary(line);
         // AC-D8 — a refusal names a root, and a real root is longer than the
         // tail's line budget: keep the daemon's `--enroll` lines whole
         if (ENROLL_LINE.test(line)) {

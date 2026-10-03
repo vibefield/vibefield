@@ -1,6 +1,11 @@
+import { createHash } from "node:crypto";
+import { MAX_GRANT_BYTES, mintGrant, SCOPE_READ } from "@rosetta/protocol/grants";
 import {
+  type CallerContext,
   INDEX_TICKET,
+  type IndexOpenTicket,
   IndexOpenTicketParams,
+  indexEndpointsFor,
   PORTS,
   type RemoteIndexEndpointSet,
   remoteIndexEndpointsFor,
@@ -9,12 +14,19 @@ import type { Logger } from "@vibefield/logging";
 import type { ServeSpec, ServeState } from "./mesh-client";
 import { RpcCallError } from "./native-link";
 import {
+  ROSETTAD_UNCONFIGURED,
+  type RosettadCredentials,
+  type RosettadHealth,
+  type RosettadState,
+} from "./rosettad-supervisor";
+import {
   publishedServe,
   RouteServeDriver,
   type RouteServeLog,
   routeServeSpec,
   type ServedProcess,
 } from "./route-serve";
+import { clientIdFor } from "./terminal-grants";
 
 // SP-3 (thinking-sync-planes.md §5.4, §6; thinking-desktop-sync-plane.md §6.4;
 // design-06 §6, §8) — ROSETTAD'S SERVE: the route-per-process driver's SECOND
@@ -54,6 +66,21 @@ import {
 // until the floor's unlink-retire, or until a flag-on successor's first refresh
 // withdraws it. Tolerable while only tests turn the flag on; DS-7, which turns
 // it on for good, inherits F-H1 through the driver as written.
+//
+// *Errata (2026-10-03, AR-8b): the pin moved to the RO-1 merge (`ee6724e`) and
+// the premise above stopped holding. fieldd starts every rosettad behind a
+// bearer with a grant key (rosettad-supervisor.ts), so the listener answers
+// nothing without a credential and publishing it puts no transcript one node
+// away. The flag is now ON unless a config says false, and the serve is
+// declared only while the generation's ready line says it enforces both
+// (`auth.bearer && auth.grants`). `index.openTicket` mints the grant below —
+// for a window on this desktop, over the LOOPBACK set; a caller across the
+// tailnet (the phone, SP-6) and another desktop's forward (DS-7) still hear
+// `direct-plane-unbuilt`, because the set they would dial is this serve's and
+// nothing hands it out yet. The flag stays a code seam with an honest off
+// path (`direct-plane-off`), never an environment variable. F-H1's residue
+// above is now every flag-on boot's to withdraw, which the driver's first
+// refresh does.*
 
 /** The engine identity and display name of rosettad's listener. */
 export const INDEX_SERVE_ID = "index" as const;
@@ -154,30 +181,194 @@ export function indexEndpointsFrom(
   return remoteIndexEndpointsFor(serve.url, sessionId);
 }
 
-/**
- * SP-3 — `index.openTicket`, DECLARED and answered honestly (declared ==
- * shipped, D36): the ask is checked first, so a malformed one is the caller's
- * to fix; then UNAVAILABLE {service: "index", state: "direct-plane-unbuilt"},
- * retryable false, whatever the flag above says. A ticket is the set AND the
- * grant beside it, and until DS-7 mints rosetta's grant (RO-10, at the pin
- * move) there is no grant — the pinned rosettad verifies none — so there is no
- * ticket to hand out, only half of one, which the template never mints.
- * Reached by a foreign `device` too: the method is `federate`, so the asker's
- * daemon forwards it keyed and THIS answer travels back untouched (PeerLink
- * passes an owner's coded reply through).
- */
-export function indexOpenTicket(params: unknown): never {
-  const parsed = IndexOpenTicketParams.safeParse(params ?? {});
-  if (!parsed.success)
-    throw new RpcCallError(
-      "PRECONDITION_FAILED",
-      "expected { sessionId: string, device?: string }",
-      false,
-    );
-  throw new RpcCallError(
-    "UNAVAILABLE",
-    "index.openTicket is declared and not served yet: the direct plane needs rosetta's per-session grant (RO-10), which arrives with its pin move (DS-7)",
-    false,
-    { service: INDEX_TICKET.SERVICE, state: INDEX_TICKET.STATE_UNBUILT },
+/** AR-8b — is this generation one the direct plane may stand on: ready, and
+ * its ready line said it enforces a bearer AND verifies grants. The
+ * supervisor refuses any other daemon, so this is the belt to its braces. */
+export function indexPlaneLive(state: RosettadState | null): boolean {
+  return (
+    state !== null &&
+    state.phase === "ready" &&
+    state.origin !== null &&
+    state.auth?.bearer === true &&
+    state.auth.grants === true
   );
+}
+
+export interface IndexTicketMinterOptions {
+  /** fieldd's `indexDirectPlane` — the owner's word (ON unless config says false) */
+  enabled: boolean;
+  /** the supervisor's three readings, or null when no daemon is configured */
+  supervisor: {
+    health(): RosettadHealth;
+    state(): RosettadState;
+    credentials(): RosettadCredentials | null;
+  } | null;
+  /** this desktop's device id — the ticket's `device` */
+  deviceId: () => string;
+  /** the grant's life (`INDEX_TICKET.TTL_MS`; a test seam) */
+  ttlMs?: number;
+  now?: () => number;
+}
+
+/** What a mint is for, once every refusal has been said: the session, and
+ * the audit target that names it. */
+export interface IndexTicketAsk {
+  sessionId: string;
+  /** the session id when it is a safe audit identity, else its digest */
+  auditId: string;
+}
+
+/** A session id as an audit target may carry it: rosetta's ids are any text
+ * (its own grant vectors carry controls), and the audit ledger refuses control
+ * characters and anything longer than 256 — such an id is named by its digest
+ * instead, which is still one session's and never the text itself. */
+function auditSessionId(sessionId: string): string {
+  const printable = [...sessionId].every((character) => {
+    const code = character.charCodeAt(0);
+    return code > 0x1f && code !== 0x7f;
+  });
+  if (printable && sessionId.length <= 256 && !/tok_|bearer|\/t\//i.test(sessionId))
+    return sessionId;
+  return `sha256:${createHash("sha256").update(sessionId).digest("hex").slice(0, 32)}`;
+}
+
+/**
+ * SP-3 / AR-8b — `index.openTicket`. Declared by SP-3 answering
+ * `direct-plane-unbuilt`; since AR-8b it MINTS, for a window on this desktop:
+ * the loopback set (`IndexEndpointSet`: rosetta's session socket and the
+ * daemon's origin) and, beside it, an RO-10 grant for exactly that session —
+ * `sid` the session, `cid` the caller's client identity (`clientIdFor`, the
+ * terminal grants' rule: a renderer window's participant, else the token's
+ * principal), `scope: ["read"]`, `exp` = now + `INDEX_TICKET.TTL_MS` —
+ * signed with the key the current generation verifies. Every answer is a
+ * fresh grant (the method is not idempotent): `exp` only ever moves forward,
+ * so two asks in one millisecond still get two grants.
+ *
+ * The refusals, in the order a caller hears them:
+ *  - a malformed ask: PRECONDITION_FAILED (the caller's to fix);
+ *  - a plugin or an MCP agent: FORBIDDEN_SCOPE — a ticket opens a transcript,
+ *    and only a window or the shell may hold one (EL7: an agent is the
+ *    adversary; a plugin's `index.read` buys the roll call, not a transcript);
+ *  - the phone, or another desktop's daemon forwarding a `{device}` ask:
+ *    UNAVAILABLE `direct-plane-unbuilt`, retryable false — their set is the
+ *    tailnet serve's (SP-6, DS-7), and nothing hands it out yet;
+ *  - the plane switched off: UNAVAILABLE `direct-plane-off`, retryable false;
+ *  - no daemon ready: UNAVAILABLE `{service: "index", state: <phase>}`,
+ *    retryable unless unconfigured — the other index doors' answer;
+ *  - a ready daemon that does not enforce access (the supervisor refuses one,
+ *    so this is the belt): `direct-plane-off` too, for that daemon's life.
+ * A guest never gets here: its preset holds no scope.
+ */
+export class IndexTicketMinter {
+  readonly #opts: IndexTicketMinterOptions;
+  #lastExp = 0;
+
+  constructor(opts: IndexTicketMinterOptions) {
+    this.#opts = opts;
+  }
+
+  /** Every refusal, before anything is minted or audited. */
+  check(ctx: CallerContext, params: unknown): IndexTicketAsk {
+    const parsed = IndexOpenTicketParams.safeParse(params ?? {});
+    if (!parsed.success)
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "expected { sessionId: string, device?: string }",
+        false,
+      );
+    // a lone surrogate is not text: no URL can carry it and rosetta's
+    // canonical form refuses it, so the ask is the caller's to fix
+    if (/\p{Cs}/u.test(parsed.data.sessionId))
+      throw new RpcCallError("PRECONDITION_FAILED", "the session id is not Unicode text", false);
+    const kind = ctx.principal.kind;
+    if (kind === "plugin" || kind === "mcp-agent" || kind === "tailnet-guest")
+      throw new RpcCallError(
+        "FORBIDDEN_SCOPE",
+        "a ticket opens a transcript; only a window or the shell on this desktop may hold one",
+        false,
+        { method: "index.openTicket", principal: kind },
+      );
+    if (kind === "tailnet" || kind === "peer-fieldd")
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        kind === "tailnet"
+          ? "a ticket across the tailnet is not served yet: the phone's set is the index serve's (SP-6)"
+          : "a ticket for another desktop's session is not served yet: it rides the egress route (DS-7)",
+        false,
+        { service: INDEX_TICKET.SERVICE, state: INDEX_TICKET.STATE_UNBUILT },
+      );
+    if (!this.#opts.enabled)
+      throw new RpcCallError("UNAVAILABLE", "the direct plane is off on this desktop", false, {
+        service: INDEX_TICKET.SERVICE,
+        state: INDEX_TICKET.STATE_OFF,
+      });
+    const supervisor = this.#opts.supervisor;
+    const health = supervisor?.health() ?? ROSETTAD_UNCONFIGURED;
+    if (supervisor === null || health.phase !== "ready")
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        `the agent index is ${health.phase}${health.detail ? `: ${health.detail}` : ""}`,
+        health.phase !== "unconfigured",
+        { service: INDEX_TICKET.SERVICE, state: health.phase },
+      );
+    // the supervisor refuses a daemon that does not enforce access; were one
+    // ever to stand here, the plane is off for its life — never a grant it
+    // would not check
+    if (!indexPlaneLive(supervisor.state()))
+      throw new RpcCallError(
+        "UNAVAILABLE",
+        "the agent index is not enforcing access, so the direct plane stays off",
+        false,
+        { service: INDEX_TICKET.SERVICE, state: INDEX_TICKET.STATE_OFF },
+      );
+    return { sessionId: parsed.data.sessionId, auditId: auditSessionId(parsed.data.sessionId) };
+  }
+
+  /** The mint itself — called inside the audit's attempt (daemon.ts). The
+   * origin and the key are read in ONE tick from the generation answering now,
+   * so a ticket never pairs one generation's port with another's key. */
+  mint(ctx: CallerContext, ask: IndexTicketAsk): IndexOpenTicket {
+    const supervisor = this.#opts.supervisor;
+    const state = supervisor?.state() ?? null;
+    const credentials = supervisor?.credentials() ?? null;
+    if (supervisor === null || !indexPlaneLive(state) || credentials === null || state === null)
+      throw new RpcCallError("UNAVAILABLE", "the agent index went away during the mint", true, {
+        service: INDEX_TICKET.SERVICE,
+        state: state?.phase ?? "unconfigured",
+      });
+    const endpoints = indexEndpointsFor(state.origin as string, ask.sessionId);
+    if (endpoints === undefined)
+      throw new RpcCallError("UNAVAILABLE", "the agent index has no loopback origin", true, {
+        service: INDEX_TICKET.SERVICE,
+        state: state.phase,
+      });
+    const now = (this.#opts.now ?? Date.now)();
+    const exp = Math.max(now + (this.#opts.ttlMs ?? INDEX_TICKET.TTL_MS), this.#lastExp + 1);
+    let grant: string;
+    try {
+      grant = mintGrant(credentials.grantKey, {
+        cid: clientIdFor(ctx.principal),
+        exp,
+        scope: [SCOPE_READ],
+        sid: ask.sessionId,
+        v: 1,
+      });
+    } catch {
+      // `check` refused what is not text; anything else rosetta's canonical
+      // form would refuse is still the caller's id, never a half ticket
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        "rosetta's grant form refuses this session id",
+        false,
+      );
+    }
+    if (grant.length > MAX_GRANT_BYTES)
+      throw new RpcCallError(
+        "PRECONDITION_FAILED",
+        `the session id is too long for a grant (rosetta reads at most ${MAX_GRANT_BYTES} bytes)`,
+        false,
+      );
+    this.#lastExp = exp;
+    return { device: this.#opts.deviceId(), endpoints, grant, expiresAt: exp };
+  }
 }

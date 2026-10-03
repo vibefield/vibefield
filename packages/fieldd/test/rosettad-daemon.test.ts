@@ -674,13 +674,16 @@ describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BI
     // not watched on the next start even though the projection persisted its
     // consent, and the roll call says so. Before RO-2c rosetta unioned the
     // persisted flag in, so the record could add consent but never revoke it.
+    // AR-8b (2026-10-03): read from `../rosetta-pin`, the checkout dedicated to the
+    // pin since W-D10 — this said `../rosetta` (James's working tree, nothing this
+    // repo reads), so the row skipped in every lane and read his tree in his own.
     const GROUNDTRUTH = join(
       dirname(fileURLToPath(import.meta.url)),
       "..",
       "..",
       "..",
       "..",
-      "rosetta",
+      "rosetta-pin",
       "groundtruth",
       "claude-code",
       "fixtures",

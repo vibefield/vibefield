@@ -948,7 +948,9 @@ export const LAYOUT = {
   /** fieldd's PRIVATE rosetta announce directory (`--announce-dir`): the
    * daemon's `<pid>.json` lands here, never in rosetta's shared per-user
    * directory (EL7 — the origin is the secret), and the next fieldd reads it
-   * to put down an orphan holding the projection lock. */
+   * to put down an orphan holding the projection lock. (AR-8b, 2026-10-03:
+   * since RO-1 the bearer is the secret, not the origin; the private directory
+   * stays, because it is still how the next fieldd finds an orphan.) */
   INDEX_DAEMONS_DIR: ["index", "daemons"],
   /** AR-1 (AR-D17) — this user's consent record and persona ↔ runtime map:
    * which discovered kinds rosettad may read, which managed roots it is

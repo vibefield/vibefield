@@ -28,6 +28,7 @@ import {
   IndexUsageResponse,
   indexEndpointsFor,
   RemoteIndexEndpointSet,
+  remoteIndexEndpointsFor,
 } from "../src/agent-index";
 import { ErrorData } from "../src/errors";
 import { KEYED_FORWARD_METHODS } from "../src/forwarding";
@@ -216,6 +217,9 @@ describe("the direct plane's LOOPBACK set — what a window on this desktop dial
       expect(indexEndpointsFor(origin, "s1"), origin).toBeUndefined();
     }
     expect(indexEndpointsFor("http://127.0.0.1:52811", "")).toBeUndefined();
+    // a lone surrogate is not text: no URL, and no URIError out of a composer
+    expect(indexEndpointsFor("http://127.0.0.1:52811", "s\ud800")).toBeUndefined();
+    expect(remoteIndexEndpointsFor("http://desk.ts.net:9424", "s\ud800")).toBeUndefined();
   });
 
   it("is disjoint from the tailnet set by host class — the template's reader still refuses it (D36)", () => {

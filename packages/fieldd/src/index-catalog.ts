@@ -312,9 +312,19 @@ export class IndexCatalog extends EventEmitter {
       // client can set the header; a browser would use the `rosetta.bearer.*`
       // subprotocol). Until then such a daemon refuses this upgrade 401, and the
       // follower warns once and waits (`#onRefused`) instead of re-dialling.
+      // *AR-8b (2026-10-03): it carries it now — the supervisor's credentials
+      // for the generation whose origin this is, read in the same tick (a unit
+      // seam's stub supervisor has none, and dials as before). `/ws/meta` is a
+      // bearer-only route: a grant never opens it (AUTH.md §5.4).*
+      const supervisor = this.#opts.supervisor;
+      const credentials =
+        supervisor !== null && typeof supervisor.credentials === "function"
+          ? supervisor.credentials()
+          : null;
       ws = new this.#WebSocket(`${origin.replace(/^http/, "ws")}/ws/meta`, {
         perMessageDeflate: false,
         handshakeTimeout: 5_000,
+        ...(credentials !== null ? { headers: { authorization: credentials.authorization } } : {}),
       });
     } catch (error) {
       this.#logger.warn("fieldd.index_catalog.dial_failed", "The meta stream could not be dialed", {

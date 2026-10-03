@@ -217,7 +217,9 @@ export type IndexPhase = (typeof INDEX_PHASES)[number];
 /** fieldd's projection of the index daemon (`FielddHealth.rosettad`, the
  * same four fields): the phase and its reason, the pid, the wire version —
  * never the loopback origin (EL7: rosettad is unauthenticated; the origin is
- * the secret and stays inside fieldd). */
+ * the secret and stays inside fieldd). *Corrected 2026-10-03 (AR-8b): rosettad
+ * authenticates now — the bearer is the secret, and it stays inside fieldd;
+ * the origin reaches a window only inside an `IndexOpenTicket`.* */
 export const IndexDaemonHealth = z
   .object({
     phase: z.string(),
@@ -1261,10 +1263,17 @@ export function remoteIndexEndpointsFor(
   serveBaseUrl: string,
   sessionId: string,
 ): RemoteIndexEndpointSet | undefined {
-  if (sessionId.length === 0) return undefined;
+  if (sessionId.length === 0 || !isWellFormedText(sessionId)) return undefined;
   return composeRemoteEndpoints(RemoteIndexEndpointSet, serveBaseUrl, {
     session: remoteIndexSessionPath(sessionId),
   });
+}
+
+/** AR-8b — a lone UTF-16 surrogate is not text: `encodeURIComponent` throws on
+ * it (URIError) and rosetta's grant refuses it (RFC 8785 §3.1), so neither
+ * composer builds a URL for it — they answer undefined, never throw. */
+function isWellFormedText(text: string): boolean {
+  return !/\p{Cs}/u.test(text);
 }
 
 /** The loopback port a set may name: 1–65535, no leading zero. */
@@ -1310,7 +1319,7 @@ export type IndexTicketEndpointSet = z.infer<typeof IndexTicketEndpointSet>;
  * empty session id. The path is the one composer's (`remoteIndexSessionPath`:
  * rosetta's own route, the same at the root of either listener). */
 export function indexEndpointsFor(origin: string, sessionId: string): IndexEndpointSet | undefined {
-  if (sessionId.length === 0) return undefined;
+  if (sessionId.length === 0 || !isWellFormedText(sessionId)) return undefined;
   let url: URL;
   try {
     url = new URL(origin);
