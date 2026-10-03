@@ -7717,3 +7717,55 @@ Validation (neither main moved while the lanes were built; both land as fast-for
 Not built: SB-4 (MCP launch values for typed runs; the binding re-read per prompt — a shell's binding is frozen at birth), SB-5 (the phone), SB-6 (the desktop ring's host side, after the sync plane's DS-1…DS-4).
 
 Decisions: SB-D1…SB-D13 (ruled 2026-09-30 on the page *Hold, Reach, Let Go*; SB-D10 **Default**), `draft/thinking-spawn-bloom.md` §12 with its review delta; QL-D3 revised again.
+
+## TL — Godview's timeline: the swarm through time, and fieldd's status ledger (2026-10-02)
+
+Godview has a fourth view, TIMELINE: each agent is a lane in birth order, and its afternoon is one wake. The wake swells into work in its project's colour, with a soft glow, and narrows through a short S-curve into an orange or blue thread for a wait and a hairline for rest. The swarm's bodies sit at the head, lit as the swarm lights them, each with its readout ("12:42 working"), and the one you owe rings. Pointing at a lane (or ↑ ↓) quiets the rest and prints every span's length. Looking back relights the bodies to that moment ("4:39 idle · of 7m"); NOW glides back. Above the axis, the map of the day: the whole field as one ridge, work stacked by project above a line, waits below, gray outside the window in view. Pressing the map puts the head there, and dragging plays the afternoon back on the bodies; it is a slider (← → 5 min, ⇧ 30, Home, End). An agent that ended stays as a faint lane; rows outside the chosen profile recede; bare terminals sit in a quiet group. James ruled design F with its map (TL-D1) and every other mark at its lean on 2026-10-02.
+
+Puppeteer `feat/timeline` carries the view side. `monitor/status-history.ts` defines the book a host hands the views: spans per lane, `recordedFromMs`, and the ended rows. `AgentMonitorProps.history?` is optional, and a view without it draws births and current states. `monitor/status-ledger.ts` is a host's record, built purely from the rows it projects: unseen replies, peers from first heard, and a durable record merged under. `views/timeline/` is the view. Its pure model (lanes, scale, wake geometry, Pulse, words) is unit-tested; the component paints two canvases and keeps DOM for heads, names and the slider. The registry gains TIMELINE after rain (swarm stays first), the bar gains its mark, and `MonitorPalette.timeline` (ground, muted, border) is read from the host's aliases. Puppeteer's own Godview app keeps a ledger too. VibeField `tl/timeline` carries the rest:
+- DESIGN.md §2.6 records one exception: a working span may wear its project's colour where the shape carries the state. §8 gains the timeline's entry.
+- Contracts add `agent.history` (`agent.observe`, `local`), `AGENT_HISTORY` (a day, 2,000 changes, 160-char texts), `LAYOUT.AGENT_HISTORY_DIR`, and the mirror's `activity`.
+- fieldd's fold keeps a ledger per run in `users/<fuid>/agents/history/<run>.jsonl` (0700/0600). It is appended on each status change at Core's `statusSince` and never runs backwards. A working span keeps its last activity line, and a blocked one its blocker's words. `unknown` marks a stop, a withdrawn run and a pending re-attach. A re-attached run resumes its file. Retention follows the records.
+- The reader is EL7-tolerant: safe ids, `O_NOFOLLOW`, single-link regular files, the last MiB only, bad lines skipped.
+- Godview asks `agent.history` when the fold goes live and lays it under the window's own ledger. Runs that ended inside the day are named from their fold rows, and the stage narrows ended lanes as it narrows live rows. The catalog mounts the shipping view over a fixture fold and ledger.
+
+Found along the way:
+- The merge dropped fieldd's activity line at a moment both had seen. VibeField's stage test caught it, and it was fixed in puppeteer `48651ab`.
+- An independent review of the view found ten defects:
+  - A zoom pressed mid-tween left the head detached.
+  - Every fold projection repainted both canvases in full: lanes were rebuilt per frame and up to 2,000 spans were walked unwindowed.
+  - A drag stayed armed after a release outside the body.
+  - The focus ring parked on lane 0 on a mouse click.
+  - The lit and focused lanes were indices, so ↵ opened the wrong agent after an ended lane scrolled out.
+  - Panning back pushed the map's lens off the map.
+  - The map repainted on every hover.
+  - The canvas keys missed the device pixel ratio.
+  - `matchMedia` and `closest()` ran every frame.
+  - The slider lacked its aria values in the first markup.
+  All ten are fixed with tests. The four that needed real input were checked against the pre-fix view.
+- Mounted in Godview, the view had painted an opaque ground over the stage's glass, ignored the usage column, and printed under the claims strip. It now shows the stage through, insets by `--vf-monitor-chrome-right`, and godview.css pads it as it pads the list.
+- The ambient-motion audit (GT-D15.1) now admits the owed ring by name. It is pinned to transform and opacity, runs only while the timeline is mounted and a body is owed, and stops under reduced motion and animations-off.
+- Wall R23b caught agent ids spelled in the catalog fixture; it now names agents by catalog row. The fieldd builder's first test run built field-native into the shared cargo target; main's sources were touched so main rebuilds its own.
+
+Validation:
+- Puppeteer:
+  - typecheck is clean in every package and app.
+  - views passes 609 tests, godview 273; `packages:check` is clean.
+  - `pnpm -r test` is green in every package.
+  - Root `pnpm test` is red only at the adapter-codex ground-truth map ("stale") and its script test, the same at the pin `a4b5290`.
+  - The view's real-input CDP checks pass 25/25, and its shots match the prototype's F at 1320 and 400 px in both themes.
+- VibeField, on the lane:
+  - `pnpm verify` passed preflight (R23 and R23b), deps, iOS fixtures, icons, typecheck (25 projects), biome, `cargo fmt`, clippy and `bundle:assert`.
+  - `pnpm test` lost one row: fieldd's DS-5c "reassembly is fair", at load 27; it passed three times alone. contracts passed 689 and fieldd 1,718.
+  - `test:rust` passed 297 (9 ignored), and `gen:check` showed no drift.
+  - `smoke:godview` (with the two switches) failed three runs under load 22–27, each on a different deck row (the zoom round trip, a pane's cwd, a ⌘-held link). A control built from main `fa31207f` failed the cwd row once at load 57 and passed twice as load fell. The branch then passed three in a row.
+  - The catalog's timeline specimen, in headless Chrome through the real door, hook and ledger, drew with no page errors.
+
+Not built:
+- Threads (TL-D15 ruled Pulse).
+- A peer's durable history: `agent.history` is `local`, and a peer waits on the sync plane.
+- Unseen moments across Godview closes: `unread.ts` reseeds at open by design.
+- A crash's gap: only a graceful stop records `unknown`.
+- Peer rows draw a generic desktop mark, because `MonitorRemoteFacet` carries no OS.
+
+Decisions: TL-D1…TL-D17 (ruled 2026-10-02 on the page *Where the Time Went*), `draft/godview-timeline/design-timeline.md` §B.
