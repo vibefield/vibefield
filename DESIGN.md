@@ -983,6 +983,41 @@ semantics inside labelled controls. The drawing source is `tooling/fieldmarks/ge
 Studio and the offline `docs/design/fieldmarks.html` mount the same `IconsSection`. The HTML
 bundles its CSS, React, vectors, and downloadable archive without network dependencies.
 
+
+### 11.1 Face Club — the account deck, drawn in After Hours ink
+
+**Account artwork study, 2026-09-22.** The 48 selected emoji in contracts' `FACE_DECK`
+receive 48 original black-and-white sticker interpretations. This is a complete one-to-one
+artwork proposal, preserving the exact deck order and the stored emoji. §2.8 remains the
+shipping face policy and renderer; adoption of vector art is a separate integration step.
+
+Each subject has two authored optical masters: **112 units, detailed, from 40px** and
+**56 units, simplified, at 16–39px**. Small masters enlarge distinguishing features and
+remove hatching, fine fur, and secondary marks. They are separate geometry, not a filter or
+an automatically shrunk full illustration. The switch aligns with the face's existing 40px
+tilt threshold. The neutral ink is `#171815`, paper is explicit white, and the surrounding
+wall uses §11's print palette. The sticker finish grows a white cut edge; artwork omits it.
+Interior paper remains opaque, including the doughnut's central knockout.
+
+Animal anatomy and object silhouette precede expression: fox wedge, raccoon mask, wolf
+profile, panda patches, two camel humps, snail spiral, and ringed planet. Color never deals
+or disambiguates users. The drawings contain no system emoji glyphs, traced reference paths,
+fonts, filters, or embedded raster art. The original emoji appears only as a comparison,
+through the shipping `UserFaceView`.
+
+`@vibefield/design-kit/face-stickers` owns `FaceSticker`, typed ids and metadata,
+`findFaceSticker(emoji)`, and portable `faceStickerSvg` export. The mapping ignores only
+text/emoji variation selectors, like `faceKey`. Unknown/custom emoji return `undefined`
+and retain native rendering when integrated. Account dealing, collision validation,
+per-user tilt, coin choice, and persistence remain in their existing owners.
+
+`tooling/face-stickers/art.py` is the editable drawing source. Its generator verifies all
+48 emoji against the current policy before producing 192 SVG exports and two sprites.
+Studio and the self-contained `docs/design/face-stickers.html` mount the same
+`FaceStickersSection`, with all emoji/sticker pairs, an inspector, actual-size light/dark
+proofs, and downloads. Recognition at tiny sizes is an explicit design review concern,
+not a claim established by a bounds test.
+
 ---
 
 ## 13. Glyphs — the chrome's icon law

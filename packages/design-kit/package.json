@@ -12,6 +12,7 @@
     "./primitives": "./src/primitives.tsx",
     "./visuals": "./src/visuals.ts",
     "./icons": "./src/icons/index.tsx",
+    "./face-stickers": "./src/face-stickers/index.tsx",
     "./glyphs": "./src/glyphs/index.ts"
   },
   "sideEffects": [

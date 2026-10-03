@@ -7,6 +7,7 @@ import { CanvasGroundSection } from "./sections/CanvasGroundSection";
 import { CardsSection } from "./sections/CardsSection";
 import { ChromeSection } from "./sections/ChromeSection";
 import { ControlsSection } from "./sections/ControlsSection";
+import { FaceStickersSection } from "./sections/FaceStickersSection";
 import { FoundationsSection } from "./sections/FoundationsSection";
 import { GlyphsSection } from "./sections/GlyphsSection";
 import { GodviewSection } from "./sections/GodviewSection";
@@ -23,6 +24,7 @@ const NAV_ITEMS = [
   ["overview", "Overview", "01"],
   ["foundations", "Foundations", "02"],
   ["fieldmarks", "After Hours", "02a"],
+  ["face-stickers", "Face Club", "02b"],
   ["glyphs", "Glyphs", "02d"],
   ["canvas-ground", "Canvas ground", "03"],
   ["controls", "Controls", "04"],
@@ -117,6 +119,7 @@ export function DesignSystemPage({
         <OverviewSection studio={studio} state={studioState} />
         <FoundationsSection />
         <IconsSection />
+        <FaceStickersSection />
         <GlyphsSection />
         <CanvasGroundSection
           dark={dark}
