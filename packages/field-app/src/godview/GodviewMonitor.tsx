@@ -32,6 +32,7 @@ import { managedRowId, monitorAgentCounts } from "./monitor/agents";
 import { type DeviceChoice, filterByDevice, standingChoice } from "./monitor/device-filter";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
+import { instrumentedMonitorView } from "./monitor/perf/instrumented-view";
 import {
   bloomOwnsKeyEvent,
   launcherOwnsKeyEvent,
@@ -592,7 +593,9 @@ export function GodviewMonitor({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [showTabs, tabKey]);
 
-  const MonitorView = view.Component;
+  // MV-0 — the view's own component, or the lab's counting wrapper around it
+  // while a perf probe is installed (`monitor/perf/instrumented-view.tsx`)
+  const MonitorView = instrumentedMonitorView(view);
   return (
     <>
       <InstrumentBar

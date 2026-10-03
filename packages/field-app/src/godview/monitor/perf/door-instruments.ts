@@ -6,6 +6,8 @@ import {
   type FrameStamp,
   recordingDoor,
 } from "./frame-recorder";
+import { godviewPerfLab, installGodviewPerfLab } from "./lab-bridge";
+import { createReplayDoor } from "./replay-door";
 
 // THE DOOR'S INSTRUMENTS (MV-0) — the one switch at the renderer's seam.
 //
@@ -25,12 +27,18 @@ import {
 //   godviewRecord=1   the door is teed into a frame recorder, published on
 //                     `window.__vfGodviewRecorder` for the host to drain.
 
-export type GodviewDoorInstrument = "off" | "record";
+//   godviewReplay=1   the door's two streams come from the lab's player
+//                     (`lab-bridge.ts`, `replay-door.ts`); every other verb and
+//                     feed stays the real door's. Replay wins over record.
+
+export type GodviewDoorInstrument = "off" | "record" | "replay";
 
 export const GODVIEW_RECORD_PARAM = "godviewRecord";
+export const GODVIEW_REPLAY_PARAM = "godviewReplay";
 
 export function godviewDoorInstrument(search: string): GodviewDoorInstrument {
   const params = new URLSearchParams(search);
+  if (params.get(GODVIEW_REPLAY_PARAM) === "1") return "replay";
   if (params.get(GODVIEW_RECORD_PARAM) === "1") return "record";
   return "off";
 }
@@ -82,6 +90,18 @@ export function instrumentMonitorDoor(door: MonitorDoor, search = locationSearch
       return door;
     case "record":
       return recordingDoor(door, publishedRecorder());
+    case "replay": {
+      const { player } = godviewPerfLab() ?? installGodviewPerfLab();
+      const replay = createReplayDoor({
+        real: door,
+        roster: {
+          current: () => player.roster(),
+          onChange: (listener) => player.onRoster(listener),
+        },
+      });
+      player.attach(replay);
+      return replay;
+    }
   }
 }
 

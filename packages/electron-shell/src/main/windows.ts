@@ -90,8 +90,14 @@ export async function loadRenderer(
 ): Promise<void> {
   if (mode !== "dev") {
     const url = withGodviewRecordFlag(new URL(APP_ENTRY_URL));
-    if (mode === "smoke-godview" || mode === "terminal-perf-lab") {
+    if (mode === "smoke-godview" || mode === "terminal-perf-lab" || mode === "godview-perf-lab") {
       url.searchParams.set("godviewMarkers", "1");
+    }
+    // MV-0 — the Godview perf lab: the probe + player bridges (`lab-bridge.ts`)
+    // and the replay door in place of the live subscriptions (`door-instruments.ts`)
+    if (mode === "godview-perf-lab") {
+      url.searchParams.set("godviewPerf", "1");
+      url.searchParams.set("godviewReplay", "1");
     }
     await win.loadURL(url.href);
     return;

@@ -39,15 +39,30 @@ export interface ReplayDoor extends MonitorDoor {
   listeners(): { fold: number; mesh: number; devices: number };
 }
 
+/** A roster that may change after the door is built (the lab loads its corpus
+ * after the deck built its door): the current list, and a way to hear a new one. */
+export interface RosterSource {
+  current(): readonly DeviceInfo[];
+  onChange(listener: (roster: readonly DeviceInfo[]) => void): () => void;
+}
+
 export interface ReplayDoorOptions {
   /** The deck's own door, for every verb and feed that is not the corpus's. */
   real?: MonitorDoor | null;
-  roster: readonly DeviceInfo[];
+  roster: readonly DeviceInfo[] | RosterSource;
   /** A `mark` frame was delivered: the moment of truth for latency. */
   onMark?: (frame: Extract<RecordedFrame, { kind: "mark" }>) => void;
 }
 
 const NO_FEED: MonitorFeedState = { state: "no-door" };
+
+function rosterSource(roster: readonly DeviceInfo[] | RosterSource): RosterSource {
+  if (Array.isArray(roster)) {
+    const held = [...(roster as readonly DeviceInfo[])];
+    return { current: () => held, onChange: () => () => undefined };
+  }
+  return roster as RosterSource;
+}
 
 export function createReplayDoor(options: ReplayDoorOptions): ReplayDoor {
   const real = options.real ?? null;
@@ -57,7 +72,7 @@ export function createReplayDoor(options: ReplayDoorOptions): ReplayDoor {
   /** The last mesh open, re-delivered to a late (or re-)subscriber the way a
    * daemon re-snapshots a fresh subscription. */
   let lastOpen: Extract<RecordedFrame, { kind: "mesh-open" }>["open"] | null = null;
-  const roster = [...options.roster];
+  const roster = rosterSource(options.roster);
 
   const door: ReplayDoor = {
     observe(listener) {
@@ -76,9 +91,14 @@ export function createReplayDoor(options: ReplayDoorOptions): ReplayDoor {
     devices: {
       subscribe(listener) {
         devices.add(listener);
-        if (roster.length > 0) listener(roster);
+        const current = roster.current();
+        if (current.length > 0) listener(current);
+        const stop = roster.onChange((next) => {
+          if (devices.has(listener)) listener(next);
+        });
         return () => {
           devices.delete(listener);
+          stop();
         };
       },
     },

@@ -143,7 +143,14 @@ const MODE = parseMode(process.argv);
 // TP-S0c: `terminal-perf-lab` joins `live-surfaces-lab` in KEEPING hardware
 // acceleration. A perf lab that measured a software rasteriser would publish
 // numbers for a renderer nobody runs — the GPU path is the thing under test.
-if (isSmokeLike(MODE) && MODE !== "live-surfaces-lab" && MODE !== "terminal-perf-lab") {
+// MV-0: `godview-perf-lab` keeps it too — the swarm's WebGPU canvas is one of
+// the four views it measures.
+if (
+  isSmokeLike(MODE) &&
+  MODE !== "live-surfaces-lab" &&
+  MODE !== "terminal-perf-lab" &&
+  MODE !== "godview-perf-lab"
+) {
   app.disableHardwareAcceleration();
 }
 // TP-S0c: an OCCLUDED Chromium window stops presenting. Chromium suspends rAF
@@ -154,7 +161,7 @@ if (isSmokeLike(MODE) && MODE !== "live-surfaces-lab" && MODE !== "terminal-perf
 // awake so a measured zero is the terminal's and not the compositor's. They are
 // mode-gated because a PRODUCTION shell should absolutely background an occluded
 // window — that is a battery feature, and only the lab wants it off.
-if (MODE === "terminal-perf-lab") {
+if (MODE === "terminal-perf-lab" || MODE === "godview-perf-lab") {
   app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
 }
@@ -994,7 +1001,7 @@ async function main(
   // for the direct proof. The perf lab also uses this isolated shell profile so
   // measurements never launch or prewarm the owner's agents.
   const typedAgent =
-    (MODE === "smoke-godview" || MODE === "terminal-perf-lab") &&
+    (MODE === "smoke-godview" || MODE === "terminal-perf-lab" || MODE === "godview-perf-lab") &&
     !process.argv.includes("--terminal-direct-proof") &&
     process.env["FIELDD_DATA_DIR"] === undefined
       ? (await testing()).stageTypedAgent({ vibefieldRoot: user.rootReal })
@@ -1427,6 +1434,34 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       setView,
+      beforeExit: closeEvidence,
+      onWindow: (window) => {
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch(() => undefined);
+          },
+        });
+      },
+    });
+    return;
+  }
+
+  // MV-0 — the Godview perf lab: the same wiring as the terminal perf lab (a
+  // SHOWN window, the real pair against an isolated root), driving a corpus
+  // through the replay door and reading the renderer's probe per view.
+  if (MODE === "godview-perf-lab") {
+    await (await testing()).runGodviewPerfLab({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
       beforeExit: closeEvidence,
       onWindow: (window) => {
         installRendererLogging({

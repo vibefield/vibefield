@@ -21,6 +21,7 @@
     "./host-kit": "./src/host-kit.ts",
     "./logging": "./src/logging.ts",
     "./terminal-perf-lab": "./src/perf/terminal-perf-lab.ts",
+    "./godview-perf-lab": "./src/godview/monitor/perf/lab-bridge.ts",
     "./spike": "./src/spike/spike-loro.ts"
   },
   "scripts": {
