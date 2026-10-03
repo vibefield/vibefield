@@ -67,6 +67,7 @@ import {
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
 import type { ElectronLogging } from "../main/logging";
+import { fileThemeStore, THEME_FILE } from "../main/theme";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
@@ -545,7 +546,16 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   }
 
   // THE THEME: the app's one owner (main) moves, and the desk is re-dressed — its still changes,
-  // darker by night. The window's stills are kept here for the grader.
+  // darker by night. The window's stills are kept here for the grader. The owner keeps the choice
+  // in Electron's userData (`vibefield-theme.json`) — the profile every smoke shares with the
+  // owner's own app — so the row puts back exactly what it found there, on every path: the
+  // preference through the owner's own door, then the file's bytes (or no file, if there was none).
+  const themeFile = join(app.getPath("userData"), THEME_FILE);
+  const themeBytes = (): string | null =>
+    existsSync(themeFile) ? readFileSync(themeFile, "utf8") : null;
+  const found = themeBytes();
+  // the store's own reading of those bytes — none, or unreadable, is no choice yet: Auto
+  const foundPreference = fileThemeStore(themeFile).read() ?? "auto";
   const dressed = async (name: "light" | "dark"): Promise<DeskSampleFacts | null> => {
     await js(`globalThis.vibefield.theme.set(${JSON.stringify(name)})`);
     await waitForRendererFact(
@@ -568,9 +578,23 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
     }
     return js<DeskSampleFacts | null>("globalThis.__vfDesk.sample()");
   };
-  const light = await dressed("light");
-  const dark = await dressed("dark");
-  console.log(`SMOKE_CANVAS_THEME ${JSON.stringify({ light, dark })}`);
+  let light: DeskSampleFacts | null = null;
+  let dark: DeskSampleFacts | null = null;
+  try {
+    light = await dressed("light");
+    dark = await dressed("dark");
+  } finally {
+    await js(`globalThis.vibefield.theme.set(${JSON.stringify(foundPreference)})`);
+    if (found === null) rmSync(themeFile, { force: true });
+    else writeFileSync(themeFile, found, "utf8");
+  }
+  const kept = themeBytes();
+  console.log(`SMOKE_CANVAS_THEME ${JSON.stringify({ light, dark, found, kept })}`);
+  if (kept !== found) {
+    problems.push(
+      `the owner's theme file was left ${JSON.stringify(kept)}, not ${JSON.stringify(found)}`,
+    );
+  }
   if (light === null || dark === null) problems.push("no still to compare the themes by");
   else if (dark.lumaMean >= light.lumaMean) {
     problems.push(`the desk did not darken by night (${light.lumaMean} → ${dark.lumaMean})`);
