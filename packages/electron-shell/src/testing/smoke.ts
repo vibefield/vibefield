@@ -6290,6 +6290,11 @@ export async function runSmokeGodview(opts: {
       }
       const levelAfterMenu = win.webContents.getZoomLevel();
       if (levelAfterMenu !== levelUnderCover) {
+        // Put the window back before saying so: Chromium keeps a page zoom per
+        // origin in the PROFILE, which this smoke shares with the app on the
+        // machine, so a regression must not leave every later window zoomed.
+        // (This row's own red-proof did, 2026-10-03: "shell" at 0.5.)
+        win.webContents.setZoomLevel(levelUnderCover);
         throw new Error(
           `the View menu's Zoom In zoomed the whole window under Godview: page zoom level ${levelUnderCover} → ${levelAfterMenu}`,
         );
@@ -6377,6 +6382,7 @@ export async function runSmokeGodview(opts: {
       );
       const levelAfterCanvasMenu = win.webContents.getZoomLevel();
       if (levelAfterCanvasMenu !== levelOnCanvas) {
+        win.webContents.setZoomLevel(levelOnCanvas); // the profile's, as above
         throw new Error(
           `the View menu zoomed the whole window on the canvas: page zoom level ${levelOnCanvas} → ${levelAfterCanvasMenu}`,
         );
