@@ -46,7 +46,7 @@ export const capsule = (x1, y1, x2, y2, hw) => {
   const l = Math.hypot(dx, dy) || 1;
   const nx = (-dy / l) * hw;
   const ny = (dx / l) * hw;
-  return `M${f2(x1 + nx)} ${f2(y1 + ny)}L${f2(x2 + nx)} ${f2(y2 + ny)}A${hw} ${hw} 0 0 1 ${f2(x2 - nx)} ${f2(y2 - ny)}L${f2(x1 - nx)} ${f2(y1 - ny)}A${hw} ${hw} 0 0 1 ${f2(x1 + nx)} ${f2(y1 + ny)}Z`;
+  return `M${f2(x1 + nx)} ${f2(y1 + ny)}L${f2(x2 + nx)} ${f2(y2 + ny)}A${hw} ${hw} 0 0 0 ${f2(x2 - nx)} ${f2(y2 - ny)}L${f2(x1 - nx)} ${f2(y1 - ny)}A${hw} ${hw} 0 0 0 ${f2(x1 + nx)} ${f2(y1 + ny)}Z`;
 };
 /** Two crossed bars at ±45° as one outline (an X). */
 export const xPoly = (cx, cy, L, hw) => {
