@@ -1101,10 +1101,12 @@
           idempotent) → <b class="product">handler</b> → <b class="native">audit record</b>
         </div>
         <div class="stats">
-          <div class="stat"><strong>46</strong><span>agent-plane doors</span></div>
+          <!-- 2026-10-03: 54 rows = 8 agent.* · 32 agents.* · 14 index.* (methods.ts); 46 when QL wrote this -->
+          <div class="stat"><strong>54</strong><span>agent-plane doors</span></div>
           <div class="stat"><strong>8</strong><span>scopes that gate them</span></div>
           <div class="stat"><strong>15</strong><span>audited mutations</span></div>
-          <div class="stat"><strong>0</strong><span>that federate</span></div>
+          <!-- 2026-10-03: 12 of them federate since DS-2 (2026-10-01); 0 when this page was written -->
+          <div class="stat"><strong>12</strong><span>that federate</span></div>
         </div>
         <div class="legend">
           <span><span class="badge tone-built">BUILT</span> in the code at the stated revision, cited.</span>
