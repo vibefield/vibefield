@@ -43,6 +43,10 @@ floating pills — with ONE named exception, the terminal deck's sheet edge (§8
 James). The scoped `--vf-godview-*` tokens are the exact reference palette. VibeField
 composites those status-body colors at 72% by default so they remain legible glass over the field;
 the temporary system-control panel exposes that alpha for live tuning.
+**Since One Frame (FR-1, 2026-10-03) Godview is a view, not an overlay:** it is drawn inside the
+cover BELOW the frame (§10), reached by ⌘2 or its cell in the views track (§8), and keeps this
+instrument bar as its head for now — without the blocked · working · idle counters (FC-D18) — and
+its own light switch until the app's one theme control lands (FC-D7).
 
 **The two signatures** (spend boldness here, keep everything else quiet):
 1. **The living card** — CardShell physics: lift-on-grab, hot-point glow and rim on overlap,
@@ -336,6 +340,7 @@ claim it.
 | Tier | Recipe | Use |
 |---|---|---|
 | Island | surface `/80` + `backdrop-blur-xl` (hover `/90`) | closed pill, toolbars |
+| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the composer line — and, until the line grows around it, the views track's own pill (§8, §10) |
 | Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | put-back affordance, HUD toasts |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
@@ -396,6 +401,17 @@ arrives, and neither runs under reduced motion.
   parks the engine outright. Sheets recede → hold. Godview covers → freeze.
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
+
+**The view switch (One Frame §12, FC-D13; ruled 2026-10-01, built 2026-10-03).** The canvas is the
+ground floor (FV-D1); every other view is ONE cover over it (§10). From Canvas the cover fades in
+over 240ms plain `ease` and settles `scale(1.012) → 1` over 560ms on the island curve — Godview's
+open as it shipped — while the field recedes to `scale(0.98)` (600ms, island) and freezes: a cover
+covers, so it takes M5's freeze, not the sheets' hold. Between covered views the cover stays put
+and only its content changes, in place: a 180ms `ease` fade, no second settle. Back to Canvas the
+cover lowers — the rise reversed, 240ms out to 1.012 — and the field comes forward and thaws.
+**The frame never moves**: only the views track's thumb travels (300ms, island; §8). Reduced
+motion (M6): fades only, halved — the cover 120ms, its content 90ms; no settle, no recede, the
+thumb lands without travelling or dipping.
 
 ---
 
@@ -490,6 +506,28 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   (white / `#2C2C2E`, hairline + `shadow-sm`), 300ms island ease; labels 13px medium,
   active full-opacity, rest `/50`. A **small** size (26px thumb, 11px labels) for a switch that
   sits inside a composition rather than heading a section — the face's Sticker / Coin in Setup.
+- **The views track** (One Frame FR-1; FC-D2, FC-D4, FC-D11, FC-D17 ruled 2026-10-01; built
+  2026-10-03): the frame's way to each view (§10), the segmented control at the line's left end.
+  Four cells — Canvas (`canvas`), Godview (`panes`), History (`history`), and Assistant (`message`),
+  whose cell waits, faint by ink (the faint text at 55%), named "not built yet" — each **printing
+  its key under its glyph**, the way a Mac keyboard prints F1 under its brightness mark. Cells
+  46 × 36 on a 48 pitch (the track 196: padding 3, gap 2), the glyph 15 (the views' glyphs at rest
+  tertiary, secondary under the pointer, primary on the cell that is on), the key 3 below it at 9 —
+  the digit 600 in secondary ink, the ⌘ 500 a step lighter in tertiary, both a step darker on the
+  cell that is on or hovered. The track is `--vf-fill` (by night the foreground at 9%); the thumb is
+  the segmented thumb (`--vf-chrome-solid`, the hairline and `0 2px 6px` black/8; by night the
+  foreground at 20%, no shadow) wearing a key's skirt — a 1.5px black/10 lower edge, and by night a
+  0.5px white/10 top light over a black/55 skirt — because the button is the key. It slides 300ms
+  on the island curve. **⌘ held alone for 400ms** (so ⌘C and ⌘V never light it; another key with ⌘,
+  a pointerdown, a wheel or the window's blur puts it out): the keys go primary and the glyphs to
+  45%, in 160ms. **⌘ + a digit** presses its cell: the thumb slides and lands with a 1px dip (240ms,
+  the lift curve); ⌘4 says "Assistant · not built yet" over its cell for 1.4s — solid chrome, 12px
+  medium in secondary ink, the strong hairline ring and the island shadow, rising 4px as it fades
+  in — and nothing moves. On Windows the keys read Ctrl 1…Ctrl 4. A cell carries its key in its
+  tooltip and its accessible name (`aria-keyshortcuts`); how the keys reach the frame is §10's.
+  *As built (FR-1):* until the line exists the track sits alone in the line's material (§5) — a
+  208 × 52 pill, padding 5 × 6, at the line's left end (§10) — so the line can grow around it
+  without the track moving.
 - **Chips / category pills**: full-round, `--vf-fill` resting; active = **inverted solid**
   (black-on-light / white-on-dark) with `shadow-md`; `active:scale-95`.
 - **Status badge** (`StateBadge`, 03·A C-7): dot or pill in §2.5 color + label; always
@@ -517,7 +555,8 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   ("· syncing", "· waiting on 3", "· peer offline") only when there is one.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
-  it, `hud.panel` above both) and is the account's one door. A 44px button holds the 40px face
+  it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
+  track is the way in*) and is the account's one door. A 44px button holds the 40px face
   (§2.8). Around it sits a 56px circle — `--vf-hairline` on hover (§7's fill step), invisible otherwise — and
   **that circle is the menu**: a click grows it (M1) on `--vf-ease-island` 600ms into a
   256px-wide panel of solid chrome (`--vf-chrome-solid` — opaque, nothing shows through;
@@ -566,7 +605,8 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   yet carries another user's link. Another user's row, like New user…, leaves through the switch
   (below). A refusal (a switch or a new user main will not do) reopens
   the menu with main's sentence at its top, in words, until it folds. Open, the menu stands one
-  z-step above Godview's button, which it grows over. Under reduced motion the seed circle's
+  z-step above Godview's button, which it grows over (*retired with the button, FR-1*). Under
+  reduced motion the seed circle's
   hover fill does not show — the panel waits at full size, invisible.
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
   opens it, because that user already exists by then — the chooser is where you choose who to
@@ -706,15 +746,21 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   theme the panes are handed (a catalog theme, the per-mode choice, or §2.7's terminal
   grounds), at the stage's glass (`--vf-godview-stage-opacity`). A pane's translucent ground
   over a sheet of its own colour composites to that colour exactly, so lip, gaps and panes are
-  one surface — at the default opaque backdrop; a viewer who thins the backdrop thins the
+  one surface — at an opaque backdrop; a viewer who thins the backdrop thins the
   sheet with the rest of Godview, and the panes then read a shade denser than the lip (the
   panes cannot shed their ground: ghosttea draws inverse video and glyph backdrops from it).
+  *Since 2026-10-03 (FC-D16) the backdrop's default is the covers' glass, 72%*, so that shade is
+  the default look; the panes keep their own 82% and the launcher its 92% floor (§2.7), so text
+  never sits on the field. **Inside the cover (§10, FC-D15)** the sheet's ground still runs to the
+  window's foot and edges, under the line, but the panes stop at 692 — the 88px reserve above the
+  foot — and keep 8px clear of each edge.
   Over the monitor the card occludes the bodies exactly as much as Godview occludes the field. **The edge moves:** a
   grip in the lip (`role="separator"`, ↑/↓ 24px, ⇧ ×4, Home/End, double-click to rest) drags it.
   Downward the monitor grows and the swarm's field grows with it; upward the monitor does NOT
   shrink — its tuned height (`Monitor height`, 35%, 170px floor) is its minimum — and the sheet
   slides OVER it, up to the bar's bottom edge, the bodies still moving beneath. The deck keeps
-  at least 120px. Terminals resize live (rows only, so no reflow of history). The position is
+  at least 120px — above the cover's reserve, inside the cover. Terminals resize live (rows only,
+  so no reflow of history). The position is
   the viewer's (`localStorage`), re-clamped to each window, never a shared setting. No
   transition on the edge: every frame of an animated edge would be a PTY resize.
 - **A launch in an empty pane is one element from the click to the first frame** (QL-2, 2026-09-29 —
@@ -799,7 +845,8 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   saved backdrop, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
   imitation of a terminal. Its glass is named in the order light passes through it: the
   pane's opacity · Godview's backdrop (opacity and blur, `--vf-godview-stage-opacity/-blur`;
-  opaque and sharp by default) · your canvas. Variants: `window` (on the page), `deck` (the
+  the covers' 72% and sharp by default — FC-D16, 2026-10-03; it was opaque) · your canvas.
+  Variants: `window` (on the page), `deck` (the
   theme browser's stage), `thumb` (a 600px window scaled, docked in the corner once the big
   one scrolls away, and minimizable to a pill). It is `inert` inside a `role="img"` with a
   description — a picture, never a second UI.
@@ -927,9 +974,35 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   cluster anchored `top-4 right-4` (zoom pill · theme FAB · Artifact FAB outermost).
   **Bottom-left (2026-09-22, UA-D19):** the Me menu — the owner's face, §8 — then Godview,
   with the `hud.panel` slot above them; the Settings gear retires into the menu and `⌘,`.
+  *(Godview's button retired 2026-10-03 — the views track below is the way in.)*
   **The left edge (2026-09-23, SNAP-3):** the clipboard tray's notch at mid-height, its drawer
   from `top-16` to `bottom-20` (clearing the Me menu and Godview); the right edge is reserved
   for its twin.
+- **One frame, every view — five places, two axes** (One Frame FR-1 and FR-6, ruled
+  2026-10-01; first built 2026-10-03). Chrome lives in FIVE places: **the head** (the window's top
+  0–52, its controls 40 tall at `top-2`, centred on the lights' axis), **the line** (the foot:
+  880 × 52 at 20 from the bottom — x 150–1030, y 708–760 at the default 1180 × 780 — never
+  starting nearer the left than 76, so it never meets the corner), **the two edges** (the notches
+  and their drawers, §8), **the corner** (your face, centred on the foot axis), or **on its own
+  object** (a card's bar, the tools in hand, a pane's band; object chrome stays with its object,
+  even where it stands under the head). **Two axes:** everything in the head centres on y 28, the
+  traffic lights' centre; everything at the foot on y 734, the line's centre. **The frame stands
+  above every view.** The canvas is the ground floor; Godview, History and (once it exists) the
+  Assistant are views drawn as ONE cover over it (§6), each on its own ground at the covers' glass,
+  72% (FC-D16) — with no blur until the field's still exists to blur. A covered view ends its
+  content at 692, the **reserve** of 88 above the window's foot, and keeps 8px clear at each edge
+  for the notches' slivers; its own ground runs under the line, and only the canvas runs content
+  under it. Above the frame stand only Settings, the palette and the loading veil.
+  **The active view has ONE owner** — the window's, held in main beside the menu that names it,
+  persisted for the window's life and Canvas at launch; the views track, the keys and the View
+  menu all ask that owner and draw what it answers. **The keys:** ⌘1–⌘4 (Ctrl 1–4 on Windows) go
+  to Canvas, Godview, History and the Assistant (which waits: ⌘4 says so and nothing moves), and
+  nothing else switches views (FC-D4) — they are the product's own chords, taken on the window's
+  capture phase before a focused pane can see them, printed on the views track's cells (§8) and
+  said in the View menu. *As built (FR-1, 2026-10-03):* the frame so far is the views track, on the
+  line's glass at the line's left end; the line (FR-2), the head (FR-3), the edges and the corner
+  (FR-4) join it next. Until they do, the slots above stay the canvas's own chrome and lie under
+  the cover with the field.
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
