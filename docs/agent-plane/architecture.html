@@ -2308,12 +2308,12 @@
                   <tr>
                     <td><strong>AR-8</strong></td>
                     <td><p>The History view as spine content, not a plugin — the ingested tier's home, behind the ticketed direct route.</p></td>
-                    <td><span class="badge tone-designed">Designed</span><p>AR-D9 amended; gated on RO-1</p></td>
+                    <td><span class="badge tone-designed">Designed</span><p>AR-D9 amended; gated on RO-1 — RO-1 landed upstream 2026-10-03; the plan is written (<code>thinking-ar-history-room.md</code>, AR-D36…D43 ruled); AR-8a ∥ AR-8b in build</p></td>
                   </tr>
                   <tr>
                     <td><strong>RO-1</strong></td>
-                    <td><p>Upstream: a bearer token plus a configurable origin allow-list on <code>rosettad</code>. Until it lands, fieldd is the daemon's sole client, the direct plane does not ship, and two products cannot share one daemon. The hardcoded origin already in the daemon's allow-list is the evidence the knob is small.</p></td>
-                    <td><span class="badge tone-owed">Owed</span><p>thinking-ar-agent-plane §4, §17.3</p></td>
+                    <td><p>Upstream: a bearer token plus a configurable origin allow-list on <code>rosettad</code>. Until it lands, fieldd is the daemon's sole client, the direct plane does not ship, and two products cannot share one daemon. The hardcoded origin already in the daemon's allow-list is the evidence the knob is small. <em>2026-10-03: BUILT upstream and merged — <code>serve --token-file --grant-key-file --allow-origin</code>, a bearer on every route once a token is given, per-session HMAC grants (RO-10), rosetta <code>docs/AUTH.md</code> the rule; pinned at <code>eecae7a</code>. fieldd does not pass the flags yet: that half, with <code>index.openTicket</code>'s grant, is AR-8b.</em></p></td>
+                    <td><span class="badge tone-built">Built</span><p>upstream, pinned (LANDED §EL8 2026-10-03); the VibeField half is AR-8b</p></td>
                   </tr>
                   <tr>
                     <td><strong>PU-12</strong></td>
