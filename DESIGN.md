@@ -62,6 +62,7 @@ the temporary system-control panel exposes that alpha for live tuning.
 | `--vf-canvas-dot` (classic alternate build) | `#A6A6A6` | `#1C1C1C` |
 | `--vf-canvas-magnet-ink` (selected GL ground) | `#A6A6A6` | `#8A8A8A` |
 | `--vf-canvas-dot` (CSS fallback) | `rgba(0,0,0,0.16)` | `rgba(255,255,255,0.08)` |
+| the cutting mat (`glyph: "mat"`, `draft/ground/MAT.md`) — sage `#86A078`, cream lines `#E8DCBE`, a material carried across both themes | lit by the **Sun**: the tree-shadow reference's chain — the sage shows `#3D5A30` | lit by the **Moon**: 4100 K through the Purkinje shift — `#313C40` in the dapples, `#1C2027` in the palm's shadow, Eigengrau `#16161D` under all; half the sunlit luminance |
 
 The ICE ground projection uses `spacings: [25, 50, 100]`, `dotAlpha: 1`,
 `fadeIn: [20, 30]`, `fadeOut: [90, 100]`, `dotRadius: [1.5, 1.5]`, and
@@ -83,6 +84,10 @@ is the experiment's `#8A8A8A`; light keeps `#A6A6A6`. The classic alternate's
 but it does not ride the current production path. Dot/needle is tuning inside
 the selected magnet implementation: Dot is the default, and Canvas Settings
 may persist either glyph as a device presentation preference.
+
+**The cutting mat (2026-09-07).** The third ground is a material, not a token: its sage and
+cream are the same in both themes and the theme changes the light that falls on it. The
+gobo plates are the product's assets; the engine ships the mat's law and its two lights.
 
 ### 2.2 Surfaces
 
@@ -335,6 +340,15 @@ claim it.
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | put-back affordance, HUD toasts |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 
+**The composited profile draws the card's material on the ground (2026-09-07; ICE
+design-013 Q8, ratified 2026-09-06).** In ICE's composited profile the resting and lifted
+card shadows above, §7's lift, selection ring and buttons, and §2.3's hairline are rendered
+by the ground's card frame — one SDF fragment per card, at true z — and the DOM card carries
+none of them; the notched frame is the selection chrome. The recipes stay exactly as written
+here: the ground reads them by name (`draft/ground` `theme.ts`: `SHADOW`, `LINES`, `LIFT`,
+`HEAT`). The stratified profile keeps its CSS chrome. Nothing here changes for a widget
+author; the change is which layer paints the chrome.
+
 ---
 
 ## 6. Motion
@@ -402,6 +416,13 @@ Glow/rim knobs are live CSS vars (Studio adjustable, defaults in code):
 light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
 `--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` · `--ic-rim-alpha-t: 0.85` /
 `-c: 0.55`.
+
+**In the composited profile (2026-09-07)** these states are the ground's frame terms, not
+CSS: lift is `Motion.lift` (the same `liftScale`), the selection ring rides the frame's edge,
+and the overlap glow and rim become the CAST LIGHT — the lifted card lights the card under
+it through its own distance field (`draft/ground/GLOW.md`); the hot-point anatomy above is
+the DOM chrome's and retires with it. The tier alphas, the rim width and the colours stay the
+`--ic-*` values listed here; the size, offset and radial knobs have no meaning for the light.
 
 ---
 
