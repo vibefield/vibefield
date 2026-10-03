@@ -20,7 +20,7 @@ export interface GlyphMeta {
   readonly role: string;
 }
 
-export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","document","layers","sparkle"] as const;
+export const GLYPH_NAMES = ["plus","close","check","search","pencil","undo","reset","outward","link","return","backspace","ellipsis","start","resume","jump","duplicate","tape","lift","trash","pen","eraser","today","chevron","arrow","gear","person","sliders","canvas","agents","profiles","plugin","mesh","terminal","pulse","code","sun","moon","clipboard","package","capture","panes","history","sidepanel","bug","globe","folder","keyboard","mic","scantext","snippets","prompt","message","key","question","exclaim","flame","missing","document","layers","sparkle"] as const;
 export type GlyphName = (typeof GLYPH_NAMES)[number];
 
 export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
@@ -80,6 +80,7 @@ export const GLYPH_META: Readonly<Record<GlyphName, GlyphMeta>> = {
   question: {"label":"Question","group":"signals","role":"The swarm's asked-you-something mark"},
   exclaim: {"label":"Failure","group":"signals","role":"The swarm's failed mark"},
   flame: {"label":"Burn","group":"signals","role":"The burn ladder's flame: filled when lit, outlined where there is no price"},
+  missing: {"label":"Missing","group":"signals","role":"A glyph name the set does not hold — a kind's act or tool drawn as missing, and said once"},
   document: {"label":"Document","group":"studio","role":"Studio catalog tile"},
   layers: {"label":"Layers","group":"studio","role":"Studio catalog tile"},
   sparkle: {"label":"Sparkle","group":"studio","role":"Studio's fallback tile"},
@@ -142,6 +143,7 @@ export const GLYPHS: Readonly<Record<GlyphName, GlyphDrawing>> = {
   question: {"kind":"instrument","strokes":[["path",{"d":"M9 9.5a3 3 0 1 1 4.2 2.7c-.8.4-1.2 1-1.2 1.8v.5"}]],"fills":[["circle",{"cx":"12","cy":"17.75","r":"1.35"}]]},
   exclaim: {"kind":"instrument","strokes":[["path",{"d":"M12 5v9"}]],"fills":[["circle",{"cx":"12","cy":"18","r":"1.35"}]]},
   flame: {"kind":"instrument","strokes":[["path",{"d":"M12.2 1.8C14.6 5.6 18 8.6 18 13.4a6 6 0 0 1-12 0c0-2.7 1.1-4.5 2.5-5.8.2 1.8 1 2.9 2.1 3.3C9.3 7.5 10.1 4.1 12.2 1.8Z"}]],"fills":[],"transform":"translate(0 1.4)"},
+  missing: {"kind":"instrument","strokes":[["rect",{"x":"4.5","y":"4.5","width":"15","height":"15","rx":"3"}],["path",{"d":"M7.5 13.5l6-6M10.5 16.5l6-6"}]],"fills":[]},
   document: {"kind":"instrument","strokes":[["path",{"d":"M6 3h8l4 4v14H6Z"}],["path",{"d":"M14 3v5h5M9 12h6M9 16h6"}]],"fills":[]},
   layers: {"kind":"instrument","strokes":[["path",{"d":"M12 3l9 5-9 5-9-5ZM3 12l9 5 9-5M3 16l9 5 9-5"}]],"fills":[]},
   sparkle: {"kind":"instrument","strokes":[["path",{"d":"M12 3l1.9 5.6 5.6 1.9-5.6 1.9L12 18l-1.9-5.6L4.5 10.5l5.6-1.9Z"}],["path",{"d":"M19 15l.8 2.2 2.2.8-2.2.8L19 21l-.8-2.2-2.2-.8 2.2-.8Z"}]],"fills":[]},

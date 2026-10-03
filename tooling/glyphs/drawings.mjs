@@ -670,6 +670,16 @@ export const DRAWINGS = {
     instrument: { s: P(FLAME), tf: "translate(0 1.4)" },
     hardware: { d: FLAME },
   },
+  missing: {
+    label: "Missing",
+    group: "signals",
+    role: "A glyph name the set does not hold — a kind's act or tool drawn as missing, and said once",
+    // the desk's missing face as a mark: a card with two of its 45° hatches
+    instrument: { s: `${R(4.5, 4.5, 15, 15, 3)}${P("M7.5 13.5l6-6M10.5 16.5l6-6")}` },
+    hardware: {
+      d: `${rectPath(3.5, 3.5, 17, 17, 3)}${capsule(7.5, 13.5, 13.5, 7.5, 1.1)}${capsule(10.5, 16.5, 16.5, 10.5, 1.1)}`,
+    },
+  },
   document: {
     label: "Document",
     group: "studio",

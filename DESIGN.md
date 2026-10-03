@@ -1702,14 +1702,14 @@ alternate moods retain their individual speed and light settings.
 **Chosen 2026-09-24 (James, from the Field Glyphs page; `tooling/glyphs/picks.json` is the record).**
 Every functional icon the chrome draws — the HUD's round buttons, the file pill, the Settings rail,
 the agent rows, the edge trays, the plugins' toolbars, the phone's composer and keypad, the swarm's
-marks, the desk's bar and the tools in hand — is one of **59 named glyphs** in one **24-unit box**,
+marks, the desk's bar and the tools in hand — is one of **60 named glyphs** in one **24-unit box**,
 optical centre at 12,12, live area 2 to 22, drawn in `currentColor` and nothing else. The host says
 the size and the colour, the way it says them for text (§2.4); a glyph never carries state (§2.5,
 I-5) and never a colour of its own. Two constructions, one set:
 
 | Construction | Glyphs | Law |
 |---|---|---|
-| **Instrument** (49) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
+| **Instrument** (50) | everything not listed as Hardware | one 2-unit stroke, round caps and joins, 3-unit corners; solid dots only where a mark ends in one (the question and the failure) |
 | **Hardware** (10) | close · check · search · rename (pencil) · return · backspace · more (ellipsis) · arrow · general (sliders) · keyboard | one solid silhouette as a single `evenodd` path — bodies and their holes, no masks, no filters — so the same geometry is a template asset on iOS |
 
 **Sizes** are the host's, by CSS: 12 (captions) · 13–16 (row controls) · 18 (the Settings rail, the
@@ -1722,9 +1722,10 @@ outward · link · return · backspace · ellipsis · start · resume · jump ·
 pen · eraser · today; navigation: chevron · arrow; places and objects:
 gear · person · sliders · canvas · agents · profiles · plugin · mesh · terminal · pulse · code · sun ·
 moon · clipboard · package · capture · panes · history · sidepanel · bug · globe · folder · keyboard ·
-mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame; Studio only:
-document · layers · sparkle. **`history`** (2026-10-03, One Frame §13) is the views track's History
-cell (§10): a clock turning back, the dial at `globe`'s radius opened where its arrow turns it.
+mic · scantext · snippets · prompt; signals: message · key · question · exclaim · flame · missing;
+Studio only: document · layers · sparkle. **`history`** (2026-10-03, One Frame §13) is the views
+track's History cell (§10): a clock turning back, the dial at `globe`'s radius opened where its arrow
+turns it.
 **`start`** and **`resume`** (2026-10-03, One Frame §13; Session Glyphs' picks of 30 Sep, spawn-T3
 and resume-play-T3) are the composer's create in Godview and in History (§8, the line): `terminal`'s
 window with its chevron, the frame opened at the lower right to hold the verb — a plus for a session
@@ -1744,7 +1745,25 @@ Hardware records are drawn, not shipped. The rest of that chrome borrows the set
 turned 180° to go back), `undo` (flipped for redo), `snippets` (a note's chip). **A desk kind may draw
 its own act and tool glyphs beyond the set** (MC-D8) — ICE's `{ path }` drawing, held to this
 construction (the 24-unit box, one 2-unit stroke, `currentColor`) and drawn as the set's are, never as
-an inline `<svg>` in product code; the clock's five are the first.
+an inline `<svg>` in product code; the mini mat's "Change the vinyl" is the first built-in to (the
+example plugin's clock draws five).
+**ICE's glyph names, mapped** (R2 — the orchestrator's Phase 4 rulings, 2026-10-03): a kind declares
+a glyph by a NAME of ICE's set or by its own drawing (`HeldGlyph = string | { path, fill? }`), and
+the desk's chrome draws it from this set by this table, never by a guess:
+
+| ICE's name | Drawn as |
+|---|---|
+| `chevron` · `chevron-left` | `chevron` · `chevron` turned 180 |
+| `undo` · `redo` | `undo` · `undo` flipped |
+| `pen` · `eraser` · `today` | `pen` · `eraser` · `today` |
+| `duplicate` · `lock` · `unlock` · `trash` | `duplicate` · `tape` · `lift` · `trash` |
+| `agents` · `ellipsis` · `check` | `agents` · `ellipsis` · `check` |
+| `{ path }` · `{ path, fill: true }` | the bar's own path renderer: the path in the 24-unit box, stroked 2 in the bar's ink, or filled |
+| any other name | **`missing`** — said once, never another glyph |
+
+**`missing`** (2026-10-03, R2) is the desk's missing face as a mark — a card with two of its 45°
+hatches — for a name the set does not hold; an act that declares no glyph at all shows its label
+instead (R3).
 
 **Where it lives.** The drawings are `tooling/glyphs/drawings.mjs` (both constructions for every
 name); `build.mjs` emits the kit's `packages/design-kit/src/glyphs/data.ts` and the phone's
@@ -1755,7 +1774,9 @@ phone, `FieldGlyph(.name, size:)` draws the template asset at `FieldGlyph.box(fo
 size the SF Symbol had, and the swarm's CoreGraphics sprites are the Instrument drawings by hand.
 **An inline `<svg>` that is an icon is refused by test**; what may stay inline is geometry that is
 not an icon — the edge tray's notch and drawer (§8), the coin's marks (§2.8), the catalog's fixture
-stills. **Kept exact, outside this set:** the tray and app masters, the three vendor marks (AR-L1),
+stills — and, on the desk, two named exceptions: the bar's ONE path renderer for a kind's own drawing
+(R2; one component, allow-listed) and the peers' pointer arrow (R17; §8, peers on the mat).
+**Kept exact, outside this set:** the tray and app masters, the three vendor marks (AR-L1),
 the OS marks the device chip wears (Simple Icons, drawn inline in `os-marks.tsx` — the test's one
 other allowed file), the Face Club and AFTER HOURS art (§11), the file-tree family (§8).
 
