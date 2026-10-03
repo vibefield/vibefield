@@ -499,19 +499,20 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   it, `hud.panel` above both) and is the account's one door. A 44px button holds the 40px face
   (§2.8). Around it sits a 56px circle — `--vf-hairline` on hover (§7's fill step), invisible otherwise — and
   **that circle is the menu**: a click grows it (M1) on `--vf-ease-island` 600ms into a
-  256px-wide panel in island material (§5) with the island shadow and a hairline, its corners
-  28px so the arc stays concentric with the face. **The face never moves** (M2): the panel
+  256px-wide panel of solid chrome (`--vf-chrome-solid` — opaque, nothing shows through;
+  *changed 2026-09-22, James: "do not make it transparent" — it was island material*) with the
+  island shadow and a hairline, its corners 28px so the arc stays concentric with the face. **The face never moves** (M2): the panel
   opens up and to the right around it, so the second click lands on the same face and folds it
   away. It reads bottom-up, nearest first: *you* (the name and login beside the face; clicking
   them opens Settings → Account) · Settings… `⌘,` · Link Tailscale account… (only while
   unlinked) · New user… · then, under a "Switch to" eyebrow, the other users — a 26px face,
   the name, the tailnet as one mono word, and "N waiting" in words after a 6px orange dot. A
   machine with one user shows no switch list. Faces and row icons share one 44px column
-  centred on the owner's face. **Choreography** (§6's constants): the glass fades in over
+  centred on the owner's face. **Choreography** (§6's constants): the surface fades in over
   160ms plain `ease`; the name and login reveal 140ms behind the shape (240ms `ease`, sliding in 6px); rows
   fade and rise 4px nearest-first, 160ms + 26ms per row (cap 400ms); the face stays lifted
   while open. **Closing reverses it** (M4): the content goes in 120ms, the shape folds from
-  80ms over 600ms, and the glass fades as it reaches the face. Return/Space opens it with
+  80ms over 600ms, and the surface fades as it reaches the face. Return/Space opens it with
   focus on Settings…, the nearest act; arrows move. Esc or a second click folds it and returns
   focus to the face, as does anything else that folds it while focus is inside (`⌘,`, the tray's
   Settings…); a click outside folds it and leaves focus where the click put it, and Tab folds it
@@ -523,7 +524,12 @@ light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
   name, the login; it opens the Account page — in place of the gear tile and the word
   "Settings"; the other users sit under it as 24px faces, each with its waiting count, and a
   switch main refuses is said under them in its words; and the Account nav group is gone,
-  because the head is the account.
+  because the head is the account. **The head is one tile** (*refined 2026-09-22, James: "self
+  contained and seperated from below sections"*): the card, the switch row and any refusal sit
+  inside the Settings sections' own material — the hairline, the whisper fill, 18px corners —
+  with a hairline between the card and the switch row, and the tile stands 12px clear of the
+  nav, so the switch row never reads as one more nav group. The row's eyebrow says "Switch
+  user", bottom-aligned with the faces it names.
   **Waiting, offline.** A resident user's waiting agents (UA-D3) show as a §2.5 orange count
   *beside* the owner's face (top-right, ringed 2px in the ground), never on it (I-5); it fades
   as the menu opens and the words take over in that user's row. An unlinked user reads

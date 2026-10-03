@@ -213,7 +213,7 @@ function AccountHead({
       </button>
       {others.length > 0 && (
         <div className="vf-settings-account-others">
-          <span className="vf-settings-account-eyebrow">Switch</span>
+          <span className="vf-settings-account-eyebrow">Switch user</span>
           {others.map((other) => {
             const waiting = other.waiting ?? 0;
             return (

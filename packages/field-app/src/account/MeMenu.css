@@ -2,10 +2,10 @@
  * the 56px seed around the owner's face grows into the menu on the island's
  * curve (M1), and the face never moves (M2). Tokens only.
  *
- * Choreography, open: the shape 600ms island · the glass 160ms ease · the
+ * Choreography, open: the shape 600ms island · the surface 160ms ease · the
  * name and login 140ms behind the shape · rows nearest-first, 160ms + 26ms per
  * row (cap 400ms), 240ms each. Closing reverses it (M4): content out in 120ms,
- * the shape folds from 80ms over 600ms, the glass fades as it reaches the face.
+ * the shape folds from 80ms over 600ms, the surface fades as it reaches the face.
  */
 
 .vf-me {
@@ -54,17 +54,17 @@
     background-color 160ms ease;
 }
 
-/* The island material, on its own layer so the glass can fade on its own beat
-   while the shape travels (§5: surface /80 + blur, hairline). */
+/* Solid chrome, on its own layer so the surface can fade on its own beat while
+   the shape travels. Opaque, never glass (§8, James 2026-09-22: "do not make
+   it transparent") — the field does not show through an open menu. */
 .vf-me-panel::before {
   position: absolute;
   inset: 0;
   border-radius: inherit;
-  background: color-mix(in srgb, var(--vf-chrome-solid) 80%, transparent);
+  background: var(--vf-chrome-solid);
   box-shadow: inset 0 0 0 1px var(--vf-hairline);
   content: "";
   opacity: 0;
-  backdrop-filter: blur(24px);
   transition: opacity 160ms ease 440ms;
 }
 

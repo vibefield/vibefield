@@ -303,6 +303,14 @@ describe("MeMenuView", () => {
     expect((item("Settings…") as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("is solid chrome, never glass: nothing shows through an open menu", () => {
+    const from = ME_CSS.indexOf(".vf-me-panel::before {");
+    const rule = ME_CSS.slice(from, ME_CSS.indexOf("}", from));
+    expect(rule).toContain("background: var(--vf-chrome-solid);");
+    expect(rule).not.toContain("backdrop-filter");
+    expect(rule).not.toContain("transparent");
+  });
+
   it("grows on the island curve and, under reduced motion, only fades (M1, M6)", () => {
     expect(ME_CSS).toContain("width 600ms var(--vf-ease-island)");
     expect(ME_CSS).toContain("height 600ms var(--vf-ease-island)");
