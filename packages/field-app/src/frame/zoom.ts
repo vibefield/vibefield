@@ -67,25 +67,68 @@ export function zoomActForKey(event: ZoomKey, keys: ViewKeys): ZoomAct | null {
   return code === "Digit1" || event.key === "!" ? "fit" : null;
 }
 
+/** The zoom band the canvas allows — the ENGINE's (`settings.zoom` → `CameraLimits`): on the desk the
+ * scale-free band, ICE's `ZOOM_MIN`…`ZOOM_MAX` (1e-8…1e8) — never a constant of the head's (DK-3,
+ * ruling 5: the 0.25–3 clamp was a DOM card's tuning and left with it). */
+export interface ZoomBounds {
+  readonly min: number;
+  readonly max: number;
+}
+
 /** What the zoom's acts move: the canvas's camera (the head's canvas door). */
 export interface ZoomTarget {
   zoom(): number;
   zoomTo(zoom: number): void;
   zoomToFit(): void;
+  /** The engine's band; absent, the camera's own clamp is the only one. */
+  bounds?(): ZoomBounds;
 }
 
+const clampTo = (zoom: number, bounds: ZoomBounds | undefined): number =>
+  bounds === undefined ? zoom : Math.min(bounds.max, Math.max(bounds.min, zoom));
+
 export function runZoom(target: ZoomTarget, act: ZoomAct): void {
+  const bounds = target.bounds?.();
   switch (act) {
     case "in":
-      target.zoomTo(target.zoom() * ZOOM_STEP);
+      target.zoomTo(clampTo(target.zoom() * ZOOM_STEP, bounds));
       return;
     case "out":
-      target.zoomTo(target.zoom() / ZOOM_STEP);
+      target.zoomTo(clampTo(target.zoom() / ZOOM_STEP, bounds));
       return;
     case "fit":
       target.zoomToFit();
       return;
     case "actual":
-      target.zoomTo(1);
+      target.zoomTo(clampTo(1, bounds));
   }
+}
+
+/** Whether an act can move the camera at all: in at the band's top, out at its foot, cannot. */
+export function zoomActAvailable(
+  act: ZoomAct,
+  zoom: number,
+  bounds: ZoomBounds | undefined,
+): boolean {
+  if (bounds === undefined) return true;
+  if (act === "in") return zoom < bounds.max;
+  if (act === "out") return zoom > bounds.min;
+  return true;
+}
+
+/** The zoom as the readout's ONE number, a percent — whatever the band allows (ruling 5): whole from
+ * 10%, a tenth below it, two significant figures under 1% — so a scale-free desk never reads 0%. */
+export function zoomPercent(zoom: number): number {
+  const percent = zoom * 100;
+  if (!Number.isFinite(percent) || percent <= 0) return 0;
+  if (percent >= 10) return Math.round(percent);
+  if (percent >= 1) return Math.round(percent * 10) / 10;
+  return Number(percent.toPrecision(2));
+}
+
+const GROUPED = new Intl.NumberFormat("en-US", { maximumFractionDigits: 20, useGrouping: true });
+
+/** The readout's number as it is printed: thousands grouped, never an exponent ("10,000,000,000"). */
+export function formatZoomPercent(percent: number): string {
+  return GROUPED.format(percent);
 }

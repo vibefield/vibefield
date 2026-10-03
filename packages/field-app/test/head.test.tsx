@@ -595,6 +595,15 @@ describe("the sync dot and the tiles' sync words (C6-4, UA-D7)", () => {
 });
 
 describe("the zoom readout (FC-D8) and its solid menu (FC-D14)", () => {
+  it("prints any zoom the desk allows, and disables Zoom in at the band's top (DK-3, ruling 5)", () => {
+    const canvas = fakeCanvas({ zoom: 1e8 });
+    const bounded = { ...canvas, bounds: () => ({ min: 1e-8, max: 1e8 }), percent: () => 1e10 };
+    mount({ canvas: bounded as unknown as ReturnType<typeof fakeCanvas>, open: "zoom" });
+    expect($(".vf-head-zoom")?.textContent).toBe("10,000,000,000%");
+    expect(($('[data-act="in"]') as HTMLButtonElement).disabled).toBe(true);
+    expect(($('[data-act="out"]') as HTMLButtonElement).disabled).toBe(false);
+  });
+
   const readout = (): HTMLButtonElement => $(".vf-head-zoom") as HTMLButtonElement;
   const rows = (): string[] =>
     $$(".vf-head-zoom-menu .vf-menu-row").map((row) => row.textContent ?? "");

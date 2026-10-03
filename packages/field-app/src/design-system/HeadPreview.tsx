@@ -1,3 +1,4 @@
+import { ZOOM_MAX, ZOOM_MIN } from "@vibecook/ice/desk";
 import type { DocRegistryEntry } from "@vibefield/contracts";
 import { type ReactElement, useState } from "react";
 import type { DocManagerApi, DocManagerState } from "../doc-manager";
@@ -6,6 +7,7 @@ import { Head } from "../frame/Head";
 import { type HeadDocTile, HeadView } from "../frame/HeadView";
 import type { HeadCanvas, HeadCrumb } from "../frame/head-canvas";
 import type { ViewKeys } from "../frame/views";
+import { zoomPercent } from "../frame/zoom";
 import { CommandPalettePreview } from "./CommandPalettePreview";
 
 // The head's fixture ADAPTER (One Frame FR-3; docs/UI_SYSTEM.md): the shipping
@@ -104,16 +106,19 @@ export function fixtureHeadCanvas(
   const say = (set: Set<() => void>): void => {
     for (const fn of [...set]) fn();
   };
+  // the desk's own band (ICE's scale-free ZOOM_MIN…ZOOM_MAX), as the engine's door reads it
+  const bounds = { min: ZOOM_MIN, max: ZOOM_MAX };
   const moveTo = (next: number): void => {
-    zoom = Math.min(8, Math.max(0.1, next));
+    zoom = Math.min(bounds.max, Math.max(bounds.min, next));
     say(zoomListeners);
   };
   return {
     path: () => path,
     subscribePath: (fn) => listen(pathListeners, fn),
-    percent: () => Math.round(zoom * 100),
+    percent: () => zoomPercent(zoom),
     subscribePercent: (fn) => listen(zoomListeners, fn),
     zoom: () => zoom,
+    bounds: () => bounds,
     zoomTo: moveTo,
     zoomToFit: () => moveTo(0.86),
     exitTo: (depth) => {

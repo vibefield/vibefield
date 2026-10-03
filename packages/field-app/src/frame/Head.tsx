@@ -23,7 +23,14 @@ import { type FrameSurface, foldSurface } from "./frame-surface";
 import { type HeadDocTile, type HeadDot, HeadView } from "./HeadView";
 import type { HeadCanvas } from "./head-canvas";
 import type { ViewKeys } from "./views";
-import { runZoom, ZOOM_ACTS, type ZoomAct, zoomActForKey, zoomKeyLabel } from "./zoom";
+import {
+  runZoom,
+  ZOOM_ACTS,
+  type ZoomAct,
+  zoomActAvailable,
+  zoomActForKey,
+  zoomKeyLabel,
+} from "./zoom";
 
 // THE HEAD'S CONTROLLER (DESIGN.md §8 "The head", §10; One Frame FR-3). It
 // owns what the head DOES — the field's name and the path to read, renaming in
@@ -378,6 +385,10 @@ export function Head({
       }}
       zoom={{
         percent,
+        // read with the percent: the camera moved, so the band's ends are asked again
+        unavailable: ZOOM_ACTS.map((entry) => entry.act).filter(
+          (act) => !zoomActAvailable(act, canvas.zoom(), canvas.bounds?.()),
+        ),
         keys,
         open: zoomOpen,
         hot,

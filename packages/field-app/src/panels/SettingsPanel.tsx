@@ -37,6 +37,7 @@ import { AgentsSection } from "./agents/AgentsSection";
 import { type ProfilesRoute, ProfilesSection } from "./agents/ProfilesSection";
 import { ProfileMark } from "./agents/ProfilesView";
 import { profileNavItems } from "./agents/profiles-model";
+import { DeskReadout } from "./DeskReadout";
 import { DesktopSection } from "./DesktopSection";
 import { MagnetGridSection } from "./MagnetGridSection";
 import { MeshSection } from "./MeshSection";
@@ -687,6 +688,8 @@ export function SettingsPanel({
             title="Developer"
             description="Tools for working on VibeField itself. Development builds only."
           >
+            {/* DK-3 (ruling 2): the desk's own numbers — no panel of ICE's */}
+            <DeskReadout />
             <SettingsRow
               title="ICE devtools"
               description="The canvas engine's inspector — the world, the systems, the documents — docked over the canvas."

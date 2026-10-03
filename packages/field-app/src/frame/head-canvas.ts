@@ -1,5 +1,6 @@
 import {
   Camera,
+  CameraLimits,
   type CanvasEngine,
   defineQuery,
   type Entity,
@@ -8,6 +9,7 @@ import {
   PrefabId,
   widgets,
 } from "@vibecook/ice";
+import { type ZoomBounds, zoomPercent } from "./zoom";
 
 // WHAT THE HEAD READS FROM THE CANVAS, AND ASKS OF IT (One Frame FR-3;
 // DESIGN.md §8 "The head"). The name pill shows where you are — the field and
@@ -39,11 +41,13 @@ export interface HeadCanvas {
    * same array until the path changes, so a store can read it as a snapshot. */
   path(): readonly HeadCrumb[];
   subscribePath(onChange: () => void): () => void;
-  /** The zoom as the readout says it: a whole percent. */
+  /** The zoom as the readout says it: a percent (`zoomPercent` — whole from 10%, finer below). */
   percent(): number;
   subscribePercent(onChange: () => void): () => void;
   /** The camera's zoom, 1 being actual size. */
   zoom(): number;
+  /** The band the canvas allows — the engine's own (DK-3, ruling 5); absent, no bound is shown. */
+  bounds?(): ZoomBounds;
   zoomTo(zoom: number): void;
   /** Frame everything in the folder you are in. */
   zoomToFit(): void;
@@ -99,6 +103,15 @@ export function headPathEqual(a: readonly HeadCrumb[], b: readonly HeadCrumb[]):
 }
 
 const zoomOf = (engine: CanvasEngine): number => engine.world.getResource(Camera)?.zoom ?? 1;
+
+/** The ENGINE's band (`settings.zoom` → `CameraLimits`) — on the desk ICE's scale-free 1e-8…1e8. */
+const boundsOf = (engine: CanvasEngine): ZoomBounds => {
+  const limits = engine.world.getResource(CameraLimits);
+  return {
+    min: limits?.minZoom ?? Number.MIN_VALUE,
+    max: limits?.maxZoom ?? Number.MAX_VALUE,
+  };
+};
 
 /** The head's door over a live canvas engine. */
 export function canvasHead(engine: CanvasEngine): HeadCanvas {
@@ -163,9 +176,10 @@ export function canvasHead(engine: CanvasEngine): HeadCanvas {
         }
       };
     },
-    percent: () => Math.round(zoomOf(engine) * 100),
+    percent: () => zoomPercent(zoomOf(engine)),
     subscribePercent: (onChange) => engine.world.reactive.observeResource(Camera, onChange),
     zoom: () => zoomOf(engine),
+    bounds: () => boundsOf(engine),
     zoomTo: (zoom) => engine.ops.zoomTo(zoom),
     zoomToFit: () => engine.ops.zoomToFit(),
     exitTo: (depth) => engine.ops.exitTo(depth),

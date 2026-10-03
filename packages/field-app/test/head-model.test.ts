@@ -9,10 +9,19 @@
  * row 11i.
  */
 import { createCanvasEngine, NavDepth, NavFrame, PrefabId } from "@vibecook/ice";
+import { ZOOM_MAX, ZOOM_MIN } from "@vibecook/ice/desk";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { buildRegistry, createFieldEngine } from "../src/field-engine";
 import { canvasHead, headPathEqual, readHeadPath } from "../src/frame/head-canvas";
 import { frameActGroups } from "../src/frame/palette-acts";
-import { runZoom, zoomActForKey, zoomKeyLabel } from "../src/frame/zoom";
+import {
+  formatZoomPercent,
+  runZoom,
+  zoomActAvailable,
+  zoomActForKey,
+  zoomKeyLabel,
+  zoomPercent,
+} from "../src/frame/zoom";
 
 type Key = Parameters<typeof zoomActForKey>[0];
 const key = (init: Partial<Key> & { key: string }): Key => ({
@@ -191,9 +200,63 @@ describe("the head's canvas door over a real engine", () => {
     expect(canvasHead(engine).percent()).toBe(100);
   });
 
+  it("reads the DESK engine's own band — scale-free, never a 0.25–3 constant (DK-3, ruling 5)", () => {
+    const engine = createFieldEngine(buildRegistry());
+    dispose = () => engine.dispose();
+    const head = canvasHead(engine);
+    expect(head.bounds?.()).toEqual({ min: ZOOM_MIN, max: ZOOM_MAX });
+    head.zoomTo(0.004); // far below the old 0.25 clamp
+    expect(head.zoom()).toBeCloseTo(0.004, 9);
+    expect(head.percent()).toBe(0.4);
+    head.zoomTo(40); // far above the old 3
+    expect(head.percent()).toBe(4000);
+    runZoom(head, "in");
+    expect(head.zoom()).toBeCloseTo(50, 9);
+  });
+
   it("compares paths by depth and name", () => {
     expect(headPathEqual([{ depth: 1, label: "A" }], [{ depth: 1, label: "A" }])).toBe(true);
     expect(headPathEqual([{ depth: 1, label: "A" }], [{ depth: 1, label: "B" }])).toBe(false);
     expect(headPathEqual([], [{ depth: 1, label: "A" }])).toBe(false);
+  });
+});
+
+describe("the zoom's band and its readout (DK-3, ruling 5 — the desk's scale-free zoom)", () => {
+  it("prints any zoom the desk allows as one number: whole from 10%, finer below, never 0%", () => {
+    expect(zoomPercent(1)).toBe(100);
+    expect(zoomPercent(1.25)).toBe(125);
+    expect(zoomPercent(0.1)).toBe(10);
+    expect(zoomPercent(0.042)).toBe(4.2);
+    expect(zoomPercent(0.004)).toBe(0.4);
+    expect(zoomPercent(ZOOM_MIN)).toBe(0.000001);
+    expect(zoomPercent(ZOOM_MAX)).toBe(10_000_000_000);
+    expect(formatZoomPercent(zoomPercent(ZOOM_MAX))).toBe("10,000,000,000");
+    expect(formatZoomPercent(zoomPercent(ZOOM_MIN))).toBe("0.000001");
+    expect(formatZoomPercent(125)).toBe("125");
+  });
+
+  it("steps in and out by 1.25 inside the engine's band, and says which acts the band's ends stop", () => {
+    let zoom = 1;
+    const target = {
+      zoom: () => zoom,
+      zoomTo: (z: number) => {
+        zoom = z;
+      },
+      zoomToFit: () => undefined,
+      bounds: () => ({ min: 0.5, max: 2 }),
+    };
+    runZoom(target, "in");
+    expect(zoom).toBe(1.25);
+    runZoom(target, "out");
+    runZoom(target, "out");
+    expect(zoom).toBeCloseTo(0.8, 9);
+    zoom = 1.9;
+    runZoom(target, "in");
+    expect(zoom).toBe(2); // clamped to the band
+    expect(zoomActAvailable("in", 2, target.bounds())).toBe(false);
+    expect(zoomActAvailable("out", 2, target.bounds())).toBe(true);
+    expect(zoomActAvailable("out", 0.5, target.bounds())).toBe(false);
+    expect(zoomActAvailable("fit", 0.5, target.bounds())).toBe(true);
+    expect(zoomActAvailable("in", 9, undefined)).toBe(true);
   });
 });

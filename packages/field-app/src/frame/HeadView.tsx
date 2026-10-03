@@ -15,7 +15,7 @@ import {
 } from "react";
 import type { HeadCrumb } from "./head-canvas";
 import type { ViewKeys } from "./views";
-import { ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
+import { formatZoomPercent, ZOOM_ACTS, type ZoomAct, zoomKeyLabel } from "./zoom";
 import "./menu.css";
 import "./head.css";
 
@@ -377,8 +377,11 @@ export function HeadPlaceView({
 }
 
 export interface HeadZoomViewProps {
-  /** The zoom as one number. */
+  /** The zoom as one number — a percent at any zoom the desk allows (`zoomPercent`). */
   percent: number;
+  /** The acts that cannot move the camera now: Zoom in at the band's top, Zoom out at its foot
+   * (the ENGINE's band — DK-3, ruling 5). Their rows stay, disabled. */
+  unavailable?: readonly ZoomAct[];
   keys: ViewKeys;
   /** Its menu is out. */
   open?: boolean;
@@ -396,6 +399,7 @@ export interface HeadZoomViewProps {
 /** The zoom readout (FC-D8), and the solid menu a click grows (FC-D14). */
 export function HeadZoomView({
   percent,
+  unavailable = [],
   keys,
   open = false,
   hot = 0,
@@ -416,7 +420,7 @@ export function HeadZoomView({
         aria-haspopup="menu"
         aria-expanded={open}
         {...(open ? { "aria-controls": menuId } : {})}
-        aria-label={`Zoom, ${percent}%`}
+        aria-label={`Zoom, ${formatZoomPercent(percent)}%`}
         title="Zoom · double-click to fit"
         // The second click of a double-click fits (and folds the menu its
         // first click grew); one click — or Return — grows or folds it.
@@ -426,7 +430,7 @@ export function HeadZoomView({
         }}
         onKeyDown={onReadoutKeyDown}
       >
-        {percent}%
+        {formatZoomPercent(percent)}%
       </button>
       {open ? (
         <div id={menuId} className="vf-menu vf-head-zoom-menu" role="menu" aria-label="Zoom">
@@ -438,6 +442,7 @@ export function HeadZoomView({
               className="vf-menu-row"
               data-act={entry.act}
               tabIndex={-1}
+              disabled={unavailable.includes(entry.act)}
               {...(index === hot ? { "data-hot": "true" } : {})}
               // The readout keeps the keyboard while a row is pointed at.
               onMouseDown={(event) => event.preventDefault()}

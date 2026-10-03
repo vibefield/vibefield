@@ -300,3 +300,16 @@
     animation-name: vf-settings-backdrop-in;
   }
 }
+
+/* Settings → Advanced → Developer: the desk's readout (DK-3) — numbers, one fact a line. */
+.vf-desk-readout {
+  display: grid;
+  gap: 2px;
+  max-width: 34ch;
+  color: var(--vf-text-secondary);
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+  line-height: 1.45;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
