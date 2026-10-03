@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { defineQuery, ENGINE_SCHEMA_VERSION, Position, PrefabId } from "@vibecook/ice";
+import { ENGINE_SCHEMA_VERSION } from "@vibecook/ice";
 import { LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
@@ -19,6 +19,7 @@ import { FielddClient } from "@vibefield/fieldd-client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { DocManager } from "../src/doc-manager";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
+import { deskCensus } from "../src/field/desk/desk-door";
 import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
@@ -91,15 +92,6 @@ async function applyPending(manager: DocManager): Promise<ReturnType<typeof crea
   return ce;
 }
 
-const widgetQ = defineQuery([Position, PrefabId]);
-function widgetCount(ce: ReturnType<typeof createFieldEngine>): number {
-  let n = 0;
-  ce.world.query(widgetQ).each((b) => {
-    for (const _ of b) n += 1;
-  });
-  return n;
-}
-
 /** The trap: any persistence code consulting document.hidden now sees TRUE. */
 function stubHiddenDocument(): void {
   (globalThis as Record<string, unknown>)["document"] = {
@@ -142,7 +134,8 @@ describe("the persistence exemption (hidden windows still persist)", () => {
     expect(restored?.initialBytes).not.toBeNull();
     const ce2 = await applyPending(manager2);
     await until(() => manager2.getState().phase === "ready");
-    expect(widgetCount(ce2)).toBe(SEED_TYPES.length); // the seeded board, byte-survived
+    // the seeded board, byte-survived — kind by kind (the census `__vfDesk.census()` reads)
+    expect(deskCensus(ce2)).toEqual(Object.fromEntries(SEED_TYPES.map((type) => [type, 1])));
     await manager2.shutdown();
   }, 30_000);
 

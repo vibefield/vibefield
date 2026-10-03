@@ -25,6 +25,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { DEFAULT_DOC_NAME, DocManager } from "../src/doc-manager";
 import { stillKey } from "../src/doc-stills";
 import { createDeskBlobStore, deskBlobs } from "../src/field/desk/desk-blobs";
+import { deskCensus } from "../src/field/desk/desk-door";
 import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
@@ -196,11 +197,8 @@ describe("DocManager launch pipeline (B4)", () => {
     expect(Array.from(restored?.initialBytes ?? [])).toEqual(Array.from(originalBytes));
     const ce3 = await applyPending(manager);
     await until(() => manager.getState().phase === "ready");
-    let restoredWidgets = 0;
-    ce3.world.query(defineQuery([Position, PrefabId])).each((b) => {
-      for (const _ of b) restoredWidgets += 1;
-    });
-    expect(restoredWidgets).toBe(SEED_TYPES.length); // everything recovers
+    // everything recovers — the seed's census, kind by kind (the one `__vfDesk.census()` reads)
+    expect(deskCensus(ce3)).toEqual(Object.fromEntries(SEED_TYPES.map((type) => [type, 1])));
     // 30s: three engine seeds/opens + two switches (the same parallel-load flag).
   }, 30_000);
 

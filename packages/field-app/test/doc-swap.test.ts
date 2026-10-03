@@ -8,6 +8,7 @@
 import { defineQuery, Position, PrefabId, WirePorts } from "@vibecook/ice";
 import { describe, expect, it } from "vitest";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
+import { deskCensus } from "../src/field/desk/desk-door";
 import { SEED_TYPES } from "../src/field/desk/desk-seed";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 
@@ -32,7 +33,9 @@ describe("in-place doc swap on one engine", () => {
     const a = ce.docs.create();
     await seedField(ce, a, createDeskBlobStore());
     const seeded = { widgets: SEED_TYPES.length, wires: 0 };
+    const oneEach = Object.fromEntries(SEED_TYPES.map((type) => [type, 1]));
     expect(census(ce)).toEqual(seeded);
+    expect(deskCensus(ce)).toEqual(oneEach);
     const bytesA = a.exportEnvelope(Date.now());
 
     ce.docs.close();
@@ -48,6 +51,7 @@ describe("in-place doc swap on one engine", () => {
     ce.world.sync();
     console.log("after reopen A:", JSON.stringify(census(ce)));
     expect(census(ce)).toEqual(seeded);
+    expect(deskCensus(ce)).toEqual(oneEach);
     ce.dispose();
   });
 });
