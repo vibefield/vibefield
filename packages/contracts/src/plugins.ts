@@ -28,6 +28,7 @@ export const PLUGIN_LIMITS = {
   PATH_MAX: 256,
   PREVIEW_MAX: 400,
   WIDGETS_MAX: 64,
+  OBJECTS_MAX: 64,
   PROPS_MAX: 64,
   PORTS_MAX: 16,
   COMMANDS_MAX: 64,
@@ -652,6 +653,71 @@ export interface PluginManifestIssue {
 
 const SizeSpec = z.object({ w: z.number().positive(), h: z.number().positive() }).passthrough();
 
+// The DURABLE vocabulary a widget and an object share (DK-0f lifted these out of
+// WidgetContribution unchanged so ObjectContribution declares the same shapes
+// by name — one definition, one generated table cell for each).
+
+/** ICE interaction flags — durable contract, host-derived into the prefab.
+ * Vocabulary is the engine's WidgetInteraction verbatim: snap
+ * source/target/both/none (default target), dragOn press/longPress,
+ * sweepContained = the comment-box drag, keyboard/keyboardEscape = the
+ * design-007 §3.1/§3.3 keyboard claim (declared 2026-08-13 for the mind map
+ * pack — before this they rode `.passthrough()` with an emit warning, and a
+ * bogus value would have flowed to the engine unvalidated). */
+const InteractionFlags = z
+  .object({
+    selectable: z.boolean().optional(),
+    movable: z.boolean().optional(),
+    resizable: z.boolean().optional(),
+    snap: z.enum(["source", "target", "both", "none"]).optional(),
+    dragOn: z.enum(["press", "longPress"]).optional(),
+    solid: z.boolean().optional(),
+    sweepContained: z.boolean().optional(),
+    /** "exclusive": while a node inside this widget holds browser focus, the
+     * engine keymap + Space pan stand down; keys flow to the widget. */
+    keyboard: z.enum(["shared", "exclusive"]).optional(),
+    /** Escape under an exclusive claim: "release" (default; Esc blurs the
+     * widget) or "widget" (vim-grade — even Esc flows; release is click-away). */
+    keyboardEscape: z.enum(["release", "widget"]).optional(),
+  })
+  .passthrough();
+
+/** container semantics (folder-class): drop-to-consume + nested canvas. */
+const ContainerSpec = z
+  .object({
+    accepts: z.array(z.string()).min(1).max(16),
+    provides: z.array(z.string()).max(16).optional(),
+    /** The FACE the container shows its inside through, as insets from its body
+     * (widget-local px; ICE `resolvePortal`): the nav flight maps the arrival onto
+     * it and the preview places the children in it. All four, non-negative;
+     * absent = the whole body. Insets that leave no area are ignored by ICE.
+     * (Another session's `c946d091`, carried here once for widgets and objects.) */
+    portal: z
+      .object({
+        top: z.number().nonnegative(),
+        right: z.number().nonnegative(),
+        bottom: z.number().nonnegative(),
+        left: z.number().nonnegative(),
+      })
+      .optional(),
+  })
+  .passthrough();
+
+/** node ports (wire endpoints); the engine renders and routes the wires.
+ * accepts optional = connects to anything; index = slot along the side. */
+const PortSpecs = z
+  .array(
+    z
+      .object({
+        id: z.string().min(1).max(32),
+        side: z.enum(["n", "e", "s", "w"]),
+        index: z.number().int().nonnegative().optional(),
+        accepts: z.array(z.string()).max(16).optional(),
+      })
+      .passthrough(),
+  )
+  .max(PLUGIN_LIMITS.PORTS_MAX);
+
 export const WidgetContribution = z
   .object({
     type: z.string().max(PLUGIN_LIMITS.ID_MAX * 2),
@@ -670,68 +736,11 @@ export const WidgetContribution = z
     /** reserved — no engine support yet (defineWidget has no maxSize); hosts ignore */
     maxSize: SizeSpec.optional(),
 
-    /** ICE interaction flags — durable contract, host-derived into the prefab.
-     * Vocabulary is the engine's WidgetInteraction verbatim: snap
-     * source/target/both/none (default target), dragOn press/longPress,
-     * sweepContained = the comment-box drag, keyboard/keyboardEscape = the
-     * design-007 §3.1/§3.3 keyboard claim (declared 2026-08-13 for the mind map
-     * pack — before this they rode `.passthrough()` with an emit warning, and a
-     * bogus value would have flowed to the engine unvalidated). */
-    interaction: z
-      .object({
-        selectable: z.boolean().optional(),
-        movable: z.boolean().optional(),
-        resizable: z.boolean().optional(),
-        snap: z.enum(["source", "target", "both", "none"]).optional(),
-        dragOn: z.enum(["press", "longPress"]).optional(),
-        solid: z.boolean().optional(),
-        sweepContained: z.boolean().optional(),
-        /** "exclusive": while a node inside this widget holds browser focus, the
-         * engine keymap + Space pan stand down; keys flow to the widget. */
-        keyboard: z.enum(["shared", "exclusive"]).optional(),
-        /** Escape under an exclusive claim: "release" (default; Esc blurs the
-         * widget) or "widget" (vim-grade — even Esc flows; release is click-away). */
-        keyboardEscape: z.enum(["release", "widget"]).optional(),
-      })
-      .passthrough()
-      .optional(),
-    /** container semantics (folder-class): drop-to-consume + nested canvas. */
-    container: z
-      .object({
-        accepts: z.array(z.string()).min(1).max(16),
-        provides: z.array(z.string()).max(16).optional(),
-        /** The FACE the container shows its inside through, as insets from its body
-         * (widget-local px; ICE `resolvePortal`): the nav flight maps the arrival onto
-         * it and the preview places the children in it. All four, non-negative;
-         * absent = the whole body. Insets that leave no area are ignored by ICE. */
-        portal: z
-          .object({
-            top: z.number().nonnegative(),
-            right: z.number().nonnegative(),
-            bottom: z.number().nonnegative(),
-            left: z.number().nonnegative(),
-          })
-          .optional(),
-      })
-      .passthrough()
-      .optional(),
+    interaction: InteractionFlags.optional(),
+    container: ContainerSpec.optional(),
     /** leaf drop-matching currency when not a container (engine: container wins). */
     provides: z.array(z.string()).max(16).optional(),
-    /** node ports (wire endpoints); the engine renders and routes the wires.
-     * accepts optional = connects to anything; index = slot along the side. */
-    ports: z
-      .array(
-        z
-          .object({
-            id: z.string().min(1).max(32),
-            side: z.enum(["n", "e", "s", "w"]),
-            index: z.number().int().nonnegative().optional(),
-            accepts: z.array(z.string()).max(16).optional(),
-          })
-          .passthrough(),
-      )
-      .max(PLUGIN_LIMITS.PORTS_MAX)
-      .optional(),
+    ports: PortSpecs.optional(),
 
     props: z.record(PropSpec).optional().default({}),
     /** NAMED conflict groups (engine truth: the generated strata component is
@@ -745,6 +754,144 @@ export const WidgetContribution = z
   })
   .passthrough();
 export type WidgetContribution = z.infer<typeof WidgetContribution>;
+
+// --- the object contribution (spec v0.4 §12.8 — DK-0f, 2026-10-02: the door's CONTRACT,
+// ahead of the desk) -------------------------------------------------------------
+//
+// An OBJECT is a widget whose face is a GPU KIND the desk draws (ICE design-015
+// §5.2, `defineObject` — sugar over the one `defineWidget`). The manifest owns
+// its DURABLE half exactly as a widget's — type, schemaVersion, props, groups,
+// interaction, container, provides, ports, behaviors — and names ONE export of
+// the renderer module that holds the code half (`binding.kind`: the ObjectKind
+// and what rides with it; the HOST calls `defineObject`, §12.2 unchanged). The
+// view fields a widget declares are RETIRED on an object — the kind IS the face
+// (no `surface`), an object is its `size` (no `sizeMode`), the pegboard draws
+// the kind's own specimen (`tray` replaces `preview` and `category`) — and the
+// invariants below refuse each by name, so a ported widget is told what moved.
+// On THIS build nothing draws an object: the schema accepts the contract and
+// every host door refuses to ACTIVATE it with `OBJECTS_NEED_DESK`.
+
+/** The pegboard tray's accessories (ICE kernel `TrayAccessory`): how a specimen hangs. */
+export const TRAY_ACCESSORIES = ["hook", "shelf", "clip", "rail"] as const;
+export type TrayAccessory = (typeof TRAY_ACCESSORIES)[number];
+
+/** A tray prop value — props are scalar cells (a `json` prop rides one string). */
+const TrayPropValue = z.union([z.string(), z.number(), z.boolean()]);
+
+/** An object's TRAY ENTRY (ICE design-017 §8, design-018 §6 — `defineObject({ tray })`):
+ * the pegboard hangs what it says, drawn by the kind itself. `category` is its
+ * chip on the tray's bar — the plugin's own string, or a built-in's name to
+ * join it; `label` the specimen's name tag; `order` its place in its category;
+ * `hang` how it hangs — its size on the board in CSS px, the accessory, the pegs
+ * in pitches from the hang point (absent: the host hangs it on a hook at its
+ * `size`); `props` the specimen's face over the object's defaults; `take` what
+ * one lifted off the board is made with (absent: the object's defaults;
+ * `"face"`: the specimen's props; a record: those); `local`: the specimen is
+ * drawn with the kind's desk state. An object without an entry is placeable
+ * but hangs nowhere. */
+export const TrayEntryContribution = z
+  .object({
+    category: z.string().min(1).max(PLUGIN_LIMITS.ID_MAX),
+    label: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
+    order: z.number().finite().optional(),
+    hang: z
+      .object({
+        w: z.number().positive(),
+        h: z.number().positive(),
+        accessory: z.enum(TRAY_ACCESSORIES),
+        pegs: z
+          .array(z.tuple([z.number(), z.number()]))
+          .min(1)
+          .max(8),
+      })
+      .passthrough()
+      .optional(),
+    props: z.record(TrayPropValue).optional(),
+    take: z.union([z.literal("face"), z.record(TrayPropValue)]).optional(),
+    local: z.boolean().optional(),
+  })
+  .passthrough();
+export type TrayEntryContribution = z.infer<typeof TrayEntryContribution>;
+
+/** The code half's door: the renderer module's NAMED EXPORT holding the object's
+ * kind and what rides with it (spec §12.8 `ObjectBinding`). One name; the host
+ * reads it at registration, and `check` holds it to the built module once the
+ * desk is here. */
+export const ObjectBindingRef = z
+  .object({
+    kind: z
+      .string()
+      .regex(/^[A-Za-z_$][A-Za-z0-9_$]*$/, "an export name: an identifier")
+      .max(PLUGIN_LIMITS.ID_MAX),
+  })
+  .passthrough();
+export type ObjectBindingRef = z.infer<typeof ObjectBindingRef>;
+
+/** The widget fields an object does NOT declare, each with where it went — the
+ * invariants refuse them by name (a ported widget is told, never silently
+ * stripped by the tolerant reader). */
+export const OBJECT_RETIRED_FIELDS: Readonly<Record<string, string>> = {
+  surface:
+    "surface is retired on an object: its kind IS the face — the desk draws it, there is no dom or gl",
+  sizeMode:
+    "sizeMode is retired on an object: an object is its size (declare size; resizable is interaction.resizable)",
+  preview: "preview is retired on an object: the tray draws the kind's own specimen (declare tray)",
+  category: "category is retired on an object: the tray's chip is tray.category",
+  defaultSize: "defaultSize is called size on an object",
+  maxSize: "maxSize never had engine support and is dropped on an object",
+};
+
+export const ObjectContribution = z
+  .object({
+    type: z.string().max(PLUGIN_LIMITS.ID_MAX * 2),
+    title: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
+    description: z.string().max(PLUGIN_LIMITS.TEXT_MAX).optional(),
+
+    schemaVersion: z.number().int().positive(),
+    /** the size a new one spawns at, world units (`defineObject({ size })`) */
+    size: SizeSpec,
+    minSize: SizeSpec.optional(),
+
+    interaction: InteractionFlags.optional(),
+    container: ContainerSpec.optional(),
+    /** what the object PROVIDES — the desk places by these keys, never by type:
+     * `desk.object` lies on the desk, `desk.containable` goes into a mini mat,
+     * `desk.pinnable` pins to a calendar's day (ICE design-016 K8a). */
+    provides: z.array(z.string()).max(16).optional(),
+    /** recorded and carried; nothing draws a wire on the desk until STRING. */
+    ports: PortSpecs.optional(),
+
+    props: z.record(PropSpec).optional().default({}),
+    groups: z.record(z.array(z.string()).min(1)).optional().default({}),
+    behaviors: z.array(WidgetBehaviorAttachment).max(PLUGIN_LIMITS.WIDGET_BEHAVIORS_MAX).optional(),
+
+    tray: TrayEntryContribution.optional(),
+    binding: ObjectBindingRef,
+  })
+  .passthrough();
+export type ObjectContribution = z.infer<typeof ObjectContribution>;
+
+/** DK-0f (2026-10-02): THIS build draws widgets. The object door's contract above
+ * is accepted and recorded ahead of the desk (ICE 0.14's `@vibecook/ice/desk`,
+ * consumed on `desk/landing` at DK-6); until then every host door refuses to
+ * ACTIVATE a plugin that declares object kinds with this one stable code and
+ * sentence — fieldd's loader (an `incompatible` row, `PLUGIN_INCOMPATIBLE`),
+ * `vibefield-plugin check` (the activation row), the renderer's registry (a
+ * thrown registration). DK-6 deletes this constant and the branches that read it. */
+export const OBJECTS_NEED_DESK = {
+  code: "objects-need-desk",
+  message: "object kinds need the desk; this build draws widgets",
+} as const;
+
+/** Does this manifest (or sanitized record) declare object kinds? The one
+ * predicate the three refusing doors share. */
+export function declaresObjects(
+  contributes:
+    | { readonly objects?: readonly unknown[] | undefined; readonly [key: string]: unknown }
+    | undefined,
+): boolean {
+  return (contributes?.objects?.length ?? 0) > 0;
+}
 
 // --- other contributions (spec §8.3–§8.8) -------------------------------------
 
@@ -888,64 +1035,77 @@ export type PluginCapabilityContribution = z.infer<typeof PluginCapabilityContri
 
 // --- the manifest (spec §7.1) -------------------------------------------------
 
+/** The `contributes` block, named (DK-0f: with `objects` beside `widgets` the
+ * INFERRED manifest type crossed tsc's serialization cap — TS7056, the P0
+ * lesson repeating — so the block and the manifest shape below carry explicit
+ * annotations; a named reference stays compact). */
+const PluginContributesFields = {
+  capabilities: z
+    .array(PluginCapabilityContribution)
+    .max(PLUGIN_LIMITS.CAPABILITIES_MAX)
+    .optional(),
+  widgets: z.array(WidgetContribution).max(PLUGIN_LIMITS.WIDGETS_MAX).optional(),
+  /** DK-0f: object kinds on the desk — may stand beside `widgets` in one
+   * manifest on this build (a type is one or the other, never both);
+   * `widgets` retires with the desk build (DK-8). */
+  objects: z.array(ObjectContribution).max(PLUGIN_LIMITS.OBJECTS_MAX).optional(),
+  /** Explicit tombstone: the former scheduler-shaped contribution was
+   * never consumed and is superseded by the ICE behavior contract. */
+  systems: z.never().optional(),
+  behaviors: z.array(BehaviorContribution).max(PLUGIN_LIMITS.BEHAVIORS_MAX).optional(),
+  commands: z.array(CommandContribution).max(PLUGIN_LIMITS.COMMANDS_MAX).optional(),
+  surfaces: z.array(SurfaceContribution).max(PLUGIN_LIMITS.SURFACES_MAX).optional(),
+  settings: SettingsContribution.optional(),
+  services: z.array(ServiceContribution).max(8).optional(),
+  mcp: McpContribution.optional(),
+};
+export const PluginContributes: z.ZodObject<typeof PluginContributesFields, "passthrough"> = z
+  .object(PluginContributesFields)
+  .passthrough();
+export type PluginContributes = z.infer<typeof PluginContributes>;
+
+const PluginManifestV1Fields = {
+  manifestVersion: z.literal(1),
+
+  id: PluginId,
+  version: SemverString,
+  title: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
+  description: z.string().max(PLUGIN_LIMITS.TEXT_MAX).optional(),
+  icon: RelativeAssetPath.optional(),
+
+  engines: z
+    .object({
+      app: z.string().min(1).max(64),
+      contracts: z.string().min(1).max(64),
+      platforms: z
+        .array(z.enum(["darwin", "linux", "win32"]))
+        .min(1)
+        .optional(),
+    })
+    .passthrough(),
+
+  entries: z
+    .object({
+      renderer: RelativeModulePath.optional(),
+      service: RelativeModulePath.optional(),
+    })
+    .passthrough()
+    .optional(),
+
+  /** applies only to entries.service; default "worker" */
+  host: z.enum(["worker", "process"]).optional(),
+
+  activation: z.array(ActivationEvent).max(PLUGIN_LIMITS.ACTIVATION_MAX),
+  backgroundReason: z.string().min(1).max(PLUGIN_LIMITS.TEXT_MAX).optional(),
+  capabilities: z.array(CapabilityId).max(PLUGIN_LIMITS.CAPABILITIES_MAX),
+
+  contributes: PluginContributes.optional(),
+};
+
 /** The structural shape (exported so declaration emit can reference it by name;
  * the validating export below layers the §7.1 cross-field invariants on top). */
-export const PluginManifestV1Shape = z
-  .object({
-    manifestVersion: z.literal(1),
-
-    id: PluginId,
-    version: SemverString,
-    title: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
-    description: z.string().max(PLUGIN_LIMITS.TEXT_MAX).optional(),
-    icon: RelativeAssetPath.optional(),
-
-    engines: z
-      .object({
-        app: z.string().min(1).max(64),
-        contracts: z.string().min(1).max(64),
-        platforms: z
-          .array(z.enum(["darwin", "linux", "win32"]))
-          .min(1)
-          .optional(),
-      })
-      .passthrough(),
-
-    entries: z
-      .object({
-        renderer: RelativeModulePath.optional(),
-        service: RelativeModulePath.optional(),
-      })
-      .passthrough()
-      .optional(),
-
-    /** applies only to entries.service; default "worker" */
-    host: z.enum(["worker", "process"]).optional(),
-
-    activation: z.array(ActivationEvent).max(PLUGIN_LIMITS.ACTIVATION_MAX),
-    backgroundReason: z.string().min(1).max(PLUGIN_LIMITS.TEXT_MAX).optional(),
-    capabilities: z.array(CapabilityId).max(PLUGIN_LIMITS.CAPABILITIES_MAX),
-
-    contributes: z
-      .object({
-        capabilities: z
-          .array(PluginCapabilityContribution)
-          .max(PLUGIN_LIMITS.CAPABILITIES_MAX)
-          .optional(),
-        widgets: z.array(WidgetContribution).max(PLUGIN_LIMITS.WIDGETS_MAX).optional(),
-        /** Explicit tombstone: the former scheduler-shaped contribution was
-         * never consumed and is superseded by the ICE behavior contract. */
-        systems: z.never().optional(),
-        behaviors: z.array(BehaviorContribution).max(PLUGIN_LIMITS.BEHAVIORS_MAX).optional(),
-        commands: z.array(CommandContribution).max(PLUGIN_LIMITS.COMMANDS_MAX).optional(),
-        surfaces: z.array(SurfaceContribution).max(PLUGIN_LIMITS.SURFACES_MAX).optional(),
-        settings: SettingsContribution.optional(),
-        services: z.array(ServiceContribution).max(8).optional(),
-        mcp: McpContribution.optional(),
-      })
-      .passthrough()
-      .optional(),
-  })
+export const PluginManifestV1Shape: z.ZodObject<typeof PluginManifestV1Fields, "passthrough"> = z
+  .object(PluginManifestV1Fields)
   .passthrough();
 
 function dupes(ids: string[]): string[] {
@@ -989,6 +1149,7 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
     // entry requirements (§7.1 invariants)
     const rendererNeeds = [
       c.widgets?.length ? "widgets" : null,
+      c.objects?.length ? "objects" : null,
       c.commands?.length ? "commands" : null,
       c.surfaces?.length ? "surfaces" : null,
       c.behaviors?.length ? "behaviors" : null,
@@ -1031,14 +1192,31 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
 
     // ownership + uniqueness per collection (§6.2 — exact names, never split)
     const widgetTypes = (c.widgets ?? []).map((w) => w.type);
+    const objectTypes = (c.objects ?? []).map((o) => o.type);
     for (const w of c.widgets ?? [])
       if (!isOwnedName(m.id, w.type, true))
         issue(`widget type ${w.type} must be ${m.id} or ${m.id}.<name>`, [
           "contributes",
           "widgets",
         ]);
+    for (const o of c.objects ?? [])
+      if (!isOwnedName(m.id, o.type, true))
+        issue(`object type ${o.type} must be ${m.id} or ${m.id}.<name>`, [
+          "contributes",
+          "objects",
+        ]);
+    // one type, one contribution (DK-0f): a widget and an object of one type
+    // would be two prefabs for one durable name
+    const widgetTypeSet = new Set(widgetTypes);
+    for (const t of objectTypes)
+      if (widgetTypeSet.has(t))
+        issue(`type ${t} is declared as both a widget and an object — one type, one contribution`, [
+          "contributes",
+          "objects",
+        ]);
     for (const [label, ids] of [
       ["widget types", widgetTypes],
+      ["object types", objectTypes],
       ["command ids", (c.commands ?? []).map((x) => x.id)],
       ["surface ids", (c.surfaces ?? []).map((x) => x.id)],
       ["capability ids", (c.capabilities ?? []).map((x) => x.id)],
@@ -1086,9 +1264,13 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
           "capabilities",
         ]);
 
-    // widgets: props/groups/ports coherence (§8.2)
-    (c.widgets ?? []).forEach((w, wi) => {
-      const path = ["contributes", "widgets", wi];
+    // widgets and objects: props/groups/ports coherence (§8.2) — the DURABLE
+    // half is one law for both (DK-0f), so one walk checks both collections
+    const behaviorRows = new Map((c.behaviors ?? []).map((row) => [row.id, row] as const));
+    const durableHalf = (
+      w: WidgetContribution | ObjectContribution,
+      path: (string | number)[],
+    ): void => {
       const propNames = Object.keys(w.props);
       if (propNames.length > PLUGIN_LIMITS.PROPS_MAX) issue("too many props", path);
       // Explicit groups: names are DURABLE component suffixes (`${type}:${name}`),
@@ -1132,7 +1314,6 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       const pd = dupes(portIds);
       if (pd.length > 0) issue(`duplicate port ids: ${pd.join(", ")}`, path);
 
-      const behaviorRows = new Map((c.behaviors ?? []).map((row) => [row.id, row] as const));
       const attached = new Set<string>();
       for (const [attachmentIndex, attachment] of (w.behaviors ?? []).entries()) {
         const attachmentPath = [...path, "behaviors", attachmentIndex];
@@ -1160,7 +1341,47 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
           }
         }
       }
-    });
+    };
+    for (const [wi, w] of (c.widgets ?? []).entries())
+      durableHalf(w, ["contributes", "widgets", wi]);
+    for (const [oi, o] of (c.objects ?? []).entries()) {
+      const path = ["contributes", "objects", oi];
+      durableHalf(o, path);
+      // the widget's view fields are refused BY NAME on an object (the tolerant
+      // reader would otherwise keep them silently, and a ported widget would
+      // never learn what moved)
+      for (const [field, why] of Object.entries(OBJECT_RETIRED_FIELDS))
+        if (Object.hasOwn(o, field)) issue(why, [...path, field]);
+      // the tray entry's face and take name declared props, each a value of
+      // its prop's kind (ICE validates the same at defineObject; saying it here
+      // keeps a bad specimen out of the manifest, not the mount)
+      const tray = o.tray;
+      if (tray === undefined) continue;
+      for (const [what, record] of [
+        ["props", tray.props],
+        ["take", tray.take],
+      ] as const) {
+        if (record === undefined || record === "face") continue;
+        for (const [name, value] of Object.entries(record)) {
+          const spec = o.props[name];
+          const trayPath = [...path, "tray", what, name];
+          if (spec === undefined) {
+            issue(`tray ${what} names undeclared prop ${name}`, trayPath);
+            continue;
+          }
+          const wantNumber = spec.kind === "number";
+          const wantBoolean = spec.kind === "boolean";
+          const kindOk = wantNumber
+            ? typeof value === "number"
+            : wantBoolean
+              ? typeof value === "boolean"
+              : typeof value === "string";
+          if (!kindOk) issue(`tray ${what} value for ${name} is not a ${spec.kind}`, trayPath);
+          else if (spec.kind === "enum" && !spec.options.includes(value as string))
+            issue(`tray ${what} value for ${name} is not one of its options`, trayPath);
+        }
+      }
+    }
 
     // services: namespace ownership + method-name uniqueness (§8.6/§14.6)
     const declaredMethods = new Set<string>();
@@ -1203,12 +1424,15 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
     // activation events name owned declarations (§8.1)
     const commandIds = new Set((c.commands ?? []).map((x) => x.id));
     const surfaceIds = new Set((c.surfaces ?? []).map((x) => x.id));
-    const widgetTypeSet = new Set(widgetTypes);
+    // an object is a widget to the engine (defineObject compiles through
+    // defineWidget), so `onWidget:` names an object type too — the activation
+    // vocabulary does not grow for the desk
+    const objectTypeSet = new Set(objectTypes);
     for (const e of m.activation) {
       if (e === "onStartup") continue;
       const [kind, target] = [e.slice(0, e.indexOf(":")), e.slice(e.indexOf(":") + 1)];
       const ok =
-        (kind === "onWidget" && widgetTypeSet.has(target)) ||
+        (kind === "onWidget" && (widgetTypeSet.has(target) || objectTypeSet.has(target))) ||
         (kind === "onCommand" && commandIds.has(target)) ||
         (kind === "onSurface" && surfaceIds.has(target)) ||
         (kind === "onService" && declaredMethods.has(target));
@@ -1237,6 +1461,7 @@ const KNOWN_TOP_KEYS = new Set([
 const KNOWN_CONTRIBUTES_KEYS = new Set([
   "capabilities",
   "widgets",
+  "objects",
   "behaviors",
   // Retired but recognized so callers receive the stable superseded verdict,
   // not a misleading unknown-key warning.

@@ -7,6 +7,8 @@
 // Codes are kebab-case and STABLE: an agent branches on them, so renaming one
 // is a breaking change to the kit's interface, not a wording fix.
 
+import { OBJECTS_NEED_DESK } from "@vibefield/contracts";
+
 export interface RefusalClass {
   /** the row that emits it */
   readonly check: string;
@@ -132,6 +134,13 @@ export const REFUSAL_CATALOG = {
     level: "refuse",
     meaning: "deactivation left a timer or handle running (§24.2 leak row)",
     guidance: "clear every timer/listener in the disposable activate returns (or ctx.track it)",
+  },
+  "objects-need-desk": {
+    check: "activation",
+    level: "refuse",
+    meaning: `the manifest declares object kinds (contributes.objects) — ${OBJECTS_NEED_DESK.message} (§12.8)`,
+    guidance:
+      "the contract is accepted and recorded; no host activates a kind until the desk lands (DK-6) — ship widgets to run on this build, or keep the kind and wait for the desk",
   },
   "activation-unbuilt": {
     check: "activation",

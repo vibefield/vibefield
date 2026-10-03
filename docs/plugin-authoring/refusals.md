@@ -33,6 +33,7 @@ column is the general one.
 | `manifest-unreadable` | manifest | vibefield.plugin.json is not parseable JSON, or exceeds the manifest byte limit | emit it with plugin-build's emitManifest rather than hand-editing |
 | `module-shape-invalid` | activation | the renderer entry's default export has no activate(ctx) function | export default defineRendererPlugin({ activate(ctx) { … } }) |
 | `module-unloadable` | activation | the built renderer entry exists but throws while being imported | module top-level must not perform product work (§10.1) — do it in activate(ctx) |
+| `objects-need-desk` | activation | the manifest declares object kinds (contributes.objects) — object kinds need the desk; this build draws widgets (§12.8) | the contract is accepted and recorded; no host activates a kind until the desk lands (DK-6) — ship widgets to run on this build, or keep the kind and wait for the desk |
 | `pack-refused` | pack | the .vfplugin bundle could not be produced (unsafe entry name, missing entry) | `pack walks vibefield.plugin.json + dist/** + assets/** — keep entries inside them` |
 | `plugin-dir-invalid` | input | the path given is not a directory holding a plugin | pass the directory that holds vibefield.plugin.json |
 | `release-not-found` | registry | the index carries no entry for the requested plugin id | check the id, or submit the plugin to the index first |

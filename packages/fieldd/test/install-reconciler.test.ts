@@ -238,7 +238,14 @@ class MemoryRegistry {
       grantedCapabilities: [],
       deniedCapabilities: [],
       grantGeneration: 0,
-      contributions: { widgets: [], behaviors: [], commands: [], surfaces: [], capabilities: [] },
+      contributions: {
+        widgets: [],
+        objects: [],
+        behaviors: [],
+        commands: [],
+        surfaces: [],
+        capabilities: [],
+      },
       renderer: "inactive",
       service: "none",
     });

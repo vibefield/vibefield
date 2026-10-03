@@ -91,6 +91,7 @@ function registryRecord(
     grantGeneration: 0,
     contributions: {
       widgets: [],
+      objects: [],
       behaviors: [],
       commands: [],
       surfaces: [],

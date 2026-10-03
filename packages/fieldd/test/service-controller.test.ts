@@ -253,6 +253,7 @@ function candidateRecord(base: TestRecord, slot: string): PluginRecord {
     deniedCapabilities: [],
     contributions: {
       widgets: [],
+      objects: [],
       behaviors: [],
       commands: [],
       surfaces: [],
