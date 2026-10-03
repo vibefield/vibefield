@@ -81,6 +81,17 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       },
       // QL — the launcher's list is the same content, so the same consent
       { method: "index.recent", scope: "index.search", idempotent: true, locality: "local" },
+      // AR-8b — the History room's reads: a session's header, a project's
+      // panels, one day's hours — content, so index.search; asked where the
+      // index lives, so federate (the phone and a peer read them later, SP-6)
+      { method: "index.session", scope: "index.search", idempotent: true, locality: "federate" },
+      { method: "index.project", scope: "index.search", idempotent: true, locality: "federate" },
+      {
+        method: "index.projectDay",
+        scope: "index.search",
+        idempotent: true,
+        locality: "federate",
+      },
       { method: "index.enroll", scope: "index.manage", idempotent: true, locality: "local" },
       { method: "index.retire", scope: "index.manage", idempotent: true, locality: "local" },
       // SP-3 — the direct plane's door, declared (it answers
@@ -285,6 +296,10 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       "index.changes.subscribe",
       // SP-3 — the direct plane's door: the transcript is the owner's to open
       "index.openTicket",
+      // AR-8b — the History room's reads, asked where the index lives
+      "index.session",
+      "index.project",
+      "index.projectDay",
     ]);
     for (const m of METHODS.filter(
       (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),
@@ -349,9 +364,13 @@ describe("SP-D13 — the phone's own history, bounded", () => {
     expect(doors.map((m) => m.method).sort()).toEqual([
       "index.catalog.subscribe",
       "index.changes.subscribe",
+      // AR-8b — the History room's three reads
+      "index.project",
+      "index.projectDay",
       "index.projects",
       "index.recent",
       "index.search",
+      "index.session",
       "index.sessions",
     ]);
     for (const m of doors) {
@@ -392,6 +411,12 @@ describe("LAYOUT — the topology's segments (AR-D15…D18)", () => {
   it("the user-scope additions hang off their owners", () => {
     expect(LAYOUT.INDEX_ENROLLMENT_FILE.slice(0, -1)).toEqual([...LAYOUT.INDEX_DIR]);
     expect(LAYOUT.INDEX_ENROLLMENT_FILE.at(-1)).toBe("enrollment.json");
+    // AR-8b — the daemon's per-start credentials, in their own directory under
+    // the index's (0700 there, 0600 each; removed once the daemon is ready)
+    expect(LAYOUT.INDEX_AUTH_DIR.slice(0, -1)).toEqual([...LAYOUT.INDEX_DIR]);
+    expect(LAYOUT.INDEX_TOKEN_FILE.slice(0, -1)).toEqual([...LAYOUT.INDEX_AUTH_DIR]);
+    expect(LAYOUT.INDEX_GRANT_KEY_FILE.slice(0, -1)).toEqual([...LAYOUT.INDEX_AUTH_DIR]);
+    expect(LAYOUT.INDEX_TOKEN_FILE.at(-1)).not.toBe(LAYOUT.INDEX_GRANT_KEY_FILE.at(-1));
     expect(LAYOUT.AGENT_PROFILES_FILE.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
     expect(LAYOUT.AGENT_ROOTS_DIR.slice(0, -1)).toEqual([...LAYOUT.AGENTS_DIR]);
     // AR-S2 — each Agent Profile's folder, beside the registry that names it

@@ -41,17 +41,28 @@ import {
   IndexCatalogSession,
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
+  IndexContributionResponse,
+  IndexDayUsageResponse,
   IndexDiscovery,
   IndexEnrollmentRecord,
+  IndexHeatmapResponse,
   IndexOpenTicket,
   IndexOpenTicketParams,
+  IndexProjectDayParams,
+  IndexProjectDayResult,
+  IndexProjectParams,
+  IndexProjectResult,
   IndexProjectsResult,
   IndexRecentParams,
   IndexRecentResult,
   IndexSearchResponse,
   IndexSearchResult,
+  IndexSessionParams,
+  IndexSessionResponse,
+  IndexSessionResult,
   IndexSessionsResult,
   IndexStatus,
+  IndexUsageResponse,
 } from "../src/agent-index";
 import {
   AgentListResult,
@@ -273,8 +284,25 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // answer (rosettad's endpoint set beside rosetta's own grant — the grant is
   // rosetta's first valid vector). Until DS-7 it answers
   // `error-data.index-direct-plane-unbuilt` (the ErrorData prefix).
+  // AR-8b — and the ticket a window on this desktop is ANSWERED today
+  // (`index-open-ticket.local`: the loopback pair beside the same vector), and
+  // the plane switched off (`error-data.index-direct-plane-off`).
   "index-open-ticket-params": IndexOpenTicketParams,
   "index-open-ticket": IndexOpenTicket,
+  // AR-8b — the History room's reads: each door's ask and answer, and the
+  // rosetta bodies they fold, transcribed from the pinned checkout's
+  // protocol-26 wire golden (revision and digest in each file's `//` note).
+  "index-session-params": IndexSessionParams,
+  "index-session": IndexSessionResult,
+  "index-session-response": IndexSessionResponse,
+  "index-project-params": IndexProjectParams,
+  "index-project": IndexProjectResult,
+  "index-project-day-params": IndexProjectDayParams,
+  "index-project-day": IndexProjectDayResult,
+  "index-heatmap": IndexHeatmapResponse,
+  "index-usage": IndexUsageResponse,
+  "index-contribution": IndexContributionResponse,
+  "index-day-usage": IndexDayUsageResponse,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

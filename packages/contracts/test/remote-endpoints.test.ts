@@ -10,7 +10,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
-  INDEX_TICKET,
+  IndexEndpointSet,
   IndexOpenTicket,
   IndexOpenTicketParams,
   IndexTicketUnavailableDetails,
@@ -21,6 +21,7 @@ import {
 } from "../src/agent-index";
 import { CellEndpointSet } from "../src/envelope";
 import { ErrorData } from "../src/errors";
+import { INDEX_TICKET } from "../src/registries";
 import {
   composeRemoteEndpoints,
   REMOTE_ENDPOINT_LEG,
@@ -298,17 +299,34 @@ describe("the index ticket — the template's anatomy for rosettad", () => {
     expect(createHmac("sha256", key).update(payload).digest("base64url")).toBe(macPart);
   });
 
-  it("is never half a ticket, and never a loopback one", () => {
+  it("is never half a ticket, and never a loopback HALF-set", () => {
     const { grant: _g, ...noGrant } = golden;
     expect(IndexOpenTicket.safeParse(noGrant).success).toBe(false);
     const { expiresAt: _e, ...noExpiry } = golden;
     expect(IndexOpenTicket.safeParse(noExpiry).success).toBe(false);
+    // the tailnet shape never names loopback (D36); the loopback shape a window
+    // is minted (AR-8b) carries BOTH its legs, so one leg alone is neither
     expect(
       IndexOpenTicket.safeParse({
         ...golden,
         endpoints: { sessionUrl: "ws://127.0.0.1:9424/ws/sessions/s1" },
       }).success,
     ).toBe(false);
+    expect(
+      IndexOpenTicket.safeParse({
+        ...golden,
+        endpoints: {
+          sessionUrl: "ws://127.0.0.1:9424/ws/sessions/s1",
+          restUrl: "http://127.0.0.1:9424",
+        },
+      }).success,
+    ).toBe(true);
+    expect(
+      IndexEndpointSet.safeParse({
+        sessionUrl: "ws://127.0.0.1:9424/ws/sessions/s1",
+        restUrl: "http://127.0.0.1:9424",
+      }).success,
+    ).toBe(true);
     // rosetta's verifier refuses a grant past 4,096 bytes; so does the shape
     expect(IndexOpenTicket.safeParse({ ...golden, grant: "g".repeat(4097) }).success).toBe(false);
   });
@@ -321,7 +339,14 @@ describe("the index ticket — the template's anatomy for rosettad", () => {
   });
 
   it("until DS-7 the door answers a contract string, not a sentence — retryable false", () => {
-    expect(INDEX_TICKET).toEqual({ SERVICE: "index", STATE_UNBUILT: "direct-plane-unbuilt" });
+    // AR-8b moved the vocabulary into the registry and gave it two more
+    // members: the plane switched off, and the grant's life
+    expect(INDEX_TICKET).toEqual({
+      SERVICE: "index",
+      STATE_UNBUILT: "direct-plane-unbuilt",
+      STATE_OFF: "direct-plane-off",
+      TTL_MS: 600_000,
+    });
     const data = ErrorData.parse(fixture("error-data.index-direct-plane-unbuilt.json"));
     expect(data).toMatchObject({ kind: "UNAVAILABLE", retryable: false });
     expect(IndexTicketUnavailableDetails.parse(data.details)).toEqual({

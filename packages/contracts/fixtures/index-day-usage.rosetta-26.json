@@ -1,0 +1,11 @@
+{
+  "//": "rosetta's day_usage body at protocol 26, transcribed VERBATIM (the `//` note apart) from the pinned checkout's committed golden crates/protocol/tests/golden/wire.json, key `day_usage`, at revision ee6724e14aea0359853598a4516e607c89bf3597 (siblings.lock.json), sha256 5e1d57fb62b47b9f25d40eac6ddaa654bbc374ff2da4e84194c71db7c521cc72. fieldd PARSES this body (never casts it); a wire change upstream reds the contracts suite here rather than surfacing as an empty panel.",
+  "day": "2026-09-30",
+  "models": [
+    {
+      "hour": 16,
+      "model": "claude-opus-5-5",
+      "tokens": 123
+    }
+  ]
+}

@@ -178,6 +178,9 @@ pub mod layout {
     pub const INDEX_DB: &[&str] = &["index", "rosetta.db"];
     pub const INDEX_DAEMONS_DIR: &[&str] = &["index", "daemons"];
     pub const INDEX_ENROLLMENT_FILE: &[&str] = &["index", "enrollment.json"];
+    pub const INDEX_AUTH_DIR: &[&str] = &["index", "auth"];
+    pub const INDEX_TOKEN_FILE: &[&str] = &["index", "auth", "token"];
+    pub const INDEX_GRANT_KEY_FILE: &[&str] = &["index", "auth", "grant.key"];
     pub const MESH_CATALOG_DIR: &[&str] = &["mesh", "catalog"];
     pub const AGENTS_DIR: &[&str] = &["agents"];
     pub const AGENT_PROFILES_FILE: &[&str] = &["agents", "profiles.json"];
@@ -227,6 +230,9 @@ pub mod layout {
         ("INDEX_DB", INDEX_DB),
         ("INDEX_DAEMONS_DIR", INDEX_DAEMONS_DIR),
         ("INDEX_ENROLLMENT_FILE", INDEX_ENROLLMENT_FILE),
+        ("INDEX_AUTH_DIR", INDEX_AUTH_DIR),
+        ("INDEX_TOKEN_FILE", INDEX_TOKEN_FILE),
+        ("INDEX_GRANT_KEY_FILE", INDEX_GRANT_KEY_FILE),
         ("MESH_CATALOG_DIR", MESH_CATALOG_DIR),
         ("AGENTS_DIR", AGENTS_DIR),
         ("AGENT_PROFILES_FILE", AGENT_PROFILES_FILE),

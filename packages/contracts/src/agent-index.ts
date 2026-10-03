@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
+import { INDEX_TICKET } from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
   MeshScope,
@@ -967,9 +968,258 @@ export const IndexChangesSubscribeParams = RowsSubscribeParams.extend({
 }).passthrough();
 export type IndexChangesSubscribeParams = z.infer<typeof IndexChangesSubscribeParams>;
 
+// ── AR-8b — the History room's reads (thinking-ar-history-room.md §3) ──
+//
+// What a History view asks that no door answered before: one session's header
+// row (`index.session`), a project's panels folded into one answer
+// (`index.project`: the heatmap, its decomposition by model and by hour, and
+// the per-session contribution), and one day of that project's hours
+// (`index.projectDay`, lazy). Every one is `federate` on `index.search` — the
+// phone and another desktop read them later through the same doors (SP-6).
+//
+// rosetta's project aggregates are BEARER-ONLY upstream: a grant never opens
+// them (AUTH.md §5.4), so they ride fieldd's doors as control-rate JSON — the
+// direct plane below is for one session's bodies. fieldd PARSES each body
+// against the snake_case readers here (rosetta's protocol-26 shapes, never
+// cast; `.passthrough()` at every level) and answers projections in
+// VibeField's spelling. A figure rosetta reports as null (an unpriced cost, a
+// bill it never saw) stays null — never zero — and an infinite number is
+// refused (`JSON.parse("1e999")` is `Infinity`).
+
+/** True when `day` names a real calendar date, `YYYY-MM-DD` — the spelling
+ * rosetta's day routes take (it normalizes through SQLite's `date()` and
+ * refuses a day that does not round-trip, so `2026-02-30` is no day). */
+function isCalendarDay(day: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(day)) return false;
+  const at = Date.parse(`${day}T00:00:00Z`);
+  return Number.isFinite(at) && new Date(at).toISOString().slice(0, 10) === day;
+}
+
+/** A calendar day as an ASK names one: `YYYY-MM-DD`, and a date that exists. */
+export const IndexCalendarDay = z.string().refine(isCalendarDay, "a calendar day, YYYY-MM-DD");
+
+/** A day as rosetta ANSWERS one (its own bucket label): the spelling, without
+ * re-proving the calendar — a tolerant reader does not refuse a body over it. */
+const AnsweredDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+
+/** The hour of a day, 0–23, in the timezone the caller asked for. */
+const HourOfDay = z.number().int().min(0).max(23);
+
+/** The minutes EAST of UTC a caller's days are bucketed in (the viewer's
+ * `-new Date().getTimezoneOffset()`): −840…840, the range rosetta's day route
+ * admits — held to it on every door, so no route is asked what one refuses. */
+const OffsetMinutes = z.number().int().min(-840).max(840);
+
+/** rosetta's six usage figures, as fieldd READS them (`HeatmapDay`,
+ * `ModelDay`, `HourTotal`, `ContributionRow` all carry them). */
+const usageFiguresRow = {
+  tokens: z.number().finite(),
+  /** list-price cost; null when rosetta could not price the usage */
+  cost_micro_usd: z.number().finite().nullish(),
+  /** the provider's own bill; null when no record carried one */
+  billed_micro_usd: z.number().finite().nullish(),
+  unpriced_tokens: z.number().finite(),
+  /** records with a prompt and no recorded output: the figure is a lower bound */
+  unrecorded_output: z.number().finite(),
+  reported_cost_adjustment_micro_usd: z.number().finite(),
+};
+
+/** rosetta `HeatmapDay`, as fieldd reads it. */
+export const IndexHeatmapDayRow = z.object({ day: AnsweredDay, ...usageFiguresRow }).passthrough();
+export type IndexHeatmapDayRow = z.infer<typeof IndexHeatmapDayRow>;
+
+/** rosetta `HeatmapResponse` — the body of `/api/projects/{id}/heatmap`. */
+export const IndexHeatmapResponse = z.object({ days: z.array(IndexHeatmapDayRow) }).passthrough();
+export type IndexHeatmapResponse = z.infer<typeof IndexHeatmapResponse>;
+
+/** rosetta `ModelDay`: one model's figures on one day (`unknown` when the
+ * agent never named its model). */
+export const IndexModelDayRow = z
+  .object({ day: AnsweredDay, model: z.string(), ...usageFiguresRow })
+  .passthrough();
+export type IndexModelDayRow = z.infer<typeof IndexModelDayRow>;
+
+/** rosetta `HourTotal`: one hour of the day across the window. */
+export const IndexHourTotalRow = z.object({ hour: HourOfDay, ...usageFiguresRow }).passthrough();
+export type IndexHourTotalRow = z.infer<typeof IndexHourTotalRow>;
+
+/** rosetta `UsageResponse` — the body of `/api/projects/{id}/usage`: the
+ * heatmap's figure decomposed over the same window (the model days sum back to
+ * the heatmap's exactly). */
+export const IndexUsageResponse = z
+  .object({ models: z.array(IndexModelDayRow), hours: z.array(IndexHourTotalRow) })
+  .passthrough();
+export type IndexUsageResponse = z.infer<typeof IndexUsageResponse>;
+
+/** rosetta `ContributionRow`: one top-level session's whole subagent tree,
+ * folded into its root. */
+export const IndexContributionRow = z
+  .object({
+    session_id: z.string().min(1),
+    project_id: z.string().nullish(),
+    commits: z.number().finite(),
+    edits: z.number().finite(),
+    loc: z.number().finite(),
+    messages: z.number().finite(),
+    ...usageFiguresRow,
+  })
+  .passthrough();
+export type IndexContributionRow = z.infer<typeof IndexContributionRow>;
+
+/** rosetta `ContributionResponse` — the body of `/api/projects/{id}/contribution`. */
+export const IndexContributionResponse = z
+  .object({ rows: z.array(IndexContributionRow) })
+  .passthrough();
+export type IndexContributionResponse = z.infer<typeof IndexContributionResponse>;
+
+/** rosetta `ModelHour`: one model's tokens in one hour of a day. */
+export const IndexModelHourRow = z
+  .object({ hour: HourOfDay, model: z.string(), tokens: z.number().finite() })
+  .passthrough();
+export type IndexModelHourRow = z.infer<typeof IndexModelHourRow>;
+
+/** rosetta `DayUsageResponse` — the body of `/api/projects/{id}/usage/day`. */
+export const IndexDayUsageResponse = z
+  .object({ day: AnsweredDay, models: z.array(IndexModelHourRow) })
+  .passthrough();
+export type IndexDayUsageResponse = z.infer<typeof IndexDayUsageResponse>;
+
+/** The six figures in VibeField's spelling — what every door below answers. */
+const usageFigures = {
+  tokens: z.number().finite(),
+  costMicroUsd: z.number().finite().nullable(),
+  billedMicroUsd: z.number().finite().nullable(),
+  unpricedTokens: z.number().finite(),
+  unrecordedOutput: z.number().finite(),
+  reportedCostAdjustmentMicroUsd: z.number().finite(),
+};
+
+/** One heatmap cell: a day's figures. */
+export const IndexHeatmapDay = z.object({ day: AnsweredDay, ...usageFigures }).passthrough();
+export type IndexHeatmapDay = z.infer<typeof IndexHeatmapDay>;
+
+/** One model's figures on one day. */
+export const IndexModelDay = z
+  .object({ day: AnsweredDay, model: z.string(), ...usageFigures })
+  .passthrough();
+export type IndexModelDay = z.infer<typeof IndexModelDay>;
+
+/** One hour of the day's figures across the window. */
+export const IndexHourTotal = z.object({ hour: HourOfDay, ...usageFigures }).passthrough();
+export type IndexHourTotal = z.infer<typeof IndexHourTotal>;
+
+/** One session's contribution to its project (rosetta's canonical id). */
+export const IndexContribution = z
+  .object({
+    sessionId: z.string().min(1),
+    /** null for a session in rosetta's unassigned bucket */
+    projectId: z.string().min(1).nullable(),
+    commits: z.number().finite(),
+    edits: z.number().finite(),
+    loc: z.number().finite(),
+    messages: z.number().finite(),
+    ...usageFigures,
+  })
+  .passthrough();
+export type IndexContribution = z.infer<typeof IndexContribution>;
+
+/** One model's tokens in one hour of a day. */
+export const IndexModelHour = z
+  .object({ hour: HourOfDay, model: z.string(), tokens: z.number().finite() })
+  .passthrough();
+export type IndexModelHour = z.infer<typeof IndexModelHour>;
+
+/** `index.session` — one session's header row, by rosetta's canonical id (the
+ * id a catalog row, a hit and a ticket name). `device?` routes it (design-04
+ * §6): absent or this desktop's id = this desktop's index. */
+export const IndexSessionParams = z
+  .object({
+    sessionId: z.string().min(1).max(1024),
+    device: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type IndexSessionParams = z.infer<typeof IndexSessionParams>;
+
+/** The header a transcript's head draws: `IndexSession`'s columns with the
+ * join columns filled (`projectId`, `provider` — the catalog id its runtime's
+ * kind maps to —, `startedAt`), plus the session it was delegated from, the
+ * persona an enrolled root was filed under, and the project's name. */
+export const IndexSessionHeader = IndexSession.extend({
+  /** the session this one was delegated from; absent for a top-level session */
+  parentSessionId: z.string().min(1).optional(),
+  profileId: AgentProfileId.optional(),
+  /** absent for a session with no workspace (rosetta's unassigned bucket) */
+  project: IndexRecentProject.optional(),
+}).passthrough();
+export type IndexSessionHeader = z.infer<typeof IndexSessionHeader>;
+
+/** `index.session`'s answer; a session the index does not hold is NOT_FOUND. */
+export const IndexSessionResult = z.object({ session: IndexSessionHeader }).passthrough();
+export type IndexSessionResult = z.infer<typeof IndexSessionResult>;
+
+/** `index.project` — a project's panels in ONE ask (AR-D39 (a)): the heatmap,
+ * its decomposition, the contribution rows. `sinceMs` and `offsetMinutes` are
+ * the window the figures cover and the timezone their days are bucketed in —
+ * a room asks its 53-week grid's first day and the viewer's offset; absent =
+ * rosetta's defaults (every recorded day; UTC). `projectId` is rosetta's
+ * opaque id, its unassigned bucket's included. */
+export const IndexProjectParams = z
+  .object({
+    projectId: z.string().min(1).max(256),
+    sinceMs: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER).optional(),
+    offsetMinutes: OffsetMinutes.optional(),
+    device: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type IndexProjectParams = z.infer<typeof IndexProjectParams>;
+
+/** `index.project`'s answer. `clipped` is SP-D13's word: the contribution rows
+ * were cut at a tailnet caller's bound (`INDEX_TAILNET_LIMITS.MAX_ROWS`); a
+ * window's answer carries every row and says false. */
+export const IndexProjectResult = z
+  .object({
+    projectId: z.string().min(1),
+    heatmap: z.array(IndexHeatmapDay),
+    usage: z
+      .object({ models: z.array(IndexModelDay), hours: z.array(IndexHourTotal) })
+      .passthrough(),
+    contribution: z.array(IndexContribution),
+    clipped: z.boolean(),
+  })
+  .passthrough();
+export type IndexProjectResult = z.infer<typeof IndexProjectResult>;
+
+/** `index.projectDay` — one day of a project's hours, by model (the heatmap's
+ * drill-down, asked when a person opens a day). */
+export const IndexProjectDayParams = z
+  .object({
+    projectId: z.string().min(1).max(256),
+    day: IndexCalendarDay,
+    offsetMinutes: OffsetMinutes.optional(),
+    device: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type IndexProjectDayParams = z.infer<typeof IndexProjectDayParams>;
+
+export const IndexProjectDayResult = z
+  .object({
+    projectId: z.string().min(1),
+    day: AnsweredDay,
+    models: z.array(IndexModelHour),
+  })
+  .passthrough();
+export type IndexProjectDayResult = z.infer<typeof IndexProjectDayResult>;
+
 // ── the direct plane (SP-3 — the ticket template's SECOND instance;
 // thinking-sync-planes.md §5.4, thinking-desktop-sync-plane.md §6.4; the
 // handler is DS-7's, at rosetta's pin move) ──
+//
+// *AR-8b (2026-10-03): the handler is built for a window on THIS desktop —
+// rosetta's pin moved to the RO-1 merge (`ee6724e`), fieldd starts rosettad
+// with a bearer and a grant key, and `index.openTicket` mints the grant. The
+// window dials rosettad's own loopback listener (`IndexEndpointSet` below), so
+// the tailnet set and its serve are what DS-7 (another desktop) and SP-6 (the
+// phone) still owe.*
 //
 // A session's transcript is rosetta's own stream, read at the OWNER's rosettad:
 // history to a stamp, then the live tail, resumable, with `resync` as the gap
@@ -1017,6 +1267,74 @@ export function remoteIndexEndpointsFor(
   });
 }
 
+/** The loopback port a set may name: 1–65535, no leading zero. */
+const LOOPBACK_PORT = String.raw`(?:[1-9]\d{0,3}|[1-5]\d{4}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5])`;
+const LOOPBACK_INDEX_SESSION = new RegExp(
+  String.raw`^ws:\/\/127\.0\.0\.1:${LOOPBACK_PORT}\/ws\/sessions\/[^/?#\s]+$`,
+);
+const LOOPBACK_INDEX_ORIGIN = new RegExp(String.raw`^http:\/\/127\.0\.0\.1:${LOOPBACK_PORT}$`);
+
+/** AR-8b — rosettad's LOOPBACK set: its own listener as a window on THIS
+ * desktop dials it. Beside `RemoteIndexEndpointSet` exactly as the cell's
+ * `CellEndpointSet` stands beside `RemoteCellEndpointSet` — disjoint by host
+ * class (D36), never a widening of the remote shape, which still refuses
+ * loopback. Two legs in the template's spelling:
+ *  - `session`: rosetta's socket for the session, `ws://127.0.0.1:<port>
+ *    /ws/sessions/<id>` (the id one percent-encoded segment);
+ *  - `rest`: the daemon's origin, `http://127.0.0.1:<port>` — the base a
+ *    `RosettaClient` takes, under which the grant opens the session's pages and
+ *    the assets its timeline names (AUTH.md §5.4), and nothing else.
+ * Exactly `127.0.0.1` with a port, because that is the only origin the
+ * supervisor accepts from the daemon (`loopbackOrigin`). No query, no
+ * fragment: the grant rides `Authorization: Rosetta-Grant` or the
+ * `rosetta.grant.<grant>` subprotocol, never a URL. */
+export const IndexEndpointSet = z
+  .object({
+    sessionUrl: z
+      .string()
+      .regex(LOOPBACK_INDEX_SESSION, "a loopback ws:// rosetta session URL without query/fragment"),
+    restUrl: z.string().regex(LOOPBACK_INDEX_ORIGIN, "rosettad's loopback http origin, no path"),
+  })
+  .passthrough();
+export type IndexEndpointSet = z.infer<typeof IndexEndpointSet>;
+
+/** What a ticket's `endpoints` may be: the loopback set for a window here, the
+ * tailnet set for a caller across the tailnet (DS-7 / SP-6). Which one a caller
+ * gets is decided by its principal at mint time and by nothing on the wire. */
+export const IndexTicketEndpointSet = z.union([IndexEndpointSet, RemoteIndexEndpointSet]);
+export type IndexTicketEndpointSet = z.infer<typeof IndexTicketEndpointSet>;
+
+/** Compose one session's loopback set from rosettad's origin (the supervisor's
+ * `RosettadState.origin` while ready); `undefined` — never a URL nothing can
+ * dial — for anything that is not `http://127.0.0.1:<port>` exactly, or an
+ * empty session id. The path is the one composer's (`remoteIndexSessionPath`:
+ * rosetta's own route, the same at the root of either listener). */
+export function indexEndpointsFor(origin: string, sessionId: string): IndexEndpointSet | undefined {
+  if (sessionId.length === 0) return undefined;
+  let url: URL;
+  try {
+    url = new URL(origin);
+  } catch {
+    return undefined;
+  }
+  if (
+    url.protocol !== "http:" ||
+    url.hostname !== "127.0.0.1" ||
+    url.port === "" ||
+    url.username !== "" ||
+    url.password !== "" ||
+    url.pathname !== "/" ||
+    url.search !== "" ||
+    url.hash !== ""
+  )
+    return undefined;
+  const parsed = IndexEndpointSet.safeParse({
+    sessionUrl: `ws://127.0.0.1:${url.port}${remoteIndexSessionPath(sessionId)}`,
+    restUrl: `http://127.0.0.1:${url.port}`,
+  });
+  return parsed.success ? parsed.data : undefined;
+}
+
 /** `index.openTicket`'s params: the session whose transcript to open, at the
  * device that holds it. `device` is the `device?` convention (design-04 §6):
  * absent or this desktop's own id = this desktop's rosettad; a foreign id
@@ -1030,38 +1348,31 @@ export const IndexOpenTicketParams = z
   .passthrough();
 export type IndexOpenTicketParams = z.infer<typeof IndexOpenTicketParams>;
 
-/** SP-3 — the door's honest refusal until DS-7 (`UnavailableDetails`, retryable
- * false: nothing a retry can change until a pin move). Declared here so a
- * client branches on a contract string rather than a sentence. */
-export const INDEX_TICKET = {
-  /** `UnavailableDetails.service` on the refusal */
-  SERVICE: "index",
-  /** The direct plane is not built: the pinned rosettad verifies no grant
-   * (RO-1/RO-10 unmerged), so there is nothing to mint and nothing a ticket
-   * could honestly name. A CAPABILITY fact for the daemon's life — a reader
-   * falls back to the door's own reads (SP-D5) instead of retrying. */
-  STATE_UNBUILT: "direct-plane-unbuilt",
-} as const;
-
-/** The refusal's details, as a reader recognizes them. */
+/** The door's two CAPABILITY refusals, as a reader recognizes them
+ * (`INDEX_TICKET`, registries.ts — `UnavailableDetails`, retryable false): the
+ * half of the plane this desktop does not serve yet, and the plane switched
+ * off. A daemon that is merely not ready answers the index's phase instead
+ * (`{service: "index", state: "starting" | …}`, retryable), which is not this. */
 export const IndexTicketUnavailableDetails = z
   .object({
     service: z.literal(INDEX_TICKET.SERVICE),
-    state: z.literal(INDEX_TICKET.STATE_UNBUILT),
+    state: z.enum([INDEX_TICKET.STATE_UNBUILT, INDEX_TICKET.STATE_OFF]),
   })
   .passthrough();
 export type IndexTicketUnavailableDetails = z.infer<typeof IndexTicketUnavailableDetails>;
 
 /**
- * SP-3 — what `index.openTicket` will answer at DS-7: the template's ticket
- * anatomy (`TerminalOpenTicket`'s) for rosettad — the endpoint set and, BESIDE
- * it, the one grant rosetta verifies. DECLARED, NEVER ANSWERED until DS-7
- * mints the grant at rosetta's pin move; DS-7 may amend it, and the golden
- * (`index-open-ticket.valid.json`) is the thing to amend with it.
+ * SP-3 — what `index.openTicket` answers: the template's ticket anatomy
+ * (`TerminalOpenTicket`'s) for rosettad — the endpoint set and, BESIDE it, the
+ * one grant rosetta verifies. *AR-8b (2026-10-03): ANSWERED, for a window on
+ * this desktop — `endpoints` is the loopback set (`index-open-ticket.local.json`
+ * is its golden); the tailnet set (`index-open-ticket.valid.json`) stays
+ * DS-7's and SP-6's, which may amend it, golden and all.*
  *
  *  - `device`: the desktop whose rosettad holds the session — the cache key's
  *    first part (`{device, session, stamp}`, thinking-sync-planes §5.4).
- *  - `endpoints`: `RemoteIndexEndpointSet`, one leg.
+ *  - `endpoints`: `IndexTicketEndpointSet` — the loopback pair for a window,
+ *    the tailnet `session` leg for a caller across the tailnet.
  *  - `grant`: rosetta's RO-10 grant, OPAQUE to a client —
  *    `base64url(JCS {cid, exp, scope, sid, v}) "." base64url(HMAC-SHA256)`,
  *    exact `sid`, `scope: ["read"]` (rosetta AUTH.md §5; at most 4,096 bytes,
@@ -1072,12 +1383,13 @@ export type IndexTicketUnavailableDetails = z.infer<typeof IndexTicketUnavailabl
  *    nearer the cell's attach grant, so it is `grant`.)
  *  - `expiresAt`: the grant's `exp` (ms, the owner's clock) — an ESTABLISHMENT
  *    deadline, as the cell's is: an open socket is not re-checked and outlives
- *    it (AUTH.md §3); a reconnect after it asks for a fresh ticket.
+ *    it (AUTH.md §3); a reconnect after it asks for a fresh ticket. AR-8b:
+ *    minted `INDEX_TICKET.TTL_MS` ahead, and every answer is a fresh grant.
  */
 export const IndexOpenTicket = z
   .object({
     device: z.string().min(1),
-    endpoints: RemoteIndexEndpointSet,
+    endpoints: IndexTicketEndpointSet,
     grant: z.string().min(1).max(4096),
     expiresAt: z.number().int().nonnegative(),
   })

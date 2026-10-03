@@ -1,0 +1,23 @@
+{
+  "//": "rosetta's session body at protocol 26, transcribed VERBATIM (the `//` note apart) from the pinned checkout's committed golden crates/protocol/tests/golden/wire.json, key `session`, at revision ee6724e14aea0359853598a4516e607c89bf3597 (siblings.lock.json), sha256 5e1d57fb62b47b9f25d40eac6ddaa654bbc374ff2da4e84194c71db7c521cc72. fieldd PARSES this body (never casts it); a wire change upstream reds the contracts suite here rather than surfacing as an empty panel.",
+  "session": {
+    "activity": {
+      "first_at": 11000,
+      "last_at": 19000
+    },
+    "cwd": "/w/rosetta",
+    "delegation": null,
+    "id": "s1",
+    "native_session_id": "native-s1",
+    "parent_session_id": "s0",
+    "project_id": "p1",
+    "role": "subagent",
+    "root_session_id": "s0",
+    "runtime_id": "rt1",
+    "started_at": 10000,
+    "stream_state": "streaming",
+    "summary": "A summary",
+    "title": "Named",
+    "updated_at": 20000
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "projectId": "p1",
+  "day": "2026-09-30",
+  "models": [
+    {
+      "hour": 16,
+      "model": "claude-opus-5-5",
+      "tokens": 123
+    }
+  ]
+}

@@ -1653,6 +1653,36 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // AR-8b (thinking-ar-history-room.md §3; AR-D39 (a)) — the History room's
+  // reads that no door answered: one session's header row (`index.session`,
+  // H-D2's — `IndexSessionResponse` was a parse-only reader until now), a
+  // project's panels folded into ONE answer (`index.project`: rosetta's
+  // heatmap, usage and contribution aggregates — bearer-only upstream, so they
+  // ride fieldd and never the grant), and one day of a project's hours
+  // (`index.projectDay`, lazy). The history's content, so `index.search`;
+  // `federate` like `index.sessions`, so the phone and another desktop read
+  // them through the same doors later (SP-6). Projections, every one.
+  defineMethod({
+    surface: "product",
+    method: "index.session",
+    scope: "index.search",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.project",
+    scope: "index.search",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.projectDay",
+    scope: "index.search",
+    idempotent: true,
+    locality: "federate",
+  }),
   defineMethod({
     surface: "product",
     method: "index.enroll",
@@ -1680,6 +1710,13 @@ export const METHODS: MethodDef[] = [
   // rosetta's pin move the door answers UNAVAILABLE {service: "index", state:
   // "direct-plane-unbuilt"} (`INDEX_TICKET`), retryable false — declared ==
   // shipped (D36): the row and its honest handler land together.
+  // *AR-8b (2026-10-03): the handler mints, for a window on this desktop — a
+  // `local-token` or `shell-main` principal — once the pin's rosettad runs with
+  // a bearer and a grant key: the loopback set and an RO-10 grant for the
+  // session, `INDEX_TICKET.TTL_MS` ahead, audited. A plugin or an MCP agent is
+  // refused FORBIDDEN_SCOPE; the phone and a peer daemon's forward still hear
+  // `direct-plane-unbuilt` (SP-6, DS-7); the plane switched off answers
+  // `direct-plane-off`, and a daemon that is not ready its phase.*
   defineMethod({
     surface: "product",
     method: "index.openTicket",

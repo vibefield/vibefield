@@ -1,0 +1,36 @@
+{
+  "//": "rosetta's usage body at protocol 26, transcribed VERBATIM (the `//` note apart) from the pinned checkout's committed golden crates/protocol/tests/golden/wire.json, key `usage`, at revision ee6724e14aea0359853598a4516e607c89bf3597 (siblings.lock.json), sha256 5e1d57fb62b47b9f25d40eac6ddaa654bbc374ff2da4e84194c71db7c521cc72. fieldd PARSES this body (never casts it); a wire change upstream reds the contracts suite here rather than surfacing as an empty panel.",
+  "hours": [
+    {
+      "billed_micro_usd": null,
+      "cost_micro_usd": null,
+      "hour": 15,
+      "reported_cost_adjustment_micro_usd": 0,
+      "tokens": 123,
+      "unpriced_tokens": 0,
+      "unrecorded_output": 0
+    }
+  ],
+  "models": [
+    {
+      "billed_micro_usd": null,
+      "cost_micro_usd": 4210,
+      "day": "2026-08-26",
+      "model": "claude-opus-5",
+      "reported_cost_adjustment_micro_usd": 0,
+      "tokens": 100,
+      "unpriced_tokens": 0,
+      "unrecorded_output": 0
+    },
+    {
+      "billed_micro_usd": null,
+      "cost_micro_usd": null,
+      "day": "2026-08-26",
+      "model": "unknown",
+      "reported_cost_adjustment_micro_usd": 0,
+      "tokens": 23,
+      "unpriced_tokens": 23,
+      "unrecorded_output": 0
+    }
+  ]
+}

@@ -229,9 +229,39 @@ export const PRODUCT_API_LIMITS = {
  * so a window's default search of 300 hits is some 300 KB, a desktop's budget
  * and not a radio's. A window keeps every door's own limits, and so does a
  * self peer DAEMON (`peer-fieldd`): it asks on behalf of a window on another
- * desktop and carries that window's limits. TS-only: no native reader. */
+ * desktop and carries that window's limits. TS-only: no native reader.
+ *
+ * AR-8b (2026-10-03): the same bound holds `index.project`'s one per-session
+ * list, its contribution rows, which says `clipped` when it cut; the door's
+ * other figures are bounded by the window the caller asked for (`sinceMs`). */
 export const INDEX_TAILNET_LIMITS = {
   MAX_ROWS: 100,
+} as const;
+
+/** SP-3 / AR-8b — `index.openTicket`, the direct plane's door
+ * (agent-index.ts `IndexOpenTicket`): the refusal vocabulary a reader branches
+ * on — a contract string, never a sentence (`UnavailableDetails`, retryable
+ * false: nothing a retry changes for the daemon's life) — and the life of the
+ * grant a ticket carries. Moved here from agent-index.ts at AR-8b, when it
+ * gained its number.
+ *
+ * STATE_UNBUILT: the half of the plane this desktop does not serve yet — a
+ * ticket for a session on another desktop (`{device}`: DS-7, the egress
+ * route at truffle's RFC 026) or for a caller across the tailnet (the phone:
+ * SP-6, the set through the index serve). A reader falls back to the door's
+ * own reads (SP-D5) instead of retrying.
+ * STATE_OFF: the owner switched the plane off (`FielddConfig.indexDirectPlane`
+ * set false) — built, and not served by this daemon.
+ * TTL_MS (AR-8b, the plan's lean of 10 minutes): how long a minted grant
+ * opens its session. An ESTABLISHMENT deadline — rosetta re-checks no open
+ * socket (AUTH.md §3) — so a reader renews by asking again before it
+ * reconnects, never by holding a long-lived grant. TS-only: no native reader. */
+export const INDEX_TICKET = {
+  /** `UnavailableDetails.service` on every refusal */
+  SERVICE: "index",
+  STATE_UNBUILT: "direct-plane-unbuilt",
+  STATE_OFF: "direct-plane-off",
+  TTL_MS: 10 * 60 * 1000,
 } as const;
 
 /** TC-D6(c) — per-class scrollback byte caps, enforced at the NATIVE create
@@ -926,6 +956,19 @@ export const LAYOUT = {
    * BEFORE every rosettad spawn — and the same file is the daemon's
    * `--enroll` input (rosetta ignores the keys only VibeField reads). */
   INDEX_ENROLLMENT_FILE: ["index", "enrollment.json"],
+  /** AR-8b (RO-1, RO-10; rosetta docs/AUTH.md §4) — the credentials fieldd
+   * hands each rosettad generation: the bearer (`--token-file`, 32 to 1,024
+   * visible ASCII characters) and the grant key (`--grant-key-file`, at least
+   * 32 raw bytes). Minted fresh for every start, written 0600 into this 0700
+   * directory before the spawn, read ONCE by the daemon before it binds, and
+   * removed by fieldd as soon as the daemon says ready (AUTH.md §7: keep the
+   * file where agents are not pointed, delete it after `ready`). fieldd holds
+   * both in memory for the generation's life; neither is projected, logged or
+   * put in an agent's environment (EL7). A restart mints both again, which
+   * revokes every grant the previous generation honoured. */
+  INDEX_AUTH_DIR: ["index", "auth"],
+  INDEX_TOKEN_FILE: ["index", "auth", "token"],
+  INDEX_GRANT_KEY_FILE: ["index", "auth", "grant.key"],
   /** DS-6 — the history catalog's REPLICAS of this user's other desktops
    * (design-06 §5): one `<device>.<table>.json` per `{device, table}` — the
    * rows as last heard and the cursor to resume from — kept while the desktop
