@@ -6,6 +6,7 @@ import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
+import { mintSmokeProfile } from "./smoke-profile.mjs";
 
 const MAX_CYCLES = 10_000;
 const LITERAL_CLAIM_MS = 24 * 60 * 60 * 1_000;
@@ -186,9 +187,11 @@ async function main() {
     })}\n`,
   );
 
+  // DK-5: the soak's own Electron profile, removed after the run (packaging/smoke-profile.mjs).
+  const profile = mintSmokeProfile();
   const child = spawn(
     electronPath,
-    [desktopRoot, "--smoke-plugin-restart", "-ApplePersistenceIgnoreState", "YES"],
+    [desktopRoot, profile.arg, "--smoke-plugin-restart", "-ApplePersistenceIgnoreState", "YES"],
     {
       cwd: desktopRoot,
       env: childEnvironment(options),
@@ -243,6 +246,11 @@ async function main() {
   const outcome = await new Promise((resolveExit, rejectExit) => {
     child.once("error", rejectExit);
     child.once("exit", (code, signal) => resolveExit({ code, signal }));
+  }).finally(() => {
+    const removed = profile.remove();
+    process.stdout.write(
+      `SMOKE_PROFILE_REMOVED ${JSON.stringify({ userData: profile.dir, removed })}\n`,
+    );
   });
   clearTimeout(timer);
   if (forceTimer !== undefined) clearTimeout(forceTimer);

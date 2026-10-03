@@ -110,6 +110,7 @@ import {
 import { buildCsp, importMapHashesFromHtml } from "./security-policy";
 import { backfillMigratedSetupVariant } from "./setup-variant";
 import { RecoveringShellProvider } from "./shell-provider";
+import { isolateSmokeProfile } from "./smoke-profile";
 import { installStillProtocol, resolveStillFile } from "./still-protocol";
 import { SupportBundleError, SupportBundleService } from "./support-bundle";
 import { fileThemeStore, THEME_FILE, ThemeOwner } from "./theme";
@@ -1808,6 +1809,11 @@ registerShellSchemes();
 // window policy runs. Independent of per-window `sandbox:true` (which stays)
 // and of the RunAsNode fuse: three controls, three surfaces, no substitutes.
 app.enableSandbox();
+// DK-5 — a smoke-like run never touches the app's SHARED profile (main/smoke-profile.ts): its
+// own `--user-data-dir`, or one minted under the OS temp here, before ready.
+const SMOKE_PROFILE = isolateSmokeProfile(MODE, process.argv, {
+  setUserData: (path) => app.setPath("userData", path),
+});
 if (!isSmokeLike(MODE)) {
   try {
     startLocalCrashReporter({
@@ -1940,6 +1946,12 @@ if (!hasInstanceLock) {
       mode: MODE,
       electronVersion: process.versions.electron ?? "unknown",
     });
+    if (SMOKE_PROFILE !== null) {
+      logger.info("desktop.smoke.profile", "A smoke-like run has its own Electron profile", {
+        userData: SMOKE_PROFILE.userData,
+        minted: SMOKE_PROFILE.minted,
+      });
+    }
     if (!isSmokeLike(MODE)) {
       logger.info("desktop.lifecycle.instance_lock_acquired", "Primary app instance lock acquired");
     }

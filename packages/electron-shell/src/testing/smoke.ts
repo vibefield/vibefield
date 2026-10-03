@@ -16,7 +16,6 @@ import { dirname, join } from "node:path";
 import { performance } from "node:perf_hooks";
 import {
   catalogEntry,
-  DocListResult,
   type FrameView,
   LAYOUT,
   TerminalConfigDocument,
@@ -68,7 +67,7 @@ import {
 import { LiveSurfaceTicketTable } from "../main/live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
 import type { ElectronLogging } from "../main/logging";
-import { fileThemeStore, THEME_FILE } from "../main/theme";
+import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
@@ -207,8 +206,9 @@ export async function runSmoke(
     nativeConnected: boolean;
     native: { units?: Array<{ unit: string }> } | null;
   };
+  const profile = smokeProfileFailures();
   const summary = {
-    ok: health.nativeConnected,
+    ok: health.nativeConnected && profile.length === 0,
     port: handle.info.port,
     nativeConnected: health.nativeConnected,
     units: health.native?.units?.map((u) => u.unit) ?? [],
@@ -433,7 +433,8 @@ export async function expectDeskUnavailableCard(
  * fields explorer showing the board's STILL — a `blob:` image the packaged CSP now admits.
  * GPU OFF (`--disable-gpu`, the smokes' mode): the unavailable card, in ICE's words, and the
  * window alive. `VF_SMOKE_SHOT_DIR` keeps the window's stills (`dk-3-desk-{light,dark}.png`,
- * `dk-4-explorer-{light,dark}.png`).
+ * `dk-4-explorer-{light,dark}.png`). DK-5: on the run's OWN profile (`smokeProfileFailures`) —
+ * what the rows write (the theme file, the stills, the print's bytes) is never put back.
  * Teardown runs on EVERY path — the old failure path leaked the spawned daemons (slice-0
  * finding 3). */
 export async function runSmokeCanvas(opts: {
@@ -489,13 +490,14 @@ export async function runSmokeCanvas(opts: {
     const styles = await waitForPluginStyles(win);
     console.log(`SMOKE_CANVAS_STYLES ${JSON.stringify(styles)}`);
     const problems = [
+      ...smokeProfileFailures(),
       ...censusFailures(JSON.parse(raw) as CanvasFacts),
       ...pluginStyleFailures(styles),
     ];
     const verdict = await deskVerdict;
     console.log(`SMOKE_CANVAS_DESK ${gpu ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
     problems.push(...(await deskSeedFailures(win)));
-    if (gpu) problems.push(...(await deskWitnesses(win, shotDir, opts.handle)));
+    if (gpu) problems.push(...(await deskWitnesses(win, shotDir)));
     else {
       const card = await expectDeskUnavailableCard(win);
       console.log(`SMOKE_CANVAS_CARD ${JSON.stringify(card)}`);
@@ -516,43 +518,25 @@ export async function runSmokeCanvas(opts: {
 }
 
 /**
- * The OWNER'S THEME, put back as it was found (DK-3's discipline, shared since DK-4): `move` sets the
- * app's one theme as it likes; on every path the preference found goes back through the owner's own
- * door, then the file's bytes — or no file, if there was none. The owner keeps the choice in
- * Electron's userData (`vibefield-theme.json`), the profile every smoke shares with the owner's own
- * app. Says what was found and what is left, for the row's own check.
+ * DK-5 — THE SMOKE'S OWN PROFILE, said and held: Electron's `userData` for this run is the one
+ * `main/smoke-profile.ts` gave it — handed by `packaging/run-smoke.mjs` as a fresh `--user-data-dir`
+ * under the OS temp, or minted there — and never the app's shared profile, where the owner's own app
+ * keeps its theme file, its renderer storage and the desk's byte store. What a smoke writes (a
+ * theme, a still, a cleared localStorage) is the run's, and leaves with the profile.
  */
-async function withOwnerThemeKept<T>(
-  win: BrowserWindow,
-  move: () => Promise<T>,
-): Promise<{ value: T; found: string | null; kept: string | null }> {
-  const themeFile = join(app.getPath("userData"), THEME_FILE);
-  const themeBytes = (): string | null =>
-    existsSync(themeFile) ? readFileSync(themeFile, "utf8") : null;
-  const found = themeBytes();
-  // the store's own reading of those bytes — none, or unreadable, is no choice yet: Auto
-  const foundPreference = fileThemeStore(themeFile).read() ?? "auto";
-  const value = await (async () => {
-    try {
-      return await move();
-    } finally {
-      await win.webContents.executeJavaScript(
-        `globalThis.vibefield.theme.set(${JSON.stringify(foundPreference)})`,
-        true,
-      );
-      if (found === null) rmSync(themeFile, { force: true });
-      else writeFileSync(themeFile, found, "utf8");
-    }
-  })();
-  return { value, found, kept: themeBytes() };
+function smokeProfileFailures(): string[] {
+  const userData = app.getPath("userData");
+  const shared = sharedProfilePath(app.getPath("appData"), app.getName());
+  const real = (path: string): string => (existsSync(path) ? realpathSync(path) : path);
+  const underTemp = `${real(userData)}/`.startsWith(`${real(tmpdir())}/`);
+  console.log(`SMOKE_PROFILE ${JSON.stringify({ userData, underTemp, shared })}`);
+  return real(userData) === real(shared)
+    ? [`the smoke ran on the app's shared profile (${shared})`]
+    : [];
 }
 
 /** The GPU-on rows (DK-3, DK-4), each a fact read off the desk through `window.__vfDesk`. */
-async function deskWitnesses(
-  win: BrowserWindow,
-  shotDir: string | undefined,
-  handle: FielddHandle,
-): Promise<string[]> {
+async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): Promise<string[]> {
   const problems: string[] = [];
   const js = <T>(expression: string): Promise<T> =>
     win.webContents.executeJavaScript(expression, true) as Promise<T>;
@@ -584,8 +568,8 @@ async function deskWitnesses(
   }
 
   // THE THEME: the app's one owner (main) moves, and the desk is re-dressed — its still changes,
-  // darker by night. The window's stills are kept here for the grader. The row puts back exactly
-  // the owner's choice it found (`withOwnerThemeKept`), on every path.
+  // darker by night. The window's stills are kept here for the grader. Nothing is put back: the
+  // theme file main writes is this run's own profile's (DK-5), and leaves with it.
   const dressed = async (name: "light" | "dark"): Promise<DeskSampleFacts | null> => {
     await js(`globalThis.vibefield.theme.set(${JSON.stringify(name)})`);
     await waitForRendererFact(
@@ -608,18 +592,9 @@ async function deskWitnesses(
     }
     return js<DeskSampleFacts | null>("globalThis.__vfDesk.sample()");
   };
-  const theme = await withOwnerThemeKept(win, async () => ({
-    light: await dressed("light"),
-    dark: await dressed("dark"),
-  }));
-  const { light, dark } = theme.value;
-  const { found, kept } = theme;
-  console.log(`SMOKE_CANVAS_THEME ${JSON.stringify({ light, dark, found, kept })}`);
-  if (kept !== found) {
-    problems.push(
-      `the owner's theme file was left ${JSON.stringify(kept)}, not ${JSON.stringify(found)}`,
-    );
-  }
+  const light = await dressed("light");
+  const dark = await dressed("dark");
+  console.log(`SMOKE_CANVAS_THEME ${JSON.stringify({ light, dark })}`);
   if (light === null || dark === null) problems.push("no still to compare the themes by");
   else if (dark.lumaMean >= light.lumaMean) {
     problems.push(`the desk did not darken by night (${light.lumaMean} → ${dark.lumaMean})`);
@@ -657,7 +632,7 @@ async function deskWitnesses(
 
   // the explorer's still FIRST: a still is owed after the board's save and taken at the desk's first
   // rest — and its capture submits GPU work, so the idle row waits until it has been taken
-  problems.push(...(await explorerStillRow(win, shotDir, handle)));
+  problems.push(...(await explorerStillRow(win, shotDir)));
   problems.push(...(await deskIdleRow(win)));
   return problems;
 }
@@ -705,14 +680,12 @@ const CURRENT_STILL = `.vf-head-explorer .vf-head-doc[aria-current="true"] img`;
  * DK-4 — THE EXPLORER SHOWS THE DESK (DK-D27): the open board's tile wears the still its desk took
  * at rest (the capture door at a quarter scale, PNG bytes on the renderer's byte store's keyed
  * shelf), an <img> on a `blob:` URL the packaged CSP admits — the window kept, light and dark, for
- * the grader (`dk-4-explorer-{light,dark}.png`). Then the PROFILE put back: the smoke runs on the
- * app's own Electron profile, and the stills its boards left on the shelf are this run's writes —
- * each removed, and the owner's theme restored as DK-3's row restores it.
+ * the grader (`dk-4-explorer-{light,dark}.png`). The stills stay on the shelf: it is this run's own
+ * profile's (DK-5), and they leave with it.
  */
 async function explorerStillRow(
   win: BrowserWindow,
   shotDir: string | undefined,
-  handle: FielddHandle,
 ): Promise<string[]> {
   const js = <T>(expression: string): Promise<T> =>
     win.webContents.executeJavaScript(expression, true) as Promise<T>;
@@ -735,54 +708,24 @@ async function explorerStillRow(
     `(() => { const img = document.querySelector(${JSON.stringify(CURRENT_STILL)}); return { scheme: img.src.slice(0, 5), width: img.naturalWidth, height: img.naturalHeight }; })()`,
   );
   console.log(`SMOKE_CANVAS_EXPLORER ${JSON.stringify(still)}`);
-  const theme = await withOwnerThemeKept(win, async () => {
-    for (const name of ["light", "dark"] as const) {
-      await js(`globalThis.vibefield.theme.set(${JSON.stringify(name)})`);
-      await waitForRendererFact(
-        win,
-        `the window dressed ${name}`,
-        10_000,
-        `document.documentElement.getAttribute("data-theme") === ${JSON.stringify(name)} && globalThis.__vfDesk.theme() === ${JSON.stringify(name)}`,
-      );
-      await sleep(800); // the chrome's own transitions
-      if (shotDir !== undefined) {
-        mkdirSync(shotDir, { recursive: true });
-        writeFileSync(
-          join(shotDir, `dk-4-explorer-${name}.png`),
-          (await win.capturePage()).toPNG(),
-        );
-      }
-    }
-  });
-  if (theme.kept !== theme.found) {
-    problems.push(
-      `the owner's theme file was left ${JSON.stringify(theme.kept)}, not ${JSON.stringify(theme.found)}`,
+  for (const name of ["light", "dark"] as const) {
+    await js(`globalThis.vibefield.theme.set(${JSON.stringify(name)})`);
+    await waitForRendererFact(
+      win,
+      `the window dressed ${name}`,
+      10_000,
+      `document.documentElement.getAttribute("data-theme") === ${JSON.stringify(name)} && globalThis.__vfDesk.theme() === ${JSON.stringify(name)}`,
     );
+    await sleep(800); // the chrome's own transitions
+    if (shotDir !== undefined) {
+      mkdirSync(shotDir, { recursive: true });
+      writeFileSync(join(shotDir, `dk-4-explorer-${name}.png`), (await win.capturePage()).toPNG());
+    }
   }
   await js(`document.querySelector('.vf-head-chev[aria-expanded="true"]')?.click()`);
-  // the profile put back: this run's boards are its own (fieldd's root is the smoke's), so their
-  // stills on the shared profile's shelf are this run's writes
-  const docIds = DocListResult.parse(await handle.client.request("doc.list", {})).docs.map(
-    (doc) => doc.docId,
-  );
-  const removed = await js<string[]>(
-    `(async (ids) => {
-      const removed = [];
-      try {
-        const store = await (await navigator.storage.getDirectory()).getDirectoryHandle("vibefield-desk-blobs");
-        const keyed = await store.getDirectoryHandle("keyed");
-        for (const id of ids) for (const name of ["still-" + id, "still-" + id + ".type"]) {
-          try { await keyed.removeEntry(name); removed.push(name); } catch {}
-        }
-      } catch {}
-      return removed;
-    })(${JSON.stringify(docIds)})`,
-  );
-  console.log(`SMOKE_CANVAS_STILLS_PUT_BACK ${JSON.stringify({ docIds, removed })}`);
   if (still.scheme !== "blob:" || still.width <= 0) {
     problems.push(`the explorer's still is not a loaded blob: image (${JSON.stringify(still)})`);
   }
-  if (removed.length === 0) problems.push("the run's stills were not found on the shelf to remove");
   return problems;
 }
 
@@ -3888,6 +3831,10 @@ export async function runSmokeGodview(opts: {
     app.exit(verdict["ok"] === true ? 0 : 2);
   };
   try {
+    // DK-5: its own profile — the `localStorage.clear()` rows below clear THIS run's storage,
+    // never the owner's app's (they cleared the shared profile's until DK-5).
+    const profileProblems = smokeProfileFailures();
+    if (profileProblems.length > 0) throw new Error(profileProblems.join(" · "));
     const win = createMainWindow({
       mode: "smoke-godview",
       preloadPath: opts.preloadPath,

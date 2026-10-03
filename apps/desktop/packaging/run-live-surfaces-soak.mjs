@@ -4,6 +4,7 @@ import { spawn } from "node:child_process";
 import { createRequire } from "node:module";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { mintSmokeProfile } from "./smoke-profile.mjs";
 
 const MAX_OUTPUT_BYTES = 8 * 1024 * 1024;
 const MAX_ITERATIONS = 1_000;
@@ -171,9 +172,11 @@ async function runIteration({
   continuousSoakMs,
   iteration,
 }) {
+  // DK-5: each iteration's own Electron profile, removed after it (packaging/smoke-profile.mjs).
+  const profile = mintSmokeProfile();
   const child = spawn(
     electronPath,
-    [desktopRoot, "--live-surfaces-lab", "-ApplePersistenceIgnoreState", "YES"],
+    [desktopRoot, profile.arg, "--live-surfaces-lab", "-ApplePersistenceIgnoreState", "YES"],
     {
       cwd: desktopRoot,
       env: labEnvironment(options, continuousSoakMs),
@@ -227,6 +230,7 @@ async function runIteration({
     });
   } finally {
     if (activeChild === child) activeChild = null;
+    profile.remove();
   }
   const verdict = parseVerdict(stdout);
   if (outcome.code !== 0 || verdict.ok !== true) {
