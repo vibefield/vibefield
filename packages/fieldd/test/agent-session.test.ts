@@ -39,6 +39,7 @@ import {
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type {
+  AccountUsageService,
   AgentAdapterBinding,
   AgentHost,
   AgentProfile,
@@ -56,6 +57,7 @@ import {
   AGENT_FIELD,
   AGENT_HISTORY,
   AGENT_MONITOR_SCHEMA_VERSION,
+  type AgentAccountUsageBatch,
   type AgentCatalogEntry,
   AgentFieldRow,
   AgentHistoryResult,
@@ -378,6 +380,8 @@ interface SetupConfig {
   extensions?: boolean;
   /** the catalog this fieldd answers from (default: THE table plus the scripted row) */
   catalog?: readonly AgentCatalogEntry[];
+  /** Replace every real quota reader; only the fake Claude service remains. */
+  usage?: AccountUsageService;
 }
 
 /** Boot fieldd: over the mock mgmt server (no floor) or the REAL field-native. */
@@ -461,14 +465,23 @@ async function setup(config: SetupConfig): Promise<Box> {
     vibefieldRoot: root,
     agentSearchPath: bin,
     agentCatalog: config.catalog ?? SCRIPTED_CATALOG,
-    agentProviders: (builtin) => [
-      ...(config.extensions === true ? builtin.map(withoutExtensionReads) : builtin),
-      scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined, {
-        profiles: config.profiles === true,
-        seen,
-        ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
-      }),
-    ],
+    agentProviders: (builtin) => {
+      const usage = config.usage;
+      const providers =
+        usage === undefined
+          ? builtin
+          : builtin.map(({ accountUsage: _usage, ...provider }) =>
+              provider.descriptor.id === "claude" ? { ...provider, accountUsage: usage } : provider,
+            );
+      return [
+        ...(config.extensions === true ? providers.map(withoutExtensionReads) : providers),
+        scriptedProvider(envOut, sessions, config.attach ? { records: attached } : undefined, {
+          profiles: config.profiles === true,
+          seen,
+          ...(config.extensions === true ? { signInMark: join(root, "scripted-signed-in") } : {}),
+        }),
+      ];
+    },
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
     // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget
     ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
@@ -1400,13 +1413,48 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     await win.call("terminal.terminate", { sessionId: resumed.terminal.sessionId });
   }, 90_000);
 
-  it("the persona login pane: the vendor's own login in a PTY, and the identity re-read when it ends", async () => {
-    const { daemon, dataDir } = await setup({ floor: "real" });
-    const win = await window(daemon, DECK, "l1");
+  it("the persona login pane: the vendor's login in a PTY, then identity and usage re-read when it ends", async () => {
+    let authenticated = false;
+    let readings = 0;
+    const { daemon, dataDir } = await setup({
+      floor: "real",
+      usage: {
+        provider: { id: "claude", label: "Claude", refresh: { pollIntervalMs: 30 * 60_000 } },
+        async fetch() {
+          readings += 1;
+          return authenticated
+            ? {
+                status: "available",
+                snapshot: {
+                  provider: "claude",
+                  fetchedAt: new Date().toISOString(),
+                  scope: "subscription",
+                  source: { kind: "native-protocol", stability: "documented" },
+                  metrics: [],
+                },
+              }
+            : {
+                status: "unauthenticated",
+                provider: "claude",
+                message: "Sign in required",
+                retryable: false,
+              };
+        },
+      },
+    });
+    const win = await window(daemon, [...DECK, "agent.usage"], "l1");
     const before = (await win.call("agents.profiles.list", {
       provider: "claude",
     })) as AgentsProfilesListResult;
     expect(before.personas[0]?.identity).toBeUndefined();
+
+    await win.call("agents.usage.subscribe", {});
+    await poll(async () => {
+      const batch = (await win.call("agents.usage", {})) as AgentAccountUsageBatch;
+      return batch.entries[0]?.state === "unauthenticated" ? true : undefined;
+    }, 8_000);
+    expect(readings).toBe(1);
+    authenticated = true;
 
     const login = (await win.call("agents.profiles.login", {
       profileId: "claude:native-default",
@@ -1431,6 +1479,11 @@ describe("managed sessions over the REAL floor (field-native)", () => {
       organization: "Example Org",
       plan: "max",
     });
+    await poll(async () => {
+      const batch = (await win.call("agents.usage", {})) as AgentAccountUsageBatch;
+      return batch.entries[0]?.state === "available" ? true : undefined;
+    }, 8_000);
+    expect(readings).toBe(2); // login completion bypasses the pre-login 30-minute delay
     expect(auditText(dataDir)).toContain('"action":"agents.profiles.login"');
     // AR-S2c: a route is one the agent declared — Claude Code declares none, so
     // puppeteer refuses one before any terminal opens; a malformed one never

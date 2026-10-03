@@ -732,6 +732,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     supervisor: rosettad,
     terminals: () => terminalsRef,
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    onProfileSignedIn: async (profileId): Promise<void> => {
+      await agentUsage.signedIn(profileId);
+    },
     revealPath: () => {
       const shell = shellApi;
       if (shell === null || !shell.revealPathAvailable()) return null;

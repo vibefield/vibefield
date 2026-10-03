@@ -7769,3 +7769,13 @@ Not built:
 - Peer rows draw a generic desktop mark, because `MonitorRemoteFacet` carries no OS.
 
 Decisions: TL-D1…TL-D17 (ruled 2026-10-02 on the page *Where the Time Went*), `draft/godview-timeline/design-timeline.md` §B.
+
+## AR — a verified sign-in re-reads that account's usage at once (2026-10-02)
+
+A persona's login pane could end with the agent signed in while the usage meter kept the pre-login reading: the row went on saying "Sign in required", and that failure's cooldown held the next reading back for up to 30 minutes (Claude's poll interval). Now a login pane that EXITS and verifies as signed in calls `onProfileSignedIn`, a new `AgentRuntimeServiceOptions` seam, and fieldd wires it to `AccountUsageService.signedIn(profileId)`. That reconciles the persona registry without polling, asks puppeteer's monitor to drop that account's pre-login reading (`invalidateProfileAuthentication`), and reads that one account again only while a window is subscribed. Unwatched, the old reading is still cleared and the next subscriber reads afresh. A failure in the hook is logged (`fieldd.agents.login_usage_failed`) and never fails the pane's own close.
+
+The monitor method is puppeteer `6392865`, and the pin moves to it. Only a local authentication failure is reset: a rate limit or a Retry-After still in the future survives. A reading already in flight settles first, so a fetch that began before the login cannot restore the failure. The account's last good meters are dropped either way, since a login can switch accounts.
+
+Tests: agent-usage gains two rows (only the newly signed-in account is rechecked instead of keeping its pre-login failure for 30 minutes; a completed login's old usage is cleared while unwatched and waits for a subscriber). Agent-session's login-pane row now drives a fake Claude usage service from `unauthenticated` to `available` across the login, with exactly two readings. Puppeteer's monitor gains three rows; its runtime suite is 441/441. Witness (2026-10-02, a clean worktree at this commit, puppeteer at `6392865`): fieldd typecheck; agent-usage 16 passed, 1 skipped; agent-session 36 passed, 2 skipped over the real floor, the login-pane row among them; the landing's `pnpm verify` EXIT 0 at its tip (the runs: LANDED §UI the living mark, 2026-10-02).
+
+Provenance: James's work in both repositories (2026-09-27/28), carried uncommitted across DS waves 1–2 and TL.

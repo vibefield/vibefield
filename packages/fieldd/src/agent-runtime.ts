@@ -384,6 +384,8 @@ export interface AgentRuntimeServiceOptions {
   audit?: SystemAudit;
   /** AR-4 test seam: the resume-when-idle thresholds (defaults above) */
   resumeWhenIdle?: { afterMs?: number; pollMs?: number };
+  /** A login pane ended and the agent confirmed it is signed in. */
+  onProfileSignedIn?: (profileId: string) => Promise<void>;
   /** AR-S4d test seam: where a profile's server values are kept (default: the OS keychain) */
   secretStore?: SecretStore;
   /** AR-7 — the agents a launcher stands for on this device NOW (the gateway
@@ -3373,8 +3375,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (how === "exited") await this.reapLoginPane(sessionId);
     if (this.disposed) return;
     let outcome: string;
+    let signedIn = false;
     try {
       const verified = await this.runtime.verifyProfile(login.profileId);
+      signedIn = !isFailure(verified) && verified.loggedIn;
       outcome = isFailure(verified)
         ? `${verified.status}: ${verified.message}`
         : verified.loggedIn
@@ -3391,6 +3395,20 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     });
     // the pane is closed whatever the read said: a frame says so
     this.profiles.publish();
+    if (how === "exited" && signedIn && !this.disposed) {
+      try {
+        await this.opts.onProfileSignedIn?.(login.profileId);
+      } catch (error) {
+        this.logger.warn(
+          "fieldd.agents.login_usage_failed",
+          "Usage was not refreshed after sign-in",
+          {
+            profileId: login.profileId,
+            error: error instanceof Error ? error.message : String(error),
+          },
+        );
+      }
+    }
   }
 
   /** MF-1f — `overrides` is how an EXITED-but-hosted row reuses this: the pane

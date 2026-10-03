@@ -370,6 +370,19 @@ export class AccountUsageService {
     return this.latest ?? { entries: [], generatedAt: this.now().toISOString() };
   }
 
+  /** A completed, verified login changes the account's credentials. Forget
+   * its pre-login reading, then read again only while somebody is watching.
+   * A registry reconcile alone keeps existing rows and their failure delay. */
+  async signedIn(profileId: string): Promise<void> {
+    if (this.disposed) return;
+    await this.monitor.refreshProfiles({ poll: false });
+    if (this.disposed) return;
+    await this.monitor.invalidateProfileAuthentication(profileId);
+    if (this.armed && this.polling && !this.disposed) {
+      await this.monitor.refresh({ profileIds: [profileId] });
+    }
+  }
+
   /** Re-read the persona registry: a new account becomes its own row, a
    * deleted one stops being polled. Called after the profile doors settle
    * (puppeteer's `onProfilesChanged`, which fires for create/delete/verify). */
