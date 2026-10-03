@@ -12,6 +12,8 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createHarness, type Harness, installDom } from "../src/boot";
 
 type FieldEngineModule = typeof import("../../../packages/field-app/src/field-engine");
+type DeskCapabilitiesModule =
+  typeof import("../../../packages/field-app/src/field/desk/desk-capabilities");
 type StagedLoaderModule =
   typeof import("../../../packages/field-app/src/plugin-host/staged-loader");
 type BehaviorHostModule =
@@ -27,7 +29,8 @@ type RendererLoggerBindings =
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REPO = resolve(HERE, "..", "..", "..");
 const PLUGIN_ID = "vibefield.behavior-conformance";
-const WIDGET_TYPE = `${PLUGIN_ID}.card`;
+/** The riders' carrier: an OBJECT kind of the fixture's own since DK-4 (its manifest's `objects` row). */
+const CARRIER_TYPE = `${PLUGIN_ID}.card`;
 const DURABLE_ID = `${PLUGIN_ID}:durable`;
 const RUNTIME_ID = `${PLUGIN_ID}:runtime`;
 const BREAKER_ID = `${PLUGIN_ID}:breaker`;
@@ -36,6 +39,7 @@ const PLUGIN_ROOT = join(REPO, "examples", "plugins", "behavior-conformance");
 const ARTIFACT = join(PLUGIN_ROOT, "dist", "renderer.js");
 const V1_AUTHOR = join(PLUGIN_ROOT, "test", "author-v1.mjs");
 const ICE_MODULE = createRequire(import.meta.url).resolve("@vibecook/ice");
+const ICE_OBJECTS_MODULE = createRequire(import.meta.url).resolve("@vibecook/ice/desk/objects");
 
 interface CapturedLog {
   readonly level: string;
@@ -100,7 +104,11 @@ function withGrant(record: PluginRecord, generation: number, granted: boolean): 
 function authorV1(): { readonly envelope: Uint8Array; readonly key: string } {
   const child = spawnSync(process.execPath, [V1_AUTHOR], {
     encoding: "utf8",
-    env: { ...process.env, PRC4_ICE_MODULE: ICE_MODULE },
+    env: {
+      ...process.env,
+      PRC4_ICE_MODULE: ICE_MODULE,
+      PRC4_ICE_OBJECTS_MODULE: ICE_OBJECTS_MODULE,
+    },
   });
   expect(child.status, `v1 author failed\nstdout:\n${child.stdout}\nstderr:\n${child.stderr}`).toBe(
     0,
@@ -149,6 +157,7 @@ async function eventually(check: () => boolean, message: string): Promise<void> 
 
 let harness: Harness;
 let fieldEngine: FieldEngineModule;
+let deskCapabilities: DeskCapabilitiesModule;
 let stagedLoader: StagedLoaderModule;
 let behaviorHost: BehaviorHostModule;
 let documentPresence: DocumentPresenceModule;
@@ -162,29 +171,40 @@ beforeAll(async () => {
   // author/release build would, so this witness is valid from a clean checkout.
   await buildPlugin({ root: PLUGIN_ROOT });
   harness = await createHarness([PLUGIN_ROOT]);
-  [fieldEngine, stagedLoader, behaviorHost, documentPresence, logging, fieldd, artifact] =
-    await Promise.all([
-      harness.load(
-        join(REPO, "packages", "field-app", "src", "field-engine.ts"),
-      ) as Promise<FieldEngineModule>,
-      harness.load(
-        join(REPO, "packages", "field-app", "src", "plugin-host", "staged-loader.ts"),
-      ) as Promise<StagedLoaderModule>,
-      harness.load(
-        join(REPO, "packages", "field-app", "src", "plugin-host", "behavior-generation-host.ts"),
-      ) as Promise<BehaviorHostModule>,
-      harness.load(
-        join(REPO, "packages", "field-app", "src", "field", "document-presence.ts"),
-      ) as Promise<DocumentPresenceModule>,
-      harness.load(
-        join(REPO, "packages", "field-app", "src", "logging.ts"),
-      ) as Promise<LoggingModule>,
-      harness.load(
-        join(REPO, "packages", "fieldd", "src", "plugin-registry.ts"),
-      ) as Promise<FielddModule>,
-      // Exact emitted bytes. Loading src/renderer.ts here would make A9 fail.
-      harness.load(ARTIFACT),
-    ]);
+  [
+    fieldEngine,
+    deskCapabilities,
+    stagedLoader,
+    behaviorHost,
+    documentPresence,
+    logging,
+    fieldd,
+    artifact,
+  ] = await Promise.all([
+    harness.load(
+      join(REPO, "packages", "field-app", "src", "field-engine.ts"),
+    ) as Promise<FieldEngineModule>,
+    harness.load(
+      join(REPO, "packages", "field-app", "src", "field", "desk", "desk-capabilities.ts"),
+    ) as Promise<DeskCapabilitiesModule>,
+    harness.load(
+      join(REPO, "packages", "field-app", "src", "plugin-host", "staged-loader.ts"),
+    ) as Promise<StagedLoaderModule>,
+    harness.load(
+      join(REPO, "packages", "field-app", "src", "plugin-host", "behavior-generation-host.ts"),
+    ) as Promise<BehaviorHostModule>,
+    harness.load(
+      join(REPO, "packages", "field-app", "src", "field", "document-presence.ts"),
+    ) as Promise<DocumentPresenceModule>,
+    harness.load(
+      join(REPO, "packages", "field-app", "src", "logging.ts"),
+    ) as Promise<LoggingModule>,
+    harness.load(
+      join(REPO, "packages", "fieldd", "src", "plugin-registry.ts"),
+    ) as Promise<FielddModule>,
+    // Exact emitted bytes. Loading src/renderer.ts here would make A9 fail.
+    harness.load(ARTIFACT),
+  ]);
 }, 120_000);
 
 afterAll(async () => {
@@ -275,6 +295,18 @@ describe("packaged behavior conformance", () => {
       const opened = engine.docs.open(v1.envelope);
       if (!opened.ok) throw new Error(`v1 document was refused: ${opened.reason}`);
       expect(opened.session.readOnly).toBe(false);
+      expect(opened.session.rootCanvas?.id).toBe("desk.desk");
+      // THE OPEN'S RULE (DK-4, DK-D17 — the workspace session's): the board gains the packs of
+      // what is on. The v1 board was authored by an engine that never knew the carrier, so its
+      // pack is absent, and ICE refuses to place what a board's packs do not enable.
+      const board = engine.canvas.current();
+      if (board.state !== "attached") throw new Error("the v1 board did not attach");
+      expect(engine.placement.canPlace(CARRIER_TYPE, board.frame)).toMatchObject({
+        ok: false,
+        reason: "pack-disabled",
+      });
+      expect(deskCapabilities.upgradeFieldCapabilities(engine, pluginRegistry)).toBe(true);
+      expect(engine.placement.canPlace(CARRIER_TYPE, board.frame)).toMatchObject({ ok: true });
       engine.world.sync();
       engine.step(16);
       const oldEntity = opened.session.store.resolve(
@@ -291,7 +323,7 @@ describe("packaged behavior conformance", () => {
         ),
       ).toBe(true);
 
-      const widget = engine.ops.spawnWidget(WIDGET_TYPE, {
+      const widget = engine.ops.spawnWidget(CARRIER_TYPE, {
         x: 0,
         y: 0,
         undoable: false,
@@ -386,6 +418,8 @@ describe("packaged behavior conformance", () => {
         expect(guest(engine, BREAKER_ID)).toMatchObject({ strikes: 3, status: "suspended" });
         const next = engine.docs.open(envelope);
         if (!next.ok) throw new Error(`generation ${generation} document was refused`);
+        // every open asks again; a board that carries the packs is not written
+        expect(deskCapabilities.upgradeFieldCapabilities(engine, pluginRegistry)).toBe(false);
         engine.world.sync();
         engine.step(500 + generation * 16);
         const restoredOld = next.session.store.resolve(

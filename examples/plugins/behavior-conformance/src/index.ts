@@ -1,2 +1,5 @@
 export { behaviorConformanceManifest } from "./manifest";
-export { default as behaviorConformanceRenderer } from "./renderer";
+export {
+  card as behaviorConformanceCard,
+  default as behaviorConformanceRenderer,
+} from "./renderer";

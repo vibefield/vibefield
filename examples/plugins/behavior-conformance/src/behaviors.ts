@@ -6,7 +6,8 @@ import {
 } from "@vibefield/plugin-sdk/behavior";
 
 export const PLUGIN_ID = "vibefield.behavior-conformance";
-export const WIDGET_TYPE = `${PLUGIN_ID}.card`;
+/** The riders' carrier — an OBJECT kind of this fixture's own since DK-4 (renderer.ts exports it). */
+export const CARRIER_TYPE = `${PLUGIN_ID}.card`;
 
 /** A v2 document behavior. The conformance suite authors genuine v1 bytes in a fresh process. */
 export const DurableProbe: BehaviorHandle<{ readonly count: number }> = defineBehavior(

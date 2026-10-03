@@ -75,6 +75,14 @@ describe("the rule, read from the envelope", () => {
     expect(ENGINE_SCHEMA_VERSION).toBeGreaterThanOrEqual(3);
   });
 
+  it("refuses a schema-1 board too — never migrated on the desk (DK-4: its fixtures went with it)", () => {
+    // `schema1-migration.test.ts` pinned 1→2 at open for `vibefield.note` boards; on the desk every
+    // board below schema 3 is from before the desk, so the open never reaches a schema migration
+    const { header, payload } = decodeEnvelope(deskBoard());
+    const { rootCanvas: _root, ...rest } = header;
+    expect(isBeforeTheDesk(encodeEnvelope({ ...rest, engineSchema: 1 }, payload))).toBe(true);
+  });
+
   it("leaves an unreadable envelope to `docs.open`'s own quarantine", () => {
     expect(isBeforeTheDesk(new Uint8Array([1, 2, 3, 4, 5]))).toBe(false);
   });

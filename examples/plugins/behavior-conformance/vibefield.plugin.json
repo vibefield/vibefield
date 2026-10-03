@@ -113,7 +113,7 @@
         "id": "vibefield.behavior-conformance:presence"
       }
     ],
-    "widgets": [
+    "objects": [
       {
         "behaviors": [
           {
@@ -132,10 +132,8 @@
             "id": "vibefield.behavior-conformance:breaker"
           }
         ],
-        "category": "Tools",
-        "defaultSize": {
-          "h": 120,
-          "w": 220
+        "binding": {
+          "kind": "card"
         },
         "description": "Exercises durable/runtime riders and bounded presence through the host",
         "groups": {},
@@ -144,9 +142,14 @@
           "selectable": true
         },
         "props": {},
+        "provides": [
+          "desk.object"
+        ],
         "schemaVersion": 1,
-        "sizeMode": "fixed",
-        "surface": "dom",
+        "size": {
+          "h": 120,
+          "w": 220
+        },
         "title": "Behavior conformance card",
         "type": "vibefield.behavior-conformance.card"
       }

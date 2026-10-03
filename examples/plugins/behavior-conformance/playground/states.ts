@@ -1,7 +1,7 @@
-import { WIDGET_TYPE } from "../src/behaviors";
+import { CARRIER_TYPE } from "../src/behaviors";
 
 export default {
-  [WIDGET_TYPE]: {
+  [CARRIER_TYPE]: {
     defaults: {},
   },
 };
