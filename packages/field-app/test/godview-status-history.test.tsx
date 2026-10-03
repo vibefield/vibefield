@@ -26,7 +26,12 @@ import { managedSummary } from "./managed-session-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-const CREATED = "2026-10-02T13:00:00.000Z";
+// The afternoon is relative to when the suite runs: the ledger keeps a day
+// (STATUS_HISTORY_HORIZON_MS) measured from the wall clock, so fixed dates
+// expired 24 h after this file was written and the seeded record was trimmed.
+const NOW = Date.now();
+const ago = (minutes: number): string => new Date(NOW - minutes * 60_000).toISOString();
+const CREATED = ago(60);
 const ROWS: readonly AgentSessionSummary[] = [
   managedSummary({ runtimeRunId: "run-live", status: "working", createdAt: CREATED }),
   // ended while Godview was closed: the fold still lists it, the stage draws it nowhere live
@@ -36,18 +41,18 @@ const ROWS: readonly AgentSessionSummary[] = [
 const RECORD: readonly AgentRunHistory[] = [
   {
     runtimeRunId: "run-live",
-    recordedFrom: "2026-10-02T12:00:00.000Z",
+    recordedFrom: ago(120),
     changes: [
-      { status: "unknown", at: "2026-10-02T12:00:00.000Z" },
-      { status: "blocked", at: "2026-10-02T12:10:00.000Z", blocker: { kind: "permission" } },
+      { status: "unknown", at: ago(120) },
+      { status: "blocked", at: ago(110), blocker: { kind: "permission" } },
       { status: "working", at: CREATED, did: "Run pnpm verify" },
     ],
   },
   {
     runtimeRunId: "run-gone",
-    recordedFrom: "2026-10-02T12:30:00.000Z",
-    changes: [{ status: "working", at: "2026-10-02T12:30:00.000Z" }],
-    exitedAt: "2026-10-02T12:50:00.000Z",
+    recordedFrom: ago(90),
+    changes: [{ status: "working", at: ago(90) }],
+    exitedAt: ago(70),
   },
 ];
 
@@ -151,7 +156,7 @@ describe("TL — the record a view is handed", () => {
     expect(load).toHaveBeenCalledWith();
     // the leading unknown is unrecorded time, never a state
     expect(spans("run-live")).toEqual([
-      ["blocked", "2026-10-02T12:10:00.000Z"],
+      ["blocked", ago(110)],
       ["working", CREATED],
     ]);
     expect(seen?.history?.lanes.get("run-live")?.spans[1]?.did).toBe("Run pnpm verify");
@@ -162,12 +167,16 @@ describe("TL — the record a view is handed", () => {
     expect(seen?.agents.map((agent) => agent.id)).toEqual(["run-live"]);
     expect(seen?.history?.ended.map((agent) => agent.id)).toEqual(["run-gone"]);
     expect(seen?.history?.lanes.get("run-gone")).toMatchObject({
-      endedAtMs: Date.parse("2026-10-02T12:50:00.000Z"),
+      endedAtMs: Date.parse(ago(70)),
     });
   });
 
   it("a local run's cost reaches the view (the projection used to drop it)", async () => {
-    const live = managedSummary({ runtimeRunId: "run-live", status: "working", createdAt: CREATED });
+    const live = managedSummary({
+      runtimeRunId: "run-live",
+      status: "working",
+      createdAt: CREATED,
+    });
     const now = Date.now();
     const bucket = (agoMs: number, costUsd: number) => ({
       at: new Date(Math.floor((now - agoMs) / 30_000) * 30_000).toISOString(),
