@@ -1,7 +1,7 @@
 // DS-5 spike, 2026-09-30 — the ICE1 checkpoint envelope (thinking-desktop-sync-plane
 // §5.1, DS-D18's "the spike that comes first"). Three questions, answered against
-// REAL bytes: `generate.mjs` wrote every fixture through ICE 0.11.0's own autosave
-// path (put = checkpoint, append = journal record), two devices, the §1.2 defect.
+// REAL bytes: `generate.mjs` wrote every fixture through ICE's own autosave path
+// (put = checkpoint, append = journal record), two devices, the §1.2 defect.
 // THIS file links no ICE and no strata — only loro-crdt, the tree's one pinned
 // resolution (EL8) — which is exactly the posture the Loro-level host must keep.
 //
@@ -10,6 +10,13 @@
 //     keeps, and converge with a doc that saw the same records in another order?
 // (c) Does ICE hand raw Loro updates beside its checkpoints — and does a
 //     checkpoint's FOLDED edit also go out as an update, or only inside it?
+//
+// DK-4 (desk/landing, 2026-10-03): the fixtures are REGENERATED AT THE PINNED ICE —
+// the desk's engine laying desk notes — and held to the pin (the manifest's `ice` is
+// the workspace's own override). (d) proves the frame unchanged across the pins:
+// 0.11.0's four checkpoints are kept as a golden the pinned writer re-framed byte
+// for byte, and this rule reads both pins' frames alike — and reads the desk's types.
+import { createHash } from "node:crypto";
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,9 +36,19 @@ interface TapEntry {
   appendedAs: string | null;
   file?: string;
 }
+interface GoldenRow {
+  file: string;
+  sha256: string;
+  reframedSha256: string;
+  identical: boolean;
+  engineSchema: number;
+}
 interface Manifest {
   ice: string;
   loro: string;
+  /** what the devices laid (DK-4: the desk's note) */
+  objectType: string;
+  golden: { ice: string; dir: string; files: GoldenRow[] };
   devices: Record<"A" | "B", { storage: StorageCall[]; tap: TapEntry[]; widgets: number }>;
   merged: {
     file: string;
@@ -79,9 +96,21 @@ const checkpoints = readdirSync(FIXTURES).filter((f) => f.endsWith(".ice1"));
 const storage = (device: "A" | "B", call: "put" | "append"): string[] =>
   manifest.devices[device].storage.filter((s) => s.call === call).map((s) => s.file);
 
+/** The workspace's ICE pin, read where it is declared (EL8): the `pnpm-workspace.yaml` override. */
+function pinnedIce(): string {
+  const workspace = readFileSync(
+    join(HERE, "..", "..", "..", "..", "..", "pnpm-workspace.yaml"),
+    "utf8",
+  );
+  const pin = /^\s+"@vibecook\/ice":\s*([^\s#]+)\s*$/m.exec(workspace)?.[1];
+  if (pin === undefined) throw new Error("no @vibecook/ice override in pnpm-workspace.yaml");
+  return pin;
+}
+
 describe("DS-5 spike (a) — the Loro bytes lift out of an ICE1 checkpoint by a fixed rule", () => {
   it("probes real renderer-written checkpoints, with no ICE or strata linked here", () => {
-    expect(manifest.ice).toBe("0.11.0");
+    // written at the PINNED ICE — move the pin and these fixtures must be regenerated (DK-4)
+    expect(manifest.ice).toBe(pinnedIce());
     expect(manifest.loro).toBe("1.13.8");
     expect(checkpoints.length).toBeGreaterThanOrEqual(4);
     const source = readFileSync(fileURLToPath(import.meta.url), "utf8");
@@ -280,5 +309,78 @@ describe("DS-5 spike (c) — what ICE hands fieldd beside its checkpoints", () =
     // absorbs that as a no-op import; the opaque journal would have grown by it.
     expect(manifest.livePush.rejournaledAppends).toBe(1);
     expect(manifest.livePush.rejournaledIsPush).toBe(true);
+  });
+});
+
+// ---- (d) DK-4: the frame across the pins ----
+const GOLDEN = join(HERE, manifest.golden.dir);
+const goldenBytes = (file: string): Uint8Array => new Uint8Array(readFileSync(join(GOLDEN, file)));
+const sha256 = (bytes: Uint8Array): string => createHash("sha256").update(bytes).digest("hex");
+/** 0.11.0's own checkpoints as DS-5 committed them (`fixtures/`, 2026-09-30) — moved, never rewritten. */
+const GOLDEN_0_11_0: Readonly<Record<string, string>> = {
+  "a-checkpoint-0.ice1": "ab9e4646d8aaade98bfc2643a7e04eb0c0cc692a1fcfe741b47ab19f3d599738",
+  "a-checkpoint-1.ice1": "903da54cfa3114c67d1d1056397854afbd734788f13744bbef49ea002969b89e",
+  "b-checkpoint-0.ice1": "884ac8614a5eee996f6d2a54a5b0924fba071823c9c909ef1c68fcf357e177ed",
+  "merged-roundtrip.ice1": "e7aaa4ad65ee0162d5a49df6140a322a7bfb5f3e6af7b34259fb0eef11e69c56",
+};
+const headerOf = (bytes: Uint8Array): Record<string, unknown> =>
+  JSON.parse(new TextDecoder().decode(lift(bytes).header)) as Record<string, unknown>;
+
+describe("DS-5 spike (d) — DK-4: the frame is identical across the pins, and it carries the desk", () => {
+  it("the pinned writer re-framed 0.11.0's own checkpoints byte for byte", () => {
+    expect(manifest.golden.ice).toBe("0.11.0");
+    expect(manifest.golden.files.map((row) => row.file)).toEqual(Object.keys(GOLDEN_0_11_0).sort());
+    for (const row of manifest.golden.files) {
+      // the golden is the very bytes 0.11.0 wrote…
+      expect(sha256(goldenBytes(row.file)), row.file).toBe(GOLDEN_0_11_0[row.file]);
+      expect(row.sha256).toBe(GOLDEN_0_11_0[row.file]);
+      // …and the pinned ICE's `encodeEnvelope`, handed their header and payload, wrote them again
+      expect(row.reframedSha256, row.file).toBe(row.sha256);
+      expect(row.identical).toBe(true);
+      expect(row.engineSchema).toBe(2);
+    }
+  });
+
+  it("this rule reads both pins' frames alike: one magic, one version, the length-prefixed header", () => {
+    const pins = [
+      ...Object.keys(GOLDEN_0_11_0).map((file) => goldenBytes(file)),
+      ...checkpoints.map((file) => bytesOf(file)),
+    ];
+    for (const bytes of pins) {
+      expect([...bytes.subarray(0, 5)]).toEqual([0x49, 0x43, 0x45, 0x31, 1]);
+      expect(Buffer.compare(Buffer.from(wrap(lift(bytes))), Buffer.from(bytes))).toBe(0);
+    }
+  });
+
+  it("reads the desk's new types: the root `desk.desk`, the desk's packs, its notes in the snapshot", () => {
+    expect(manifest.objectType).toBe("desk.note");
+    for (const file of checkpoints) {
+      const header = headerOf(bytesOf(file));
+      expect(header["engineSchema"], file).toBe(3);
+      expect(header["rootCanvas"]).toEqual({ id: "desk.desk", semanticVersion: 1 });
+      expect(header["prefabVersions"]).toMatchObject({
+        "desk.note": 1,
+        "@ice/canvas/desk.desk": 1,
+      });
+    }
+    for (const file of Object.keys(GOLDEN_0_11_0)) {
+      const header = headerOf(goldenBytes(file));
+      expect(header["engineSchema"]).toBe(2);
+      expect(header["rootCanvas"]).toBeUndefined(); // the root identity came with schema 3
+    }
+    // the merged snapshot, read with loro-crdt alone: the entities' `comp:PrefabId` names the desk's note
+    const merged = new LoroDoc();
+    merged.import(lift(bytesOf(manifest.merged.file)).payload);
+    const json = merged.toJSON() as {
+      entities: Record<string, { "comp:PrefabId"?: { id: string } }>;
+      meta: Record<string, unknown>;
+    };
+    const notes = Object.values(json.entities).filter(
+      (entity) => entity["comp:PrefabId"]?.id === manifest.objectType,
+    );
+    expect(notes).toHaveLength(manifest.merged.iceOpenedWidgets);
+    expect(json.meta["ice:rootCanvas"]).toBe(
+      JSON.stringify({ id: "desk.desk", semanticVersion: 1 }),
+    );
   });
 });

@@ -1,7 +1,42 @@
 {
-  "spike": "DS-5 ICE1 envelope, 2026-09-30",
-  "ice": "0.11.0",
+  "spike": "DS-5 ICE1 envelope, 2026-09-30; regenerated on the desk at DK-4, 2026-10-03",
+  "ice": "0.15.0-desk.1",
   "loro": "1.13.8",
+  "objectType": "desk.note",
+  "golden": {
+    "ice": "0.11.0",
+    "dir": "golden-0.11.0",
+    "files": [
+      {
+        "file": "a-checkpoint-0.ice1",
+        "sha256": "ab9e4646d8aaade98bfc2643a7e04eb0c0cc692a1fcfe741b47ab19f3d599738",
+        "reframedSha256": "ab9e4646d8aaade98bfc2643a7e04eb0c0cc692a1fcfe741b47ab19f3d599738",
+        "identical": true,
+        "engineSchema": 2
+      },
+      {
+        "file": "a-checkpoint-1.ice1",
+        "sha256": "903da54cfa3114c67d1d1056397854afbd734788f13744bbef49ea002969b89e",
+        "reframedSha256": "903da54cfa3114c67d1d1056397854afbd734788f13744bbef49ea002969b89e",
+        "identical": true,
+        "engineSchema": 2
+      },
+      {
+        "file": "b-checkpoint-0.ice1",
+        "sha256": "884ac8614a5eee996f6d2a54a5b0924fba071823c9c909ef1c68fcf357e177ed",
+        "reframedSha256": "884ac8614a5eee996f6d2a54a5b0924fba071823c9c909ef1c68fcf357e177ed",
+        "identical": true,
+        "engineSchema": 2
+      },
+      {
+        "file": "merged-roundtrip.ice1",
+        "sha256": "e7aaa4ad65ee0162d5a49df6140a322a7bfb5f3e6af7b34259fb0eef11e69c56",
+        "reframedSha256": "e7aaa4ad65ee0162d5a49df6140a322a7bfb5f3e6af7b34259fb0eef11e69c56",
+        "identical": true,
+        "engineSchema": 2
+      }
+    ]
+  },
   "devices": {
     "A": {
       "storage": [
@@ -84,15 +119,15 @@
     "file": "merged-roundtrip.ice1",
     "headerFrom": "a-checkpoint-1.ice1",
     "oplogVersion": {
-      "6036510176875920655": 14,
-      "510829504163391488": 43
+      "9594873750121244817": 69,
+      "14396876258606760642": 20
     },
     "iceOpenedWidgets": 7
   },
   "livePush": {
     "file": "push-to-window-a.loro",
     "windowFrom": {
-      "510829504163391488": 43
+      "9594873750121244817": 69
     },
     "widgetsBefore": 5,
     "widgetsAfter": 7,

@@ -1,20 +1,29 @@
 // DS-5 spike, 2026-09-30 — the ICE1 checkpoint envelope (thinking-desktop-sync-plane §5.1).
 //
-// Writes REAL checkpoints and journal records through ICE 0.11.0's OWN autosave
-// path — the renderer's persistence-controller shape exactly: `put` receives a
-// checkpoint, `append` receives an update record — for two devices playing the
-// §1.2 defect: A checkpoints edits that live in no journal record while B holds
-// content of its own. fieldd's probe (ice1-envelope.test.ts) reads the fixtures
-// WITHOUT ICE; this script is the only file here that links ICE, and it resolves
-// ICE through the RENDERER's dependency graph because fieldd must never depend
-// on it. It also closes the loop from ICE's side: an envelope rebuilt by the
-// fixed header rule over a Loro-merged snapshot is opened by ICE itself, and a
-// live window is pushed a host's update without quarantining.
+// Writes REAL checkpoints and journal records through ICE's OWN autosave path — the renderer's
+// persistence-controller shape exactly: `put` receives a checkpoint, `append` receives an update
+// record — for two devices playing the §1.2 defect: A checkpoints edits that live in no journal
+// record while B holds content of its own. fieldd's probe (ice1-envelope.test.ts) reads the
+// fixtures WITHOUT ICE; this script is the only file here that links ICE, and it resolves ICE
+// through the RENDERER's dependency graph because fieldd must never depend on it. It also closes
+// the loop from ICE's side: an envelope rebuilt by the fixed header rule over a Loro-merged
+// snapshot is opened by ICE itself, and a live window is pushed a host's update without
+// quarantining.
+//
+// DK-4 (desk/landing, 2026-10-03): REGENERATED AND RE-PINNED at the pinned ICE (DK-D31; r2 R12 —
+// "the frame is identical", proven here, not assumed). The devices are the DESK: ICE's desk
+// preset (`DESK_ENGINE`, rooted at `desk.desk`) laying desk notes, where 0.11.0's untyped engine
+// laid a DOM widget the desk no longer defines. The frame's proof is the 0.11.0 GOLDEN: the four
+// checkpoints 0.11.0's writer made are kept, byte for byte, in `golden-0.11.0/`, and the pinned
+// writer re-frames each from its own header and payload — the bytes must come back identical, or
+// this script refuses to write anything. Both shas of each ride the manifest, which the ICE-free
+// probe reads again.
 //
 // Run from the repo root:  node packages/fieldd/test/probes/ice1-envelope/generate.mjs
-// Peer ids are random per LoroDoc, so a rerun rewrites every fixture; the probe
-// asserts relations, never bytes.
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+// Peer ids are random per LoroDoc, so a rerun rewrites every fixture; the probe asserts
+// relations, never bytes (the golden is the one byte-for-byte witness, and it never changes).
+import { createHash } from "node:crypto";
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
@@ -22,12 +31,37 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 const here = dirname(fileURLToPath(import.meta.url));
 const repo = join(here, "..", "..", "..", "..", "..");
 const fromApp = createRequire(join(repo, "packages", "field-app", "package.json"));
-const iceEntry = fromApp.resolve("@vibecook/ice");
-const ice = await import(pathToFileURL(iceEntry).href);
+const ice = await import(pathToFileURL(fromApp.resolve("@vibecook/ice")).href);
+const objects = await import(pathToFileURL(fromApp.resolve("@vibecook/ice/desk/objects")).href);
 const loro = await import(pathToFileURL(fromApp.resolve("loro-crdt")).href);
 const icePkg = fromApp("@vibecook/ice/package.json");
-const { createCanvasEngine, defineWidget, defineQuery, Position, PrefabId } = ice;
+const { createCanvasEngine, decodeEnvelope, defineQuery, encodeEnvelope, PrefabId } = ice;
+const { DESK_ENGINE, NOTE_TYPE } = objects;
 const { LoroDoc } = loro;
+
+const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+const same = (a, b) => a.byteLength === b.byteLength && a.every((byte, i) => byte === b[i]);
+
+// ---- THE FRAME, PROVEN FIRST: the pinned writer re-frames 0.11.0's own checkpoints ----
+const goldenDir = join(here, "golden-0.11.0");
+const golden = readdirSync(goldenDir)
+  .filter((file) => file.endsWith(".ice1"))
+  .sort()
+  .map((file) => {
+    const bytes = new Uint8Array(readFileSync(join(goldenDir, file)));
+    const { header, payload } = decodeEnvelope(bytes);
+    const reframed = encodeEnvelope(header, payload);
+    return {
+      file,
+      sha256: sha256(bytes),
+      reframedSha256: sha256(reframed),
+      identical: same(bytes, reframed),
+      engineSchema: header.engineSchema,
+    };
+  });
+if (golden.length === 0 || !golden.every((row) => row.identical)) {
+  throw new Error(`the pinned ICE does not re-frame the 0.11.0 golden: ${JSON.stringify(golden)}`);
+}
 
 const fixtures = join(here, "fixtures");
 rmSync(fixtures, { recursive: true, force: true });
@@ -53,14 +87,13 @@ function wrap(headerBytes, payload) {
 }
 const vvJson = (vv) => Object.fromEntries([...vv.toJSON()].map(([p, c]) => [String(p), c]));
 
-// ---- one device = one engine + one autosave, driven by hand ----
-const Card = defineWidget({ type: "probe.card", surface: "dom", component: () => null });
-const widgetQ = defineQuery([Position, PrefabId]);
+// ---- one device = one desk engine + one autosave, driven by hand ----
+const objectQ = defineQuery([PrefabId]);
 let clock = 1_000;
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 function device(name, initial) {
-  const ce = createCanvasEngine({ widgets: [Card] });
+  const ce = createCanvasEngine(DESK_ENGINE);
   let session;
   if (initial === null) session = ce.docs.create();
   else {
@@ -70,6 +103,9 @@ function device(name, initial) {
     for (const update of initial.updates) session.applyRemote(update);
   }
   ce.world.sync();
+  // one frame, as a window's loop takes: the facade judges a board an applied record touched at
+  // its next publish, and holds writes until then (0.14+; 0.11.0 had no such gate)
+  ce.step(clock);
   const timers = [];
   const calls = []; // storage calls in the order autosave made them
   const tap = []; // EVERY local commit the store emitted, appended or not
@@ -104,18 +140,24 @@ function device(name, initial) {
         await sleep(5);
       }
     },
+    /** a desk note laid by the engine's own op — the desk places what provides `desk.object` */
     spawn(x) {
-      ce.ops.spawnWidget("probe.card", { x, y: 10, w: 100, h: 60 });
+      ce.ops.spawnWidget(NOTE_TYPE, { x, y: 10 });
       ce.world.sync();
     },
     widgets() {
-      let n = 0;
-      ce.world.query(widgetQ).each((batch) => {
-        for (const _ of batch) n += 1;
-      });
-      return n;
+      return notesIn(ce);
     },
   };
+}
+
+function notesIn(ce) {
+  let n = 0;
+  ce.world.query(objectQ).each((batch) => {
+    for (const row of batch)
+      if (ce.world.get(batch.entity(row), PrefabId)?.id === NOTE_TYPE) n += 1;
+  });
+  return n;
 }
 
 const files = {};
@@ -130,7 +172,7 @@ const A = device("A", null);
 await A.tick();
 A.spawn(0);
 await A.tick();
-A.spawn(120);
+A.spawn(320);
 await A.tick();
 // 2. B bootstraps from what fieldd would ship: A's checkpoint + A's journal.
 const bootstrap = {
@@ -140,16 +182,16 @@ const bootstrap = {
 const B = device("B", bootstrap);
 await B.tick();
 // 3. Concurrent edits: A journals one more; B journals two of its own.
-A.spawn(240);
+A.spawn(640);
 await A.tick();
-B.spawn(-200);
+B.spawn(-400);
 await B.tick();
-B.spawn(-320);
+B.spawn(-720);
 await B.tick();
 // 4. THE DEFECT'S SHAPE: A edits twice and flushes before the debounce fires —
 //    ICE folds both pending updates into a checkpoint and never appends them.
-A.spawn(360);
-A.spawn(480);
+A.spawn(960);
+A.spawn(1280);
 await A.autosave.flush();
 
 function record(prefix, dev) {
@@ -190,14 +232,11 @@ const merged = wrap(lift(aLast).header, host.export({ mode: "snapshot" }));
 save("merged-roundtrip.ice1", merged);
 
 // 6. ICE opens the rule-built envelope — the host can serve a merged doc back.
-const C = createCanvasEngine({ widgets: [Card] });
+const C = createCanvasEngine(DESK_ENGINE);
 const opened = C.docs.open(merged);
 if (!opened.ok) throw new Error(`ICE refused the rebuilt envelope: ${opened.reason}`);
 C.world.sync();
-let mergedWidgets = 0;
-C.world.query(widgetQ).each((batch) => {
-  for (const _ of batch) mergedWidgets += 1;
-});
+const mergedWidgets = notesIn(C);
 
 // 7. A LIVE window is pushed the host's update from what it holds, and ICE's
 //    autosave re-journals the applied remote update (subscribeRemote).
@@ -216,9 +255,12 @@ await A.tick();
 const rejournal = A.calls.filter((c) => c.call === "append").slice(appendsBefore);
 
 const manifest = {
-  spike: "DS-5 ICE1 envelope, 2026-09-30",
+  spike: "DS-5 ICE1 envelope, 2026-09-30; regenerated on the desk at DK-4, 2026-10-03",
   ice: icePkg.version,
   loro: fromApp("loro-crdt/package.json").version,
+  /** What the devices lay: the desk's note, on ICE's desk preset. */
+  objectType: NOTE_TYPE,
+  golden: { ice: "0.11.0", dir: "golden-0.11.0", files: golden },
   devices,
   merged: {
     file: "merged-roundtrip.ice1",
@@ -245,6 +287,8 @@ await B.autosave.close().catch(() => {});
 console.log(
   JSON.stringify(
     {
+      ice: manifest.ice,
+      golden,
       devices: { A: devices.A.widgets, B: devices.B.widgets },
       merged: mergedWidgets,
       livePush: manifest.livePush,

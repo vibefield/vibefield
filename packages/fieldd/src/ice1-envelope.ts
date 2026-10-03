@@ -1,12 +1,14 @@
 // DS-5 (DS-D18) — the ICE1 checkpoint envelope, by its FIXED FRAME RULE and
 // nothing more. ICE 0.11.0's writer (`core/src/doc/envelope.ts`, read in its
 // dist; proven against renderer-written checkpoints by
-// test/probes/ice1-envelope, 2026-09-30):
+// test/probes/ice1-envelope, 2026-09-30) — and the desk's (DK-4, 2026-10-03: the
+// probe regenerated at the pinned ICE, whose writer re-frames 0.11.0's own
+// checkpoints byte for byte; the frame did not move, the header gained a field):
 //
 //   [0..4)      "ICE1"
 //   [4]         envelope version — 1
 //   [5..9)      header length n, u32 LITTLE-endian
-//   [9..9+n)    header, UTF-8 JSON  (engineSchema, prefabVersions, savedAt)
+//   [9..9+n)    header, UTF-8 JSON  (engineSchema, prefabVersions, rootCanvas?, savedAt)
 //   [9+n..end)  payload — a FULL Loro snapshot, nothing after it
 //
 // *Corrected 2026-10-01 (DS-5d):* "a FULL Loro snapshot" holds only for a
