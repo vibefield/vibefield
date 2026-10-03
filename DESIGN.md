@@ -340,8 +340,8 @@ claim it.
 | Tier | Recipe | Use |
 |---|---|---|
 | Island | surface `/80` + `backdrop-blur-xl` (hover `/90`) | closed pill, toolbars |
-| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the composer line (§8), the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2) |
-| Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels |
+| Line (MC-D2, ruled 2026-10-01) | `--vf-chrome-solid` at 88% (94% by night) + a 24px blur, ringed by the hairline (`--vf-hairline-strong` by night), the island shadow, and by night a 6% top light (`inset 0 1px 0` white/6) | the composer line (§8), the views track at its left end on the same pane of glass — the track's own pill folded into it 2026-10-03 (FR-2); the head's name pill and zoom readout, the frame's floating controls at the top (FR-3, 2026-10-03) |
+| Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels, the fields explorer grown from the head's pill (FR-3) |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | put-back affordance, HUD toasts |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
 
@@ -349,8 +349,9 @@ claim it.
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
 the island shadow and corners 18 (the Me menu keeps its 28, concentric with the face). The Me menu
 (2026-09-22) was the first; @'s list in the line (§8) is the second; the zoom's menu and the palette
-follow with the head (FR-3). A menu opens over the stage and never over the frame: the line's menus
-grow upward from the line, 8 above it.
+are the third and fourth (the head, §8; FR-3, 2026-10-03). A menu opens over the stage and never over
+the frame: the line's menus grow upward from the line, 8 above it; the head's grow downward from the
+head — the zoom's 4 under it, the palette 16 — and end 8 above the line.
 
 **The composited profile draws the card's material on the ground (2026-09-07; ICE
 design-013 Q8, ratified 2026-09-06).** In ICE's composited profile the resting and lifted
@@ -420,6 +421,13 @@ cover lowers — the rise reversed, 240ms out to 1.012 — and the field comes f
 motion (M6): fades only, halved — the cover 120ms, its content 90ms; no settle, no recede, the
 thumb lands without travelling or dipping.
 
+**The file pill's own curve retired (One Frame F14; 2026-10-03, FR-3).** The head's name pill grows
+into the fields explorer as every other morph does — 600ms on the island curve (M1), the pill's own
+row staying its head — and the 560ms `cubic-bezier(0.32, 0.72, 0, 1)` it alone carried is gone. The
+head's menus grow from their control on the island curve in 240ms (the zoom's from the readout, the
+palette from the head); the zoom's folds at once, as @'s list does, and the palette fades out over
+200ms `ease`. Reduced motion fades them in over 120ms at full size.
+
 ---
 
 ## 7. Interactive states (the living card)
@@ -471,7 +479,9 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   Its persistent 40px round toggle is the outermost control in the top-right chrome cluster:
   zoom pill · theme · Artifacts, with 8px gaps, anchored `top-4 right-4`. It uses the floating
   round-button recipe and the inverted active state; the same button toggles open/closed and
-  carries the matching tooltip/accessible name.
+  carries the matching tooltip/accessible name. *Since 2026-10-03 (One Frame FR-3) that cluster is
+  the head's right slot — the zoom readout · theme · Artifacts, 8 apart, on the head's axis
+  (`top-2 right-4`) — until FR-4 moves the toggle behind the right notch (FC-D10).*
   The panel is fixed `top-16 right-0 bottom-0 w-[min(92vw,26rem)]`, with
   `rounded-l-[2.5rem]`, sheet material, a left-cast side-panel shadow from §5, and internal
   edge-faded scrolling. The same physical panel translates from the right on the 600ms island
@@ -597,7 +607,9 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   **One surface at a time, at the line** (One Frame FR-4, F11): @'s list and the objects are ONE
   owner's two surfaces — opening either folds the other — and Settings, the palette, the docs
   explorer, the Artifact panel and the Me menu fold them as they folded the tray. The Me menu and
-  the edges' drawers join the owner with FR-4.
+  the edges' drawers join the owner with FR-4. *Since FR-3 (2026-10-03) the owner is the frame's,
+  not the line's: the head's three surfaces — the fields explorer, the zoom's menu, the palette —
+  are in the same one value (the head, below).*
 - **Chips / category pills**: full-round, `--vf-fill` resting; active = **inverted solid**
   (black-on-light / white-on-dark) with `shadow-md`; `active:scale-95`.
 - **Status badge** (`StateBadge`, 03·A C-7): dot or pill in §2.5 color + label; always
@@ -628,7 +640,73 @@ the DOM chrome's and retires with it. The tier alphas, the rim width and the col
   explorer's first tile, in words — a doc tile's footprint whose face is the fill inside a dashed
   strong hairline, the words 12/500 in secondary ink at its centre, hover 1.03 / active 0.95 like
   its neighbours. The empty explorer says "No fields yet" in words beside it, never "⊕ creates
-  one". The pill itself becomes the head's name pill with FR-3.
+  one". *Became the head's name pill 2026-10-03 (One Frame FR-3, below):* its place (`top-4`,
+  280 wide), its single-click rename, the separate breadcrumbs beside it and its own 560ms curve
+  (F14 — this entry already said the island's 600ms) retired; the explorer, its tiles, New field
+  and the sync dot stand, as written here.
+- **The head** (One Frame FR-2 "the head says where", FR-6, §4, §6, §7; FC-D8, FC-D9 ruled
+  2026-10-01; built 2026-10-03, FR-3): the frame's top (§10) on the lights' axis — every control
+  40 tall at `top-2`, centred on y 28. On Canvas the left slot (from 96, clear of the lights) is
+  empty, **the name pill** stands centred on the window and **the zoom readout** at the right, 16
+  in. No keycaps and no plus anywhere in it (FR-3, FR-5; F1, F2).
+  - **The name pill** — the line's glass (§5), corners 20, padded 0 6 0 16: the field's name at
+    13/500 in primary ink, then **the chevron** — a 28 round button, `chevron` 12 turned down in
+    tertiary ink (the ready fill and primary under the pointer) — which grows the fields explorer.
+    **A double-click renames** in place, as do Return and Space on the focused name: the name
+    becomes a transparent input on the ready fill, corners 6, as wide as what is typed; Return or
+    leaving commits, Esc reverts. The sync dot (C6-4, above) follows the field's name. **Inside a
+    folder the crumbs fold into the pill** (FC-D9): `Studio desk › Sketches` — the earlier names
+    are buttons in tertiary ink (primary under the pointer) that go there in one flight, a
+    `chevron` 11 in faint ink stands between names, and the last is the name; **Esc goes up one**,
+    said in the parent's tooltip. **At the field's top it is one name**: no back button, no "Root"
+    (F12). **FitPath** (One Project, Many Places): the pill stays centred on the window and never
+    wider than the window less the wider side's slot on both sides; a path too long for that drops
+    whole leading names, one at a time, behind a `…` that is itself a button (it goes to the
+    nearest name it hides, and its tooltip names them all) — never a name cut mid-word (F13). Only
+    the last name, if even it alone cannot fit, ends in an ellipsis.
+  - **The fields explorer** grows FROM the pill (M1): one element, 600ms on the island curve,
+    still at `top-2`, to `min(56%, 34rem)` × `min(46vh, 420px)` (544 wide at the default window),
+    corners 22 22 40 40, the sheet tier (§5) ringed by the strong hairline with the top sheet's
+    shadow; the backdrop dim, the field's recede and the stage hold behind it, as before. Its head
+    row is the pill's own: the field's name and the chevron turned up ("Close  Esc"). Below, the
+    doc tiles (the file pill, above) in three columns, **New field** first, in words. Esc or the
+    dim closes it.
+  - **The zoom readout** (FC-D8; Canvas's one instrument): at least 66 wide, the line's glass,
+    corners 20, the zoom as one number at 13/500 `tabular-nums` in secondary ink (primary under
+    the pointer or while its menu is open). **A click grows its menu** (FC-D14, §5: solid), 4
+    under the head with its right edge on the readout's: 196 wide, corners 18, padding 6 —
+    **Zoom in ⌘+ · Zoom out ⌘− · Zoom to fit ⇧1 · Actual size ⌘0**, rows 36 tall at 13/500 with
+    each key at the row's end (11/500, tertiary: said, never printed — FR-5), the hot row in the
+    ready fill (the first, until the pointer or ↑ ↓ moves it); Return takes it, Esc or a click
+    elsewhere folds the menu. **A double-click fits.** In and out step ×1.25 and ×0.8, as the old
+    − + did; to fit frames everything in the folder you are in; actual size is 100%. Off the Mac
+    the keys read Ctrl+Plus · Ctrl+Minus · Shift+1 · Ctrl+0. The − % + cluster it replaces
+    retired with its text marks (F2, F9).
+  - **The palette** (⌘K, in every view): a solid panel (§5, corners 22, padding 6 6 8), 560 wide,
+    centred under the head at `top-16` (64), over the stage — never over the line, which it ends
+    8 above. Its field heads it: 46 tall, `search` 16 in secondary ink and the words at 14 (§3;
+    the page drew 15, F15) under the strong hairline — "Type a command or a view…". Below it every
+    act, **its key at the row's end**: **Views** — Canvas ⌘1 · Godview ⌘2 · History ⌘3 ·
+    Assistant ⌘4, which waits ("not built yet"); **On this view** — the line's create (Objects B
+    on Canvas, New terminal ⌘T in Godview, Resume this session in History, waiting until a session
+    is chosen) and on Canvas the four zoom acts; **App** — Settings… ⌘,; then each enabled
+    plugin's palette commands under the plugin's name, one no live handler answers drawn
+    "unavailable" and never run. Eyebrows 10px mono capitals in tertiary ink; rows 36, a 16 glyph
+    in a 24 column in secondary ink (the zoom acts carry none), 13/500, the hot row in the ready
+    fill; a row that waits says why under its name. Typing filters every group; ↑ ↓ move,
+    Return runs, Esc or the dim closes it. The prose footer ("↵ to run · esc to close") retired
+    (F7, F15): the keys are said in the rows. The backdrop dim behind it, no recede.
+  - **One surface at a time** (FR-4): the explorer, the zoom's menu and the palette are three of
+    **the frame's open surface** — the line's owner, renamed now that it holds the head's too:
+    `objects · @ · fields · zoom · palette`, one value, so opening any one folds the rest by
+    construction; Settings, the Artifact panel and the Me menu fold them and are folded by them as
+    before. A change of view folds whichever is open.
+  - *As built (FR-3, 2026-10-03):* until FR-4 moves them, the theme button and the Artifacts
+    toggle stand beside the readout in the head's right slot, 8 apart, on the head's axis where
+    the cluster stood (FR-4 takes the theme into the Me menu, FC-D5, and Artifacts behind the
+    right notch, FC-D10). The head is still the canvas's own chrome: it lies under the cover with
+    the field, and Godview's and History's heads are their own bands (FC-D6). Full screen's left
+    slot (16 rather than 96) waits for a host signal; none exists.
 - **The Me menu** (UA-D19, ratified 2026-09-22 — Where You Sit II, design 2B): the owner's
   face replaces the Settings gear at the bottom-left (`bottom-4 left-4`; Godview stays beside
   it, `hud.panel` above both — *Godview's button retired 2026-10-03, FR-1: its cell in the views
@@ -1051,6 +1129,9 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   Top-row slots (all inside the 52px drag strip, all `no-drag`): breadcrumbs left
   (`left-24`, clearing the traffic lights) · **the file pill center** · the right chrome
   cluster anchored `top-4 right-4` (zoom pill · theme FAB · Artifact FAB outermost).
+  *(Superseded 2026-10-03 by the head — the five places below, §8 "The head": the crumbs fold
+  into the name pill, the cluster goes and only the zoom readout is the head's right; the window
+  still drags by the strip between the pills.)*
   **Bottom-left (2026-09-22, UA-D19):** the Me menu — the owner's face, §8 — then Godview,
   with the `hud.panel` slot above them; the Settings gear retires into the menu and `⌘,`.
   *(Godview's button retired 2026-10-03 — the views track below is the way in.)*
@@ -1084,13 +1165,25 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   never printed (FR-5): **B** toggles Objects on Canvas — never while typing (the draft, a note, any
   field) and never under a cover; **⌘T** (Ctrl+T) is Godview's New terminal, a product chord taken
   on the capture phase in Godview so a focused pane never sees it (ghostty's new_tab); and **@ is
-  never a shortcut** — it is typed in the draft. **The line's open surfaces have ONE owner** (FR-4):
-  @'s list and Objects are one value, so opening either folds the other, and every surface that
-  folded the tray folds them. *As built (FR-1, 2026-10-03):* the frame so far is the views track, on
+  never a shortcut** — it is typed in the draft. **The head's keys** (DK-D24; One Frame §6) are
+  the zoom's, SAID in its menu and the palette, never printed: **⌘+** (⌘= or ⌘+, the keypad's too)
+  zooms in, **⌘−** out, **⌘0** to actual size and **⇧1** to fit — Ctrl+Plus, Ctrl+Minus, Ctrl+0
+  and Shift+1 off the Mac. They are Canvas's, not the product's chords: heard on the window's
+  BUBBLE phase, so a pane that holds the keyboard keeps its own ⌘+ ⌘− ⌘0 (ghostty's font sizes) and
+  a key something else took is left alone; never under a cover, never from inside a keyboard claim
+  (design-007's `data-canvas-keyboard` — a terminal or a page on the canvas), and ⇧1 never while
+  typing (it types "!"). A key they take is claimed, so the View menu's page zoom never runs over
+  the canvas. **The frame's open surfaces have ONE owner** (FR-4; the line's, renamed at FR-3 when
+  the head's joined): @'s list, Objects, the fields explorer, the zoom's menu and the palette are
+  one value, so opening any one folds the rest, and every surface that folded the tray folds them.
+  *As built (FR-1, 2026-10-03):* the frame so far is the views track, on
   the line's glass at the line's left end; the line (FR-2), the head (FR-3), the edges and the
   corner (FR-4) join it next. Until they do, the slots above stay the canvas's own chrome and lie
   under the cover with the field. *As built (FR-2, 2026-10-03):* the line is whole, the track at its
-  left end; the head (FR-3), the edges and the corner (FR-4) are next.
+  left end; the head (FR-3), the edges and the corner (FR-4) are next. *As built (FR-3,
+  2026-10-03):* the head is the name pill and the zoom readout on y 28 (§8 "The head"), still the
+  canvas's chrome under the cover; until FR-4 the theme button and the Artifacts toggle stand
+  beside the readout. The edges and the corner (FR-4) are next.
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
   change *to this file first* — the doc moves, then the code.
