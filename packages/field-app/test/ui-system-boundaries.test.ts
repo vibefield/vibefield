@@ -147,21 +147,6 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("watchOnlyRuntime");
   });
 
-  it("keeps the session picker's fixture an ADAPTER too (TP-S2b-widget)", () => {
-    // The picker was split out of the widget precisely so the catalog could reach
-    // its five roster states with no daemon under it. That only pays if the
-    // fixture supplies DATA — rows and a state — and never markup: a catalog
-    // that redrew the list would be showing a picture of a picker while the
-    // shipping one drifted.
-    const fixture = source("design-system/TerminalSessionPickerPreview.tsx");
-    expect(fixture).toContain("SessionPickerView");
-    expect(fixture).not.toMatch(/vf-terminal-picker/);
-    expect(fixture).not.toContain("<style");
-    // And it must not reach the pool: the picker's whole seam is its props.
-    expect(fixture).not.toContain("refreshTerminalRoster");
-    expect(fixture).not.toContain("useTerminalPool");
-  });
-
   it("keeps the view frame's fixture an ADAPTER — the owner's value, never the frame's markup (FR-1)", () => {
     // The catalog stands in for the one thing a host supplies — the window's
     // view, which main owns in the product — and for the keys' timing, which the
@@ -333,7 +318,6 @@ describe("UI system ownership boundaries", () => {
     const groundWorkbench = source("design-system/CanvasGroundWorkbench.tsx");
     const groundPreview = source("design-system/InfiniteCanvasGroundPreview.tsx");
     const mirror = source("design-system/TerminalMirrorPreview.tsx");
-    const picker = source("design-system/TerminalSessionPickerPreview.tsx");
     const paneFrame = source("design-system/PaneFramePreview.tsx");
     const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
@@ -345,7 +329,7 @@ describe("UI system ownership boundaries", () => {
     const corner = source("design-system/CornerPreview.tsx");
     const edges = source("design-system/EdgesPreview.tsx");
     const history = source("design-system/HistoryPreview.tsx");
-    const catalog = `${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const catalog = `${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -384,8 +368,6 @@ describe("UI system ownership boundaries", () => {
       "LiveSurfaceView",
       "TerminalMirrorPreview",
       "TerminalMirrorSurface",
-      "TerminalSessionPickerPreview",
-      "SessionPickerView",
       "PaneFramePreview",
       "PaneFrameChrome",
       "PaneLauncherPreview",
@@ -538,7 +520,6 @@ describe("UI system ownership boundaries", () => {
       "frame/head.css",
       "frame/menu.css",
       "terminal/mirror/mirror.css",
-      "terminal/widget/mirror-widget.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

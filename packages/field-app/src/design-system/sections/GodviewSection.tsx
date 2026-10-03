@@ -10,7 +10,6 @@ import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
 import { TerminalMirrorPreview } from "../TerminalMirrorPreview";
-import { TerminalSessionPickerPreview } from "../TerminalSessionPickerPreview";
 
 export function GodviewSection({ dark = false }: { dark?: boolean } = {}): ReactElement {
   // Godview follows the app's theme (FC-D7): in the catalog, the page's.
@@ -107,13 +106,6 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         source="terminal/mirror/TerminalMirrorSurface.tsx"
       >
         <TerminalMirrorPreview />
-      </Specimen>
-      <Specimen
-        title="Terminal mirror — choosing which session a card watches"
-        source="terminal/widget/SessionPickerView.tsx"
-        bleed
-      >
-        <TerminalSessionPickerPreview />
       </Specimen>
     </Section>
   );

@@ -34,7 +34,6 @@ import {
   prepareRendererPlugins,
   type StagedLoaderDeps,
 } from "./plugin-host/staged-loader";
-import { registerBuiltInTerminalWidgets, TERMINAL_BUILT_IN_WIDGETS } from "./terminal/widget";
 
 // The field's engine + seed, React-free (Track D3/D4): FieldView renders it,
 // the headless contract tests (drop-consume) drive it. B3 split the two —
@@ -163,30 +162,16 @@ export async function loadDevBundledPlugins(): Promise<readonly BundledRendererP
  * an empty field is the honest face of a daemon that approved no modules, and a
  * silent second loader would hide exactly the failure this rung must surface.
  *
- * TP-S2b-widget: the HOST'S OWN built-ins register FIRST — before any plugin,
- * staged or bundled. Order is the point: the registry's collision law is
- * first-writer-wins-and-the-second-throws, so registering the built-ins ahead
- * of everything makes a plugin that claims `vibefield.terminal.mirror` fail
- * loudly at registration instead of quietly outranking the host. */
+ * DK-5 (DK-D19): the host registers NO built-in types of its own. Its one, the
+ * terminal mirror (`vibefield.terminal.mirror`, TP-S2b-widget), retired with
+ * `terminal/widget/*` — the deck owns terminals, and a session tag returns under
+ * PORTALS. A board that still names the type reads it as any absent type: a
+ * faceless ghost stub, its data kept. */
 export function buildRegistry(
   prepared: PreparedRendererPlugins = EMPTY_PREPARED,
 ): PluginRegistry<WidgetType> {
   const registry = new PluginRegistry<WidgetType>();
   const log = getRendererLogger().child({ component: "plugin.host" });
-  // DK-2: the built-in's registration is GUARDED (r1 §0.2) — it ran outside every try, so one
-  // refused definition threw out of `buildRegistry` and took the workspace's session memo down
-  // with it. A built-in that cannot register now says which type, and the field opens without it.
-  try {
-    registerBuiltInTerminalWidgets(registry);
-  } catch (error) {
-    const types = TERMINAL_BUILT_IN_WIDGETS.map((w) => w.type).join(", ");
-    log.error(
-      "renderer.plugins.builtin_registration_failed",
-      `The built-in widget type ${types} could not be registered`,
-      error,
-      { type: types },
-    );
-  }
   for (const staged of prepared.staged) {
     if (staged.activation.state !== "active") {
       log.error(

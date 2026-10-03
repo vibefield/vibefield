@@ -296,14 +296,19 @@ describe("DK-2 — ghost stubs read the engine's full pack scope", () => {
         "desk.stroke": 4,
         "desk.note": 1,
         wire: 1,
+        // a dev-bundled plugin's type, registered
+        "vibefield.note": 1,
+        // DK-5: the host's built-in mirror retired with `terminal/widget/*` (DK-D19) — a board
+        // that still names it holds an ABSENT type now, stubbed faceless like any other
         "vibefield.terminal.mirror": 1,
         "com.example.dk2ghost.gone": 2,
       },
       scope,
     );
     expect(stubs.map((stub) => [stub.type, stub.version])).toEqual([
+      ["vibefield.terminal.mirror", 1],
       ["com.example.dk2ghost.gone", 2],
     ]);
-    expect(objectKindOf(stubs[0])).toBeUndefined();
+    for (const stub of stubs) expect(objectKindOf(stub)).toBeUndefined();
   });
 });
