@@ -2528,6 +2528,26 @@ async function untilRenderer(
   throw new Error(`${label} did not happen within ${timeoutMs}ms (${seen})`);
 }
 
+/** `untilRenderer` for a value (One Frame FR-2's row 11h): poll until `accept`
+ * takes what the page answers, and hand that answer back. */
+async function untilRendererValue(
+  win: BrowserWindow,
+  label: string,
+  expression: string,
+  timeoutMs: number,
+  accept: (value: string) => boolean,
+): Promise<string> {
+  const deadline = Date.now() + timeoutMs;
+  let seen = "";
+  while (Date.now() < deadline) {
+    const answer = (await win.webContents.executeJavaScript(expression)) as string;
+    if (accept(answer)) return answer;
+    seen = answer;
+    await sleep(200);
+  }
+  throw new Error(`${label} did not happen within ${timeoutMs}ms (${seen})`);
+}
+
 /** Click the first button inside `scope` whose text or accessible name is
  * `label` — polled, like `clickDeckButton`, and scoped, because a settings
  * page and the deck behind it can both hold a "Save" or a "Terminal". */
@@ -6067,6 +6087,180 @@ export async function runSmokeGodview(opts: {
         })`,
       )
       .catch((error) => ({ unmeasured: error instanceof Error ? error.message : String(error) }));
+
+    // 11h. THE LINE'S KEYS, DELIVERED FROM A FOCUSED PANE (One Frame FR-2,
+    //      §11) — the probes B and ⌘T owe before they ship, in 11g's form: a
+    //      pane holds focus, the ear listens at every pane input, each key is
+    //      pressed the way a keyboard presses it, and the LINE says what it
+    //      took (its LINE_KEY line). Last among the deck's rows on purpose: ⌘T
+    //      leaves a fresh shell in the active pane, and a fresh shell shows its
+    //      launcher, which holds the keys the rows above type into a shell.
+    //
+    //      B is a letter, and a pane that holds the keyboard keeps its letters:
+    //      the PANE hears it and the LINE takes nothing — no LINE_KEY line,
+    //      Objects shut, the window still in Godview — an absence, watched for
+    //      a while as ⇧⇧'s is; a Backspace then takes the b back out of the
+    //      shell. The interim send (four-views §11) goes next, end to end: @
+    //      typed into the line, Return takes the nearest pane (the active one),
+    //      a line typed and sent is PASTED into that pane — and the shell runs
+    //      it only when the harness presses Return there, because the send
+    //      never presses it. ⌘T is the line's in Godview: the LINE asked the
+    //      deck, the PANE never heard it (ghostty's new_tab), and the deck
+    //      shows a session it did not before. Then B on the canvas with
+    //      nothing focused raises Objects behind the line, and B puts it away.
+    const lineKeys: Record<string, string> = {};
+    const lineTaken: string[] = [];
+    const hearLine = (...args: unknown[]): void => {
+      for (const arg of args) {
+        const text = consoleText(arg);
+        if (text.startsWith("LINE_KEY ")) lineTaken.push(text.slice("LINE_KEY ".length));
+      }
+    };
+    /** Type into whatever holds focus as a keyboard does — a key down, the
+     * character it types, the key up — which is what an editor needs (a
+     * terminal reads the key; a contenteditable inserts the character). */
+    const typeChars = async (text: string): Promise<void> => {
+      for (const character of text) {
+        const keyCode = character === " " ? "Space" : character;
+        win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+        win.webContents.sendInputEvent({ type: "char", keyCode });
+        win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+        await sleep(3);
+      }
+    };
+    const pressKey = (keyCode: string): void => {
+      win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+      win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+    };
+    const objectsNow = `(document.querySelector('[data-tray-open="true"]') ? "open" : "shut")`;
+    win.webContents.on("console-message", hearLine);
+    try {
+      await focusDeck(win);
+      await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      pressKey("b");
+      await sleep(1_500);
+      const paneHeardB = await chordProbeHeard(win);
+      if (!paneHeardB.includes("b")) {
+        throw new Error(`the focused pane never heard B: ${JSON.stringify(paneHeardB)}`);
+      }
+      if (lineTaken.length > 0) {
+        throw new Error(`the line took B from a focused pane: ${lineTaken.join(" · ")}`);
+      }
+      if ((await win.webContents.executeJavaScript(objectsNow)) !== "shut") {
+        throw new Error("B from a focused pane opened Objects");
+      }
+      const afterB = (await win.webContents.executeJavaScript(VIEW_NOW)) as string;
+      if (afterB !== "godview")
+        throw new Error(`B from a focused pane moved the window: ${afterB}`);
+      pressKey("Backspace");
+      lineKeys["B"] = "godview, a pane focused: the pane typed it; the line took nothing";
+
+      if (process.platform !== "win32") {
+        const nonce = `fr2${Math.random().toString(36).slice(2, 10)}`;
+        const sentPath = `/tmp/${nonce}.txt`;
+        const placed = (await win.webContents.executeJavaScript(
+          `(() => { const field = document.querySelector(".vf-line-input"); if (!field) return "no draft";
+            field.focus(); return document.activeElement === field ? "ok" : "focus refused"; })()`,
+        )) as string;
+        if (placed !== "ok") throw new Error(`the line's draft could not take focus: ${placed}`);
+        await typeChars("@");
+        const aimedAt = await untilRendererValue(
+          win,
+          "@'s list, the active pane hot",
+          `document.querySelector(".vf-at-menu .vf-at-row.is-aim[data-hot] b")?.textContent ?? "no list"`,
+          5_000,
+          (value) => value !== "no list",
+        );
+        pressKey("Return");
+        await untilRenderer(
+          win,
+          "the aim leading the draft",
+          `document.querySelector('.vf-line-chip[data-chip="aim"]') ? "ok" : "unaimed"`,
+          5_000,
+        );
+        await typeChars(`echo ${nonce} > ${sentPath}`);
+        pressKey("Return");
+        const said = await untilRendererValue(
+          win,
+          "the line saying where the send went",
+          `document.querySelector(".vf-line-note")?.textContent ?? "no note"`,
+          5_000,
+          (value) => value !== "no note",
+        );
+        if (!said.startsWith("Pasted into")) throw new Error(`the send did not paste: ${said}`);
+        await sleep(400);
+        if (existsSync(sentPath)) {
+          throw new Error("the send pressed Return for the pane — the shell ran it unasked");
+        }
+        pressKey("Return");
+        await waitForShellMarker(sentPath, 10_000, nonce);
+        lineKeys["send"] =
+          `aimed at ${aimedAt}: ${said}; the shell ran it on the pane's own Return`;
+      }
+
+      await focusDeck(win);
+      await untilRenderer(win, "the probe reset", CHORD_PROBE, 5_000);
+      const sessionsBefore = new Set(deck.current()?.sessionIds ?? []);
+      const heardT = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressProductChord(win, "t");
+      const tFacts = JSON.parse(await heardT) as { key: string; view: string; outcome: string };
+      if (tFacts.view !== "godview" || tFacts.outcome !== "new-terminal") {
+        throw new Error(`the line heard ⌘T as ${JSON.stringify(tFacts)}`);
+      }
+      const grown = await deck.until(
+        (facts) => facts.sessionIds.some((id) => !sessionsBefore.has(id)),
+        "⌘T's new terminal in the deck",
+        30_000,
+      );
+      const paneHeardT = await chordProbeHeard(win);
+      if (paneHeardT.some((key) => /\+t$/iu.test(key))) {
+        throw new Error(`the pane heard ⌘T too (ghostty's new_tab): ${JSON.stringify(paneHeardT)}`);
+      }
+      // A new terminal takes the ACTIVE pane (the deck's `createTerminal`, the
+      // swarm's hold's door): a session the deck did not show, in a pane it had.
+      const born = grown.sessionIds.find((id) => !sessionsBefore.has(id)) ?? "?";
+      lineKeys["⌘T"] =
+        `godview, a pane focused: the line asked the deck; a new shell ${born.slice(0, 8)}… in the ` +
+        `active pane (${grown.panes} panes); the pane never heard it`;
+
+      pressViewKey(win, "canvas");
+      await untilRenderer(
+        win,
+        "⌘1 to the canvas",
+        `${VIEW_NOW} === "canvas" ? "ok" : ${VIEW_NOW}`,
+        10_000,
+      );
+      const opened = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressKey("b");
+      const openFacts = JSON.parse(await opened) as { view: string; outcome: string };
+      if (openFacts.view !== "canvas" || openFacts.outcome !== "opened") {
+        throw new Error(`B on the canvas was heard as ${JSON.stringify(openFacts)}`);
+      }
+      await untilRenderer(
+        win,
+        "Objects behind the line",
+        `${objectsNow} === "open" ? "ok" : "shut"`,
+        5_000,
+      );
+      const closed = waitForConsole(win, "LINE_KEY ", 10_000);
+      pressKey("b");
+      const closeFacts = JSON.parse(await closed) as { outcome: string };
+      if (closeFacts.outcome !== "closed")
+        throw new Error(`B again: ${JSON.stringify(closeFacts)}`);
+      await untilRenderer(
+        win,
+        "Objects put away",
+        `${objectsNow} === "shut" ? "ok" : "open"`,
+        5_000,
+      );
+      lineKeys["B on the canvas"] =
+        "nothing focused: Objects rose behind the line; B again put it away";
+      pressViewKey(win, "godview");
+      await deck.until((facts) => facts.active, "⌘2 back to the deck", 30_000);
+    } finally {
+      win.webContents.off("console-message", hearLine);
+    }
+    verdict["lineKeys"] = lineKeys;
 
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //
