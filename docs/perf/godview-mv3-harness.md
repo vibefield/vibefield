@@ -141,6 +141,10 @@ The results are in [godview-mv3/captures-aa-2026-10-04.md](godview-mv3/captures-
   - The rain animates on its own clock.
   - Their A/B is judged only past twice their A/A share.
 - **Sanity:** every view's theme flip is seen.
+- **The A/B path, exercised:** B was this same build reached through another path (`--b <alias>
+  --source-b fold`). List and timeline read `same` (0.000 %), and the swarm and the rain read
+  `same-within-aa`. The swarm's A/A of 30–40 % means its pixels can flag only a gross change;
+  MV-5's goldens are its witness.
 - **The first trial** captured the whole window. Its list and timeline A/A differed by 0.1 %: the
   deck's blinking terminal cursor and the composer's animated avatar. Hence the monitor region.
 
