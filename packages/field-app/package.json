@@ -31,6 +31,7 @@
     "@react-three/drei": "^10.0.0",
     "@react-three/fiber": "^9.6.1",
     "@rosetta/protocol": "*",
+    "@rosetta/room": "*",
     "@vibecook/ghosttea-protocol": "*",
     "@vibecook/ghosttea-react": "*",
     "@vibecook/ice": "*",

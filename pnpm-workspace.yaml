@@ -179,6 +179,16 @@ overrides:
   # (`../rosetta-pin`, 2026-10-03; `node scripts/siblings.mjs fetch rosetta`): James's
   # working checkout `../rosetta` is nothing this tree reads.
   "@rosetta/protocol": link:../rosetta-pin/clients/ts
+  # AR-8c (2026-10-03) — rosetta's History room as a package (AR-D36; built
+  # upstream as AR-8a, `clients/room`): the four columns, the panels and the
+  # transcript behind injected ports, mounted in the frame's History slot. It
+  # dials nothing — VibeField's adapters (field-app `history/doors.ts`) are its
+  # ports. Its react/react-dom are PEERS (>=19 <20), deduped to this tree's
+  # copy exactly as @vibecook/puppeteer-views is (the renderer's Vite config
+  # and field-app's vitest config); its own install (`pnpm install
+  # --frozen-lockfile` in that folder, its own lock) brings its dependencies
+  # and a development React for its own typecheck.
+  "@rosetta/room": link:../rosetta-pin/clients/room
 # Shared dependency versions, declared ONCE — packages reference "catalog:".
 catalog:
   "@tailwindcss/vite": ^4.0.0
