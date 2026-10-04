@@ -89,6 +89,7 @@ function mountFrame(): HTMLElement {
     root?.render(
       <ViewFrame
         godview={<div data-testid="godview-content" />}
+        history={(active) => <div data-testid="history-content" data-active={String(active)} />}
         surface={null}
         onSurfaceChange={() => undefined}
       />,
@@ -417,7 +418,13 @@ describe("the cover (DESIGN.md §6)", () => {
     to("history");
     expect(cover().getAttribute("data-cover-motion")).toBe("swap");
     expect(coverView("history").getAttribute("data-active")).toBe("true");
-    expect(coverView("history").textContent).toContain("History is not wired yet");
+    // AR-8c: History's view is the host's slot, drawn on its first open and
+    // told it is the view showing
+    expect(
+      coverView("history").querySelector('[data-testid="history-content"]')?.getAttribute(
+        "data-active",
+      ),
+    ).toBe("true");
     to("canvas");
     expect(cover().getAttribute("data-cover")).toBe("down");
     expect(cover().getAttribute("data-cover-motion")).toBe("lower");

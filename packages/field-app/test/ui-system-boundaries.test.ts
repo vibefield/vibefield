@@ -38,6 +38,13 @@ describe("UI system ownership boundaries", () => {
     expect(appManifest.indexOf("deck-frame.css")).toBeGreaterThan(
       appManifest.indexOf("godview.css"),
     );
+    // AR-8c: History is rosetta's room, and its sheet enters the same way — one
+    // row, the package's own bundle — AFTER the kit's tokens, whose --vf-* names
+    // it reads (its README's one ordering rule), never a copy of its rules.
+    expect(appManifest).toContain('@import "@rosetta/room/styles/room.css";');
+    expect(appManifest.indexOf("@rosetta/room/styles/room.css")).toBeGreaterThan(
+      appManifest.indexOf("@vibefield/design-kit/tokens.css"),
+    );
 
     const catalogManifest = source("design-system/design-system.css");
     expect(catalogManifest).toContain('@import "./styles/catalog-shell.css";');
@@ -55,7 +62,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history-room|line\b|line-|at-|head\b|head-|menu\b|menu-)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-)/m,
     );
   });
 
@@ -119,11 +126,12 @@ describe("UI system ownership boundaries", () => {
     // The catalog stands in for the one thing a host supplies — the window's
     // view, which main owns in the product — and for the keys' timing, which the
     // controller owns. The track, the cover and History's room are the shipping
-    // views, and their selectors are the product's alone.
+    // views, and their selectors are the product's alone. (AR-8c: History's
+    // room is the shipping view over the package's fixture ports.)
     const fixture = source("design-system/ViewFramePreview.tsx");
     expect(fixture).toContain("ViewsTrackView");
     expect(fixture).toContain("ViewCoverView");
-    expect(fixture).toContain("HistoryPlaceholderView");
+    expect(fixture).toContain("HistoryPreview");
     // the cover's motion is the product's own rule, not a fixture's copy of it
     expect(fixture).toContain("coverAfter");
     expect(fixture).not.toMatch(/className="vf-(?:views|cover|history-room)/);
@@ -131,6 +139,31 @@ describe("UI system ownership boundaries", () => {
     // and the fixture never reaches the owner a host would hold
     expect(fixture).not.toContain("requestView");
     expect(fixture).not.toContain("getHost");
+  });
+
+  it("keeps History's fixture an ADAPTER — the package's fixture ports, never the room's markup (AR-8c)", () => {
+    // The catalog stands in for what a host supplies — the room's four ports —
+    // and takes them from the room package's own fixture entry; the view it
+    // mounts is the shipping composition, and the room's markup and CSS are
+    // the package's. Never the room's or the view's own classes, never a
+    // stylesheet, never the product's doors or the host.
+    const preview = source("design-system/HistoryPreview.tsx");
+    const fixtures = source("design-system/history-fixtures.ts");
+    expect(preview).toContain("HistoryRoomView");
+    expect(preview).toMatch(/<Composer\s/u);
+    expect(fixtures).toContain('from "@rosetta/room/fixtures"');
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/className="(?:ah-|tr-|vf-history)/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("historyPortsOver");
+    }
+    // The product composition is the room's ONLY mount: the view draws no
+    // replica of a column, a panel or a state the package draws.
+    const view = source("history/HistoryRoomView.tsx");
+    expect(view).toMatch(/<HistoryRoom\s/u);
+    expect(view).not.toMatch(/className="(?:ah-|tr-)/);
   });
 
   it("keeps the head's fixture an ADAPTER — the doors' facts, never the head's markup (FR-3)", () => {
@@ -257,7 +290,8 @@ describe("UI system ownership boundaries", () => {
     const palette = source("design-system/CommandPalettePreview.tsx");
     const corner = source("design-system/CornerPreview.tsx");
     const edges = source("design-system/EdgesPreview.tsx");
-    const catalog = `${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const history = source("design-system/HistoryPreview.tsx");
+    const catalog = `${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${picker}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -305,7 +339,11 @@ describe("UI system ownership boundaries", () => {
       "ViewFramePreview",
       "ViewsTrackView",
       "ViewCoverView",
-      "HistoryPlaceholderView",
+      // AR-8c — History: the shipping view over the room package's fixtures,
+      // in every state the host owns, and the line's Resume live for a choice
+      "HistoryPreview",
+      "HistoryRoomView",
+      "HistoryResumePlate",
       // One Frame FR-2 — the line: its view, @'s list, the plates, and the
       // live line on its real controller with fixture doors
       "ComposerLinePlate",
@@ -339,6 +377,12 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<AppearancePlate\s/u);
     expect(page).toMatch(/<EdgesPlate\s/u);
     expect(page).toMatch(/<ArtifactsDrawer\s/u);
+    // …and History's plates mounted on the page in each state the host owns
+    // (AR-8c): the room, a choice with Resume live, unavailable, consent.
+    expect(page).toMatch(/<HistoryPreview state="room"/u);
+    expect(page).toMatch(/<HistoryResumePlate\s/u);
+    expect(page).toMatch(/<HistoryPreview state="unavailable"/u);
+    expect(page).toMatch(/<HistoryPreview state="consent"/u);
 
     // The Settings specimen's Appearance page was a replica the product never
     // had (a system-appearance switch, an interface scale); it is the shipping
@@ -388,6 +432,8 @@ describe("UI system ownership boundaries", () => {
       "frame/ViewFrame.tsx",
       "frame/ViewsTrack.tsx",
       "frame/ViewCover.tsx",
+      "history/HistoryRoomView.tsx",
+      "history/HistoryView.tsx",
       "frame/Composer.tsx",
       "frame/ComposerLine.tsx",
       "frame/Head.tsx",
@@ -415,6 +461,7 @@ describe("UI system ownership boundaries", () => {
       "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",
       "frame/view-frame.css",
+      "history/history-room-view.css",
       "frame/composer.css",
       "frame/head.css",
       "frame/menu.css",

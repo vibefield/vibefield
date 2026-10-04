@@ -1,0 +1,59 @@
+/* The History view (AR-8c; DESIGN.md §8 "History", §10; One Frame §9 —
+   FC-D6, FC-D15, FC-D16): rosetta's room on the cover's glass. Tokens only; the
+   room's own sheet (`@rosetta/room/styles/room.css`) enters through the app's
+   manifest after the kit's tokens, and every rule it brings is scoped to its
+   root (`.ah-frame`) and to the layers it portals (`.ah-layer`). */
+
+/* The view's own ground: the covers' glass, 72% (FC-D16). The room is mounted
+   as a HOST surface, so it paints no ground and no plate of its own, and its
+   paper fades frost over this glass instead (the package's `surface="host"`). */
+.vf-history {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 72%, transparent);
+}
+
+/* FC-D15: the room ENDS at the reserve (692 in the default window) — the line
+   and the face sit on the view's own ground, never on a row. Its top band is
+   the head's and its side edges keep the notches' slivers clear; both are the
+   room's own edge inset (`HistoryRoomView`, from `frame-geometry.ts`). */
+.vf-history-room {
+  position: absolute;
+  inset: 0 0 var(--vf-history-reserve) 0;
+}
+
+/* Where the room's dialogs land (its `portalContainer`): a containing block
+   for their fixed layers that ends at the reserve too, so a dialog is never
+   drawn under the line. Empty, it takes no pointer; what lands in it does. */
+.vf-history-layers {
+  position: absolute;
+  inset: 0 0 var(--vf-history-reserve) 0;
+  contain: layout;
+  pointer-events: none;
+}
+
+.vf-history-layers > * {
+  pointer-events: auto;
+}
+
+/* The host's words in the room's state slot: the consent line. */
+.vf-history-state {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  padding: 0 24px;
+}
+
+/* M6, the floor the room asks of its host (the reference host's own rule,
+   scoped to the room and its layers): motion collapses under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-history *,
+  .vf-history-layers * {
+    /* biome-ignore lint/complexity/noImportantStyles: the room's own transitions are scoped rules this floor must outrank. */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    transition-duration: 0.01ms !important;
+  }
+}

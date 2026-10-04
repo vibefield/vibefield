@@ -1,6 +1,4 @@
 import type { FrameView } from "@vibefield/contracts";
-import { FieldGlyph } from "@vibefield/design-kit/glyphs";
-import { EmptyState } from "@vibefield/design-kit/primitives";
 import type { ReactElement, ReactNode } from "react";
 import "./view-frame.css";
 
@@ -95,22 +93,6 @@ export function ViewCoverView({
       >
         {history}
       </section>
-    </div>
-  );
-}
-
-/** History's view until rosetta's room joins the frame (AR-8, behind RO-1):
- * its own ground at the covers' glass, and what will be here, said plainly. */
-export function HistoryPlaceholderView(): ReactElement {
-  return (
-    <div className="vf-history-room">
-      <div className="vf-history-room__stage">
-        <EmptyState
-          visual={<FieldGlyph name="history" size={28} />}
-          title="History is not wired yet"
-          description="The sessions your agents ran will read here."
-        />
-      </div>
     </div>
   );
 }

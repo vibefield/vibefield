@@ -43,6 +43,8 @@ function door(overrides: Partial<LineViewDoor> = {}): LineViewDoor {
     onScreen: true,
     newTerminal: vi.fn(async () => ({ state: "opened" as const })),
     paste: vi.fn(() => true),
+    canPlace: true,
+    place: vi.fn(async () => ({ state: "opened" as const })),
     ...overrides,
   };
 }
@@ -285,7 +287,7 @@ describe("@'s list (FC-D1, FC-D14)", () => {
     ]);
     expect(rows.at(-1)?.getAttribute("data-hot")).toBe("true");
     expect(menu.textContent).toContain("No file door on the desktop yet");
-    expect(menu.textContent).toContain("History is not wired yet");
+    expect(menu.textContent).toContain("No past-session door on the line yet");
   });
 
   it("takes the hot row on Return: a pane aims the draft, and the @ goes", () => {

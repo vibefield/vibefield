@@ -5,18 +5,13 @@ import { defaultCanvasGridConfig, type MagnetGridGlyph } from "../field/canvas-a
 import { Composer } from "../frame/Composer";
 import { ComposerLineView } from "../frame/ComposerLine";
 import type { FrameSurface } from "../frame/frame-surface";
-import {
-  type CoverState,
-  coverAfter,
-  coverAt,
-  HistoryPlaceholderView,
-  ViewCoverView,
-} from "../frame/ViewCover";
+import { type CoverState, coverAfter, coverAt, ViewCoverView } from "../frame/ViewCover";
 import { type ViewKeyPress, ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
 import { WidgetTrayFrame } from "../hud/WidgetTray";
 import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
 import { GodviewPreview } from "./GodviewPreview";
+import { HistoryPreview } from "./HistoryPreview";
 import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 
 // The view frame's fixture ADAPTER (One Frame FR-1, FR-2; docs/UI_SYSTEM.md):
@@ -174,7 +169,7 @@ export function ViewFramePreview({
           content={cover.content}
           motion={cover.motion}
           godview={<GodviewPreview theme={dark ? "dark" : "light"} />}
-          history={<HistoryPlaceholderView />}
+          history={<HistoryPreview />}
         />
         <WidgetTrayFrame
           open={surface === "objects"}

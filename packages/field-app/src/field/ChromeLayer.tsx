@@ -28,6 +28,7 @@ import { requestView, subscribeMenuZoom, useActiveView } from "../frame/view-sta
 import { viewKeysOf } from "../frame/views";
 import { runZoom } from "../frame/zoom";
 import { GodviewOverlay } from "../godview";
+import { HistoryView } from "../history/HistoryView";
 import { getHost } from "../host";
 import { CommandPalette } from "../hud/CommandPalette";
 import { ArtifactsTray, ClipboardTray } from "../hud/edge-tray/EdgeTray";
@@ -127,6 +128,9 @@ export function ChromeLayer({
   // line lends the palette its create (One Frame FR-3).
   const head = useMemo(() => canvasHead(ce), [ce]);
   const lineActs = useRef<LineActs | null>(null);
+  // History's view in the frame's cover (AR-8c): rosetta's room over this
+  // window's fieldd client, told whether it is the view showing.
+  const historyView = useCallback((active: boolean) => <HistoryView active={active} />, []);
 
   /** Settings, on the page asked for — the Me menu's Settings… and ⌘, open
    * General; its name row and its Link… open Account (UA-D19). */
@@ -421,6 +425,7 @@ export function ChromeLayer({
           owns the window more than any view does. */}
       <ViewFrame
         godview={<GodviewOverlay />}
+        history={historyView}
         surface={surface}
         onSurfaceChange={onSurfaceChange}
         lineActs={lineActs}

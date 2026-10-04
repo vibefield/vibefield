@@ -44,6 +44,13 @@ export interface LineViewDoor {
    * takes, so the pane brackets it and nothing presses Return. True when the
    * pane took it. */
   paste(sessionId: string, text: string): boolean;
+  /** AR-8c — whether `place` can mount now: the deck has its door. */
+  readonly canPlace: boolean;
+  /** AR-8c — History's Resume lands here: the create ticket `agent.resume`
+   * answered with (plain data, the same ticket a shell birth carries), adopted
+   * by the deck and mounted in the ACTIVE pane — the pane the swarm's open uses
+   * (GT-D17; the session it showed is detached, never killed). */
+  place(terminal: unknown): Promise<NewTerminalOutcome>;
 }
 
 let godview: LineViewDoor | null = null;
@@ -84,4 +91,92 @@ export function newTerminalNote(outcome: NewTerminalOutcome): string {
 export function resetGodviewLineDoorForTest(): void {
   godview = null;
   listeners.clear();
+}
+
+/** Wait (bounded) for a deck that can place — History's Resume asks the frame
+ * for Godview, whose deck mounts on its first open and publishes its door a
+ * moment later. Null when none came in `timeoutMs`. */
+export function whenGodviewCanPlace(timeoutMs: number): Promise<LineViewDoor | null> {
+  const ready = (): LineViewDoor | null => (godview?.canPlace === true ? godview : null);
+  const now = ready();
+  if (now !== null) return Promise.resolve(now);
+  return new Promise((resolve) => {
+    const stop = subscribe(() => {
+      const door = ready();
+      if (door === null) return;
+      stop();
+      clearTimeout(timer);
+      resolve(door);
+    });
+    const timer = setTimeout(() => {
+      stop();
+      resolve(ready());
+    }, timeoutMs);
+  });
+}
+
+// ── WHAT HISTORY LENDS THE LINE (AR-8c; DESIGN.md §8 "History — Resume") ────
+// History's create is Resume: it continues the session the room has chosen.
+// The room is rosetta's and reports its selection to History's controller,
+// which publishes this door; the line reads it the way it reads Godview's.
+
+/** What a Resume came to, said on the line. */
+export type ResumeOutcome =
+  | { readonly state: "resumed" }
+  | { readonly state: "refused"; readonly reason: string };
+
+export interface HistoryLineDoor {
+  /** The chosen session (rosetta's id), or null while none is chosen. */
+  readonly chosen: string | null;
+  /** Why Resume waits for the chosen session — the launcher's own words (its
+   * folder is gone, an agent that cannot resume here) — or null. */
+  readonly waits: string | null;
+  /** Resume the chosen session in its own agent, in the pane the swarm's open
+   * uses, and show it (the frame moves to Godview). */
+  resume(): Promise<ResumeOutcome>;
+}
+
+let history: HistoryLineDoor | null = null;
+const historyListeners = new Set<() => void>();
+
+/** History's side: publish on change, null when the view goes away. */
+export function publishHistoryLineDoor(next: HistoryLineDoor | null): void {
+  if (next === history) return;
+  history = next;
+  for (const fn of historyListeners) fn();
+}
+
+export function getHistoryLineDoor(): HistoryLineDoor | null {
+  return history;
+}
+
+function subscribeHistory(fn: () => void): () => void {
+  historyListeners.add(fn);
+  return () => {
+    historyListeners.delete(fn);
+  };
+}
+
+/** The line's side. */
+export function useHistoryLineDoor(): HistoryLineDoor | null {
+  return useSyncExternalStore(subscribeHistory, getHistoryLineDoor, getHistoryLineDoor);
+}
+
+/** The words a Resume is said in, as a new terminal's are (above). */
+export function resumeNote(outcome: ResumeOutcome): string {
+  return outcome.state === "resumed"
+    ? "Resumed in the active pane"
+    : `Could not resume — ${outcome.reason}`;
+}
+
+/** Why History's create waits, or null when Resume can be pressed. */
+export function resumeWaits(door: HistoryLineDoor | null): string | null {
+  if (door === null || door.chosen === null) return "choose a session first";
+  return door.waits;
+}
+
+/** Test seam. */
+export function resetHistoryLineDoorForTest(): void {
+  history = null;
+  historyListeners.clear();
 }

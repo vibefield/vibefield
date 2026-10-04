@@ -734,7 +734,9 @@ The hot-point glow and rim retire with CardShell (above).
   in the ready fill. Typing after the @ filters both groups; ↑ ↓ move, Return or Tab takes the row,
   Esc closes the list and keeps what was typed. A row with no door behind it says why and cannot be
   taken (File… "no file door on the desktop yet", Past session… "History is not wired yet") — never
-  faked. A paste or a drop lands at the caret, as plain text.
+  faked. A paste or a drop lands at the caret, as plain text. *Corrected 2026-10-03 (AR-8c):*
+  History is wired — it is rosetta's room (below) — but a past session still has no door into a
+  message, so Past session… says "no past-session door on the line yet".
   **The chip** (D1, ruled 12 Sep): a token in the sentence, 24 tall, corners 7, 12.5/500, its glyph
   13, padded 0 8 0 6, ringed 1px; it never splits a word, Backspace takes it as one character and ×
   on hover removes it. A capture wears `capture` on the select blue at 14%. **The aim** — a Send to
@@ -1505,6 +1507,47 @@ The hot-point glow and rim retire with CardShell (above).
   **Reduced motion:** no wave, no glide, no zoom tween; positions jump.
   **The record** is fieldd's status ledger (`agent.history`, TL-D8). Without it the view still draws
   each agent's birth and its current state (TL-D9).
+- **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
+  "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
+  projects, the sessions, the panels and charts, the transcript and its folds — mounted from the
+  package `@rosetta/room` behind VibeField's ports, so its drawing is rosetta's and this entry governs
+  only where it sits and what VibeField says around it. Lists and figures arrive over fieldd's
+  `index.*` doors; one session's body over the direct plane, with a grant of its own (EL2).
+  - **Its ground is the cover's glass.** The room is a HOST surface: it paints no ground and no plate
+    of its own, and the view's ground is the covers' glass, `--vf-chrome-solid` at **72%** (FC-D16).
+    The room's paper fades — the transcript's top frost, the sticky day heads — **frost** over that
+    glass (a 14px blur feathered by its own mask, the package's), never a mask on the scroller, which
+    would fade the pinned chrome with the rows.
+  - **Its edges are the frame's.** The columns end at **692** — the reserve of 88 above the window's
+    foot (FC-D15) — and keep **8** clear at each side for the notches' slivers; the top band, 0–52, is
+    the head's (FC-D6), holding only the window's lights: the strip's search pill left for the frame's
+    button (GV-D10) and the Peek is not built, so History has no search yet. Its dialogs (a file, an
+    image's gallery) land in a layer that ends at the reserve too, so a dialog is never under the line.
+    The numbers are the frame's own (`frame/frame-geometry.ts`), never retyped.
+  - **Its create is Resume** (`resume`, §13): waiting, faint by ink, until the room has a session
+    chosen ("Resume this session — choose a session first"), and waiting with the empty pane
+    launcher's own words for one it would not resume ("its folder is gone", "not offered here", "not
+    installed"). Pressed, it continues the conversation in its own agent and persona (`agent.resume`,
+    the native form, as the launcher asks it) in the active pane — the pane the swarm's open uses —
+    and the window moves to Godview to show it; the note says **"Resumed in the active pane"**, or
+    **"Could not resume — …"** in the launcher's words, and then the window stays in History. Jump to,
+    for a session still running, is owed.
+  - **Its honest states are said inside the frame** (§9; the tolerant reader). An index that cannot
+    answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
+    fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",
+    "The history catalog has not read the index yet (connecting)", "Fieldd is not answering
+    (reconnecting)" — never a blank. An index that has found agents and reads none says ours:
+    **"No agent's history is read yet"** — "The index has found agents on this desktop and reads
+    nothing until you choose which. Choose them in Settings → Agents." A recorded file says
+    "Recorded files can't open here yet — no file door on the desktop" (the live-file read is
+    bearer-only upstream, RO-13), and the worktree guest stays closed with its own words until
+    VibeField's worktree host (AR-D38, AR-8d).
+  - History follows the app's **theme** (the room reads the page's `.dark` and the kit's `--vf-*`);
+    it has no toggle of its own. Under **reduced motion** the room's own transitions collapse — the
+    floor the room asks of its host, scoped to the view. Its **preferences** (dealt project tints,
+    the fold, recent searches) keep under `vf.history.` in the window's storage, where a refusal
+    costs only the memory. ⌘3 out and back keeps the room as it was: its scroll, its choice, its
+    open stream.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
