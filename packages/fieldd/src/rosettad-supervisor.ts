@@ -130,6 +130,11 @@ export interface RosettadAuth {
 export interface RosettadCredentials {
   /** `Bearer <token>` — the `Authorization` value of every fieldd dial */
   authorization: string;
+  /** SP-6 — the bearer itself, for the one dial that cannot carry a header:
+   * rosetta's session socket, where the credential rides the subprotocol pair
+   * (`rosetta`, `rosetta.bearer.<base64url(token)>`, AUTH.md §3) through
+   * rosetta's own client. Memory only, like the rest of this record. */
+  token: string;
   /** the HMAC key this generation verifies RO-10 grants with (a copy) */
   grantKey: Uint8Array;
 }
@@ -480,7 +485,11 @@ export class RosettadSupervisor extends EventEmitter {
     const live = this.live;
     return live === null
       ? null
-      : { authorization: live.authorization, grantKey: new Uint8Array(live.grantKey) };
+      : {
+          authorization: live.authorization,
+          token: live.token,
+          grantKey: new Uint8Array(live.grantKey),
+        };
   }
 
   /** The client-facing projection (FielddHealth.rosettad). */
@@ -830,7 +839,7 @@ export class RosettadSupervisor extends EventEmitter {
       stderrLine: "",
       stderrTail: [],
       enrollRefusals: [],
-      credentials: { authorization: `Bearer ${token}`, grantKey: new Uint8Array(key) },
+      credentials: { authorization: `Bearer ${token}`, token, grantKey: new Uint8Array(key) },
       wrongBinary: null,
       startupTimer: null,
       stableTimer: null,

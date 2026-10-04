@@ -419,6 +419,45 @@ const sessionRows = () => {
   const rows = scripted("FAKE_ROSETTAD_SESSIONS", []);
   return Array.isArray(rows) ? rows : [];
 };
+// SP-6 — the timeline: rosetta `TimelineEntry` rows for any session, scripted
+// by FAKE_ROSETTAD_TIMELINE (a JSON array re-read per request and per poll),
+// filtered by `session_id` and ordered by `ordinal`. FAKE_ROSETTAD_TIMELINE_CONTROL
+// scripts the projection's generation: `{watermark}` (every page and the
+// socket's snapshot carry it; a cursor minted under another one is 410
+// `cursor_expired`, as the real server answers a rewrite), `{resync: n}` (a
+// change sends `resync` then a fresh `timeline_snapshot` on every open session
+// socket — rosetta's barrier), `{drop: n}` (a change closes every session
+// socket, 1011 — a daemon that went away mid-stream).
+const timelineRows = (sessionId) => {
+  const rows = scripted("FAKE_ROSETTAD_TIMELINE", []);
+  return (Array.isArray(rows) ? rows : [])
+    .filter((row) => row !== null && typeof row === "object" && row.session_id === sessionId)
+    .sort(
+      (a, b) => a.ordinal - b.ordinal || String(a.timeline_id).localeCompare(String(b.timeline_id)),
+    );
+};
+const timelineControl = () => {
+  const control = scripted("FAKE_ROSETTAD_TIMELINE_CONTROL", {});
+  return control !== null && typeof control === "object" ? control : {};
+};
+const timelineWatermark = () => {
+  const control = timelineControl();
+  return typeof control.watermark === "string" ? control.watermark : "w-1";
+};
+/** rosetta's `read_timeline_page`: the newest `limit` rows before `before`,
+ * oldest first within the page; a cursor to the next older page when the page
+ * filled; the cursor's spelling is the server's own JSON */
+const timelinePage = (sessionId, limit, before) => {
+  const watermark = timelineWatermark();
+  const rows = timelineRows(sessionId).filter((row) => before === null || row.ordinal < before);
+  const entries = rows.slice(Math.max(0, rows.length - limit));
+  const cursor =
+    entries.length === limit && entries.length > 0
+      ? JSON.stringify({ session_id: sessionId, before: entries[0].ordinal, watermark })
+      : null;
+  return { entries, cursor, watermark };
+};
+const SNAPSHOT_LIMIT = 200;
 /** AR-5e — the scripted search answer, with the real server's defaults */
 const searchScript = () => {
   const script = scripted("FAKE_ROSETTAD_SEARCH", {});
@@ -681,6 +720,58 @@ if (mode === "silent") {
       );
       return;
     }
+    // SP-6 — one backward page of a session's timeline, as the real server
+    // pages it: `limit` clamped 1..1000 (default 100), `cursor` the previous
+    // page's own (its session and watermark must match, else 410
+    // `cursor_expired`), a 404 for a session the index does not hold
+    const timelineRoute =
+      req.url === undefined
+        ? null
+        : /^\/api\/sessions\/([^/?]+)\/timeline(?:\?(.*))?$/.exec(req.url);
+    if (timelineRoute !== null) {
+      logRequest(req.url);
+      const id = decodeURIComponent(timelineRoute[1]);
+      if (sessionRows().find((candidate) => candidate.id === id) === undefined) {
+        res.statusCode = 404;
+        res.setHeader("x-rosetta-protocol-version", String(protocol));
+        res.end(JSON.stringify({ error: { code: "not_found", message: `no session ${id}` } }));
+        return;
+      }
+      const query = new URLSearchParams(timelineRoute[2] ?? "");
+      const limit = clampLimit(query.get("limit"), 100);
+      let before = null;
+      const cursor = query.get("cursor");
+      if (cursor !== null) {
+        let decoded = null;
+        try {
+          decoded = JSON.parse(cursor);
+        } catch {
+          decoded = null;
+        }
+        if (
+          decoded === null ||
+          decoded.session_id !== id ||
+          decoded.watermark !== timelineWatermark() ||
+          typeof decoded.before !== "number"
+        ) {
+          res.statusCode = 410;
+          res.setHeader("x-rosetta-protocol-version", String(protocol));
+          res.setHeader("content-type", "application/json");
+          res.end(
+            JSON.stringify({
+              error: {
+                code: "cursor_expired",
+                message: "the timeline was rewritten; refetch from the head",
+              },
+            }),
+          );
+          return;
+        }
+        before = decoded.before;
+      }
+      json(res, timelinePage(id, limit, before));
+      return;
+    }
     // AR-5e — one session by canonical id: how a hit inside a delegated child
     // is walked up to the root a reader navigates to. An id the index does not
     // hold is a 404, exactly as the real server answers it.
@@ -755,6 +846,8 @@ if (mode === "silent") {
   });
   // DS-6 — `/ws/meta`, the topology stream (see the header)
   const metaSockets = new Set();
+  // SP-6 — the session sockets' ring identity; a scripted resync moves it
+  let sessionEpoch = 1;
   // the WebSocket server loads on the FIRST upgrade: a test that never opens
   // the stream (the supervisor's kill matrix) starts the fake as fast as ever
   let wss = null;
@@ -852,18 +945,86 @@ if (mode === "silent") {
       return;
     }
     if (sessionSocket !== null) {
-      // the session stream, in miniature: a hello, then the snapshot of the
-      // session's row as the scripted index holds it (null when it holds none)
+      // SP-6 — the session stream in rosetta's own shape (ws.rs): a hello
+      // stamped at the ring's position, a `timeline_snapshot` of the newest
+      // SNAPSHOT_LIMIT rows (oldest first, a cursor to the older page, the
+      // watermark), then one `message` mutation per row the scripted file
+      // adds or changes, at-least-once and keyed by `timeline_id`; a scripted
+      // `resync` is the barrier (`resync`, then a replacement snapshot under a
+      // new epoch), a scripted `drop` closes the socket. A session the index
+      // does not hold greets and then errors, exactly as the real server does
+      // (`snapshot read failed`, then the socket ends).
       const id = decodeURIComponent(sessionSocket[1]);
       void metaServer().then((sessions) =>
         sessions.handleUpgrade(req, socket, head, (ws) => {
-          ws.send(JSON.stringify({ frame: "hello", protocol_version: protocol, stamp: null }));
-          ws.send(
-            JSON.stringify({
-              frame: "snapshot",
-              session: sessionRows().find((row) => row.id === id) ?? null,
-            }),
-          );
+          let epoch = sessionEpoch;
+          let seq = 0;
+          const stamp = () => ({ epoch, seq });
+          ws.send(JSON.stringify({ frame: "hello", protocol_version: protocol, stamp: stamp() }));
+          if (sessionRows().find((row) => row.id === id) === undefined) {
+            ws.send(
+              JSON.stringify({
+                frame: "error",
+                error: { code: "internal", message: "snapshot read failed" },
+              }),
+            );
+            ws.close(1000);
+            return;
+          }
+          const snapshot = () => {
+            const page = timelinePage(id, SNAPSHOT_LIMIT, null);
+            ws.send(
+              JSON.stringify({
+                frame: "timeline_snapshot",
+                stamp: stamp(),
+                entries: page.entries,
+                timeline_meta: { tasks: [], workflows: [], plans: [], artifacts: [] },
+                cursor: page.cursor,
+                watermark: page.watermark,
+              }),
+            );
+          };
+          snapshot();
+          let last = new Map(timelineRows(id).map((row) => [row.timeline_id, JSON.stringify(row)]));
+          let control = { ...timelineControl() };
+          const poll = setInterval(() => {
+            if (ws.readyState !== 1) return;
+            const next = timelineControl();
+            if (next.drop !== undefined && next.drop !== control.drop) {
+              control = { ...next };
+              ws.close(1011, "scripted drop");
+              return;
+            }
+            if (next.resync !== undefined && next.resync !== control.resync) {
+              control = { ...next };
+              sessionEpoch += 1;
+              epoch = sessionEpoch;
+              seq = 0;
+              ws.send(JSON.stringify({ frame: "resync" }));
+              snapshot();
+              last = new Map(timelineRows(id).map((row) => [row.timeline_id, JSON.stringify(row)]));
+              return;
+            }
+            control = { ...next };
+            const now = new Map();
+            for (const row of timelineRows(id)) {
+              const encoded = JSON.stringify(row);
+              now.set(row.timeline_id, encoded);
+              if (last.get(row.timeline_id) === encoded) continue;
+              seq += 1;
+              ws.send(
+                JSON.stringify({
+                  frame: "mutation",
+                  stamp: stamp(),
+                  mutation: { type: "message", ...row },
+                }),
+              );
+            }
+            last = now;
+          }, 40);
+          poll.unref();
+          ws.on("close", () => clearInterval(poll));
+          ws.on("error", () => clearInterval(poll));
         }),
       );
       return;

@@ -601,7 +601,7 @@ describe("AR-8b — IndexTicketMinter, the rule alone", () => {
       protocolVersion: state.protocolVersion,
     }),
     state: () => state,
-    credentials: () => ({ authorization: "Bearer test", grantKey: key }),
+    credentials: () => ({ authorization: "Bearer test", token: "test", grantKey: key }),
   });
   const minterOf = (state: RosettadState = live) =>
     new IndexTicketMinter({

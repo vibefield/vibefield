@@ -64,6 +64,7 @@ import {
   IdempotencyKey,
   INDEX_MESH,
   INDEX_RECENT_DEFAULT_LIMIT,
+  INDEX_TIMELINE,
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
   IndexEnrollParams,
@@ -74,7 +75,9 @@ import {
   IndexRetireParams,
   IndexSearchParams,
   IndexSessionParams,
+  IndexSessionSubscribeParams,
   IndexSessionsParams,
+  IndexTimelineParams,
   isAgentResumeRun,
   KvDeleteParams,
   KvGetParams,
@@ -181,6 +184,7 @@ import { FederatedSubscriptionManager } from "./federated-subs";
 import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
 import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } from "./index-serve";
+import { IndexTailService } from "./index-tail";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import { DocHoldersService, LibraryDocService, systemAccount, systemDocId } from "./library-doc";
@@ -532,6 +536,9 @@ export interface FielddDaemon {
   /** DS-6 — the aggregator: every self peer's catalog replicated (persisted
    * under `mesh/catalog`), the merged doors and search by asking. */
   indexMesh: IndexMesh;
+  /** SP-6 — the session tails (`index.session.subscribe`): one rosetta socket
+   * per tailed session, shared by its subscribers; tests count them. */
+  indexTail: IndexTailService;
   /** AR-2 — the agent runtime (puppeteer) and the service behind the
    * agents.* doors; tests read its runtime directly. */
   agents: AgentRuntimeService;
@@ -707,6 +714,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
     ...(config.agentCatalog !== undefined ? { catalog: config.agentCatalog } : {}),
     logger: logger.child({ component: "index_service" }),
+  });
+  // SP-6 — one session's live tail over the door (index-tail.ts): rosetta's
+  // session socket followed through rosetta's own client with the generation's
+  // bearer, republished as rows at the registry's floor; one socket per
+  // session however many subscribers. Re-aims itself at the daemon's next
+  // generation (a restart resets every open tail).
+  const indexTail = new IndexTailService({
+    supervisor: rosettad,
+    expectedProtocolVersion: ROSETTA_PROTOCOL_VERSION,
+    logger: logger.child({ component: "index_tail" }),
   });
   // AR-8b — `index.openTicket`'s minter (index-serve.ts): the direct plane is
   // the owner's word (ON unless config says false) standing on a generation
@@ -1818,6 +1835,61 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           false,
         );
       return await index.projectDay(parsed.data);
+    });
+    // SP-6 (thinking-sync-planes.md §5.4 "until RO-1"; SP-D5 (a)) — one
+    // session's transcript over the door until the ticket: the page door and
+    // the live tail. SP-D13-bounded for a tailnet caller like the doors above:
+    // a phone's page is cut at INDEX_TAILNET_LIMITS.MAX_ROWS and says
+    // `clipped`; its tail's snapshot frames carry the newest MAX_ROWS rows
+    // (the rows before them are the page door's); a window keeps rosetta's
+    // own page and snapshot whole. The tail's floor is the registry's
+    // (`atFloor`: a slower ask is honoured, a faster one served at the floor).
+    api.register("index.timeline", async (ctx, params) => {
+      const parsed = IndexTimelineParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          `expected { sessionId: string, cursor?: string, limit?: 1..${INDEX_TIMELINE.PAGE_MAX_LIMIT} }`,
+          false,
+        );
+      const asked = parsed.data.limit ?? INDEX_TIMELINE.PAGE_DEFAULT_LIMIT;
+      const limit =
+        tailnetRowLimit(ctx.principal, parsed.data.limit, INDEX_TIMELINE.PAGE_DEFAULT_LIMIT) ??
+        asked;
+      return await index.timeline({
+        sessionId: parsed.data.sessionId,
+        cursor: parsed.data.cursor,
+        limit,
+        boundedBelow: limit < asked,
+      });
+    });
+    api.registerSubscription("index.session.subscribe", async (ctx, params, emit) => {
+      const parsed = IndexSessionSubscribeParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { sessionId: string, since?: {epoch, revision}, minIntervalMs? }",
+          false,
+        );
+      // the header first: a session the index does not hold is NOT_FOUND
+      // here, in fieldd's own words — rosetta's socket would greet, send an
+      // internal error and close, and its client would retry that for ever
+      await index.session(parsed.data.sessionId);
+      const opened = await indexTail.subscribe(
+        parsed.data.sessionId,
+        {
+          minIntervalMs: atFloor(
+            parsed.data.minIntervalMs,
+            INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS,
+          ),
+          rowBound:
+            tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER) ??
+            Number.MAX_SAFE_INTEGER,
+          since: parsed.data.since,
+        },
+        emit,
+      );
+      return { snapshot: opened.open, dispose: opened.dispose, start: opened.start };
     });
     // SP-3 — the direct plane's door (methods.ts; index-serve.ts). AR-8b: it
     // mints for a window on this desktop — every refusal said first, then the
@@ -4880,6 +4952,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // be gone first, and stop() resolves only after the real exit
           rosettad?.stop() ?? Promise.resolve(),
         ]);
+        indexTail.dispose(); // SP-6 — the session sockets close with the daemon they follow
         indexCatalog.dispose();
         runtimeDiagnostics.dispose();
         detachHealthSources?.();
@@ -4938,6 +5011,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docs.dispose();
       const artifactDrain = artifacts.dispose();
       board.dispose();
+      indexTail.dispose();
       indexCatalog.dispose();
       indexMesh?.dispose();
       federatedSubs.dispose();
@@ -5290,6 +5364,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // launcher in a pane waits for the fieldd that comes next)
           await gateway?.stop();
           await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
+          indexTail.dispose(); // SP-6 — every session socket closes before its daemon stops
           index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
           indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
@@ -5381,6 +5456,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       enrollment,
       index,
       indexCatalog,
+      indexTail,
       indexMesh: indexMesh as IndexMesh,
       agents,
       agentUsage,
