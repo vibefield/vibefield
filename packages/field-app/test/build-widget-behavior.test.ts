@@ -1,7 +1,8 @@
-import { WidgetContribution } from "@vibefield/contracts";
+import { ObjectContribution, WidgetContribution } from "@vibefield/contracts";
 import { defineBehavior, p } from "@vibefield/plugin-sdk/behavior";
+import type { ObjectKind } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
-import { buildWidgetType } from "../src/plugin-host/build-widget";
+import { buildObjectType, buildWidgetType } from "../src/plugin-host/build-widget";
 
 describe("host-built widget behavior riders", () => {
   it("resolves the manifest id through the sealed code map and stays dormant", () => {
@@ -76,6 +77,54 @@ describe("host-built widget behavior riders", () => {
     expect(() =>
       buildWidgetType(
         contribution(Ephemeral.name, "ephemeral"),
+        owner,
+        new Map([[Ephemeral.name, { handle: Ephemeral }]]),
+      ),
+    ).toThrow(/cannot pre-attach ephemeral/);
+  });
+
+  it("DK-6 input (d) — an OBJECT row's riders keep the same law through the host's defineObject: a runtime rider rides, an ephemeral pre-attach is refused", () => {
+    const pluginId = "com.example.object-rider";
+    const Rider = defineBehavior(`${pluginId}:rider`, { store: "runtime" });
+    const Ephemeral = defineBehavior(`${pluginId}:facet`, { store: "ephemeral" });
+    const owner = { pluginId, pluginTitle: "Object riders" };
+    const object = (behaviorId: string, suffix: string) => {
+      const type = `${pluginId}.${suffix}`;
+      const row = ObjectContribution.parse({
+        type,
+        title: suffix,
+        schemaVersion: 1,
+        size: { w: 100, h: 80 },
+        provides: ["desk.object"],
+        behaviors: [{ id: behaviorId }],
+        binding: { kind: "kind" },
+      });
+      const kind: ObjectKind = {
+        name: type,
+        stratum: "things",
+        reach: 0,
+        create: () => Promise.reject(new Error("no GPU in a unit test")),
+        resolve: () => ({}),
+        record: () => ({}),
+        hit: () => "content",
+      };
+      return { row, binding: { kind } };
+    };
+
+    const riding = object(Rider.name, "riding");
+    const built = buildObjectType(
+      riding.row,
+      riding.binding,
+      owner,
+      new Map([[Rider.name, { handle: Rider }]]),
+    );
+    expect(built.behaviors.map((entry) => entry.behavior)).toEqual([Rider]);
+
+    const facet = object(Ephemeral.name, "facet");
+    expect(() =>
+      buildObjectType(
+        facet.row,
+        facet.binding,
         owner,
         new Map([[Ephemeral.name, { handle: Ephemeral }]]),
       ),
