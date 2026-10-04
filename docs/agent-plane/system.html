@@ -1935,8 +1935,36 @@
               <code>index.openTicket</code> hands a window the loopback pair and an RO-10 grant for that
               session, ten minutes ahead, and the window's own rosetta client dials rosettad with it, so
               no transcript byte crosses fieldd (EL2). The phone's and another desktop's tickets wait on
-              the tailnet set (SP-6, DS-7) and answer <code>direct-plane-unbuilt</code> meanwhile; the
+              the tailnet set (SP-7, DS-7) and answer <code>direct-plane-unbuilt</code> meanwhile; the
               room and its mount are AR-8a and AR-8c. <span class="badge tone-built">Built</span>
+              <em>Corrected 2026-10-04 (SP-6):</em> this said the PHONE's ticket is SP-6's — SP-6 is the
+              phone's History over the DOOR (below); the phone's ticket is SP-7's.
+            </p>
+            <h3>The phone's History lane (SP-6)</h3>
+            <p class="section-note">
+              The phone reads a desktop's real sessions OVER THE DOOR until the ticket (SP-D5 (a), ruled
+              2026-10-03; built 2026-10-04): the catalog doors above for the ledger, a project and search,
+              and two doors of its own — <code>index.timeline</code>, one backward page of a session's
+              rows (the projection of rosetta's page: kind, stamps, bounded words, a tool line's facts,
+              attachments as refs; <code>local</code>, cut at <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> for
+              a phone and <code>clipped</code>), and <code>index.session.subscribe</code>, the live tail as
+              rows at <code>INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS</code> (1 s). fieldd follows rosetta's
+              own session socket THROUGH rosetta's own client, the bearer riding the subprotocol pair and
+              never leaving fieldd, one socket per session however many subscribers
+              (<code>packages/fieldd/src/index-tail.ts</code>); a tailnet subscriber's snapshot frames carry
+              the newest hundred rows, its deltas every change; rosetta's <code>resync</code>, a dropped
+              socket and the daemon's restart each reset the copy with a <code>.snapshot</code>. On the phone
+              (<code>apps/ios/VibeFieldKit/Sources/FieldHistory/</code>): one reader per self desktop whose
+              door answers, the HOME first (DS-8), the home's shared client or a door opened for the
+              reading; the reads fill the mock's own values; a 24 MiB LRU cache keyed
+              <code>{device, session, stamp}</code> replays a desktop that cannot answer under its own name
+              (<code>mini is asleep · read 11:42</code>); images and files are placeholders, never relayed
+              (H-D9, EL2). The swap to the ticket at SP-7 changes the body's transport, not the phone's
+              model (SP-L2). <span class="badge tone-built">Built</span>
+              <strong>Owed:</strong> SP-7's ticket (truffle's egress release), H-D6's chip (the field's rows
+              carry no provider-native session id), a spend column on the catalog row, the
+              <code>{unchanged}</code> revalidation, the over-the-air run (James).
+              <span class="badge tone-owed">Owed</span>
             </p>
             <h3>The mount (AR-8c)</h3>
             <p class="section-note">
@@ -2029,7 +2057,7 @@
               (526 bytes in 10 frames while the stream opened). <span class="badge tone-built">Built</span>
               <strong>Owed:</strong> the Peek's "Everything" scope and <code>openAt</code> (GT), Jump to for a
               live session, the transcript's delegated threads, attachments, the file door (AR-8d), and
-              the phone's and another desktop's tickets (SP-6, DS-7).
+              the phone's and another desktop's tickets (SP-7, DS-7).
               <span class="badge tone-owed">Owed</span>
             </p>
           </section>
