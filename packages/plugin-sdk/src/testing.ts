@@ -748,3 +748,6 @@ export {
   runKindConformance,
   validateStateProps,
 } from "./kind-harness";
+// …and the palette the PRODUCT mounts its desk with, for a kind that reads a host role (DK-8 — its test hands
+// it to the harness as `palette`; field-app holds the two equal).
+export { productPalette } from "./product-palette";

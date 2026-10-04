@@ -39,6 +39,7 @@ import type { AnyBehaviorDef } from "@vibefield/plugin-sdk/behavior";
 import {
   activateWithMockHost,
   type KindRefusalCode,
+  productPalette,
   runKindConformance,
 } from "@vibefield/plugin-sdk/testing";
 import {
@@ -358,12 +359,15 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
       });
       continue;
     }
+    // judged as the PRODUCT draws it: under the palette VibeField mounts its desk with (DK-8 — a kind that
+    // reads a host role, the comment pad's pens, is refused under the harness's two-role default)
     const report = await runKindConformance({
       binding: namespace[object.binding.kind],
       row: object,
       at: pointer("contributes", "objects", String(index)),
       states: declared,
       only: only.state,
+      palette: productPalette,
     });
     const first = report.verdicts.find((v) => v.status === "refused");
     verdicts.push({
