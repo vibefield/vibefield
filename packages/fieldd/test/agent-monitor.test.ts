@@ -64,14 +64,13 @@ function asking(base: AgentSessionSummary, prompt: string): AgentSessionSummary 
 }
 
 describe("hostRunFromSummary — the fold's row as the backend's host record", () => {
-  it("joins the PTY, names the project by the workspace, keeps the run id as the row's identity (interim)", () => {
+  it("joins the PTY and names the project by the workspace; the row's identity is the backend's to carry (M22)", () => {
     const run = hostRunFromSummary(working);
     expect(run).toMatchObject({
       runtimeRunId: "run-working",
       createdAt: T0,
       provider: { id: "claude", label: "Claude Code" },
       terminalSessionId: "run-working-pty",
-      terminalIdentity: "run-working",
       projectKey: "/repo",
       workspace: { root: "/repo", sourcePath: "/repo" },
       tier: "managed",
@@ -81,6 +80,9 @@ describe("hostRunFromSummary — the fold's row as the backend's host record", (
     // host says nothing about it
     expect(run.alive).toBeUndefined();
     expect(run.pending).toBeUndefined();
+    // fieldd keeps no identity for a PTY across handoffs: the backend's
+    // carry-forward decides the row's id, and `rowForRun` asks it (`idOf`)
+    expect(run.terminalIdentity).toBeUndefined();
   });
 
   it("an exited run is not alive and claims no PTY — its shell is a bare terminal again (AR-7)", () => {
@@ -212,11 +214,15 @@ describe("the hosted backend — the model's rows for the fold's fixtures", () =
     monitor.terminals.bind("pty-bound", "work");
     monitor.terminals.observe(monitor.terminals.list());
     const rows = monitor.rows();
+    // the agent's row carries its PTY's id — the shell's body is the agent's
+    // (the backend's carry-forward, M22); the run is found through `idOf`
     expect(rows.map((row) => `${row.kind}:${row.id}`)).toEqual([
-      "agent:run-working",
+      "agent:run-working-pty",
       "terminal:pty-bare",
       "terminal:pty-bound",
     ]);
+    expect(monitor.service.rowForRun("run-working")?.id).toBe("run-working-pty");
+    expect(monitor.row("run-working").kind).toBe("agent");
     const bare = rows.find((row) => row.id === "pty-bare");
     expect(bare).toMatchObject({
       kind: "terminal",
@@ -419,53 +425,79 @@ describe("the hosted backend — live changes", () => {
   });
 });
 
-describe("the hosted backend — screens (L5)", () => {
-  it("a turn that finishes while no screen shows the row marks it unread; a screen showing it clears the mark; closing the screen withdraws its report", async () => {
+describe("the hosted backend — screens (L5, M20)", () => {
+  it("no mark accrues while no screen is open; an open screen's unshown row is marked when its turn finishes; showing it clears; forgetting the last screen drops every mark", async () => {
     const monitor = await testMonitor({ summaries: [working] });
     monitor.rows();
     const base = stateOf(working);
-    monitor.runtime.push({
-      ...base,
-      revision: base.revision + 1,
-      status: "idle",
-      statusSince: "2026-09-13T10:06:00.000Z",
-    } as AgentMonitorState);
-    expect(monitor.row("run-working")).toMatchObject({ status: "idle", unread: true });
+    const flip = (revision: number, status: "idle" | "working", at: string): void =>
+      monitor.runtime.push({
+        ...base,
+        revision: base.revision + revision,
+        status,
+        statusSince: at,
+      } as AgentMonitorState);
+    // Godview closed: a turn that finishes is never marked (today's behaviour)
+    flip(1, "idle", "2026-09-13T10:06:00.000Z");
+    expect(monitor.row("run-working")).toMatchObject({ status: "idle", unread: false });
     // a report from a screen that is not open is refused, and changes nothing
     expect(monitor.service.reportShown("win-1", ["run-working"])).toBe(false);
-    expect(monitor.row("run-working").unread).toBe(true);
+    // the board opens: the screen's first (empty) report stamps first sight
     const close = monitor.service.openScreen("win-1");
+    expect(monitor.row("run-working").unread).toBe(false);
+    // a turn finishes while the pane shows nothing: unread
+    flip(2, "working", "2026-09-13T10:07:00.000Z");
+    flip(3, "idle", "2026-09-13T10:08:00.000Z");
+    expect(monitor.row("run-working").unread).toBe(true);
+    // the pane shows it: cleared now, and the next finished turn stays clear
     expect(monitor.service.reportShown("win-1", ["run-working"])).toBe(true);
     expect(monitor.row("run-working").unread).toBe(false);
-    // shown, the next finished turn is not unread; unshown again, it is
-    monitor.runtime.push({
-      ...base,
-      revision: base.revision + 2,
-      status: "working",
-      statusSince: "2026-09-13T10:07:00.000Z",
-    } as AgentMonitorState);
-    monitor.runtime.push({
-      ...base,
-      revision: base.revision + 3,
-      status: "idle",
-      statusSince: "2026-09-13T10:08:00.000Z",
-    } as AgentMonitorState);
+    flip(4, "working", "2026-09-13T10:09:00.000Z");
+    flip(5, "idle", "2026-09-13T10:10:00.000Z");
     expect(monitor.row("run-working").unread).toBe(false);
-    close();
-    expect(monitor.service.reportShown("win-1", ["run-working"])).toBe(false);
-    monitor.runtime.push({
-      ...base,
-      revision: base.revision + 4,
-      status: "working",
-      statusSince: "2026-09-13T10:09:00.000Z",
-    } as AgentMonitorState);
-    monitor.runtime.push({
-      ...base,
-      revision: base.revision + 5,
-      status: "idle",
-      statusSince: "2026-09-13T10:10:00.000Z",
-    } as AgentMonitorState);
+    // the pane shows nothing again — an empty report keeps the screen open
+    expect(monitor.service.reportShown("win-1", [])).toBe(true);
+    flip(6, "working", "2026-09-13T10:11:00.000Z");
+    flip(7, "idle", "2026-09-13T10:12:00.000Z");
     expect(monitor.row("run-working").unread).toBe(true);
+    // the board closes: the screen is forgotten, the marks go, reports are refused
+    close();
+    expect(monitor.row("run-working").unread).toBe(false);
+    expect(monitor.service.reportShown("win-1", ["run-working"])).toBe(false);
+    flip(8, "working", "2026-09-13T10:13:00.000Z");
+    flip(9, "idle", "2026-09-13T10:14:00.000Z");
+    expect(monitor.row("run-working").unread).toBe(false);
+    monitor.service.dispose();
+  });
+});
+
+describe("the hosted backend — a shell promoted to an agent keeps its body (M22)", () => {
+  it("the bare terminal's row id becomes the agent's; the terminal row leaves; the run is found through idOf", async () => {
+    const monitor = await testMonitor({
+      summaries: [],
+      terminals: [floorTerminal({ sessionId: "pty-shell", cwd: "/repo", title: "zsh" })],
+    });
+    expect(monitor.rows().map((row) => `${row.kind}:${row.id}`)).toEqual(["terminal:pty-shell"]);
+    // the person types the agent's name in that shell: the fold names a run in the PTY
+    const promoted = summary({
+      runtimeRunId: "run-typed",
+      status: "working",
+      terminal: { hosted: "local", runtimeSessionId: "pty-shell", workloadClass: "interactive" },
+    });
+    monitor.fold.publish([promoted]);
+    monitor.runtime.push(stateOf(promoted));
+    const rows = monitor.rows();
+    expect(rows.map((row) => `${row.kind}:${row.id}`)).toEqual(["agent:pty-shell"]);
+    expect(monitor.service.rowForRun("run-typed")?.id).toBe("pty-shell");
+    expect(monitor.service.rowForRun("run-typed")?.status).toBe("working");
+    // the PTY stays listed by the floor the whole time (the host contract): the
+    // backend dedupes it under the run, and nothing was dropped from the facts
+    expect(monitor.terminals.list()?.map((info) => info.sessionId)).toEqual(["pty-shell"]);
+    // the run ends and leaves the PTY standing: a bare terminal again, same id
+    monitor.fold.publish([]);
+    monitor.runtime.remove("run-typed");
+    expect(monitor.rows().map((row) => `${row.kind}:${row.id}`)).toEqual(["terminal:pty-shell"]);
+    expect(monitor.service.rowForRun("run-typed")).toBeUndefined();
     monitor.service.dispose();
   });
 });

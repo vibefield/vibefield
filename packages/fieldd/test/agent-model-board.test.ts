@@ -73,8 +73,11 @@ describe("the model board — this desktop's windows' cut", () => {
     // the field half says what it always said; the model's row rides beside it, whole
     expect(run.status).toBe("working");
     expect(run.lastAssistantMessage?.text).toBe("Keeping it greyed; wiring the filter now.");
+    // the board key is the RUN; the model's id is the PTY's — the shell's body
+    // carried into the agent (M22); the adapter maps one to the other
+    expect(run.runtimeRunId).toBe("run-working");
     expect(run.monitorRow).toMatchObject({
-      id: "run-working",
+      id: "run-working-pty",
       kind: "agent",
       status: "working",
       project: { name: "repo", branch: "ds/c", seq: 0 },
@@ -119,22 +122,18 @@ describe("the two cuts of the model's row (M16, M21)", () => {
       summaries: [summary({ runtimeRunId: "run-long", lastAssistantText: long })],
     });
     const row = monitor.row("run-long");
-    // M21 — fieldd passes the backend no bound; the backend at pin 1afaff7 still
-    // applies its own default (280, which mv1-fix lifts), so the window's cut is
-    // proved as a pass-through of whatever the row carries
-    const text = row.reply?.text ?? "";
-    expect(text.length).toBeGreaterThan(40);
-    const peer = peerMonitorRow(row, 40);
+    // M21 — fieldd passes the backend no bound and the backend's own default is
+    // none: the row carries the text as core bounded it
+    expect(row.reply?.text).toBe(long);
+    const peer = peerMonitorRow(row);
     expect(peer.project.seq).toBeUndefined();
-    expect(peer.reply?.text.length).toBe(40);
+    expect(peer.reply?.text.length).toBe(AGENT_FIELD.DESK_TEXT_CHARS);
     expect(peer.reply?.text.endsWith("…")).toBe(true);
-    expect(peer.detail.length).toBeLessThanOrEqual(40);
+    expect(peer.detail.length).toBeLessThanOrEqual(AGENT_FIELD.DESK_TEXT_CHARS);
     expect("self" in peer.device).toBe(false);
-    // the default bound is the desk's
-    expect(peerMonitorRow(row).reply?.text.length).toBeLessThanOrEqual(AGENT_FIELD.DESK_TEXT_CHARS);
     const window = windowMonitorRow(row);
     expect(window.project.seq).toBe(0);
-    expect(window.reply?.text).toBe(text);
+    expect(window.reply?.text).toBe(long);
     // the desk projector joins the peer's cut onto the desk row
     const desk = AgentDeskRow.parse({
       ...deskProjector((id) => monitor.service.rowForRun(id))(monitor.fold.list().sessions[0]!),

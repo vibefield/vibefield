@@ -101,15 +101,6 @@ export interface AgentMonitorServiceOptions {
   logger?: Logger | undefined;
 }
 
-/** The backend as mv1-fix (M22) extends it; both members are absent at pin
- * 1afaff7 and read behind a check until the pin moves: `idOf` says which model
- * row a run is (see `hostRunFromSummary`'s terminalIdentity), `forgetScreen`
- * ends a screen's lifetime (M20) where today's backend only clears its report. */
-type MonitorBackendWithFixes = MonitorBackend & {
-  idOf?: (runtimeRunId: string) => string | undefined;
-  forgetScreen?: (screenId: string) => void;
-};
-
 export interface AgentMonitorService {
   readonly backend: MonitorBackend;
   /** Resolves once the runtime's all-runs listing has been merged. */
@@ -132,10 +123,11 @@ export interface AgentMonitorService {
    */
   subscribe(listener: (change: MonitorModelChange, urgent: boolean) => void): () => void;
   /**
-   * L5, M20 — a screen is a window's model board while it is open: what it
-   * reports shown clears unread marks; closing it FORGETS the screen (the
-   * backend accrues no unread while no screen is registered, so a closed
-   * Godview marks nothing — today's single-window behaviour). Returns the close.
+   * L5, M20 — a screen is a window's model board while it is open: opening it
+   * is an empty first report (its pane shows nothing yet, and the backend
+   * stamps first sight), what it reports shown clears unread marks, and closing
+   * it FORGETS the screen. While no screen is open no mark accrues, so a closed
+   * Godview marks nothing — today's single-window behaviour. Returns the close.
    */
   openScreen(screenId: string): () => void;
   /** What a screen shows in its active pane; false when no such screen is open. */
@@ -185,13 +177,12 @@ function epochMs(iso: string | undefined): number | undefined {
  *    `projectKey`): the workspace's root, else its source path; the backend
  *    falls back to the live state's cwd, as the renderer fell back to the
  *    mirror's;
- *  · `terminalIdentity` is the run id — INTERIM. The backend carries a
- *    promoted shell's row id forward (its PTY's id) and keeps that map
- *    private, so fieldd could not join a row back to its run; naming the run
- *    as its PTY's identity makes every agent row's id its runtimeRunId
- *    (`managedRowId`, today's action identity) at the cost of the body's
- *    continuity on promotion. The ask for `MonitorBackend.idOf` is with the
- *    lead; when it lands this line goes and `rowForRun` reads the map.
+ *  · the row's ID is the backend's (M22): a run whose PTY the floor lists —
+ *    a shell promoted to an agent, or born with it — carries the shell's id,
+ *    so the body a window drew for the shell is the agent's; fieldd never
+ *    assumes a row's id is its run id and asks `idOf` (`rowForRun`). The PTY
+ *    stays listed among the host's terminals as long as the floor lists it
+ *    (the README's host contract); the backend dedupes the one the run claims.
  */
 export function hostRunFromSummary(summary: AgentSessionSummary): MonitorHostRun {
   const exited = summary.continuation?.exited === true;
@@ -213,7 +204,6 @@ export function hostRunFromSummary(summary: AgentSessionSummary): MonitorHostRun
     },
     ...(pty !== undefined && !exited ? { terminalSessionId: pty } : {}),
     ...(terminal?.replaced !== undefined ? { replacedTerminalSessionId: terminal.replaced } : {}),
-    terminalIdentity: summary.runtimeRunId,
     ...(projectKey !== undefined ? { projectKey } : {}),
     ...(workspace !== undefined
       ? {
@@ -394,7 +384,7 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
     },
   );
 
-  const backend: MonitorBackendWithFixes = createMonitorBackend({
+  const backend: MonitorBackend = createMonitorBackend({
     runs: runtimeRunSource(opts.runtime),
     host,
     identity: opts.identity,
@@ -438,7 +428,6 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
     }
     return byId;
   };
-  const idOf = (runtimeRunId: string): string => backend.idOf?.(runtimeRunId) ?? runtimeRunId;
 
   const screens = new Set<string>();
 
@@ -446,7 +435,11 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
     backend,
     ready: backend.ready,
     snapshot: () => backend.getSnapshot(),
-    rowForRun: (runtimeRunId) => index().get(idOf(runtimeRunId)),
+    rowForRun(runtimeRunId) {
+      // never assumed to be the run id: a promoted shell's run carries the shell's id (M22)
+      const id = backend.idOf(runtimeRunId);
+      return id === undefined ? undefined : index().get(id);
+    },
     terminalRows: () => backend.getSnapshot().rows.filter((row) => row.kind === "terminal"),
     terminalJoin(sessionId) {
       const info = opts.terminals.list()?.find((row) => row.sessionId === sessionId);
@@ -469,17 +462,15 @@ export function createAgentMonitorService(opts: AgentMonitorServiceOptions): Age
     },
     openScreen(screenId) {
       screens.add(screenId);
-      // the registration itself, for a backend that stamps first-sight on it
-      // (M20); today's backend learns of a screen only from its first report
-      if (backend.forgetScreen !== undefined) backend.reportShown(screenId, []);
+      // the first report opens the screen, an empty one too (M20): the backend
+      // stamps first sight and marks accrue from here
+      backend.reportShown(screenId, []);
       let open = true;
       return () => {
         if (!open) return;
         open = false;
         screens.delete(screenId);
-        if (disposed) return;
-        if (backend.forgetScreen !== undefined) backend.forgetScreen(screenId);
-        else backend.reportShown(screenId, []);
+        if (!disposed) backend.forgetScreen(screenId);
       };
     },
     reportShown(screenId, ids) {
