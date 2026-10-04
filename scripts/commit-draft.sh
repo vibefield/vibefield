@@ -8,7 +8,16 @@ export GIT_INDEX_FILE="$GIT_DIR/dev-local-index"
 trap 'rm -f "$GIT_INDEX_FILE"' EXIT
 
 git read-tree --empty
-git add -f draft
+# -f passes the root /draft/ rule, but git reads no ignore file inside an ignored
+# directory, so draft/'s own nested ignores never apply (2026-09-06). The excludes
+# below keep installs, builds and caches out of the snapshot (2026-10-04, James's
+# word): one spike directory alone had put a 39,108-file cargo target/debug into it.
+git add -f -- draft \
+  ':(exclude,glob)draft/**/node_modules/**' \
+  ':(exclude,glob)draft/**/dist/**' \
+  ':(exclude,glob)draft/**/.cache/**' \
+  ':(exclude,glob)draft/**/.vite/**' \
+  ':(exclude,glob)draft/**/target/**'
 tree=$(git write-tree)
 
 msg="${1:-docs: draft snapshot $(date +%Y-%m-%dT%H:%M:%S)}"
