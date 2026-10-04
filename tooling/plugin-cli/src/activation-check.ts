@@ -8,7 +8,7 @@
 //  - No build, no rows. `check` must never require `plugin-build` to have run,
 //    so an absent renderer artifact is `activation-unbuilt` — a note, not a
 //    refusal.
-//  - A widget bundle's module graph is a BROWSER graph. It reaches JSX and CSS
+//  - A renderer bundle's module graph may be a BROWSER graph. It reaches JSX and CSS
 //    through the SDK's `/ui` and `/canvas` doors, and plain Node can import
 //    neither. When the import dies for that reason the row says so
 //    (`activation-not-loadable-here`) and names the playground, which owns a
@@ -17,9 +17,9 @@
 //
 // DK-6 (desk/landing): an OBJECT row's binding is its module's export, not a registration — so the
 // object rows (object-check.ts) read the imported namespace as the host does, with no device, through
-// the SDK's kind-conformance harness (DK-7: its declaration and program checks); and a
-// WIDGET row needs no binding at all on the desk build (the host compiles it faceless, DK-2), so only
-// a registration the manifest never declared is refused for widgets.
+// the SDK's kind-conformance harness (DK-7: its declaration and program checks). DK-8: the WIDGET row
+// RETIRED with `contributes.widgets` (the manifest refuses it by name, pointing at `objects`) and
+// `ctx.widgets` with it — the registrations left to match are commands, surfaces and behaviors.
 
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
@@ -84,7 +84,6 @@ export async function checkActivation(
   root: string,
   manifest: PluginManifestV1,
 ): Promise<Verdict[]> {
-  const declaredWidgets = (manifest.contributes?.widgets ?? []).map((w) => w.type);
   const declaredCommands = (manifest.contributes?.commands ?? []).map((c) => c.id);
   const declaredSurfaces = (manifest.contributes?.surfaces ?? []).map((s) => s.id);
   const declaredBehaviors = manifest.contributes?.behaviors ?? [];
@@ -144,7 +143,6 @@ export async function checkActivation(
   const options: MockPluginHostOptions = {
     id: manifest.id,
     version: manifest.version,
-    declaredWidgets,
     ...(declaredCommands.length > 0 ? { declaredCommands } : {}),
     ...(declaredSurfaces.length > 0 ? { declaredSurfaces } : {}),
     ...(declaredBehaviors.length > 0 ? { declaredBehaviors } : {}),
@@ -174,9 +172,6 @@ export async function checkActivation(
   }
 
   verdicts.push(
-    // a widget row needs no binding on the desk build (DK-2: compiled faceless) — only a
-    // registration the manifest never declared is refused, as the host refuses it
-    ...exactMatch("widget type", declaredWidgets, [...session.bindings.keys()], false),
     ...exactMatch("command", declaredCommands, [...session.commands.keys()]),
     ...exactMatch("surface", declaredSurfaces, [...session.surfaces.keys()]),
     ...exactMatch(
@@ -224,15 +219,10 @@ export async function checkActivation(
 
 /** Both directions, because both are real failures: a binding with no
  * declaration is refused by the host at register time, and a declaration with no
- * binding is a contribution the user can reach and nothing implements. Widgets
- * are the exception since DK-2 (`requireBound` false): the host compiles every
- * widget row faceless, bound or not, so an unbound declaration is no failure. */
-function exactMatch(
-  kind: string,
-  declared: string[],
-  bound: string[],
-  requireBound = true,
-): Verdict[] {
+ * binding is a contribution the user can reach and nothing implements. (Until DK-8
+ * a widget row was the one exception — compiled faceless, bound or not; it retired
+ * with `contributes.widgets`.) */
+function exactMatch(kind: string, declared: string[], bound: string[]): Verdict[] {
   const declaredSet = new Set(declared);
   const boundSet = new Set(bound);
   const verdicts: Verdict[] = [];
@@ -243,22 +233,14 @@ function exactMatch(
           expected: `declare ${id} in the manifest, or stop registering it`,
         }),
       );
-  if (requireBound)
-    for (const id of declared)
-      if (!boundSet.has(id))
-        verdicts.push(
-          refuse("activation", "binding-missing", `declared ${kind} ${id} was never bound`, {
-            expected: `register ${id} during activate(ctx)`,
-          }),
-        );
+  for (const id of declared)
+    if (!boundSet.has(id))
+      verdicts.push(
+        refuse("activation", "binding-missing", `declared ${kind} ${id} was never bound`, {
+          expected: `register ${id} during activate(ctx)`,
+        }),
+      );
   if (verdicts.length === 0 && declared.length > 0)
-    verdicts.push(
-      pass(
-        "activation",
-        requireBound
-          ? `${declared.length} declared ${kind}(s) bound exactly`
-          : `${declared.length} declared ${kind}(s): faceless on the desk, bound or not (DK-2)`,
-      ),
-    );
+    verdicts.push(pass("activation", `${declared.length} declared ${kind}(s) bound exactly`));
   return verdicts;
 }

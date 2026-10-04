@@ -1,0 +1,11 @@
+{
+  "manifestVersion": 1,
+  "id": "vibefield.fixture-no-objects",
+  "version": "0.1.0",
+  "title": "Kind-less fixture",
+  "description": "CONTROL: a complete plugin that contributes no object kind. Zero states is a pass.",
+  "engines": { "app": ">=0.0.0", "contracts": "^0.1.0" },
+  "activation": [],
+  "capabilities": [],
+  "contributes": {}
+}

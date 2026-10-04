@@ -88,21 +88,24 @@ describe("the repo's own plugins", () => {
   // The subject was `vibefield.browser` until DT-3 gave it a canvas card, which
   // is the whole reason this row names its plugin rather than taking whichever
   // one happens to declare nothing: the empty pass has to be witnessed by a
-  // plugin that is deliberately widget-less, and `kv-service` is the repo's —
+  // plugin that is deliberately kind-less, and `kv-service` is the repo's —
   // service-only, staging no renderer module at all.
-  it("a plugin with no canvas widgets is an honest empty pass", async () => {
+  it("a plugin with no object kinds is an honest empty pass", async () => {
     const result = await run({
       pluginDir: join(REPO, "examples", "plugins", "kv-service"),
       loader: harness,
     });
     expect(result.summary).toMatchObject({
       plugin: "vibefield.example.kv",
-      widgets: 0,
+      objects: 0,
       states: 0,
       refused: 0,
       exit: 0,
     });
     expect(result.verdicts).toEqual([]);
+    // DK-8: the summary counts kinds and their states alone — its widget count retired with
+    // `contributes.widgets`
+    expect(result.summary).not.toHaveProperty("widgets");
   });
 });
 
@@ -245,7 +248,7 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
     const result = await run({ pluginDir: scaffold?.empty as string, loader: harness });
     expect(result.verdicts).toEqual([
       expect.objectContaining({
-        kind: "widget",
+        kind: "type",
         type: "vendor.empty",
         code: "states-empty",
         pointer: "/vendor.empty",
@@ -254,7 +257,7 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
     expect(result.summary.exit).toBe(1);
   });
 
-  it("never emits a RETIRED code (`widget-unbound`, `skipped-gl`) — in any run this file made", () => {
+  it("never emits a RETIRED code (`widget-unbound`, `skipped-gl`, `widget-unbuildable`) — in any run this file made", () => {
     expect(ran.length).toBeGreaterThan(0);
     const codes = ran.flatMap((r) =>
       r.verdicts.map((v: Verdict) => ("code" in v ? v.code : undefined)),
@@ -282,8 +285,8 @@ describe("the DOM it installs", () => {
 });
 
 describe("controls", () => {
-  it("a widget-less fixture passes with zero states", async () => {
-    const result = await run({ pluginDir: join(FIXTURES, "no-widgets"), loader: harness });
+  it("a kind-less fixture passes with zero states", async () => {
+    const result = await run({ pluginDir: join(FIXTURES, "no-objects"), loader: harness });
     expect(result.summary).toMatchObject({ states: 0, refused: 0, exit: 0 });
   });
 

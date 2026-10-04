@@ -38,9 +38,11 @@ async function spawn(...args: string[]): Promise<Spawned> {
 // face since DK-2. What the bin answers now (DK-7, the playground v2): an object kind JUDGED by the
 // kind-conformance harness — its row with the export its binding names, the count of states the
 // harness drove and its first refusal as a FIELD (`null` when it passed), then the harness's own rows
-// (`kind`) — and a widget state judged on its props against the declared schema, with nothing
-// mounted. The subject with an object kind is the repo's own: behavior-conformance's carrier (an
-// `objects` row since DK-4); the refused one is the fixture of kinds broken one way each.
+// (`kind`). DK-8: the widget state rows (props judged against the schema, nothing mounted) retired
+// with `contributes.widgets`; a fixture's props are the kind harness's first question now. The
+// subject with an object kind is the repo's own: behavior-conformance's carrier (an `objects` row
+// since DK-4); the refused ones are the fixture of kinds broken one way each and the strict card
+// whose fixtures are wrong.
 const KIND_PLUGIN = join(REPO, "examples", "plugins", "behavior-conformance");
 
 describe("the bin", () => {
@@ -86,27 +88,36 @@ describe("the bin", () => {
     expect(code).toBe(summary.exit);
   }, 180_000);
 
-  it("exits 1 when a state is refused, and the refusal carries code + pointer + expected", async () => {
+  it("exits 1 when a fixture is refused, and the refusal carries code + pointer + expected", async () => {
     const { code, stdout } = await spawn(join(FIXTURES, "invalid-state"), "--json");
     expect(code).toBe(1);
     const parsed = stdout
       .trim()
       .split("\n")
       .map((l) => JSON.parse(l) as Verdict);
-    const refused = parsed.filter((v) => v.kind === "state" && v.status === "refused");
-    expect(refused.length).toBe(4);
+    // DK-8: the strict card is an OBJECT KIND now (its widget row retired with `contributes.widgets`)
+    // — the harness judges each fixture's props against the row before it draws one, and says the
+    // four wrong ones on its own rows
+    const refused = parsed.filter((v) => v.kind === "kind" && v.status === "refused");
+    expect(refused.map((v) => v.kind === "kind" && v.subject)).toEqual([
+      "over-max",
+      "wrong-kind",
+      "typo",
+      "bad-json",
+    ]);
     for (const row of refused) {
       expect(row).toMatchObject({ code: "state-invalid" });
       expect("pointer" in row && row.pointer).toMatch(/^\/vibefield\.fixture-invalid\.card\//);
       expect("expected" in row && row.expected).toBeTruthy();
     }
-    // the fixture's one valid state passes on its schema — and NOTHING MOUNTS: the verdict that
-    // a React face "rendered N bytes of DOM" in happy-dom is gone, its spawn with it
-    const valid = parsed.filter((v) => v.kind === "state" && v.status === "pass");
-    expect(valid).toMatchObject([{ state: "ok" }]);
-    expect(stdout).not.toMatch(
-      /bytes of DOM|rendered no DOM|state-render-failed|state-spawn-failed/,
-    );
+    // the fixture's one valid state is DRIVEN and passes — the kind was never at fault — and the
+    // kind's own row names the first refusal as the fixture's class, never a symptom
+    const valid = parsed.filter((v) => v.kind === "kind" && v.subject === "ok");
+    expect(valid).toMatchObject([{ status: "pass" }]);
+    expect(parsed.filter((v) => v.kind === "object")).toMatchObject([
+      { type: "vibefield.fixture-invalid.card", binding: "Card", refusal: "state-invalid" },
+    ]);
+    expect(stdout).not.toMatch(/state-render-failed|state-spawn-failed/);
     expect((parsed.at(-1) as RunSummary).exit).toBe(1);
   }, 180_000);
 
@@ -159,9 +170,7 @@ describe("the bin", () => {
       /KIND\s+card\s+—\s+export card · 61 states driven by the kind harness · refusal: none/,
     );
     expect(stdout).toMatch(/PASS\s+card\s+declaration\s+`card` is a desk kind named by its type/);
-    expect(stdout).toMatch(
-      /\d+ passed · \d+ skipped · \d+ refused \(0 widgets, 61 states, 1 object\)/,
-    );
+    expect(stdout).toMatch(/\d+ passed · \d+ skipped · \d+ refused \(61 states, 1 object\)/);
     // the table is a projection of the same records, never JSON in disguise
     expect(stdout.trim().startsWith("{")).toBe(false);
   }, 180_000);

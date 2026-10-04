@@ -7,7 +7,7 @@
 //  1. A DOM on globalThis. React DOM reads `document` when its module body runs,
 //     so the window has to exist BEFORE anything in the graph imports it. Once
 //     react-dom has bound a document, no later swap fixes it.
-//  2. A Vite dev server used purely as a module loader. The graph a widget verdict
+//  2. A Vite dev server used purely as a module loader. The graph a plugin verdict
 //     needs is .ts + .tsx + .css + workspace packages that export SOURCE — which
 //     is the renderer's own build pipeline, not something Node's type stripping
 //     can approximate. Running the real transform is what makes this a verdict
@@ -27,7 +27,7 @@ const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 /** apps/plugin-playground -> the workspace root. */
 const WORKSPACE_ROOT = resolve(PACKAGE_ROOT, "..", "..");
 
-/** The window properties a widget graph actually reaches for. An explicit list,
+/** The window properties a renderer graph actually reaches for. An explicit list,
  * not a blanket copy of the happy-dom window: overwriting a Node global (`fetch`,
  * `crypto`, `performance`, timers) with a synthetic one is how a harness starts
  * answering for itself instead of for the code under test. */
@@ -136,7 +136,7 @@ export async function createHarness(extraRoots: readonly string[] = []): Promise
     // Workspace packages export .ts sources, which Node cannot load — they must
     // ride the transform. Everything else (react, react-dom, ice) stays
     // EXTERNAL so each is the single real instance Node resolved, which is what
-    // keeps hooks and ICE's process-global widget catalog working across the
+    // keeps hooks and ICE's process-global type catalog working across the
     // host/plugin boundary.
     ssr: { noExternal: [/^@vibefield\//] },
     esbuild: { jsx: "automatic", jsxImportSource: "react" },

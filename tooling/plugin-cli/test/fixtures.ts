@@ -19,6 +19,11 @@ export interface FixtureOptions {
   readonly rawManifest?: string;
 }
 
+/** The base plugin's one contribution: a palette command its renderer binds. DK-8: a widget row was
+ * the base until `contributes.widgets` retired; a command is the contribution whose declaration ↔
+ * binding law still holds both ways (a binding nothing declares, a declaration nothing binds). */
+export const FIXTURE_COMMAND = `${FIXTURE_ID}.go`;
+
 export function baseManifest(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     manifestVersion: 1,
@@ -27,19 +32,10 @@ export function baseManifest(overrides: Record<string, unknown> = {}): Record<st
     title: "Fixture",
     engines: { app: "^0.1.0", contracts: "^0.1.0" },
     entries: { renderer: "./dist/renderer.js" },
-    activation: [`onWidget:${FIXTURE_ID}.card`],
+    activation: [`onCommand:${FIXTURE_COMMAND}`],
     capabilities: [],
     contributes: {
-      widgets: [
-        {
-          type: `${FIXTURE_ID}.card`,
-          title: "Card",
-          schemaVersion: 1,
-          surface: "dom",
-          sizeMode: "fixed",
-          defaultSize: { w: 200, h: 120 },
-        },
-      ],
+      commands: [{ id: FIXTURE_COMMAND, title: "Go", placements: ["palette"] }],
     },
     ...overrides,
   };
@@ -48,6 +44,7 @@ export function baseManifest(overrides: Record<string, unknown> = {}): Record<st
 /** A renderer module that runs in plain Node: no imports at all, so the module
  * graph is the fixture's own behaviour and nothing else. */
 export function rendererModule(body: {
+  /** command ids its activate binds (default the base plugin's one command) */
   binds?: string[];
   /** leave an interval running that dispose() does NOT clear */
   leak?: boolean;
@@ -57,8 +54,8 @@ export function rendererModule(body: {
   wrongShape?: boolean;
 }): string {
   if (body.wrongShape === true) return "export default { notActivate() {} };\n";
-  const binds = (body.binds ?? [`${FIXTURE_ID}.card`])
-    .map((type) => `    ctx.widgets.register({ type: ${JSON.stringify(type)}, binding: {} });`)
+  const binds = (body.binds ?? [FIXTURE_COMMAND])
+    .map((id) => `    ctx.commands.register(${JSON.stringify(id)}, () => {});`)
     .join("\n");
   return [
     "export default {",
@@ -94,7 +91,7 @@ export function objectRendererModule(
     notAKind?: boolean;
     /** the kind OPENS (picked up into the hand) — DK-7's harness drives it `open` too */
     opens?: boolean;
-    /** widget types its activate registers (default none) */
+    /** command ids its activate binds (default none) */
     binds?: string[];
   } = {},
 ): string {

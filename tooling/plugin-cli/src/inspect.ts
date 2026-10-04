@@ -1,9 +1,10 @@
 // `inspect` — what the host will see, computed from the artifact on disk: the
 // resolved contributions, the requested capabilities and how they resolve per
 // entry kind, the identity hashes, and how many states the playground judges —
-// each widget's fixtures, and each object kind's states as the SDK's kind
-// harness DRIVES them (DK-7: its fixtures × every declared mode × every zoom the
-// desk's LOD names, the same `kindPlan` the playground runs).
+// each object kind's states as the SDK's kind harness DRIVES them (DK-7: its
+// fixtures × every declared mode × every zoom the desk's LOD names, the same
+// `kindPlan` the playground runs). DK-8: the widget rows RETIRED with
+// `contributes.widgets`, so `totalStates` counts kinds alone.
 //
 // The grant column is not this tool's opinion: `computeEffectiveGrants` is the
 // contracts function fieldd itself applies (§15.2), called here with the same
@@ -54,18 +55,6 @@ export interface InspectedObject {
   readonly refusal: string | null;
 }
 
-export interface InspectedWidget {
-  readonly type: string;
-  readonly title: string;
-  readonly schemaVersion: number;
-  readonly props: number;
-  readonly groups: string[];
-  readonly ports: number;
-  /** named playground states, or 1 when the plugin declares none (§P8-D8's
-   * "absent file ⇒ one `default` state from prop defaults") */
-  readonly states: number;
-}
-
 export interface InspectionResult {
   readonly id: string;
   readonly version: string;
@@ -80,7 +69,6 @@ export interface InspectionResult {
     readonly denied: Array<{ capability: string; reason: string }>;
   };
   readonly contributions: {
-    readonly widgets: InspectedWidget[];
     readonly objects: InspectedObject[];
     readonly commands: Array<{ id: string; title: string; placements: string[] }>;
     readonly surfaces: Array<{ id: string; title: string; slot: string }>;
@@ -98,7 +86,7 @@ export interface InspectionResult {
   };
   /** where the playground state fixtures came from, said plainly */
   readonly statesSource: "playground" | "defaults";
-  /** every widget's states and every object kind's DRIVEN states (a `null` object counts none) */
+  /** every object kind's DRIVEN states (a `null` object counts none) */
   readonly totalStates: number;
 }
 
@@ -109,7 +97,7 @@ export function manifestHashOf(manifest: PluginManifestV1): string {
 }
 
 /**
- * Named widget states from `playground/states.*`, tolerated rather than
+ * Named kind states (fixtures) from `playground/states.*`, tolerated rather than
  * demanded: the file is authoring-time bench material whose contract belongs to
  * the playground, so an unreadable or unrecognised one degrades to the default
  * state count instead of failing an inspection.
@@ -182,15 +170,6 @@ export async function inspectPlugin(
   });
   const states = await readPlaygroundStates(resolve(root));
 
-  const widgets: InspectedWidget[] = (c.widgets ?? []).map((w) => ({
-    type: w.type,
-    title: w.title,
-    schemaVersion: w.schemaVersion,
-    props: Object.keys(w.props).length,
-    groups: Object.keys(w.groups),
-    ports: (w.ports ?? []).length,
-    states: states.byType.get(w.type)?.length ?? 1,
-  }));
   const namespace = await builtRenderer(root, manifest);
   const objects: InspectedObject[] = (c.objects ?? []).map((o) => ({
     type: o.type,
@@ -234,7 +213,6 @@ export async function inspectPlugin(
       denied: grants.denied,
     },
     contributions: {
-      widgets,
       objects,
       commands: (c.commands ?? []).map((x) => ({
         id: x.id,
@@ -264,9 +242,7 @@ export async function inspectPlugin(
       },
     },
     statesSource: states.source,
-    totalStates:
-      widgets.reduce((sum, w) => sum + w.states, 0) +
-      objects.reduce((sum, o) => sum + (o.states ?? 0), 0),
+    totalStates: objects.reduce((sum, o) => sum + (o.states ?? 0), 0),
   };
 }
 
@@ -292,11 +268,6 @@ export function formatInspection(result: InspectionResult): string {
     push("denied", `${denial.capability} (${denial.reason})`);
 
   const c = result.contributions;
-  for (const w of c.widgets)
-    push(
-      "widget",
-      `${w.type} — v${w.schemaVersion}, ${w.props} prop(s), ${w.ports} port(s), ${w.states} state(s)`,
-    );
   for (const o of c.objects) {
     const hang = o.hang === null ? "" : ` (${o.hang.accessory} ${o.hang.w} × ${o.hang.h})`;
     const provides = o.provides.length === 0 ? "nothing" : o.provides.join(" + ");

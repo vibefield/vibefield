@@ -11,6 +11,7 @@ import { type CliIo, HELP, parseArgs, runCli } from "../src/cli";
 import { EXIT_HARNESS, EXIT_OK, EXIT_REFUSED } from "../src/verdict";
 import {
   baseManifest,
+  FIXTURE_COMMAND,
   freshDir,
   makePlugin,
   objectRendererModule,
@@ -129,14 +130,17 @@ describe("the two registers", () => {
       result: string;
       id: string;
       manifestHash: string;
-      contributions: { widgets: Array<{ type: string; states: number }> };
+      contributions: Record<string, unknown> & { commands: Array<{ id: string }> };
       totalStates: number;
     };
     expect(result.result).toBe("inspect");
     expect(result.id).toBe(baseManifest()["id"]);
     expect(result.manifestHash).toMatch(/^sha256:[0-9a-f]{64}$/);
-    expect(result.contributions.widgets[0]?.states).toBe(1);
-    expect(result.totalStates).toBe(1);
+    expect(result.contributions.commands.map((c) => c.id)).toEqual([FIXTURE_COMMAND]);
+    // DK-8: no widget rows — `contributes.widgets` retired — and the states are the kinds' alone
+    // (this plugin declares none, so it has none to judge)
+    expect(result.contributions).not.toHaveProperty("widgets");
+    expect(result.totalStates).toBe(0);
   });
 
   it("DK-2: lists an object kind with its export and a refusal field that reads null on the desk build", async () => {
@@ -242,7 +246,10 @@ describe("the two registers", () => {
     expect(unbuilt.totalStates).toBe(0);
   });
 
-  it("counts the playground's named states when the plugin declares them", async () => {
+  it("reads the playground's named states, and counts none for a type the manifest does not contribute", async () => {
+    // DK-8: a states file can still name a retired WIDGET type (`<id>.card`); with `contributes.widgets`
+    // gone nothing judges it — the file is read (its source says so) and its rows count nothing. A kind's
+    // named fixtures are counted by the harness's plan, above.
     const io = capture();
     const root = makePlugin({
       files: {
@@ -256,7 +263,7 @@ describe("the two registers", () => {
       totalStates: number;
     };
     expect(result.statesSource).toBe("playground");
-    expect(result.totalStates).toBe(3);
+    expect(result.totalStates).toBe(0);
   });
 });
 

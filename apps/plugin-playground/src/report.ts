@@ -58,13 +58,10 @@ function rowsOf(result: RunResult): Row[] {
       if (v.pointer !== undefined) under.push(`at ${v.pointer}`);
       if (v.expected !== undefined) under.push(`expected: ${v.expected}`);
     }
-    if (v.kind === "state" && v.consoleErrors !== undefined) {
-      for (const line of v.consoleErrors) under.push(`console.error: ${line.split("\n")[0] ?? ""}`);
-    }
     rows.push({
       mark: MARK[v.status] ?? v.status.toUpperCase(),
       type: v.kind === "plugin" ? "(plugin)" : shortType(v.type, plugin),
-      state: v.kind === "state" ? v.state : v.kind === "kind" ? v.subject : "—",
+      state: v.kind === "kind" ? v.subject : "—",
       note:
         v.status === "pass"
           ? (v.detail ?? "")
@@ -87,12 +84,12 @@ export function toTable(result: RunResult): string {
     );
     for (const line of row.under) lines.push(`          ${line}`);
   }
-  if (summary.widgets === 0 && summary.objects === 0 && summary.refused === 0) {
-    lines.push("  no canvas widgets or objects declared — nothing to judge, and that is a pass");
+  if (summary.objects === 0 && summary.refused === 0) {
+    lines.push("  no object kinds declared — nothing to judge, and that is a pass");
   }
   lines.push(
     `  ${summary.passed} passed · ${summary.skipped} skipped · ${summary.refused} refused ` +
-      `(${summary.widgets} widget${summary.widgets === 1 ? "" : "s"}, ${summary.states} state${summary.states === 1 ? "" : "s"}, ` +
+      `(${summary.states} state${summary.states === 1 ? "" : "s"}, ` +
       `${summary.objects} object${summary.objects === 1 ? "" : "s"})`,
   );
   return `${lines.join("\n")}\n`;

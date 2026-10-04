@@ -11,6 +11,7 @@ import { checkPlugin } from "../src/check";
 import { REFUSAL_CATALOG } from "../src/refusals";
 import {
   baseManifest,
+  FIXTURE_COMMAND,
   FIXTURE_ID,
   FIXTURE_WGSL,
   freshDir,
@@ -19,8 +20,6 @@ import {
   refusalCodes,
   rendererModule,
 } from "./fixtures";
-
-const CARD = `${FIXTURE_ID}.card`;
 
 describe("check — a clean plugin", () => {
   it("passes every row it can run, and notes the ones it cannot", async () => {
@@ -41,9 +40,7 @@ describe("check — a clean plugin", () => {
     const verdicts = await checkPlugin({ dir: root });
 
     expect(refusalCodes(verdicts)).toEqual([]);
-    expect(verdicts.map((v) => v.detail)).toContain(
-      "1 declared widget type(s): faceless on the desk, bound or not (DK-2)",
-    );
+    expect(verdicts.map((v) => v.detail)).toContain("1 declared command(s) bound exactly");
     expect(verdicts.map((v) => v.detail)).toContain(
       "deactivation released every timer this activation created",
     );
@@ -78,7 +75,7 @@ describe("check — manifest-invalid (the control run)", () => {
     });
     const verdicts = await checkPlugin({ dir: root });
     const invalid = verdicts.filter((v) => v.code === "manifest-invalid");
-    expect(invalid.map((v) => v.detail)).toContain("widgets require entries.renderer");
+    expect(invalid.map((v) => v.detail)).toContain("commands require entries.renderer");
     expect(invalid[0]?.pointer).toBe("/entries");
   });
 
@@ -267,8 +264,8 @@ describe("check — declaration ↔ binding", () => {
       files: { "dist/renderer.js": rendererModule({ binds: [`${FIXTURE_ID}.other`] }) },
     });
     const verdicts = await checkPlugin({ dir: root });
-    // The mock host enforces §12.1 at register time, so an undeclared bind
-    // surfaces as a failed activation naming the type.
+    // The mock host enforces §8.3 at register time, so an undeclared bind
+    // surfaces as a failed activation naming the command.
     const refusal = verdicts.find(
       (v) => v.code === "activation-failed" || v.code === "binding-undeclared",
     );
@@ -276,48 +273,17 @@ describe("check — declaration ↔ binding", () => {
     expect(refusal?.detail).toContain(`${FIXTURE_ID}.other`);
   });
 
-  it("refuses a declaration nothing binds — a command's; a WIDGET row needs no binding on the desk (DK-2)", async () => {
-    // DK-6: the host compiles every widget row faceless, bound or not, so an unbound widget
-    // declaration is no failure — note, browser, field-tools and widgetlab bind none since DK-2
-    const widgetsUnbound = makePlugin({
-      manifest: baseManifest({
-        activation: [`onWidget:${CARD}`],
-        contributes: {
-          widgets: [
-            (baseManifest()["contributes"] as { widgets: unknown[] }).widgets[0],
-            {
-              type: `${FIXTURE_ID}.second`,
-              title: "Second",
-              schemaVersion: 1,
-              surface: "dom",
-              sizeMode: "fixed",
-              defaultSize: { w: 10, h: 10 },
-            },
-          ],
-        },
-      }),
-      files: { "dist/renderer.js": rendererModule({ binds: [CARD] }) },
-    });
-    const widgetVerdicts = await checkPlugin({ dir: widgetsUnbound });
-    expect(refusalCodes(widgetVerdicts)).toEqual([]);
-    expect(widgetVerdicts.map((v) => v.detail)).toContain(
-      "2 declared widget type(s): faceless on the desk, bound or not (DK-2)",
-    );
-    // …while a declared COMMAND nothing binds is still a contribution the user can reach and nothing implements
+  it("refuses a declaration nothing binds — a command the user can reach and nothing implements", async () => {
+    // DK-8: the one exception this row carried — a WIDGET row, compiled faceless and so bound or
+    // not — retired with `contributes.widgets`; every declaration left is held both ways
     const commandUnbound = makePlugin({
-      manifest: baseManifest({
-        contributes: {
-          ...(baseManifest()["contributes"] as object),
-          commands: [{ id: `${FIXTURE_ID}.go`, title: "Go", placements: ["palette"] }],
-        },
-      }),
-      files: { "dist/renderer.js": rendererModule({}) },
+      files: { "dist/renderer.js": rendererModule({ binds: [] }) },
     });
     const refusal = (await checkPlugin({ dir: commandUnbound })).find(
       (v) => v.code === "binding-missing",
     );
     expect(refusal?.level).toBe("refuse");
-    expect(refusal?.detail).toContain(`command ${FIXTURE_ID}.go`);
+    expect(refusal?.detail).toContain(`command ${FIXTURE_COMMAND}`);
   });
 
   it("refuses an activate that throws", async () => {
@@ -389,13 +355,13 @@ describe("check — object kinds on the desk build", () => {
     expect(activation(verdicts).map((v) => v.level)).toEqual(expect.arrayContaining(["pass"]));
   });
 
-  it("activates objects standing beside widgets — the widget binding rows run as before", async () => {
+  it("activates objects standing beside a command — the command's binding rows run as before", async () => {
     const root = makePlugin({
       manifest: {
-        activation: [`onWidget:${CLOCK}`, `onWidget:${CARD}`],
+        activation: [`onWidget:${CLOCK}`, `onCommand:${FIXTURE_COMMAND}`],
         contributes: { ...(baseManifest()["contributes"] as object), objects },
       },
-      files: { "dist/renderer.js": objectRendererModule({ binds: [CARD] }) },
+      files: { "dist/renderer.js": objectRendererModule({ binds: [FIXTURE_COMMAND] }) },
     });
     const verdicts = await checkPlugin({ dir: root });
     expect(refusalCodes(verdicts)).toEqual([]);

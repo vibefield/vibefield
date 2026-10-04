@@ -2,19 +2,19 @@
 // engine, and no Vite. These are the checks that run BEFORE anything mounts, so
 // they are worth pinning on their own — a mistake here turns a diagnosis
 // (`state-invalid`) into a symptom (`state-render-failed`).
-import type { WidgetContribution } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { parseArgs } from "../src/cli";
-import { readStatesModule, synthesizeDefaultState, validateState } from "../src/states";
+import {
+  readStatesModule,
+  type StateRow,
+  synthesizeDefaultState,
+  validateState,
+} from "../src/states";
 
+// DK-8: the declaration a fixture is judged against is an OBJECT row's type and props (the widget
+// row it was until `contributes.widgets` retired declared the same prop vocabulary).
 const decl = {
   type: "vibefield.t.card",
-  title: "Card",
-  schemaVersion: 1,
-  surface: "dom",
-  sizeMode: "fixed",
-  defaultSize: { w: 100, h: 100 },
-  groups: {},
   props: {
     count: { kind: "number", min: 0, max: 10, default: 3 },
     label: { kind: "string", default: "hi", maxLength: 8 },
@@ -27,7 +27,7 @@ const decl = {
     },
     who: { kind: "entity-ref" },
   },
-} as unknown as WidgetContribution;
+} as unknown as StateRow;
 
 describe("validateState", () => {
   it("accepts props that match every declared kind", () => {

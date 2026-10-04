@@ -30,28 +30,28 @@ export type RefusalCode =
   | "manifest-missing"
   /** the manifest exists and the contracts schema refused it */
   | "manifest-invalid"
-  /** the manifest declares widgets but no renderer source exists to bind them */
+  /** the manifest declares object kinds but no renderer source exists to export them */
   | "renderer-entry-missing"
   /** the renderer module could not be imported (syntax, bad import, throw at top level) */
   | "renderer-import-failed"
   /** `activate` threw, or bound a type the manifest does not declare */
   | "activation-failed"
-  // --- widget-level: the state list for one type could not be built ---
-  /** the host could not build the prefab from this declaration (§12.2) */
-  | "widget-unbuildable"
+  // --- type-level: the fixtures for one declared type could not be read ---
   /** `playground/states.ts` exists but its default export is not the declared shape */
   | "states-invalid"
-  /** the states file names a widget type this manifest does not declare */
+  /** the states file names a type this manifest does not contribute */
   | "states-unknown-type"
   /** a declared type's state record is empty — say so rather than silently pass zero rows */
   | "states-empty"
-  // --- state-level: a WIDGET state's row (an object's states are the kind harness's rows) ---
+  // --- state-level: one fixture's props (`validateState`; the kind harness says it on its rows) ---
   /** the fixture's props violate the manifest's declared prop schema */
   | "state-invalid";
 
 /**
- * Codes RETIRED by name at DK-7 (the plan's Phase 3 input (3): each of the four "not emitted" codes
- * re-aimed at a measured state or retired) — never emitted again:
+ * Codes RETIRED by name — never emitted again. DK-8: `widget-unbuildable` (the host could not build
+ * a WIDGET row's faceless prefab) retired with `contributes.widgets` itself — the manifest refuses
+ * the contribution by name, so no run reaches a widget row. DK-7 (the plan's Phase 3 input (3): each
+ * of the four "not emitted" codes re-aimed at a measured state or retired):
  *  - `widget-unbound` — a widget row binds no face: the host compiles it faceless (DK-2), so an
  *    unbound widget is the expected one; an OBJECT row whose export is missing is the harness's
  *    `object-export-missing`.
@@ -61,28 +61,10 @@ export type RefusalCode =
  * and `state-render-failed` (its pass's prepare or drawRange threw) — the harness's codes, said on
  * `kind` rows (`KindRefusalCode`).
  */
-export const RETIRED_CODES = ["widget-unbound", "skipped-gl"] as const;
+export const RETIRED_CODES = ["widget-unbound", "skipped-gl", "widget-unbuildable"] as const;
 
-/** A note a row can carry: the kind harness's honest absences (a widget state's row carries none). */
+/** A note a row can carry: the kind harness's honest absences. */
 export type NoteCode = KindNoteCode;
-
-export interface StateVerdict {
-  readonly kind: "state";
-  readonly plugin: string;
-  readonly type: string;
-  readonly state: string;
-  readonly status: VerdictStatus;
-  readonly code?: RefusalCode;
-  readonly pointer?: string;
-  readonly expected?: string;
-  readonly detail?: string;
-  readonly durationMs?: number;
-  /** console.error calls captured during this mount. REPORTED, never gating —
-   * React's dev channel carries version-dependent warnings that are not the
-   * plugin's contract, and a verdict that flips with a React upgrade is not a
-   * verdict. An author who wants them gone can still see every one. */
-  readonly consoleErrors?: readonly string[];
-}
 
 /** A refusal that stopped the run before (or instead of) any state row. */
 export interface PluginVerdict {
@@ -129,10 +111,12 @@ export interface KindRow {
   readonly detail: string;
 }
 
-/** A refusal that costs ONE widget its state rows while its peers still run —
- * §11.4's containment law applied to the verdict table. */
-export interface WidgetVerdict {
-  readonly kind: "widget";
+/** A refusal that costs ONE declared type its rows while its peers still run —
+ * §11.4's containment law applied to the verdict table. DK-8: this row was `kind: "widget"` while
+ * widget rows were judged (it was said of object types too); the widget rows retired with
+ * `contributes.widgets`, and the row is named for what it is about — a TYPE. */
+export interface TypeVerdict {
+  readonly kind: "type";
   readonly plugin: string;
   readonly type: string;
   readonly status: "refused";
@@ -145,10 +129,9 @@ export interface WidgetVerdict {
 export interface RunSummary {
   readonly kind: "summary";
   readonly plugin: string;
-  readonly widgets: number;
   /** the manifest's object kinds, each judged by the kind harness (DK-7) */
   readonly objects: number;
-  /** widget states judged, plus every state the kind harness drove */
+  /** every state the kind harness drove (DK-8: widget states retired with `contributes.widgets`) */
   readonly states: number;
   readonly passed: number;
   readonly skipped: number;
@@ -156,13 +139,7 @@ export interface RunSummary {
   readonly exit: 0 | 1;
 }
 
-export type Verdict =
-  | StateVerdict
-  | ObjectVerdict
-  | KindRow
-  | PluginVerdict
-  | WidgetVerdict
-  | RunSummary;
+export type Verdict = ObjectVerdict | KindRow | PluginVerdict | TypeVerdict | RunSummary;
 
 export interface RunResult {
   readonly verdicts: readonly Verdict[];
