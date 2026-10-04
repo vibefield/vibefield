@@ -1,7 +1,8 @@
 packages:
   - "packages/*"
   # plugins live at the repo ROOT (plugin spec §5.1/PA-35): product actors beside
-  # the platform, not inside it; examples/ holds dev/reference packs (widgetlab).
+  # the platform, not inside it; examples/ holds dev/reference packs (the desk clock,
+  # the behavior-conformance carrier, the kv service).
   - "plugins/*"
   - "examples/plugins/*"
   # authoring kit (plugin spec §5.4): build/check tooling, never host code.

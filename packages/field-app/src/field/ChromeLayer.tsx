@@ -366,7 +366,7 @@ export function ChromeLayer({
       {showSettings && (
         <SettingsPanel
           engine={ce}
-          stressWidgetType="vibefield.widgetlab.clock"
+          stressWidgetType="desk.note"
           platform={getHost().platform ?? "other"}
           desktopState={desktopState}
           magnetGridGlyph={chrome.magnetGridGlyph}

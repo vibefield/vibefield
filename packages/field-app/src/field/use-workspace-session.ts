@@ -251,10 +251,6 @@ export function useWorkspaceSession(
       ce.docs.close();
     };
     if (pending.initialBytes !== null) {
-      // C2 renames fold IN-BAND since ice 0.4.0 (design-008, petition I5): the
-      // widgets' `renamedFrom` declarations drive the engine's own open-path
-      // runner and zombie sweep, so pre-rename bytes and journals need no
-      // offline surgery — the envelope header self-heals at the next save.
       const res = ce.docs.open(pending.initialBytes);
       if (!res.ok) {
         // Honest quarantine (the M5 law): the at-rest bytes stay untouched on

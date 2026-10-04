@@ -2,7 +2,6 @@ import type { WidgetType } from "@vibecook/ice";
 import { isDistributablePluginId, type WidgetContribution } from "@vibefield/contracts";
 import { getRendererLogger } from "../logging";
 import { buildWidgetType } from "./build-widget";
-import { TYPE_RENAMES } from "./type-renames";
 
 // P3c — ghost stubs (§12.4, the ABSENT case): a board can carry widgets of a
 // plugin this device does not have at all. The envelope header names every
@@ -39,14 +38,6 @@ export function buildGhostWidgetTypes(
   const out: WidgetType[] = [];
   for (const [type, version] of Object.entries(headerPrefabVersions)) {
     if (packScope.has(type)) continue;
-    // I5 (ice 0.4.0): a pre-rename doc names OLD ids in its envelope until the
-    // header self-heals at the next save. Those are not absent — the engine's
-    // rename runner owns them; stubbing one would register the old id as a
-    // live type and collide with its successor's `renamedFrom` claim. A
-    // tombstoned id whose successor is ALSO absent is stubbed like any absent
-    // type — faceless, so its data survives.
-    const renamedTo = TYPE_RENAMES[type];
-    if (renamedTo !== undefined && packScope.has(renamedTo)) continue;
     if (!isDistributablePluginId(type)) continue; // engine-internal — never ours to stub
     const contribution: WidgetContribution = {
       type,

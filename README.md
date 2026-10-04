@@ -24,7 +24,7 @@ a private mesh across machines, and an iPhone companion.
 | `packages/design-kit` | the design kit — CardShell, tokens, GL card chrome (DESIGN.md made code) |
 | `packages/plugin-runtime` | plugin manifest / registry / renderer context (P0 core of the design-03 plugin system) |
 | `plugins/*` | built-in plugins at the repo root (product actors beside the platform — plugin spec §5.1): `comment-pad` (the comment pad — VibeField's own object kind, DK-8), `browser` (the Artifact Hub panel) |
-| `examples/plugins/widgetlab` | the 18-widget parity pack — dev/reference plugin, staged as demo boot content |
+
 | `apps/desktop` | packaging-only: delegating scripts + the electron dep; no application source lives here — the native helpers' sources do (`native/macos/live-surface-capture` the SCK helper · `native/macos/screenshot-helper` the Swift screenshot helper · `native/windows/screenshot-helper` its Rust twin, an own-workspace crate) with their build/test/verify scripts under `packaging/` |
 | `apps/ios` | the iPhone companion — thin xcodeproj over the `VibeFieldKit` SPM package (FieldHome · FieldAgents · FieldMesh · FieldTerminal · FieldDesign · SwarmPhysics). Deliberately outside `pnpm verify` (the gate must not require Xcode); its gate is the `xcodebuild` commands in `apps/ios/README.md` |
 | `docs/` | the main-tracked corpus: `ROADMAP.md` (now/next) · `LANDED.md` (append-only history) · `DECISIONS.md` (decision index) · `UI_SYSTEM.md` (where `DESIGN.md` lives in code) · `AGENT_PLANE.md` + `agent-plane/` (the three-repo agent plane) |

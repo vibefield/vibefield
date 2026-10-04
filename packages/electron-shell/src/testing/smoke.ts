@@ -231,39 +231,28 @@ interface CanvasFacts {
   runtime?: object;
 }
 
-interface PluginStyleCensus {
-  readonly links: number;
-  readonly loaded: number;
-  readonly loading: number;
-  readonly errors: number;
-  /** No href: plugin-module URLs are bearer capabilities and never enter logs. */
-  readonly rows: readonly {
-    readonly pluginId: string;
-    readonly state: "loading" | "loaded" | "error" | "unobserved";
-  }[];
-}
-
 /** The census this smoke defends (P8-D2; rewritten at DK-3).
  *
  * `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback can satisfy
  * a registry census on its own, so without this number a renderer that quietly
  * fell back would look exactly like one that staged correctly — the field must
- * be filled the real way. behavior-conformance contributes the fifth renderer
- * module and the example desk clock the sixth (DK-6: `examples/plugins/desk-clock`,
- * dev-linked); both are built by build:all through field-app's dev dependencies
- * (the carrier since DK-8 — before that it staged whatever `dist/` its last hand
- * build or the playground's test wrote); kv-service remains service-only and
- * stages no renderer module. DK-8: VibeField's own comment pad (`plugins/comment-pad`,
- * bundled, built by build:all through field-app's dependency) joins them, and the
- * retired plugins leave them (`vibefield.note` first).
+ * be filled the real way. Since DK-8 the staged renderer modules are FOUR: the
+ * product's two (`plugins/browser` — its Artifacts panel — and VibeField's own comment
+ * pad, `plugins/comment-pad`, bundled, built by build:all through field-app's
+ * dependencies) and two dev-linked examples — the behavior-conformance carrier and
+ * the desk clock (DK-6: `examples/plugins/desk-clock`), built by build:all through
+ * field-app's dev dependencies (the carrier since DK-8 — before that it staged
+ * whatever `dist/` its last hand build or the playground's test wrote); kv-service
+ * remains service-only and stages no renderer module. The note, field-tools and
+ * widgetlab plugins retired with their widgets (DK-8).
  *
  * The PRODUCT fact moved at DK-3 (the plan's retire table: "the 24-type census
  * → the new seed's census"). It was `widgetTypes === 24` — the registry's
  * types, 23 across the five plugins plus the host's terminal mirror, seven of
  * them R3F islands — a count the desk no longer draws a single one of (every
  * VibeField widget type is faceless on the desk until DK-8). What a first-run
- * board must hold now is the DESK's seed (field/desk/desk-seed.ts, ruling 6):
- * one of each reference kind, read off the open document through
+ * board must hold now is the DESK's seed (field/desk/desk-seed.ts; DK-8 the
+ * product's: ICE's six and the comment pad), read off the open document through
  * `window.__vfDesk.census()` — GPU on or off, since it counts the world, not
  * pixels. `widgetTypes` is still printed, and no longer judged. */
 const CANVAS_CENSUS = {
@@ -285,17 +274,16 @@ const CANVAS_CENSUS = {
    * the run asks for the examples, so this smoke loads its renderer with `?deskSeedExamples=1`
    * (field-app `SEED_EXAMPLES`) — the CLOCK row needs it. */
   exampleClock: "vibefield.example.desk-clock",
-  // DK-8: 7 → 6 — `vibefield.note` retired (ICE's `desk.note` is the note); 6 → 5 —
-  // `vibefield.field-tools` retired (ICE's mini mat is the folder, the comment pad the comment)
-  minStagedPlugins: 5,
-  // The renderer plugins that draw DOM (browser, widgetlab — a HUD surface or a legacy
-  // widgets row) ship scoped CSS (DK-8: 4 → 3 → 2, the note's and field-tools' went with them). An objects-only plugin ships
-  // none since DK-6 (plugin-build's `generatesStylesheet`: a kind has no CSS) — the
-  // behavior-conformance carrier (an object since DK-4), whose sheet was Tailwind's
-  // accident, and the desk clock. A link alone is not evidence: the 2026-08-25
-  // regression left all five links published but their late fetches unauthorized
-  // after unrelated service activation.
-  minLoadedPluginStyles: 2,
+  // DK-8: 7 → 6 → 5 → 4 — `vibefield.note`, `vibefield.field-tools` and `examples/plugins/widgetlab` retired
+  // (ICE's note and mini mat, the comment pad; widgetlab's demos go): the browser's Artifacts panel, the comment
+  // pad, the behavior-conformance carrier and the example desk clock stay.
+  minStagedPlugins: 4,
+  // THE CSS CENSUS RETIRED (DK-8; the plan's retire table — "the CSS census in `smoke:canvas` and
+  // `smoke:plugin-restart`", DK-5 kept it for here): it counted the scoped stylesheets of the plugins that
+  // drew DOM WIDGETS (note, field-tools, widgetlab — and the browser's), 4 → 3 → 2 as the first two retired;
+  // with widgetlab the last DOM widget is gone, and an object kind has no CSS (DK-6). The one plugin
+  // stylesheet left is the browser's Artifacts panel — a HUD surface, whose CSS scope stays (the retire
+  // table's `plugin-style.ts` row) — and it is no longer counted here.
 } as const;
 
 /** Every way the line disagrees with the census, named — a smoke that fails
@@ -308,63 +296,6 @@ function censusFailures(facts: CanvasFacts): string[] {
     );
   }
   return problems;
-}
-
-function pluginStyleFailures(facts: PluginStyleCensus): string[] {
-  const problems: string[] = [];
-  if (facts.links < CANVAS_CENSUS.minLoadedPluginStyles) {
-    problems.push(
-      `${facts.links} plugin stylesheet link(s), expected at least ${CANVAS_CENSUS.minLoadedPluginStyles}`,
-    );
-  }
-  if (facts.loaded < CANVAS_CENSUS.minLoadedPluginStyles) {
-    problems.push(
-      `${facts.loaded} loaded plugin stylesheet(s), expected at least ${CANVAS_CENSUS.minLoadedPluginStyles} (${facts.loading} loading, ${facts.errors} failed)`,
-    );
-  }
-  if (facts.errors > 0) {
-    const failed = facts.rows
-      .filter((row) => row.state === "error")
-      .map((row) => row.pluginId)
-      .join(", ");
-    problems.push(`plugin stylesheet fetch failed${failed === "" ? "" : `: ${failed}`}`);
-  }
-  return problems;
-}
-
-async function readPluginStyleCensus(win: BrowserWindow): Promise<PluginStyleCensus> {
-  return (await win.webContents.executeJavaScript(
-    `(() => {
-      const rows = [...document.querySelectorAll("link[data-vf-plugin-style]")].map((link) => ({
-        pluginId: link.dataset.vfPluginStyle ?? "unknown",
-        state: link.dataset.vfPluginStyleState ?? "unobserved",
-      }));
-      return {
-        links: rows.length,
-        loaded: rows.filter((row) => row.state === "loaded").length,
-        loading: rows.filter((row) => row.state === "loading").length,
-        errors: rows.filter((row) => row.state === "error").length,
-        rows,
-      };
-    })()`,
-    true,
-  )) as PluginStyleCensus;
-}
-
-/** Wait for Chromium's load/error terminals, not merely DOM publication. */
-async function waitForPluginStyles(win: BrowserWindow, timeoutMs = 10_000) {
-  const deadline = Date.now() + timeoutMs;
-  let last = await readPluginStyleCensus(win);
-  while (
-    Date.now() < deadline &&
-    last.errors === 0 &&
-    (last.links < CANVAS_CENSUS.minLoadedPluginStyles ||
-      last.loaded < CANVAS_CENSUS.minLoadedPluginStyles)
-  ) {
-    await sleep(25);
-    last = await readPluginStyleCensus(win);
-  }
-  return last;
 }
 
 /** A captured still read back in the renderer (field/desk/desk-door.ts `DeskSample`). */
@@ -933,13 +864,7 @@ export async function runSmokeCanvas(opts: {
     await loadRenderer(win, "smoke-canvas", opts.viteUrl, { [SEED_EXAMPLES]: "1" });
     const raw = await canvasReady;
     console.log(`SMOKE_CANVAS ${raw}`);
-    const styles = await waitForPluginStyles(win);
-    console.log(`SMOKE_CANVAS_STYLES ${JSON.stringify(styles)}`);
-    const problems = [
-      ...smokeProfileFailures(),
-      ...censusFailures(JSON.parse(raw) as CanvasFacts),
-      ...pluginStyleFailures(styles),
-    ];
+    const problems = [...smokeProfileFailures(), ...censusFailures(JSON.parse(raw) as CanvasFacts)];
     const verdict = await deskVerdict;
     console.log(`SMOKE_CANVAS_DESK ${gpu ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
     problems.push(...(await deskSeedFailures(win)));

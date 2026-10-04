@@ -1,6 +1,10 @@
-import { WEATHER_GRADIENT } from "@vibefield/plugin-widgetlab/design-system";
 import { type ReactElement, useState } from "react";
 import { Section, Specimen } from "../catalog-ui";
+
+/** A committed content surface (DESIGN.md §2.2 — "committed gradients/colors are content, not theme",
+ * its own example): the catalog's weather card. Until DK-8 it came from the widgetlab plugin's content
+ * tokens, which retired with the plugin. */
+const WEATHER_GRADIENT = "linear-gradient(135deg, #3A86FF 0%, #1D4ED8 55%, #0B2AB5 100%)";
 
 export function CardsSection(): ReactElement {
   const [state, setState] = useState("Resting");

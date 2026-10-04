@@ -28,8 +28,6 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@react-three/drei": "^10.0.0",
-    "@react-three/fiber": "^9.6.1",
     "@rosetta/protocol": "*",
     "@rosetta/room": "*",
     "@vibecook/ghosttea-protocol": "*",
@@ -44,23 +42,18 @@
     "@vibefield/live-surfaces": "workspace:*",
     "@vibefield/plugin-browser": "workspace:*",
     "@vibefield/plugin-comment-pad": "workspace:*",
-
-
     "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",
-    "@vibefield/plugin-widgetlab": "workspace:*",
     "loro-crdt": "^1.13.6",
     "matter-js": "0.19.0",
     "react": "catalog:",
-    "react-dom": "catalog:",
-    "three": "^0.185.0"
+    "react-dom": "catalog:"
   },
   "devDependencies": {
     "@types/matter-js": "^0.19.0",
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
-    "@types/three": "^0.185.0",
     "@vibefield/fieldd": "workspace:*",
     "@vibefield/plugin-behavior-conformance": "workspace:*",
     "@vibefield/plugin-build": "workspace:*",

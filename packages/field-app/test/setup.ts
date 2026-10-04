@@ -12,7 +12,7 @@ holdLocalStorage();
 /**
  * P8b-3: load the dev-bundled plugin set once, for the whole file.
  *
- * The four built-in plugins stopped being static imports of `field-engine` —
+ * The product's plugins stopped being static imports of `field-engine` —
  * production stages them from their own artifacts, and the bundled list is now a
  * DEV fallback behind a dynamic import (P8-D2). The headless suites have no
  * daemon to approve modules and no boot phase to await one, so this awaits the

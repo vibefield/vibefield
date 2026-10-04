@@ -123,8 +123,10 @@ function registerStaged(
   );
 }
 
-/** THE DEV-ONLY BUNDLED SET (P8-D2). Until P8b-3 these four rode the app bundle
- * as static imports and WERE the plugin system; now they are the fallback for a
+/** THE DEV-ONLY BUNDLED SET (P8-D2) — since DK-8 the PRODUCT's plugins: the browser's
+ * Artifacts panel and VibeField's comment pad (the note, field-tools and widgetlab
+ * retired with their widgets). Until P8b-3 the bundled set rode the app bundle
+ * as static imports and WAS the plugin system; now it is the fallback for a
  * dev run whose artifacts are not built yet, and production ships none of them
  * — the branch folds to `false` at build time, so the dynamic imports below are
  * eliminated with it and no plugin source reaches a production chunk.
@@ -138,15 +140,12 @@ let devBundled: readonly BundledRendererPlugin[] | null = null;
 export async function loadDevBundledPlugins(): Promise<readonly BundledRendererPlugin[]> {
   if (!import.meta.env.DEV) return [];
   if (devBundled !== null) return devBundled;
-  const [browser, widgetlab, commentPad] = await Promise.all([
+  const [browser, commentPad] = await Promise.all([
     import("@vibefield/plugin-browser"),
-    import("@vibefield/plugin-widgetlab"),
     import("@vibefield/plugin-comment-pad"),
   ]);
   devBundled = [
     { manifest: browser.browserManifest, mod: browser.browserRenderer },
-
-    { manifest: widgetlab.widgetlabManifest, mod: widgetlab.widgetlabRenderer },
     // DK-8 (DK-D14): VibeField's own object kind — its code half read off the package's namespace by its row's
     // binding name, exactly as the staged loader reads a built module's (`objectBindingsFrom`)
     {
@@ -260,7 +259,7 @@ export async function buildDevRegistry(): Promise<PluginRegistry<WidgetType>> {
 /** THE BOOT ENTRY: ask the authority, and fall back to the dev-bundled set only
  * when it approved nothing. The fallback is loaded AFTER the staged answer
  * rather than beside it, so a dev run with real artifacts never pays for
- * importing four plugin packages it will not use. */
+ * importing plugin packages it will not use. */
 export async function prepareFieldPlugins(
   deps: StagedLoaderDeps,
 ): Promise<PreparedRendererPlugins> {

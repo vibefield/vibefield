@@ -2,7 +2,6 @@ import { type AnyBehaviorDef, defineWidget, p, type WidgetType } from "@vibecook
 import { defineObject, isObjectKind } from "@vibecook/ice/desk";
 import type { ObjectContribution, PropSpec, WidgetContribution } from "@vibefield/contracts";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
-import { TYPE_RENAMES } from "./type-renames";
 
 // §12.2 — the HOST builds every prefab from manifest data; plugins never call
 // defineWidget or defineObject (thinking-p1-canonical-manifests.md; spec §12.8).
@@ -55,20 +54,9 @@ function buildProp(type: string, name: string, spec: PropSpec) {
   }
 }
 
-// I5 consumed (ice 0.4.0, design-008): the C2 rename history projects into
-// `renamedFrom` declarations, and the ENGINE folds pre-rename docs in-band —
-// the offline byte surgery is retired. Renames are HOST history, not manifest
-// data: the old ids predate plugins authoring against the SDK at all.
-// `atVersion` is omitted — every C2-era pack wrote version 1, the default.
-const RENAMED_FROM: Readonly<Record<string, readonly { type: string }[]>> = (() => {
-  const inverted: Record<string, { type: string }[]> = {};
-  for (const [oldType, newType] of Object.entries(TYPE_RENAMES)) {
-    const olds = inverted[newType] ?? [];
-    olds.push({ type: oldType });
-    inverted[newType] = olds;
-  }
-  return inverted;
-})();
+// DK-8: the C2 rename history (`TYPE_RENAMES`, the `renamedFrom` projection) RETIRED with the
+// `vibefield.*` types it renamed — note, field-tools and widgetlab. Every board that could carry a
+// pre-C2 id is a board from before the desk, refused at open (field/desk/pre-desk.ts; DK-D13).
 
 // defineWidget registers into ICE's process-global catalog and THROWS on a
 // duplicate type. The retired hand calls ran once per process as import side
@@ -77,7 +65,7 @@ const RENAMED_FROM: Readonly<Record<string, readonly { type: string }[]>> = (() 
 const built = new Map<string, WidgetType>();
 
 /** The durable half both doors share: props, groups, interaction, container,
- * provides, ports, the behavior riders and the C2 rename history. */
+ * provides, ports and the behavior riders. */
 function durableHalf(
   row: WidgetContribution | ObjectContribution,
   owner: { pluginId: string; pluginTitle: string } | undefined,
@@ -117,7 +105,6 @@ function durableHalf(
     ...(row.provides !== undefined ? { provides: row.provides } : {}),
     ...(row.ports !== undefined ? { ports: row.ports } : {}),
     ...(behaviors.length > 0 ? { behaviors } : {}),
-    ...(RENAMED_FROM[row.type] !== undefined ? { renamedFrom: RENAMED_FROM[row.type] } : {}),
   };
 }
 

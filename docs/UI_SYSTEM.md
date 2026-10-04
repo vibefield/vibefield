@@ -75,8 +75,9 @@ access and pane modifier, provider glyph, and context boundary.
 
 When a staged view or content token lives in another workspace package, the catalog composes it
 through that package's `./design-system` export — a fixture-adapter door beside the shipping code
-(`@vibefield/plugin-browser/design-system` is the template; `@vibefield/plugin-widgetlab/design-system`
-carries content tokens the same way). Catalog code imports another workspace package only through
+(`@vibefield/plugin-browser/design-system` is the template; the widgetlab plugin's content-token door
+retired with the plugin at DK-8, and the catalog's weather card carries DESIGN.md §2.2's gradient as its
+own content). Catalog code imports another workspace package only through
 that door, the design-kit foundation, or `@vibefield/contracts` types; any other internal path is
 rejected by the ownership test. A future package that owns a whole viewport — a History or
 Assistant plugin, an extracted spine library — ships its specimens behind the same entry, so this

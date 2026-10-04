@@ -786,7 +786,7 @@ function runSelfTest() {
     },
     {
       id: "R10",
-      file: "examples/plugins/widgetlab/src/uses-electron.ts",
+      file: "examples/plugins/desk-clock/src/uses-electron.ts",
       body: 'import { app } from "electron";\nimport { CardShell } from "@vibefield/design-kit";\n',
     },
     // DK-8: ICE's workspace-internal names are walled as written — a kind that
