@@ -17,10 +17,11 @@ kinds.
    as data.
 4. **Test** — `pnpm --filter {{packageName}} test`: the manifest contract, and the kind over its
    playground states (`test/kind.test.ts` — DK-7's harness will hold a still of each to a golden).
-5. **See it** — a dev session (`pnpm dev`) stages every built plugin under `plugins/` and
+5. **Mount it** — a dev session (`pnpm dev`) stages every built plugin under `plugins/` and
    `examples/plugins/` (elsewhere: `pnpm plugin dev-link <this directory>`), and the desk mounts your
-   kind beside its own. It hangs on the pegboard under "things" — reached from the desk's chrome once
-   VibeField wires the pegboard (DK-13).
+   kind beside its own. Nothing lays one yet: you take it from the pegboard, under "things", once
+   VibeField wires the pegboard into the desk's chrome (DK-13); until then the kind is compiled and
+   waiting, and DK-7's harness is where you will see it drawn.
 
 ## Make it yours
 
@@ -31,7 +32,7 @@ kinds.
 | `src/kind.ts` | the kind, whole: `create` (its pass, on the host's device), `resolve` (where it lies), `record` (what the pass draws), `hit` (what a press picks) |
 | `src/pass.ts` | its pass: one pipeline, a record store, one instanced draw |
 | `src/record.ts` | the GPU record, declared once — its WGSL struct is generated from it |
-| `src/shaders.wgsl` | its own WGSL, after the kit's `view` and `portal` pieces (`src/shaders.ts` names them) |
+| `src/shaders.wgsl` | its own WGSL, after the kit's `view`, `portal` and `light` pieces (`src/shaders.ts` names them) |
 | `playground/states.ts` | the states a harness draws it in |
 
 The reference is `docs/plugin-authoring/objects.md` (generated with the contracts); the worked example
