@@ -5,6 +5,10 @@
 // view block (`view`), the portal chain's cover (`portal`), the card primitives (`sdf`) and the mat's
 // light — the lamp's gobo, the night, the value noise, the colour chain (`light`). The kit's text comes
 // from the host's `ShaderText` (the desk's generated module in a browser), byte for byte.
+//
+// The reference below types the `.wgsl` imports wherever this module is compiled — in this package and
+// in any program that reaches it (the host's suite imports the plugin to witness its compile).
+/// <reference path="./wgsl.d.ts" />
 
 import { type ComposeOptions, kitWgsl, type ShaderText } from "@vibefield/plugin-sdk/desk";
 import CLOCK_WGSL from "./clock.wgsl";

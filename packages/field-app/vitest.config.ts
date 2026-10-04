@@ -1,3 +1,4 @@
+import { wgsl } from "@vibefield/plugin-build/wgsl";
 import { defineConfig } from "vitest/config";
 
 // Renderer unit tests under happy-dom, with the localStorage setup shim (theme.ts
@@ -6,6 +7,9 @@ import { defineConfig } from "vitest/config";
 // vite config's React plugin, so esbuild.jsx transforms the .tsx panels the
 // panel test imports.
 export default defineConfig({
+  // DK-6: the example plugin's clock (the host's parity witness, desk-clock-plugin.test.ts) ships its
+  // WGSL as `.wgsl` files; the suite loads them as plugin-build inlines them — as their text
+  plugins: [wgsl()],
   esbuild: { jsx: "automatic", jsxImportSource: "react" },
   // The sibling `link:` rows (puppeteer's views) resolve their own react by
   // Node's rules; dedupe is what makes the tests load ONE React, exactly as

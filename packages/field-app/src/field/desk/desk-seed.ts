@@ -26,7 +26,23 @@ export interface SeedObject {
   readonly props: Readonly<Record<string, unknown>>;
 }
 
-/** The five laid at once, in the showcase's order — its three notes are one here. */
+/**
+ * THE EXAMPLE PLUGIN'S CLOCK (DK-6 — the parity witness, `examples/plugins/desk-clock`): a PLUGIN's kind
+ * laid beside the six where ICE's showcase lays its own clock (rig:remount's, centred at 520, 380) —
+ * and only while its plugin is ON: the seed lays a type only where the root canvas places it, so with
+ * the plugin off the first board is the six. Named by its TYPE, as a host names any plugin's kind; the
+ * host imports no plugin. Laid WITHOUT its seconds hand: a minute clock wakes the resting desk once a
+ * minute by its registered wake (a seconds clock, once a second), so a first board still sleeps.
+ */
+export const SEED_CLOCK: SeedObject = {
+  type: "vibefield.example.desk-clock",
+  cx: 520,
+  cy: 380,
+  props: { seconds: false },
+};
+
+/** The five laid at once, in the showcase's order — its three notes are one here — and the example
+ * plugin's clock when it is on. */
 export function seedObjects(now: Date): readonly SeedObject[] {
   const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
   return [
@@ -35,13 +51,15 @@ export function seedObjects(now: Date): readonly SeedObject[] {
     { type: BOARD_TYPE, cx: 760, cy: 560, props: {} },
     { type: NOTEBOOK_TYPE, cx: 1040, cy: 300, props: { seed: 3, angle: 0.05 } },
     { type: CALENDAR_TYPE, cx: 640, cy: 170, props: { month } },
+    SEED_CLOCK,
   ];
 }
 
 /** Where the print lies (its centre): the showcase's `kinds.print({ x: 960, y: 610 })`. */
 export const SEED_PRINT_AT = { cx: 960, cy: 610 } as const;
 
-/** The six types the seed lays, one each — the census a first-run board must hold. */
+/** The six types the seed lays, one each — the census a first-run board must hold (the example clock
+ * joins it only while its plugin is on — `SEED_CLOCK`). */
 export const SEED_TYPES: readonly string[] = [
   NOTE_TYPE,
   MINIMAT_TYPE,
@@ -53,9 +71,10 @@ export const SEED_TYPES: readonly string[] = [
 
 /**
  * Seed a live document: the five laid now (one transaction each, not undoable — the user's first ⌘Z
- * stays clean), then the print once its picture is in `blobs`. Resolves when the print is laid; a
- * board switched away meanwhile gets no print. Each object is laid only where the root canvas places
- * it (the desk places what provides `desk.object` — all six do).
+ * stays clean) and the example clock if its plugin is on, then the print once its picture is in
+ * `blobs`. Resolves when the print is laid; a board switched away meanwhile gets no print. Each object
+ * is laid only where the root canvas places it (the desk places what provides `desk.object` — all six
+ * do, and the clock; a type the catalog lacks is passed by).
  */
 export async function seedDesk(
   ce: CanvasEngine,

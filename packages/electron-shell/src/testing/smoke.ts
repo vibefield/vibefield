@@ -249,7 +249,9 @@ interface PluginStyleCensus {
  * a registry census on its own, so without this number a renderer that quietly
  * fell back would look exactly like one that staged correctly — the field must
  * be filled the real way. behavior-conformance contributes the fifth renderer
- * module; kv-service remains service-only and stages no renderer module.
+ * module and the example desk clock the sixth (DK-6: `examples/plugins/desk-clock`,
+ * dev-linked, built by build:all through field-app's dev dependency); kv-service
+ * remains service-only and stages no renderer module.
  *
  * The PRODUCT fact moved at DK-3 (the plan's retire table: "the 24-type census
  * → the new seed's census"). It was `widgetTypes === 24` — the registry's
@@ -263,7 +265,10 @@ interface PluginStyleCensus {
 const CANVAS_CENSUS = {
   /** The desk seed's types, one object each (ICE `@vibecook/ice/desk/objects`'s ids). */
   seed: ["desk.note", "desk.minimat", "desk.board", "desk.notebook", "desk.calendar", "desk.photo"],
-  minStagedPlugins: 5,
+  /** DK-6 — THE PARITY WITNESS: the example plugin's clock, a PLUGIN's kind through the SDK's `/desk`
+   * door alone, which the seed lays beside the six while its plugin is on — as it is in every smoke. */
+  exampleClock: "vibefield.example.desk-clock",
+  minStagedPlugins: 6,
   // The renderer plugins that draw DOM (note, browser, field-tools, widgetlab — a HUD
   // surface or a legacy widgets row) ship scoped CSS. An objects-only plugin ships
   // none since DK-6 (plugin-build's `generatesStylesheet`: a kind has no CSS) — the
@@ -413,6 +418,64 @@ async function deskSeedFailures(win: BrowserWindow, timeoutMs = 15_000): Promise
   return problems;
 }
 
+/** What the GPU-on half of the clock row reads off the desk. */
+interface DrawnClock {
+  readonly faults: readonly unknown[];
+  readonly picked: { readonly x: number; readonly y: number; readonly part: string } | null;
+}
+
+/**
+ * DK-6 — THE PARITY WITNESS IN THE PRODUCT: the example plugin's clock — a PLUGIN's kind, built on
+ * `@vibefield/plugin-sdk/desk` alone and staged by fieldd like any plugin — in the seed's census beside
+ * the six (GPU on or off: it counts the world); and, GPU on, DRAWN: its kind not refused at the desk's
+ * mount (`status().faults` names it not — its WGSL compiled on the host's device) and its round face
+ * PICKED on the last presented frame, the desk's own pick resolving through the kind's mirror of what
+ * it drew (a scan of the view at 16 CSS px). The window's stills hold it beside the six.
+ */
+async function exampleClockRow(win: BrowserWindow, gpu: boolean): Promise<string[]> {
+  const type = CANVAS_CENSUS.exampleClock;
+  const js = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const count = async (): Promise<number> =>
+    (await js<Record<string, number> | null>("globalThis.__vfDesk?.census() ?? null"))?.[type] ?? 0;
+  const deadline = Date.now() + 15_000;
+  let census = await count();
+  while (census !== 1 && Date.now() < deadline) {
+    await sleep(100);
+    census = await count();
+  }
+  const problems: string[] = [];
+  if (census !== 1) {
+    problems.push(
+      `the example clock is not on the desk (${type} × ${census}) — examples/plugins/desk-clock built and staged?`,
+    );
+  }
+  let drawn: DrawnClock | null = null;
+  if (gpu) {
+    drawn = await js<DrawnClock>(`(() => {
+      const d = globalThis.__vfDesk;
+      const el = document.querySelector("[data-desk]");
+      const box = el === null ? { width: innerWidth, height: innerHeight } : el.getBoundingClientRect();
+      let picked = null;
+      for (let y = 8; y < box.height && picked === null; y += 16)
+        for (let x = 8; x < box.width && picked === null; x += 16) {
+          const hit = d.pick({ x, y });
+          if (hit !== null && hit.type === ${JSON.stringify(type)}) picked = { x, y, part: hit.part };
+        }
+      return { faults: d.status().faults ?? [], picked };
+    })()`);
+    const refused = (drawn?.faults ?? []).some(
+      (fault) => (fault as { kind?: unknown }).kind === type,
+    );
+    if (refused)
+      problems.push(`the desk refused the example clock's kind (${JSON.stringify(drawn)})`);
+    if (drawn?.picked === null)
+      problems.push("the example clock was not picked on the drawn frame");
+  }
+  console.log(`SMOKE_CANVAS_CLOCK ${JSON.stringify({ type, census, ...(drawn ?? {}) })}`);
+  return problems;
+}
+
 /** The stage's unavailable card (DESIGN.md §8 "When the desk can't draw") — what every GPU-OFF
  * smoke now asserts where the desk cannot draw (DK-3; r6b risk 1): the card in the DOM, its words
  * and ICE's message, and the window still alive. Returns the card's account of itself. */
@@ -518,6 +581,7 @@ export async function runSmokeCanvas(opts: {
     const verdict = await deskVerdict;
     console.log(`SMOKE_CANVAS_DESK ${gpu ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
     problems.push(...(await deskSeedFailures(win)));
+    problems.push(...(await exampleClockRow(win, gpu)));
     if (gpu) {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
@@ -742,6 +806,12 @@ async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
     "globalThis.__vfDesk.rest().asleep === true",
     "globalThis.__vfDesk.rest()",
   );
+  // DK-6: the seed's example clock is a MINUTE clock, and its registered wake moves the resting desk
+  // at each minute's turn (by its law, a hair before it) — by design. The two seconds are taken clear
+  // of a turn, so the zero is still the whole witness: not a frame, not a submit, between the wakes.
+  const intoMinute = Date.now() % 60_000;
+  if (intoMinute < 1_000) await sleep(1_000 - intoMinute);
+  else if (intoMinute > 56_000) await sleep(61_000 - intoMinute);
   const rest0 = await deskCounters(win);
   await sleep(2_000);
   const rest1 = await deskCounters(win);

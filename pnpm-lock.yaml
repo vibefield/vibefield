@@ -512,6 +512,12 @@ importers:
       '@vibefield/fieldd':
         specifier: workspace:*
         version: link:../fieldd
+      '@vibefield/plugin-build':
+        specifier: workspace:*
+        version: link:../../tooling/plugin-build
+      '@vibefield/plugin-example-desk-clock':
+        specifier: workspace:*
+        version: link:../../examples/plugins/desk-clock
       '@vibefield/test-env':
         specifier: workspace:*
         version: link:../../tooling/test-env
