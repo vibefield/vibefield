@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./build": "./src/build.ts"
+    "./build": "./src/build.ts",
+    "./wgsl": "./src/wgsl.ts"
   },
   "bin": {
     "plugin-build": "./bin/plugin-build.mjs"

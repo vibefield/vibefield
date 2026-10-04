@@ -27,6 +27,7 @@ import {
   HOST_SINGLETON_MODULE_SPECIFIERS,
   type HostSingletonExternal,
 } from "./externals";
+import { wgsl } from "./wgsl";
 
 /** Where a plugin's entry sources live, by convention. The manifest names the
  * built ARTIFACT (`./dist/renderer.js`); these are what produce it.
@@ -145,6 +146,35 @@ export function findUnmappableSpecifiers(specifiers: Iterable<string>): string[]
   return [...unmappable].sort();
 }
 
+/**
+ * THE DOOR CHECK (DK-6; ICE design-016 K-L1, wall R10): which of this bundle's bare imports name ICE
+ * itself? None may. A plugin reaches ICE only through `@vibefield/plugin-sdk` — a kind through its
+ * `/desk` door — so the bundle names the SDK and the host's import map binds that to the app's own
+ * copy: the plugin runs on the host's one ICE, one strata, one loro. R10 walls ICE in TypeScript
+ * source; this is the same wall at the artifact, where a `.js` source or a hand-written entry cannot
+ * walk past it. (The import map still binds ICE's entries: the SDK's own singleton chunks need them.)
+ *
+ * Pure and exported so it is testable without running a build.
+ */
+export function findDirectIceSpecifiers(specifiers: Iterable<string>): string[] {
+  const direct = new Set<string>();
+  for (const id of specifiers)
+    if (id === "@vibecook/ice" || id.startsWith("@vibecook/ice/")) direct.add(id);
+  return [...direct].sort();
+}
+
+/** Modules a plugin bundle must never carry a copy of though no import map binds them for a plugin: the
+ * world's own engine. Two strata copies are two schema registries at one seam (`check:deps`'s reason) —
+ * the plugin build's half of the one-loro/one-strata/one-ice rule, beside the singletons' check. */
+const ONE_COPY_MODULES = ["@vibecook/strata-ecs"] as const;
+
+/** Which of `ONE_COPY_MODULES` did this bundle link in? Read from the bundler's module list, as
+ * `findBundledSingletons` reads it. */
+export function findBundledOneCopyModules(modulePaths: Iterable<string>): string[] {
+  const paths = [...modulePaths].map((p) => p.replaceAll("\\", "/"));
+  return ONE_COPY_MODULES.filter((name) => paths.some((p) => p.includes(`node_modules/${name}/`)));
+}
+
 function firstExisting(root: string, candidates: readonly string[]): string | undefined {
   return candidates.map((c) => join(root, c)).find((p) => existsSync(p));
 }
@@ -212,7 +242,8 @@ async function bundleRenderer(
     root,
     configFile: false,
     logLevel: "warn",
-    plugins: [react(), tailwindcss()],
+    // `wgsl()` first: a kind's `.wgsl` imports become their text before anything parses them (DK-6).
+    plugins: [wgsl(), react(), tailwindcss()],
     build: {
       outDir,
       emptyOutDir: false,
@@ -361,6 +392,13 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<BuildRep
       "artifact checks",
     );
   }
+  const copies = findBundledOneCopyModules(linked);
+  if (copies.length > 0) {
+    throw new PluginBuildError(
+      `bundle carries its own copy of ${copies.join(", ")} — the host's one copy is the only one (two are two schema registries at one seam); a plugin reaches the world through @vibefield/plugin-sdk`,
+      "artifact checks",
+    );
+  }
   const unmappable = findUnmappableSpecifiers(emitted);
   if (unmappable.length > 0) {
     throw new PluginBuildError(
@@ -368,10 +406,17 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<BuildRep
       "artifact checks",
     );
   }
+  const direct = findDirectIceSpecifiers(emitted);
+  if (direct.length > 0) {
+    throw new PluginBuildError(
+      `renderer bundle imports ICE directly (${direct.join(", ")}) — a plugin reaches ICE only through @vibefield/plugin-sdk (a kind through its /desk door: K-L1, wall R10), so it runs on the host's one copy`,
+      "artifact checks",
+    );
+  }
   stages.push({
     stage: "artifact checks",
     ok: true,
-    detail: `entries present; no bundled singletons across ${linked.length} linked modules; ${emitted.length} emitted specifiers all mappable`,
+    detail: `entries present; no bundled singletons across ${linked.length} linked modules; ${emitted.length} emitted specifiers all mappable, none of them ICE's`,
   });
 
   return { pluginId: manifest.id, stages, ok: true };

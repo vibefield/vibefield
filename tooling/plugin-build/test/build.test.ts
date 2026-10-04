@@ -1,14 +1,18 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   buildPlugin,
+  findBundledOneCopyModules,
   findBundledSingletons,
+  findDirectIceSpecifiers,
   findUnmappableSpecifiers,
   isHostSingletonSpecifier,
   PluginBuildError,
 } from "../src/build";
+import { wgsl, wgslModule } from "../src/wgsl";
 
 // P8a — the build stages. Two levels, deliberately:
 //
@@ -116,6 +120,31 @@ describe("findUnmappableSpecifiers (the §11.6 artifact check)", () => {
   });
 });
 
+describe("the door and one-copy checks (DK-6)", () => {
+  it("names every ICE entry a bundle emits, and nothing that merely starts alike", () => {
+    expect(
+      findDirectIceSpecifiers([
+        "@vibefield/plugin-sdk/desk",
+        "@vibecook/ice/desk/kit",
+        "@vibecook/ice",
+        "@vibecook/icebox",
+        "react",
+      ]),
+    ).toEqual(["@vibecook/ice", "@vibecook/ice/desk/kit"]);
+  });
+
+  it("finds a linked strata by its package path, never a namesake", () => {
+    expect(
+      findBundledOneCopyModules([
+        "/repo/node_modules/.pnpm/@vibecook+strata-ecs@0.13.0/node_modules/@vibecook/strata-ecs/dist/index.js",
+      ]),
+    ).toEqual(["@vibecook/strata-ecs"]);
+    expect(
+      findBundledOneCopyModules(["/repo/node_modules/@vibecook/strata-ecs-tools/x.js"]),
+    ).toEqual([]);
+  });
+});
+
 describe("buildPlugin", () => {
   it("bundles a service entry self-contained, leaving only the SDK external", async () => {
     const root = fixture({
@@ -202,6 +231,67 @@ describe("buildPlugin", () => {
     await expect(buildPlugin({ root })).rejects.toThrow(
       /@vibecook\/ice\/react[\s\S]*HOST_SINGLETON_MODULE_SPECIFIERS[\s\S]*@vibefield\/contracts/,
     );
+  });
+
+  it("DK-6 — inlines a kind's `.wgsl` as its TEXT, byte for byte, and ships no second file", async () => {
+    // Every byte that could go wrong in a string literal: quotes, a backslash, a template
+    // literal's backtick and `${`, unicode, CRLF and a trailing newline.
+    // (the `$` and `{x}` are split only so the linter does not read a placeholder into them)
+    const shader =
+      '// the "dot" — a kind\'s own WGSL, `verbatim` $' +
+      "{x}\\n\r\n" +
+      "@fragment fn fs() -> @location(0) vec4f { return vec4f(1.0); }\n";
+    const root = fixture({
+      "vibefield.plugin.json": manifest({ renderer: "./dist/renderer.js" }),
+      "src/dot.wgsl": shader,
+      "src/renderer.ts":
+        'import DOT from "./dot.wgsl";\nexport const dotWgsl = DOT;\nexport default { activate() {} };\n',
+    });
+    const report = await buildPlugin({ root });
+    expect(report.ok).toBe(true);
+    const built = (await import(pathToFileURL(join(root, "dist", "renderer.js")).href)) as {
+      dotWgsl: string;
+    };
+    expect(built.dotWgsl).toBe(shader);
+    expect(existsSync(join(root, "dist", "dot.wgsl"))).toBe(false);
+    expect(readFileSync(join(root, "dist", "renderer.js"), "utf8")).not.toMatch(
+      /["']\.\/dot\.wgsl["']/,
+    );
+  });
+
+  it("DK-6 — the WGSL plugin loads `.wgsl` ids alone, as a default-exported string", async () => {
+    const plugin = wgsl();
+    expect(plugin.enforce).toBe("pre");
+    expect(await plugin.load("/x/src/pass.ts")).toBeNull();
+    expect(await plugin.load("/x/src/clock.wgsl?raw")).toBeNull(); // a query is Vite's own
+    expect(wgslModule("fn a() {}\n")).toBe('export default "fn a() {}\\n";\n');
+  });
+
+  it("DK-6 — REFUSES a renderer that imports ICE itself: the SDK is a plugin's only door", async () => {
+    // `@vibecook/ice/desk` IS mappable (the SDK's own singleton chunks need the import map's
+    // entry), so the unmappable check passes it — this refusal is the one that closes the door.
+    expect(findUnmappableSpecifiers(["@vibecook/ice/desk"])).toEqual([]);
+    const root = fixture({
+      "vibefield.plugin.json": manifest({ renderer: "./dist/renderer.js" }),
+      "src/side-door.js": 'export { DESK_OBJECT } from "@vibecook/ice/desk";\n',
+      "src/renderer.ts":
+        'import { DESK_OBJECT } from "./side-door.js";\nexport default { activate: () => DESK_OBJECT };\n',
+    });
+    // a `.js` module walks past R10's TypeScript scan; the artifact cannot
+    await expect(buildPlugin({ root })).rejects.toThrow(
+      /imports ICE directly \(@vibecook\/ice\/desk\)[\s\S]*@vibefield\/plugin-sdk/,
+    );
+  });
+
+  it("DK-6 — REFUSES a bundle that linked its own strata (one strata, beside one ice and one loro)", async () => {
+    const root = fixture({
+      "vibefield.plugin.json": manifest({ renderer: "./dist/renderer.js" }),
+      "node_modules/@vibecook/strata-ecs/index.js": "export const defineComponent = () => 1;\n",
+      "src/renderer.ts":
+        'import { defineComponent } from "../node_modules/@vibecook/strata-ecs/index.js";\n' +
+        "export default { activate: () => defineComponent() };\n",
+    });
+    await expect(buildPlugin({ root })).rejects.toThrow(/own copy of @vibecook\/strata-ecs/);
   });
 
   it("refuses when the manifest promises a renderer no source can produce", async () => {
