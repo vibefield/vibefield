@@ -105,8 +105,8 @@ export interface DiscBreak {
   readonly groupMisfilled?: boolean;
   /** its drawRange draws without setting its bind group */
   readonly drawsUngrouped?: boolean;
-  /** its create: rejects, resolves no pass, or never settles */
-  readonly create?: "throws" | "no-pass" | "never";
+  /** its create: rejects, resolves no pass, never settles, or reaches for a browser global Node lacks */
+  readonly create?: "throws" | "no-pass" | "never" | "browser";
   /** its record throws */
   readonly recordThrows?: boolean;
   /** its hit misses everywhere (a pick that never finds what was drawn) */
@@ -279,6 +279,8 @@ export function discKind(how: DiscBreak = {}): ObjectKind<DiscGeometry, DiscReco
       if (how.create === "throws") throw new Error("the disc's create throws on purpose");
       if (how.create === "no-pass") return {} as never;
       if (how.create === "never") return new Promise<never>(() => {});
+      // a browser global, named as a bundle names it — in Node an unbound identifier (ReferenceError)
+      if (how.create === "browser") return new OffscreenCanvas(1, 1) as never;
       return DiscPass.create(device, format, mat, how) as never;
     },
     resolve: (ctx: ObjectContext): DiscGeometry => ({

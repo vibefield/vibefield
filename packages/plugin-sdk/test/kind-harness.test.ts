@@ -188,6 +188,15 @@ describe("(b) the program on a recording device — each refusal earned", () => 
     expect(r.verdicts.at(-1)?.detail).not.toContain("prepare");
   });
 
+  it("object-create-not-run-here (a NOTE): a create that reaches for a browser global Node does not define — the harness's ceiling, never the kind's fault", async () => {
+    const r = await run({ create: "browser" });
+    expect(refusals(r)).toEqual([]);
+    expect(notes(r)).toEqual(["object-create-not-run-here"]);
+    expect(r.verdicts.find((v) => v.status === "note")?.detail).toContain(
+      "OffscreenCanvas is not defined",
+    );
+  });
+
   it("object-kit-piece-unknown: a pass naming a kit piece that does not exist", async () => {
     const r = await run({ pieces: ["view", "portal", "light", "lens"] });
     expect(refusals(r)).toEqual(["object-kit-piece-unknown"]);

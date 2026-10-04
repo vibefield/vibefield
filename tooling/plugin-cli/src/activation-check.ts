@@ -16,7 +16,8 @@
 //    plugin for the harness's ceiling.
 //
 // DK-6 (desk/landing): an OBJECT row's binding is its module's export, not a registration — so the
-// object rows (object-check.ts) read the imported namespace as the host does, with no device; and a
+// object rows (object-check.ts) read the imported namespace as the host does, with no device, through
+// the SDK's kind-conformance harness (DK-7: its declaration and program checks); and a
 // WIDGET row needs no binding at all on the desk build (the host compiles it faceless, DK-2), so only
 // a registration the manifest never declared is refused for widgets.
 
@@ -154,7 +155,7 @@ export async function checkActivation(
   };
 
   // The object rows first: they read the module's namespace, never its activate.
-  const verdicts: Verdict[] = await checkObjectRows(imported, declaredObjects, entry);
+  const verdicts: Verdict[] = await checkObjectRows(imported, declaredObjects);
 
   const before = timerCensus();
   let session: Awaited<ReturnType<typeof activateWithMockHost>>;

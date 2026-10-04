@@ -577,13 +577,26 @@ never polls for what an arrival can tell it.
 
 ## Checking it
 
+One harness judges a kind everywhere: the SDK's kind-conformance harness
+(`@vibefield/plugin-sdk/testing` — `runKindConformance`), with no device and no DOM.
 `vibefield-plugin check` runs the manifest, wall, schema, artifact and activation rows
-as for any plugin, and holds each object row to the BUILT module — in Node, with no device:
-`binding.kind` names a real export (`object-export-missing`) holding a desk kind
-(`object-kind-invalid`) whose registry name is the row's type (`object-kind-misnamed`); the
-row says how it hangs; and its `create`, run on a RECORDING device, must ask for its shader
-as WGSL text (`object-wgsl-not-text`; a create that needs a real device is noted,
-`object-create-not-run-here`). That row proves TEXT, not compilation — a shader naming what
-the kit's pieces do not carry passes it; the playground's Dawn harness (DK-7) compiles and
-draws each declared state and holds its still to a golden. `inspect` lists each kind with its
-tray chip, its hang, what it provides, its export and a `null` refusal.
+as for any plugin, and holds each object row to the BUILT module with the harness's
+declaration and program checks: `binding.kind` names a real export
+(`object-export-missing`) holding a desk kind (`object-kind-invalid`) whose registry name
+is the row's type (`object-kind-misnamed`), hanging by a tray entry that says how
+(`object-tray-hang-missing`, `object-tray-category-invalid`), providing `desk.object`
+(`object-provides-no-desk-object`); its `create`, run on a RECORDING device that answers
+every call as WebGPU does short of compiling, names only the kit's pieces
+(`object-kit-piece-unknown`), asks for its shader as WGSL TEXT (`object-wgsl-not-text`)
+that READS — entry points its pipelines name (`object-wgsl-unread`), bindings each stage
+uses laid in its layout (`object-wgsl-binding-unlaid`), bind groups that fill their
+layouts (`object-bind-group-mismatch`). NOTHING COMPILES IT: a shader naming what nothing
+declares passes, and every kind with shaders carries the note `object-wgsl-not-compiled`
+(the still that would compile and draw it waits on ICE). `pnpm playground <dir>` runs the
+same harness over every DECLARED STATE — each fixture in `playground/states.ts` (its props
+validated first, `state-invalid`) × idle, selected, held, open (when the kind opens),
+contained (when it provides `desk.containable`) × every zoom the desk's LOD names — through
+resolve, record, hit (`state-hit-missed`: it must hit its own box), frame, chip, the
+opening, prepare and drawRange (`state-spawn-failed`, `state-render-failed`,
+`state-draw-ill-formed`), then dispose. A unit test calls it the same way. `inspect` lists
+each kind with its tray chip, its hang, what it provides, its export and a `null` refusal.

@@ -131,7 +131,8 @@ export const REFUSAL_CATALOG = {
       "the manifest declares a command, surface or behavior that activate never bound (§12.1); a widget row needs none on the desk build — the host compiles it faceless (DK-2), and an object's binding is its module's export (the object-* codes)",
     guidance: "bind every declared command, surface and behavior during activate(ctx)",
   },
-  // --- the object rows (DK-6: the host's reading of contributes.objects, before the host) ---
+  // --- the object rows (DK-6; DK-7: the SDK's kind-conformance harness — its declaration and its
+  // program, `@vibefield/plugin-sdk/testing` — the same verdicts the playground says) ---
   "object-export-missing": {
     check: "activation",
     level: "refuse",
@@ -144,7 +145,7 @@ export const REFUSAL_CATALOG = {
     check: "activation",
     level: "refuse",
     meaning:
-      "the named export's kind is not a desk kind (ICE isObjectKind: name · stratum · create · resolve · record · hit · reach)",
+      "the named export's kind is not a desk kind (ICE isObjectKind: name · stratum · create · resolve · record · hit · reach), or lies in no stratum the ground draws (pads, sheets, things)",
     guidance:
       "type it `ObjectKind` from @vibefield/plugin-sdk/desk and give it every required member",
   },
@@ -155,6 +156,42 @@ export const REFUSAL_CATALOG = {
       "the kind's registry name is not the row's type — the host refuses it (one id, no second namespace)",
     guidance: "name the kind exactly as the row's type",
   },
+  "object-tray-hang-missing": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "the row's tray entry does not say how its specimen hangs: no size, no accessory the pegboard has, or no pegs",
+    guidance:
+      "`tray.hang` with w and h (> 0, CSS px), an accessory (hook, shelf, clip, rail) and 1–8 pegs",
+  },
+  "object-tray-category-invalid": {
+    check: "activation",
+    level: "refuse",
+    meaning: "the row's tray category is empty or longer than the pegboard's 64 characters",
+    guidance: "a tray category of 1–64 characters — the pegboard's chip",
+  },
+  "object-provides-no-desk-object": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "the row does not provide `desk.object` — the desk places by what a row provides, never by its type",
+    guidance: "provide `desk.object` (DESK_OBJECT) beside the row's own keys",
+  },
+  "object-create-failed": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "the kind's create threw, or resolved no KindPass, on a recording device that answers every call as WebGPU does short of compiling",
+    guidance:
+      "a create that resolves a KindPass (spawn · prepare · drawRange · dispose) from the device, format and mat it is handed",
+  },
+  "object-kit-piece-unknown": {
+    check: "activation",
+    level: "refuse",
+    meaning: "the kind's program names a piece the render kit does not carry (`kitWgsl`)",
+    guidance:
+      "name only the kit's pieces in kitWgsl: view, portal, sdf, light (lamp, gobo, night, noise), ruler, book",
+  },
   "object-wgsl-not-text": {
     check: "activation",
     level: "refuse",
@@ -163,13 +200,51 @@ export const REFUSAL_CATALOG = {
     guidance:
       "import the kind's .wgsl files (plugin-build inlines each as its text) and compose them with kitWgsl",
   },
+  "object-wgsl-unread": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "a pipeline names an entry point its WGSL does not declare for that stage, or overrides a constant it never declares — read from the text, no compiler",
+    guidance:
+      "name the entry points the WGSL declares (`@vertex fn vs`, `@fragment fn fs` by default) and override only what it declares",
+  },
+  "object-wgsl-binding-unlaid": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "a binding a pipeline's stage statically uses is not in that pipeline's layout, or is laid as another kind of resource",
+    guidance:
+      "carry every binding the WGSL's entry points use in the pipeline's layout, at its @group/@binding, as the same kind of resource",
+  },
+  "object-bind-group-mismatch": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "a bind group does not fill its layout exactly — a binding left empty, filled twice, not in the layout, or given the wrong resource",
+    guidance:
+      "fill every binding of the layout exactly once, each with the resource it asks for (a buffer made for that use, a texture view, a sampler)",
+  },
+  "object-dispose-failed": {
+    check: "activation",
+    level: "refuse",
+    meaning: "the kind's pass threw when it was disposed",
+    guidance: "a dispose that lets go of what the pass made, and never throws",
+  },
+  "object-wgsl-not-compiled": {
+    check: "activation",
+    level: "note",
+    meaning:
+      "the kind's WGSL was READ — its entry points and bindings — never compiled: an unresolved name or a type error passes this row (the honest gap, not a refusal)",
+    guidance:
+      "nothing to do here: the still that compiles and draws a kind waits on a host-less desk ICE does not publish (VibeField's ask I30)",
+  },
   "object-create-not-run-here": {
     check: "activation",
     level: "note",
     meaning:
-      "the kind's create stopped before its shader on the recording device (no GPU in Node) — the harness's ceiling, not a refusal",
+      "the kind's create did not finish on the recording device (it ran past its budget, or reached for a browser global Node does not define) — the harness's ceiling, not a refusal",
     guidance:
-      "the product and the playground's Dawn harness (DK-7) run create on a real device; the CLI reports honestly",
+      "nothing to do here: the product makes the pass on a real device; the playground drives its states without it",
   },
   "activation-leak": {
     check: "activation",

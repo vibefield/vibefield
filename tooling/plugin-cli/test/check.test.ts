@@ -8,6 +8,7 @@ import { OBJECTS_NEED_DESK } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { emittedSpecifiers } from "../src/artifact-check";
 import { checkPlugin } from "../src/check";
+import { REFUSAL_CATALOG } from "../src/refusals";
 import {
   baseManifest,
   FIXTURE_ID,
@@ -352,6 +353,8 @@ describe("check — declaration ↔ binding", () => {
 // export — the host's reading, in Node, with no device (object-check.ts).
 describe("check — object kinds on the desk build", () => {
   const CLOCK = `${FIXTURE_ID}.clock`;
+  /** A pass that draws nothing, as fixture source. */
+  const PASS = "({ spawn() { return this; }, prepare: () => 0, drawRange() {}, dispose() {} })";
   const objects = [
     {
       type: CLOCK,
@@ -401,12 +404,12 @@ describe("check — object kinds on the desk build", () => {
     expect(activation(verdicts).length).toBeGreaterThan(1);
   });
 
-  it("DK-6 — holds binding.kind to a REAL export: a desk kind named by its type, and says how it hangs", async () => {
+  it("DK-6 — holds binding.kind to a REAL export: a desk kind named by its type, and says how it hangs (DK-7: the harness's declaration row)", async () => {
     const verdicts = await checkPlugin({ dir: objectPlugin(objectRendererModule()) });
     expect(activation(verdicts).map((v) => v.detail)).toEqual(
       expect.arrayContaining([
-        `${CLOCK}: \`clock\` is a desk kind named by its type; hangs on "things" by a hook (110 × 110)`,
-        `${CLOCK}: its create compiles no shader (a kind that draws nothing)`,
+        `${CLOCK}: \`clock\` is a desk kind named by its type, lying in the things; hangs on "things" by a hook (110 × 110); provides desk.object`,
+        `${CLOCK}: its create made a pass that compiles no shader — a kind that draws nothing`,
       ]),
     );
   });
@@ -430,40 +433,88 @@ describe("check — object kinds on the desk build", () => {
     expect(misnamed.find((v) => v.code === "object-kind-misnamed")?.detail).toContain(
       `kind is named "clock"`,
     );
+    // the harness's own `expected`, specific to the row, rides the refusal
+    expect(misnamed.find((v) => v.code === "object-kind-misnamed")?.expected).toBe(
+      `name the kind "${CLOCK}"`,
+    );
   });
 
-  it("DK-6 — its WGSL present as TEXT: the create, on a recording device with no GPU, asks for its shader", async () => {
+  it("DK-7 — refuses a row that does not provide desk.object, the key the desk places by", async () => {
+    const root = makePlugin({
+      manifest: {
+        activation: [`onWidget:${CLOCK}`],
+        contributes: { objects: [{ ...objects[0], provides: [CLOCK] }] },
+      },
+      files: { "dist/renderer.js": objectRendererModule() },
+    });
+    const verdicts = await checkPlugin({ dir: root });
+    expect(refusalCodes(verdicts)).toEqual(["object-provides-no-desk-object"]);
+    expect(verdicts.find((v) => v.code === "object-provides-no-desk-object")?.pointer).toBe(
+      "/contributes/objects/0/provides",
+    );
+  });
+
+  it("DK-6 — its WGSL present as TEXT and READ (DK-7), with the compile it did NOT run named as a note", async () => {
     // the create reads a WebGPU constant first (as ICE's bindLayout does), then compiles its text
-    const create = `async (device) => { const stage = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT; device.createBindGroupLayout({ entries: [{ binding: 0, visibility: stage }] }); device.createShaderModule({ code: ${JSON.stringify(FIXTURE_WGSL)} }); return {}; }`;
+    const create = `async (device) => { const stage = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT; device.createBindGroupLayout({ entries: [{ binding: 0, visibility: stage, buffer: {} }] }); device.createShaderModule({ code: ${JSON.stringify(FIXTURE_WGSL)} }); return ${PASS}; }`;
     const verdicts = await checkPlugin({ dir: objectPlugin(objectRendererModule({ create })) });
     expect(refusalCodes(verdicts)).toEqual([]);
     expect(activation(verdicts).map((v) => v.detail)).toContain(
-      `${CLOCK}: its WGSL arrived as text (${FIXTURE_WGSL.length} characters, vertex + fragment)`,
+      `${CLOCK}: its WGSL arrived as text and reads: ${FIXTURE_WGSL.length} characters, vertex vs + fragment fs; 0 pipeline(s) whose stages statically use 0 binding(s), each laid in its layout; 0 bind group(s) filling their layouts`,
     );
+    // DK-6's open question 1, said plainly: the row is presence and a READ — never a compile
+    const gap = verdicts.find((v) => v.code === "object-wgsl-not-compiled");
+    expect(gap?.level).toBe("note");
+    expect(gap?.detail).toContain("never compiled");
+    expect(gap?.expected).toContain("I30");
     // the constants were the row's, lent for the create and taken back
     expect((globalThis as Record<string, unknown>)["GPUShaderStage"]).toBeUndefined();
   });
 
-  it("DK-6 — refuses a shader whose code is not text; notes a create that stops before its shader", async () => {
+  it("DK-6 — refuses a shader whose code is not text, and a create that throws; notes a create that reaches for a browser global (DK-7)", async () => {
     const notText = await checkPlugin({
       dir: objectPlugin(
         objectRendererModule({
-          create: "async (device) => { device.createShaderModule({ code: 42 }); return {}; }",
+          create: `async (device) => { device.createShaderModule({ code: 42 }); return ${PASS}; }`,
         }),
       ),
     });
     expect(refusalCodes(notText)).toEqual(["object-wgsl-not-text"]);
-    const stopped = await checkPlugin({
+    const throws = await checkPlugin({
       dir: objectPlugin(
         objectRendererModule({
           create: 'async () => { throw new Error("wants a real adapter"); }',
         }),
       ),
     });
-    expect(refusalCodes(stopped)).toEqual([]);
-    const noted = stopped.find((v) => v.code === "object-create-not-run-here");
+    expect(refusalCodes(throws)).toEqual(["object-create-failed"]);
+    expect(throws.find((v) => v.code === "object-create-failed")?.detail).toContain(
+      "wants a real adapter",
+    );
+    const browser = await checkPlugin({
+      dir: objectPlugin(objectRendererModule({ create: "async () => new OffscreenCanvas(1, 1)" })),
+    });
+    expect(refusalCodes(browser)).toEqual([]);
+    const noted = browser.find((v) => v.code === "object-create-not-run-here");
     expect(noted?.level).toBe("note");
-    expect(noted?.detail).toContain("wants a real adapter");
+    expect(noted?.detail).toContain("OffscreenCanvas is not defined");
+  });
+
+  it("DK-7 — every code the object rows can say is in the catalog, at the level it is said", () => {
+    for (const [code, level] of [
+      ["object-tray-hang-missing", "refuse"],
+      ["object-tray-category-invalid", "refuse"],
+      ["object-provides-no-desk-object", "refuse"],
+      ["object-create-failed", "refuse"],
+      ["object-kit-piece-unknown", "refuse"],
+      ["object-wgsl-unread", "refuse"],
+      ["object-wgsl-binding-unlaid", "refuse"],
+      ["object-bind-group-mismatch", "refuse"],
+      ["object-dispose-failed", "refuse"],
+      ["object-wgsl-not-compiled", "note"],
+      ["object-create-not-run-here", "note"],
+    ] as const)
+      expect(REFUSAL_CATALOG[code].level, code).toBe(level);
   });
 });
 

@@ -718,11 +718,19 @@ async function makePass(kind: ObjectKind, gpu: RecordingGpu, budgetMs: number): 
             "program",
             `its program names the kit piece "${piece[1]}", which the kit does not carry — ${message}`,
           )
-        : refused(
-            "object-create-failed",
-            "program",
-            `its create threw on a recording device that answers every call as WebGPU would, short of compiling: ${message}`,
-          ),
+        : error instanceof ReferenceError
+          ? // a name this environment does not define (a browser global in Node — `OffscreenCanvas`,
+            // `document`): the harness's ceiling, not the kind's fault — the product's renderer has it
+            noted(
+              "object-create-not-run-here",
+              "program",
+              `its create reached for what this environment does not define (${message}) — its states are driven without its pass`,
+            )
+          : refused(
+              "object-create-failed",
+              "program",
+              `its create threw on a recording device that answers every call as WebGPU would, short of compiling: ${message}`,
+            ),
     );
   } finally {
     if (timer !== undefined) clearTimeout(timer);

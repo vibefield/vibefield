@@ -231,7 +231,7 @@ create-plugin --id vendor.name --title "My Plugin" --dir plugins/name
 #    examples/plugins/ join the workspace — run pnpm install after)
 pnpm --filter @vendor/plugin-name build   # its kind's .wgsl inlined
 pnpm plugin check plugins/name    # a fresh scaffold is check-clean from birth
-pnpm playground plugins/name      # its starter states, listed
+pnpm playground plugins/name      # its kind judged over every declared state
 ```
 
 The scaffold ships `manifest.ts` + its emit script, one working OBJECT KIND — its
