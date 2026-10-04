@@ -1,4 +1,5 @@
-import { join } from "node:path";
+import { existsSync, readFileSync, realpathSync } from "node:fs";
+import { join, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
@@ -20,8 +21,27 @@ const repoRoot = join(import.meta.dirname, "..", "..");
 // ONLY when the lock names them, so registry mode (W-D8) ships this config
 // unchanged. Sibling sources then reach the renderer through Vite's own module
 // graph (watched, HMR'd), never through the dev runner's watchers.
-const siblingRoots = Object.values(readLock(repoRoot)?.siblings ?? {}).map((entry) =>
-  siblingDir(repoRoot, entry),
+const siblingEntries = Object.values(readLock(repoRoot)?.siblings ?? {});
+const siblingRoots = siblingEntries.map((entry) => siblingDir(repoRoot, entry));
+// AR-8c (2026-10-03): a linked package may link further checkouts of its own —
+// rosetta's room takes `@vibecook/mille` and `mille-ui` as `link:` rows into a
+// mille checkout beside it, the way rosetta's app does — and Vite reaches those
+// files by their REAL path, outside every root above. Each such link a lock
+// package declares joins the list, resolved from that package's own manifest.
+const linkedRoots = siblingEntries.flatMap((entry) =>
+  Object.values(entry.packages ?? {}).flatMap((packageDir) => {
+    const dir = join(siblingDir(repoRoot, entry), packageDir);
+    const manifest = join(dir, "package.json");
+    if (!existsSync(manifest)) return [];
+    const { dependencies = {} } = JSON.parse(readFileSync(manifest, "utf8")) as {
+      dependencies?: Record<string, string>;
+    };
+    return Object.values(dependencies)
+      .filter((spec) => spec.startsWith("link:"))
+      .map((spec) => resolve(dir, spec.slice("link:".length)))
+      .filter((target) => existsSync(target))
+      .map((target) => realpathSync(target));
+  }),
 );
 const mainEntry = join(rendererRoot, "index.html");
 const designSystemEntry = join(rendererRoot, "design-system.html");
@@ -195,7 +215,7 @@ export default defineConfig(({ mode }) => ({
     port: mode === "design" ? 5174 : 5173,
     strictPort: true,
     ...(siblingRoots.length > 0
-      ? { fs: { allow: [searchForWorkspaceRoot(repoRoot), ...siblingRoots] } }
+      ? { fs: { allow: [searchForWorkspaceRoot(repoRoot), ...siblingRoots, ...linkedRoots] } }
       : {}),
   },
 }));

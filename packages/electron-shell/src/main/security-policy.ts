@@ -51,7 +51,17 @@ export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = [
   // (a CSP matter, not mixed content). A fixed front-door port would be the
   // centralization custody refused — and per the correction above, a pinned
   // enumeration would refuse the very sockets the product binds.
-  const connect = "ws://127.0.0.1:*";
+  //
+  // AR-8c (2026-10-03): and `http://127.0.0.1:*` beside it — the History
+  // room's DIRECT PLANE (thinking-ar-history-room.md §2; AR-8b's ticket):
+  // `index.openTicket` hands this window rosettad's loopback origin, and
+  // rosetta's client reads one session's pages, entries, plans and assets
+  // there over plain HTTP (its live stream is the `ws://` source above). The
+  // same reasoning holds: rosettad's listener refuses every route without a
+  // credential since RO-1 — this window holds per-session grants, never the
+  // bearer (EL7) — and the port is per daemon start, so a pinned enumeration
+  // would refuse the very origin the ticket names.
+  const connect = "ws://127.0.0.1:* http://127.0.0.1:*";
   // Smoke-like modes may spawn blob: workers (TP-S3a's door probe dials a cell
   // from a worker context built in place); production keeps workers on 'self'
   // — the product's workers are bundled files under the app origin.
@@ -69,7 +79,10 @@ export function buildCsp(mode: ShellMode, importMapHashes: readonly string[] = [
   return (
     `default-src 'self'; script-src 'self' 'wasm-unsafe-eval' ${pluginModules}${hashes}; ` +
     `style-src 'self' 'unsafe-inline' ${pluginModules}; ` +
-    `img-src 'self' data: https://*.ts.net:* ${SCREENSHOT_STILL_SCHEME}:; ${workers}connect-src ${connect}; base-uri 'none'; object-src 'none'`
+    // AR-8c: `blob:` — an image in the History room is READ through a session's
+    // client with its grant (an `<img src>` cannot carry a credential) into an
+    // object URL this document made itself (AR-D40 (a), `history/asset-source.ts`).
+    `img-src 'self' data: blob: https://*.ts.net:* ${SCREENSHOT_STILL_SCHEME}:; ${workers}connect-src ${connect}; base-uri 'none'; object-src 'none'`
   );
 }
 

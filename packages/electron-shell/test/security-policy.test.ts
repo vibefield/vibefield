@@ -79,10 +79,12 @@ describe("buildCsp", () => {
       expect(admitsLoopbackWs(csp as string, PORTS.FIELDD_WS_DATA)).toBe(true);
     });
 
-    it("opens exactly ONE connect source, and it is loopback — no fan-out", () => {
+    it("opens only LOOPBACK connect sources — no fan-out", () => {
       // The surviving half of the row this replaced: the aperture widened by a
-      // port, never by a host. Nothing off-device may be dialled.
-      expect(connectSrc(csp as string)).toEqual(["ws://127.0.0.1:*"]);
+      // port, never by a host. Nothing off-device may be dialled. AR-8c adds
+      // the second loopback source, the History room's direct plane: rosettad's
+      // listener over HTTP, beside the WebSockets (its live stream among them).
+      expect(connectSrc(csp as string)).toEqual(["ws://127.0.0.1:*", "http://127.0.0.1:*"]);
       // and nothing else widened: production keeps workers on 'self' (no
       // worker-src directive at all — TP-S3a's blob: allowance is smoke-only)
       expect(csp).not.toContain("worker-src");
@@ -118,7 +120,9 @@ describe("buildCsp", () => {
     const csp = buildCsp(mode) as string;
     // SNAP-3: the still scheme is the one other image source — a retained
     // screenshot, served by main from its own list.
-    expect(csp).toContain("img-src 'self' data: https://*.ts.net:* vibefield-still:");
+    // AR-8c: blob: — the History room's images, read with a grant into object
+    // URLs this document makes (an <img src> carries no credential).
+    expect(csp).toContain("img-src 'self' data: blob: https://*.ts.net:* vibefield-still:");
     expect(csp).not.toContain("frame-src");
     expect(csp).not.toContain("connect-src https://");
   });
