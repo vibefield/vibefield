@@ -1,4 +1,4 @@
-import type { CorpusRecipe } from "../../src/godview/monitor/perf/corpus";
+import { type CorpusRecipe, parseRecipe } from "../../src/godview/monitor/perf/corpus";
 
 // THE RECIPES every MV-0 instrument shares (the fixtures, the oracle, the seam
 // bench, the Electron lab): n = 10 / 20 / 60 at the fixed change rates
@@ -21,4 +21,13 @@ export const LANE_RECIPES: readonly CorpusRecipe[] = [
 /** The lab's recipe spelling for the lane set: `n=10,duration=8000,seed=1`. */
 export function recipeText(recipe: CorpusRecipe): string {
   return [`n=${recipe.n}`, `duration=${recipe.durationMs}`, `seed=${recipe.seed ?? 1}`].join(",");
+}
+
+/** The lab's list spelling (`VF_GODVIEW_PERF_RECIPES`): recipes joined by `;`. */
+export function parseRecipeList(text: string): CorpusRecipe[] {
+  return text
+    .split(";")
+    .map((part) => part.trim())
+    .filter((part) => part !== "")
+    .map(parseRecipe);
 }

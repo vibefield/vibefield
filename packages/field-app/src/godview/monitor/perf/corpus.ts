@@ -177,6 +177,25 @@ export interface Corpus {
   frames: RecordedFrame[];
 }
 
+/**
+ * MV-3c — one fold tick as the generator lived it, for a reader that needs
+ * more than the corpus writes down: the model stream (`perf/lib/model-stream`)
+ * feeds BOTH desktops' fold rows to their own hosted backends, and the corpus
+ * records only this desktop's fold and the peer's desk cut. Handed out while
+ * generating; the corpus's bytes do not change with or without an observer.
+ */
+export interface CorpusTick {
+  tMs: number;
+  /** this desktop's fold rows, the very array its fold frame carries; absent
+   * on a tick the quiet window kept silent */
+  here?: AgentSessionSummary[];
+  /** the peer's fold rows (its board is written only as desk deltas); absent
+   * when the peer did not advance (the quiet window, the marker's tick) */
+  peer?: AgentSessionSummary[];
+  /** the corpus's mark, delivered right before this tick's fold frame */
+  mark?: Extract<RecordedFrame, { kind: "mark" }>;
+}
+
 // ── the PRNG ──────────────────────────────────────────────────────────────────
 
 /** mulberry32: small, seedable, good enough to decide who spends what. */
@@ -753,7 +772,7 @@ function rosterOf(recipe: ResolvedCorpusRecipe): DeviceInfo[] {
   ];
 }
 
-export function generateCorpus(input: CorpusRecipe): Corpus {
+export function generateCorpus(input: CorpusRecipe, observe?: (tick: CorpusTick) => void): Corpus {
   const recipe = resolveRecipe(input);
   const catalog = providers();
   const here = newDesktop(CORPUS_HERE, "run", recipe.n, recipe.seed, recipe, catalog);
@@ -778,9 +797,11 @@ export function generateCorpus(input: CorpusRecipe): Corpus {
   };
   const counts = { fold: 0, meshOpen: 0, meshFrames: 0, marks: 0 };
 
-  const emitFold = (tMs: number): void => {
+  const emitFold = (tMs: number): AgentSessionSummary[] => {
     counts.fold += 1;
-    frames.push({ ...stamp(tMs), kind: "fold", rows: here.agents.map(foldRowOf) });
+    const rows = here.agents.map(foldRowOf);
+    frames.push({ ...stamp(tMs), kind: "fold", rows });
+    return rows;
   };
   const emitDesk = (desk: Desktop, tMs: number): void => {
     const upserts = deskDelta(desk);
@@ -796,7 +817,8 @@ export function generateCorpus(input: CorpusRecipe): Corpus {
   };
 
   // t = 0: the fold's first frame (the subscribe's snapshot) and the mesh open
-  emitFold(0);
+  const firstRows = emitFold(0);
+  observe?.({ tMs: 0, here: firstRows, peer: peer.agents.map(foldRowOf) });
   const open: AgentMeshOpen = {
     devices: [here, peer].map((desk) => {
       desk.revision += 1;
@@ -820,7 +842,7 @@ export function generateCorpus(input: CorpusRecipe): Corpus {
       if (!markerFired && tMs >= recipe.markerAtMs) {
         markerFired = true;
         counts.marks += 1;
-        frames.push({
+        const mark: Extract<RecordedFrame, { kind: "mark" }> = {
           ...stamp(tMs),
           kind: "mark",
           name: CORPUS_MARK,
@@ -830,20 +852,23 @@ export function generateCorpus(input: CorpusRecipe): Corpus {
             from: markerFrom,
             to: recipe.markerTo,
           },
-        });
+        };
+        frames.push(mark);
         if (recipe.markerTo === "blocked") {
           block(marker, nowMs, Number.POSITIVE_INFINITY, TOOLS[0] as string);
         } else {
           marker.blocker = null;
           setStatus(marker, recipe.markerTo, nowMs);
         }
-        emitFold(tMs);
+        const rows = emitFold(tMs);
+        observe?.({ tMs, here: rows, mark });
       }
       continue;
     }
     advance(here, nowMs, tMs, recipe);
     advance(peer, nowMs, tMs, recipe);
-    emitFold(tMs);
+    const rows = emitFold(tMs);
+    observe?.({ tMs, here: rows, peer: peer.agents.map(foldRowOf) });
     // the desk's floor: at most one frame per device per `deskTickMs`, sent at
     // the first fold tick at or after it is due (fieldd's own floor semantics)
     if (tMs >= nextDeskAt) {
