@@ -92,6 +92,8 @@ export function objectRendererModule(
     create?: string;
     /** export `{ kind: { name } }` — a binding whose kind is no desk kind */
     notAKind?: boolean;
+    /** the kind OPENS (picked up into the hand) — DK-7's harness drives it `open` too */
+    opens?: boolean;
     /** widget types its activate registers (default none) */
     binds?: string[];
   } = {},
@@ -103,7 +105,7 @@ export function objectRendererModule(
   const kind =
     body.notAKind === true
       ? `{ name: ${name} }`
-      : `{ name: ${name}, stratum: "things", reach: 0, create: ${create}, resolve: () => ({}), record: () => ({}), hit: () => "content" }`;
+      : `{ name: ${name}, stratum: "things", reach: 0, create: ${create}, resolve: () => ({}), record: () => ({}), hit: () => "content"${body.opens === true ? ", open: { extent: ({ rect }) => rect }" : ""} }`;
   return `export const ${body.exportName ?? "clock"} = { kind: ${kind} };\n${rendererModule({ binds: body.binds ?? [] })}`;
 }
 

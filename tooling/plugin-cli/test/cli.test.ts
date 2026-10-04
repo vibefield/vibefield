@@ -5,10 +5,17 @@
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { generateRegistryKeypair } from "@vibefield/plugin-build";
+import { kindPlan } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
 import { type CliIo, HELP, parseArgs, runCli } from "../src/cli";
 import { EXIT_HARNESS, EXIT_OK, EXIT_REFUSED } from "../src/verdict";
-import { baseManifest, freshDir, makePlugin, rendererModule } from "./fixtures";
+import {
+  baseManifest,
+  freshDir,
+  makePlugin,
+  objectRendererModule,
+  rendererModule,
+} from "./fixtures";
 
 function capture(): CliIo & { out: (line: string) => void; lines: string[]; errors: string[] } {
   const lines: string[] = [];
@@ -176,6 +183,8 @@ describe("the two registers", () => {
         hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
         provides: ["desk.object"],
         binding: "clock",
+        // DK-7: the built module exports no kind for the row, so its driven states are unknown (null)
+        states: null,
         refusal: null,
       },
     ]);
@@ -184,6 +193,53 @@ describe("the two registers", () => {
     expect(human.lines.join("\n")).toContain(
       `${clock} — v1, 0 prop(s), 0 port(s), tray things (hook 110 × 110), provides desk.object, export clock`,
     );
+  });
+
+  it("DK-7: counts an object kind's states as the kind harness DRIVES them — fixtures × modes × the LOD's zooms (+ its hang) + once by night", async () => {
+    const id = baseManifest()["id"] as string;
+    const clock = `${id}.clock`;
+    const row = {
+      type: clock,
+      title: "Clock",
+      schemaVersion: 1,
+      size: { w: 160, h: 160 },
+      provides: ["desk.object"],
+      tray: {
+        category: "things",
+        label: "Clock",
+        hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
+      },
+      binding: { kind: "clock" },
+    };
+    const inspect = async (files: Record<string, string>) => {
+      const io = capture();
+      const root = makePlugin({
+        manifest: { activation: [`onWidget:${clock}`], contributes: { objects: [row] } },
+        files,
+      });
+      await runCli(["inspect", root, "--json"], io);
+      return JSON.parse(io.lines[0] ?? "{}") as {
+        contributions: { objects: Array<{ states: number | null }> };
+        totalStates: number;
+      };
+    };
+    // one `default` fixture × (idle, selected, held × 21 zooms — the LOD's 20 and the hang's 110/160 — + by night)
+    const plain = await inspect({ "dist/renderer.js": objectRendererModule() });
+    expect(plain.contributions.objects[0]?.states).toBe(3 * 21 + 1);
+    expect(plain.totalStates).toBe(64);
+    // it opens: a fourth mode; two named fixtures: twice over — the same plan the playground runs
+    const opens = await inspect({
+      "dist/renderer.js": objectRendererModule({ opens: true }),
+      "playground/states.js": `export default { "${clock}": { day: {}, night: {} } };\n`,
+    });
+    expect(opens.contributions.objects[0]?.states).toBe(2 * (4 * 21 + 1));
+    expect(opens.totalStates).toBe(
+      kindPlan(row as never, { opens: true, fixtures: ["day", "night"] }).states,
+    );
+    // unbuilt: unknown, and counted as none
+    const unbuilt = await inspect({});
+    expect(unbuilt.contributions.objects[0]?.states).toBeNull();
+    expect(unbuilt.totalStates).toBe(0);
   });
 
   it("counts the playground's named states when the plugin declares them", async () => {

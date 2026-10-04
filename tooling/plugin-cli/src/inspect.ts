@@ -1,7 +1,9 @@
 // `inspect` — what the host will see, computed from the artifact on disk: the
 // resolved contributions, the requested capabilities and how they resolve per
-// entry kind, the identity hashes, and how many widget states the playground
-// would render.
+// entry kind, the identity hashes, and how many states the playground judges —
+// each widget's fixtures, and each object kind's states as the SDK's kind
+// harness DRIVES them (DK-7: its fixtures × every declared mode × every zoom the
+// desk's LOD names, the same `kindPlan` the playground runs).
 //
 // The grant column is not this tool's opinion: `computeEffectiveGrants` is the
 // contracts function fieldd itself applies (§15.2), called here with the same
@@ -17,6 +19,7 @@ import {
   type PluginManifestV1,
 } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
+import { kindOfBinding, kindPlan } from "@vibefield/plugin-sdk/testing";
 
 /** DK-0f — an object kind as the host will see it: its durable half, the chip
  * it hangs under, the export that draws it, and what THIS build answers when
@@ -42,6 +45,12 @@ export interface InspectedObject {
   /** what it PROVIDES: the keys the desk places by (`desk.object`, `desk.containable`, …) */
   readonly provides: string[];
   readonly binding: string;
+  /** the states the kind harness drives for this row — its fixtures × idle, selected, held (+ open
+   * when its kind opens, + contained when it provides `desk.containable`) × every zoom the desk's LOD
+   * names, and each fixture once at rest by night: the count the playground reports. `null` when
+   * the built module holds no kind for the row (or is unbuilt, or cannot load in Node) — `check`
+   * says why. */
+  readonly states: number | null;
   readonly refusal: string | null;
 }
 
@@ -89,6 +98,7 @@ export interface InspectionResult {
   };
   /** where the playground state fixtures came from, said plainly */
   readonly statesSource: "playground" | "defaults";
+  /** every widget's states and every object kind's DRIVEN states (a `null` object counts none) */
   readonly totalStates: number;
 }
 
@@ -106,8 +116,8 @@ export function manifestHashOf(manifest: PluginManifestV1): string {
  */
 async function readPlaygroundStates(
   root: string,
-): Promise<{ source: "playground" | "defaults"; byType: Map<string, number> }> {
-  const byType = new Map<string, number>();
+): Promise<{ source: "playground" | "defaults"; byType: Map<string, string[]> }> {
+  const byType = new Map<string, string[]>();
   const candidate = ["states.ts", "states.mts", "states.js", "states.mjs"]
     .map((name) => join(root, "playground", name))
     .find((path) => existsSync(path));
@@ -119,13 +129,42 @@ async function readPlaygroundStates(
     if (typeof table !== "object" || table === null) return { source: "defaults", byType };
     for (const [type, states] of Object.entries(table as Record<string, unknown>)) {
       if (typeof states !== "object" || states === null) continue;
-      byType.set(type, Object.keys(states as Record<string, unknown>).length);
+      byType.set(type, Object.keys(states as Record<string, unknown>));
     }
     return { source: byType.size > 0 ? "playground" : "defaults", byType };
   } catch {
     // The playground owns this file's contract; an inspection never fails on it.
     return { source: "defaults", byType };
   }
+}
+
+/** The BUILT renderer module's namespace — where an object row's kind is its export, as `check` and
+ * the host read it — or null: no renderer entry, not built, or not loadable in plain Node. */
+async function builtRenderer(
+  root: string,
+  manifest: PluginManifestV1,
+): Promise<Record<string, unknown> | null> {
+  const entry = manifest.entries?.renderer;
+  if (entry === undefined || (manifest.contributes?.objects ?? []).length === 0) return null;
+  const path = resolve(root, entry);
+  if (!existsSync(path)) return null;
+  try {
+    return (await import(pathToFileURL(path).href)) as Record<string, unknown>;
+  } catch {
+    // `check` owns the reason (activation-not-loadable-here, module-unloadable); inspect never fails on it
+    return null;
+  }
+}
+
+/** The states the kind harness drives for one row (DK-7) — the playground's own plan, never a recount. */
+function drivenStates(
+  namespace: Record<string, unknown> | null,
+  row: NonNullable<NonNullable<PluginManifestV1["contributes"]>["objects"]>[number],
+  fixtures: readonly string[],
+): number | null {
+  const kind = kindOfBinding(namespace?.[row.binding.kind]);
+  if (kind === undefined) return null;
+  return kindPlan(row, { opens: kind.open !== undefined, fixtures }).states;
 }
 
 export async function inspectPlugin(
@@ -150,8 +189,9 @@ export async function inspectPlugin(
     props: Object.keys(w.props).length,
     groups: Object.keys(w.groups),
     ports: (w.ports ?? []).length,
-    states: states.byType.get(w.type) ?? 1,
+    states: states.byType.get(w.type)?.length ?? 1,
   }));
+  const namespace = await builtRenderer(root, manifest);
   const objects: InspectedObject[] = (c.objects ?? []).map((o) => ({
     type: o.type,
     title: o.title,
@@ -171,6 +211,7 @@ export async function inspectPlugin(
           },
     provides: [...(o.provides ?? [])],
     binding: o.binding.kind,
+    states: drivenStates(namespace, o, states.byType.get(o.type) ?? ["default"]),
     // DK-2: the desk build activates object kinds — the field stays so an agent
     // branches on it (plan §5 DK-6 inputs (f)), and it reads null here.
     refusal: null,
@@ -223,7 +264,9 @@ export async function inspectPlugin(
       },
     },
     statesSource: states.source,
-    totalStates: widgets.reduce((sum, w) => sum + w.states, 0),
+    totalStates:
+      widgets.reduce((sum, w) => sum + w.states, 0) +
+      objects.reduce((sum, o) => sum + (o.states ?? 0), 0),
   };
 }
 
@@ -259,7 +302,7 @@ export function formatInspection(result: InspectionResult): string {
     const provides = o.provides.length === 0 ? "nothing" : o.provides.join(" + ");
     push(
       "object",
-      `${o.type} — v${o.schemaVersion}, ${o.props} prop(s), ${o.ports} port(s), tray ${o.tray ?? "none"}${hang}, provides ${provides}, export ${o.binding}${o.refusal === null ? "" : ` — ${o.refusal}: ${OBJECTS_NEED_DESK.message}`}`,
+      `${o.type} — v${o.schemaVersion}, ${o.props} prop(s), ${o.ports} port(s), tray ${o.tray ?? "none"}${hang}, provides ${provides}, export ${o.binding}, ${o.states === null ? "its states unknown (no kind in the built module — run check)" : `${o.states} state(s) for the kind harness`}${o.refusal === null ? "" : ` — ${o.refusal}: ${OBJECTS_NEED_DESK.message}`}`,
     );
   }
   for (const x of c.commands) push("command", `${x.id} [${x.placements.join(", ")}]`);
