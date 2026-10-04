@@ -1,10 +1,25 @@
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
 import { dirname, join } from "node:path";
+import { gunzipSync } from "node:zlib";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
-import { createMainWindow, loadRenderer } from "../main/windows";
+import { type MetricTotals, metricTotals, parseSynthetic } from "./godview-lab-measures";
+import {
+  type LabWindow,
+  labWindowOptions,
+  leave,
+  openLabWindow,
+  page,
+  pageMetrics,
+  restoreLabWindow,
+  selectView,
+  sleep,
+  swarmRenderer,
+  teardownLab,
+  untilPage,
+} from "./godview-lab-window";
 
 // THE GODVIEW PERF LAB (MV-0, step 6; `design-mv.md` §5 "per-view counters,
 // under the same replay"). The product, Godview open, the real pair against an
@@ -23,9 +38,43 @@ import { createMainWindow, loadRenderer } from "../main/windows";
 //   VF_GODVIEW_PERF_ARM      a label the runner stamps (A / B)
 //   VF_GODVIEW_PERF_SETTLE_MS  settle after a view switch (default 1500)
 //
+// MV-3c (build-mv M30, M31, M32):
+//
+//   VF_GODVIEW_PERF_SOURCE   `fold` (default: the corpus, today's seam's input)
+//                            or `model` (the B arm: each corpus's MODEL STREAM —
+//                            what the window's one door answers for it — pushed
+//                            into the page and played into the window adapter)
+//   VF_GODVIEW_PERF_MODEL_DIR  where `<corpus>.model.jsonl.gz` streams are (model)
+//   VF_GODVIEW_PERF_WARMUP_RECIPE  the discarded warm-up's corpus (default
+//                            `n=10,duration=1500,seed=9,markerQuietMs=50`); under
+//                            `model` its stream is played too, so the model path
+//                            pays its first-use costs where nothing is measured
+//   VF_GODVIEW_PERF_CLOCK    `corpus` (default, M31: the page's Date reads the
+//                            corpus's wall time while a replay plays) or `real`
+//   VF_GODVIEW_PERF_WINDOW   `offscreen` (default) or `shown` — never focused,
+//                            never on top (`godview-lab-window.ts`)
+//   VF_GODVIEW_PERF_FPS / _SCALE  the offscreen frame rate and scale (60 / 2)
+//   VF_GODVIEW_PERF_WITNESS  `1`: a second window adapter in the page checks,
+//                            after every cell, that its replica's rows are the
+//                            stream's rows — the proof on a build whose window
+//                            does not read the model yet; never in a gate run
+//   VF_GODVIEW_PERF_SYNTHETIC  M33's negative controls, `view:<ms>` (a busy wait
+//                            in every counted view render) and/or `root:<ms>`
+//                            (a side React root committing once per frame with
+//                            that much render work), e.g. `view:2,root:1`
+//
+// M33 — TOTAL WORK. Every cell also carries every React root's commits and
+// summed render time (the probe's `react`, fed by the lab window's DevTools
+// hook; timed when the renderer was built with `VF_REACT_PROFILING=1`) and
+// Chromium's main-thread totals per second over the cell (`totals`: task,
+// script, layout, style — CDP `Performance.getMetrics` at the window's start
+// and end). Those totals are what the paired gate reads: a view in its own root,
+// or work moved into rAF, is inside them.
+//
 // It asserts nothing about the numbers (L14: pairing is the gate), only that
-// the machinery answered: the bridges installed, the player heard a fold
-// listener, every frame was delivered, the mark landed.
+// the machinery answered: the bridges installed, the player heard what it
+// plays to (under `model`, a model reader — a build with none fails the run
+// rather than measuring nothing), every frame was delivered, the mark landed.
 
 const DEFAULT_RECIPES = [
   "n=10,duration=8000,seed=1",
@@ -33,111 +82,9 @@ const DEFAULT_RECIPES = [
   "n=60,duration=8000,seed=1",
 ];
 const DEFAULT_VIEWS = ["swarm", "list", "rain", "timeline"];
-const VIEW_LABELS: Readonly<Record<string, string>> = {
-  swarm: "SWARM",
-  list: "LIST",
-  rain: "RAIN",
-  timeline: "TIMELINE",
-};
-
-const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
-
-function consoleText(arg: unknown): string {
-  if (typeof arg === "string") return arg;
-  if (arg !== null && typeof arg === "object" && "message" in arg) {
-    return String((arg as { message: unknown }).message);
-  }
-  return "";
-}
-
-/** A running tail of one marker channel (the perf lab's shape, kept separate on
- * purpose: a lab's steering must not couple to a smoke row's timeouts). */
-class MarkerTail<T> {
-  #latest: T | null = null;
-  readonly #waiters = new Set<() => void>();
-
-  constructor(win: BrowserWindow, prefix: string) {
-    win.webContents.on("console-message", (...args: unknown[]) => {
-      for (const arg of args) {
-        const text = consoleText(arg);
-        if (!text.startsWith(prefix)) continue;
-        try {
-          this.#latest = JSON.parse(text.slice(prefix.length)) as T;
-        } catch {
-          continue;
-        }
-        for (const waiter of [...this.#waiters]) waiter();
-      }
-    });
-  }
-
-  current(): T | null {
-    return this.#latest;
-  }
-
-  async until(predicate: (value: T) => boolean, what: string, timeoutMs: number): Promise<T> {
-    const deadline = Date.now() + timeoutMs;
-    for (;;) {
-      const latest = this.#latest;
-      if (latest !== null && predicate(latest)) return latest;
-      if (Date.now() >= deadline)
-        throw new Error(`timed out after ${timeoutMs}ms waiting for ${what}`);
-      await new Promise<void>((resolve) => {
-        const waiter = (): void => {
-          this.#waiters.delete(waiter);
-          resolve();
-        };
-        this.#waiters.add(waiter);
-        setTimeout(waiter, 200);
-      });
-    }
-  }
-}
-
-/** ⌘2 (Ctrl+2 elsewhere): the road a person takes to Godview (One Frame FR-1),
- * as the smoke presses it. */
-function pressGodviewKey(win: BrowserWindow): void {
-  const modifiers: ("meta" | "control")[] = [process.platform === "darwin" ? "meta" : "control"];
-  win.webContents.sendInputEvent({ type: "keyDown", keyCode: "2", modifiers });
-  win.webContents.sendInputEvent({ type: "keyUp", keyCode: "2", modifiers });
-}
-
-async function page<T>(win: BrowserWindow, expression: string): Promise<T> {
-  return (await win.webContents.executeJavaScript(expression, true)) as T;
-}
-
-async function untilPage(
-  win: BrowserWindow,
-  what: string,
-  expression: string,
-  timeoutMs: number,
-): Promise<void> {
-  const deadline = Date.now() + timeoutMs;
-  let seen = "";
-  while (Date.now() < deadline) {
-    const answer = await page<string>(win, expression);
-    if (answer === "ok") return;
-    seen = answer;
-    await sleep(100);
-  }
-  throw new Error(`${what} did not happen within ${timeoutMs}ms (${seen})`);
-}
-
-/** `app.exit`, with `process.exit` behind it on a short fuse (the perf lab's). */
-function leave(code: number): void {
-  const fuse = setTimeout(() => process.exit(code), 5_000);
-  fuse.unref();
-  try {
-    app.exit(code);
-  } catch {
-    process.exit(code);
-  }
-}
-
-interface MonitorFacts {
-  viewId: string;
-  agents: number;
-}
+export const DEFAULT_WARMUP_RECIPE = "n=10,duration=1500,seed=9,markerQuietMs=50";
+/** Whole lines per `executeJavaScript`: a model stream of n=60 is ~23 MB. */
+const PUSH_CHUNK_CHARS = 4_000_000;
 
 export interface GodviewPerfCell {
   view: string;
@@ -149,6 +96,75 @@ export interface GodviewPerfCell {
   memory: { rendererMB: number | null; gpuMB: number | null; processes: number };
   loadavg: number[];
   startedAt: number;
+  /** MV-3c — what the swarm rendered with in this cell (`data-swarm-renderer`) */
+  swarmRenderer: string | null;
+  /** MV-3c — the witness's verdict after the cell (`VF_GODVIEW_PERF_WITNESS=1`) */
+  witness?: unknown;
+  /** M33 — Chromium's main-thread totals per second over the cell */
+  totals: MetricTotals | null;
+}
+
+interface ModelLoaded {
+  corpus: string;
+  frames: number;
+  marks: number;
+  corpusFrames: number;
+}
+
+/** A corpus's model stream, pushed into the page's player in whole-line chunks. */
+async function pushModelStream(
+  win: BrowserWindow,
+  dir: string,
+  corpus: string,
+): Promise<ModelLoaded> {
+  // `modelStreamFileName` (field-app `perf/model-stream.ts`)
+  const path = join(dir, `${corpus}.model.jsonl.gz`);
+  if (!existsSync(path)) {
+    throw new Error(`no model stream for ${corpus} at ${path} (pnpm perf:godview writes them)`);
+  }
+  const text = gunzipSync(readFileSync(path)).toString("utf8");
+  let loaded: ModelLoaded | null = null;
+  let start = 0;
+  while (start < text.length) {
+    let end = Math.min(text.length, start + PUSH_CHUNK_CHARS);
+    if (end < text.length) {
+      const newline = text.lastIndexOf("\n", end);
+      end = newline > start ? newline + 1 : text.indexOf("\n", end) + 1 || text.length;
+    }
+    loaded = await page<ModelLoaded>(
+      win,
+      `window.__vfGodviewReplay.pushModel(${JSON.stringify(text.slice(start, end))})`,
+    );
+    start = end;
+  }
+  if (loaded === null) throw new Error(`the model stream for ${corpus} is empty`);
+  return loaded;
+}
+
+/** Load a corpus in the page, and its model stream when the source asks. */
+async function loadCorpus(
+  win: BrowserWindow,
+  recipe: string,
+  source: { kind: "fold" | "model"; modelDir: string | undefined },
+): Promise<{ corpus: string; frames: number; durationMs: number; model: ModelLoaded | null }> {
+  const loaded = await page<{ corpus: string; frames: number; durationMs: number }>(
+    win,
+    `window.__vfGodviewReplay.load(${JSON.stringify(recipe)})`,
+  );
+  if (source.kind !== "model") return { ...loaded, model: null };
+  if (source.modelDir === undefined)
+    throw new Error("VF_GODVIEW_PERF_SOURCE=model needs VF_GODVIEW_PERF_MODEL_DIR");
+  const model = await pushModelStream(win, source.modelDir, loaded.corpus);
+  return { ...loaded, model };
+}
+
+async function untilEnded(win: BrowserWindow, what: string, timeoutMs: number): Promise<void> {
+  await untilPage(
+    win,
+    what,
+    `window.__vfGodviewReplay.state().phase === "ended" ? "ok" : window.__vfGodviewReplay.state().phase`,
+    timeoutMs,
+  );
 }
 
 export async function runGodviewPerfLab(opts: {
@@ -174,6 +190,16 @@ export async function runGodviewPerfLab(opts: {
     .filter((text) => text !== "");
   const settleMs = Math.max(0, Number(process.env["VF_GODVIEW_PERF_SETTLE_MS"] ?? 1_500));
   const arm = process.env["VF_GODVIEW_PERF_ARM"] ?? "A";
+  const source = {
+    kind:
+      process.env["VF_GODVIEW_PERF_SOURCE"] === "model" ? ("model" as const) : ("fold" as const),
+    modelDir: process.env["VF_GODVIEW_PERF_MODEL_DIR"] || undefined,
+  };
+  const warmupRecipe = process.env["VF_GODVIEW_PERF_WARMUP_RECIPE"] || DEFAULT_WARMUP_RECIPE;
+  const clock = process.env["VF_GODVIEW_PERF_CLOCK"] === "real" ? "real" : "corpus";
+  const witness = process.env["VF_GODVIEW_PERF_WITNESS"] === "1";
+  const synthetic = parseSynthetic(process.env["VF_GODVIEW_PERF_SYNTHETIC"]);
+  const windowOptions = labWindowOptions();
   const say = (record: Record<string, unknown>): void => {
     process.stdout.write(`GODVIEW_PERF_LAB ${JSON.stringify(record)}\n`);
   };
@@ -181,100 +207,85 @@ export async function runGodviewPerfLab(opts: {
   let code = 0;
   const cells: GodviewPerfCell[] = [];
   const startedAt = Date.now();
+  let lab: LabWindow | null = null;
   try {
-    const win = createMainWindow({
-      mode: "godview-perf-lab",
+    lab = await openLabWindow({
       preloadPath: opts.preloadPath,
-      show: true,
+      viteUrl: opts.viteUrl,
+      registry: opts.registry,
+      options: windowOptions,
+      onWindow: opts.onWindow,
     });
-    opts.registry.adopt(win);
-    // Above everything, like the perf lab: a measurement taken behind another
-    // window is a measurement of Chromium's occlusion policy.
-    win.setAlwaysOnTop(true, "floating");
-    opts.onWindow?.(win);
-
-    const canvas = new MarkerTail<Record<string, unknown>>(win, "CANVAS_READY ");
-    const bridge = new MarkerTail<{ installed: boolean }>(win, "GODVIEW_PERF_LAB ");
-    const monitor = new MarkerTail<MonitorFacts>(win, "GODVIEW_MONITOR ");
-
-    await loadRenderer(win, "godview-perf-lab", opts.viteUrl);
-    await canvas.until(() => true, "the renderer to report CANVAS_READY", 90_000);
-    await bridge.until((value) => value.installed, "the lab bridges to install", 30_000);
-    win.focus();
-    win.webContents.focus();
-    await page(win, "localStorage.clear()");
-
-    // Godview, as a person opens it; the monitor stage mounts the default view
-    pressGodviewKey(win);
-    await monitor.until(() => true, "the monitor stage to mount", 60_000);
-    say({ kind: "open", arm, view: monitor.current()?.viewId ?? null });
-    await page(win, `window.__vfGodviewPerf.observeStage(".vf-godview-monitor-stage")`);
+    const { win, monitor } = lab;
+    await page(win, `window.__vfGodviewReplay.setClock(${JSON.stringify(clock)})`);
+    say({
+      kind: "open",
+      arm,
+      view: monitor.current()?.viewId ?? null,
+      source: source.kind,
+      clock,
+      window: windowOptions,
+      frameRate: lab.frameRate,
+      focusEmulated: lab.focusEmulated,
+      reactHook: lab.reactHook,
+      metered: lab.metered,
+      synthetic,
+    });
+    if (Object.keys(synthetic).length > 0) {
+      await page(win, `window.__vfGodviewPerf.setSynthetic(${JSON.stringify(synthetic)})`);
+    }
+    if (witness) {
+      const opened = await page<{ state: string }>(win, "window.__vfGodviewModelWitness.open()");
+      say({ kind: "witness", arm, ...opened });
+    }
 
     // A WARM-UP, discarded: the first trial's first cell carried 4.4 s of
     // long-frame blocking (two LoAFs, the longest 2.3 s) that no later cell saw
     // — first-use costs of the stage, the views' chunks and the JIT. One short
-    // corpus through the default view pays them before anything is measured.
+    // corpus through the default view pays them before anything is measured;
+    // under `model`, through the model path.
     if (process.env["VF_GODVIEW_PERF_WARMUP"] !== "0") {
-      const warm = await page<{ durationMs: number }>(
-        win,
-        `window.__vfGodviewReplay.load("n=10,duration=1500,seed=9,markerQuietMs=50")`,
-      );
+      const warm = await loadCorpus(win, warmupRecipe, source);
       await page(win, "window.__vfGodviewReplay.start()");
-      await untilPage(
-        win,
-        "the warm-up replay to end",
-        `window.__vfGodviewReplay.state().phase === "ended" ? "ok" : window.__vfGodviewReplay.state().phase`,
-        warm.durationMs + 30_000,
-      );
+      await untilEnded(win, "the warm-up replay to end", warm.durationMs + 30_000);
       await page(win, "window.__vfGodviewReplay.stop()");
       await sleep(settleMs);
-      say({ kind: "warmed", arm });
+      say({ kind: "warmed", arm, corpus: warm.corpus, model: warm.model !== null });
     }
 
     for (const recipe of recipes) {
-      const loaded = await page<{ corpus: string; frames: number; durationMs: number }>(
-        win,
-        `window.__vfGodviewReplay.load(${JSON.stringify(recipe)})`,
-      );
+      const loaded = await loadCorpus(win, recipe, source);
       say({ kind: "loaded", arm, ...loaded });
       for (const view of views) {
-        const label = VIEW_LABELS[view] ?? view.toUpperCase();
-        // the instrument bar's own button, clicked in-page (CDP-synthesized, never OS input)
-        await untilPage(
-          win,
-          `the ${view} view to be selected`,
-          `(() => {
-            const button = document.querySelector('[role="group"][aria-label="Monitor view"] button[aria-label="${label} view"]');
-            if (!button) return "no button for ${label}";
-            if (button.getAttribute("aria-pressed") === "true") return "ok";
-            button.click();
-            return "clicked";
-          })()`,
-          15_000,
-        );
-        await monitor.until(
-          (value) => value.viewId === view,
-          `the monitor to report ${view}`,
-          15_000,
-        );
+        await selectView(win, monitor, view);
         await sleep(settleMs);
         await page(win, "window.__vfGodviewPerf.reset()");
-        const replayStart = await page<{ phase: string; listeners: unknown }>(
-          win,
-          "window.__vfGodviewReplay.start()",
-        );
+        const metricsAtStart = await pageMetrics(win);
+        const replayStart = await page<{
+          phase: string;
+          source: string;
+          listeners: { model?: number } | null;
+        }>(win, "window.__vfGodviewReplay.start()");
+        if (source.kind === "model" && (replayStart.listeners?.model ?? 0) === 0) {
+          throw new Error(
+            "VF_GODVIEW_PERF_SOURCE=model, but nothing in this build reads the model door (listeners.model = 0); a build whose window does not read the model yet needs VF_GODVIEW_PERF_WITNESS=1",
+          );
+        }
         const cellStartedAt = Date.now();
-        await untilPage(
+        await untilEnded(
           win,
           `the ${loaded.corpus} replay to end on ${view}`,
-          `window.__vfGodviewReplay.state().phase === "ended" ? "ok" : window.__vfGodviewReplay.state().phase`,
           loaded.durationMs + 30_000,
         );
         // the marker's quiet tail is inside the corpus; a short settle lets the
         // last frame's work finish before the report is read
         await sleep(400);
+        const metricsAtEnd = await pageMetrics(win);
         const report = await page<Record<string, unknown>>(win, "window.__vfGodviewPerf.report()");
         const replay = await page<Record<string, unknown>>(win, "window.__vfGodviewReplay.state()");
+        const witnessed = witness
+          ? await page<unknown>(win, "window.__vfGodviewModelWitness.check()")
+          : undefined;
         const metrics = app.getAppMetrics();
         const renderer = metrics.find((metric) => metric.type === "Tab");
         const gpu = metrics.find((metric) => metric.type === "GPU");
@@ -292,48 +303,42 @@ export async function runGodviewPerfLab(opts: {
           },
           loadavg: loadavg(),
           startedAt: cellStartedAt,
+          swarmRenderer: view === "swarm" ? await swarmRenderer(win) : null,
+          ...(witnessed !== undefined ? { witness: witnessed } : {}),
+          totals: metricTotals(metricsAtStart, metricsAtEnd),
         };
         cells.push(cell);
         const frames = (report["frames"] ?? {}) as Record<string, number>;
+        const raf = (report["raf"] ?? {}) as { totalMs?: number };
+        const work = (replay["work"] ?? {}) as { totalMs?: number };
+        const react = (report["react"] ?? {}) as { commits?: number; renderMs?: number };
         say({
           kind: "cell",
           arm,
           view,
           corpus: loaded.corpus,
+          source: replayStart.source,
           frameP50: frames["p50"],
           frameP95: frames["p95"],
+          rafMs: raf.totalMs,
+          workMs: work.totalMs,
+          taskMsPerS: cell.totals?.taskMsPerS,
+          scriptMsPerS: cell.totals?.scriptMsPerS,
+          reactCommits: react.commits,
+          reactRenderMs: react.renderMs,
           renders: (report["renders"] as Record<string, number> | undefined)?.[view] ?? 0,
           posts: report["postsTotal"],
           delivered: (replay as { delivered?: number }).delivered,
+          skipped: (replay as { skipped?: number }).skipped,
           listeners: replayStart.listeners,
+          ...(cell.swarmRenderer !== null ? { swarmRenderer: cell.swarmRenderer } : {}),
+          ...(witnessed !== undefined ? { witness: witnessed } : {}),
         });
         await page(win, "window.__vfGodviewReplay.stop()");
       }
     }
 
-    // LEAVE THE PRODUCT AS FOUND. The monitor persists the selected view in the
-    // renderer's localStorage (`deck-appearance.ts`), which every smoke-like
-    // launch of this checkout shares: the first run of this lab left its last
-    // cell's view behind and the godview smoke then opened on "timeline"
-    // instead of the default swarm. So the default view is selected again,
-    // and the storage this lab cleared at its start is cleared at its end.
-    await untilPage(
-      win,
-      "the default (swarm) view to be selected again",
-      `(() => {
-        const button = document.querySelector('[role="group"][aria-label="Monitor view"] button[aria-label="SWARM view"]');
-        if (!button) return "no swarm button";
-        if (button.getAttribute("aria-pressed") === "true") return "ok";
-        button.click();
-        return "clicked";
-      })()`,
-      15_000,
-    );
-    await monitor.until((value) => value.viewId === "swarm", "the monitor to report swarm", 15_000);
-    await sleep(300);
-    await page(win, "localStorage.clear()");
-    await sleep(300);
-    say({ kind: "restored", arm, view: monitor.current()?.viewId ?? null });
+    say({ kind: "restored", arm, view: await restoreLabWindow(lab) });
   } catch (error) {
     code = 1;
     say({ kind: "failed", arm, error: error instanceof Error ? error.message : String(error) });
@@ -350,6 +355,16 @@ export async function runGodviewPerfLab(opts: {
         recipes,
         views,
         settleMs,
+        source: source.kind,
+        clock,
+        window: windowOptions,
+        frameRate: lab?.frameRate ?? null,
+        focusEmulated: lab?.focusEmulated ?? false,
+        reactHook: lab?.reactHook ?? false,
+        metered: lab?.metered ?? false,
+        synthetic,
+        witness,
+        warmupRecipe,
         electron: process.versions["electron"],
         platform: process.platform,
         loadavg: loadavg(),
@@ -360,6 +375,6 @@ export async function runGodviewPerfLab(opts: {
     )}\n`,
   );
   say({ kind: "done", arm, out, cells: cells.length, code });
-  await opts.beforeExit().catch(() => undefined);
+  await teardownLab(opts);
   leave(code);
 }

@@ -15,6 +15,9 @@ export function createMainWindow(opts: {
   mode: ShellMode;
   preloadPath: string;
   show: boolean;
+  /** MV-3c — offscreen rendering, for a lab window that is never shown (the
+   * Godview perf lab and capture, M31/M32); every other window leaves it unset */
+  offscreen?: { deviceScaleFactor: number } | undefined;
 }): BrowserWindow {
   const fillWorkArea = process.platform === "darwin" && !isSmokeLike(opts.mode);
   const win = new BrowserWindow({
@@ -26,7 +29,10 @@ export function createMainWindow(opts: {
     show: opts.show,
     title: "VibeField",
     backgroundColor: "#171717", // pre-paint = the dark canvas token (--vf-canvas-bg)
-    webPreferences: assertSecurePreferences(webPreferences(opts.preloadPath)),
+    webPreferences: assertSecurePreferences({
+      ...webPreferences(opts.preloadPath),
+      ...(opts.offscreen !== undefined ? { offscreen: opts.offscreen } : {}),
+    }),
   });
   if (fillWorkArea) win.setBounds(screen.getPrimaryDisplay().workArea);
   // Dev opens the tools by default (James, 2026-08-02) — detached, so the

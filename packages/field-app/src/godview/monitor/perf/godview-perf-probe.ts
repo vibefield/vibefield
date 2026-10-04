@@ -24,6 +24,25 @@
 // every animation-frame callback the page asks for (the views' draw loops, a
 // replica's publication and the store render it queues — each callback with the
 // microtasks it queued), per frame and in total; its own sampler is not counted.
+//
+// MV-3c (M33) — EVERY ROOT. The counting wrapper sees only the view inside the
+// host's root; a view host that mounts a view in its own root hides it. The
+// report also carries every React root's commits and summed render time
+// (`react-roots.ts`, fed by the lab's DevTools hook), and the lab samples
+// Chromium's own task totals around the same window (`Performance.getMetrics`).
+// Two synthetic loads prove those totals see a view's renders and a separate
+// root's (`setSynthetic`): a busy wait inside each counted view render, and a
+// side root that commits once per frame with a busy wait in its render.
+
+import { type ReactRootsReport, reactRootsBase, reactRootsSince } from "./react-roots";
+
+/** MV-3c (M33) — the negative controls; zero is off. */
+export interface GodviewPerfSynthetic {
+  /** busy wait, ms, inside every counted view render */
+  viewRenderMs?: number;
+  /** a side React root that commits once per frame with this much render work */
+  sideRootMs?: number;
+}
 
 export interface GodviewPerfMark {
   name: string;
@@ -53,6 +72,10 @@ export interface GodviewPerfReport {
   dom: { mutations: number; childList: number; attributes: number; characterData: number };
   marks: GodviewPerfMark[];
   memory: { usedJSHeapSize: number | null; totalJSHeapSize: number | null };
+  /** MV-3c (M33) — every React root's commits and render time in the window */
+  react: ReactRootsReport;
+  /** MV-3c (M33) — the synthetic load standing during the window */
+  synthetic: GodviewPerfSynthetic;
 }
 
 export interface GodviewPerfProbe {
@@ -67,10 +90,19 @@ export interface GodviewPerfProbe {
   workerPost(type: string): void;
   /** watch the stage's subtree; retried on rAF until the element exists */
   observeStage(selector: string): void;
+  /** MV-3c (M33) — set the negative controls (`{}` turns them off) */
+  setSynthetic(synthetic: GodviewPerfSynthetic): Promise<GodviewPerfSynthetic>;
   dispose(): void;
 }
 
 const now = (): number => performance.now();
+
+function busyWait(ms: number): void {
+  const until = now() + ms;
+  while (now() < until) {
+    // the synthetic load is the wait itself
+  }
+}
 
 function quantile(sorted: readonly number[], q: number): number {
   if (sorted.length === 0) return 0;
@@ -90,6 +122,34 @@ const DRAW_METHODS = [
 ] as const;
 
 let probe: GodviewPerfProbe | null = null;
+
+/** The side root (M33's second control): its own container and `createRoot`,
+ * so its commits are a root the view host's root does not contain. Reached by
+ * dynamic import: the probe module stays free of react-dom until asked. */
+async function mountSideRoot(
+  workMs: () => number,
+): Promise<{ render(tick: number): void; unmount(): void }> {
+  const [{ createElement }, { createRoot }] = await Promise.all([
+    import("react"),
+    import("react-dom/client"),
+  ]);
+  const container = document.createElement("div");
+  container.className = "vf-perf-side-root";
+  container.hidden = true;
+  document.body.append(container);
+  const root = createRoot(container);
+  function SideRootLoad(props: { tick: number }) {
+    busyWait(workMs());
+    return createElement("span", null, props.tick);
+  }
+  return {
+    render: (tick) => root.render(createElement(SideRootLoad, { tick })),
+    unmount: () => {
+      root.unmount();
+      container.remove();
+    },
+  };
+}
 
 /** The probe, when the lab installed one; the product's hooks read this. */
 export function activeProbe(): GodviewPerfProbe | null {
@@ -121,6 +181,10 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
   let rafTotalMs = 0;
   let rafThisFrame = 0;
   let rafFrames: number[] = [];
+  let reactBase = reactRootsBase();
+  let synthetic: GodviewPerfSynthetic = {};
+  let sideRoot: { render(tick: number): void; unmount(): void } | null = null;
+  let sideTick = 0;
 
   /** Each event settles the "first X after" of every mark still waiting for it. */
   const settle = (key: keyof Omit<GodviewPerfMark, "name" | "at">, at: number): void => {
@@ -160,6 +224,10 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
     frameTimes.push(at);
     rafFrames.push(rafThisFrame);
     rafThisFrame = 0;
+    if (sideRoot !== null) {
+      sideTick += 1;
+      sideRoot.render(sideTick);
+    }
     if (draw2dThisFrame) framesWithDraw2d += 1;
     if (gpuThisFrame) framesWithGpu += 1;
     draw2dThisFrame = false;
@@ -285,6 +353,7 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
       rafTotalMs = 0;
       rafThisFrame = 0;
       rafFrames = [];
+      reactBase = reactRootsBase();
     },
     report() {
       const sorted = [...intervals].sort((a, b) => a - b);
@@ -337,6 +406,8 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
           usedJSHeapSize: memory?.usedJSHeapSize ?? null,
           totalJSHeapSize: memory?.totalJSHeapSize ?? null,
         },
+        react: reactRootsSince(reactBase),
+        synthetic: { ...synthetic },
       };
     },
     mark(name, at = now()) {
@@ -352,6 +423,7 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
       });
     },
     viewRender(viewId, at = now()) {
+      if ((synthetic.viewRenderMs ?? 0) > 0) busyWait(synthetic.viewRenderMs ?? 0);
       bump(renders, viewId);
       settle("firstRenderAfter", at);
     },
@@ -363,7 +435,20 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
       bump(posts, type);
     },
     observeStage,
+    async setSynthetic(next) {
+      synthetic = { ...next };
+      const sideMs = synthetic.sideRootMs ?? 0;
+      if (sideMs <= 0) {
+        sideRoot?.unmount();
+        sideRoot = null;
+      } else if (sideRoot === null) {
+        sideRoot = await mountSideRoot(() => synthetic.sideRootMs ?? 0);
+      }
+      return { ...synthetic };
+    },
     dispose() {
+      sideRoot?.unmount();
+      sideRoot = null;
       originalCancel(raf);
       originalCancel(stageWatch);
       if (globalThis.requestAnimationFrame === timedRaf)
