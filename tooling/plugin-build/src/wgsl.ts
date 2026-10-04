@@ -25,19 +25,33 @@ export function wgslModule(text: string): string {
   return `export default ${JSON.stringify(text)};\n`;
 }
 
+/** The ids the plugin loads — the hook filter, and the handler's own guard. */
+export const WGSL_ID = /\.wgsl$/;
+
 /** The Vite/Rollup plugin: a `.wgsl` import loads as its text. */
 export function wgsl(): {
   readonly name: string;
   readonly enforce: "pre";
-  load(id: string): Promise<{ code: string; map: null } | null>;
+  readonly load: {
+    readonly filter: { readonly id: RegExp };
+    handler(id: string): Promise<{ code: string; map: null } | null>;
+  };
 } {
   return {
     // (never the app's IPC channel prefix, which wall R6 reserves for packages/contracts)
     name: "plugin-build:wgsl",
     enforce: "pre",
-    async load(id) {
-      if (!id.endsWith(WGSL_EXTENSION)) return null;
-      return { code: wgslModule(await readFile(id, "utf8")), map: null };
+    load: {
+      // A HOOK FILTER, so the bundler never calls this for any other module. Unfiltered, Vite 8 awaited
+      // the handler for EVERY id the playground's harness loaded, and in a crowded repo-wide run the
+      // packaged-conformance test's eight concurrent loads came apart: its recorder held one instance
+      // of field-app's logging module while the runtime logged through another (red three runs out of
+      // three; green with this filter).
+      filter: { id: WGSL_ID },
+      async handler(id) {
+        if (!WGSL_ID.test(id)) return null;
+        return { code: wgslModule(await readFile(id, "utf8")), map: null };
+      },
     },
   };
 }

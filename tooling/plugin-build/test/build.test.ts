@@ -260,11 +260,14 @@ describe("buildPlugin", () => {
     );
   });
 
-  it("DK-6 — the WGSL plugin loads `.wgsl` ids alone, as a default-exported string", async () => {
+  it("DK-6 — the WGSL plugin loads `.wgsl` ids alone, as a default-exported string — its hook FILTERED, so no other id reaches it", async () => {
     const plugin = wgsl();
     expect(plugin.enforce).toBe("pre");
-    expect(await plugin.load("/x/src/pass.ts")).toBeNull();
-    expect(await plugin.load("/x/src/clock.wgsl?raw")).toBeNull(); // a query is Vite's own
+    const { filter, handler } = plugin.load;
+    expect(filter.id.test("/x/src/clock.wgsl")).toBe(true);
+    expect(filter.id.test("/x/src/pass.ts")).toBe(false);
+    expect(filter.id.test("/x/src/clock.wgsl?raw")).toBe(false); // a query is Vite's own
+    expect(await handler("/x/src/pass.ts")).toBeNull();
     expect(wgslModule("fn a() {}\n")).toBe('export default "fn a() {}\\n";\n');
   });
 
