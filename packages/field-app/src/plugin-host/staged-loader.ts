@@ -285,7 +285,7 @@ async function stageOne(
     return {
       record,
       module,
-      activation: { state: "failed", bindings: new Map(), behaviors: new Map(), error: detail },
+      activation: { state: "failed", behaviors: new Map(), error: detail },
     };
   }
   const mod = asRendererModule(imported);
@@ -302,7 +302,6 @@ async function stageOne(
       module,
       activation: {
         state: "failed",
-        bindings: new Map(),
         behaviors: new Map(),
         error: "the module exports no activate (§10.1)",
       },
@@ -321,7 +320,6 @@ async function stageOne(
       (await controller.reconcile(record)) ??
       ({
         state: "failed",
-        bindings: new Map(),
         behaviors: new Map(),
         error: "renderer target is unavailable",
       } as const);
@@ -339,7 +337,7 @@ async function stageOne(
     return {
       record,
       module,
-      activation: { state: "failed", bindings: new Map(), behaviors: new Map(), error: detail },
+      activation: { state: "failed", behaviors: new Map(), error: detail },
       controller,
       objectBindings,
     };

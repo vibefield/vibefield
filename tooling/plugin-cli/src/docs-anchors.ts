@@ -45,13 +45,6 @@ export const RENDERER_CTX_FACES: readonly CtxFaceRow[] = [
     anchor: "structured, provenance-stamped by the host; never log secrets",
   },
   {
-    face: "ctx.widgets",
-    type: "RendererWidgetAPI",
-    presence:
-      "always (the legacy door — it retires at DK-8); `register` binds no face on the desk build, and throws on an undeclared type and on a double-bind",
-    anchor: "Acknowledge a declared widget type (§12.1: throws on undeclared types and",
-  },
-  {
     face: "ctx.client",
     type: "PluginProductClient (request/subscribe)",
     presence: "always; calls arrive at fieldd as THIS plugin, with its granted scopes",

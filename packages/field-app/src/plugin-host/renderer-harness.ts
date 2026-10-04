@@ -9,7 +9,6 @@ import {
   type PluginModuleUrls,
   type PluginRecord,
   type SurfaceContribution,
-  type WidgetContribution,
 } from "@vibefield/contracts";
 import {
   type ActivationCloseReason,
@@ -31,12 +30,10 @@ import {
   type PluginSurfaceProps,
   type RendererPluginContext,
   type RendererPluginModule,
-  type WidgetRegistration,
 } from "@vibefield/plugin-sdk";
 import type { ComponentType } from "react";
 import { getRendererLogger } from "../logging";
 import type { ProductSurfaceFrame, SurfacePool } from "../surfaces/pool";
-import type { WidgetBinding } from "./build-widget";
 import { getActiveCanvasEngine } from "./canvas-engine-ref";
 import * as commandRegistry from "./command-registry";
 import { createPluginProductClient, currentWindowClient } from "./plugin-client";
@@ -53,8 +50,8 @@ import * as surfaceRegistry from "./surface-registry";
 // TWO ENTRY PATHS, ONE CONTEXT (P8b-3). The staged loader (§19.2) imports a
 // plugin's own artifact and AWAITS activate under §10.4's deadline; the dev-only
 // bundled path still activates SYNCHRONOUSLY inside buildRegistry and still
-// refuses a thenable, because a half-awaited activation there would register
-// zero widgets silently and nothing is waiting to notice. Both build their
+// refuses a thenable, because a half-awaited activation there would publish
+// nothing silently and nothing is waiting to notice. Both build their
 // context through `buildActivation` — the declared⇄bound laws (§12.1), the
 // absent-API law (§10.2), and the capability gates are written once, so the
 // path a plugin arrives by cannot change what it is allowed to do.
@@ -72,9 +69,11 @@ export interface RendererActivationLifetime {
   snapshot(): ActivationScopeSnapshot;
 }
 
+// DK-8: `bindings` (declared widget type → its legacy registration) RETIRED with
+// `ctx.widgets` and `contributes.widgets`: an activation publishes commands, surfaces
+// and behavior bindings; an object kind is its module's export, never registered here.
 export interface ActivatedRenderer {
   readonly state: RendererActivationState;
-  readonly bindings: ReadonlyMap<string, WidgetBinding>;
   /** Complete, descriptor-checked inert bindings. This map is populated only
    * after the private candidate seals and clears at the lifetime close edge. */
   readonly behaviors: ReadonlyMap<string, RendererBehaviorBinding>;
@@ -104,7 +103,6 @@ const activated = new Map<string, ActivatedRenderer>();
 interface ActivationSpec {
   readonly id: string;
   readonly version: string;
-  readonly widgets: readonly WidgetContribution[];
   readonly commands: readonly CommandContribution[];
   readonly surfaces: readonly SurfaceContribution[];
   readonly behaviors: readonly BehaviorContribution[];
@@ -131,10 +129,6 @@ export interface RendererActivationDeps {
   /** PRC-3d controller seam. The attempt keeps its own scope, but this owner closes it at the
    * controller's synchronous authority edge and awaits its quiescence during adapter cleanup. */
   readonly ownerScope?: ActivationScope;
-  /** Controller-only hooks that keep ICE's stable facade honest when an open activation acquires
-   * or releases a widget binding after its initial publication commit. */
-  readonly validateWidgetBinding?: (type: string, binding: WidgetBinding) => void;
-  readonly onWidgetBindingsChanged?: () => void;
 }
 
 function specFromManifest(manifest: PluginManifestV1): ActivationSpec {
@@ -147,7 +141,6 @@ function specFromManifest(manifest: PluginManifestV1): ActivationSpec {
   return {
     id: manifest.id,
     version: manifest.version,
-    widgets: manifest.contributes?.widgets ?? [],
     commands: manifest.contributes?.commands ?? [],
     surfaces: manifest.contributes?.surfaces ?? [],
     behaviors: manifest.contributes?.behaviors ?? [],
@@ -160,7 +153,6 @@ function specFromRecord(record: PluginRecord, module: PluginModuleUrls): Activat
   return {
     id: record.id,
     version: record.version,
-    widgets: record.contributions.widgets,
     commands: record.contributions.commands,
     surfaces: record.contributions.surfaces,
     behaviors: record.contributions.behaviors ?? [],
@@ -193,7 +185,6 @@ function isThenable(v: unknown): v is PromiseLike<unknown> {
  * disposes what it already registered rather than leaving it bound). */
 interface Activation {
   readonly contextFor: (scope: ActivationScope) => RendererPluginContext;
-  readonly bindings: Map<string, WidgetBinding>;
   readonly behaviors: Map<string, RendererBehaviorBinding>;
   readonly commandBindings: Map<string, { token: symbol; handler: commandRegistry.CommandHandler }>;
   readonly surfaceBindings: Map<
@@ -261,16 +252,14 @@ function ownPublication(
 
 function lifetimeFor(
   scope: ActivationScope,
-  bindings: Map<string, WidgetBinding>,
   behaviors: Map<string, RendererBehaviorBinding>,
 ): RendererActivationLifetime {
   return Object.freeze({
     signal: scope.signal,
     close(reason: ActivationCloseReason): void {
       scope.close(reason);
-      // Widget implementations are a publication projection, not an inverse. Withdraw them at
-      // the synchronous close edge while resource cleanup continues in strict LIFO order.
-      bindings.clear();
+      // Behavior bindings are a publication projection, not an inverse. Withdraw them at the
+      // synchronous close edge while resource cleanup continues in strict LIFO order.
       behaviors.clear();
     },
     observe: (deadlineMs?: number) => scope.observe(deadlineMs),
@@ -299,14 +288,6 @@ function canonicalDescriptorJson(value: unknown): string {
   return JSON.stringify(visit(value));
 }
 
-/** The opaque registration binding, held in the legacy shape the controller's update lane
- * compares (DK-2). Nothing mounts it: a widget compiles faceless. */
-function legacyWidgetBinding(binding: unknown): WidgetBinding {
-  return typeof binding === "object" && binding !== null
-    ? (binding as WidgetBinding)
-    : { component: undefined };
-}
-
 function behaviorOrderKey(pluginId: string, declarationIndex: number): string {
   return `${pluginId}\0${declarationIndex.toString().padStart(6, "0")}`;
 }
@@ -316,7 +297,6 @@ function buildActivation(
   deps: RendererActivationDeps = {},
   suppliedScope?: ActivationScope,
 ): Activation {
-  const declared = new Set(spec.widgets.map((w) => w.type));
   // §8.3/§8.4 declared contributions — the DECLARATION is the always-available
   // authority (the fieldd snapshot may be null at boot; two-plane law). Commands
   // and surfaces bind only ids the plugin declares; a surface's SLOT is declared
@@ -361,11 +341,9 @@ function buildActivation(
   const rawStorage = spec.requestedCapabilities.includes("storage.self")
     ? createStorageSurfaces(rawClient)
     : undefined;
-  const bindings = new Map<string, WidgetBinding>();
   const boundBehaviorHandles = new Map<string, AnyBehaviorDef>();
   const behaviors = new Map<string, RendererBehaviorBinding>();
   let behaviorsSealed = false;
-  const widgetGenerations = new Map<string, symbol>();
   const commandBindings = new Map<
     string,
     { token: symbol; handler: commandRegistry.CommandHandler }
@@ -530,33 +508,6 @@ function buildActivation(
       }),
       signal: ownedBy.signal,
       logger: guardedLogger,
-      widgets: Object.freeze({
-        register(registration: WidgetRegistration): Disposable {
-          assertOpen();
-          if (!declared.has(registration.type))
-            throw new Error(`${registration.type} is not declared by ${spec.id} (§12.1)`);
-          if (bindings.has(registration.type))
-            throw new Error(`${registration.type} already bound in this entry (§12.1)`);
-          // DK-2: the SDK's registration binding is opaque and binds no face (the host
-          // compiles every widget faceless); it is held only for the legacy update lane's
-          // shape law until `ctx.widgets.register` retires at DK-8.
-          const binding = legacyWidgetBinding(registration.binding);
-          deps.validateWidgetBinding?.(registration.type, binding);
-          const generation = Symbol(registration.type);
-          widgetGenerations.set(registration.type, generation);
-          bindings.set(registration.type, binding);
-          deps.onWidgetBindingsChanged?.();
-          const resource: Disposable = {
-            dispose() {
-              if (widgetGenerations.get(registration.type) !== generation) return;
-              widgetGenerations.delete(registration.type);
-              bindings.delete(registration.type);
-              deps.onWidgetBindingsChanged?.();
-            },
-          };
-          return ownPublication(ownedBy, `widget:${registration.type}`, resource);
-        },
-      }),
       // §11.2: every call rides the plugin's own lazy product connection, with the child scope's
       // activity gate wrapped around it.
       client,
@@ -827,12 +778,11 @@ function buildActivation(
 
   return {
     contextFor,
-    bindings,
     behaviors,
     commandBindings,
     surfaceBindings,
     scope,
-    lifetime: lifetimeFor(scope, bindings, behaviors),
+    lifetime: lifetimeFor(scope, behaviors),
     logger,
     setBehaviorAuthorization,
     stagePublications,
@@ -884,7 +834,6 @@ function cachedActivation(id: string): ActivatedRenderer | undefined {
   }
   return {
     state: "non-quiescent",
-    bindings: new Map(),
     behaviors: new Map(),
     error: cached.error ?? "the previous renderer activation is still draining",
     cleanup,
@@ -914,7 +863,6 @@ export function activateRenderer(
     attempt.logger.error(`activation failed: ${message}`);
     const failed: ActivatedRenderer = {
       state: cleanup.quiescent ? "failed" : "non-quiescent",
-      bindings: attempt.bindings,
       behaviors: new Map(),
       error: message,
       cleanup,
@@ -930,7 +878,6 @@ export function activateRenderer(
     const cleanup = attempt.lifetime.snapshot();
     const failed: ActivatedRenderer = {
       state: cleanup.quiescent ? "failed" : "non-quiescent",
-      bindings: attempt.bindings,
       behaviors: new Map(),
       error: "async activate needs the staged loader (§19.2) — bundled activation is sync",
       cleanup,
@@ -950,7 +897,6 @@ export function activateRenderer(
     const message = primaryErrorMessage(error);
     const failed: ActivatedRenderer = {
       state: cleanup.quiescent ? "failed" : "non-quiescent",
-      bindings: attempt.bindings,
       behaviors: new Map(),
       error: message,
       cleanup,
@@ -966,7 +912,6 @@ export function activateRenderer(
     attempt.logger.warn(`activate took ${Math.round(elapsed)}ms — over the §10.4 deadline`);
   const ok: ActivatedRenderer = {
     state: "active",
-    bindings: attempt.bindings,
     behaviors: attempt.behaviors,
     lifetime: attempt.lifetime,
   };
@@ -1052,7 +997,6 @@ export async function stageStagedRenderer(
       attempt.logger.error(error);
       throw new RendererActivationStageError({
         state: cleanup.quiescent ? "failed" : "non-quiescent",
-        bindings: attempt.bindings,
         behaviors: new Map(),
         error,
         cleanup,
@@ -1062,7 +1006,6 @@ export async function stageStagedRenderer(
     const publications = attempt.stagePublications();
     const activation: ActivatedRenderer = {
       state: "active",
-      bindings: attempt.bindings,
       behaviors: attempt.behaviors,
       lifetime: attempt.lifetime,
     };
@@ -1111,7 +1054,6 @@ export async function stageStagedRenderer(
     attempt.logger.error(`activation failed: ${message}`);
     throw new RendererActivationStageError({
       state: cleanup.quiescent ? "failed" : "non-quiescent",
-      bindings: attempt.bindings,
       behaviors: new Map(),
       error: message,
       cleanup,
@@ -1129,7 +1071,7 @@ export async function stageStagedRenderer(
  * The deadline is a RACE, not a timer that logs afterwards: on the miss the
  * controller aborts (registrations made later are refused by the context's own
  * guards) and everything already tracked is disposed, so a plugin that never
- * settles cannot leave half-bound widgets behind. That failure is NOT memoized
+ * settles cannot leave half-bound registrations behind. That failure is NOT memoized
  * — a deadline says something about this machine at this moment, not about the
  * plugin, and the next boot is entitled to a fresh answer. A plugin that THREW
  * is not memoized either, for §11.4's reason; only the sync path's thenable
@@ -1156,7 +1098,6 @@ export async function activateStagedRenderer(
         ? error.activation
         : {
             state: "failed" as const,
-            bindings: new Map(),
             behaviors: new Map(),
             error: primaryErrorMessage(error),
           };

@@ -8,7 +8,6 @@ import {
   type PluginRuntimeBehaviorGenerationDiagnostic,
   type PluginUpdateArtifact,
 } from "@vibefield/contracts";
-import { UnavailableState } from "@vibefield/design-kit";
 import {
   type ActivationScope,
   projectPluginAuthority,
@@ -21,11 +20,9 @@ import {
   samePluginRuntimeObservation,
 } from "@vibefield/plugin-runtime";
 import type { PluginProductClient, RendererPluginModule } from "@vibefield/plugin-sdk";
-import { type ComponentType, createElement, type ReactElement, useSyncExternalStore } from "react";
 import type { RendererLogger } from "../logging";
 import { BehaviorBindingCatalog } from "./behavior-binding-catalog";
 import { BehaviorBreakerLedger } from "./behavior-generation-host";
-import type { WidgetBinding } from "./build-widget";
 import { refreshPluginProductClient, retirePluginProductClient } from "./plugin-client";
 import { stagePluginStyleLink } from "./plugin-style";
 import {
@@ -149,15 +146,10 @@ export class RendererPluginController {
   private closed = false;
   private currentCandidate: ControlledRendererCandidate | null = null;
   private lastFailure: ActivatedRenderer | null = null;
-  private committedBindings: ReadonlyMap<string, WidgetBinding> = new Map();
-  private readonly bindingFacades = new Map<string, WidgetBinding>();
-  private readonly bindingShapes = new Map<
-    string,
-    { required: boolean; animated?: boolean; chrome?: unknown; preview?: unknown }
-  >();
-  private readonly listeners = new Set<() => void>();
+  // DK-8: the ICE-facing widget facade (`widgetBinding`), its committed binding map, its fixed
+  // metadata shapes and the revision listeners that re-rendered it RETIRED with `ctx.widgets` and
+  // `contributes.widgets` — nothing on the desk mounts a plugin component under the camera.
   private behaviorCatalog: BehaviorBindingCatalog | undefined;
-  private revision = 0;
   private readonly controller: RuntimeTargetController<
     ControlledRendererTarget,
     ControlledRendererCandidate
@@ -314,43 +306,6 @@ export class RendererPluginController {
       throw new Error(`${this.pluginId}: behavior catalog must attach before renderer activation`);
     }
     this.behaviorCatalog = catalog;
-  }
-
-  /** Stable ICE-facing binding. Code components dereference the currently committed activation;
-   * artifact-scoped chrome/animation/preview metadata is sealed on first registry construction. */
-  widgetBinding(type: string, surface: "dom" | "gl"): WidgetBinding {
-    const cached = this.bindingFacades.get(type);
-    if (cached !== undefined) return cached;
-    const initial = this.committedBindings.get(type);
-    const DynamicComponent = (props: Record<string, unknown>): ReactElement | null => {
-      useSyncExternalStore(
-        (notify) => this.subscribe(notify),
-        () => this.revision,
-        () => this.revision,
-      );
-      const component = this.committedBindings.get(type)?.component;
-      if (component === undefined) {
-        if (surface === "gl") return null;
-        return createElement(UnavailableState, {
-          title: type,
-          description:
-            this.lastFailure?.error === undefined
-              ? "renderer unavailable — content preserved"
-              : `renderer failed: ${this.lastFailure.error}`,
-        });
-      }
-      return createElement(component as ComponentType<Record<string, unknown>>, props);
-    };
-    DynamicComponent.displayName = `RendererTarget(${type})`;
-    const metadata = {
-      ...(initial?.animated === undefined ? {} : { animated: initial.animated }),
-      ...(initial?.chrome === undefined ? {} : { chrome: initial.chrome }),
-      ...(initial?.preview === undefined ? {} : { preview: initial.preview }),
-    };
-    this.bindingShapes.set(type, { required: initial !== undefined, ...metadata });
-    const facade: WidgetBinding = { component: DynamicComponent, ...metadata };
-    this.bindingFacades.set(type, facade);
-    return facade;
   }
 
   /** Reconcile one durable observation. During a replacement episode, exact old and candidate
@@ -657,23 +612,18 @@ export class RendererPluginController {
     if (settled.state === "non-quiescent") {
       this.lastFailure = {
         state: "non-quiescent",
-        bindings: new Map(),
         behaviors: new Map(),
         error: "the previous renderer activation is still draining",
         ...(settled.blocked?.report === undefined ? {} : { cleanup: settled.blocked.report }),
       };
-      this.publishBindings();
     } else if (target !== null && settled.state === "failed" && this.lastFailure === null) {
       this.lastFailure = {
         state: "failed",
-        bindings: new Map(),
         behaviors: new Map(),
         error: settled.error ?? "renderer activation failed",
       };
-      this.publishBindings();
     } else if (target === null && settled.state === "inactive" && this.lastFailure !== null) {
       this.lastFailure = null;
-      this.publishBindings();
     }
   }
 
@@ -716,12 +666,6 @@ export class RendererPluginController {
         ...activationDeps,
         ...(source.productClient === undefined ? {} : { productClient: source.productClient }),
         ownerScope: scope,
-        validateWidgetBinding: (type, binding) => this.assertBindingShape(type, binding),
-        onWidgetBindingsChanged: () => {
-          if (candidate !== undefined && this.currentCandidate === candidate) {
-            this.publishBindings();
-          }
-        },
       });
       inner.setBehaviorAuthorization(target.behaviorAuthorized);
       if (inner.activation.behaviors.size > 0 && this.behaviorCatalog === undefined) {
@@ -730,7 +674,6 @@ export class RendererPluginController {
     } catch (error) {
       if (error instanceof RendererActivationStageError && !signal.aborted) {
         this.lastFailure = error.activation;
-        this.publishBindings();
       }
       if (source.releaseAuthority === undefined) this.retireCredential(this.pluginId);
       throw error;
@@ -751,8 +694,6 @@ export class RendererPluginController {
       style?.dispose();
       if (candidate !== undefined && this.currentCandidate === candidate) {
         this.currentCandidate = null;
-        this.committedBindings = new Map();
-        this.publishBindings();
       }
     };
     signal.addEventListener("abort", withdraw, { once: true });
@@ -766,13 +707,9 @@ export class RendererPluginController {
         if (current === undefined)
           throw new Error(`${this.pluginId}: renderer candidate was not constructed`);
         if (signal.aborted) throw new Error(`${this.pluginId}: stale renderer candidate`);
-        this.assertBindingShapes(inner.activation.bindings);
         this.currentSource = source;
         this.record = source.record;
         this.currentCandidate = current;
-        // Keep the exact attempt map: an open context may acquire/release declared bindings after
-        // activation, and the controller hooks above advance the stable facade's revision.
-        this.committedBindings = inner.activation.bindings;
         this.lastFailure = null;
         try {
           style?.commit();
@@ -793,7 +730,6 @@ export class RendererPluginController {
           withdraw();
           throw error;
         }
-        this.publishBindings();
       },
       dispose: async () => {
         signal.removeEventListener("abort", withdraw);
@@ -805,57 +741,10 @@ export class RendererPluginController {
     return candidate;
   }
 
-  private subscribe(listener: () => void): () => void {
-    this.listeners.add(listener);
-    return () => this.listeners.delete(listener);
-  }
-
-  private publishBindings(): void {
-    this.revision += 1;
-    for (const listener of [...this.listeners]) listener();
-  }
-
-  private assertBindingShapes(bindings: ReadonlyMap<string, WidgetBinding>): void {
-    for (const [type, shape] of this.bindingShapes) {
-      const next = bindings.get(type);
-      if (next === undefined) {
-        if (shape.required)
-          throw new Error(`${this.pluginId}: renderer replacement omitted widget binding ${type}`);
-        continue;
-      }
-      this.assertBindingShape(type, next);
-    }
-  }
-
-  private assertBindingShape(type: string, next: WidgetBinding): void {
-    const shape = this.bindingShapes.get(type);
-    if (shape === undefined) return;
-    if (
-      next.animated !== shape.animated ||
-      !sameOpaqueBindingValue(next.chrome, shape.chrome) ||
-      !sameOpaqueBindingValue(next.preview, shape.preview)
-    ) {
-      throw new Error(
-        `${this.pluginId}: renderer replacement changed fixed binding metadata for ${type}`,
-      );
-    }
-  }
-
   private settleDeadline(): number {
     return (
       PLUGIN_LIMITS.RENDERER_ACTIVATE_DEADLINE_MS + PLUGIN_LIMITS.DEACTIVATE_DEADLINE_MS * 2 + 100
     );
-  }
-}
-
-function sameOpaqueBindingValue(left: unknown, right: unknown): boolean {
-  if (Object.is(left, right)) return true;
-  if (typeof left !== "object" || left === null || typeof right !== "object" || right === null)
-    return false;
-  try {
-    return JSON.stringify(left) === JSON.stringify(right);
-  } catch {
-    return false;
   }
 }
 

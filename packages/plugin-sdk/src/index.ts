@@ -8,7 +8,7 @@
 // module normalizer + the testing mock — no host logic.
 //
 // P3 SUBSET, honest by omission (§10.2 — unavailable APIs are ABSENT, never
-// stubs): ctx carries plugin/logger/signal/track/widgets/client. Commands,
+// stubs): ctx carries plugin/logger/signal/track/client. Commands,
 // surfaces, and the canvas handle (ctx.canvas) arrive at P6; `pool` arrives
 // with its runtime — DT-2b-2 gives it one, and its first and only kind is
 // `liveSurface`. ctx.plugin's manifestHash/installRevision are OPTIONAL because
@@ -44,25 +44,12 @@ export interface PluginLogger {
  * ICE-free. */
 export type { ObjectBinding } from "./desk";
 
-/** The LEGACY widget door (spec §28: `ctx.widgets.register` retires with
- * `contributes.widgets` at DK-8). Since DK-2 a widget binds to NOTHING the desk
- * draws: the React binding (`component`, `chrome`, `animated`, `preview`) is gone —
- * the host compiles every `widgets` type FACELESS from its manifest row (ICE draws
- * a type with no kind with its missing face from 0.15.0; DK-D18 as amended). The
- * door keeps only the §12.1 activation laws (declared-by-this-plugin, no double
- * bind); whatever `binding` carries is held as opaque data and never mounted. */
-export interface WidgetRegistration {
-  /** MUST be a widget type this plugin's manifest declares (§12.1). */
-  type: string;
-  /** Opaque and inert on the desk build — never a face. */
-  binding?: unknown;
-}
-
-export interface RendererWidgetAPI {
-  /** Acknowledge a declared widget type (§12.1: throws on undeclared types and
-   * double-binds). Binds no face on the desk build. Returns the un-bind handle. */
-  register(registration: WidgetRegistration): Disposable;
-}
+// DK-8 (spec §28): the LEGACY widget door — `ctx.widgets.register`, its
+// `WidgetRegistration` and `RendererWidgetAPI` — RETIRED with `contributes.widgets`
+// itself (the manifest refuses the contribution by name, pointing at `objects`).
+// Since DK-2 it bound nothing the desk draws; a face is an OBJECT KIND, the export
+// a manifest's `objects` row names (`ObjectBinding`, the `/desk` door), never a
+// registration from `activate`.
 
 /** The plugin-principal product connection (§11.2): calls arrive at fieldd
  * attributed to THIS plugin with its granted scopes — never the window's.
@@ -89,7 +76,6 @@ export interface RendererPluginContext {
   };
   readonly signal: AbortSignal;
   readonly logger: PluginLogger;
-  readonly widgets: RendererWidgetAPI;
   readonly client: PluginProductClient;
   /** DT-2b-2 — the window's shared attachment pool. `liveSurface` is its first
    * and only kind; other kinds join with their consumers (A7).
@@ -557,7 +543,7 @@ export interface PluginSurfaceViewProps {
   /** The holder is interactively engaged: raises fps + priority (DT-D5) AND
    * forwards pointer/wheel/keyboard from the canvas into the surface
    * (DT-D6) — the view owns the coordinate mapping, the plugin never sees a
-   * raw event. Gate this on the widget's own input boundary. */
+   * raw event. Gate this on the holder's own input boundary. */
   readonly interactive?: boolean;
   readonly className?: string;
 }

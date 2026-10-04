@@ -20,7 +20,6 @@ import type {
   RendererPluginModule,
   ServicePluginContext,
   ServicePluginModule,
-  WidgetRegistration,
 } from "./index";
 
 type MockCommandHandler = (args: unknown, invocation: CommandInvocation) => void | Promise<void>;
@@ -34,9 +33,6 @@ type MockSurfaceComponent = ComponentType<PluginSurfaceProps>;
 // pool's `SurfaceView` draws nothing (`inertSurfaceView` below says why).
 
 export interface MockActivation {
-  /** declared widget type → whatever its legacy registration carried. Inert on the desk build
-   * (DK-2): a widget binds no face; the map witnesses only the §12.1 activation laws. */
-  bindings: Map<string, unknown>;
   /** behavior id → inert code handle bound during the private candidate. */
   behaviors: Map<string, AnyBehaviorDef>;
   /** command id → bound handler (§13.1) — ctx.commands is present iff the
@@ -59,8 +55,6 @@ export interface MockActivation {
 export interface MockPluginHostOptions {
   id?: string;
   version?: string;
-  /** widget types the manifest declares — register() enforces §12.1 against it */
-  declaredWidgets?: readonly string[];
   /** command ids the manifest declares. Supplying this (even empty) makes
    * ctx.commands present (the manifest declares the kind); register() accepts
    * declared ids and refuses undeclared ones + double-binds (§8.3/§13.1). */
@@ -298,7 +292,6 @@ export async function activateWithMockHost(
   mod: RendererPluginModule,
   opts: MockPluginHostOptions = {},
 ): Promise<MockActivation> {
-  const declared = opts.declaredWidgets;
   const declaredCommands = opts.declaredCommands;
   const declaredSurfaces = opts.declaredSurfaces;
   const declaredBehaviors = opts.declaredBehaviors;
@@ -310,12 +303,10 @@ export async function activateWithMockHost(
       .filter((row): row is BehaviorContribution => typeof row !== "string")
       .map((row) => [row.id, row]),
   );
-  const bindings = new Map<string, unknown>();
   const behaviors = new Map<string, AnyBehaviorDef>();
   const commands = new Map<string, MockCommandHandler>();
   const surfaces = new Map<string, MockSurfaceComponent>();
   const liveSurfaces = new Map<string, MockLiveSurface>();
-  const widgetGenerations = new Map<string, symbol>();
   const commandGenerations = new Map<string, symbol>();
   const surfaceGenerations = new Map<string, symbol>();
   const behaviorGenerations = new Map<string, symbol>();
@@ -360,25 +351,6 @@ export async function activateWithMockHost(
       plugin: { id: opts.id ?? "vibefield.mock", version: opts.version ?? "0.0.0" },
       signal: ownedBy.signal,
       logger,
-      widgets: {
-        register(registration: WidgetRegistration): Disposable {
-          assertOpen();
-          if (declared !== undefined && !declared.includes(registration.type))
-            throw new Error(`mock host: ${registration.type} is not declared by this plugin`);
-          if (bindings.has(registration.type))
-            throw new Error(`mock host: ${registration.type} already bound in this entry`);
-          const generation = Symbol(registration.type);
-          widgetGenerations.set(registration.type, generation);
-          bindings.set(registration.type, registration.binding);
-          return ownedBy.track({
-            dispose() {
-              if (widgetGenerations.get(registration.type) !== generation) return;
-              widgetGenerations.delete(registration.type);
-              bindings.delete(registration.type);
-            },
-          });
-        },
-      },
       client: {
         request() {
           assertOpen();
@@ -550,7 +522,6 @@ export async function activateWithMockHost(
       throw new AggregateError(cleanupErrors, "mock host cleanup failed");
   };
   return {
-    bindings,
     behaviors,
     commands,
     surfaces,

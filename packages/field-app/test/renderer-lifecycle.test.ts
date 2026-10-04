@@ -58,18 +58,6 @@ function record(id: string, capabilities: readonly string[] = []): PluginRecord 
     deniedCapabilities: [],
     grantGeneration: 1,
     contributions: {
-      widgets: [
-        {
-          type: `${id}.card`,
-          title: "Card",
-          schemaVersion: 1,
-          surface: "dom",
-          sizeMode: "fixed",
-          defaultSize: { w: 100, h: 100 },
-          props: {},
-          groups: {},
-        },
-      ],
       commands: [
         { id: `${id}.root`, title: "Root" },
         { id: `${id}.outer`, title: "Outer" },
@@ -101,6 +89,22 @@ describe("renderer activation ownership", () => {
     productSubscriptions.unsubscribes = 0;
   });
 
+  it("hands the plugin no widget door — `ctx.widgets` retired with `contributes.widgets` (DK-8)", async () => {
+    const id = "prc.renderer.no-widgets";
+    let keys: string[] = [];
+    const activation = await activateStagedRenderer(record(id), moduleRow(id), {
+      activate(ctx) {
+        keys = Object.keys(ctx);
+      },
+    });
+    expect(activation.state).toBe("active");
+    expect(keys).not.toContain("widgets");
+    expect(keys).toEqual(expect.arrayContaining(["plugin", "signal", "logger", "client", "pool"]));
+    expect(activation).not.toHaveProperty("bindings");
+    activation.lifetime?.close({ kind: "disable" });
+    await activation.lifetime?.whenQuiescent();
+  });
+
   it("rolls every host registration back, awaits cleanup, and preserves the primary failure", async () => {
     const id = "prc.renderer.failure";
     let cleanupFinished = false;
@@ -109,7 +113,6 @@ describe("renderer activation ownership", () => {
       moduleRow(id),
       {
         async activate(ctx) {
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
           ctx.commands?.register(`${id}.root`, () => {});
           ctx.surfaces?.register(`${id}.panel`, () => null);
           await ctx.client.subscribe("events.subscribe", {}, () => {});
@@ -130,7 +133,6 @@ describe("renderer activation ownership", () => {
     expect(activation.state).toBe("failed");
     expect(activation.error).toBe("activation failed");
     expect(cleanupFinished).toBe(true);
-    expect(activation.bindings.size).toBe(0);
     expect(isCommandBound(`${id}.root`)).toBe(false);
     expect(hasSurface(`${id}.panel`)).toBe(false);
     expect(productSubscriptions).toEqual({ active: 0, unsubscribes: 2 });
@@ -155,7 +157,6 @@ describe("renderer activation ownership", () => {
     const activation = await activateStagedRenderer(record(id), moduleRow(id), {
       activate(ctx) {
         retainedContext = ctx;
-        ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
         ctx.commands?.register(`${id}.root`, () => {});
         ctx.surfaces?.register(`${id}.panel`, () => null);
         ctx.track("shared", shared);
@@ -165,7 +166,6 @@ describe("renderer activation ownership", () => {
     });
 
     expect(activation.state).toBe("active");
-    expect(activation.bindings.has(`${id}.card`)).toBe(true);
     expect(isCommandBound(`${id}.root`)).toBe(true);
     expect(hasSurface(`${id}.panel`)).toBe(true);
     const lifetime = activation.lifetime;
@@ -173,14 +173,12 @@ describe("renderer activation ownership", () => {
     if (lifetime === undefined) throw new Error("active renderer has no lifetime");
 
     lifetime.close({ kind: "disable" });
-    expect(activation.bindings.size).toBe(0);
+    // the publications withdraw at the synchronous close edge (§18.2), before any LIFO cleanup
+    expect(isCommandBound(`${id}.root`)).toBe(false);
     expect(retainedContext?.signal.aborted).toBe(true);
-    expect(() =>
-      retainedContext?.widgets.register({
-        type: `${id}.card`,
-        binding: { component: () => null },
-      }),
-    ).toThrow(/no longer open/);
+    expect(() => retainedContext?.commands?.register(`${id}.outer`, () => {})).toThrow(
+      /no longer open/,
+    );
     let quiescent = false;
     const closing = lifetime.whenQuiescent().then((report) => {
       quiescent = true;
@@ -255,7 +253,7 @@ describe("renderer activation ownership", () => {
     try {
       const pending = activateStagedRenderer(record(id), moduleRow(id), {
         activate(ctx) {
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
+          ctx.commands?.register(`${id}.root`, () => {});
           return lateResult.promise;
         },
       });
@@ -265,7 +263,8 @@ describe("renderer activation ownership", () => {
         state: "non-quiescent",
         cleanup: { quiescent: false, pendingSetups: 1 },
       });
-      expect(overdue.bindings.size).toBe(0);
+      // what it bound was private to the attempt and never published (§18.2)
+      expect(isCommandBound(`${id}.root`)).toBe(false);
 
       const blocked = await activateStagedRenderer(record(id), moduleRow(id), {
         activate() {

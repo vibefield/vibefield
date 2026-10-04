@@ -20,17 +20,6 @@ import type { ObjectBinding } from "@vibefield/plugin-sdk";
 // until then it is invisible). An `objects` row compiles through `defineObject`
 // with the kind its renderer module exports.
 
-/** The LEGACY widget binding's shape — the React face the SDK's widget door carried
- * until DK-2. HOST-LOCAL now: the SDK's registration binding is opaque, this builder
- * never reads it, and only the renderer controller's stable facade still holds one
- * (its update lane retires with `ctx.widgets.register` at DK-8). */
-export interface WidgetBinding {
-  component: unknown;
-  chrome?: unknown;
-  animated?: boolean;
-  preview?: unknown;
-}
-
 function buildProp(type: string, name: string, spec: PropSpec) {
   switch (spec.kind) {
     case "string":

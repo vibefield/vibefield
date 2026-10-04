@@ -3,45 +3,60 @@ import { defineRendererPlugin } from "../src/index";
 import { activateWithMockHost } from "../src/testing";
 
 // The SDK's own contract in miniature: the mock host enforces exactly what the
-// real harness enforces (§12.1 — declared-by-this-plugin, no double-bind,
+// real harness enforces (§13.1 — declared-by-this-plugin, no double-bind,
 // nothing after abort), so a plugin's suite failing here fails for the same
-// reason it would fail in the app.
+// reason it would fail in the app. DK-8: the widget door these rows were written
+// against retired with `contributes.widgets`; a command carries the same laws.
 describe("activateWithMockHost", () => {
+  it("offers no widget door — `ctx.widgets` retired with `contributes.widgets` (DK-8)", async () => {
+    let keys: string[] = [];
+    const session = await activateWithMockHost(
+      defineRendererPlugin({
+        activate(ctx) {
+          keys = Object.keys(ctx);
+        },
+      }),
+    );
+    expect(keys).not.toContain("widgets");
+    expect(keys).toEqual(expect.arrayContaining(["plugin", "signal", "logger", "client", "pool"]));
+    expect(session).not.toHaveProperty("bindings");
+  });
+
   it("collects registrations and tracked disposables", async () => {
     const mod = defineRendererPlugin({
       activate(ctx) {
-        ctx.widgets.register({ type: "vibefield.mock.a", binding: { component: () => null } });
+        ctx.commands?.register("vibefield.mock.a", () => {});
         ctx.track({ dispose() {} });
         ctx.logger.info("hello");
       },
     });
     const session = await activateWithMockHost(mod, {
-      declaredWidgets: ["vibefield.mock.a", "vibefield.mock.b"],
+      declaredCommands: ["vibefield.mock.a", "vibefield.mock.b"],
     });
-    expect([...session.bindings.keys()]).toEqual(["vibefield.mock.a"]);
+    expect([...session.commands.keys()]).toEqual(["vibefield.mock.a"]);
     // Host-created registrations are owned too; explicit tracking remains compatible.
     expect(session.disposables).toHaveLength(3);
     expect(session.logs).toEqual([{ level: "info", message: "hello" }]);
   });
 
-  it("refuses undeclared types and double-binds (§12.1)", async () => {
+  it("refuses undeclared ids and double-binds (§13.1)", async () => {
     const undeclared = defineRendererPlugin({
       activate(ctx) {
-        ctx.widgets.register({ type: "vibefield.mock.ghost", binding: { component: 1 } });
+        ctx.commands?.register("vibefield.mock.ghost", () => {});
       },
     });
-    await expect(activateWithMockHost(undeclared, { declaredWidgets: [] })).rejects.toThrow(
+    await expect(activateWithMockHost(undeclared, { declaredCommands: [] })).rejects.toThrow(
       /not declared/,
     );
 
     const doubled = defineRendererPlugin({
       activate(ctx) {
-        ctx.widgets.register({ type: "vibefield.mock.a", binding: { component: 1 } });
-        ctx.widgets.register({ type: "vibefield.mock.a", binding: { component: 2 } });
+        ctx.commands?.register("vibefield.mock.a", () => {});
+        ctx.commands?.register("vibefield.mock.a", () => {});
       },
     });
     await expect(
-      activateWithMockHost(doubled, { declaredWidgets: ["vibefield.mock.a"] }),
+      activateWithMockHost(doubled, { declaredCommands: ["vibefield.mock.a"] }),
     ).rejects.toThrow(/already bound/);
   });
 
@@ -131,19 +146,14 @@ describe("activateWithMockHost", () => {
     const mod = defineRendererPlugin({
       activate(ctx) {
         escaped = ctx; // tests only — a real module must not let ctx escape
-        const handle = ctx.widgets.register({
-          type: "vibefield.mock.a",
-          binding: { component: () => null },
-        });
-        void handle.dispose();
+        const handle = ctx.commands?.register("vibefield.mock.a", () => {});
+        void handle?.dispose();
       },
     });
-    const session = await activateWithMockHost(mod, { declaredWidgets: ["vibefield.mock.a"] });
-    expect(session.bindings.size).toBe(0); // the dispose un-bound it
+    const session = await activateWithMockHost(mod, { declaredCommands: ["vibefield.mock.a"] });
+    expect(session.commands.size).toBe(0); // the dispose un-bound it
     session.abort();
-    expect(() =>
-      escaped?.widgets.register({ type: "vibefield.mock.a", binding: { component: 1 } }),
-    ).toThrow(/after abort/);
+    expect(() => escaped?.commands?.register("vibefield.mock.a", () => {})).toThrow(/after abort/);
   });
 
   it("binds effect capabilities to a rollback child while outer registrations survive", async () => {
@@ -208,10 +218,7 @@ describe("activateWithMockHost", () => {
     const activation = activateWithMockHost(
       defineRendererPlugin({
         activate(ctx) {
-          ctx.widgets.register({
-            type: "vibefield.mock.a",
-            binding: { component: () => null },
-          });
+          ctx.commands?.register("vibefield.mock.a", () => {});
           ctx.track("partial", {
             dispose() {
               disposeCalls += 1;
@@ -220,7 +227,7 @@ describe("activateWithMockHost", () => {
           throw new Error("primary failure");
         },
       }),
-      { declaredWidgets: ["vibefield.mock.a"] },
+      { declaredCommands: ["vibefield.mock.a"] },
     );
 
     await expect(activation).rejects.toThrow("primary failure");

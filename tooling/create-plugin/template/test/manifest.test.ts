@@ -32,13 +32,13 @@ describe("{{id}}", () => {
     expect(isObjectKind(kind) ? kind.name : undefined).toBe(row?.type);
   });
 
-  it("activates as any plugin does, binding no widget, command or surface", async () => {
+  it("activates as any plugin does, binding no command or surface — its kind is its export", async () => {
     const session = await activateWithMockHost(renderer, {
       id: manifest.id,
       version: manifest.version,
-      declaredWidgets: [],
     });
-    expect([...session.bindings.keys()]).toEqual([]);
+    expect([...session.commands.keys()]).toEqual([]);
+    expect([...session.surfaces.keys()]).toEqual([]);
     await session.close();
   });
 

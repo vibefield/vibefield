@@ -13,16 +13,15 @@ import {
 import * as rendererModule from "../src/renderer";
 
 describe("vibefield.behavior-conformance", () => {
-  it("binds its signed behavior declarations through the SDK mock host, and no widget", async () => {
+  it("binds its signed behavior declarations through the SDK mock host, and nothing else", async () => {
     const behaviors = behaviorConformanceManifest.contributes?.behaviors ?? [];
     const activation = await activateWithMockHost(behaviorConformanceRenderer, {
       id: behaviorConformanceManifest.id,
       version: behaviorConformanceManifest.version,
-      declaredWidgets: [],
       declaredBehaviors: behaviors,
     });
 
-    expect([...activation.bindings.keys()]).toEqual([]);
+    expect([...activation.commands.keys()]).toEqual([]);
     expect([...activation.behaviors.keys()]).toEqual(behaviors.map((row) => row.id));
     await activation.close();
   });

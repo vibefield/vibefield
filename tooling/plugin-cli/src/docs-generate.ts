@@ -633,11 +633,9 @@ function widgetsDoc(): string {
     section("Binding", [
       "On the desk build a widget row binds NOTHING the desk draws (DK-2): the host compiles",
       "it FACELESS from the manifest — its document data kept, drawn as the desk's missing",
-      "face, picked by its box — whether or not `activate` acknowledges it, so `check` never",
-      "asks for one. `ctx.widgets.register({ type })` stays for the §12.1 laws (it throws on an",
-      "undeclared type and on a second bind in one activation) and carries nothing; it retires",
-      "with `contributes.widgets` at DK-8. A face on the desk is an OBJECT KIND, declared under",
-      "`contributes.objects` and drawn by its own WGSL — `objects.md`.",
+      "face, picked by its box. The door that once bound it, `ctx.widgets.register`, RETIRED",
+      "at DK-8 with the contribution itself. A face on the desk is an OBJECT KIND, declared",
+      "under `contributes.objects` and drawn by its own WGSL — `objects.md`.",
       "",
     ]),
     section("Reading and writing props", [
@@ -1068,8 +1066,8 @@ function contextDoc(): string {
       "",
     ]),
     section("The service context", [
-      "A service entry gets a different context: no widgets, no canvas, and the",
-      "provider API instead.",
+      "A service entry gets a different context: no canvas, no commands or surfaces, and",
+      "the provider API instead.",
       "",
       ctxTable(SERVICE_CTX_FACES),
       "",

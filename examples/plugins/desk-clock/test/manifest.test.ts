@@ -32,14 +32,13 @@ describe("vibefield.example.desk-clock", () => {
     expect(row?.provides).toEqual([row?.type, DESK_OBJECT, CONTAINABLE]);
   });
 
-  it("activates as any plugin does, binding no widget, command, surface or behavior", async () => {
+  it("activates as any plugin does, binding no command, surface or behavior — its kind is its export", async () => {
     const session = await activateWithMockHost(deskClockRenderer, {
       id: deskClockManifest.id,
       version: deskClockManifest.version,
-      declaredWidgets: [],
     });
-    expect([...session.bindings.keys()]).toEqual([]);
     expect([...session.commands.keys()]).toEqual([]);
+    expect([...session.surfaces.keys()]).toEqual([]);
     await session.close();
   });
 

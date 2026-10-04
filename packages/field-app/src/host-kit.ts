@@ -16,5 +16,4 @@
 // process-global activation memo that would make a second run answer for the
 // first.
 export { createFieldEngine } from "./field-engine";
-export type { WidgetBinding } from "./plugin-host/build-widget";
 export { buildWidgetType } from "./plugin-host/build-widget";

@@ -159,6 +159,11 @@ describe("the ctx table is anchored to the SDK", () => {
     expect(drifted).toEqual([]);
   });
 
+  it("documents no widget door — `ctx.widgets` retired with `contributes.widgets` (DK-8)", () => {
+    expect(RENDERER_CTX_FACES.map((r) => r.face)).not.toContain("ctx.widgets");
+    expect(generateDocs().get("context.md")).not.toContain("RendererWidgetAPI");
+  });
+
   it("covers every optional face the renderer context declares", () => {
     const documented = new Set(RENDERER_CTX_FACES.map((r) => r.face));
     for (const face of [
@@ -180,7 +185,6 @@ describe("coverage of what an author has to know", () => {
     for (const topic of [
       "vibefield.plugin.json",
       "activate(ctx)",
-      "ctx.widgets.register",
       "conflict group",
       "plugin-build",
       "dev-link",

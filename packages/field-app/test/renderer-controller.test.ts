@@ -11,11 +11,10 @@ import type {
   RendererPluginContext,
   RendererPluginModule,
 } from "@vibefield/plugin-sdk";
-import { act, type ComponentType, createElement } from "react";
-import { createRoot } from "react-dom/client";
+import { act } from "react";
 import { describe, expect, it, vi } from "vitest";
 import type { RendererLogger } from "../src/logging";
-import { isCommandBound } from "../src/plugin-host/command-registry";
+import { invoke, isCommandBound } from "../src/plugin-host/command-registry";
 import {
   RendererPluginController,
   type RendererPluginControllerDeps,
@@ -143,6 +142,17 @@ function hasSurface(surfaceId: string): boolean {
   return getSurfacesSnapshot().some((surface) => surface.surfaceId === surfaceId);
 }
 
+/** DK-8: which activation's CODE is live — a bound command's handler, run as the palette would
+ * run it. (The ICE-facing widget facade these rows read before retired with `ctx.widgets`.) */
+async function run(commandId: string): Promise<void> {
+  await invoke(commandId, undefined, {
+    source: "palette",
+    windowId: "field",
+    selection: [],
+    userGesture: true,
+  });
+}
+
 function withSecondSurface(plugin: PluginRecord): PluginRecord {
   return {
     ...plugin,
@@ -161,19 +171,6 @@ function withLateContributions(plugin: PluginRecord): PluginRecord {
     ...plugin,
     contributions: {
       ...plugin.contributions,
-      widgets: [
-        ...plugin.contributions.widgets,
-        {
-          type: `${plugin.id}.late`,
-          title: "Late",
-          schemaVersion: 1,
-          surface: "dom",
-          sizeMode: "fixed",
-          defaultSize: { w: 100, h: 100 },
-          props: {},
-          groups: {},
-        },
-      ],
       commands: [...plugin.contributions.commands, { id: `${plugin.id}.late`, title: "Late" }],
       surfaces: [
         ...plugin.contributions.surfaces,
@@ -295,7 +292,7 @@ describe("the renderer/window target controller", () => {
       moduleRow(id),
       {
         activate(ctx) {
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
+          ctx.commands?.register(`${id}.run`, () => undefined);
         },
       },
       "field",
@@ -342,7 +339,6 @@ describe("the renderer/window target controller", () => {
       {
         async activate(ctx) {
           signal = ctx.signal;
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
           ctx.commands?.register(`${id}.run`, () => undefined);
           ctx.surfaces?.register(`${id}.panel`, () => null);
           activated.resolve();
@@ -392,7 +388,6 @@ describe("the renderer/window target controller", () => {
         async activate(ctx) {
           activations += 1;
           signals.push(ctx.signal);
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
           ctx.commands?.register(`${id}.run`, () => undefined);
           ctx.surfaces?.register(`${id}.panel`, () => null);
           if (activations === 1) {
@@ -475,58 +470,42 @@ describe("the renderer/window target controller", () => {
       {
         activate(ctx) {
           retained = ctx;
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
+          ctx.commands?.register(`${id}.run`, () => undefined);
         },
       },
       "field",
       testDeps(),
     );
     await controller.reconcile(row);
-
-    // ICE asks once. The facade must still follow a binding acquired later by the same live scope.
-    const binding = controller.widgetBinding(`${id}.late`, "dom");
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(binding.component as ComponentType<Record<string, unknown>>, {}));
-    });
-    expect(host.textContent).not.toContain("late-live");
+    expect(isCommandBound(`${id}.late`)).toBe(false);
 
     const context = retained;
     if (context === undefined || context.commands === undefined || context.surfaces === undefined)
       throw new Error("activation did not retain its declared binding APIs");
-    let widget!: Disposable;
     let command!: Disposable;
     let surface!: Disposable;
     await act(async () => {
-      widget = context.widgets.register({
-        type: `${id}.late`,
-        binding: { component: () => createElement("span", null, "late-live") },
-      });
       command = context.commands!.register(`${id}.late`, () => undefined);
       surface = context.surfaces!.register(`${id}.late`, () => null);
     });
-    expect(host.textContent).toBe("late-live");
     expect(isCommandBound(`${id}.late`)).toBe(true);
     expect(hasSurface(`${id}.late`)).toBe(true);
 
     await act(async () => {
       await surface.dispose();
       await command.dispose();
-      await widget.dispose();
     });
-    expect(host.textContent).not.toContain("late-live");
     expect(isCommandBound(`${id}.late`)).toBe(false);
     expect(hasSurface(`${id}.late`)).toBe(false);
 
-    await act(async () => root.unmount());
     await controller.close();
   });
 
-  it("refreshes observation-only grants in place and swaps the stable widget facade on authority change", async () => {
+  it("refreshes observation-only grants in place and swaps the live activation's code on authority change", async () => {
     const id = "prc.renderer.controller.observation";
     const refreshes: number[] = [];
     const signals: AbortSignal[] = [];
+    const ran: string[] = [];
     let activations = 0;
     const controller = new RendererPluginController(
       record(id),
@@ -536,11 +515,8 @@ describe("the renderer/window target controller", () => {
           activations += 1;
           const generation = activations;
           signals.push(ctx.signal);
-          ctx.widgets.register({
-            type: `${id}.card`,
-            binding: {
-              component: () => createElement("span", null, `generation-${generation}`),
-            },
+          ctx.commands?.register(`${id}.run`, () => {
+            ran.push(`generation-${generation}`);
           });
         },
       },
@@ -552,14 +528,8 @@ describe("the renderer/window target controller", () => {
       }),
     );
     await controller.reconcile(record(id));
-
-    const binding = controller.widgetBinding(`${id}.card`, "dom");
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(binding.component as ComponentType<Record<string, unknown>>, {}));
-    });
-    expect(host.textContent).toBe("generation-1");
+    await run(`${id}.run`);
+    expect(ran).toEqual(["generation-1"]);
 
     await controller.reconcile(record(id, { grantGeneration: 2 }));
     expect(activations).toBe(1);
@@ -577,11 +547,9 @@ describe("the renderer/window target controller", () => {
     expect(activations).toBe(2);
     expect(signals[0]?.aborted).toBe(true);
     expect(signals[1]?.aborted).toBe(false);
-    expect(host.textContent).toBe("generation-2");
+    await run(`${id}.run`);
+    expect(ran).toEqual(["generation-1", "generation-2"]);
 
-    await act(async () => {
-      root.unmount();
-    });
     await controller.close();
   });
 
@@ -596,7 +564,6 @@ describe("the renderer/window target controller", () => {
         activate(ctx) {
           activations += 1;
           signal = ctx.signal;
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
           ctx.commands?.register(`${id}.run`, () => undefined);
         },
       },
@@ -625,7 +592,6 @@ describe("the renderer/window target controller", () => {
     const mod = (windowId: string) => ({
       activate(ctx: RendererPluginContext) {
         signals.set(windowId, ctx.signal);
-        ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
       },
     });
     const row = record(id, { commandsAndSurfaces: false });
@@ -775,7 +741,7 @@ describe("the renderer/window target controller", () => {
 });
 
 describe("PRC-5d renderer replacement participant", () => {
-  it("imports only after old quiescence, uses candidate product authority, and commits through one stable facade", async () => {
+  it("imports only after old quiescence, uses candidate product authority, and commits the candidate's code in one step", async () => {
     const id = "prc.renderer.replacement.commit";
     const oldRecord = record(id);
     const candidateRecord = replacementRecord(oldRecord, "b");
@@ -793,17 +759,16 @@ describe("PRC-5d renderer replacement participant", () => {
     };
     let candidateAuthorityReleases = 0;
     const candidateRefreshes: number[] = [];
+    const ran: string[] = [];
     const controller = new RendererPluginController(
       oldRecord,
       moduleRow(id),
       {
         activate(ctx) {
           oldSignal = ctx.signal;
-          ctx.widgets.register({
-            type: `${id}.card`,
-            binding: { component: () => createElement("span", null, "old-renderer") },
+          ctx.commands?.register(`${id}.run`, () => {
+            ran.push("old-renderer");
           });
-          ctx.commands?.register(`${id}.run`, () => undefined);
           return {
             dispose: async () => {
               events.push("old-dispose-start");
@@ -821,14 +786,8 @@ describe("PRC-5d renderer replacement participant", () => {
     runtime.add(controller);
     const participant = new RendererUpdateParticipant(runtime);
     await runtime.reconcile(snapshot(oldRecord));
-
-    const stableBinding = controller.widgetBinding(`${id}.card`, "dom");
-    const host = document.createElement("div");
-    const root = createRoot(host);
-    await act(async () => {
-      root.render(createElement(stableBinding.component as ComponentType<Record<string, unknown>>));
-    });
-    expect(host.textContent).toBe("old-renderer");
+    await run(`${id}.run`);
+    expect(ran).toEqual(["old-renderer"]);
 
     const candidateRecordInput = structuredClone(candidateRecord);
     const candidateModuleInput = replacementModule(candidateRecord, "candidate-commit");
@@ -848,11 +807,9 @@ describe("PRC-5d renderer replacement participant", () => {
         return {
           async activate(ctx) {
             events.push(`client:${await ctx.client.request("authority.who", {})}`);
-            ctx.widgets.register({
-              type: `${id}.card`,
-              binding: { component: () => createElement("span", null, "candidate-renderer") },
+            ctx.commands?.register(`${id}.run`, () => {
+              ran.push("candidate-renderer");
             });
-            ctx.commands?.register(`${id}.run`, () => undefined);
           },
         } satisfies RendererPluginModule;
       },
@@ -876,8 +833,9 @@ describe("PRC-5d renderer replacement participant", () => {
     expect(events).not.toContain("candidate-import");
 
     // Delayed activation consumes the defensively copied source, not caller-owned objects that
-    // can change after code-free validation and target projection.
-    (candidateRecordInput.contributions.widgets[0] as { type: string }).type = `${id}.tampered`;
+    // can change after code-free validation and target projection — a tampered declaration would
+    // refuse the candidate's own `.run` binding.
+    (candidateRecordInput.contributions.commands[0] as { id: string }).id = `${id}.tampered`;
     (candidateModuleInput as { manifestHash: string }).manifestHash = `sha256:${"f".repeat(64)}`;
 
     oldDisposed.resolve();
@@ -888,8 +846,9 @@ describe("PRC-5d renderer replacement participant", () => {
     expect(prepared?.kind).toBe("prepared");
     expect(events).toContain("client:candidate-authority");
     expect(isCommandBound(`${id}.run`)).toBe(false);
-    expect(host.textContent).not.toBe("old-renderer");
-    expect(host.textContent).not.toBe("candidate-renderer");
+    // neither activation's code answers while the candidate is prepared and uncommitted
+    await run(`${id}.run`);
+    expect(ran).toEqual(["old-renderer"]);
 
     // The registry/pointer observation arrives before the explicit commit command.
     await runtime.reconcile(snapshot(candidateRecord));
@@ -924,14 +883,13 @@ describe("PRC-5d renderer replacement participant", () => {
         commitEpoch: 2,
       });
     });
-    expect(controller.widgetBinding(`${id}.card`, "dom")).toBe(stableBinding);
-    expect(host.textContent).toBe("candidate-renderer");
     expect(isCommandBound(`${id}.run`)).toBe(true);
+    await run(`${id}.run`);
+    expect(ran).toEqual(["old-renderer", "candidate-renderer"]);
 
     await controller.reconcile({ ...candidateRecord, grantGeneration: 3 });
     expect(candidateRefreshes).toEqual([3]);
 
-    await act(async () => root.unmount());
     await runtime.close();
     expect(candidateAuthorityReleases).toBe(1);
   });
@@ -946,7 +904,6 @@ describe("PRC-5d renderer replacement participant", () => {
       {
         activate(ctx) {
           oldSignal = ctx.signal;
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
           ctx.commands?.register(`${id}.run`, () => undefined);
         },
       },
@@ -998,7 +955,6 @@ describe("PRC-5d renderer replacement participant", () => {
       moduleRow(id),
       {
         activate(ctx) {
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
           ctx.commands?.register(`${id}.run`, () => undefined);
         },
       },
@@ -1051,7 +1007,6 @@ describe("PRC-5d renderer replacement participant", () => {
           oldRecoveryImports += 1;
           return {
             activate(ctx) {
-              ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
               ctx.commands?.register(`${id}.run`, () => undefined);
             },
           };
@@ -1073,9 +1028,7 @@ describe("PRC-5d renderer replacement participant", () => {
       oldRecord,
       moduleRow(id),
       {
-        activate(ctx) {
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
-        },
+        activate() {},
       },
       "field",
       testDeps(),
@@ -1091,9 +1044,7 @@ describe("PRC-5d renderer replacement participant", () => {
         record: candidateRecord,
         module: replacementModule(candidateRecord, "candidate-stale"),
         load: async () => ({
-          activate(ctx) {
-            ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
-          },
+          activate() {},
         }),
       },
     });
@@ -1121,7 +1072,6 @@ describe("PRC-5d renderer replacement participant", () => {
       moduleRow(id),
       {
         activate(ctx) {
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
           ctx.commands?.register(`${id}.run`, () => undefined);
         },
       },
@@ -1141,7 +1091,6 @@ describe("PRC-5d renderer replacement participant", () => {
         load: async () => ({
           activate(ctx) {
             candidateSignal = ctx.signal;
-            ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
             ctx.commands?.register(`${id}.run`, () => undefined);
           },
         }),
@@ -1180,9 +1129,7 @@ describe("PRC-5d renderer replacement participant", () => {
           record: nextRecord,
           module: replacementModule(nextRecord, "candidate-after-catchup"),
           load: async () => ({
-            activate(ctx) {
-              ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
-            },
+            activate() {},
           }),
         },
       }),
@@ -1202,8 +1149,7 @@ describe("PRC-5d renderer replacement participant", () => {
       oldRecord,
       moduleRow(id),
       {
-        activate(ctx) {
-          ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
+        activate() {
           return { dispose: async () => release.promise } satisfies Disposable;
         },
       },

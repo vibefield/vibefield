@@ -10,7 +10,7 @@ import type { ComponentType } from "react";
 // re-renders when a surface binds/unbinds — a disabled or dev-reloaded plugin's
 // surface must appear and disappear honestly, never linger (P5: no optimistic
 // state). The manifest-DECLARED check is the harness's (it holds the manifest,
-// like widgets.register); THIS module owns SLOT POLICY:
+// like commands.register); THIS module owns SLOT POLICY:
 //  - hud.attention, hud.panel, and hud.side-panel are LIVE slots;
 //  - godview.row and godview.lens are REFUSED honestly at bind time — the
 //    declaration is forward-compatible (a manifest may carry it), but binding

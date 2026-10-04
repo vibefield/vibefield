@@ -84,7 +84,7 @@ const sourceResult = (): PluginUpdateSourceResult => ({
   },
 });
 
-const activation = { state: "active", bindings: new Map(), behaviors: new Map() } as const;
+const activation = { state: "active", behaviors: new Map() } as const;
 
 class FakeRuntime implements RendererUpdateParticipantRuntime {
   readonly prepares: PrepareRendererReplacementInput[] = [];

@@ -47,11 +47,9 @@ describe("plugin-browser", () => {
     const session = await activateWithMockHost(browserRenderer, {
       id: browserManifest.id,
       version: browserManifest.version,
-      declaredWidgets: [],
       declaredSurfaces: [ARTIFACT_SURFACE],
     });
     expect([...session.surfaces.keys()]).toEqual([ARTIFACT_SURFACE]);
-    expect(session.bindings.size).toBe(0);
     // Activation acquires NOTHING: no card exists to claim a surface.
     expect(session.liveSurfaces.size).toBe(0);
   });

@@ -62,7 +62,8 @@ describe("the deferred replacement module loader", () => {
   });
 });
 
-/** A record shaped the way fieldd's snapshot ships one, declaring one widget. */
+/** A record shaped the way fieldd's snapshot ships one, declaring one command (DK-8: one widget
+ * until `contributes.widgets` retired). */
 const record = (id: string, over: Record<string, unknown> = {}): PluginRecord =>
   ({
     id,
@@ -79,19 +80,7 @@ const record = (id: string, over: Record<string, unknown> = {}): PluginRecord =>
     deniedCapabilities: [],
     grantGeneration: 0,
     contributions: {
-      widgets: [
-        {
-          type: `${id}.card`,
-          title: "Card",
-          schemaVersion: 1,
-          surface: "dom",
-          sizeMode: "fixed",
-          defaultSize: { w: 100, h: 100 },
-          props: {},
-          groups: {},
-        },
-      ],
-      commands: [],
+      commands: [{ id: `${id}.run`, title: "Run", placements: ["palette"] }],
       surfaces: [],
       capabilities: [],
     },
@@ -103,10 +92,10 @@ const record = (id: string, over: Record<string, unknown> = {}): PluginRecord =>
 const snapshotOf = (...records: PluginRecord[]): PluginRegistrySnapshot =>
   PluginRegistrySnapshot.parse({ generation: 7, plugins: records, problems: [] });
 
-/** A module that binds its declared widget, the ordinary case. */
+/** A module that binds its declared command, the ordinary case. */
 const bindingModule = (id: string) => ({
   activate(ctx: RendererPluginContext) {
-    ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
+    ctx.commands?.register(`${id}.run`, () => undefined);
   },
 });
 
@@ -155,7 +144,7 @@ describe("the staged loader", () => {
     const [entry] = prepared.staged;
     expect(entry?.record.id).toBe("alpha");
     expect(entry?.activation.state).toBe("active");
-    expect([...(entry?.activation.bindings.keys() ?? [])]).toEqual(["alpha.card"]);
+    expect(isCommandBound("alpha.run")).toBe(true);
     expect(prepared.runtime?.windowId).toBe("field");
     await prepared.runtime?.close();
   });
@@ -237,7 +226,6 @@ describe("the staged loader", () => {
         importModule: async () => ({
           activate(ctx: RendererPluginContext) {
             signal = ctx.signal;
-            ctx.widgets.register({ type: `${id}.card`, binding: { component: () => null } });
             ctx.commands?.register(`${id}.run`, () => undefined);
             ctx.surfaces?.register(`${id}.panel`, () => null);
           },
@@ -441,11 +429,14 @@ describe("staged activation under the §10.4 deadline", () => {
     const activation = await activateStagedRenderer(record("gamma"), module, {
       async activate(ctx: RendererPluginContext) {
         await Promise.resolve();
-        ctx.widgets.register({ type: "gamma.card", binding: { component: () => null } });
+        ctx.commands?.register("gamma.run", () => undefined);
       },
     });
     expect(activation.state).toBe("active");
-    expect([...activation.bindings.keys()]).toEqual(["gamma.card"]);
+    expect(isCommandBound("gamma.run")).toBe(true);
+    activation.lifetime?.close({ kind: "disable" });
+    await activation.lifetime?.whenQuiescent();
+    expect(isCommandBound("gamma.run")).toBe(false);
   });
 
   it("reports a rejected activate as a failure, without memoizing it", async () => {
@@ -460,10 +451,13 @@ describe("staged activation under the §10.4 deadline", () => {
     // next boot, so the failure must NOT be the answer a second call gets.
     const retried = await activateStagedRenderer(record("delta"), module, {
       activate: (ctx: RendererPluginContext) => {
-        ctx.widgets.register({ type: "delta.card", binding: { component: () => null } });
+        ctx.commands?.register("delta.run", () => undefined);
       },
     });
     expect(retried.state).toBe("active");
+    expect(isCommandBound("delta.run")).toBe(true);
+    retried.lifetime?.close({ kind: "disable" });
+    await retried.lifetime?.whenQuiescent();
   });
 
   it("preempts an activate that never settles, and drops what it had bound", async () => {
@@ -472,7 +466,7 @@ describe("staged activation under the §10.4 deadline", () => {
       const tracked = { dispose: vi.fn() };
       const pending = activateStagedRenderer(record("epsilon"), module, {
         activate(ctx: RendererPluginContext) {
-          ctx.widgets.register({ type: "epsilon.card", binding: { component: () => null } });
+          ctx.commands?.register("epsilon.run", () => undefined);
           ctx.track(tracked);
           return new Promise<void>(() => {});
         },
@@ -481,9 +475,9 @@ describe("staged activation under the §10.4 deadline", () => {
       const activation = await pending;
       expect(activation.state).toBe("non-quiescent");
       expect(activation.error).toMatch(/§10.4/);
-      // The registrations it managed to make are gone and its resources are
+      // The registrations it managed to make were never published and its resources are
       // released — a half-activated plugin must not leave live bindings behind.
-      expect(activation.bindings.size).toBe(0);
+      expect(isCommandBound("epsilon.run")).toBe(false);
       expect(tracked.dispose).toHaveBeenCalledTimes(1);
     } finally {
       vi.useRealTimers();

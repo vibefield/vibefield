@@ -26,7 +26,7 @@ const artifact = (char: string): PluginUpdateArtifact => ({
 const oldArtifact = artifact("a");
 const candidateArtifact = artifact("b");
 const source = {} as RendererReplacementSource;
-const activation = { state: "active", bindings: new Map(), behaviors: new Map() } as const;
+const activation = { state: "active", behaviors: new Map() } as const;
 
 const prepareCommand = (updateId = "pupd_renderer_adapter"): PrepareCommand => ({
   kind: "prepare",

@@ -70,14 +70,13 @@ describe("vibefield.comment-pad", () => {
     expect(PAD_ACCENTS).toHaveLength(8);
   });
 
-  it("activates as any plugin does, binding no widget, command, surface or behavior", async () => {
+  it("activates as any plugin does, binding no command, surface or behavior — its kind is its export", async () => {
     const session = await activateWithMockHost(commentPadRenderer, {
       id: commentPadManifest.id,
       version: commentPadManifest.version,
-      declaredWidgets: [],
     });
-    expect([...session.bindings.keys()]).toEqual([]);
     expect([...session.commands.keys()]).toEqual([]);
+    expect([...session.surfaces.keys()]).toEqual([]);
     await session.close();
   });
 
