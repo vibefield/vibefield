@@ -150,3 +150,10 @@ land there (DK-3: godview-monitor's no-GPU row failed four whole runs in six, ne
 makes `observe()` hold its listener strongly, as a browser does. Its forced-GC witness runs once, in
 `tooling/test-env`; each suite carries a one-line wiring row. A new happy-dom suite loads the same
 setup file. Drop the shim when happy-dom holds the callback itself.
+
+The package owns every environment shim (DK-7): the Node-26 `localStorage` shim lives beside it
+(`@vibefield/test-env/local-storage`, `holdLocalStorage()`), called by field-app's test setup and the
+playground's boot. Node 26 defines an own `localStorage` that evaluates to `undefined` without
+`--localstorage-file`, so happy-dom's real Storage never lands over it; the shim puts an in-memory
+Storage there, deciding from the property's descriptor so it never reads Node's (reading it prints
+an ExperimentalWarning). Its witness runs in `tooling/test-env` too.

@@ -1,43 +1,13 @@
 // The repo's shared happy-dom shim (DK-5; tooling/test-env): the environment's
 // MutationObserver survives a garbage collection — its witness runs there, once.
 import "@vibefield/test-env/happy-dom/setup";
+import { holdLocalStorage } from "@vibefield/test-env/local-storage";
 import { loadDevBundledPlugins } from "../src/field-engine";
 
-/**
- * Test-env shim (2026-07-18): Node 26 defines an EXPERIMENTAL `localStorage`
- * own property on globalThis that evaluates to `undefined` unless the process
- * runs with `--localstorage-file`. Because the key already exists, vitest's
- * happy-dom environment never injects happy-dom's real Storage over it — and
- * App.tsx's dark-mode init (`localStorage.getItem`) explodes at mount.
- * Replace the stub with a real in-memory Storage; browsers are unaffected.
- * The plugin playground's boot carries the same shim for its own window.
- */
-function makeStorage(): Storage {
-  const map = new Map<string, string>();
-  return {
-    get length() {
-      return map.size;
-    },
-    clear: () => map.clear(),
-    getItem: (k: string) => map.get(k) ?? null,
-    key: (i: number) => [...map.keys()][i] ?? null,
-    removeItem: (k: string) => {
-      map.delete(k);
-    },
-    setItem: (k: string, v: string) => {
-      map.set(k, String(v));
-    },
-  };
-}
-
-if (typeof globalThis.localStorage === "undefined") {
-  const storage = makeStorage();
-  Object.defineProperty(globalThis, "localStorage", { value: storage, configurable: true });
-  const win = (globalThis as { window?: object }).window;
-  if (win !== undefined && (win as { localStorage?: Storage }).localStorage === undefined) {
-    Object.defineProperty(win, "localStorage", { value: storage, configurable: true });
-  }
-}
+// The Node-26 localStorage shim, shared (DK-7; tooling/test-env says why): Node's
+// undefined-valued `localStorage` keeps happy-dom's real Storage out, and App.tsx's
+// dark-mode init (`localStorage.getItem`) explodes at mount without one.
+holdLocalStorage();
 
 /**
  * P8b-3: load the dev-bundled plugin set once, for the whole file.

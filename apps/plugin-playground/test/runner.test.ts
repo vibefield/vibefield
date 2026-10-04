@@ -92,6 +92,13 @@ describe("the DOM it installs", () => {
     const held = Symbol.for("vibefield.test-env.held-mutation-observer");
     expect((Object.getPrototypeOf(observer) as Record<symbol, unknown>)[held]).toBe(true);
   });
+
+  // DK-7: the Node-26 localStorage shim is the shared one too (tooling/test-env), on the same window
+  it("keeps a working localStorage where Node 26's undefined-valued one stood", () => {
+    localStorage.setItem("dk-7.wiring", "held");
+    expect(localStorage.getItem("dk-7.wiring")).toBe("held");
+    localStorage.removeItem("dk-7.wiring");
+  });
 });
 
 describe("controls", () => {

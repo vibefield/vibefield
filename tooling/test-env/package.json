@@ -5,7 +5,8 @@
   "type": "module",
   "exports": {
     "./happy-dom": "./src/happy-dom.ts",
-    "./happy-dom/setup": "./src/happy-dom-setup.ts"
+    "./happy-dom/setup": "./src/happy-dom-setup.ts",
+    "./local-storage": "./src/local-storage.ts"
   },
   "scripts": {
     "test": "vitest run",

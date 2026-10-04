@@ -19,6 +19,7 @@ import { existsSync, statSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { holdMutationObserverCallbacks } from "@vibefield/test-env/happy-dom";
+import { holdLocalStorage } from "@vibefield/test-env/local-storage";
 
 /** This package's own directory, so the loader can find `src/cli.ts` no matter
  * which directory the bin was invoked from. */
@@ -96,33 +97,13 @@ export async function installDom(): Promise<void> {
       writable: true,
     });
   }
-  // The Node-26 localStorage shim, same defect and same fix as field-app's own
-  // test setup (test/setup.ts): Node defines an OWN `localStorage` key that
+  // The Node-26 localStorage shim, shared with field-app's test setup (DK-7;
+  // tooling/test-env says why): Node defines an OWN `localStorage` key that
   // evaluates to undefined without --localstorage-file, so the loop above skips
   // it AND happy-dom's real Storage never lands. Product code reads it at module
-  // init. Defined unconditionally rather than after an `=== undefined` check —
-  // READING Node's property is what prints its ExperimentalWarning, and a tool
-  // that warns on every run has taught its users to ignore its stderr.
-  {
-    const map = new Map<string, string>();
-    Object.defineProperty(globalThis, "localStorage", {
-      configurable: true,
-      value: {
-        get length(): number {
-          return map.size;
-        },
-        clear: () => map.clear(),
-        getItem: (k: string) => map.get(k) ?? null,
-        key: (i: number) => [...map.keys()][i] ?? null,
-        removeItem: (k: string) => {
-          map.delete(k);
-        },
-        setItem: (k: string, v: string) => {
-          map.set(k, String(v));
-        },
-      } satisfies Storage,
-    });
-  }
+  // init. The shim decides from the descriptor and never READS Node's property —
+  // reading it is what prints its ExperimentalWarning.
+  holdLocalStorage(globalThis);
 }
 
 /**
