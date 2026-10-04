@@ -56,6 +56,12 @@ describe("R10 parity with the repo's import-boundary checker", () => {
     expect(violatesR10("@vibecook/ice/desk/kit")).toBe(true);
     expect(violatesR10("@vibecook/ice/desk/objects")).toBe(true);
     expect(violatesR10("node:fs")).toBe(true);
+    // DK-8: ICE's workspace-internal names, walled as written (K-L1) — the built-ins'
+    // package and the desk's, by the names ICE's own packages import them with.
+    expect(violatesR10("@ice/objects")).toBe(true);
+    expect(violatesR10("@ice/desk")).toBe(true);
+    expect(violatesR10("@ice/desk/kit")).toBe(true);
+    expect(violatesR10("@ice/core")).toBe(true);
     // The SDK door and its subpaths are the sanctioned imports.
     expect(violatesR10("@vibefield/plugin-sdk")).toBe(false);
     expect(violatesR10("@vibefield/plugin-sdk/canvas")).toBe(false);
@@ -65,6 +71,7 @@ describe("R10 parity with the repo's import-boundary checker", () => {
     // A same-prefix impostor is not the forbidden module.
     expect(violatesR10("electronics")).toBe(false);
     expect(violatesR10("wsx")).toBe(false);
+    expect(violatesR10("@icecream/scoop")).toBe(false);
   });
 
   it("states the door as the SDK ships it: every runtime subpath, none of them walled", () => {

@@ -155,7 +155,11 @@ These are refused — `check` reports `wall-violation` with the file and line:
 - `ws`
 
 Node builtins (`node:*`) are refused too — a renderer plugin has no filesystem,
-and a service plugin asks the host through `ctx`. `scripts/` and `test/` are
+and a service plugin asks the host through `ctx`. ICE is refused by EVERY name it
+answers to: `@vibecook/ice` and each of its entries — `/desk/objects`, the
+built-ins' entry, first of all (a kind never imports another kind) — and the
+workspace-internal `@ice/*` names ICE's own packages build with; a kind reaches
+ICE through `@vibefield/plugin-sdk/desk` alone. `scripts/` and `test/` are
 authoring-time subtrees and are exempt.
 
 Separately, these are the specifiers the host's import map RESOLVES at load

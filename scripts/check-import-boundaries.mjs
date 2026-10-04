@@ -272,9 +272,14 @@ const RULES = [
     // types, react, PA-29 singleton bare specifiers). scripts/ (manifest emit —
     // plugin-build's Node-side caller) and test/ (vitest) are authoring-time
     // subtrees, never part of the renderer artifact graph, and stay exempt.
+    // DK-8 (ICE K-L1/K-L4): ICE is walled by EVERY name it answers to — the
+    // published `@vibecook/ice` and each of its entries (`/desk/objects`, the
+    // built-ins' entry, first of all: a kind never imports another kind), and
+    // the workspace-internal `@ice/*` names ICE's own packages build with
+    // (unresolvable here, so refused as written, never by luck of resolution).
     enforce: true,
     description:
-      "plugins import only the plugin SDK (no host/platform/ICE/Electron under plugins/, examples/plugins/)",
+      "plugins import only the plugin SDK (no host/platform/Electron under plugins/, examples/plugins/; no ICE by any name — @vibecook/ice and every entry of it, /desk/objects first, nor the workspace-internal @ice/*)",
     applies: (p) =>
       SOURCE_EXT.test(p) &&
       underAny(p, ["plugins", "examples/plugins"]) &&
@@ -293,7 +298,7 @@ const RULES = [
           "electron",
           "ws",
         ],
-        prefixes: ["node:"],
+        prefixes: ["node:", "@ice/"],
       }),
   },
   {
@@ -783,6 +788,13 @@ function runSelfTest() {
       id: "R10",
       file: "examples/plugins/widgetlab/src/uses-electron.ts",
       body: 'import { app } from "electron";\nimport { CardShell } from "@vibefield/design-kit";\n',
+    },
+    // DK-8: ICE's workspace-internal names are walled as written — a kind that
+    // reaches for `@ice/objects` (a built-in) or `@ice/desk` is refused by name.
+    {
+      id: "R10",
+      file: "examples/plugins/desk-clock/src/uses-ice-internal.ts",
+      body: 'import { paperKind } from "@ice/objects";\nimport { defineObject } from "@ice/desk";\n',
     },
     {
       id: "R11",

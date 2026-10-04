@@ -28,8 +28,11 @@ export const R10_FORBIDDEN_MODULES = [
   "ws",
 ] as const;
 
-/** R10's forbidden prefixes, verbatim: Node builtins have no renderer meaning. */
-export const R10_FORBIDDEN_PREFIXES = ["node:"] as const;
+/** R10's forbidden prefixes, verbatim: Node builtins have no renderer meaning, and
+ * `@ice/*` is ICE's WORKSPACE-INTERNAL scope (its own packages build with it; DK-8,
+ * ICE K-L1) — walled as written, beside every entry of the published `@vibecook/ice`
+ * above (`/desk/objects`, the built-ins' entry, among them). */
+export const R10_FORBIDDEN_PREFIXES = ["node:", "@ice/"] as const;
 
 /** What a plugin's runtime code MAY import — the door, stated positively for the
  * docs. Not a matcher: R10 gates on the deny list above, and a bare npm package
