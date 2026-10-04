@@ -135,6 +135,9 @@ export async function installDom(): Promise<void> {
  */
 export async function createHarness(extraRoots: readonly string[] = []): Promise<Harness> {
   const { createServer } = await import("vite");
+  // DK-6: a kind ships its shaders as `.wgsl` files, which plugin-build inlines as their TEXT — the
+  // harness loads them the same way, or every object plugin's renderer fails to import here.
+  const { wgsl } = await import("@vibefield/plugin-build/wgsl");
   const allow = [WORKSPACE_ROOT, ...extraRoots.filter((p) => existsSync(p))];
   const server = await createServer({
     root: WORKSPACE_ROOT,
@@ -152,6 +155,7 @@ export async function createHarness(extraRoots: readonly string[] = []): Promise
     // host/plugin boundary.
     ssr: { noExternal: [/^@vibefield\//] },
     esbuild: { jsx: "automatic", jsxImportSource: "react" },
+    plugins: [wgsl()],
   });
   return {
     load: (absolutePath) => server.ssrLoadModule(absolutePath) as Promise<Record<string, unknown>>,

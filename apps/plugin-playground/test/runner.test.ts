@@ -57,6 +57,32 @@ describe("the repo's own plugins", () => {
   });
 });
 
+describe("an object kind's WGSL (DK-6)", () => {
+  // The example plugin ships its shaders as `.wgsl` files (plugin-build inlines them as text); the
+  // harness loads its renderer from SOURCE, so it must load them the same way — or every object
+  // plugin, the scaffold's own included, is refused `renderer-import-failed` before its kind is read.
+  it("loads the example clock, whose kind's WGSL is two .wgsl files, and lists its object", async () => {
+    const result = await run({
+      pluginDir: join(REPO, "examples", "plugins", "desk-clock"),
+      loader: harness,
+    });
+    expect(result.summary).toMatchObject({
+      plugin: "vibefield.example.desk-clock",
+      objects: 1,
+      refused: 0,
+      exit: 0,
+    });
+    expect(result.verdicts).toContainEqual(
+      expect.objectContaining({
+        kind: "object",
+        type: "vibefield.example.desk-clock",
+        binding: "clock",
+        refusal: null,
+      }),
+    );
+  });
+});
+
 describe("the DOM it installs", () => {
   // DK-5: the repo's SHARED happy-dom shim (tooling/test-env) on the playground's own
   // window, applied before its classes are bound onto globalThis — an observer here
