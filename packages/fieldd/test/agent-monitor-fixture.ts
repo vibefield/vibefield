@@ -30,6 +30,12 @@ import {
 // service's tests, the board's and the differential's.
 
 export const T0 = Date.parse("2026-09-13T10:00:00.000Z");
+/** The clock's start: after every stamp the fixtures carry (`stateChangedAt`
+ * 10:05, the blockers' 10:04:30) and inside core's 30 s freshness window of the
+ * evidence, so a state is neither in the backend's future nor stale at first
+ * sight — a fixture whose turn finished AFTER the clock's now reads as a turn
+ * that finished unseen, and the unread ledger marks it on the next tick. */
+export const NOW0 = T0 + 5 * 60_000 + 10_000;
 
 /** The runtime's live state for a fold row: its mirror IS core's projection
  * (the passthrough carries it verbatim), with the three collections the
@@ -342,7 +348,7 @@ export async function testMonitor(
   const terminals = scriptedTerminals(input.terminals);
   const devices = scriptedDevices(input.devices);
   const profiles = scriptedProfiles(input.profiles);
-  const clock = manualClock();
+  const clock = manualClock(NOW0);
   const scheduler = manualScheduler();
   const identity = createMemoryProjectIdentityStore();
   const service = createAgentMonitorService({
@@ -377,7 +383,13 @@ export async function testMonitor(
     row(runtimeRunId) {
       rows();
       const row = service.rowForRun(runtimeRunId);
-      if (row === undefined) throw new Error(`no model row for ${runtimeRunId}`);
+      if (row === undefined)
+        throw new Error(
+          `no model row for ${runtimeRunId}; the model holds ${service
+            .snapshot()
+            .rows.map((held) => held.id)
+            .join(", ")}`,
+        );
       return row;
     },
   };
