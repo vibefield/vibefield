@@ -266,6 +266,31 @@ describe("the B-side replay — on the tree as it stands", () => {
     feed.dispose();
   });
 
+  it("the lab's witness — a second adapter in the page — reads the same verdict, and can say no", async () => {
+    window.history.replaceState(null, "", "/?godviewPerf=1&godviewReplay=1");
+    instrumentMonitorDoor(quietDoor());
+    const lab = godviewPerfLab();
+    const witness = window.__vfGodviewModelWitness;
+    if (lab === null || witness === undefined) throw new Error("the switch installed no lab");
+    const opened = witness.open();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(await opened).toEqual({ state: "live" });
+    lab.player.load(RECIPE);
+    lab.player.pushModel(STREAM);
+    lab.player.start();
+    // the open is delivered in the start's own task; the replica publishes on its frame
+    const early = witness.check();
+    expect(early.equal).toBe(false);
+    expect(early.expected).toBe(15);
+    expect(early.rows).toBe(0);
+    await vi.advanceTimersByTimeAsync(3_000);
+    expect(lab.player.state().phase).toBe("ended");
+    const late = witness.check();
+    expect(late).toMatchObject({ open: true, state: "live", rows: 15, expected: 15, equal: true });
+    expect(late.mismatched).toEqual([]);
+    witness.close();
+  });
+
   it("refuses a stream for another corpus, and plays the fold source untouched without one", async () => {
     window.history.replaceState(null, "", "/?godviewPerf=1&godviewReplay=1");
     const feed = createGodviewMonitorFeed({ client: refusingClient() });

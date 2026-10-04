@@ -111,24 +111,34 @@ export function instrumentMonitorDoor(door: MonitorDoor, search = locationSearch
 
 let modelReplay: ModelReplayClient | undefined;
 
+/** One model replay client per renderer life, like the recorder: a feed built
+ * again (Godview reopened, a gap re-asked) hears the same stream. */
+function publishedModelReplay(): ModelReplayClient {
+  if (modelReplay !== undefined) return modelReplay;
+  const created = createModelReplayClient();
+  modelReplay = created;
+  const { player } = godviewPerfLab() ?? installGodviewPerfLab();
+  player.attachModel(created);
+  return created;
+}
+
 /**
  * MV-3c — THE MODEL DOOR'S INSTRUMENT, the same switch: `createGodviewMonitorFeed`
  * hands its client through here. With nothing asked it hands back THE SAME
  * OBJECT; under `godviewReplay=1` the model board is answered by the lab's
- * player from a model stream (`model-replay-client.ts`) and every other call
- * goes to the client given. One replay client per renderer life, like the
- * recorder: a feed built again (Godview reopened, a gap re-asked) hears the
- * same stream, and the newest client given answers the rest.
+ * player from a model stream (`model-replay-client.ts`), and every other call
+ * goes to the newest client given.
  */
 export function instrumentModelClient(client: DoorClient, search = locationSearch()): DoorClient {
   if (godviewDoorInstrument(search) !== "replay") return client;
-  if (modelReplay === undefined) {
-    const created = createModelReplayClient({ real: client });
-    modelReplay = created;
-    const { player } = godviewPerfLab() ?? installGodviewPerfLab();
-    player.attachModel(created);
-  } else modelReplay.setReal(client);
-  return modelReplay;
+  const replay = publishedModelReplay();
+  if (client !== replay) replay.setReal(client);
+  return replay;
+}
+
+/** The lab's own handle on the model replay (its witness feed, `lab-bridge.ts`). */
+export function godviewModelReplay(): ModelReplayClient {
+  return publishedModelReplay();
 }
 
 /** Test seam: the published recorder is per-renderer-life by design. */

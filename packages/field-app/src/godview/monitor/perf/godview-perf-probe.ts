@@ -18,6 +18,12 @@
 // "commits" are counted by a wrapper component the host mounts around the view
 // ONLY while the probe is on (the view has no memo: the wrapper renders exactly
 // when the view does).
+//
+// MV-3c (M32) — RAF WORK. An offscreen window pins frame p50 at its frame rate,
+// so the frame intervals stop saying what a frame costs. The probe also times
+// every animation-frame callback the page asks for (the views' draw loops, a
+// replica's publication and the store render it queues — each callback with the
+// microtasks it queued), per frame and in total; its own sampler is not counted.
 
 export interface GodviewPerfMark {
   name: string;
@@ -34,6 +40,9 @@ export interface GodviewPerfReport {
   sinceMs: number;
   windowMs: number;
   frames: { count: number; p50: number; p95: number; max: number; fps: number };
+  /** MV-3c — the page's animation-frame callbacks: their count, their summed
+   * time, and that time per frame */
+  raf: { callbacks: number; totalMs: number; perFrame: { p50: number; p95: number; max: number } };
   loaf: { observable: boolean; count: number; blockingMs: number; longestMs: number };
   renders: Record<string, number>;
   commits: Record<string, number>;
@@ -108,6 +117,10 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
   let framesWithGpu = 0;
   let mutations = { total: 0, childList: 0, attributes: 0, characterData: 0 };
   const marks: GodviewPerfMark[] = [];
+  let rafCallbacks = 0;
+  let rafTotalMs = 0;
+  let rafThisFrame = 0;
+  let rafFrames: number[] = [];
 
   /** Each event settles the "first X after" of every mark still waiting for it. */
   const settle = (key: keyof Omit<GodviewPerfMark, "name" | "at">, at: number): void => {
@@ -116,20 +129,45 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
     }
   };
 
+  // ── the page's animation-frame callbacks, timed (MV-3c) ─────────────────────
+  // the probe's own loops keep the page's original; everyone else's callback is
+  // timed with the microtasks it queued (they run first-in first-out, ahead of
+  // the one that reads the clock)
+  const nativeRaf = globalThis.requestAnimationFrame;
+  const originalRaf = nativeRaf.bind(globalThis);
+  const originalCancel = globalThis.cancelAnimationFrame.bind(globalThis);
+  const timedRaf = (callback: FrameRequestCallback): number =>
+    originalRaf((at) => {
+      const begun = now();
+      try {
+        callback(at);
+      } finally {
+        queueMicrotask(() => {
+          const spent = now() - begun;
+          rafCallbacks += 1;
+          rafTotalMs += spent;
+          rafThisFrame += spent;
+        });
+      }
+    });
+  globalThis.requestAnimationFrame = timedRaf;
+
   // ── the frame sampler (rAF) ───────────────────────────────────────────────
   let raf = 0;
   const tick = (at: number): void => {
     if (lastFrameAt !== null) intervals.push(at - lastFrameAt);
     lastFrameAt = at;
     frameTimes.push(at);
+    rafFrames.push(rafThisFrame);
+    rafThisFrame = 0;
     if (draw2dThisFrame) framesWithDraw2d += 1;
     if (gpuThisFrame) framesWithGpu += 1;
     draw2dThisFrame = false;
     gpuThisFrame = false;
     settle("nextFrameAfter", at);
-    raf = requestAnimationFrame(tick);
+    raf = originalRaf(tick);
   };
-  raf = requestAnimationFrame(tick);
+  raf = originalRaf(tick);
 
   // ── long animation frames ─────────────────────────────────────────────────
   let loaf: PerformanceObserver | null = null;
@@ -192,11 +230,11 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
   const observeStage = (selector: string): void => {
     observer?.disconnect();
     observer = null;
-    cancelAnimationFrame(stageWatch);
+    originalCancel(stageWatch);
     const attach = (): void => {
       const stage = document.querySelector(selector);
       if (stage === null) {
-        stageWatch = requestAnimationFrame(attach);
+        stageWatch = originalRaf(attach);
         return;
       }
       observer = new MutationObserver((records) => {
@@ -243,9 +281,14 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
       framesWithGpu = 0;
       mutations = { total: 0, childList: 0, attributes: 0, characterData: 0 };
       marks.length = 0;
+      rafCallbacks = 0;
+      rafTotalMs = 0;
+      rafThisFrame = 0;
+      rafFrames = [];
     },
     report() {
       const sorted = [...intervals].sort((a, b) => a - b);
+      const rafSorted = [...rafFrames].sort((a, b) => a - b);
       const windowMs = now() - since;
       const memory = (
         performance as Performance & {
@@ -261,6 +304,15 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
           p95: quantile(sorted, 0.95),
           max: sorted.at(-1) ?? 0,
           fps: windowMs > 0 ? (frameTimes.length * 1_000) / windowMs : 0,
+        },
+        raf: {
+          callbacks: rafCallbacks,
+          totalMs: rafTotalMs,
+          perFrame: {
+            p50: quantile(rafSorted, 0.5),
+            p95: quantile(rafSorted, 0.95),
+            max: rafSorted.at(-1) ?? 0,
+          },
         },
         loaf: {
           observable,
@@ -312,8 +364,10 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
     },
     observeStage,
     dispose() {
-      cancelAnimationFrame(raf);
-      cancelAnimationFrame(stageWatch);
+      originalCancel(raf);
+      originalCancel(stageWatch);
+      if (globalThis.requestAnimationFrame === timedRaf)
+        globalThis.requestAnimationFrame = nativeRaf;
       loaf?.disconnect();
       observer?.disconnect();
       for (const restore of restores) restore();
