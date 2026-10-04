@@ -53,10 +53,18 @@
 // default, never focused, never on top — proven: the swarm renders WebGPU
 // there), the same clock, the same warm-up.
 
-import { spawn } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
 import { join, resolve } from "node:path";
+import {
+  buildRoot,
+  builtBundle,
+  launchLab,
+  log,
+  modelStreams,
+  WARMUP_RECIPE,
+  waitForLoad,
+} from "./godview-lab-arms.mjs";
 import { cellMetrics, gateVerdict, judgeCell, metricTable } from "./perf-godview-stats.mjs";
 
 const argv = process.argv.slice(2);
@@ -64,9 +72,6 @@ const option = (name, fallback) => {
   const index = argv.indexOf(`--${name}`);
   return index === -1 ? fallback : (argv[index + 1] ?? fallback);
 };
-
-/** Keep in step with `DEFAULT_WARMUP_RECIPE` in electron-shell's godview-perf-lab.ts. */
-const WARMUP_RECIPE = "n=10,duration=1500,seed=9,markerQuietMs=50";
 
 const repoRoot = resolve(new URL("..", import.meta.url).pathname);
 const rootA = resolve(option("a", repoRoot));
@@ -100,8 +105,6 @@ const outDir = resolve(
 );
 mkdirSync(outDir, { recursive: true });
 
-const log = (line) => process.stdout.write(`${line}\n`);
-
 /** The arms, each a root and a source; A′ is A's own build and source. */
 const ARMS = {
   A: { root: rootA, source: sourceA, synthetic: "" },
@@ -109,136 +112,46 @@ const ARMS = {
   ...(paired ? { "A′": { root: rootA, source: sourceA, synthetic: "" } } : {}),
 };
 
-const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
-
-async function waitForLoad() {
-  for (;;) {
-    const [one] = loadavg();
-    if (one < loadMax) return one;
-    log(`load ${one.toFixed(1)} ≥ ${loadMax}: waiting (L17)`);
-    await sleep(15_000);
-  }
-}
-
-function run(command, args, cwd, env, logPath) {
-  return new Promise((done, fail) => {
-    const child = spawn(command, args, { cwd, env, stdio: ["ignore", "pipe", "pipe"] });
-    const lines = [];
-    child.stdout.on("data", (chunk) => lines.push(String(chunk)));
-    child.stderr.on("data", (chunk) => lines.push(String(chunk)));
-    child.on("error", fail);
-    child.on("exit", (code) => {
-      writeFileSync(logPath, lines.join(""));
-      if (code === 0) done();
-      else
-        fail(new Error(`${command} ${args.join(" ")} in ${cwd} exited ${code} (log: ${logPath})`));
-    });
-  });
-}
-
-/** Build a root's desktop app with React's profiling client (M33's render time). */
-async function buildRoot(root, name) {
-  log(`build ${name}: ${root} (VF_REACT_PROFILING=1)`);
-  await run(
-    "pnpm",
-    ["--filter", "@vibefield/desktop", "build:all"],
-    root,
-    { ...process.env, TMPDIR: "/tmp", NX_DAEMON: "false", VF_REACT_PROFILING: "1" },
-    join(outDir, `build-${name}.log`),
-  );
-}
-
 function assertBuilt() {
   for (const [arm, { root }] of Object.entries(ARMS)) {
-    const bundle = join(root, "packages", "electron-shell", "dist", "testing", "smoke.cjs");
-    if (!existsSync(bundle)) {
-      log(
-        `arm ${arm}: ${root} is not built (${bundle} missing) — run VF_REACT_PROFILING=1 pnpm --filter @vibefield/desktop build:all there, or drop --no-build`,
-      );
-      process.exit(2);
-    }
+    if (builtBundle(root) !== null) continue;
+    log(
+      `arm ${arm}: ${root} is not built — run VF_REACT_PROFILING=1 pnpm --filter @vibefield/desktop build:all there, or drop --no-build`,
+    );
+    process.exit(2);
   }
 }
 
-/** The model streams a root's fieldd answers for the recipes and the warm-up,
- * computed in THAT root (its backend, its board, its relay). */
-async function modelStreams(root, name) {
-  const dir = join(outDir, `model-streams-${name}`);
-  log(`model streams for ${name}: computing in ${root} → ${dir}`);
-  await run(
-    "pnpm",
-    ["--filter", "@vibefield/field-app", "perf:godview:model"],
-    root,
-    {
-      ...process.env,
-      TMPDIR: "/tmp",
-      NX_DAEMON: "false",
-      VF_GODVIEW_MODEL_OUT: dir,
-      VF_GODVIEW_MODEL_RECIPES: `${recipes};${WARMUP_RECIPE}`,
-    },
-    join(outDir, `model-streams-${name}.log`),
-  );
-  return dir;
-}
-
-function launch(arm, { root, source, modelDir, synthetic }, round) {
+async function launch(arm, { root, source, modelDir, synthetic }, round) {
   const file = arm === "A′" ? "A2" : arm;
   const out = join(outDir, `${file}-r${round}.json`);
-  return new Promise((done, fail) => {
-    const child = spawn(
-      "pnpm",
-      [
-        "exec",
-        "electron",
-        ".",
-        "--godview-perf-lab",
-        "--disable-renderer-backgrounding",
-        "--disable-backgrounding-occluded-windows",
-      ],
-      {
-        cwd: join(root, "apps", "desktop"),
-        env: {
-          ...process.env,
-          TMPDIR: "/tmp",
-          VF_GODVIEW_PERF_OUT: out,
-          VF_GODVIEW_PERF_RECIPES: recipes,
-          VF_GODVIEW_PERF_VIEWS: views,
-          VF_GODVIEW_PERF_ARM: arm,
-          VF_GODVIEW_PERF_ROUND: String(round),
-          VF_GODVIEW_PERF_SOURCE: source,
-          ...(modelDir !== undefined ? { VF_GODVIEW_PERF_MODEL_DIR: modelDir } : {}),
-          VF_GODVIEW_PERF_WARMUP_RECIPE: WARMUP_RECIPE,
-          VF_GODVIEW_PERF_CLOCK: clock,
-          VF_GODVIEW_PERF_WINDOW: windowMode,
-          VF_GODVIEW_PERF_FPS: String(fps),
-          VF_GODVIEW_PERF_SCALE: String(scale),
-          ...(synthetic !== "" ? { VF_GODVIEW_PERF_SYNTHETIC: synthetic } : {}),
-        },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    const lines = [];
-    child.stdout.on("data", (chunk) => {
-      for (const line of String(chunk).split("\n")) {
-        if (line.startsWith("GODVIEW_PERF_LAB")) log(`  ${arm} r${round}: ${line.slice(0, 160)}`);
-        lines.push(line);
-      }
-    });
-    child.stderr.on("data", (chunk) => lines.push(String(chunk)));
-    child.on("error", fail);
-    child.on("exit", (code) => {
-      writeFileSync(join(outDir, `${file}-r${round}.log`), lines.join("\n"));
-      if (code !== 0 || !existsSync(out)) {
-        fail(
-          new Error(
-            `arm ${arm} round ${round} exited ${code} (${out} ${existsSync(out) ? "written" : "missing"})`,
-          ),
-        );
-        return;
-      }
-      done(JSON.parse(readFileSync(out, "utf8")));
-    });
+  const code = await launchLab({
+    root,
+    env: {
+      VF_GODVIEW_PERF_OUT: out,
+      VF_GODVIEW_PERF_RECIPES: recipes,
+      VF_GODVIEW_PERF_VIEWS: views,
+      VF_GODVIEW_PERF_ARM: arm,
+      VF_GODVIEW_PERF_ROUND: String(round),
+      VF_GODVIEW_PERF_SOURCE: source,
+      ...(modelDir !== undefined ? { VF_GODVIEW_PERF_MODEL_DIR: modelDir } : {}),
+      VF_GODVIEW_PERF_WARMUP_RECIPE: WARMUP_RECIPE,
+      VF_GODVIEW_PERF_CLOCK: clock,
+      VF_GODVIEW_PERF_WINDOW: windowMode,
+      VF_GODVIEW_PERF_FPS: String(fps),
+      VF_GODVIEW_PERF_SCALE: String(scale),
+      ...(synthetic !== "" ? { VF_GODVIEW_PERF_SYNTHETIC: synthetic } : {}),
+    },
+    logPath: join(outDir, `${file}-r${round}.log`),
+    echo: "GODVIEW_PERF_LAB",
+    prefix: `${arm} r${round}`,
   });
+  if (code !== 0 || !existsSync(out)) {
+    throw new Error(
+      `arm ${arm} round ${round} exited ${code} (${out} ${existsSync(out) ? "written" : "missing"})`,
+    );
+  }
+  return JSON.parse(readFileSync(out, "utf8"));
 }
 
 /** A frame is the window mode's: 1000/fps offscreen, the display's 8.3 ms shown. */
@@ -260,7 +173,7 @@ async function main() {
     for (const [arm, { root }] of Object.entries(ARMS)) {
       if (built.has(root)) continue;
       built.add(root);
-      await buildRoot(root, arm === "A′" ? "A" : arm);
+      await buildRoot(root, join(outDir, `build-${arm === "A′" ? "A" : arm}.log`));
     }
   }
   assertBuilt();
@@ -268,10 +181,19 @@ async function main() {
   const streams = new Map();
   for (const [arm, spec] of Object.entries(ARMS)) {
     if (spec.source !== "model" || streams.has(spec.root)) continue;
-    streams.set(spec.root, await modelStreams(spec.root, arm === "A′" ? "A" : arm));
+    const name = arm === "A′" ? "A" : arm;
+    streams.set(
+      spec.root,
+      await modelStreams(
+        spec.root,
+        join(outDir, `model-streams-${name}`),
+        `${recipes};${WARMUP_RECIPE}`,
+        join(outDir, `model-streams-${name}.log`),
+      ),
+    );
   }
   for (const spec of Object.values(ARMS)) spec.modelDir = streams.get(spec.root);
-  const loadAtStart = await waitForLoad();
+  const loadAtStart = await waitForLoad(loadMax);
   log(`load ${loadAtStart.toFixed(1)} < ${loadMax}: starting`);
   const runs = Object.fromEntries(Object.keys(ARMS).map((arm) => [arm, []]));
   const loads = [];
