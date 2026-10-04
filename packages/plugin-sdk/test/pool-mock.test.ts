@@ -135,6 +135,9 @@ describe("mock host ctx.pool", () => {
     const session = await activateWithMockHost(mod);
 
     expect(typeof view).toBe("function");
+    // DK-7: the mock's view draws NOTHING and never throws (DK-2's stub threw "DK-7") — a panel that
+    // mounts it still activates under the mock; a face on the desk is a kind, judged by the harness.
+    expect((view as (props: unknown) => unknown)({ handle })).toBeNull();
     // PA-22 in the mock too: nothing on the handle reaches a frame.
     expect("presentation" in (handle as Record<string, unknown>)).toBe(false);
 

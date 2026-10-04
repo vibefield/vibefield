@@ -28,8 +28,10 @@ type MockSurfaceComponent = ComponentType<PluginSurfaceProps>;
 
 // §5.4.4 — the mock host lives WITH the SDK contract it mocks. Runs a renderer
 // module's activate against a collecting context: no engine, no daemon, no
-// React (the pool's placeholder view was cut at DK-2 — a typed stub below names
-// DK-7, where the kind-conformance mock host replaces this mock's face half).
+// React. Its FACE half is the kind-conformance harness (DK-7, kind-harness.ts,
+// exported at the foot of this module): an object's face is a GPU kind the desk
+// draws, judged over its declared states with no device and no DOM — the mock
+// pool's `SurfaceView` draws nothing (`inertSurfaceView` below says why).
 
 export interface MockActivation {
   /** declared widget type → whatever its legacy registration carried. Inert on the desk build
@@ -93,15 +95,16 @@ export interface MockLiveSurface {
   setBrowser(state: PluginSurfaceBrowserState | null): void;
 }
 
-/** CUT at DK-2 (desk/landing, ICE 0.14.0): the mock's `SurfaceView` mounted a
- * live surface's DOM view — the widget-face path the desk retires (a live surface
- * returns as an object kind under PORTALS). The kind-conformance mock host that
- * replaces this mock's face half is DK-7's; this typed stub throws so a caller
- * sees where it went. */
-function MockSurfaceView(_props: PluginSurfaceViewProps): ReactElement {
-  throw new Error(
-    "plugin-sdk/testing: MockSurfaceView was cut at DK-2 — the kind-conformance mock host arrives at DK-7",
-  );
+/** The mock pool's `SurfaceView` (DK-7): it renders NOTHING, and says so by
+ * being nothing. The product's view paints a live surface's frames into a DOM
+ * box (field-app's surface door); the mock host has no frames and no DOM to
+ * paint — a mock that drew would claim a presentation path it does not have.
+ * A plugin's face on the desk is an object KIND, and the SDK judges that with
+ * `runKindConformance` (below), never with a mounted view. It never throws: a
+ * panel that mounts the pool's view still activates and closes under the mock,
+ * and its handle (`ctx.pool.liveSurface`) is driven by the test as before. */
+function inertSurfaceView(_props: PluginSurfaceViewProps): ReactElement | null {
+  return null;
 }
 
 function mockLiveSurface(
@@ -397,7 +400,7 @@ export async function activateWithMockHost(
           ownedBy.track({ dispose: () => surface.handle.release() });
           return surface.handle;
         },
-        SurfaceView: MockSurfaceView,
+        SurfaceView: inertSurfaceView,
       } satisfies PluginAttachmentPool,
       ...(declaredCommands !== undefined
         ? {
@@ -701,3 +704,45 @@ export async function activateServiceWithMockHost(
   };
   return { provided, logs, disposables, abort: () => void root.close(), close };
 }
+
+export {
+  type BindingResource,
+  bindingsUsedBy,
+  type GpuProblem,
+  type GpuProblemCode,
+  type RecordedModule,
+  type RecordingGpu,
+  readWgsl,
+  recordingGpu,
+  uncommented,
+  type WgslBinding,
+  type WgslRead,
+  type WgslStage,
+} from "./kind-gpu";
+// --- THE FACE HALF: the kind-conformance harness (DK-7) ------------------------
+// An object's code half (its `ObjectBinding`) against its durable half (the
+// manifest row), with NO device and NO DOM: the declaration the host reads, the
+// program on a recording device (its WGSL read — never compiled), every
+// declared state driven through resolve / record / hit / frame / chip / the
+// opening / prepare / drawRange, then dispose. `{ states, verdicts }`.
+export {
+  checkKindDeclaration,
+  checkKindProgram,
+  DESK_ZOOMS,
+  defaultProps,
+  hangZoom,
+  KIND_EXPECTED,
+  type KindConformanceInput,
+  type KindMode,
+  type KindNoteCode,
+  type KindPlan,
+  type KindRefusalCode,
+  type KindReport,
+  type KindVerdict,
+  type KindVerdictStatus,
+  kindOfBinding,
+  kindPlan,
+  type PropRefusal,
+  runKindConformance,
+  validateStateProps,
+} from "./kind-harness";
