@@ -23,6 +23,7 @@ import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvi
 import type { MonitorDoor, StatusHistoryPort } from "../src/godview/monitor/remote-door";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
 import { managedSummary } from "./managed-session-fixture";
+import { type ScriptedModelBoard, scriptedModelBoard } from "./model-board-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -71,11 +72,19 @@ const noUsage: AccountUsagePort = {
   subscribe: () => () => undefined,
 };
 
+/** MV-3b — the model board the window's rows come from (`model-board-fixture.ts`):
+ * fieldd's real backend on the door's fold rows. Built per door, disposed after
+ * the test; the fold stays on the door for the readers the model does not serve. */
+let board: ScriptedModelBoard | null = null;
+
 function door(
   statusHistory?: StatusHistoryPort,
   rows: readonly AgentSessionSummary[] = ROWS,
 ): MonitorDoor {
+  board?.dispose();
+  board = scriptedModelBoard({ rows });
   return {
+    model: board.port,
     observeMesh: ({ onOpen }) => {
       onOpen({ devices: [] } as never);
       return () => undefined;
@@ -117,6 +126,8 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
+  board?.dispose();
+  board = null;
   setSwarmPhysicsDriverFactory(undefined);
   vi.restoreAllMocks();
 });
@@ -137,10 +148,16 @@ async function mount(monitorDoor: MonitorDoor): Promise<void> {
       </GodviewAgentsProvider>,
     );
   });
-  // the ledger's answer lands after the first frame
-  await act(async () => {
-    await Promise.resolve();
-  });
+  // the board's open lands in a microtask, the replica publishes on the next
+  // frame, and the ledger's answer lands after the board is live
+  for (let round = 0; round < 3; round += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
 }
 
 const spans = (id: string) =>

@@ -45,7 +45,7 @@ import {
   createInlineSwarmPhysicsDriver,
   type SwarmPhysicsDriver,
 } from "@vibecook/puppeteer-views/physics";
-import type { AgentPersona, AgentProfileSet } from "@vibefield/contracts";
+import type { AgentPersona, AgentProfileSet, TerminalInfo } from "@vibefield/contracts";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -60,6 +60,7 @@ import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
 import { managedSummary } from "./managed-session-fixture";
+import { type ScriptedModelBoard, scriptedModelBoard, terminalInfoOf } from "./model-board-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -160,9 +161,57 @@ interface FakeDoor extends MonitorDoor {
   push(rows: readonly AgentSessionSummary[]): void;
 }
 
+/** MV-3b — the model board the window's rows come from (`model-board-fixture.ts`):
+ * fieldd's real backend on the door's fold rows, with the deck's pane sessions
+ * and the roster's PTYs as the floor's inventory (`syncBoard`). One per door,
+ * disposed with the test; the fold stays on the door for the readers the model
+ * does not serve (the marker, the find sheet). */
+let board: ScriptedModelBoard | null = null;
+
+/** fieldd's inventory as the deck's facts imply it: every pane's session, and
+ * the roster's PTYs no pane shows (GT-6b). */
+function floorOf(panes: MonitorPaneFacts): TerminalInfo[] {
+  const listed = new Set((panes.sessions ?? []).map((session) => session.id));
+  return [
+    ...(panes.sessions ?? []).map((session) => terminalInfoOf(session)),
+    ...(panes.floor ?? [])
+      .filter((row) => !listed.has(row.sessionId))
+      .map((row) =>
+        terminalInfoOf(
+          { id: row.sessionId, createdAtMs: 0, title: row.title } as unknown as SessionSummary,
+          row.workloadClass,
+        ),
+      ),
+  ];
+}
+
+/** What the daemon would know from the deck's facts: the floor, and which shells were born under a profile. */
+function syncBoard(panes: MonitorPaneFacts): void {
+  if (board === null) return;
+  for (const [sessionId, set] of panes.profileSets ?? []) board.bind(sessionId, set);
+  board.floor(floorOf(panes));
+}
+
+/** The board's open lands in a microtask and the replica publishes on the next
+ * frame: let both arrive before reading the stage. */
+async function settle(): Promise<void> {
+  for (let round = 0; round < 3; round += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      await Promise.resolve();
+    });
+  }
+}
+
 function fakeDoor(rows: readonly AgentSessionSummary[] = ROWS): FakeDoor {
   let publish: ((rows: readonly AgentSessionSummary[]) => void) | null = null;
+  board?.dispose();
+  const held = scriptedModelBoard({ rows });
+  board = held;
   return {
+    model: held.port,
     observeMesh: vi.fn(({ onOpen }) => {
       onOpen({ devices: [] });
       return () => undefined;
@@ -175,7 +224,10 @@ function fakeDoor(rows: readonly AgentSessionSummary[] = ROWS): FakeDoor {
         publish = null;
       };
     }),
-    push: (next) => publish?.(next),
+    push: (next) => {
+      publish?.(next);
+      held.publish(next);
+    },
     createTerminal: vi.fn(async () => ({ state: "mounted" as const, sessionId: "born-1" })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: unreachableHistory(),
@@ -244,6 +296,8 @@ afterEach(() => {
   root = null;
   container = null;
   setSwarmPhysicsDriverFactory(undefined);
+  board?.dispose();
+  board = null;
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   vi.restoreAllMocks();
   // `restoreAllMocks` does not undo `stubGlobal`, and the inset row below stubs
@@ -258,6 +312,7 @@ async function mountMonitor(
   panes: MonitorPaneFacts = PANES,
 ): Promise<HTMLElement> {
   const view = monitorViewFor(viewId);
+  syncBoard(panes);
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -273,6 +328,7 @@ async function mountMonitor(
       </GodviewAgentsProvider>,
     );
   });
+  await settle();
   return container;
 }
 
@@ -284,6 +340,7 @@ async function renderMonitor(
   panes: MonitorPaneFacts,
 ): Promise<void> {
   const view = monitorViewFor(viewId);
+  syncBoard(panes);
   await act(async () => {
     root?.render(
       <GodviewAgentsProvider door={door}>
@@ -296,6 +353,7 @@ async function renderMonitor(
       </GodviewAgentsProvider>,
     );
   });
+  await settle();
 }
 
 const latest = (): GodviewMonitorFacts => markers[markers.length - 1] as GodviewMonitorFacts;
@@ -469,7 +527,12 @@ describe("the monitor stage", () => {
         observed: true,
         drawn: false,
       },
-      // no pane of this device hosts it, and nothing has spoken for it yet
+      // no pane of this device hosts it, and nothing has spoken for it yet.
+      // MV-3b: NOT drawn — a run with no mirror and no PTY is not alive by
+      // fieldd's one liveness rule (ruled 2026-09-13; `hostRunFromSummary`),
+      // which the backend now applies for the window too. The seam drew it as
+      // a "starting" body from its own second copy of the rule; the marker
+      // still names it, which is what this row is for.
       {
         run: "run-quiet",
         provider: "codex",
@@ -477,16 +540,16 @@ describe("the monitor stage", () => {
         status: "idle",
         exited: false,
         observed: false,
-        drawn: true,
+        drawn: false,
       },
     ]);
-    // the typed run is a body, exactly as the spawned one is: three agents
+    // the typed run is a body, exactly as the spawned one is: two agents
     // drawn, and the pane it is in is no longer an unclaimed terminal row
-    expect(latest().agentBacked).toBe(3);
+    expect(latest().agentBacked).toBe(2);
     expect(latest().terminals).toBe(1);
     expect(
       swarmRows(host).filter((row) => row.dataset["agentBubbleSource"] === "agent").length,
-    ).toBe(3);
+    ).toBe(2);
   });
 
   it("says WEBGPU UNAVAILABLE rather than drawing an empty field on a device with no GPU", async () => {
@@ -587,21 +650,33 @@ describe("the monitor stage", () => {
     }
   });
 
-  it("PF6: closing disposes — every timer cleared, the physics driver disposed", async () => {
+  it("PF6: closing disposes — every timer cleared, the subscription closed, the physics driver disposed", async () => {
     await mountMonitor();
-    expect(openedIntervals.length, "the mesh poll never started").toBeGreaterThan(0);
+    // MV-3b: the clocks the seam ran here (the mesh poll, the 10 s now) are the
+    // backend's now, so there is no interval to count on; the window's ONE model
+    // subscription is what the stage holds open, and whatever it still opens
+    // must close with it
+    expect(board?.opened(), "the model board never opened").toBe(1);
+    expect(board?.closed()).toBe(0);
     expect(clearedIntervals).not.toEqual(expect.arrayContaining(openedIntervals));
     expect(builtDrivers, "the swarm never started its physics").toBeGreaterThan(0);
 
-    act(() => root?.unmount());
+    // the view lives in the bridge's own React root, which the host releases a
+    // microtask after its own commit (one root never unmounts inside another's)
+    await act(async () => {
+      root?.unmount();
+      await Promise.resolve();
+    });
     root = null;
 
     // The whole PF6 claim for this stage, and it is stronger than the deck's:
     // the deck stays mounted and SILENCED, this is gone. Nothing is left
-    // ticking, and the physics world was torn down rather than left pumping.
+    // ticking, the board is closed, and the physics world was torn down rather
+    // than left pumping.
     for (const id of openedIntervals) {
       expect(clearedIntervals, `interval ${id} survived the close`).toContain(id);
     }
+    expect(board?.closed(), "the model subscription outlived the close").toBe(1);
     expect(disposedDrivers, "a physics driver outlived the close").toBe(builtDrivers);
   });
 
@@ -715,11 +790,6 @@ describe("the monitor stage", () => {
     });
     const door = fakeDoor([resumed]);
     const host = await mountMonitor("list", door);
-    const settle = async (): Promise<void> => {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-    };
     await settle();
     expect(door.mountLocal).toHaveBeenCalledTimes(1);
     expect(door.mountLocal.mock.calls[0]).toEqual([
@@ -1003,6 +1073,8 @@ interface TabDoor extends FakeDoor {
 
 function tabDoor(sets: readonly AgentProfileSet[] = TAB_SETS): TabDoor {
   const door = fakeDoor(TAB_ROWS);
+  // the backend reads the same feed (a row's `profileSet` is its word)
+  board?.profiles(sets);
   let listener: ((next: readonly AgentProfileSet[]) => void) | null = null;
   const profiles: ProfileSetsPort = {
     subscribe: (next) => {
@@ -1015,7 +1087,10 @@ function tabDoor(sets: readonly AgentProfileSet[] = TAB_SETS): TabDoor {
   };
   return Object.assign(door, {
     profiles,
-    pushSets: (next: readonly AgentProfileSet[]) => listener?.(next),
+    pushSets: (next: readonly AgentProfileSet[]) => {
+      listener?.(next);
+      board?.profiles(next);
+    },
   });
 }
 
@@ -1344,6 +1419,7 @@ async function mountProbe(
 }
 
 async function renderProbe(door: MonitorDoor | null, panes: MonitorPaneFacts): Promise<void> {
+  syncBoard(panes);
   await act(async () => {
     root?.render(
       <GodviewAgentsProvider door={door}>
@@ -1356,6 +1432,7 @@ async function renderProbe(door: MonitorDoor | null, panes: MonitorPaneFacts): P
       </GodviewAgentsProvider>,
     );
   });
+  await settle();
 }
 
 /** A feed that has not answered yet, and answers when told. */
@@ -1371,7 +1448,10 @@ function slowTabDoor(): TabDoor {
         };
       },
     },
-    pushSets: (next: readonly AgentProfileSet[]) => listener?.(next),
+    pushSets: (next: readonly AgentProfileSet[]) => {
+      listener?.(next);
+      board?.profiles(next);
+    },
   });
 }
 

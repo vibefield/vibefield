@@ -3,28 +3,24 @@
  * THE LOCAL SOURCE, as pure functions (AR-3).
  *
  * The field that replaced the mock: fieldd's fold, read through the door. Its
- * honest states and its identity rule are pure, so they are held here without
- * a renderer; the mounted half (frames reaching bubbles, the claims on screen)
- * is in `godview-monitor.test.tsx` and `godview-remote-door.test.tsx`.
+ * honest states are pure, so they are held here without a renderer; the mounted
+ * half (the deck's pane frames reading the fold's facts) is in
+ * `godview-agents-provider.test.tsx` and `godview-deck-frames.test.tsx`.
+ *
+ * MV-3b: the monitor's ROWS no longer come from this fold — the backend's model
+ * does, through the window's replica — so the row identity this file used to
+ * hold (`managedRowId`: the RUN) is the backend's now (`idOf`, M22), witnessed
+ * by `godview-model-differential.test.ts`. The fold stays for the readers the
+ * model does not serve (M19), and these states are theirs.
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  type MonitorColours,
-  managedRowId,
-  monitorAgentFromManaged,
-} from "../src/godview/monitor/agents";
 import {
   EMPTY_LOCAL_FIELD,
   localFieldAfterFailure,
   localFieldFromFrame,
 } from "../src/godview/monitor/local-agent-field";
 import { managedSummary } from "./managed-session-fixture";
-
-/** The theme's tokens and an empty ledger: this file is about identity, not
- * colour, so every row here wears the ramp (record §02, AR-5). */
-const COLOURS: MonitorColours = { tint: { l: 0.6, c: 0.15 }, neutral: "oklch(0.5 0 0)" };
-const PURE = { colours: COLOURS, projectSeqs: new Map<string, number>() } as const;
 
 describe("the local field's honest states", () => {
   it("starts with nobody asked — which is not the same as an empty fold", () => {
@@ -45,40 +41,5 @@ describe("the local field's honest states", () => {
     expect(down).toEqual({ rows: [], state: "unavailable", reason: "FORBIDDEN_SCOPE" });
     expect(localFieldAfterFailure(down, "FORBIDDEN_SCOPE")).toBe(down);
     expect(localFieldAfterFailure(down, "the daemon is gone")).not.toBe(down);
-  });
-});
-
-describe("a managed row's identity", () => {
-  it("is the RUN, whatever PTY it is in and whether it is in one at all", () => {
-    // The identity rule, stated as the three cases that used to give three
-    // different answers: a run in a PTY, the same run resumed into another one
-    // (AR-4), and a run hosting none. The row is the same row through all of
-    // them, because the RUN is what the user is watching.
-    expect(
-      managedRowId(managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" })),
-    ).toBe("run-a");
-    expect(
-      managedRowId(
-        managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-b", replaced: "pty-a" }),
-      ),
-    ).toBe("run-a");
-    expect(managedRowId(managedSummary({ runtimeRunId: "run-a", terminalSessionId: null }))).toBe(
-      "run-a",
-    );
-  });
-
-  it("carries the fold's row verbatim on the facet, and the tier as ruled", () => {
-    const summary = managedSummary({ runtimeRunId: "run-a", profileId: "codex:abc" });
-    const agent = monitorAgentFromManaged({ summary }, PURE);
-    expect(agent?.agent?.summary).toBe(summary);
-    expect(agent?.agent?.tier).toBe("managed");
-    expect(agent?.agent?.runtimeRunId).toBe("run-a");
-    expect(agent?.agent?.profileId).toBe("codex:abc");
-    // a row without a terminal here has no session and no pane join
-    const homeless = monitorAgentFromManaged(
-      { summary: managedSummary({ terminalSessionId: null }) },
-      PURE,
-    );
-    expect(homeless?.session).toBeUndefined();
   });
 });

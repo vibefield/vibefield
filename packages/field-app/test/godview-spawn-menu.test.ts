@@ -73,7 +73,7 @@ describe("the spawn menu (SB-3)", () => {
 
   it("lists the profiles in the tabs' order with the tabs' fields and who is signed in under each", () => {
     const sets = [NATIVE, WORK, DEMO];
-    const tabs = profileTabs(sets, [], new Map());
+    const tabs = profileTabs(sets, []);
     const blockedTabs = tabs.map((tab) => (tab.id === "demo" ? { ...tab, blocked: true } : tab));
     const menu = spawnMenuOf(sets, blockedTabs);
     expect(menu.devices).toHaveLength(1);
