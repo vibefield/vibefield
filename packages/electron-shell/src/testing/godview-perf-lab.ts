@@ -310,6 +310,30 @@ export async function runGodviewPerfLab(opts: {
         await page(win, "window.__vfGodviewReplay.stop()");
       }
     }
+
+    // LEAVE THE PRODUCT AS FOUND. The monitor persists the selected view in the
+    // renderer's localStorage (`deck-appearance.ts`), which every smoke-like
+    // launch of this checkout shares: the first run of this lab left its last
+    // cell's view behind and the godview smoke then opened on "timeline"
+    // instead of the default swarm. So the default view is selected again,
+    // and the storage this lab cleared at its start is cleared at its end.
+    await untilPage(
+      win,
+      "the default (swarm) view to be selected again",
+      `(() => {
+        const button = document.querySelector('[role="group"][aria-label="Monitor view"] button[aria-label="SWARM view"]');
+        if (!button) return "no swarm button";
+        if (button.getAttribute("aria-pressed") === "true") return "ok";
+        button.click();
+        return "clicked";
+      })()`,
+      15_000,
+    );
+    await monitor.until((value) => value.viewId === "swarm", "the monitor to report swarm", 15_000);
+    await sleep(300);
+    await page(win, "localStorage.clear()");
+    await sleep(300);
+    say({ kind: "restored", arm, view: monitor.current()?.viewId ?? null });
   } catch (error) {
     code = 1;
     say({ kind: "failed", arm, error: error instanceof Error ? error.message : String(error) });
