@@ -5,6 +5,7 @@ import { useEffect, useState } from "react";
 import { type DoorClient, meshBoardFailure } from "./doors";
 import { MESH_RETRY_MAX_MS, MESH_RETRY_MIN_MS, meshRetryDelay } from "./mesh-field";
 import { type ModelBoardDevice, ModelBoardFold } from "./model-board";
+import { instrumentModelClient } from "./perf/door-instruments";
 
 /**
  * MV-3a (MV-D18, PF6, M3, M23) — THE WINDOW ADAPTER: the one door, folded into
@@ -67,6 +68,8 @@ const MODEL_BOARD_ASK = { projection: "model", scope: "mesh" } as const;
 export function createGodviewMonitorFeed(
   opts: CreateGodviewMonitorFeedOptions,
 ): GodviewMonitorFeed {
+  // MV-3c — the same object unless the lab replays (`godviewReplay=1`)
+  const client = instrumentModelClient(opts.client);
   const replica = createMonitorReplica({
     ...(opts.scheduler !== undefined ? { scheduler: opts.scheduler } : {}),
     ...(opts.onError !== undefined ? { onListenerError: opts.onError } : {}),
@@ -96,7 +99,7 @@ export function createGodviewMonitorFeed(
 
   const sendReport = (): void => {
     if (lastReport === null || state.state !== "live") return;
-    void opts.client.request("agent.reportShown", { ids: [...lastReport] }).catch((error) => {
+    void client.request("agent.reportShown", { ids: [...lastReport] }).catch((error) => {
       // a board that closed under the report: the next open re-sends it
       opts.onError?.(error);
     });
@@ -161,7 +164,7 @@ export function createGodviewMonitorFeed(
       }
       if (change !== null && !replica.apply(change)) reopen();
     };
-    void opts.client
+    void client
       .subscribe(
         "agent.subscribe",
         { ...MODEL_BOARD_ASK },

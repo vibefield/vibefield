@@ -1,3 +1,4 @@
+import type { DoorClient } from "../doors";
 import type { MonitorDoor } from "../remote-door";
 import {
   createFrameRecorder,
@@ -7,6 +8,7 @@ import {
   recordingDoor,
 } from "./frame-recorder";
 import { godviewPerfLab, installGodviewPerfLab } from "./lab-bridge";
+import { createModelReplayClient, type ModelReplayClient } from "./model-replay-client";
 import { createReplayDoor } from "./replay-door";
 
 // THE DOOR'S INSTRUMENTS (MV-0) — the one switch at the renderer's seam.
@@ -30,6 +32,8 @@ import { createReplayDoor } from "./replay-door";
 //   godviewReplay=1   the door's two streams come from the lab's player
 //                     (`lab-bridge.ts`, `replay-door.ts`); every other verb and
 //                     feed stays the real door's. Replay wins over record.
+//                     MV-3c: so does the window's model board, when the window
+//                     adapter hands its client through `instrumentModelClient`.
 
 export type GodviewDoorInstrument = "off" | "record" | "replay";
 
@@ -105,8 +109,31 @@ export function instrumentMonitorDoor(door: MonitorDoor, search = locationSearch
   }
 }
 
+let modelReplay: ModelReplayClient | undefined;
+
+/**
+ * MV-3c — THE MODEL DOOR'S INSTRUMENT, the same switch: `createGodviewMonitorFeed`
+ * hands its client through here. With nothing asked it hands back THE SAME
+ * OBJECT; under `godviewReplay=1` the model board is answered by the lab's
+ * player from a model stream (`model-replay-client.ts`) and every other call
+ * goes to the client given. One replay client per renderer life, like the
+ * recorder: a feed built again (Godview reopened, a gap re-asked) hears the
+ * same stream, and the newest client given answers the rest.
+ */
+export function instrumentModelClient(client: DoorClient, search = locationSearch()): DoorClient {
+  if (godviewDoorInstrument(search) !== "replay") return client;
+  if (modelReplay === undefined) {
+    const created = createModelReplayClient({ real: client });
+    modelReplay = created;
+    const { player } = godviewPerfLab() ?? installGodviewPerfLab();
+    player.attachModel(created);
+  } else modelReplay.setReal(client);
+  return modelReplay;
+}
+
 /** Test seam: the published recorder is per-renderer-life by design. */
 export function resetGodviewDoorInstrumentsForTest(): void {
   recorder = undefined;
+  modelReplay = undefined;
   if (typeof window !== "undefined") delete window.__vfGodviewRecorder;
 }
