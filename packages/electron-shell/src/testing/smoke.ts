@@ -544,6 +544,69 @@ async function padProps(win: BrowserWindow): Promise<Record<string, unknown>[] |
   )) as Record<string, unknown>[] | null;
 }
 
+/** A point of BARE MAT nearest the window's middle — no object picked there, and the desk's own element under it (no
+ * chrome): where a drag pans the desk. */
+async function bareMatPoint(win: BrowserWindow): Promise<{ x: number; y: number } | null> {
+  return (await win.webContents.executeJavaScript(
+    `(() => {
+      const d = globalThis.__vfDesk;
+      const el = document.querySelector("[data-desk]");
+      if (d === undefined || el === null) return null;
+      const r = el.getBoundingClientRect();
+      const cx = innerWidth / 2, cy = innerHeight / 2;
+      let best = null, bestD = Infinity;
+      for (let y = 12; y < r.height; y += 12)
+        for (let x = 12; x < r.width; x += 12) {
+          const wx = r.left + x, wy = r.top + y;
+          if (d.pick({ x, y }) !== null) continue;
+          const under = document.elementFromPoint(wx, wy);
+          if (under === null || !el.contains(under)) continue;
+          const dd = Math.hypot(wx - cx, wy - cy);
+          if (dd < bestD) { bestD = dd; best = { x: wx, y: wy }; }
+        }
+      return best;
+    })()`,
+    true,
+  )) as { x: number; y: number } | null;
+}
+
+/** A drag by the primary button from `from` by `by` — pressed, moved in steps with the button held, let go. */
+async function dragFrom(
+  win: BrowserWindow,
+  from: { x: number; y: number },
+  by: { dx: number; dy: number },
+): Promise<void> {
+  win.webContents.sendInputEvent({ type: "mouseMove", x: from.x, y: from.y });
+  await sleep(60);
+  win.webContents.sendInputEvent({
+    type: "mouseDown",
+    x: from.x,
+    y: from.y,
+    button: "left",
+    clickCount: 1,
+  });
+  await sleep(60);
+  for (const k of [0.15, 0.35, 0.55, 0.75, 0.9, 1]) {
+    win.webContents.sendInputEvent({
+      type: "mouseMove",
+      x: Math.round(from.x + by.dx * k),
+      y: Math.round(from.y + by.dy * k),
+      button: "left",
+      modifiers: ["leftbuttondown"],
+    });
+    await sleep(40);
+  }
+  const to = { x: Math.round(from.x + by.dx), y: Math.round(from.y + by.dy) };
+  win.webContents.sendInputEvent({
+    type: "mouseUp",
+    x: to.x,
+    y: to.y,
+    button: "left",
+    clickCount: 1,
+  });
+  await sleep(500); // the camera settles
+}
+
 /** GPU off: the pad counts the world, so its census holds even where the desk cannot draw. */
 async function commentPadCensusRow(win: BrowserWindow): Promise<string[]> {
   const props = await padProps(win);
@@ -586,11 +649,39 @@ async function commentPadRow(
     console.log(`SMOKE_CANVAS_PAD ${JSON.stringify(facts)}`);
     return { problems, typed: false };
   }
-  // THE VIEW WHEELED IN over the pad, a step at a time, until it is ~40 % of the window wide: the plain wheel
-  // zooms about the pointer (the pad stays under it). Chromium's wheel sign is the reverse of the DOM's, so the
-  // row reads the pad's box after its first step and turns the wheel the other way if the pad got smaller.
-  const width = (s: PadOnScreen | null): number => (s === null ? 0 : s.box.x1 - s.box.x0);
-  const at = seen.tap;
+  // THE PAD BROUGHT TO THE MIDDLE AND WHEELED IN, by the desk's own input: a drag on the bare mat pans it (the select
+  // tool pans the bare mat, DK-D29) until the pad's centre is the window's — at the arrival a pad may lie under the
+  // head's strip — then the plain wheel, about the pad's centre (it zooms about the pointer), a step at a time until
+  // the pad is about two thirds of the window tall. Chromium's wheel sign is the reverse of the DOM's: the row reads
+  // the pad's box after its first step and turns the wheel the other way if the pad got smaller.
+  const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
+  const centreOf = (s: PadOnScreen) => ({
+    x: (s.box.x0 + s.box.x1) / 2,
+    y: (s.box.y0 + s.box.y1) / 2,
+  });
+  const height = (s: PadOnScreen | null): number => (s === null ? 0 : s.box.y1 - s.box.y0);
+  const pans: {
+    from: { x: number; y: number };
+    by: { dx: number; dy: number };
+    padAfter?: { x: number; y: number };
+  }[] = [];
+  for (let i = 0; i < 3 && seen !== null; i += 1) {
+    const c = centreOf(seen);
+    const by = { dx: view.w / 2 - c.x, dy: view.h / 2 - c.y };
+    if (Math.hypot(by.dx, by.dy) < 24) break;
+    const from = await bareMatPoint(win);
+    if (from === null) break;
+    await dragFrom(win, from, by);
+    seen = await padOnScreen(win);
+    pans.push({ from, by, ...(seen === null ? {} : { padAfter: centreOf(seen) }) });
+  }
+  facts.panned = pans;
+  if (seen === null) {
+    problems.push("the comment pad left the view when the mat was panned");
+    console.log(`SMOKE_CANVAS_PAD ${JSON.stringify(facts)}`);
+    return { problems, typed: false };
+  }
+  const at = centreOf(seen);
   const step = async (dir: number): Promise<PadOnScreen | null> => {
     win.webContents.sendInputEvent({
       type: "mouseWheel",
@@ -602,30 +693,35 @@ async function commentPadRow(
     await sleep(300); // the camera settles (its spring)
     return padOnScreen(win);
   };
-  const before = width(seen);
-  const target = (await js<number>("innerWidth")) * 0.4;
+  const before = height(seen);
+  const target = view.h * 0.66;
   let after = await step(1);
   let steps = 1;
-  const dir = width(after) >= before ? 1 : -1;
+  const dir = height(after) >= before ? 1 : -1;
   if (dir < 0) {
     after = await step(-1);
     steps += 1;
   }
-  while (after !== null && width(after) < target && steps < 16) {
+  while (after !== null && height(after) < target && steps < 16) {
     after = await step(dir);
     steps += 1;
   }
-  facts.zoomed = { before, after: width(after), steps };
-  if (after === null || after.tap === null) {
+  facts.zoomed = { before, after: height(after), steps };
+  if (after === null) {
     problems.push("the comment pad left the view when it was wheeled in over");
     console.log(`SMOKE_CANVAS_PAD ${JSON.stringify(facts)}`);
     return { problems, typed: false };
   }
   seen = after;
-  if (width(seen) <= before)
+  if (height(seen) <= before)
     problems.push(`the wheel did not zoom in over the pad (${JSON.stringify(facts.zoomed)})`);
-  // A TAP where the desk receives it: the editor is lent to the pad's text part
-  const tap = seen.tap ?? { x: 0, y: 0 };
+  // A TAP on the pad's first writing line (under its binding — pad units 24 + 8 + the hand's 17, of its 280), where
+  // the desk receives it: the editor is lent to the pad's text part, the caret where the tap fell
+  const tap = {
+    x: (seen.box.x0 + seen.box.x1) / 2,
+    y: seen.box.y0 + ((24 + 8 + 12) / 284.5) * (seen.box.y1 - seen.box.y0),
+  };
+  facts.tap = tap;
   win.webContents.sendInputEvent({
     type: "mouseDown",
     x: tap.x,
