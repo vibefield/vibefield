@@ -58,7 +58,7 @@ import { createUsageHistoryCache } from "./usage-history-cache";
  * read when it came through and empty when it did not — the ledger reads
  * the aggregates first and the last sample only as a fallback.
  */
-function coreUsage(usage: Readonly<Record<string, unknown>>): MonitorUsageState {
+export function coreUsage(usage: Readonly<Record<string, unknown>>): MonitorUsageState {
   const num = (key: string): number | undefined => {
     const value = usage[key];
     return typeof value === "number" ? value : undefined;
@@ -261,7 +261,7 @@ const REMOUNT_ATTEMPTS = 3;
  * revision. Cheap where `JSON.stringify` of the whole fold was not — the
  * mirror carries the subagent, workflow and team collections verbatim — at
  * one frame per 16 ms while an agent is active. */
-function rowsKey(rows: readonly AgentSessionSummary[]): string {
+export function rowsKey(rows: readonly AgentSessionSummary[]): string {
   return rows
     .map((row) => {
       const monitor = row.monitor;

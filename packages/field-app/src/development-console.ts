@@ -358,3 +358,9 @@ export function emitGodviewColdOpenMarker(facts: GodviewColdOpenFacts): void {
 export function emitTerminalPerfLabMarker(): void {
   console.log(`TERMINAL_PERF_LAB ${JSON.stringify({ installed: true })}`);
 }
+
+/** MV-0 — the Godview perf lab's bridges arrived (`monitor/perf/lab-bridge.ts`):
+ * the same shape and reason as the terminal perf lab's line above. */
+export function emitGodviewPerfLabMarker(facts: { installed: boolean }): void {
+  console.log(`GODVIEW_PERF_LAB ${JSON.stringify(facts)}`);
+}

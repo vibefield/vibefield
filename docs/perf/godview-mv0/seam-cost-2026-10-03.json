@@ -1,0 +1,317 @@
+[
+  {
+    "corpus": "n10-8s-s1",
+    "n": 10,
+    "rounds": 3,
+    "foldFrames": 465,
+    "meshFrames": 106,
+    "agentsOut": 15,
+    "wireBytesPerFoldFrame": {
+      "p50": 47822,
+      "max": 48109
+    },
+    "perFoldFrameMs": {
+      "parse": {
+        "p50": 0.109,
+        "p95": 0.131,
+        "max": 5.806,
+        "mean": 0.127
+      },
+      "zod": {
+        "p50": 0.091,
+        "p95": 0.133,
+        "max": 14.779,
+        "mean": 0.105
+      },
+      "gate": {
+        "p50": 0.009,
+        "p95": 0.015,
+        "max": 0.828,
+        "mean": 0.01
+      },
+      "usageLedger": {
+        "p50": 0.013,
+        "p95": 0.019,
+        "max": 1.368,
+        "mean": 0.015
+      },
+      "assemble": {
+        "p50": 0.029,
+        "p95": 0.051,
+        "max": 19.875,
+        "mean": 0.033
+      },
+      "unreadLedger": {
+        "p50": 0.003,
+        "p95": 0.005,
+        "max": 0.145,
+        "mean": 0.003
+      },
+      "statusLedger": {
+        "p50": 0.005,
+        "p95": 0.01,
+        "max": 0.19,
+        "mean": 0.006
+      },
+      "exportUsage": {
+        "p50": 0.001,
+        "p95": 0.003,
+        "max": 1.19,
+        "mean": 0.002
+      },
+      "frame": {
+        "p50": 0.261,
+        "p95": 0.364,
+        "max": 20.137,
+        "mean": 0.298
+      }
+    },
+    "perMeshFrameMs": {
+      "meshParse": {
+        "p50": 0.015,
+        "p95": 0.03,
+        "max": 0.885
+      },
+      "meshZod": {
+        "p50": 0.024,
+        "p95": 0.045,
+        "max": 0.154
+      },
+      "meshApply": {
+        "p50": 0.002,
+        "p95": 0.005,
+        "max": 0.016
+      },
+      "meshRecords": {
+        "p50": 0,
+        "p95": 0.001,
+        "max": 0.003
+      },
+      "meshFrame": {
+        "p50": 0.041,
+        "p95": 0.078,
+        "max": 0.956
+      }
+    },
+    "gate": {
+      "passes": 465,
+      "passRate": 1
+    },
+    "usageExportRecordsPerRound": 0,
+    "frameBudgetMs": 16,
+    "loadavg": {
+      "before": [28.921875, 68.68359375, 70.36474609375],
+      "after": [28.921875, 68.68359375, 70.36474609375]
+    }
+  },
+  {
+    "corpus": "n20-8s-s1",
+    "n": 20,
+    "rounds": 3,
+    "foldFrames": 465,
+    "meshFrames": 135,
+    "agentsOut": 27,
+    "wireBytesPerFoldFrame": {
+      "p50": 81725,
+      "max": 81999
+    },
+    "perFoldFrameMs": {
+      "parse": {
+        "p50": 0.193,
+        "p95": 0.298,
+        "max": 45.695,
+        "mean": 0.412
+      },
+      "zod": {
+        "p50": 0.181,
+        "p95": 0.479,
+        "max": 37.047,
+        "mean": 0.363
+      },
+      "gate": {
+        "p50": 0.021,
+        "p95": 0.039,
+        "max": 3.017,
+        "mean": 0.034
+      },
+      "usageLedger": {
+        "p50": 0.018,
+        "p95": 0.032,
+        "max": 19.263,
+        "mean": 0.033
+      },
+      "assemble": {
+        "p50": 0.043,
+        "p95": 0.093,
+        "max": 111.228,
+        "mean": 0.078
+      },
+      "unreadLedger": {
+        "p50": 0.006,
+        "p95": 0.01,
+        "max": 0.184,
+        "mean": 0.007
+      },
+      "statusLedger": {
+        "p50": 0.009,
+        "p95": 0.018,
+        "max": 2.783,
+        "mean": 0.012
+      },
+      "exportUsage": {
+        "p50": 0.003,
+        "p95": 0.007,
+        "max": 0.205,
+        "mean": 0.004
+      },
+      "frame": {
+        "p50": 0.478,
+        "p95": 1.846,
+        "max": 111.697,
+        "mean": 0.935
+      }
+    },
+    "perMeshFrameMs": {
+      "meshParse": {
+        "p50": 0.027,
+        "p95": 0.045,
+        "max": 1.08
+      },
+      "meshZod": {
+        "p50": 0.047,
+        "p95": 0.077,
+        "max": 5.483
+      },
+      "meshApply": {
+        "p50": 0.003,
+        "p95": 0.006,
+        "max": 0.019
+      },
+      "meshRecords": {
+        "p50": 0,
+        "p95": 0.001,
+        "max": 0.006
+      },
+      "meshFrame": {
+        "p50": 0.077,
+        "p95": 0.128,
+        "max": 5.54
+      }
+    },
+    "gate": {
+      "passes": 465,
+      "passRate": 1
+    },
+    "usageExportRecordsPerRound": 0,
+    "frameBudgetMs": 16,
+    "loadavg": {
+      "before": [28.921875, 68.68359375, 70.36474609375],
+      "after": [40.05859375, 70.33203125, 70.9365234375]
+    }
+  },
+  {
+    "corpus": "n60-8s-s1",
+    "n": 60,
+    "rounds": 3,
+    "foldFrames": 465,
+    "meshFrames": 135,
+    "agentsOut": 77,
+    "wireBytesPerFoldFrame": {
+      "p50": 216895,
+      "max": 217181
+    },
+    "perFoldFrameMs": {
+      "parse": {
+        "p50": 0.515,
+        "p95": 0.634,
+        "max": 20.019,
+        "mean": 0.607
+      },
+      "zod": {
+        "p50": 0.532,
+        "p95": 1.221,
+        "max": 25.192,
+        "mean": 0.69
+      },
+      "gate": {
+        "p50": 0.061,
+        "p95": 0.087,
+        "max": 13.337,
+        "mean": 0.07
+      },
+      "usageLedger": {
+        "p50": 0.047,
+        "p95": 0.07,
+        "max": 18.578,
+        "mean": 0.062
+      },
+      "assemble": {
+        "p50": 0.124,
+        "p95": 0.182,
+        "max": 13.721,
+        "mean": 0.151
+      },
+      "unreadLedger": {
+        "p50": 0.018,
+        "p95": 0.024,
+        "max": 22.587,
+        "mean": 0.022
+      },
+      "statusLedger": {
+        "p50": 0.025,
+        "p95": 0.036,
+        "max": 3.56,
+        "mean": 0.032
+      },
+      "exportUsage": {
+        "p50": 0.005,
+        "p95": 0.011,
+        "max": 2.539,
+        "mean": 0.007
+      },
+      "frame": {
+        "p50": 1.346,
+        "p95": 2.171,
+        "max": 39.927,
+        "mean": 1.648
+      }
+    },
+    "perMeshFrameMs": {
+      "meshParse": {
+        "p50": 0.07,
+        "p95": 0.093,
+        "max": 1.747
+      },
+      "meshZod": {
+        "p50": 0.123,
+        "p95": 0.16,
+        "max": 1.235
+      },
+      "meshApply": {
+        "p50": 0.006,
+        "p95": 0.011,
+        "max": 0.051
+      },
+      "meshRecords": {
+        "p50": 0,
+        "p95": 0.001,
+        "max": 0.004
+      },
+      "meshFrame": {
+        "p50": 0.2,
+        "p95": 0.266,
+        "max": 2.763
+      }
+    },
+    "gate": {
+      "passes": 465,
+      "passRate": 1
+    },
+    "usageExportRecordsPerRound": 0,
+    "frameBudgetMs": 16,
+    "loadavg": {
+      "before": [40.05859375, 70.33203125, 70.9365234375],
+      "after": [40.05859375, 70.33203125, 70.9365234375]
+    }
+  }
+]

@@ -8,6 +8,7 @@ import {
   type SwarmPhysicsEvent,
 } from "@vibecook/puppeteer-views/physics";
 import { getRendererLogger } from "../../../logging";
+import { activeProbe } from "../../monitor/perf/godview-perf-probe";
 
 // THE MAIN THREAD'S END OF THE WIRE (GT-3c).
 //
@@ -60,7 +61,11 @@ export function createSwarmPhysicsDriver(options: SwarmPhysicsDriverOptions): Sw
     get mode() {
       return driver.mode;
     },
-    post: (command, transfer) => driver.post(command, transfer),
+    post: (command, transfer) => {
+      // MV-0 — the lab's post counter; `activeProbe()` is null outside a lab run
+      activeProbe()?.workerPost(command.type);
+      driver.post(command, transfer);
+    },
     dispose: () => {
       driver.dispose();
       activeMode = "none";

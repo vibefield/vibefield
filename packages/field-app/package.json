@@ -21,11 +21,15 @@
     "./host-kit": "./src/host-kit.ts",
     "./logging": "./src/logging.ts",
     "./terminal-perf-lab": "./src/perf/terminal-perf-lab.ts",
+    "./godview-perf-lab": "./src/godview/monitor/perf/lab-bridge.ts",
     "./spike": "./src/spike/spike-loro.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "perf:godview:corpora": "vitest run --config vitest.perf.config.ts perf/corpora.generate.perf.ts",
+    "perf:godview:oracle": "vitest run --config vitest.perf.config.ts perf/godview-oracle.perf.tsx",
+    "perf:godview:seam": "vitest run --config vitest.perf.config.ts perf/godview-seam.perf.ts"
   },
   "dependencies": {
     "@react-three/drei": "^10.0.0",

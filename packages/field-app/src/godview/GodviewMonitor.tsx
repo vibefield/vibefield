@@ -37,6 +37,7 @@ import {
   launcherOwnsKeyEvent,
   setMonitorHoldsKeys,
 } from "./monitor/launcher-keys";
+import { instrumentedMonitorView } from "./monitor/perf/instrumented-view";
 import {
   chosenProfile,
   personaProfiles,
@@ -592,7 +593,9 @@ export function GodviewMonitor({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [showTabs, tabKey]);
 
-  const MonitorView = view.Component;
+  // MV-0 — the view's own component, or the lab's counting wrapper around it
+  // while a perf probe is installed (`monitor/perf/instrumented-view.tsx`)
+  const MonitorView = instrumentedMonitorView(view);
   return (
     <>
       <InstrumentBar

@@ -117,6 +117,8 @@ import {
   type TypedAgentCall,
 } from "./typed-agent";
 
+// MV-0 — the Godview perf lab rides the same bundle, for the same reason.
+export { runGodviewPerfLab } from "./godview-perf-lab";
 export { runTerminalDoorProbe } from "./terminal-door-probe";
 // TP-S0c — the perf lab rides the SAME test-only bundle every smoke does, so
 // main reaches it through the one runtime-external import it already has and no

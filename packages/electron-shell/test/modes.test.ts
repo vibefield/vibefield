@@ -14,6 +14,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "smoke-godview",
   "live-surfaces-lab",
   "terminal-perf-lab",
+  "godview-perf-lab",
   "terminal-door-probe",
   "spike-loro",
 ];
@@ -33,6 +34,7 @@ describe("parseMode", () => {
     expect(parseMode(["--smoke-godview"])).toBe("smoke-godview");
     expect(parseMode(["--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--terminal-perf-lab"])).toBe("terminal-perf-lab");
+    expect(parseMode(["--godview-perf-lab"])).toBe("godview-perf-lab");
     expect(parseMode(["--terminal-door-probe"])).toBe("terminal-door-probe");
     expect(parseMode(["--spike-loro"])).toBe("spike-loro");
   });
@@ -73,6 +75,7 @@ describe("isSmokeLike", () => {
     "smoke-godview",
     "live-surfaces-lab",
     "terminal-perf-lab",
+    "godview-perf-lab",
     "terminal-door-probe",
     "spike-loro",
   ]);
@@ -100,6 +103,8 @@ describe("shutdownPolicy", () => {
     // pair against its own data root and drives real sessions through it, so it
     // owns what it started and stops it.
     "terminal-perf-lab": "stop-owned",
+    // MV-0: the Godview perf lab is the perf lab's shape too.
+    "godview-perf-lab": "stop-owned",
     // TP-S3a: the door probe is the perf lab's shape — its own pair, stop-owned.
     "terminal-door-probe": "stop-owned",
     "spike-loro": "leave-running",

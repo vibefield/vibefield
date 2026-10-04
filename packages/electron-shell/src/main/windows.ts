@@ -1,5 +1,6 @@
 import { BrowserWindow, screen } from "electron";
 import { APP_ENTRY_URL } from "./app-protocol";
+import { attachGodviewRecording, godviewRecordDir } from "./godview-recording";
 import { isSmokeLike, type ShellMode } from "./modes";
 import { assertSecurePreferences, webPreferences } from "./window-policy";
 
@@ -31,7 +32,19 @@ export function createMainWindow(opts: {
   // Dev opens the tools by default (James, 2026-08-02) — detached, so the
   // canvas keeps its geometry. Every other mode stays clean.
   if (opts.mode === "dev") win.webContents.openDevTools({ mode: "detach" });
+  // MV-0 — `VF_GODVIEW_RECORD=<dir>`: this window's Godview frames, gzipped
+  // JSONL, drained from the renderer's recorder (`godview-recording.ts`).
+  // Dormant with the variable unset; `loadRenderer` arms the renderer's half.
+  const recordDir = godviewRecordDir();
+  if (recordDir !== undefined) attachGodviewRecording(win, recordDir);
   return win;
+}
+
+/** The renderer's switch for the frame recorder (`door-instruments.ts`),
+ * set only when main has somewhere to put the frames. */
+function withGodviewRecordFlag(url: URL): URL {
+  if (godviewRecordDir() !== undefined) url.searchParams.set("godviewRecord", "1");
+  return url;
 }
 
 /** Hardened non-product renderer factory. Capability comes from its preload;
@@ -76,16 +89,23 @@ export async function loadRenderer(
   viteUrl: string,
 ): Promise<void> {
   if (mode !== "dev") {
-    const url = new URL(APP_ENTRY_URL);
-    if (mode === "smoke-godview" || mode === "terminal-perf-lab") {
+    const url = withGodviewRecordFlag(new URL(APP_ENTRY_URL));
+    if (mode === "smoke-godview" || mode === "terminal-perf-lab" || mode === "godview-perf-lab") {
       url.searchParams.set("godviewMarkers", "1");
+    }
+    // MV-0 — the Godview perf lab: the probe + player bridges (`lab-bridge.ts`)
+    // and the replay door in place of the live subscriptions (`door-instruments.ts`)
+    if (mode === "godview-perf-lab") {
+      url.searchParams.set("godviewPerf", "1");
+      url.searchParams.set("godviewReplay", "1");
     }
     await win.loadURL(url.href);
     return;
   }
+  const devUrl = withGodviewRecordFlag(new URL(viteUrl)).href;
   for (let i = 0; i < 40; i++) {
     try {
-      await win.loadURL(viteUrl);
+      await win.loadURL(devUrl);
       return;
     } catch {
       await sleep(500); // vite still booting

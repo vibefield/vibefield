@@ -94,6 +94,7 @@ import {
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
+import { instrumentMonitorDoor } from "./monitor/perf/door-instruments";
 import type {
   LocalMountOptions,
   LocalMountOutcome,
@@ -1122,7 +1123,7 @@ export function GodviewDeck({
         opts?: { onReplayFailed?: (error: unknown) => void },
       ) => fieldd.subscribe(method, params, onFrame, opts),
     };
-    return {
+    const built: MonitorDoor = {
       // DS-3 (2026-09-30, DS-D4) — THE MESH HALF IS THE MESH BOARD. Other
       // desktops' agents arrive through this window's one door to its own
       // fieldd (`agent.subscribe {projection: "desk", scope: "mesh"}`), which
@@ -1242,6 +1243,9 @@ export function GodviewDeck({
         return run;
       },
     };
+    // MV-0 — the door's instruments (`monitor/perf/door-instruments.ts`): the
+    // same object back unless the renderer's URL asks for a recording.
+    return instrumentMonitorDoor(built);
     /**
      * DS-4e — the remote attach, in three steps, each the answer of its owner:
      *
