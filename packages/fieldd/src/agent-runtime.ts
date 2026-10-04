@@ -518,7 +518,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
    * `providers` seam adds, and `spawn` takes any composed id. */
   readonly runtime: AgentRuntime;
   /** AC-3 — the catalog's readers: the truth of what is offered here */
-  private readonly catalog: AgentCatalogReaders;
+  readonly catalog: AgentCatalogReaders;
   private readonly host: AgentHost;
   private readonly terminalHost: TerminalAgentHost | null;
   /** the machine record (AR-D16); null = no machine scope */
