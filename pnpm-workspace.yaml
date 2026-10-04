@@ -106,7 +106,13 @@ overrides:
   # (I27) and the hand's host options (I20–I22). strata 0.13.0 and loro
   # ^1.13.8 unchanged. A prerelease never satisfies a range, so the exact
   # string here IS the resolution; later prereleases are `0.15.0-desk.N`.
-  "@vibecook/ice": 0.15.0-desk.1
+  # 2026-10-03 bumped 0.15.0-desk.1 → 0.15.0-desk.2 (DK-6) — desk.1 and I29's fix
+  # (ICE CHANGELOG `### Fixed`: every pass converts device px by the attachment's
+  # own ratio, so a capture at ANY scale draws every kind; at desk.1 a capture
+  # below a device ratio of 1 drew two kinds of six). VibeField's DK-4
+  # `captureScale` workaround retires with it. Nothing else moves; strata
+  # 0.13.0 and loro ^1.13.8 unchanged.
+  "@vibecook/ice": 0.15.0-desk.2
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -221,7 +227,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.15.0-desk.1'
+  - '@vibecook/ice@0.15.0-desk.2'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'
