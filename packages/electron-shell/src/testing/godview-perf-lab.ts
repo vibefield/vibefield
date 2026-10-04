@@ -1,15 +1,16 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
 import { dirname, join } from "node:path";
-import { gunzipSync } from "node:zlib";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
+import { runGodviewCapture } from "./godview-capture";
 import { type MetricTotals, metricTotals, parseSynthetic } from "./godview-lab-measures";
 import {
   type LabWindow,
   labWindowOptions,
   leave,
+  loadCorpus,
   openLabWindow,
   page,
   pageMetrics,
@@ -18,7 +19,7 @@ import {
   sleep,
   swarmRenderer,
   teardownLab,
-  untilPage,
+  untilEnded,
 } from "./godview-lab-window";
 
 // THE GODVIEW PERF LAB (MV-0, step 6; `design-mv.md` §5 "per-view counters,
@@ -58,6 +59,8 @@ import {
 //                            after every cell, that its replica's rows are the
 //                            stream's rows — the proof on a build whose window
 //                            does not read the model yet; never in a gate run
+//   VF_GODVIEW_LAB           `capture`: this launch is the capture tool's
+//                            (`godview-capture.ts`), not a perf run
 //   VF_GODVIEW_PERF_SYNTHETIC  M33's negative controls, `view:<ms>` (a busy wait
 //                            in every counted view render) and/or `root:<ms>`
 //                            (a side React root committing once per frame with
@@ -83,8 +86,6 @@ const DEFAULT_RECIPES = [
 ];
 const DEFAULT_VIEWS = ["swarm", "list", "rain", "timeline"];
 export const DEFAULT_WARMUP_RECIPE = "n=10,duration=1500,seed=9,markerQuietMs=50";
-/** Whole lines per `executeJavaScript`: a model stream of n=60 is ~23 MB. */
-const PUSH_CHUNK_CHARS = 4_000_000;
 
 export interface GodviewPerfCell {
   view: string;
@@ -104,69 +105,6 @@ export interface GodviewPerfCell {
   totals: MetricTotals | null;
 }
 
-interface ModelLoaded {
-  corpus: string;
-  frames: number;
-  marks: number;
-  corpusFrames: number;
-}
-
-/** A corpus's model stream, pushed into the page's player in whole-line chunks. */
-async function pushModelStream(
-  win: BrowserWindow,
-  dir: string,
-  corpus: string,
-): Promise<ModelLoaded> {
-  // `modelStreamFileName` (field-app `perf/model-stream.ts`)
-  const path = join(dir, `${corpus}.model.jsonl.gz`);
-  if (!existsSync(path)) {
-    throw new Error(`no model stream for ${corpus} at ${path} (pnpm perf:godview writes them)`);
-  }
-  const text = gunzipSync(readFileSync(path)).toString("utf8");
-  let loaded: ModelLoaded | null = null;
-  let start = 0;
-  while (start < text.length) {
-    let end = Math.min(text.length, start + PUSH_CHUNK_CHARS);
-    if (end < text.length) {
-      const newline = text.lastIndexOf("\n", end);
-      end = newline > start ? newline + 1 : text.indexOf("\n", end) + 1 || text.length;
-    }
-    loaded = await page<ModelLoaded>(
-      win,
-      `window.__vfGodviewReplay.pushModel(${JSON.stringify(text.slice(start, end))})`,
-    );
-    start = end;
-  }
-  if (loaded === null) throw new Error(`the model stream for ${corpus} is empty`);
-  return loaded;
-}
-
-/** Load a corpus in the page, and its model stream when the source asks. */
-async function loadCorpus(
-  win: BrowserWindow,
-  recipe: string,
-  source: { kind: "fold" | "model"; modelDir: string | undefined },
-): Promise<{ corpus: string; frames: number; durationMs: number; model: ModelLoaded | null }> {
-  const loaded = await page<{ corpus: string; frames: number; durationMs: number }>(
-    win,
-    `window.__vfGodviewReplay.load(${JSON.stringify(recipe)})`,
-  );
-  if (source.kind !== "model") return { ...loaded, model: null };
-  if (source.modelDir === undefined)
-    throw new Error("VF_GODVIEW_PERF_SOURCE=model needs VF_GODVIEW_PERF_MODEL_DIR");
-  const model = await pushModelStream(win, source.modelDir, loaded.corpus);
-  return { ...loaded, model };
-}
-
-async function untilEnded(win: BrowserWindow, what: string, timeoutMs: number): Promise<void> {
-  await untilPage(
-    win,
-    what,
-    `window.__vfGodviewReplay.state().phase === "ended" ? "ok" : window.__vfGodviewReplay.state().phase`,
-    timeoutMs,
-  );
-}
-
 export async function runGodviewPerfLab(opts: {
   handle: FielddHandle;
   supervisor: FielddSupervisor;
@@ -177,6 +115,11 @@ export async function runGodviewPerfLab(opts: {
   beforeExit: () => Promise<void>;
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
+  // MV-3c — the capture tool shares this mode, its pair and its one window
+  if (process.env["VF_GODVIEW_LAB"] === "capture") {
+    await runGodviewCapture(opts);
+    return;
+  }
   const out =
     process.env["VF_GODVIEW_PERF_OUT"] ??
     join(app.getPath("temp"), `vf-godview-perf-${Date.now()}.json`);

@@ -158,4 +158,13 @@ describe("the seam's recency and the backend's, under the corpus clock", () => {
     await vi.advanceTimersByTimeAsync(3_000);
     expect(player.state().delivered).toBe(loaded.frames);
   });
+
+  it("names the corpus's wall at a fixed frame, as a capture freezes it", () => {
+    const player = createReplayPlayer();
+    expect(player.wallAt(1_000)).toBeNull();
+    player.load(RECIPE);
+    const base = Date.parse("2026-10-03T12:00:00Z");
+    expect(player.wallAt(0)).toBe(base);
+    expect(player.wallAt(1_500)).toBe(base + 1_500);
+  });
 });

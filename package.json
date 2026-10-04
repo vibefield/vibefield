@@ -27,6 +27,7 @@
     "perf:terminal:capture": "pnpm --filter @vibefield/terminal-perf capture",
     "perf:terminal": "node tooling/terminal-perf/bin/terminal-perf.ts",
     "perf:godview": "node scripts/perf-godview.mjs",
+    "capture:godview": "node scripts/capture-godview.mjs",
     "lab:live-surfaces": "pnpm --filter @vibefield/desktop lab:live-surfaces",
     "lab:plugin-runtime:soak": "pnpm --filter @vibefield/desktop lab:plugin-runtime:soak",
     "lab:plugin-runtime:soak:24h": "pnpm --filter @vibefield/desktop lab:plugin-runtime:soak:24h",

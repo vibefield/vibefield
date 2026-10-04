@@ -121,6 +121,10 @@ export interface ReplayPlayer {
   /** MV-3c — whether a start shifts the page's wall clock to the corpus's (M31;
    * `corpus`, the default) or keeps the machine's (`real`). */
   setClock(clock: ReplayClock): void;
+  /** MV-3c — the corpus's wall time `t` ms after its first frame (the same
+   * `t` as a start's `untilT`; null with nothing loaded): what a capture
+   * freezes the page's clock at for its fixed frame. */
+  wallAt(t: number): number | null;
 }
 
 /** One model stream line, held as TEXT and parsed when delivered (a socket's
@@ -572,6 +576,10 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
     source: () => (modelLines.length > 0 ? "model" : "fold"),
     setClock(next) {
       clock = next;
+    },
+    wallAt: (t) => {
+      const first = frames[0];
+      return first === undefined ? null : first.wall + t;
     },
   };
 }

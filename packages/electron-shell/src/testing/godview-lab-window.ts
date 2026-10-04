@@ -1,4 +1,6 @@
-import { rmSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
+import { gunzipSync } from "node:zlib";
 import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
@@ -197,7 +199,7 @@ export async function swarmRenderer(win: BrowserWindow): Promise<string | null> 
 
 /** One CDP command, bounded: a debugger another tool holds, or a page that
  * does not answer, yields null and the caller says what it went without. */
-async function cdp<T>(
+export async function cdp<T>(
   win: BrowserWindow,
   method: string,
   params: Record<string, unknown> = {},
@@ -313,6 +315,83 @@ export async function openLabWindow(opts: {
     reactHook,
     metered,
   };
+}
+
+/** Whole lines per `executeJavaScript`: a model stream of n=60 is ~23 MB. */
+const PUSH_CHUNK_CHARS = 4_000_000;
+
+export interface ModelLoaded {
+  corpus: string;
+  frames: number;
+  marks: number;
+  corpusFrames: number;
+}
+
+/** A corpus's model stream, pushed into the page's player in whole-line chunks. */
+async function pushModelStream(
+  win: BrowserWindow,
+  dir: string,
+  corpus: string,
+): Promise<ModelLoaded> {
+  // `modelStreamFileName` (field-app `perf/model-stream.ts`)
+  const path = join(dir, `${corpus}.model.jsonl.gz`);
+  if (!existsSync(path)) {
+    throw new Error(`no model stream for ${corpus} at ${path} (pnpm perf:godview writes them)`);
+  }
+  const text = gunzipSync(readFileSync(path)).toString("utf8");
+  let loaded: ModelLoaded | null = null;
+  let start = 0;
+  while (start < text.length) {
+    let end = Math.min(text.length, start + PUSH_CHUNK_CHARS);
+    if (end < text.length) {
+      const newline = text.lastIndexOf("\n", end);
+      end = newline > start ? newline + 1 : text.indexOf("\n", end) + 1 || text.length;
+    }
+    loaded = await page<ModelLoaded>(
+      win,
+      `window.__vfGodviewReplay.pushModel(${JSON.stringify(text.slice(start, end))})`,
+    );
+    start = end;
+  }
+  if (loaded === null) throw new Error(`the model stream for ${corpus} is empty`);
+  return loaded;
+}
+
+/** What a lab replays: the corpus itself (`fold`, today's seam's input) or its
+ * model stream (`model`, the window's one door's answer — MV-3c). */
+export interface LabSource {
+  kind: "fold" | "model";
+  modelDir: string | undefined;
+}
+
+/** Load a corpus in the page, and its model stream when the source asks. */
+export async function loadCorpus(
+  win: BrowserWindow,
+  recipe: string,
+  source: LabSource,
+): Promise<{ corpus: string; frames: number; durationMs: number; model: ModelLoaded | null }> {
+  const loaded = await page<{ corpus: string; frames: number; durationMs: number }>(
+    win,
+    `window.__vfGodviewReplay.load(${JSON.stringify(recipe)})`,
+  );
+  if (source.kind !== "model") return { ...loaded, model: null };
+  if (source.modelDir === undefined)
+    throw new Error("VF_GODVIEW_PERF_SOURCE=model needs VF_GODVIEW_PERF_MODEL_DIR");
+  const model = await pushModelStream(win, source.modelDir, loaded.corpus);
+  return { ...loaded, model };
+}
+
+export async function untilEnded(
+  win: BrowserWindow,
+  what: string,
+  timeoutMs: number,
+): Promise<void> {
+  await untilPage(
+    win,
+    what,
+    `window.__vfGodviewReplay.state().phase === "ended" ? "ok" : window.__vfGodviewReplay.state().phase`,
+    timeoutMs,
+  );
 }
 
 /**
