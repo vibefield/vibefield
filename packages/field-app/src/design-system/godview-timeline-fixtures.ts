@@ -4,7 +4,8 @@ import {
   type AgentSessionSummary,
 } from "@vibefield/contracts";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
-import { aloneOnTheMesh, NO_HISTORY, NO_USAGE } from "./godview-profiles-fixtures";
+import { catalogModelBoard } from "./godview-model-fixture";
+import { aloneOnTheMesh, NO_HISTORY, NO_USAGE, THIS_MAC } from "./godview-profiles-fixtures";
 
 // TL — the catalog's timeline on a fixture door: an afternoon as fieldd's fold
 // and its status ledger (`agent.history`) would send it, so the specimen drives
@@ -222,10 +223,12 @@ export function timelineAfternoon(nowMs: number): {
   return { rows: RUNS.map((spec, i) => foldRow(spec, runs[i] as AgentRunHistory)), runs };
 }
 
-/** A door with the fold and its status ledger in it, and no deck. */
+/** A door with the fold, its status ledger and the model board in it, and no deck. */
 export function timelineDoor(): MonitorDoor {
   const { rows, runs } = timelineAfternoon(Date.now());
+  const board = catalogModelBoard({ device: THIS_MAC, rows });
   return {
+    model: board.port,
     observeMesh: aloneOnTheMesh,
     attach: async () => ({ state: "no-pane" }),
     observe: ({ onFrame }) => {
