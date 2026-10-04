@@ -65,6 +65,13 @@ The product with Godview open, the replay door in place of the live subscription
 selected on the instrument bar, a discarded warm-up replay first, then 8 s per cell. Counted from
 inside the renderer by the probe. Loads at the six launches: 45 · 44 · 48 · 75 · 72 · 42.
 
+> **Note (MV-3c, 2026-10-04; build-mv M31):** these numbers were taken with EVERY replayed row drawn
+> stale. Today's seam classifies recency against `Date.now()`, and the corpus is dated
+> 2026-10-03T12:00Z, so under the lab every row's evidence was older than the stale bound. The
+> MV-3 harness replays under a corpus clock (the page's `Date.now` reads the corpus's wall time
+> while a replay plays, both arms), so its numbers draw the rows the backend draws. These stay
+> reference, never a bound (L14).
+
 | view × n | fps | frame p50 / p95 | LoAF | renders / 8 s | worker posts (`updateAgents`) | GPU submits | 2D calls | DOM mutations | JS heap | renderer WS |
 |---|---|---|---|---|---|---|---|---|---|---|
 | swarm × 10 | 119.9 | 8.3 / 10.0 | 0 | 571 | 825 (570) | 1018 | 0 | 159 | 126 MB | 466 MB |

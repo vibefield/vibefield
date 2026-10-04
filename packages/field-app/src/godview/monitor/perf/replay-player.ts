@@ -5,6 +5,7 @@ import type { RecordedFrame } from "./frame-recorder";
 import type { ModelReplayClient, ModelReplayStats } from "./model-replay-client";
 import { MODEL_STREAM_META_KIND, type ModelStreamMeta } from "./model-stream";
 import type { ReplayDoor } from "./replay-door";
+import { restoreWallClock, shiftWallClock } from "./wall-clock";
 
 // THE PLAYER (MV-0, step 6): a corpus on the recorder's own timeline, in the
 // renderer. The Electron lab loads a RECIPE (the page generates the corpus
@@ -29,10 +30,29 @@ import type { ReplayDoor } from "./replay-door";
 // live — and the marks are the stream's, moved to the frame that carries the
 // marker's change to the model. With no stream pushed, a start is exactly the
 // fold source above, unchanged.
+//
+// MV-3c (M31) — THE CORPUS CLOCK, on by default for either source: the page's
+// `Date.now` reads the corpus's own wall time from a start to its stop
+// (`wall-clock.ts`), so today's seam and the backend agree on recency
+// (`setClock("real")` keeps the machine's). And each
+// delivery's own work — the frame handed over, and the microtasks it queued
+// (a store's render) — is timed, since an offscreen window pins frame p50 at
+// its frame rate (M32): `state().work`.
 
 export type ReplayPhase = "empty" | "loaded" | "playing" | "ended" | "stopped";
 
 export type ReplaySource = "fold" | "model";
+
+export type ReplayClock = "real" | "corpus";
+
+/** Per-delivery work, ms: the handler and the microtasks it queued. */
+export interface ReplayWork {
+  count: number;
+  totalMs: number;
+  p50: number;
+  p95: number;
+  max: number;
+}
 
 export interface ReplayState {
   phase: ReplayPhase;
@@ -50,6 +70,10 @@ export interface ReplayState {
   skipped: number;
   /** MV-3c — the model replay client's counters over this start (model source) */
   model: ModelReplayStats | null;
+  /** MV-3c — what the page's wall clock read off for this start */
+  clock: ReplayClock;
+  /** MV-3c — each delivered frame's work over this start */
+  work: ReplayWork;
 }
 
 export interface ReplayModelLoaded {
@@ -74,7 +98,9 @@ export interface ReplayPlayer {
   /** Append recorded JSONL lines (a corpus file's text, in chunks). */
   push(text: string): ReplayLoaded;
   clear(): void;
-  start(options?: { speed?: number }): ReplayState;
+  /** `untilT` (MV-3c): deliver only frames at or before this corpus time, then
+   * end — a capture's fixed frame. */
+  start(options?: { speed?: number; untilT?: number }): ReplayState;
   stop(): ReplayState;
   state(): ReplayState;
   roster(): readonly DeviceInfo[];
@@ -92,6 +118,9 @@ export interface ReplayPlayer {
   attachModel(client: ModelReplayClient): void;
   /** MV-3c — what the next start plays. */
   source(): ReplaySource;
+  /** MV-3c — whether a start shifts the page's wall clock to the corpus's (M31;
+   * `corpus`, the default) or keeps the machine's (`real`). */
+  setClock(clock: ReplayClock): void;
 }
 
 /** One model stream line, held as TEXT and parsed when delivered (a socket's
@@ -132,6 +161,52 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
   let skipped = 0;
   let modelAtStart: ModelReplayStats | null = null;
   let timeline: TimelineEntry[] = [];
+  let clock: ReplayClock = "corpus";
+  let shifted = false;
+  let works: number[] = [];
+
+  /** Time one delivery: the handler, then the microtasks it queued (they run
+   * first-in first-out, ahead of this one). */
+  const timed = (deliverOne: () => void): void => {
+    const begun = now();
+    deliverOne();
+    queueMicrotask(() => {
+      works.push(now() - begun);
+    });
+  };
+
+  const work = (): ReplayWork => {
+    const sorted = [...works].sort((a, b) => a - b);
+    const at = (q: number): number =>
+      sorted.length === 0
+        ? 0
+        : (sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * q) - 1))] ?? 0);
+    return {
+      count: sorted.length,
+      totalMs: sorted.reduce((total, value) => total + value, 0),
+      p50: at(0.5),
+      p95: at(0.95),
+      max: sorted.at(-1) ?? 0,
+    };
+  };
+
+  /** The corpus's wall at corpus time `t`: its first frame's stamp, moved on. */
+  const corpusWall = (t: number): number => {
+    const first = frames[0];
+    return first === undefined ? Date.now() : first.wall - first.t + t;
+  };
+
+  const startClock = (firstT: number): void => {
+    if (clock !== "corpus" || frames.length === 0) return;
+    shiftWallClock(corpusWall(firstT));
+    shifted = true;
+  };
+
+  const stopClock = (): void => {
+    if (!shifted) return;
+    shifted = false;
+    restoreWallClock();
+  };
 
   const loaded = (): ReplayLoaded => ({
     corpus: corpusName ?? "recorded",
@@ -169,6 +244,8 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
     source,
     skipped,
     model: modelSince(),
+    clock,
+    work: work(),
   });
 
   const dropModel = (): void => {
@@ -258,13 +335,15 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
     return entries;
   };
 
-  const startModel = (speed: number): ReplayState => {
+  const startModel = (speed: number, untilT: number): ReplayState => {
     timeline = interleave();
     modelClient?.reset();
     modelAtStart = modelClient?.stats() ?? null;
     skipped = 0;
-    const origin = now();
+    works = [];
     const first = timeline[0]?.t ?? 0;
+    startClock(first);
+    const origin = now();
     startedAt = origin;
     endedAt = null;
     delivered = 0;
@@ -291,7 +370,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
         delivered = index;
       }
       const entry = timeline[index];
-      if (entry === undefined) {
+      if (entry === undefined || entry.t - first > untilT) {
         endedAt = now();
         phase = "ended";
         return;
@@ -302,8 +381,10 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
         return;
       }
       // ONE frame per task, as the fold source delivers them (see `start`)
-      if ("corpus" in entry) deliver(entry.corpus);
-      else deliverModel(entry.model);
+      timed(() => {
+        if ("corpus" in entry) deliver(entry.corpus);
+        else deliverModel(entry.model);
+      });
       index += 1;
       delivered = index;
       timer = setTimeout(step, 0);
@@ -315,6 +396,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
   return {
     load(recipeText) {
       halt();
+      stopClock();
       dropModel();
       const recipe = parseRecipe(recipeText);
       const corpus = generateCorpus(recipe);
@@ -362,6 +444,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
     },
     clear() {
       halt();
+      stopClock();
       dropModel();
       frames = [];
       lines = [];
@@ -379,11 +462,14 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       halt();
       if (frames.length === 0) return state();
       const speed = startOptions.speed ?? 1;
+      const untilT = startOptions.untilT ?? Number.POSITIVE_INFINITY;
       source = modelLines.length > 0 ? "model" : "fold";
-      if (source === "model") return startModel(speed);
+      if (source === "model") return startModel(speed, untilT);
       skipped = 0;
       modelAtStart = null;
+      works = [];
       const first = frames[0] as RecordedFrame;
+      startClock(first.t);
       const origin = now();
       startedAt = origin;
       endedAt = null;
@@ -394,7 +480,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       let index = 0;
       const step = (): void => {
         timer = null;
-        if (index >= frames.length) {
+        if (index >= frames.length || (frames[index] as RecordedFrame).t - first.t > untilT) {
           endedAt = now();
           phase = "ended";
           return;
@@ -409,7 +495,8 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
         // the client one message per task too, so after a stall each late frame
         // is its own render rather than a batch React folds into one — the first
         // trial's list cell rendered 102 times for ~150 fold frames that way.
-        deliver(index);
+        const at = index;
+        timed(() => deliver(at));
         index += 1;
         timer = setTimeout(step, 0);
       };
@@ -418,6 +505,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
     },
     stop() {
       halt();
+      stopClock();
       if (phase === "playing") {
         phase = "stopped";
         endedAt = now();
@@ -482,5 +570,8 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       modelClient = client;
     },
     source: () => (modelLines.length > 0 ? "model" : "fold"),
+    setClock(next) {
+      clock = next;
+    },
   };
 }
