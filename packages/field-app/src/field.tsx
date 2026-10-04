@@ -254,10 +254,10 @@ export function FieldView({
     [dark, effectiveAppearance],
   );
 
-  // I1 (ice 0.4.0): the C key's "selection decides" behavior rides the engine
-  // keymap's own override surface — stable entries; runs read the Settings
-  // gate through a ref (field-keymap.ts).
-  const keymapOverrides = useFieldKeymapOverrides(chrome.showSettings);
+  // I1 (ice 0.4.0): the field's overrides ride the engine keymap's own override
+  // surface — stable entries (field-keymap.ts; DK-8: `c` refuses the connect
+  // tool, the comment command left with field-tools).
+  const keymapOverrides = useFieldKeymapOverrides();
 
   return (
     <div

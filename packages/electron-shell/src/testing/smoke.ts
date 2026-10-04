@@ -285,16 +285,17 @@ const CANVAS_CENSUS = {
    * the run asks for the examples, so this smoke loads its renderer with `?deskSeedExamples=1`
    * (field-app `SEED_EXAMPLES`) — the CLOCK row needs it. */
   exampleClock: "vibefield.example.desk-clock",
-  // DK-8: 7 → 6 — `vibefield.note` retired (ICE's `desk.note` is the note)
-  minStagedPlugins: 6,
-  // The renderer plugins that draw DOM (browser, field-tools, widgetlab — a HUD surface
-  // or a legacy widgets row) ship scoped CSS (DK-8: 4 → 3, the note's went with it). An objects-only plugin ships
+  // DK-8: 7 → 6 — `vibefield.note` retired (ICE's `desk.note` is the note); 6 → 5 —
+  // `vibefield.field-tools` retired (ICE's mini mat is the folder, the comment pad the comment)
+  minStagedPlugins: 5,
+  // The renderer plugins that draw DOM (browser, widgetlab — a HUD surface or a legacy
+  // widgets row) ship scoped CSS (DK-8: 4 → 3 → 2, the note's and field-tools' went with them). An objects-only plugin ships
   // none since DK-6 (plugin-build's `generatesStylesheet`: a kind has no CSS) — the
   // behavior-conformance carrier (an object since DK-4), whose sheet was Tailwind's
   // accident, and the desk clock. A link alone is not evidence: the 2026-08-25
   // regression left all five links published but their late fetches unauthorized
   // after unrelated service activation.
-  minLoadedPluginStyles: 3,
+  minLoadedPluginStyles: 2,
 } as const;
 
 /** Every way the line disagrees with the census, named — a smoke that fails

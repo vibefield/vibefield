@@ -11,16 +11,16 @@ import { buildGhostWidgetTypes } from "../src/plugin-host/ghost-stubs";
 // projection into the ghost-stub filter, pinned here until the map retires with
 // the `vibefield.*` types.
 
-// DK-8: `vibefield.note` retired (ICE's `desk.note` is the note) and its `note.card` entry
-// went with it; the history's projection is pinned on a pair still in the map.
-const OLD_COMMENT = "field.comment";
+// DK-8: `vibefield.note` and `vibefield.field-tools` retired, and their C2 entries went with
+// them; the history's projection is pinned on a pair still in the map.
+const OLD_CLOCK = "widgetlab.clock";
 
 describe("type renames — the ghost-stub filter keeps the C2 history", () => {
   it("never ghost-stubs an old id whose successor is registered; truly absent ids still stub", () => {
-    const registered = new Set(["vibefield.field-tools.comment"]);
-    // A pre-rename envelope names field.comment until it self-heals — the rename
+    const registered = new Set(["vibefield.widgetlab.clock"]);
+    // A pre-rename envelope names widgetlab.clock until it self-heals — the rename
     // runner owns it; a stub would collide with the successor's renamedFrom.
-    expect(buildGhostWidgetTypes({ [OLD_COMMENT]: 1 }, registered)).toHaveLength(0);
+    expect(buildGhostWidgetTypes({ [OLD_CLOCK]: 1 }, registered)).toHaveLength(0);
     const stubs = buildGhostWidgetTypes({ "acme.vanished.widget": 1 }, registered);
     expect(stubs).toHaveLength(1);
   });

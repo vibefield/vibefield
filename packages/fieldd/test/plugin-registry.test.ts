@@ -438,24 +438,26 @@ describe("PluginRegistryService — reload discovery", () => {
 });
 
 describe("PluginRegistryService — real repo canary", () => {
-  it("discovers the shipped comment pad and field-tools plugins as valid, enabled rows", async () => {
+  it("discovers the shipped comment pad and browser plugins as valid, enabled rows", async () => {
     const svc = newService({ bundled: [REPO_PLUGINS], devLinked: [] });
     await svc.refresh();
 
     const ids = svc.list().map((p) => p.id);
     expect(ids).toContain("vibefield.comment-pad");
-    expect(ids).toContain("vibefield.field-tools");
-    // DK-8: the note retired with its plugin (ICE's `desk.note` is the note)
+    expect(ids).toContain("vibefield.browser");
+    // DK-8: the note and field-tools retired with their plugins (ICE's `desk.note` and `desk.minimat`, and the
+    // comment pad, are what they were)
     expect(ids).not.toContain("vibefield.note");
+    expect(ids).not.toContain("vibefield.field-tools");
     expect(svc.list().length).toBeGreaterThanOrEqual(2); // the repo grows — never an exact count
 
     // VibeField's own object kind (DK-8): an `objects` row, compatible on the desk build
     const pad = svc.get("vibefield.comment-pad");
     expect(pad?.state).toBe("enabled");
     expect(pad?.compatible).toBe(true);
-    const tools = svc.get("vibefield.field-tools");
-    expect(tools?.state).toBe("enabled");
-    expect(tools?.compatible).toBe(true);
+    const browser = svc.get("vibefield.browser");
+    expect(browser?.state).toBe("enabled");
+    expect(browser?.compatible).toBe(true);
   });
 });
 
