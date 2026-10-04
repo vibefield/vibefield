@@ -2144,6 +2144,19 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "local",
   }),
+  // MV-3a (L5, M20) — `agent.reportShown {ids}`: which rows the calling
+  // window shows in its active pane, so the backend beside the runtime can
+  // clear their unread marks; the screen is the connection's own `model` board
+  // (refused without one, forgotten when it closes). The board's scope, because
+  // reporting what you look at is part of looking: a reader of the board may
+  // say which of its rows it shows, and nothing else.
+  defineMethod({
+    surface: "product",
+    method: "agent.reportShown",
+    scope: "agent.observe",
+    idempotent: true,
+    locality: "local",
+  }),
   // MF-1 — the row is unchanged; its PARAMS are now `AgentSubscribeParams`
   // (agent-field.ts): absent or `{projection: "full"}` is today's subscription
   // byte for byte, `{projection: "field"}` answers the content-free projection
@@ -2194,6 +2207,18 @@ export const METHODS: MethodDef[] = [
         '{scope: "mesh", projection: "desk"}': {
           shape: "rows",
           cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+        },
+        // MV-3a (MV-D18, L12) — this desktop's own windows' board: the model's
+        // rows at the fold's own tick, urgent changes ahead of it; refused to a
+        // peer daemon and to a phone like `full`. Under `scope: "mesh"` the
+        // other desktops ride beside it as their `desk` cuts at the desk floor.
+        '{projection: "model"}': {
+          shape: "snapshot-delta",
+          cadenceFloorMs: AGENT_FIELD.FULL_TICK_MS,
+        },
+        '{scope: "mesh", projection: "model"}': {
+          shape: "rows",
+          cadenceFloorMs: AGENT_FIELD.FULL_TICK_MS,
         },
       },
     },

@@ -1,14 +1,19 @@
+import type { MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
 import {
   AGENT_FIELD,
   type AgentDeskBlocker,
   type AgentDeskMessage,
+  AgentDeskRow,
+  AgentDeskTerminalRow,
   type AgentFieldBlocker,
   type AgentFieldDelta,
   AgentFieldRow,
   type AgentFieldSnapshot,
   type AgentListResult,
   type AgentSessionSummary,
+  type AgentSessionTerminal,
   type AgentSubscribeParams,
+  type MonitorAgentRow as WireMonitorRow,
 } from "@vibefield/contracts";
 import { RpcCallError } from "./native-link";
 import {
@@ -24,7 +29,7 @@ import {
 export function malformedBoardAsk(): RpcCallError {
   return new RpcCallError(
     "PRECONDITION_FAILED",
-    'expected { projection?: "full" | "field" | "desk", scope?: "local" | "mesh", minIntervalMs?: number, heartbeatMs?: number }',
+    'expected { projection?: "full" | "field" | "desk" | "model", scope?: "local" | "mesh", minIntervalMs?: number, heartbeatMs?: number }',
     false,
   );
 }
@@ -89,6 +94,19 @@ export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): Rp
       );
     return null;
   }
+  // MV-3a (MV-D18, L8, M16) — the model board is THIS desktop's own windows':
+  // it carries the colour sequences this desktop dealt and its bare terminals,
+  // neither of which crosses the sync plane. A peer reads `desk`, a phone
+  // `field`; both are refused here as they are refused `full`.
+  if (projection === "model" && (principal === "peer-fieldd" || principal === "tailnet"))
+    return new RpcCallError(
+      "FORBIDDEN_SCOPE",
+      principal === "tailnet"
+        ? "the model projection is this desktop's windows'; a phone reads field (SP-L4)"
+        : "the model projection is this desktop's windows'; a peer reads desk (M16)",
+      false,
+      { projection },
+    );
   // SP-L4 — every subscription a phone opens is content-free. Decided by the
   // principal's kind, never by its transport.
   if (projection === "desk" && principal === "tailnet")
@@ -145,6 +163,12 @@ export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): Rp
  * one it was asked to drop. Zod's own `.omit()` keeps them. */
 const ProjectedRowSchema = AgentFieldRow.omit({ revision: true });
 export type ProjectedFieldRow = (typeof ProjectedRowSchema)["_output"];
+/** MV-3a — the model board's two row shapes before the counter stamps them,
+ * derived the same way and for the same reason (`Omit` would swallow them). */
+const ProjectedDeskRowSchema = AgentDeskRow.omit({ revision: true });
+export type ProjectedDeskRow = (typeof ProjectedDeskRowSchema)["_output"];
+const ProjectedTerminalRowSchema = AgentDeskTerminalRow.omit({ revision: true });
+export type ProjectedTerminalRow = (typeof ProjectedTerminalRowSchema)["_output"];
 
 /** Read one unknown object field tolerantly (the mirror is `.passthrough()`,
  * so everything this projection wants beyond the contract's named fields
@@ -350,6 +374,94 @@ function blockerQuestion(blocker: unknown, chars: number): string | undefined {
   return prompt === undefined ? undefined : boundText(prompt, chars);
 }
 
+// MV-3a (MV-D22, MV-D18) — THE MODEL'S ROW, CUT PER AUDIENCE. The backend
+// beside the runtime (`agent-monitor.ts`) emits the SDK's `MonitorAgentRow`;
+// the board carries it on the wire as the contract's mirror (`MonitorAgentRow`
+// in `agent-field.ts` of the contracts), and WHO reads it decides what of it
+// travels (design-mv §1: "which fields leave the device stays VibeField's
+// custody rule"):
+//   · this desktop's own window (the `model` projection) reads it whole — the
+//     colour sequence it dealt, the texts as core bounded them (M21);
+//   · a PEER (the `desk` projection) reads it without `project.seq` (M16: a
+//     sequence is desktop-local and would collide with the reader's own) and
+//     with every text bounded at `DESK_TEXT_CHARS`, exactly as the desk row's
+//     own reply line and question are (M21);
+//   · the phone (`field`) never sees it.
+// `device.self` is the reader's fact and never travels.
+
+/** The SDK's row as the wire carries it: the same facts, `device.self` dropped. */
+function wireMonitorRow(row: MonitorAgentRow): WireMonitorRow {
+  const { self: _self, ...device } = row.device;
+  // the contract mirrors the SDK field for field (the fixtures and the service's
+  // tests parse real backend rows through it); the arrays are readonly there
+  // and plain here, which is the one difference the type cannot state
+  return { ...row, device } as unknown as WireMonitorRow;
+}
+
+/** The model's row for THIS desktop's own window: whole. */
+export function windowMonitorRow(row: MonitorAgentRow): WireMonitorRow {
+  return wireMonitorRow(row);
+}
+
+/** The model's row for a PEER: no colour sequence (M16), every text bounded
+ * at the desk's bound (M21). */
+export function peerMonitorRow(
+  row: MonitorAgentRow,
+  chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
+): WireMonitorRow {
+  const wire = wireMonitorRow(row);
+  const { seq: _seq, ...project } = wire.project;
+  const bound = (text: string | undefined): string | undefined =>
+    text === undefined ? undefined : boundText(text, chars);
+  const activity = wire.activity;
+  const wait = wire.wait;
+  const reply = wire.reply;
+  return {
+    ...wire,
+    project,
+    detail: boundText(wire.detail, chars),
+    ...(activity !== undefined
+      ? {
+          activity: {
+            ...activity,
+            ...(activity.line !== undefined ? { line: boundText(activity.line, chars) } : {}),
+          },
+        }
+      : {}),
+    ...(wait !== undefined
+      ? {
+          wait: {
+            ...wait,
+            ...(wait.header !== undefined ? { header: bound(wait.header) } : {}),
+            ...(wait.question !== undefined ? { question: bound(wait.question) } : {}),
+            ...(wait.detail !== undefined ? { detail: bound(wait.detail) } : {}),
+          },
+        }
+      : {}),
+    ...(reply !== undefined ? { reply: { ...reply, text: boundText(reply.text, chars) } } : {}),
+  };
+}
+
+/** A bare terminal as the `model` board's row (L8): keyed by the model's id
+ * (its floor session), joined to the pane it is, this desktop's windows only. */
+export function projectModelTerminalRow(
+  row: MonitorAgentRow,
+  join: Pick<AgentSessionTerminal, "cellBootId" | "workloadClass"> = {},
+): ProjectedTerminalRow {
+  return {
+    runtimeRunId: row.id,
+    kind: "terminal",
+    device: row.device.id,
+    terminal: {
+      hosted: "local",
+      runtimeSessionId: row.id,
+      ...(join.cellBootId !== undefined ? { cellBootId: join.cellBootId } : {}),
+      ...(join.workloadClass !== undefined ? { workloadClass: join.workloadClass } : {}),
+    },
+    monitorRow: windowMonitorRow(row),
+  };
+}
+
 /**
  * DS-3 — the DESK row: the field row plus the reply line, the blocker's
  * question and the cost (DS-D4; `AgentDeskRow` in the contract). Content is
@@ -357,10 +469,18 @@ function blockerQuestion(blocker: unknown, chars: number): string | undefined {
  * the mesh board's upstreams are self peers, and the door refuses `desk` to a
  * phone (which reads `field`, SP-L4). Everything the field row says is said
  * the same way, from `projectFieldRow`, so the two cannot drift.
+ *
+ * MV-3a — with the model's row for the run (`monitorRow`), the desk row also
+ * carries the backend's facts, cut for its audience: a PEER's cut by default
+ * (`peerMonitorRow`), this desktop's own window's when `audience` says so.
+ * Absent (the backend has not assembled the run yet, or a caller without the
+ * backend), the row carries none and a reader draws what it was sent.
  */
 export function projectDeskRow(
   summary: AgentSessionSummary,
   chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
+  monitorRow?: MonitorAgentRow | undefined,
+  audience: "peer" | "window" = "peer",
 ): ProjectedFieldRow {
   const field = projectFieldRow(summary);
   const message = deskMessage(summary, chars);
@@ -386,7 +506,24 @@ export function projectDeskRow(
     blockers,
     ...(cost !== undefined ? { usage: { ...field.usage, ...cost } } : {}),
     ...(message !== undefined ? { lastAssistantMessage: message } : {}),
+    ...(monitorRow !== undefined
+      ? {
+          monitorRow:
+            audience === "window"
+              ? windowMonitorRow(monitorRow)
+              : peerMonitorRow(monitorRow, chars),
+        }
+      : {}),
   };
+}
+
+/** The desk projector with the backend joined in: each run's model row, as a
+ * peer reads it. The join is by run id (`AgentMonitorService.rowForRun`). */
+export function deskProjector(
+  rowForRun: (runtimeRunId: string) => MonitorAgentRow | undefined,
+  chars: number = AGENT_FIELD.DESK_TEXT_CHARS,
+): RowProjector {
+  return (summary) => projectDeskRow(summary, chars, rowForRun(summary.runtimeRunId));
 }
 
 /** Upserts and removals between two projected boards, by (runtimeRunId,
@@ -493,8 +630,11 @@ export function attachableRows(
 export interface FieldSubscriptionOptions {
   /** the fold's current rows */
   list: () => AgentListResult;
-  /** the fold's publish stream (`AgentRuntimeService.subscribe`) */
-  subscribe: (emit: (rows: AgentListResult) => void) => () => void;
+  /** the fold's publish stream (`AgentRuntimeService.subscribe`); the rows it
+   * hands over are not read — the projection lists the fold itself — so a
+   * second source (MV-3a: the backend's changes behind the desk row) may
+   * signal it with none */
+  subscribe: (emit: (rows?: AgentListResult) => void) => () => void;
   /** push one delta frame to this subscriber */
   emit: (delta: AgentFieldDelta) => void;
   /** per-subscriber trailing-edge floor */

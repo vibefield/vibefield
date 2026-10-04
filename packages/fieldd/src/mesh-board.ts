@@ -1,11 +1,7 @@
 import {
   AGENT_FIELD,
   AgentFieldDelta,
-  type AgentFieldRow,
   AgentFieldSnapshot,
-  type AgentMeshDevice,
-  type AgentMeshFrame,
-  type AgentMeshOpen,
   type DeviceInfo,
   type RowsDeviceState,
 } from "@vibefield/contracts";
@@ -63,7 +59,45 @@ import { RpcCallError } from "./native-link";
 
 const METHOD = "agent.subscribe";
 
-export type BoardProjection = "field" | "desk";
+export type BoardProjection = "field" | "desk" | "model";
+
+/** MV-3a — a `model` hub's own board is this desktop's model cut; its
+ * UPSTREAMS are the peers' DESK boards (a peer is refused `model`, M16/L8), at
+ * the desk's floor however fast the window reads its own rows (L12). */
+export function upstreamProjection(projection: BoardProjection): "field" | "desk" {
+  return projection === "model" ? "desk" : projection;
+}
+export function upstreamFloor(projection: BoardProjection, floor: number): number {
+  return projection === "model" ? Math.max(floor, AGENT_FIELD.DESK_MIN_INTERVAL_MS) : floor;
+}
+
+/** A row as the board holds it: keyed, and otherwise the owner's. A field or
+ * desk row (a peer's), or a model-board row (this desktop's own — an
+ * `AgentDeskTerminalRow` is no field row, which is why the hub reads nothing
+ * but the key). */
+export type BoardRow = { runtimeRunId: string } & Record<string, unknown>;
+export type BoardSnapshot = { epoch: string; revision: number; rows: BoardRow[] };
+export type BoardDelta = {
+  epoch?: string | undefined;
+  since: number;
+  revision: number;
+  upserts: BoardRow[];
+  removed: string[];
+};
+/** What a reader of the mesh board hears: the field's frames, or the model's. */
+export type MeshBoardFrame =
+  | { device: string; delta: BoardDelta & { epoch: string } }
+  | { device: string; snapshot: BoardSnapshot }
+  | { device: string; state: RowsDeviceState; asOf: string };
+export interface MeshBoardDevice {
+  device: string;
+  state: RowsDeviceState;
+  asOf: string;
+  snapshot?: BoardSnapshot | undefined;
+}
+export interface MeshBoardOpen {
+  devices: MeshBoardDevice[];
+}
 
 /** The roster as DeviceService serves it (structural: this file never imports
  * the service). */
@@ -95,7 +129,7 @@ export interface MeshBoardUpstreams {
 /** This device's own board at one projection and floor, stamped with its
  * chain's epoch; later deltas arrive through the `emit` it was opened with. */
 export interface LocalBoard {
-  snapshot: { epoch: string; revision: number; rows: AgentFieldRow[] };
+  snapshot: BoardSnapshot;
   dispose(): void;
 }
 
@@ -107,7 +141,7 @@ export interface MeshBoardOptions {
   openLocal: (
     projection: BoardProjection,
     minIntervalMs: number,
-    emit: (delta: AgentFieldDelta) => void,
+    emit: (delta: BoardDelta) => void,
   ) => LocalBoard;
   now?: () => number;
   /** test seams; the registry's values by default */
@@ -136,7 +170,7 @@ interface Resolved {
 interface HeldBoard {
   epoch: string;
   revision: number;
-  rows: Map<string, AgentFieldRow>;
+  rows: Map<string, BoardRow>;
 }
 
 interface Peer {
@@ -173,7 +207,7 @@ const isDesktopPeer = (row: DeviceInfo, self: string): boolean =>
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-function held(snapshot: { epoch: string; revision: number; rows: AgentFieldRow[] }): HeldBoard {
+function held(snapshot: BoardSnapshot): HeldBoard {
   return {
     epoch: snapshot.epoch,
     revision: snapshot.revision,
@@ -181,20 +215,20 @@ function held(snapshot: { epoch: string; revision: number; rows: AgentFieldRow[]
   };
 }
 
-function snapshotOf(board: HeldBoard): { epoch: string; revision: number; rows: AgentFieldRow[] } {
+function snapshotOf(board: HeldBoard): BoardSnapshot {
   return { epoch: board.epoch, revision: board.revision, rows: [...board.rows.values()] };
 }
 
 /** Upserts, then removals, then the owner's revision: the owner's delta
  * applied to the relay's copy, exactly as a reader applies it to its own. */
-function apply(board: HeldBoard, delta: AgentFieldDelta): void {
+function apply(board: HeldBoard, delta: BoardDelta): void {
   for (const row of delta.upserts) board.rows.set(row.runtimeRunId, row);
   for (const id of delta.removed) board.rows.delete(id);
   board.revision = delta.revision;
 }
 
 /** An empty delta whose `since` is its `revision`: the owner's heartbeat. */
-const isHeartbeat = (delta: AgentFieldDelta): boolean =>
+const isHeartbeat = (delta: BoardDelta): boolean =>
   delta.upserts.length === 0 && delta.removed.length === 0 && delta.since === delta.revision;
 
 /** Refusals that are the peer's DOOR speaking — asking again changes nothing
@@ -202,7 +236,7 @@ const isHeartbeat = (delta: AgentFieldDelta): boolean =>
  * endpoint yet) is transport, and is retried. */
 const REFUSALS = new Set(["INCOMPATIBLE", "FORBIDDEN_SCOPE", "PRECONDITION_FAILED", "NOT_FOUND"]);
 
-type Member = (frame: AgentMeshFrame) => void;
+type Member = (frame: MeshBoardFrame) => void;
 
 /** Each desktop's LAST board at one projection, beyond any one hub's life
  * (DS-L8): a reader who arrives after the last one left — Godview reopened
@@ -258,7 +292,7 @@ class BoardHub {
 
   /** A reader joins: it is answered with every device as the hub holds it,
    * and hears every later frame. */
-  join(member: Member): { open: AgentMeshOpen; dispose: () => void } {
+  join(member: Member): { open: MeshBoardOpen; dispose: () => void } {
     const open = this.#openAnswer();
     this.#members.add(member);
     let left = false;
@@ -291,8 +325,8 @@ class BoardHub {
 
   // ---- the answer and the relay ----
 
-  #openAnswer(): AgentMeshOpen {
-    const devices: AgentMeshDevice[] = [
+  #openAnswer(): MeshBoardOpen {
+    const devices: MeshBoardDevice[] = [
       {
         device: this.opts.selfDevice(),
         state: "live",
@@ -312,7 +346,7 @@ class BoardHub {
     return { devices };
   }
 
-  #broadcast(frame: AgentMeshFrame): void {
+  #broadcast(frame: MeshBoardFrame): void {
     for (const member of this.#members) {
       try {
         member(frame);
@@ -325,7 +359,7 @@ class BoardHub {
     }
   }
 
-  #onLocal(delta: AgentFieldDelta): void {
+  #onLocal(delta: BoardDelta): void {
     if (this.#disposed || isHeartbeat(delta)) return;
     const board = this.#self.board;
     apply(board, delta);
@@ -438,8 +472,8 @@ class BoardHub {
     const generation = ++peer.generation;
     peer.attaching = true;
     const params = {
-      projection: this.projection,
-      minIntervalMs: this.floor,
+      projection: upstreamProjection(this.projection),
+      minIntervalMs: upstreamFloor(this.projection, this.floor),
       heartbeatMs: this.opts.heartbeatMs,
     };
     this.opts.upstreams
@@ -603,7 +637,7 @@ export class MeshBoard {
   readonly #opts: Resolved;
   readonly #hubs = new Map<string, BoardHub>();
   /** each desktop's last board, by projection (`KeptBoards`) */
-  readonly #kept = new Map<BoardProjection, Map<string, HeldBoard>>();
+  readonly #kept = new Map<"field" | "desk", Map<string, HeldBoard>>();
   #disposed = false;
 
   constructor(opts: MeshBoardOptions) {
@@ -626,8 +660,8 @@ export class MeshBoard {
   open(
     projection: BoardProjection,
     minIntervalMs: number,
-    emit: (frame: AgentMeshFrame) => void,
-  ): { open: AgentMeshOpen; dispose: () => void } {
+    emit: (frame: MeshBoardFrame) => void,
+  ): { open: MeshBoardOpen; dispose: () => void } {
     if (this.#disposed)
       throw new RpcCallError("UNAVAILABLE", "the mesh board is stopping", true, {
         service: "mesh-board",
@@ -636,10 +670,13 @@ export class MeshBoard {
     const key = `${projection}|${minIntervalMs}`;
     let hub = this.#hubs.get(key);
     if (hub === undefined) {
-      let boards = this.#kept.get(projection);
+      // kept by what the PEERS send: a model hub keeps desk boards, the same
+      // copies a desk hub keeps
+      const upstream = upstreamProjection(projection);
+      let boards = this.#kept.get(upstream);
       if (boards === undefined) {
         boards = new Map();
-        this.#kept.set(projection, boards);
+        this.#kept.set(upstream, boards);
       }
       const kept = boards;
       const keeper: KeptBoards = {

@@ -212,8 +212,12 @@ export interface RevisionedView<TOpen, TFrame> {
 export interface RevisionedSubscriptionOptions<TOpen, TFrame> {
   view: RevisionedView<TOpen, TFrame>;
   /** the source's change signal; answers its unsubscribe. The signal says only
-   * that something MAY have moved — the view decides whether anything did. */
-  subscribe: (onChange: () => void) => () => void;
+   * that something MAY have moved — the view decides whether anything did.
+   * MV-3a (L12) — a signal may say it is URGENT (what a person waits on moved):
+   * when the floor has already elapsed since the last frame the frame goes out
+   * at once, leading-edge; inside the floor it waits the window out like any
+   * other. A source that never says so keeps the trailing-edge floor exactly. */
+  subscribe: (onChange: (urgent?: boolean) => void) => () => void;
   /** one frame to this subscriber */
   emit: (frame: TOpen | TFrame, kind: FrameKind) => void;
   /** this subscriber's trailing-edge floor, in ms */
@@ -249,11 +253,14 @@ export class RevisionedSubscription<TOpen, TFrame> {
   #beat: ReturnType<typeof setTimeout> | null = null;
   #gap = false;
   #disposed = false;
+  /** ms — when a frame last went out (the open counts), for the urgent edge */
+  #lastFrameAt: number;
 
   constructor(opts: RevisionedSubscriptionOptions<TOpen, TFrame>) {
     this.#opts = opts;
     this.snapshot = opts.view.open();
-    this.#unsubscribe = opts.subscribe(() => this.#schedule());
+    this.#lastFrameAt = Date.now();
+    this.#unsubscribe = opts.subscribe((urgent) => this.#schedule(urgent === true));
     this.#armBeat();
   }
 
@@ -286,8 +293,20 @@ export class RevisionedSubscription<TOpen, TFrame> {
     this.#unsubscribe();
   }
 
-  #schedule(): void {
-    if (this.#disposed || this.#timer !== null) return;
+  #schedule(urgent = false): void {
+    if (this.#disposed) return;
+    // L12 — the leading edge: an urgent change with the floor already elapsed
+    // since the last frame goes out now, not a window later. A gap is repaired
+    // on the floor as before (a replacement is never hurried).
+    if (urgent && !this.#gap && Date.now() - this.#lastFrameAt >= this.#opts.minIntervalMs) {
+      if (this.#timer !== null) {
+        clearTimeout(this.#timer);
+        this.#timer = null;
+      }
+      this.#flush();
+      return;
+    }
+    if (this.#timer !== null) return;
     this.#timer = setTimeout(() => this.#flush(), this.#opts.minIntervalMs);
     this.#timer.unref?.();
   }
@@ -332,6 +351,7 @@ export class RevisionedSubscription<TOpen, TFrame> {
    * not, so it only ever speaks into silence. */
   #deliver(frame: TOpen | TFrame, kind: FrameKind): boolean {
     let delivered = true;
+    this.#lastFrameAt = Date.now();
     try {
       this.#opts.emit(frame, kind);
     } catch (error) {
