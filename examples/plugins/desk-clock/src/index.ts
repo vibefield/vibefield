@@ -2,6 +2,7 @@
 // MANIFEST (host-read, authoring-emitted), the renderer MODULE, and the kind's own surface for tests
 // and the docs. The host builds the prefab from the manifest (§12.2) and the kind from the export the
 // manifest names — never from anything else exported here.
+export * from "./broken";
 export * from "./glyphs";
 export * from "./ids";
 export * from "./kind";

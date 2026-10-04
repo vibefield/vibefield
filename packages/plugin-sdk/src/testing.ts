@@ -708,8 +708,10 @@ export async function activateServiceWithMockHost(
 export {
   type BindingResource,
   bindingsUsedBy,
+  GPU_CONSTANTS,
   type GpuProblem,
   type GpuProblemCode,
+  holdGpuConstants,
   type RecordedModule,
   type RecordingGpu,
   readWgsl,
