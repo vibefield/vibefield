@@ -9,11 +9,13 @@ import {
   type MonitorHostRun,
   type MonitorHostTerminal,
   type MonitorRuntimeSource,
+  type MonitorScheduler,
   runtimeRunSource,
 } from "@vibecook/puppeteer-monitor";
 import type { DeviceOs, MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
 import {
   AGENT_CATALOG,
+  AGENT_FIELD,
   type AgentDeskRow,
   type AgentDeskTerminalRow,
   type AgentModelBoardRow,
@@ -38,13 +40,17 @@ import type { ModelBoardPort } from "../godview/monitor/remote-door";
  * (`@vibecook/puppeteer-monitor`, browser-safe) over the fixture's own fold rows,
  * one backend per desktop drawn, each cut to the board the window reads.
  *
- * What this is NOT: fieldd. The daemon hosts the backend in `agent-monitor.ts`
- * and cuts the board in `agent-model-board.ts`/`agent-field.ts`; those are
- * Node-only and the catalog may not import them (the workspace taxonomy keeps
- * `@vibefield/fieldd` test-only here). The three mappings below are the
- * catalog's READINGS of fieldd's rules, each naming its source; the product's
- * truth is `test/godview-model-differential.test.tsx`, which drives fieldd's own
- * backend. A drift here shows in the catalog, never in the product.
+ * FIXTURE-GRADE COPY (M37). What this is NOT: fieldd. The daemon hosts the
+ * backend in `agent-monitor.ts` and cuts the board in `agent-model-board.ts` /
+ * `agent-field.ts`; those are Node-only and the catalog may not import them (the
+ * workspace taxonomy keeps `@vibefield/fieldd` test-only here). The three
+ * mappings below are the catalog's COPIES of fieldd's rules, each naming its
+ * source, and `test/godview-catalog-model-fixture.test.ts` runs them and fieldd's
+ * real mapping over the same fixture rows and asserts the model rows are equal,
+ * so a drift fails a test rather than waiting for an eye. The product's truth is
+ * `test/godview-model-differential.test.tsx`, which drives fieldd's own backend.
+ * The clean end (a shared browser-safe home for fieldd's pure helpers) is a
+ * taxonomy question for James, not this lane's.
  */
 
 export interface CatalogDesktop {
@@ -137,7 +143,9 @@ function hostRunOf(summary: AgentSessionSummary): MonitorHostRun {
   };
 }
 
-/** `agent-monitor.ts` `hostTerminalFrom`: a floor PTY as the backend's host record. */
+/** `agent-monitor.ts` `hostTerminalFrom`: a floor PTY as the backend's host record.
+ * fieldd's inventory knows a PTY's cwd and title but not its activity (M28: that is
+ * the window's join), so none travels here either. */
 function hostTerminalOf(
   session: SessionSummary,
   profileSet: string | undefined,
@@ -147,9 +155,7 @@ function hostTerminalOf(
     createdAt: session.createdAtMs,
     ...(session.cwd ? { cwd: session.cwd } : {}),
     ...(session.title ? { title: session.title } : {}),
-    ...(session.activity?.kind ? { activity: { kind: session.activity.kind } } : {}),
     ...(profileSet !== undefined ? { profileSet } : {}),
-    ...(session.exited ? { exited: true } : {}),
   };
 }
 
@@ -189,6 +195,8 @@ function stateOf(summary: AgentSessionSummary): AgentMonitorState | undefined {
 
 interface HostedDesktop {
   backend: MonitorBackend;
+  /** runs a pending tick now: the rows are current after it */
+  flush(): void;
   publish(rows: readonly AgentSessionSummary[]): void;
   born(session: SessionSummary, profileSet: string | undefined): void;
   rows(): readonly AgentSessionSummary[];
@@ -249,6 +257,23 @@ function hostDesktop(
     facts = null;
     for (const listener of [...hostListeners]) listener();
   };
+  // The tick: one emission per microtask turn (the backend's default is a
+  // macrotask), and `flush()` runs a pending tick NOW — the backend's `ready`
+  // only schedules its first recompute, and the board is read right after it.
+  let pending: (() => void) | null = null;
+  const run = (): void => {
+    const task = pending;
+    pending = null;
+    task?.();
+  };
+  const scheduler: MonitorScheduler = (task) => {
+    pending = task;
+    queueMicrotask(run);
+    return () => {
+      if (pending === task) pending = null;
+    };
+  };
+
   const os = deviceOsOf(device.platform);
   const backend = createMonitorBackend({
     runs: runtimeRunSource(runtime),
@@ -278,10 +303,12 @@ function hostDesktop(
     // VibeField's readings, as fieldd passes them (M15, M17)
     cost: { acrossEpochs: "current" },
     unobservedAgents: "row",
+    scheduler,
   });
 
   return {
     backend,
+    flush: run,
     publish(next) {
       rows = next;
       setStates();
@@ -299,12 +326,56 @@ function hostDesktop(
 
 // ── the board's cut ──────────────────────────────────────────────────────────
 
-/** The wire's row for the model's: the shapes mirror field for field (fieldd parses real
- * backend rows through the contract). A PEER's row carries no `project.seq` (M16). */
+/** `agent-field.ts` `boundText`: a text at most `chars` code points long, the last one an ellipsis. */
+function boundText(text: string, chars: number): string {
+  if (text.length <= chars) return text;
+  const long = text.length > chars * 2;
+  const points = Array.from(long ? text.slice(0, chars * 2) : text);
+  if (!long && points.length <= chars) return text;
+  return `${points.slice(0, chars - 1).join("")}…`;
+}
+
+/**
+ * `agent-field.ts` `windowMonitorRow` / `peerMonitorRow`: the SDK's row as the wire
+ * carries it. `device.self` is the reader's fact and never travels (the window's
+ * fold joins it back); this desktop's own row is otherwise whole, and a PEER's
+ * carries no colour sequence (M16) with every text bounded at the desk's bound
+ * (M21). The shapes mirror field for field (fieldd parses real backend rows
+ * through the contract).
+ */
 function wireRowOf(row: MonitorAgentRow, peer: boolean): WireMonitorRow {
-  if (!peer) return row as unknown as WireMonitorRow;
+  const { self: _self, ...device } = row.device;
+  if (!peer) return { ...row, device } as unknown as WireMonitorRow;
+  const chars = AGENT_FIELD.DESK_TEXT_CHARS;
   const { seq: _seq, ...project } = row.project;
-  return { ...row, project } as unknown as WireMonitorRow;
+  const bound = (text: string | undefined): string | undefined =>
+    text === undefined ? undefined : boundText(text, chars);
+  const { activity, wait, reply } = row;
+  return {
+    ...row,
+    device,
+    project,
+    detail: boundText(row.detail, chars),
+    ...(activity !== undefined
+      ? {
+          activity: {
+            ...activity,
+            ...(activity.line !== undefined ? { line: boundText(activity.line, chars) } : {}),
+          },
+        }
+      : {}),
+    ...(wait !== undefined
+      ? {
+          wait: {
+            ...wait,
+            ...(wait.header !== undefined ? { header: bound(wait.header) } : {}),
+            ...(wait.question !== undefined ? { question: bound(wait.question) } : {}),
+            ...(wait.detail !== undefined ? { detail: bound(wait.detail) } : {}),
+          },
+        }
+      : {}),
+    ...(reply !== undefined ? { reply: { ...reply, text: boundText(reply.text, chars) } } : {}),
+  } as unknown as WireMonitorRow;
 }
 
 /** `agent-field.ts` `projectDeskRow`, as far as the window reads a board row: the key, the
@@ -314,6 +385,7 @@ function boardRowsOf(
   device: CatalogDesktop,
   peer: boolean,
 ): AgentModelBoardRow[] {
+  desk.flush();
   const snapshot = desk.backend.getSnapshot();
   const byId = new Map(snapshot.rows.map((row) => [row.id, row] as const));
   const claimed = new Set<string>();

@@ -169,6 +169,10 @@ class Tally {
   compared = 0;
   rows = 0;
   peersSkipped = 0;
+  /** M38 — oracle rows of the one shape the two paths decide differently (see `isM38Shape`) */
+  m38Rows = 0;
+  /** M38 — those of them the replica hides, accepted by name */
+  m38Hidden = 0;
   missing: { seq: number; key: string }[] = [];
   extra: { seq: number; key: string }[] = [];
 
@@ -211,6 +215,7 @@ class Tally {
   report(): string {
     const lines = [
       `rows compared ${this.rows} · peers skipped ${this.peersSkipped} · missing ${this.missing.length} · extra ${this.extra.length}`,
+      `  M38 rows (no mirror, no PTY, not exited) in the oracle: ${this.m38Rows} · hidden by the one liveness rule: ${this.m38Hidden}`,
     ];
     for (const entry of [...this.mismatches.values()].sort((x, y) => y.count - x.count)) {
       const { seq, key, path, oracle, replica } = entry.example;
@@ -223,6 +228,23 @@ class Tally {
     for (const item of this.extra.slice(0, 5)) lines.push(`  extra seq ${item.seq} ${item.key}`);
     return lines.join("\n");
   }
+}
+
+/**
+ * M38 — the one row shape the two paths decide differently: a managed run with
+ * NO mirror (the runtime never spoke) and NO PTY, not exited. The seam drew it as
+ * a "starting" body (its own copy of the drop rule dropped only `alive: false`
+ * mirrors); fieldd's one liveness rule (ruled 2026-09-13, `hostRunFromSummary`)
+ * says a run with neither is not alive, so the backend hides it. Such a row
+ * missing from the replica is the accepted difference, counted, never a miss.
+ */
+function isM38Shape(agent: OracleAgent): boolean {
+  return (
+    agent.agent !== undefined &&
+    agent.agent.monitor === undefined &&
+    agent.session === undefined &&
+    agent.floorSessionId === undefined
+  );
 }
 
 /** What the oracle named a local row by: its run, or the floor session it stood for. */
@@ -416,8 +438,11 @@ async function replay(oracle: Oracle, corpus: Corpus): Promise<Tally> {
       const key = oracleKey(agent);
       seen.add(key);
       const row = replicaRows.get(key);
+      const m38 = isM38Shape(agent);
+      if (m38) tally.m38Rows += 1;
       if (row === undefined) {
-        tally.missing.push({ seq: entry.seq, key });
+        if (m38) tally.m38Hidden += 1;
+        else tally.missing.push({ seq: entry.seq, key });
         continue;
       }
       tally.compare(entry.seq, key, viewReadProjection(agent), viewReadProjection(row));
