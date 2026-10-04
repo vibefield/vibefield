@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { MAX_GRANT_BYTES, mintGrant, SCOPE_READ } from "@rosetta/protocol/grants";
+import { MAX_GRANT_BYTES, mintGrant, SCOPE_FILES, SCOPE_READ } from "@rosetta/protocol/grants";
 import {
   type CallerContext,
   INDEX_TICKET,
@@ -210,12 +210,43 @@ export interface IndexTicketMinterOptions {
   now?: () => number;
 }
 
-/** What a mint is for, once every refusal has been said: the session, and
- * the audit target that names it. */
+/** What a mint is for, once every refusal has been said: the session, the
+ * audit target that names it, and what its grant may do. */
 export interface IndexTicketAsk {
   sessionId: string;
   /** the session id when it is a safe audit identity, else its digest */
   auditId: string;
+  /** the grant's scopes — `indexTicketScopes(ctx)`, decided once, so the
+   * mint and its audit record say the same thing */
+  scope: readonly string[];
+}
+
+/** The desktop window: the shell-minted renderer bearer on the loopback door
+ * (`rendererIdentity`'s proof in plugin-update-transport.ts, read here without
+ * throwing). `clientKind` is a claim, so it only ever narrows. */
+function isDesktopWindow(ctx: CallerContext): boolean {
+  return (
+    ctx.principal.kind === "local-token" &&
+    ctx.principal.rendererParticipant !== undefined &&
+    ctx.transport === "ws-loopback" &&
+    ctx.clientKind === "renderer"
+  );
+}
+
+/**
+ * RO-13 (James, 2026-10-04) — what a ticket's grant may do, by who asked.
+ * `read` opens the session's recorded history (its socket, its rows, its
+ * plans, the assets). `files` beside it opens the session's recorded-file read
+ * (rosetta docs/AUTH.md §5.4): rosettad reads the file a row names from THIS
+ * desktop's disk as it is NOW, which is more than the transcript, so the scope
+ * is minted per principal. The desktop WINDOW holds it — the History room opens
+ * recorded files there. Every other holder keeps `read` alone until a law says
+ * otherwise: the shell, a plain local token, and — refused a ticket today, but
+ * the rule outlives the refusals — a plugin, an MCP agent, the phone, a guest,
+ * another desktop's daemon.
+ */
+export function indexTicketScopes(ctx: CallerContext): readonly string[] {
+  return isDesktopWindow(ctx) ? [SCOPE_READ, SCOPE_FILES] : [SCOPE_READ];
 }
 
 /** A session id as an audit target may carry it: rosetta's ids are any text
@@ -239,8 +270,10 @@ function auditSessionId(sessionId: string): string {
  * daemon's origin) and, beside it, an RO-10 grant for exactly that session —
  * `sid` the session, `cid` the caller's client identity (`clientIdFor`, the
  * terminal grants' rule: a renderer window's participant, else the token's
- * principal), `scope: ["read"]`, `exp` = now + `INDEX_TICKET.TTL_MS` —
- * signed with the key the current generation verifies. Every answer is a
+ * principal), `scope` by who asked (`indexTicketScopes`: `["read", "files"]`
+ * for the desktop window since RO-13, `["read"]` for everyone else),
+ * `exp` = now + `INDEX_TICKET.TTL_MS` — signed with the key the current
+ * generation verifies. Every answer is a
  * fresh grant (the method is not idempotent): `exp` only ever moves forward,
  * so two asks in one millisecond still get two grants.
  *
@@ -321,7 +354,11 @@ export class IndexTicketMinter {
         false,
         { service: INDEX_TICKET.SERVICE, state: INDEX_TICKET.STATE_OFF },
       );
-    return { sessionId: parsed.data.sessionId, auditId: auditSessionId(parsed.data.sessionId) };
+    return {
+      sessionId: parsed.data.sessionId,
+      auditId: auditSessionId(parsed.data.sessionId),
+      scope: indexTicketScopes(ctx),
+    };
   }
 
   /** The mint itself — called inside the audit's attempt (daemon.ts). The
@@ -349,7 +386,7 @@ export class IndexTicketMinter {
       grant = mintGrant(credentials.grantKey, {
         cid: clientIdFor(ctx.principal),
         exp,
-        scope: [SCOPE_READ],
+        scope: ask.scope,
         sid: ask.sessionId,
         v: 1,
       });

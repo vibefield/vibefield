@@ -20,13 +20,17 @@
  *    arrives carrying the transcript's own words;
  *  - EL2: every call the adapters made of fieldd is a catalog door or the
  *    ticket — none is a transcript read — and no frame fieldd sent this window
- *    carries a byte of the transcript's text.
+ *    carries a byte of the transcript's text;
+ *  - RO-13 (2026-10-04): the window's grant reaches the session's recorded-file
+ *    read through the room's port — rosettad answers past its credential check
+ *    with its own not_found (the ground truth's first row is a prompt, which
+ *    names no file), never `wrong-scope`, and never the room's refusal words.
  */
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { MetaState, TimelineEntry } from "@rosetta/protocol";
+import { type MetaState, type TimelineEntry, UnauthorizedError } from "@rosetta/protocol";
 import {
   IndexSessionsResult,
   IndexStatus,
@@ -39,6 +43,7 @@ import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient, type WsLike } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it } from "vitest";
 import { type HistoryDoorClient, historyPortsOver } from "../src/history/doors";
+import { FILE_TARGET_REFUSAL } from "../src/history/session-port";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const REAL_BIN = process.env["FIELDD_ROSETTAD_BIN"];
@@ -246,6 +251,18 @@ describe.skipIf(
     );
     const bytesAfter = received.reduce((sum, frame) => sum + frame.length, 0);
 
+    // RO-13: a recorded file, read the way the room reads one — through the
+    // session port, with the window's grant, straight to rosettad
+    const firstRow = entries[0]?.timeline_id;
+    expect(firstRow).toBeDefined();
+    const fileRead = await client.readFileTarget(sid, firstRow as string, 0).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(fileRead).not.toBeInstanceOf(UnauthorizedError);
+    expect(fileRead).toMatchObject({ status: 404, code: "not_found" });
+    expect((fileRead as Error).message).not.toBe(FILE_TARGET_REFUSAL);
+
     // EL2: no frame fieldd sent this window carries a byte of the body…
     expect(received.some((frame) => frame.includes(BODY_WORDS))).toBe(false);
     // …because fieldd answered lists, facts and a ticket — never a transcript read
@@ -265,6 +282,15 @@ describe.skipIf(
         doorCalls: [...asked].sort(),
         fielddBytesWhileStreaming: bytesAfter - bytesBefore,
         fielddFrames: received.length,
+      })}`,
+    );
+    const answered = fileRead as { status: number; code: string | null; message: string };
+    console.log(
+      `RO13_WITNESS ${JSON.stringify({
+        timelineId: firstRow,
+        status: answered.status,
+        code: answered.code,
+        message: answered.message,
       })}`,
     );
     ports.sessions.close(sid);

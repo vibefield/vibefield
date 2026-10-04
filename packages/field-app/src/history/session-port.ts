@@ -27,6 +27,13 @@ import { INDEX_TICKET, IndexEndpointSet, IndexOpenTicket } from "@vibefield/cont
 // lease repoints its one client with rosetta's own `setBaseUrl`, which aborts
 // the old origin's reads and restarts every subscription there; the room keeps
 // the client object it was handed for the whole lease.
+//
+// RO-13 (2026-10-04): the desktop window's grant carries `files` beside `read`
+// (fieldd's `indexTicketScopes`), so a recorded file — the file a transcript
+// row names, read from this desktop's disk by rosettad — opens through the
+// lease like every other read: renewed, repointed, in rosetta's own words when
+// the file is gone. Only a refusal of the grant's REACH there is said in the
+// room's words (`FILE_TARGET_REFUSAL`).
 
 /** How long before a grant's `expiresAt` its lease asks for the next one
  * (`INDEX_TICKET.TTL_MS` is ten minutes); a shorter grant renews at half its
@@ -37,11 +44,26 @@ export const TICKET_RENEW_LEAD_MS = 60_000;
 export const TICKET_RETRY_MIN_MS = 500;
 export const TICKET_RETRY_MAX_MS = 10_000;
 
-/** What opening a recorded file answers on this desktop. rosetta's live-file
- * read (`/read/{target_index}`) is bearer-only upstream and a grant cannot
- * open it (RO-13, the ask on record), so the room says so in a receipt. */
+/** What opening a recorded file answers when rosettad refuses this window's
+ * grant the file read: `wrong-scope`, a grant minted without `files`, or
+ * `wrong-route`, a daemon from before the scope existed — neither of which a
+ * fresh grant changes. The room says so in its receipt pill. *Corrected
+ * 2026-10-04 (RO-13): this said the read was bearer-only upstream and that
+ * every file answered these words; since the scope, a window's file read goes
+ * through, and a file that is gone is rosetta's own not_found.* */
 export const FILE_TARGET_REFUSAL =
   "Recorded files can't open here yet — no file door on the desktop";
+
+/** The refusals a fresh grant cannot change: the minter gives the same window
+ * the same scopes, and the route is the room's — so a read refused for one of
+ * them is not renewed. */
+const REACH_REFUSALS: ReadonlySet<string> = new Set(["wrong-scope", "wrong-route"]);
+
+function reachRefused(cause: unknown): boolean {
+  return (
+    cause instanceof UnauthorizedError && cause.reason !== null && REACH_REFUSALS.has(cause.reason)
+  );
+}
 
 /** The one call the session port makes of fieldd. */
 export interface TicketClient {
@@ -228,14 +250,15 @@ export function sessionPortOver(
   }
 
   /** A read through the lease's client, renewed once when rosettad refused
-   * its grant (expired, or signed by a generation that is gone). */
+   * its grant (expired, or signed by a generation that is gone) — never for
+   * a refusal of its reach, which a fresh grant would only repeat. */
   async function read<T>(lease: Lease, run: (session: RosettaClient) => Promise<T>): Promise<T> {
     const session = lease.client;
     if (session === null) throw new Error("This session is not open");
     try {
       return await run(session);
     } catch (cause) {
-      if (!(cause instanceof UnauthorizedError) || lease.closed) throw cause;
+      if (!(cause instanceof UnauthorizedError) || lease.closed || reachRefused(cause)) throw cause;
       await renew(lease);
       const renewed = lease.client;
       if (renewed === null) throw cause;
@@ -272,8 +295,14 @@ export function sessionPortOver(
       readTextAsset: (asset, signal) =>
         read(lease, (session) => session.readTextAsset(asset, signal)),
       readAsset: (asset, signal) => read(lease, (session) => session.readAsset(asset, signal)),
-      // RO-13: a grant never opens the live-file read; the room's receipt says so.
-      readFileTarget: () => Promise.reject(new Error(FILE_TARGET_REFUSAL)),
+      // RO-13: the window's grant carries `files`; a refusal of its reach is
+      // the room's words, anything else (a file that is gone) rosetta's own.
+      readFileTarget: (sessionId, timelineId, targetIndex, signal) =>
+        read(lease, (session) =>
+          session.readFileTarget(sessionId, timelineId, targetIndex, signal),
+        ).catch((cause: unknown) => {
+          throw reachRefused(cause) ? new Error(FILE_TARGET_REFUSAL) : cause;
+        }),
     };
   }
 

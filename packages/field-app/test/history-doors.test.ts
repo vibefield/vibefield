@@ -6,7 +6,8 @@
  * scripted client. The rows: the catalog assembled from DS-6's listings and
  * pings into the room's meta shapes; the session lease renewed before its
  * grant expires and repointed when the ticket's origin moves; the asset
- * cache's bound and its revokes; the honest refusal of a recorded file.
+ * cache's bound and its revokes; a recorded file read with the window's grant
+ * (RO-13), and the honest refusal when rosettad refuses the grant's reach.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -386,9 +387,17 @@ class FakeSocket {
   }
 }
 
+/** The bytes rosettad answers for a recorded file in these rows. */
+const RECORDED_BYTES = [7, 8, 9];
+
 /** rosettad's REST in a test: every read recorded with the credential it
- * carried; a 401 the first time `refuseOnce` names a path. */
-function rosettadFetch(refuseOnce: Set<string> = new Set()) {
+ * carried; a 401 `expired` the first time `refuseOnce` names a path; and
+ * `answer` scripts any path's whole response (a refusal of the grant's reach,
+ * a file that is gone). A recorded file answers its bytes. */
+function rosettadFetch(
+  refuseOnce: Set<string> = new Set(),
+  answer: (path: string, headers: Record<string, string>) => Response | null = () => null,
+) {
   const reads: Array<{ url: string; authorization: string | null }> = [];
   const fetchFn = (async (input: string | URL | Request, init?: RequestInit) => {
     const url = String(input);
@@ -402,8 +411,13 @@ function rosettadFetch(refuseOnce: Set<string> = new Set()) {
         headers: { ...headers, "x-rosetta-auth": "expired" },
       });
     }
+    const scripted = answer(path, headers);
+    if (scripted !== null) return scripted;
     if (path.startsWith("/api/assets/")) {
       return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers });
+    }
+    if (/\/read\/\d+$/.test(path)) {
+      return new Response(new Uint8Array(RECORDED_BYTES), { status: 200, headers });
     }
     return new Response(JSON.stringify({ entry: { timeline_id: "t1" }, generation: 1 }), {
       status: 200,
@@ -473,6 +487,12 @@ describe("the session port's lease (AR-8c)", () => {
     expect(moved?.protocols).toEqual(["rosetta", "rosetta.grant.g3"]);
     await session.timelineEntry("s1", "t1");
     expect(rest.reads.at(-1)?.url.startsWith("http://127.0.0.1:52999/")).toBe(true);
+    // RO-13: a recorded file rides the same lease — the moved origin, the new grant
+    expect([...(await session.readFileTarget("s1", "t1", 0))]).toEqual(RECORDED_BYTES);
+    expect(rest.reads.at(-1)).toEqual({
+      url: "http://127.0.0.1:52999/api/sessions/s1/timeline/t1/read/0",
+      authorization: "Rosetta-Grant g3",
+    });
     port.dispose();
   });
 
@@ -520,11 +540,91 @@ describe("the session port's lease (AR-8c)", () => {
     port.dispose();
   });
 
-  it("answers a recorded file with its honest refusal — a grant never opens the live-file read (RO-13)", async () => {
+  it("reads a recorded file through the lease's client with the window's grant (RO-13)", async () => {
     const door = client({ "index.openTicket": () => ticket(43000, "g1", Date.now() + 600_000) });
-    const port = sessionPortOver(door, { fetchFn: rosettadFetch().fetchFn });
+    const rest = rosettadFetch();
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
     const session = await port.open("s1");
-    await expect(session.readFileTarget("s1", "t1", 0)).rejects.toThrow(FILE_TARGET_REFUSAL);
+    expect([...(await session.readFileTarget("s1", "t1", 2))]).toEqual(RECORDED_BYTES);
+    expect(rest.reads).toEqual([
+      {
+        url: "http://127.0.0.1:43000/api/sessions/s1/timeline/t1/read/2",
+        authorization: "Rosetta-Grant g1",
+      },
+    ]);
+    port.dispose();
+  });
+
+  it("an expired grant on a file read is renewed once and the file is read again", async () => {
+    const tickets = [
+      ticket(43100, "g1", Date.now() + 600_000),
+      ticket(43100, "g2", Date.now() + 600_000),
+    ];
+    const door = client({ "index.openTicket": () => tickets.shift() });
+    const rest = rosettadFetch(new Set(["/api/sessions/s1/timeline/t1/read/0"]));
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
+    const session = await port.open("s1");
+    expect([...(await session.readFileTarget("s1", "t1", 0))]).toEqual(RECORDED_BYTES);
+    expect(rest.reads.map((read) => read.authorization)).toEqual([
+      "Rosetta-Grant g1",
+      "Rosetta-Grant g2",
+    ]);
+    port.dispose();
+  });
+
+  it("a file read rosettad refuses for the grant's reach is the room's honest refusal, and no fresh grant is asked for", async () => {
+    // wrong-scope: a grant minted without `files`; wrong-route: a daemon from
+    // before the scope — a fresh grant from the same minter repeats either
+    for (const reason of ["wrong-scope", "wrong-route"]) {
+      const door = client({
+        "index.openTicket": () => ticket(43200, "g1", Date.now() + 600_000),
+      });
+      const rest = rosettadFetch(new Set(), (path, headers) =>
+        path.endsWith("/read/0")
+          ? new Response("", { status: 401, headers: { ...headers, "x-rosetta-auth": reason } })
+          : null,
+      );
+      const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
+      const session = await port.open("s1");
+      await expect(session.readFileTarget("s1", "t1", 0), reason).rejects.toThrow(
+        FILE_TARGET_REFUSAL,
+      );
+      expect(
+        door.calls.filter((call) => call.method === "index.openTicket"),
+        reason,
+      ).toHaveLength(1);
+      // the session's other reads are untouched by it
+      await expect(session.timelineEntry("s1", "t1")).resolves.toMatchObject({
+        timeline_id: "t1",
+      });
+      port.dispose();
+    }
+  });
+
+  it("a recorded file that is gone stays rosetta's own words, never the room's refusal", async () => {
+    const door = client({ "index.openTicket": () => ticket(43300, "g1", Date.now() + 600_000) });
+    const rest = rosettadFetch(new Set(), (path, headers) =>
+      path.endsWith("/read/0")
+        ? new Response(
+            JSON.stringify({
+              error: { code: "not_found", message: "the recorded file is no longer available" },
+            }),
+            { status: 404, headers: { ...headers, "content-type": "application/json" } },
+          )
+        : null,
+    );
+    const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
+    const session = await port.open("s1");
+    const refused = await session.readFileTarget("s1", "t1", 0).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(refused).toMatchObject({
+      status: 404,
+      code: "not_found",
+      message: "the recorded file is no longer available",
+    });
+    expect((refused as Error).message).not.toBe(FILE_TARGET_REFUSAL);
     port.dispose();
   });
 
