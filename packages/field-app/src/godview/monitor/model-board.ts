@@ -39,6 +39,22 @@ export interface ModelBoardDevice {
   asOf: string;
 }
 
+/**
+ * MV-3b — one row as the fold holds it: the model's row the replica applies,
+ * and the BOARD row it rode in on, kept beside it for the window's own joins.
+ * The model carries no pane join by design (a view never looks a pane up); the
+ * board row does — a terminal row's `terminal.runtimeSessionId` (G3), a desk
+ * row's `terminal` and `runtimeRunId` — and that is what lets the window map
+ * its panes, its spawn answers and fieldd's history (keyed by run) onto model
+ * ids without deriving a business fact. Every row the fold has heard is here,
+ * the ones the replica hides included (`alive: false`, M3).
+ */
+export interface HeldModelRow {
+  readonly device: string;
+  readonly board: AgentModelBoardRow;
+  readonly row: MonitorAgentRow;
+}
+
 interface HeldDevice {
   state: RowsDeviceState;
   asOf: string;
@@ -76,7 +92,7 @@ export class ModelBoardFold {
   #revision = 0;
   #here: string | undefined;
   readonly #devices = new Map<string, HeldDevice>();
-  readonly #rows = new Map<string, MonitorAgentRow>();
+  readonly #held = new Map<string, HeldModelRow>();
 
   /** The answering desktop: fieldd lists itself first (`AgentMeshOpen`). */
   get here(): string | undefined {
@@ -85,6 +101,16 @@ export class ModelBoardFold {
 
   get revision(): number {
     return this.#revision;
+  }
+
+  /** A row the fold holds, by model id — hidden or shown — with its board row. */
+  held(id: string): HeldModelRow | undefined {
+    return this.#held.get(id);
+  }
+
+  /** Every row the fold holds, this desktop's first and then by device order. */
+  heldRows(): readonly HeldModelRow[] {
+    return [...this.#held.values()];
   }
 
   /** Every desktop the board lists, in the board's order. */
@@ -99,12 +125,12 @@ export class ModelBoardFold {
   /** The open — and every re-snapshot — replaces everything held (M23). */
   open(open: AgentModelMeshOpen): MonitorModelSnapshot {
     this.#devices.clear();
-    this.#rows.clear();
+    this.#held.clear();
     this.#here = open.devices[0]?.device;
     for (const entry of open.devices) {
       const held: HeldDevice = { state: entry.state, asOf: entry.asOf, idByKey: new Map() };
       this.#devices.set(entry.device, held);
-      if (entry.snapshot !== undefined) this.#replaceBoard(held, entry.snapshot);
+      if (entry.snapshot !== undefined) this.#replaceBoard(entry.device, held, entry.snapshot);
     }
     this.#revision += 1;
     return { revision: this.#revision, rows: this.#ordered() };
@@ -138,7 +164,7 @@ export class ModelBoardFold {
       };
       if (held === undefined) this.#devices.set(frame.device, target);
       const before = new Set(target.idByKey.values());
-      const upserts = this.#replaceBoard(target, frame.snapshot);
+      const upserts = this.#replaceBoard(frame.device, target, frame.snapshot);
       const removed = [...before].filter((id) => !target.idByKey.has(this.#keyOf(target, id)));
       return this.#change(upserts, removed);
     }
@@ -161,25 +187,25 @@ export class ModelBoardFold {
         // stands for nothing now
         if (previous !== undefined) {
           held.idByKey.delete(row.runtimeRunId);
-          this.#rows.delete(previous);
+          this.#held.delete(previous);
           removed.push(previous);
         }
         continue;
       }
       const next = modelRowFrom(wire, this.#here);
       if (previous !== undefined && previous !== next.id) {
-        this.#rows.delete(previous);
+        this.#held.delete(previous);
         removed.push(previous);
       }
       held.idByKey.set(row.runtimeRunId, next.id);
-      this.#rows.set(next.id, next);
+      this.#held.set(next.id, { device: frame.device, board: row, row: next });
       upserts.push(next);
     }
     for (const key of delta.removed) {
       const id = held.idByKey.get(key);
       if (id === undefined) continue;
       held.idByKey.delete(key);
-      this.#rows.delete(id);
+      this.#held.delete(id);
       removed.push(id);
     }
     held.revision = delta.revision;
@@ -187,8 +213,12 @@ export class ModelBoardFold {
   }
 
   /** A device's board, whole: its rows replace that device's; the upserts. */
-  #replaceBoard(held: HeldDevice, snapshot: RowsSnapshot<AgentModelBoardRow>): MonitorAgentRow[] {
-    for (const id of held.idByKey.values()) this.#rows.delete(id);
+  #replaceBoard(
+    device: string,
+    held: HeldDevice,
+    snapshot: RowsSnapshot<AgentModelBoardRow>,
+  ): MonitorAgentRow[] {
+    for (const id of held.idByKey.values()) this.#held.delete(id);
     held.idByKey = new Map();
     held.epoch = snapshot.epoch;
     held.revision = snapshot.revision;
@@ -198,7 +228,7 @@ export class ModelBoardFold {
       if (wire === undefined) continue;
       const next = modelRowFrom(wire, this.#here);
       held.idByKey.set(row.runtimeRunId, next.id);
-      this.#rows.set(next.id, next);
+      this.#held.set(next.id, { device, board: row, row: next });
       upserts.push(next);
     }
     return upserts;
@@ -219,7 +249,7 @@ export class ModelBoardFold {
   /** Every row the fold holds, this desktop's first and then by device order;
    * the replica sorts by the contract's own rule. */
   #ordered(): MonitorAgentRow[] {
-    return [...this.#rows.values()];
+    return [...this.#held.values()].map((held) => held.row);
   }
 }
 

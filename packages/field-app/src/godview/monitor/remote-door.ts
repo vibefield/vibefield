@@ -98,6 +98,29 @@ export interface MonitorDoor {
    * fieldd that predates the door) leaves the timeline drawing what this
    * window watched. */
   statusHistory?: StatusHistoryPort;
+  /** MV-3 (MV-D18) — THE MODEL BOARD: the backend's rows for every self
+   * desktop through this window's one door (`agent.subscribe {projection:
+   * "model", scope: "mesh"}`), and the screen's report of what its active pane
+   * shows (`agent.reportShown`, L5). Two verbs bound to one board — a window
+   * holds no client. Optional, and deliberately: a door without it (a fieldd
+   * from before the backend, the catalog) draws the stage with no rows and
+   * says so (`no-door`). */
+  model?: ModelBoardPort;
+}
+
+/** MV-3 — the model board's two verbs (`doors.ts` `modelBoardOver`). The
+ * subscription is the deck's client's: `onFrame` receives the OPEN as a
+ * `.snapshot` (and the client's own re-snapshot after a reconnect) and every
+ * per-device frame as a `.delta`; `onReplayFailed` hears a replay the daemon
+ * refused after a reconnect — the subscription is over, and the feed asks
+ * again on its backoff (S4). */
+export interface ModelBoardPort {
+  subscribe(
+    onFrame: (payload: unknown, kind?: "snapshot" | "delta") => void,
+    opts?: { onReplayFailed?: (error: unknown) => void },
+  ): Promise<{ snapshot: unknown; unsubscribe: () => void }>;
+  /** L5 — the rows the window shows in its active pane, by MODEL id. */
+  reportShown(ids: readonly string[]): Promise<unknown>;
 }
 
 /** TL — one ask of `agent.history`, read run by run: a run that does not parse

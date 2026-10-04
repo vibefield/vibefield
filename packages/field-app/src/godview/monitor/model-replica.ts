@@ -2,9 +2,9 @@ import { createMonitorReplica, type MonitorReplica } from "@vibecook/puppeteer-m
 import type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";
 import { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
 import { useEffect, useState } from "react";
-import { type DoorClient, meshBoardFailure } from "./doors";
-import { MESH_RETRY_MAX_MS, MESH_RETRY_MIN_MS, meshRetryDelay } from "./mesh-field";
-import { type ModelBoardDevice, ModelBoardFold } from "./model-board";
+import { meshBoardFailure } from "./doors";
+import { type HeldModelRow, type ModelBoardDevice, ModelBoardFold } from "./model-board";
+import type { ModelBoardPort } from "./remote-door";
 
 /**
  * MV-3a (MV-D18, PF6, M3, M23) — THE WINDOW ADAPTER: the one door, folded into
@@ -30,8 +30,11 @@ import { type ModelBoardDevice, ModelBoardFold } from "./model-board";
  * is open and sent again after every re-open — the daemon forgets the screen
  * with the board.
  *
- * NOT YET WIRED into `GodviewMonitor` (that is mv3b's); the hook below is the
- * seam mv3b mounts.
+ * MV-3b: the board arrives through the door's model PORT (`remote-door.ts`
+ * `ModelBoardPort` — the two verbs, never a client), `GodviewAgentsProvider`
+ * mounts the hook below beside the fold, and `GodviewMonitor` draws the replica.
+ * The fold's held rows (`held`, `heldRows`) are the window's own joins: the
+ * pane a model id stands for, the run a model id was dealt to.
  */
 
 export type MonitorFeedState =
@@ -45,6 +48,12 @@ export interface GodviewMonitorFeed {
   state(): MonitorFeedState;
   /** every desktop the board lists, with its standing (DS-L8) */
   devices(): readonly ModelBoardDevice[];
+  /** the answering desktop, once the board has answered (fieldd lists itself first) */
+  here(): string | undefined;
+  /** a row the fold holds, by model id, hidden or shown, with its board row */
+  held(id: string): HeldModelRow | undefined;
+  /** every row the fold holds, this desktop's first */
+  heldRows(): readonly HeldModelRow[];
   /** hears state and device changes (the replica has its own subscribe) */
   subscribe(listener: () => void): () => void;
   /** L5 — the rows the active pane shows, by model id; re-sent after a re-open */
@@ -53,7 +62,7 @@ export interface GodviewMonitorFeed {
 }
 
 export interface CreateGodviewMonitorFeedOptions {
-  client: DoorClient;
+  board: ModelBoardPort;
   /** the host's ONE frame scheduler (M7); the replica's default frame otherwise */
   scheduler?: FrameScheduler | undefined;
   /** test seams for the re-ask backoff */
@@ -62,7 +71,15 @@ export interface CreateGodviewMonitorFeedOptions {
   onError?: ((error: unknown) => void) | undefined;
 }
 
-const MODEL_BOARD_ASK = { projection: "model", scope: "mesh" } as const;
+/** S4 — the re-ask backoff after a failure that may heal: 250 ms, doubling,
+ * capped at 8 s; reset by the next board that answers. The mesh reader's
+ * numbers (DS-3), kept to the digit. */
+export const MESH_RETRY_MIN_MS = 250;
+export const MESH_RETRY_MAX_MS = 8_000;
+
+export function meshRetryDelay(failures: number): number {
+  return Math.min(MESH_RETRY_MIN_MS * 2 ** failures, MESH_RETRY_MAX_MS);
+}
 
 export function createGodviewMonitorFeed(
   opts: CreateGodviewMonitorFeedOptions,
@@ -96,7 +113,7 @@ export function createGodviewMonitorFeed(
 
   const sendReport = (): void => {
     if (lastReport === null || state.state !== "live") return;
-    void opts.client.request("agent.reportShown", { ids: [...lastReport] }).catch((error) => {
+    void opts.board.reportShown([...lastReport]).catch((error) => {
       // a board that closed under the report: the next open re-sends it
       opts.onError?.(error);
     });
@@ -161,10 +178,8 @@ export function createGodviewMonitorFeed(
       }
       if (change !== null && !replica.apply(change)) reopen();
     };
-    void opts.client
+    void opts.board
       .subscribe(
-        "agent.subscribe",
-        { ...MODEL_BOARD_ASK },
         (payload, kind) => {
           if (!live()) return;
           if (kind === "snapshot") deliverOpen(payload);
@@ -203,6 +218,9 @@ export function createGodviewMonitorFeed(
     replica,
     state: () => state,
     devices: () => fold.devices(),
+    here: () => fold.here,
+    held: (id) => fold.held(id),
+    heldRows: () => fold.heldRows(),
     subscribe(listener) {
       listeners.add(listener);
       return () => listeners.delete(listener);
@@ -227,12 +245,12 @@ export function createGodviewMonitorFeed(
 }
 
 /**
- * The feed while a door is held and Godview is open (PF6): one subscription per
- * window, opened on mount and closed on unmount, like the fold's
- * `useLocalAgentField`. Null without a door or while not subscribed.
+ * The feed while a door with a model board is held and Godview is open (PF6):
+ * one subscription per window, opened on mount and closed on unmount, like the
+ * fold's `useLocalAgentField`. Null without a board or while not subscribed.
  */
 export function useMonitorReplica(
-  client: DoorClient | null,
+  board: ModelBoardPort | null,
   options: { subscribed?: boolean; scheduler?: FrameScheduler | undefined } = {},
 ): { feed: GodviewMonitorFeed | null; state: MonitorFeedState } {
   const subscribed = options.subscribed ?? true;
@@ -240,13 +258,13 @@ export function useMonitorReplica(
   const [feed, setFeed] = useState<GodviewMonitorFeed | null>(null);
   const [state, setState] = useState<MonitorFeedState>({ state: "no-door" });
   useEffect(() => {
-    if (client === null || !subscribed) {
+    if (board === null || !subscribed) {
       setFeed(null);
       setState({ state: "no-door" });
       return;
     }
     const created = createGodviewMonitorFeed({
-      client,
+      board,
       ...(scheduler !== undefined ? { scheduler } : {}),
     });
     setFeed(created);
@@ -256,6 +274,6 @@ export function useMonitorReplica(
       off();
       created.dispose();
     };
-  }, [client, subscribed, scheduler]);
+  }, [board, subscribed, scheduler]);
   return { feed, state };
 }

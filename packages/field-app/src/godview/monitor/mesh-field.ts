@@ -5,6 +5,7 @@ import type {
   RowsDeviceState,
 } from "@vibefield/contracts";
 import { useEffect, useRef, useState } from "react";
+import { meshRetryDelay } from "./model-replica";
 import type { MonitorDoor } from "./remote-door";
 
 /**
@@ -77,13 +78,9 @@ export interface MeshFieldSnapshot {
 export const EMPTY_MESH_FIELD: MeshFieldSnapshot = { devices: new Map(), state: "no-door" };
 
 /** S4 — the re-ask backoff after a failure that may heal: 250 ms, doubling,
- * capped at 8 s; reset by the next board that answers. */
-export const MESH_RETRY_MIN_MS = 250;
-export const MESH_RETRY_MAX_MS = 8_000;
-
-export function meshRetryDelay(failures: number): number {
-  return Math.min(MESH_RETRY_MIN_MS * 2 ** failures, MESH_RETRY_MAX_MS);
-}
+ * capped at 8 s; reset by the next board that answers. MV-3b: the numbers live
+ * with the model board's feed now (`model-replica.ts`), which heals the same way. */
+export { MESH_RETRY_MAX_MS, MESH_RETRY_MIN_MS, meshRetryDelay } from "./model-replica";
 
 const byRun = (rows: readonly AgentFieldRow[]): ReadonlyMap<string, AgentFieldRow> =>
   new Map(rows.map((row) => [row.runtimeRunId, row]));

@@ -1,3 +1,4 @@
+import { frameScheduler } from "@vibecook/puppeteer-view-sdk/host";
 import type { PaneFrameAgent } from "@vibecook/puppeteer-views";
 import {
   createContext,
@@ -9,6 +10,7 @@ import {
 } from "react";
 import type { AgentSessionSummary } from "./facet-types";
 import { type LocalFieldState, useLocalAgentField } from "./local-agent-field";
+import { type GodviewMonitorFeed, useMonitorReplica } from "./model-replica";
 import { paneFrameAgents, paneFrameFactsKey, runIdsBySession } from "./pane-frame-facts";
 import type { MonitorDoor } from "./remote-door";
 
@@ -38,6 +40,17 @@ import type { MonitorDoor } from "./remote-door";
  * frame reads would be paying the pane tree for news about a token count — so
  * the deck's value is gated on the frame's own fields and changes only when one
  * of them does.
+ *
+ * MV-3b (MV-D18, M19) — A THIRD CONTEXT, the MODEL BOARD'S FEED, mounted here
+ * beside the fold under the same PF6 gate: the monitor's rows are the
+ * backend's now (`model-replica.ts`, one subscription per window on the door's
+ * model port), and the stage draws the replica. The fold STAYS for the readers
+ * the model does not serve (M19 names them): the deck's pane frames read a
+ * run's working directory as a PATH, the find sheet joins rosetta's hits by the
+ * provider-native session id, and the AR-7 marker names every run of the fold
+ * with its PTY, provenance and exit — none of which the model carries, by
+ * design (EL7 B1; MV-D17). Retiring the full board while Godview is open is
+ * therefore not this slice's: it would change what those three read.
  */
 
 export interface AgentFold {
@@ -61,6 +74,12 @@ const EMPTY_DECK_FACTS: DeckAgentFacts = { agents: new Map(), runs: new Map() };
 
 const AgentFoldContext = createContext<AgentFold | undefined>(undefined);
 const DeckAgentFactsContext = createContext<DeckAgentFacts | undefined>(undefined);
+/** `null` is a fact of its own: no door, no model port, or Godview closed. The
+ * sentinel below tells "no provider" from it. */
+const NO_PROVIDER = Symbol("no GodviewAgentsProvider");
+const MonitorFeedContext = createContext<GodviewMonitorFeed | null | typeof NO_PROVIDER>(
+  NO_PROVIDER,
+);
 
 /**
  * The pane join. `hosted: "local"` only, and the restriction is the point: a
@@ -110,6 +129,13 @@ export function GodviewAgentsProvider({
   children: ReactNode;
 }): ReactElement {
   const field = useLocalAgentField({ door: subscribed ? door : null });
+  // MV-3b — the model board, on the view host's ONE frame scheduler (M7), so a
+  // change reaches the view in the frame it arrived in. Gated exactly as the
+  // fold is: a closed Godview holds no model subscription either (PF6).
+  const { feed } = useMonitorReplica(door?.model ?? null, {
+    subscribed,
+    scheduler: frameScheduler,
+  });
 
   const fold = useMemo<AgentFold>(
     () => ({
@@ -138,10 +164,24 @@ export function GodviewAgentsProvider({
   return (
     <AgentFoldContext.Provider value={fold}>
       <DeckAgentFactsContext.Provider value={deckFacts.current}>
-        {children}
+        <MonitorFeedContext.Provider value={feed}>{children}</MonitorFeedContext.Provider>
       </DeckAgentFactsContext.Provider>
     </AgentFoldContext.Provider>
   );
+}
+
+/** MV-3b — the model board's feed, for the stage that draws the replica. Null
+ * while there is no door, no model port on it, or Godview is closed — the
+ * `no-door` fact, which is not an empty board. Throws outside a provider, like
+ * the two readers above. */
+export function useMonitorFeed(): GodviewMonitorFeed | null {
+  const feed = useContext(MonitorFeedContext);
+  if (feed === NO_PROVIDER) {
+    throw new Error(
+      "useMonitorFeed: no GodviewAgentsProvider above this tree — the model board is one subscription per window",
+    );
+  }
+  return feed;
 }
 
 /** The fold, for a surface that draws the whole board. Throws outside a
