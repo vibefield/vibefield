@@ -140,7 +140,9 @@ type Flat = Map<string, unknown>;
 function flatten(value: unknown, path: string, into: Flat): Flat {
   if (Array.isArray(value)) {
     into.set(`${path}.length`, value.length);
-    value.forEach((item, index) => flatten(item, `${path}[${index}]`, into));
+    value.forEach((item, index) => {
+      flatten(item, `${path}[${index}]`, into);
+    });
     return into;
   }
   if (typeof value === "object" && value !== null) {
