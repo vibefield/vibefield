@@ -73,7 +73,8 @@ describe("the differential — the desk projection and the model's row say the s
     const monitor = await testMonitor({ summaries: rows });
     const findings: string[] = [];
     for (const [name, row] of Object.entries(CASES)) {
-      const desk = projectDeskRow(row);
+      // the desk row as the contract types it (and proves it parses)
+      const desk = AgentDeskRow.parse({ ...projectDeskRow(row), revision: 0 });
       const field = projectFieldRow(row);
       const model = monitor.row(row.runtimeRunId);
       const pending = row.continuation?.pending !== undefined;
@@ -148,7 +149,7 @@ describe("the differential — the desk projection and the model's row say the s
     const priced = costing(CASES.working as AgentSessionSummary, 4.04, "complete");
     monitor.fold.publish([priced]);
     monitor.runtime.push({ ...stateOf(priced), revision: 9 } as AgentMonitorState);
-    const deskCost = projectDeskRow(priced).usage;
+    const deskCost = AgentDeskRow.parse({ ...projectDeskRow(priced), revision: 0 }).usage;
     const modelCost = monitor.row("run-working").cost;
     // DIFFERENCE, designed (L11, M15): the desk row says the mirror's running
     // total (`costUsd`, the run so far); the model's cost is the backend's
