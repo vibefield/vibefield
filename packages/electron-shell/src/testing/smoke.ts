@@ -253,7 +253,8 @@ interface PluginStyleCensus {
  * dev-linked); both are built by build:all through field-app's dev dependencies
  * (the carrier since DK-8 — before that it staged whatever `dist/` its last hand
  * build or the playground's test wrote); kv-service remains service-only and
- * stages no renderer module.
+ * stages no renderer module. DK-8: VibeField's own comment pad (`plugins/comment-pad`,
+ * bundled, built by build:all through field-app's dependency) is the seventh.
  *
  * The PRODUCT fact moved at DK-3 (the plan's retire table: "the 24-type census
  * → the new seed's census"). It was `widgetTypes === 24` — the registry's
@@ -270,7 +271,7 @@ const CANVAS_CENSUS = {
   /** DK-6 — THE PARITY WITNESS: the example plugin's clock, a PLUGIN's kind through the SDK's `/desk`
    * door alone, which the seed lays beside the six while its plugin is on — as it is in every smoke. */
   exampleClock: "vibefield.example.desk-clock",
-  minStagedPlugins: 6,
+  minStagedPlugins: 7,
   // The renderer plugins that draw DOM (note, browser, field-tools, widgetlab — a HUD
   // surface or a legacy widgets row) ship scoped CSS. An objects-only plugin ships
   // none since DK-6 (plugin-build's `generatesStylesheet`: a kind has no CSS) — the

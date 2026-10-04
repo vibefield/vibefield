@@ -24,6 +24,7 @@ import {
   buildFacelessObjectType,
   buildObjectType,
   buildWidgetType,
+  objectBindingsFrom,
 } from "./plugin-host/build-widget";
 import { RendererWindowController } from "./plugin-host/renderer-controller";
 import { type ActivatedRenderer, activateRenderer } from "./plugin-host/renderer-harness";
@@ -137,17 +138,28 @@ let devBundled: readonly BundledRendererPlugin[] | null = null;
 export async function loadDevBundledPlugins(): Promise<readonly BundledRendererPlugin[]> {
   if (!import.meta.env.DEV) return [];
   if (devBundled !== null) return devBundled;
-  const [browser, note, fieldTools, widgetlab] = await Promise.all([
+  const [browser, note, fieldTools, widgetlab, commentPad] = await Promise.all([
     import("@vibefield/plugin-browser"),
     import("@vibefield/plugin-note"),
     import("@vibefield/plugin-field-tools"),
     import("@vibefield/plugin-widgetlab"),
+    import("@vibefield/plugin-comment-pad"),
   ]);
   devBundled = [
     { manifest: browser.browserManifest, mod: browser.browserRenderer },
     { manifest: note.noteManifest, mod: note.noteRenderer },
     { manifest: fieldTools.fieldToolsManifest, mod: fieldTools.fieldToolsRenderer },
     { manifest: widgetlab.widgetlabManifest, mod: widgetlab.widgetlabRenderer },
+    // DK-8 (DK-D14): VibeField's own object kind — its code half read off the package's namespace by its row's
+    // binding name, exactly as the staged loader reads a built module's (`objectBindingsFrom`)
+    {
+      manifest: commentPad.commentPadManifest,
+      mod: commentPad.commentPadRenderer,
+      objectBindings: objectBindingsFrom(
+        commentPad,
+        commentPad.commentPadManifest.contributes?.objects ?? [],
+      ),
+    },
   ];
   return devBundled;
 }
