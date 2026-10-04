@@ -1,11 +1,10 @@
 // Playground states (plugin spec §24.2 "every state render fixture").
 //
-// Shape: object type -> state name -> the props that state draws. `pnpm playground <dir>`
-// lists them today, refusing a type this manifest does not contribute; DK-7's
-// kind harness will validate each state's props against the manifest's declared schema
-// BEFORE drawing (a typo then reads as a broken fixture, not a broken kind), drive it
-// through resolve/record/hit and hold a still of it to a golden — test/kind.test.ts runs
-// them by hand until then, and validates nothing.
+// Shape: object type -> state name -> the props that state draws. The SDK's kind-conformance
+// harness — `pnpm playground <dir>`, and test/kind.test.ts — validates each state's props against the
+// manifest's declared schema FIRST (a typo reads as a broken fixture, `state-invalid`, not a broken
+// kind), then drives the kind through it in every mode it declares, at every zoom the desk's LOD
+// names. Each state you add here is judged everywhere the harness runs.
 //
 // Authoring-time only: this directory never enters a `.vfplugin`, the same way
 // `scripts/` and `test/` do not.

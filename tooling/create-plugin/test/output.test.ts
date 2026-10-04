@@ -147,11 +147,15 @@ describe("the scaffolded tree", () => {
       provides: ["vendor.demo.disc", "desk.object"],
       tray: { category: "things", hang: { accessory: "hook" } },
     });
-    // the README says the ten-minute path, the still test says it is DK-7's harness stubbed to its shape
+    // the README says the ten-minute path; the kind test runs the SDK's kind-conformance harness over
+    // the playground states, and its still is a `todo` naming the ICE ask it waits on (DK-7)
     expect(readFileSync(join(dir, "README.md"), "utf8")).toContain("## The ten-minute path");
-    expect(readFileSync(join(dir, "test", "kind.test.ts"), "utf8")).toContain(
-      "stubbed to its SHAPE until DK-7 lands",
+    const kindTest = readFileSync(join(dir, "test", "kind.test.ts"), "utf8");
+    expect(kindTest).toContain(
+      'import { runKindConformance } from "@vibefield/plugin-sdk/testing";',
     );
+    expect(kindTest).toContain("binding: Demo,");
+    expect(kindTest).toMatch(/it\.todo\("its STILL — .*I30\)"\)/);
   });
 
   it("ships a substituted, React-free behavior authoring example", async () => {

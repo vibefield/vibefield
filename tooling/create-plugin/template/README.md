@@ -13,15 +13,18 @@ kinds.
    `.wgsl` inlined into it as text (no stylesheet: a kind has no CSS).
 3. **Check** — `pnpm plugin check <this directory>`: every row passes — the manifest, the import wall,
    and the activation's object rows (your export is a desk kind named by its type; it hangs on
-   "things" by a hook; its WGSL arrived as text). `pnpm plugin inspect <this directory>` says the same
-   as data.
-4. **Test** — `pnpm --filter {{packageName}} test`: the manifest contract, and the kind over its
-   playground states (`test/kind.test.ts` — DK-7's harness will hold a still of each to a golden).
+   "things" by a hook; its WGSL arrived as text and READS — the note says nothing compiled it).
+   `pnpm plugin inspect <this directory>` says the same as data.
+4. **Judge it** — `pnpm playground <this directory>`: the SDK's kind-conformance harness drives your
+   kind through every state in `playground/states.ts`, in every mode it declares, at every zoom the
+   desk's LOD names; `pnpm --filter {{packageName}} test` runs the same harness (`test/kind.test.ts`)
+   beside the manifest contract. The Dawn STILL of each state is a `todo` there: it waits on a desk
+   ICE does not publish yet (VibeField's ask I30).
 5. **Mount it** — a dev session (`pnpm dev`) stages every built plugin under `plugins/` and
    `examples/plugins/` (elsewhere: `pnpm plugin dev-link <this directory>`), and the desk mounts your
    kind beside its own. Nothing lays one yet: you take it from the pegboard, under "things", once
    VibeField wires the pegboard into the desk's chrome (DK-13); until then the kind is compiled and
-   waiting, and DK-7's harness is where you will see it drawn.
+   waiting.
 
 ## Make it yours
 
@@ -33,7 +36,7 @@ kinds.
 | `src/pass.ts` | its pass: one pipeline, a record store, one instanced draw |
 | `src/record.ts` | the GPU record, declared once — its WGSL struct is generated from it |
 | `src/shaders.wgsl` | its own WGSL, after the kit's `view`, `portal` and `light` pieces (`src/shaders.ts` names them) |
-| `playground/states.ts` | the states a harness draws it in |
+| `playground/states.ts` | the states the kind harness drives it through — each validated against the manifest's props first |
 
 The reference is `docs/plugin-authoring/objects.md` (generated with the contracts); the worked example
 it quotes is ICE's desk clock ported to a plugin, `examples/plugins/desk-clock` — a desk state that
