@@ -512,6 +512,9 @@ importers:
       '@vibefield/fieldd':
         specifier: workspace:*
         version: link:../fieldd
+      '@vibefield/plugin-behavior-conformance':
+        specifier: workspace:*
+        version: link:../../examples/plugins/behavior-conformance
       '@vibefield/plugin-build':
         specifier: workspace:*
         version: link:../../tooling/plugin-build

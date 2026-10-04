@@ -250,8 +250,10 @@ interface PluginStyleCensus {
  * fell back would look exactly like one that staged correctly — the field must
  * be filled the real way. behavior-conformance contributes the fifth renderer
  * module and the example desk clock the sixth (DK-6: `examples/plugins/desk-clock`,
- * dev-linked, built by build:all through field-app's dev dependency); kv-service
- * remains service-only and stages no renderer module.
+ * dev-linked); both are built by build:all through field-app's dev dependencies
+ * (the carrier since DK-8 — before that it staged whatever `dist/` its last hand
+ * build or the playground's test wrote); kv-service remains service-only and
+ * stages no renderer module.
  *
  * The PRODUCT fact moved at DK-3 (the plan's retire table: "the 24-type census
  * → the new seed's census"). It was `widgetTypes === 24` — the registry's

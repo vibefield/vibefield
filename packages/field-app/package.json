@@ -61,6 +61,7 @@
     "@types/react-dom": "catalog:",
     "@types/three": "^0.185.0",
     "@vibefield/fieldd": "workspace:*",
+    "@vibefield/plugin-behavior-conformance": "workspace:*",
     "@vibefield/plugin-build": "workspace:*",
     "@vibefield/plugin-example-desk-clock": "workspace:*",
     "@vibefield/test-env": "workspace:*",
