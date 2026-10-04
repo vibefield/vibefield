@@ -52,6 +52,7 @@ overrides:
   '@vibecook/puppeteer-core': link:../puppeteer/packages/core
   '@vibecook/puppeteer-record': link:../puppeteer/packages/record
   '@vibecook/puppeteer-monitor': link:../puppeteer/packages/monitor
+  '@vibecook/puppeteer-view-sdk': link:../puppeteer/packages/view-sdk
   '@vibecook/puppeteer-views': link:../puppeteer/packages/views
   '@rosetta/protocol': link:../rosetta-pin/clients/ts
 
@@ -410,6 +411,9 @@ importers:
       '@vibecook/puppeteer-monitor':
         specifier: link:../../../puppeteer/packages/monitor
         version: link:../../../puppeteer/packages/monitor
+      '@vibecook/puppeteer-view-sdk':
+        specifier: link:../../../puppeteer/packages/view-sdk
+        version: link:../../../puppeteer/packages/view-sdk
       '@vibecook/puppeteer-views':
         specifier: link:../../../puppeteer/packages/views
         version: link:../../../puppeteer/packages/views
@@ -501,12 +505,18 @@ importers:
       '@vibecook/puppeteer-core':
         specifier: link:../../../puppeteer/packages/core
         version: link:../../../puppeteer/packages/core
+      '@vibecook/puppeteer-monitor':
+        specifier: link:../../../puppeteer/packages/monitor
+        version: link:../../../puppeteer/packages/monitor
       '@vibecook/puppeteer-record':
         specifier: link:../../../puppeteer/packages/record
         version: link:../../../puppeteer/packages/record
       '@vibecook/puppeteer-runtime':
         specifier: link:../../../puppeteer/packages/runtime
         version: link:../../../puppeteer/packages/runtime
+      '@vibecook/puppeteer-view-sdk':
+        specifier: link:../../../puppeteer/packages/view-sdk
+        version: link:../../../puppeteer/packages/view-sdk
       '@vibefield/audit':
         specifier: workspace:*
         version: link:../audit
