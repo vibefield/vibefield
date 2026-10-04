@@ -1542,7 +1542,11 @@ The hot-point glow and rim retire with CardShell (above).
     agents to find waits the same way.) A recorded file says
     "Recorded files can't open here yet — no file door on the desktop" (the live-file read is
     bearer-only upstream, RO-13), and the worktree guest stays closed with its own words until
-    VibeField's worktree host (AR-D38, AR-8d).
+    VibeField's worktree host (AR-D38, AR-8d). *Corrected 2026-10-04 (RO-13 built):* a recorded
+    file OPENS in the room's viewer — the window's grant carries `files` — and a file that is gone
+    says rosetta's own words ("the recorded file is no longer available"); "Recorded files can't
+    open here yet — no file door on the desktop" is said only when rosettad refuses the grant the
+    file read (a daemon from before the scope, or a grant minted without it).
   - **Its first open says "Opening History"** (2026-10-04): the room — its code and its sheet — is
     its own chunk, on neither the first paint nor the canvas's. It loads when the window is first
     idle after the canvas has drawn, or at the first ⌘3 if that comes sooner. While it arrives the

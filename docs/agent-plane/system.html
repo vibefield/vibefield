@@ -1974,7 +1974,13 @@
                   grant: the key is per generation), and after a refused read; when the ticket names another
                   origin the one client is repointed (<code>setBaseUrl</code>, rosetta's own restart path).
                   The live-file read (<code>readFileTarget</code>) is bearer-only upstream, so the port
-                  answers the room's honest refusal (RO-13).
+                  answers the room's honest refusal (RO-13). <em>Corrected 2026-10-04 (RO-13 MERGED to
+                  rosetta main <code>856bd80</code>):</em> the window's grant carries
+                  <code>files</code> beside <code>read</code>, so a recorded file opens through the lease
+                  like every other read — renewed and repointed with it, and a file that is gone answers
+                  in rosetta's own words. Only rosettad refusing the grant's reach there
+                  (<code>wrong-scope</code> or <code>wrong-route</code>, which a fresh grant would only
+                  repeat) is the room's "Recorded files can't open here yet".
                 </p>
               </div>
               <div class="contract-row">
