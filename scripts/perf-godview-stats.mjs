@@ -156,7 +156,9 @@ export function reading(direction, floor, effect, nullArm) {
   return worse ? "worse" : "better";
 }
 
-/** One cell's rows: A's, B's (and A′'s) per-round metrics, read paired. */
+/** One cell's rows: A's, B's (and A′'s) per-round metrics, read paired. With
+ * no A′ the run IS the null arm, and a row past z > 4 and its floor reads
+ * `moved` (the instrument's own noise), never worse or better. */
 export function judgeCell(a, b, a2, table) {
   return table.map(({ name, direction, floor: floorOf, gate }) => {
     const av = a.map((m) => m[name]);
@@ -178,10 +180,19 @@ export function judgeCell(a, b, a2, table) {
       ...effect,
       ...(nullArm !== null ? { T0: nullArm.T, mad0: nullArm.mad, z0: nullArm.z } : {}),
       floor,
-      reading: reading(direction, floor, effect, nullArm),
+      reading:
+        a2 === null
+          ? Number.isFinite(effect.T) && effect.z > 4 && Math.abs(effect.T) > floor
+            ? "moved"
+            : ""
+          : reading(direction, floor, effect, nullArm),
     };
   });
 }
+
+/** M24: z is not read before seven paired rounds (with fewer, MAD collapses
+ * and z reads ∞ on a difference of nothing). */
+export const MIN_ROUNDS = 7;
 
 /**
  * THE GATE (M33) over every cell's gate rows. A paired run: `worse` when any
@@ -190,8 +201,9 @@ export function judgeCell(a, b, a2, table) {
  * render row); else `pass`. An A/A run (no null arm: the run IS the null arm)
  * reads `null-ok` when no gate row clears z > 4 and its floor, else
  * `null-moved` — the instrument's own noise would have been called an effect.
+ * Fewer than seven rounds read `unread` whatever the rows say (M24).
  */
-export function gateVerdict(cells, { paired }) {
+export function gateVerdict(cells, { paired, rounds }) {
   const worse = [];
   const better = [];
   const noisy = [];
@@ -202,25 +214,27 @@ export function gateVerdict(cells, { paired }) {
       if (!row.gate) continue;
       const where = `${cell} · ${row.metric}`;
       if (!Number.isFinite(row.T)) missing.push(where);
-      else if (!paired) {
-        if (row.z > 4 && Math.abs(row.T) > row.floor) moved.push(where);
-      } else if (row.reading === "worse") worse.push(where);
+      else if (row.reading === "moved") moved.push(where);
+      else if (row.reading === "worse") worse.push(where);
       else if (row.reading === "better") better.push(where);
       else if (row.reading === "noisy") noisy.push(where);
     }
   }
-  const verdict = !paired
-    ? moved.length > 0
-      ? "null-moved"
-      : missing.length > 0
-        ? "missing"
-        : "null-ok"
-    : worse.length > 0
-      ? "worse"
-      : noisy.length > 0
-        ? "noisy"
-        : missing.length > 0
-          ? "missing"
-          : "pass";
+  const verdict =
+    rounds < MIN_ROUNDS
+      ? "unread"
+      : !paired
+        ? moved.length > 0
+          ? "null-moved"
+          : missing.length > 0
+            ? "missing"
+            : "null-ok"
+        : worse.length > 0
+          ? "worse"
+          : noisy.length > 0
+            ? "noisy"
+            : missing.length > 0
+              ? "missing"
+              : "pass";
   return { verdict, worse, better, noisy, missing, moved };
 }

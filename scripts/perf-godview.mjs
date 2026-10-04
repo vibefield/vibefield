@@ -65,7 +65,13 @@ import {
   WARMUP_RECIPE,
   waitForLoad,
 } from "./godview-lab-arms.mjs";
-import { cellMetrics, gateVerdict, judgeCell, metricTable } from "./perf-godview-stats.mjs";
+import {
+  cellMetrics,
+  gateVerdict,
+  judgeCell,
+  MIN_ROUNDS,
+  metricTable,
+} from "./perf-godview-stats.mjs";
 
 const argv = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -157,6 +163,16 @@ async function launch(arm, { root, source, modelDir, synthetic }, round) {
 /** A frame is the window mode's: 1000/fps offscreen, the display's 8.3 ms shown. */
 const frameMs = windowMode === "offscreen" ? 1000 / fps : 1000 / 120;
 const METRICS = metricTable(frameMs);
+
+/** `cell · metric` entries, one cell per group: `cell (metric, metric) · …` */
+function byCell(entries) {
+  const groups = new Map();
+  for (const entry of entries) {
+    const [cell, metric] = entry.split(" · ");
+    groups.set(cell, [...(groups.get(cell) ?? []), metric]);
+  }
+  return [...groups].map(([cell, metrics]) => `${cell} (${metrics.join(", ")})`).join(" · ");
+}
 
 const fmt = (value, digits = 2) => (Number.isFinite(value) ? value.toFixed(digits) : "–");
 
@@ -268,16 +284,22 @@ async function main() {
     summary.cells.push({ cell: key, rows });
   }
   // THE GATE (M33): the totals, every cell — before the per-cell tables
-  const gate = gateVerdict(summary.cells, { paired });
+  const gate = gateVerdict(summary.cells, { paired, rounds });
   summary.gate = gate;
   md.push(
     `## The gate (M33: total work) — ${gate.verdict.toUpperCase()}`,
     "",
+    ...(gate.verdict === "unread"
+      ? [
+          `**Unread: ${rounds} rounds — z is not read before ${MIN_ROUNDS} (M24).** The rows below are context only.`,
+          "",
+        ]
+      : []),
     paired
       ? "Gate rows: task, script, layout and style ms/s (Chromium's main thread, CDP) and every React root's render ms/s. `worse` = past z > 4, the floor and the null arm's |T₀| + 2·MAD₀; `noisy` = the null arm itself moved. A reading aid — the verdict is the lead's (L14)."
       : "An A/A run: no gate row should clear z > 4 and its floor (`null-ok`); one that does is the instrument's own noise (`null-moved`).",
     "",
-    "| cell | task ms/s A→B (z, z₀) | script ms/s | layout ms/s | style ms/s | React render ms/s | reading |",
+    `| cell | task ms/s A→B (z${paired ? ", z₀" : ""}) | script ms/s | layout ms/s | style ms/s | React render ms/s | reading |`,
     "|---|---|---|---|---|---|---|",
   );
   for (const { cell, rows } of summary.cells) {
@@ -293,10 +315,10 @@ async function main() {
   }
   md.push(
     "",
-    ...(gate.worse.length > 0 ? [`- worse: ${gate.worse.join(" · ")}`] : []),
-    ...(gate.noisy.length > 0 ? [`- noisy: ${gate.noisy.join(" · ")}`] : []),
-    ...(gate.missing.length > 0 ? [`- unreadable: ${gate.missing.join(" · ")}`] : []),
-    ...(gate.moved.length > 0 ? [`- the null moved: ${gate.moved.join(" · ")}`] : []),
+    ...(gate.worse.length > 0 ? [`- worse: ${byCell(gate.worse)}`] : []),
+    ...(gate.noisy.length > 0 ? [`- noisy: ${byCell(gate.noisy)}`] : []),
+    ...(gate.missing.length > 0 ? [`- unreadable: ${byCell(gate.missing)}`] : []),
+    ...(gate.moved.length > 0 ? [`- the null moved: ${byCell(gate.moved)}`] : []),
     "",
   );
   for (const { cell: key, rows } of summary.cells) {

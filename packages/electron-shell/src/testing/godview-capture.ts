@@ -33,7 +33,9 @@ import {
 // over CDP (the timeline prints local time), the stage's ambient animations
 // off and reduced motion emulated. Each capture is written as a PNG (to look
 // at) and as the raw BGRA bitmap, gzipped (what the diff reads), with a
-// manifest. The Node runner launches arms and diffs them (`scripts/capture-godview.mjs`).
+// manifest. A capture is the MONITOR'S REGION (the instrument bar, the stage and
+// the view: `MONITOR_REGION`), and the whole window beside it as a PNG to look
+// at. The Node runner launches arms and diffs them (`scripts/capture-godview.mjs`).
 //
 // Reached through the perf lab's mode (`--godview-perf-lab`, `VF_GODVIEW_LAB=capture`):
 //
@@ -55,6 +57,9 @@ export interface GodviewCapture {
   wall: number;
   width: number;
   height: number;
+  /** the page's device pixel ratio, and the captured region in CSS px */
+  dpr: number;
+  region: { x: number; y: number; width: number; height: number };
   /** distinct colours on a sampled grid, and the share of pixels off the
    * modal colour: a blank capture compares equal to a blank one (memory
    * `webgpu-canvas-readback-is-blank`), so the diff refuses one */
@@ -85,13 +90,35 @@ export function bitmapContent(
   return { colours: counts.size, offModal: samples === 0 ? 0 : 1 - modal / samples };
 }
 
+/** The monitor's region: the window's full width from its top to the bottom
+ * of Godview's monitor stage — the instrument bar, the stage, the view. The
+ * deck below it (a terminal's blinking cursor) and the composer's animated
+ * avatar are not the views', and the first A/A trial read exactly them. */
+const MONITOR_REGION = `(() => {
+  const stage = document.querySelector(".vf-godview .vf-godview-monitor-stage");
+  if (stage === null) return null;
+  const bottom = Math.round(stage.getBoundingClientRect().bottom);
+  return { x: 0, y: 0, width: Math.round(window.innerWidth), height: bottom, dpr: window.devicePixelRatio };
+})()`;
+
 async function capture(win: BrowserWindow, dir: string, name: string) {
-  const image = await win.webContents.capturePage();
+  const region = await page<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+    dpr: number;
+  } | null>(win, MONITOR_REGION);
+  if (region === null) throw new Error("no Godview monitor stage to capture");
+  const { dpr, ...rect } = region;
+  const image = await win.webContents.capturePage(rect);
   const { width, height } = image.getSize();
   const bitmap = image.toBitmap();
   writeFileSync(join(dir, `${name}.png`), image.toPNG());
   writeFileSync(join(dir, `${name}.bgra.gz`), gzipSync(bitmap));
-  return { width, height, content: bitmapContent(bitmap, width, height) };
+  // the whole window too, to look at (never diffed)
+  writeFileSync(join(dir, `${name}.window.png`), (await win.webContents.capturePage()).toPNG());
+  return { width, height, dpr, region: rect, content: bitmapContent(bitmap, width, height) };
 }
 
 const list = (text: string | undefined, fallback: string[]): string[] =>

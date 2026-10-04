@@ -24,7 +24,7 @@ interface Stats {
   judgeCell(a: Metrics[], b: Metrics[], a2: Metrics[] | null, table: unknown): Row[];
   gateVerdict(
     cells: { cell: string; rows: Row[] }[],
-    options: { paired: boolean },
+    options: { paired: boolean; rounds: number },
   ): { verdict: string; worse: string[]; noisy: string[]; missing: string[]; moved: string[] };
 }
 
@@ -123,21 +123,21 @@ describe("the gate", () => {
     const rows = stats.judgeCell(arm(150), arm(270), arm(150, 1), table());
     const task = rows.find((row) => row.metric === "task ms/s");
     expect(task?.reading).toBe("worse");
-    const gate = stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true });
+    const gate = stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true, rounds: 7 });
     expect(gate.verdict).toBe("worse");
     expect(gate.worse).toContain("list × n10 · task ms/s");
   });
 
   it("passes a copy of A", () => {
     const rows = stats.judgeCell(arm(150), arm(150, 1), arm(150, -1), table());
-    expect(stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true }).verdict).toBe(
-      "pass",
-    );
+    expect(
+      stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true, rounds: 7 }).verdict,
+    ).toBe("pass");
   });
 
   it("will not judge a run whose null arm moved", () => {
     const rows = stats.judgeCell(arm(150), arm(270), arm(200), table());
-    const gate = stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true });
+    const gate = stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true, rounds: 7 });
     expect(gate.verdict).toBe("noisy");
     expect(gate.noisy).toContain("list × n10 · task ms/s");
   });
@@ -145,19 +145,28 @@ describe("the gate", () => {
   it("says a gate row it could not read is unreadable, not passed", () => {
     const untimed = WOBBLE.map((w) => stats.cellMetrics(cell(150 + w, { timed: false })));
     const rows = stats.judgeCell(untimed, untimed, untimed, table());
-    const gate = stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true });
+    const gate = stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true, rounds: 7 });
     expect(gate.verdict).toBe("missing");
     expect(gate.missing).toEqual(["list × n10 · react render ms/s"]);
   });
 
+  it("reads nothing before seven rounds (M24), whatever the rows say", () => {
+    const rows = stats.judgeCell(arm(150), arm(270), arm(150, 1), table());
+    expect(stats.gateVerdict([{ cell: "c", rows }], { paired: true, rounds: 3 }).verdict).toBe(
+      "unread",
+    );
+  });
+
   it("reads an A/A run as the null arm: quiet is null-ok, an effect there is the instrument moving", () => {
     const quiet = stats.judgeCell(arm(150), arm(150, 1), null, table());
-    expect(stats.gateVerdict([{ cell: "c", rows: quiet }], { paired: false }).verdict).toBe(
-      "null-ok",
-    );
+    expect(
+      stats.gateVerdict([{ cell: "c", rows: quiet }], { paired: false, rounds: 7 }).verdict,
+    ).toBe("null-ok");
     const moved = stats.judgeCell(arm(150), arm(190), null, table());
-    expect(stats.gateVerdict([{ cell: "c", rows: moved }], { paired: false }).verdict).toBe(
-      "null-moved",
-    );
+    // the null arm's own effect is never called worse
+    expect(moved.find((row) => row.metric === "task ms/s")?.reading).toBe("moved");
+    expect(
+      stats.gateVerdict([{ cell: "c", rows: moved }], { paired: false, rounds: 7 }).verdict,
+    ).toBe("null-moved");
   });
 });

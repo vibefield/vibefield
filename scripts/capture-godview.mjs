@@ -20,7 +20,7 @@
 //   node scripts/capture-godview.mjs [--a <root>] [--b <root>] [--out <dir>]
 //     [--recipe n=20,duration=8000,seed=1] [--frames 2500,7900]
 //     [--views swarm,list,rain,timeline] [--themes dark,light]
-//     [--threshold 0.001] [--tolerance 24] [--scale 1] [--window offscreen|shown]
+//     [--threshold 0.001] [--tolerance 24] [--scale 2] [--window offscreen|shown]
 //     [--source-a fold|model] [--source-b fold|model] [--motion reduce|normal] [--no-build]
 
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -45,7 +45,7 @@ const views = option("views", "swarm,list,rain,timeline");
 const themes = option("themes", "dark,light");
 const threshold = Number(option("threshold", "0.001"));
 const tolerance = Number(option("tolerance", "24"));
-const scale = option("scale", "1");
+const scale = option("scale", "2");
 const windowMode = option("window", "offscreen") === "shown" ? "shown" : "offscreen";
 const motion = option("motion", "reduce") === "normal" ? "normal" : "reduce";
 const sourceA = option("source-a", "fold") === "model" ? "model" : "fold";
