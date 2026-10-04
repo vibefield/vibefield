@@ -8,15 +8,20 @@ import type { RunResult } from "./verdict";
 
 const USAGE = `plugin-playground <pluginDir> [--json] [--state <type>[:<name>]]
 
-Judges every declared widget state of a plugin headlessly against its declared
-prop schema, and lists its object kinds with their refusal (plugin spec §5.4
-item 5, §24.2). Nothing mounts: the desk draws object kinds, and the kind
-harness that judges their states is DK-7's.
+Judges a plugin headlessly (plugin spec §5.4 item 5, §24.2): every declared
+widget state against its declared prop schema, and every OBJECT KIND through the
+kind-conformance harness (@vibefield/plugin-sdk/testing) with no device and no
+DOM — its declaration, its program (its WGSL read as text: entry points and
+bindings, never compiled), every declared state (each fixture in playground/
+states.ts × idle, selected, held, open, contained × the zooms the desk's LOD
+names) through resolve, record, hit, frame, chip, the opening, prepare and
+drawRange, and its dispose. The Dawn still that would compile and draw a kind
+waits on a host-less desk ICE does not yet publish (VibeField's ask I30).
 
   --json                NDJSON: one verdict per line, then a summary line
-  --state <type>[:<n>]  run one widget type, or one state of it
+  --state <type>[:<n>]  run one widget or object type, or one state of it
 
-exit 0  every state passed and no kind is refused
+exit 0  every row passed (notes are not refusals)
 exit 1  at least one refusal
 exit 2  the harness itself failed
 `;

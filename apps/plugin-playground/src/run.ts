@@ -8,14 +8,18 @@
 //
 // DK-5 (desk/landing): NOTHING MOUNTS. The verdict for a widget state was "its
 // React face mounts in happy-dom", and the desk draws object KINDS — a widget row
-// compiles faceless since DK-2, so there is no face to mount, nor a desk root that
-// admits one (`desk.desk` refuses a type that is not `desk.object`). What a widget
-// state is judged on now is what needs no face: its props against the declared
-// schema. An OBJECT kind is listed — its type, the export its binding names, the
-// states its fixture declares, and the refusal this build answers (`null`: the
-// desk draws object kinds), the field `inspect` carries too. DK-7's kind-
-// conformance harness judges each kind's states (`resolve`/`record`/`hit`, no
-// DOM) on that same row.
+// compiles faceless since DK-2, so there is no face to mount. What a widget state
+// is judged on now is what needs no face: its props against the declared schema.
+//
+// DK-7 (the playground v2): an OBJECT kind is JUDGED by the kind-conformance
+// harness (`@vibefield/plugin-sdk/testing`) — its code half, the export its
+// binding names (read off the module's namespace as the host reads it), against
+// its durable half, the manifest row, with NO device and NO DOM: its declaration,
+// its program on a recording device (its WGSL READ — never compiled), every
+// declared state (each fixture × every mode × every zoom the desk's LOD names)
+// through resolve/record/hit/frame/chip/the opening/prepare/drawRange, and its
+// dispose. Its row carries the count of states DRIVEN and its first refusal; the
+// harness's verdicts follow as `kind` rows.
 //
 // Source, not artifact. The runner loads `src/renderer.tsx` rather than
 // `dist/renderer.js` for two reasons that both matter: an author (or an agent)
@@ -32,7 +36,11 @@ import {
 import { buildWidgetType } from "@vibefield/field-app/host-kit";
 import { RENDERER_SOURCES } from "@vibefield/plugin-build/build";
 import type { AnyBehaviorDef } from "@vibefield/plugin-sdk/behavior";
-import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
+import {
+  activateWithMockHost,
+  type KindRefusalCode,
+  runKindConformance,
+} from "@vibefield/plugin-sdk/testing";
 import {
   DEFAULT_STATE,
   readStatesModule,
@@ -76,9 +84,10 @@ function summarize(
   for (const v of verdicts) {
     if (v.kind === "summary") continue;
     if (v.kind === "object") {
-      if (v.refusal !== null) refused += 1;
-    } else if (v.kind === "state") {
-      states += 1;
+      // the kind's own row SUMMARIZES its harness rows (counted below): it adds the states driven
+      states += v.states;
+    } else if (v.kind === "state" || v.kind === "kind") {
+      if (v.kind === "state") states += 1;
       if (v.status === "pass") passed += 1;
       else if (v.status === "note") skipped += 1;
       else refused += 1;
@@ -104,12 +113,19 @@ function stopAt(plugin: string, verdict: Verdict, widgets = 0, objects = 0): Run
   return { verdicts, summary: summarize(plugin, widgets, objects, verdicts) };
 }
 
+/** `--state <type>[:<state>]`, split. */
+function onlyOf(only: string | undefined): { type?: string; state?: string } {
+  if (only === undefined) return {};
+  const [type, state] = only.includes(":") ? only.split(":", 2) : [only, undefined];
+  return { ...(type !== undefined ? { type } : {}), ...(state !== undefined ? { state } : {}) };
+}
+
 /** `--state <type>[:<state>]`. */
 function matches(only: string | undefined, type: string, state: string): boolean {
   if (only === undefined) return true;
-  const [wantType, wantState] = only.includes(":") ? only.split(":", 2) : [only, undefined];
-  if (wantType !== type) return false;
-  return wantState === undefined || wantState === state;
+  const want = onlyOf(only);
+  if (want.type !== type) return false;
+  return want.state === undefined || want.state === state;
 }
 
 export async function runPlayground(options: RunOptions): Promise<RunResult> {
@@ -173,8 +189,11 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
   }
 
   let mod: { activate?: unknown };
+  // the module's NAMESPACE: an object row's code half is its export there (`binding.kind`)
+  let namespace: Record<string, unknown>;
   try {
     const loaded = await options.loader.load(source);
+    namespace = loaded;
     mod = (loaded.default ?? loaded) as { activate?: unknown };
   } catch (error) {
     return stopAt(manifest.id, {
@@ -316,19 +335,57 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
     }
   }
 
-  // --- the object kinds -----------------------------------------------------
-  // Listed, never drawn here: the desk builds each from its binding's export at
-  // the mount, and DK-7's harness judges its declared states.
-  for (const object of objects) {
+  // --- the object kinds: the kind-conformance harness (DK-7) ---------------
+  // Each row's code half is the module's export its binding names — read off the
+  // namespace as the host reads it (`objectBindingsFrom`) — judged against the row
+  // with no device and no DOM. Its fixtures are its states-file entry (absent: one
+  // `default` from the declared defaults); each is validated against the row's
+  // props first (`state-invalid`), then driven over every declared mode and zoom.
+  const only = onlyOf(options.only);
+  for (const [index, object] of objects.entries()) {
+    if (only.type !== undefined && only.type !== object.type) continue;
     const declared = authored[object.type];
+    if (declared !== undefined && Object.keys(declared).length === 0) {
+      verdicts.push({
+        kind: "widget",
+        plugin: manifest.id,
+        type: object.type,
+        status: "refused",
+        code: "states-empty",
+        pointer: pointer(object.type),
+        detail: `${STATES_RELATIVE_PATH} declares ${object.type} with no states`,
+        expected: "at least one named state, or no entry at all (which synthesizes `default`)",
+      });
+      continue;
+    }
+    const report = await runKindConformance({
+      binding: namespace[object.binding.kind],
+      row: object,
+      at: pointer("contributes", "objects", String(index)),
+      states: declared,
+      only: only.state,
+    });
+    const first = report.verdicts.find((v) => v.status === "refused");
     verdicts.push({
       kind: "object",
       plugin: manifest.id,
       type: object.type,
       binding: object.binding.kind,
-      states: declared === undefined ? 1 : Object.keys(declared).length,
-      refusal: null,
+      states: report.states,
+      refusal: first === undefined ? null : (first.code as KindRefusalCode),
     });
+    for (const v of report.verdicts)
+      verdicts.push({
+        kind: "kind",
+        plugin: manifest.id,
+        type: object.type,
+        subject: v.subject,
+        status: v.status,
+        code: v.code,
+        ...(v.pointer !== undefined ? { pointer: v.pointer } : {}),
+        ...(v.expected !== undefined && v.status !== "pass" ? { expected: v.expected } : {}),
+        detail: v.detail,
+      });
   }
 
   // --- the widget states ----------------------------------------------------

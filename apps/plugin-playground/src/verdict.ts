@@ -1,3 +1,5 @@
+import type { KindNoteCode, KindRefusalCode } from "@vibefield/plugin-sdk/testing";
+
 // The verdict vocabulary (P8-D8, thinking-p8 §2.1: "refusals are an interface,
 // not prose"). An agent iterates against `{code, pointer, expected}`; the human
 // line is `detail` and is never the only thing said.
@@ -35,9 +37,6 @@ export type RefusalCode =
   /** `activate` threw, or bound a type the manifest does not declare */
   | "activation-failed"
   // --- widget-level: the state list for one type could not be built ---
-  /** NOT EMITTED since DK-5: a widget row binds no face on the desk (the host
-   * compiles it faceless since DK-2), so an unbound widget is the expected one */
-  | "widget-unbound"
   /** the host could not build the prefab from this declaration (§12.2) */
   | "widget-unbuildable"
   /** `playground/states.ts` exists but its default export is not the declared shape */
@@ -46,18 +45,26 @@ export type RefusalCode =
   | "states-unknown-type"
   /** a declared type's state record is empty — say so rather than silently pass zero rows */
   | "states-empty"
-  // --- state-level: the row itself ---
+  // --- state-level: a WIDGET state's row (an object's states are the kind harness's rows) ---
   /** the fixture's props violate the manifest's declared prop schema */
-  | "state-invalid"
-  /** NOT EMITTED since DK-5 (nothing mounts — no entity is spawned for a face) */
-  | "state-spawn-failed"
-  /** NOT EMITTED since DK-5 (the "React mounts in happy-dom" verdict retired) */
-  | "state-render-failed";
+  | "state-invalid";
 
-/** NOT EMITTED since DK-5: a GL widget was skipped because no GL island could
- * mount in a DOM-only harness, and nothing mounts now. DK-7 retires the class
- * with the kind-conformance harness. */
-export type NoteCode = "skipped-gl";
+/**
+ * Codes RETIRED by name at DK-7 (the plan's Phase 3 input (3): each of the four "not emitted" codes
+ * re-aimed at a measured state or retired) — never emitted again:
+ *  - `widget-unbound` — a widget row binds no face: the host compiles it faceless (DK-2), so an
+ *    unbound widget is the expected one; an OBJECT row whose export is missing is the harness's
+ *    `object-export-missing`.
+ *  - `skipped-gl` (a note) — nothing is GL: the desk draws object kinds, and the harness drives every
+ *    kind with no device; what it cannot do — compile — is its note `object-wgsl-not-compiled`.
+ * RE-AIMED: `state-spawn-failed` (a kind's world half threw or answered no shape at a driven state)
+ * and `state-render-failed` (its pass's prepare or drawRange threw) — the harness's codes, said on
+ * `kind` rows (`KindRefusalCode`).
+ */
+export const RETIRED_CODES = ["widget-unbound", "skipped-gl"] as const;
+
+/** A note a row can carry: the kind harness's honest absences (a widget state's row carries none). */
+export type NoteCode = KindNoteCode;
 
 export interface StateVerdict {
   readonly kind: "state";
@@ -65,7 +72,7 @@ export interface StateVerdict {
   readonly type: string;
   readonly state: string;
   readonly status: VerdictStatus;
-  readonly code?: RefusalCode | NoteCode;
+  readonly code?: RefusalCode;
   readonly pointer?: string;
   readonly expected?: string;
   readonly detail?: string;
@@ -89,12 +96,11 @@ export interface PluginVerdict {
 }
 
 /**
- * DK-5 — an OBJECT KIND as this harness speaks of it: listed from the manifest,
- * with the export its binding names, the states its fixture declares (or the one
- * synthesized `default`), and the refusal this build answers — `null`, because
- * the desk draws object kinds (the field `inspect` carries too, so an agent
- * branches on the field, never on a code's absence). DK-7's kind-conformance
- * harness judges those states (`resolve`/`record`/`hit`, no DOM) on this row.
+ * An OBJECT KIND's row (DK-7, the playground v2): what the kind-conformance harness
+ * (`@vibefield/plugin-sdk/testing`) made of it — the export its binding names, the count of states
+ * it DROVE (each fixture × every declared mode × every zoom the desk's LOD names, and once at rest
+ * by night), and `refusal`: the first refusal it said of the kind, or `null` — a FIELD an agent
+ * branches on, never a code's absence. The harness's verdicts follow it, one `kind` row each.
  */
 export interface ObjectVerdict {
   readonly kind: "object";
@@ -102,8 +108,25 @@ export interface ObjectVerdict {
   readonly type: string;
   /** the renderer module's export that draws the kind (`binding.kind`) */
   readonly binding: string;
+  /** the count of states the harness drove */
   readonly states: number;
-  readonly refusal: RefusalCode | null;
+  readonly refusal: KindRefusalCode | null;
+}
+
+/** One verdict of the kind-conformance harness on an object kind (DK-7): its `declaration`, its
+ * `program`, one of its fixtures (a playground state, driven over every mode and zoom) or its
+ * `dispose`. Its code is the harness's (`KIND_EXPECTED` says what each would have passed). */
+export interface KindRow {
+  readonly kind: "kind";
+  readonly plugin: string;
+  readonly type: string;
+  /** `declaration` · `program` · `dispose` · a fixture's name */
+  readonly subject: string;
+  readonly status: VerdictStatus;
+  readonly code: KindRefusalCode | KindNoteCode | "ok";
+  readonly pointer?: string;
+  readonly expected?: string;
+  readonly detail: string;
 }
 
 /** A refusal that costs ONE widget its state rows while its peers still run —
@@ -123,8 +146,9 @@ export interface RunSummary {
   readonly kind: "summary";
   readonly plugin: string;
   readonly widgets: number;
-  /** the manifest's object kinds, each listed on its own row (DK-5) */
+  /** the manifest's object kinds, each judged by the kind harness (DK-7) */
   readonly objects: number;
+  /** widget states judged, plus every state the kind harness drove */
   readonly states: number;
   readonly passed: number;
   readonly skipped: number;
@@ -132,7 +156,13 @@ export interface RunSummary {
   readonly exit: 0 | 1;
 }
 
-export type Verdict = StateVerdict | ObjectVerdict | PluginVerdict | WidgetVerdict | RunSummary;
+export type Verdict =
+  | StateVerdict
+  | ObjectVerdict
+  | KindRow
+  | PluginVerdict
+  | WidgetVerdict
+  | RunSummary;
 
 export interface RunResult {
   readonly verdicts: readonly Verdict[];

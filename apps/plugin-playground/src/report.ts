@@ -39,13 +39,13 @@ function rowsOf(result: RunResult): Row[] {
   for (const v of result.verdicts) {
     if (v.kind === "summary") continue;
     if (v.kind === "object") {
-      // DK-5: an object kind is LISTED — its export, its declared states, the
-      // refusal this build answers (none: the desk draws it). DK-7 judges it.
+      // DK-7: an object kind's own row — the export the harness judged, the states it
+      // DROVE, and its first refusal; the harness's rows (`kind`) follow beneath it.
       rows.push({
         mark: v.refusal === null ? "KIND" : "FAIL",
         type: shortType(v.type, plugin),
         state: "—",
-        note: `export ${v.binding} · ${v.states} state${v.states === 1 ? "" : "s"} for the kind harness (DK-7) · refusal: ${v.refusal ?? "none"}`,
+        note: `export ${v.binding} · ${v.states} state${v.states === 1 ? "" : "s"} driven by the kind harness · refusal: ${v.refusal ?? "none"}`,
         under: [],
       });
       continue;
@@ -64,7 +64,7 @@ function rowsOf(result: RunResult): Row[] {
     rows.push({
       mark: MARK[v.status] ?? v.status.toUpperCase(),
       type: v.kind === "plugin" ? "(plugin)" : shortType(v.type, plugin),
-      state: v.kind === "state" ? v.state : "—",
+      state: v.kind === "state" ? v.state : v.kind === "kind" ? v.subject : "—",
       note:
         v.status === "pass"
           ? (v.detail ?? "")
@@ -98,8 +98,9 @@ export function toTable(result: RunResult): string {
   return `${lines.join("\n")}\n`;
 }
 
-/** For a caller that wants the rows without the process. */
+/** For a caller that wants the rows without the process. (An object's own row
+ * summarizes its harness rows: a refused kind is refused there, once.) */
 export function isRefusal(v: Verdict): boolean {
-  if (v.kind === "summary") return false;
-  return v.kind === "object" ? v.refusal !== null : v.status === "refused";
+  if (v.kind === "summary" || v.kind === "object") return false;
+  return v.status === "refused";
 }

@@ -38,6 +38,7 @@ const PRESENCE_ID = `${PLUGIN_ID}:presence`;
 const PLUGIN_ROOT = join(REPO, "examples", "plugins", "behavior-conformance");
 const ARTIFACT = join(PLUGIN_ROOT, "dist", "renderer.js");
 const V1_AUTHOR = join(PLUGIN_ROOT, "test", "author-v1.mjs");
+const LOGGING = join(REPO, "packages", "field-app", "src", "logging.ts");
 const ICE_MODULE = createRequire(import.meta.url).resolve("@vibecook/ice");
 const ICE_OBJECTS_MODULE = createRequire(import.meta.url).resolve("@vibecook/ice/desk/objects");
 
@@ -171,40 +172,30 @@ beforeAll(async () => {
   // author/release build would, so this witness is valid from a clean checkout.
   await buildPlugin({ root: PLUGIN_ROOT });
   harness = await createHarness([PLUGIN_ROOT]);
-  [
-    fieldEngine,
-    deskCapabilities,
-    stagedLoader,
-    behaviorHost,
-    documentPresence,
-    logging,
-    fieldd,
-    artifact,
-  ] = await Promise.all([
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "field-engine.ts"),
-    ) as Promise<FieldEngineModule>,
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "field", "desk", "desk-capabilities.ts"),
-    ) as Promise<DeskCapabilitiesModule>,
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "plugin-host", "staged-loader.ts"),
-    ) as Promise<StagedLoaderModule>,
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "plugin-host", "behavior-generation-host.ts"),
-    ) as Promise<BehaviorHostModule>,
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "field", "document-presence.ts"),
-    ) as Promise<DocumentPresenceModule>,
-    harness.load(
-      join(REPO, "packages", "field-app", "src", "logging.ts"),
-    ) as Promise<LoggingModule>,
-    harness.load(
-      join(REPO, "packages", "fieldd", "src", "plugin-registry.ts"),
-    ) as Promise<FielddModule>,
-    // Exact emitted bytes. Loading src/renderer.ts here would make A9 fail.
-    harness.load(ARTIFACT),
-  ]);
+  // ONE AT A TIME (DK-7; DK-6's open question 6): eight concurrent loads on one module runner, with a
+  // process-global logger among them, came apart in every crowded repo-wide run at 81c71631 — the
+  // recorder below held one instance of field-app's logging.ts while the runtime logged through
+  // another. Sequential loads give the graph one order; the witness row below holds it to ONE instance.
+  const load = async <T>(path: string): Promise<T> => (await harness.load(path)) as T;
+  fieldEngine = await load<FieldEngineModule>(
+    join(REPO, "packages", "field-app", "src", "field-engine.ts"),
+  );
+  deskCapabilities = await load<DeskCapabilitiesModule>(
+    join(REPO, "packages", "field-app", "src", "field", "desk", "desk-capabilities.ts"),
+  );
+  stagedLoader = await load<StagedLoaderModule>(
+    join(REPO, "packages", "field-app", "src", "plugin-host", "staged-loader.ts"),
+  );
+  behaviorHost = await load<BehaviorHostModule>(
+    join(REPO, "packages", "field-app", "src", "plugin-host", "behavior-generation-host.ts"),
+  );
+  documentPresence = await load<DocumentPresenceModule>(
+    join(REPO, "packages", "field-app", "src", "field", "document-presence.ts"),
+  );
+  logging = await load<LoggingModule>(LOGGING);
+  fieldd = await load<FielddModule>(join(REPO, "packages", "fieldd", "src", "plugin-registry.ts"));
+  // Exact emitted bytes. Loading src/renderer.ts here would make A9 fail.
+  artifact = await load<Record<string, unknown>>(ARTIFACT);
 }, 120_000);
 
 afterAll(async () => {
@@ -212,6 +203,10 @@ afterAll(async () => {
 });
 
 describe("packaged behavior conformance", () => {
+  it("loads ONE instance of field-app's process-global logger — the recorder hears what the runtime says", () => {
+    expect(harness.instancesOf(LOGGING)).toBe(1);
+  });
+
   it("preserves migration, riders, diagnostics, breaker state, and exact cleanup through churn", async () => {
     const dataDir = mkdtempSync(join(tmpdir(), "vibefield-prc4f-"));
     const registryService = new fieldd.PluginRegistryService({

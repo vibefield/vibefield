@@ -72,6 +72,10 @@ const DOM_GLOBALS = [
 export interface Harness {
   /** Load a module through the real transform pipeline. */
   readonly load: (absolutePath: string) => Promise<Record<string, unknown>>;
+  /** How many INSTANCES of one file the loader's module graph holds (DK-7): one, for a module with
+   * process-global state (field-app's logger), or a graph has split — a recorder set on one instance
+   * hears nothing the other says. Zero: not loaded. */
+  readonly instancesOf: (absolutePath: string) => number;
   readonly close: () => Promise<void>;
 }
 
@@ -136,10 +140,14 @@ export async function createHarness(extraRoots: readonly string[] = []): Promise
     // host/plugin boundary.
     ssr: { noExternal: [/^@vibefield\//] },
     esbuild: { jsx: "automatic", jsxImportSource: "react" },
+    // EVERY plugin here carries a hook filter (DK-6's lesson, `4161f36d`): an unfiltered hook is awaited
+    // for every module the harness loads, and in a crowded run that split the graph
     plugins: [wgsl()],
   });
   return {
     load: (absolutePath) => server.ssrLoadModule(absolutePath) as Promise<Record<string, unknown>>,
+    instancesOf: (absolutePath) =>
+      server.environments.ssr.moduleGraph.getModulesByFile(absolutePath)?.size ?? 0,
     close: () => server.close(),
   };
 }

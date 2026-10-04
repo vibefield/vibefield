@@ -35,15 +35,16 @@ async function spawn(...args: string[]): Promise<Spawned> {
 
 // DK-5 (desk/landing): the rows that judged the note plugin's states by MOUNTING its React face
 // in happy-dom retired with that verdict — the desk draws object kinds, and a widget row binds no
-// face since DK-2. What the bin answers now: an object kind LISTED with the export its binding
-// names and a `null` refusal (the field `inspect` carries; DK-7's kind-conformance harness judges
-// its states on that row), and a widget state judged on its props against the declared schema,
-// with nothing mounted. The subject with an object kind is the repo's own: behavior-conformance's
-// carrier (an `objects` row since DK-4).
+// face since DK-2. What the bin answers now (DK-7, the playground v2): an object kind JUDGED by the
+// kind-conformance harness — its row with the export its binding names, the count of states the
+// harness drove and its first refusal as a FIELD (`null` when it passed), then the harness's own rows
+// (`kind`) — and a widget state judged on its props against the declared schema, with nothing
+// mounted. The subject with an object kind is the repo's own: behavior-conformance's carrier (an
+// `objects` row since DK-4); the refused one is the fixture of kinds broken one way each.
 const KIND_PLUGIN = join(REPO, "examples", "plugins", "behavior-conformance");
 
 describe("the bin", () => {
-  it("emits one NDJSON verdict per row and a summary line, listing the manifest's object kinds with a null refusal", async () => {
+  it("emits one NDJSON verdict per row and a summary line: the kind's row (its states DRIVEN, a null refusal) and the harness's rows", async () => {
     const { code, stdout } = await spawn(KIND_PLUGIN, "--json");
     expect(code).toBe(0);
     const lines = stdout.trim().split("\n");
@@ -58,8 +59,9 @@ describe("the bin", () => {
       refused: 0,
       exit: 0,
     });
-    // the manifest's object, listed: its type, the export that draws it, its declared states,
-    // and the refusal as a FIELD that reads null — never a missing code
+    // the manifest's object, judged: its type, the export that draws it, the states the harness
+    // DROVE (its one fixture × idle, selected, held × 20 zooms + at rest by night — it hangs nowhere,
+    // so no hang zoom), and the refusal as a FIELD that reads null — never a missing code
     const objects = parsed.filter((v) => v.kind === "object");
     expect(objects).toEqual([
       {
@@ -67,9 +69,18 @@ describe("the bin", () => {
         plugin: "vibefield.behavior-conformance",
         type: "vibefield.behavior-conformance.card",
         binding: "card",
-        states: 1,
+        states: 3 * 20 + 1,
         refusal: null,
       },
+    ]);
+    expect(summary.states).toBe(3 * 20 + 1);
+    // …then the harness's own rows, one per verdict: the declaration, the program, the fixture
+    expect(
+      parsed.filter((v) => v.kind === "kind").map((v) => "subject" in v && [v.subject, v.status]),
+    ).toEqual([
+      ["declaration", "pass"],
+      ["program", "pass"],
+      ["defaults", "pass"],
     ]);
     // the exit code IS the summary's claim, not a second opinion
     expect(code).toBe(summary.exit);
@@ -99,6 +110,35 @@ describe("the bin", () => {
     expect((parsed.at(-1) as RunSummary).exit).toBe(1);
   }, 180_000);
 
+  it("exits 1 when a KIND is refused: each broken kind's row names its own code, its harness row the pointer and what passes", async () => {
+    const { code, stdout } = await spawn(join(FIXTURES, "broken-kinds"), "--json");
+    expect(code).toBe(1);
+    const parsed = stdout
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as Verdict);
+    const refusals = parsed.flatMap((v) =>
+      v.kind === "object" && v.refusal !== null ? [v.refusal] : [],
+    );
+    expect(refusals).toEqual([
+      "object-kind-misnamed",
+      "object-export-missing",
+      "object-kit-piece-unknown",
+      "object-wgsl-unread",
+      "state-hit-missed",
+      "state-spawn-failed",
+      "state-render-failed",
+    ]);
+    const misnamed = parsed.find((v) => v.kind === "kind" && v.code === "object-kind-misnamed");
+    expect(misnamed).toMatchObject({
+      status: "refused",
+      subject: "declaration",
+      pointer: "/contributes/objects/1/binding/kind",
+      expected: 'name the kind "vibefield.fixture-broken-kinds.misnamed"',
+    });
+    expect((parsed.at(-1) as RunSummary).exit).toBe(1);
+  }, 180_000);
+
   it("exits 2 — not 1 — when the CALLER is wrong rather than the plugin", async () => {
     const missing = await spawn(join(FIXTURES, "no-such-plugin-dir"));
     expect(missing.code).toBe(2);
@@ -116,10 +156,11 @@ describe("the bin", () => {
     expect(code).toBe(0);
     expect(stdout).toContain("plugin-playground vibefield.behavior-conformance");
     expect(stdout).toMatch(
-      /KIND\s+card\s+—\s+export card · 1 state for the kind harness \(DK-7\) · refusal: none/,
+      /KIND\s+card\s+—\s+export card · 61 states driven by the kind harness · refusal: none/,
     );
+    expect(stdout).toMatch(/PASS\s+card\s+declaration\s+`card` is a desk kind named by its type/);
     expect(stdout).toMatch(
-      /\d+ passed · \d+ skipped · \d+ refused \(0 widgets, 0 states, 1 object\)/,
+      /\d+ passed · \d+ skipped · \d+ refused \(0 widgets, 61 states, 1 object\)/,
     );
     // the table is a projection of the same records, never JSON in disguise
     expect(stdout.trim().startsWith("{")).toBe(false);

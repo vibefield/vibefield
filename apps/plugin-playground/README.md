@@ -1,71 +1,104 @@
 # @vibefield/plugin-playground
 
-The headless **verdict runner** (plugin spec §5.4 item 5, §24.2 "every widget
-state render fixture").
+The headless **verdict runner** (plugin spec §5.4 item 5, §24.2 "every state
+render fixture").
 
-It judges every declared widget state of a plugin with no window, no daemon and
-no build step, lists the plugin's object kinds, and answers pass/fail with a
-machine-readable diagnostic. It is scriptable acceptance, not a visual bench —
-VibeField Studio (`pnpm dev:design`) exists for eyes beside the real product;
-this exists for agents and CI.
+It judges a plugin with no window, no daemon, no device and no build step, and
+answers pass/fail with a machine-readable diagnostic. It is scriptable
+acceptance, not a visual bench — VibeField Studio (`pnpm dev:design`) exists for
+eyes beside the real product; this exists for agents and CI.
 
-**Since DK-5 (the desk) nothing mounts.** The canvas is ICE's desk, which draws
-object KINDS and no DOM under the camera: a widget row compiles faceless (DK-2),
-so the old verdict — "its React face mounts in happy-dom" — retired with the
-faces. The kind-conformance harness that judges an object's states
-(`resolve`/`record`/`hit` over them, no DOM, and an optional Dawn still) is the
-playground v2, DK-7's.
+**Since DK-7 it is the playground v2:** every OBJECT KIND a plugin contributes is
+judged by the SDK's **kind-conformance harness** (`@vibefield/plugin-sdk/testing`,
+`runKindConformance`) — the kind's code half (the export its manifest row's
+`binding.kind` names) against its durable half (the row), with no GPU and no DOM:
+
+1. **its declaration**, as the host reads it — a desk kind (`isObjectKind`) named by
+   its type, a tray entry that says how it hangs under a category of 1–64
+   characters, a row that provides `desk.object`;
+2. **its program** — `create` on a RECORDING device that answers every call as
+   WebGPU does short of compiling: the kit pieces it names exist, its WGSL arrives
+   as text and READS (its entry points and bindings — regular expressions, the way
+   ICE's own units read WGSL; nothing compiles it), each pipeline's layout carries
+   what its stages statically use, each bind group fills its layout;
+3. **every declared state** — each fixture in `playground/states.ts` (its props
+   validated first) × idle, selected, held, open (when the kind opens), contained
+   (when the row provides `desk.containable`) × the zooms the desk's LOD names (one
+   per band of its decade lattice, its ends, the arrival band, the hang), and once
+   at rest by night — through resolve, record, hit (it must hit its own box),
+   frame, chip, the opening, prepare and drawRange into a pass that checks the
+   draw list;
+4. **its dispose.**
+
+A widget row has no face on the desk (it retires at DK-8); its states are judged
+on their props against the declared schema, nothing mounted.
+
+**The Dawn still is not here yet.** A still per kind on a bare mat, held to a
+per-plugin golden, needs a host-less desk on a given device, and ICE's published
+entries do not expose one (the mat's shader set is unpublished; `surface()`
+needs a canvas) — VibeField's ICE ask **I30**. Until it lands, every kind with
+shaders carries the note `object-wgsl-not-compiled`: its WGSL was read, never
+compiled, so an unresolved name or a type error passes here.
 
 ```sh
-node apps/plugin-playground/bin/plugin-playground.mjs plugins/note
-node apps/plugin-playground/bin/plugin-playground.mjs plugins/note --json
-node apps/plugin-playground/bin/plugin-playground.mjs plugins/note --state vibefield.note:long
+node apps/plugin-playground/bin/plugin-playground.mjs examples/plugins/desk-clock
+node apps/plugin-playground/bin/plugin-playground.mjs examples/plugins/desk-clock --json
+node apps/plugin-playground/bin/plugin-playground.mjs <plugin> --state <type>:<state>
 ```
 
-Exit codes are law (P8-D8): **0** every state passed · **1** at least one
-refusal · **2** the harness itself failed. Nothing prompts.
+Exit codes are law (P8-D8): **0** every row passed (a note is not a refusal) ·
+**1** at least one refusal · **2** the harness itself failed. Nothing prompts.
 
 ## Authoring states
 
 States live at `<plugin>/playground/states.ts`, default-exporting
-`widget type → state name → props`:
+`object (or widget) type → state name → props`:
 
 ```ts
 export default {
-  "vibefield.note": {
-    empty: { text: "", color: "#f6e7a9" },
-    written: { text: "Ship the playground.", color: "#f6e7a9" },
+  "vendor.demo": {
+    default: {},
+    coral: { color: "#e8765c" },
   },
 };
 ```
 
 The file is authoring-time material — it never enters a `.vfplugin`, the same way
 `scripts/` and `test/` do not. **Absent file ⇒ one `default` state per declared
-widget**, built from the manifest's own prop defaults, so a plugin gets a verdict
-before anyone writes a fixture.
+object or widget**, built from the manifest's own prop defaults, so a plugin gets
+a verdict before anyone writes a fixture. For an object kind each state is a
+FIXTURE the harness drives in every declared mode and at every zoom.
 
-Props are validated against the manifest's declared prop schema, so a fixture
-that contradicts the declaration is reported as `state-invalid` — its own class.
-Unknown prop names refuse too: the engine drops them silently, so a typo would
-otherwise read as the defaults and pass. A states file may name an object kind's
-type as well: its states are counted on the kind's row for DK-7's harness.
+Props are validated against the manifest's declared prop schema — one function
+for a widget's states and a kind's fixtures, the SDK's `validateStateProps` — so a
+fixture that contradicts the declaration is reported as `state-invalid`, its own
+class, before anything draws it. Unknown prop names refuse too: the engine drops
+them silently, so a typo would otherwise read as the defaults and pass.
 
-## What a pass means
+## What the rows say
 
-A **widget state** passes when its props agree with the type's declared schema —
-the same check `state-invalid` refuses on. Nothing is spawned or mounted for it:
-on the desk a widget row has no face (it is retired at DK-8 in favour of object
-kinds), so a mount could only answer for the harness.
+An **object kind** gets its own row — `{ kind: "object", type, binding, states,
+refusal }`: `states` is the count of states the harness DROVE, and `refusal` its
+first refusal or `null` (a field an agent branches on, never a code's absence).
+The harness's verdicts follow it, one row each: `{ kind: "kind", type, subject,
+status, code, pointer?, expected?, detail }`, `subject` being `declaration`,
+`program`, `dispose` or a fixture's name. The codes are the SDK's
+(`KIND_EXPECTED` says what each would have passed): `object-export-missing`,
+`object-kind-invalid`, `object-kind-misnamed`, `object-tray-hang-missing`,
+`object-tray-category-invalid`, `object-provides-no-desk-object`,
+`object-create-failed`, `object-kit-piece-unknown`, `object-wgsl-not-text`,
+`object-wgsl-unread`, `object-wgsl-binding-unlaid`, `object-bind-group-mismatch`,
+`object-dispose-failed`, `state-invalid`, `state-spawn-failed` (a world half threw
+or answered no shape), `state-hit-missed`, `state-render-failed` (a prepare or
+drawRange threw), `state-draw-ill-formed`; the notes `object-wgsl-not-compiled`
+and `object-create-not-run-here`.
 
-An **object kind** is LISTED, one row per `contributes.objects` entry: its type,
-the export its `binding.kind` names, how many states its fixture declares (or the
-one synthesized `default`), and its `refusal` — a field that reads `null`, because
-the desk draws object kinds (`vibefield-plugin inspect` carries the same field),
-so an agent branches on the field, never on a code's absence. DK-7's harness
-judges those states on the same row.
+A **widget state** passes when its props agree with the type's declared schema.
 
-The `skipped-gl` note, `state-spawn-failed`, `state-render-failed` and
-`widget-unbound` are no longer emitted: each answered for a mount.
+**Retired by name (DK-7):** `widget-unbound` (a widget row binds no face) and the
+note `skipped-gl` (nothing is GL) — never emitted again (`RETIRED_CODES`).
+`state-spawn-failed` and `state-render-failed` were re-aimed at the states the
+harness drives.
 
 ## How it loads code
 

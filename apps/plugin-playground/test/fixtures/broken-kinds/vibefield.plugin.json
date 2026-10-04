@@ -1,0 +1,332 @@
+{
+  "manifestVersion": 1,
+  "id": "vibefield.fixture-broken-kinds",
+  "version": "0.1.0",
+  "title": "Broken kinds fixture",
+  "description": "CONTROL (DK-7): one object kind per way a plugin's kind breaks, each refused by the kind harness with its own verdict \u2014 and one whole kind beside them that passes.",
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "activation": [],
+  "capabilities": [],
+  "contributes": {
+    "objects": [
+      {
+        "type": "vibefield.fixture-broken-kinds.whole",
+        "title": "whole",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-broken-kinds.whole",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "whole",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Whole"
+        }
+      },
+      {
+        "type": "vibefield.fixture-broken-kinds.misnamed",
+        "title": "misnamed",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-broken-kinds.misnamed",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "misnamed",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Misnamed"
+        }
+      },
+      {
+        "type": "vibefield.fixture-broken-kinds.no-export",
+        "title": "no-export",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-broken-kinds.no-export",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "no-export",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "NoSuchExport"
+        }
+      },
+      {
+        "type": "vibefield.fixture-broken-kinds.unknown-piece",
+        "title": "unknown-piece",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-broken-kinds.unknown-piece",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "unknown-piece",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "UnknownPiece"
+        }
+      },
+      {
+        "type": "vibefield.fixture-broken-kinds.unread",
+        "title": "unread",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-broken-kinds.unread",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "unread",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Unread"
+        }
+      },
+      {
+        "type": "vibefield.fixture-broken-kinds.missing-hit",
+        "title": "missing-hit",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-broken-kinds.missing-hit",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "missing-hit",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "MissingHit"
+        }
+      },
+      {
+        "type": "vibefield.fixture-broken-kinds.throws",
+        "title": "throws",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-broken-kinds.throws",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "throws",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Throws"
+        }
+      },
+      {
+        "type": "vibefield.fixture-broken-kinds.render",
+        "title": "render",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-broken-kinds.render",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "render",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Render"
+        }
+      }
+    ]
+  }
+}
