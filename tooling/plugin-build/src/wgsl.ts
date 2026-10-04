@@ -32,7 +32,8 @@ export function wgsl(): {
   load(id: string): Promise<{ code: string; map: null } | null>;
 } {
   return {
-    name: "vibefield:wgsl",
+    // (never the app's IPC channel prefix, which wall R6 reserves for packages/contracts)
+    name: "plugin-build:wgsl",
     enforce: "pre",
     async load(id) {
       if (!id.endsWith(WGSL_EXTENSION)) return null;
