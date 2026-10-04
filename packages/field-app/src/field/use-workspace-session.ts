@@ -17,6 +17,7 @@ import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
 import { deskBlobs } from "./desk/desk-blobs";
 import { bindCapabilityUpgrades } from "./desk/desk-capabilities";
 import { currentDesk, deskCensus } from "./desk/desk-door";
+import { seedsExamples } from "./desk/desk-seed";
 import { createDeskStills } from "./desk/desk-stills";
 import { isBeforeTheDesk, rootIsBeforeTheDesk } from "./desk/pre-desk";
 import { attachDocumentPresence } from "./document-presence";
@@ -345,11 +346,13 @@ export function useWorkspaceSession(
       connectPresence();
       behaviorConnection?.refresh();
       // The first-run board belongs to the bootstrap default doc alone (seed
-      // flag); user-created docs open as an empty field. On the desk (ruling 6)
-      // it is one of each reference kind — five laid now, the print once its
-      // picture is in the byte store.
+      // flag); user-created docs open as an empty field. On the desk it is the
+      // PRODUCT's composition (DK-8: ICE's six and the comment pad — the print
+      // once its picture is in the byte store); the example clock joins it only
+      // where the run asks for the examples (a dev build, `?deskSeedExamples=1`).
       if (pending.seed) {
-        void seedField(ce, session, deskBlobs()).catch((error: unknown) =>
+        const examples = seedsExamples(import.meta.env.DEV, globalThis.location?.search ?? "");
+        void seedField(ce, session, deskBlobs(), undefined, { examples }).catch((error: unknown) =>
           getRendererLogger()
             .child({ component: "board.session", docId: pending.docId })
             .error("renderer.board.seed_failed", "The first-run board's print was not laid", error),

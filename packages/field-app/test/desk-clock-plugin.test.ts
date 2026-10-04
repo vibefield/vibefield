@@ -3,8 +3,8 @@
 // host exactly as ICE compiles a built-in: the host reads the plugin's export by its manifest row's name
 // (`objectBindingsFrom`), compiles the row's durable half with it through `defineObject`
 // (`buildRegistry`), and the desk's catalog finds the kind by its OBJECT, places it, hangs it, opens it
-// and menus it — the rows ICE's own clock test holds its compiled object to. And the first-run seed
-// lays it beside the six while its plugin is on — the census the canvas smoke reads — never while off.
+// and menus it — the rows ICE's own clock test holds its compiled object to. And the first-run seed lays
+// it only where the run asks for the examples (a dev build, the canvas smoke) — never a user's first board.
 import { defineQuery, Not, Position, PrefabId, Size, Specimen } from "@vibecook/ice";
 import { CONTAINABLE, DESK_OBJECT, objectKindOf } from "@vibecook/ice/desk";
 import * as deskClock from "@vibefield/plugin-example-desk-clock";
@@ -12,7 +12,12 @@ import { describe, expect, it } from "vitest";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { deskCensus } from "../src/field/desk/desk-door";
 import { SEED_CLOCK, SEED_TYPES } from "../src/field/desk/desk-seed";
-import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
+import {
+  buildRegistry,
+  createFieldEngine,
+  loadDevBundledPlugins,
+  seedField,
+} from "../src/field-engine";
 import { objectBindingsFrom } from "../src/plugin-host/build-widget";
 
 const { CLOCK_SECONDS_ACT, CLOCK_TYPE, deskClockManifest } = deskClock;
@@ -71,15 +76,28 @@ describe("the host compiles the example plugin's clock as ICE compiles a built-i
   });
 });
 
-describe("the first-run seed lays the clock while its plugin is on", () => {
-  it("beside the six, at the showcase's centre, a minute clock — the census the smoke reads", async () => {
-    const ce = createFieldEngine(withClock());
-    const session = ce.docs.create();
-    await seedField(ce, session, createDeskBlobStore());
-    expect(deskCensus(ce)).toEqual({
-      ...Object.fromEntries(SEED_TYPES.map((type) => [type, 1])),
-      [CLOCK_TYPE]: 1,
+describe("the example clock is a DEV/SMOKE switch on the first board, never the product's (DK-8, ruling 1)", () => {
+  /** The dev plugin set: the product's plugins (the dev-bundled fallback — the comment pad among them) and the clock. */
+  const devSet = async () =>
+    buildRegistry({
+      generation: -1,
+      staged: [],
+      bundled: [
+        ...(await loadDevBundledPlugins()),
+        {
+          manifest: deskClockManifest,
+          mod: deskClock.deskClockRenderer,
+          objectBindings: objectBindingsFrom(deskClock, rows),
+        },
+      ],
     });
+  const product = Object.fromEntries(SEED_TYPES.map((type) => [type, 1]));
+
+  it("where the run asks for the examples: beside the product's seven, in the working column, a minute clock — the census the smoke reads", async () => {
+    const ce = createFieldEngine(await devSet());
+    const session = ce.docs.create();
+    await seedField(ce, session, createDeskBlobStore(), undefined, { examples: true });
+    expect(deskCensus(ce)).toEqual({ ...product, [CLOCK_TYPE]: 1 });
     let found: { x: number; y: number; w: number; h: number; props: unknown } | undefined;
     const group = ce.catalog.widget(CLOCK_TYPE)?.groups.find((g) => g.name === "props");
     ce.world.query(objectsQ).each((batch) => {
@@ -97,16 +115,29 @@ describe("the first-run seed lays the clock while its plugin is on", () => {
         };
       }
     });
-    expect(found).toMatchObject({ x: 520 - 75, y: 380 - 75, w: 150, h: 150 });
+    expect(found).toMatchObject({
+      x: SEED_CLOCK.cx - 75,
+      y: SEED_CLOCK.cy - 75,
+      w: 150,
+      h: 150,
+    });
     expect(found?.props).toMatchObject({ seconds: false, style: "classic", zone: "local" });
     ce.dispose();
   });
 
-  it("…and with its plugin off the first board is the six, the clock passed by", async () => {
-    const ce = createFieldEngine(buildRegistry({ generation: -1, staged: [], bundled: [] }));
+  it("A USER'S FIRST BOARD never carries it — its plugin staged, the product's seed lays the seven and passes the clock by", async () => {
+    const ce = createFieldEngine(await devSet());
     const session = ce.docs.create();
     await seedField(ce, session, createDeskBlobStore());
-    expect(deskCensus(ce)).toEqual(Object.fromEntries(SEED_TYPES.map((type) => [type, 1])));
+    expect(deskCensus(ce)).toEqual(product);
+    ce.dispose();
+  });
+
+  it("…and where the run asks for the examples with the clock's plugin OFF, the clock is passed by", async () => {
+    const ce = createFieldEngine(buildRegistry());
+    const session = ce.docs.create();
+    await seedField(ce, session, createDeskBlobStore(), undefined, { examples: true });
+    expect(deskCensus(ce)).toEqual(product);
     ce.dispose();
   });
 });

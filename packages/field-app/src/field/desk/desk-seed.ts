@@ -10,15 +10,23 @@ import {
   printRect,
 } from "@vibecook/ice/desk/objects";
 
-// THE FIRST-RUN BOARD (DK-3, the orchestrator's ruling 6): ONE OF EACH reference kind, laid as ICE's
-// showcase lays them (`apps/desk/scripts/remount.mjs`, rig:remount's showcase — the same centres, the
-// note's seed, the mini mat's name, the notebook's hand and turn, this month's calendar, a print), so
-// `pnpm dev` opens on a desk, not an empty mat. The bootstrap default doc alone is seeded (the B3
-// registry-open law); user-created boards open empty. The print needs a picture: the seed's sample
-// goes into the byte store FIRST, and only then is the print laid naming its hash — so the desk never
-// meets a print whose picture is not there yet. DK-5 rewrites the census to this seed.
+// THE FIRST-RUN BOARD — THE PRODUCT'S (DK-3's six; rewritten at DK-8): ICE's six reference kinds and VibeField's own
+// comment pad, laid as the product's composition — a WORKING COLUMN on the left (the note, the comment pad and the
+// notebook side by side; the mini mat "Inbox" under them; the whiteboard; the print last) and the desk CALENDAR beside
+// it on the right, its 1760 × 1852 sheet (the calendar's law; never resized) lying next to the others, never under
+// them: one object among the six, not the ground (DK-6's stills had it under all of them). The column is centred on the
+// calendar's height, so where the arrival band's 0.5 floor (`frameContent`) cannot hold the calendar's height (a window
+// under ~930 CSS px tall) the frame trims the calendar's top and foot before the column's rows; a window under ~1250 CSS
+// px wide trims both sides' edges too. The bootstrap default doc alone is seeded (the B3 registry-open
+// law); user-created boards open empty. The print needs a picture: the seed's sample goes into the byte store FIRST,
+// and only then is the print laid naming its hash — so the desk never meets a print whose picture is not there yet.
+//
+// THE EXAMPLE CLOCK is not the product's (the orchestrator's ruling 1 at DK-8: "an example is an example"): a user's
+// first board never carries it. It is a DEV/SMOKE SWITCH — laid only where the run asks for the examples: a dev build
+// (`pnpm dev`, the dev plugin set stages it) or a smoke that loads the renderer with `?deskSeedExamples=1`
+// (`smoke:canvas`, whose CLOCK row needs it) — and, as every seeded type, only while its plugin is on.
 
-/** One seeded object: its type, its CENTRE in world units (the showcase's convention), its props. */
+/** One seeded object: its type, its CENTRE in world units, its props. */
 export interface SeedObject {
   readonly type: string;
   readonly cx: number;
@@ -27,39 +35,62 @@ export interface SeedObject {
 }
 
 /**
- * THE EXAMPLE PLUGIN'S CLOCK (DK-6 — the parity witness, `examples/plugins/desk-clock`): a PLUGIN's kind
- * laid beside the six where ICE's showcase lays its own clock (rig:remount's, centred at 520, 380) —
- * and only while its plugin is ON: the seed lays a type only where the root canvas places it, so with
- * the plugin off the first board is the six. Named by its TYPE, as a host names any plugin's kind; the
- * host imports no plugin. Laid WITHOUT its seconds hand: a minute clock wakes the resting desk once a
- * minute by its registered wake (a seconds clock, once a second), so a first board still sleeps.
+ * VIBEFIELD'S OWN KIND on the first board (DK-8, DK-D14): the COMMENT PAD (`plugins/comment-pad`), blank, in the
+ * working column between the note and the notebook. Named by its TYPE, as a host names any plugin's kind (the
+ * seed imports no plugin; `comment-pad-plugin.test.ts` holds the string to the plugin's), and laid only while its
+ * plugin is on: every dev run and smoke stages it; a packaged build ships no plugin until WP8 and lays the six.
+ */
+export const SEED_PAD: SeedObject = {
+  type: "vibefield.comment-pad",
+  cx: 340,
+  cy: 330,
+  props: {},
+};
+
+/**
+ * THE EXAMPLE PLUGIN'S CLOCK (DK-6 — the parity witness, `examples/plugins/desk-clock`): a DEV/SMOKE switch, never the
+ * product's seed (ruling 1). Laid in the working column beside the whiteboard, WITHOUT its seconds hand: a minute clock
+ * wakes the resting desk once a minute by its registered wake (a seconds clock, once a second), so a board still sleeps.
  */
 export const SEED_CLOCK: SeedObject = {
   type: "vibefield.example.desk-clock",
-  cx: 520,
-  cy: 380,
+  cx: 585,
+  cy: 1095,
   props: { seconds: false },
 };
 
-/** The five laid at once, in the showcase's order — its three notes are one here — and the example
- * plugin's clock when it is on. */
-export function seedObjects(now: Date): readonly SeedObject[] {
-  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-  return [
-    { type: NOTE_TYPE, cx: 170, cy: 160, props: { seed: 1 } },
-    { type: MINIMAT_TYPE, cx: 300, cy: 520, props: { name: "Inbox" } },
-    { type: BOARD_TYPE, cx: 760, cy: 560, props: {} },
-    { type: NOTEBOOK_TYPE, cx: 1040, cy: 300, props: { seed: 3, angle: 0.05 } },
-    { type: CALENDAR_TYPE, cx: 640, cy: 170, props: { month } },
-    SEED_CLOCK,
-  ];
+/** The URL door a run asks for the example objects through (`smoke:canvas` loads the renderer with it). */
+export const SEED_EXAMPLES = "deskSeedExamples";
+
+/** Whether this run's first board lays the examples: a dev build, or a load that asks (`?deskSeedExamples=1`). */
+export function seedsExamples(dev: boolean, search: string): boolean {
+  return dev || new URLSearchParams(search).get(SEED_EXAMPLES) === "1";
 }
 
-/** Where the print lies (its centre): the showcase's `kinds.print({ x: 960, y: 610 })`. */
-export const SEED_PRINT_AT = { cx: 960, cy: 610 } as const;
+export interface SeedOptions {
+  /** Lay the example objects (the clock) — a dev build's and a smoke's; never a user's first board. */
+  readonly examples?: boolean;
+}
 
-/** The six types the seed lays, one each — the census a first-run board must hold (the example clock
- * joins it only while its plugin is on — `SEED_CLOCK`). */
+/** The product's composition, laid at once (the print follows its picture) — and the example clock where the run asks. */
+export function seedObjects(now: Date, opts: SeedOptions = {}): readonly SeedObject[] {
+  const month = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const product: SeedObject[] = [
+    { type: NOTE_TYPE, cx: 100, cy: 330, props: { seed: 1 } },
+    SEED_PAD,
+    { type: NOTEBOOK_TYPE, cx: 570, cy: 330, props: { seed: 3, angle: 0.05 } },
+    { type: MINIMAT_TYPE, cx: 320, cy: 750, props: { name: "Inbox" } },
+    { type: BOARD_TYPE, cx: 240, cy: 1180, props: {} },
+    { type: CALENDAR_TYPE, cx: 1620, cy: 926, props: { month } },
+  ];
+  return opts.examples === true ? [...product, SEED_CLOCK] : product;
+}
+
+/** Where the print lies (its centre): the working column's foot, under the whiteboard. */
+export const SEED_PRINT_AT = { cx: 200, cy: 1520 } as const;
+
+/** The types the product's seed lays, one each — the census a first-run board holds while the product's plugins are
+ * on (ICE's six and the comment pad; the example clock joins it only where the run asks for the examples). */
 export const SEED_TYPES: readonly string[] = [
   NOTE_TYPE,
   MINIMAT_TYPE,
@@ -67,27 +98,30 @@ export const SEED_TYPES: readonly string[] = [
   NOTEBOOK_TYPE,
   CALENDAR_TYPE,
   PHOTO_TYPE,
+  SEED_PAD.type,
 ];
 
 /**
- * Seed a live document: the five laid now (one transaction each, not undoable — the user's first ⌘Z
- * stays clean) and the example clock if its plugin is on, then the print once its picture is in
- * `blobs`. Resolves when the print is laid; a board switched away meanwhile gets no print. Each object
- * is laid only where the root canvas places it (the desk places what provides `desk.object` — all six
- * do, and the clock; a type the catalog lacks is passed by).
+ * Seed a live document: the product's composition laid now (one transaction each, not undoable — the
+ * user's first ⌘Z stays clean) and the example clock where the run asks for the examples, then the print
+ * once its picture is in `blobs`. Resolves when the print is laid; a board switched away meanwhile gets no
+ * print. Each object is laid only where the root canvas places it (the desk places what provides
+ * `desk.object` — the six do, the pad and the clock do; a type the catalog lacks — its plugin off — is
+ * passed by).
  */
 export async function seedDesk(
   ce: CanvasEngine,
   session: DocSession,
   blobs: BlobStore,
   now: Date = new Date(),
+  opts: SeedOptions = {},
 ): Promise<void> {
   const placeable = ce.catalog.placementFor(ce.catalog.rootCanvas.id);
   const lay = (type: string, at: { x: number; y: number; w: number; h: number }, props: object) => {
     if (!placeable.has(type)) return;
     ce.ops.spawnWidget(type, { ...at, props: { ...props }, undoable: false });
   };
-  for (const s of seedObjects(now)) {
+  for (const s of seedObjects(now, opts)) {
     const size = ce.catalog.widget(s.type)?.defaultSize;
     if (size === undefined) continue;
     lay(s.type, { x: s.cx - size.w / 2, y: s.cy - size.h / 2, w: size.w, h: size.h }, s.props);

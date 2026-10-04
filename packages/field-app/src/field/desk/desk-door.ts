@@ -17,6 +17,7 @@ import type {
   PickResult,
   ThemeName,
 } from "@vibecook/ice/desk";
+import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 
@@ -26,7 +27,8 @@ import { deskBlobs } from "./desk-blobs";
 // frames, `submits()`, the memory ledger; no panel of ICE's) and the smokes and rigs, through
 // `window.__vfDesk` (the shape of ICE's own `window.__desk`, narrowed to what a harness reads). The
 // CANVAS_READY bargain (development-console.ts), extended one door: reads, plus the ambient switch a
-// freeze witness needs to make the desk busy before it covers it. No document authority.
+// freeze witness needs to make the desk busy before it covers it. No document authority. DK-8 adds two
+// reads: an object type's props (what a kind's own write landed) and the board's persistence row.
 
 export interface MountedDesk {
   readonly engine: CanvasEngine;
@@ -123,6 +125,30 @@ export function deskCensus(engine: CanvasEngine): Record<string, number> {
   return out;
 }
 
+/**
+ * Each object of `type` on the open board with its props — the cells of its groups, merged — what a smoke reads to
+ * know what a kind's own write landed (DK-8: the comment pad's typed line). Never the pegboard's specimens.
+ */
+export function deskObjects(
+  engine: CanvasEngine,
+  type: string,
+): { readonly entity: number; readonly props: Readonly<Record<string, unknown>> }[] {
+  const widget = engine.catalog.widget(type);
+  if (widget === undefined) return [];
+  const out: { entity: number; props: Record<string, unknown> }[] = [];
+  engine.world.query(objectsQ).each((batch) => {
+    for (const row of batch) {
+      const e = batch.entity(row);
+      if (engine.world.get(e, PrefabId)?.id !== type) continue;
+      const props: Record<string, unknown> = {};
+      for (const g of widget.groups)
+        Object.assign(props, (engine.world.get(e, g.component) as object | undefined) ?? {});
+      out.push({ entity: e as number, props });
+    }
+  });
+  return out;
+}
+
 export interface VfDeskDoor {
   readonly generation: number;
   readonly mount: number;
@@ -144,6 +170,12 @@ export interface VfDeskDoor {
   sample(opts?: CaptureOptions): Promise<DeskSample | null>;
   theme(): ThemeName;
   census(): Record<string, number>;
+  /** Each object of a type with its props (`deskObjects`) — what a kind's own write landed. */
+  objects(
+    type: string,
+  ): readonly { readonly entity: number; readonly props: Readonly<Record<string, unknown>> }[];
+  /** The board's persistence as its status row reads it — `live` with the last acknowledged save's time once a save lands. */
+  board(): { readonly state: BoardPersistenceState; readonly lastSavedAt: number | null };
   /** What the desk was fed, by the routes the packaged CSP admits (ruling 8): the plates set, each
    * face loaded through `FontFace(url)`, where the byte store keeps its prints. */
   assets(): Promise<{
@@ -198,6 +230,11 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     },
     theme: () => desk.theme,
     census: () => deskCensus(engine),
+    objects: (type) => deskObjects(engine, type),
+    board: () => {
+      const s = getBoardStatus();
+      return { state: s.state, lastSavedAt: s.lastSavedAt ?? null };
+    },
     async assets() {
       const text = deskText();
       const names = Object.keys(DESK_FACE_URLS);

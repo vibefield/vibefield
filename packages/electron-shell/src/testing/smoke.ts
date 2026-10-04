@@ -266,10 +266,23 @@ interface PluginStyleCensus {
  * `window.__vfDesk.census()` — GPU on or off, since it counts the world, not
  * pixels. `widgetTypes` is still printed, and no longer judged. */
 const CANVAS_CENSUS = {
-  /** The desk seed's types, one object each (ICE `@vibecook/ice/desk/objects`'s ids). */
-  seed: ["desk.note", "desk.minimat", "desk.board", "desk.notebook", "desk.calendar", "desk.photo"],
+  /** The PRODUCT's first board (DK-8), one object each: ICE's six (`@vibecook/ice/desk/objects`'s ids) and
+   * VibeField's own comment pad (`plugins/comment-pad`, staged with the product's plugins). */
+  seed: [
+    "desk.note",
+    "desk.minimat",
+    "desk.board",
+    "desk.notebook",
+    "desk.calendar",
+    "desk.photo",
+    "vibefield.comment-pad",
+  ],
+  /** DK-8 — VibeField's own kind: the comment pad, drawn, written in and reopened by the pad rows. */
+  commentPad: "vibefield.comment-pad",
   /** DK-6 — THE PARITY WITNESS: the example plugin's clock, a PLUGIN's kind through the SDK's `/desk`
-   * door alone, which the seed lays beside the six while its plugin is on — as it is in every smoke. */
+   * door alone. DK-8 (ruling 1): an EXAMPLE, never a user's first board — the seed lays it only where
+   * the run asks for the examples, so this smoke loads its renderer with `?deskSeedExamples=1`
+   * (field-app `SEED_EXAMPLES`) — the CLOCK row needs it. */
   exampleClock: "vibefield.example.desk-clock",
   minStagedPlugins: 7,
   // The renderer plugins that draw DOM (note, browser, field-tools, widgetlab — a HUD
@@ -479,6 +492,252 @@ async function exampleClockRow(win: BrowserWindow, gpu: boolean): Promise<string
   return problems;
 }
 
+/** The URL door the first board's examples are asked through (field-app `field/desk/desk-seed.ts`
+ * `SEED_EXAMPLES` — restated: the shell imports no field-app module here). */
+const SEED_EXAMPLES = "deskSeedExamples";
+
+/** The line the pad row writes, a character at a time, through the desk's one editor. */
+const PAD_LINE = "dk-8: a line on the comment pad";
+
+/** Where the pad lies on screen — its picked box (CSS px, window coordinates) and a point to tap that the
+ * desk itself receives (no chrome over it) — or null when no pick answers the pad. */
+interface PadOnScreen {
+  readonly box: {
+    readonly x0: number;
+    readonly y0: number;
+    readonly x1: number;
+    readonly y1: number;
+  };
+  readonly tap: { readonly x: number; readonly y: number } | null;
+}
+
+/** Scan the drawn frame for the pad (the desk's own pick, 8 CSS px apart) — its box, and the lowest point of
+ * it the desk's own element receives (`elementFromPoint` inside `[data-desk]`): a tap there is the desk's. */
+async function padOnScreen(win: BrowserWindow): Promise<PadOnScreen | null> {
+  return (await win.webContents.executeJavaScript(
+    `(() => {
+      const d = globalThis.__vfDesk;
+      const el = document.querySelector("[data-desk]");
+      if (d === undefined || el === null) return null;
+      const r = el.getBoundingClientRect();
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, tap = null;
+      for (let y = 4; y < r.height; y += 8)
+        for (let x = 4; x < r.width; x += 8) {
+          const hit = d.pick({ x, y });
+          if (hit === null || hit.type !== ${JSON.stringify(CANVAS_CENSUS.commentPad)}) continue;
+          const wx = r.left + x, wy = r.top + y;
+          x0 = Math.min(x0, wx); y0 = Math.min(y0, wy); x1 = Math.max(x1, wx); y1 = Math.max(y1, wy);
+          const under = document.elementFromPoint(wx, wy);
+          if (under !== null && el.contains(under) && (tap === null || wy > tap.y)) tap = { x: wx, y: wy };
+        }
+      return x0 === Infinity ? null : { box: { x0, y0, x1, y1 }, tap };
+    })()`,
+    true,
+  )) as PadOnScreen | null;
+}
+
+/** The pad's props on the open board, read through the door (`__vfDesk.objects`). */
+async function padProps(win: BrowserWindow): Promise<Record<string, unknown>[] | null> {
+  return (await win.webContents.executeJavaScript(
+    `globalThis.__vfDesk?.objects(${JSON.stringify(CANVAS_CENSUS.commentPad)}).map((o) => o.props) ?? null`,
+    true,
+  )) as Record<string, unknown>[] | null;
+}
+
+/** GPU off: the pad counts the world, so its census holds even where the desk cannot draw. */
+async function commentPadCensusRow(win: BrowserWindow): Promise<string[]> {
+  const props = await padProps(win);
+  console.log(`SMOKE_CANVAS_PAD ${JSON.stringify({ census: props?.length ?? 0 })}`);
+  return props?.length === 1
+    ? []
+    : [`the comment pad is not on the board (× ${props?.length ?? 0})`];
+}
+
+/**
+ * DK-8 (DK-D14) — VIBEFIELD'S OWN KIND IN THE PRODUCT: the comment pad (`plugins/comment-pad`, a plugin kind through
+ * `@vibefield/plugin-sdk/desk` alone, staged with the product's plugins) — on the first board (its census, 1); DRAWN
+ * (its kind not refused at the desk's mount — its WGSL compiled on the host's device — and its block picked on the
+ * drawn frame); the view wheeled in over it (the plain wheel zooms about the pointer); then A LINE TYPED: a tap where
+ * the desk receives it puts the desk's one editor on the pad (its text part — the editor's focus is the lease's),
+ * the line goes in a character at a time (`char` events — an editor types from `char`), and the session's end (1 s
+ * without input) lands it in the pad's `ink` cell — read back through the door — and the board's save is
+ * acknowledged (`board()`), so the reopen after the retry row's reload reads what fieldd holds. The window's stills
+ * (`dk-8-pad-{light,dark}.png`) are the pad with its line and its caret, by day and by night. Escape lets it go.
+ */
+async function commentPadRow(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+): Promise<{ problems: string[]; typed: boolean }> {
+  const js = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const problems: string[] = [];
+  const type = CANVAS_CENSUS.commentPad;
+  const census = (await padProps(win))?.length ?? 0;
+  const faults = await js<readonly unknown[]>("globalThis.__vfDesk.status().faults ?? []");
+  const refused = faults.some((fault) => (fault as { kind?: unknown }).kind === type);
+  let seen = await padOnScreen(win);
+  const facts: Record<string, unknown> = { census, refused, picked: seen?.box ?? null };
+  if (census !== 1) problems.push(`the comment pad is not on the board (× ${census})`);
+  if (refused) problems.push(`the desk refused the comment pad's kind (${JSON.stringify(faults)})`);
+  if (seen === null || seen.tap === null) {
+    problems.push(
+      "the comment pad was not picked on the drawn frame where the desk receives a tap",
+    );
+    console.log(`SMOKE_CANVAS_PAD ${JSON.stringify(facts)}`);
+    return { problems, typed: false };
+  }
+  // THE VIEW WHEELED IN over the pad, a step at a time, until it is ~40 % of the window wide: the plain wheel
+  // zooms about the pointer (the pad stays under it). Chromium's wheel sign is the reverse of the DOM's, so the
+  // row reads the pad's box after its first step and turns the wheel the other way if the pad got smaller.
+  const width = (s: PadOnScreen | null): number => (s === null ? 0 : s.box.x1 - s.box.x0);
+  const at = seen.tap;
+  const step = async (dir: number): Promise<PadOnScreen | null> => {
+    win.webContents.sendInputEvent({
+      type: "mouseWheel",
+      x: at.x,
+      y: at.y,
+      deltaX: 0,
+      deltaY: 120 * dir,
+    });
+    await sleep(300); // the camera settles (its spring)
+    return padOnScreen(win);
+  };
+  const before = width(seen);
+  const target = (await js<number>("innerWidth")) * 0.4;
+  let after = await step(1);
+  let steps = 1;
+  const dir = width(after) >= before ? 1 : -1;
+  if (dir < 0) {
+    after = await step(-1);
+    steps += 1;
+  }
+  while (after !== null && width(after) < target && steps < 16) {
+    after = await step(dir);
+    steps += 1;
+  }
+  facts.zoomed = { before, after: width(after), steps };
+  if (after === null || after.tap === null) {
+    problems.push("the comment pad left the view when it was wheeled in over");
+    console.log(`SMOKE_CANVAS_PAD ${JSON.stringify(facts)}`);
+    return { problems, typed: false };
+  }
+  seen = after;
+  if (width(seen) <= before)
+    problems.push(`the wheel did not zoom in over the pad (${JSON.stringify(facts.zoomed)})`);
+  // A TAP where the desk receives it: the editor is lent to the pad's text part
+  const tap = seen.tap ?? { x: 0, y: 0 };
+  win.webContents.sendInputEvent({
+    type: "mouseDown",
+    x: tap.x,
+    y: tap.y,
+    button: "left",
+    clickCount: 1,
+  });
+  win.webContents.sendInputEvent({
+    type: "mouseUp",
+    x: tap.x,
+    y: tap.y,
+    button: "left",
+    clickCount: 1,
+  });
+  await waitForRendererFact(
+    win,
+    "the desk's editor lent to the comment pad",
+    10_000,
+    `document.activeElement?.hasAttribute("data-desk-editor") === true && document.activeElement.getAttribute("aria-label") === "write on the comment pad"`,
+    `({ active: document.activeElement?.tagName ?? null, label: document.activeElement?.getAttribute("aria-label") ?? null })`,
+  );
+  // THE LINE, a character at a time — an editor types from `char`
+  for (const ch of PAD_LINE) {
+    win.webContents.sendInputEvent({ type: "char", keyCode: ch });
+    await sleep(15);
+  }
+  // the session's end: 1 s without input commits ONE transaction — the line in the pad's cell
+  await waitForRendererFact(
+    win,
+    "the typed line landing in the comment pad's ink cell",
+    15_000,
+    `globalThis.__vfDesk.objects(${JSON.stringify(type)})[0]?.props.text === ${JSON.stringify(PAD_LINE)}`,
+    `globalThis.__vfDesk.objects(${JSON.stringify(type)}).map((o) => o.props.text)`,
+  );
+  const landedAt = await js<number>("Date.now()");
+  // …and saved: the board's last acknowledged save is after the line landed (the reopen reads fieldd's)
+  await waitForRendererFact(
+    win,
+    "the board's save after the line",
+    20_000,
+    `(() => { const b = globalThis.__vfDesk.board(); return b.state === "live" && (b.lastSavedAt ?? 0) >= ${landedAt}; })()`,
+    "globalThis.__vfDesk.board()",
+  );
+  facts.typed = PAD_LINE;
+  facts.saved = await js("globalThis.__vfDesk.board()");
+  // THE STILLS: the pad with its line and its caret, by day and by night (the window, cut to the pad)
+  for (const name of ["light", "dark"] as const) {
+    await js(`globalThis.vibefield.theme.set(${JSON.stringify(name)})`);
+    await waitForRendererFact(
+      win,
+      `the desk dressed ${name}`,
+      10_000,
+      `globalThis.__vfDesk.theme() === ${JSON.stringify(name)}`,
+    );
+    const from = (await deskCounters(win)).frames;
+    await waitForRendererFact(
+      win,
+      `a frame drawn ${name}`,
+      10_000,
+      `globalThis.__vfDesk.perf().frames > ${from}`,
+    );
+    await sleep(400);
+    if (shotDir !== undefined) {
+      const m = 40;
+      const rect = {
+        x: Math.max(0, Math.floor(seen.box.x0 - m)),
+        y: Math.max(0, Math.floor(seen.box.y0 - m)),
+        width: Math.ceil(seen.box.x1 - seen.box.x0 + 2 * m),
+        height: Math.ceil(seen.box.y1 - seen.box.y0 + 2 * m),
+      };
+      mkdirSync(shotDir, { recursive: true });
+      writeFileSync(join(shotDir, `dk-8-pad-${name}.png`), (await win.capturePage(rect)).toPNG());
+    }
+  }
+  // let it go: Escape is the lease's (the keymap stands down while the editor holds the focus)
+  win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Escape" });
+  win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Escape" });
+  await waitForRendererFact(
+    win,
+    "the desk's editor let go",
+    10_000,
+    `document.activeElement?.hasAttribute("data-desk-editor") !== true`,
+  );
+  console.log(`SMOKE_CANVAS_PAD ${JSON.stringify(facts)}`);
+  return { problems, typed: true };
+}
+
+/**
+ * DK-8 — THE PAD'S LINE SURVIVES A REOPEN: after the retry row's reload (the renderer REPLACED — the window
+ * reopens its own board from fieldd, `vf-window-doc`), the comment pad is on the board once and its cell holds
+ * the line the pad row typed — what fieldd kept, not what the old renderer held.
+ */
+async function commentPadReopenRow(win: BrowserWindow): Promise<string[]> {
+  const type = CANVAS_CENSUS.commentPad;
+  try {
+    await waitForRendererFact(
+      win,
+      "the comment pad's line after the reopen",
+      20_000,
+      `globalThis.__vfDesk?.objects(${JSON.stringify(type)})[0]?.props.text === ${JSON.stringify(PAD_LINE)}`,
+      `globalThis.__vfDesk?.objects(${JSON.stringify(type)}).map((o) => o.props.text) ?? null`,
+    );
+  } catch (error) {
+    return [error instanceof Error ? error.message : String(error)];
+  }
+  const props = await padProps(win);
+  console.log(
+    `SMOKE_CANVAS_PAD_REOPEN ${JSON.stringify({ census: props?.length ?? 0, text: props?.[0]?.text ?? null })}`,
+  );
+  return props?.length === 1 ? [] : [`the reopened board holds ${props?.length ?? 0} comment pads`];
+}
+
 /** The stage's unavailable card (DESIGN.md §8 "When the desk can't draw") — what every GPU-OFF
  * smoke now asserts where the desk cannot draw (DK-3; r6b risk 1): the card in the DOM, its words
  * and ICE's message, and the window still alive. Returns the card's account of itself. */
@@ -571,7 +830,8 @@ export async function runSmokeCanvas(opts: {
   try {
     const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
     const deskVerdict = waitForConsole(win, gpu ? "DESK_READY " : "DESK_UNAVAILABLE ", 60_000);
-    await loadRenderer(win, "smoke-canvas", opts.viteUrl);
+    // the first board lays the examples where the run asks (DK-8, ruling 1): the CLOCK row needs its clock
+    await loadRenderer(win, "smoke-canvas", opts.viteUrl, { [SEED_EXAMPLES]: "1" });
     const raw = await canvasReady;
     console.log(`SMOKE_CANVAS ${raw}`);
     const styles = await waitForPluginStyles(win);
@@ -589,8 +849,14 @@ export async function runSmokeCanvas(opts: {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
+      // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
+      // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
+      const pad = await commentPadRow(win, shotDir);
+      problems.push(...pad.problems);
       problems.push(...(await deskRetryRow(win, opts.viteUrl)));
+      if (pad.typed) problems.push(...(await commentPadReopenRow(win)));
     } else {
+      problems.push(...(await commentPadCensusRow(win)));
       const card = await expectDeskUnavailableCard(win);
       console.log(`SMOKE_CANVAS_CARD ${JSON.stringify(card)}`);
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);

@@ -18,7 +18,7 @@ import { setPreviewBackground } from "@vibefield/design-kit";
 import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
 import { deskBlobs } from "./field/desk/desk-blobs";
-import { seedDesk } from "./field/desk/desk-seed";
+import { type SeedOptions, seedDesk } from "./field/desk/desk-seed";
 import { getRendererLogger } from "./logging";
 import {
   buildFacelessObjectType,
@@ -409,15 +409,16 @@ function pluginIdForBehavior(behaviorId: string): string | undefined {
   return separator > 0 ? behaviorId.slice(0, separator) : undefined;
 }
 
-/** THE FIRST-RUN BOARD (DK-3, ruling 6) — one of each reference kind, the print through the byte
- * store (field/desk/desk-seed.ts). Requires a live doc session. The five land before this returns;
- * the promise resolves once the print is laid. The widgetlab demo scene it replaced seeded nothing
- * on the desk (no VibeField widget provides `desk.object`) and retires with its plugin (DK-8). */
+/** THE FIRST-RUN BOARD (DK-3's six; DK-8 the product's composition) — ICE's six reference kinds and the
+ * comment pad, the print through the byte store, the example clock only where the run asks for the
+ * examples (field/desk/desk-seed.ts). Requires a live doc session. The composition lands before this
+ * returns; the promise resolves once the print is laid. */
 export function seedField(
   ce: CanvasEngine,
   session: DocSession,
   blobs: BlobStore = deskBlobs(),
   now?: Date,
+  opts?: SeedOptions,
 ): Promise<void> {
-  return seedDesk(ce, session, blobs, now);
+  return seedDesk(ce, session, blobs, now, opts);
 }
