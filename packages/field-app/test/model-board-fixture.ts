@@ -363,6 +363,8 @@ export function scriptedModelBoard(options: ScriptedModelBoardOptions = {}): Scr
     { hosted: HostedDesktop; state: RowsDeviceState; revision: number }
   >();
   let sink: ((payload: unknown, kind?: "snapshot" | "delta") => void) | null = null;
+  /** the open board's screen with the backend (L5), null between boards */
+  let screen: string | null = null;
   let onReplayFailed: ((error: unknown) => void) | undefined;
   let opened = 0;
   let closed = 0;
@@ -423,16 +425,27 @@ export function scriptedModelBoard(options: ScriptedModelBoardOptions = {}): Scr
       sink = onFrame;
       onReplayFailed = opts?.onReplayFailed;
       const mine = onFrame;
+      // L5, M20 — the board IS the connection's screen, as the daemon ties it
+      // (`agent.reportShown` answers for the subscription's screen; closing the
+      // board forgets it): no unread accrues before the open, none after the close
+      const mineScreen = `screen-${opened}`;
+      const forget = here.service.openScreen(mineScreen);
+      screen = mineScreen;
       return {
         snapshot: open(),
         unsubscribe: () => {
           closed += 1;
           if (sink === mine) sink = null;
+          if (screen === mineScreen) screen = null;
+          forget();
         },
       };
     },
     reportShown: async (ids) => {
       reports.push([...ids]);
+      if (screen === null) return { reported: false };
+      here.service.reportShown(screen, ids);
+      emit();
       return { reported: true };
     },
   };
