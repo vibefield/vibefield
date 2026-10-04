@@ -9,6 +9,7 @@ import {
   findBundledSingletons,
   findDirectIceSpecifiers,
   findUnmappableSpecifiers,
+  generatesStylesheet,
   isHostSingletonSpecifier,
   PluginBuildError,
 } from "../src/build";
@@ -292,6 +293,43 @@ describe("buildPlugin", () => {
         "export default { activate: () => defineComponent() };\n",
     });
     await expect(buildPlugin({ root })).rejects.toThrow(/own copy of @vibecook\/strata-ecs/);
+  });
+
+  it("DK-6 — an objects-only plugin ships NO stylesheet (a kind has no CSS), and no stale one", async () => {
+    const kinds = (extra: Record<string, unknown> = {}): string =>
+      JSON.stringify({
+        id: "com.example.fixture",
+        entries: { renderer: "./dist/renderer.js" },
+        contributes: { objects: [{ type: "com.example.fixture" }], ...extra },
+      });
+    // words Tailwind would read as utilities if the generated stylesheet were scanned for them
+    const renderer =
+      'const words = "fixed shadow ring";\nexport default { activate: () => words };\n';
+    const root = fixture({
+      "vibefield.plugin.json": kinds(),
+      "src/renderer.ts": renderer,
+      "dist/renderer.css": ".stale { color: red; }\n", // a previous build's
+    });
+    const report = await buildPlugin({ root });
+    expect(existsSync(join(root, "dist", "renderer.css"))).toBe(false);
+    expect(report.stages.find((s) => s.stage === "renderer bundle")?.detail).toContain(
+      "no stylesheet: a kind has no CSS",
+    );
+    // a kind's plugin that ALSO draws a HUD surface keeps the generated stylesheet for it
+    const withSurface = fixture({
+      "vibefield.plugin.json": kinds({ surfaces: [{ id: "com.example.fixture.panel" }] }),
+      "src/renderer.ts": renderer,
+    });
+    await buildPlugin({ root: withSurface });
+    expect(readFileSync(join(withSurface, "dist", "renderer.css"), "utf8")).toContain(".fixed");
+  });
+
+  it("DK-6 — generatesStylesheet: DOM contributions or none at all keep it; objects alone drop it", () => {
+    expect(generatesStylesheet({})).toBe(true);
+    expect(generatesStylesheet({ contributes: { surfaces: [1] } })).toBe(true);
+    expect(generatesStylesheet({ contributes: { objects: [1], widgets: [1] } })).toBe(true);
+    expect(generatesStylesheet({ contributes: { objects: [1], surfaces: [1] } })).toBe(true);
+    expect(generatesStylesheet({ contributes: { objects: [1] } })).toBe(false);
   });
 
   it("refuses when the manifest promises a renderer no source can produce", async () => {

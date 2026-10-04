@@ -182,6 +182,27 @@ function firstExisting(root: string, candidates: readonly string[]): string | un
 interface ManifestShape {
   id: string;
   entries?: { renderer?: string; service?: string };
+  contributes?: {
+    objects?: readonly unknown[];
+    surfaces?: readonly unknown[];
+    widgets?: readonly unknown[];
+  };
+}
+
+/**
+ * Does this plugin's renderer get the GENERATED stylesheet (Tailwind's utilities, scoped beneath
+ * `[data-vf-plugin]`)? It is for what draws DOM — a HUD surface, a legacy `widgets` row (until DK-8
+ * retires them). A plugin that contributes OBJECTS and nothing that draws DOM gets none (DK-6): a kind
+ * has no CSS — the desk draws it — and Tailwind scanning a kind's words ("shadow", "ring", "fixed")
+ * would otherwise ship a stylesheet nothing uses. A stylesheet the plugin imports itself still ships.
+ */
+export function generatesStylesheet(manifest: Pick<ManifestShape, "contributes">): boolean {
+  const c = manifest.contributes;
+  const kindsOnly =
+    (c?.objects?.length ?? 0) > 0 &&
+    (c?.surfaces?.length ?? 0) === 0 &&
+    (c?.widgets?.length ?? 0) === 0;
+  return !kindsOnly;
 }
 
 async function readManifest(root: string): Promise<ManifestShape> {
@@ -211,6 +232,7 @@ async function bundleRenderer(
   root: string,
   declared: string,
   pluginId: string,
+  styles: boolean,
 ): Promise<{ detail: string; modules: string[]; specifiers: string[] }> {
   const source = firstExisting(root, RENDERER_SOURCES);
   if (source === undefined) {
@@ -223,15 +245,18 @@ async function bundleRenderer(
   const outDir = resolve(out, "..");
   const workDir = join(outDir, ".build");
   mkdirSync(workDir, { recursive: true });
+  // The sibling stylesheet is THIS build's or none: `emptyOutDir` stays false (dist may hold more than
+  // the bundle), so a sheet a previous build left would otherwise be served beside this module (DK-6).
+  rmSync(join(outDir, "renderer.css"), { force: true });
   // A generated entry, so the plugin's own source never carries build scaffolding:
-  // it pulls in the compiled stylesheet and re-exports the module verbatim (the
-  // default export IS the plugin; `export *` keeps any named surface the host
-  // normalizer reads).
+  // it pulls in the compiled stylesheet (when the plugin draws DOM — `generatesStylesheet`)
+  // and re-exports the module verbatim (the default export IS the plugin; `export *`
+  // keeps any named surface the host normalizer reads — an object's binding among them).
   const rel = relative(workDir, source).replaceAll("\\", "/");
-  writeFileSync(join(workDir, "styles.css"), TAILWIND_ENTRY);
+  if (styles) writeFileSync(join(workDir, "styles.css"), TAILWIND_ENTRY);
   writeFileSync(
     join(workDir, "entry.ts"),
-    `import "./styles.css";\nexport * from ${JSON.stringify(rel)};\nexport { default } from ${JSON.stringify(rel)};\n`,
+    `${styles ? 'import "./styles.css";\n' : ""}export * from ${JSON.stringify(rel)};\nexport { default } from ${JSON.stringify(rel)};\n`,
   );
 
   const { build } = await import("vite");
@@ -298,7 +323,7 @@ async function bundleRenderer(
     }
   }
   return {
-    detail: `${declared}${existsSync(css) ? " + renderer.css" : " (no stylesheet)"}`,
+    detail: `${declared}${existsSync(css) ? " + renderer.css" : styles ? " (no stylesheet)" : " (no stylesheet: a kind has no CSS)"}`,
     modules,
     specifiers: imported.filter((id) => !emittedFiles.has(id)),
   };
@@ -362,7 +387,12 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<BuildRep
 
   const rendererEntry = manifest.entries?.renderer;
   if (rendererEntry !== undefined) {
-    const { detail, modules, specifiers } = await bundleRenderer(root, rendererEntry, manifest.id);
+    const { detail, modules, specifiers } = await bundleRenderer(
+      root,
+      rendererEntry,
+      manifest.id,
+      generatesStylesheet(manifest),
+    );
     linked.push(...modules);
     emitted.push(...specifiers);
     stages.push({ stage: "renderer bundle", ok: true, detail });

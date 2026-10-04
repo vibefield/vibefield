@@ -264,10 +264,14 @@ const CANVAS_CENSUS = {
   /** The desk seed's types, one object each (ICE `@vibecook/ice/desk/objects`'s ids). */
   seed: ["desk.note", "desk.minimat", "desk.board", "desk.notebook", "desk.calendar", "desk.photo"],
   minStagedPlugins: 5,
-  // The current five renderer plugins all ship scoped CSS. A link alone is not
-  // evidence: the 2026-08-25 regression left all five links published but their
-  // late fetches unauthorized after unrelated service activation.
-  minLoadedPluginStyles: 5,
+  // The renderer plugins that draw DOM (note, browser, field-tools, widgetlab — a HUD
+  // surface or a legacy widgets row) ship scoped CSS. An objects-only plugin ships
+  // none since DK-6 (plugin-build's `generatesStylesheet`: a kind has no CSS) — the
+  // behavior-conformance carrier (an object since DK-4), whose sheet was Tailwind's
+  // accident, and the desk clock. A link alone is not evidence: the 2026-08-25
+  // regression left all five links published but their late fetches unauthorized
+  // after unrelated service activation.
+  minLoadedPluginStyles: 4,
 } as const;
 
 /** Every way the line disagrees with the census, named — a smoke that fails
