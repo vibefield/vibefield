@@ -421,9 +421,9 @@ describe("the cover (DESIGN.md §6)", () => {
     // AR-8c: History's view is the host's slot, drawn on its first open and
     // told it is the view showing
     expect(
-      coverView("history").querySelector('[data-testid="history-content"]')?.getAttribute(
-        "data-active",
-      ),
+      coverView("history")
+        .querySelector('[data-testid="history-content"]')
+        ?.getAttribute("data-active"),
     ).toBe("true");
     to("canvas");
     expect(cover().getAttribute("data-cover")).toBe("down");

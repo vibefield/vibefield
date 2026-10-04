@@ -27,7 +27,13 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { MetaState, TimelineEntry } from "@rosetta/protocol";
-import { IndexSessionsResult, IndexStatus, LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/contracts";
+import {
+  IndexSessionsResult,
+  IndexStatus,
+  LAYOUT,
+  pipeEndpointFor,
+  SOCKETS,
+} from "@vibefield/contracts";
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient, type WsLike } from "@vibefield/fieldd-client";
@@ -70,7 +76,11 @@ afterEach(async () => {
 });
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-async function until<T>(read: () => Promise<T | null> | T | null, label: string, ms: number): Promise<T> {
+async function until<T>(
+  read: () => Promise<T | null> | T | null,
+  label: string,
+  ms: number,
+): Promise<T> {
   const deadline = Date.now() + ms;
   for (;;) {
     const value = await Promise.resolve(read()).catch(() => null);
@@ -148,7 +158,11 @@ async function realDesktop(): Promise<{ daemon: FielddDaemon; window: FielddClie
   });
   window.connect();
   cleanup.push(() => window.close());
-  await until(() => (daemon.health().rosettad.phase === "ready" ? true : null), "rosettad ready", 30_000);
+  await until(
+    () => (daemon.health().rosettad.phase === "ready" ? true : null),
+    "rosettad ready",
+    30_000,
+  );
   await until(
     async () =>
       IndexStatus.parse(await window.request("index.status", {})).phase === "awaiting_consent"
@@ -232,7 +246,9 @@ describe.skipIf(
     );
     const bytesAfter = received.reduce((sum, frame) => sum + frame.length, 0);
 
-    // EL2: fieldd answered lists, facts and a ticket — never a transcript read…
+    // EL2: no frame fieldd sent this window carries a byte of the body…
+    expect(received.some((frame) => frame.includes(BODY_WORDS))).toBe(false);
+    // …because fieldd answered lists, facts and a ticket — never a transcript read
     const asked = new Set(doorCalls);
     expect([...asked].sort()).toEqual(
       expect.arrayContaining(["index.changes.subscribe", "index.openTicket", "index.sessions"]),
@@ -242,8 +258,6 @@ describe.skipIf(
         /^index\.(changes\.subscribe|projects|sessions|status|openTicket|project|projectDay)$/,
       );
     }
-    // …and no frame fieldd sent this window carries a byte of the body
-    expect(received.some((frame) => frame.includes(BODY_WORDS))).toBe(false);
     console.log(
       `AR8C_WITNESS ${JSON.stringify({
         sessionId: sid,

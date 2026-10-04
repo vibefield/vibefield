@@ -203,7 +203,10 @@ describe("History in the frame (AR-8c)", () => {
     mount(client);
     expect(historySlot()?.querySelector(".ah-frame")).toBeNull();
     to("history");
-    const frame = await until(() => historySlot()?.querySelector<HTMLElement>(".ah-frame"), "the room");
+    const frame = await until(
+      () => historySlot()?.querySelector<HTMLElement>(".ah-frame"),
+      "the room",
+    );
     expect(frame.closest(".vf-history")).not.toBeNull();
     expect(frame.getAttribute("data-ah-surface")).toBe("host");
     await until(
@@ -224,7 +227,9 @@ describe("History in the frame (AR-8c)", () => {
     expect(historySlot()?.querySelector(".ah-frame")).toBe(frame);
     expect(historySlot()?.querySelector(".ah-cols .ah-scroll")).toBe(scroller);
     expect(scroller.scrollTop).toBe(120);
-    expect(client.calls.filter((call) => call.method === "index.changes.subscribe")).toHaveLength(1);
+    expect(client.calls.filter((call) => call.method === "index.changes.subscribe")).toHaveLength(
+      1,
+    );
   });
 
   it("Resume continues the chosen session by its native id with the launcher's facts, placed in Godview's pane", async () => {

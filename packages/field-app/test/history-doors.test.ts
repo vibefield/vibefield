@@ -42,8 +42,7 @@ import {
 } from "../src/history/session-port";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
-const fixture = (name: string): unknown =>
-  JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
+const fixture = (name: string): unknown => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 
 const PROJECTS = IndexProjectsResult.parse(fixture("index-projects.mesh.json"));
 const SESSIONS = IndexSessionsResult.parse(fixture("index-sessions.mesh.json"));
@@ -89,7 +88,15 @@ function client(answers: Record<string, (params: Record<string, unknown>) => unk
     calls,
     ping: (kind = "delta") =>
       onFrame?.(
-        { epoch: "changes-local-1", since: 0, revision: 1, upserts: [], removed: [], tables: ["sessions"], devices: [] },
+        {
+          epoch: "changes-local-1",
+          since: 0,
+          revision: 1,
+          upserts: [],
+          removed: [],
+          tables: ["sessions"],
+          devices: [],
+        },
         kind,
       ),
     request: async (method, params) => {
@@ -241,7 +248,7 @@ describe("the catalog port's meta feed (AR-8c)", () => {
   const PROJECTS_ONE_PAGE = { rows: PROJECTS.rows, sources: PROJECTS.sources };
 
   it("answers one snapshot assembled from every page of both listings, then a mutation per ping", async () => {
-    const pages = {
+    const pages: { sessions: unknown[] } = {
       sessions: [{ ...SESSIONS, cursor: "1" }, PAGE_TWO],
     };
     const door = scripted(pages);
@@ -256,7 +263,10 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     expect(door.calls.map((call) => call.method)).toContain("index.changes.subscribe");
     expect(changes).toHaveLength(1);
     expect(changes[0]?.source).toBe("snapshot");
-    expect(changes[0]?.meta.sessions.map((row) => row.id)).toEqual(["ses-9b2f0c7d", "ses-unmapped"]);
+    expect(changes[0]?.meta.sessions.map((row) => row.id)).toEqual([
+      "ses-9b2f0c7d",
+      "ses-unmapped",
+    ]);
     // the listings are this desktop's own, asked at the door's page ceiling
     const listing = door.calls.find((call) => call.method === "index.sessions");
     expect(listing?.params).toEqual({ scope: "local", limit: 500 });
@@ -317,7 +327,7 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     const catalog = catalogPortOver(
       client({
         "index.status": () => ({
-          ...fixture("index-status.valid.json") as object,
+          ...(fixture("index-status.valid.json") as object),
           phase: "failed",
           rosettad: { phase: "failed", detail: "exited 101", pid: null, protocolVersion: null },
         }),
@@ -338,7 +348,10 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     expect(stats.heat).toHaveLength(1);
     expect(usage.hours).toHaveLength(1);
     expect(door.calls.filter((call) => call.method === "index.project")).toEqual([
-      { method: "index.project", params: { projectId: "p1", sinceMs: 1_700_000_000_000, offsetMinutes: -420 } },
+      {
+        method: "index.project",
+        params: { projectId: "p1", sinceMs: 1_700_000_000_000, offsetMinutes: -420 },
+      },
     ]);
   });
 });
@@ -384,7 +397,10 @@ function rosettadFetch(refuseOnce: Set<string> = new Set()) {
     const path = new URL(url).pathname;
     const headers = { "x-rosetta-protocol-version": String(PROTOCOL_VERSION) };
     if (refuseOnce.delete(path)) {
-      return new Response("", { status: 401, headers: { ...headers, "x-rosetta-auth": "expired" } });
+      return new Response("", {
+        status: 401,
+        headers: { ...headers, "x-rosetta-auth": "expired" },
+      });
     }
     if (path.startsWith("/api/assets/")) {
       return new Response(new Uint8Array([1, 2, 3]), { status: 200, headers });
@@ -488,7 +504,10 @@ describe("the session port's lease (AR-8c)", () => {
   });
 
   it("a read rosettad refuses renews the grant once and is asked again", async () => {
-    const tickets = [ticket(42000, "g1", Date.now() + 600_000), ticket(42000, "g2", Date.now() + 600_000)];
+    const tickets = [
+      ticket(42000, "g1", Date.now() + 600_000),
+      ticket(42000, "g2", Date.now() + 600_000),
+    ];
     const door = client({ "index.openTicket": () => tickets.shift() });
     const rest = rosettadFetch(new Set(["/api/sessions/s1/timeline/t1"]));
     const port = sessionPortOver(door, { fetchFn: rest.fetchFn });
@@ -546,7 +565,10 @@ describe("the asset source (AR-8c, AR-D40 (a))", () => {
       { anyClient: () => rosetta },
       {
         limit: 2,
-        createObjectURL: () => `blob:history/${(made += 1)}`,
+        createObjectURL: () => {
+          made += 1;
+          return `blob:history/${made}`;
+        },
         revokeObjectURL: (url) => revoked.push(url),
       },
     );
@@ -566,7 +588,12 @@ describe("the asset source (AR-8c, AR-D40 (a))", () => {
     await assets.imageAssetUrl(asset("d"), "tile");
     expect(rest.reads.at(-1)?.url).toBe("http://127.0.0.1:44000/api/assets/d.webp?image=tile&v=1");
     assets.dispose();
-    expect(revoked.sort()).toEqual(["blob:history/1", "blob:history/2", "blob:history/3", "blob:history/4"]);
+    expect(revoked.sort()).toEqual([
+      "blob:history/1",
+      "blob:history/2",
+      "blob:history/3",
+      "blob:history/4",
+    ]);
     expect(assets.size).toBe(0);
   });
 
@@ -576,7 +603,10 @@ describe("the asset source (AR-8c, AR-D40 (a))", () => {
       baseUrl: "http://127.0.0.1:45000",
       fetchFn: (async () =>
         fail
-          ? new Response("", { status: 500, headers: { "x-rosetta-protocol-version": String(PROTOCOL_VERSION) } })
+          ? new Response("", {
+              status: 500,
+              headers: { "x-rosetta-protocol-version": String(PROTOCOL_VERSION) },
+            })
           : new Response(new Uint8Array([9]), {
               status: 200,
               headers: { "x-rosetta-protocol-version": String(PROTOCOL_VERSION) },

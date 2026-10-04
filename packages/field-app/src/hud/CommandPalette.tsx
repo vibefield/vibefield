@@ -280,10 +280,7 @@ export function CommandPalette({
   // The frame's acts, as this view has them — History's Resume waiting for
   // what History lends the line (AR-8c), exactly as the line's create does.
   const historyWaits = resumeWaits(useHistoryLineDoor());
-  const acts = useMemo(
-    () => frameActGroups(view, keys, historyWaits),
-    [view, keys, historyWaits],
-  );
+  const acts = useMemo(() => frameActGroups(view, keys, historyWaits), [view, keys, historyWaits]);
 
   // All palette-placement commands of enabled plugins (§8.3), each plugin's
   // under its own name. null snapshot → none (honest: fieldd has not told us

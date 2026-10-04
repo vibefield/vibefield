@@ -40,7 +40,8 @@ export const TICKET_RETRY_MAX_MS = 10_000;
 /** What opening a recorded file answers on this desktop. rosetta's live-file
  * read (`/read/{target_index}`) is bearer-only upstream and a grant cannot
  * open it (RO-13, the ask on record), so the room says so in a receipt. */
-export const FILE_TARGET_REFUSAL = "Recorded files can't open here yet — no file door on the desktop";
+export const FILE_TARGET_REFUSAL =
+  "Recorded files can't open here yet — no file door on the desktop";
 
 /** The one call the session port makes of fieldd. */
 export interface TicketClient {
@@ -72,7 +73,10 @@ interface Lease {
   closed: boolean;
   /** The subscriptions opened through this lease's client that are still
    * open, with the handlers they were handed (a refusal is said to them). */
-  readonly streams: Map<{ close(): void }, { onError?: (error: { code: string; message: string }) => void }>;
+  readonly streams: Map<
+    { close(): void },
+    { onError?: (error: { code: string; message: string }) => void }
+  >;
 }
 
 /** A refusal fieldd expressed by throwing, read structurally (the deck's
@@ -115,7 +119,8 @@ function grantOf(ticket: IndexOpenTicket): RosettaCredential {
  * set (another desktop's, DS-7) is not one this window can dial yet. */
 function originOf(ticket: IndexOpenTicket): string {
   const parsed = IndexEndpointSet.safeParse(ticket.endpoints);
-  if (!parsed.success) throw new Error("Transcripts on another desktop can't be read from here yet");
+  if (!parsed.success)
+    throw new Error("Transcripts on another desktop can't be read from here yet");
   return parsed.data.restUrl.replace(/\/$/, "");
 }
 
@@ -264,7 +269,8 @@ export function sessionPortOver(
         read(lease, (session) => session.command(sessionId, timelineId, signal)),
       readPlan: (sessionId, source, signal) =>
         read(lease, (session) => session.readPlan(sessionId, source, signal)),
-      readTextAsset: (asset, signal) => read(lease, (session) => session.readTextAsset(asset, signal)),
+      readTextAsset: (asset, signal) =>
+        read(lease, (session) => session.readTextAsset(asset, signal)),
       readAsset: (asset, signal) => read(lease, (session) => session.readAsset(asset, signal)),
       // RO-13: a grant never opens the live-file read; the room's receipt says so.
       readFileTarget: () => Promise.reject(new Error(FILE_TARGET_REFUSAL)),

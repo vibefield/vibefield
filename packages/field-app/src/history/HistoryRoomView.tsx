@@ -64,7 +64,7 @@ export function HistoryConsentState(): ReactElement {
       <EmptyState
         visual={<FieldGlyph name="history" size={28} />}
         title="No agent's history is read yet"
-        description="The index has found agents on this desktop and reads nothing until you choose which. Choose them in Settings → Agents."
+        description="Nothing is enrolled yet, so the index reads nothing. Choose whose history it reads in Settings → Agents."
       />
     </div>
   );

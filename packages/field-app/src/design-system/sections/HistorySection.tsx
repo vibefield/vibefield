@@ -38,7 +38,11 @@ export function HistorySection(): ReactElement {
           <HistoryPreview state="unavailable" />
         </div>
       </Specimen>
-      <Specimen title="Nothing enrolled yet — the consent line" source="history/HistoryRoomView.tsx" bleed>
+      <Specimen
+        title="Nothing enrolled yet — the consent line"
+        source="history/HistoryRoomView.tsx"
+        bleed
+      >
         <div className="vf-ds-history-plate is-short" data-state="consent">
           <HistoryPreview state="consent" />
         </div>

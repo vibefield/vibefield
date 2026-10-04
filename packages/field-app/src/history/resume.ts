@@ -76,7 +76,8 @@ export async function readResume(
       .request("agent.providers", {})
       .then((answer) => AgentProvidersResult.parse(answer).providers),
   ]);
-  if (providers.status === "rejected") return { state: "waits", why: refusalReason(providers.reason) };
+  if (providers.status === "rejected")
+    return { state: "waits", why: refusalReason(providers.reason) };
   const listed = recent.status === "fulfilled" ? (recent.value?.rows ?? []) : [];
   let row: IndexRecentSession | undefined = listed.find(
     (candidate) => candidate.sessionId === selection.sessionId,

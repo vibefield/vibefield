@@ -5704,6 +5704,55 @@ export async function runSmokeGodview(opts: {
       `document.activeElement?.classList.contains("terminal-input") ? "still focused" : "ok"`,
       5_000,
     );
+    // THE HISTORY RUNG (AR-8c): ⌘3 shows rosetta's room on the cover's glass —
+    //      mounted in History's slot as a HOST surface, holding either its
+    //      columns or an honest state said in words (which one is this run's
+    //      index: the pair runs as a throwaway person, so an index here has
+    //      found nothing of the machine owner's), never a blank — and ⌘2 out and
+    //      ⌘3 back keeps the SAME room: marked before, found marked after.
+    const HISTORY_ROOM = `document.querySelector('[data-cover-view="history"] .vf-history .ah-frame')`;
+    const historyFace = await untilRendererValue(
+      win,
+      "History's room in the cover",
+      `(() => {
+        const room = ${HISTORY_ROOM};
+        if (!room) return "no room";
+        return JSON.stringify({
+          surface: room.getAttribute("data-ah-surface"),
+          columns: room.querySelector(".ah-cols") !== null,
+          projects: room.querySelectorAll(".ah-project-list-item").length,
+          words: (room.textContent ?? "").replace(/\\s+/g, " ").trim().slice(0, 240),
+        });
+      })()`,
+      30_000,
+      (answer) => {
+        if (answer === "no room") return false;
+        const face = JSON.parse(answer) as { surface: string; columns: boolean; words: string };
+        return face.surface === "host" && (face.columns || face.words.length > 0);
+      },
+    );
+    await win.webContents.executeJavaScript(`(${HISTORY_ROOM}).dataset.smokeKept = "yes"`);
+    pressViewKey(win, "godview");
+    await untilRenderer(
+      win,
+      "⌘2 out of History",
+      `${VIEW_NOW} === "godview" ? "ok" : ${VIEW_NOW}`,
+      10_000,
+    );
+    pressViewKey(win, "history");
+    await untilRenderer(
+      win,
+      "⌘3 back into History",
+      `${VIEW_NOW} === "history" ? "ok" : ${VIEW_NOW}`,
+      10_000,
+    );
+    await untilRenderer(
+      win,
+      "History's room kept across ⌘2 and ⌘3 (no remount)",
+      `${HISTORY_ROOM}?.dataset.smokeKept === "yes" ? "ok" : "remounted"`,
+      5_000,
+    );
+    verdict["history"] = { ...(JSON.parse(historyFace) as object), kept: true };
     pressViewKey(win, "godview");
     await untilRenderer(
       win,

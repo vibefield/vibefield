@@ -36,8 +36,8 @@ import {
   IndexProjectDayResult,
   IndexProjectResult,
   IndexProjectsResult,
-  type IndexSession,
   IndexSearchResult,
+  type IndexSession,
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
@@ -106,7 +106,11 @@ const BACKFILL_STATES: ReadonlySet<string> = new Set<BackfillState>([
   "applying",
   "done",
 ]);
-const STREAM_STATES: ReadonlySet<string> = new Set<StreamState>(["pending", "streaming", "indexed"]);
+const STREAM_STATES: ReadonlySet<string> = new Set<StreamState>([
+  "pending",
+  "streaming",
+  "indexed",
+]);
 const SEARCH_READINESS: ReadonlySet<string> = new Set<SearchReadiness>([
   "ready",
   "building",
@@ -120,7 +124,9 @@ const SEARCH_READINESS: ReadonlySet<string> = new Set<SearchReadiness>([
  * row, so the room's runtimes are one per agent kind — rosetta's kind, read
  * through the catalog — and a session no catalog row maps is `unknown`. */
 export function runtimeKindOf(provider: string | undefined): string {
-  return (provider === undefined ? undefined : AGENT_CATALOG_READERS.kindFor(provider)) ?? "unknown";
+  return (
+    (provider === undefined ? undefined : AGENT_CATALOG_READERS.kindFor(provider)) ?? "unknown"
+  );
 }
 
 /** One project of the catalog (DS-6's row) as rosetta's `ProjectRow`. */
@@ -157,7 +163,9 @@ export function sessionRowOf(row: IndexSession): SessionRow {
     started_at: startedAt,
     updated_at: row.updatedAt ?? row.activity?.lastAt ?? startedAt,
     activity:
-      row.activity === null ? null : { first_at: row.activity.firstAt, last_at: row.activity.lastAt },
+      row.activity === null
+        ? null
+        : { first_at: row.activity.firstAt, last_at: row.activity.lastAt },
     // rosetta's open vocabulary: a word this build never heard of is read as
     // indexed — the session's own stream is the authority on what it holds
     stream_state: STREAM_STATES.has(row.streamState) ? (row.streamState as StreamState) : "indexed",
@@ -409,7 +417,10 @@ export function catalogPortOver(
   /** Page a whole listing (`index.projects` or `index.sessions`), this
    * desktop's own (`scope: "local"`, one desktop first — PJ's grouping is the
    * second slice), at the door's own page ceiling. */
-  async function listAll<T>(method: string, parse: (answer: unknown) => { rows: T[]; cursor?: string | undefined }): Promise<T[]> {
+  async function listAll<T>(
+    method: string,
+    parse: (answer: unknown) => { rows: T[]; cursor?: string | undefined },
+  ): Promise<T[]> {
     const rows: T[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < HISTORY_LISTING_MAX_PAGES; page += 1) {
@@ -474,7 +485,7 @@ export function catalogPortOver(
       handlers.onStatus?.(next);
     };
 
-    const retry = (kind: "snapshot" | "mutation", ask: () => void): void => {
+    const retry = (ask: () => void): void => {
       if (closed || retryTimer !== null) return;
       if (!loaded) setStatus("connecting");
       retryTimer = setTimeout(() => {
@@ -484,10 +495,15 @@ export function catalogPortOver(
       retryDelay = Math.min(HISTORY_RETRY_MAX_MS, retryDelay * 2);
     };
 
-    const fail = (cause: unknown, kind: "snapshot" | "mutation", ask: () => void): void => {
+    /** A refusal said in fieldd's words; asked again when fieldd says it may
+     * be answered, else the feed is closed with it. */
+    const fail = (cause: unknown, ask: () => void): void => {
       say("listing", refusalWords(cause));
-      if (askAgain(cause)) {
-        retry(kind, ask);
+      // an index this desktop does not run is not one that is coming: the room
+      // says "rosettad is not answering", not "Connecting to rosettad"
+      const unconfigured = refusalOf(cause).details?.["state"] === "unconfigured";
+      if (askAgain(cause) && !unconfigured) {
+        retry(ask);
         return;
       }
       setStatus("closed");
@@ -525,7 +541,7 @@ export function catalogPortOver(
             setStatus("live");
           } catch (cause) {
             if (closed) return;
-            fail(cause, kind, () => request(kind));
+            fail(cause, () => request(kind));
           }
         }
       } finally {
@@ -543,7 +559,7 @@ export function catalogPortOver(
             onReplayFailed: (cause) => {
               if (closed) return;
               unsubscribe = null;
-              fail(cause, "snapshot", openPings);
+              fail(cause, openPings);
             },
           },
         )
@@ -556,7 +572,7 @@ export function catalogPortOver(
           request("snapshot");
         })
         .catch((cause: unknown) => {
-          if (!closed) fail(cause, "snapshot", openPings);
+          if (!closed) fail(cause, openPings);
         });
     };
 
@@ -608,7 +624,8 @@ export function catalogPortOver(
       try {
         status = IndexStatus.parse(await withSignal(client.request("index.status", {}), signal));
       } catch (cause) {
-        if (signal?.aborted !== true) say("status", `Fieldd is not answering — ${refusalWords(cause)}`);
+        if (signal?.aborted !== true)
+          say("status", `Fieldd is not answering — ${refusalWords(cause)}`);
         throw cause;
       }
       const answer = catalogStatusOf(status);

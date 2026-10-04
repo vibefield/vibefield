@@ -1536,9 +1536,10 @@ The hot-point glow and rim retire with CardShell (above).
     answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
     fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",
     "The history catalog has not read the index yet (connecting)", "Fieldd is not answering
-    (reconnecting)" — never a blank. An index that has found agents and reads none says ours:
-    **"No agent's history is read yet"** — "The index has found agents on this desktop and reads
-    nothing until you choose which. Choose them in Settings → Agents." A recorded file says
+    (reconnecting)" — never a blank. An index waiting for consent, nothing enrolled, says ours:
+    **"No agent's history is read yet"** — "Nothing is enrolled yet, so the index reads nothing.
+    Choose whose history it reads in Settings → Agents." (No count is claimed: a desktop with no
+    agents to find waits the same way.) A recorded file says
     "Recorded files can't open here yet — no file door on the desktop" (the live-file read is
     bearer-only upstream, RO-13), and the worktree guest stays closed with its own words until
     VibeField's worktree host (AR-D38, AR-8d).
