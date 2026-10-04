@@ -104,6 +104,17 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: false,
         locality: "federate",
       },
+      // SP-6 — one session's transcript over the door until the ticket: the
+      // page door is `local` (the connected desktop's own history — the phone
+      // dials each desktop, SP-D2 (a)), the tail a rows stream; both read the
+      // history's content, so index.search
+      { method: "index.timeline", scope: "index.search", idempotent: true, locality: "local" },
+      {
+        method: "index.session.subscribe",
+        scope: "index.search",
+        idempotent: true,
+        locality: "stream",
+      },
     ]);
   });
 
@@ -300,6 +311,10 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
       "index.session",
       "index.project",
       "index.projectDay",
+      // SP-6 — the tail is a stream; the page door `index.timeline` is NOT
+      // here: it stays `local` like `index.recent` (the phone dials each
+      // desktop; DS-7 may federate it with the ticket)
+      "index.session.subscribe",
     ]);
     for (const m of METHODS.filter(
       (m) => m.method.startsWith("index.") || m.method.startsWith("agents."),
@@ -325,7 +340,9 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
           m.method === "agents.extensions.subscribe" ||
           // DS-6 — the catalog's rows and the History page's pings
           m.method === "index.catalog.subscribe" ||
-          m.method === "index.changes.subscribe",
+          m.method === "index.changes.subscribe" ||
+          // SP-6 — one session's live tail over the door
+          m.method === "index.session.subscribe",
       );
     }
   });
@@ -371,7 +388,10 @@ describe("SP-D13 — the phone's own history, bounded", () => {
       "index.recent",
       "index.search",
       "index.session",
+      // SP-6 — the live tail and the page door
+      "index.session.subscribe",
       "index.sessions",
+      "index.timeline",
     ]);
     for (const m of doors) {
       // the phone's preset, not the peer daemon's: before SP-D13 these were

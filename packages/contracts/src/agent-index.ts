@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
-import { INDEX_TICKET } from "./registries";
+import { INDEX_TICKET, INDEX_TIMELINE } from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
   MeshScope,
@@ -1412,6 +1412,336 @@ export const IndexOpenTicket = z
   })
   .passthrough();
 export type IndexOpenTicket = z.infer<typeof IndexOpenTicket>;
+
+// ── SP-6 (2026-10-04) — one session's transcript over the DOOR: bounded pages
+// and a floored tail, until the ticket (thinking-sync-planes.md §5.4 "until
+// RO-1"; SP-D5 (a), ruled 2026-10-03; thinking-ios-history.md H-D2) ──
+//
+// The phone's History tab reads a desktop's real sessions, and until truffle's
+// egress release lets it dial rosettad's own socket by ticket (SP-7) the bodies
+// ride fieldd's door as BOUNDED PAGES: `index.timeline` pages one session
+// backward from its head the way rosetta's `/api/sessions/{id}/timeline` does
+// (an opaque cursor that expires on a rewrite), and `index.session.subscribe`
+// is the live tail — a rows subscription (SP-L4) whose first frame is the
+// newest rows and whose later frames are deltas keyed by `timelineId`, at a
+// floor. Both are projections: fieldd PARSES rosetta's rows against the
+// snake_case readers below (transcribed from the pin's `wire.json` goldens,
+// never cast; `.passthrough()` at every level) and answers VibeField's own
+// spelling. What a row carries is what a transcript's LIST draws — the kind,
+// the stamps, a prompt's or a reply's text (bounded, `INDEX_TIMELINE`), a
+// tool line's facts, attachments as REFS — and never an asset's bytes nor its
+// address on rosettad (EL2, EL7; H-D9: files and images are not relayed).
+//
+// There is NO `index.timelineEntry` door: rosetta's timeline rows ARE its
+// entries, bodies included (`TimelinePage.entries: TimelineEntry[]`, the same
+// type its socket snapshot carries); the room's `loadEntry` re-reads ONE row by
+// id into its cache for a landing deep in history, which the phone does by
+// paging. A head-and-body split was H-D2's assumption, not rosetta's shape —
+// corrected at its source.
+
+/** rosetta `Stamp` (a subscription position), as fieldd reads it. */
+export const IndexTimelineStampRow = z
+  .object({ epoch: z.number().finite(), seq: z.number().finite() })
+  .passthrough();
+export type IndexTimelineStampRow = z.infer<typeof IndexTimelineStampRow>;
+
+/** rosetta `CanonicalText`, as fieldd reads it: `inline` carries the text,
+ * `member` a preview of a text that lives in an asset upstream. An open
+ * `type`: a third form rides as "no text" rather than refusing the row. */
+export const IndexTimelineTextRow = z
+  .object({
+    type: z.string(),
+    text: z.string().optional(),
+    preview: z.string().optional(),
+    byte_len: z.number().finite().optional(),
+  })
+  .passthrough();
+export type IndexTimelineTextRow = z.infer<typeof IndexTimelineTextRow>;
+
+/** rosetta `AttachmentRef`, as fieldd reads it. The asset's `url` under
+ * `source.asset` is deliberately NOT read: it is an address on rosettad's own
+ * listener, and no address of the daemon crosses a door (EL7). */
+export const IndexTimelineAttachmentRow = z
+  .object({
+    id: z.string().min(1),
+    kind: z.string(),
+    label: z.string().nullish(),
+    name: z.string().nullish(),
+    media_type: z.string().nullish(),
+    byte_len: z.number().finite().nullish(),
+    source: z.object({ type: z.string(), reason: z.string().optional() }).passthrough(),
+  })
+  .passthrough();
+export type IndexTimelineAttachmentRow = z.infer<typeof IndexTimelineAttachmentRow>;
+
+/** rosetta `ToolInteraction`, NARROWED to the facts a ledger line draws: the
+ * native tool's name, its status, the action's family (`action.type`, open —
+ * the projection reads the family's own object field tolerantly), the failure,
+ * the timing and the recorded output media as refs. */
+export const IndexTimelineToolRow = z
+  .object({
+    native: z.object({ name: z.string() }).passthrough(),
+    status: z.object({ value: z.string() }).passthrough(),
+    action: z.object({ type: z.string() }).passthrough(),
+    failure: z.object({ kind: z.string(), summary: z.string().nullish() }).passthrough().nullish(),
+    timing: z
+      .object({
+        started_at: z.number().finite().nullish(),
+        completed_at: z.number().finite().nullish(),
+        duration_ms: z.number().finite().nullish(),
+      })
+      .passthrough()
+      .nullish(),
+    attachments: z.array(IndexTimelineAttachmentRow).optional(),
+  })
+  .passthrough();
+export type IndexTimelineToolRow = z.infer<typeof IndexTimelineToolRow>;
+
+/** rosetta `TokenSnapshot`, narrowed to the five token buckets a head sums.
+ * Every one nullish: `null` is "the agent never reported it", never zero. */
+export const IndexTimelineUsageRow = z
+  .object({
+    input: z.number().finite().nullish(),
+    output: z.number().finite().nullish(),
+    cache_read: z.number().finite().nullish(),
+    cache_write: z.number().finite().nullish(),
+    thinking: z.number().finite().nullish(),
+  })
+  .passthrough();
+export type IndexTimelineUsageRow = z.infer<typeof IndexTimelineUsageRow>;
+
+/** rosetta `TimelineEntry`, NARROWED to the columns the projection reads. The
+ * body's `type` decides what else is read from it (user · agent · thinking ·
+ * tool_use · notice · summary · collaboration, open); its members are read
+ * tolerantly by the projection, so a body shape this build never heard of is
+ * a row of its kind with no text — never a refused page. */
+export const IndexTimelineEntryRow = z
+  .object({
+    timeline_id: z.string().min(1),
+    session_id: z.string().min(1),
+    ordinal: z.number().finite(),
+    group: z.object({ id: z.string(), kind: z.string() }).passthrough(),
+    response: z.object({ id: z.string() }).passthrough().nullish(),
+    at: z.number().finite().nullish(),
+    model: z.string().nullish(),
+    effort: z.string().nullish(),
+    body: z.object({ type: z.string() }).passthrough(),
+    usage: IndexTimelineUsageRow.nullish(),
+    /** rosetta `UsageCost`: `priced` carries `micro_usd`; `unpriced` a reason */
+    cost: z
+      .object({ status: z.string(), micro_usd: z.number().finite().optional() })
+      .passthrough()
+      .nullish(),
+  })
+  .passthrough();
+export type IndexTimelineEntryRow = z.infer<typeof IndexTimelineEntryRow>;
+
+/** rosetta `TimelinePage` — the body of `/api/sessions/{id}/timeline`: one
+ * backward page, oldest first within the page; `cursor` continues to the next
+ * OLDER page and is null at the top; `watermark` is the projection generation
+ * every page and the socket's snapshot share. */
+export const IndexTimelinePageResponse = z
+  .object({
+    entries: z.array(IndexTimelineEntryRow),
+    cursor: z.string().nullable(),
+    watermark: z.string(),
+  })
+  .passthrough();
+export type IndexTimelinePageResponse = z.infer<typeof IndexTimelinePageResponse>;
+
+/** rosetta's session-socket frames (`ServerFrame`), as the tail READS them —
+ * through rosetta's own client, which owns the state machine (the stamp, the
+ * resume, the `resync` barrier); this reader is the seam's record, so the
+ * pin's `frames` golden pins the shapes that client hands fieldd. A frame of a
+ * kind this build does not read (the meta snapshot, the collaboration frames)
+ * is carried by its `frame` alone. */
+export const IndexTimelineFrameRow = z.union([
+  z
+    .object({
+      frame: z.literal("hello"),
+      protocol_version: z.number().finite(),
+      stamp: IndexTimelineStampRow.nullish(),
+    })
+    .passthrough(),
+  z
+    .object({
+      frame: z.literal("timeline_snapshot"),
+      stamp: IndexTimelineStampRow,
+      entries: z.array(IndexTimelineEntryRow),
+      cursor: z.string().nullable(),
+      watermark: z.string(),
+    })
+    .passthrough(),
+  z.object({ frame: z.literal("caught_up"), stamp: IndexTimelineStampRow }).passthrough(),
+  z
+    .object({
+      frame: z.literal("mutation"),
+      stamp: IndexTimelineStampRow.nullish(),
+      mutation: z.object({ type: z.string() }).passthrough(),
+    })
+    .passthrough(),
+  z.object({ frame: z.literal("resync") }).passthrough(),
+  z
+    .object({
+      frame: z.literal("error"),
+      error: z.object({ code: z.string(), message: z.string() }).passthrough(),
+    })
+    .passthrough(),
+  z.object({ frame: z.string() }).passthrough(),
+]);
+export type IndexTimelineFrameRow = z.infer<typeof IndexTimelineFrameRow>;
+
+/** An attachment as the door answers it: a REF — what was attached and whether
+ * rosetta recorded its bytes — never the bytes, never an address. `available`
+ * false is rosetta's own word (`source.type: "unavailable"`), and `reason` its
+ * reason (`not_recorded` · `omitted` · `invalid_data` · `unsupported_media`,
+ * open); a `reference` (a file by path) is available-by-name on its desktop. */
+export const IndexTimelineAttachment = z
+  .object({
+    id: z.string().min(1),
+    /** image · document · audio · video · file (open) */
+    kind: z.string(),
+    name: z.string().optional(),
+    mediaType: z.string().optional(),
+    byteLen: z.number().finite().optional(),
+    available: z.boolean(),
+    reason: z.string().optional(),
+  })
+  .passthrough();
+export type IndexTimelineAttachment = z.infer<typeof IndexTimelineAttachment>;
+
+/** A tool line's facts (`body.type: "tool_use"`): the native tool's name, the
+ * action's family (rosetta's `ToolAction.type`, open), its status (open), the
+ * one object it acted on — a command's first line, a path, a query, a URL —
+ * bounded to `INDEX_TIMELINE.OBJECT_CHARS` (`objectClipped` says when), the
+ * result in a few words (`exit 1`, `3 files`) and the duration. `failed` is
+ * derived ONCE here: a status that did not complete (`failed` · `denied` ·
+ * `timed_out` · `cancelled` · `interrupted`) or a recorded failure. */
+export const IndexTimelineTool = z
+  .object({
+    name: z.string(),
+    family: z.string(),
+    status: z.string(),
+    failed: z.boolean(),
+    failure: z.string().optional(),
+    object: z.string().optional(),
+    objectClipped: z.boolean().optional(),
+    result: z.string().optional(),
+    durationMs: z.number().finite().optional(),
+    attachments: z.array(IndexTimelineAttachment).optional(),
+  })
+  .passthrough();
+export type IndexTimelineTool = z.infer<typeof IndexTimelineTool>;
+
+/** The five token buckets a reply's head sums (absent = never reported). */
+export const IndexTimelineUsage = z
+  .object({
+    input: z.number().finite().optional(),
+    output: z.number().finite().optional(),
+    cacheRead: z.number().finite().optional(),
+    cacheWrite: z.number().finite().optional(),
+    thinking: z.number().finite().optional(),
+  })
+  .passthrough();
+export type IndexTimelineUsage = z.infer<typeof IndexTimelineUsage>;
+
+/** One timeline row as the door answers it, keyed by `timelineId` (rosetta's
+ * deterministic id — a tail's delta upserts by it). `kind` is the body's type
+ * (open). `text` is the row's words — a prompt, a reply paragraph, a thought,
+ * a summary, a notice's sentence, a collaboration's summary — cut at
+ * `INDEX_TIMELINE.TEXT_CHARS` (`textClipped`); a text that lives in an asset
+ * upstream rides as its preview with `textByteLen` saying how big the whole
+ * is. A tool row carries `tool` and no `text`. `group` is rosetta's turn
+ * grouping (`human_turn` · `agent_cycle` · …, open) and `responseId` the
+ * reply the row belongs to, which is how a reader folds turns and heads
+ * without re-deriving them from timestamps. */
+export const IndexTimelineRow = z
+  .object({
+    timelineId: z.string().min(1),
+    sessionId: z.string().min(1),
+    ordinal: z.number().finite(),
+    kind: z.string(),
+    at: z.number().finite().optional(),
+    model: z.string().optional(),
+    effort: z.string().optional(),
+    group: z.object({ id: z.string(), kind: z.string() }).passthrough(),
+    responseId: z.string().optional(),
+    text: z.string().optional(),
+    textClipped: z.boolean().optional(),
+    textByteLen: z.number().finite().optional(),
+    attachments: z.array(IndexTimelineAttachment).optional(),
+    tool: IndexTimelineTool.optional(),
+    /** a notice's type (compaction · truncation · model_changed · …, open) */
+    notice: z.string().optional(),
+    /** a summary's purpose (compaction · branch · handoff · session, open) */
+    summaryPurpose: z.string().optional(),
+    usage: IndexTimelineUsage.optional(),
+    /** the row's list-price cost when rosetta priced it; absent when unpriced */
+    costMicroUsd: z.number().finite().optional(),
+  })
+  .passthrough();
+export type IndexTimelineRow = z.infer<typeof IndexTimelineRow>;
+
+/** `index.timeline {sessionId, cursor?, limit?}` — one backward page of one
+ * session's rows, newest page first, oldest first within the page (rosetta's
+ * own order). `cursor` is the previous answer's `nextCursor`, opaque; it
+ * expires when the session's projection is rewritten under it, which the door
+ * refuses PRECONDITION_FAILED with `details.reason: "cursor-expired"` — a
+ * reader re-reads from the head (no cursor). `limit` at most
+ * `INDEX_TIMELINE.PAGE_MAX_LIMIT`; a tailnet caller's page is cut at
+ * `INDEX_TAILNET_LIMITS.MAX_ROWS` at the door. `local`: the connected
+ * desktop's own history — the phone dials each desktop (SP-D2 (a)); there is
+ * no `device`. */
+export const IndexTimelineParams = z
+  .object({
+    sessionId: z.string().min(1).max(1024),
+    cursor: z.string().min(1).max(4096).optional(),
+    limit: z.number().int().min(1).max(INDEX_TIMELINE.PAGE_MAX_LIMIT).optional(),
+  })
+  .passthrough();
+export type IndexTimelineParams = z.infer<typeof IndexTimelineParams>;
+
+/** `index.timeline`'s answer. `nextCursor` continues to the next OLDER page
+ * and is null at the top of the session; `clipped` is SP-D13's word — the
+ * page was cut at a tailnet caller's bound and holds that many rows, so there
+ * are rows beyond it the cursor reaches; `watermark` is rosetta's projection
+ * generation (opaque): the pages and the tail's snapshot that share one are
+ * one reading of the session, and a reader's cache is keyed by the session
+ * and its stamp. A session the index does not hold is NOT_FOUND. */
+export const IndexTimelineResult = z
+  .object({
+    sessionId: z.string().min(1),
+    entries: z.array(IndexTimelineRow),
+    nextCursor: z.string().nullable(),
+    clipped: z.boolean(),
+    watermark: z.string(),
+  })
+  .passthrough();
+export type IndexTimelineResult = z.infer<typeof IndexTimelineResult>;
+
+/** `index.session.subscribe {sessionId, since?, minIntervalMs?}` — one
+ * session's live tail as rows (SP-L4, `rows.ts`): the open answers a snapshot
+ * of the newest rows (rosetta's own socket snapshot, cut at
+ * `INDEX_TAILNET_LIMITS.MAX_ROWS` for a tailnet caller — the rows before it
+ * are `index.timeline`'s), later frames are deltas keyed by `timelineId` at
+ * the floor (`INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS`; a caller may ask
+ * slower, never faster), and a `.snapshot` frame RESETS the copy — after
+ * rosetta's `resync` barrier, a rewrite, or the daemon's restart. A kept
+ * cursor whose chain is the current one and whose revision is the head
+ * answers `resumed`; any other re-takes the snapshot (there is no journal: a
+ * transcript's rows are re-read whole, never replayed). H-D2 named this door
+ * `index.subscribeSession`; the registry's naming is `<family>.<thing>.subscribe`
+ * (`index.changes.subscribe`), corrected at its source. */
+export const IndexSessionSubscribeParams = RowsSubscribeParams.extend({
+  sessionId: z.string().min(1).max(1024),
+}).passthrough();
+export type IndexSessionSubscribeParams = z.infer<typeof IndexSessionSubscribeParams>;
+
+/** The tail's wire, with its rows typed (the base's shapes): the open answer,
+ * a `.delta` frame and a `.snapshot` frame (a reset). */
+export const IndexSessionTailOpen = rowsOpen(IndexTimelineRow);
+export const IndexSessionTailDelta = rowsDelta(IndexTimelineRow);
+export const IndexSessionTailSnapshot = rowsSnapshot(IndexTimelineRow);
 
 // ── agents.* (the distribution and persona doors; handlers land at AR-2 with
 // puppeteer's first import — these rows are the contract they will satisfy) ──

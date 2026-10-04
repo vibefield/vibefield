@@ -379,6 +379,45 @@ export const INDEX_MESH = {
   PAGE_DEFAULT_LIMIT: 100,
   PAGE_MAX_LIMIT: 500,
   CHANGES_MIN_INTERVAL_MS: 500,
+  /** SP-6 (2026-10-04) — the floor of ONE session's live tail over the door
+   * (`index.session.subscribe`, a rows subscription): a frame per subscriber
+   * at most this often while the session moves, nothing while it is still.
+   * One second is a reader's pace for a transcript — rosetta's own room
+   * coalesces at 16 ms for a desktop, and a radio has no use for that; the
+   * page door (`index.timeline`) is how the rows before the tail arrive. */
+  SESSION_TAIL_MIN_INTERVAL_MS: 1_000,
+} as const;
+
+/** SP-6 (2026-10-04; `thinking-sync-planes.md` §5.4 "until RO-1", SP-D5 (a))
+ * — one session's transcript over the DOOR, as bounded pages and a tail,
+ * until the ticket (SP-7) moves the bodies to rosetta's own socket.
+ *
+ * PAGE_DEFAULT_LIMIT / PAGE_MAX_LIMIT: `index.timeline`'s page when nothing is
+ * asked, and the most a window may ask (rosetta's own default is 100 and its
+ * ceiling 1,000; the door stops at 500, the catalog pager's own ceiling). A
+ * `tailnet` caller's page is cut at INDEX_TAILNET_LIMITS.MAX_ROWS at the door
+ * and says `clipped`, exactly as the listings are.
+ *
+ * TEXT_CHARS: the most of a row's TEXT a projected row carries — a prompt's
+ * words, a reply paragraph, a thought, a notice's sentence — in UTF-16 code
+ * units, `textClipped` saying when it was cut. rosetta already bounds an
+ * oversized text upstream (a `member` text rides as a preview beside an asset,
+ * and that asset never crosses this door — EL2); this bound is the page's: a
+ * phone page of a hundred rows holds at most some 200 KB of prose, and a
+ * reply longer than this is read whole in the room, which has the ticket.
+ * OBJECT_CHARS: the most of a tool line's object (a command, a path, a query)
+ * and of a failure's summary a row carries; the ladder draws one line.
+ *
+ * The tail itself carries rosetta's own snapshot (its newest 200 rows, the
+ * socket's SNAPSHOT_LIMIT at the pin) and what the session appends after;
+ * a tailnet subscriber's snapshot is cut to INDEX_TAILNET_LIMITS.MAX_ROWS, the
+ * newest first to go — the rows before it are the page door's. TS-only: no
+ * native reader. */
+export const INDEX_TIMELINE = {
+  PAGE_DEFAULT_LIMIT: 100,
+  PAGE_MAX_LIMIT: 500,
+  TEXT_CHARS: 2_000,
+  OBJECT_CHARS: 200,
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals

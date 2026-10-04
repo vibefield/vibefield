@@ -60,8 +60,15 @@ import {
   IndexSessionParams,
   IndexSessionResponse,
   IndexSessionResult,
+  IndexSessionSubscribeParams,
   IndexSessionsResult,
+  IndexSessionTailDelta,
+  IndexSessionTailOpen,
   IndexStatus,
+  IndexTimelineFrameRow,
+  IndexTimelinePageResponse,
+  IndexTimelineParams,
+  IndexTimelineResult,
   IndexUsageResponse,
 } from "../src/agent-index";
 import {
@@ -303,6 +310,20 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "index-usage": IndexUsageResponse,
   "index-contribution": IndexContributionResponse,
   "index-day-usage": IndexDayUsageResponse,
+  // SP-6 — one session's transcript over the door: rosetta's page body and
+  // its socket frames (both transcribed from the pin's `wire.json`), the page
+  // door's ask and answer over that page, the tail's ask, its open and a
+  // delta, and the cursor refusal (`error-data.index-timeline-cursor-expired`,
+  // the ErrorData prefix).
+  "index-timeline-page": IndexTimelinePageResponse,
+  "index-timeline-frames": z
+    .object({ frames: z.array(IndexTimelineFrameRow), mutations: z.array(z.unknown()) })
+    .passthrough(),
+  "index-timeline-params": IndexTimelineParams,
+  "index-timeline": IndexTimelineResult,
+  "index-session-subscribe-params": IndexSessionSubscribeParams,
+  "index-session-tail-open": IndexSessionTailOpen,
+  "index-session-tail-delta": IndexSessionTailDelta,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

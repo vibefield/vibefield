@@ -1724,6 +1724,35 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "federate",
   }),
+  // SP-6 (thinking-sync-planes.md §5.4 "until RO-1"; SP-D5 (a), 2026-10-03;
+  // thinking-ios-history.md H-D2) — one session's transcript over the DOOR,
+  // until the ticket (SP-7) moves the bodies to rosetta's own socket: the
+  // page door and the tail. Both read the history's content, so `index.search`
+  // — every principal that holds it (a window, a self phone) is served; a
+  // tailnet caller's page and snapshot are cut at INDEX_TAILNET_LIMITS.MAX_ROWS
+  // at the door (`tailnetRowLimit`), `clipped` saying so on a page.
+  // `index.timeline` is `local`: the connected desktop's OWN history, which is
+  // the phone's shape (SP-D2 (a) — it dials each desktop; no `device`), and a
+  // peer daemon is refused it by the D36 wall, as `index.recent` is. The tail
+  // is a `rows` stream (SP-L4) at the registry's floor — rosetta's own room
+  // coalesces at 16 ms, a radio has no use for that. The subscription's name
+  // follows the registry's `<family>.<thing>.subscribe` (`index.changes.subscribe`);
+  // H-D2 had called it `index.subscribeSession`, corrected at its source.
+  defineMethod({
+    surface: "product",
+    method: "index.timeline",
+    scope: "index.search",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.session.subscribe",
+    scope: "index.search",
+    idempotent: true,
+    locality: "stream",
+    subscription: { shape: "rows", cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS },
+  }),
   // ── agents.* (AR-1 — the contract; handlers land with puppeteer's first
   // import at AR-2, until when the dispatcher answers NOT_FOUND for them) ──
   // Distribution is MACHINE scope (AR-D15/D16): the installs puppeteer

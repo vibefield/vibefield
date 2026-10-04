@@ -1,0 +1,1005 @@
+{
+  "//": "rosetta's session-socket frames (ServerFrame) at protocol 26, transcribed VERBATIM (the `//` note apart) from the pinned checkout's committed golden crates/protocol/tests/golden/wire.json, key `frames`, at revision 00b97869d27a644a237f98ef64b7d51483d33ad4 (siblings.lock.json), sha256 5e1d57fb62b47b9f25d40eac6ddaa654bbc374ff2da4e84194c71db7c521cc72. fieldd PARSES this body (never casts it); a wire change upstream reds the contracts suite here rather than surfacing as an empty document on the phone. The `mutations` member is the golden's `mutations` key: every mutation kind the socket may carry, at the same revision.",
+  "frames": [
+    {
+      "frame": "hello",
+      "protocol_version": 26,
+      "stamp": {
+        "epoch": 9,
+        "seq": 3
+      }
+    },
+    {
+      "cursor": null,
+      "entries": [
+        {
+          "at": 3600000,
+          "block_index": 0,
+          "body": {
+            "tool": {
+              "action": {
+                "background": false,
+                "command": {
+                  "text": "one",
+                  "type": "inline"
+                },
+                "cwd": null,
+                "outcome": {
+                  "exit_code": 0,
+                  "process_id": null,
+                  "signal": null
+                },
+                "source_truncated": true,
+                "timeout_ms": null,
+                "type": "shell"
+              },
+              "attachments": [
+                {
+                  "byte_len": null,
+                  "dimensions": null,
+                  "id": "tool-image-1",
+                  "kind": "image",
+                  "label": null,
+                  "media_type": null,
+                  "message_ranges": [],
+                  "name": null,
+                  "source": {
+                    "asset": {
+                      "byte_len": 17,
+                      "digest": "09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc",
+                      "image_variants": {
+                        "preview": {
+                          "byte_len": 19,
+                          "digest": "b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9",
+                          "media_type": "image/webp",
+                          "url": "/api/assets/b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9.webp"
+                        },
+                        "rail": {
+                          "byte_len": 16,
+                          "digest": "519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762",
+                          "media_type": "image/webp",
+                          "url": "/api/assets/519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762.webp"
+                        },
+                        "tile": {
+                          "byte_len": 16,
+                          "digest": "72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d",
+                          "media_type": "image/webp",
+                          "url": "/api/assets/72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d.webp"
+                        },
+                        "tile2x": {
+                          "byte_len": 18,
+                          "digest": "18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732",
+                          "media_type": "image/webp",
+                          "url": "/api/assets/18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732.webp"
+                        }
+                      },
+                      "media_type": "image/webp",
+                      "url": "/api/assets/09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc.webp"
+                    },
+                    "type": "asset"
+                  }
+                }
+              ],
+              "correlation": {
+                "derivation": "native_id",
+                "key": "toolu_1"
+              },
+              "failure": null,
+              "native": {
+                "id": "toolu_1",
+                "name": "Bash",
+                "namespace": null,
+                "provider": null
+              },
+              "status": {
+                "basis": "native_terminal_record",
+                "value": "succeeded"
+              },
+              "timing": null
+            },
+            "type": "tool_use"
+          },
+          "cost": {
+            "reason": "unknown_model",
+            "status": "unpriced"
+          },
+          "effort": "high",
+          "group": {
+            "derivation": "native",
+            "id": "turn-1",
+            "kind": "human_turn"
+          },
+          "model": "claude-opus-5",
+          "native_id": "u1",
+          "ordinal": 7,
+          "parent_native_id": "u0",
+          "parent_tool_native_id": "toolu_0",
+          "provenance": {
+            "agent_version": "2.1.240",
+            "src_cursor": 4,
+            "src_offset": 1024
+          },
+          "response": {
+            "derivation": "native",
+            "id": "response-1"
+          },
+          "session_id": "s1",
+          "timeline_id": "t1",
+          "usage": {
+            "billed_pico_usd": 1250000,
+            "cache_read": 3,
+            "cache_write": 2,
+            "cache_write_1h": 4,
+            "input": 10,
+            "output": 5,
+            "requests": null,
+            "route": "openrouter",
+            "scope": "request",
+            "service_tier": "standard",
+            "thinking": 1,
+            "web_searches": 1
+          }
+        },
+        {
+          "at": 3800000,
+          "block_index": null,
+          "body": {
+            "event": {
+              "authored_at": 3799000,
+              "body": {
+                "text": "All design deltas landed.",
+                "type": "inline"
+              },
+              "channel": "team",
+              "color": "green",
+              "delivery_id": "delivery-2",
+              "kind": "report",
+              "recipient": "coordinator",
+              "sender": "w2-docs",
+              "source_response_id": "team-response-2",
+              "source_session_id": "team-member-s2",
+              "status": "completed",
+              "summary": "design docs updated",
+              "task_id": "task-2",
+              "team": "refinement",
+              "work_end_timeline_id": "team-work-end",
+              "work_start_timeline_id": "team-work-start"
+            },
+            "type": "collaboration"
+          },
+          "effort": null,
+          "group": {
+            "derivation": "native",
+            "id": "team-delivery-1",
+            "kind": "system_cycle"
+          },
+          "model": null,
+          "native_id": "team-native-1",
+          "ordinal": 9,
+          "parent_native_id": "team-parent-1",
+          "parent_tool_native_id": null,
+          "provenance": {
+            "agent_version": "2.1.240",
+            "src_cursor": 4,
+            "src_offset": 3072
+          },
+          "response": null,
+          "session_id": "s1",
+          "timeline_id": "team-report-1",
+          "usage": {
+            "billed_pico_usd": null,
+            "cache_read": null,
+            "cache_write": null,
+            "cache_write_1h": null,
+            "input": null,
+            "output": null,
+            "requests": null,
+            "route": null,
+            "scope": "request",
+            "service_tier": null,
+            "thinking": null,
+            "web_searches": null
+          }
+        }
+      ],
+      "frame": "timeline_snapshot",
+      "stamp": {
+        "epoch": 9,
+        "seq": 3
+      },
+      "timeline_meta": {
+        "artifacts": [
+          {
+            "artifact_kind": "document",
+            "byte_len": null,
+            "created_at": 3608000,
+            "id": "file:/w/rosetta/report.md",
+            "media_type": "text/markdown",
+            "name": "report.md",
+            "source": {
+              "path": "/w/rosetta/report.md",
+              "target_index": 0,
+              "timeline_id": "artifact-message-1",
+              "type": "timeline_file"
+            }
+          },
+          {
+            "artifact_kind": "image",
+            "byte_len": 42,
+            "created_at": 3609000,
+            "id": "asset:digest",
+            "media_type": "image/webp",
+            "name": "preview.webp",
+            "source": {
+              "asset": {
+                "byte_len": 17,
+                "digest": "df4a1ed6652b68ad493b11705ed0563b79a7280170dff7ecfa6a8f1a0cce533b",
+                "image_variants": {
+                  "preview": {
+                    "byte_len": 14,
+                    "digest": "d6dec0e3c28916078439046c5b80cf7d3bffc2f6eee84e9b3a117e68f4287b5c",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/d6dec0e3c28916078439046c5b80cf7d3bffc2f6eee84e9b3a117e68f4287b5c.webp"
+                  },
+                  "rail": {
+                    "byte_len": 11,
+                    "digest": "d2811135c3f7f2920aa29b0c7894738b40904f7913492d10983ff4ba8a9b979e",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/d2811135c3f7f2920aa29b0c7894738b40904f7913492d10983ff4ba8a9b979e.webp"
+                  },
+                  "tile": {
+                    "byte_len": 11,
+                    "digest": "a7fb8dcb60c9f74c17b6d37582e8cfa2ef4d4e4352c6d5b2d57e496bff3e3d36",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/a7fb8dcb60c9f74c17b6d37582e8cfa2ef4d4e4352c6d5b2d57e496bff3e3d36.webp"
+                  },
+                  "tile2x": {
+                    "byte_len": 13,
+                    "digest": "9699e06d61df0b07f4506c8fb44f707a16e09cd8047ba7f00f3ced251734f7c4",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/9699e06d61df0b07f4506c8fb44f707a16e09cd8047ba7f00f3ced251734f7c4.webp"
+                  }
+                },
+                "media_type": "image/webp",
+                "url": "/api/assets/df4a1ed6652b68ad493b11705ed0563b79a7280170dff7ecfa6a8f1a0cce533b.webp"
+              },
+              "type": "asset"
+            }
+          }
+        ],
+        "plans": [
+          {
+            "byte_len": 128,
+            "id": "revision:2",
+            "name": "plan-r2.json",
+            "source": {
+              "revision": 2,
+              "type": "revision"
+            },
+            "updated_at": 3605000
+          },
+          {
+            "byte_len": 96,
+            "id": "timeline:primary",
+            "name": "Implementation plan.md",
+            "source": {
+              "timeline_id": "plan-message-1",
+              "type": "timeline"
+            },
+            "updated_at": 3606000
+          }
+        ],
+        "tasks": [
+          {
+            "id": "task-1",
+            "started_at": 3600000,
+            "status": "completed",
+            "subject": "Ship the work index",
+            "terminal_at": 3610000,
+            "timeline_id": "task-message-1"
+          }
+        ],
+        "workflows": [
+          {
+            "child_session_ids": [
+              "workflow-child-1"
+            ],
+            "duration_ms": 8000,
+            "id": "workflow-run-1",
+            "name": "Review in parallel",
+            "started_at": 3601000,
+            "status": "completed",
+            "timeline_id": "workflow-message-1",
+            "worker_count": 3
+          }
+        ]
+      },
+      "watermark": "1.2.3"
+    },
+    {
+      "frame": "timeline_meta_snapshot",
+      "stamp": {
+        "epoch": 9,
+        "seq": 3
+      },
+      "timeline_meta": {
+        "artifacts": [
+          {
+            "artifact_kind": "document",
+            "byte_len": null,
+            "created_at": 3608000,
+            "id": "file:/w/rosetta/report.md",
+            "media_type": "text/markdown",
+            "name": "report.md",
+            "source": {
+              "path": "/w/rosetta/report.md",
+              "target_index": 0,
+              "timeline_id": "artifact-message-1",
+              "type": "timeline_file"
+            }
+          },
+          {
+            "artifact_kind": "image",
+            "byte_len": 42,
+            "created_at": 3609000,
+            "id": "asset:digest",
+            "media_type": "image/webp",
+            "name": "preview.webp",
+            "source": {
+              "asset": {
+                "byte_len": 17,
+                "digest": "df4a1ed6652b68ad493b11705ed0563b79a7280170dff7ecfa6a8f1a0cce533b",
+                "image_variants": {
+                  "preview": {
+                    "byte_len": 14,
+                    "digest": "d6dec0e3c28916078439046c5b80cf7d3bffc2f6eee84e9b3a117e68f4287b5c",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/d6dec0e3c28916078439046c5b80cf7d3bffc2f6eee84e9b3a117e68f4287b5c.webp"
+                  },
+                  "rail": {
+                    "byte_len": 11,
+                    "digest": "d2811135c3f7f2920aa29b0c7894738b40904f7913492d10983ff4ba8a9b979e",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/d2811135c3f7f2920aa29b0c7894738b40904f7913492d10983ff4ba8a9b979e.webp"
+                  },
+                  "tile": {
+                    "byte_len": 11,
+                    "digest": "a7fb8dcb60c9f74c17b6d37582e8cfa2ef4d4e4352c6d5b2d57e496bff3e3d36",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/a7fb8dcb60c9f74c17b6d37582e8cfa2ef4d4e4352c6d5b2d57e496bff3e3d36.webp"
+                  },
+                  "tile2x": {
+                    "byte_len": 13,
+                    "digest": "9699e06d61df0b07f4506c8fb44f707a16e09cd8047ba7f00f3ced251734f7c4",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/9699e06d61df0b07f4506c8fb44f707a16e09cd8047ba7f00f3ced251734f7c4.webp"
+                  }
+                },
+                "media_type": "image/webp",
+                "url": "/api/assets/df4a1ed6652b68ad493b11705ed0563b79a7280170dff7ecfa6a8f1a0cce533b.webp"
+              },
+              "type": "asset"
+            }
+          }
+        ],
+        "plans": [
+          {
+            "byte_len": 128,
+            "id": "revision:2",
+            "name": "plan-r2.json",
+            "source": {
+              "revision": 2,
+              "type": "revision"
+            },
+            "updated_at": 3605000
+          },
+          {
+            "byte_len": 96,
+            "id": "timeline:primary",
+            "name": "Implementation plan.md",
+            "source": {
+              "timeline_id": "plan-message-1",
+              "type": "timeline"
+            },
+            "updated_at": 3606000
+          }
+        ],
+        "tasks": [
+          {
+            "id": "task-1",
+            "started_at": 3600000,
+            "status": "completed",
+            "subject": "Ship the work index",
+            "terminal_at": 3610000,
+            "timeline_id": "task-message-1"
+          }
+        ],
+        "workflows": [
+          {
+            "child_session_ids": [
+              "workflow-child-1"
+            ],
+            "duration_ms": 8000,
+            "id": "workflow-run-1",
+            "name": "Review in parallel",
+            "started_at": 3601000,
+            "status": "completed",
+            "timeline_id": "workflow-message-1",
+            "worker_count": 3
+          }
+        ]
+      }
+    },
+    {
+      "frame": "caught_up",
+      "stamp": {
+        "epoch": 9,
+        "seq": 3
+      }
+    },
+    {
+      "entries": [
+        {
+          "at": 3800000,
+          "block_index": null,
+          "body": {
+            "event": {
+              "authored_at": 3799000,
+              "body": {
+                "text": "All design deltas landed.",
+                "type": "inline"
+              },
+              "channel": "team",
+              "color": "green",
+              "delivery_id": "delivery-2",
+              "kind": "report",
+              "recipient": "coordinator",
+              "sender": "w2-docs",
+              "source_response_id": "team-response-2",
+              "source_session_id": "team-member-s2",
+              "status": "completed",
+              "summary": "design docs updated",
+              "task_id": "task-2",
+              "team": "refinement",
+              "work_end_timeline_id": "team-work-end",
+              "work_start_timeline_id": "team-work-start"
+            },
+            "type": "collaboration"
+          },
+          "effort": null,
+          "group": {
+            "derivation": "native",
+            "id": "team-delivery-1",
+            "kind": "system_cycle"
+          },
+          "model": null,
+          "native_id": "team-native-1",
+          "ordinal": 9,
+          "parent_native_id": "team-parent-1",
+          "parent_tool_native_id": null,
+          "provenance": {
+            "agent_version": "2.1.240",
+            "src_cursor": 4,
+            "src_offset": 3072
+          },
+          "response": null,
+          "session_id": "s1",
+          "timeline_id": "team-report-1",
+          "usage": {
+            "billed_pico_usd": null,
+            "cache_read": null,
+            "cache_write": null,
+            "cache_write_1h": null,
+            "input": null,
+            "output": null,
+            "requests": null,
+            "route": null,
+            "scope": "request",
+            "service_tier": null,
+            "thinking": null,
+            "web_searches": null
+          }
+        }
+      ],
+      "frame": "collaboration_snapshot",
+      "response_runtimes": []
+    },
+    {
+      "frame": "response_runtime",
+      "observation": {
+        "effort": null,
+        "model": "model",
+        "response_id": "r1"
+      }
+    },
+    {
+      "frame": "meta_snapshot",
+      "projects": [
+        {
+          "git_repo": "git@example.com:w/rosetta.git",
+          "id": "p1",
+          "name": "rosetta",
+          "root_paths": [
+            "/w/rosetta"
+          ]
+        }
+      ],
+      "runtimes": [
+        {
+          "account": {
+            "email": "user@example.com"
+          },
+          "config": {
+            "theme": "dark"
+          },
+          "data_root": "~/.claude",
+          "discovered_at": 1000,
+          "enabled": true,
+          "id": "rt1",
+          "kind": "claude-code",
+          "skills": [
+            "review"
+          ],
+          "versions_seen": [
+            "2.1.240"
+          ]
+        }
+      ],
+      "sessions": [
+        {
+          "activity": {
+            "first_at": 11000,
+            "last_at": 19000
+          },
+          "cwd": "/w/rosetta",
+          "delegation": null,
+          "id": "s1",
+          "native_session_id": "native-s1",
+          "parent_session_id": "s0",
+          "project_id": "p1",
+          "role": "subagent",
+          "root_session_id": "s0",
+          "runtime_id": "rt1",
+          "started_at": 10000,
+          "stream_state": "streaming",
+          "summary": "A summary",
+          "title": "Named",
+          "updated_at": 20000
+        }
+      ]
+    },
+    {
+      "frame": "mutation",
+      "mutation": {
+        "session_id": "s1",
+        "type": "session_swept"
+      },
+      "stamp": {
+        "epoch": 9,
+        "seq": 3
+      }
+    },
+    {
+      "frame": "resync"
+    },
+    {
+      "error": {
+        "code": "internal",
+        "message": "boom"
+      },
+      "frame": "error"
+    }
+  ],
+  "mutations": [
+    {
+      "at": 3600000,
+      "block_index": 0,
+      "body": {
+        "tool": {
+          "action": {
+            "background": false,
+            "command": {
+              "text": "one",
+              "type": "inline"
+            },
+            "cwd": null,
+            "outcome": {
+              "exit_code": 0,
+              "process_id": null,
+              "signal": null
+            },
+            "source_truncated": true,
+            "timeout_ms": null,
+            "type": "shell"
+          },
+          "attachments": [
+            {
+              "byte_len": null,
+              "dimensions": null,
+              "id": "tool-image-1",
+              "kind": "image",
+              "label": null,
+              "media_type": null,
+              "message_ranges": [],
+              "name": null,
+              "source": {
+                "asset": {
+                  "byte_len": 17,
+                  "digest": "09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc",
+                  "image_variants": {
+                    "preview": {
+                      "byte_len": 19,
+                      "digest": "b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9",
+                      "media_type": "image/webp",
+                      "url": "/api/assets/b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9.webp"
+                    },
+                    "rail": {
+                      "byte_len": 16,
+                      "digest": "519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762",
+                      "media_type": "image/webp",
+                      "url": "/api/assets/519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762.webp"
+                    },
+                    "tile": {
+                      "byte_len": 16,
+                      "digest": "72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d",
+                      "media_type": "image/webp",
+                      "url": "/api/assets/72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d.webp"
+                    },
+                    "tile2x": {
+                      "byte_len": 18,
+                      "digest": "18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732",
+                      "media_type": "image/webp",
+                      "url": "/api/assets/18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732.webp"
+                    }
+                  },
+                  "media_type": "image/webp",
+                  "url": "/api/assets/09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc.webp"
+                },
+                "type": "asset"
+              }
+            }
+          ],
+          "correlation": {
+            "derivation": "native_id",
+            "key": "toolu_1"
+          },
+          "failure": null,
+          "native": {
+            "id": "toolu_1",
+            "name": "Bash",
+            "namespace": null,
+            "provider": null
+          },
+          "status": {
+            "basis": "native_terminal_record",
+            "value": "succeeded"
+          },
+          "timing": null
+        },
+        "type": "tool_use"
+      },
+      "cost": {
+        "reason": "unknown_model",
+        "status": "unpriced"
+      },
+      "effort": "high",
+      "group": {
+        "derivation": "native",
+        "id": "turn-1",
+        "kind": "human_turn"
+      },
+      "model": "claude-opus-5",
+      "native_id": "u1",
+      "ordinal": 7,
+      "parent_native_id": "u0",
+      "parent_tool_native_id": "toolu_0",
+      "provenance": {
+        "agent_version": "2.1.240",
+        "src_cursor": 4,
+        "src_offset": 1024
+      },
+      "response": {
+        "derivation": "native",
+        "id": "response-1"
+      },
+      "session_id": "s1",
+      "timeline_id": "t1",
+      "type": "message",
+      "usage": {
+        "billed_pico_usd": 1250000,
+        "cache_read": 3,
+        "cache_write": 2,
+        "cache_write_1h": 4,
+        "input": 10,
+        "output": 5,
+        "requests": null,
+        "route": "openrouter",
+        "scope": "request",
+        "service_tier": "standard",
+        "thinking": 1,
+        "web_searches": 1
+      }
+    },
+    {
+      "at": 3700000,
+      "block_index": null,
+      "body": {
+        "notice": {
+          "output": {
+            "text": "Set model to Fable 5.1",
+            "type": "inline"
+          },
+          "type": "command_output"
+        },
+        "type": "notice"
+      },
+      "effort": null,
+      "group": {
+        "derivation": "native",
+        "id": "command-cycle",
+        "kind": "system_cycle"
+      },
+      "model": null,
+      "native_id": "command-output-1",
+      "ordinal": 8,
+      "parent_native_id": "command-1",
+      "parent_tool_native_id": null,
+      "provenance": {
+        "agent_version": "2.1.240",
+        "src_cursor": 4,
+        "src_offset": 2048
+      },
+      "response": null,
+      "session_id": "s1",
+      "timeline_id": "t-command-output",
+      "type": "message",
+      "usage": {
+        "billed_pico_usd": null,
+        "cache_read": null,
+        "cache_write": null,
+        "cache_write_1h": null,
+        "input": null,
+        "output": null,
+        "requests": null,
+        "route": null,
+        "scope": "request",
+        "service_tier": null,
+        "thinking": null,
+        "web_searches": null
+      }
+    },
+    {
+      "at": 3800000,
+      "block_index": null,
+      "body": {
+        "event": {
+          "authored_at": 3799000,
+          "body": {
+            "text": "All design deltas landed.",
+            "type": "inline"
+          },
+          "channel": "team",
+          "color": "green",
+          "delivery_id": "delivery-2",
+          "kind": "report",
+          "recipient": "coordinator",
+          "sender": "w2-docs",
+          "source_response_id": "team-response-2",
+          "source_session_id": "team-member-s2",
+          "status": "completed",
+          "summary": "design docs updated",
+          "task_id": "task-2",
+          "team": "refinement",
+          "work_end_timeline_id": "team-work-end",
+          "work_start_timeline_id": "team-work-start"
+        },
+        "type": "collaboration"
+      },
+      "effort": null,
+      "group": {
+        "derivation": "native",
+        "id": "team-delivery-1",
+        "kind": "system_cycle"
+      },
+      "model": null,
+      "native_id": "team-native-1",
+      "ordinal": 9,
+      "parent_native_id": "team-parent-1",
+      "parent_tool_native_id": null,
+      "provenance": {
+        "agent_version": "2.1.240",
+        "src_cursor": 4,
+        "src_offset": 3072
+      },
+      "response": null,
+      "session_id": "s1",
+      "timeline_id": "team-report-1",
+      "type": "message",
+      "usage": {
+        "billed_pico_usd": null,
+        "cache_read": null,
+        "cache_write": null,
+        "cache_write_1h": null,
+        "input": null,
+        "output": null,
+        "requests": null,
+        "route": null,
+        "scope": "request",
+        "service_tier": null,
+        "thinking": null,
+        "web_searches": null
+      }
+    },
+    {
+      "at": 3700000,
+      "session_id": "s1",
+      "timeline_id": "t1",
+      "tool": {
+        "action": {
+          "background": false,
+          "command": {
+            "text": "one",
+            "type": "inline"
+          },
+          "cwd": null,
+          "outcome": {
+            "exit_code": 0,
+            "process_id": null,
+            "signal": null
+          },
+          "source_truncated": true,
+          "timeout_ms": null,
+          "type": "shell"
+        },
+        "attachments": [
+          {
+            "byte_len": null,
+            "dimensions": null,
+            "id": "tool-image-1",
+            "kind": "image",
+            "label": null,
+            "media_type": null,
+            "message_ranges": [],
+            "name": null,
+            "source": {
+              "asset": {
+                "byte_len": 17,
+                "digest": "09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc",
+                "image_variants": {
+                  "preview": {
+                    "byte_len": 19,
+                    "digest": "b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9.webp"
+                  },
+                  "rail": {
+                    "byte_len": 16,
+                    "digest": "519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762.webp"
+                  },
+                  "tile": {
+                    "byte_len": 16,
+                    "digest": "72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d.webp"
+                  },
+                  "tile2x": {
+                    "byte_len": 18,
+                    "digest": "18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732",
+                    "media_type": "image/webp",
+                    "url": "/api/assets/18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732.webp"
+                  }
+                },
+                "media_type": "image/webp",
+                "url": "/api/assets/09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc.webp"
+              },
+              "type": "asset"
+            }
+          }
+        ],
+        "correlation": {
+          "derivation": "native_id",
+          "key": "toolu_1"
+        },
+        "failure": null,
+        "native": {
+          "id": "toolu_1",
+          "name": "Bash",
+          "namespace": null,
+          "provider": null
+        },
+        "status": {
+          "basis": "native_terminal_record",
+          "value": "succeeded"
+        },
+        "timing": null
+      },
+      "type": "tool_updated"
+    },
+    {
+      "cost": {
+        "long_context": false,
+        "micro_usd": 175,
+        "status": "priced"
+      },
+      "model": "claude-opus-5",
+      "session_id": "s1",
+      "timeline_id": "t1",
+      "tokens": {
+        "billed_pico_usd": null,
+        "cache_read": null,
+        "cache_write": null,
+        "cache_write_1h": null,
+        "input": 10,
+        "output": 5,
+        "requests": null,
+        "route": null,
+        "scope": "request",
+        "service_tier": null,
+        "thinking": null,
+        "web_searches": null
+      },
+      "ts": 3600000,
+      "type": "usage"
+    },
+    {
+      "session_id": "s1",
+      "type": "session_swept"
+    },
+    {
+      "session_id": "s1",
+      "type": "timeline_meta_changed"
+    },
+    {
+      "activity": {
+        "first_at": 11000,
+        "last_at": 19000
+      },
+      "cwd": "/w/rosetta",
+      "delegation": null,
+      "id": "s1",
+      "native_session_id": "native-s1",
+      "parent_session_id": "s0",
+      "project_id": "p1",
+      "role": "subagent",
+      "root_session_id": "s0",
+      "runtime_id": "rt1",
+      "started_at": 10000,
+      "stream_state": "streaming",
+      "summary": "A summary",
+      "title": "Named",
+      "type": "session",
+      "updated_at": 20000
+    },
+    {
+      "git_repo": "git@example.com:w/rosetta.git",
+      "id": "p1",
+      "name": "rosetta",
+      "root_paths": [
+        "/w/rosetta"
+      ],
+      "type": "project"
+    },
+    {
+      "account": {
+        "email": "user@example.com"
+      },
+      "config": {
+        "theme": "dark"
+      },
+      "data_root": "~/.claude",
+      "discovered_at": 1000,
+      "enabled": true,
+      "id": "rt1",
+      "kind": "claude-code",
+      "skills": [
+        "review"
+      ],
+      "type": "runtime",
+      "versions_seen": [
+        "2.1.240"
+      ]
+    }
+  ]
+}

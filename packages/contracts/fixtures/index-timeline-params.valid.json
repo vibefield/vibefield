@@ -1,0 +1,5 @@
+{
+  "sessionId": "s1",
+  "cursor": "{\"session_id\":\"s1\",\"before\":7,\"watermark\":\"1.2.3\"}",
+  "limit": 40
+}
