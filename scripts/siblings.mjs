@@ -23,12 +23,15 @@
 // (EL8). A dirty sibling only WARNs — co-developing it is the normal state;
 // the pin is about the base revision.
 //
-// Usage: node scripts/siblings.mjs <status|pin [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>
+// Usage: node scripts/siblings.mjs <status|pin [--skip-typecheck] [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>
 //   status  print each sibling's path, HEAD, pin, and dirtiness (never fails)
 //   pin     record the named siblings' current HEADs (all when omitted), build
-//           rosettad at it (a no-op when fresh), then prove the agent catalog
-//           against the new pins (wall R23, the rosetta half REQUIRED).
-//           Every checkout must match its resulting pin before the build/gate.
+//           rosettad at it (a no-op when fresh), prove the agent catalog
+//           against the new pins (wall R23, the rosetta half REQUIRED), then
+//           typecheck the consumers at them (`pnpm typecheck`, since
+//           2026-10-04; `--skip-typecheck` for the deliberate case, said when
+//           used). Every checkout must match its resulting pin before the
+//           build/gate; any red after the pin is recorded KEEPS it and exits 1.
 //   stamp   one line naming each sibling's HEAD + a hash of its working-tree
 //           state — the Nx `sharedGlobals` runtime input
 //   fetch   clone a named sibling at its pin; never reset an existing checkout
@@ -623,7 +626,7 @@ export function pinSiblingHeads(root, names = []) {
   return 0;
 }
 
-function pin(root, names) {
+function pin(root, names, { skipTypecheck = false } = {}) {
   const pinned = pinSiblingHeads(root, names);
   if (pinned !== 0) return pinned;
   // A named upgrade leaves other pins intact, but the build and catalog gate
@@ -701,6 +704,44 @@ function pin(root, names) {
           : "is red above";
     console.error(
       `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, and wall R23 ${how} — settle it before relying on them (a missing decision is a row in packages/contracts/src/agent-catalog.ts; declined is a decision)`,
+    );
+    return 1;
+  }
+  // The consumers' typecheck (2026-10-04, AR-8c's follow-up). Wall R23 proves
+  // the catalog against the new pins, not that a sibling's SOURCE compiles
+  // under THIS repo's lib and flags — and a `link:` sibling's TypeScript is
+  // compiled here, from source. rosetta's client used the DOM-only
+  // `HeadersInit` (2026-10-03, pin ee6724e): its own tsc (the DOM lib on) and
+  // R23 were green, fieldd's typecheck (lib ES2022 + @types/node) red, found a
+  // gate later. So the pin runs the workspace typecheck the way the gate does
+  // (`pnpm typecheck`; Nx keys its cache on the sibling stamp, which a moved
+  // checkout changes, so it runs), and a red is R23's red: the new SHAs STAY
+  // recorded — the pin did move — and the exit is 1 so the event is loud.
+  // `--skip-typecheck` is the deliberate case (a pin whose consumer change
+  // follows in the same lane), said when used.
+  if (skipTypecheck) {
+    console.warn(
+      "siblings:pin WARN: --skip-typecheck — the consumers were NOT typechecked at the new pins; run pnpm typecheck before relying on them",
+    );
+    return 0;
+  }
+  console.log(
+    "siblings:pin: typechecking the consumers at the new pins (pnpm typecheck, the gate's own step)",
+  );
+  const typecheck = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", ["typecheck"], {
+    cwd: root,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (typecheck.status !== 0) {
+    const how =
+      typecheck.error !== undefined
+        ? `could not run (${typecheck.error.message})`
+        : typecheck.signal !== null
+          ? `was killed by ${typecheck.signal}`
+          : "is red above";
+    console.error(
+      `siblings:pin: the new pins ARE recorded in ${LOCK_FILE}, but the consumers do not typecheck at them — pnpm typecheck ${how}; a sibling's source can compile under its own tsc and not under this repo's lib and flags (the HeadersInit class, 2026-10-03): fix it upstream or in the consumer, then re-run pnpm typecheck`,
     );
     return 1;
   }
@@ -817,7 +858,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const command = process.argv[2] ?? "status";
   const handlers = {
     status,
-    pin: (root) => pin(root, process.argv.slice(3)),
+    pin: (root) => {
+      const args = process.argv.slice(3);
+      const flags = args.filter((arg) => arg.startsWith("--"));
+      const unknown = flags.filter((flag) => flag !== "--skip-typecheck");
+      if (unknown.length > 0) {
+        console.error(
+          `siblings:pin FAIL: unknown flag ${unknown.join(" ")} — the one flag is --skip-typecheck; nothing was pinned`,
+        );
+        return 2;
+      }
+      return pin(
+        root,
+        args.filter((arg) => !arg.startsWith("--")),
+        { skipTypecheck: flags.includes("--skip-typecheck") },
+      );
+    },
     stamp: (root) => {
       console.log(stamp(root));
       return 0;
@@ -831,7 +887,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const handler = handlers[command];
   if (handler === undefined) {
     console.error(
-      "usage: node scripts/siblings.mjs <status|pin [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>",
+      "usage: node scripts/siblings.mjs <status|pin [--skip-typecheck] [NAME...]|stamp|fetch NAME|install-js|build-js|build|bin>",
     );
     process.exit(2);
   }
