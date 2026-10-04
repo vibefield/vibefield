@@ -128,12 +128,15 @@ export function packageNameFor(id: string): string {
 
 /** `Demo Board` → `DemoBoard`. Falls back to the id's last segment when the
  * title carries nothing an identifier can be made of — a non-ASCII title is a
- * perfectly good title and must not fail the scaffold. */
+ * perfectly good title and must not fail the scaffold. DK-6: the name is the
+ * object's EXPORT, which the manifest's `binding.kind` names, so it is held to
+ * that field's limit (`PLUGIN_LIMITS.ID_MAX`) — an 80-character title would
+ * otherwise emit a manifest its own schema refuses. */
 export function classNameFor(title: string, id: string): string {
   const fromTitle = pascalCase(title);
-  if (fromTitle.length > 0) return fromTitle;
+  if (fromTitle.length > 0) return fromTitle.slice(0, PLUGIN_LIMITS.ID_MAX);
   const fromId = pascalCase((id.split(".").at(-1) ?? id).replaceAll("-", " "));
-  return fromId.length > 0 ? fromId : "Widget";
+  return fromId.length > 0 ? fromId.slice(0, PLUGIN_LIMITS.ID_MAX) : "Widget";
 }
 
 /** ASCII-only by construction: the result is spliced into source as an

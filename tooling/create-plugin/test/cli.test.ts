@@ -124,7 +124,7 @@ describe("the two registers", () => {
 });
 
 describe("the next three commands are named, verbatim", () => {
-  it("names install, check and playground for a workspace member", async () => {
+  it("names install, the build, check and playground for a workspace member", async () => {
     // A temp directory made to look like a workspace: the note is about where
     // the scaffold LANDED, so the probe has to be exercised through a real one.
     const root = freshDir();
@@ -135,6 +135,10 @@ describe("the next three commands are named, verbatim", () => {
     await runCli(args(join(root, "plugins", "demo")), io);
     const printed = io.lines.join("\n");
     expect(printed).toContain("pnpm install");
+    // DK-6: the build before check — a kind's rows read the built module
+    expect(printed).toMatch(
+      /pnpm install · pnpm --filter @[a-z0-9-]+\/plugin-[a-z0-9-]+ build · pnpm plugin check plugins\/demo/,
+    );
     expect(printed).toContain("pnpm plugin check plugins/demo");
     expect(printed).toContain("pnpm playground plugins/demo");
   });

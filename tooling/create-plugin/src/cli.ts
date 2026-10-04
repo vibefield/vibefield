@@ -17,7 +17,8 @@ required:
   --dir <target>         where to write it — must be empty or not exist
 
 options:
-  --widget-type <type>   the contributed widget type (default: the plugin id)
+  --widget-type <type>   the contributed object's type (default: the plugin id) — an
+                         object is a widget to the engine, so the flag keeps its name
   --first-party          allow the reserved vibefield.* namespace
   --json                 one JSON object per line: verdicts, then a result object
   --help                 this text
@@ -25,8 +26,9 @@ options:
 exit codes:
   0  the scaffold was written   1  a refusal (nothing was written)   2  the scaffolder failed
 
-The scaffold is a working plugin: a manifest, one widget, playground states and a
-conformance test. Nothing here prompts, and nothing here touches the network.`;
+The scaffold is a working plugin: a manifest, one OBJECT KIND (its kind, pass and WGSL —
+the desk draws it), playground states, the manifest contract and the kind's state test.
+Nothing here prompts, and nothing here touches the network.`;
 
 interface ParsedArgs {
   readonly command: string[];

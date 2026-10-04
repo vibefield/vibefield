@@ -2,15 +2,17 @@
 //
 // `template/` holds REAL FILES — the scaffold is a directory copy with a
 // substitution, never code assembled from strings in TypeScript. What you read
-// in `template/src/renderer.tsx` is what lands, modulo the `{{token}}`s, so the
-// template can be diffed against `plugins/note` (the shape it was derived from)
-// instead of reconstructed from a generator.
+// in `template/src/kind.ts` is what lands, modulo the `{{token}}`s, so the
+// template can be diffed against `examples/plugins/desk-clock` (the shape it was
+// cut from, DK-6: an object kind — its kind, its pass, its `.wgsl`) instead of
+// reconstructed from a generator.
 //
 // ESCAPING, which is the one subtle thing here. `{{id}}`, `{{widgetType}}`,
 // `{{packageName}}` and `{{className}}` are grammar-restricted or derived, so
 // they are safe by construction. `{{title}}` is arbitrary author text and every
-// place it appears is inside a double-quoted string in TS, JSON or a JSX
-// attribute — so it is escaped for exactly that context. Without this a title
+// place it appears is inside a double-quoted string in TS or JSON, a `//` line
+// comment (TS or WGSL) or the README's markdown — never a block comment or a
+// template literal — so it is escaped for the double-quoted context. Without this a title
 // carrying a quote produces a template that will not parse, and a title chosen
 // adversarially writes code. The escape is applied to every value uniformly:
 // escaping a value that needed no escaping changes nothing.

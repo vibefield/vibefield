@@ -90,7 +90,7 @@ export async function scaffoldPlugin(options: ScaffoldOptions): Promise<Scaffold
 
   const placement = placementFor(root);
   verdicts.push(placementVerdict(root, placement));
-  verdicts.push(nextStepsVerdict(root, placement));
+  verdicts.push(nextStepsVerdict(root, placement, plan.packageName));
 
   return { verdicts, plan, root, files: written };
 }
@@ -134,15 +134,22 @@ function placementVerdict(root: string, placement: WorkspacePlacement): Verdict 
   );
 }
 
-/** The three commands, named verbatim, in the order they answer. An agent
- * should never have to guess the next call from prose. */
-function nextStepsVerdict(root: string, placement: WorkspacePlacement): Verdict {
+/** The next commands, named verbatim, in the order they answer. An agent
+ * should never have to guess the next call from prose. DK-6: the BUILD sits
+ * before `check` — an object kind's rows (its export a desk kind named by its
+ * type, its WGSL arrived as text) read the built module, and without one
+ * `check` can only note that it is unbuilt. */
+function nextStepsVerdict(
+  root: string,
+  placement: WorkspacePlacement,
+  packageName: string,
+): Verdict {
   const target =
     placement.member && placement.root !== undefined
       ? relative(placement.root, root).split(sep).join("/")
       : root;
   const steps = [
-    ...(placement.member ? ["pnpm install"] : []),
+    ...(placement.member ? ["pnpm install", `pnpm --filter ${packageName} build`] : []),
     `pnpm plugin check ${target}`,
     `pnpm playground ${target}`,
   ];

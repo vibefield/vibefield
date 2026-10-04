@@ -42,17 +42,27 @@ describe("the scaffolded tree", () => {
     await scaffoldPlugin({ ...VALID, dir });
 
     // The shape `docs/plugin-authoring/README.md` calls "the shortest real
-    // plugin", plus the two the kit's other commands read.
+    // plugin" — since DK-6 an OBJECT KIND: its kind, its pass, its record, its
+    // WGSL — plus the files the kit's other commands and the README read.
     for (const path of [
       "package.json",
       "tsconfig.json",
+      "vitest.config.ts",
+      "README.md",
       MANIFEST_SOURCE,
       "src/behavior.example.ts",
-      "src/renderer.tsx",
+      "src/renderer.ts",
+      "src/kind.ts",
+      "src/pass.ts",
+      "src/record.ts",
+      "src/shaders.ts",
+      "src/shaders.wgsl",
+      "src/wgsl.d.ts",
       "src/index.ts",
       "scripts/emit-manifest.ts",
       "playground/states.ts",
       "test/manifest.test.ts",
+      "test/kind.test.ts",
       MANIFEST_NAME,
     ]) {
       expect(existsSync(join(dir, ...path.split("/"))), `${path} is missing`).toBe(true);
@@ -68,7 +78,7 @@ describe("the scaffolded tree", () => {
     }
   });
 
-  it("names the package after the id, and the component after the title", async () => {
+  it("names the package after the id, and the object's export after the title", async () => {
     const dir = unusedPath();
     const result = await scaffoldPlugin({ id: "vendor.demo", title: "Mind Map", dir });
 
@@ -77,9 +87,71 @@ describe("the scaffolded tree", () => {
 
     const pkg: unknown = JSON.parse(readFileSync(join(dir, "package.json"), "utf8"));
     expect((pkg as { name: string }).name).toBe("@vendor/plugin-demo");
-    const renderer = readFileSync(join(dir, "src", "renderer.tsx"), "utf8");
-    expect(renderer).toContain("function MindMap(");
-    expect(renderer).toContain("component: MindMap");
+    const renderer = readFileSync(join(dir, "src", "renderer.ts"), "utf8");
+    expect(renderer).toContain("export const MindMap: ObjectBinding<");
+    const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), "utf8")) as {
+      contributes: { objects: Array<{ binding: { kind: string } }> };
+    };
+    expect(manifest.contributes.objects[0]?.binding.kind).toBe("MindMap");
+  });
+
+  it("DK-6 — is an OBJECT KIND: its WGSL and pass through the SDK's /desk door, no React, no card, no CSS", async () => {
+    const dir = unusedPath();
+    await scaffoldPlugin({ id: "vendor.demo", title: "Demo", widgetType: "vendor.demo.disc", dir });
+
+    const files = tree(dir);
+    expect(files.filter((f) => /\.(css|tsx)$/.test(f))).toEqual([]);
+    for (const path of files.filter((f) => /\.ts$/.test(f))) {
+      const text = readFileSync(join(dir, ...path.split("/")), "utf8");
+      expect(text, path).not.toMatch(/from "react|CardShell|@vibefield\/plugin-sdk\/(ui|canvas)"/);
+      expect(text, path).not.toMatch(/from "@vibecook\/ice/);
+    }
+    const pkg = JSON.parse(readFileSync(join(dir, "package.json"), "utf8")) as Record<
+      string,
+      Record<string, string>
+    >;
+    expect(
+      Object.keys({
+        ...pkg["dependencies"],
+        ...pkg["devDependencies"],
+        ...pkg["peerDependencies"],
+      }),
+    ).not.toContain("react");
+    // the kind: named by its type (the host's rule), its pass and its own WGSL composed after the kit's pieces
+    expect(readFileSync(join(dir, "src", "kind.ts"), "utf8")).toContain(
+      'export const KIND_NAME = "vendor.demo.disc";',
+    );
+    expect(readFileSync(join(dir, "src", "pass.ts"), "utf8")).toContain(
+      'from "@vibefield/plugin-sdk/desk"',
+    );
+    const wgsl = readFileSync(join(dir, "src", "shaders.wgsl"), "utf8");
+    expect(wgsl).toMatch(/@vertex[\s\S]*@fragment/);
+    expect(readFileSync(join(dir, "src", "shaders.ts"), "utf8")).toContain(
+      'kitWgsl(\n    ["view", "portal", "light"]',
+    );
+    // the manifest: ONE objects row, no widgets — `hang` declared, placing by `desk.object`
+    const manifest = JSON.parse(readFileSync(join(dir, MANIFEST_NAME), "utf8")) as {
+      contributes: {
+        widgets?: unknown;
+        objects: Array<{
+          type: string;
+          provides: string[];
+          tray: { category: string; hang: { accessory: string } };
+        }>;
+      };
+    };
+    expect(manifest.contributes.widgets).toBeUndefined();
+    expect(manifest.contributes.objects).toHaveLength(1);
+    expect(manifest.contributes.objects[0]).toMatchObject({
+      type: "vendor.demo.disc",
+      provides: ["vendor.demo.disc", "desk.object"],
+      tray: { category: "things", hang: { accessory: "hook" } },
+    });
+    // the README says the ten-minute path, the still test says it is DK-7's harness stubbed to its shape
+    expect(readFileSync(join(dir, "README.md"), "utf8")).toContain("## The ten-minute path");
+    expect(readFileSync(join(dir, "test", "kind.test.ts"), "utf8")).toContain(
+      "stubbed to its SHAPE until DK-7 lands",
+    );
   });
 
   it("ships a substituted, React-free behavior authoring example", async () => {
@@ -113,7 +185,7 @@ describe("the manifest is emitted, not templated", () => {
     expect(readFileSync(join(dir, MANIFEST_NAME), "utf8")).toBe(canonicalJson(validated.manifest));
   });
 
-  it("declares the id, title and widget type it was asked for", async () => {
+  it("declares the id, title and object type it was asked for", async () => {
     const dir = unusedPath();
     await scaffoldPlugin({
       id: "com.example.notes",
@@ -126,12 +198,12 @@ describe("the manifest is emitted, not templated", () => {
       id: string;
       title: string;
       activation: string[];
-      contributes: { widgets: Array<{ type: string; title: string }> };
+      contributes: { objects: Array<{ type: string; title: string }> };
     };
     expect(manifest.id).toBe("com.example.notes");
     expect(manifest.title).toBe("Example Notes");
     expect(manifest.activation).toEqual(["onWidget:com.example.notes.card"]);
-    expect(manifest.contributes.widgets[0]?.type).toBe("com.example.notes.card");
+    expect(manifest.contributes.objects[0]?.type).toBe("com.example.notes.card");
   });
 });
 
@@ -172,6 +244,8 @@ describe("substitution is escaped, not spliced", () => {
     // A title with nothing an identifier can be made of falls back to the id.
     expect(classNameFor("日本語", "vendor.mind-map")).toBe("MindMap");
     expect(classNameFor("…", "vendor.demo")).toBe("Demo");
+    // DK-6: it is the object's export, which `binding.kind` names — held to that field's limit
+    expect(classNameFor("x".repeat(80), "vendor.demo")).toBe(`X${"x".repeat(63)}`);
     for (const title of ["Mind Map", "kanban-board", "3D Viewer", "日本語", "…"]) {
       expect(classNameFor(title, "vendor.demo")).toMatch(/^[A-Za-z][A-Za-z0-9]*$/);
     }

@@ -3,28 +3,43 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { validatePluginManifest } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
+import { isObjectKind } from "@vibefield/plugin-sdk/desk";
 import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
 import { manifest, renderer } from "../src";
+import * as rendererModule from "../src/renderer";
 
-// The plugin contract in miniature: the CANONICAL manifest V1-validates,
-// ACTIVATION binds exactly the declared widget types (§12.1, proven against the
-// SDK's mock host — no engine, no registry), and the committed artifact is the
-// canonical emission of the TS source beside it.
+// The plugin contract in miniature: the CANONICAL manifest V1-validates; its object row
+// names an export of the renderer module whose kind the host will take — a desk kind whose
+// registry name IS the row's type (the host refuses anything else); ACTIVATION binds nothing
+// (a kind is an export, never a registration); and the committed artifact is the canonical
+// emission of the TS source beside it.
 //
-// Keep both tests as the plugin grows. The first is what makes a declaration
-// that nothing binds fail here rather than at load; the second is what makes a
-// hand-edited `vibefield.plugin.json` fail here rather than at install.
+// Keep these as the plugin grows. The second is what makes a misnamed or missing export fail
+// here rather than on the desk; the last is what makes a hand-edited `vibefield.plugin.json`
+// fail here rather than at install.
 describe("{{id}}", () => {
-  it("activation binds exactly the manifest's declared widget types", async () => {
-    const declared = (manifest.contributes?.widgets ?? []).map((w) => w.type);
+  const row = manifest.contributes?.objects?.[0];
+
+  it("declares one object, drawn by the export its binding names — a desk kind named by its type", () => {
+    expect(row?.type).toBe("{{widgetType}}");
+    // the host reads the export off the module's NAMESPACE by its binding name (spec §12.8)
+    const exported = (rendererModule as unknown as Record<string, { kind?: unknown }>)[
+      row?.binding.kind ?? ""
+    ];
+    const kind = exported?.kind;
+    expect(isObjectKind(kind)).toBe(true);
+    expect(isObjectKind(kind) ? kind.name : undefined).toBe(row?.type);
+  });
+
+  it("activates as any plugin does, binding no widget, command or surface", async () => {
     const session = await activateWithMockHost(renderer, {
       id: manifest.id,
       version: manifest.version,
-      declaredWidgets: declared,
+      declaredWidgets: [],
     });
-    expect([...session.bindings.keys()]).toEqual(declared);
-    for (const binding of session.bindings.values()) expect(binding.component).toBeDefined();
+    expect([...session.bindings.keys()]).toEqual([]);
+    await session.close();
   });
 
   it("the committed vibefield.plugin.json is the canonical emission (regen: pnpm gen:manifest)", () => {
