@@ -1,3 +1,8 @@
+/// <reference types="@webgpu/types" />
+// The reference above (design-kit's logo renderer is the precedent): this file names the WebGPU
+// globals a kind's pass is written against, and a program that reaches it through the HOST — field-app's
+// dev-bundled set, the playground's tests — does not list `@webgpu/types` in its own tsconfig. The pad's
+// own dependency answers for its own names.
 // The pad pass — the comment pads, instanced: one quad per pad (grown by its lower sheets and its shadow's
 // reach), one `shade_pad` per covered fragment, premultiplied, through the slot's presence and its portal chain.
 // It binds the slot's ONE view block (the kit's `MatPass.view` — never written, never copied), the slot's gobo
