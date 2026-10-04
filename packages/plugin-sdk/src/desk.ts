@@ -15,7 +15,12 @@
 //    store, the theme's types and `rgb`, the fault ladder's constants. Never the host half: no
 //    `deskLayer`, no renderer, no profiler — those are the app's.
 //  - `@vibecook/ice` — the core types a kind's acts and tray entry speak: `HeldToolDef`,
-//    `MenuActionDef` and their APIs, `HeldGlyph`, `TrayEntry` (`hang` required), `Entity`, `World`.
+//    `MenuActionDef` and their APIs, `HeldGlyph`, `TrayEntry` (`hang` required), `Entity`, `World`;
+//    and the two core names a kind's DOM HALF reads (DK-8 — VibeField's comment pad, the first plugin
+//    kind with a text part), exactly as ICE's own halves read them (the note's body, the calendar's
+//    line): `Camera` — the resource that says where the desk's one editor stands on screen (read,
+//    never written) — and `Active` — the tag that says its object is still in the frame (a nav cut
+//    ends the lease). Nothing else of core's: a kind writes its document through `writable(docs)`.
 //
 // NOTHING of `@vibecook/ice/desk/objects`: a plugin never imports a built-in kind (K-L4 — a kind
 // names another only by its registry name, through `KindDriverHost.kind(name)`/`provides(key)`).
@@ -38,6 +43,7 @@ export type {
   TrayEntry,
   World,
 } from "@vibecook/ice";
+export { Active, Camera } from "@vibecook/ice";
 export {
   CONTAINABLE,
   createRecordStore,

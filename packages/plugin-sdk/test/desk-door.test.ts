@@ -69,6 +69,19 @@ describe("the SDK's /desk door", () => {
       );
   });
 
+  it("hands a kind's DOM half the two core names ICE's own halves read — the camera and the frame — and nothing else of core's (DK-8)", () => {
+    // the desk's one editor is placed in screen space from where the camera is (`world.getResource(Camera)`),
+    // and a lease ends when its object leaves the frame (`Active`) — the note's body and the calendar's line
+    // read these two; a plugin kind's text part reads the same bindings, one copy
+    expect(door.Camera).toBe(iceRoot.Camera);
+    expect(door.Active).toBe(iceRoot.Active);
+    // core's writers stay core's: a kind commits through `writable(docs)`, never a raw transaction door
+    for (const name of ["guardedTransaction", "Editing", "Grab", "setWidgetProps", "Position"]) {
+      expect(iceRoot, name).toHaveProperty(name);
+      expect(door, name).not.toHaveProperty(name);
+    }
+  });
+
   it("withholds the host's half and a device of a kind's own (DK-D22)", () => {
     for (const name of ["acquire", "adopt"]) {
       expect(iceEngine, name).toHaveProperty(name);
