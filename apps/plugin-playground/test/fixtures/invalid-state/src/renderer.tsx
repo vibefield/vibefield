@@ -10,7 +10,8 @@ import { type Entity, useWidgetProps, type World } from "@vibefield/plugin-sdk/c
 import type { ReactElement } from "react";
 
 /** The retired React face's props (the SDK cut `WidgetComponentProps` at DK-2); this
- * fixture's face is the old runner's subject — DK-7 replaces both. */
+ * fixture's face is the old runner's subject. Nothing mounts it now: its STATES are judged on their
+ * props alone (the playground v2, DK-7), and a widget row retires at DK-8. */
 interface WidgetComponentProps {
   readonly entity: Entity;
   readonly world: World;
