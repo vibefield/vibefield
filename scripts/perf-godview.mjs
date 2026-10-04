@@ -160,6 +160,17 @@ async function launch(arm, { root, source, modelDir, synthetic }, round) {
   return JSON.parse(readFileSync(out, "utf8"));
 }
 
+/** The gate table's columns: the totals, the decisive frame rows, the components. */
+const GATE_COLUMNS = [
+  "task ms/s",
+  "react render ms/s",
+  "frame p50 ms",
+  "loaf blocking ms",
+  "script ms/s",
+  "layout ms/s",
+  "recalc style ms/s",
+];
+
 /** A frame is the window mode's: 1000/fps offscreen, the display's 8.3 ms shown. */
 const frameMs = windowMode === "offscreen" ? 1000 / fps : 1000 / 120;
 const METRICS = metricTable(frameMs);
@@ -296,20 +307,22 @@ async function main() {
         ]
       : []),
     paired
-      ? "Gate rows: task, script, layout and style ms/s (Chromium's main thread, CDP) and every React root's render ms/s. `worse` = past z > 4, the floor and the null arm's |T₀| + 2·MAD₀; `noisy` = the null arm itself moved. A reading aid — the verdict is the lead's (L14)."
+      ? "Decisive rows (M33, M40): main-thread task ms/s (CDP) and every React root's render ms/s — the totals — plus frame p50 and the LoAF rows. The task total's components (script, layout, style) gate only when material (≥ 1 ms/s and > 2 %), and read `shifted` when they rose while the total fell. `worse` = past z > 4, the floor and the null arm's |T₀| + 2·MAD₀; `noisy` = the null arm itself moved. A reading aid — the verdict is the lead's (L14)."
       : "An A/A run: no gate row should clear z > 4 and its floor (`null-ok`); one that does is the instrument's own noise (`null-moved`).",
     "",
-    `| cell | task ms/s A→B (z${paired ? ", z₀" : ""}) | script ms/s | layout ms/s | style ms/s | React render ms/s | reading |`,
-    "|---|---|---|---|---|---|---|",
+    `| cell | ${GATE_COLUMNS.map((name) => `${name} A→B (z${paired ? ", z₀" : ""})`).join(" | ")} | reading |`,
+    `|---|${GATE_COLUMNS.map(() => "---").join("|")}|---|`,
   );
   for (const { cell, rows } of summary.cells) {
-    const gateRows = rows.filter((row) => row.gate);
-    const shown = gateRows.map(
-      (row) =>
-        `${fmt(row.A, 1)}→${fmt(row.B, 1)} (${fmt(row.z, 1)}${paired ? `, ${fmt(row.z0, 1)}` : ""})`,
-    );
-    const readings = gateRows
-      .filter((row) => row.reading !== "")
+    const byName = new Map(rows.map((row) => [row.metric, row]));
+    const shown = GATE_COLUMNS.map((name) => {
+      const row = byName.get(name);
+      return row === undefined
+        ? "–"
+        : `${fmt(row.A, 1)}→${fmt(row.B, 1)} (${fmt(row.z, 1)}${paired ? `, ${fmt(row.z0, 1)}` : ""})`;
+    });
+    const readings = rows
+      .filter((row) => row.gate && row.reading !== "")
       .map((row) => `${row.metric}: ${row.reading}`);
     md.push(`| ${cell} | ${shown.join(" | ")} | ${readings.join("; ")} |`);
   }
@@ -319,6 +332,11 @@ async function main() {
     ...(gate.noisy.length > 0 ? [`- noisy: ${byCell(gate.noisy)}`] : []),
     ...(gate.missing.length > 0 ? [`- unreadable: ${byCell(gate.missing)}`] : []),
     ...(gate.moved.length > 0 ? [`- the null moved: ${byCell(gate.moved)}`] : []),
+    ...(gate.shifted.length > 0
+      ? [
+          `- shifted (a component rose while the task total fell; named, not a failure — M40): ${byCell(gate.shifted)}`,
+        ]
+      : []),
     "",
   );
   for (const { cell: key, rows } of summary.cells) {

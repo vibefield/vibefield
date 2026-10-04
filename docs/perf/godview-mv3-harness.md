@@ -49,7 +49,14 @@ frame scheduler moved into rAF. Every cell now carries two totals.
   - The runner builds every arm that way. An untimed run says so (`missing`), never `pass`.
 - **Chromium's main-thread totals per second.** These are CDP `Performance.getMetrics` (task,
   script, layout, recalc style), sampled at the cell's start and end.
-- **The gate reads these totals.** Per-view rows (renders, commits, posts, latencies) are context.
+- **The gate reads these totals (M40's rule).**
+  - The decisive rows are main-thread task ms/s, every root's render ms/s, frame p50 and the LoAF
+    rows.
+  - A component of the task total (script, layout, recalc style) gates only when it is material:
+    B − A of at least 1 ms/s, besides z > 4 and T > 2 %.
+  - A component that rises while its cell's task total falls reads `shifted`. It is named, never
+    a failure.
+  - Per-view rows (renders, commits, posts, latencies) are context.
 - **Negative controls** (`VF_GODVIEW_PERF_SYNTHETIC`):
   - `view:<ms>` busy-waits inside every counted view render.
   - `root:<ms>` mounts a side React root of its own that commits once per frame with that much

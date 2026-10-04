@@ -25,7 +25,14 @@ interface Stats {
   gateVerdict(
     cells: { cell: string; rows: Row[] }[],
     options: { paired: boolean; rounds: number },
-  ): { verdict: string; worse: string[]; noisy: string[]; missing: string[]; moved: string[] };
+  ): {
+    verdict: string;
+    worse: string[];
+    noisy: string[];
+    missing: string[];
+    moved: string[];
+    shifted: string[];
+  };
 }
 
 let stats: Stats;
@@ -38,7 +45,10 @@ beforeAll(async () => {
 });
 
 /** One lab cell, the shape `godview-perf-lab.ts` writes. */
-function cell(task: number, options: { renderMs?: number; timed?: boolean } = {}): unknown {
+function cell(
+  task: number,
+  options: { renderMs?: number; timed?: boolean; script?: number; layout?: number } = {},
+): unknown {
   return {
     view: "list",
     report: {
@@ -68,8 +78,8 @@ function cell(task: number, options: { renderMs?: number; timed?: boolean } = {}
     totals: {
       seconds: 8,
       taskMsPerS: task,
-      scriptMsPerS: task * 0.8,
-      layoutMsPerS: 2,
+      scriptMsPerS: options.script ?? task * 0.8,
+      layoutMsPerS: options.layout ?? 2,
       recalcStyleMsPerS: 1,
     },
   };
@@ -101,17 +111,20 @@ describe("a cell's metrics", () => {
     );
   });
 
-  it("the gate rows are the totals (M33), and only they", () => {
+  it("the gate rows are the totals, frame p50, the LoAF rows and the total's components (M33, M40)", () => {
     const gate = stats
       .metricTable(16.7)
       .filter((row) => row.gate)
       .map((row) => row.name);
     expect(gate).toEqual([
       "task ms/s",
+      "react render ms/s",
+      "frame p50 ms",
+      "loaf count",
+      "loaf blocking ms",
       "script ms/s",
       "layout ms/s",
       "recalc style ms/s",
-      "react render ms/s",
     ]);
   });
 });
@@ -148,6 +161,29 @@ describe("the gate", () => {
     const gate = stats.gateVerdict([{ cell: "list × n10", rows }], { paired: true, rounds: 7 });
     expect(gate.verdict).toBe("missing");
     expect(gate.missing).toEqual(["list × n10 · react render ms/s"]);
+  });
+
+  it("a component's rise under 1 ms/s is not material (M40), however sure", () => {
+    const at = (layout: number) =>
+      WOBBLE.map((w, round) => stats.cellMetrics(cell(150 + w, { layout: layout + round * 0.01 })));
+    const rows = stats.judgeCell(at(1), at(1.4), at(1), table());
+    const layout = rows.find((row) => row.metric === "layout ms/s");
+    expect(layout?.z).toBeGreaterThan(4);
+    expect(layout?.reading).toBe("");
+    expect(stats.gateVerdict([{ cell: "c", rows }], { paired: true, rounds: 7 }).verdict).toBe(
+      "pass",
+    );
+  });
+
+  it("a component that rose while the task total fell is shifted, named and not a failure (M40)", () => {
+    const at = (task: number, script: number) =>
+      WOBBLE.map((w) => stats.cellMetrics(cell(task + w, { script: script + w })));
+    const rows = stats.judgeCell(at(150, 100), at(130, 112), at(150, 100), table());
+    expect(rows.find((row) => row.metric === "task ms/s")?.reading).toBe("better");
+    expect(rows.find((row) => row.metric === "script ms/s")?.reading).toBe("shifted");
+    const gate = stats.gateVerdict([{ cell: "c", rows }], { paired: true, rounds: 7 });
+    expect(gate.verdict).toBe("pass");
+    expect(gate.shifted).toEqual(["c · script ms/s"]);
   });
 
   it("reads nothing before seven rounds (M24), whatever the rows say", () => {

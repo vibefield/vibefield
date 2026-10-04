@@ -8,10 +8,14 @@
 // in the same session) is read with the SAME estimator and judged by its own
 // spread. Medians, never tails (memory `loaded-host-measurement-discipline`).
 //
-// M33: the GATE rows are the totals — Chromium's main-thread task, script,
-// layout and style time per second, and every React root's render time per
-// second — because a view in its own root, or work moved into rAF, is inside
-// them and outside every per-view row. The per-view rows stay as context.
+// M33 + M40: the GATE reads the decisive rows — frame p50, the LoAF rows, and
+// the TOTALS: Chromium's main-thread task time per second and every React
+// root's render time per second (a view in its own root, or work moved into
+// rAF, is inside them and outside every per-view row). The task total's
+// COMPONENTS (script, layout, recalc style) gate only when material — B − A of
+// at least 1 ms/s besides z > 4 and T > 2 % — and a component that rises while
+// its cell's task total falls reads `shifted`: named, never a failure. The
+// per-view rows stay as context.
 
 export const median = (values) => {
   const sorted = [...values].filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
@@ -44,25 +48,29 @@ const relative =
 
 /**
  * Each metric: its name, which way is worse, its materiality floor (from A's
- * median where it is relative), and whether the GATE reads it (M33). A frame is
- * the window mode's (`frameMs`).
+ * median where it is relative), and its role in the GATE (M33, M40): `total`
+ * and `decisive` rows gate, `component` rows gate only when material and not
+ * shifted; rows with no role are context. A frame is the window mode's
+ * (`frameMs`).
  */
 export function metricTable(frameMs) {
+  const gate = (role) => ({ gate: true, role });
   return [
-    // ── the gate: total work, whatever root or loop spent it (M33) ──
-    { name: "task ms/s", direction: "up", floor: relative(0.03, 2), gate: true },
-    { name: "script ms/s", direction: "up", floor: relative(0.03, 2), gate: true },
-    { name: "layout ms/s", direction: "up", floor: relative(0.03, 2), gate: true },
-    { name: "recalc style ms/s", direction: "up", floor: relative(0.03, 2), gate: true },
-    { name: "react render ms/s", direction: "up", floor: relative(0.03, 2), gate: true },
+    // ── the decisive rows: the totals, frame p50, the LoAF rows (M33, M40) ──
+    { name: "task ms/s", direction: "up", floor: relative(0.02, 0.5), ...gate("total") },
+    { name: "react render ms/s", direction: "up", floor: relative(0.02, 0.5), ...gate("total") },
+    { name: "frame p50 ms", direction: "up", floor: () => 0.02 * frameMs, ...gate("decisive") },
+    { name: "loaf count", direction: "up", floor: () => 1, ...gate("decisive") },
+    { name: "loaf blocking ms", direction: "up", floor: () => 50, ...gate("decisive") },
+    // ── the task total's components: material at ≥ 1 ms/s and > 2 % (M40) ──
+    { name: "script ms/s", direction: "up", floor: relative(0.02, 1), ...gate("component") },
+    { name: "layout ms/s", direction: "up", floor: relative(0.02, 1), ...gate("component") },
+    { name: "recalc style ms/s", direction: "up", floor: relative(0.02, 1), ...gate("component") },
     // ── context ──
     { name: "react commits/s", direction: "up", floor: relative(0.02) },
     { name: "react roots", direction: "up", floor: () => 0.5 },
-    { name: "frame p50 ms", direction: "up", floor: () => 0.02 * frameMs },
     { name: "frame p95 ms", direction: "up", floor: () => 0.02 * frameMs },
     { name: "fps", direction: "down", floor: relative(0.02, 0.5) },
-    { name: "loaf count", direction: "up", floor: () => 1 },
-    { name: "loaf blocking ms", direction: "up", floor: () => 50 },
     { name: "raf work ms", direction: "up", floor: relative(0.05) },
     { name: "raf work p95 ms/frame", direction: "up", floor: () => 0.05 * frameMs },
     { name: "delivery work ms", direction: "up", floor: relative(0.05) },
@@ -158,9 +166,10 @@ export function reading(direction, floor, effect, nullArm) {
 
 /** One cell's rows: A's, B's (and A′'s) per-round metrics, read paired. With
  * no A′ the run IS the null arm, and a row past z > 4 and its floor reads
- * `moved` (the instrument's own noise), never worse or better. */
+ * `moved` (the instrument's own noise), never worse or better. A component
+ * that reads worse while the cell's task total fell reads `shifted` (M40). */
 export function judgeCell(a, b, a2, table) {
-  return table.map(({ name, direction, floor: floorOf, gate }) => {
+  const rows = table.map(({ name, direction, floor: floorOf, gate, role }) => {
     const av = a.map((m) => m[name]);
     const bv = b.map((m) => m[name]);
     const effect = pairedDiff(av, bv);
@@ -175,6 +184,7 @@ export function judgeCell(a, b, a2, table) {
     return {
       metric: name,
       gate: gate === true,
+      role: role ?? null,
       A: median(av),
       B: median(bv),
       ...effect,
@@ -188,6 +198,13 @@ export function judgeCell(a, b, a2, table) {
           : reading(direction, floor, effect, nullArm),
     };
   });
+  const total = rows.find((row) => row.role === "total" && row.metric === "task ms/s");
+  if (a2 !== null && total !== undefined && Number.isFinite(total.T) && total.T < 0) {
+    for (const row of rows) {
+      if (row.role === "component" && row.reading === "worse") row.reading = "shifted";
+    }
+  }
+  return rows;
 }
 
 /** M24: z is not read before seven paired rounds (with fewer, MAD collapses
@@ -195,8 +212,8 @@ export function judgeCell(a, b, a2, table) {
 export const MIN_ROUNDS = 7;
 
 /**
- * THE GATE (M33) over every cell's gate rows. A paired run: `worse` when any
- * gate row reads worse; else `noisy` when a gate row's null arm moved; else
+ * THE GATE (M33, M40) over every cell's gate rows. A paired run: `worse` when
+ * any gate row reads worse (a shifted component is listed, never counted); else `noisy` when a gate row's null arm moved; else
  * `missing` when a gate row could not be read (no totals, or an untimed React
  * render row); else `pass`. An A/A run (no null arm: the run IS the null arm)
  * reads `null-ok` when no gate row clears z > 4 and its floor, else
@@ -209,6 +226,7 @@ export function gateVerdict(cells, { paired, rounds }) {
   const noisy = [];
   const missing = [];
   const moved = [];
+  const shifted = [];
   for (const { cell, rows } of cells) {
     for (const row of rows) {
       if (!row.gate) continue;
@@ -218,6 +236,7 @@ export function gateVerdict(cells, { paired, rounds }) {
       else if (row.reading === "worse") worse.push(where);
       else if (row.reading === "better") better.push(where);
       else if (row.reading === "noisy") noisy.push(where);
+      else if (row.reading === "shifted") shifted.push(where);
     }
   }
   const verdict =
@@ -236,5 +255,5 @@ export function gateVerdict(cells, { paired, rounds }) {
             : missing.length > 0
               ? "missing"
               : "pass";
-  return { verdict, worse, better, noisy, missing, moved };
+  return { verdict, worse, better, noisy, missing, moved, shifted };
 }
