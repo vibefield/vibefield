@@ -1,0 +1,86 @@
+{
+  "activation": [
+    "onWidget:vibefield.example.desk-clock"
+  ],
+  "capabilities": [],
+  "contributes": {
+    "objects": [
+      {
+        "binding": {
+          "kind": "clock"
+        },
+        "description": "An analogue clock lying on the desk: it reads the host's clock and wakes only when a hand must move",
+        "groups": {},
+        "interaction": {
+          "movable": true,
+          "resizable": false,
+          "selectable": true,
+          "snap": "both"
+        },
+        "props": {
+          "ring24": {
+            "default": false,
+            "kind": "boolean"
+          },
+          "seconds": {
+            "default": true,
+            "kind": "boolean"
+          },
+          "style": {
+            "default": "classic",
+            "kind": "enum",
+            "options": [
+              "classic",
+              "station",
+              "graphite"
+            ]
+          },
+          "zone": {
+            "default": "local",
+            "kind": "string"
+          }
+        },
+        "provides": [
+          "vibefield.example.desk-clock",
+          "desk.object",
+          "desk.containable"
+        ],
+        "schemaVersion": 1,
+        "size": {
+          "h": 150,
+          "w": 150
+        },
+        "title": "Clock",
+        "tray": {
+          "category": "things",
+          "hang": {
+            "accessory": "hook",
+            "h": 110,
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ],
+            "w": 110
+          },
+          "label": "Clock",
+          "order": 0
+        },
+        "type": "vibefield.example.desk-clock"
+      }
+    ]
+  },
+  "description": "ICE's analogue desk clock as a VibeField plugin — its own WGSL, pass, wake, tray entry, menu act and held tools, through the SDK's /desk door alone",
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "id": "vibefield.example.desk-clock",
+  "manifestVersion": 1,
+  "title": "Desk clock",
+  "version": "0.1.0"
+}

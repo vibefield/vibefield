@@ -1,0 +1,10 @@
+{
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM"],
+    // a kind's pass names the WebGPU globals (`GPUDevice`, `GPUBlendState`, …) the host's device carries
+    "types": ["@webgpu/types", "node"],
+    "noEmit": true
+  },
+  "include": ["src", "scripts", "test", "vitest.config.ts"]
+}
