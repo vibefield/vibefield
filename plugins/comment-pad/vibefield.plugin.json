@@ -1,0 +1,112 @@
+{
+  "activation": [
+    "onWidget:vibefield.comment-pad"
+  ],
+  "capabilities": [],
+  "contributes": {
+    "objects": [
+      {
+        "binding": {
+          "kind": "commentPad"
+        },
+        "description": "A pad of comments: tap it and write — each line a comment, kept with the board, undone a session at a time",
+        "groups": {
+          "ink": [
+            "text",
+            "seeds"
+          ]
+        },
+        "interaction": {
+          "movable": true,
+          "resizable": false,
+          "selectable": true,
+          "snap": "both"
+        },
+        "props": {
+          "accent": {
+            "default": "indigo",
+            "kind": "enum",
+            "options": [
+              "indigo",
+              "pink",
+              "green",
+              "amber",
+              "cyan",
+              "violet",
+              "red",
+              "blue"
+            ]
+          },
+          "pen": {
+            "default": "ball",
+            "kind": "enum",
+            "options": [
+              "felt",
+              "ball",
+              "fountain",
+              "red"
+            ]
+          },
+          "seed": {
+            "default": 0,
+            "kind": "number"
+          },
+          "seeds": {
+            "default": "",
+            "kind": "string",
+            "maxLength": 200000
+          },
+          "text": {
+            "default": "",
+            "kind": "string",
+            "maxLength": 20000
+          }
+        },
+        "provides": [
+          "vibefield.comment-pad",
+          "desk.object",
+          "desk.containable"
+        ],
+        "schemaVersion": 1,
+        "size": {
+          "h": 280,
+          "w": 220
+        },
+        "title": "Comment pad",
+        "tray": {
+          "category": "comments",
+          "hang": {
+            "accessory": "hook",
+            "h": 140,
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ],
+            "w": 110
+          },
+          "label": "Comment pad",
+          "local": true,
+          "order": 0,
+          "props": {
+            "text": "a comment"
+          }
+        },
+        "type": "vibefield.comment-pad"
+      }
+    ]
+  },
+  "description": "A pad of comments lying on the desk — tap it and write in the desk's hand; its lines are the document's, undoable, shared with every peer",
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "id": "vibefield.comment-pad",
+  "manifestVersion": 1,
+  "title": "Comment pad",
+  "version": "0.1.0"
+}
