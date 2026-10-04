@@ -23,6 +23,7 @@ import type {
 } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { DoorClient } from "../src/godview/monitor/doors";
+import { modelBoardOver } from "../src/godview/monitor/doors";
 import { createGodviewMonitorFeed } from "../src/godview/monitor/model-replica";
 import {
   instrumentModelClient,
@@ -201,8 +202,8 @@ describe("the B-side replay — on the tree as it stands", () => {
   it("the replayed model stream reaches the window adapter's replica, whose rows are the stream's rows", async () => {
     window.history.replaceState(null, "", "/?godviewPerf=1&godviewReplay=1");
     const real = refusingClient();
-    // the window adapter, built as a window builds it: its client goes through the switch
-    const feed = createGodviewMonitorFeed({ client: real });
+    // the window adapter, built as a window builds it: the board over the client, which goes through the switch
+    const feed = createGodviewMonitorFeed({ board: modelBoardOver(real) });
     instrumentMonitorDoor(quietDoor());
     await vi.advanceTimersByTimeAsync(0);
     expect(feed.state()).toEqual({ state: "live", here: undefined });
@@ -293,7 +294,7 @@ describe("the B-side replay — on the tree as it stands", () => {
 
   it("refuses a stream for another corpus, and plays the fold source untouched without one", async () => {
     window.history.replaceState(null, "", "/?godviewPerf=1&godviewReplay=1");
-    const feed = createGodviewMonitorFeed({ client: refusingClient() });
+    const feed = createGodviewMonitorFeed({ board: modelBoardOver(refusingClient()) });
     const replayDoor = instrumentMonitorDoor(quietDoor());
     const lab = godviewPerfLab();
     if (lab === null) throw new Error("the switch installed no lab");

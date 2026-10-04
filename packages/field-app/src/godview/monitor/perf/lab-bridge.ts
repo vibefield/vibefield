@@ -84,12 +84,15 @@ function createModelWitness(): ModelWitness {
   return {
     async open() {
       if (feed === null) {
-        const [{ createGodviewMonitorFeed }, { godviewModelReplay }] = await Promise.all([
-          import("../model-replica"),
-          import("./door-instruments"),
-        ]);
+        const [{ createGodviewMonitorFeed }, { godviewModelReplay }, { modelBoardOver }] =
+          await Promise.all([
+            import("../model-replica"),
+            import("./door-instruments"),
+            import("../doors"),
+          ]);
         replay = godviewModelReplay();
-        feed = createGodviewMonitorFeed({ client: replay });
+        // built as a window builds its feed: the board port over the client (MV-3b)
+        feed = createGodviewMonitorFeed({ board: modelBoardOver(replay) });
         await new Promise((settled) => setTimeout(settled, 0));
       }
       return { state: feed.state().state };

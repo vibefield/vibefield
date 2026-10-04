@@ -8,6 +8,10 @@ import {
 } from "@vibefield/contracts";
 import type { MeshBoardListener, MonitorDoor } from "../godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
+import { type CatalogDesktop, catalogModelBoard } from "./godview-model-fixture";
+
+/** This desktop, as the catalog's roster names it (`godview-mesh-fixtures.ts`). */
+export const THIS_MAC: CatalogDesktop = { id: "this-mac", name: "MacBook Pro", platform: "darwin" };
 
 // AR-S5 — the catalog's Godview with its profile tabs, on a fixture door: the
 // design record's pass-15 stage as fieldd's fold would send it (Work:
@@ -215,11 +219,15 @@ export function aloneOnTheMesh({ onOpen }: MeshBoardListener): () => void {
   return () => undefined;
 }
 
-/** A door with the fold and the profiles in it, and no deck: every verb that
- * would need a pane says there is none, as the live door says it. */
+/** A door with the fold, the profiles and the model board in it, and no deck:
+ * every verb that would need a pane says there is none, as the live door says
+ * it. MV-3b: the monitor draws the board (`godview-model-fixture.ts`); the fold
+ * stays for the marker and the find sheet, as in the product. */
 export function profileTabsDoor(): MonitorDoor {
   const rows = profileTabRows(new Date().toISOString());
+  const board = catalogModelBoard({ device: THIS_MAC, rows, profiles: PROFILE_TAB_SETS });
   return {
+    model: board.port,
     observeMesh: aloneOnTheMesh,
     attach: async () => ({ state: "no-pane" }),
     observe: ({ onFrame }) => {
@@ -322,12 +330,28 @@ export interface CatalogBirth {
   profileSet?: string;
 }
 
-/** The spawn bloom's door: the fold and the three profiles, and a create that
- * answers `mounted` — telling `onBorn`, which keeps the pane facts. */
+/** A born terminal's floor summary, as the deck would hold its pane's session. */
+function birthSession(birth: CatalogBirth, index: number): SessionSummary {
+  return {
+    id: birth.sessionId,
+    exited: false,
+    createdAtMs: Date.parse(AT) + index,
+    cwd: "/Users/you/Projects/scratch",
+    title: "zsh",
+    activity: { kind: "shell-idle" },
+  } as unknown as SessionSummary;
+}
+
+/** The spawn bloom's door: the fold, the three profiles and the model board,
+ * and a create that answers `mounted` — telling `onBorn`, which keeps the pane
+ * facts, and listing the shell on the board's floor under its profile (SB-3),
+ * which is where the new body's row comes from. */
 export function spawnBloomDoor(onBorn: (birth: CatalogBirth) => void): MonitorDoor {
   const rows = fixtureRows(SPAWN_ROWS, new Date().toISOString());
+  const board = catalogModelBoard({ device: THIS_MAC, rows, profiles: SPAWN_BLOOM_SETS });
   let births = 0;
   return {
+    model: board.port,
     observeMesh: aloneOnTheMesh,
     attach: async () => ({ state: "no-pane" }),
     observe: ({ onFrame }) => {
@@ -338,7 +362,12 @@ export function spawnBloomDoor(onBorn: (birth: CatalogBirth) => void): MonitorDo
       births += 1;
       const sessionId = `catalog-terminal-${births}`;
       const profileSet = request?.profileSet;
-      onBorn({ sessionId, ...(profileSet !== undefined ? { profileSet } : {}) });
+      const birth: CatalogBirth = {
+        sessionId,
+        ...(profileSet !== undefined ? { profileSet } : {}),
+      };
+      board.born(birthSession(birth, births - 1), profileSet);
+      onBorn(birth);
       return { state: "mounted", sessionId, ...(profileSet !== undefined ? { profileSet } : {}) };
     },
     mountLocal: async () => ({ state: "no-pane" }),
@@ -356,17 +385,7 @@ export function spawnBloomDoor(onBorn: (birth: CatalogBirth) => void): MonitorDo
 /** The births as a deck would publish them: each in a pane, the last one
  * active, and the pool's record of the profile each was born under. */
 export function catalogBirthPanes(births: readonly CatalogBirth[]): MonitorPaneFacts {
-  const sessions = births.map(
-    (birth, index) =>
-      ({
-        id: birth.sessionId,
-        exited: false,
-        createdAtMs: Date.parse(AT) + index,
-        cwd: "/Users/you/Projects/scratch",
-        title: "zsh",
-        activity: { kind: "shell-idle" },
-      }) as unknown as SessionSummary,
-  );
+  const sessions = births.map((birth, index) => birthSession(birth, index));
   const last = births.at(-1);
   return {
     sessionIds: births.map((birth) => birth.sessionId),

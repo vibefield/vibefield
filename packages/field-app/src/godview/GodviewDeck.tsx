@@ -89,6 +89,7 @@ import {
   devicesPortOver,
   historyPortOver,
   meshBoardOver,
+  modelBoardOver,
   profileSetsPortOver,
   statusHistoryPortOver,
   usagePortOver,
@@ -1149,6 +1150,9 @@ export function GodviewDeck({
       statusHistory: statusHistoryPortOver(doorClient),
       // The profile tabs filter existing sessions; terminal birth is independent.
       profiles: profileSetsPortOver(doorClient),
+      // MV-3 (MV-D18) — the model board and the screen's report: the monitor's
+      // rows are the backend's, through this window's one door (`model-replica.ts`).
+      model: modelBoardOver(doorClient),
       // DS-4e (2026-10-01; `thinking-desktop-sync-plane.md` §6.3) — ANOTHER
       // desktop's session, mounted in the pane the user is in through the
       // SAME routed host a local pane rides: never ghosttea's remote palette,

@@ -98,6 +98,29 @@ export interface MonitorDoor {
    * fieldd that predates the door) leaves the timeline drawing what this
    * window watched. */
   statusHistory?: StatusHistoryPort;
+  /** MV-3 (MV-D18) — THE MODEL BOARD: the backend's rows for every self
+   * desktop through this window's one door (`agent.subscribe {projection:
+   * "model", scope: "mesh"}`), and the screen's report of what its active pane
+   * shows (`agent.reportShown`, L5). Two verbs bound to one board — a window
+   * holds no client. Optional, and deliberately: a door without it (a fieldd
+   * from before the backend, the catalog) draws the stage with no rows and
+   * says so (`no-door`). */
+  model?: ModelBoardPort;
+}
+
+/** MV-3 — the model board's two verbs (`doors.ts` `modelBoardOver`). The
+ * subscription is the deck's client's: `onFrame` receives the OPEN as a
+ * `.snapshot` (and the client's own re-snapshot after a reconnect) and every
+ * per-device frame as a `.delta`; `onReplayFailed` hears a replay the daemon
+ * refused after a reconnect — the subscription is over, and the feed asks
+ * again on its backoff (S4). */
+export interface ModelBoardPort {
+  subscribe(
+    onFrame: (payload: unknown, kind?: "snapshot" | "delta") => void,
+    opts?: { onReplayFailed?: (error: unknown) => void },
+  ): Promise<{ snapshot: unknown; unsubscribe: () => void }>;
+  /** L5 — the rows the window shows in its active pane, by MODEL id. */
+  reportShown(ids: readonly string[]): Promise<unknown>;
 }
 
 /** TL — one ask of `agent.history`, read run by run: a run that does not parse
@@ -207,22 +230,15 @@ export type RemoteAttachOutcome =
   | { state: "no-pane" }
   | { state: "failed"; reason: string };
 
-/**
- * A monitor row id for another desktop's run, keyed `{device, runtimeRunId}`
- * as the mesh board keys it (DS-L2: a row's key says who owns it).
- *
- * Prefixed and device-qualified because the monitor's ids are a flat namespace
- * shared with local rows: two desktops can each have a run with one id, and
- * one of them can collide with ours. The prefix also makes a remote id
- * recognizable in a marker line, which is how the smoke tells the two apart.
- */
-export function remoteRowId(deviceId: string, runtimeRunId: string): string {
-  return `remote:${deviceId}:${runtimeRunId}`;
-}
-
+// RETIRED 2026-10-04 (MV-3b, M35): `remoteRowId` — the window's own id for
+// another desktop's run (`remote:{device}:{run}`). A peer's row carries its
+// OWNER's model id now, the one the backend dealt it, read off the one model
+// door; nothing qualifies it here.
+//
 // RETIRED 2026-09-30 (DS-3): `RemoteHostIdentity`, `RemoteSessionRow` and
 // `remoteSessionRows` — GT-D17's mesh half, which flattened ghosttea's
 // `runtime.listRemoteHosts()` into rows every two seconds. Under the routed
 // runtime that ask THREW ("Remote-host discovery is not part of the routed
-// host contract"), so the half had been dark since TP-S3e; the mesh board
-// (`mesh-field.ts`) is what a desktop reads another desktop's agents from now.
+// host contract"), so the half had been dark since TP-S3e; the model board
+// (`model-replica.ts`, MV-3b; the mesh board before it) is what a desktop reads
+// another desktop's agents from now.

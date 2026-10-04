@@ -24,8 +24,9 @@ import {
   GodviewAgentsProvider,
   useAgentFold,
   useDeckAgentFacts,
+  useMonitorFeed,
 } from "../src/godview/monitor/GodviewAgentsProvider";
-import type { MonitorDoor } from "../src/godview/monitor/remote-door";
+import type { ModelBoardPort, MonitorDoor } from "../src/godview/monitor/remote-door";
 import { managedSummary } from "./managed-session-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -88,7 +89,43 @@ function foldDoor(initial: readonly AgentSessionSummary[] = []): FoldDoor {
 const seen = {
   fold: [] as Array<ReturnType<typeof useAgentFold>>,
   deck: [] as Array<ReturnType<typeof useDeckAgentFacts>>,
+  feed: [] as Array<ReturnType<typeof useMonitorFeed>>,
 };
+
+function FeedReader(): ReactElement {
+  const feed = useMonitorFeed();
+  seen.feed.push(feed);
+  return <span data-testid="feed">{feed === null ? "none" : feed.state().state}</span>;
+}
+
+/** MV-3b — the door's model port, scripted: an empty board for this desktop
+ * alone, and a count of the subscriptions opened and let go. */
+function modelPort(): ModelBoardPort & { opened: number; closed: number } {
+  const port = {
+    opened: 0,
+    closed: 0,
+    subscribe: async () => {
+      port.opened += 1;
+      return {
+        snapshot: {
+          devices: [
+            {
+              device: "dev-here",
+              state: "live",
+              asOf: "2026-09-13T00:00:00.000Z",
+              snapshot: { epoch: "here.1", revision: 1, rows: [] },
+            },
+          ],
+        },
+        unsubscribe: () => {
+          port.closed += 1;
+        },
+      };
+    },
+    reportShown: async () => ({ reported: true }),
+  };
+  return port;
+}
 
 function FoldReader(): ReactElement {
   const fold = useAgentFold();
@@ -111,6 +148,7 @@ function mount(door: MonitorDoor | null, subscribed = true): void {
       <GodviewAgentsProvider door={door} subscribed={subscribed}>
         <FoldReader />
         <DeckReader />
+        <FeedReader />
       </GodviewAgentsProvider>,
     );
   });
@@ -119,6 +157,7 @@ function mount(door: MonitorDoor | null, subscribed = true): void {
 beforeEach(() => {
   seen.fold = [];
   seen.deck = [];
+  seen.feed = [];
 });
 
 afterEach(() => {
@@ -251,5 +290,45 @@ describe("the pane join", () => {
     });
     expect(foldByTerminal([speaking, silent]).get("pty-a")).toBe(speaking);
     expect(foldByTerminal([silent, speaking]).get("pty-a")).toBe(speaking);
+  });
+});
+
+describe("the window's model board (MV-3b)", () => {
+  const settle = () => act(async () => undefined);
+
+  it("mounts the feed beside the fold when the door has a model port, and lets it go with the tree", async () => {
+    const port = modelPort();
+    const door = { ...foldDoor(), model: port } as MonitorDoor;
+    mount(door);
+    await settle();
+    expect(port.opened).toBe(1);
+    const feed = seen.feed.at(-1);
+    expect(feed).not.toBeNull();
+    // the feed's STATE is its own (the stage subscribes to it); the context value is the feed
+    expect(feed?.state()).toEqual({ state: "live", here: "dev-here" });
+    expect(container?.querySelector('[data-testid="feed"]')).not.toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    expect(port.closed).toBe(1);
+  });
+
+  it("is null — not an empty board — without a model port, without a door, and while Godview is closed", async () => {
+    mount(foldDoor());
+    await settle();
+    expect(seen.feed.at(-1)).toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    seen.feed = [];
+    const port = modelPort();
+    mount({ ...foldDoor(), model: port } as MonitorDoor, false);
+    await settle();
+    expect(port.opened).toBe(0);
+    expect(seen.feed.at(-1)).toBeNull();
+    act(() => root?.unmount());
+    root = null;
+    seen.feed = [];
+    mount(null);
+    await settle();
+    expect(seen.feed.at(-1)).toBeNull();
   });
 });

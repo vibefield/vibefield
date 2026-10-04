@@ -15,6 +15,7 @@
  * provider the overlay mounts in production.
  */
 
+import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   monitorParameterDefaults,
   monitorViewFor,
@@ -26,6 +27,7 @@ import {
   type ComponentType,
   type CSSProperties,
   type ReactElement,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -39,6 +41,7 @@ import { setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
 import { managedSummary } from "./managed-session-fixture";
+import { type ScriptedModelBoard, scriptedModelBoard, terminalInfoOf } from "./model-board-fixture";
 import { bornSummary, routedTicket } from "./routed-terminal-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -416,8 +419,15 @@ vi.mock("@vibefield/fieldd-client/react", () => ({
 /** The fold, as the overlay feeds it: the deck's own door would carry it in
  * production, and a fake one carries it here — the routing is ours, the
  * transport is not this fixture's subject. */
+/** MV-3b — the model board the window's rows come from (`model-board-fixture.ts`):
+ * fieldd's real backend on this fixture's fold rows, the deck's pane sessions
+ * as the floor's PTYs. Built per test, disposed after it. */
+let board: ScriptedModelBoard | null = null;
+
 function foldDoor(): MonitorDoor {
+  board ??= scriptedModelBoard({ rows: foldRows });
   return {
+    model: board.port,
     observeMesh: vi.fn(({ onOpen }) => {
       onOpen({ devices: [] });
       return () => undefined;
@@ -488,16 +498,42 @@ async function settle(): Promise<void> {
   }
 }
 
+/** The monitor's rows beside the deck, as the swarm would read them: the model
+ * board's rows (the deck's pane sessions are the floor's PTYs, so each pane is
+ * a terminal row) joined with the deck's panes by the window. A bare terminal's
+ * row id is its floor session. */
 function PaneLinks({ panes }: { panes: MonitorPaneFacts }): ReactElement {
   const palette = useMonitorPalette();
   const { agents } = useMonitorAgents({ palette, panes });
+  // fieldd's inventory lists every live PTY: the panes' sessions and the
+  // roster's (a shell detached from its pane and kept, GT-6b)
+  const floorKey = [
+    ...(panes.sessions ?? []).map((session) => `${session.id}:${session.cwd ?? ""}`),
+    ...(panes.floor ?? []).map((row) => `${row.sessionId}:${row.workloadClass}`),
+  ].join("\n");
+  useEffect(() => {
+    const listed = new Set((panes.sessions ?? []).map((session) => session.id));
+    board?.floor([
+      ...(panes.sessions ?? []).map((session) => terminalInfoOf(session)),
+      ...(panes.floor ?? [])
+        .filter((row) => !listed.has(row.sessionId))
+        .map((row) =>
+          terminalInfoOf(
+            { id: row.sessionId, createdAtMs: 0, title: row.title } as unknown as SessionSummary,
+            row.workloadClass,
+          ),
+        ),
+    ]);
+    // keyed by the sessions' facts, not the array the deck republishes
+  }, [floorKey]);
   return (
     <div>
       {agents.map((agent) => (
         <output
           key={agent.id}
-          data-session={agent.session?.id ?? agent.floorSessionId}
-          data-visual-id={agent.visualId}
+          data-session={agent.id}
+          // the views' own read (`viewReadProjection`): the shim leaves it absent when it is the id
+          data-visual-id={agent.visualId ?? agent.id}
           data-pane-color={agent.attachment?.color}
           data-palette-lightness={palette.tint.l}
         />
@@ -582,6 +618,8 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
+  board?.dispose();
+  board = null;
   document.documentElement.style.removeProperty("--tint-l");
   document.documentElement.style.removeProperty("--tint-c");
   document.documentElement.classList.remove("godview-test-dark");

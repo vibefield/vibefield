@@ -26,7 +26,7 @@ export interface ManagedSummaryOptions {
    * `core/src/monitor/types.ts:74–78`). The fixture used to invent the flat
    * shape, which is why a renderer reading the root field passed its tests and
    * said a bare "permission" on every real board (GT-6 review). */
-  blocker?: { kind: string; tool?: string; detail?: string };
+  blocker?: { kind: string; tool?: string; detail?: string; question?: string };
   lastAssistantText?: string;
   createdAt?: string;
   profileId?: string;
@@ -76,6 +76,11 @@ export function managedSummary(options: ManagedSummaryOptions = {}): AgentSessio
                     since: createdAt,
                     ...(options.blocker.detail !== undefined
                       ? { detail: options.blocker.detail }
+                      : {}),
+                    // a question's prompt rides under `questions`, as Core's
+                    // does (`MonitorStructuredQuestion`), never at the root
+                    ...(options.blocker.question !== undefined
+                      ? { questions: [{ prompt: options.blocker.question }] }
                       : {}),
                     // Only a permission carries one, and Core nests it: the
                     // tool rides under `permission`, beside the request id the

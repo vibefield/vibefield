@@ -6,9 +6,9 @@ import { createMonitorReplica } from "@vibecook/puppeteer-monitor/replica";
 import type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";
 import { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
-import type { DoorClient } from "../src/godview/monitor/doors";
 import { ModelBoardFold } from "../src/godview/monitor/model-board";
 import { createGodviewMonitorFeed } from "../src/godview/monitor/model-replica";
+import type { ModelBoardPort } from "../src/godview/monitor/remote-door";
 
 // MV-3a (MV-D18, M3, M23) — the window adapter: the one door's per-device
 // chains folded into ONE model chain, fed to the replica. The frames are the
@@ -64,6 +64,18 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
       [PEER, "live"],
       ["dev-01HQ9S7Y44", "asleep"],
     ]);
+    // MV-3b — the board row is kept beside each model row: the window's own
+    // joins read the pane a model id stands for and the run it was dealt to
+    expect(fold.heldRows().map((held) => [held.device, held.row.id])).toEqual([
+      [HERE, "run-studio-q"],
+      [HERE, "pty-s4"],
+      [PEER, "run-loft-w"],
+    ]);
+    const terminal = fold.held("pty-s4");
+    expect(terminal?.board.kind).toBe("terminal");
+    expect(terminal?.board.terminal?.runtimeSessionId).toBe("pty-s4");
+    expect(fold.held("run-studio-q")?.board.runtimeRunId).toBe("run-studio-q");
+    expect(fold.held("nobody")).toBeUndefined();
   });
 
   it("frames in order: a delta is upserts and removals by model id, a state change moves no row (DS-L8), a peer's removal leaves", () => {
@@ -142,6 +154,9 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
       },
     });
     expect(change).toMatchObject({ upserts: [], removed: ["run-loft-w"] });
+    // …and the fold no longer holds it
+    expect(fold.held("run-loft-w")).toBeUndefined();
+    expect(fold.heldRows()).toHaveLength(2);
   });
 });
 
@@ -173,43 +188,44 @@ describe("the replica over the fold — structural sharing, the host's order", (
 });
 
 describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the screen re-reported", () => {
-  interface FakeDoor extends DoorClient {
+  /** The door's model port (`remote-door.ts`), scripted: the two verbs and nothing else. */
+  interface FakeBoard extends ModelBoardPort {
     opens: number;
     unsubscribed: number;
-    requests: Array<[string, Record<string, unknown>]>;
+    reports: string[][];
     /** the live subscription's frame sink */
     push(payload: unknown, kind?: "snapshot" | "delta"): void;
   }
-  function fakeDoor(open: unknown = OPEN): FakeDoor {
+  function fakeBoard(open: unknown = OPEN): FakeBoard {
     let sink: ((payload: unknown, kind?: "snapshot" | "delta") => void) | null = null;
-    const door: FakeDoor = {
+    const board: FakeBoard = {
       opens: 0,
       unsubscribed: 0,
-      requests: [],
-      request: async (method, params) => {
-        door.requests.push([method, params]);
+      reports: [],
+      reportShown: async (ids) => {
+        board.reports.push([...ids]);
         return { reported: true };
       },
-      subscribe: async (_method, _params, onFrame) => {
-        door.opens += 1;
+      subscribe: async (onFrame) => {
+        board.opens += 1;
         sink = onFrame;
         return {
           snapshot: open,
           unsubscribe: () => {
-            door.unsubscribed += 1;
+            board.unsubscribed += 1;
           },
         };
       },
       push: (payload, kind = "delta") => sink?.(payload, kind),
     };
-    return door;
+    return board;
   }
   const settle = () => new Promise((resolve) => setTimeout(resolve, 0));
 
   it("opens the model board, applies the open, folds frames, and re-subscribes on a gap", async () => {
-    const door = fakeDoor();
+    const door = fakeBoard();
     const frame = manualFrame();
-    const feed = createGodviewMonitorFeed({ client: door, scheduler: frame });
+    const feed = createGodviewMonitorFeed({ board: door, scheduler: frame });
     await settle();
     expect(door.opens).toBe(1);
     expect(feed.state()).toEqual({ state: "live", here: HERE });
@@ -243,21 +259,21 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
   });
 
   it("reports what the pane shows while the board is open, and again after a re-open", async () => {
-    const door = fakeDoor();
-    const feed = createGodviewMonitorFeed({ client: door, scheduler: manualFrame() });
+    const door = fakeBoard();
+    const feed = createGodviewMonitorFeed({ board: door, scheduler: manualFrame() });
     feed.reportShown(["pty-s4"]);
     // not yet live: held until the board answers
-    expect(door.requests).toEqual([]);
+    expect(door.reports).toEqual([]);
     await settle();
-    expect(door.requests).toEqual([["agent.reportShown", { ids: ["pty-s4"] }]]);
+    expect(door.reports).toEqual([["pty-s4"]]);
     feed.reportShown(["run-loft-w"]);
-    expect(door.requests.at(-1)).toEqual(["agent.reportShown", { ids: ["run-loft-w"] }]);
+    expect(door.reports.at(-1)).toEqual(["run-loft-w"]);
     // a gap re-opens the board, and the screen is told again
     door.push("not a frame");
     await settle();
     expect(door.opens).toBe(2);
-    expect(door.requests.at(-1)).toEqual(["agent.reportShown", { ids: ["run-loft-w"] }]);
-    expect(door.requests).toHaveLength(3);
+    expect(door.reports.at(-1)).toEqual(["run-loft-w"]);
+    expect(door.reports).toHaveLength(3);
     feed.dispose();
   });
 
@@ -265,8 +281,8 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
     vi.useFakeTimers();
     try {
       let attempts = 0;
-      const door: DoorClient = {
-        request: async () => undefined,
+      const door: ModelBoardPort = {
+        reportShown: async () => undefined,
         subscribe: async () => {
           attempts += 1;
           throw Object.assign(new Error(attempts === 1 ? "not ready" : "no"), {
@@ -276,7 +292,7 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
         },
       };
       const feed = createGodviewMonitorFeed({
-        client: door,
+        board: door,
         scheduler: manualFrame(),
         retryMinMs: 10,
       });

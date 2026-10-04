@@ -3,17 +3,17 @@ import { describe, expect, it } from "vitest";
 import {
   agentProfileSet,
   chosenProfile,
-  personaProfiles,
   profileTabs,
   recedeOutside,
   showsProfileTabs,
-  withProfileSets,
 } from "../src/godview/monitor/profile-tabs";
 import type { MonitorAgent } from "../src/godview/monitor/types";
-import { managedSummary } from "./managed-session-fixture";
 
 // AR-S5 — the bar's profile tabs as pure functions: which profile a row runs
-// under, the strip, what a chosen tab recedes, and where a spawn lands.
+// under, the strip, what a chosen tab recedes. MV-3b: the row's `profileSet` is
+// the BACKEND's word (`resolveProfileSet`: fieldd's set, else the sign-in's,
+// else This Mac), carried on the row by the shim; a peer's set is dropped by
+// the window's rows pass before any reader sees it.
 
 const AT = "2026-09-24T12:00:00.000Z";
 
@@ -53,15 +53,13 @@ const WORK = set(
 );
 const SETS = [NATIVE, PERSONAL, WORK];
 
+/** A row as the shim hands it: an agent facet or none, the set on the ROW. */
 function row(
   id: string,
-  facet: { profileId?: string; profileSet?: string } | null,
+  facet: boolean,
+  profileSet: string | undefined,
   status: MonitorAgent["status"] = "idle",
 ): MonitorAgent {
-  const summary = managedSummary({
-    runtimeRunId: id,
-    ...(facet?.profileId !== undefined ? { profileId: facet.profileId } : {}),
-  });
   return {
     id,
     createdAtMs: 0,
@@ -70,41 +68,22 @@ function row(
     detail: "",
     color: "currentColor",
     active: false,
-    ...(facet === null
-      ? {}
-      : {
-          agent: {
-            provider: { id: "claude", label: "Claude" },
-            kind: "claude",
-            tier: "managed",
-            runtimeRunId: id,
-            recency: "fresh",
-            summary,
-            ...(facet.profileId !== undefined ? { profileId: facet.profileId } : {}),
-            ...(facet.profileSet !== undefined ? { profileSet: facet.profileSet } : {}),
-          },
-        }),
+    ...(profileSet !== undefined ? { profileSet } : {}),
+    ...(facet ? { agent: { provider: { id: "claude", label: "Claude" }, recency: "fresh" } } : {}),
   } as MonitorAgent;
 }
 
-const personas = personaProfiles(SETS);
-
 describe("which profile a session runs under", () => {
-  it("takes fieldd's word first, then the sign-in's profile, and a bare local agent is This Mac's", () => {
-    expect(agentProfileSet(row("a", { profileSet: "work", profileId: "p-claude" }), personas)).toBe(
-      "work",
-    );
-    expect(agentProfileSet(row("b", { profileId: "p-claude" }), personas)).toBe("personal");
-    expect(agentProfileSet(row("c", { profileId: "claude:native-default" }), personas)).toBe(
-      "native",
-    );
-    expect(agentProfileSet(row("d", {}), personas)).toBe("native");
+  it("is the row's own word — the backend's chain: fieldd's set, the sign-in's, This Mac", () => {
+    expect(agentProfileSet(row("a", true, "work"))).toBe("work");
+    expect(agentProfileSet(row("b", true, "personal"))).toBe("personal");
+    expect(agentProfileSet(row("d", true, "native"))).toBe("native");
   });
 
-  it("puts a bare terminal, a peer's session and a sign-in the feed no longer lists under no profile", () => {
-    expect(agentProfileSet(row("t", null), personas)).toBeUndefined();
+  it("puts a bare terminal, a peer's session and a shell under no set under no profile", () => {
+    expect(agentProfileSet(row("t", false, undefined))).toBeUndefined();
     const remote = {
-      ...row("r", {}),
+      ...row("r", true, "native"),
       remote: {
         deviceId: "mini",
         deviceName: "studio-mini",
@@ -114,8 +93,7 @@ describe("which profile a session runs under", () => {
         cwdLabel: null,
       },
     } as MonitorAgent;
-    expect(agentProfileSet(remote, personas)).toBeUndefined();
-    expect(agentProfileSet(row("gone", { profileId: "signed-out" }), personas)).toBeUndefined();
+    expect(agentProfileSet(remote)).toBeUndefined();
   });
 });
 
@@ -127,14 +105,10 @@ describe("the strip", () => {
   });
 
   it("lists the profiles in the feed's order, fills the default, and dots only a profile with a blocked session", () => {
-    const tabs = profileTabs(
-      SETS,
-      [
-        row("w1", { profileSet: "work" }, "blocked"),
-        row("p1", { profileSet: "personal" }, "working"),
-      ],
-      personas,
-    );
+    const tabs = profileTabs(SETS, [
+      row("w1", true, "work", "blocked"),
+      row("p1", true, "personal", "working"),
+    ]);
     expect(tabs).toEqual([
       { id: "native", label: "This Mac", kind: "native", isDefault: false },
       { id: "personal", label: "Personal", kind: "managed", glyph: "house", isDefault: true },
@@ -159,14 +133,14 @@ describe("the strip", () => {
 
 describe("a chosen tab", () => {
   const rows = [
-    row("w1", { profileSet: "work" }),
-    row("p1", { profileId: "p-claude" }),
-    row("m1", {}),
-    row("t1", null),
+    row("w1", true, "work"),
+    row("p1", true, "personal"),
+    row("m1", true, "native"),
+    row("t1", false, undefined),
   ];
 
   it("keeps its profile's sessions as they are and recedes every other row in place", () => {
-    const staged = recedeOutside(rows, "work", personas);
+    const staged = recedeOutside(rows, "work");
     expect(staged.map((agent) => [agent.id, agent.receded === true])).toEqual([
       ["w1", false],
       ["p1", true],
@@ -175,25 +149,24 @@ describe("a chosen tab", () => {
     ]);
     expect(staged[0]).toBe(rows[0]);
     expect(
-      recedeOutside(rows, "native", personas)
+      recedeOutside(rows, "native")
         .filter((a) => !a.receded)
         .map((a) => a.id),
     ).toEqual(["m1"]);
-    expect(recedeOutside(rows, undefined, personas)).toBe(rows);
+    expect(recedeOutside(rows, undefined)).toBe(rows);
+    // every row already under the chosen set: the same list
+    expect(recedeOutside([rows[0] as MonitorAgent], "work")).toEqual([rows[0]]);
   });
 });
 
 describe("a terminal born under a profile (SB-3)", () => {
-  const shell = (id: string, profileSet?: string): MonitorAgent =>
-    ({ ...row(id, null), ...(profileSet !== undefined ? { profileSet } : {}) }) as MonitorAgent;
+  const shell = (id: string, profileSet?: string): MonitorAgent => row(id, false, profileSet);
 
   it("runs under the profile its shell was born under, so a chosen Work tab keeps a Work shell", () => {
     const rows = [shell("work-shell", "work"), shell("bare"), shell("orphan", "deleted-set")];
-    expect(agentProfileSet(rows[0]!, personas)).toBe("work");
-    expect(agentProfileSet(rows[1]!, personas)).toBeUndefined();
-    expect(
-      recedeOutside(rows, "work", personas).map((agent) => [agent.id, agent.receded === true]),
-    ).toEqual([
+    expect(agentProfileSet(rows[0] as MonitorAgent)).toBe("work");
+    expect(agentProfileSet(rows[1] as MonitorAgent)).toBeUndefined();
+    expect(recedeOutside(rows, "work").map((agent) => [agent.id, agent.receded === true])).toEqual([
       ["work-shell", false],
       ["bare", true],
       ["orphan", true],
@@ -201,35 +174,9 @@ describe("a terminal born under a profile (SB-3)", () => {
     // A set deleted since recedes under every tab, like an unbound shell, and
     // lights no tab's dot.
     for (const tab of ["native", "personal", "work"]) {
-      expect(recedeOutside(rows, tab, personas)[2]?.receded).toBe(true);
+      expect(recedeOutside(rows, tab)[2]?.receded).toBe(true);
     }
     const blockedOrphan = { ...shell("x", "deleted-set"), status: "blocked" } as MonitorAgent;
-    expect(profileTabs(SETS, [blockedOrphan], personas).some((tab) => tab.blocked)).toBe(false);
-  });
-
-  it("puts on every row the set the tabs compute, and hands an unchanged row on as itself", () => {
-    const rows = [
-      row("w1", { profileSet: "work" }),
-      row("p1", { profileId: "p-claude" }),
-      row("m1", {}),
-      shell("s1", "work"),
-      shell("t1"),
-      row("gone", { profileId: "signed-out" }),
-    ];
-    const stamped = withProfileSets(rows, personas);
-    expect(stamped.map((agent) => [agent.id, agent.profileSet])).toEqual([
-      ["w1", "work"],
-      ["p1", "personal"],
-      ["m1", "native"],
-      ["s1", "work"],
-      ["t1", undefined],
-      ["gone", undefined],
-    ]);
-    expect(stamped[3]).toBe(rows[3]);
-    expect(stamped[4]).toBe(rows[4]);
-    expect(withProfileSets(stamped, personas).every((agent, i) => agent === stamped[i])).toBe(true);
-    // a row whose set is no longer known drops the one it carried
-    const stale = { ...row("stale", { profileId: "signed-out" }), profileSet: "work" };
-    expect("profileSet" in (withProfileSets([stale], personas)[0] ?? {})).toBe(false);
+    expect(profileTabs(SETS, [blockedOrphan]).some((tab) => tab.blocked)).toBe(false);
   });
 });

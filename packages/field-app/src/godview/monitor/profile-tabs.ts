@@ -4,64 +4,28 @@ import type { MonitorAgent } from "./types";
 
 // AR-S5 — the bar's profile tabs (the agents-settings record's T3), as pure
 // functions of the profiles feed and the monitor's rows: which profile a row's
-// session runs under, the strip and what a chosen tab recedes. `GodviewMonitor` draws them; nothing here dials.
+// session runs under, the strip and what a chosen tab recedes. `GodviewMonitor`
+// draws them; nothing here dials.
 
 /** The native set's id: the agents' own folders ("This Mac"). */
 export const NATIVE_PROFILE = "native";
 
-/** Every sign-in the feed lists, by the profile it is in. */
-export function personaProfiles(sets: readonly AgentProfileSet[]): ReadonlyMap<string, string> {
-  const map = new Map<string, string>();
-  for (const set of sets) for (const persona of set.personas) map.set(persona.profileId, set.id);
-  return map;
-}
-
 /**
  * The profile a row's session runs under, or undefined for a row under none.
  *
- * fieldd's word first (`profileSet`, puppeteer's own record of the set the
- * run was born under); then the set its sign-in is listed in; a local agent
- * with neither runs in the agent's own folder, which is This Mac. A terminal
- * runs under the profile its shell was born under (SB-3 — the row's own
- * `profileSet`, fieldd's record): a Work shell stays under Work. A bare,
- * unbound terminal and a peer's session run under no profile of this
- * device's: under a chosen tab they recede, and so does a shell whose profile
- * has since been deleted (its id names no tab). A sign-in the feed no longer
- * lists (signed out, its sessions still running) is unknown here rather than
- * guessed.
+ * MV-3b: the row's own word, which is the BACKEND's (`resolveProfileSet`):
+ * fieldd's `profileSet` for the run first (puppeteer's own record of the set
+ * the run was born under), then the set its sign-in is listed in, then This
+ * Mac — the same chain this function walked over the fold's row — and for a
+ * terminal the profile its shell was born under (SB-3, fieldd's bindings). A
+ * peer's session runs under no profile of this device's: under a chosen tab it
+ * recedes (`window-rows.ts` drops the owner's set before any reader sees it,
+ * and this answers undefined for it regardless). A shell whose profile has
+ * since been deleted names no tab and recedes too.
  */
-export function agentProfileSet(
-  agent: MonitorAgent,
-  personas: ReadonlyMap<string, string>,
-): string | undefined {
+export function agentProfileSet(agent: MonitorAgent): string | undefined {
   if (agent.remote !== undefined) return undefined;
-  const facet = agent.agent;
-  if (facet === undefined) return agent.profileSet;
-  if (facet.profileSet !== undefined) return facet.profileSet;
-  if (facet.profileId !== undefined) return personas.get(facet.profileId);
-  return NATIVE_PROFILE;
-}
-
-/**
- * The rows with the profile each runs under on the row itself (SB-3): the
- * views' `MonitorAgent.profileSet`, which the spawn bloom lights by (SB-D8) and
- * a terminal's body names. An agent row carries the set the tabs compute
- * (`agentProfileSet`); a terminal already carries its shell's. A row whose set
- * is unchanged is handed on as the same object.
- */
-export function withProfileSets(
-  agents: readonly MonitorAgent[],
-  personas: ReadonlyMap<string, string>,
-): readonly MonitorAgent[] {
-  return agents.map((agent) => {
-    const profileSet = agentProfileSet(agent, personas);
-    if (profileSet === agent.profileSet) return agent;
-    if (profileSet === undefined) {
-      const { profileSet: _dropped, ...rest } = agent;
-      return rest;
-    }
-    return { ...agent, profileSet };
-  });
+  return agent.profileSet;
 }
 
 /** The strip is worth drawing once a profile besides This Mac exists: All
@@ -75,12 +39,11 @@ export function showsProfileTabs(sets: readonly AgentProfileSet[]): boolean {
 export function profileTabs(
   sets: readonly AgentProfileSet[],
   agents: readonly MonitorAgent[],
-  personas: ReadonlyMap<string, string>,
 ): ProfileTab[] {
   const blocked = new Set<string>();
   for (const agent of agents) {
     if (agent.status !== "blocked") continue;
-    const set = agentProfileSet(agent, personas);
+    const set = agentProfileSet(agent);
     if (set !== undefined) blocked.add(set);
   }
   return sets.map((set) => ({
@@ -104,15 +67,22 @@ export function chosenProfile(
   return sets.find((set) => set.id === selected);
 }
 
-/** The rows as the stage draws them under a chosen profile: its own sessions
- * as they are, every other one receded (it keeps its place). */
+/**
+ * Rows as the stage draws them under a chosen profile: its own sessions as
+ * they are, every other one receded (it keeps its place). The LIVE rows take
+ * this from the replica's join (`receded`, the same rule); the timeline's
+ * ended lanes take it here. The same list when nothing recedes.
+ */
 export function recedeOutside(
   agents: readonly MonitorAgent[],
   chosen: string | undefined,
-  personas: ReadonlyMap<string, string>,
 ): readonly MonitorAgent[] {
   if (chosen === undefined) return agents;
-  return agents.map((agent) =>
-    agentProfileSet(agent, personas) === chosen ? agent : { ...agent, receded: true },
-  );
+  let changed = false;
+  const receded = agents.map((agent) => {
+    if (agentProfileSet(agent) === chosen || agent.receded === true) return agent;
+    changed = true;
+    return { ...agent, receded: true };
+  });
+  return changed ? receded : agents;
 }

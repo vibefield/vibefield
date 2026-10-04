@@ -8,8 +8,9 @@ import { defineConfig } from "vitest/config";
 // three other vitest workers is a number about the scheduler.
 //
 //   pnpm --filter @vibefield/field-app perf:godview:corpora   write the fixtures
-//   pnpm --filter @vibefield/field-app perf:godview:oracle    the oracle
-//   pnpm --filter @vibefield/field-app perf:godview:seam      the seam-cost bench
+//   (the oracle and the seam-cost bench ran the PRE-MV seam, which MV-3b
+//   deleted: regenerate at the pre-MV ref, M24; the recorded oracle is the
+//   differential's ground truth)
 export default defineConfig({
   esbuild: { jsx: "automatic", jsxImportSource: "react" },
   resolve: { dedupe: ["react", "react-dom"] },

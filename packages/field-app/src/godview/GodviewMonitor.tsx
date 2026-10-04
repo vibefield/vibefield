@@ -1,3 +1,5 @@
+import type { MonitorTheme, StageGeometry } from "@vibecook/puppeteer-view-sdk";
+import { frameScheduler, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
 import {
   type AccountUsagePort,
   BarControl,
@@ -10,7 +12,6 @@ import {
   type MonitorParameters,
   ProfileGlyph,
   ProfileTabs,
-  SwarmPhysicsProvider,
   UsageColumn,
   useMonitorPalette,
   type MonitorAgent as ViewsMonitorAgent,
@@ -28,8 +29,8 @@ import {
 import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
 import { DeviceFilterChip } from "./DeviceFilterChip";
 import type { GodviewTheme } from "./GodviewTuningPanel";
-import { managedRowId, monitorAgentCounts } from "./monitor/agents";
-import { type DeviceChoice, filterByDevice, standingChoice } from "./monitor/device-filter";
+import { monitorAgentCounts } from "./monitor/agents";
+import type { DeviceChoice } from "./monitor/device-filter";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
 import {
@@ -37,28 +38,16 @@ import {
   launcherOwnsKeyEvent,
   setMonitorHoldsKeys,
 } from "./monitor/launcher-keys";
-import { instrumentedMonitorView } from "./monitor/perf/instrumented-view";
-import {
-  chosenProfile,
-  personaProfiles,
-  profileTabs,
-  recedeOutside,
-  showsProfileTabs,
-  withProfileSets,
-} from "./monitor/profile-tabs";
+import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
-import { spawnMenuOf } from "./monitor/spawn-menu";
-import type { AgentMonitorView, MonitorAgent, MonitorSpawnMenu } from "./monitor/types";
+import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
 import {
   type MonitorPaneFacts,
   type MonitorSourceCounts,
   useMonitorAgents,
 } from "./monitor/useMonitorAgents";
 import { OsMark } from "./os-marks";
-import {
-  createSwarmPhysicsDriver,
-  currentSwarmPhysicsMode,
-} from "./views/swarm/swarm-physics-driver";
+import { currentSwarmPhysicsMode } from "./views/swarm/swarm-physics-driver";
 
 const ACKNOWLEDGEMENT_MS = 2_600;
 
@@ -145,14 +134,15 @@ export function remoteUnavailableClaim(sources: MonitorSourceCounts): string | n
  * stage draws it or not. The pane is the fold's own join (`terminal`, a LOCAL
  * row only — a peer's session id names no pane here), the provenance is the
  * row's word with the contract's default (absent reads `app`), and `drawn` is
- * asked of the rows the stage actually assembled, by the run — the id every
- * managed row is keyed by (`managedRowId`).
+ * asked of the RUNS the stage actually shows (MV-3b: the model's rows, each
+ * joined to its run through the board row it rode in on). The fold stays the
+ * marker's source (M19): the model carries neither the PTY join, nor the
+ * provenance, nor the exit a smoke reads here.
  */
 export function monitorRunFacts(
   rows: readonly AgentSessionSummary[],
-  drawn: readonly Pick<MonitorAgent, "id" | "agent">[],
+  drawnRuns: ReadonlySet<string>,
 ): GodviewMonitorRunFacts[] {
-  const bodies = new Set(drawn.filter((row) => row.agent !== undefined).map((row) => row.id));
   return rows.map((row) => {
     const terminal = row.terminal?.hosted === "local" ? row.terminal.runtimeSessionId : undefined;
     return {
@@ -163,10 +153,18 @@ export function monitorRunFacts(
       status: row.status,
       exited: row.continuation?.exited === true,
       observed: row.monitor !== undefined,
-      drawn: bodies.has(managedRowId(row)),
+      drawn: drawnRuns.has(row.runtimeRunId),
     };
   });
 }
+
+/** The stage before it is measured: no size, no chrome. */
+const EMPTY_STAGE: StageGeometry = Object.freeze({
+  width: 0,
+  height: 0,
+  insets: Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 }),
+  obstacles: Object.freeze([]),
+});
 
 /** With no deck there is no daemon to ask: the sheet says HISTORY OFF, the
  * column stays empty, and neither invents an answer. */
@@ -266,21 +264,43 @@ export function GodviewMonitor({
   }, [profilesPort]);
   const showTabs = showsProfileTabs(profileSets);
   const chosen = useMemo(() => chosenProfile(profileSets, profileTab), [profileSets, profileTab]);
+  const chosenId = chosen?.id;
 
-  const { agents, actions, sources, acknowledgement, clearAcknowledgement, devices, history } =
-    useMonitorAgents({
-      palette,
-      door,
-      ...(panes ? { panes } : {}),
-      profiles: profileSets,
-    });
   // DS-3 — THE DEVICE FILTER: one desktop's rows, or every desktop's (the
   // default). A desktop that leaves the board falls back to all. The chip is
   // drawn only when there is a choice to make — two desktops or more — and
   // while its menu is open the stage holds the keys (QL-D2, as the find sheet
   // does), so a launcher in the focused pane never takes its ⎋.
   const [deviceChoice, setDeviceChoice] = useState<string | null>(null);
-  const deviceChosen = standingChoice(devices, deviceChoice);
+  // MV-3b — THE WINDOW on the replica (`useMonitorAgents`): the backend's rows
+  // through this window's one door, joined with the deck's panes, the chosen
+  // tab and the chosen desktop; the views through the view host's legacy bridge.
+  const {
+    replica,
+    viewFor,
+    commands,
+    capabilities,
+    agents,
+    shown,
+    findAgents,
+    runByRow,
+    actions,
+    sources,
+    acknowledgement,
+    clearAcknowledgement,
+    devices,
+    deviceChosen,
+    tabs,
+  } = useMonitorAgents({
+    palette,
+    door,
+    ...(panes ? { panes } : {}),
+    profiles: profileSets,
+    profilesRead: profileSetsRead,
+    hasProfiles: profilesPort !== undefined,
+    chosenProfile: chosenId,
+    device: deviceChoice,
+  });
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   // Held only while the chip is DRAWN and says its menu is open: the chip is
   // drawn for two desktops or more, and one unmounted with its menu open used
@@ -321,74 +341,47 @@ export function GodviewMonitor({
   const [swarmRenderer, setSwarmRenderer] = useState("none");
   /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */
   const [usageTiles, setUsageTiles] = useState(-1);
-  const personas = useMemo(() => personaProfiles(profileSets), [profileSets]);
-  const chosenId = chosen?.id;
-  /** SB-3 — every row says the profile it runs under (`profileSet`), the set
-   * the tabs compute: the spawn bloom lights the rows under what it points at. */
-  const rows = useMemo(() => withProfileSets(agents, personas), [agents, personas]);
-  /** DS-3 — the chosen desktop's rows (all of them by default): the device
-   * filter NARROWS what the swarm and the list are handed. */
-  const placed = useMemo(() => filterByDevice(rows, deviceChosen), [rows, deviceChosen]);
-  /** The rows as the stage draws them: every one, the chosen profile's as
-   * they are and the rest receded — still in the physics, in their places. */
-  const staged = useMemo(
-    () => recedeOutside(placed, chosenId, personas),
-    [placed, chosenId, personas],
-  );
-  const shown = useMemo(
-    () => (chosenId === undefined ? placed : staged.filter((agent) => agent.receded !== true)),
-    [placed, chosenId, staged],
-  );
-  /** TL — the record, its ended lanes narrowed exactly as the live rows are:
-   * an ended run on another desktop, or under another profile, is drawn (or
-   * receded) by the same rule as a live one. */
-  const stagedHistory = useMemo(
-    () => ({
-      ...history,
-      ended: recedeOutside(
-        filterByDevice(withProfileSets(history.ended, personas), deviceChosen),
-        chosenId,
-        personas,
-      ),
-    }),
-    [history, personas, deviceChosen, chosenId],
-  );
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
   // AR-7 — the fold's rows for the marker, handed on as the SAME object until
   // a fact the marker states moves: the fold sends a whole board at fieldd's
   // tick while an agent works, and a token count is no news to this line (the
   // identity rule the deck's frame facts follow in `GodviewAgentsProvider`).
+  // `drawn` is asked of the runs behind the agent rows the stage shows, through
+  // the board's join (`runByRow`) — observed or not.
   const fold = useAgentFold();
   const runFacts = useRef<{ key: string; runs: GodviewMonitorRunFacts[] }>({ key: "", runs: [] });
-  const nextRuns = monitorRunFacts(fold.rows, agents);
+  const drawnRuns = useMemo(
+    () =>
+      new Set(
+        shown.flatMap((row) => {
+          const run = row.agent === undefined ? undefined : runByRow.get(row.id);
+          return run === undefined ? [] : [run];
+        }),
+      ),
+    [shown, runByRow],
+  );
+  const nextRuns = monitorRunFacts(fold.rows, drawnRuns);
   const runsKey = JSON.stringify(nextRuns);
   if (runsKey !== runFacts.current.key) runFacts.current = { key: runsKey, runs: nextRuns };
   const runs = runFacts.current.runs;
-  const tabs = useMemo(
-    () => profileTabs(profileSets, rows, personas),
-    [profileSets, rows, personas],
-  );
-  /** SB-3 — what a new terminal can be born under, for the spawn bloom (and
-   * the list's menu): this desktop and its Agent Profiles (SB-D9). A host with
-   * no feed offers no menu, and a hold creates at once, as before. Handed on as
-   * the SAME object until what it says changes. */
-  const nextSpawnMenu =
-    profilesPort === undefined
-      ? undefined
-      : spawnMenuOf(profileSetsRead ? profileSets : null, tabs);
-  const spawnMenuKey = nextSpawnMenu === undefined ? "" : JSON.stringify(nextSpawnMenu);
-  const spawnMenuRef = useRef<{ key: string; menu: MonitorSpawnMenu | undefined }>({
-    key: "",
-    menu: undefined,
-  });
-  if (spawnMenuRef.current.key !== spawnMenuKey) {
-    spawnMenuRef.current = { key: spawnMenuKey, menu: nextSpawnMenu };
-  }
-  const spawnMenu = spawnMenuRef.current.menu;
   /** A tab with no sessions under it says so over the stage; with no sessions
    * at all the view's own empty state speaks instead. */
   const emptyUnder =
     chosen !== undefined && agents.length > 0 && shown.length === 0 ? chosen : undefined;
+
+  // MV-D19 — the view host's stage: the same measurement the CSS variables
+  // below publish, as plain data. The legacy views keep reading the variables
+  // and the chrome's rects (insets are advisory, `design-mv.md` §5); a ported
+  // view will read this instead.
+  const [stageGeometry, setStageGeometry] = useState<StageGeometry>(EMPTY_STAGE);
+  const reducedMotion =
+    typeof window !== "undefined" && typeof window.matchMedia === "function"
+      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
+      : false;
+  const monitorTheme = useMemo<MonitorTheme>(
+    () => ({ scheme: theme, tokens: palette, reducedMotion, animations: true }),
+    [theme, palette, reducedMotion],
+  );
 
   // Views that lay out in flow clear the chrome with these two insets (the
   // list's padding reads both); the swarm instead reads the chrome elements'
@@ -417,10 +410,9 @@ export function GodviewMonitor({
     if (!stage || !chrome || !claims || typeof ResizeObserver === "undefined") return;
     const publish = (): void => {
       const stageRect = stage.getBoundingClientRect();
-      stage.style.setProperty(
-        "--vf-monitor-chrome-right",
-        `${Math.round(chrome.getBoundingClientRect().right - stageRect.left)}px`,
-      );
+      const chromeRect = chrome.getBoundingClientRect();
+      const chromeRight = Math.round(chromeRect.right - stageRect.left);
+      stage.style.setProperty("--vf-monitor-chrome-right", `${chromeRight}px`);
       // A strip with nothing to say takes no room: it publishes 0, and the
       // view's own band then measures from the stage's top exactly as before.
       // The GAP is not published — `godview.css` adds the package's own band to
@@ -434,6 +426,21 @@ export function GodviewMonitor({
       const claimsRect = claims.getBoundingClientRect();
       const bottom = claimsRect.height === 0 ? 0 : Math.round(claimsRect.bottom - stageRect.top);
       stage.style.setProperty("--vf-monitor-claims-bottom", `${bottom}px`);
+      // the same measurement as the view host's stage (MV-D19): the chrome's
+      // right edge as the left inset, the strip's bottom as the top one, both
+      // elements as obstacles
+      const rect = (box: DOMRect) => ({
+        x: Math.round(box.left - stageRect.left),
+        y: Math.round(box.top - stageRect.top),
+        width: Math.round(box.width),
+        height: Math.round(box.height),
+      });
+      setStageGeometry({
+        width: Math.round(stageRect.width),
+        height: Math.round(stageRect.height),
+        insets: { top: bottom, right: 0, bottom: 0, left: chromeRight },
+        obstacles: [rect(chromeRect), ...(claimsRect.height === 0 ? [] : [rect(claimsRect)])],
+      });
     };
     const observer = new ResizeObserver(publish);
     observer.observe(chrome);
@@ -593,9 +600,8 @@ export function GodviewMonitor({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [showTabs, tabKey]);
 
-  // MV-0 — the view's own component, or the lab's counting wrapper around it
-  // while a perf probe is installed (`monitor/perf/instrumented-view.tsx`)
-  const MonitorView = instrumentedMonitorView(view);
+  /** The chosen view through the legacy bridge — whatever view the host hands the stage. */
+  const hostedView = viewFor(view);
   return (
     <>
       <InstrumentBar
@@ -665,7 +671,7 @@ export function GodviewMonitor({
 
       <FindSheet
         open={findOpen}
-        agents={agents}
+        agents={findAgents}
         history={door?.history ?? NO_HISTORY}
         onClose={closeFind}
         onSelect={(agent: ViewsMonitorAgent) => {
@@ -681,18 +687,21 @@ export function GodviewMonitor({
           sources.remote === 0 ? "Agent monitor" : "Agent monitor — local and remote sessions"
         }
       >
-        {/* The swarm's physics lives in OUR worker (GT-D16); the package's view
-            is handed the driver through its context and never learns which. */}
-        <SwarmPhysicsProvider factory={createSwarmPhysicsDriver}>
-          <MonitorView
-            agents={staged}
-            parameters={parameters}
-            actions={actions}
-            palette={palette}
-            history={stagedHistory}
-            {...(spawnMenu !== undefined ? { spawnMenu } : {})}
-          />
-        </SwarmPhysicsProvider>
+        {/* One view, through the view host's legacy bridge (L6), drawn from this
+            window's replica (MV-3b): one update per frame, on the host's ONE
+            frame scheduler (M7). The swarm's physics still lives in OUR worker
+            (GT-D16) — the bridge re-provides the driver above the old view. */}
+        <MonitorViewHost
+          replica={replica}
+          view={hostedView}
+          stage={stageGeometry}
+          theme={monitorTheme}
+          parameters={parameters}
+          capabilities={capabilities}
+          commands={commands}
+          scheduler={frameScheduler}
+          className="vf-monitor-view-slot"
+        />
         {emptyUnder !== undefined ? (
           <div className="vf-monitor-profile-empty" role="status">
             <span className="vf-monitor-profile-empty-ring" aria-hidden="true">

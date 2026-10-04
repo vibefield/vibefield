@@ -25,10 +25,12 @@ import {
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import { instrumentModelClient } from "./perf/door-instruments";
 import type {
   DevicesPort,
   MeshBoardFailure,
   MeshBoardListener,
+  ModelBoardPort,
   MonitorFeedState,
   MonitorUsagePort,
   ProfileSetsPort,
@@ -452,6 +454,23 @@ export function meshBoardOver(client: DoorClient): (listener: MeshBoardListener)
 }
 
 const RosterList = DeviceInfo.array();
+
+/** MV-3 (MV-D18) — the model board's ask, in one place: the window's one
+ * subscription (`projection: "model", scope: "mesh"`) and the screen's report.
+ * The frames reach the feed (`model-replica.ts`) unparsed — the fold is the
+ * tolerant reader — and a refused replay reaches it too (S4). */
+const MODEL_BOARD_ASK = { projection: "model", scope: "mesh" } as const;
+
+export function modelBoardOver(client: DoorClient): ModelBoardPort {
+  // MV-3c's B-side replay (`godviewReplay=1`) stands in for the client here, where the board is
+  // built; dormant otherwise — `instrumentModelClient` hands back the same client.
+  const door = instrumentModelClient(client);
+  return {
+    subscribe: (onFrame, opts) =>
+      door.subscribe("agent.subscribe", { ...MODEL_BOARD_ASK }, onFrame, opts),
+    reportShown: (ids) => door.request("agent.reportShown", { ids: [...ids] }),
+  };
+}
 
 /** The roster (`device.subscribe`): whole lists, the newest one standing. An
  * unreadable list is dropped and the last good one stays. */
