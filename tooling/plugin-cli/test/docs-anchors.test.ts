@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { EXAMPLE_PLUGIN_DIR, quotedRegion } from "../src/docs-generate";
 
 // The P8d-3 rehearsal found the generated docs teaching three calls that did
 // not compile against the shipped SDK (bare <CardShell>, zero-arg
@@ -37,5 +38,51 @@ describe("generated docs teach the shipped API", () => {
     const manifest = read("docs/plugin-authoring/manifest.md");
     expect(manifest).toContain("behaviors?: object[]");
     expect(manifest).not.toContain("systems?:");
+  });
+});
+
+// DK-6 — THE RE-ANCHOR DK-3 promised: the docs' worked examples are the example OBJECT plugin's code
+// (examples/plugins/desk-clock, through the SDK's `/desk` door) and the SDK's own `ObjectBinding`,
+// QUOTED at generation — so the committed pages must carry those regions byte for byte, and no page may
+// teach the React face DK-2 cut.
+describe("generated docs quote the shipped object code", () => {
+  const objects = read("docs/plugin-authoring/objects.md");
+  const readme = read("docs/plugin-authoring/README.md");
+
+  it("objects.md carries the example plugin's binding, kind, program and wake — and the SDK's ObjectBinding — verbatim", () => {
+    for (const [file, region] of [
+      [`${EXAMPLE_PLUGIN_DIR}/src/object.ts`, "binding"],
+      [`${EXAMPLE_PLUGIN_DIR}/src/kind.ts`, "kind"],
+      [`${EXAMPLE_PLUGIN_DIR}/src/shaders.ts`, "program"],
+      [`${EXAMPLE_PLUGIN_DIR}/src/local.ts`, "due"],
+      ["packages/plugin-sdk/src/desk.ts", "object-binding"],
+    ] as const) {
+      const quoted = quotedRegion(file, region);
+      expect(quoted.split("\n").length, `${file} ${region}`).toBeGreaterThan(5);
+      expect(objects, `objects.md does not carry ${file}'s "${region}" as it ships`).toContain(
+        quoted,
+      );
+    }
+  });
+
+  it("the README's renderer module and objects.md's are the example plugin's renderer.ts, whole", () => {
+    const renderer = read(`${EXAMPLE_PLUGIN_DIR}/src/renderer.ts`).trimEnd();
+    expect(readme).toContain(renderer);
+    expect(objects).toContain(renderer);
+  });
+
+  it("no page teaches the React face the desk retired (DK-2): no CardShell, no component binding", () => {
+    for (const page of ["README.md", "context.md", "widgets.md", "objects.md"]) {
+      const text = read(`docs/plugin-authoring/${page}`);
+      expect(text, page).not.toContain("CardShell");
+      expect(text, page).not.toContain("WidgetComponentProps");
+      expect(text, page).not.toMatch(/binding:\s*\{\s*component/);
+    }
+  });
+
+  it("a quoted region that lost its markers stops generation, never a silently stale page", () => {
+    expect(() => quotedRegion(`${EXAMPLE_PLUGIN_DIR}/src/object.ts`, "no-such-region")).toThrow(
+      /no "\/\/ docs:begin no-such-region"/,
+    );
   });
 });

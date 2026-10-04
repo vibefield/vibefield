@@ -233,6 +233,7 @@ export interface ClockKindOptions {
   readonly now?: () => number;
 }
 
+// docs:begin kind
 /** The desk clock's kind, whole (`ObjectKind`): its program and its world half. */
 export function clockKind(
   opts: ClockKindOptions = {},
@@ -310,3 +311,4 @@ export function clockKind(
     },
   };
 }
+// docs:end kind

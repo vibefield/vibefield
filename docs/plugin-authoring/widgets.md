@@ -91,42 +91,19 @@ anything. Port ids are unique within a widget.
 
 ## Binding
 
-One `register` per declared type, during `activate`:
-
-```ts
-ctx.widgets.register({
-  type: "com.example.notes",
-  binding: {
-    component: NoteCard,      // the card itself
-    chrome: NoteChrome,       // GL only: DOM chrome under the canvas
-    animated: true,           // GL only: per-frame island repaint
-    preview: NotePreview,     // tray preview override
-  },
-});
-```
-
-`register` throws on an undeclared type and on a second bind of the same type in
-one activation. It returns a `Disposable`; the host disposes the binding when
-the activation ends, so you do not have to.
+On the desk build a widget row binds NOTHING the desk draws (DK-2): the host compiles
+it FACELESS from the manifest — its document data kept, drawn as the desk's missing
+face, picked by its box — whether or not `activate` acknowledges it, so `check` never
+asks for one. `ctx.widgets.register({ type })` stays for the §12.1 laws (it throws on an
+undeclared type and on a second bind in one activation) and carries nothing; it retires
+with `contributes.widgets` at DK-8. A face on the desk is an OBJECT KIND, declared under
+`contributes.objects` and drawn by its own WGSL — `objects.md`.
 
 ## Reading and writing props
 
-The canvas hooks arrive through the SDK's `/canvas` door, never from ICE
-directly:
-
-```tsx
-import { useOps, useWidgetProps, type WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
-
-const TYPE = "com.example.notes";
-
-function NoteCard({ world, entity }: WidgetComponentProps) {
-  const props = useWidgetProps<{ body: string }>(world, entity, TYPE);
-  const ops = useOps();
-  return (
-    <textarea
-      value={props.body}
-      onChange={(e) => ops.setWidgetProps(entity, { body: e.target.value })}
-    />
-  );
-}
-```
+An object's props arrive in its kind's `ObjectContext.props` each frame (cached from the
+document, never re-read); writes go through the document's doors, one transaction and one
+undo step each — a menu act's `api.setProps(entity, patch)`, a held tool's
+`api.setProps(patch)`, a driver's `docs` at a gesture's end (`objects.md`, What the kind
+receives). The `/canvas` door's hooks (`useWidgetProps(world, entity, type)`, `useOps()`)
+stay for screen-space React — a HUD surface reading the world — never under the camera.

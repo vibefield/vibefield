@@ -66,6 +66,7 @@ export function createClockLocal(clock: () => number = () => Date.now()): ClockL
       }
       return false;
     },
+    // docs:begin due
     due(now) {
       if (drawn.size === 0) return Number.POSITIVE_INFINITY;
       const wall = clock();
@@ -73,6 +74,7 @@ export function createClockLocal(clock: () => number = () => Date.now()): ClockL
       for (const { step, key } of drawn.values()) at = Math.min(at, nextMoveAt(key, step));
       return now + Math.max(0, at - wall);
     },
+    // docs:end due
     forget(e) {
       drawn.delete(e);
       shownOf.delete(e);

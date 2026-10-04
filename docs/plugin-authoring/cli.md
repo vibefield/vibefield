@@ -43,7 +43,7 @@ The rows, in order:
 | `manifest` | validates as `PluginManifestV1`, and the committed bytes are canonical |
 | `wall` | plugin sources import only through the SDK door (R10) |
 | `schema` | every declared JSON Schema compiles, as the daemon compiles it |
-| `activation` | declarations and bindings match exactly, and deactivation leaks nothing |
+| `activation` | declarations and bindings match exactly — each object row's export a desk kind named by its type, its WGSL arriving as text — and deactivation leaks nothing |
 | `artifact` | declared entries exist and import only mappable specifiers |
 
 `check` never requires a build. With no `dist/` the artifact and activation rows

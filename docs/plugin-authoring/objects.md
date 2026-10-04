@@ -179,20 +179,34 @@ defaults (ICE design-017 §8, design-018 §6).
 ## The binding — one export
 
 The renderer module exports the kind under the name `binding.kind` names. The
-export is the object's CODE half, `ObjectBinding` (the SDK's `/desk` door; until
-it lands the types are ICE's, `@vibecook/ice/desk`):
+export is the object's CODE half, `ObjectBinding`, from the SDK's object door
+`@vibefield/plugin-sdk/desk` — the one door every name a kind is written against
+arrives through (below, verbatim from the SDK's source):
 
 ```ts
-interface ObjectBinding<G = unknown, R = unknown, L = unknown> {
-  kind: ObjectKind<G, R, L>;   // the program and the world half — required
-  /** the migrate chain to the manifest's schemaVersion: version → (prev props) => next props */
-  migrate?: Record<number, (prev: Record<string, unknown>) => Record<string, unknown>>;
-  /** the hand onto the kind's state, made once per desk (a pen, a carry, a typing session) */
-  drivers?: (host: KindDriverHost) => KindDriver | undefined;
-  /** the kind's DOM half: lend (services only a browser makes) · text (parts that lease the desk's one editor) · mount */
-  host?: ObjectHost;
-  /** acts in the selection menu, each one undo step */
-  menu?: MenuActionDef[];
+/**
+ * An OBJECT's code half (spec §12.8; DK-0f's contract): the value of the renderer module's NAMED
+ * EXPORT that `contributes.objects[].binding.kind` names. Static, never registered from `activate` —
+ * the desk creates every kind's pass together at its mount — so the HOST reads the export and
+ * compiles the prefab from the manifest's DURABLE half through ICE's `defineObject` (§12.2: plugin
+ * code never owns a durable schema). The host refuses a binding whose `kind` is not a desk kind
+ * (`isObjectKind`) or whose registry `name` is not the row's type (one id, no second namespace).
+ *
+ * `defineObject` is re-exported by this door for a plugin's own TESTS (compile the object as the host will,
+ * then read it back with `objectKindOf`) — never call it in the renderer module: the host defines
+ * your type from the manifest, and a second definition of one type throws.
+ */
+export interface ObjectBinding<G = unknown, R = unknown, L = unknown> {
+  /** The kind: its program (its WGSL, its pass) and its world half. Its `name` IS the row's type. */
+  readonly kind: ObjectKind<G, R, L>;
+  /** The props chain to the manifest's `schemaVersion`: version → (prev) => next. Renames of the TYPE are host history, never a plugin's (`TYPE_RENAMES`). */
+  readonly migrate?: ObjectDef["migrate"];
+  /** The hand onto the kind's state, made once per desk (a pen, a carry, a typing session). */
+  readonly drivers?: DriverFactory;
+  /** The kind's DOM half, declared: `lend` · `text` · `mount`. */
+  readonly host?: ObjectHost;
+  /** Selection-menu acts, one undo step each. */
+  readonly menu?: readonly MenuActionDef[];
 }
 ```
 
@@ -207,7 +221,7 @@ half `packages/desk/src/kind.ts`):
 
 | member | required | what it is |
 | --- | --- | --- |
-| `name` | yes | the kind's registry name — unique on a desk; name it as you name the type |
+| `name` | yes | the kind's registry name — it IS the object's type (the host refuses any other: `check` says `object-kind-misnamed`) |
 | `stratum` | yes | `pads` \| `sheets` \| `things` — the desk's paint order: beneath everything · flat on the mat, holding a desk · every other thing |
 | `create(device, format, mat)` | yes | → `Promise<KindPass>`: the kind's PASS on the host's `GPUDevice` for the swap chain's `format`, on the root mat's pass (`MatPass` — the slot's view block, bound once, never written by a kind) |
 | `reach` | yes | how far the drawing may reach PAST the rect, world units (shadow, lift, tilt) — the cull margin and the pick pad |
@@ -231,52 +245,256 @@ draws a run; `dispose()`. Optional: `records()`/`dropped()` (counters the host
 reports), `idle(ms)`/`idleAt(ms)` (let device targets go when nothing drew),
 `drawOver`, `endHold`, `tune`/`setLaw`, `cardResources`/`cardSlot`.
 
-The worked kind, until VibeField's example plugin arrives at DK-8, is ICE's desk
-clock — a THIRD-PARTY kind in its own package, built on the published entries
-alone, exactly as a plugin kind is: `infinite-canvas-engine/examples/desk-clock/src/`
-`object.ts` (what it declares), `kind.ts` (the kind, whole), `pass.ts` (its pass),
-`shaders.ts` (its WGSL on the kit's pieces, `kitWgsl(["view", "portal", "sdf", "light"])`),
-`local.ts` (its registered wake), and its `README.md` (the seam table). Its shape as
-a VibeField export:
+## The worked example — ICE's desk clock as a plugin
+
+`examples/plugins/desk-clock` is ICE's worked third-party kind
+(`infinite-canvas-engine/examples/desk-clock`) ported to a VibeField plugin through
+`@vibefield/plugin-sdk/desk` alone — the PARITY WITNESS: the product draws it beside the
+desk's six built-ins, from a plugin. Its law, hands, zone and wakes are ICE's verbatim; the
+code below is QUOTED from its source when these docs are generated, so it is the code that
+ships.
+
+Its manifest row — the durable half (`src/manifest.ts`, emitted to `vibefield.plugin.json`):
+
+```json
+{
+  "binding": {
+    "kind": "clock"
+  },
+  "description": "An analogue clock lying on the desk: it reads the host's clock and wakes only when a hand must move",
+  "groups": {},
+  "interaction": {
+    "movable": true,
+    "resizable": false,
+    "selectable": true,
+    "snap": "both"
+  },
+  "props": {
+    "ring24": {
+      "default": false,
+      "kind": "boolean"
+    },
+    "seconds": {
+      "default": true,
+      "kind": "boolean"
+    },
+    "style": {
+      "default": "classic",
+      "kind": "enum",
+      "options": [
+        "classic",
+        "station",
+        "graphite"
+      ]
+    },
+    "zone": {
+      "default": "local",
+      "kind": "string"
+    }
+  },
+  "provides": [
+    "vibefield.example.desk-clock",
+    "desk.object",
+    "desk.containable"
+  ],
+  "schemaVersion": 1,
+  "size": {
+    "h": 150,
+    "w": 150
+  },
+  "title": "Clock",
+  "tray": {
+    "category": "things",
+    "hang": {
+      "accessory": "hook",
+      "h": 110,
+      "pegs": [
+        [
+          0,
+          -0.5
+        ]
+      ],
+      "w": 110
+    },
+    "label": "Clock",
+    "order": 0
+  },
+  "type": "vibefield.example.desk-clock"
+}
+```
+
+The export that row's `binding.kind` names (`src/object.ts`) — the kind and its
+selection-menu act:
 
 ```ts
-// src/renderer.ts — the renderer entry
-import { defineRendererPlugin } from "@vibefield/plugin-sdk";
-// DK-6 opens this door; today the same names are ICE's, @vibecook/ice/desk + /desk/kit + /desk/engine
-import type { ObjectBinding, ObjectContext, ObjectKind } from "@vibefield/plugin-sdk/desk";
-import { ClockPass } from "./pass";       // its pipelines and buffers on the host's device
-import { clockShaders } from "./shaders"; // its WGSL, composed on the kit's pieces
-
-interface ClockGeometry { cx: number; cy: number; r: number; lift: number; alpha: number }
-interface ClockRecord { geometry: ClockGeometry; style: number; seconds: boolean }
-
-const clockKind: ObjectKind<ClockGeometry, ClockRecord> = {
-  name: "com.example.clock",
-  stratum: "things",
-  reach: 24,
-  create: (device, format, mat) => ClockPass.create(device, format, clockShaders(), mat),
-  resolve: (ctx: ObjectContext): ClockGeometry => ({
-    cx: ctx.rect.cx, cy: ctx.rect.cy,         // the rect is CENTRED, world units
-    r: Math.min(ctx.rect.w, ctx.rect.h) / 2,
-    lift: ctx.flux.lift, alpha: ctx.flux.fade, // in a hand · fading as a ghost
-  }),
-  record: (G, ctx) => ({
-    geometry: G,
-    style: ["classic", "minimal", "ink"].indexOf(String(ctx.props["style"] ?? "classic")),
-    seconds: ctx.props["seconds"] !== false,
-  }),
-  hit: (G, wx, wy) => (Math.hypot(wx - G.cx, wy - G.cy) <= G.r ? "content" : null),
+/**
+ * THE BINDING — the clock's kind and its selection-menu act (K8a — a plugin's act, declared as a
+ * built-in's: the selected clocks' seconds hand flips, the first's deciding so a mixed selection ends
+ * alike, each clock one undo step — with its own glyph, a stopwatch).
+ */
+export const clock: ObjectBinding<ClockGeometry, ClockInstance, ClockLook> = {
+  kind: clockKind(),
+  menu: [
+    {
+      id: CLOCK_SECONDS_ACT,
+      label: "Seconds hand",
+      keys: "S",
+      glyph: { path: SECONDS_GLYPH },
+      run: (api: MenuActionApi) => {
+        const first = api.entities[0];
+        if (first === undefined) return;
+        const next = !flagProp(api.props(first), "seconds", true);
+        for (const e of api.entities) api.setProps(e, { seconds: next });
+      },
+    },
+  ],
 };
+```
 
-/** the manifest's `binding: { kind: "clock" }` names THIS export */
-export const clock: ObjectBinding<ClockGeometry, ClockRecord> = { kind: clockKind };
+The renderer module (`src/renderer.ts`), whole — the kind is an export, never a
+registration:
+
+```ts
+import { defineRendererPlugin } from "@vibefield/plugin-sdk";
+
+// The renderer MODULE (spec §10.1). The clock's code half is the NAMED export its manifest row's
+// `binding.kind` names — `clock` — which the host reads off this module's namespace and compiles
+// through `defineObject` before the desk's first frame; nothing about the kind is registered here.
+// `activate` stays the module's entry, as for every plugin, and the clock needs nothing of it.
+
+export { clock } from "./object";
 
 export default defineRendererPlugin({
   activate() {
-    // nothing to register for the kind — the host reads `clock` by the manifest's name
+    // nothing to bind: the kind is a static export, and the clock asks for no command, surface or behavior
   },
 });
 ```
+
+The kind, whole (`src/kind.ts`): its program on the root's mat, the case resolved under
+the desk's lamp, its hands recorded at the time it shows, its round pick, its chip inside a
+container's face, the frame the desk's marks go round, its look, its desk state and its
+opening — every name from the SDK's door:
+
+```ts
+/** The desk clock's kind, whole (`ObjectKind`): its program and its world half. */
+export function clockKind(
+  opts: ClockKindOptions = {},
+): ObjectKind<ClockGeometry, ClockInstance, ClockLook> {
+  const law = opts.law ?? CLOCK;
+  const fallback = clockLook(CLOCK_PALETTE);
+  const lookOf = (ctx: Pick<ObjectContext, "look">): ClockLook =>
+    (ctx.look as ClockLook | undefined) ?? fallback;
+  return {
+    ...clockProgram(opts.text),
+    reach: clockReach(law),
+    local: (): ClockLocal => createClockLocal(opts.now),
+    resolve: (ctx: ObjectContext): ClockGeometry => resolveClock(ctx.rect, ctx.flux, ctx.lamp, law),
+    record(G: ClockGeometry, ctx: ObjectContext): ClockInstance {
+      const style = styleOf(ctx.props);
+      const seconds = flagProp(ctx.props, "seconds", true);
+      const zone = stringProp(ctx.props, "zone", "local");
+      const local = ctx.local as ClockLocal | undefined;
+      const pin = asClockAsset(ctx.asset);
+      let tod = SHOP_TIME;
+      if (pin !== undefined) tod = timeOfDay(pin.at, zone);
+      else if (local !== undefined) {
+        // the desk's wall clock — and the clock says what it shows, so the desk wakes exactly when a hand must move (local.ts)
+        const wall = local.now();
+        const step = stepOf(seconds);
+        tod = timeOfDay(wall + EARLY_MS, zone);
+        local.saw(ctx.entity, step, keyAt(wall, step));
+      }
+      const hands = handAngles(tod, seconds);
+      local?.show(ctx.entity, { tod, ...hands, seconds, pinned: pin !== undefined });
+      return {
+        geometry: G,
+        hands,
+        seconds,
+        style: CLOCK_STYLES.indexOf(style),
+        ring24: flagProp(ctx.props, "ring24", false),
+        colours: lookOf(ctx).styles[style],
+      };
+    },
+    hit: (G: ClockGeometry, wx: number, wy: number): ObjectHit | null =>
+      onClock(G, wx, wy) ? "content" : null,
+    // far inside a container's face (K8a's generic chips): a disc of its dial in the paper finish — a container that draws paper chips shows it
+    chip: (G: ClockGeometry, ctx: ObjectContext): ChildShape => ({
+      finish: PAPER_FINISH,
+      cx: G.centre[0],
+      cy: G.centre[1],
+      hx: G.radius,
+      hy: G.radius,
+      angle: 0,
+      radius: G.radius,
+      colour: lookOf(ctx).styles[styleOf(ctx.props)].dial,
+      height: G.heights.case * 0.5,
+    }),
+    // the desk's marks go round the round case as drawn (its corner its radius)
+    frame: (G: ClockGeometry): MarkFrame => ({
+      cx: G.centre[0],
+      cy: G.centre[1],
+      hx: G.radius,
+      hy: G.radius,
+      angle: 0,
+      r: G.radius,
+    }),
+    theme: (palette: Palette, _name: ThemeName): ClockLook =>
+      clockLook((palette as ClockPalette).clocks ?? CLOCK_PALETTE),
+    // picked up, it is set: the held bar's tools are its own (a flat kind: the held slot's camera frames the case); its word in hand
+    // is the time it shows (I22)
+    open: {
+      extent: (c) => c.rect,
+      tools: CLOCK_TOOLS,
+      readout: (c) =>
+        clockWord(
+          (c.local as ClockLocal | undefined)?.shown(c.entity),
+          flagProp(c.props(), "ring24", false),
+        ),
+    },
+  };
+}
+```
+
+Its WGSL ships as `.wgsl` FILES (`src/clock.wgsl`, `src/clock-pass.wgsl`): plugin-build
+inlines each into the renderer bundle as its text, and the program composes them after the
+kit's pieces by name (`src/shaders.ts`):
+
+```ts
+/** The clock pass's program: the kit's view · portal · sdf · light by name, then the clock's record, module and entry. */
+export function clockShaders(text?: ShaderText): ComposeOptions {
+  return kitWgsl(
+    ["view", "portal", "sdf", "light"],
+    {
+      structs: [Clock],
+      modules: [{ label: "desk-clock/clock.wgsl", text: CLOCK_WGSL }],
+      entry: { label: "desk-clock/clock-pass.wgsl", text: CLOCK_PASS_WGSL },
+    },
+    text,
+  );
+}
+```
+
+Its registered wake (`src/local.ts`): the desk asks `due` after every step and gets the
+wall clock's next boundary a drawn clock needs — a frame a second with its seconds hand, a
+minute without, none at all with no clock drawn:
+
+```ts
+due(now) {
+  if (drawn.size === 0) return Number.POSITIVE_INFINITY;
+  const wall = clock();
+  let at = Number.POSITIVE_INFINITY;
+  for (const { step, key } of drawn.values()) at = Math.min(at, nextMoveAt(key, step));
+  return now + Math.max(0, at - wall);
+},
+```
+
+The rest is its own: `src/pass.ts` (instanced, a persistent record store, the slot's one
+view block bound and never written), `src/layout.ts` (its GPU record, declared once),
+`src/law.ts` (pure: the time it shows, the hands, the zone, the wake's arithmetic),
+`src/theme.ts` (its look from the palette), `src/glyphs.ts` (its act's and tools' own
+drawings) — and `test/imports.test.ts`, its wall: it names `@vibefield/plugin-sdk`, `/desk`,
+its own modules and its `.wgsl`, never `@vibecook/ice` and never `/desk/objects`.
 
 ## What the kind receives
 
@@ -359,10 +577,13 @@ never polls for what an arrival can tell it.
 
 ## Checking it
 
-On this build `vibefield-plugin check` runs the manifest, wall, schema,
-artifact and activation rows as for any plugin, and `inspect` lists each kind
-with its chip, its export and a `null` refusal. DK-6 and DK-7 bring the rest: the
-activation row holds `binding.kind` to a real export, the playground runs a kind
-through `resolve`/`record`/`hit` over its declared states with no DOM, and a Dawn
-still is held to a per-plugin golden (DK-6, DK-7). Until then the pixel witness is
-ICE's own: its oracle draws a kind in Node (`pnpm --filter @ice/objects oracle`).
+`vibefield-plugin check` runs the manifest, wall, schema, artifact and activation rows
+as for any plugin, and holds each object row to the BUILT module — in Node, with no device:
+`binding.kind` names a real export (`object-export-missing`) holding a desk kind
+(`object-kind-invalid`) whose registry name is the row's type (`object-kind-misnamed`); the
+row says how it hangs; and its `create`, run on a RECORDING device, must ask for its shader
+as WGSL text (`object-wgsl-not-text`; a create that needs a real device is noted,
+`object-create-not-run-here`). That row proves TEXT, not compilation — a shader naming what
+the kit's pieces do not carry passes it; the playground's Dawn harness (DK-7) compiles and
+draws each declared state and holds its still to a golden. `inspect` lists each kind with its
+tray chip, its hang, what it provides, its export and a `null` refusal.

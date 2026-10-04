@@ -127,6 +127,7 @@ export {
 } from "@vibecook/ice/desk/engine";
 export * from "@vibecook/ice/desk/kit";
 
+// docs:begin object-binding
 /**
  * An OBJECT's code half (spec §12.8; DK-0f's contract): the value of the renderer module's NAMED
  * EXPORT that `contributes.objects[].binding.kind` names. Static, never registered from `activate` —
@@ -135,7 +136,7 @@ export * from "@vibecook/ice/desk/kit";
  * code never owns a durable schema). The host refuses a binding whose `kind` is not a desk kind
  * (`isObjectKind`) or whose registry `name` is not the row's type (one id, no second namespace).
  *
- * `defineObject` is re-exported above for a plugin's own TESTS (compile the object as the host will,
+ * `defineObject` is re-exported by this door for a plugin's own TESTS (compile the object as the host will,
  * then read it back with `objectKindOf`) — never call it in the renderer module: the host defines
  * your type from the manifest, and a second definition of one type throws.
  */
@@ -151,3 +152,4 @@ export interface ObjectBinding<G = unknown, R = unknown, L = unknown> {
   /** Selection-menu acts, one undo step each. */
   readonly menu?: readonly MenuActionDef[];
 }
+// docs:end object-binding

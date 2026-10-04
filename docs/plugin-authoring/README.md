@@ -25,27 +25,31 @@ schema this app actually enforces (contracts 0.1.0).
 
 ## The shortest real plugin
 
-Three files you write, two the tools produce.
+An OBJECT on the desk: the manifest DECLARES it, the renderer module EXPORTS it,
+and its kind DRAWS it — files you write, two the tools produce:
 
 ```
 my-plugin/
-  src/manifest.ts           # TS authors the manifest
-  src/renderer.tsx          # the entry source: activate + the component
+  src/manifest.ts           # TS authors the manifest (the object's durable half)
+  src/renderer.ts           # the entry: activate + the object's export
+  src/kind.ts               # the kind: create · resolve · record · hit
+  src/pass.ts               # its pass, on the host's device
+  src/shaders.wgsl          # its own WGSL — plugin-build inlines it as text
   scripts/emit-manifest.ts  # writes the canonical JSON
   vibefield.plugin.json     # EMITTED — never hand-edited
   dist/renderer.js          # BUILT — the artifact the manifest names
   package.json              # build + gen:manifest scripts
 ```
 
-The manifest, complete and minimal:
+The manifest, complete and minimal — one object kind (`objects.md` says every field):
 
 ```json
 {
   "manifestVersion": 1,
-  "id": "com.example.notes",
+  "id": "com.example.clock",
   "version": "0.1.0",
-  "title": "Example Notes",
-  "description": "A renderer-only note widget — the minimal real plugin",
+  "title": "Example Clock",
+  "description": "An analogue desk clock — the minimal real OBJECT plugin (the desk draws it; DK-0f)",
   "engines": {
     "app": "^0.1.0",
     "contracts": "^0.1.0"
@@ -54,56 +58,75 @@ The manifest, complete and minimal:
     "renderer": "./dist/renderer.js"
   },
   "activation": [
-    "onWidget:com.example.notes"
+    "onWidget:com.example.clock"
   ],
   "capabilities": [
     "doc.write"
   ],
   "contributes": {
-    "widgets": [
+    "objects": [
       {
-        "type": "com.example.notes",
-        "title": "Note",
-        "description": "A sticky note",
-        "category": "Cards",
-        "preview": {
-          "kind": "color",
-          "value": "#F6E7A9"
-        },
+        "type": "com.example.clock",
+        "title": "Clock",
+        "description": "An analogue clock on the desk",
         "schemaVersion": 1,
-        "surface": "dom",
-        "sizeMode": "fixed",
-        "defaultSize": {
-          "w": 260,
-          "h": 180
+        "size": {
+          "w": 160,
+          "h": 160
         },
-        "minSize": {
-          "w": 120,
-          "h": 90
+        "interaction": {
+          "selectable": true,
+          "movable": true,
+          "resizable": false,
+          "snap": "both"
         },
+        "provides": [
+          "com.example.clock",
+          "desk.object",
+          "desk.containable"
+        ],
         "props": {
-          "text": {
-            "kind": "string",
-            "default": "",
-            "maxLength": 4000
-          },
-          "color": {
+          "style": {
             "kind": "enum",
             "options": [
-              "yellow",
-              "blue",
-              "pink"
+              "classic",
+              "minimal",
+              "ink"
             ],
-            "default": "yellow"
+            "default": "classic"
+          },
+          "seconds": {
+            "kind": "boolean",
+            "default": true
+          },
+          "zone": {
+            "kind": "string",
+            "default": "local",
+            "maxLength": 32
           }
         },
-        "groups": {
-          "text": [
-            "text"
-          ],
-          "color": [
-            "color"
-          ]
+        "tray": {
+          "category": "things",
+          "label": "Clock",
+          "order": 0,
+          "hang": {
+            "w": 110,
+            "h": 110,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          },
+          "props": {
+            "style": "classic"
+          },
+          "take": "face"
+        },
+        "binding": {
+          "kind": "clock"
         }
       }
     ]
@@ -111,29 +134,25 @@ The manifest, complete and minimal:
 }
 ```
 
-*(@vibefield/contracts fixtures/plugin-manifest.valid.json)*
+*(@vibefield/contracts fixtures/plugin-manifest.objects.json)*
 
-The renderer module it names:
+The renderer module it names — the kind is a static EXPORT that `binding.kind` names, never
+a registration (quoted whole from `examples/plugins/desk-clock/src/renderer.ts`, the worked
+example in `objects.md`):
 
-```tsx
+```ts
 import { defineRendererPlugin } from "@vibefield/plugin-sdk";
-import type { WidgetComponentProps } from "@vibefield/plugin-sdk/canvas";
-import { CardShell } from "@vibefield/plugin-sdk/ui";
 
-function NoteCard({ world, entity }: WidgetComponentProps) {
-  return (
-    <CardShell world={world} entity={entity}>
-      <p>hello from a plugin</p>
-    </CardShell>
-  );
-}
+// The renderer MODULE (spec §10.1). The clock's code half is the NAMED export its manifest row's
+// `binding.kind` names — `clock` — which the host reads off this module's namespace and compiles
+// through `defineObject` before the desk's first frame; nothing about the kind is registered here.
+// `activate` stays the module's entry, as for every plugin, and the clock needs nothing of it.
+
+export { clock } from "./object";
 
 export default defineRendererPlugin({
-  activate(ctx) {
-    ctx.widgets.register({
-      type: "com.example.notes",
-      binding: { component: NoteCard },
-    });
+  activate() {
+    // nothing to bind: the kind is a static export, and the clock asks for no command, surface or behavior
   },
 });
 ```
@@ -147,14 +166,14 @@ import type { PluginManifestV1 } from "@vibefield/contracts";
 
 export const manifest: PluginManifestV1 = {
   manifestVersion: 1,
-  id: "com.example.notes",
+  id: "com.example.clock",
   version: "0.1.0",
-  title: "Example Notes",
+  title: "Example Clock",
   engines: { app: "^0.1.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: ["onWidget:com.example.notes"],
+  activation: ["onWidget:com.example.clock"],
   capabilities: [],
-  contributes: { widgets: [/* … */] },
+  contributes: { objects: [/* … */] },
 };
 ```
 
@@ -175,7 +194,7 @@ The package.json that wires it together — the build script is the whole build:
 
 ```json
 {
-  "name": "@example/plugin-notes",
+  "name": "@example/plugin-clock",
   "private": true,
   "type": "module",
   "scripts": {
@@ -187,8 +206,9 @@ The package.json that wires it together — the build script is the whole build:
     "@vibefield/contracts": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*"
   },
-  "peerDependencies": {
-    "react": "^19.0.0"
+  "devDependencies": {
+    "@vibefield/plugin-build": "workspace:*",
+    "@webgpu/types": "^0.1.74"
   }
 }
 ```
@@ -209,27 +229,32 @@ new plugin with
 create-plugin --id vendor.name --title "My Plugin" --dir plugins/name
 #   (in this repo: pnpm exec create-plugin …; targets under plugins/ or
 #    examples/plugins/ join the workspace — run pnpm install after)
+pnpm --filter @vendor/plugin-name build   # its kind's .wgsl inlined
 pnpm plugin check plugins/name    # a fresh scaffold is check-clean from birth
-pnpm playground plugins/name      # its starter states render as verdicts
+pnpm playground plugins/name      # its starter states, listed
 ```
 
-The scaffold ships `manifest.ts` + its emit script, one working CardShell
-widget, `playground/states.ts` starter states, the manifest conformance test,
-and the build preset — every file already in the shape `check` demands.
+The scaffold ships `manifest.ts` + its emit script, one working OBJECT KIND — its
+kind, its pass, its record and its `.wgsl` — `playground/states.ts` starter states, the
+manifest contract and the kind's state test, a README with the ten-minute path, and the
+build preset — every file already in the shape `check` demands.
 
 ## The rules that catch people first
 
-- **Every contributed id is owned by the plugin id.** A widget type is `<id>` or
+- **Every contributed id is owned by the plugin id.** An object's type is `<id>` or
   `<id>.<name>`; commands and surfaces are `<id>.<name>`; behaviors are
   `<id>:<name>`; custom
   capabilities are `x.<id>.<name>`.
-- **Declare before you bind.** `ctx.widgets.register` throws for a type the
-  manifest does not declare, and `check` refuses a declaration nothing binds.
+- **Declare, then export or bind.** An object's code half is the export its row's
+  `binding.kind` names, a desk kind whose registry name IS the type — `check` refuses
+  one missing, not a desk kind, or named otherwise. Commands, surfaces and behaviors
+  register in `activate`, which throws for an id the manifest does not declare, and
+  `check` refuses a declaration nothing binds.
 - **The manifest is emitted, not written.** `vibefield.plugin.json` is canonical
   key-sorted JSON; its hash is the plugin's identity. Hand-edit it and `check`
   refuses with `manifest-stale`.
 - **The SDK is the only door.** Plugin code imports `@vibefield/plugin-sdk`
-  (plus `/ui`, `/canvas`, `/behavior`), `@vibefield/contracts` types, and
+  (plus `/ui`, `/canvas`, `/behavior`, and `/desk` for a kind), `@vibefield/contracts` types, and
   `react`. Nothing
   else — no host packages, no Electron, no Node builtins.
 - **Absent APIs are absent, never stubbed.** If a face is missing from `ctx`,

@@ -14,6 +14,7 @@ import type { ClockLook } from "./theme";
 
 export { CLOCK_SECONDS_ACT, CLOCK_TYPE } from "./ids";
 
+// docs:begin binding
 /**
  * THE BINDING — the clock's kind and its selection-menu act (K8a — a plugin's act, declared as a
  * built-in's: the selected clocks' seconds hand flips, the first's deciding so a mixed selection ends
@@ -36,3 +37,4 @@ export const clock: ObjectBinding<ClockGeometry, ClockInstance, ClockLook> = {
     },
   ],
 };
+// docs:end binding

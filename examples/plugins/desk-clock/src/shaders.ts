@@ -23,6 +23,7 @@ import { Clock } from "./layout";
 // through the portal chain.
 export { CLOCK_PASS_WGSL, CLOCK_WGSL };
 
+// docs:begin program
 /** The clock pass's program: the kit's view · portal · sdf · light by name, then the clock's record, module and entry. */
 export function clockShaders(text?: ShaderText): ComposeOptions {
   return kitWgsl(
@@ -35,3 +36,4 @@ export function clockShaders(text?: ShaderText): ComposeOptions {
     text,
   );
 }
+// docs:end program

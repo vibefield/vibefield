@@ -7,16 +7,14 @@ A plugin module has exactly one entry point. Module top-level code MUST NOT do
 product work — no registration, no I/O, no timers — because the host imports the
 module before it decides whether to activate it. Everything starts in `activate`.
 
-```tsx
+```ts
 import { defineRendererPlugin } from "@vibefield/plugin-sdk";
+
+// an object's code half is a static export the manifest names — never registered here
+export { clock } from "./object";
 
 export default defineRendererPlugin({
   activate(ctx) {
-    ctx.widgets.register({
-      type: "com.example.notes",
-      binding: { component: NoteCard },
-    });
-
     const timer = setInterval(() => ctx.logger.debug("tick"), 1000);
     return { dispose() { clearInterval(timer); } };   // deactivation
   },
