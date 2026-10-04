@@ -52,10 +52,13 @@
 /* The faces before the room (2026-10-04; DESIGN.md §8 "History" — "Its first
    open says 'Opening History'"): the same words' place, in the room's box and
    inside the edges the room keeps — the head's band above, the slivers' 8 at
-   each side (`HistoryOpening.tsx` projects the frame's numbers). */
+   each side (`HistoryOpening.tsx` projects the frame's numbers) — and the
+   room's own top edge, the hairline under the head band, so the room takes the
+   face's place with nothing appearing at its edge. */
 .vf-history-face {
   position: absolute;
   inset: var(--vf-history-head) var(--vf-history-edge) 0;
+  border-top: 1px solid var(--vf-hairline);
 }
 
 /* LATE, as the veil's words are (§8): invisible for 120ms, then a 180ms plain
