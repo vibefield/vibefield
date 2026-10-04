@@ -781,7 +781,7 @@ function runSelfTest() {
     // R10 covers BOTH plugin roots (plugins/ and examples/plugins/).
     {
       id: "R10",
-      file: "plugins/note/src/uses-runtime.ts",
+      file: "plugins/comment-pad/src/uses-runtime.ts",
       body: 'import { PluginRegistry } from "@vibefield/plugin-runtime";\n',
     },
     {
@@ -818,7 +818,7 @@ function runSelfTest() {
     },
     {
       id: "R15",
-      file: "plugins/note/src/raw-console.ts",
+      file: "plugins/comment-pad/src/raw-console.ts",
       body: 'console.info("plugin-origin");\n',
     },
     {
@@ -929,17 +929,17 @@ function runSelfTest() {
     },
     // R10 allows the SDK, contracts types, and react under plugins/.
     {
-      file: "plugins/note/src/clean-sdk.ts",
+      file: "plugins/comment-pad/src/clean-sdk.ts",
       body: 'import { defineRendererPlugin } from "@vibefield/plugin-sdk";\nimport type { Scope } from "@vibefield/contracts";\nimport React from "react";\nexport const ok = 1;\n',
     },
     // R10 exempts authoring-time subtrees: emit scripts and tests are Node-side
     // by design, never part of the renderer artifact graph (§11.3 scope).
     {
-      file: "plugins/note/scripts/emit-something.ts",
+      file: "plugins/comment-pad/scripts/emit-something.ts",
       body: 'import { writeFileSync } from "node:fs";\nexport const emit = () => writeFileSync;\n',
     },
     {
-      file: "plugins/note/test/uses-node.test.ts",
+      file: "plugins/comment-pad/test/uses-node.test.ts",
       body: 'import { readFileSync } from "node:fs";\nimport { PluginRegistry } from "@vibefield/plugin-runtime";\nexport const t = readFileSync;\n',
     },
     // LOG walls: sanctioned first-party console adapters, contained Pino, valid
@@ -953,7 +953,7 @@ function runSelfTest() {
       body: 'console.log("CANVAS_READY");\n',
     },
     {
-      file: "plugins/note/scripts/emit-manifest.ts",
+      file: "plugins/comment-pad/scripts/emit-manifest.ts",
       body: 'console.log("generated manifest");\n',
     },
     {

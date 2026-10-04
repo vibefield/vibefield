@@ -298,6 +298,9 @@ describe("DK-2 — ghost stubs read the engine's full pack scope", () => {
         "desk.note": 1,
         wire: 1,
         // a dev-bundled plugin's type, registered
+        "vibefield.comment-pad": 1,
+        // DK-8: `vibefield.note` retired (ICE's `desk.note` is the note) — a board that still names
+        // it holds an ABSENT type, stubbed faceless, its data kept
         "vibefield.note": 1,
         // DK-5: the host's built-in mirror retired with `terminal/widget/*` (DK-D19) — a board
         // that still names it holds an ABSENT type now, stubbed faceless like any other
@@ -307,6 +310,7 @@ describe("DK-2 — ghost stubs read the engine's full pack scope", () => {
       scope,
     );
     expect(stubs.map((stub) => [stub.type, stub.version])).toEqual([
+      ["vibefield.note", 1],
       ["vibefield.terminal.mirror", 1],
       ["com.example.dk2ghost.gone", 2],
     ]);

@@ -226,7 +226,7 @@ sidecar was built from source while the window's Go half was open, and comes fro
   outside tokens; the named easings; the shadow recipes).
 - Every daemon seam ships contract fixtures parsed on both sides (EL9); kill-matrix
   integration tests live in `packages/fieldd/test`. New plugins get at least a
-  manifest/registry test (`plugins/note/test` is the template). Plugins live at the
+  manifest/registry test (`plugins/comment-pad/test` is the template). Plugins live at the
   repo root (`plugins/*`, dev/reference packs in `examples/plugins/*`) — walls rule
   R10 (ENFORCED since PLUG-P3 — the SDK is the door) keeps them SDK-only.
 - Env vars: see `.env.example`. Nothing auto-loads `.env` — export in the launching shell.

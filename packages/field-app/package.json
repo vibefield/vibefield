@@ -45,7 +45,7 @@
     "@vibefield/plugin-browser": "workspace:*",
     "@vibefield/plugin-comment-pad": "workspace:*",
     "@vibefield/plugin-field-tools": "workspace:*",
-    "@vibefield/plugin-note": "workspace:*",
+
     "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",
     "@vibefield/plugin-widgetlab": "workspace:*",

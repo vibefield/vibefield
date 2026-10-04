@@ -254,7 +254,8 @@ interface PluginStyleCensus {
  * (the carrier since DK-8 — before that it staged whatever `dist/` its last hand
  * build or the playground's test wrote); kv-service remains service-only and
  * stages no renderer module. DK-8: VibeField's own comment pad (`plugins/comment-pad`,
- * bundled, built by build:all through field-app's dependency) is the seventh.
+ * bundled, built by build:all through field-app's dependency) joins them, and the
+ * retired plugins leave them (`vibefield.note` first).
  *
  * The PRODUCT fact moved at DK-3 (the plan's retire table: "the 24-type census
  * → the new seed's census"). It was `widgetTypes === 24` — the registry's
@@ -284,15 +285,16 @@ const CANVAS_CENSUS = {
    * the run asks for the examples, so this smoke loads its renderer with `?deskSeedExamples=1`
    * (field-app `SEED_EXAMPLES`) — the CLOCK row needs it. */
   exampleClock: "vibefield.example.desk-clock",
-  minStagedPlugins: 7,
-  // The renderer plugins that draw DOM (note, browser, field-tools, widgetlab — a HUD
-  // surface or a legacy widgets row) ship scoped CSS. An objects-only plugin ships
+  // DK-8: 7 → 6 — `vibefield.note` retired (ICE's `desk.note` is the note)
+  minStagedPlugins: 6,
+  // The renderer plugins that draw DOM (browser, field-tools, widgetlab — a HUD surface
+  // or a legacy widgets row) ship scoped CSS (DK-8: 4 → 3, the note's went with it). An objects-only plugin ships
   // none since DK-6 (plugin-build's `generatesStylesheet`: a kind has no CSS) — the
   // behavior-conformance carrier (an object since DK-4), whose sheet was Tailwind's
   // accident, and the desk clock. A link alone is not evidence: the 2026-08-25
   // regression left all five links published but their late fetches unauthorized
   // after unrelated service activation.
-  minLoadedPluginStyles: 4,
+  minLoadedPluginStyles: 3,
 } as const;
 
 /** Every way the line disagrees with the census, named — a smoke that fails

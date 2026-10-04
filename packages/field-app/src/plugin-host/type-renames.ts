@@ -8,7 +8,6 @@
 /** old widget type → ratified widget type (PrefabId values + `${type}:props`
  * component-cell names both rename through this map). */
 export const TYPE_RENAMES: Readonly<Record<string, string>> = {
-  "note.card": "vibefield.note",
   "field.folder": "vibefield.field-tools.folder",
   "field.comment": "vibefield.field-tools.comment",
   "widgetlab.clock": "vibefield.widgetlab.clock",
