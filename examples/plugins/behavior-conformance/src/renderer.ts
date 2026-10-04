@@ -1,22 +1,32 @@
-import { defineRendererPlugin, type ObjectBinding } from "@vibefield/plugin-sdk";
+import { defineRendererPlugin } from "@vibefield/plugin-sdk";
+import type { KindPass, ObjectBinding } from "@vibefield/plugin-sdk/desk";
 import { BreakerProbe, CARRIER_TYPE, DurableProbe, PresenceProbe, RuntimeProbe } from "./behaviors";
 
 /**
- * The carrier's KIND (DK-4; the manifest's `binding.kind: "card"` names this export): a desk kind's
- * shape with no drawing of its own — the fixture carries behaviors, not pixels. Its pass is never
- * made: `create` refuses, so a desk that mounts it draws the carrier with ICE's missing face (I24),
- * contained to the kind. The SDK's `/desk` door (DK-6) will type this; until then the host checks
- * it (`isObjectKind`) and compiles the row through `defineObject`.
+ * The carrier's PASS — a real one that DRAWS NOTHING (DK-6, through the SDK's `/desk` door; DK-5's
+ * input (4)): the fixture carries behaviors, not pixels. Until DK-6 its `create` refused, so every desk
+ * that mounted it drew the carrier with ICE's missing face and named it in `status().faults`; now the
+ * desk makes this pass beside every other kind's, it records nothing to draw, and the carrier lies on
+ * the desk as an object with no drawing of its own — picked by its box, faulting nothing.
+ */
+const NOTHING_DRAWN: KindPass = {
+  spawn: () => NOTHING_DRAWN,
+  prepare: () => 0,
+  drawRange: () => {},
+  dispose: () => {},
+};
+
+/**
+ * The carrier's KIND (DK-4; the manifest's `binding.kind: "card"` names this export): a desk kind with
+ * no drawing of its own, typed at the SDK's door; the host checks it (`isObjectKind`, its name IS its
+ * type) and compiles the row through `defineObject`.
  */
 export const card: ObjectBinding = {
   kind: {
     name: CARRIER_TYPE,
     stratum: "things",
     reach: 0,
-    create: () =>
-      Promise.reject(
-        new Error("the behavior-conformance carrier draws nothing: a test fixture's kind"),
-      ),
+    create: async () => NOTHING_DRAWN,
     resolve: () => ({}),
     record: () => ({}),
     hit: () => "content",

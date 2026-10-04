@@ -5,7 +5,11 @@ import { validatePluginManifest } from "@vibefield/contracts";
 import { canonicalJson } from "@vibefield/plugin-build";
 import { activateWithMockHost } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
-import { behaviorConformanceManifest, behaviorConformanceRenderer } from "../src";
+import {
+  behaviorConformanceCard,
+  behaviorConformanceManifest,
+  behaviorConformanceRenderer,
+} from "../src";
 import * as rendererModule from "../src/renderer";
 
 describe("vibefield.behavior-conformance", () => {
@@ -32,6 +36,15 @@ describe("vibefield.behavior-conformance", () => {
     // the host reads a row's kind off the module's NAMESPACE by its binding name (spec §12.8)
     const namespace = rendererModule as unknown as Record<string, { kind?: { name?: unknown } }>;
     expect(namespace[objects[0]?.binding.kind ?? ""]?.kind?.name).toBe(objects[0]?.type);
+  });
+
+  it("DK-6 — its kind's create makes a REAL pass that draws nothing: no fault, no missing face", async () => {
+    // the pass touches no device: the carrier has nothing to compile or upload
+    const pass = await behaviorConformanceCard.kind.create({} as never, "bgra8unorm", {} as never);
+    expect(pass.prepare({} as never, {} as never, [{}, {}])).toBe(0);
+    expect(() => pass.drawRange({} as never, 0, 2)).not.toThrow();
+    expect(pass.spawn({} as never)).toBe(pass);
+    pass.dispose();
   });
 
   it("keeps the committed manifest byte-identical to its validated canonical emission", () => {
