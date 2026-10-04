@@ -10,6 +10,10 @@ import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { EmptyState } from "@vibefield/design-kit/primitives";
 import { type CSSProperties, type ReactElement, useEffect, useRef, useState } from "react";
 import { COVER_EDGE_CLEAR_PX, COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
+// The room's own sheet enters HERE, with the room — one row, the package's own
+// bundle, never a copy — so it rides the room's chunk, not the first paint, and
+// lands after the kit's tokens by load order (its README's one ordering rule).
+import "@rosetta/room/styles/room.css";
 import "./history-room-view.css";
 
 // THE HISTORY VIEW (AR-8c; DESIGN.md §8 "History", §10; One Frame §9 "History,
@@ -23,7 +27,9 @@ import "./history-room-view.css";
 // clear at each side for the notches' slivers), where its dialogs land (a
 // layer that ends at the reserve, so a dialog never sits under the line), the
 // prefix it keeps its preferences under, and the words of its two honest
-// states that are the host's to say.
+// states that are the host's to say. The product reaches this module only
+// through the room's chunk (`room-chunk.tsx`, 2026-10-04), the catalog
+// directly; nothing else imports it statically.
 
 /** Every name the room keeps in storage goes under this prefix (recent
  * searches, dealt project tints, the site-icon setting, the fold). */

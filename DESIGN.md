@@ -1543,6 +1543,17 @@ The hot-point glow and rim retire with CardShell (above).
     "Recorded files can't open here yet — no file door on the desktop" (the live-file read is
     bearer-only upstream, RO-13), and the worktree guest stays closed with its own words until
     VibeField's worktree host (AR-D38, AR-8d).
+  - **Its first open says "Opening History"** (2026-10-04): the room — its code and its sheet — is
+    its own chunk, on neither the first paint nor the canvas's. It loads when the window is first
+    idle after the canvas has drawn, or at the first ⌘3 if that comes sooner. While it arrives the
+    view is already the covers' glass with the room's edges, and in the consent line's place and
+    type (the kit's empty state under the `history` glyph) it says **"Opening History"** —
+    "rosetta's room is loading." The words are **late**, as the veil's are: invisible until 120ms
+    have passed, then a 180ms plain `ease` fade, so a room already loaded never flashes them; the
+    glass under them is the room's own, so nothing moves when the room takes their place. A room
+    that cannot open says so in the same place, never a blank: **"History could not open"** over
+    what failed, in its own words, and a quiet **Retry** (the splash's rule: the plain reason, then
+    Retry).
   - History follows the app's **theme** (the room reads the page's `.dark` and the kit's `--vf-*`);
     it has no toggle of its own. Under **reduced motion** the room's own transitions collapse — the
     floor the room asks of its host, scoped to the view. Its **preferences** (dealt project tints,

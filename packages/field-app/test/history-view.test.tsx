@@ -17,7 +17,7 @@ import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   type LineViewDoor,
   publishGodviewLineDoor,
@@ -48,6 +48,15 @@ let publish: ((state: FrameViewState) => void) | null = null;
 let asked: FrameView[] = [];
 let root: Root | null = null;
 let host: HTMLElement | null = null;
+
+// The room is its own chunk (2026-10-04): `HistoryView` mounts it through
+// `room-chunk.tsx`'s dynamic import, so these rows await that boundary as the
+// product does (their `until`s). Loading the module ONCE before them keeps a
+// row's five seconds for the room rather than for the room's first transform
+// on a busy host; the opening face itself is `history-chunk.test.tsx`'s.
+beforeAll(async () => {
+  await import("../src/history/HistoryRoomView");
+}, 60_000);
 
 beforeEach(() => {
   resetActiveViewForTest();

@@ -1,8 +1,13 @@
 /* The History view (AR-8c; DESIGN.md §8 "History", §10; One Frame §9 —
-   FC-D6, FC-D15, FC-D16): rosetta's room on the cover's glass. Tokens only; the
-   room's own sheet (`@rosetta/room/styles/room.css`) enters through the app's
-   manifest after the kit's tokens, and every rule it brings is scoped to its
-   root (`.ah-frame`) and to the layers it portals (`.ah-layer`). */
+   FC-D6, FC-D15, FC-D16): rosetta's room on the cover's glass. Tokens only. The
+   room's own sheet (`@rosetta/room/styles/room.css`) enters with the room, in
+   its chunk (`HistoryRoomView.tsx`, since 2026-10-04 — the app's manifest
+   carried it until then), so it loads AFTER this sheet, which the faces before
+   the room bring on the canvas's chunk (`HistoryOpening.tsx`). Nothing here and
+   nothing there meet: every rule the room brings is scoped to its root
+   (`.ah-frame`) and to the layers it portals (`.ah-layer`), its broad ones are
+   `:where()` (no weight against a class here), and its `!important`s outrank
+   the motion floor below by weight or say the same thing. */
 
 /* The view's own ground: the covers' glass, 72% (FC-D16). The room is mounted
    as a HOST surface, so it paints no ground and no plate of its own, and its
@@ -42,6 +47,27 @@
   flex: 1;
   place-items: center;
   padding: 0 24px;
+}
+
+/* The faces before the room (2026-10-04; DESIGN.md §8 "History" — "Its first
+   open says 'Opening History'"): the same words' place, in the room's box and
+   inside the edges the room keeps — the head's band above, the slivers' 8 at
+   each side (`HistoryOpening.tsx` projects the frame's numbers). */
+.vf-history-face {
+  position: absolute;
+  inset: var(--vf-history-head) var(--vf-history-edge) 0;
+}
+
+/* LATE, as the veil's words are (§8): invisible for 120ms, then a 180ms plain
+   `ease` fade — a room already loaded never flashes them. */
+.vf-history-face[data-late] {
+  animation: vf-history-late 180ms ease 120ms both;
+}
+
+@keyframes vf-history-late {
+  from {
+    opacity: 0;
+  }
 }
 
 /* M6, the floor the room asks of its host (the reference host's own rule,

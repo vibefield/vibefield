@@ -18,15 +18,19 @@ import { requestView } from "../frame/view-state";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import { historyPortsOver } from "./doors";
-import { HistoryRoomView } from "./HistoryRoomView";
 import { type ResumeReading, readResume, resumeNative } from "./resume";
+import { HistoryRoomMount } from "./room-chunk";
 
 // HISTORY'S CONTROLLER (AR-8c). It builds the room's ports over this window's
 // fieldd client (`doors.ts`) and holds them for the view's life — the room is
 // mounted on History's first open and kept mounted after (⌘3 out and back in
 // keeps its scroll, its selection and its open stream) — tells the catalog when
 // the view shows, says the index's state in the frame's words, and lends the
-// line History's create: Resume, for the session the room has chosen.
+// line History's create: Resume, for the session the room has chosen. The room
+// itself is its own chunk (`room-chunk.tsx`, 2026-10-04): this controller rides
+// the canvas's chunk and mounts the room through it, "Opening History" saying
+// so while it arrives — so the ports, the feed's words and the line's door are
+// here from the first open, before the room is.
 
 /** How long Resume waits for Godview's deck — mounted on Godview's first open
  * — to be able to place the resumed agent. */
@@ -105,5 +109,5 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   }, [chosen, waits, resume]);
   useEffect(() => () => publishHistoryLineDoor(null), []);
 
-  return <HistoryRoomView ports={ports} unavailable={words} onSelect={setSelection} />;
+  return <HistoryRoomMount ports={ports} unavailable={words} onSelect={setSelection} />;
 }

@@ -38,12 +38,16 @@ describe("UI system ownership boundaries", () => {
     expect(appManifest.indexOf("deck-frame.css")).toBeGreaterThan(
       appManifest.indexOf("godview.css"),
     );
-    // AR-8c: History is rosetta's room, and its sheet enters the same way — one
-    // row, the package's own bundle — AFTER the kit's tokens, whose --vf-* names
-    // it reads (its README's one ordering rule), never a copy of its rules.
-    expect(appManifest).toContain('@import "@rosetta/room/styles/room.css";');
-    expect(appManifest.indexOf("@rosetta/room/styles/room.css")).toBeGreaterThan(
-      appManifest.indexOf("@vibefield/design-kit/tokens.css"),
+    // AR-8c: History is rosetta's room, and its sheet rides the ROOM'S chunk,
+    // never this manifest (2026-10-04): the first paint does not carry it. It
+    // enters with the room — one row, the package's own bundle, never a copy of
+    // its rules — and lands after the kit's tokens, whose --vf-* names it reads
+    // (its README's one ordering rule), by load order: the manifest is the
+    // entry's sheet, the room's chunk comes later. The chunk itself is held by
+    // the row below and by `pnpm bundle:assert`.
+    expect(appManifest).not.toMatch(/@import\s+"@rosetta\/room/);
+    expect(source("history/HistoryRoomView.tsx")).toContain(
+      'import "@rosetta/room/styles/room.css";',
     );
 
     const catalogManifest = source("design-system/design-system.css");
@@ -51,6 +55,42 @@ describe("UI system ownership boundaries", () => {
     expect(catalogManifest).toContain('@import "./styles/foundations.css";');
     expect(catalogManifest).toContain('@import "./styles/scenes.css";');
     expect(catalogManifest).toContain('@import "./styles/tweaks.css";');
+  });
+
+  it("keeps History's room behind its chunk's one dynamic import — nothing in the product imports it statically (2026-10-04)", () => {
+    // The room's chunk (`history/room-chunk.tsx`) reaches `HistoryRoomView` —
+    // and through it everything under `@rosetta/room`, its sheet included — by
+    // ONE dynamic import. A static import anywhere in the product pulls the
+    // room back onto the canvas's chunk (or the first paint); `import type` is
+    // erased and costs nothing, while `import { type X }` is NOT (under
+    // verbatimModuleSyntax it stays a bare import of the module). The catalog
+    // mounts the view directly — it is its own build.
+    const offenders: string[] = [];
+    const walk = (relativeDir: string): void => {
+      for (const entry of readdirSync(join(PACKAGE_ROOT, "src", relativeDir), {
+        withFileTypes: true,
+      })) {
+        const relativePath = relativeDir === "" ? entry.name : `${relativeDir}/${entry.name}`;
+        if (entry.isDirectory()) {
+          if (relativePath !== "design-system") walk(relativePath);
+        } else if (/\.tsx?$/.test(entry.name) && relativePath !== "history/HistoryRoomView.tsx") {
+          const text = source(relativePath);
+          if (/^import\s+(?!type\s)[^;]*?from\s+"[^"]*\/HistoryRoomView"/m.test(text)) {
+            offenders.push(`${relativePath}: imports HistoryRoomView statically`);
+          }
+          if (
+            /^import\s+(?!type\s)[^;]*?from\s+"@rosetta\/room(?:\/[^"]*)?"/m.test(text) ||
+            /^import\s+"@rosetta\/room/m.test(text)
+          ) {
+            offenders.push(`${relativePath}: imports @rosetta/room's code or sheet`);
+          }
+        }
+      }
+    };
+    walk("");
+    expect(offenders).toEqual([]);
+    expect(source("history/room-chunk.tsx")).toContain('import("./HistoryRoomView")');
+    expect(source("history/HistoryView.tsx")).toMatch(/<HistoryRoomMount\s/u);
   });
 
   it("does not let catalog CSS own production component selectors", () => {
@@ -344,6 +384,9 @@ describe("UI system ownership boundaries", () => {
       "HistoryPreview",
       "HistoryRoomView",
       "HistoryResumePlate",
+      // …and the two faces before the room, as they ship (2026-10-04)
+      "HistoryOpeningState",
+      "HistoryOpenFailedState",
       // One Frame FR-2 — the line: its view, @'s list, the plates, and the
       // live line on its real controller with fixture doors
       "ComposerLinePlate",
@@ -383,6 +426,9 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<HistoryResumePlate\s/u);
     expect(page).toMatch(/<HistoryPreview state="unavailable"/u);
     expect(page).toMatch(/<HistoryPreview state="consent"/u);
+    // …and the faces before the room (2026-10-04): opening, could not open.
+    expect(page).toMatch(/<HistoryOpeningState\s*\/>/u);
+    expect(page).toMatch(/<HistoryOpenFailedState\s/u);
 
     // The Settings specimen's Appearance page was a replica the product never
     // had (a system-appearance switch, an interface scale); it is the shipping
