@@ -102,6 +102,16 @@ describe("agent.* registry rows (AR-3)", () => {
         locality: "local",
         subscription: false,
       },
+      // MV-3a (L5) — what a window shows, reported to the backend beside the
+      // runtime: the board's scope, `local` because the screen is this
+      // connection's own model board.
+      {
+        method: "agent.reportShown",
+        scope: "agent.observe",
+        idempotent: true,
+        locality: "local",
+        subscription: false,
+      },
       {
         method: "agent.subscribe",
         scope: "agent.observe",

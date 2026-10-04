@@ -1,0 +1,61 @@
+[
+  {
+    "device": "dev-01HQ9S7UD1",
+    "delta": {
+      "epoch": "fieldd-9b04c1e27a6d5f30.9",
+      "since": 61,
+      "revision": 62,
+      "upserts": [
+        {
+          "runtimeRunId": "pty-s4",
+          "revision": 4,
+          "kind": "terminal",
+          "device": "dev-01HQ9S7UD1",
+          "terminal": {
+            "hosted": "local",
+            "runtimeSessionId": "pty-s4",
+            "workloadClass": "interactive"
+          },
+          "monitorRow": {
+            "id": "pty-s4",
+            "kind": "terminal",
+            "createdAt": 1790800812000,
+            "status": "idle",
+            "statusSince": 1790802843000,
+            "stale": false,
+            "alive": true,
+            "observed": true,
+            "detail": "/Users/james/Projects/notes",
+            "project": {
+              "name": "notes"
+            },
+            "unread": false,
+            "device": {
+              "id": "dev-01HQ9S7UD1",
+              "name": "Studio",
+              "os": "mac"
+            },
+            "profileSet": "native",
+            "attachable": true
+          }
+        }
+      ],
+      "removed": ["run-studio-q"]
+    }
+  },
+  {
+    "device": "dev-01HQ9S7XZ2",
+    "state": "stale",
+    "asOf": "2026-09-30T21:16:03.000Z"
+  },
+  {
+    "device": "dev-01HQ9S7XZ2",
+    "delta": {
+      "epoch": "fieldd-5d2c8f1a0b7e4c93.2",
+      "since": 17,
+      "revision": 18,
+      "upserts": [],
+      "removed": ["run-loft-w"]
+    }
+  }
+]

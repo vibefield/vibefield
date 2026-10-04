@@ -1,0 +1,36 @@
+{
+  "runtimeRunId": "pty-s4",
+  "revision": 3,
+  "kind": "terminal",
+  "device": "dev-01HQ9S7UD1",
+  "terminal": {
+    "hosted": "local",
+    "runtimeSessionId": "pty-s4",
+    "workloadClass": "interactive"
+  },
+  "monitorRow": {
+    "id": "pty-s4",
+    "kind": "terminal",
+    "createdAt": 1790800812000,
+    "status": "working",
+    "statusSince": 1790802600000,
+    "stale": false,
+    "alive": true,
+    "observed": true,
+    "detail": "/Users/james/Projects/notes",
+    "activity": {
+      "kind": "foreground-job"
+    },
+    "project": {
+      "name": "notes"
+    },
+    "unread": false,
+    "device": {
+      "id": "dev-01HQ9S7UD1",
+      "name": "Studio",
+      "os": "mac"
+    },
+    "profileSet": "native",
+    "attachable": true
+  }
+}

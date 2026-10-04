@@ -925,6 +925,15 @@ export const LAYOUT = {
    * disk because the floor outlives fieldd — a restarted fieldd still says
    * which profile a surviving shell was born under. */
   TERMINAL_BINDINGS_FILE: ["fieldd", "terminal-bindings.json"],
+  /** MV-3a (L4) — the project colour's IDENTITY (`ProjectIdentityFile`,
+   * 0600): which project key was dealt which colour sequence, and the next
+   * sequence to deal. fieldd's, because the monitor backend runs beside the
+   * runtime now and every window reads the same colour from it; on disk
+   * because a daemon restart that reshuffled every project's colour would be
+   * a regression. Identity, never history (MV-D22): no clock, no row of what a
+   * project did. Desktop-local — a sequence never crosses the sync plane
+   * (M16), so this is a LAYOUT file and not a STORES slice. */
+  PROJECT_IDENTITY_FILE: ["fieldd", "project-identity.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
   // `TERMINAL_MIRROR_WRITE_FILE` = `native/terminal-mirror-write.key`, MF-2a's

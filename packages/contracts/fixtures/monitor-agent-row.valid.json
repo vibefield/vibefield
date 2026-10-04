@@ -1,0 +1,70 @@
+{
+  "id": "run-studio-q",
+  "kind": "agent",
+  "createdAt": 1790801500000,
+  "status": "blocked",
+  "statusSince": 1790802842000,
+  "stale": false,
+  "alive": true,
+  "observed": true,
+  "detail": "Should the board keep a sleeping desktop greyed, or drop its rows after thirty days?",
+  "activity": {
+    "kind": "other",
+    "since": 1790802842000
+  },
+  "project": {
+    "name": "vibe-field",
+    "branch": "ds/c",
+    "seq": 2
+  },
+  "provider": {
+    "id": "claude",
+    "label": "Claude Code"
+  },
+  "model": "Opus 5",
+  "effort": {
+    "value": "high",
+    "intent": "observed"
+  },
+  "context": {
+    "usedPercent": 41
+  },
+  "wait": {
+    "kind": "question",
+    "since": 1790802842000,
+    "header": "Sleeping desktops",
+    "question": "Should the board keep a sleeping desktop greyed, or drop its rows after thirty days?",
+    "detail": "the provider's own sentence about the question"
+  },
+  "reply": {
+    "text": "I have the multiplexer relaying each desktop verbatim. Before I wire the filter: one question about sleeping desktops.",
+    "at": 1790802841000,
+    "final": true
+  },
+  "cost": {
+    "usd": 4.04,
+    "coverage": "complete",
+    "burnPerHour": 1.32,
+    "series": {
+      "stepMs": 30000,
+      "steps": [
+        0, 0, 0.11, 0.24, 0.3, 0.18, 0.09, 0.27, 0.33, 0.41, 0.2, 0.15, 0.28, 0.36, 0.22, 0.19,
+        0.31, 0.26, 0.12, 0.02
+      ],
+      "lastStepAt": 1790802840000
+    }
+  },
+  "tokens": {
+    "total": 412880,
+    "perMinute": 2210
+  },
+  "unread": false,
+  "device": {
+    "id": "dev-01HQ9S7UD1",
+    "name": "Studio",
+    "os": "mac"
+  },
+  "tier": "managed",
+  "profileSet": "native",
+  "attachable": true
+}

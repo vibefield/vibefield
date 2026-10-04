@@ -19,12 +19,17 @@ import {
 } from "../src/agent-extensions";
 import {
   AgentDeskRow,
+  AgentDeskTerminalRow,
   AgentFieldDelta,
   AgentFieldSlice,
   AgentFieldSnapshot,
   AgentInterruptResult,
   AgentMeshFrame,
   AgentMeshOpen,
+  AgentModelMeshFrame,
+  AgentModelMeshOpen,
+  AgentReportShownParams,
+  MonitorAgentRow,
 } from "../src/agent-field";
 import { AgentHistoryResult } from "../src/agent-history";
 import {
@@ -372,6 +377,20 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-desk-row": AgentDeskRow,
   "agent-mesh-open": AgentMeshOpen,
   "agent-mesh-frames": z.array(AgentMeshFrame),
+  // MV-3a (MV-D22, MV-D18) — the model's row as the backend beside the runtime
+  // emits it (mirroring the SDK's `MonitorAgentRow`); the desk row carrying one
+  // as a PEER's cut (no `project.seq`, M16); a bare terminal's row, this
+  // desktop's windows only (L8); the window's one door — this desktop's model
+  // board with its terminal first, a peer's desk board beside it, an asleep
+  // desktop carrying none — and its frames in order (a terminal going idle with
+  // the run's row removed, a peer going stale, the peer's run leaving); the
+  // report of what a window shows (L5).
+  "monitor-agent-row": MonitorAgentRow,
+  "agent-desk-row.model": AgentDeskRow,
+  "agent-desk-terminal-row": AgentDeskTerminalRow,
+  "agent-model-mesh-open": AgentModelMeshOpen,
+  "agent-model-mesh-frames": z.array(AgentModelMeshFrame),
+  "agent-report-shown": AgentReportShownParams,
   // Both arms of the interrupt's union: the refusal carries the FLOOR's own
   // word, never a sentence composed at the door.
   "agent-interrupt": AgentInterruptResult,

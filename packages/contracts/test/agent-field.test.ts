@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   AgentDeskRow,
+  AgentDeskTerminalRow,
   AgentFieldDelta,
   AgentFieldRow,
   AgentFieldSlice,
@@ -11,7 +12,13 @@ import {
   AgentInterruptResult,
   AgentMeshFrame,
   AgentMeshOpen,
+  AgentModelBoardRow,
+  AgentModelMeshFrame,
+  AgentModelMeshOpen,
+  AgentProjection,
+  AgentReportShownParams,
   AgentSubscribeParams,
+  MonitorAgentRow,
 } from "../src/agent-field";
 import { AGENT_FIELD } from "../src/registries";
 
@@ -315,5 +322,108 @@ describe("AR-6-0 — the interrupt's answer", () => {
     expect(
       AgentInterruptResult.parse({ accepted: false, reason: "no-terminal-host" }),
     ).toMatchObject({ accepted: false, reason: "no-terminal-host" });
+  });
+});
+
+describe("MV-3a — the model's row on the wire (MV-D22, MV-D18)", () => {
+  const row = MonitorAgentRow.parse(golden("monitor-agent-row.valid.json"));
+  const desk = AgentDeskRow.parse(golden("agent-desk-row.model.json"));
+  const terminal = AgentDeskTerminalRow.parse(golden("agent-desk-terminal-row.valid.json"));
+
+  it("carries every fact a screen draws, with epoch-millisecond clocks and the parts of a wait apart (M2)", () => {
+    expect(row).toMatchObject({
+      id: "run-studio-q",
+      kind: "agent",
+      status: "blocked",
+      observed: true,
+      wait: { kind: "question", header: "Sleeping desktops" },
+      cost: { usd: 4.04, coverage: "complete" },
+      project: { name: "vibe-field", branch: "ds/c", seq: 2 },
+      device: { id: "dev-01HQ9S7UD1", name: "Studio", os: "mac" },
+    });
+    expect(Number.isInteger(row.createdAt)).toBe(true);
+    expect(Number.isInteger(row.statusSince)).toBe(true);
+    expect(row.cost?.series?.steps).toHaveLength(20);
+    // reader-relative, never on the wire
+    expect("self" in row.device).toBe(false);
+  });
+
+  it("the desk row carries the model's row for a PEER without its colour sequence (M16), and still IS a field row", () => {
+    expect(desk.monitorRow?.id).toBe(desk.runtimeRunId);
+    expect(desk.monitorRow?.project.seq).toBeUndefined();
+    const asField = AgentFieldRow.parse(golden("agent-desk-row.model.json"));
+    expect(asField.runtimeRunId).toBe(desk.runtimeRunId);
+    expect((asField as Record<string, unknown>)["monitorRow"]).toEqual(desk.monitorRow);
+    // a desk row from an older daemon carries none, and parses
+    const { monitorRow: _omitted, ...older } = golden("agent-desk-row.model.json") as Record<
+      string,
+      unknown
+    >;
+    expect(AgentDeskRow.parse(older).monitorRow).toBeUndefined();
+  });
+
+  it("a bare terminal is a row of its own kind, keyed by the model's id, and never a field row", () => {
+    expect(terminal).toMatchObject({
+      runtimeRunId: "pty-s4",
+      kind: "terminal",
+      terminal: { hosted: "local", runtimeSessionId: "pty-s4" },
+      monitorRow: { id: "pty-s4", kind: "terminal", attachable: true },
+    });
+    expect(AgentFieldRow.safeParse(golden("agent-desk-terminal-row.valid.json")).success).toBe(
+      false,
+    );
+    const asBoard = AgentModelBoardRow.parse(golden("agent-desk-terminal-row.valid.json"));
+    expect(asBoard.kind).toBe("terminal");
+  });
+
+  it("the window's one door: this desktop's model board first (its terminal among its rows), peers' desk boards beside it", () => {
+    const open: AgentModelMeshOpen = AgentModelMeshOpen.parse(
+      golden("agent-model-mesh-open.valid.json"),
+    );
+    expect(open.devices.map((entry) => entry.state)).toEqual(["live", "live", "asleep"]);
+    const own = open.devices[0]?.snapshot?.rows ?? [];
+    expect(own.map((entry) => entry.kind)).toEqual(["claude", "terminal"]);
+    const ownAgent = own[0];
+    expect(
+      ownAgent !== undefined && "monitorRow" in ownAgent && ownAgent.monitorRow?.project.seq,
+    ).toBe(2);
+    const peer = open.devices[1]?.snapshot?.rows[0];
+    expect(peer !== undefined && peer.kind !== "terminal" ? peer.monitorRow?.project.seq : -1).toBe(
+      undefined,
+    );
+    // the field board's reader does not take a terminal row: the field stays the field
+    expect(AgentMeshOpen.safeParse(golden("agent-model-mesh-open.valid.json")).success).toBe(false);
+    const frames: AgentModelMeshFrame[] = (
+      golden("agent-model-mesh-frames.valid.json") as unknown[]
+    ).map((frame) => AgentModelMeshFrame.parse(frame));
+    expect(frames.map((frame) => ("delta" in frame ? "delta" : "state"))).toEqual([
+      "delta",
+      "state",
+      "delta",
+    ]);
+    const first = frames[0];
+    if (first === undefined || !("delta" in first)) throw new Error("the first frame is a delta");
+    expect(first.delta.removed).toEqual(["run-studio-q"]);
+    expect(first.delta.upserts[0]?.kind).toBe("terminal");
+  });
+
+  it("`model` is a projection; the report names rows by model id and nothing else", () => {
+    expect(AgentProjection.options).toContain("model");
+    expect(AgentSubscribeParams.parse({ projection: "model", scope: "mesh" })).toMatchObject({
+      projection: "model",
+      scope: "mesh",
+    });
+    expect(AgentReportShownParams.parse(golden("agent-report-shown.valid.json")).ids).toEqual([
+      "run-studio-q",
+      "pty-s4",
+    ]);
+    expect(AgentReportShownParams.safeParse({ ids: [""] }).success).toBe(false);
+    expect(AgentReportShownParams.safeParse({}).success).toBe(false);
+  });
+
+  it("the model's texts name folders, never paths, on the agent row; a terminal's detail is its directory and stays home (L8)", () => {
+    expect(JSON.stringify(row)).not.toMatch(/"\/Users\/|"\/home\/|"[A-Za-z]:\\\\/);
+    // a terminal row is this desktop's windows' only: the path never leaves the device
+    expect(terminal.monitorRow.detail).toBe("/Users/james/Projects/notes");
   });
 });

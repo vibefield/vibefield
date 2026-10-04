@@ -2,12 +2,11 @@ import { EventEmitter } from "node:events";
 import {
   type AgentFieldDelta,
   type AgentFieldRow,
-  type AgentMeshFrame,
   CONTRACTS_VERSION,
   type DeviceInfo,
 } from "@vibefield/contracts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { MeshBoard } from "../src/mesh-board";
+import { MeshBoard, type MeshBoardFrame } from "../src/mesh-board";
 import { RpcCallError } from "../src/native-link";
 
 // DS-3 (DS-D4) — the mesh board's multiplexer against fakes: the roster
@@ -173,7 +172,7 @@ function harness(rows: DeviceInfo[], selfDevice: () => string = () => SELF): Har
 
 /** A reader, and the frames it has heard. */
 function reader(h: Harness, projection: "field" | "desk" = "desk", floor = 100) {
-  const frames: AgentMeshFrame[] = [];
+  const frames: MeshBoardFrame[] = [];
   const opened = h.board.open(projection, floor, (frame) => frames.push(frame));
   return { ...opened, frames };
 }

@@ -167,6 +167,7 @@ pub mod layout {
     pub const MESH_STATE_DIR: &[&str] = &["native", "mesh"];
     pub const LINK_FILE: &[&str] = &["fieldd", "link.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
+    pub const PROJECT_IDENTITY_FILE: &[&str] = &["fieldd", "project-identity.json"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
     pub const MESHDATA_SOCKET: &[&str] = &["native", "run", "meshdata.sock"];
@@ -219,6 +220,7 @@ pub mod layout {
         ("MESH_STATE_DIR", MESH_STATE_DIR),
         ("LINK_FILE", LINK_FILE),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),
+        ("PROJECT_IDENTITY_FILE", PROJECT_IDENTITY_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),
         ("MESHDATA_SOCKET", MESHDATA_SOCKET),

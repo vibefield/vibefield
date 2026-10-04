@@ -62,6 +62,10 @@
     "fieldd",
     "terminal-bindings.json"
   ],
+  "PROJECT_IDENTITY_FILE": [
+    "fieldd",
+    "project-identity.json"
+  ],
   "TERMINAL_CONFIG_FILE": [
     "native",
     "config.ghostty"
