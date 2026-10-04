@@ -1,4 +1,4 @@
-import type { AgentView, MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
+import type { MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
 import type { MonitorAgent as ViewsMonitorAgent } from "@vibecook/puppeteer-views";
 import { type LegacyShimOptions, toMonitorAgents } from "@vibecook/puppeteer-views/legacy";
 import type { RowsDeviceState } from "@vibefield/contracts";
