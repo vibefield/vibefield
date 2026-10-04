@@ -75,6 +75,38 @@ export function rendererModule(body: {
   ].join("\n");
 }
 
+/** A WGSL text with both entry points, as a kind's create would ask for it. */
+export const FIXTURE_WGSL =
+  "@vertex fn vs() -> @builtin(position) vec4f { return vec4f(0.0); }\n" +
+  "@fragment fn fs() -> @location(0) vec4f { return vec4f(1.0); }\n";
+
+/** DK-6 — a renderer module exporting an OBJECT binding (and an activate that binds nothing), in
+ * plain Node: the export the host reads by `binding.kind`, its kind's shape as asked. */
+export function objectRendererModule(
+  body: {
+    /** the export's name (default `clock`) */
+    exportName?: string;
+    /** the kind's registry name (default the fixture's clock type) */
+    kindName?: string;
+    /** the kind's create, as source (default: a pass that draws nothing, no shader) */
+    create?: string;
+    /** export `{ kind: { name } }` — a binding whose kind is no desk kind */
+    notAKind?: boolean;
+    /** widget types its activate registers (default none) */
+    binds?: string[];
+  } = {},
+): string {
+  const name = JSON.stringify(body.kindName ?? `${FIXTURE_ID}.clock`);
+  const create =
+    body.create ??
+    "async () => ({ spawn() { return this; }, prepare: () => 0, drawRange() {}, dispose() {} })";
+  const kind =
+    body.notAKind === true
+      ? `{ name: ${name} }`
+      : `{ name: ${name}, stratum: "things", reach: 0, create: ${create}, resolve: () => ({}), record: () => ({}), hit: () => "content" }`;
+  return `export const ${body.exportName ?? "clock"} = { kind: ${kind} };\n${rendererModule({ binds: body.binds ?? [] })}`;
+}
+
 export function makePlugin(opts: FixtureOptions = {}): string {
   const root = mkdtempSync(join(tmpdir(), "vf-plugin-cli-"));
   if (opts.rawManifest !== undefined)

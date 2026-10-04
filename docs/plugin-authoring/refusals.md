@@ -18,8 +18,8 @@ column is the general one.
 | `artifact-unmappable-specifier` | artifact | the bundle imports a bare specifier the host import map cannot bind (§11.6) | `import only HOST_SINGLETON_MODULE_SPECIFIERS, or let the plugin bundle it in` |
 | `behavior-presence-budget-exceeded` | manifest | the plugin's charged ephemeral facets exceed one renderer presence window | reduce maxFacetBytes claims or remove optional presence producers; the whole plugin set must fit 48 KiB including per-facet envelopes |
 | `behavior-store-unsupported` | manifest | a legacy host release does not admit this behavior store | upgrade the host; current releases admit bounded ephemeral behaviors and no longer emit this code |
-| `binding-missing` | activation | the manifest declares a widget type that activate never bound (§12.1) | bind every declared type: ctx.widgets.register({ type, binding }) |
-| `binding-undeclared` | activation | activate registered a widget type the manifest does not declare (§12.1) | declare the type under contributes.widgets, or register the declared type |
+| `binding-missing` | activation | `the manifest declares a command, surface or behavior that activate never bound (§12.1); a widget row needs none on the desk build — the host compiles it faceless (DK-2), and an object's binding is its module's export (the object-* codes)` | bind every declared command, surface and behavior during activate(ctx) |
+| `binding-undeclared` | activation | activate registered a widget type, command, surface or behavior the manifest does not declare (§12.1) | declare it in the manifest first, or stop registering it |
 | `dev-root-unknown` | dev-link | no dev-linked plugin root could be resolved for this machine | `pass --root <dir>, or run inside the repo whose dev session watches examples/plugins` |
 | `docs-stale` | docs | the committed docs are not what the current schemas generate | regenerate with `pnpm gen:docs` and commit the result |
 | `harness-error` | harness | the kit itself failed — a bug here, not in the plugin (exit 2) | report it with the detail line; the plugin is not implicated |
@@ -33,6 +33,10 @@ column is the general one.
 | `manifest-unreadable` | manifest | vibefield.plugin.json is not parseable JSON, or exceeds the manifest byte limit | emit it with plugin-build's emitManifest rather than hand-editing |
 | `module-shape-invalid` | activation | the renderer entry's default export has no activate(ctx) function | export default defineRendererPlugin({ activate(ctx) { … } }) |
 | `module-unloadable` | activation | the built renderer entry exists but throws while being imported | module top-level must not perform product work (§10.1) — do it in activate(ctx) |
+| `object-export-missing` | activation | an objects row's binding.kind names no ObjectBinding the built renderer module exports (§12.8) | export the binding under that name: `export const <name>: ObjectBinding = { kind }` (@vibefield/plugin-sdk/desk) |
+| `object-kind-invalid` | activation | the named export's kind is not a desk kind (ICE isObjectKind: name · stratum · create · resolve · record · hit · reach) | type it `ObjectKind` from @vibefield/plugin-sdk/desk and give it every required member |
+| `object-kind-misnamed` | activation | the kind's registry name is not the row's type — the host refuses it (one id, no second namespace) | name the kind exactly as the row's type |
+| `object-wgsl-not-text` | activation | the kind's create asked for a shader module whose code is not WGSL text — the shader did not arrive inlined | import the kind's .wgsl files (plugin-build inlines each as its text) and compose them with kitWgsl |
 | `objects-need-desk` | activation | the manifest declares object kinds (contributes.objects) — object kinds need the desk; this build draws widgets (§12.8); said only by the ICE 0.11 build — the desk build (DK-2) activates object kinds and no door says it | kept for the record: on the desk build an object kind activates like any plugin; a host that still says this code predates the desk — run the desk build |
 | `pack-refused` | pack | the .vfplugin bundle could not be produced (unsafe entry name, missing entry) | `pack walks vibefield.plugin.json + dist/** + assets/** — keep entries inside them` |
 | `plugin-dir-invalid` | input | the path given is not a directory holding a plugin | pass the directory that holds vibefield.plugin.json |
@@ -42,7 +46,7 @@ column is the general one.
 | `signature-missing` | registry | no detached index.json.sig beside the index | sign the index with `vibefield-plugin index sign <index> --key <secret>` |
 | `systems-contribution-superseded` | manifest | the retired contributes.systems shape cannot express an ICE behavior descriptor | define through @vibefield/plugin-sdk/behavior and declare under contributes.behaviors |
 | `usage` | input | the command line could not be understood | run `vibefield-plugin --help`; every command is non-interactive |
-| `wall-violation` | wall | plugin runtime code imports something outside the SDK door (§11.3, wall R10) | import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior), @vibefield/contracts types, or react |
+| `wall-violation` | wall | plugin runtime code imports something outside the SDK door (§11.3, wall R10) | import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior, /desk), @vibefield/contracts types, or react |
 
 ## Notes (exit 0)
 
@@ -60,5 +64,6 @@ command — honest absence beats a blank.
 | `link-missing` | dev-link | --remove found nothing to unlink | nothing to do — the plugin is not dev-linked under this root |
 | `manifest-dev-alias-id` | manifest | a single-segment dev-era id — valid locally, refused by distribution (§6.1) | use a dotted, distributable id (`vendor.plugin`) before publishing |
 | `manifest-unknown-key` | manifest | a top-level or contributes key the schema does not know (preserved, ungranted) | remove it, or land the contribution kind in @vibefield/contracts first |
+| `object-create-not-run-here` | activation | the kind's create stopped before its shader on the recording device (no GPU in Node) — the harness's ceiling, not a refusal | the product and the playground's Dawn harness (DK-7) run create on a real device; the CLI reports honestly |
 | `submit-artifact-url-placeholder` | registry | the emitted index row's artifactUrl is a placeholder, not a real location | replace it with the release asset's url before opening the index PR |
 | `submit-index-repo-absent` | registry | the index repository does not exist yet, so submitting is a human step | keep the row; add it to registry/index.json and sign it when the repo exists |

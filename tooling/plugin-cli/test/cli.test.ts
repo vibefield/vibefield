@@ -162,10 +162,28 @@ describe("the two registers", () => {
     const result = JSON.parse(io.lines[0] ?? "{}") as {
       contributions: { objects: Array<{ type: string; binding: string; refusal: unknown }> };
     };
-    // the field stays so an agent branches on it (plan §5 DK-6 inputs (f)); the desk draws objects
+    // the field stays so an agent branches on it (plan §5 DK-6 inputs (f)); the desk draws objects.
+    // DK-6: the row says, beside its chip and its export, how it hangs and what it provides
     expect(result.contributions.objects).toEqual([
-      expect.objectContaining({ type: clock, binding: "clock", refusal: null }),
+      {
+        type: clock,
+        title: "Clock",
+        schemaVersion: 1,
+        props: 0,
+        groups: [],
+        ports: 0,
+        tray: "things",
+        hang: { w: 110, h: 110, accessory: "hook", pegs: [[0, -0.5]] },
+        provides: ["desk.object"],
+        binding: "clock",
+        refusal: null,
+      },
     ]);
+    const human = capture();
+    expect(await runCli(["inspect", root], human)).toBe(EXIT_OK);
+    expect(human.lines.join("\n")).toContain(
+      `${clock} — v1, 0 prop(s), 0 port(s), tray things (hook 110 × 110), provides desk.object, export clock`,
+    );
   });
 
   it("counts the playground's named states when the plugin declares them", async () => {

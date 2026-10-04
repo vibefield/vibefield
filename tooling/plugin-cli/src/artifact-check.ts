@@ -18,13 +18,24 @@ import { resolve } from "node:path";
 import type { PluginManifestV1 } from "@vibefield/contracts";
 import { findUnmappableSpecifiers } from "@vibefield/plugin-build/build";
 import { note, pass, refuse, type Verdict } from "./verdict";
-import { importSpecifiersOnLine } from "./wall";
+
+/** What an ESM artifact's imports look like. A STATIC `import … from` / `export … from` /
+ * `import "x"` takes a string literal — never a template literal — so a backticked word after "from"
+ * is prose, not an import: DK-6 found six such in the browser plugin's bundle (the contracts' comments
+ * it carries — "computes from `git_repo`", "a different claim from `alive`"), each refused as an
+ * unmappable specifier. A dynamic `import()` may take a template. (The WALL keeps its own wider
+ * matcher: in source, refusing too much is the safe side.) */
+const ARTIFACT_IMPORTS = [
+  /\bfrom\s*["']([^"'\n]+)["']/g,
+  /\bimport\s+["']([^"'\n]+)["']/g,
+  /\bimport\s*\(\s*["'`]([^"'`\n]+)["'`]/g,
+];
 
 /** The bare specifiers a built ESM artifact asks the host for. */
 export function emittedSpecifiers(source: string): string[] {
   const out = new Set<string>();
-  for (const line of source.split(/\r?\n/))
-    for (const spec of importSpecifiersOnLine(line)) out.add(spec);
+  for (const re of ARTIFACT_IMPORTS)
+    for (const m of source.matchAll(re)) if (m[1] !== undefined) out.add(m[1]);
   return [...out].sort();
 }
 

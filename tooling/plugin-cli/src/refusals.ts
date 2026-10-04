@@ -86,7 +86,7 @@ export const REFUSAL_CATALOG = {
     level: "refuse",
     meaning: "plugin runtime code imports something outside the SDK door (§11.3, wall R10)",
     guidance:
-      "import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior), @vibefield/contracts types, or react",
+      "import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior, /desk), @vibefield/contracts types, or react",
   },
 
   // --- declared schemas --------------------------------------------------------
@@ -120,14 +120,56 @@ export const REFUSAL_CATALOG = {
   "binding-undeclared": {
     check: "activation",
     level: "refuse",
-    meaning: "activate registered a widget type the manifest does not declare (§12.1)",
-    guidance: "declare the type under contributes.widgets, or register the declared type",
+    meaning:
+      "activate registered a widget type, command, surface or behavior the manifest does not declare (§12.1)",
+    guidance: "declare it in the manifest first, or stop registering it",
   },
   "binding-missing": {
     check: "activation",
     level: "refuse",
-    meaning: "the manifest declares a widget type that activate never bound (§12.1)",
-    guidance: "bind every declared type: ctx.widgets.register({ type, binding })",
+    meaning:
+      "the manifest declares a command, surface or behavior that activate never bound (§12.1); a widget row needs none on the desk build — the host compiles it faceless (DK-2), and an object's binding is its module's export (the object-* codes)",
+    guidance: "bind every declared command, surface and behavior during activate(ctx)",
+  },
+  // --- the object rows (DK-6: the host's reading of contributes.objects, before the host) ---
+  "object-export-missing": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "an objects row's binding.kind names no ObjectBinding the built renderer module exports (§12.8)",
+    guidance:
+      "export the binding under that name: `export const <name>: ObjectBinding = { kind }` (@vibefield/plugin-sdk/desk)",
+  },
+  "object-kind-invalid": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "the named export's kind is not a desk kind (ICE isObjectKind: name · stratum · create · resolve · record · hit · reach)",
+    guidance:
+      "type it `ObjectKind` from @vibefield/plugin-sdk/desk and give it every required member",
+  },
+  "object-kind-misnamed": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "the kind's registry name is not the row's type — the host refuses it (one id, no second namespace)",
+    guidance: "name the kind exactly as the row's type",
+  },
+  "object-wgsl-not-text": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "the kind's create asked for a shader module whose code is not WGSL text — the shader did not arrive inlined",
+    guidance:
+      "import the kind's .wgsl files (plugin-build inlines each as its text) and compose them with kitWgsl",
+  },
+  "object-create-not-run-here": {
+    check: "activation",
+    level: "note",
+    meaning:
+      "the kind's create stopped before its shader on the recording device (no GPU in Node) — the harness's ceiling, not a refusal",
+    guidance:
+      "the product and the playground's Dawn harness (DK-7) run create on a real device; the CLI reports honestly",
   },
   "activation-leak": {
     check: "activation",

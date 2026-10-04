@@ -6,12 +6,15 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { OBJECTS_NEED_DESK } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
+import { emittedSpecifiers } from "../src/artifact-check";
 import { checkPlugin } from "../src/check";
 import {
   baseManifest,
   FIXTURE_ID,
+  FIXTURE_WGSL,
   freshDir,
   makePlugin,
+  objectRendererModule,
   refusalCodes,
   rendererModule,
 } from "./fixtures";
@@ -37,7 +40,9 @@ describe("check — a clean plugin", () => {
     const verdicts = await checkPlugin({ dir: root });
 
     expect(refusalCodes(verdicts)).toEqual([]);
-    expect(verdicts.map((v) => v.detail)).toContain("1 declared widget type(s) bound exactly");
+    expect(verdicts.map((v) => v.detail)).toContain(
+      "1 declared widget type(s): faceless on the desk, bound or not (DK-2)",
+    );
     expect(verdicts.map((v) => v.detail)).toContain(
       "deactivation released every timer this activation created",
     );
@@ -270,8 +275,10 @@ describe("check — declaration ↔ binding", () => {
     expect(refusal?.detail).toContain(`${FIXTURE_ID}.other`);
   });
 
-  it("refuses a declaration nothing binds", async () => {
-    const root = makePlugin({
+  it("refuses a declaration nothing binds — a command's; a WIDGET row needs no binding on the desk (DK-2)", async () => {
+    // DK-6: the host compiles every widget row faceless, bound or not, so an unbound widget
+    // declaration is no failure — note, browser, field-tools and widgetlab bind none since DK-2
+    const widgetsUnbound = makePlugin({
       manifest: baseManifest({
         activation: [`onWidget:${CARD}`],
         contributes: {
@@ -290,10 +297,26 @@ describe("check — declaration ↔ binding", () => {
       }),
       files: { "dist/renderer.js": rendererModule({ binds: [CARD] }) },
     });
-    const verdicts = await checkPlugin({ dir: root });
-    const refusal = verdicts.find((v) => v.code === "binding-missing");
+    const widgetVerdicts = await checkPlugin({ dir: widgetsUnbound });
+    expect(refusalCodes(widgetVerdicts)).toEqual([]);
+    expect(widgetVerdicts.map((v) => v.detail)).toContain(
+      "2 declared widget type(s): faceless on the desk, bound or not (DK-2)",
+    );
+    // …while a declared COMMAND nothing binds is still a contribution the user can reach and nothing implements
+    const commandUnbound = makePlugin({
+      manifest: baseManifest({
+        contributes: {
+          ...(baseManifest()["contributes"] as object),
+          commands: [{ id: `${FIXTURE_ID}.go`, title: "Go", placements: ["palette"] }],
+        },
+      }),
+      files: { "dist/renderer.js": rendererModule({}) },
+    });
+    const refusal = (await checkPlugin({ dir: commandUnbound })).find(
+      (v) => v.code === "binding-missing",
+    );
     expect(refusal?.level).toBe("refuse");
-    expect(refusal?.detail).toContain(`${FIXTURE_ID}.second`);
+    expect(refusal?.detail).toContain(`command ${FIXTURE_ID}.go`);
   });
 
   it("refuses an activate that throws", async () => {
@@ -325,7 +348,8 @@ describe("check — declaration ↔ binding", () => {
 
 // DK-2 (desk/landing): DK-0f's `objects-need-desk` activation row is FLIPPED OFF —
 // the desk draws objects, so `check` passes an object plugin's manifest AND its
-// activation like any plugin's. (Holding `binding.kind` to a desk kind is DK-7's.)
+// activation like any plugin's. DK-6: each object row is held to the module's
+// export — the host's reading, in Node, with no device (object-check.ts).
 describe("check — object kinds on the desk build", () => {
   const CLOCK = `${FIXTURE_ID}.clock`;
   const objects = [
@@ -343,22 +367,23 @@ describe("check — object kinds on the desk build", () => {
       binding: { kind: "clock" },
     },
   ];
+  const objectPlugin = (module: string) =>
+    makePlugin({
+      manifest: { activation: [`onWidget:${CLOCK}`], contributes: { objects } },
+      files: { "dist/renderer.js": module },
+    });
+  const activation = (verdicts: Awaited<ReturnType<typeof checkPlugin>>) =>
+    verdicts.filter((v) => v.check === "activation");
 
   it("accepts the manifest and activates it — no objects-need-desk on any row", async () => {
-    const root = makePlugin({
-      manifest: { activation: [`onWidget:${CLOCK}`], contributes: { objects } },
-      files: { "dist/renderer.js": rendererModule({ binds: [] }) },
-    });
-    const verdicts = await checkPlugin({ dir: root });
+    const verdicts = await checkPlugin({ dir: objectPlugin(objectRendererModule()) });
 
     expect(refusalCodes(verdicts)).toEqual([]);
     expect(verdicts.some((v) => v.code === OBJECTS_NEED_DESK.code)).toBe(false);
     expect(verdicts.filter((v) => v.check === "manifest").map((v) => v.level)).toEqual(
       expect.arrayContaining(["pass"]),
     );
-    expect(verdicts.filter((v) => v.check === "activation").map((v) => v.level)).toEqual(
-      expect.arrayContaining(["pass"]),
-    );
+    expect(activation(verdicts).map((v) => v.level)).toEqual(expect.arrayContaining(["pass"]));
   });
 
   it("activates objects standing beside widgets — the widget binding rows run as before", async () => {
@@ -367,13 +392,78 @@ describe("check — object kinds on the desk build", () => {
         activation: [`onWidget:${CLOCK}`, `onWidget:${CARD}`],
         contributes: { ...(baseManifest()["contributes"] as object), objects },
       },
-      files: { "dist/renderer.js": rendererModule({}) },
+      files: { "dist/renderer.js": objectRendererModule({ binds: [CARD] }) },
     });
     const verdicts = await checkPlugin({ dir: root });
     expect(refusalCodes(verdicts)).toEqual([]);
     expect(verdicts.some((v) => v.code === OBJECTS_NEED_DESK.code)).toBe(false);
     // the ordinary activation rows ran (DK-0f's single refusing row is gone)
-    expect(verdicts.filter((v) => v.check === "activation").length).toBeGreaterThan(1);
+    expect(activation(verdicts).length).toBeGreaterThan(1);
+  });
+
+  it("DK-6 — holds binding.kind to a REAL export: a desk kind named by its type, and says how it hangs", async () => {
+    const verdicts = await checkPlugin({ dir: objectPlugin(objectRendererModule()) });
+    expect(activation(verdicts).map((v) => v.detail)).toEqual(
+      expect.arrayContaining([
+        `${CLOCK}: \`clock\` is a desk kind named by its type; hangs on "things" by a hook (110 × 110)`,
+        `${CLOCK}: its create compiles no shader (a kind that draws nothing)`,
+      ]),
+    );
+  });
+
+  it("DK-6 — refuses the three bindings the host refuses: no such export, no desk kind, a kind named otherwise", async () => {
+    const missing = await checkPlugin({
+      dir: objectPlugin(objectRendererModule({ exportName: "clocks" })),
+    });
+    expect(refusalCodes(missing)).toEqual(["object-export-missing"]);
+    expect(missing.find((v) => v.code === "object-export-missing")?.pointer).toBe(
+      "/contributes/objects/0/binding/kind",
+    );
+    const notKind = await checkPlugin({
+      dir: objectPlugin(objectRendererModule({ notAKind: true })),
+    });
+    expect(refusalCodes(notKind)).toEqual(["object-kind-invalid"]);
+    const misnamed = await checkPlugin({
+      dir: objectPlugin(objectRendererModule({ kindName: "clock" })),
+    });
+    expect(refusalCodes(misnamed)).toEqual(["object-kind-misnamed"]);
+    expect(misnamed.find((v) => v.code === "object-kind-misnamed")?.detail).toContain(
+      `kind is named "clock"`,
+    );
+  });
+
+  it("DK-6 — its WGSL present as TEXT: the create, on a recording device with no GPU, asks for its shader", async () => {
+    // the create reads a WebGPU constant first (as ICE's bindLayout does), then compiles its text
+    const create = `async (device) => { const stage = GPUShaderStage.VERTEX | GPUShaderStage.FRAGMENT; device.createBindGroupLayout({ entries: [{ binding: 0, visibility: stage }] }); device.createShaderModule({ code: ${JSON.stringify(FIXTURE_WGSL)} }); return {}; }`;
+    const verdicts = await checkPlugin({ dir: objectPlugin(objectRendererModule({ create })) });
+    expect(refusalCodes(verdicts)).toEqual([]);
+    expect(activation(verdicts).map((v) => v.detail)).toContain(
+      `${CLOCK}: its WGSL arrived as text (${FIXTURE_WGSL.length} characters, vertex + fragment)`,
+    );
+    // the constants were the row's, lent for the create and taken back
+    expect((globalThis as Record<string, unknown>)["GPUShaderStage"]).toBeUndefined();
+  });
+
+  it("DK-6 — refuses a shader whose code is not text; notes a create that stops before its shader", async () => {
+    const notText = await checkPlugin({
+      dir: objectPlugin(
+        objectRendererModule({
+          create: "async (device) => { device.createShaderModule({ code: 42 }); return {}; }",
+        }),
+      ),
+    });
+    expect(refusalCodes(notText)).toEqual(["object-wgsl-not-text"]);
+    const stopped = await checkPlugin({
+      dir: objectPlugin(
+        objectRendererModule({
+          create: 'async () => { throw new Error("wants a real adapter"); }',
+        }),
+      ),
+    });
+    expect(refusalCodes(stopped)).toEqual([]);
+    const noted = stopped.find((v) => v.code === "object-create-not-run-here");
+    expect(noted?.level).toBe("note");
+    expect(noted?.detail).toContain("wants a real adapter");
   });
 });
 
@@ -399,6 +489,18 @@ describe("check — artifacts", () => {
     const refusal = verdicts.find((v) => v.code === "artifact-unmappable-specifier");
     expect(refusal?.level).toBe("refuse");
     expect(refusal?.detail).toContain("lodash");
+  });
+
+  it("DK-6 — reads no import out of prose the bundle carries: a backticked word after `from` is none", async () => {
+    // the browser plugin's bundle carries the contracts' comments, six of which read "… from `x`" —
+    // each was refused as an unmappable specifier until the artifact matcher took string literals only
+    const prose =
+      "/** the family VibeField computes from `git_repo` (DS-D9), a claim apart from `alive` */\n";
+    const root = makePlugin({ files: { "dist/renderer.js": `${prose}${rendererModule({})}` } });
+    expect(refusalCodes(await checkPlugin({ dir: root }))).toEqual([]);
+    expect(
+      emittedSpecifiers(`${prose}import "react";\nconst m = import(\`./chunk.js\`);\n`),
+    ).toEqual(["./chunk.js", "react"]);
   });
 
   it("accepts the singleton specifiers the map does bind", async () => {

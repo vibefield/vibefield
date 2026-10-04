@@ -20,7 +20,9 @@ import { canonicalJson } from "@vibefield/plugin-build";
 
 /** DK-0f — an object kind as the host will see it: its durable half, the chip
  * it hangs under, the export that draws it, and what THIS build answers when
- * asked to activate it (the stable refusal code; null once the desk draws). */
+ * asked to activate it (the stable refusal code; null once the desk draws).
+ * DK-6 adds how it hangs and what it provides — the two things the desk reads
+ * to hang it on the pegboard and to place it. */
 export interface InspectedObject {
   readonly type: string;
   readonly title: string;
@@ -28,7 +30,17 @@ export interface InspectedObject {
   readonly props: number;
   readonly groups: string[];
   readonly ports: number;
+  /** its chip on the pegboard's bar (the tray entry's category), or null: it hangs nowhere */
   readonly tray: string | null;
+  /** how it hangs — its size on the board in CSS px, the accessory, the pegs — or null */
+  readonly hang: {
+    readonly w: number;
+    readonly h: number;
+    readonly accessory: string;
+    readonly pegs: readonly (readonly [number, number])[];
+  } | null;
+  /** what it PROVIDES: the keys the desk places by (`desk.object`, `desk.containable`, …) */
+  readonly provides: string[];
   readonly binding: string;
   readonly refusal: string | null;
 }
@@ -148,6 +160,16 @@ export async function inspectPlugin(
     groups: Object.keys(o.groups),
     ports: (o.ports ?? []).length,
     tray: o.tray?.category ?? null,
+    hang:
+      o.tray === undefined
+        ? null
+        : {
+            w: o.tray.hang.w,
+            h: o.tray.hang.h,
+            accessory: o.tray.hang.accessory,
+            pegs: o.tray.hang.pegs.map(([x, y]) => [x, y] as const),
+          },
+    provides: [...(o.provides ?? [])],
     binding: o.binding.kind,
     // DK-2: the desk build activates object kinds — the field stays so an agent
     // branches on it (plan §5 DK-6 inputs (f)), and it reads null here.
@@ -232,11 +254,14 @@ export function formatInspection(result: InspectionResult): string {
       "widget",
       `${w.type} — v${w.schemaVersion}, ${w.props} prop(s), ${w.ports} port(s), ${w.states} state(s)`,
     );
-  for (const o of c.objects)
+  for (const o of c.objects) {
+    const hang = o.hang === null ? "" : ` (${o.hang.accessory} ${o.hang.w} × ${o.hang.h})`;
+    const provides = o.provides.length === 0 ? "nothing" : o.provides.join(" + ");
     push(
       "object",
-      `${o.type} — v${o.schemaVersion}, ${o.props} prop(s), ${o.ports} port(s), tray ${o.tray ?? "none"}, export ${o.binding}${o.refusal === null ? "" : ` — ${o.refusal}: ${OBJECTS_NEED_DESK.message}`}`,
+      `${o.type} — v${o.schemaVersion}, ${o.props} prop(s), ${o.ports} port(s), tray ${o.tray ?? "none"}${hang}, provides ${provides}, export ${o.binding}${o.refusal === null ? "" : ` — ${o.refusal}: ${OBJECTS_NEED_DESK.message}`}`,
     );
+  }
   for (const x of c.commands) push("command", `${x.id} [${x.placements.join(", ")}]`);
   for (const x of c.surfaces) push("surface", `${x.id} → ${x.slot}`);
   for (const x of c.behaviors) {
