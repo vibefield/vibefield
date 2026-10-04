@@ -22,9 +22,12 @@ import type { RecordedFrame } from "./frame-recorder";
 // skipped the parse would measure a seam the product does not have.
 //
 // What is NOT the corpus's comes from the REAL door when one is given (attach,
-// create, mount, the account usage feed, History, the profile sets), so the
-// product's chrome keeps working under replay; without one those verbs refuse
-// honestly. The roster is the corpus's: a fold whose rows name `desk-here` must
+// create, mount, the account usage feed, History, the profile sets, the model
+// board), so the product's chrome keeps working under replay; without one those
+// verbs refuse honestly. The model board is the window's rows since MV-3b, and
+// under the lab it is already the model replay client's (`modelBoardOver`
+// instruments the deck's client), so passing it through is what lets a
+// model-stream replay reach the window at all. The roster is the corpus's: a fold whose rows name `desk-here` must
 // hear a roster that calls `desk-here` self, or the mesh's own board is drawn
 // twice (`mesh-rows.ts` drops only the device the roster says is here).
 
@@ -105,6 +108,7 @@ export function createReplayDoor(options: ReplayDoorOptions): ReplayDoor {
     // TL — fieldd's status ledger has nothing to say about a corpus's runs
     statusHistory: { load: async () => [] },
     ...(real?.profiles !== undefined ? { profiles: real.profiles } : {}),
+    ...(real?.model !== undefined ? { model: real.model } : {}),
     history: real?.history ?? {
       status: async () => ({
         reachable: false,

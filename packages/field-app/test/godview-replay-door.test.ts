@@ -5,7 +5,10 @@
  * roster is the corpus's; `deliverText` reads a fold frame the way the deck's
  * `observe` does (zod, an unreadable frame is a reason); and the verbs that are
  * not the corpus's go to the real door when there is one and refuse honestly
- * when there is not.
+ * when there is not. The model board is one of them (MV-3b): the window reads
+ * its rows through `door.model`, and under the lab that board is the model
+ * replay client's (`modelBoardOver` instruments it), so a replay door that
+ * dropped it left the window with no feed at all.
  */
 import type { AgentMeshOpen } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
@@ -110,6 +113,7 @@ describe("the replay door", () => {
     expect(await bare.mountLocal("s1")).toEqual({ state: "no-pane" });
     expect(await bare.statusHistory?.load()).toEqual([]);
     expect(bare.profiles).toBeUndefined();
+    expect(bare.model).toBeUndefined();
 
     const real: MonitorDoor = {
       observe: vi.fn(() => () => undefined),
@@ -137,6 +141,10 @@ describe("the replay door", () => {
       },
       profiles: { subscribe: () => () => undefined },
       devices: { subscribe: vi.fn(() => () => undefined) },
+      model: {
+        subscribe: vi.fn(async () => ({ snapshot: null, unsubscribe: () => undefined })),
+        reportShown: vi.fn(async () => ({ reported: true })),
+      },
     };
     const door = createReplayDoor({ real, roster: corpus.roster });
     expect(await door.mountLocal("s2")).toEqual({ state: "mounted", sessionId: "s2" });
@@ -144,6 +152,7 @@ describe("the replay door", () => {
     expect(door.history).toBe(real.history);
     expect(door.usage).toBe(real.usage);
     expect(door.profiles).toBe(real.profiles);
+    expect(door.model).toBe(real.model);
     // the streams and the roster stay the corpus's: the real door is never asked
     door.observe({ onFrame: () => undefined, onError: () => undefined });
     door.devices?.subscribe(() => undefined);
