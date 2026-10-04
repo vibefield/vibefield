@@ -736,6 +736,8 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   // rest — and its capture submits GPU work, so the idle row waits until it has been taken
   problems.push(...(await explorerStillRow(win, shotDir)));
   problems.push(...(await deskIdleRow(win)));
+  // the desk at rest: both captures below read the same last frame
+  problems.push(...(await quarterStillRow(win)));
   return problems;
 }
 
@@ -787,6 +789,53 @@ async function deskRetryRow(win: BrowserWindow, viteUrl: string): Promise<string
 
 /** The composer line's editor — the frame's chrome a person types into over the desk. */
 const LINE_INPUT = ".vf-line-input";
+
+/**
+ * DK-6 — THE EXPLORER'S QUARTER STILL IS THE DESK, SMALLER (ICE petition I29, fixed in 0.15.0-desk.2):
+ * the capture door at the explorer's own ask (`scale: 0.25`, a device ratio of 0.5 at dpr 2) held to
+ * the 1× still brought down to the same size — at desk.1 the quarter dropped every card kind (the note,
+ * the mini mat, the whiteboard, the print: whole regions of mat where they lie); now the two agree but
+ * for resampling. Both read the same last frame (the desk at rest), compared in the renderer as numbers:
+ * the mean of each pixel's largest channel difference, and the share of pixels that differ by more
+ * than a quarter of the range.
+ */
+async function quarterStillRow(win: BrowserWindow): Promise<string[]> {
+  const facts = (await win.webContents.executeJavaScript(
+    `(async () => {
+      const d = globalThis.__vfDesk;
+      const quarter = await d.capture({ scale: 0.25 });
+      const whole = await d.capture({ scale: 1 });
+      if (quarter === undefined || whole === undefined) { quarter?.close(); whole?.close(); return null; }
+      const w = quarter.width, h = quarter.height, wholeSize = [whole.width, whole.height];
+      const read = (bitmap) => {
+        const c = new OffscreenCanvas(w, h);
+        const x = c.getContext("2d");
+        x.imageSmoothingQuality = "high";
+        x.drawImage(bitmap, 0, 0, w, h);
+        return x.getImageData(0, 0, w, h).data;
+      };
+      const a = read(quarter), b = read(whole);
+      quarter.close(); whole.close();
+      let sum = 0, far = 0;
+      for (let i = 0; i < a.length; i += 4) {
+        const diff = Math.max(Math.abs(a[i] - b[i]), Math.abs(a[i + 1] - b[i + 1]), Math.abs(a[i + 2] - b[i + 2]));
+        sum += diff;
+        if (diff > 64) far += 1;
+      }
+      return { size: [w, h], whole: wholeSize, meanDiff: sum / (w * h), farShare: far / (w * h) };
+    })()`,
+    true,
+  )) as { size: number[]; whole: number[]; meanDiff: number; farShare: number } | null;
+  console.log(`SMOKE_CANVAS_QUARTER ${JSON.stringify(facts)}`);
+  if (facts === null) return ["the capture door gave no quarter or no whole still"];
+  return facts.meanDiff > QUARTER_STILL.meanDiff || facts.farShare > QUARTER_STILL.farShare
+    ? [`the quarter still is not the desk brought down (${JSON.stringify(facts)})`]
+    : [];
+}
+
+/** How far the quarter still may stand from the 1× still brought down — resampling's own difference
+ * (measured on this desk: see the commit), well under a card kind missing from it. */
+const QUARTER_STILL = { meanDiff: 6, farShare: 0.02 } as const;
 
 /**
  * DK-4 — THE DESK IDLES AT ZERO SUBMITS with the frame's chrome over it (plan §9 Phase 2's witness):

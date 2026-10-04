@@ -1,8 +1,6 @@
 /**
  * DK-4 — THE EXPLORER'S STILLS (DK-D27, the orchestrator's ruling on DK-3's q3): a board's picture is
- * a still of its desk through ICE's capture door — a quarter of the view, asked at a device ratio of
- * at least 1 (`captureScale`: the door's 0.25 at dpr 2 draws no card kind, measured — ICE I29) and brought down
- * to the quarter as it is encoded — taken at the
+ * a still of its desk through ICE's capture door — a quarter of the view — taken at the
  * board's CLOSE and ONCE on the desk's idle after an edit settles — never per frame — its PNG bytes
  * kept on the renderer's byte store's keyed shelf under the document id, and shown in the explorer as
  * a `blob:` URL. A board never captured has no URL (the placeholder tile). PF6: an owed still waits
@@ -18,7 +16,6 @@ import { DocStillShelf, stillKey } from "../src/doc-stills";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import {
   CLOSE_BUDGET_MS,
-  captureScale,
   createDeskStills,
   deskStillPng,
   REST_PATIENCE_MS,
@@ -110,7 +107,7 @@ describe("a board's still — at its close, and once on the desk's idle", () => 
     expect(h.d.asks).toHaveLength(0); // the desk is drawing: no still
     h.f.state.asleep = true;
     await vi.advanceTimersByTimeAsync(REST_POLL_MS);
-    expect(h.d.asks).toEqual([{ scale: 0.5 }]); // a quarter at dpr 2, asked at a ratio of 1
+    expect(h.d.asks).toEqual([{ scale: STILL_SCALE }]); // a quarter of the view
     expect(h.kept).toEqual([PNG]);
     expect(h.d.closed()).toBe(1); // the bitmap let go once encoded
     await vi.advanceTimersByTimeAsync(REST_POLL_MS * 20);
@@ -163,7 +160,7 @@ describe("a board's still — at its close, and once on the desk's idle", () => 
     const h = stills();
     h.s.owe(); // owed, the desk drawing on
     await h.s.close();
-    expect(h.d.asks).toEqual([{ scale: 0.5 }]);
+    expect(h.d.asks).toEqual([{ scale: STILL_SCALE }]);
     expect(h.kept).toEqual([PNG]);
     expect(h.s.owed()).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
@@ -197,27 +194,23 @@ describe("a board's still — at its close, and once on the desk's idle", () => 
 });
 
 describe("the still's size: a quarter of the view, every kind in it", () => {
-  it("asks the capture door at a device ratio of at least 1, never below the quarter", () => {
-    expect(captureScale(2)).toBe(0.5); // the door's own 0.25 here is a ratio of 0.5: no card kind drawn (measured)
-    expect(captureScale(1)).toBe(1);
-    expect(captureScale(3)).toBeCloseTo(1 / 3, 12);
-    expect(captureScale(4)).toBe(STILL_SCALE);
-    expect(captureScale(8)).toBe(STILL_SCALE);
-    expect(captureScale(0)).toBe(1); // no ratio known: as drawn
-  });
-
-  it("brings the still down to the quarter as it encodes — the size `scale: 0.25` names", async () => {
-    for (const dpr of [1, 2, 4]) {
+  // DK-6: ICE 0.15.0-desk.2 draws every kind at every scale, so the door is asked the quarter ITSELF at
+  // every device ratio and the encoder keeps the still as captured — DK-4's `max(0.25, 1 / dpr)` ask
+  // and its encode-time reduction retired with the pin (smoke:canvas's quarter row holds the pixels).
+  it("asks the capture door for the quarter at every device ratio, and encodes the still at its own size", async () => {
+    for (const dpr of [1, 2, 3, 4]) {
       const d = desk(true, dpr);
-      const factors: number[] = [];
-      await deskStillPng(d.handle, async (_bitmap, factor) => {
-        factors.push(factor);
+      const encoded: ImageBitmap[] = [];
+      const png = await deskStillPng(d.handle, async (bitmap) => {
+        encoded.push(bitmap);
         return PNG.slice();
       });
-      const asked = (d.asks[0] as { scale: number }).scale;
-      expect(asked * factors[0]!, `dpr ${dpr}`).toBeCloseTo(STILL_SCALE, 12);
-      expect(asked * dpr, `dpr ${dpr}`).toBeGreaterThanOrEqual(1);
+      expect(d.asks, `dpr ${dpr}`).toEqual([{ scale: STILL_SCALE }]);
+      expect(encoded, `dpr ${dpr}`).toHaveLength(1); // the bitmap the door gave, as it gave it
+      expect(png).toEqual(PNG);
+      expect(d.closed(), `dpr ${dpr}`).toBe(1);
     }
+    expect(STILL_SCALE).toBe(0.25);
   });
 });
 

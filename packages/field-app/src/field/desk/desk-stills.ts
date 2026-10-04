@@ -9,7 +9,7 @@ import {
 // THE DESK'S STILLS (DK-4; DK-D27 ruled 2 Oct — "the explorer shows the desk"): a board's picture in the
 // fields explorer is the DESK as it last showed it, through ICE's capture door (petition I23:
 // `handle.capture({ scale })` — the last PRESENTED frame drawn once more and read back; no redraw, no
-// wake, no frame counted — a quarter of the view, see `captureScale` for the ratio it is asked at). Taken TWICE in a board's life and never per
+// wake, no frame counted — a quarter of the view, every kind in it since ICE 0.15.0-desk.2). Taken TWICE in a board's life and never per
 // frame: at its CLOSE (the manager asks before the switch, the new board or the window's end takes the
 // desk away), and ONCE ON IDLE after an edit settles — the persistence path owes a still after each
 // acknowledged save, and the still is taken the first time the desk's loop is at rest (asleep, or parked
@@ -25,31 +25,20 @@ export const REST_PATIENCE_MS = 120_000;
 /** The most a closing board's still may hold the switch. */
 export const CLOSE_BUDGET_MS = 1_500;
 
-/**
- * The scale the capture door is ASKED at for a quarter-size still: `STILL_SCALE`, but never below a device ratio of 1.
- * MEASURED (DK-4, 2026-10-03, the packaged app on Dawn at dpr 2, the seeded board): `capture({ scale: 0.25 })` — a ratio of
- * 0.5 — draws the calendar and the notebook and NONE of the card kinds (the note, the mini mat, the whiteboard, the print),
- * while 0.5 and 1 draw all six (ICE's rig:capture checks the quarter still's size, never its picture). So the still is asked at
- * `max(0.25, 1 / dpr)` and brought down to the quarter as it is encoded — the same size, every object in it. ICE petition
- * I29 (filed 3 Oct, `draft/petitions/I29-ice-capture-quarter-drops-card-kinds.md`): this RETIRES at the first
- * `0.15.0-desk.N` carrying it — the door is then asked `STILL_SCALE` itself and the encoder keeps the still's own size.
- */
-export function captureScale(dpr: number): number {
-  return Math.max(STILL_SCALE, dpr > 0 ? 1 / dpr : 1);
-}
+// DK-6: the door is asked the quarter ITSELF. DK-4 measured ICE 0.15.0-desk.1 drawing two kinds of six
+// in a capture below a device ratio of 1 (petition I29) and asked at `max(0.25, 1 / dpr)`, bringing the
+// still down as it encoded; desk.2 carries I29's fix (every pass converts device px by the attachment's
+// own ratio), so that workaround — `captureScale` and the encoder's factor — retired with the pin.
 
-/** Encode a still as PNG bytes, `factor` of its size (1: as captured). */
-export type PngEncoder = (bitmap: ImageBitmap, factor: number) => Promise<Uint8Array<ArrayBuffer>>;
+/** Encode a still as PNG bytes, at its own size. */
+export type PngEncoder = (bitmap: ImageBitmap) => Promise<Uint8Array<ArrayBuffer>>;
 
-/** A still as PNG bytes, through a 2D OffscreenCanvas — brought down by `factor`, smoothed. */
-export const encodePng: PngEncoder = async (bitmap, factor) => {
-  const width = Math.max(1, Math.round(bitmap.width * factor));
-  const height = Math.max(1, Math.round(bitmap.height * factor));
-  const canvas = new OffscreenCanvas(width, height);
+/** A still as PNG bytes, through a 2D OffscreenCanvas. */
+export const encodePng: PngEncoder = async (bitmap) => {
+  const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
   const ctx = canvas.getContext("2d");
   if (ctx === null) throw new Error("desk still: no 2d context");
-  ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, 0, 0, width, height);
+  ctx.drawImage(bitmap, 0, 0);
   const blob = await canvas.convertToBlob({ type: "image/png" });
   return new Uint8Array(await blob.arrayBuffer());
 };
@@ -57,16 +46,13 @@ export const encodePng: PngEncoder = async (bitmap, factor) => {
 /** The desk's still as PNG bytes, a quarter of the view — or undefined where the desk has none: `failed` or `degraded`,
  * before its first frame, its device lost mid-copy (the capture door's honest answer). */
 export async function deskStillPng(
-  handle: Pick<DeskLayerHandle, "capture" | "lastInputs">,
+  handle: Pick<DeskLayerHandle, "capture">,
   encode: PngEncoder = encodePng,
 ): Promise<Uint8Array<ArrayBuffer> | undefined> {
-  // the device ratio the last frame was drawn at — the one the capture door scales
-  const dpr = handle.lastInputs()?.view.dpr ?? globalThis.devicePixelRatio ?? 1;
-  const scale = captureScale(dpr);
-  const still = await handle.capture({ scale });
+  const still = await handle.capture({ scale: STILL_SCALE });
   if (still === undefined) return undefined;
   try {
-    return await encode(still, STILL_SCALE / scale);
+    return await encode(still);
   } finally {
     still.close();
   }
@@ -81,7 +67,7 @@ export interface DeskStillsOptions {
   /** The engine whose frame loop says when the desk is at rest. */
   readonly engine: Pick<CanvasEngine, "frame">;
   /** The desk drawing this board now (the stage's layer for this generation), or null. */
-  readonly desk: () => Pick<DeskLayerHandle, "capture" | "lastInputs"> | null;
+  readonly desk: () => Pick<DeskLayerHandle, "capture"> | null;
   /** Where a still goes: the explorer's shelf, under this board's id. */
   readonly keep: (png: Uint8Array<ArrayBuffer>) => Promise<void> | void;
   readonly encode?: PngEncoder;
