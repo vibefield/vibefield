@@ -32,12 +32,12 @@ import { managedRowId, monitorAgentCounts } from "./monitor/agents";
 import { type DeviceChoice, filterByDevice, standingChoice } from "./monitor/device-filter";
 import type { AgentSessionSummary } from "./monitor/facet-types";
 import { useAgentFold } from "./monitor/GodviewAgentsProvider";
-import { instrumentedMonitorView } from "./monitor/perf/instrumented-view";
 import {
   bloomOwnsKeyEvent,
   launcherOwnsKeyEvent,
   setMonitorHoldsKeys,
 } from "./monitor/launcher-keys";
+import { instrumentedMonitorView } from "./monitor/perf/instrumented-view";
 import {
   chosenProfile,
   personaProfiles,
