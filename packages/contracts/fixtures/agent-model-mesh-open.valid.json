@@ -125,6 +125,17 @@
               "tier": "managed",
               "profileSet": "native",
               "attachable": true
+            },
+            "local": {
+              "nativeSessionId": "5f0d2c4e-8a1b-4e6f-9c3d-2b7a1e0f4d68",
+              "cwd": "/Users/james/Projects/project100/vibe-field",
+              "spawnedBy": "user-shell",
+              "mirror": {
+                "alive": true,
+                "startedAt": "2026-09-30T20:51:42.000Z",
+                "lastEvidenceAt": "2026-09-30T21:14:02.000Z",
+                "contextSource": "provider"
+              }
             }
           },
           {

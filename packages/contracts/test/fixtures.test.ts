@@ -26,6 +26,7 @@ import {
   AgentInterruptResult,
   AgentMeshFrame,
   AgentMeshOpen,
+  AgentModelDeskRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
   AgentReportShownParams,
@@ -390,6 +391,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "agent-desk-terminal-row": AgentDeskTerminalRow,
   "agent-model-mesh-open": AgentModelMeshOpen,
   "agent-model-mesh-frames": z.array(AgentModelMeshFrame),
+  // MV-3d (M35) — a run's row on this desktop's own `model` board: the desk row
+  // with the model's row whole and the chrome's facts (`local`) beside it.
+  "agent-model-desk-row": AgentModelDeskRow,
   "agent-report-shown": AgentReportShownParams,
   // Both arms of the interrupt's union: the refusal carries the FLOOR's own
   // word, never a sentence composed at the door.

@@ -13,6 +13,8 @@ import {
   AgentMeshFrame,
   AgentMeshOpen,
   AgentModelBoardRow,
+  AgentModelDeskRow,
+  AgentModelLocalFacts,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
   AgentProjection,
@@ -425,5 +427,75 @@ describe("MV-3a — the model's row on the wire (MV-D22, MV-D18)", () => {
     expect(JSON.stringify(row)).not.toMatch(/"\/Users\/|"\/home\/|"[A-Za-z]:\\\\/);
     // a terminal row is this desktop's windows' only: the path never leaves the device
     expect(terminal.monitorRow.detail).toBe("/Users/james/Projects/notes");
+  });
+});
+
+describe("MV-3d — the chrome's facts ride this desktop's own rows of the model board (M35, M42)", () => {
+  const own = AgentModelDeskRow.parse(golden("agent-model-desk-row.valid.json"));
+
+  it("the window's run row carries the model's row whole and the chrome's facts beside it", () => {
+    expect(own.monitorRow?.project.seq).toBe(2);
+    expect(own.local).toEqual({
+      nativeSessionId: "5f0d2c4e-8a1b-4e6f-9c3d-2b7a1e0f4d68",
+      cwd: "/Users/james/Projects/project100/vibe-field",
+      spawnedBy: "user-shell",
+      mirror: {
+        alive: true,
+        startedAt: "2026-09-30T20:51:42.000Z",
+        lastEvidenceAt: "2026-09-30T21:14:02.000Z",
+        contextSource: "provider",
+      },
+    });
+    // the path rides beside the model, never in it (EL7 B1): the model's row names a folder
+    expect(JSON.stringify(own.monitorRow)).not.toMatch(/"\/Users\//);
+    // a model-board row is still a desk row and a field row to a reader that knows only those
+    expect(AgentDeskRow.parse(golden("agent-model-desk-row.valid.json")).runtimeRunId).toBe(
+      own.runtimeRunId,
+    );
+    expect(AgentFieldRow.safeParse(golden("agent-model-desk-row.valid.json")).success).toBe(true);
+  });
+
+  it("only this desktop's rows carry them: the peer cut and the peers' boards on the window's door carry none", () => {
+    expect("local" in AgentDeskRow.parse(golden("agent-desk-row.model.json"))).toBe(false);
+    const open: AgentModelMeshOpen = AgentModelMeshOpen.parse(
+      golden("agent-model-mesh-open.valid.json"),
+    );
+    const [here, ...others] = open.devices;
+    expect(AgentModelDeskRow.parse(here?.snapshot?.rows[0]).local?.cwd).toBe(
+      "/Users/james/Projects/project100/vibe-field",
+    );
+    // a bare terminal's row carries none: no reader asks it anything beyond its row
+    expect(here?.snapshot?.rows.filter((row) => "local" in row)).toHaveLength(1);
+    for (const device of others) {
+      for (const row of device.snapshot?.rows ?? []) expect("local" in row).toBe(false);
+    }
+  });
+
+  it("the union keeps the facts through the board's reader, and the tolerant reader takes any part of them", () => {
+    const asBoard = AgentModelBoardRow.parse(golden("agent-model-desk-row.valid.json"));
+    expect(AgentModelDeskRow.parse(asBoard).local?.spawnedBy).toBe("user-shell");
+    // every part optional: a run before its first state (no mirror), a fieldd
+    // that says less, and a word this build never heard all parse
+    expect(AgentModelLocalFacts.parse({})).toEqual({});
+    expect(AgentModelLocalFacts.parse({ nativeSessionId: "n-1", exited: true })).toEqual({
+      nativeSessionId: "n-1",
+      exited: true,
+    });
+    const newer = AgentModelLocalFacts.parse({
+      nativeSessionId: "n-1",
+      laterFact: 3,
+      mirror: { alive: false, laterWord: "x" },
+    });
+    expect(newer).toMatchObject({ laterFact: 3, mirror: { alive: false, laterWord: "x" } });
+    // what it does refuse is a fact of the wrong kind, never a missing one
+    expect(AgentModelLocalFacts.safeParse({ nativeSessionId: "" }).success).toBe(false);
+    expect(AgentModelLocalFacts.safeParse({ exited: "yes" }).success).toBe(false);
+    expect(AgentModelLocalFacts.safeParse({ mirror: { alive: "true" } }).success).toBe(false);
+    // and a row with no facts at all is a row fieldd said nothing more about
+    const { local: _none, ...bare } = golden("agent-model-desk-row.valid.json") as Record<
+      string,
+      unknown
+    >;
+    expect(AgentModelDeskRow.parse(bare).local).toBeUndefined();
   });
 });
