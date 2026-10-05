@@ -40,7 +40,6 @@ import {
   meshBoardFailure,
   meshBoardOver,
   profileSetsPortOver,
-  statusHistoryPortOver,
   toAccountUsageBatch,
   usagePortOver,
 } from "../src/godview/monitor/doors";
@@ -853,44 +852,5 @@ describe("DS-3 — the roster port over device.subscribe", () => {
     expect(seen).toHaveLength(1);
     dispose();
     expect(door.unsubscribes).toBe(1);
-  });
-});
-
-describe("TL — the status history port over agent.history", () => {
-  const run = (id: string) => ({
-    runtimeRunId: id,
-    recordedFrom: "2026-10-02T14:00:00.000Z",
-    changes: [
-      { status: "working", at: "2026-10-02T14:00:00.000Z", did: "Edit tl-view.js" },
-      { status: "blocked", at: "2026-10-02T14:05:00.000Z", blocker: { kind: "permission" } },
-    ],
-  });
-
-  it("asks for every run, or for the runs named, and reads the answer run by run", async () => {
-    const { client, request } = requestingClient({
-      "agent.history": {
-        horizonMs: 86_400_000,
-        runs: [run("r1"), { runtimeRunId: "" }, run("r2")],
-      },
-    });
-    const port = statusHistoryPortOver(client);
-    const runs = await port.load();
-    expect(request).toHaveBeenCalledWith("agent.history", {});
-    // the run that does not parse is dropped; the rest stand
-    expect(runs.map((r) => r.runtimeRunId)).toEqual(["r1", "r2"]);
-    expect(runs[0]?.changes[0]?.did).toBe("Edit tl-view.js");
-    await port.load(["r2"]);
-    expect(request).toHaveBeenLastCalledWith("agent.history", { runtimeRunIds: ["r2"] });
-  });
-
-  it("reads an answer that is not a list of runs as no record, and lets a refusal reject", async () => {
-    const odd = requestingClient({ "agent.history": { horizonMs: 1, runs: "nope" } });
-    await expect(statusHistoryPortOver(odd.client).load()).resolves.toEqual([]);
-    const refusing = requestingClient({
-      "agent.history": async () => {
-        throw new Error("METHOD_NOT_FOUND: agent.history");
-      },
-    });
-    await expect(statusHistoryPortOver(refusing.client).load()).rejects.toThrow("METHOD_NOT_FOUND");
   });
 });

@@ -55,12 +55,10 @@ import type {
 } from "@vibecook/puppeteer-runtime";
 import {
   AGENT_FIELD,
-  AGENT_HISTORY,
   AGENT_MONITOR_SCHEMA_VERSION,
   type AgentAccountUsageBatch,
   type AgentCatalogEntry,
   AgentFieldRow,
-  AgentHistoryResult,
   type AgentListResult,
   type AgentProvidersResult,
   AgentSessionRecord,
@@ -851,120 +849,17 @@ describe("agent.* without a floor (the mock mgmt server)", () => {
     expect((await spawner.callErr("agent.subscribe", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
   });
 
-  it("TL — agent.history: the scope is agent.observe, a malformed ask is refused, and an empty fold answers no runs", async () => {
-    const { daemon } = await setup({ floor: "mock" });
+  it("MV-6 (L10, MV-D13) — agent.history is gone: the door answers method-not-found, and the user root holds no status ledger", async () => {
+    // Godview is runtime only (James, 2026-10-03): fieldd keeps no record of
+    // what a run did, and only rosetta ingests transcripts. The method is not
+    // registered at all — a window that asks is told so, never handed an
+    // empty record that reads as "nothing happened".
+    const { daemon, dataDir } = await setup({ floor: "mock" });
     const win = await window(daemon, DECK, "h0");
-    const empty = AgentHistoryResult.parse(await win.call("agent.history", {}));
-    expect(empty).toEqual({ horizonMs: AGENT_HISTORY.HORIZON_MS, runs: [] });
-    // absent params read as every run
-    expect(AgentHistoryResult.parse(await win.call("agent.history", undefined)).runs).toEqual([]);
-    for (const bad of [
-      { runtimeRunIds: "run-1" },
-      { runtimeRunIds: [""] },
-      { runtimeRunIds: Array.from({ length: 513 }, (_, i) => `run-${i}`) },
-    ]) {
-      const refused = await win.callErr("agent.history", bad);
-      expect(refused.data?.kind).toBe("PRECONDITION_FAILED");
-      expect(refused.message).toContain("runtimeRunIds");
-    }
-    const spawner = await window(daemon, ["agent.spawn"], "h1");
-    expect((await spawner.callErr("agent.history", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
-  });
-
-  it("TL — agent.history answers a previous boot's runs from their files: exits inside the horizon only, a verified record required, retention sweeping the rest", async () => {
-    const { daemon, dataDir, records } = await setup({ floor: "mock" });
-    const win = await window(daemon, DECK, "h2");
-    const dir = join(dataDir, ...LAYOUT.AGENT_HISTORY_DIR);
-    mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const now = Date.now();
-    const iso = (ms: number) => new Date(ms).toISOString();
-    const ledger = (id: string, from: number) =>
-      writeFileSync(
-        join(dir, `${id}.jsonl`),
-        [
-          { k: "from", at: iso(from) },
-          { k: "change", status: "unknown", at: iso(from) },
-          { k: "change", status: "working", at: iso(from + 1000) },
-          { k: "did", did: "Editing src/a.ts" },
-          {
-            k: "change",
-            status: "blocked",
-            at: iso(from + 2000),
-            blocker: { kind: "question", detail: "Which branch?" },
-          },
-          { k: "change", status: "idle", at: iso(from + 3000) },
-        ]
-          .map((line) => `${JSON.stringify(line)}\n`)
-          .join(""),
-        { mode: 0o600 },
-      );
-    const stage = (id: string, createdAt: number, exitedAt: number | undefined) =>
-      records.write({
-        format: 1,
-        runtimeRunId: id,
-        runtimeEpoch: 1,
-        provider: "scripted",
-        cwd: dataDir,
-        continuation: { providerId: "scripted", nativeSessionId: `native-${id}` },
-        createdAt: iso(createdAt),
-        updatedAt: iso(createdAt),
-        ...(exitedAt !== undefined
-          ? { exited: { at: iso(exitedAt), exitCode: 0, signal: null, reason: "exit" } }
-          : {}),
-      });
-    const hour = 60 * 60 * 1000;
-    // exited an hour ago: answered, its exit attached
-    stage("run-recent", now - 3 * hour, now - hour);
-    ledger("run-recent", now - 3 * hour);
-    // exited a day and more ago: past the horizon
-    stage("run-old", now - 30 * hour, now - 25 * hour);
-    ledger("run-old", now - 30 * hour);
-    // a ledger with no record, and one whose record is not ours (unsigned)
-    ledger("run-orphan", now - 2 * hour);
-    writeFileSync(
-      join(dataDir, ...LAYOUT.AGENT_SESSIONS_DIR, "run-forged.json"),
-      JSON.stringify({
-        format: 1,
-        runtimeRunId: "run-forged",
-        runtimeEpoch: 1,
-        provider: "scripted",
-        cwd: dataDir,
-        continuation: { providerId: "scripted", nativeSessionId: "native-forged" },
-        createdAt: iso(now - hour),
-        updatedAt: iso(now - hour),
-      }),
-      { mode: 0o600 },
-    );
-    ledger("run-forged", now - 2 * hour);
-
-    const all = AgentHistoryResult.parse(await win.call("agent.history", {}));
-    expect(all.runs.map((run) => run.runtimeRunId)).toEqual(["run-recent"]);
-    expect(all.runs[0]).toEqual({
-      runtimeRunId: "run-recent",
-      recordedFrom: iso(now - 3 * hour),
-      exitedAt: iso(now - hour),
-      changes: [
-        { status: "unknown", at: iso(now - 3 * hour) },
-        { status: "working", at: iso(now - 3 * hour + 1000), did: "Editing src/a.ts" },
-        {
-          status: "blocked",
-          at: iso(now - 3 * hour + 2000),
-          blocker: { kind: "question", detail: "Which branch?" },
-        },
-        { status: "idle", at: iso(now - 3 * hour + 3000) },
-      ],
-    });
-    // retention ran with the first ask: only the answered run's file is left
-    expect(readdirSync(dir).sort()).toEqual(["run-recent.jsonl"]);
-    // `runtimeRunIds` narrows the answer; an id with nothing recorded is left out
-    const asked = AgentHistoryResult.parse(
-      await win.call("agent.history", { runtimeRunIds: ["run-nothing", "run-recent", "../x"] }),
-    );
-    expect(asked.runs.map((run) => run.runtimeRunId)).toEqual(["run-recent"]);
-    expect(
-      AgentHistoryResult.parse(await win.call("agent.history", { runtimeRunIds: ["run-nothing"] }))
-        .runs,
-    ).toEqual([]);
+    const refused = await win.callErr("agent.history", {});
+    expect(refused.data?.kind).toBe("NOT_FOUND");
+    expect(refused.message).toBe("method not found");
+    expect(existsSync(join(dataDir, "agents", "history"))).toBe(false);
   });
 
   it("a spawn with no floor refuses UNAVAILABLE in the floor's own words, records nothing, and the audit says failed", async () => {
@@ -2523,67 +2418,10 @@ describe("stable ingress — a managed session outlives fieldd (AR-4)", () => {
       return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
     }, 15_000);
     expect(readRecord(first.dataDir, runId).exited).toBeDefined();
-  }, 150_000);
-
-  it("TL — the status ledger survives a restart: the re-attached run carries on from its file, the stop reads as unrecorded, and the exit is the record's", async () => {
-    const first = await setup({ floor: "real", attach: true });
-    const win1 = await window(first.daemon, DECK, "tl1");
-    const spawned = (await win1.call("agent.spawn", {
-      provider: "scripted",
-      cwd: first.envOut,
-      title: "remembered",
-    })) as AgentSpawnResult;
-    const runId = spawned.session.runtimeRunId;
-    const ptyId = spawned.terminal.sessionId;
-    await joinedRow(win1, runId);
-    const before = AgentHistoryResult.parse(
-      await win1.call("agent.history", { runtimeRunIds: [runId] }),
-    );
-    expect(before.runs).toHaveLength(1);
-    const born = before.runs[0]!;
-    // the record begins at the spawn, unknown until puppeteer says otherwise
-    expect(born.recordedFrom).toBe(readRecord(first.dataDir, runId).createdAt);
-    expect(born.changes[0]).toEqual({ status: "unknown", at: born.recordedFrom });
-    expect(born.exitedAt).toBeUndefined();
-    const file = join(first.dataDir, ...LAYOUT.AGENT_HISTORY_DIR, `${runId}.jsonl`);
-    expect(statSync(file).mode & 0o777).toBe(0o600);
-
-    // ── the restart: the stop says what it cannot see ──
-    const stoppedBy = Date.now();
-    await first.daemon.stop();
-    const tail = readFileSync(file, "utf8").trim().split("\n").at(-1) ?? "";
-    expect(JSON.parse(tail)).toMatchObject({ k: "change", status: "unknown" });
-    const second = await setup({ floor: "real", attach: true, restartOf: first });
-    const win2 = await window(second.daemon, DECK, "tl2");
-    await poll(async () => {
-      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
-      const found = sessions.find((r) => r.runtimeRunId === runId);
-      return found?.continuation?.reattached === true ? found : undefined;
-    }, 20_000);
-    const after = AgentHistoryResult.parse(await win2.call("agent.history", {})).runs.find(
-      (run) => run.runtimeRunId === runId,
-    );
-    expect(after).toBeDefined();
-    // the first boot's record is still the beginning, change for change
-    expect(after!.recordedFrom).toBe(born.recordedFrom);
-    expect(after!.changes.slice(0, born.changes.length)).toEqual(born.changes);
-    const stop = after!.changes.slice(born.changes.length).find((c) => c.status === "unknown");
-    expect(stop).toBeDefined();
-    expect(Date.parse(stop!.at)).toBeGreaterThanOrEqual(stoppedBy - 1000);
-    for (let i = 1; i < after!.changes.length; i += 1) {
-      expect(after!.changes[i]!.at >= after!.changes[i - 1]!.at).toBe(true);
-    }
-
-    // ── the exit: the record's moment ends the record ──
-    await win2.call("terminal.terminate", { sessionId: ptyId });
-    await poll(async () => {
-      const { sessions } = (await win2.call("agent.list", {})) as AgentListResult;
-      return sessions.some((r) => r.runtimeRunId === runId) ? undefined : true;
-    }, 15_000);
-    const exited = AgentHistoryResult.parse(
-      await win2.call("agent.history", { runtimeRunIds: [runId] }),
-    ).runs[0];
-    expect(exited?.exitedAt).toBe(readRecord(first.dataDir, runId).exited?.at);
+    // MV-6 (MV-D13): a run that worked, re-attached across a restart and exited
+    // left no record of what it did — the session record is the resume's, and
+    // the status ledger's directory is never made
+    expect(existsSync(join(first.dataDir, "agents", "history"))).toBe(false);
   }, 150_000);
 
   it("a provider that cannot attach: the run is held PENDING across the restart (live, unobserved, resumable), and agent.resume replaces its PTY by hand — the new row names the PTY it replaced", async () => {

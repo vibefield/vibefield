@@ -40,7 +40,6 @@
   "AGENT_SESSIONS_DIR": ["agents", "sessions"],
   "AGENT_RUNS_DIR": ["agents", "runs"],
   "AGENT_SESSIONS_KEY_FILE": ["agents", "sessions.key"],
-  "AGENT_HISTORY_DIR": ["agents", "history"],
   "AGENT_SHIMS_DIR": ["agents", "shims"],
   "USERS_DIR": ["users"],
   "USERS_FILE": ["users.json"],

@@ -32,7 +32,6 @@ import {
   AgentReportShownParams,
   MonitorAgentRow,
 } from "../src/agent-field";
-import { AgentHistoryResult } from "../src/agent-history";
 import {
   AgentDistributionRecord,
   AgentPersona,
@@ -327,9 +326,6 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // conversation by its native id with the persona whose root holds it.
   "agent-resume-params": AgentResumeParams,
   "agent-list": AgentListResult,
-  // TL (TL-D8) — `agent.history`: a live run whose record spans the horizon
-  // (an unrecorded stop between two boots) and one that exited inside it.
-  "agent-history-result": AgentHistoryResult,
   "agent-providers": AgentProvidersResult,
   // AC-1 — the catalog as `agent.catalog` answers it (the whole table; the
   // phone's kit mirrors this file byte for byte).

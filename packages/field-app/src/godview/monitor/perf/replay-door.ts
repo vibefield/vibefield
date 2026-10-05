@@ -106,8 +106,6 @@ export function createReplayDoor(options: ReplayDoorOptions): ReplayDoor {
         };
       },
     },
-    // TL — fieldd's status ledger has nothing to say about a corpus's runs
-    statusHistory: { load: async () => [] },
     ...(real?.profiles !== undefined ? { profiles: real.profiles } : {}),
     ...(real?.model !== undefined ? { model: real.model } : {}),
     history: real?.history ?? {

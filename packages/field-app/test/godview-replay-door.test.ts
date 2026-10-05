@@ -111,7 +111,6 @@ describe("the replay door", () => {
     expect(await bare.attach({} as never)).toEqual({ state: "no-pane" });
     expect(await bare.createTerminal()).toEqual({ state: "no-pane" });
     expect(await bare.mountLocal("s1")).toEqual({ state: "no-pane" });
-    expect(await bare.statusHistory?.load()).toEqual([]);
     expect(bare.profiles).toBeUndefined();
     expect(bare.model).toBeUndefined();
 

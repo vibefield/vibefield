@@ -1,18 +1,16 @@
-import {
-  AGENT_CATALOG,
-  type AgentRunHistory,
-  type AgentSessionSummary,
-} from "@vibefield/contracts";
+import { AGENT_CATALOG, type AgentSessionSummary } from "@vibefield/contracts";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 import { catalogModelBoard } from "./godview-model-fixture";
 import { aloneOnTheMesh, NO_HISTORY, NO_USAGE, THIS_MAC } from "./godview-profiles-fixtures";
 
 // TL — the catalog's timeline on a fixture door: an afternoon as fieldd's fold
-// and its status ledger (`agent.history`) would send it, so the specimen drives
-// the shipping path whole — door, the stage's ledger, the view. Six runs over
-// five projects, born between four hours and forty minutes ago, each with a
-// day of working, waiting on you and resting; one asks a question now, one
-// ended forty minutes ago. A seeded afternoon, so the catalog draws the same
+// would send it, so the specimen drives the shipping path whole — door, the
+// window's replica, the view. Runtime only (MV-6, MV-D13): no record of what a
+// run did before rides the door, so each lane is drawn unrecorded from its
+// birth to its current state, the way the view draws any live window. Five
+// runs over five projects, born between four hours and forty minutes ago, each
+// in its current state for the last few minutes: two working, one asks a
+// question now, one rests. A seeded afternoon, so the catalog draws the same
 // one every time. Examples, not anyone's sessions; nothing spawns.
 
 const MIN = 60_000;
@@ -30,10 +28,10 @@ interface RunSpec {
   project: string;
   model: string;
   bornAgoMin: number;
-  /** what it is doing now; the past is dealt from the seed */
+  /** what it is doing now, since a moment dealt from the seed */
   now: "working" | "blocked" | "idle";
-  endedAgoMin?: number;
-  did: readonly string[];
+  /** what a working run's activity line says */
+  did: string;
 }
 
 const RUNS: readonly RunSpec[] = [
@@ -44,7 +42,7 @@ const RUNS: readonly RunSpec[] = [
     model: "opus · high",
     bornAgoMin: 238,
     now: "working",
-    did: ["Edit godview/GodviewMonitor.tsx", "Run pnpm verify", "Read DESIGN.md §8"],
+    did: "Edit godview/GodviewMonitor.tsx",
   },
   {
     run: "run-puppeteer",
@@ -53,7 +51,7 @@ const RUNS: readonly RunSpec[] = [
     model: "gpt-5 · medium",
     bornAgoMin: 191,
     now: "blocked",
-    did: ["Edit views/timeline/wake.ts", "Run pnpm test", "Read monitor/types.ts"],
+    did: "Edit views/timeline/wake.ts",
   },
   {
     run: "run-swarm-lab",
@@ -62,7 +60,7 @@ const RUNS: readonly RunSpec[] = [
     model: "sonnet",
     bornAgoMin: 150,
     now: "idle",
-    did: ["Edit physics/world.ts", "Run cargo test"],
+    did: "Edit physics/world.ts",
   },
   {
     run: "run-rosetta",
@@ -71,17 +69,7 @@ const RUNS: readonly RunSpec[] = [
     model: "fast-4",
     bornAgoMin: 122,
     now: "working",
-    did: ["Read src/index/walk.rs", "Run cargo clippy"],
-  },
-  {
-    run: "run-changelog",
-    agent: 0,
-    project: "changelog",
-    model: "haiku",
-    bornAgoMin: 96,
-    now: "idle",
-    endedAgoMin: 40,
-    did: ["Edit CHANGELOG.md"],
+    did: "Read src/index/walk.rs",
   },
   {
     run: "run-billing-api",
@@ -90,7 +78,7 @@ const RUNS: readonly RunSpec[] = [
     model: "gpt-5 · high",
     bornAgoMin: 41,
     now: "working",
-    did: ["Edit src/invoices.ts", "Run pnpm test invoices"],
+    did: "Edit src/invoices.ts",
   },
 ];
 
@@ -106,66 +94,17 @@ function seeded(seed: number): () => number {
   };
 }
 
-type State = "working" | "blocked" | "idle";
-const LENGTH_MIN: Record<State, [number, number]> = {
-  working: [4, 26],
-  blocked: [1, 7],
-  idle: [1, 14],
-};
-
-/** A run's changes, oldest first, ending in its current state. */
-function afternoon(spec: RunSpec, nowMs: number, rnd: () => number): AgentRunHistory {
-  const born = nowMs - spec.bornAgoMin * MIN;
-  const end = spec.endedAgoMin === undefined ? nowMs : nowMs - spec.endedAgoMin * MIN;
-  const changes: AgentRunHistory["changes"] = [{ status: "unknown", at: iso(born) }];
-  let at = born + 20_000;
-  let state: State = "working";
-  let line = 0;
-  // the current stretch is the last 1–9 minutes before the end, in `spec.now`
-  const lastFrom = Math.round(end - (1 + rnd() * 8) * MIN);
-  while (at < lastFrom) {
-    changes.push(change(state, at, spec, line++));
-    const [lo, hi] = LENGTH_MIN[state];
-    at = Math.min(lastFrom, at + (lo + rnd() * (hi - lo)) * MIN);
-    state = state === "working" ? (rnd() < 0.4 ? "blocked" : "idle") : "working";
-  }
-  const lastState = changes[changes.length - 1]?.status;
-  if (lastState === spec.now) changes.pop();
-  changes.push(change(spec.now, lastFrom, spec, line));
-  return {
-    runtimeRunId: spec.run,
-    recordedFrom: iso(born),
-    changes,
-    ...(spec.endedAgoMin === undefined ? {} : { exitedAt: iso(end) }),
-  };
-}
-
-function change(state: State, atMs: number, spec: RunSpec, line: number) {
-  if (state === "working")
-    return { status: state, at: iso(atMs), did: spec.did[line % spec.did.length] };
-  if (state === "blocked") {
-    return line % 2
-      ? {
-          status: state,
-          at: iso(atMs),
-          blocker: { kind: "permission", detail: "Bash: pnpm install" },
-        }
-      : {
-          status: state,
-          at: iso(atMs),
-          blocker: { kind: "question", detail: "Keep the old export?" },
-        };
-  }
-  return { status: state, at: iso(atMs) };
+/** When a run's current state began: the last 1–9 minutes, dealt from the seed. */
+function stateSince(nowMs: number, rnd: () => number): number {
+  return Math.round(nowMs - (1 + rnd() * 8) * MIN);
 }
 
 const iso = (ms: number): string => new Date(ms).toISOString();
 
-function foldRow(spec: RunSpec, history: AgentRunHistory): AgentSessionSummary {
+function foldRow(spec: RunSpec, nowMs: number, sinceMs: number): AgentSessionSummary {
   const cwd = `/Users/you/Projects/${spec.project}`;
-  const last = history.changes[history.changes.length - 1];
-  const since = last?.at ?? history.recordedFrom;
-  const alive = history.exitedAt === undefined;
+  const born = iso(nowMs - spec.bornAgoMin * MIN);
+  const since = iso(sinceMs);
   const agent = agentOf(spec.agent);
   return {
     sessionId: `${spec.run}-native`,
@@ -196,36 +135,30 @@ function foldRow(spec: RunSpec, history: AgentRunHistory): AgentSessionSummary {
               },
             ]
           : [],
-      ...(spec.now === "working"
-        ? { activity: { kind: "tool", line: last?.did ?? spec.did[0] ?? "", since } }
-        : {}),
+      ...(spec.now === "working" ? { activity: { kind: "tool", line: spec.did, since } } : {}),
       model: { id: spec.model, displayName: spec.model },
       environment: { cwd, worktrees: [] },
       session: { nativeSessionId: `${spec.run}-native` },
       freshness: { lastEvidenceAt: since, level: "native-hooks" },
-      alive,
+      alive: true,
     },
     status: spec.now,
     observationLevel: "native-hooks",
-    createdAt: history.recordedFrom,
-    stateChangedAt: history.exitedAt ?? since,
-    continuation: { persisted: true, resumable: false, ...(alive ? {} : { exited: true }) },
+    createdAt: born,
+    stateChangedAt: since,
+    continuation: { persisted: true, resumable: false },
   };
 }
 
-/** The afternoon, as of `nowMs`: the fold's rows and the ledger's runs. */
-export function timelineAfternoon(nowMs: number): {
-  rows: AgentSessionSummary[];
-  runs: AgentRunHistory[];
-} {
+/** The afternoon, as of `nowMs`: the fold's rows, each in its current state. */
+export function timelineAfternoon(nowMs: number): { rows: AgentSessionSummary[] } {
   const rnd = seeded(20261002);
-  const runs = RUNS.map((spec) => afternoon(spec, nowMs, rnd));
-  return { rows: RUNS.map((spec, i) => foldRow(spec, runs[i] as AgentRunHistory)), runs };
+  return { rows: RUNS.map((spec) => foldRow(spec, nowMs, stateSince(nowMs, rnd))) };
 }
 
-/** A door with the fold, its status ledger and the model board in it, and no deck. */
+/** A door with the fold and the model board in it, and no deck. */
 export function timelineDoor(): MonitorDoor {
-  const { rows, runs } = timelineAfternoon(Date.now());
+  const { rows } = timelineAfternoon(Date.now());
   const board = catalogModelBoard({ device: THIS_MAC, rows });
   return {
     model: board.port,
@@ -239,6 +172,5 @@ export function timelineDoor(): MonitorDoor {
     mountLocal: async () => ({ state: "no-pane" }),
     history: NO_HISTORY,
     usage: NO_USAGE,
-    statusHistory: { load: async () => runs },
   };
 }

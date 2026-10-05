@@ -73,7 +73,6 @@ function door(): { door: MonitorDoor; taps: Taps } {
     },
     devices: { subscribe: () => () => undefined },
     profiles: { subscribe: () => () => undefined },
-    statusHistory: { load: async () => [] },
   };
   return { door: built, taps };
 }
@@ -168,7 +167,6 @@ describe("the frame recorder", () => {
       "usage",
       "devices",
       "profiles",
-      "statusHistory",
     ] as const) {
       expect(teed[key]).toBe(inner[key]);
     }

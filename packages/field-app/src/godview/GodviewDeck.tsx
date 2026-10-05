@@ -91,7 +91,6 @@ import {
   meshBoardOver,
   modelBoardOver,
   profileSetsPortOver,
-  statusHistoryPortOver,
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
@@ -1146,8 +1145,6 @@ export function GodviewDeck({
       // The views never dial rosettad; the daemon's origin stays in fieldd.
       history: historyPortOver(doorClient),
       usage: usagePortOver(doorClient),
-      // TL — fieldd's status ledger, for the timeline's past (TL-D8).
-      statusHistory: statusHistoryPortOver(doorClient),
       // The profile tabs filter existing sessions; terminal birth is independent.
       profiles: profileSetsPortOver(doorClient),
       // MV-3 (MV-D18) — the model board and the screen's report: the monitor's

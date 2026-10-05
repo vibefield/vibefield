@@ -41,13 +41,10 @@ import type { ProcessTable } from "@vibecook/puppeteer-runtime/spawn-through";
 import {
   AGENT_CATALOG,
   AGENT_FIELD,
-  AGENT_HISTORY,
   type AgentCapability,
   type AgentCatalogEntry,
   type AgentCatalogReaders,
   type AgentCatalogResult,
-  type AgentHistoryParams,
-  type AgentHistoryResult,
   type AgentHistoryState,
   type AgentInterruptParams,
   type AgentInterruptResult,
@@ -60,7 +57,6 @@ import {
   type AgentResumeNativeParams,
   type AgentResumeParams,
   type AgentResumeRunParams,
-  type AgentRunHistory,
   type AgentSessionRecord,
   type AgentSessionSummary,
   type AgentSpawnParams,
@@ -101,7 +97,6 @@ import {
   summarizeManaged,
   summarizePending,
 } from "./agent-sessions";
-import { AgentStatusLedgers, blockerOf, type RunLedger } from "./agent-status-ledger";
 import {
   isTypedRun,
   processIsGone,
@@ -436,8 +431,6 @@ interface ManagedEntry {
   typed?: { pid: number; startedAt: string } | undefined;
   /** AR-7 — stops the watch on that pid */
   unwatch?: (() => void) | undefined;
-  /** TL — the run's status ledger (absent for a run id that cannot be a file name) */
-  ledger?: RunLedger | undefined;
 }
 
 /** AR-4 — a run whose PTY outlived a fieldd that could NOT re-attach to it:
@@ -532,8 +525,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
   /** AR-S4d — what each profile keeps once for its agents: definitions, value names, what each agent was given */
   private readonly extensionStore: AgentExtensionStore;
   private readonly records: SessionRecordStore;
-  /** TL (TL-D8) — what each run was doing over time (`agent.history`) */
-  private readonly ledgers: AgentStatusLedgers;
   private readonly home: string;
   private readonly logger: Logger;
   private readonly now: () => Date;
@@ -597,11 +588,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     this.records = new SessionRecordStore({
       dir: join(opts.userRoot, ...LAYOUT.AGENT_SESSIONS_DIR),
       keyPath: join(opts.userRoot, ...LAYOUT.AGENT_SESSIONS_KEY_FILE),
-      now: this.now,
-      logger: this.logger,
-    });
-    this.ledgers = new AgentStatusLedgers({
-      dir: join(opts.userRoot, ...LAYOUT.AGENT_HISTORY_DIR),
       now: this.now,
       logger: this.logger,
     });
@@ -1528,60 +1514,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     return { sessions: rows.map((r) => r.row) };
   }
 
-  /** TL (TL-D8) — `agent.history`: each run's status ledger over the last
-   * HORIZON_MS — the runs this fold holds, and runs whose record says they
-   * exited inside the horizon (from their files, for runs a previous boot
-   * watched). Only a run with a VERIFIED record or a live row answers; an id
-   * with neither, or with no ledger, is left out. Oldest first by
-   * `recordedFrom`. */
-  history(params: AgentHistoryParams): AgentHistoryResult {
-    const now = this.now().getTime();
-    let records: AgentSessionRecord[];
-    try {
-      records = this.records.list();
-    } catch (error) {
-      this.logger.warn("fieldd.agents.history_records_unreadable", "Records could not be listed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-      records = [];
-    }
-    if (this.ledgers.sweepDue()) this.sweepLedgers(records);
-    const cut = now - AGENT_HISTORY.HORIZON_MS;
-    const candidates = new Map<string, string | undefined>();
-    for (const record of records) {
-      const exitedAt = record.exited?.at;
-      if (exitedAt !== undefined && !(Date.parse(exitedAt) >= cut)) continue;
-      candidates.set(record.runtimeRunId, exitedAt);
-    }
-    // the fold's own runs answer even if their record could not be read
-    for (const id of this.managed.keys()) if (!candidates.has(id)) candidates.set(id, undefined);
-    for (const id of this.pending.keys()) if (!candidates.has(id)) candidates.set(id, undefined);
-    const asked = params.runtimeRunIds === undefined ? undefined : new Set(params.runtimeRunIds);
-    const runs: AgentRunHistory[] = [];
-    for (const [id, exitedAt] of candidates) {
-      if (asked !== undefined && !asked.has(id)) continue;
-      // a live run's exit is not yet; a record stamped while the fold still
-      // holds the run is the run's own future
-      const live = this.managed.has(id) || this.pending.has(id);
-      const history = this.ledgers.history(id, live ? undefined : exitedAt);
-      if (history !== undefined) runs.push(history);
-    }
-    runs.sort((a, b) =>
-      a.recordedFrom < b.recordedFrom ? -1 : a.recordedFrom > b.recordedFrom ? 1 : 0,
-    );
-    return { horizonMs: AGENT_HISTORY.HORIZON_MS, runs };
-  }
-
-  private sweepLedgers(records: readonly AgentSessionRecord[]): void {
-    try {
-      this.ledgers.sweep(records, new Set([...this.managed.keys(), ...this.pending.keys()]));
-    } catch (error) {
-      this.logger.warn("fieldd.agents.history_sweep_failed", "Status-ledger retention failed", {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  }
-
   /** `agent.subscribe`: full snapshots, at most one per tick. */
   subscribe(emit: (rows: AgentListResult) => void): () => void {
     this.subscribers.add(emit);
@@ -1883,7 +1815,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     for (const record of this.records.list()) {
       if (record.profileId !== undefined && profileIds.has(record.profileId)) {
         this.records.remove(record.runtimeRunId);
-        this.ledgers.remove(record.runtimeRunId);
       }
     }
   }
@@ -1952,15 +1883,10 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     for (const login of this.logins.values()) clearTimeout(login.timer);
     this.logins.clear();
-    const stoppedAt = this.now().getTime();
     for (const entry of this.managed.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
       entry.unwatch?.();
       entry.unwatch = undefined;
-      // TL — the run outlives this fieldd; what it does until the next boot
-      // watches it is unrecorded, and the ledger says so (a crash cannot)
-      entry.ledger?.flush();
-      entry.ledger?.change("unknown", stoppedAt);
     }
     for (const entry of this.pending.values()) {
       if (entry.backstop !== undefined) clearTimeout(entry.backstop);
@@ -2117,13 +2043,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     this.managed.set(info.runtimeRunId, entry);
     this.byTerminal.set(info.terminalSessionId, info.runtimeRunId);
-    // TL — the ledger begins where the fold began watching: the spawn (or the
-    // adoption) itself, or — re-attached — wherever the last boot's file left
-    // it (field-native outlives fieldd, so its history should too)
-    entry.ledger = this.ledgers.open(info.runtimeRunId, {
-      recordedFrom: Date.parse(now),
-      resume: launch.reattached !== undefined,
-    });
     const current = this.runtime.monitorState(info.runtimeRunId);
     if (current !== undefined) this.applyMonitor(entry, current);
     this.logger.info(
@@ -2433,8 +2352,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // none does; after a restart this is the first moment that is known
     this.reattachDone = true;
     void this.profiles.sweep();
-    // TL — retention, once the boot knows which runs it holds
-    this.sweepLedgers(records);
   }
 
   /** A record whose PTY the first inventory lacked (AR-4b): the same grace
@@ -2708,8 +2625,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     };
     this.pending.set(record.runtimeRunId, entry);
     this.byTerminal.set(terminalId, record.runtimeRunId);
-    // TL — alive and unobserved: its ledger (from the last boot) says unknown from here
-    this.ledgers.note(record.runtimeRunId, "unknown", Date.parse(now));
     const typed = isTypedRun(held) ? held.process : undefined;
     this.logger.warn(
       "fieldd.agents.reattach_held",
@@ -3246,14 +3161,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     if (status !== entry.status) {
       entry.status = status;
       entry.stateChangedAt = mirror?.statusSince ?? this.now().toISOString();
-      // TL — `unknown` is recorded too: a reader draws it as unrecorded
-      entry.ledger?.change(
-        status,
-        mirror?.statusSince !== undefined ? Date.parse(mirror.statusSince) : this.now().getTime(),
-        status === "blocked" ? blockerOf(mirror) : undefined,
-      );
     }
-    if (status === "working") entry.ledger?.activity(mirror?.activity?.line);
     const evidence = mirror?.freshness?.lastEvidenceAt;
     if (evidence !== undefined) entry.lastActivityAt = evidence;
     this.refreshContinuation(entry);
@@ -3290,9 +3198,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     // row leaves; the record stays for a resume
     entry.unwatch?.();
     entry.unwatch = undefined;
-    // TL — nothing observes it from here: unrecorded until something does
-    entry.ledger?.flush();
-    entry.ledger?.change("unknown", this.now().getTime());
     this.managed.delete(runtimeRunId);
     this.byTerminal.delete(entry.info.terminalSessionId);
     this.terminalHost?.forget(entry.info.terminalSessionId);
@@ -3333,8 +3238,6 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         error: error instanceof Error ? error.message : String(error),
       });
     }
-    // TL — the last span's line reaches the file; the exit itself is the record's
-    entry.ledger?.flush();
     this.records.stampExit(runtimeRunId, {
       at: this.now().toISOString(),
       exitCode: exit.exitCode,
