@@ -313,7 +313,9 @@ export type AgentDeskBlocker = z.infer<typeof AgentDeskBlocker>;
  * replica applies them with no derivation. Optional on the wire: a desktop on
  * an older daemon sends none, and a reader draws what it was sent. On a PEER's
  * row the owner's cut bounds its texts at `AGENT_FIELD.DESK_TEXT_CHARS` and
- * omits `project.seq` (M16, M21); this desktop's own window reads it whole. */
+ * omits `project.seq` (M16, M21); this desktop's own window reads it whole.
+ * The chrome's facts (MV-3d) are not here: they ride only the `model` board's
+ * own rows (`AgentModelDeskRow.local`), which no peer receives. */
 export const AgentDeskRow = AgentFieldRow.extend({
   lastAssistantMessage: AgentDeskMessage.optional(),
   blockers: z.array(AgentDeskBlocker),
@@ -347,7 +349,11 @@ export type AgentDeskRow = z.infer<typeof AgentDeskRow>;
  * (`AGENT_FIELD.FULL_TICK_MS`) with urgent changes ahead of it. Refused to a
  * peer daemon and to a phone, like `full`; with `scope: "mesh"` the other
  * desktops' boards beside it are their `desk` cuts, as their owners sent
- * them. The phone's `field` row is untouched by all of this. */
+ * them. The phone's `field` row is untouched by all of this.
+ *
+ * MV-3d (M35) — this desktop's run rows on it also carry the chrome's facts
+ * (`AgentModelDeskRow.local`), so a window reads `model` alone: `full` is no
+ * longer asked while Godview is open. */
 export const AgentProjection = z.enum(["full", "field", "desk", "model"]);
 export type AgentProjection = z.infer<typeof AgentProjection>;
 
@@ -476,10 +482,81 @@ export const AgentDeskTerminalRow = z
   .passthrough();
 export type AgentDeskTerminalRow = z.infer<typeof AgentDeskTerminalRow>;
 
+// MV-3d (M35, M42) — THE CHROME'S FACTS, ON THIS DESKTOP'S OWN ROWS. Beside the
+// views, this desktop's window draws chrome the model does not serve, by design
+// (M19; MV-D17): the deck's pane frames and empty-pane launchers, the find
+// sheet, the AR-7 marker. Until MV-3d those read the fold's `full` board, a
+// second subscription that sent the whole board every 16 ms while anything
+// moved. They read `local` now: the fold's facts no other part of the row
+// carries, riding ON the run's desk row of the `model` board, so a fact arrives
+// in the frame of the row it annotates (no second stream to order against) and
+// a moved fact upserts the row in the board's next delta like any other.
+//
+// WHO SEES IT is the projection's rule, not this schema's: `model` is refused to
+// peers and the phone (M29), and fieldd writes `local` on the window's cut only
+// — never on the `desk` cut a peer receives, never in `monitorRow` (the model,
+// which syncs), never on the phone's field row. That is what lets it carry the
+// working directory as a PATH (EL7 B1 keeps the path off everything that leaves
+// this desktop). Every field is optional (the tolerant reader); a reader of a
+// row with no `local` reads a run fieldd said nothing more about. A bare
+// terminal's row carries none: no reader asks anything of a terminal beyond
+// its row.
+
+/** What this desktop's own window reads of one of its runs beside the model:
+ * the fold's facts, each named for the chrome that reads it and nothing more. */
+export const AgentModelLocalFacts = z
+  .object({
+    /** the provider-native session id the run's transcript is filed under (the
+     * fold's `sessionId`): the find sheet joins rosetta's hits by it */
+    nativeSessionId: z.string().min(1).optional(),
+    /** the directory the run works in, as a PATH: the mirror's observed cwd,
+     * else the workspace's source path, else its root. The pane frame names
+     * its badge from it and a pane returned to a shell opens there. Absent
+     * when nothing names one */
+    cwd: z.string().optional(),
+    /** AR-7 — where the run came from (`AGENT_SPAWNED_BY`, open; absent reads `app`) */
+    spawnedBy: z.string().optional(),
+    /** MF-1f — fieldd witnessed the run's process end while its pane is still
+     * on the floor; absent: it did not */
+    exited: z.boolean().optional(),
+    /** The mirror's own words the chrome reads, present exactly when fieldd
+     * holds a monitor mirror for the run — the provider has spoken. Absent is
+     * the run before its first state: the pane frame's bare badge, the
+     * marker's `observed: false`. */
+    mirror: z
+      .object({
+        /** the mirror's liveness, verbatim (the row's own `alive` is fieldd's
+         * reading, which an exit outranks) */
+        alive: z.boolean().optional(),
+        /** when the provider's session began (`session.startedAt`): the find
+         * sheet's scope for rosetta's hits */
+        startedAt: z.string().optional(),
+        /** the newest evidence the provider gave (`freshness.lastEvidenceAt`):
+         * when the find sheet says a run was last active */
+        lastEvidenceAt: z.string().optional(),
+        /** how the provider knows its context share (`context.percentageSource`,
+         * open: `provider` · `derived` · `unavailable`): no meter is drawn from
+         * an unavailable one */
+        contextSource: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type AgentModelLocalFacts = z.infer<typeof AgentModelLocalFacts>;
+
+/** A run's row on the `model` board: the desk row, and — this desktop's own
+ * runs, the window's cut — the chrome's facts (`local`). A peer's desk row on
+ * the same board carries none: its owner's desk cut never writes them. */
+export const AgentModelDeskRow = AgentDeskRow.extend({
+  local: AgentModelLocalFacts.optional(),
+}).passthrough();
+export type AgentModelDeskRow = z.infer<typeof AgentModelDeskRow>;
+
 /** A row of the `model` board: a desk row (an agent, `monitorRow` whole) or a
  * bare terminal's row. Discriminated by shape — a terminal row has no
  * `status`, `label` or `tier`, and the union tries the desk row first. */
-export const AgentModelBoardRow = z.union([AgentDeskRow, AgentDeskTerminalRow]);
+export const AgentModelBoardRow = z.union([AgentModelDeskRow, AgentDeskTerminalRow]);
 export type AgentModelBoardRow = z.infer<typeof AgentModelBoardRow>;
 
 /** `agent.subscribe {projection: "model"}` at the local scope: the field's
