@@ -130,8 +130,15 @@ export function ChromeLayer({
   const head = useMemo(() => canvasHead(ce), [ce]);
   const lineActs = useRef<LineActs | null>(null);
   // History's view in the frame's cover (AR-8c): rosetta's room over this
-  // window's fieldd client, told whether it is the view showing.
-  const historyView = useCallback((active: boolean) => <HistoryView active={active} />, []);
+  // window's fieldd client, told whether it is the view showing — and, until
+  // the Peek lands, handed the frame's one value, which holds the room's search
+  // sheet as one of the frame's surfaces (the search interim, 2026-10-04).
+  const historyView = useCallback(
+    (active: boolean) => (
+      <HistoryView active={active} surface={surface} onSurfaceChange={onSurfaceChange} />
+    ),
+    [surface, onSurfaceChange],
+  );
   // The room is its own chunk (DESIGN.md §8 "History"): fetched when the window
   // is next idle after the chrome has mounted — after the canvas has drawn,
   // never on its path — so the first ⌘3 finds it here. Code only: the room

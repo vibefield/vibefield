@@ -384,6 +384,9 @@ describe("UI system ownership boundaries", () => {
       "HistoryPreview",
       "HistoryRoomView",
       "HistoryResumePlate",
+      // …and its search until the Peek lands — a search held, the room's own
+      // sheet a press on the pill away (the search interim, 2026-10-04)
+      "HistorySearchPlate",
       // …and the two faces before the room, as they ship (2026-10-04)
       "HistoryOpeningState",
       "HistoryOpenFailedState",
@@ -424,6 +427,7 @@ describe("UI system ownership boundaries", () => {
     // (AR-8c): the room, a choice with Resume live, unavailable, consent.
     expect(page).toMatch(/<HistoryPreview state="room"/u);
     expect(page).toMatch(/<HistoryResumePlate\s/u);
+    expect(page).toMatch(/<HistorySearchPlate\s/u);
     expect(page).toMatch(/<HistoryPreview state="unavailable"/u);
     expect(page).toMatch(/<HistoryPreview state="consent"/u);
     // …and the faces before the room (2026-10-04): opening, could not open.

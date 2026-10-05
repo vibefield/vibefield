@@ -8,8 +8,17 @@ import {
 } from "@rosetta/room";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { EmptyState } from "@vibefield/design-kit/primitives";
-import { type CSSProperties, type ReactElement, useEffect, useRef, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  type RefObject,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { COVER_EDGE_CLEAR_PX, COVER_RESERVE_PX, HEAD_BAND_PX } from "../frame/frame-geometry";
+import type { HistorySearchSheet } from "./search";
 // The room's own sheet enters HERE, with the room — one row, the package's own
 // bundle, never a copy — so it rides the room's chunk, not the first paint, and
 // lands after the kit's tokens by load order (its README's one ordering rule).
@@ -25,9 +34,13 @@ import "./history-room-view.css";
 // on a host surface, and its paper fades frost over whatever is beneath), the
 // edges (its columns end at the reserve, its top band is the head's, 8 px stay
 // clear at each side for the notches' slivers), where its dialogs land (a
-// layer that ends at the reserve, so a dialog never sits under the line), the
-// prefix it keeps its preferences under, and the words of its two honest
-// states that are the host's to say. The product reaches this module only
+// layer that ends at the reserve, so a dialog never sits under the line, and
+// since the search interim starts at the head band's foot, so the sheet and a
+// dialog never cover the band), the prefix it keeps its preferences under, the
+// words of its two honest states that are the host's to say, and — until the
+// Peek lands — its search: the room's own sheet with the host's open state,
+// no key printed, and the empty transcript in VibeField's words
+// (`search.ts`; DESIGN.md §8 "History"). The product reaches this module only
 // through the room's chunk (`room-chunk.tsx`, 2026-10-04), the catalog
 // directly; nothing else imports it statically.
 
@@ -62,6 +75,11 @@ export function guardedLocalStorage(): KeyValueStore | null {
   };
 }
 
+/** The empty transcript's sentence while the room's search is shown (the
+ * search interim; DESIGN.md §8 "History"). The room's own would name ⌘K, which
+ * is the palette's here — so VibeField says where the search is instead. */
+export const HISTORY_EMPTY_PROMPT = "Pick a session, or search above.";
+
 /** What the room shows while the index waits for consent to read anything:
  * consent is the enrollment, and it is given in Settings (AR-1). */
 export function HistoryConsentState(): ReactElement {
@@ -92,6 +110,14 @@ export interface HistoryRoomViewProps {
   /** Where the room keeps its preferences; the window's guarded
    * localStorage when absent, nothing kept when null. */
   storage?: KeyValueStore | null;
+  /** The room's own search — its strip's launcher and its sheet — until the
+   * Peek lands (the search interim): the open state is the host's, the frame's
+   * one value in the product (`search.ts`). Absent or null: no launcher, no
+   * sheet, and the room's own empty-transcript sentence. */
+  search?: HistorySearchSheet | null;
+  /** Where the room's handle is kept for the host's keys (⌘G / ⇧⌘G walk the
+   * stepper, `search.ts`); the view keeps its own when absent. */
+  roomRef?: RefObject<HistoryRoomHandle | null>;
 }
 
 export function HistoryRoomView({
@@ -100,22 +126,43 @@ export function HistoryRoomView({
   onSelect,
   openAt = null,
   storage,
+  search = null,
+  roomRef,
 }: HistoryRoomViewProps): ReactElement {
   const [layers, setLayers] = useState<HTMLDivElement | null>(null);
   // An object ref, not a ref callback: the room's handle type is declared in
   // the package's own React types, and an object ref is the one form both
-  // installs agree on structurally.
-  const room = useRef<HistoryRoomHandle | null>(null);
+  // installs agree on structurally. The host's, when it keeps one for its keys.
+  const ownRoom = useRef<HistoryRoomHandle | null>(null);
+  const room = roomRef ?? ownRoom;
   useEffect(() => {
     if (openAt !== null) room.current?.openAt(openAt);
-  }, [openAt]);
+  }, [openAt, room]);
+  // The room's search as VibeField hosts it (RO-14): the open state is the
+  // host's, and NO key is printed — ⌘K is the palette's and nothing else is
+  // spent on opening the sheet — so the launcher opens it with a press.
+  const searchOpen = search?.open ?? false;
+  const onSearchOpenChange = search?.onOpenChange ?? null;
+  const initialQuery = search?.initialQuery;
+  const roomSearch = useMemo(
+    () =>
+      onSearchOpenChange === null
+        ? undefined
+        : { open: searchOpen, onOpenChange: onSearchOpenChange, initialQuery, shortcut: null },
+    [searchOpen, onSearchOpenChange, initialQuery],
+  );
   const [store] = useState<KeyValueStore | null>(() =>
     storage === undefined ? guardedLocalStorage() : storage,
   );
   return (
     <div
       className="vf-history"
-      style={{ "--vf-history-reserve": `${COVER_RESERVE_PX}px` } as CSSProperties}
+      style={
+        {
+          "--vf-history-reserve": `${COVER_RESERVE_PX}px`,
+          "--vf-history-head": `${HEAD_BAND_PX}px`,
+        } as CSSProperties
+      }
     >
       <div className="vf-history-room">
         <HistoryRoom
@@ -131,6 +178,8 @@ export function HistoryRoomView({
           storage={store}
           unavailable={unavailable}
           consent={<HistoryConsentState />}
+          search={roomSearch}
+          emptyPrompt={roomSearch === undefined ? undefined : HISTORY_EMPTY_PROMPT}
           onSelect={onSelect}
         />
       </div>
