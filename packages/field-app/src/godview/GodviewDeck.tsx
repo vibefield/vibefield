@@ -1380,6 +1380,15 @@ export function GodviewDeck({
         const root = zoomHostRef.current;
         return pane !== undefined && root !== null && pasteIntoPane(root, pane.id, text);
       },
+      // AR-8c — History's Resume: the resumed agent's create ticket, adopted
+      // into the pool exactly as the launcher's resume adopts one, and mounted
+      // in the active pane through the door's serialized mount (AR-4b).
+      canPlace: door !== null,
+      place: async (terminal) => {
+        if (door === null) return { state: "refused", reason: "the deck has no connection yet" };
+        const born = adoptCreatedTerminal(terminal);
+        return newTerminalOutcome(await door.mountLocal(born.sessionId));
+      },
     });
   }, [linePanesKey, active, door]);
   useEffect(() => () => publishGodviewLineDoor(null), []);

@@ -3,9 +3,9 @@ import {
   type ArtifactPanelPreviewState,
 } from "@vibefield/plugin-browser/design-system";
 import type { ReactElement } from "react";
-import { HistoryPlaceholderView } from "../frame/ViewCover";
 import { type EdgeTrayTile, EdgeTrayView } from "../hud/edge-tray/EdgeTrayView";
 import { GodviewPreview } from "./GodviewPreview";
+import { HistoryPreview } from "./HistoryPreview";
 
 // The edges' fixture ADAPTER (One Frame FR-4; docs/UI_SYSTEM.md): the shipping
 // edge trays — `EdgeTrayView`, both sides — over fixture tiles, one plate per
@@ -113,7 +113,7 @@ export function EdgesPlate({ state, dark }: { state: EdgeState; dark: boolean })
   const resting = covered && state !== "approach";
   const ground =
     state === "approach" ? (
-      <HistoryPlaceholderView />
+      <HistoryPreview />
     ) : covered ? (
       <GodviewPreview theme={dark ? "dark" : "light"} />
     ) : null;

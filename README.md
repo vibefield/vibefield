@@ -46,7 +46,11 @@ need RFC 025's login API) — the unblock is a ghosttea Swift release, and `Carg
 note carries it. So the repo does not build standalone. Every revision is pinned in
 `siblings.lock.json`:
 `pnpm siblings` prints the state, `pnpm preflight` fails on drift, `pnpm siblings:pin` is the
-deliberate upgrade. `@vibecook/ice` stays an exact npm pin and needs no checkout. Every number
+deliberate upgrade — it records the new SHAs, builds rosettad at them, proves the agent catalog
+(wall R23) and, since 2026-10-04, typechecks the consumers (`pnpm typecheck`), so a sibling type
+change only this repo's compiler can see fails the pin, not a later gate; any red keeps the new
+SHAs recorded and exits 1 (`--skip-typecheck` for the deliberate case, said when used).
+`@vibecook/ice` stays an exact npm pin and needs no checkout. Every number
 lives in the manifests (`Cargo.toml`, `pnpm-workspace.yaml`); cite them from there, not from prose
 — this line said `=0.7.11`/`0.2.0` until 2026-08-07, and its ice pin still read `0.4.0` on
 2026-09-16 when the manifest had been at `0.11.0` for weeks, which is why it now names none.

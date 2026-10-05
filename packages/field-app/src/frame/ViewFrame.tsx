@@ -13,13 +13,7 @@ import { listenForProductChord } from "../field/product-chords";
 import { getHost } from "../host";
 import { Composer, type LineActs } from "./Composer";
 import type { FrameSurface } from "./frame-surface";
-import {
-  type CoverState,
-  coverAfter,
-  coverAt,
-  HistoryPlaceholderView,
-  ViewCoverView,
-} from "./ViewCover";
+import { type CoverState, coverAfter, coverAt, ViewCoverView } from "./ViewCover";
 import { type ViewKeyPress, ViewsTrackView } from "./ViewsTrack";
 import { requestView, useActiveView } from "./view-state";
 import { FRAME_VIEWS, viewForKey, viewKeysOf } from "./views";
@@ -42,11 +36,16 @@ const NOTE_MS = 1400;
 
 export function ViewFrame({
   godview,
+  history,
   surface,
   onSurfaceChange,
   lineActs,
 }: {
   godview: ReactNode;
+  /** History's view (AR-8c: rosetta's room, `history/HistoryView.tsx`), drawn
+   * once History has first been opened and kept after; `active` is whether it
+   * is the view showing. */
+  history?: (active: boolean) => ReactNode;
   /** The frame's open surface, from its one owner. */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
@@ -71,6 +70,12 @@ export function ViewFrame({
     setShown(view);
     setCover(coverAfter(cover, shown, view));
   }
+  // History's view (AR-8c) mounts on History's first open — rosetta's room reads
+  // the whole catalog and holds a stream per open session, none of which a
+  // window that never shows History should pay for — and stays mounted after,
+  // so ⌘3 out and back in keeps its scroll, its selection and its open stream.
+  const [historyOpened, setHistoryOpened] = useState(view === "history");
+  if (view === "history" && !historyOpened) setHistoryOpened(true);
 
   /** A view was chosen — by its key or by its cell. The waiting view says so
    * and nothing moves (FC-D2); any other is asked of the owner. Only a key
@@ -195,7 +200,7 @@ export function ViewFrame({
         content={cover.content}
         motion={cover.motion}
         godview={godview}
-        history={<HistoryPlaceholderView />}
+        history={historyOpened ? history?.(view === "history") : null}
       />
       <Composer
         view={view}

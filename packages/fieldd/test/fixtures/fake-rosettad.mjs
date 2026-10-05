@@ -90,12 +90,16 @@
 // `ee6724e`): `--token-file F` requires a credential on every route and every
 // upgrade; `--grant-key-file K` (only beside a token) admits a grant on the
 // session routes and the assets — never the lists, search, `/ws/meta` or the
-// aggregates; `--allow-origin O` adds browser origins. The files are read ONCE
-// before binding and refused (stderr + exit 2) the way rosetta refuses them: a
-// token outside 32..1,024 visible ASCII, a key under 32 bytes, a key without a
-// token, any group/other permission bit. The ready line carries `auth:
-// {bearer, grants, origins}`; with no flags the daemon is open, as before
-// (the catalog's own rows spawn it that way). A refusal is a 401 with
+// aggregates; `--allow-origin O` adds browser origins. RO-13 (2026-10-04,
+// rosetta main `856bd80`): the session's recorded-file read
+// (`/api/sessions/{id}/timeline/{t}/read/{n}`) admits a grant for its session
+// that carries `files` beside `read` — a read grant there is `wrong-scope` —
+// and, the scripted index recording no file, answers rosetta's honest 404. The
+// files are read ONCE before binding and refused (stderr + exit 2) the way
+// rosetta refuses them: a token outside 32..1,024 visible ASCII, a key under
+// 32 bytes, a key without a token, any group/other permission bit. The ready
+// line carries `auth: {bearer, grants, origins}`; with no flags the daemon is
+// open, as before (the catalog's own rows spawn it that way). A refusal is a 401 with
 // `x-rosetta-auth: <reason>` beside the protocol header, which is how a test
 // tells "wrong credential" from "wrong daemon"; FAKE_ROSETTAD_AUTH_LOG names a
 // file that gets one line per decision (`<METHOD> <path> <credential> <verdict>`,
@@ -202,18 +206,17 @@ if (grantKeyPath !== undefined) {
   grantKey = new Uint8Array(key);
 }
 /** AUTH.md §5.4 — what a grant opens, by route: the session's own routes (the
- * id the grant's `sid`) and the assets; everything else needs the bearer */
+ * id the grant's `sid`) and the assets; everything else needs the bearer.
+ * RO-13: the recorded-file read is its session's route that also needs
+ * `files` (it reads the disk NOW, which is more than the transcript). */
+const FILE_READ = /^\/api\/sessions\/[^/?]+\/timeline\/[^/?]+\/read\/[^/?]+$/;
 const grantRoute = (method, path) => {
   if (method !== "GET" && method !== "HEAD") return null;
   const session = /^\/(?:ws\/sessions|ws\/collaboration|api\/sessions)\/([^/?]+)(?:\/[^?]*)?$/.exec(
     path,
   );
-  if (session !== null) {
-    // `/api/sessions/{id}/timeline/{t}/read/{n}` reads the disk NOW: never a grant's
-    if (/\/read\/[^/]+$/.test(path)) return null;
-    return { sid: decodeURIComponent(session[1]) };
-  }
-  if (/^\/api\/assets\/[^/?]+$/.test(path)) return { sid: null };
+  if (session !== null) return { sid: decodeURIComponent(session[1]), files: FILE_READ.test(path) };
+  if (/^\/api\/assets\/[^/?]+$/.test(path)) return { sid: null, files: false };
   return null;
 };
 const authLog = (line) => {
@@ -266,7 +269,11 @@ const credentialRefusal = (method, rawUrl, headers) => {
   if (!verdict.ok) return decide("grant", verdict.reason);
   if (route.sid !== null && verdict.claims.sid !== route.sid)
     return decide("grant", "wrong-session");
-  if (!verdict.claims.scope.includes("read")) return decide("grant", "wrong-scope");
+  if (
+    !verdict.claims.scope.includes("read") ||
+    (route.files && !verdict.claims.scope.includes("files"))
+  )
+    return decide("grant", "wrong-scope");
   return decide("grant", "ok");
 };
 /** the 401 rosetta answers (AUTH.md §6) */
@@ -657,6 +664,21 @@ if (mode === "silent") {
           (project === null || row.project_id === project),
       );
       json(res, { sessions: Number.isFinite(limit) ? sessions.slice(0, limit) : sessions });
+      return;
+    }
+    // RO-13 — the recorded-file read, past the credential: the scripted index
+    // records no file, so every target is rosetta's own 404 for a row with no
+    // openable file (crates/server/src/http.rs `read_file_target`)
+    if (req.url !== undefined && FILE_READ.test(req.url.split("?")[0])) {
+      logRequest(req.url);
+      res.statusCode = 404;
+      res.setHeader("x-rosetta-protocol-version", String(protocol));
+      res.setHeader("content-type", "application/json");
+      res.end(
+        JSON.stringify({
+          error: { code: "not_found", message: "no file at that recorded target" },
+        }),
+      );
       return;
     }
     // AR-5e — one session by canonical id: how a hit inside a delegated child

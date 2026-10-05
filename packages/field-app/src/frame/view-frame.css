@@ -61,22 +61,8 @@
   transition: none;
 }
 
-/* ── HISTORY, until its room joins the frame ──────────────────────────────
-   Its own ground — the sheet's paper — at the covers' glass, 72% (FC-D16), and
-   its content above the reserve: ending at 88 from the foot, 8px clear of each
-   edge for the notches' slivers (FC-D15). */
-.vf-history-room {
-  position: absolute;
-  inset: 0;
-  background: color-mix(in srgb, var(--vf-chrome-solid) 72%, transparent);
-}
-
-.vf-history-room__stage {
-  position: absolute;
-  inset: 52px 8px 88px;
-  display: grid;
-  place-items: center;
-}
+/* History's view is rosetta's room on the covers' glass since AR-8c: its own
+   stylesheet sits beside it (`history/history-room-view.css`). */
 
 /* ── THE VIEWS TRACK (§8) at the line's left end ───────────────────────────
    FR-1 drew it alone on the line's glass where the line's left end would be;

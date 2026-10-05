@@ -10,6 +10,9 @@
 // the plane's off path is honest, and that a daemon restarted mid-ticket is
 // re-ticketed on the next ask. The last block runs the same seam against the
 // REAL rosettad (opt-in via FIELDD_ROSETTAD_BIN), over rosetta's own client.
+// RO-13 (2026-10-04): the desktop window's grant carries `files` beside
+// `read` and reads its session's recorded files; every other holder's carries
+// `read` alone and is `wrong-scope` there — against both daemons.
 import { spawn } from "node:child_process";
 import {
   cpSync,
@@ -29,7 +32,7 @@ import {
   type SessionSubscriptionHandlers,
   UnauthorizedError,
 } from "@rosetta/protocol";
-import { verifyGrant } from "@rosetta/protocol/grants";
+import { SCOPE_FILES, SCOPE_READ, verifyGrant } from "@rosetta/protocol/grants";
 import { verifyAuditSegment } from "@vibefield/audit";
 import {
   type CallerContext,
@@ -47,7 +50,7 @@ import type { WsCtor } from "@vibefield/fieldd-client";
 import { afterEach, describe, expect, it } from "vitest";
 import WebSocket from "ws";
 import { bootstrap, type FielddDaemon } from "../src/index";
-import { INDEX_SERVE_ID, IndexTicketMinter } from "../src/index-serve";
+import { INDEX_SERVE_ID, IndexTicketMinter, indexTicketScopes } from "../src/index-serve";
 import type { RosettadState } from "../src/rosettad-supervisor";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import { productDoorPath, productPathSecret, TEST_LOGIN, writeLinkFixture } from "./link-fixture";
@@ -321,17 +324,20 @@ describe("AR-8b — index.openTicket mints for a window on this desktop", () => 
     });
     expect(ticket.device).toBe(daemon.devices.currentDeviceId());
     // the grant verifies under the key THIS generation was handed, and says
-    // what the door promised: the session, read, this window, the expiry
+    // what the door promised: the session, this window, the expiry — and, the
+    // desktop window being the one principal that holds it, read AND files
+    // (RO-13); the control: not the read-only scope every other holder gets
     const verdict = verifyGrant(keys.at(-1) as Buffer, ticket.grant, Date.now());
     expect(verdict.ok).toBe(true);
     if (!verdict.ok) return;
     expect(verdict.claims).toEqual({
       cid: "win:renderer:ixt:w1#renderer:ixt:w1:document-1",
       exp: ticket.expiresAt,
-      scope: ["read"],
+      scope: [SCOPE_READ, SCOPE_FILES],
       sid: "s1",
       v: 1,
     });
+    expect(verdict.claims.scope).not.toEqual([SCOPE_READ]);
     expect(ticket.expiresAt).toBeGreaterThanOrEqual(before + INDEX_TICKET.TTL_MS);
     expect(ticket.expiresAt).toBeLessThanOrEqual(Date.now() + INDEX_TICKET.TTL_MS);
     // D6: a ticket is a grant, and its mint is an audited act — naming the
@@ -341,6 +347,8 @@ describe("AR-8b — index.openTicket mints for a window on this desktop", () => 
     expect(mints[1]).toMatchObject({
       outcome: "succeeded",
       target: { kind: "index-session", id: "s1" },
+      // RO-13: the record says what the grant may do
+      attrs: { expiresAt: ticket.expiresAt, scope: [SCOPE_READ, SCOPE_FILES] },
     });
     expect(JSON.stringify(mints)).not.toContain(ticket.grant);
   }, 30_000);
@@ -391,7 +399,7 @@ describe("AR-8b — index.openTicket mints for a window on this desktop", () => 
   }, 30_000);
 
   it("a plugin holding index.read is refused — a ticket opens a transcript; so is an ask without index.read", async () => {
-    const { daemon } = await boot();
+    const { daemon, keys } = await boot();
     await ready(daemon);
     const plugin = await tokenOf(daemon, ["index.read"], "ixt-plugin");
     const refused = await plugin.callErr("index.openTicket", { sessionId: "s1" });
@@ -407,11 +415,13 @@ describe("AR-8b — index.openTicket mints for a window on this desktop", () => 
     // a malformed ask is the caller's to fix
     const win = await windowOf(daemon, ["index.read"], "w3");
     expect((await win.callErr("index.openTicket", {})).data?.kind).toBe("PRECONDITION_FAILED");
-    // a plain local token is this desktop's own principal, and is served
+    // a plain local token is this desktop's own principal, and is served —
+    // with `read` alone: it is not the desktop window (RO-13)
     const token = await tokenOf(daemon, ["index.read"]);
-    expect(
-      IndexOpenTicket.parse(await token.call("index.openTicket", { sessionId: "s1" })).grant,
-    ).toMatch(/\./);
+    const plain = IndexOpenTicket.parse(await token.call("index.openTicket", { sessionId: "s1" }));
+    expect(plain.grant).toMatch(/\./);
+    const verdict = verifyGrant(keys.at(-1) as Buffer, plain.grant, Date.now());
+    expect(verdict.ok && verdict.claims.scope).toEqual([SCOPE_READ]);
   }, 30_000);
 
   it("every ask is a fresh grant: a second ticket for the same session is a new grant with a later exp", async () => {
@@ -481,6 +491,46 @@ describe("AR-8b — index.openTicket mints for a window on this desktop", () => 
     expect(serialized).not.toContain((keys.at(-1) as Buffer).toString("base64url"));
     expect(serialized).not.toContain((keys.at(-1) as Buffer).toString("base64"));
     expect(Object.keys(ticket).sort()).toEqual(["device", "endpoints", "expiresAt", "grant"]);
+  }, 30_000);
+});
+
+describe("RO-13 — the recorded-file read is the desktop window's alone", () => {
+  it("the window's grant passes the file route's check (the scripted index records no file: rosetta's 404); a plain token's grant is wrong-scope there and still reads the session; another session's file is wrong-session; the audit names each mint's scopes", async () => {
+    const { daemon } = await boot();
+    await ready(daemon);
+    const win = await windowOf(daemon, ["index.read"]);
+    const ticket = await ticketFor(win, "s1");
+    const { restUrl } = IndexEndpointSet.parse(ticket.endpoints);
+    const file = (sid: string) => `${restUrl}/api/sessions/${sid}/timeline/t1/read/0`;
+    // past the credential: the daemon's own answer for a target it never recorded
+    expect(await getWith(file("s1"), `Rosetta-Grant ${ticket.grant}`)).toEqual({
+      status: 404,
+      reason: null,
+    });
+    expect(await getWith(file("s2"), `Rosetta-Grant ${ticket.grant}`)).toEqual({
+      status: 401,
+      reason: "wrong-session",
+    });
+    // a principal that is not the desktop window: read alone
+    const token = await tokenOf(daemon, ["index.read"]);
+    const plain = IndexOpenTicket.parse(await token.call("index.openTicket", { sessionId: "s1" }));
+    expect(await getWith(file("s1"), `Rosetta-Grant ${plain.grant}`)).toEqual({
+      status: 401,
+      reason: "wrong-scope",
+    });
+    expect(await getWith(`${restUrl}/api/sessions/s1`, `Rosetta-Grant ${plain.grant}`)).toEqual({
+      status: 200,
+      reason: null,
+    });
+    // the record of each mint says what its grant may do, never the grant
+    const outcomes = (await auditRecords(daemon)).filter(
+      (r) => r.action === "index.ticket.mint" && r.phase === "outcome",
+    );
+    expect(outcomes.map((r) => (r.attrs as { scope?: unknown } | undefined)?.scope)).toEqual([
+      [SCOPE_READ, SCOPE_FILES],
+      [SCOPE_READ],
+    ]);
+    expect(JSON.stringify(outcomes)).not.toContain(plain.grant);
   }, 30_000);
 });
 
@@ -588,6 +638,96 @@ describe("AR-8b — IndexTicketMinter, the rule alone", () => {
     expect(minter.check(ctx, { sessionId: "s1" }).auditId).toBe("s1");
     expect(minter.check(ctx, { sessionId: "s\u0001" }).auditId).toMatch(/^sha256:[0-9a-f]{32}$/);
     expect(minter.check(ctx, { sessionId: "s".repeat(300) }).auditId).toMatch(/^sha256:/);
+  });
+
+  it("RO-13: the desktop window's grant carries read and files, every other holder's read alone — the rule outlives today's refusals", () => {
+    const window = {
+      principal: {
+        kind: "local-token",
+        tokenId: "tk_000000000002",
+        scopes: ["index.read"],
+        rendererParticipant: {
+          participantId: "renderer:unit:1",
+          incarnation: "renderer:unit:1:document-1",
+        },
+      },
+      transport: "ws-loopback",
+      receivedAt: 0,
+      clientKind: "renderer",
+    } as CallerContext;
+    expect(indexTicketScopes(window)).toEqual([SCOPE_READ, SCOPE_FILES]);
+    const readOnly: Array<[string, CallerContext]> = [
+      // the window's own bearer, over another door or claiming another kind
+      ["the window's bearer on the tailnet door", { ...window, transport: "ws-tailnet" }],
+      ["the window's bearer with another client kind", { ...window, clientKind: "debug" }],
+      ["the window's bearer with no client kind", { ...window, clientKind: undefined } as never],
+      ["a plain local token", ctx],
+      [
+        "the shell",
+        {
+          principal: { kind: "shell-main", tokenId: "tk_000000000003", scopes: ["index.read"] },
+          transport: "ws-loopback",
+          receivedAt: 0,
+          clientKind: "shell-main",
+        },
+      ],
+      // refused a ticket today — the rule still says read alone
+      [
+        "a plugin",
+        {
+          principal: { kind: "plugin", id: "p", scopes: ["index.read"] },
+          transport: "inproc-port",
+          receivedAt: 0,
+        },
+      ],
+      [
+        "an MCP agent",
+        {
+          principal: { kind: "mcp-agent", sessionId: "m", scopes: ["index.read"] },
+          transport: "mcp",
+          receivedAt: 0,
+        },
+      ],
+      [
+        "the phone",
+        {
+          principal: { kind: "tailnet", login: "me@example.com", self: true },
+          transport: "ws-tailnet",
+          receivedAt: 0,
+          clientKind: "ios",
+        },
+      ],
+      [
+        "a guest",
+        {
+          principal: { kind: "tailnet-guest", login: "them@example.com" },
+          transport: "ws-tailnet",
+          receivedAt: 0,
+        },
+      ],
+      [
+        "another desktop's daemon",
+        {
+          principal: { kind: "peer-fieldd", deviceId: "dev-b" },
+          transport: "ws-tailnet",
+          receivedAt: 0,
+        },
+      ],
+    ];
+    for (const [who, caller] of readOnly)
+      expect(indexTicketScopes(caller), who).toEqual([SCOPE_READ]);
+    // the mint carries what the rule said, and the ask carries it to the audit
+    const minter = minterOf();
+    const ask = minter.check(window, { sessionId: "s1" });
+    expect(ask.scope).toEqual([SCOPE_READ, SCOPE_FILES]);
+    const windowGrant = verifyGrant(key, minter.mint(window, ask).grant, 1_000_000);
+    expect(windowGrant.ok && windowGrant.claims.scope).toEqual([SCOPE_READ, SCOPE_FILES]);
+    const plainGrant = verifyGrant(
+      key,
+      minter.mint(ctx, minter.check(ctx, { sessionId: "s1" })).grant,
+      1_000_000,
+    );
+    expect(plainGrant.ok && plainGrant.claims.scope).toEqual([SCOPE_READ]);
   });
 
   it("a generation that does not enforce access is the plane OFF — never a grant it would not check", () => {
@@ -768,6 +908,30 @@ function firstSnapshot(client: RosettaClient, sid: string): Promise<{ close: () 
   });
 }
 
+/** The id of the first row a session's stream delivers, through rosetta's
+ * client — a real timeline id of the ground truth. */
+function firstTimelineId(client: RosettaClient, sid: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    const subscription = client.subscribeSession(sid, {
+      onChange: (rows) => {
+        const id = rows[0]?.timeline_id;
+        if (settled || id === undefined) return;
+        settled = true;
+        subscription.close();
+        resolve(id);
+      },
+      onError: (error) => {
+        if (settled) return;
+        settled = true;
+        subscription.close();
+        reject(new Error(`${error.code}: ${error.message}`));
+      },
+    });
+    cleanup.push(() => subscription.close());
+  });
+}
+
 describe.skipIf(
   REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BIN) || !existsSync(GROUNDTRUTH),
 )("AR-8b — the direct plane against the REAL rosettad (opt-in via FIELDD_ROSETTAD_BIN)", () => {
@@ -812,6 +976,45 @@ describe.skipIf(
     expect(
       await dialSession(sessionUrl.replace(/[^/]+$/, "not-this-session"), ticket.grant),
     ).toEqual({ opened: false, status: 401, reason: "wrong-session" });
+  }, 180_000);
+
+  it("RO-13: the window's grant reaches the recorded-file read — rosetta's own not_found for a row that names no file, never wrong-scope — and a plain token's grant is wrong-scope there", async () => {
+    const { daemon, win, sid } = await realWorld();
+    const ticket = await ticketFor(win, sid);
+    const { restUrl } = IndexEndpointSet.parse(ticket.endpoints);
+    const client = clientFor(ticket);
+    const timelineId = await firstTimelineId(client, sid);
+    // the window's grant, through rosetta's own client as the room asks it: past
+    // the credential check, the daemon's honest answer — the ground truth's
+    // first row is a prompt, which names no file
+    const windowRead = await client.readFileTarget(sid, timelineId, 0).then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(windowRead).not.toBeInstanceOf(UnauthorizedError);
+    expect(windowRead).toMatchObject({ status: 404, code: "not_found" });
+    // a principal that is not the desktop window holds read alone: refused there…
+    const token = await tokenOf(daemon, ["index.read"]);
+    const plain = IndexOpenTicket.parse(await token.call("index.openTicket", { sessionId: sid }));
+    const session = `${restUrl}/api/sessions/${encodeURIComponent(sid)}`;
+    const plainRead = await getWith(
+      `${session}/timeline/${encodeURIComponent(timelineId)}/read/0`,
+      `Rosetta-Grant ${plain.grant}`,
+    );
+    expect(plainRead).toEqual({ status: 401, reason: "wrong-scope" });
+    // …and still reading the session's history
+    expect(await getWith(session, `Rosetta-Grant ${plain.grant}`)).toEqual({
+      status: 200,
+      reason: null,
+    });
+    const answered = windowRead as { status: number; code: string | null; message: string };
+    console.log(
+      `RO13_REAL ${JSON.stringify({
+        timelineId,
+        window: { status: answered.status, code: answered.code, message: answered.message },
+        plain: plainRead,
+      })}`,
+    );
   }, 180_000);
 
   it("the kill matrix: the daemon restarted mid-stream — the old grant is refused by the new generation, the next ask is re-ticketed and streams", async () => {

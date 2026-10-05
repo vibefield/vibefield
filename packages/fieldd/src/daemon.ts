@@ -1830,15 +1830,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // SP-3 — the direct plane's door (methods.ts; index-serve.ts). AR-8b: it
     // mints for a window on this desktop — every refusal said first, then the
     // mint inside its audited attempt (a ticket is a grant: D6's rule, the
-    // terminal mint's precedent), the record naming the session and when the
-    // grant expires, never the grant.
+    // terminal mint's precedent), the record naming the session, what the
+    // grant may do (RO-13: `files` for the desktop window) and when it
+    // expires, never the grant.
     api.register("index.openTicket", async (ctx, params) => {
       const ask = indexTickets.check(ctx, params);
       return await audit.required(
         ctx,
         { action: "index.ticket.mint", target: { kind: "index-session", id: ask.auditId } },
         () => indexTickets.mint(ctx, ask),
-        (ticket) => ({ outcome: "succeeded", attrs: { expiresAt: ticket.expiresAt } }),
+        (ticket) => ({
+          outcome: "succeeded",
+          attrs: { expiresAt: ticket.expiresAt, scope: [...ask.scope] },
+        }),
       );
     });
     // DS-6 — the history catalog, as rows (DS-L3): the PEER replication door.

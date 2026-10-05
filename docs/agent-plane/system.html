@@ -1912,12 +1912,15 @@
                 </p>
               </div>
             </div>
-            <div class="callout warning">
-              <strong>The History view does not exist.</strong> It is ruled as spine content, not a plugin
-              (AR-D9), and sits behind RO-1 — rosetta's authenticated direct data plane — as AR-8 on the
-              roadmap. What ships today is the <em>find sheet</em>: search and session facts through the
-              <code>index.*</code> doors, adapted to puppeteer's <code>HistoryPort</code>.
-              <span class="badge tone-designed">Designed</span>
+            <div class="callout">
+              <strong>History is rosetta's room, mounted in the frame (AR-8c).</strong> It is spine
+              content, not a plugin (AR-D9): the frame's History view (⌘3) is rosetta's own room — the
+              package <code>@rosetta/room</code>, a sibling link like the Godview views — over four ports
+              VibeField writes, and nothing the room dials (AR-D14). The Godview <em>find sheet</em>
+              still reads its search and session facts through the same <code>index.*</code> doors.
+              <span class="badge tone-built">Built</span>
+              <em>Corrected 2026-10-03 (AR-8c):</em> this said "The History view does not exist" — true
+              until the mount landed; RO-1 merged, and AR-8b built fieldd's half.
             </div>
             <h3>The room's two lanes (AR-8b)</h3>
             <p class="section-note">
@@ -1934,6 +1937,93 @@
               no transcript byte crosses fieldd (EL2). The phone's and another desktop's tickets wait on
               the tailnet set (SP-6, DS-7) and answer <code>direct-plane-unbuilt</code> meanwhile; the
               room and its mount are AR-8a and AR-8c. <span class="badge tone-built">Built</span>
+            </p>
+            <h3>The mount (AR-8c)</h3>
+            <p class="section-note">
+              The renderer's half of both lanes is <code>packages/field-app/src/history/</code>: pure
+              adapters over the window's FielddClient, the way <code>godview/monitor/doors.ts</code> adapts
+              the Godview views, and one composition, <code>HistoryRoomView</code>, in the cover's History
+              slot. Pinned at rosetta <code>00b97869</code> (the room merged; EL8 — the Rust and
+              <code>clients/ts</code> unchanged from the pin before it).
+              <span class="badge tone-built">Built</span>
+            </p>
+            <div class="contract-list">
+              <div class="contract-row">
+                <strong>The catalog port — lists and figures, over the doors</strong>
+                <p>
+                  The room asks for its whole topology as a stream (one snapshot, then mutations).
+                  fieldd's own replication door, <code>index.catalog.subscribe</code>, refuses every window
+                  (it is the peer door, DS-L4), so the port assembles the stream from what a window is
+                  given: the invalidation pings of <code>index.changes.subscribe</code> and the merged
+                  replica's pages, <code>index.projects</code> and <code>index.sessions</code> at
+                  <code>scope: "local"</code> — one desktop first; PJ's grouping is AR-8e. The catalog lists
+                  roots only, so a transcript's delegated children are not threads in this slice.
+                  <code>index.status</code> folds into the room's status, and an index that is not up is
+                  refused in fieldd's own words ("the agent index is starting"), which the room shows under
+                  its "rosettad is not answering". One <code>index.project</code> answer serves both the
+                  panel's figures and its usage; <code>index.projectDay</code> the day; <code>index.search</code>
+                  the room's search port, which no sheet uses here (the Peek is GT's).
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>The session port — bodies, over the ticket, as a lease</strong>
+                <p>
+                  Opening a session asks <code>index.openTicket</code> and builds rosetta's own client on the
+                  loopback origin with the grant as its credential. The lease renews before the grant's
+                  <code>expiresAt</code>, after a stream drops once it was live (a restart revokes every
+                  grant: the key is per generation), and after a refused read; when the ticket names another
+                  origin the one client is repointed (<code>setBaseUrl</code>, rosetta's own restart path).
+                  The live-file read (<code>readFileTarget</code>) is bearer-only upstream, so the port
+                  answers the room's honest refusal (RO-13). <em>Corrected 2026-10-04 (RO-13 MERGED to
+                  rosetta main <code>856bd80</code>):</em> the window's grant carries
+                  <code>files</code> beside <code>read</code>, so a recorded file opens through the lease
+                  like every other read — renewed and repointed with it, and a file that is gone answers
+                  in rosetta's own words. Only rosettad refusing the grant's reach there
+                  (<code>wrong-scope</code> or <code>wrong-route</code>, which a fresh grant would only
+                  repeat) is the room's "Recorded files can't open here yet".
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>The asset source and the host port</strong>
+                <p>
+                  An <code>&lt;img src&gt;</code> carries no credential, so images are read through a
+                  session's client into object URLs, at most 192 at once, revoked on eviction and on
+                  unmount (AR-D40 (a)). The host port answers the platform and nothing it cannot keep: no
+                  home directory (no door says it), no open-in-browser and no favicons yet, and no worktree
+                  port — the guest stays closed until AR-8d (AR-D38).
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>Resume — History's create</strong>
+                <p>
+                  The room reports the chosen session; the line's create continues it with
+                  <code>agent.resume</code>'s native form and the empty pane launcher's own facts (the
+                  conversation's agent and persona, its folder — <code>index.recent</code>,
+                  <code>index.session</code>, <code>agent.providers</code>), lands it in Godview's active pane
+                  through the deck's door, and moves the window there. A refusal is said on the line.
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>The renderer's policy admits the plane</strong>
+                <p>
+                  The packaged CSP admitted only <code>ws://127.0.0.1:*</code>; the direct plane also reads
+                  over HTTP and draws object-URL images, so <code>connect-src</code> gained
+                  <code>http://127.0.0.1:*</code> and <code>img-src</code> gained <code>blob:</code>
+                  (<code>electron-shell/src/main/security-policy.ts</code>).
+                </p>
+              </div>
+            </div>
+            <p class="section-note">
+              <strong>The witness.</strong> A real fieldd and the real rosettad over rosetta's ground-truth
+              transcript, read through these adapters with a window's token
+              (<code>field-app/test/history-witness.test.ts</code>): the session reaches the room's meta
+              over the doors, its body streams over the ticket, the adapters asked fieldd only the
+              catalog doors and the ticket, and no frame fieldd sent the window holds a byte of the body
+              (526 bytes in 10 frames while the stream opened). <span class="badge tone-built">Built</span>
+              <strong>Owed:</strong> the Peek's "Everything" scope and <code>openAt</code> (GT), Jump to for a
+              live session, the transcript's delegated threads, attachments, the file door (AR-8d), and
+              the phone's and another desktop's tickets (SP-6, DS-7).
+              <span class="badge tone-owed">Owed</span>
             </p>
           </section>
 
@@ -2513,7 +2603,7 @@
           <footer>
             <p>
               Agent plane · vibe-field. Written against vibe-field <code>b7ebb444</code>, puppeteer
-              <code>2f5ce002</code>, rosetta <code>e8d907ab</code>. <em>Pin note, 2026-10-03: the rosetta pin moved to <code>886baede</code> (protocol 26) on 2026-10-03 after <code>d3cf325e</code> (protocol 23) on 2026-09-28; the seams this page cites were re-checked at the move — fieldd's seven imported types and the session, project and search rows are byte-identical to <code>e8d907ab</code>; only the constant and the route count above moved.</em> Mechanics defer to design-03; look
+              <code>2f5ce002</code>, rosetta <code>e8d907ab</code>. <em>Pin note, 2026-10-03: the rosetta pin moved to <code>886baede</code> (protocol 26) on 2026-10-03 after <code>d3cf325e</code> (protocol 23) on 2026-09-28; the seams this page cites were re-checked at the move — fieldd's seven imported types and the session, project and search rows are byte-identical to <code>e8d907ab</code>; only the constant and the route count above moved.</em> <em>Pin note, AR-8c (2026-10-03): the pin moved to <code>00b97869</code>, rosetta main with <code>@rosetta/room</code> merged — the Rust and <code>clients/ts</code> unchanged, the room's package new.</em> Mechanics defer to design-03; look
               and feel defer to <code>DESIGN.md</code>. A claim on this page that the code contradicts
               is a bug in this page.
             </p>
