@@ -19,7 +19,7 @@ import { deskBlobs } from "./desk/desk-blobs";
 import { bindCapabilityUpgrades } from "./desk/desk-capabilities";
 import { currentDesk, deskCensus } from "./desk/desk-door";
 import { watchPacksLearned } from "./desk/desk-packs";
-import { seedsExamples } from "./desk/desk-seed";
+import { seedsExamples, seedTryTypes } from "./desk/desk-seed";
 import { createDeskStills } from "./desk/desk-stills";
 import { isBeforeTheDesk, rootIsBeforeTheDesk } from "./desk/pre-desk";
 import { attachDocumentPresence } from "./document-presence";
@@ -405,9 +405,16 @@ export function useWorkspaceSession(
       // PRODUCT's composition (DK-8: ICE's six and the comment pad — the print
       // once its picture is in the byte store); the example clock joins it only
       // where the run asks for the examples (a dev build, `?deskSeedExamples=1`).
+      // DK-10: a load that asks for a TRY BOARD (`?deskTry=<type>,…` — the
+      // author's smoke, `vibefield-plugin try`) gets those types alone.
       if (pending.seed) {
-        const examples = seedsExamples(import.meta.env.DEV, globalThis.location?.search ?? "");
-        void seedField(ce, session, deskBlobs(), undefined, { examples }).catch((error: unknown) =>
+        const search = globalThis.location?.search ?? "";
+        const examples = seedsExamples(import.meta.env.DEV, search);
+        const tryTypes = seedTryTypes(search);
+        void seedField(ce, session, deskBlobs(), undefined, {
+          examples,
+          ...(tryTypes.length > 0 ? { try: tryTypes } : {}),
+        }).catch((error: unknown) =>
           getRendererLogger()
             .child({ component: "board.session", docId: pending.docId })
             .error("renderer.board.seed_failed", "The first-run board's print was not laid", error),

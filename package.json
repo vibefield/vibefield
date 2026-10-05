@@ -19,6 +19,7 @@
     "smoke:studio": "pnpm --filter @vibefield/desktop smoke:studio",
     "smoke:plugin-restart": "pnpm --filter @vibefield/desktop smoke:plugin-restart",
     "smoke:kind-faults": "pnpm --filter @vibefield/desktop smoke:kind-faults",
+    "smoke:plugin": "pnpm --filter @vibefield/desktop smoke:plugin",
     "playground": "node apps/plugin-playground/bin/plugin-playground.mjs",
     "plugin": "node tooling/plugin-cli/bin/vibefield-plugin.mjs",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",

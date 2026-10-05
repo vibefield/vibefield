@@ -67,9 +67,53 @@ export function seedsExamples(dev: boolean, search: string): boolean {
   return dev || new URLSearchParams(search).get(SEED_EXAMPLES) === "1";
 }
 
+/**
+ * THE TRY BOARD (DK-10 — the ten-minute bar): the URL door a run lays a plugin author's kinds through,
+ * `?deskTry=<type>[,<type>…]`. The first board then lays ONE object of each named type, side by side in a row centred
+ * on the origin, and NOTHING ELSE — no product composition, no example, no print — so the arrival fit frames them alone
+ * and the run's still is the author's object. It is a SMOKE'S door (`vibefield-plugin try` → `smoke:plugin`): how an
+ * author sees a kind DRAWN in the product before the pegboard (DK-13) can lay one. Only a type the root canvas places
+ * (its row provides `desk.object`) is laid; any other is passed by, and the smoke says which.
+ */
+export const SEED_TRY = "deskTry";
+
+/** The most types one try board lays. */
+export const SEED_TRY_MAX = 16;
+
+/** The gap between two objects on the try board, world units. */
+export const SEED_TRY_GAP = 48;
+
+/** The types a load asks the try board for (`?deskTry=a,b`): trimmed, de-duplicated, in order, at most `SEED_TRY_MAX`. */
+export function seedTryTypes(search: string): readonly string[] {
+  const raw = new URLSearchParams(search).get(SEED_TRY);
+  if (raw === null) return [];
+  const types: string[] = [];
+  for (const part of raw.split(",")) {
+    const type = part.trim();
+    if (type.length > 0 && !types.includes(type)) types.push(type);
+  }
+  return types.slice(0, SEED_TRY_MAX);
+}
+
+/** The try board's row: each object at its own size, side by side with `SEED_TRY_GAP` between, centred on (0, 0). */
+export function tryRow(
+  sized: readonly { readonly type: string; readonly w: number; readonly h: number }[],
+): readonly SeedObject[] {
+  const width =
+    sized.reduce((sum, s) => sum + s.w, 0) + SEED_TRY_GAP * Math.max(0, sized.length - 1);
+  let x = -width / 2;
+  return sized.map((s) => {
+    const at: SeedObject = { type: s.type, cx: x + s.w / 2, cy: 0, props: {} };
+    x += s.w + SEED_TRY_GAP;
+    return at;
+  });
+}
+
 export interface SeedOptions {
   /** Lay the example objects (the clock) — a dev build's and a smoke's; never a user's first board. */
   readonly examples?: boolean;
+  /** A TRY BOARD (`?deskTry=`): lay one object of each of these types, and nothing else. */
+  readonly try?: readonly string[];
 }
 
 /** The product's composition, laid at once (the print follows its picture) — and the example clock where the run asks. */
@@ -121,6 +165,21 @@ export async function seedDesk(
     if (!placeable.has(type)) return;
     ce.ops.spawnWidget(type, { ...at, props: { ...props }, undoable: false });
   };
+  if (opts.try !== undefined && opts.try.length > 0) {
+    // THE TRY BOARD: the named types alone, each at its declared size (a type the catalog lacks, or the root canvas
+    // does not place, is passed by) — no composition, no example, no print
+    const sized = opts.try.flatMap((type) => {
+      const size = ce.catalog.widget(type)?.defaultSize;
+      return size === undefined || !placeable.has(type) ? [] : [{ type, w: size.w, h: size.h }];
+    });
+    for (const s of tryRow(sized)) {
+      const size = sized.find((one) => one.type === s.type);
+      if (size === undefined) continue;
+      lay(s.type, { x: s.cx - size.w / 2, y: s.cy - size.h / 2, w: size.w, h: size.h }, s.props);
+    }
+    ce.world.sync();
+    return;
+  }
   for (const s of seedObjects(now, opts)) {
     const size = ce.catalog.widget(s.type)?.defaultSize;
     if (size === undefined) continue;

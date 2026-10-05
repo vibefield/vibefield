@@ -110,6 +110,7 @@ import {
   type PhysicalSoakOptions,
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
+import { TRY_FLAG, TRY_SEARCH_KEY, TRY_TYPES_ENV, tryBoardRows, tryTypes } from "./smoke-try";
 import {
   leakedVariables,
   readTypedAgentCalls,
@@ -862,6 +863,41 @@ export async function runSmokeCanvas(opts: {
   // (the relaunch heal) before the card — DESK_RETRY, then DESK_UNAVAILABLE.
   const deskSaid = deskMarkerLog(win);
   let ok = false;
+  if (process.argv.includes(TRY_FLAG)) {
+    // DK-10 — THE TRY BOARD (`vibefield-plugin try`, `pnpm smoke:plugin`): a plugin author's kinds alone on a fresh
+    // board, each held DRAWN, the stills theirs (smoke-try.ts) — none of the canvas witnesses below
+    try {
+      const { types, from } = tryTypes(process.env);
+      if (types.length === 0) {
+        throw new Error(
+          from === "env"
+            ? `${TRY_TYPES_ENV} names no object type`
+            : "no object type to try: FIELDD_PLUGIN_DEV_ROOTS holds no plugin whose manifest declares contributes.objects",
+        );
+      }
+      console.log(`SMOKE_TRY ${JSON.stringify({ types, from, gpu })}`);
+      const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
+      const deskVerdict = waitForConsole(win, gpu ? "DESK_READY " : "DESK_UNAVAILABLE ", 60_000);
+      await loadRenderer(win, "smoke-canvas", opts.viteUrl, { [TRY_SEARCH_KEY]: types.join(",") });
+      console.log(`SMOKE_CANVAS ${await canvasReady}`);
+      const problems = [...smokeProfileFailures()];
+      const verdict = await deskVerdict;
+      console.log(`SMOKE_CANVAS_DESK ${gpu ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
+      deskSaid.stop();
+      if (!gpu)
+        problems.push("the try board needs the GPU: a kind draws only on the host's device");
+      else problems.push(...(await tryBoardRows(win, types, shotDir, (line) => console.log(line))));
+      if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
+      if (problems.length > 0) throw new Error(problems.join(" · "));
+      ok = true;
+      console.log("SMOKE_TRY_OK");
+    } catch (e) {
+      console.error(`SMOKE_TRY failed: ${e instanceof Error ? e.message : e}`);
+    }
+    await teardown(opts.supervisor, opts.root, opts.beforeExit);
+    app.exit(ok ? 0 : 2);
+    return;
+  }
   try {
     const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
     const deskVerdict = waitForConsole(win, gpu ? "DESK_READY " : "DESK_UNAVAILABLE ", 60_000);
