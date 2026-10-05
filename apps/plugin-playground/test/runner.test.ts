@@ -23,12 +23,16 @@ let run: (options: RunOptions) => Promise<RunResult>;
 /** Every result this file ran — the retired codes are held to none of them. */
 const ran: RunResult[] = [];
 /** Scaffolds of the create-plugin template, made as an author makes one (its bin, a temp dir):
- * `demo` as scaffolded, `empty` with a states file that declares its kind with no states. */
-let scaffold: { readonly root: string; readonly dir: string; readonly empty: string } | undefined;
+ * `demo` as scaffolded, `empty` with a states file that declares its kind with no states, and `bare` with
+ * NOTHING installed — the plugin outside any workspace the ten-minute bar's agents held (DK-10). */
+let scaffold:
+  | { readonly root: string; readonly dir: string; readonly empty: string; readonly bare: string }
+  | undefined;
 
 /** The create-plugin bin into `root/<name>`, its three workspace dependencies linked as an install
- * links them — so the playground judges exactly the files an author is handed, never a copy kept here. */
-async function scaffoldTemplate(root: string, name: string): Promise<string> {
+ * links them (unless `installed` is false) — so the playground judges exactly the files an author is
+ * handed, never a copy kept here. */
+async function scaffoldTemplate(root: string, name: string, installed = true): Promise<string> {
   const dir = join(root, name);
   await promisify(execFile)(process.execPath, [
     join(REPO, "tooling", "create-plugin", "bin", "create-plugin.mjs"),
@@ -39,6 +43,7 @@ async function scaffoldTemplate(root: string, name: string): Promise<string> {
     "--dir",
     dir,
   ]);
+  if (!installed) return dir;
   mkdirSync(join(dir, "node_modules", "@vibefield"), { recursive: true });
   for (const [name, path] of [
     ["plugin-sdk", "packages/plugin-sdk"],
@@ -54,7 +59,12 @@ beforeAll(async () => {
   const root = mkdtempSync(join(tmpdir(), "dk-7-template-"));
   const empty = await scaffoldTemplate(root, "empty");
   writeFileSync(join(empty, "playground", "states.ts"), 'export default { "vendor.empty": {} };\n');
-  scaffold = { root, dir: await scaffoldTemplate(root, "demo"), empty };
+  scaffold = {
+    root,
+    dir: await scaffoldTemplate(root, "demo"),
+    empty,
+    bare: await scaffoldTemplate(root, "bare", false),
+  };
   harness = await createHarness([FIXTURES, scaffold.root]);
   const mod = await harness.load(join(PACKAGE_ROOT, "src", "run.ts"));
   const runPlayground = mod.runPlayground as typeof run;
@@ -192,6 +202,18 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
       ["program", "note"],
       ["default", "pass"],
       ["coral", "pass"],
+    ]);
+    expect(result.summary.exit).toBe(0);
+  });
+
+  // DK-10 — the bar's first wall: a plugin outside any workspace has no node_modules, so its source's
+  // `@vibefield/plugin-sdk` resolved to nothing and EVERY such plugin — the untouched scaffold included — was
+  // refused `renderer-import-failed` before its kind was read. The loader binds the host's singletons to the
+  // kit's own copies for an importer outside the workspace (boot.ts `hostSingletons`), as the host's import map does.
+  it("passes the template scaffolded OUTSIDE any workspace with NOTHING installed — the host's specifiers bound to the kit's copies", async () => {
+    const result = await run({ pluginDir: scaffold?.bare as string, loader: harness });
+    expect(objectRows(result)).toEqual([
+      expect.objectContaining({ type: "vendor.bare", states: 2 * (3 * 21 + 1), refusal: null }),
     ]);
     expect(result.summary.exit).toBe(0);
   });

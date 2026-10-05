@@ -113,6 +113,19 @@ export async function checkActivation(
     imported = await import(pathToFileURL(entryPath).href);
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
+    // DK-10: a name the host's module does not export is the PLUGIN's defect, never the harness's ceiling — the
+    // host's import map links the bundle to the same module, so the plugin would never load there either. (The bar's
+    // third agent built and checked a bundle importing a made-up name from `/desk` and both passed it.)
+    const unknown = /does not provide an export named '([^']+)'/.exec(message);
+    if (error instanceof SyntaxError && unknown !== null)
+      return [
+        refuse(
+          "activation",
+          "import-name-unknown",
+          `${entry} imports ${unknown[1]}, which its host module does not export: ${message}`,
+          { pointer: entry },
+        ),
+      ];
     if (isBrowserGraphFailure(error))
       return [
         note(

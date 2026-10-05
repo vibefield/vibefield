@@ -16,7 +16,7 @@
 // Everything after this point is loaded THROUGH the server, so bare specifiers in
 // those modules resolve exactly as they do in the app.
 import { existsSync, statSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { holdMutationObserverCallbacks } from "@vibefield/test-env/happy-dom";
 import { holdLocalStorage } from "@vibefield/test-env/local-storage";
@@ -111,6 +111,50 @@ export async function installDom(): Promise<void> {
 }
 
 /**
+ * THE IMPORT MAP, for a plugin authored OUTSIDE the workspace (DK-10 — the ten-minute bar's first wall). A plugin's
+ * source names the host's singletons bare (`@vibefield/plugin-sdk`, its `/desk` door), which the renderer binds with its
+ * import map (§11.6). A directory with no node_modules cannot resolve them, so every such plugin was refused
+ * `renderer-import-failed` before its kind was read — the three agents who first measured the bar all stopped there.
+ * Here, for an importer outside the workspace only, a specifier the host binds resolves from THIS package: the kit's
+ * own copies, what the host would hand the plugin. Hook-filtered to the list (DK-6's law).
+ */
+export function hostSingletons(specifiers: readonly string[]): {
+  readonly name: string;
+  readonly enforce: "pre";
+  readonly resolveId: {
+    readonly filter: { readonly id: RegExp };
+    handler(
+      this: {
+        resolve(
+          source: string,
+          importer: string,
+          options: Record<string, unknown>,
+        ): Promise<unknown>;
+      },
+      source: string,
+      importer: string | undefined,
+      options: Record<string, unknown>,
+    ): Promise<unknown>;
+  };
+} {
+  const escaped = specifiers.map((s) => s.replaceAll(/[.*+?^${}()|[\]\\/]/g, "\\$&"));
+  const id = new RegExp(`^(?:${escaped.join("|")})$`);
+  const kit = resolve(PACKAGE_ROOT, "src", "cli.ts");
+  return {
+    name: "plugin-playground:host-singletons",
+    enforce: "pre",
+    resolveId: {
+      filter: { id },
+      async handler(source, importer, options) {
+        if (!id.test(source) || importer === undefined) return null;
+        if (importer.startsWith(`${WORKSPACE_ROOT}${sep}`)) return null; // a workspace module keeps its own resolution
+        return this.resolve(source, kit, { ...options, skipSelf: true });
+      },
+    },
+  };
+}
+
+/**
  * Stand up the module loader.
  *
  * `extraRoots` are directories the run needs to read outside the workspace — a
@@ -123,6 +167,7 @@ export async function createHarness(extraRoots: readonly string[] = []): Promise
   // DK-6: a kind ships its shaders as `.wgsl` files, which plugin-build inlines as their TEXT — the
   // harness loads them the same way, or every object plugin's renderer fails to import here.
   const { wgsl } = await import("@vibefield/plugin-build/wgsl");
+  const { HOST_SINGLETON_MODULE_SPECIFIERS } = await import("@vibefield/contracts");
   const allow = [WORKSPACE_ROOT, ...extraRoots.filter((p) => existsSync(p))];
   const server = await createServer({
     root: WORKSPACE_ROOT,
@@ -142,7 +187,10 @@ export async function createHarness(extraRoots: readonly string[] = []): Promise
     esbuild: { jsx: "automatic", jsxImportSource: "react" },
     // EVERY plugin here carries a hook filter (DK-6's lesson, `4161f36d`): an unfiltered hook is awaited
     // for every module the harness loads, and in a crowded run that split the graph
-    plugins: [wgsl()],
+    plugins: [
+      wgsl(),
+      hostSingletons([...HOST_SINGLETON_MODULE_SPECIFIERS, "@vibefield/contracts"]),
+    ],
   });
   return {
     load: (absolutePath) => server.ssrLoadModule(absolutePath) as Promise<Record<string, unknown>>,

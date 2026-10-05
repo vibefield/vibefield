@@ -262,6 +262,14 @@ export const REFUSAL_CATALOG = {
     guidance:
       "nothing to do here: the product makes the pass on a real device; the playground drives its states without it",
   },
+  "import-name-unknown": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "the built module imports a name its host module does not export — the host's import map links it to that same module, so the plugin would never load",
+    guidance:
+      "import only what the door exports (a typo, or a name the door withholds: acquire, adopt, the host half, all of /desk/objects) — the detail names the module and the name",
+  },
   "activation-leak": {
     check: "activation",
     level: "refuse",

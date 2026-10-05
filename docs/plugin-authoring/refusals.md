@@ -23,6 +23,7 @@ column is the general one.
 | `dev-root-unknown` | dev-link | no dev-linked plugin root could be resolved for this machine | `pass --root <dir>, or run inside the repo whose dev session watches examples/plugins` |
 | `docs-stale` | docs | the committed docs are not what the current schemas generate | regenerate with `pnpm gen:docs` and commit the result |
 | `harness-error` | harness | the kit itself failed — a bug here, not in the plugin (exit 2) | report it with the detail line; the plugin is not implicated |
+| `import-name-unknown` | activation | the built module imports a name its host module does not export — the host's import map links it to that same module, so the plugin would never load | import only what the door exports (a typo, or a name the door withholds: acquire, adopt, the host half, all of /desk/objects) — the detail names the module and the name |
 | `index-invalid` | registry | the index bytes are not a RegistryIndex | generate it with the kit; the shape is RegistryIndex in @vibefield/contracts |
 | `index-unreadable` | registry | the registry index could not be read from the given path or url | `pass --index <path to index.json>; its detached signature must sit beside it` |
 | `key-unreadable` | registry | the signing key file could not be read, or is not a base64 DER Ed25519 secret key | generate one with generateRegistryKeypair(); the file holds the base64 secretKey |
