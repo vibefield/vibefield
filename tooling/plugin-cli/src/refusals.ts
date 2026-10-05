@@ -290,7 +290,7 @@ export const REFUSAL_CATALOG = {
     meaning:
       "the kind's WGSL was READ — its entry points and bindings — never compiled: an unresolved name or a type error passes this row (the honest gap, not a refusal)",
     guidance:
-      "run `vibefield-plugin try <dir>`: the app compiles the kind on its device and draws it, and a WGSL error comes back as the compiler's own line (file:line:column) — the Dawn still waits on the pin carrying ICE's createStill (I30)",
+      "run `vibefield-plugin try <dir>`: the app compiles the kind on its device and draws it, and a WGSL error comes back as the compiler's own line (file:line:column) — a headless still of it is not in the kit yet",
   },
   "object-create-not-run-here": {
     check: "activation",

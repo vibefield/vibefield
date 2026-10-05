@@ -28,12 +28,12 @@ copy they run from, as the app's import map does. Only this package's own `pnpm`
 6. **Put it on the desk** — `vibefield-plugin try <this directory>`: the app, on a fresh profile with this plugin
    staged alone, lays one of your object on a fresh board and says whether it is DRAWN — its WGSL compiled on the
    host's device (a compile error comes back as the compiler's own line), picked where it lies — with stills by day
-   and by night in `.vibefield-try/`. About a minute (the first run builds the app). The Dawn STILL in
-   `test/kind.test.ts` is a `todo` until VibeField's pin carries ICE's `createStill` (I30).
+   and by night in `.vibefield-try/`. Well under a minute while the app's build is cached. The headless STILL in
+   `test/kind.test.ts` is a `todo` until the kit carries one.
 
 A person's dev session (`pnpm dev` in a checkout) finds the plugin through `vibefield-plugin dev-link <this
 directory>` (`FIELDD_PLUGIN_DEV_ROOTS`); nothing a person can do lays one on the desk yet — the pegboard will, under
-"things", once VibeField wires it into the desk's chrome (DK-13).
+"things", once VibeField wires it into the desk's chrome.
 
 ## Make it yours
 
@@ -47,6 +47,6 @@ directory>` (`FIELDD_PLUGIN_DEV_ROOTS`); nothing a person can do lays one on the
 | `src/shaders.wgsl` | its own WGSL, after the kit's `view`, `portal` and `light` pieces (`src/shaders.ts` names them) |
 | `playground/states.ts` | the states the kind harness drives it through — each validated against the manifest's props first |
 
-The reference is `docs/plugin-authoring/objects.md` (generated with the contracts); the worked example
-it quotes is ICE's desk clock ported to a plugin, `examples/plugins/desk-clock` — a desk state that
-wakes the desk only when a hand must move, a menu act, held tools, a chip inside a mini mat.
+The reference is the plugin authoring docs' `objects.md`; the worked example it quotes is ICE's desk clock
+ported to a plugin — a desk state that wakes the desk only when a hand must move, a menu act, held tools, a chip
+inside a mini mat.

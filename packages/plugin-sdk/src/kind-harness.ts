@@ -149,7 +149,7 @@ export const KIND_EXPECTED: Readonly<Record<KindRefusalCode | KindNoteCode, stri
   "state-draw-ill-formed":
     "set the pipeline your create made, and a bind group of its layout at every index, before each draw",
   "object-wgsl-not-compiled":
-    "`vibefield-plugin try <dir>` compiles it: the app makes the kind on its device and draws it, and a WGSL error comes back as the compiler's own line (file:line:column) — the Dawn still waits on the pin carrying ICE's createStill (I30)",
+    "`vibefield-plugin try <dir>` compiles it: the app makes the kind on its device and draws it, and a WGSL error comes back as the compiler's own line (file:line:column) — a headless still of it is not in the kit yet",
   "object-create-not-run-here":
     "nothing to do here: the product makes the pass on a real device; this harness's ceiling is a recording one",
 };

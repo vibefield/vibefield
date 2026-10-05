@@ -255,6 +255,13 @@ describe("coverage of what an author has to know", () => {
       "export declare function cssColor", // what `rgb` parses
       "picked across W × H", // what try's box measures
       "the ONLY dev plugin staged",
+      // DK-10 — the fifth agent's notes
+      "`rgb` THROWS on a string it cannot parse", // a free-string colour strikes the kind unguarded
+      "export interface Lamp",
+      "export interface Palette",
+      "TEMPORARY dev root", // try never touches your dev root
+      "module-scope names, complete",
+      "`engines.app` is the app versions",
     ])
       expect(all, `nothing tells an author about ${topic}`).toContain(topic);
   });

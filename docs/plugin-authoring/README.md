@@ -133,7 +133,9 @@ The manifest, complete and minimal — one object kind (`objects.md` says every 
 
 *(@vibefield/contracts fixtures/plugin-manifest.objects.json)*
 
-A kind asks for NO capability (`capabilities: []`) to draw, or to write its own objects —
+`engines.app` is the app versions the plugin runs on — the scaffold's `>=0.0.0` takes any,
+the example's `^0.1.0` the 0.1 line. A kind asks for NO capability (`capabilities: []`) to
+draw, or to write its own objects —
 a menu act's or a held tool's write goes through the desk's gate, one transaction each.
 Capabilities gate what `ctx.client` asks of the product (`manifest.md`).
 

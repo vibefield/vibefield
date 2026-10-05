@@ -189,11 +189,12 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
   it("passes the CREATE-PLUGIN TEMPLATE, scaffolded as an author scaffolds it — both of its playground states, every mode, every zoom", async () => {
     const result = await run({ pluginDir: scaffold?.dir as string, loader: harness });
     const [disc] = objectRows(result);
-    // two fixtures (default, coral) × (idle, selected, held × 21 zooms + at rest by night)
+    // three fixtures (default, coral, and a colour `rgb` cannot parse — DK-10: drawn as the default, never a strike)
+    // × (idle, selected, held × 21 zooms + at rest by night)
     expect(disc).toMatchObject({
       type: "vendor.demo",
       binding: "Demo",
-      states: 2 * (3 * 21 + 1),
+      states: 3 * (3 * 21 + 1),
       refusal: null,
     });
     expect(kindRows(result).map((v) => [v.subject, v.status])).toEqual([
@@ -202,6 +203,7 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
       ["program", "note"],
       ["default", "pass"],
       ["coral", "pass"],
+      ["unparsed", "pass"],
     ]);
     expect(result.summary.exit).toBe(0);
   });
@@ -213,7 +215,7 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
   it("passes the template scaffolded OUTSIDE any workspace with NOTHING installed — the host's specifiers bound to the kit's copies", async () => {
     const result = await run({ pluginDir: scaffold?.bare as string, loader: harness });
     expect(objectRows(result)).toEqual([
-      expect.objectContaining({ type: "vendor.bare", states: 2 * (3 * 21 + 1), refusal: null }),
+      expect.objectContaining({ type: "vendor.bare", states: 3 * (3 * 21 + 1), refusal: null }),
     ]);
     expect(result.summary.exit).toBe(0);
   });

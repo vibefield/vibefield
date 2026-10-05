@@ -82,7 +82,8 @@ contract is refused with its issue, and nothing is written.
 DRAWN:
 
 1. it copies the plugin's installed bundle (`vibefield.plugin.json`, `dist/`, `assets/`)
-   into a dev root of its own — `dev-link`'s copy;
+   into a TEMPORARY dev root of its own, as `dev-link` copies (your dev root is never
+   touched — `dev-link` is for a person's session);
 2. it runs the app from the checkout the kit is installed in (`pnpm smoke:plugin`) on a
    FRESH profile with that root alone (`FIELDD_PLUGIN_DEV_ROOTS`), whose first board lays
    ONE object of each kind the manifest declares — and nothing else;

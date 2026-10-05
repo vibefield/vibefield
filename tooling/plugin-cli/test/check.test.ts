@@ -501,7 +501,8 @@ describe("check — object kinds on the desk build", () => {
     const gap = verdicts.find((v) => v.code === "object-wgsl-not-compiled");
     expect(gap?.level).toBe("note");
     expect(gap?.detail).toContain("never compiled");
-    expect(gap?.expected).toContain("I30");
+    // DK-10: the guidance says what compiles it — `try`, in the app — in place of an ask number an author cannot act on
+    expect(gap?.expected).toContain("vibefield-plugin try");
     // the constants were the row's, lent for the create and taken back
     expect((globalThis as Record<string, unknown>)["GPUShaderStage"]).toBeUndefined();
   });

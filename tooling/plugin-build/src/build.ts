@@ -376,7 +376,11 @@ export async function buildPlugin(options: BuildPluginOptions): Promise<BuildRep
   const root = resolve(options.root);
   const manifest = await readManifest(root);
   const stages: BuildStage[] = [
-    { stage: "manifest", ok: true, detail: `${manifest.id} (read; emitted by gen:manifest)` },
+    {
+      stage: "manifest",
+      ok: true,
+      detail: `${manifest.id} (read — emitted from src/manifest.ts by emit-manifest or gen:manifest)`,
+    },
   ];
   const linked: string[] = [];
   const emitted: string[] = [];

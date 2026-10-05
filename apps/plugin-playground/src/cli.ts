@@ -14,8 +14,8 @@ DOM — its declaration, its program (its WGSL read as text: entry points and
 bindings, never compiled), every declared state (each fixture in playground/
 states.ts × idle, selected, held, open, contained × the zooms the desk's LOD
 names) through resolve, record, hit, frame, chip, the opening, prepare and
-drawRange, and its dispose. The Dawn still that would compile and draw a kind
-waits on a host-less desk ICE does not yet publish (VibeField's ask I30).
+drawRange, and its dispose. Nothing here compiles a kind's WGSL: \`vibefield-plugin
+try <dir>\` does, in the app, and draws it.
 
   --json                NDJSON: one verdict per line, then a summary line
   --state <type>[:<n>]  run one object type, or one state of it

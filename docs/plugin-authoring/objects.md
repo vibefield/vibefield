@@ -271,7 +271,7 @@ The kind, whole (`ObjectKind`, from the door):
 | `name` | yes | the kind's registry name — it IS the object's type (the host refuses any other: `check` says `object-kind-misnamed`) |
 | `stratum` | yes | `pads` \| `sheets` \| `things` — the desk's paint order: beneath everything (the calendar) · flat on the mat, holding a desk of its own (the mini mat) · every other thing (the note, the whiteboard, the notebook, the clock) — a card or a token is a `things` kind |
 | `create(device, format, mat)` | yes | → `Promise<KindPass>`: the kind's PASS on the host's `GPUDevice` for the swap chain's `format`, on the root mat's pass (`MatPass` — the slot's view block, bound once, never written by a kind) |
-| `reach` | yes | how far the drawing may reach PAST the rect, world units (shadow, lift, tilt) — the cull margin and the pick pad |
+| `reach` | yes | how far the drawing may reach PAST the rect, world units (shadow, lift, tilt): the desk culls the object only once its rect grown by `reach` leaves the view, and asks your `hit` anywhere within it — what `hit` answers is what is picked |
 | `resolve(ctx)` | yes | the geometry `G` this frame, from the rect, the props and the flux |
 | `record(G, ctx)` | yes | the record `R` the pass draws for that geometry |
 | `hit(G, wx, wy)` | yes | the CPU mirror of the pass: `"content"` or `"frame"` is the object itself (a tap selects, a drag moves), any other string is a PART, `null` a miss |
@@ -600,7 +600,10 @@ export declare const numberProp: (props: Readonly<Record<string, unknown>>, name
 export declare const stringProp: (props: Readonly<Record<string, unknown>>, name: string, fallback: string) => string;
 ```
 
-A colour prop reads through `rgb` (the CSS syntaxes `cssColor` parses, to sRGB 0..1):
+A colour prop reads through `rgb` (the CSS syntaxes `cssColor` parses, to sRGB 0..1) — and
+`rgb` THROWS on a string it cannot parse, a named colour like `red` among them. A free-string
+colour prop can hold anything, and a throw in `record` strikes the kind (three strikes, and
+every object of it wears the missing face): guard it, as the scaffold's `colourOf` does.
 
 ```ts
 export type RGB = readonly [number, number, number];
@@ -622,8 +625,8 @@ A boolean is `typeof v === "boolean" ? v : fallback` — the worked example's ow
 A kind's program is `kitWgsl(pieces, own)`: the kit's pieces you name, composed BEFORE
 your own structs, modules and entry into ONE WGSL module (`object-kit-piece-unknown`
 refuses a piece it does not carry). What each piece declares is in scope in your shader,
-and YOUR module-scope names must not repeat its. Read from the kit's own text when these
-docs are generated:
+and YOUR module-scope names must not repeat its. Each piece's module-scope names, complete,
+read from the kit's own text when these docs are generated:
 
 - `view` — `struct MatUniforms`
 - `portal` — `const PORTAL_CHAIN`, `fn portal_sd(p: vec2f, half: vec2f, r: f32) -> f32`, `fn portal_cover_one(p_css: vec2f, portal: vec4f, clip: vec4f, dpr: f32, grow: f32) -> f32`, `fn portal_cover_grown(p_css: vec2f, portals: array<vec4f, PORTAL_CHAIN>, clips: array<vec4f, PORTAL_CHAIN>, dpr: f32, grow: f32) -> f32`, `fn portal_cover(p_css: vec2f, portals: array<vec4f, PORTAL_CHAIN>, clips: array<vec4f, PORTAL_CHAIN>, dpr: f32) -> f32`
@@ -830,6 +833,23 @@ export interface ObjectFlux {
     readonly hover: number;
     readonly ring: number;
     readonly fade: number;
+}
+```
+
+**`ctx.lamp` — the desk's one light; and the palette `theme(palette, name)` is handed** (the
+desk's own roles; a host may hand more — VibeField's adds its pens, papers and inks):
+
+```ts
+/** The lamp over the desk in WORLD units: where it stands on the plane, and how high above it. */
+export interface Lamp {
+    readonly x: number;
+    readonly y: number;
+    readonly h: number;
+}
+/** The roles the ground paints from a product's palette, one token each, per theme. */
+export interface Palette {
+    readonly canvasBg: TokenRef;
+    readonly select: TokenRef;
 }
 ```
 

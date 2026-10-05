@@ -34,9 +34,9 @@ describe("{{title}}'s kind, judged by the kind-conformance harness", () => {
       states: (states as Record<string, Record<string, Record<string, unknown>>>)[row.type],
     });
     expect(report.verdicts.filter((v) => v.status === "refused")).toEqual([]);
-    // both playground states, each driven in idle, selected and held at every zoom, and once by night
-    expect(report.plan.fixtures).toEqual(["default", "coral"]);
-    expect(report.states).toBe(2 * (3 * report.plan.zooms.length + 1));
+    // the three playground states, each driven in idle, selected and held at every zoom, and once by night
+    expect(report.plan.fixtures).toEqual(["default", "coral", "unparsed"]);
+    expect(report.states).toBe(3 * (3 * report.plan.zooms.length + 1));
   });
 
   // What the harness cannot know is YOURS to pin: here, that a disc is picked by its round face.
@@ -59,8 +59,8 @@ describe("{{title}}'s kind, judged by the kind-conformance harness", () => {
     expect(k.hit(G, 100 + 50, 80 + 50)).toBeNull(); // in the rect, off the disc
   });
 
-  // The STILL — a Dawn frame of each state on a bare mat, held to this plugin's golden — needs ICE's host-less
-  // desk (`createStill`, VibeField's ask I30), which VibeField's pin does not carry yet. Until it does the harness
-  // READS your WGSL and never compiles it: `vibefield-plugin try <dir>` compiles and draws it in the app.
-  it.todo("its STILL — a Dawn frame of each state held to this plugin's golden (waits on the pin carrying ICE's I30)");
+  // The STILL — a Dawn frame of each state on a bare mat, held to this plugin's golden — needs a headless GPU
+  // still the kit does not carry yet (ICE's createStill, I30). Until it does the harness READS your WGSL and never
+  // compiles it: `vibefield-plugin try <dir>` compiles and draws it in the app.
+  it.todo("its STILL — a Dawn frame of each state held to this plugin's golden (when the kit carries a headless still, I30)");
 });
