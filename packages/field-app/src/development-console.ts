@@ -73,13 +73,16 @@ export function emitDeskUnavailableMarker(facts: DeskUnavailableFacts): void {
   else afterCanvasReady.push(say);
 }
 
-/** DK-5 — the relaunch heal (field/desk/desk-gpu.ts): a desk whose device never arrived at boot
- * is retried once, after `afterMs`, before any card — said with what failed. */
+/** DK-5 — the relaunch heal (field/desk/desk-gpu.ts), by its rule since DK-9: a desk whose device
+ * never arrived at boot is mounted again after `afterMs`, before any card — said with what failed and
+ * which of its kind's retries this is (`attempt` of `of`: a missing adapter 3, a refused device 1). */
 export interface DeskRetryFacts {
   readonly generation: number;
   readonly mount: number;
   readonly kind: string;
   readonly message?: string;
+  readonly attempt: number;
+  readonly of: number;
   readonly afterMs: number;
 }
 

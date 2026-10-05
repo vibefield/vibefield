@@ -13,7 +13,7 @@ import { useAppTheme } from "../theme";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
 import { feedDesk } from "./desk/desk-feed";
-import { DEVICE_RETRY_MS, deskGpu, deviceNeverArrived } from "./desk/desk-gpu";
+import { deskGpu, HEAL_DELAYS_MS, type HealKind, healDelay, healKind } from "./desk/desk-gpu";
 import { deskLook, fieldDeskLayer } from "./desk/desk-layer";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
 
@@ -29,8 +29,10 @@ import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./d
 //   the plates (a lazy module — no `fetch`, ruling 8) and the rulers' glyph atlas, once the mat is here;
 //   the status: `failed` → the unavailable card (Reload = a desk remount, a new layer on this engine);
 //     `degraded` → the status line's banner with its Reload, the desk drawing on beneath it;
-//   THE RELAUNCH HEAL (DK-5, desk-gpu.ts): the boot's first mount `failed` with no device yet is
-//     retried ONCE, after `DEVICE_RETRY_MS`, as a new mount — the card only if that fails too;
+//   THE RELAUNCH HEAL (DK-5, desk-gpu.ts) by its RULE (DK-9): a mount of the heal's chain — the
+//     boot's first and each retry it made — `failed` with no device yet is mounted again: a missing
+//     adapter up to three times over ~2 s, a refused device once; then the card. A Reload the person
+//     asked for is outside the chain and never retried;
 //   DESK_READY (ready AND the first frame presented, after CANVAS_READY) and `window.__vfDesk`.
 // The old composition — `<InfiniteCanvas>`, the GL bridge and router, the R3F portal, the GL lanes,
 // the cursor halo — left with ICE 0.14.0; `InfiniteCanvasGround` (DK-2's stub) folded in here: the
@@ -64,9 +66,13 @@ export function CanvasStage({
   const [mount, setMount] = useState(0);
   const [status, setStatus] = useState<DeskLayerStatus>({ state: "pending" });
   const remount = useCallback(() => setMount((n) => n + 1), []);
-  // The relaunch heal's one retry, per stage — per engine generation: armed until the boot uses it.
+  // The relaunch heal, per stage — per engine generation: the mounts of its chain (the boot's first,
+  // and each retry it made) and the retries each kind has spent (desk-gpu.ts `HEAL_DELAYS_MS`).
   const [retrying, setRetrying] = useState(false);
-  const retryArmedRef = useRef(true);
+  const healRef = useRef<{ chain: Set<number>; tries: Record<HealKind, number> }>({
+    chain: new Set([0]),
+    tries: { "no-adapter": 0, refused: 0 },
+  });
 
   // A new factory per engine and per remount: `<Desk>` re-boots on a new identity, never on a render.
   const layer = useMemo<LayerFactory>(() => {
@@ -128,31 +134,44 @@ export function CanvasStage({
 
     const heard = (next: DeskLayerStatus): void => {
       if (ended) return;
-      // THE RELAUNCH HEAL: the boot's device never arrived (a late GPU process answers an adapter
-      // request with null) — no card yet, no DESK_UNAVAILABLE: one new mount after a second.
-      if (mount === 0 && retryArmedRef.current && deviceNeverArrived(next, handle.perf().boot)) {
-        retryArmedRef.current = false;
+      // THE RELAUNCH HEAL: a mount of the heal's chain whose device never arrived (a late GPU process
+      // answers an adapter request with null; an adapter lost mid-request refuses its device) — no
+      // card yet, no DESK_UNAVAILABLE: a new mount after the kind's next wait, while its budget lasts.
+      const kind = healKind(next, handle.perf().boot);
+      const heal = healRef.current;
+      const afterMs =
+        kind !== null && heal.chain.has(mount) ? healDelay(kind, heal.tries[kind]) : undefined;
+      if (kind !== null && afterMs !== undefined) {
+        heal.tries[kind] += 1;
+        heal.chain.add(mount + 1);
         const failed = unavailableWords(next);
+        const attempt = heal.tries[kind];
+        const of = HEAL_DELAYS_MS[kind].length;
         setRetrying(true);
-        log.warn("renderer.desk.retrying", "The desk found no device at boot; retrying once", {
-          kind: failed?.kind ?? "refused",
+        log.warn("renderer.desk.retrying", "The desk found no device at boot; retrying", {
+          kind,
           message: failed?.detail ?? "",
           generation,
-          afterMs: DEVICE_RETRY_MS,
+          mount,
+          attempt,
+          of,
+          afterMs,
         });
         emitDeskRetryMarker({
           generation,
           mount,
-          kind: failed?.kind ?? "refused",
+          kind,
           ...(failed?.detail === undefined ? {} : { message: failed.detail }),
-          afterMs: DEVICE_RETRY_MS,
+          attempt,
+          of,
+          afterMs,
         });
         retryTimer = setTimeout(() => {
           retryTimer = null;
           setStatus({ state: "pending" });
           setRetrying(false);
           remount();
-        }, DEVICE_RETRY_MS);
+        }, afterMs);
         return;
       }
       setStatus(next);

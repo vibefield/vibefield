@@ -1221,10 +1221,12 @@ The hot-point glow and rim retire with CardShell (above).
   **any other refusal**
   (`no desk — the adapter, the device or the pipelines were refused: …`) — "The desk couldn't start
   its graphics" · "Your objects are saved in this document; reload to try again." · Reload · the
-  message. **A boot whose device never arrived** — no adapter, or a refused device, before any
-  device was in hand — is retried ONCE, a second later, before any card shows (DK-5: Chromium's GPU
-  process can be late, and an adapter asked for before it is up answers null); the card shows only
-  if that retry fails too, and a Reload is never retried. **`degraded`** (an uncaptured GPU error;
+  message. **A boot whose device never arrived** — before any device was in hand — is mounted again
+  before any card shows, as often as a retry can cure it (DK-5's heal, DK-9's rule): **no adapter**
+  three times over about two seconds (Chromium's GPU process can be late, and an adapter asked for
+  before it is up answers null), **a refused device** once (an adapter lost mid-request — a refusal
+  is otherwise deterministic for the same adapter and limits); the card shows only when those run
+  out, and a Reload the person asked for is never retried. **`degraded`** (an uncaptured GPU error;
   the desk still draws) is a banner, not the card: the status line holding ICE's message and a
   Reload until the state clears, the desk drawing on beneath it (R18). No Canvas2D fallback in v1
   (DK-D32): the state is the whole answer, and the frame around it still works.
