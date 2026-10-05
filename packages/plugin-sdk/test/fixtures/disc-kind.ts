@@ -119,6 +119,8 @@ export interface DiscBreak {
   readonly chip?: "good" | "bad";
   /** it opens (picked up into the hand) */
   readonly opens?: boolean;
+  /** it opens with these held tools (`open.tools`, ICE's HeldToolDef) — DK-10 */
+  readonly tools?: readonly unknown[];
 }
 
 export interface DiscGeometry {
@@ -310,9 +312,10 @@ export function discKind(how: DiscBreak = {}): ObjectKind<DiscGeometry, DiscReco
             colour: (how.chip === "bad" ? [Number.NaN, 0, 0] : [0.9, 0.8, 0.4]) as RGB,
           }),
         }),
-    ...(how.opens === true
+    ...(how.opens === true || how.tools !== undefined
       ? {
           open: {
+            ...(how.tools !== undefined ? { tools: how.tools } : {}),
             extent: ({
               rect,
             }: {

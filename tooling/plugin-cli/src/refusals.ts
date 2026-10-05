@@ -210,6 +210,22 @@ export const REFUSAL_CATALOG = {
       "the row does not provide `desk.object` — the desk places by what a row provides, never by its type",
     guidance: "provide `desk.object` (DESK_OBJECT) beside the row's own keys",
   },
+  "object-tool-invalid": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "one of the kind's held tools (`open.tools`) is not a tool ICE takes at definition — no id or a repeated one, no label, an unknown kind, an action with no op, a glyph it cannot draw",
+    guidance:
+      'a HeldToolDef: `{ id, label, kind: "action", run(api) }` or `{ id, label, kind: "mode" }`, a glyph a name of the bar\'s set or `{ path }` (SVG path data in the bar\'s 24-unit box) — objects.md quotes the type',
+  },
+  "object-tool-inert": {
+    check: "activation",
+    level: "refuse",
+    meaning:
+      "a held tool has an op (`run`) but no `kind` — ICE takes it as DECLARED ONLY: the bar shows it dim and never runs it",
+    guidance:
+      'give it `kind: "action"` (its op runs once when chosen) or `kind: "mode"` (the active tool)',
+  },
   "object-create-failed": {
     check: "activation",
     level: "refuse",
@@ -269,7 +285,7 @@ export const REFUSAL_CATALOG = {
     meaning:
       "the kind's WGSL was READ — its entry points and bindings — never compiled: an unresolved name or a type error passes this row (the honest gap, not a refusal)",
     guidance:
-      "nothing to do here: the still that compiles and draws a kind waits on a host-less desk ICE does not publish (VibeField's ask I30)",
+      "run `vibefield-plugin try <dir>`: the app compiles the kind on its device and draws it, and a WGSL error comes back as the compiler's own line (file:line:column) — the Dawn still waits on the pin carrying ICE's createStill (I30)",
   },
   "object-create-not-run-here": {
     check: "activation",

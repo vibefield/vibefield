@@ -22,7 +22,7 @@
 // that would compile and draw it needs a host-less desk on a given device, which ICE's published
 // entries do not expose (`createOracleDesk` builds on its unpublished mat) — VibeField's ask I30.
 
-import { createWorld } from "@vibecook/ice";
+import { createWorld, isHeldGlyph } from "@vibecook/ice";
 import {
   CONTAINABLE,
   DESK_OBJECT,
@@ -58,6 +58,8 @@ export type KindRefusalCode =
   | "object-tray-hang-missing"
   | "object-tray-category-invalid"
   | "object-provides-no-desk-object"
+  | "object-tool-invalid"
+  | "object-tool-inert"
   // the program
   | "object-create-failed"
   | "object-kit-piece-unknown"
@@ -120,6 +122,10 @@ export const KIND_EXPECTED: Readonly<Record<KindRefusalCode | KindNoteCode, stri
   "object-tray-category-invalid": `a tray category of 1–${PLUGIN_LIMITS.ID_MAX} characters — the pegboard's chip`,
   "object-provides-no-desk-object":
     "provide `desk.object` (DESK_OBJECT) — the desk places by what a row provides, never by its type",
+  "object-tool-invalid":
+    'each of `open.tools` a HeldToolDef as ICE defines it: an id unique within the tools, a label, `kind: "action"` with its op `run(api)` or `kind: "mode"`, and a glyph that is a name of the bar\'s set or `{ path }` (SVG path data in the bar\'s 24-unit box)',
+  "object-tool-inert":
+    'give the tool its kind — `kind: "action"` runs `run(api)` once when chosen, `kind: "mode"` makes it the active tool; a tool with no kind is DECLARED ONLY: the bar shows it dim and nothing ever runs it',
   "object-create-failed":
     "a create that resolves a KindPass (spawn · prepare · drawRange · dispose) from the device, format and mat it is handed",
   "object-kit-piece-unknown":
@@ -143,7 +149,7 @@ export const KIND_EXPECTED: Readonly<Record<KindRefusalCode | KindNoteCode, stri
   "state-draw-ill-formed":
     "set the pipeline your create made, and a bind group of its layout at every index, before each draw",
   "object-wgsl-not-compiled":
-    "nothing to do here: the still that compiles and draws a kind waits on a host-less desk ICE does not publish (VibeField's ask I30)",
+    "`vibefield-plugin try <dir>` compiles it: the app makes the kind on its device and draws it, and a WGSL error comes back as the compiler's own line (file:line:column) — the Dawn still waits on the pin carrying ICE's createStill (I30)",
   "object-create-not-run-here":
     "nothing to do here: the product makes the pass on a real device; this harness's ceiling is a recording one",
 };
@@ -202,6 +208,58 @@ function hangProblem(hang: unknown): string | undefined {
     if (!Array.isArray(peg) || peg.length !== 2 || !peg.every((n) => Number.isFinite(n)))
       return "hangs on a peg that is not a pair of numbers";
   return undefined;
+}
+
+/**
+ * The held bar's tools (`open.tools`, ICE's `HeldToolDef`) as ICE takes them at definition — an id unique within the
+ * tools, a label, a known kind, an action with its op, a glyph it can draw — and the one mistake ICE takes SILENTLY
+ * (DK-10): a tool with an op but no `kind` is DECLARED ONLY, shown dim and never run. The ten-minute bar's third agent
+ * wrote exactly that Roll tool — the docs said "an action or a mode" and never named the field — and nothing caught it.
+ */
+function toolProblems(kind: ObjectKind, type: string, at: string): KindVerdict[] {
+  const tools = (kind.open as { readonly tools?: unknown } | undefined)?.tools;
+  if (tools === undefined) return [];
+  const subject = "declaration";
+  const pointer = `${at}/binding/kind`;
+  if (!Array.isArray(tools))
+    return [
+      refused("object-tool-invalid", subject, `${type}'s open.tools is not a list`, { pointer }),
+    ];
+  const out: KindVerdict[] = [];
+  const ids = new Set<string>();
+  tools.forEach((tool: unknown, index: number) => {
+    const t = (typeof tool === "object" && tool !== null ? tool : {}) as Record<string, unknown>;
+    const id = typeof t["id"] === "string" ? t["id"] : "";
+    const which = `${type}'s tool ${index} ("${id || "no id"}")`;
+    const invalid = (why: string): void => {
+      out.push(refused("object-tool-invalid", subject, `${which} ${why}`, { pointer }));
+    };
+    if (id.length === 0) invalid("has no id");
+    else if (ids.has(id)) invalid("has an id another of its tools has");
+    ids.add(id);
+    if (typeof t["label"] !== "string" || t["label"].length === 0) invalid("has no label");
+    const toolKind = t["kind"];
+    if (toolKind === undefined) {
+      if (typeof t["run"] === "function")
+        out.push(
+          refused(
+            "object-tool-inert",
+            subject,
+            `${which} has an op (run) but no kind — ICE takes a tool with no kind as DECLARED ONLY: the bar shows it dim and never runs it`,
+            {
+              pointer,
+              expected: `give it \`kind: "action"\` (an op run once) or \`kind: "mode"\``,
+            },
+          ),
+        );
+    } else if (toolKind !== "action" && toolKind !== "mode")
+      invalid(`has kind "${String(toolKind)}" — a tool is an "action" or a "mode"`);
+    else if (toolKind === "action" && typeof t["run"] !== "function")
+      invalid("is an action with no op — give it run(api)");
+    if (t["glyph"] !== undefined && !isHeldGlyph(t["glyph"]))
+      invalid("has a glyph that is neither a name of the bar's set nor { path } with path data");
+  });
+  return out;
 }
 
 /** The kind a binding holds when it is a desk kind, else undefined. */
@@ -304,6 +362,7 @@ export function checkKindDeclaration(
         { pointer: `${at}/provides` },
       ),
     );
+  out.push(...toolProblems(kind, row.type, at));
   if (out.length > 0) return out;
   const hang = row.tray?.hang;
   const hangs =
@@ -768,7 +827,7 @@ async function makePass(kind: ObjectKind, gpu: RecordingGpu, budgetMs: number): 
       noted(
         "object-wgsl-not-compiled",
         "program",
-        "its WGSL was READ — its entry points, bindings and overrides — never compiled: an unresolved name or a type error passes here. The still that would compile and draw it waits on a host-less desk ICE does not publish (VibeField's ask I30)",
+        "its WGSL was READ — its entry points, bindings and overrides — never compiled: an unresolved name or a type error passes here. `vibefield-plugin try <dir>` compiles and draws it on the host's device",
       ),
     );
   return { pass, drawable: problems.length === 0 ? pass : undefined, verdicts };

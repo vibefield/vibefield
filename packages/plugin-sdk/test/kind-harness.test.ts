@@ -174,6 +174,46 @@ describe("(a) the declaration — each refusal earned by a fixture broken that w
   });
 });
 
+describe("(a) the held tools — ICE's HeldToolDef, and the one mistake ICE takes silently (DK-10)", () => {
+  const roll = { id: "vendor.fixture.roll", label: "Roll", glyph: { path: "M4 4h16v16H4z" } };
+
+  it("object-tool-inert: a tool with an op but no kind — the ten-minute bar's Roll tool, which the bar would show dim and never run", async () => {
+    const r = await run({ tools: [{ ...roll, run: () => {} }] });
+    expect(refusals(r)).toEqual(["object-tool-inert"]);
+    expect(refusal(r, "object-tool-inert")?.detail).toContain("DECLARED ONLY");
+    expect(refusal(r, "object-tool-inert")?.expected).toContain('kind: "action"');
+  });
+
+  it("object-tool-invalid: what ICE refuses at definition — an action with no op, an unknown kind, a repeated id, no label, a glyph that is no drawing", async () => {
+    const r = await run({
+      tools: [
+        { ...roll, kind: "action" },
+        { ...roll, id: "vendor.fixture.spin", kind: "spin", run: () => {} },
+        { ...roll, kind: "mode" },
+        { id: "vendor.fixture.nolabel", kind: "mode" },
+        { ...roll, id: "vendor.fixture.blank", kind: "mode", glyph: { path: "" } },
+      ],
+    });
+    const details = r.verdicts.filter((v) => v.code === "object-tool-invalid").map((v) => v.detail);
+    expect(refusals(r)).toEqual(Array(5).fill("object-tool-invalid"));
+    expect(details.join(" | ")).toContain("is an action with no op");
+    expect(details.join(" | ")).toContain('has kind "spin"');
+    expect(details.join(" | ")).toContain("has an id another of its tools has");
+    expect(details.join(" | ")).toContain("has no label");
+    expect(details.join(" | ")).toContain("has a glyph that is neither");
+  });
+
+  it("a kind's tools as ICE takes them pass — an action with its op, a mode, a glyph named or drawn", async () => {
+    const r = await run({
+      tools: [
+        { ...roll, kind: "action", run: () => {} },
+        { id: "vendor.fixture.pen", label: "Pen", kind: "mode", glyph: "pen", keys: ["1"] },
+      ],
+    });
+    expect(refusals(r)).toEqual([]);
+  });
+});
+
 describe("(b) the program on a recording device — each refusal earned", () => {
   it("object-create-failed: a create that rejects, or resolves no pass", async () => {
     expect(refusals(await run({ create: "throws" }))).toEqual(["object-create-failed"]);
