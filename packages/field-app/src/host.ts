@@ -205,6 +205,14 @@ export interface FieldHost {
   /** UA-5 — attach to an existing user (UA-D15). Switching to the user already
    * attached is main's no-op. Same reload race as `usersCreate`. */
   readonly usersSwitch?: (params: { userId: string }) => Promise<FieldUserProfile>;
+  /** DK-9 — replace THIS window's renderer: a plugin's kinds changed in a way the
+   * realm cannot take (an update's new code or schema — ICE's catalog cannot
+   * re-define a type in a realm), so a new document must carry them. Main reloads
+   * the page, which reopens its own board (`vf-window-doc`) with them; the page's
+   * own reload is a navigation the shell refuses outside dev. Save the board FIRST.
+   * Same reload race as `usersCreate`. Optional: a browser harness has no main, and
+   * reloads the page itself (plugin-host/replace-renderer.ts). */
+  readonly replaceRenderer?: (reason: "plugin-kinds") => Promise<unknown>;
   /** SNAP-D3 — the native screenshot helper, through main. Optional like the
    * users doors: a browser harness has no helper to spawn, and a surface that
    * offers the capture renders disabled and says so. The answer is the

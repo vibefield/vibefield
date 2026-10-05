@@ -17,6 +17,8 @@ import {
   isUnambiguousLinkText,
   ProductInfo,
   RendererParticipantIdentity,
+  RendererReplaceRequest,
+  RendererReplaceResult,
   resolveTheme,
   SHELL_INTERNAL_PROVIDER_METHODS,
   SHELL_PROVIDER_METHODS,
@@ -214,7 +216,7 @@ describe("Close protocol — CloseReason / CloseRequest / CloseResult (ESR §6.4
 });
 
 describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => {
-  it("exposes exactly the twenty channel keys, in order", () => {
+  it("exposes exactly the twenty-one channel keys, in order", () => {
     expect(Object.keys(IPC_CHANNELS)).toEqual([
       "windowBootstrap",
       "prepareClose",
@@ -238,6 +240,7 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       "screenshotCapture", // SNAP-D3 — the native screenshot helper, one capture at a time
       "screenshotResult", // SNAP-3 — main → renderer: the View menu's capture, told to the page
       "screenshotPreview",
+      "rendererReplace", // DK-9 — the window's renderer replaced at its own asking (a plugin's kinds)
     ]);
   });
 
@@ -263,7 +266,18 @@ describe("IPC_CHANNELS — the CLOSED contextBridge surface (ESR §6.2)", () => 
       screenshotCapture: "vibefield:screenshot:capture",
       screenshotResult: "vibefield:screenshot:result",
       screenshotPreview: "vibefield:screenshot:preview",
+      rendererReplace: "vibefield:shell:renderer-replace",
     });
+  });
+
+  it("the renderer replacement door (DK-9) names its reason and nothing else does", () => {
+    expect(RendererReplaceRequest.parse({ reason: "plugin-kinds" })).toEqual({
+      reason: "plugin-kinds",
+    });
+    expect(() => RendererReplaceRequest.parse({})).toThrow();
+    expect(() => RendererReplaceRequest.parse({ reason: "because" })).toThrow();
+    expect(RendererReplaceResult.parse({ replacing: true })).toEqual({ replacing: true });
+    expect(() => RendererReplaceResult.parse({ replacing: false })).toThrow();
   });
 });
 

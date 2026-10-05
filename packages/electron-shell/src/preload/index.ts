@@ -9,6 +9,10 @@ import {
   type FrameZoomAct,
   IPC_CHANNELS,
   LIVE_SURFACE_PORT_BRIDGE_MESSAGE_V1,
+  type RendererReplaceReason,
+  RendererReplaceRequest,
+  type RendererReplaceResult,
+  RendererReplaceResult as RendererReplaceResultSchema,
   ScreenshotCaptureRequest,
   type ScreenshotCaptureResult,
   ScreenshotCaptureResult as ScreenshotCaptureResultSchema,
@@ -310,6 +314,16 @@ contextBridge.exposeInMainWorld("vibefield", {
   usersSwitch: async (params: UsersSwitchParams): Promise<UserRecord> =>
     UserRecordSchema.parse(
       await invokeInHandlerWords(IPC_CHANNELS.usersSwitch, UsersSwitchParams.parse(params)),
+    ),
+  /** DK-9 — replace THIS window's renderer (a plugin's kinds changed in a way the
+   * page's realm cannot take): main reloads the page, which reopens its own board.
+   * The page saves its board BEFORE asking. Same reload race as `usersCreate`. */
+  replaceRenderer: async (reason: RendererReplaceReason): Promise<RendererReplaceResult> =>
+    RendererReplaceResultSchema.parse(
+      await ipcRenderer.invoke(
+        IPC_CHANNELS.rendererReplace,
+        RendererReplaceRequest.parse({ reason }),
+      ),
     ),
   onPrepareClose: (handler: (requestId: string) => void): (() => void) => {
     const listener = (_event: Electron.IpcRendererEvent, raw: unknown) => {

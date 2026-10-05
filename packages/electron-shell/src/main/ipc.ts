@@ -2,6 +2,8 @@ import {
   FrameViewSetRequest,
   FrameViewState as FrameViewStateSchema,
   IPC_CHANNELS,
+  RendererReplaceRequest,
+  RendererReplaceResult,
   type ScreenshotCaptureResult,
   ScreenshotPreviewResult,
   ThemeSetRequest,
@@ -192,6 +194,45 @@ export function registerViewSet(
     }
     const request = FrameViewSetRequest.parse(raw);
     return FrameViewStateSchema.parse(views.ensure(event.sender).set(request.view));
+  });
+}
+
+/** DK-9 — THE WINDOW'S RENDERER REPLACED AT ITS OWN ASKING (the runtime with kinds: a
+ * plugin update whose kinds the page's realm defined otherwise — ICE's catalog cannot
+ * re-define a type in a realm — is carried by a new document, which reopens the
+ * window's board, `vf-window-doc`, with the new kinds). The page saves its board
+ * FIRST and then asks; main answers and reloads it FROM MAIN — a page's own
+ * `location.reload()` is a navigation the contents policy refuses in every mode but
+ * dev (security-policy.ts `decideNavigation`), and a main-made reload is the users
+ * switch's road (UA-D15): bootstrap's `did-start-navigation` retires the old
+ * generation's token before the new document mints. Same registered-sender gate as
+ * every door; the answer RACES the reload, as the users doors' do. */
+export function registerRendererReplace(
+  registry: WindowRegistry,
+  logger?: Logger,
+  reload: (sender: WebContents) => void = (sender) => {
+    setImmediate(() => {
+      if (!sender.isDestroyed()) sender.reload();
+    });
+  },
+): void {
+  ipcMain.handle(IPC_CHANNELS.rendererReplace, async (event, raw: unknown) => {
+    if (!registry.owns(event.sender)) {
+      logger?.warn(
+        "desktop.ipc.renderer_replace_refused",
+        "Electron refused a renderer replacement from an unregistered sender",
+        { webContentsId: event.sender.id },
+      );
+      throw new Error("renderer replace refused: unregistered sender");
+    }
+    const request = RendererReplaceRequest.parse(raw);
+    logger?.info(
+      "desktop.ipc.renderer_replace",
+      "A window's renderer is replaced at its own asking: main reloads it",
+      { webContentsId: event.sender.id, reason: request.reason },
+    );
+    reload(event.sender);
+    return RendererReplaceResult.parse({ replacing: true });
   });
 }
 

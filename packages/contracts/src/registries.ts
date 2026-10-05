@@ -1195,4 +1195,12 @@ export const IPC_CHANNELS = {
   screenshotResult: "vibefield:screenshot:result",
   /** A registered product window asks main to preview one retained still. */
   screenshotPreview: "vibefield:screenshot:preview",
+  /** renderer → main invoke: RendererReplaceRequest → RendererReplaceResult — the
+   * window's renderer REPLACED at its own asking (DK-9, the runtime with kinds: a
+   * plugin update whose kinds this realm defined otherwise — ICE's catalog cannot
+   * re-define a type in a realm — is carried by a new document, which reopens the
+   * window's board with them). The page saves its board first; main answers, then
+   * reloads the page FROM MAIN: a page's own reload is a navigation the contents
+   * policy refuses outside dev. The answer races the reload, as the users doors' do. */
+  rendererReplace: "vibefield:shell:renderer-replace",
 } as const;

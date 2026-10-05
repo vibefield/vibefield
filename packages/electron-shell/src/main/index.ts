@@ -60,6 +60,7 @@ import { installLocalDiagnosticsPort } from "./diagnostics-port";
 import { buildSupervisor, dataRoot } from "./fieldd";
 import { FielddDaemonBootFence, FielddHandleCoordinator } from "./fieldd-handle-coordinator";
 import {
+  registerRendererReplace,
   registerScreenshotCapture,
   registerScreenshotPreview,
   registerThemeSet,
@@ -1218,6 +1219,8 @@ async function main(
     onChanged: (state) => redrawMenu({ view: state.view }),
   });
   registerViewSet(registry, viewStates, logger.child({ component: "ipc.view" }));
+  // DK-9: a window replaces its renderer at its own asking (a plugin's kinds changed)
+  registerRendererReplace(registry, logger.child({ component: "ipc.renderer" }));
 
   // FR-4: main owns the app's one theme (FC-D5) — Light · Dark · Auto, kept in
   // the shell's own profile, Auto following the OS through `nativeTheme`, and

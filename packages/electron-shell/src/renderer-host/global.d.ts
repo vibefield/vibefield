@@ -86,6 +86,10 @@ declare global {
        * callers fire-and-forget and gate nothing on it beyond disabling the
        * control they pressed. */
       usersSwitch(params: { userId: string }): Promise<BridgeUserRecord>;
+      /** DK-9 — replace THIS window's renderer: main reloads the page, which reopens
+       * its own board with a plugin's new kinds. The page saves its board first.
+       * RELOAD RACE — see `usersSwitch`. */
+      replaceRenderer(reason: "plugin-kinds"): Promise<{ replacing: true }>;
       onPrepareClose(handler: (requestId: string) => void): () => void;
       completeClose(result: { requestId: string; ok: boolean; error?: string }): void;
       onShellCommand(handler: (command: ShellCommand) => void): () => void;

@@ -211,6 +211,21 @@ export type ThemeState = z.infer<typeof ThemeState>;
 export const ThemeSetRequest = z.object({ preference: ThemePreference }).passthrough();
 export type ThemeSetRequest = z.infer<typeof ThemeSetRequest>;
 
+/** Why a window asks main to replace its renderer (DK-9), by name. One reason today:
+ * a plugin's KINDS changed in a way this realm cannot take — an update's new code or
+ * schema, or a type a board's ghost stub defined faceless (field-app window-kinds.ts). */
+export const RendererReplaceReason = z.enum(["plugin-kinds"]);
+export type RendererReplaceReason = z.infer<typeof RendererReplaceReason>;
+
+/** renderer → main: replace THIS window's renderer (`IPC_CHANNELS.rendererReplace`). */
+export const RendererReplaceRequest = z.object({ reason: RendererReplaceReason }).passthrough();
+export type RendererReplaceRequest = z.infer<typeof RendererReplaceRequest>;
+
+/** main → renderer: the replacement is under way — main reloads the page right after
+ * this answer, which the page may never see. */
+export const RendererReplaceResult = z.object({ replacing: z.literal(true) }).passthrough();
+export type RendererReplaceResult = z.infer<typeof RendererReplaceResult>;
+
 /** Small host fact used only to describe platform-specific desktop behavior in
  * Settings. Unknown Electron platforms collapse to `other` at the preload
  * boundary rather than leaking Node's process object into the renderer. */

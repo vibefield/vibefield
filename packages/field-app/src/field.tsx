@@ -27,7 +27,7 @@ import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import type { FrameSurface } from "./frame/frame-surface";
 import { useCovered } from "./frame/view-state";
-import type { FieldUserProfile } from "./host";
+import { type FieldUserProfile, peekHost } from "./host";
 import { useReactiveResource } from "./hud/use-reactive";
 import { getRendererLogger } from "./logging";
 import { setPluginClientBackend } from "./plugin-host/plugin-client";
@@ -37,6 +37,7 @@ import {
   usePluginRegistryFeed,
 } from "./plugin-host/plugin-registry-store";
 import { RendererWindowController } from "./plugin-host/renderer-controller";
+import { replaceThisRenderer } from "./plugin-host/replace-renderer";
 import {
   type PreparedRendererPlugins,
   type StagedLoaderDeps,
@@ -127,18 +128,15 @@ export function FieldView({
       },
       remountGeneration: async (reason) => await manager.remount(reason),
       replaceRenderer: () => {
-        // the board saved first (its lease closed, its lane drained) — then a NEW realm, which stages
-        // the approved set and reopens this window's own board (`vf-window-doc`) with the new kinds
-        void manager
-          .shutdown()
-          .catch((error: unknown) =>
-            log.error(
-              "renderer.plugins.replace_save_failed",
-              "The board did not save first",
-              error,
-            ),
-          )
-          .finally(() => globalThis.location?.reload());
+        // the board saved first (its lease closed, its lane drained) — then a NEW realm, made by the
+        // shell (main reloads the page: its own reload is refused outside dev), which stages the
+        // approved set and reopens this window's own board (`vf-window-doc`) with the new kinds
+        void replaceThisRenderer({
+          shutdown: () => manager.shutdown(),
+          door: peekHost()?.replaceRenderer,
+          reload: () => globalThis.location?.reload(),
+          log,
+        });
       },
       updating: (pluginId) => plugins.runtime?.updating(pluginId) ?? false,
       logger: log,
@@ -189,7 +187,8 @@ export function FieldView({
     void manager.boot();
   }, [manager]);
 
-  const stagedPlugins = plugins?.staged.length ?? 0;
+  // the plugins staged NOW: the boot's, and any a mid-session enable staged (DK-9) — re-read per registry
+  const stagedPlugins = (kinds?.current() ?? plugins)?.staged.length ?? 0;
   useEffect(() => {
     // The console marker is a smoke adapter, so make its runtime census a
     // quiescent fact: the earlier reconcile effect may have entered its first
