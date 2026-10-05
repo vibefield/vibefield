@@ -18,8 +18,9 @@ import "./PluginSurfaceSlot.css";
 // taking chrome down; an empty slot renders nothing (no attention = nothing to
 // show, DESIGN.md §8 empty-states — a HUD slot is not a content area to fill).
 
-// The surface's own boundary (§11.4 idiom, mirrored from faces.tsx's
-// WidgetFaceBoundary): a thrown surface render is contained to that surface.
+// The surface's own boundary (§11.4 idiom — the widget faces' boundary it was
+// mirrored from retired with them at DK-8): a thrown surface render is
+// contained to that surface.
 class SurfaceErrorBoundary extends Component<
   { surfaceId: string; children: ReactNode },
   { error: string | null }

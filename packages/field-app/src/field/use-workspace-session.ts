@@ -144,8 +144,10 @@ export function useWorkspaceSession(
   );
   // P3c: every PRESENT plugin registers unconditionally (ICE's catalog is
   // process-permanent — the only way enable/disable round-trips in-session);
-  // disabled plugins swap FACES live (faces.tsx), never registrations. The
-  // registry is therefore stable for the whole mount again.
+  // disabling a plugin never changes registrations (what a disabled plugin's
+  // kinds draw is DK-9's; the widget-face swapper, faces.tsx, retired with
+  // `contributes.widgets` at DK-8). The registry is therefore stable for the
+  // whole mount again.
   const registry = useMemo(() => buildRegistry(plugins), [plugins]);
   // Ghost stubs (§12.4 absent case): the pending doc's envelope header names
   // every widget type + pack version pre-open; types NO pack of this engine

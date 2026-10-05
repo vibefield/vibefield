@@ -22,8 +22,8 @@ import {
 const RETRIES = 3;
 
 /** The object types a board should carry the packs of: the desk's kinds, and every registered plugin's object
- * kinds unless its record says it is disabled — no snapshot yet (the daemon away) disables nothing, as the faces
- * read it (plugin-host/faces.tsx). A legacy `widgets` row is no object: it places nowhere on the desk. */
+ * kinds unless its record says it is disabled — no snapshot yet (the daemon away) disables nothing. (DK-8: the
+ * widget rows this once skipped — a widget placed nowhere on the desk — retired with `contributes.widgets`.) */
 export function capabilityTypes(
   registry: PluginRegistry<WidgetType>,
   snapshot: PluginRegistrySnapshot | null,

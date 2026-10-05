@@ -63,7 +63,7 @@ export function StatusSection(): ReactElement {
             description="Create a field to begin."
           />
         </Specimen>
-        <Specimen title="Unavailable" source="plugin-host/faces.tsx">
+        <Specimen title="Unavailable" source="field/desk/DeskUnavailableView.tsx">
           <UnavailableState
             title="Plugin unavailable"
             description="The card is kept. Enable Notes to restore it."

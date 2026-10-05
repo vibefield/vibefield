@@ -483,7 +483,6 @@ describe("UI system ownership boundaries", () => {
       "hud/WidgetTray.tsx",
       "boot/onboarding/wizard-ui.tsx",
       "godview/GodviewMonitor.tsx",
-      "plugin-host/faces.tsx",
       "frame/ViewFrame.tsx",
       "frame/ViewsTrack.tsx",
       "frame/ViewCover.tsx",
