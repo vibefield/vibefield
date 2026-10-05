@@ -11,6 +11,11 @@
 // DK-4 — PHASE 2'S WITNESS (plan §9): a fresh board seeded with the desk's six
 // converges across TWO TABS through fieldd — a note typed in tab A appears in
 // tab B's desk, a mini mat moved in B lands in A, and the two hold one board.
+//
+// DK-8 — THE COMMENT PAD'S (DK-D14): the product's first board carries the six
+// and VibeField's own kind; a line written on the pad in A appears in B's pad, a
+// line written in B lands in A, and the two hold one board — the pad's ink is
+// one durable cell, committed once per session, like the note's.
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -35,6 +40,7 @@ import { DOC_SYNC_RECORD, LAYOUT, pipeEndpointFor, SOCKETS } from "@vibefield/co
 import { bootstrap, type FielddDaemon } from "@vibefield/fieldd";
 import { MockMgmtServer } from "@vibefield/fieldd/testing";
 import { FielddClient } from "@vibefield/fieldd-client";
+import { COMMENT_PAD_TYPE, createPadTyping, type PadCell } from "@vibefield/plugin-comment-pad";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { getBoardStatus } from "../src/board-status";
@@ -198,62 +204,84 @@ function stateOf(session: DocSession): Record<string, unknown> {
   );
 }
 
+/** Two tabs on ONE fresh first-run board through a real fieldd: tab A is the window (the real DocManager,
+ * lane and persistence, the board seeded — the desk's six and the comment pad); tab B is a peer over fieldd's
+ * doc-sync exchange — it opens what fieldd holds, its records reach fieldd as a sync lane hands them
+ * (`applyRemoteRecord`), and it asks fieldd for what it lacks by its version (`hostAnswer`). */
+async function twoTabs() {
+  const daemon = await stack();
+  const client = new FielddClient({
+    url: `ws://127.0.0.1:${daemon.controlPort}`,
+    token: daemon.shellToken,
+    clientKind: "debug",
+  });
+  client.connect();
+  cleanup.push(() => client.close());
+
+  // TAB A — the window: the real DocManager, lane and persistence, a FRESH first-run board seeded
+  // with the desk's six and the comment pad.
+  const manager = new DocManager(client, { timeoutMs: 5_000 });
+  await manager.boot();
+  const pending = manager.getState().pending;
+  if (pending === null || pending.lane == null) throw new Error("no pending session");
+  expect(pending.seed).toBe(true);
+  expect(pending.initialBytes).toBeNull(); // a fresh board, made on the desk
+  const a = createFieldEngine(buildRegistry());
+  cleanup.push(() => a.dispose());
+  const sessionA = a.docs.create();
+  await seedField(a, sessionA);
+  a.world.sync();
+  manager.contentApplied(pending.generation);
+  await until(() => manager.getState().phase === "ready", "the manager to be ready");
+  const unbind = bindPersistence({ ce: a, manager, pending, lane: pending.lane });
+  cleanup.push(() => unbind());
+  const docId = pending.docId;
+  await until(async () => (await daemon.docs.readDoc(docId)) !== null, "A's first save");
+
+  // TAB B — the other tab, a peer over fieldd's doc-sync exchange: it opens what fieldd holds, its
+  // records reach fieldd as a sync lane hands them (`applyRemoteRecord`), and it asks fieldd for
+  // what it lacks by its version (`hostAnswer` — the VERSION record's answer).
+  const stored = await daemon.docs.readDoc(docId);
+  if (stored === null) throw new Error("nothing stored");
+  const b = createFieldEngine(buildRegistry());
+  cleanup.push(() => b.dispose());
+  const opened = b.docs.open(stored.bytes);
+  if (!opened.ok) throw new Error(opened.reason);
+  const sessionB = opened.session;
+  for (const update of stored.updates) sessionB.applyRemote(update);
+  b.world.sync();
+  b.step(16); // the facade judges a board an applied record touched at its next publish
+  const seeded = Object.fromEntries(SEED_TYPES.map((type) => [type, 1]));
+  expect(deskCensus(a)).toEqual(seeded);
+  expect(deskCensus(b)).toEqual(seeded);
+  const pull = async (): Promise<void> => {
+    const answer = await daemon.docs.hostAnswer(docId, {
+      version: versionOf(sessionB),
+      hasCheckpoint: true,
+      baseEpoch: 0,
+    });
+    if (answer?.update != null) sessionB.applyRemote(answer.update);
+    b.world.sync();
+  };
+
+  /** B's records out to fieldd, as a doc-sync lane hands them. */
+  const send = async (outbound: readonly Uint8Array[]): Promise<void> => {
+    for (const payload of outbound) {
+      const outcome = await daemon.docs.applyRemoteRecord(docId, {
+        kind: DOC_SYNC_RECORD.UPDATE,
+        meta: { baseEpoch: 0, engineSchema: ENGINE_SCHEMA_VERSION, savedAt: Date.now() },
+        payload,
+      });
+      expect(outcome.applied).toBe(true);
+    }
+  };
+  return { daemon, manager, a, b, sessionA, sessionB, seeded, pull, send };
+}
+
 describe("Phase 2's witness — a fresh board converges across two tabs through fieldd (DK-4)", () => {
   it("a note typed in A appears in B's desk, a mini mat moved in B lands in A, and the two hold one board", async () => {
-    const daemon = await stack();
-    const client = new FielddClient({
-      url: `ws://127.0.0.1:${daemon.controlPort}`,
-      token: daemon.shellToken,
-      clientKind: "debug",
-    });
-    client.connect();
-    cleanup.push(() => client.close());
-
-    // TAB A — the window: the real DocManager, lane and persistence, a FRESH first-run board seeded
-    // with the desk's six.
-    const manager = new DocManager(client, { timeoutMs: 5_000 });
-    await manager.boot();
-    const pending = manager.getState().pending;
-    if (pending === null || pending.lane == null) throw new Error("no pending session");
-    expect(pending.seed).toBe(true);
-    expect(pending.initialBytes).toBeNull(); // a fresh board, made on the desk
-    const a = createFieldEngine(buildRegistry());
-    cleanup.push(() => a.dispose());
-    const sessionA = a.docs.create();
-    await seedField(a, sessionA);
-    a.world.sync();
-    manager.contentApplied(pending.generation);
-    await until(() => manager.getState().phase === "ready", "the manager to be ready");
-    const unbind = bindPersistence({ ce: a, manager, pending, lane: pending.lane });
-    cleanup.push(() => unbind());
-    const docId = pending.docId;
-    await until(async () => (await daemon.docs.readDoc(docId)) !== null, "A's first save");
-
-    // TAB B — the other tab, a peer over fieldd's doc-sync exchange: it opens what fieldd holds, its
-    // records reach fieldd as a sync lane hands them (`applyRemoteRecord`), and it asks fieldd for
-    // what it lacks by its version (`hostAnswer` — the VERSION record's answer).
-    const stored = await daemon.docs.readDoc(docId);
-    if (stored === null) throw new Error("nothing stored");
-    const b = createFieldEngine(buildRegistry());
-    cleanup.push(() => b.dispose());
-    const opened = b.docs.open(stored.bytes);
-    if (!opened.ok) throw new Error(opened.reason);
-    const sessionB = opened.session;
-    for (const update of stored.updates) sessionB.applyRemote(update);
-    b.world.sync();
-    b.step(16); // the facade judges a board an applied record touched at its next publish
-    const six = Object.fromEntries(SEED_TYPES.map((type) => [type, 1]));
-    expect(deskCensus(a)).toEqual(six);
-    expect(deskCensus(b)).toEqual(six);
-    const pull = async (): Promise<void> => {
-      const answer = await daemon.docs.hostAnswer(docId, {
-        version: versionOf(sessionB),
-        hasCheckpoint: true,
-        baseEpoch: 0,
-      });
-      if (answer?.update != null) sessionB.applyRemote(answer.update);
-      b.world.sync();
-    };
+    const { daemon, manager, a, b, sessionA, sessionB, seeded, pull, send } = await twoTabs();
+    void daemon;
 
     // 1. A NOTE TYPED IN A — through the note kind's own typing session (ICE's `createNoteTyping`:
     //    the claim, the live keystrokes, ONE commit at the session's end) — APPEARS IN B'S DESK.
@@ -289,14 +317,7 @@ describe("Phase 2's witness — a fresh board converges across two tabs through 
     b.world.sync();
     await until(() => outbound.length > 0, "B's move on its way out");
     offOut();
-    for (const payload of outbound) {
-      const outcome = await daemon.docs.applyRemoteRecord(docId, {
-        kind: DOC_SYNC_RECORD.UPDATE,
-        meta: { baseEpoch: 0, engineSchema: ENGINE_SCHEMA_VERSION, savedAt: Date.now() },
-        payload,
-      });
-      expect(outcome.applied).toBe(true);
-    }
+    await send(outbound);
     const matA = only(a, MINIMAT_TYPE);
     await until(() => {
       a.world.sync(); // the window's lane pushed it; the binding drains inbound on sync
@@ -304,16 +325,91 @@ describe("Phase 2's witness — a fresh board converges across two tabs through 
       return at?.x === to.x && at?.y === to.y;
     }, "B's move in A's desk");
 
-    // 3. ONE BOARD: what the two tabs hold is the same — the six, the typing, the move.
+    // 3. ONE BOARD: what the two tabs hold is the same — the seed, the typing, the move.
     await until(async () => {
       await pull();
       return JSON.stringify(stateOf(sessionA)) === JSON.stringify(stateOf(sessionB));
     }, "the two tabs to converge");
     expect(stateOf(sessionB)).toEqual(stateOf(sessionA));
-    expect(deskCensus(a)).toEqual(six);
-    expect(deskCensus(b)).toEqual(six);
+    expect(deskCensus(a)).toEqual(seeded);
+    expect(deskCensus(b)).toEqual(seeded);
     expect(a.world.get(noteA, NOTE_INK)?.text).toBe("typed in A");
     expect(b.world.get(matB, Position)).toEqual(to);
+    expect(getBoardStatus().state).not.toBe("quarantined");
+    await manager.shutdown();
+  });
+});
+
+/** The comment pad's two cells on a tab's desk — `ink` (`{ text, seeds }`) and `props` — from the object the host
+ * compiled (`buildRegistry`'s `defineObject`, process-wide like every prefab). */
+function padCells(): { ink: PadCell; props: PadCell } {
+  const object = buildRegistry().allWidgets().get(COMMENT_PAD_TYPE);
+  const ink = object?.groups.find((g) => g.name === "ink")?.component;
+  const props = object?.groups.find((g) => g.name === "props")?.component;
+  if (ink === undefined || props === undefined)
+    throw new Error("the comment pad is not registered");
+  return { ink, props };
+}
+
+/** A line written on a pad as the desk's one editor writes it: the pad's own typing SESSION
+ * (`createPadTyping` — the draft kept off the document, ONE transaction at the session's end). */
+function write(ce: CanvasEngine, pad: Entity, lines: readonly string[]): void {
+  const { ink, props } = padCells();
+  const typing = createPadTyping({
+    world: ce.world,
+    docs: ce.docs,
+    ink,
+    props,
+    writing: () => undefined,
+  });
+  expect(typing.begin(pad)).toBe(true);
+  for (const line of lines) typing.input(line);
+  typing.end();
+}
+
+const padText = (ce: CanvasEngine, pad: Entity): string | undefined =>
+  (ce.world.get(pad, padCells().ink) as { text?: string } | undefined)?.text;
+
+describe("the comment pad converges across two tabs through fieldd (DK-8, DK-D14)", () => {
+  it("a line written on the pad in A appears in B's pad, a line written in B lands in A, and the two hold one board", async () => {
+    const { manager, a, b, sessionA, sessionB, seeded, pull, send } = await twoTabs();
+    // the product's first board carries VibeField's own kind beside ICE's six — one pad, two tabs
+    expect(seeded[COMMENT_PAD_TYPE]).toBe(1);
+    const padA = only(a, COMMENT_PAD_TYPE);
+    const padB = only(b, COMMENT_PAD_TYPE);
+    expect(sessionB.store.keyOf(padB)).toBe(sessionA.store.keyOf(padA));
+
+    // 1. A LINE WRITTEN IN A — the session's keystrokes stay A's draft; its end is ONE commit, which A's
+    //    persistence carries to fieldd — APPEARS IN B'S PAD.
+    write(a, padA, ["a", "a line", "a line from A"]);
+    expect(padText(a, padA)).toBe("a line from A");
+    await until(async () => {
+      await pull();
+      return padText(b, padB) === "a line from A";
+    }, "A's line in B's pad");
+
+    // 2. A LINE WRITTEN IN B — its commit leaves B as a sync lane hands it to fieldd — LANDS IN A.
+    const outbound: Uint8Array[] = [];
+    const offOut = sessionB.store.subscribeOutbound((bytes) => outbound.push(bytes.slice()));
+    write(b, padB, ["a line from A, and one from B"]);
+    b.world.sync();
+    await until(() => outbound.length > 0, "B's line on its way out");
+    offOut();
+    await send(outbound);
+    await until(() => {
+      a.world.sync(); // the window's lane pushed it; the binding drains inbound on sync
+      return padText(a, padA) === "a line from A, and one from B";
+    }, "B's line in A's pad");
+
+    // 3. ONE BOARD: the seed and the pad's writing, the same in both tabs.
+    await until(async () => {
+      await pull();
+      return JSON.stringify(stateOf(sessionA)) === JSON.stringify(stateOf(sessionB));
+    }, "the two tabs to converge");
+    expect(stateOf(sessionB)).toEqual(stateOf(sessionA));
+    expect(deskCensus(a)).toEqual(seeded);
+    expect(deskCensus(b)).toEqual(seeded);
+    expect(padText(b, padB)).toBe("a line from A, and one from B");
     expect(getBoardStatus().state).not.toBe("quarantined");
     await manager.shutdown();
   });
