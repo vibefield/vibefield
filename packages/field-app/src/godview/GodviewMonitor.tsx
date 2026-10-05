@@ -387,7 +387,7 @@ export function GodviewMonitor({
   // MV-D19 — the view host's stage: the same measurement the CSS variables
   // below publish, as plain data. The legacy views keep reading the variables
   // and the chrome's rects (insets are advisory, `design-mv.md` §5); a ported
-  // view will read this instead.
+  // view reads this instead (MV-4: the list's band and gutter are its insets).
   const [stageGeometry, setStageGeometry] = useState<StageGeometry>(EMPTY_STAGE);
   const reducedMotion =
     typeof window !== "undefined" && typeof window.matchMedia === "function"
@@ -398,9 +398,10 @@ export function GodviewMonitor({
     [theme, palette, reducedMotion],
   );
 
-  // Views that lay out in flow clear the chrome with these two insets (the
-  // list's padding reads both); the swarm instead reads the chrome elements'
-  // rects directly and steers bodies around them.
+  // Views that lay out in flow clear the chrome with these two insets — the
+  // list as the stage's `insets.left` and `insets.top` since MV-4 (M58), the
+  // timeline as the two variables until it ports; the swarm instead reads the
+  // chrome elements' rects directly and steers bodies around them.
   //
   // The RIGHT inset is the package's own idea (`monitor/chrome.ts`): the usage
   // column down the left edge is host chrome, and a view that cares finds it
@@ -430,10 +431,11 @@ export function GodviewMonitor({
       stage.style.setProperty("--vf-monitor-chrome-right", `${chromeRight}px`);
       // A strip with nothing to say takes no room: it publishes 0, and the
       // view's own band then measures from the stage's top exactly as before.
-      // The GAP is not published — `godview.css` adds the package's own band to
-      // whatever this says, so no new spacing number is invented here
-      // (docs/UI_SYSTEM.md: a visual constant belongs in DESIGN.md and the
-      // token sheet, never loose in a component).
+      // The GAP is not published — the list's own stylesheet adds its band to
+      // the inset, and `godview.css` adds the same band for the timeline, so no
+      // new spacing number is invented here (docs/UI_SYSTEM.md: a visual
+      // constant belongs in DESIGN.md and the token sheet, never loose in a
+      // component).
       //
       // "Nothing to say" is read off the HEIGHT, not off the child count: the
       // strip always carries its `aria-live` acknowledgement span, empty or

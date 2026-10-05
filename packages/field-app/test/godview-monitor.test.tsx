@@ -29,9 +29,10 @@
  * workspace's copy that the package would never have called.
  */
 
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
+import { MONITOR_SKIN } from "@vibecook/puppeteer-view-sdk";
 import {
   type AccountUsagePort,
   type AgentMonitorProps,
@@ -384,7 +385,10 @@ describe("the monitor stage", () => {
   // package's toolbar 11px down too, because the reference host has no claims
   // to make room for — so the two printed over each other on James's
   // 2026-09-13 pass. The fix publishes the strip's measured bottom and the
-  // flow view's band starts from there; these rows hold that seam.
+  // flow view's band starts from there; these rows hold that seam. Since MV-4
+  // the list reads it as the stage's top inset (M58) — the view host hands it
+  // the measurement and the list's own stylesheet adds its band — so the rows
+  // read the list's own property; the variable stays for the timeline.
   //
   // Every rect in happy-dom is zero, so the geometry is FED here rather than
   // laid out. That is the honest shape for this claim anyway: what is under
@@ -419,9 +423,14 @@ describe("the monitor stage", () => {
     act(() => {
       for (const publish of fire) publish();
     });
+    await settle();
     // 64 − 44: the strip's bottom in the stage's own coordinates. The band
-    // under it is the package's, added by the rule in `godview.css`, so this
-    // number is a measurement and not a spacing decision.
+    // under it is the list's own (its stylesheet's 11px past the inset), so
+    // this number is a measurement and not a spacing decision. It reaches the
+    // list as `stage.insets.top` — no host rule names the list (W5).
+    const list = host.querySelector<HTMLElement>(".vf-monitor-list");
+    expect(list?.style.getPropertyValue("--mv-list-inset-top")).toBe("20px");
+    // the same measurement, still published for the timeline's host rule
     expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("20px");
   });
 
@@ -442,7 +451,61 @@ describe("the monitor stage", () => {
     act(() => {
       for (const publish of fire) publish();
     });
+    await settle();
+    expect(
+      host
+        .querySelector<HTMLElement>(".vf-monitor-list")
+        ?.style.getPropertyValue("--mv-list-inset-top"),
+    ).toBe("0px");
     expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("0px");
+  });
+
+  it("names no ported view in a host stylesheet (W5), and defines every skin name the views read (L18)", () => {
+    // List and rain carry their own stylesheets since MV-4 (L18): no
+    // VibeField rule may name their classes or their root classes — swept over
+    // every stylesheet of this package and the design kit. The timeline's host
+    // rule stays until it ports (mv56-vf).
+    const stylesheets = (dir: string): string[] =>
+      readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? stylesheets(join(dir, entry.name))
+          : entry.name.endsWith(".css")
+            ? [join(dir, entry.name)]
+            : [],
+      );
+    const sheets = [
+      ...stylesheets(join(process.cwd(), "src")),
+      ...stylesheets(join(process.cwd(), "../design-kit/src")),
+    ];
+    expect(sheets.some((path) => path.endsWith("godview/godview.css"))).toBe(true);
+    expect(sheets.some((path) => path.endsWith("design-kit/src/tokens.css"))).toBe(true);
+    for (const path of sheets) {
+      const css = readFileSync(path, "utf8");
+      for (const name of [
+        /vf-monitor-list/,
+        /vf-monitor-rain/,
+        /vf-rain/,
+        /\.mv-list\b/,
+        /\.mv-rain\b/,
+      ]) {
+        expect(css, `${path} names ${name}`).not.toMatch(name);
+      }
+    }
+    // Every name of the skin (the SDK's MONITOR_SKIN) is defined on the stage
+    // in BOTH themes — Godview's skin blocks — or once for all in the tokens.
+    const godview = readFileSync(join(process.cwd(), "src/godview/godview.css"), "utf8");
+    const tokens = readFileSync(join(process.cwd(), "../design-kit/src/tokens.css"), "utf8");
+    const block = (scheme: string): string => {
+      const start = godview.indexOf(`.vf-godview.theme-${scheme},`);
+      expect(start, `godview.css has the ${scheme} skin block`).toBeGreaterThanOrEqual(0);
+      return godview.slice(start, godview.indexOf("}", start));
+    };
+    const defines = (css: string, name: string): boolean =>
+      new RegExp(`^\\s*${name}\\s*:`, "m").test(css);
+    for (const name of MONITOR_SKIN) {
+      const themed = defines(block("light"), name) && defines(block("dark"), name);
+      expect(themed || defines(tokens, name), `${name} is defined on the stage`).toBe(true);
+    }
   });
 
   it("mounts on the registry's default view with the fold's rows and the deck's pane on it", async () => {

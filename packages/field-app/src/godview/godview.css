@@ -462,13 +462,19 @@
    its bodies around chrome by rect, and the rain is a canvas the column already
    crosses. DESIGN.md §9: two claims that overlap are one unreadable claim.
    TL (2026-10-02): the timeline lays out in flow (its map strip is a row at
-   its top), so it starts below the strip as the list does. */
+   its top), so it starts below the strip as the list does.
+
+   MV-4 (M58, W5): the list is an SDK view now and clears the strip ITSELF —
+   the view host hands it the strip's measured bottom as `stage.insets.top`
+   (the same measurement `GodviewMonitor` publishes below), and its own
+   stylesheet starts its band 11px past it. So no host rule names it. The
+   timeline still lays out under this one until it ports (mv56-vf), which
+   deletes the rule and the band with it. */
 .vf-godview-monitor-stage {
-  /* `@vibecook/puppeteer-views/styles/list.css` — a flow view's own top band. */
+  /* the flow views' own top band (the list's stylesheet draws it as 11px too) */
   --vf-monitor-flow-band: 11px;
 }
 
-.vf-godview-monitor-stage .vf-monitor-list,
 .vf-godview-monitor-stage .vf-monitor-timeline {
   padding-top: calc(var(--vf-monitor-claims-bottom, 0px) + var(--vf-monitor-flow-band));
 }
