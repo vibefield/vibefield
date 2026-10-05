@@ -674,6 +674,15 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "sync",
   }),
+  // DK-9 (DK-5 input (2)) — who holds a board LIVE now (another desktop's window, by its presence lane):
+  // a pack the board lacks waits while one does.
+  defineMethod({
+    surface: "product",
+    method: "doc.holders",
+    scope: "doc.read",
+    idempotent: true,
+    locality: "sync",
+  }),
   // Mints a fresh one-shot lane ticket per call (EL2 — bytes ride the ticketed
   // :9411 lane this method fronts, hence the stream class).
   defineMethod({

@@ -151,6 +151,20 @@ export type DocListResult = z.infer<typeof DocListResult>;
 export const DocOpenParams = z.object({ docId: z.string().uuid() }).passthrough();
 export type DocOpenParams = z.infer<typeof DocOpenParams>;
 
+/** DK-9 (DK-5 input (2)) — `doc.holders`: who holds a board LIVE now — the OTHER desktops with it open
+ * in a window (the board's presence room on this device's fieldd: each peer whose lane reaches it). A
+ * pack the board lacks is stamped only while none does (the enable's stamp waits). */
+export const DocHoldersParams = z.object({ docId: z.string().uuid() }).passthrough();
+export type DocHoldersParams = z.infer<typeof DocHoldersParams>;
+export const DocHoldersResult = z
+  .object({
+    docId: z.string().uuid(),
+    /** the peers (other desktops) with the board open now; empty when none is known */
+    live: z.array(z.string()),
+  })
+  .passthrough();
+export type DocHoldersResult = z.infer<typeof DocHoldersResult>;
+
 /** doc.rename params — a label-only edit (the service updates name, never updatedAt). */
 export const DocRenameParams = z
   .object({ docId: z.string().uuid(), name: z.string().min(1) })

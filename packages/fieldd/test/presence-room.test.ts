@@ -176,6 +176,41 @@ describe("PresenceRoomRouter", () => {
   });
 });
 
+// DK-9 (DK-5 input (2)) — WHO HOLDS A BOARD LIVE: the other desktops with it open in a window, each one a
+// peer whose presence lane reaches the board's room here. The renderer waits a pack the board lacks while
+// any does (`doc.holders`).
+describe("DK-9 — liveElsewhere: the other desktops holding a board open now", () => {
+  const opened = (laneId: number, peer: string, docId: string) => ({
+    kind: "peerOpened",
+    laneId,
+    inbound: true,
+    class: "lossy",
+    protocol: "presence",
+    peer,
+    docId,
+  });
+
+  it("names each peer whose lane reaches the board's room — and only that board's, sorted, gone when the lane or the room is", async () => {
+    const { router, control } = harness([]);
+    await router.start();
+    expect(router.liveElsewhere("doc-a")).toEqual([]); // no window here holds it: no room
+    const room = router.attach("doc-a", () => {});
+    router.attach("doc-b", () => {});
+    expect(router.liveElsewhere("doc-a")).toEqual([]); // open here, nobody else's lane yet
+    const base = MESHDATA_INBOUND_LANE_ID_BASE;
+    control.announce(opened(base, "peer-z", "doc-a"));
+    control.announce(opened(base + 1, "peer-b", "doc-a"));
+    control.announce(opened(base + 2, "peer-c", "doc-b"));
+    expect(router.liveElsewhere("doc-a")).toEqual(["peer-b", "peer-z"]);
+    expect(router.liveElsewhere("doc-b")).toEqual(["peer-c"]);
+    control.announce({ kind: "closed", laneId: base, peer: "peer-z", protocol: "presence" });
+    expect(router.liveElsewhere("doc-a")).toEqual(["peer-b"]); // that desktop let the board go
+    await room.close();
+    expect(router.liveElsewhere("doc-a")).toEqual([]);
+    await router.stop();
+  });
+});
+
 // UA-P-0f (D5) — presence follows documents: a room is a DOCUMENT's room, so
 // who may be in it is who may sync it. James ruled documents sync only among
 // VibeField desktops sharing one tailscale login.

@@ -150,6 +150,15 @@ export class PresenceRoomRouter implements DocumentPresenceRooms {
     this.#inboundByLane.clear();
   }
 
+  /** DK-9 (DK-5 input (2)) — the OTHER desktops holding `docId` open NOW: the peers whose presence lane
+   * reaches this board's room (a window there has the board open). Empty while no window here has it
+   * open (no room), and for a peer that has not opened its lane yet. Sorted. */
+  liveElsewhere(docId: string): string[] {
+    const room = this.#rooms.get(docId);
+    if (room === undefined || room.closing) return [];
+    return [...room.inbound.keys()].sort();
+  }
+
   /** A count-only diagnostic used by lifecycle tests and health inspection. */
   state(): { rooms: number; outbound: number; inbound: number; retainedBytes: number } {
     let retainedBytes = 0;

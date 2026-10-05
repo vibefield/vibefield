@@ -56,6 +56,8 @@ import {
   DeviceGetParams,
   DocCreateParams,
   DocDeleteParams,
+  DocHoldersParams,
+  type DocHoldersResult,
   type DocListResult,
   DocOpenParams,
   type DocOpenResult,
@@ -2965,6 +2967,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const result: DocListResult = {
         docs: docs.list(),
         ...(elsewhere.length > 0 ? { elsewhere } : {}),
+      };
+      return result;
+    });
+    // DK-9 (DK-5 input (2)) — who holds a board LIVE now: the other desktops whose presence lane reaches
+    // its room here. The renderer waits a pack the board lacks while any does (desk-capabilities.ts).
+    api.register("doc.holders", (ctx, params) => {
+      requireLocalDocumentCaller(ctx);
+      const parsed = DocHoldersParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { docId: uuid }", false);
+      const result: DocHoldersResult = {
+        docId: parsed.data.docId,
+        live: presenceRooms?.liveElsewhere(parsed.data.docId) ?? [],
       };
       return result;
     });
