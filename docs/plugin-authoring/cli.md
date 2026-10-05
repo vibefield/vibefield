@@ -21,11 +21,27 @@ rows passed), `1` (at least one refusal) or `2` (the kit itself failed). With
 `level` is `pass`, `note` (an honest absence — a row that could not run and says
 why) or `refuse`. Only `refuse` affects the exit code.
 
+## The kit's commands
+
+Three executables, each run from anywhere, each needing NOTHING installed beside the
+plugin — they bind the SDK to the copy they run from, as the app's import map does:
+
+| command | what it is | in a checkout of VibeField |
+| --- | --- | --- |
+| `vibefield-plugin <command> <dir>` | this page's commands, below | `pnpm plugin <command> <dir>` |
+| `plugin-build [<dir>]` | the build (default: the current directory): `dist/renderer.js` with each `.wgsl` inlined as its text, the service bundle, the artifact checks — it READS the manifest and never writes it (`--help`) | `pnpm --filter <package> build` |
+| `plugin-playground <dir> [--json] [--state <type>[:<name>]]` | the kind-conformance harness over every declared state (`objects.md`, Checking it) | `pnpm playground <dir>` |
+
+`create-plugin --id <vendor.name> --title <title> --dir <dir>` scaffolds a plugin and prints
+these commands, in order, for where it landed.
+
 ## Commands
 
 | command | what it does |
 | --- | --- |
 | `check <dir>` | the whole suite: manifest, wall, schemas, binding, artifacts |
+| `emit-manifest <dir>` | write `vibefield.plugin.json` from `src/manifest.ts` — the plugin's `gen:manifest`, with nothing installed |
+| `try <dir> [--shots <dir>]` | put its kinds ON THE DESK in the app and say whether each one is DRAWN — stills by day and night |
 | `inspect <dir>` | resolved contributions, grants, hashes, entries, state count |
 | `pack <dir>` | the deterministic `.vfplugin` + its sha256 |
 | `dev-link <dir>` | put the plugin where a developer-mode session finds it |
@@ -47,7 +63,52 @@ The rows, in order:
 | `artifact` | declared entries exist and import only mappable specifiers |
 
 `check` never requires a build. With no `dist/` the artifact and activation rows
-emit notes instead of refusals, and the command can still pass.
+emit notes instead of refusals, and the command can still pass. With one, the
+activation rows import the BUILT module as the app would — the host's specifiers bound
+to the kit's own copies, so a plugin outside any workspace is judged whole — and a name
+it imports that the door does not export is refused (`import-name-unknown`).
+
+## emit-manifest
+
+`emit-manifest` imports `src/manifest.ts` (TypeScript, its types stripped — keep it a plain
+module that exports `manifest`) and writes the canonical `vibefield.plugin.json` through
+the same `emitManifest` the scaffold's `gen:manifest` script calls: validated, defaulted,
+keys sorted. Re-run it after every edit of `manifest.ts`; a manifest that fails the
+contract is refused with its issue, and nothing is written.
+
+## try
+
+`try` puts your kinds ON THE DESK — in the app itself — and says whether each one is
+DRAWN:
+
+1. it copies the plugin's installed bundle (`vibefield.plugin.json`, `dist/`, `assets/`)
+   into a dev root of its own — `dev-link`'s copy;
+2. it runs the app from the checkout the kit is installed in (`pnpm smoke:plugin`) on a
+   FRESH profile with that root alone (`FIELDD_PLUGIN_DEV_ROOTS`), whose first board lays
+   ONE object of each kind the manifest declares — and nothing else;
+3. for each kind it reads the desk: laid on the board; its kind made on the host's device
+   — its WGSL COMPILED, the one place the kit compiles it; picked where it lies on the
+   drawn frame.
+
+It takes about a minute (the first run builds the app; later runs reuse the build),
+shows the app's window while it runs, and needs the machine's GPU. Build first —
+`try` stages what `plugin-build` wrote. A kind that draws:
+
+```text
+ok     try   acme.card staged alone in a dev root of its own (a copy of its bundle) and the app run on a fresh profile — its log: <dir>/.vibefield-try/try.log
+ok     try   acme.card is on the desk, DRAWN: laid on a fresh board, its kind made on the host's device (its WGSL compiled), picked across 240 × 144 CSS px — stills: <dir>/.vibefield-try/try-acme.card-light.png · <dir>/.vibefield-try/try-acme.card-dark.png
+```
+
+A refusal says what the desk said: `try-kind-refused` quotes the desk's own reason —
+for a WGSL error the compiler's first line at YOUR file's line and column, e.g.
+`refused at create — WGSL acme.card/shaders.wgsl: acme.card/shaders.wgsl:73:47 unresolved
+value 'ink'`; `try-not-laid` says whether the kind was not registered (the host refused
+its row — the log says why) or not placed (the row must provide `desk.object`);
+`try-not-picked` means nothing of it was drawn where it lies, or its `hit` misses what its
+pass draws — look at the still. The stills (the board, and each object, by day and by
+night) and the app's whole log (`try.log`) land in `<dir>/.vibefield-try/` (`--shots` for
+elsewhere). The note `try-desk-awake` says the desk never came to rest with your kind on
+it (`objects.md`, Wakes).
 
 ## pack
 
@@ -62,16 +123,18 @@ registry pin its sha256 and a reviewer diff it.
 ## dev-link
 
 `dev-link` copies the installed bundle into the dev-linked plugin root, where a
-developer-mode session discovers it. It is a COPY, not a symlink, and that is
+person's developer-mode session discovers it. It is a COPY, not a symlink, and that is
 forced by two host rules: discovery keeps only real directories, and the module
 authority refuses an artifact whose realpath escapes its plugin root.
 
 So the loop is: build, link, reload.
 
 ```sh
-pnpm build                        # produce dist/
+plugin-build .                     # produce dist/
 vibefield-plugin dev-link .        # copy into the dev root, print where
-# then, in the app: enable developer mode and call plugins.reload
+# then a person's dev session (pnpm dev in a checkout, FIELDD_PLUGIN_DEV_ROOTS
+# naming the root) reads it at boot, and the app's plugins.reload re-reads it —
+# to see your kinds drawn without a person, use try
 
 vibefield-plugin dev-link . --remove   # undo
 ```

@@ -14,7 +14,8 @@
 // unordered map anywhere in here would make the gate flap.
 
 import { readFileSync } from "node:fs";
-import { join } from "node:path";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
   BehaviorContribution,
@@ -23,7 +24,6 @@ import {
   HOST_SINGLETON_MODULE_SPECIFIERS,
   McpContribution,
   OBJECT_RETIRED_FIELDS,
-  OBJECTS_NEED_DESK,
   ObjectContribution,
   PLUGIN_CAPABILITY_ELIGIBILITY,
   PLUGIN_LIMITS,
@@ -36,8 +36,9 @@ import {
   SurfaceContribution,
   TRAY_ACCESSORIES,
   TrayEntryContribution,
-  WIDGETS_CONTRIBUTION_RETIRED,
 } from "@vibefield/contracts";
+import { kitWgsl } from "@vibefield/plugin-sdk/desk";
+import { KIND_EXPECTED } from "@vibefield/plugin-sdk/testing";
 import {
   type CtxFaceRow,
   invariantRows,
@@ -88,6 +89,104 @@ function exampleObjectRow(): unknown {
   const row = manifest.contributes.objects[0];
   if (row === undefined) throw new Error(`${EXAMPLE_PLUGIN_DIR}: its manifest declares no object`);
   return row;
+}
+
+// DK-10 — ICE'S OWN DECLARATIONS, QUOTED. The shapes a kind hands the desk (its opening, its held tools and their
+// glyphs, its chip, the frame its marks go round) and what it is handed (its flux) are ICE's types, re-exported through
+// the SDK's `/desk` door. The ten-minute bar's agents guessed each from the clock's code — the third wrote a held tool
+// ICE shows dim and never runs. They are quoted from the installed ICE's own published declarations, doc comments and
+// all, at generation: a declaration that moved throws here, never a silently stale page.
+
+/** One of the installed ICE's published type declaration files (`dist/types/packages/<rel>`) — the package the SDK's
+ * `/desk` door re-exports, resolved as the SDK resolves it. */
+function iceTypesFile(rel: string): string {
+  const fromSdk = createRequire(join(REPO_ROOT, "packages", "plugin-sdk", "package.json"));
+  const pkg = dirname(dirname(fromSdk.resolve("@vibecook/ice")));
+  return readFileSync(join(pkg, "dist", "types", "packages", rel), "utf8");
+}
+
+/** One exported declaration of ICE's — the doc comment above it and its whole body — quoted from its `.d.ts`. */
+export function quotedDeclaration(rel: string, name: string): string {
+  const lines = iceTypesFile(rel).split("\n");
+  const head = new RegExp(`^export (?:declare )?(?:interface|type|const|function) ${name}\\b`);
+  const start = lines.findIndex((line) => head.test(line));
+  if (start === -1) throw new Error(`ICE ${rel}: no exported declaration of ${name} to quote`);
+  let first = start;
+  if ((lines[start - 1] ?? "").trim().endsWith("*/")) {
+    first = start - 1;
+    while (first > 0 && !(lines[first] ?? "").trim().startsWith("/**")) first -= 1;
+  }
+  let depth = 0;
+  let braced = false;
+  let end = start;
+  for (let i = start; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    for (const ch of line) {
+      if (ch === "{") {
+        depth += 1;
+        braced = true;
+      } else if (ch === "}") depth -= 1;
+    }
+    end = i;
+    if (braced ? depth === 0 : line.trimEnd().endsWith(";")) break;
+  }
+  return lines.slice(first, end + 1).join("\n");
+}
+
+/** A program with nothing of its own — what `kitWgsl` composes then is the kit's pieces alone. */
+const NO_ENTRY = { entry: { label: "docs/none", text: "" } };
+
+/** The kit's WGSL pieces, in the kit's compose order (`kitWgsl`'s `KitWgslPiece`). */
+export const KIT_PIECES = ["view", "portal", "sdf", "light", "ruler", "book"] as const;
+
+/** What one kit piece declares at module scope — its structs, constants, module vars and functions with their
+ * signatures — read from the kit's own text (`kitWgsl([piece], NO_ENTRY)`). */
+export function kitPieceDeclarations(piece: (typeof KIT_PIECES)[number]): string[] {
+  const composed = kitWgsl([piece], NO_ENTRY);
+  const out = (composed.structs ?? []).map((struct) => `struct ${struct.name}`);
+  for (const module of composed.modules ?? []) {
+    const text = module.text;
+    for (const m of text.matchAll(/^struct\s+([A-Za-z_]\w*)/gm)) out.push(`struct ${m[1]}`);
+    for (const m of text.matchAll(/^(const|override)\s+([A-Za-z_]\w*)/gm))
+      out.push(`${m[1]} ${m[2]}`);
+    for (const m of text.matchAll(/^(?:@[^\n]*?\s)?var(?:<[^>]*>)?\s+([A-Za-z_]\w*)/gm))
+      out.push(`var ${m[1]}`);
+    for (const m of text.matchAll(/^fn\s+([A-Za-z_]\w*)\s*\(([^)]*)\)\s*(?:->\s*([^{]+?))?\s*\{/gm))
+      out.push(
+        `fn ${m[1]}(${(m[2] ?? "").replace(/\s+/g, " ").trim()})${m[3] !== undefined ? ` -> ${m[3].trim()}` : ""}`,
+      );
+  }
+  return out;
+}
+
+/** The view block's fields a kind reads, and what each holds (ICE `mat/layout.ts`'s own comments, said for a kind). */
+export const VIEW_BLOCK_FIELDS: readonly (readonly [string, string])[] = [
+  [
+    "cam",
+    "the camera: `xy` the world point at the canvas's top-left (world units), `z` the zoom — CSS px per world unit, `mat_zoom(u)` — and `w` the device ratio, `mat_dpr(u)`",
+  ],
+  [
+    "view",
+    "`xy` the canvas size, CSS px; `z` the grain's time, seconds; `w` the OBJECTS' presentation opacity — what every kind multiplies its alpha by",
+  ],
+  ["box", "this slot's box on the attachment, CSS px (`x, y, w, h`) — what a kind culls against"],
+  [
+    "portals",
+    "the portal chain `portal_cover` reads: each container face's centre and half extents, CSS px",
+  ],
+  ["clips", "each face's corner radius and on (0/1 — a 0 ends the chain), beside `portals`"],
+];
+
+/** The view block's fields a kind reads — each held to the kit's own `MatUniforms` at generation (a renamed field throws). */
+function viewBlockFields(): readonly (readonly [string, string])[] {
+  const struct = kitWgsl(["view"], NO_ENTRY).structs?.[0] as
+    | { name?: string; slots?: Record<string, unknown> }
+    | undefined;
+  const fields = new Set(Object.keys(struct?.slots ?? {}));
+  for (const [field] of VIEW_BLOCK_FIELDS)
+    if (!fields.has(field))
+      throw new Error(`the kit's ${struct?.name ?? "view block"} has no field ${field} any more`);
+  return VIEW_BLOCK_FIELDS;
 }
 
 const BANNER = [
@@ -179,7 +278,10 @@ function readme(): string {
             "an object kind on the desk: its durable half, its tray entry, the export that draws it, what the kind receives",
           ],
           ["`context.md`", "`activate(ctx)`, which faces exist when, and the lifecycle"],
-          ["`cli.md`", "the build → check → pack → dev-link loop"],
+          [
+            "`cli.md`",
+            "the kit's commands: emit, build, check, judge, and `try` — your object ON THE DESK; then pack and dev-link",
+          ],
           ["`refusals.md`", "every refusal code the kit can emit, and what fixes it"],
         ],
       ),
@@ -208,14 +310,20 @@ function readme(): string {
       "",
       `*(${examples.objects.source})*`,
       "",
+      "A kind asks for NO capability (`capabilities: []`) to draw, or to write its own objects —",
+      "a menu act's or a held tool's write goes through the desk's gate, one transaction each.",
+      "Capabilities gate what `ctx.client` asks of the product (`manifest.md`).",
+      "",
       "The renderer module it names — the kind is a static EXPORT that `binding.kind` names, never",
       `a registration (quoted whole from \`${EXAMPLE_PLUGIN_DIR}/src/renderer.ts\`, the worked`,
       "example in `objects.md`):",
       "",
       fence("ts", repoFile(`${EXAMPLE_PLUGIN_DIR}/src/renderer.ts`)),
       "",
-      "The manifest is AUTHORED in TypeScript and EMITTED to that JSON — you never",
-      "write the JSON by hand, and `check` refuses it if you do:",
+      "The manifest is AUTHORED in TypeScript and EMITTED to that JSON — re-emit it after",
+      "every edit of `manifest.ts` (`vibefield-plugin emit-manifest <dir>`, or `pnpm gen:manifest`",
+      "with an install) and never edit the JSON by hand: `check` refuses JSON that is not canonical",
+      "(`manifest-stale`), but a canonical JSON that went stale reads as any other:",
       "",
       fence(
         "ts",
@@ -277,30 +385,39 @@ function readme(): string {
         }),
       ),
       "",
-      "And the loop:",
+      "And the loop — the kit's own commands, from the plugin's directory:",
       "",
       fence(
         "sh",
         [
-          "pnpm gen:manifest                 # manifest.ts → vibefield.plugin.json",
-          "pnpm build                        # plugin-build: renderer (+ service) bundles",
-          "vibefield-plugin check .          # the whole suite, as verdicts",
-          "vibefield-plugin dev-link .       # put it where a dev session finds it",
+          "vibefield-plugin emit-manifest .  # src/manifest.ts → vibefield.plugin.json  (pnpm gen:manifest)",
+          "plugin-build .                    # dist/renderer.js, its .wgsl inlined      (pnpm build)",
+          "vibefield-plugin check .          # the whole suite, against the BUILT module",
+          "plugin-playground .               # its kind driven through every declared state",
+          "vibefield-plugin try .            # ON THE DESK: drawn — or why not — with stills",
         ].join("\n"),
       ),
       "",
-      "Do not hand-author this layout: the scaffolder emits it working. Start every",
-      "new plugin with",
+      "NOTHING NEEDS INSTALLING for these, outside a checkout's workspace too: the kit's",
+      "commands bind the SDK to the copy they run from, as the app's import map does. In a",
+      "checkout of VibeField they are also its root scripts (`pnpm plugin <command> <dir>`,",
+      "`pnpm playground <dir>`); only a plugin's own `pnpm` scripts (`gen:manifest`, `test`,",
+      "`typecheck`) need an install, which only the checkout's workspace gives (`plugins/*`).",
+      "",
+      "Do not hand-author this layout: the scaffolder emits it working, and prints the next",
+      "commands for where it landed. Start every new plugin with",
       "",
       fence(
         "sh",
         [
-          'create-plugin --id vendor.name --title "My Plugin" --dir plugins/name',
-          "#   (in this repo: pnpm exec create-plugin …; targets under plugins/ or",
-          "#    examples/plugins/ join the workspace — run pnpm install after)",
-          "pnpm --filter @vendor/plugin-name build   # its kind's .wgsl inlined",
-          "pnpm plugin check plugins/name    # a fresh scaffold is check-clean from birth",
-          "pnpm playground plugins/name      # its kind judged over every declared state",
+          'create-plugin --id vendor.name --title "My Plugin" --dir <dir>',
+          "# outside a workspace — nothing to install, then:",
+          "plugin-build <dir>                 # its kind's .wgsl inlined",
+          "vibefield-plugin check <dir>       # a fresh scaffold is check-clean from birth",
+          "plugin-playground <dir>            # its kind judged over every declared state",
+          "vibefield-plugin try <dir>         # its object drawn on the desk",
+          "# in a checkout, under plugins/: pnpm install, then pnpm --filter <package> build,",
+          "#   pnpm plugin check plugins/<name>, pnpm playground plugins/<name>, pnpm plugin try plugins/<name>",
         ].join("\n"),
       ),
       "",
@@ -321,8 +438,14 @@ function readme(): string {
       "  register in `activate`, which throws for an id the manifest does not declare, and",
       "  `check` refuses a declaration nothing binds.",
       "- **The manifest is emitted, not written.** `vibefield.plugin.json` is canonical",
-      "  key-sorted JSON; its hash is the plugin's identity. Hand-edit it and `check`",
-      "  refuses with `manifest-stale`.",
+      "  key-sorted JSON; its hash is the plugin's identity. Edit `src/manifest.ts` and",
+      "  re-emit (`vibefield-plugin emit-manifest`); `check` refuses JSON that is not",
+      "  canonical (`manifest-stale`).",
+      "- **On the desk means `try`.** `check` and the playground READ a kind's WGSL and never",
+      "  compile it, and nothing a person can do lays a plugin's kind yet (the pegboard that",
+      "  hangs your tray entry is still to come). `vibefield-plugin try <dir>` lays one on a",
+      "  fresh board in the app and says whether it is DRAWN — its WGSL compiled on the device,",
+      "  picked where it lies — with stills by day and by night (`cli.md`).",
       "- **The SDK is the only door.** Plugin code imports `@vibefield/plugin-sdk`",
       "  (plus `/ui`, `/canvas`, `/behavior`, and `/desk` for a kind), `@vibefield/contracts` types, and",
       "  `react`. Nothing",
@@ -341,10 +464,12 @@ function manifestDoc(): string {
   const limits = Object.entries(PLUGIN_LIMITS).map(([key, value]) => [`\`${key}\``, String(value)]);
   return document("The manifest", [
     "`vibefield.plugin.json` is the installed contract. It is EMITTED from a typed",
-    "`manifest.ts` by `plugin-build`'s manifest stage, canonicalized (keys sorted,",
-    "2-space indent, one trailing newline) so the same manifest always produces the",
-    "same bytes — the plugin's `manifestHash` and its packed artifact's sha256 both",
-    "derive from them.",
+    "`src/manifest.ts` by ONE writer — plugin-build's `emitManifest`, which the plugin's",
+    "`gen:manifest` script calls with an install and `vibefield-plugin emit-manifest <dir>`",
+    "calls with none — validated, defaulted and canonicalized (keys sorted, 2-space indent,",
+    "one trailing newline), so the same manifest always produces the same bytes: the",
+    "plugin's `manifestHash` and its packed artifact's sha256 both derive from them.",
+    "`plugin-build` READS it and never writes it; re-emit after every edit of `manifest.ts`.",
     "",
     section("Top-level fields", [
       fieldTable(fieldsOf(PluginManifestV1Shape)),
@@ -455,16 +580,10 @@ function contributionsDoc(): string {
     "under it; every one is optional, and the cross-field invariants in `manifest.md`",
     "decide which entry module and which capability each kind requires.",
     "",
-    "`widgets` is RETIRED (DK-8): a manifest that still says it is refused with",
-    `\`${WIDGETS_CONTRIBUTION_RETIRED.code}\` — a face on the desk is an object kind, below.`,
-    "",
     kindSection("Objects", ObjectContribution, objectSlice, [
       "An object is a kind the desk DRAWS — one WebGPU renderer, the kind's own GPU",
       "program — declared by its DURABLE half (the type, its props, its size) and bound",
       "by ONE export name; `tray` hangs it on the pegboard. `objects.md` is the deep end.",
-      "",
-      "The desk build activates an object like any contribution; the ICE 0.11 build",
-      `refused it with \`${OBJECTS_NEED_DESK.code}\` (${OBJECTS_NEED_DESK.message}).`,
     ]),
     kindSection("Commands", CommandContribution, commandSlice, [
       "A command is an invocable action the spine places (palette, context menus, HUD,",
@@ -573,17 +692,17 @@ function objectsDoc(): string {
     "",
     "The manifest owns the DURABLE half — the type name, prop names and group names",
     "outlive any implementation — and names ONE export of the renderer module that",
-    "holds the kind. The host compiles the two halves into the prefab (`defineObject`,",
-    "through the engine's one `defineWidget`); plugin code never does.",
+    "holds the kind. The host compiles the two halves into the object (`defineObject`);",
+    "plugin code never does.",
     "",
-    section("On this build", [
-      "The desk build (the `desk/landing` branch) ACCEPTS the contract below at every",
-      "door: fieldd's roster lists the plugin's kinds as an ordinary row, `check`",
-      "activates it like any plugin, and the renderer's registry registers each kind's",
-      "type and compiles it through `defineObject`. The ICE 0.11 build refused it with",
-      `\`${OBJECTS_NEED_DESK.code}\` (${OBJECTS_NEED_DESK.message}); \`inspect\` keeps`,
-      "its `refusal` field, and it reads `null`. `contributes.widgets` — the canvas face",
-      `before the desk — is refused with \`${WIDGETS_CONTRIBUTION_RETIRED.code}\` (DK-8).`,
+    section("On the desk, today", [
+      "Every door ACCEPTS the contract below: fieldd lists the plugin's kinds, `check`",
+      "activates it like any plugin, and the renderer compiles each kind through",
+      "`defineObject` before the desk's first frame. What no door does yet is LAY one: the",
+      "pegboard that hangs your `tray` entry is not wired into the desk's chrome, so nothing",
+      "a person can do puts your object on a board. `vibefield-plugin try <dir>` does it for",
+      "you — the app, on a fresh profile with your plugin staged alone, lays one object of",
+      "each of your kinds on a fresh board and says whether each is DRAWN (`cli.md`).",
       "",
     ]),
     section("Declaring", [
@@ -611,7 +730,7 @@ function objectsDoc(): string {
       "  the kind's pass (the desk makes every registered kind's pass at its mount). The",
       "  retired `onWidget:<type>` is refused by name (`onwidget-activation-retired`).",
       "",
-      "The widget-era view fields are RETIRED on an object and refused by name:",
+      "The old canvas face's view fields are RETIRED on an object and refused by name:",
       "",
       table(
         ["field", "where it went"],
@@ -680,7 +799,9 @@ function objectsDoc(): string {
       "- `category` is the chip on the tray's bar: a plugin's own string is its own chip,",
       "  or name a built-in's (`paper`, `surfaces`, `things`) to join it.",
       "- `hang` is how it hangs, and every entry says it: its size on the board in CSS px,",
-      `  the accessory (${TRAY_ACCESSORIES.map((a) => `\`${a}\``).join(", ")}) and the pegs in pitches from the hang point.`,
+      `  the accessory (${TRAY_ACCESSORIES.map((a) => `\`${a}\``).join(", ")}) and the pegs in pitches from the hang point`,
+      "  (a pitch is the board's hole spacing; the hang point is the specimen's top edge's centre,",
+      "  its bottom edge's on a shelf — so a hook at `[0, -0.5]` sits half a pitch above it).",
       "  Size it from the specimen: the board draws the object at its natural size scaled",
       "  by the smaller of `hang.w / size.w` and `hang.h / size.h`, centred — so a hang of",
       "  the object's own aspect fills it (ICE's note hangs 120 × 120, its whiteboard",
@@ -719,7 +840,7 @@ function objectsDoc(): string {
           [
             "`stratum`",
             "yes",
-            "`pads` \\| `sheets` \\| `things` — the desk's paint order: beneath everything · flat on the mat, holding a desk · every other thing",
+            "`pads` \\| `sheets` \\| `things` — the desk's paint order: beneath everything (the calendar) · flat on the mat, holding a desk of its own (the mini mat) · every other thing (the note, the whiteboard, the notebook, the clock) — a card or a token is a `things` kind",
           ],
           [
             "`create(device, format, mat)`",
@@ -761,7 +882,7 @@ function objectsDoc(): string {
           [
             "`open`",
             "no",
-            "what picking it up means: `extent` (the open rect), `pose` (`camera` \\| `eye`), `tools` (the held bar's — each an action or a mode, with its own glyph)",
+            'what picking it up means (`OpenBinding`, quoted below): `extent` (the open rect), `pose` (`camera` \\| `eye`), `tools` (the held bar\'s, each a `HeldToolDef` — `kind: "action"` with its op `run`, or `kind: "mode"`; with NO kind it is declared only, dim and never run), `readout` (its word in hand)',
           ],
           [
             "`rezoom` / `rung(ctx)`",
@@ -885,6 +1006,105 @@ function objectsDoc(): string {
       "  transaction, one undo step (`{ undoable: false }` opts out).",
       "",
     ]),
+    section("Reading props", [
+      "`ctx.props` is FLAT: every prop the row declares, by its name, whatever conflict group it",
+      "rides in, as the document holds it now (cached from the change journal — read it each",
+      "frame, never keep it). Read each with its type and a default, through the door:",
+      "",
+      fence(
+        "ts",
+        [
+          quotedDeclaration("desk/src/kinds/world.d.ts", "numberProp"),
+          quotedDeclaration("desk/src/kinds/world.d.ts", "stringProp"),
+        ].join("\n"),
+      ),
+      "",
+      'A boolean is `typeof v === "boolean" ? v : fallback` — the worked example\'s own `flagProp`',
+      "(its `src/kind.ts`) is exactly that. A menu act's `api.props(e)` and a held tool's",
+      "`api.props()` hand the same flat record; `setProps(patch)` writes the props you name.",
+      "",
+    ]),
+    section("The kit's WGSL — what your shader is composed after", [
+      "A kind's program is `kitWgsl(pieces, own)`: the kit's pieces you name, composed BEFORE",
+      "your own structs, modules and entry into ONE WGSL module (`object-kit-piece-unknown`",
+      "refuses a piece it does not carry). What each piece declares is in scope in your shader,",
+      "and YOUR module-scope names must not repeat its. Read from the kit's own text when these",
+      "docs are generated:",
+      "",
+      ...KIT_PIECES.map(
+        (piece) =>
+          `- \`${piece}\`${piece === "light" ? " (also named `lamp`, `gobo`, `night`, `noise`)" : ""} — ${kitPieceDeclarations(
+            piece,
+          )
+            .map((d) => `\`${d}\``)
+            .join(", ")}`,
+      ),
+      "",
+      "The VIEW BLOCK every kind binds — `@group(0) @binding(0) var<uniform> u: MatUniforms;`,",
+      "written by the desk once a frame per slot, bound by a kind and never written. The fields",
+      "a kind reads (its others are the mat's own — reach them only through the `light` piece):",
+      "",
+      table(
+        ["field", "holds"],
+        viewBlockFields().map(([field, holds]) => [`\`u.${field}\``, holds]),
+      ),
+      "",
+      "The conventions the scaffold's shader keeps: world units, y DOWN (the screen's own axes);",
+      "a kind's rect CENTRED (`cx, cy, w, h`); CSS px = (world − `u.cam.xy`) × `mat_zoom(u)`;",
+      "clip space = CSS px ÷ `u.view.xy` × 2 − 1, y flipped; in a fragment `in.clip.xy` is",
+      "DEVICE px, so world = `in.clip.xy` ÷ (`mat_zoom(u)` × `mat_dpr(u)`) + `u.cam.xy`. The colour",
+      "a fragment returns is PREMULTIPLIED, times `u.view.w` × `portal_cover(in.clip.xy / mat_dpr(u),",
+      "u.portals, u.clips, mat_dpr(u))` — so inside a mini mat's face it fades with no code of yours.",
+      "",
+      "A record's GPU struct is `defineStruct(name, fields)` — its WGSL generated from the one",
+      "declaration, so the CPU and the GPU cannot drift; `kitWgsl(…, { structs: [It] })` puts it in",
+      "scope. Its field types, laid out (and padded) by WGSL's own alignment rules — a `vec2f`",
+      "first, then the scalars, then each `vec4f`, keeps it tight, as the scaffold's record does:",
+      "",
+      fence("ts", quotedDeclaration("desk/src/engine/struct.d.ts", "FieldType")),
+      "",
+    ]),
+    section("Shapes the desk takes — ICE's own declarations", [
+      "These types are ICE's, re-exported by `@vibefield/plugin-sdk/desk`, quoted from the",
+      "installed ICE's own declarations — doc comments and all — when these docs are generated.",
+      "",
+      "**`open` — what picking it up means, and its held bar's tools.** A tool with no `kind` is",
+      "DECLARED ONLY — the bar shows it dim and never runs it: `check` refuses an op without one",
+      "(`object-tool-inert`), and a tool ICE would refuse at definition (`object-tool-invalid`).",
+      "",
+      fence(
+        "ts",
+        [
+          quotedDeclaration("desk/src/kinds/world.d.ts", "OpenBinding"),
+          quotedDeclaration("core/src/widget/held-tools.d.ts", "HeldToolDef"),
+          quotedDeclaration("core/src/widget/held-tools.d.ts", "HeldGlyph"),
+        ].join("\n"),
+      ),
+      "",
+      "**`chip` — its far impostor inside a container's face** (with `desk.containable`):",
+      "",
+      fence(
+        "ts",
+        [
+          quotedDeclaration("desk/src/kit/inside.d.ts", "ChildShape"),
+          quotedDeclaration("desk/src/kit/inside.d.ts", "PAPER_FINISH"),
+          quotedDeclaration("desk/src/kit/inside.d.ts", "VINYL_FINISH"),
+        ].join("\n"),
+      ),
+      "",
+      "**`frame` — the silhouette the desk's marks go round** (absent: the rect):",
+      "",
+      fence("ts", quotedDeclaration("desk/src/marks/layout.d.ts", "MarkFrame")),
+      "",
+      "**`ctx.flux` — how it is held, hovered and present this frame:**",
+      "",
+      fence("ts", quotedDeclaration("desk/src/kinds/world.d.ts", "ObjectFlux")),
+      "",
+      "**`tray.hang` — how its specimen hangs on the pegboard:**",
+      "",
+      fence("ts", quotedDeclaration("kernel/src/tray.d.ts", "TrayHang")),
+      "",
+    ]),
     section("Where logic goes", [
       "Three places, each for its own kind of state (ICE design-015's law: facts in the",
       "world, flux outside it):",
@@ -927,24 +1147,32 @@ function objectsDoc(): string {
       "(`object-export-missing`) holding a desk kind (`object-kind-invalid`) whose registry name",
       "is the row's type (`object-kind-misnamed`), hanging by a tray entry that says how",
       "(`object-tray-hang-missing`, `object-tray-category-invalid`), providing `desk.object`",
-      "(`object-provides-no-desk-object`); its `create`, run on a RECORDING device that answers",
+      "(`object-provides-no-desk-object`), its held tools ones ICE takes and runs",
+      "(`object-tool-invalid`, `object-tool-inert`); every name the built module imports from the",
+      "door one the door exports (`import-name-unknown`); its `create`, run on a RECORDING device that answers",
       "every call as WebGPU does short of compiling, names only the kit's pieces",
       "(`object-kit-piece-unknown`), asks for its shader as WGSL TEXT (`object-wgsl-not-text`)",
       "that READS — entry points its pipelines name (`object-wgsl-unread`), bindings each stage",
       "uses laid in its layout (`object-wgsl-binding-unlaid`), bind groups that fill their",
       "layouts (`object-bind-group-mismatch`). NOTHING COMPILES IT: a shader naming what nothing",
       "declares passes, and every kind with shaders carries the note `object-wgsl-not-compiled`",
-      "(the still that would compile and draw it waits on ICE). `pnpm playground <dir>` runs the",
+      "(`try`, below, is what compiles it). `plugin-playground <dir>` (`pnpm playground` in a checkout) runs the",
       "same harness over every DECLARED STATE — each fixture in `playground/states.ts` (its props",
       "validated first, `state-invalid`) × idle, selected, held, open (when the kind opens),",
       "contained (when it provides `desk.containable`) × every zoom the desk's LOD names — through",
       "resolve, record, hit (`state-hit-missed`: it must hit its own box), frame, chip, the",
       "opening, prepare and drawRange (`state-spawn-failed`, `state-render-failed`,",
       "`state-draw-ill-formed`), then dispose. A unit test calls it the same way. `inspect` lists",
-      "each kind with its tray chip, its hang, what it provides, its export and a `null` refusal.",
+      "each kind with its tray chip, its hang, what it provides, its export, the states it is",
+      "driven through and, with `--json`, a `null` refusal.",
+      "",
+      "SEEING IT DRAWN: neither compiles your WGSL. `vibefield-plugin try <dir>` does — the app",
+      "makes the kind on its own device and draws it on a fresh board: a WGSL error comes back as",
+      "the compiler's own line at YOUR file's line and column (`try-kind-refused`), a kind laid but",
+      "drawn nowhere as `try-not-picked`, and a kind drawn as `ok … DRAWN`, with stills (`cli.md`).",
       "",
       "WHERE IT RUNS: `check` runs the harness in plain Node — no `document`, no",
-      "`OffscreenCanvas`; `pnpm playground` runs it in happy-dom — a `document`, still no",
+      "`OffscreenCanvas`; the playground runs it in happy-dom — a `document`, still no",
       "`OffscreenCanvas` or `createImageBitmap`; your own unit test runs in whatever",
       "environment its vitest file declares. A `create` that reaches for a browser global its",
       "environment lacks gets the note `object-create-not-run-here` (its states are still",
@@ -1169,11 +1397,48 @@ function cliDoc(): string {
     "`level` is `pass`, `note` (an honest absence — a row that could not run and says",
     "why) or `refuse`. Only `refuse` affects the exit code.",
     "",
+    section("The kit's commands", [
+      "Three executables, each run from anywhere, each needing NOTHING installed beside the",
+      "plugin — they bind the SDK to the copy they run from, as the app's import map does:",
+      "",
+      table(
+        ["command", "what it is", "in a checkout of VibeField"],
+        [
+          [
+            "`vibefield-plugin <command> <dir>`",
+            "this page's commands, below",
+            "`pnpm plugin <command> <dir>`",
+          ],
+          [
+            "`plugin-build [<dir>]`",
+            "the build (default: the current directory): `dist/renderer.js` with each `.wgsl` inlined as its text, the service bundle, the artifact checks — it READS the manifest and never writes it (`--help`)",
+            "`pnpm --filter <package> build`",
+          ],
+          [
+            "`plugin-playground <dir> [--json] [--state <type>[:<name>]]`",
+            "the kind-conformance harness over every declared state (`objects.md`, Checking it)",
+            "`pnpm playground <dir>`",
+          ],
+        ],
+      ),
+      "",
+      "`create-plugin --id <vendor.name> --title <title> --dir <dir>` scaffolds a plugin and prints",
+      "these commands, in order, for where it landed.",
+      "",
+    ]),
     section("Commands", [
       table(
         ["command", "what it does"],
         [
           ["`check <dir>`", "the whole suite: manifest, wall, schemas, binding, artifacts"],
+          [
+            "`emit-manifest <dir>`",
+            "write `vibefield.plugin.json` from `src/manifest.ts` — the plugin's `gen:manifest`, with nothing installed",
+          ],
+          [
+            "`try <dir> [--shots <dir>]`",
+            "put its kinds ON THE DESK in the app and say whether each one is DRAWN — stills by day and night",
+          ],
           ["`inspect <dir>`", "resolved contributions, grants, hashes, entries, state count"],
           ["`pack <dir>`", "the deterministic `.vfplugin` + its sha256"],
           ["`dev-link <dir>`", "put the plugin where a developer-mode session finds it"],
@@ -1206,7 +1471,55 @@ function cliDoc(): string {
       ),
       "",
       "`check` never requires a build. With no `dist/` the artifact and activation rows",
-      "emit notes instead of refusals, and the command can still pass.",
+      "emit notes instead of refusals, and the command can still pass. With one, the",
+      "activation rows import the BUILT module as the app would — the host's specifiers bound",
+      "to the kit's own copies, so a plugin outside any workspace is judged whole — and a name",
+      "it imports that the door does not export is refused (`import-name-unknown`).",
+      "",
+    ]),
+    section("emit-manifest", [
+      "`emit-manifest` imports `src/manifest.ts` (TypeScript, its types stripped — keep it a plain",
+      "module that exports `manifest`) and writes the canonical `vibefield.plugin.json` through",
+      "the same `emitManifest` the scaffold's `gen:manifest` script calls: validated, defaulted,",
+      "keys sorted. Re-run it after every edit of `manifest.ts`; a manifest that fails the",
+      "contract is refused with its issue, and nothing is written.",
+      "",
+    ]),
+    section("try", [
+      "`try` puts your kinds ON THE DESK — in the app itself — and says whether each one is",
+      "DRAWN:",
+      "",
+      "1. it copies the plugin's installed bundle (`vibefield.plugin.json`, `dist/`, `assets/`)",
+      "   into a dev root of its own — `dev-link`'s copy;",
+      "2. it runs the app from the checkout the kit is installed in (`pnpm smoke:plugin`) on a",
+      "   FRESH profile with that root alone (`FIELDD_PLUGIN_DEV_ROOTS`), whose first board lays",
+      "   ONE object of each kind the manifest declares — and nothing else;",
+      "3. for each kind it reads the desk: laid on the board; its kind made on the host's device",
+      "   — its WGSL COMPILED, the one place the kit compiles it; picked where it lies on the",
+      "   drawn frame.",
+      "",
+      "It takes about a minute (the first run builds the app; later runs reuse the build),",
+      "shows the app's window while it runs, and needs the machine's GPU. Build first —",
+      "`try` stages what `plugin-build` wrote. A kind that draws:",
+      "",
+      fence(
+        "text",
+        [
+          "ok     try   acme.card staged alone in a dev root of its own (a copy of its bundle) and the app run on a fresh profile — its log: <dir>/.vibefield-try/try.log",
+          "ok     try   acme.card is on the desk, DRAWN: laid on a fresh board, its kind made on the host's device (its WGSL compiled), picked across 240 × 144 CSS px — stills: <dir>/.vibefield-try/try-acme.card-light.png · <dir>/.vibefield-try/try-acme.card-dark.png",
+        ].join("\n"),
+      ),
+      "",
+      "A refusal says what the desk said: `try-kind-refused` quotes the desk's own reason —",
+      "for a WGSL error the compiler's first line at YOUR file's line and column, e.g.",
+      "`refused at create — WGSL acme.card/shaders.wgsl: acme.card/shaders.wgsl:73:47 unresolved",
+      "value 'ink'`; `try-not-laid` says whether the kind was not registered (the host refused",
+      "its row — the log says why) or not placed (the row must provide `desk.object`);",
+      "`try-not-picked` means nothing of it was drawn where it lies, or its `hit` misses what its",
+      "pass draws — look at the still. The stills (the board, and each object, by day and by",
+      "night) and the app's whole log (`try.log`) land in `<dir>/.vibefield-try/` (`--shots` for",
+      "elsewhere). The note `try-desk-awake` says the desk never came to rest with your kind on",
+      "it (`objects.md`, Wakes).",
       "",
     ]),
     section("pack", [
@@ -1221,7 +1534,7 @@ function cliDoc(): string {
     ]),
     section("dev-link", [
       "`dev-link` copies the installed bundle into the dev-linked plugin root, where a",
-      "developer-mode session discovers it. It is a COPY, not a symlink, and that is",
+      "person's developer-mode session discovers it. It is a COPY, not a symlink, and that is",
       "forced by two host rules: discovery keeps only real directories, and the module",
       "authority refuses an artifact whose realpath escapes its plugin root.",
       "",
@@ -1230,9 +1543,11 @@ function cliDoc(): string {
       fence(
         "sh",
         [
-          "pnpm build                        # produce dist/",
+          "plugin-build .                     # produce dist/",
           "vibefield-plugin dev-link .        # copy into the dev root, print where",
-          "# then, in the app: enable developer mode and call plugins.reload",
+          "# then a person's dev session (pnpm dev in a checkout, FIELDD_PLUGIN_DEV_ROOTS",
+          "# naming the root) reads it at boot, and the app's plugins.reload re-reads it —",
+          "# to see your kinds drawn without a person, use try",
           "",
           "vibefield-plugin dev-link . --remove   # undo",
         ].join("\n"),
@@ -1262,10 +1577,15 @@ function refusalsDoc(): string {
   const rows = catalogRows();
   const refusals = rows.filter((r) => r.level === "refuse");
   const notes = rows.filter((r) => r.level === "note");
+  const stateCodes = (Object.keys(KIND_EXPECTED) as (keyof typeof KIND_EXPECTED)[])
+    .filter((code) => code.startsWith("state-"))
+    .sort();
   return document("Refusal codes", [
-    "Every code `check` and its siblings can emit. `code` is stable — branch on it.",
-    "`expected` in the verdict is the concrete fix for that instance; the guidance",
-    "column is the general one.",
+    "Every code `vibefield-plugin` can emit — `check`, `inspect`, `emit-manifest`, `try`,",
+    "`dev-link`, `pack` and the registry commands — then the kind harness's state codes and",
+    "the playground's own. `code` is stable — branch on it. `expected` in the verdict is the",
+    "concrete fix for that instance; the guidance column is the general one. `create-plugin`",
+    "and `plugin-build` answer in their own words (`--help`).",
     "",
     section("Refusals (exit 1)", [
       table(
@@ -1282,6 +1602,23 @@ function refusalsDoc(): string {
         ["code", "row", "meaning", "what it suggests"],
         notes.map((r) => [`\`${r.code}\``, r.check, r.meaning, r.guidance]),
       ),
+      "",
+    ]),
+    section("The kind harness's state codes", [
+      "The kind-conformance harness drives a kind through its declared states in the playground",
+      "and in your own unit test (`check` runs its declaration and program rows, above). Each",
+      "state code, and what passes:",
+      "",
+      table(
+        ["code", "what passes"],
+        stateCodes.map((code) => [`\`${code}\``, KIND_EXPECTED[code]]),
+      ),
+      "",
+    ]),
+    section("The playground's own codes", [
+      "What `plugin-playground` says before a kind's states are driven (quoted from its source):",
+      "",
+      fence("ts", quotedRegion("apps/plugin-playground/src/verdict.ts", "playground-codes")),
       "",
     ]),
   ]);

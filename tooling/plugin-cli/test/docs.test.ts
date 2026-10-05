@@ -12,7 +12,15 @@ import { describe, expect, it } from "vitest";
 import { invariantRows, RENDERER_CTX_FACES, SERVICE_CTX_FACES } from "../src/docs-anchors";
 import { checkDocsFresh, writeDocs } from "../src/docs-command";
 import { loadExamples } from "../src/docs-examples";
-import { cell, DOC_FILES, generateDocs } from "../src/docs-generate";
+import {
+  cell,
+  DOC_FILES,
+  generateDocs,
+  KIT_PIECES,
+  kitPieceDeclarations,
+  quotedDeclaration,
+  VIEW_BLOCK_FIELDS,
+} from "../src/docs-generate";
 import { catalogRows, REFUSAL_CATALOG, type RefusalCode } from "../src/refusals";
 import { freshDir, refusalCodes } from "./fixtures";
 
@@ -210,8 +218,76 @@ describe("coverage of what an author has to know", () => {
       "WHERE IT RUNS",
       "resolve(ctx)",
       "KindLocal.due",
+      // DK-10 — the ten-minute bar's punch list: what its agents had to guess, said
+      "On the desk, today", // nothing a person can do lays a plugin's kind yet — and what does
+      "vibefield-plugin try <dir>", // the object ON THE DESK, drawn or refused, with stills
+      "try-kind-refused",
+      "vibefield-plugin emit-manifest", // gen:manifest with nothing installed
+      "NOTHING NEEDS INSTALLING", // the kit's commands outside a checkout's workspace
+      "plugin-playground <dir>", // the executables' own names, beside the checkout's pnpm scripts
+      "plugin-build [<dir>]",
+      "## Reading props", // ctx.props is flat; the door's numberProp/stringProp
+      "export declare const numberProp",
+      "## The kit's WGSL", // what each piece declares, the view block, the conventions
+      "fn mat_zoom(u: MatUniforms) -> f32",
+      "fn portal_cover(",
+      "`u.view`",
+      "y DOWN",
+      "PREMULTIPLIED",
+      "export type FieldType", // defineStruct's field types
+      "export interface HeldToolDef", // a tool's `kind` — without it, dim and never run
+      "object-tool-inert",
+      "export interface ChildShape",
+      "export interface MarkFrame",
+      "export interface ObjectFlux",
+      "export interface TrayHang", // what a peg's pitches are measured from
+      "import-name-unknown",
+      "## The playground's own codes", // renderer-import-failed was in no doc
+      "renderer-import-failed",
+      "## The kind harness's state codes",
+      "state-hit-missed",
     ])
       expect(all, `nothing tells an author about ${topic}`).toContain(topic);
+  });
+
+  it("DK-10: says nothing of `widget` but the retired words' own refusals and the names ICE's vocabulary keeps", () => {
+    // the retired words, each said only where it is refused by name; ICE's `keyboardEscape` value; the limit the
+    // plan's addendum (15) keeps — nothing else of the old face may creep back into what an author reads
+    const kept = [
+      /`?onWidget:(<type>|com\.example\.demo)?`?/g,
+      /onwidget-activation-retired/g,
+      /widget-context-retired/g,
+      /placement widget-context is retired/g,
+      /the retired widget-context command placement/g,
+      /contributes\.widgets/g,
+      /widgets-contribution-retired/g,
+      /keyboardEscape\?: `release` \\\| `widget`/g,
+      /`WIDGET_BEHAVIORS_MAX`/g,
+    ];
+    for (const [name, text] of docs) {
+      const left = kept.reduce((t, word) => t.replace(word, ""), text);
+      const line = left.split("\n").find((l) => /widget/i.test(l));
+      expect(line, `${name} still says widget`).toBeUndefined();
+    }
+  });
+
+  it("DK-10: the kit's WGSL is listed from the kit itself — each piece, the helpers a kind's shader calls", () => {
+    const objects = docs.get("objects.md") ?? "";
+    for (const piece of KIT_PIECES) expect(objects).toContain(`- \`${piece}\``);
+    expect(kitPieceDeclarations("view")).toEqual(["struct MatUniforms"]);
+    expect(kitPieceDeclarations("light")).toContain("fn mat_dpr(u: MatUniforms) -> f32");
+    expect(kitPieceDeclarations("portal").some((d) => d.startsWith("fn portal_cover("))).toBe(true);
+    for (const [field] of VIEW_BLOCK_FIELDS) expect(objects).toContain(`\`u.${field}\``);
+  });
+
+  it("DK-10: a quoted ICE declaration is its doc comment and its whole body — and a missing one throws, never a stale page", () => {
+    const tool = quotedDeclaration("core/src/widget/held-tools.d.ts", "HeldToolDef");
+    expect(tool.startsWith("/** One tool of the held bar")).toBe(true);
+    expect(tool).toContain('readonly kind?: "mode" | "action";');
+    expect(tool.trimEnd().endsWith("}")).toBe(true);
+    expect(() => quotedDeclaration("core/src/widget/held-tools.d.ts", "NoSuchDeclaration")).toThrow(
+      /no exported declaration of NoSuchDeclaration/,
+    );
   });
 
   it("DK-0f: objects.md shows the golden object manifest, and names the retired widget fields", () => {

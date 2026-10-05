@@ -105,7 +105,7 @@ export function commandsAndSurfacesExample(): ExampleManifest {
           {
             id: "com.example.tools.tidy",
             title: "Tidy the selection",
-            description: "Align the selected widgets to a grid",
+            description: "Align the selected objects to a grid",
             placements: ["palette", "canvas-context"],
             args: {
               type: "object",

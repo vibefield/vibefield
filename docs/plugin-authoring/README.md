@@ -19,7 +19,7 @@ schema this app actually enforces (contracts 0.1.0).
 | `contributions.md` | each contribution kind's shape, with a worked example |
 | `objects.md` | an object kind on the desk: its durable half, its tray entry, the export that draws it, what the kind receives |
 | `context.md` | `activate(ctx)`, which faces exist when, and the lifecycle |
-| `cli.md` | the build → check → pack → dev-link loop |
+| `cli.md` | the kit's commands: emit, build, check, judge, and `try` — your object ON THE DESK; then pack and dev-link |
 | `refusals.md` | every refusal code the kit can emit, and what fixes it |
 
 ## The shortest real plugin
@@ -59,9 +59,7 @@ The manifest, complete and minimal — one object kind (`objects.md` says every 
   "activation": [
     "onObject:com.example.clock"
   ],
-  "capabilities": [
-    "doc.write"
-  ],
+  "capabilities": [],
   "contributes": {
     "objects": [
       {
@@ -135,6 +133,10 @@ The manifest, complete and minimal — one object kind (`objects.md` says every 
 
 *(@vibefield/contracts fixtures/plugin-manifest.objects.json)*
 
+A kind asks for NO capability (`capabilities: []`) to draw, or to write its own objects —
+a menu act's or a held tool's write goes through the desk's gate, one transaction each.
+Capabilities gate what `ctx.client` asks of the product (`manifest.md`).
+
 The renderer module it names — the kind is a static EXPORT that `binding.kind` names, never
 a registration (quoted whole from `examples/plugins/desk-clock/src/renderer.ts`, the worked
 example in `objects.md`):
@@ -156,8 +158,10 @@ export default defineRendererPlugin({
 });
 ```
 
-The manifest is AUTHORED in TypeScript and EMITTED to that JSON — you never
-write the JSON by hand, and `check` refuses it if you do:
+The manifest is AUTHORED in TypeScript and EMITTED to that JSON — re-emit it after
+every edit of `manifest.ts` (`vibefield-plugin emit-manifest <dir>`, or `pnpm gen:manifest`
+with an install) and never edit the JSON by hand: `check` refuses JSON that is not canonical
+(`manifest-stale`), but a canonical JSON that went stale reads as any other:
 
 ```ts
 // src/manifest.ts — typed against the contract, so a mistake is a type error
@@ -212,25 +216,34 @@ The package.json that wires it together — the build script is the whole build:
 }
 ```
 
-And the loop:
+And the loop — the kit's own commands, from the plugin's directory:
 
 ```sh
-pnpm gen:manifest                 # manifest.ts → vibefield.plugin.json
-pnpm build                        # plugin-build: renderer (+ service) bundles
-vibefield-plugin check .          # the whole suite, as verdicts
-vibefield-plugin dev-link .       # put it where a dev session finds it
+vibefield-plugin emit-manifest .  # src/manifest.ts → vibefield.plugin.json  (pnpm gen:manifest)
+plugin-build .                    # dist/renderer.js, its .wgsl inlined      (pnpm build)
+vibefield-plugin check .          # the whole suite, against the BUILT module
+plugin-playground .               # its kind driven through every declared state
+vibefield-plugin try .            # ON THE DESK: drawn — or why not — with stills
 ```
 
-Do not hand-author this layout: the scaffolder emits it working. Start every
-new plugin with
+NOTHING NEEDS INSTALLING for these, outside a checkout's workspace too: the kit's
+commands bind the SDK to the copy they run from, as the app's import map does. In a
+checkout of VibeField they are also its root scripts (`pnpm plugin <command> <dir>`,
+`pnpm playground <dir>`); only a plugin's own `pnpm` scripts (`gen:manifest`, `test`,
+`typecheck`) need an install, which only the checkout's workspace gives (`plugins/*`).
+
+Do not hand-author this layout: the scaffolder emits it working, and prints the next
+commands for where it landed. Start every new plugin with
 
 ```sh
-create-plugin --id vendor.name --title "My Plugin" --dir plugins/name
-#   (in this repo: pnpm exec create-plugin …; targets under plugins/ or
-#    examples/plugins/ join the workspace — run pnpm install after)
-pnpm --filter @vendor/plugin-name build   # its kind's .wgsl inlined
-pnpm plugin check plugins/name    # a fresh scaffold is check-clean from birth
-pnpm playground plugins/name      # its kind judged over every declared state
+create-plugin --id vendor.name --title "My Plugin" --dir <dir>
+# outside a workspace — nothing to install, then:
+plugin-build <dir>                 # its kind's .wgsl inlined
+vibefield-plugin check <dir>       # a fresh scaffold is check-clean from birth
+plugin-playground <dir>            # its kind judged over every declared state
+vibefield-plugin try <dir>         # its object drawn on the desk
+# in a checkout, under plugins/: pnpm install, then pnpm --filter <package> build,
+#   pnpm plugin check plugins/<name>, pnpm playground plugins/<name>, pnpm plugin try plugins/<name>
 ```
 
 The scaffold ships `manifest.ts` + its emit script, one working OBJECT KIND — its
@@ -250,8 +263,14 @@ build preset — every file already in the shape `check` demands.
   register in `activate`, which throws for an id the manifest does not declare, and
   `check` refuses a declaration nothing binds.
 - **The manifest is emitted, not written.** `vibefield.plugin.json` is canonical
-  key-sorted JSON; its hash is the plugin's identity. Hand-edit it and `check`
-  refuses with `manifest-stale`.
+  key-sorted JSON; its hash is the plugin's identity. Edit `src/manifest.ts` and
+  re-emit (`vibefield-plugin emit-manifest`); `check` refuses JSON that is not
+  canonical (`manifest-stale`).
+- **On the desk means `try`.** `check` and the playground READ a kind's WGSL and never
+  compile it, and nothing a person can do lays a plugin's kind yet (the pegboard that
+  hangs your tray entry is still to come). `vibefield-plugin try <dir>` lays one on a
+  fresh board in the app and says whether it is DRAWN — its WGSL compiled on the device,
+  picked where it lies — with stills by day and by night (`cli.md`).
 - **The SDK is the only door.** Plugin code imports `@vibefield/plugin-sdk`
   (plus `/ui`, `/canvas`, `/behavior`, and `/desk` for a kind), `@vibefield/contracts` types, and
   `react`. Nothing

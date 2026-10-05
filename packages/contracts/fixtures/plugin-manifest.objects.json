@@ -12,7 +12,7 @@
     "renderer": "./dist/renderer.js"
   },
   "activation": ["onObject:com.example.clock"],
-  "capabilities": ["doc.write"],
+  "capabilities": [],
   "contributes": {
     "objects": [
       {

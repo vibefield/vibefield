@@ -11,18 +11,18 @@ plugin parity): there is no React component and no DOM under the camera.
 
 The manifest owns the DURABLE half — the type name, prop names and group names
 outlive any implementation — and names ONE export of the renderer module that
-holds the kind. The host compiles the two halves into the prefab (`defineObject`,
-through the engine's one `defineWidget`); plugin code never does.
+holds the kind. The host compiles the two halves into the object (`defineObject`);
+plugin code never does.
 
-## On this build
+## On the desk, today
 
-The desk build (the `desk/landing` branch) ACCEPTS the contract below at every
-door: fieldd's roster lists the plugin's kinds as an ordinary row, `check`
-activates it like any plugin, and the renderer's registry registers each kind's
-type and compiles it through `defineObject`. The ICE 0.11 build refused it with
-`objects-need-desk` (object kinds need the desk; this build draws widgets); `inspect` keeps
-its `refusal` field, and it reads `null`. `contributes.widgets` — the canvas face
-before the desk — is refused with `widgets-contribution-retired` (DK-8).
+Every door ACCEPTS the contract below: fieldd lists the plugin's kinds, `check`
+activates it like any plugin, and the renderer compiles each kind through
+`defineObject` before the desk's first frame. What no door does yet is LAY one: the
+pegboard that hangs your `tray` entry is not wired into the desk's chrome, so nothing
+a person can do puts your object on a board. `vibefield-plugin try <dir>` does it for
+you — the app, on a fresh profile with your plugin staged alone, lays one object of
+each of your kinds on a fresh board and says whether each is DRAWN (`cli.md`).
 
 ## Declaring
 
@@ -66,7 +66,7 @@ One entry per kind under `contributes.objects`:
   the kind's pass (the desk makes every registered kind's pass at its mount). The
   retired `onWidget:<type>` is refused by name (`onwidget-activation-retired`).
 
-The widget-era view fields are RETIRED on an object and refused by name:
+The old canvas face's view fields are RETIRED on an object and refused by name:
 
 | field | where it went |
 | --- | --- |
@@ -212,7 +212,9 @@ defaults (ICE design-017 §8, design-018 §6).
 - `category` is the chip on the tray's bar: a plugin's own string is its own chip,
   or name a built-in's (`paper`, `surfaces`, `things`) to join it.
 - `hang` is how it hangs, and every entry says it: its size on the board in CSS px,
-  the accessory (`hook`, `shelf`, `clip`, `rail`) and the pegs in pitches from the hang point.
+  the accessory (`hook`, `shelf`, `clip`, `rail`) and the pegs in pitches from the hang point
+  (a pitch is the board's hole spacing; the hang point is the specimen's top edge's centre,
+  its bottom edge's on a shelf — so a hook at `[0, -0.5]` sits half a pitch above it).
   Size it from the specimen: the board draws the object at its natural size scaled
   by the smaller of `hang.w / size.w` and `hang.h / size.h`, centred — so a hang of
   the object's own aspect fills it (ICE's note hangs 120 × 120, its whiteboard
@@ -268,7 +270,7 @@ half `packages/desk/src/kind.ts`):
 | member | required | what it is |
 | --- | --- | --- |
 | `name` | yes | the kind's registry name — it IS the object's type (the host refuses any other: `check` says `object-kind-misnamed`) |
-| `stratum` | yes | `pads` \| `sheets` \| `things` — the desk's paint order: beneath everything · flat on the mat, holding a desk · every other thing |
+| `stratum` | yes | `pads` \| `sheets` \| `things` — the desk's paint order: beneath everything (the calendar) · flat on the mat, holding a desk of its own (the mini mat) · every other thing (the note, the whiteboard, the notebook, the clock) — a card or a token is a `things` kind |
 | `create(device, format, mat)` | yes | → `Promise<KindPass>`: the kind's PASS on the host's `GPUDevice` for the swap chain's `format`, on the root mat's pass (`MatPass` — the slot's view block, bound once, never written by a kind) |
 | `reach` | yes | how far the drawing may reach PAST the rect, world units (shadow, lift, tilt) — the cull margin and the pick pad |
 | `resolve(ctx)` | yes | the geometry `G` this frame, from the rect, the props and the flux |
@@ -278,7 +280,7 @@ half `packages/desk/src/kind.ts`):
 | `frame(G)` | no | the silhouette the desk's marks go round; absent, the rect |
 | `theme(palette, name)` | no | its look `L` from the host's palette, per theme — `ctx.look` |
 | `local(host)` | no | its desk state (`KindLocal`: `tick` · `due` · `landed` · `forget`) — and the registered wake, below |
-| `open` | no | what picking it up means: `extent` (the open rect), `pose` (`camera` \| `eye`), `tools` (the held bar's — each an action or a mode, with its own glyph) |
+| `open` | no | what picking it up means (`OpenBinding`, quoted below): `extent` (the open rect), `pose` (`camera` \| `eye`), `tools` (the held bar's, each a `HeldToolDef` — `kind: "action"` with its op `run`, or `kind: "mode"`; with NO kind it is declared only, dim and never run), `readout` (its word in hand) |
 | `rezoom` / `rung(ctx)` | no | the record reads the zoom continuously / only through a rung (a raster's band) |
 | `face(G)` · `faceLaw` · `insideGrid` | no | a CONTAINER kind: the window its inside shows through, its chip law, its inside's grid |
 | `reads` | no | components and tags beyond its props the builder journals for it |
@@ -588,6 +590,226 @@ so the same kind draws for the app, a test's fake world and the Node oracle alik
   plus `api.transact(fn)`, `api.undo()`, `api.redo()`. Every write is ONE
   transaction, one undo step (`{ undoable: false }` opts out).
 
+## Reading props
+
+`ctx.props` is FLAT: every prop the row declares, by its name, whatever conflict group it
+rides in, as the document holds it now (cached from the change journal — read it each
+frame, never keep it). Read each with its type and a default, through the door:
+
+```ts
+/** A prop read with a type and a default — the kinds' one door to `ctx.props`. */
+export declare const numberProp: (props: Readonly<Record<string, unknown>>, name: string, fallback: number) => number;
+export declare const stringProp: (props: Readonly<Record<string, unknown>>, name: string, fallback: string) => string;
+```
+
+A boolean is `typeof v === "boolean" ? v : fallback` — the worked example's own `flagProp`
+(its `src/kind.ts`) is exactly that. A menu act's `api.props(e)` and a held tool's
+`api.props()` hand the same flat record; `setProps(patch)` writes the props you name.
+
+## The kit's WGSL — what your shader is composed after
+
+A kind's program is `kitWgsl(pieces, own)`: the kit's pieces you name, composed BEFORE
+your own structs, modules and entry into ONE WGSL module (`object-kit-piece-unknown`
+refuses a piece it does not carry). What each piece declares is in scope in your shader,
+and YOUR module-scope names must not repeat its. Read from the kit's own text when these
+docs are generated:
+
+- `view` — `struct MatUniforms`
+- `portal` — `const PORTAL_CHAIN`, `fn portal_sd(p: vec2f, half: vec2f, r: f32) -> f32`, `fn portal_cover_one(p_css: vec2f, portal: vec4f, clip: vec4f, dpr: f32, grow: f32) -> f32`, `fn portal_cover_grown(p_css: vec2f, portals: array<vec4f, PORTAL_CHAIN>, clips: array<vec4f, PORTAL_CHAIN>, dpr: f32, grow: f32) -> f32`, `fn portal_cover(p_css: vec2f, portals: array<vec4f, PORTAL_CHAIN>, clips: array<vec4f, PORTAL_CHAIN>, dpr: f32) -> f32`
+- `sdf` — `fn sdf_box(p: vec2f, b: vec2f) -> f32`, `fn sdf_round_box(p: vec2f, b: vec2f, r: f32) -> f32`, `fn sdf_circle(p: vec2f, r: f32) -> f32`, `fn sdf_segment(p: vec2f, a: vec2f, b: vec2f) -> f32`, `fn sdf_rounded_x(p: vec2f, w: f32, r: f32) -> f32`, `fn op_union_round(a: f32, b: f32, r: f32) -> f32`, `fn op_isect_round(a: f32, b: f32, r: f32) -> f32`
+- `light` (also named `lamp`, `gobo`, `night`, `noise`) — `fn mat_zoom(u: MatUniforms) -> f32`, `fn mat_dpr(u: MatUniforms) -> f32`, `fn hash12(p: vec2f) -> f32`, `fn value_noise(p: vec2f) -> f32`, `fn srgb_to_linear(c: vec3f) -> vec3f`, `fn rgb2hsb(c: vec3f) -> vec3f`, `fn hsb2rgb(c: vec3f) -> vec3f`, `fn line_coverage(x: f32, spacing: f32, half_width: f32, px: f32) -> f32`, `fn grid2(p: vec2f, spacing: f32, half_width: f32, px: f32) -> f32`, `fn line_weight(u: MatUniforms, cell_px: f32) -> vec2f`, `fn mat_albedo(u: MatUniforms, world: vec2f, px: f32, frag: vec2f, bn: vec3f, ruler: f32) -> vec3f`, `fn linearstep(edge0: f32, edge1: f32, x: f32) -> f32`, `fn blur_ratio(ndc_z: f32, p: vec4f) -> f32`, `fn sample_blur(tex: texture_2d<f32>, samp: sampler, uv: vec2f, texel: vec2f, blur: f32, n: f32) -> f32`, `fn sample_gobo(u: MatUniforms, tex: texture_2d<f32>, samp: sampler, desk: vec3f, n: f32) -> f32`, `fn desk_of(u: MatUniforms, world: vec2f) -> vec3f`, `fn lit_desk(u: MatUniforms, L: vec4f, p: vec2f, h: f32) -> vec3f`, `fn lit_gobo(u: MatUniforms, tex: texture_2d<f32>, samp: sampler, p: vec2f, h: f32, own: vec3f, n: f32) -> f32`, `fn shade_mat(u: MatUniforms, albedo: vec3f, gobo: f32) -> vec3f`, `fn night_luminance(c: vec3f) -> f32`, `fn night_scotopic(c: vec3f) -> f32`, `fn night_mesopic(L: f32) -> f32`, `fn night_encode(c: vec3f) -> vec3f`, `fn night_mat(u: MatUniforms, albedo: vec3f, gobo: f32, noise: f32) -> vec3f`, `fn mat_colour(u: MatUniforms, albedo: vec3f, gobo: f32, noise: f32) -> vec3f`
+- `ruler` — `struct RulerHit`, `const RULER_LEVELS`, `const GLYPH_PAD`, `fn ruler_line(d: f32, hw: f32) -> f32`, `fn ruler_in(x: f32, a: f32, b: f32) -> f32`, `fn ruler_digits(a: i32) -> i32`, `fn ruler_pow10(p: i32) -> i32`, `fn ruler_digit_at(a: i32, i: i32, nd: i32) -> i32`, `fn ruler_label(index: i32, mult: i32, exp: i32, k: i32) -> i32`, `fn ruler_label_len(index: i32, mult: i32, exp: i32) -> i32`, `fn ruler_band(u: MatUniforms, along: f32, across: f32, phase: f32, wraps: f32, lim: vec2f, turned: bool) -> RulerHit`, `fn ruler_ink(u: MatUniforms, screen: vec2f, frag: vec2f, glyph_tex: texture_2d<f32>, samp: sampler) -> f32`
+- `book` — `struct NbUniforms`, `struct NbBook`, `struct NbCloth`, `struct NbPaperS`, `struct NbEnd`, `const NB_PI`, `const NB_GOLDEN`, `fn nb_sat(x: f32) -> f32`, `fn nb_clip(k: NbUniforms, P: vec3f) -> vec4f`, `fn nb_desk_at(u: MatUniforms, P: vec3f) -> vec3f`, `fn nb_hash(p: vec2i) -> f32`, `fn nb_vn(p: vec2f) -> vec3f`, `fn nb_fbm(p: vec2f) -> vec3f`, `fn nb_detail(period: f32, px: f32) -> f32`, `fn nb_cov(d: f32, px: f32) -> f32`, `fn nb_sd_box(p: vec2f, b: vec2f, r: f32) -> f32`, `fn nb_sd_fore(q: vec2f, w: f32, h: f32, r: f32) -> f32`, `fn nb_shadow(k: NbUniforms, B: NbBook, P: vec3f, n: vec3f, rot: f32, tex: texture_depth_2d_array, cmp: sampler_comparison) -> f32`, `fn nb_colour(u: MatUniforms, albedo: vec3f, light: f32, gobo: f32, noise: f32) -> vec3f`, `fn nb_cloth(q: vec2f, pitch: f32, px: f32) -> NbCloth`, `fn nb_ring(d: f32, r: f32, w: f32, px: f32) -> f32`, `fn nb_hash2(p: vec2f) -> f32`, `fn nb_design(B: NbBook, q: vec2f, w: f32, h: f32, px: f32, base: vec3f) -> vec4f`, `fn nb_paper_seed(seed: f32) -> vec2f`, `fn nb_paper(k: NbUniforms, base: vec3f, q: vec2f, dqdx: vec2f, dqdy: vec2f, seed: f32, tex: texture_2d<f32>, samp: sampler) -> NbPaperS`, `fn nb_ruling(k: NbUniforms, B: NbBook, q: vec2f, w: f32, h: f32, px: f32) -> f32`, `fn nb_cover_g(k: NbUniforms, B: NbBook, q: vec2f, px: f32) -> vec2f`, `fn nb_cover_albedo(k: NbUniforms, B: NbBook, q: vec2f, px: f32) -> vec3f`, `fn nb_endpaper(k: NbUniforms, B: NbBook, q: vec2f, px: f32, stacked: bool, dqdx: vec2f, dqdy: vec2f, tex: texture_2d<f32>, samp: sampler) -> NbEnd`, `fn nb_board(k: NbUniforms, B: NbBook, q: vec2f, px: f32) -> vec3f`, `fn nb_edge(k: NbUniforms, B: NbBook, q: vec2f, sheets: f32, side: f32, px: f32) -> vec3f`
+
+The VIEW BLOCK every kind binds — `@group(0) @binding(0) var<uniform> u: MatUniforms;`,
+written by the desk once a frame per slot, bound by a kind and never written. The fields
+a kind reads (its others are the mat's own — reach them only through the `light` piece):
+
+| field | holds |
+| --- | --- |
+| `u.cam` | the camera: `xy` the world point at the canvas's top-left (world units), `z` the zoom — CSS px per world unit, `mat_zoom(u)` — and `w` the device ratio, `mat_dpr(u)` |
+| `u.view` | `xy` the canvas size, CSS px; `z` the grain's time, seconds; `w` the OBJECTS' presentation opacity — what every kind multiplies its alpha by |
+| `u.box` | this slot's box on the attachment, CSS px (`x, y, w, h`) — what a kind culls against |
+| `u.portals` | the portal chain `portal_cover` reads: each container face's centre and half extents, CSS px |
+| `u.clips` | each face's corner radius and on (0/1 — a 0 ends the chain), beside `portals` |
+
+The conventions the scaffold's shader keeps: world units, y DOWN (the screen's own axes);
+a kind's rect CENTRED (`cx, cy, w, h`); CSS px = (world − `u.cam.xy`) × `mat_zoom(u)`;
+clip space = CSS px ÷ `u.view.xy` × 2 − 1, y flipped; in a fragment `in.clip.xy` is
+DEVICE px, so world = `in.clip.xy` ÷ (`mat_zoom(u)` × `mat_dpr(u)`) + `u.cam.xy`. The colour
+a fragment returns is PREMULTIPLIED, times `u.view.w` × `portal_cover(in.clip.xy / mat_dpr(u),
+u.portals, u.clips, mat_dpr(u))` — so inside a mini mat's face it fades with no code of yours.
+
+A record's GPU struct is `defineStruct(name, fields)` — its WGSL generated from the one
+declaration, so the CPU and the GPU cannot drift; `kitWgsl(…, { structs: [It] })` puts it in
+scope. Its field types, laid out (and padded) by WGSL's own alignment rules — a `vec2f`
+first, then the scalars, then each `vec4f`, keeps it tight, as the scaffold's record does:
+
+```ts
+/** The scalar and vector types, and a fixed array of vec4f (`array<vec4f, N>`: stride 16, legal in a uniform block) — the portal chain's. */
+export type FieldType = "f32" | "i32" | "u32" | "vec2f" | "vec3f" | "vec4f" | "mat4x4f" | `array<vec4f, ${number}>`;
+```
+
+## Shapes the desk takes — ICE's own declarations
+
+These types are ICE's, re-exported by `@vibefield/plugin-sdk/desk`, quoted from the
+installed ICE's own declarations — doc comments and all — when these docs are generated.
+
+**`open` — what picking it up means, and its held bar's tools.** A tool with no `kind` is
+DECLARED ONLY — the bar shows it dim and never runs it: `check` refuses an op without one
+(`object-tool-inert`), and a tool ICE would refuse at definition (`object-tool-invalid`).
+
+```ts
+/**
+ * The kind's OPENING (design-015 §8; D4b) — what "pick it up" means for this kind. `extent`: the OPEN rect in the object's
+ * own desk units, centred as its rect is and UNTURNED (the builder turns it with the object): a notebook's spread (twice the
+ * case's width, left of the spine), a board's face, a calendar's month — what the reading size fits into the view. `pose`: how
+ * the reading size is reached — `camera` (a flat kind, the default: the held slot's camera maps the extent to the held rect
+ * and the kind draws at rest) or `eye` (a thing with height: the camera keeps the desk's zoom and the kind RISES toward the
+ * desk eye by `ctx.held.grow`). `openness`: how far the kind's own open motion has come (0 shut … 1 open) — the put-down
+ * flies home once it is under 0.35 and lands once under 0.02 (absent: 0, a kind with no motion of its own). `spread`: a
+ * two-page extent that opens one page at a time on a portrait phone (Q-p); `page`: which of its two is in view there — 0 the
+ * right (the default) … 1 the left, flux the view glides by (D3t-b: the notebook reads page by page). `tools`: the held bar's
+ * slots (D3t-a: live — a mode or an action each); `tool`: the mode in hand when it is picked up, from its props (default: the first mode);
+ * `swatches`: the colour a slot shows instead of its glyph (the board's four inks — the product's palette, through the look), read
+ * with the anchor as `readout` is — a throw leaves the slots their glyphs, said once, never a strike (petition I24).
+ */
+export interface OpenBinding {
+    extent(ctx: Pick<ObjectContext, "rect" | "props">): ObjectRect;
+    readonly pose?: "camera" | "eye";
+    openness?(ctx: Pick<ObjectContext, "entity" | "local">): number;
+    readonly spread?: boolean;
+    page?(ctx: Pick<ObjectContext, "entity" | "local">): number;
+    readonly tools?: readonly HeldToolDef[];
+    tool?(props: Readonly<Record<string, unknown>>): string;
+    swatches?(look: unknown): Readonly<Record<string, string>>;
+    /**
+     * The kind's WORD IN HAND (petition I22 — MC-D9's readouts): where the hand is, said beside its tools — the notebook's "Page 2",
+     * the calendar's "September", a clock's time. A string, or read each time the selection's anchor is recomposed (the pickup, a
+     * mode taken up, a held tool's act run — every frame drawn while it is held) and surfaced as `HeldAnchor.readout`; `undefined`
+     * or "" — no word. A readout that throws is caught at the kind's boundary: the anchor keeps the tools and carries no word, and the
+     * desk says so once — never a strike against the kind (petition I24: the anchor is read at the host's rate and only in hand, and a
+     * word draws nothing of the desk).
+     */
+    readonly readout?: string | ((ctx: HeldReadoutContext) => string | undefined);
+}
+/** One tool of the held bar, as a kind declares it (its `open.tools`). */
+export interface HeldToolDef {
+    /** Unique within the type: what `HeldTool.id` holds for a mode, what `ops.useHeldTool` names. */
+    readonly id: string;
+    /** Its name — the slot's accessible label and its tip. */
+    readonly label: string;
+    /** `mode` (the active tool) or `action` (an op, run once); absent = declared only (dim, inert). */
+    readonly kind?: "mode" | "action";
+    /** The keys that choose it while held: `KeyboardEvent.key` with `mod+` (⌘ or ctrl), `shift+`, `alt+` — "1", "e", "mod+z", "mod+Backspace". */
+    readonly keys?: readonly string[];
+    /** The key as the tip shows it ("1", "E", "⌘Z"). */
+    readonly hint?: string;
+    /** Its glyph (`HeldGlyph`, K8a): a name of the bar's set, or its own drawing (`{ path }`). */
+    readonly glyph?: HeldGlyph;
+    /** A mode chosen again while active hands the hand back the mode before it. */
+    readonly toggle?: boolean;
+    /** The cursor over the object's drawing surface (its `content` part) while this mode is active — "none" where the tool draws itself. */
+    readonly cursor?: string;
+    /** false: keys only — no slot in the bar (the board's tip, its wipe). */
+    readonly bar?: boolean;
+    /** An action's op. */
+    run?(api: HeldToolApi): void;
+}
+/**
+ * A held tool's GLYPH (design-016 §5 · K-L2, K8a): a NAME the bar draws (its set — `SELECTION_GLYPHS` in `@ice/react`, which an
+ * app may extend), or the tool's OWN drawing — SVG path data in the bar's 24-unit box, stroked 2 units in the bar's ink as the
+ * bar's own are, or filled (`fill`). A plugin kind in its own package, which draws no React, declares its drawing; a name the bar
+ * does not know is never drawn as another glyph (the bar marks it missing and says so).
+ */
+export type HeldGlyph = string | {
+    readonly path: string;
+    readonly fill?: boolean;
+};
+```
+
+**`chip` — its far impostor inside a container's face** (with `desk.containable`):
+
+```ts
+/** One child as the face's far LOD draws it, in the CHILD's frame (the inside's world). */
+export interface ChildShape {
+    /** Its finish (`ChipFinish`) — or finishes, in preference order; the builder hands the container the one it draws. */
+    readonly finish: ChipFinish | readonly ChipFinish[];
+    readonly cx: number;
+    readonly cy: number;
+    /** Half extents, the tilt (radians), the corner radius — the child's own. */
+    readonly hx: number;
+    readonly hy: number;
+    readonly angle: number;
+    readonly radius: number;
+    /** Its colour: the paper's, or the vinyl's. */
+    readonly colour: RGB;
+    /** How far it stands off the face, child units — what its contact shadow is cast from. */
+    readonly height: number;
+    /** A note's writing, GREEKED: the pen's colour, the text's left edge and em (note units from the sheet's top-left), and each line's baseline and width. */
+    readonly writing?: {
+        readonly ink: RGB;
+        readonly x0: number;
+        readonly em: number;
+        readonly lines: readonly {
+            readonly y: number;
+            readonly width: number;
+        }[];
+    } | undefined;
+    /** A mini mat's printed border, child units. */
+    readonly margin?: number | undefined;
+}
+/** The two finishes the kit names — a chip's shared vocabulary (a note's `paper`, a mini mat's `vinyl`); a container may draw more. */
+export declare const PAPER_FINISH: ChipFinish;
+export declare const VINYL_FINISH: ChipFinish;
+```
+
+**`frame` — the silhouette the desk's marks go round** (absent: the rect):
+
+```ts
+/** An object's silhouette as the marks go around it: its centre, half extents, turn and corner — world units from a kind (`frame`), CSS px on screen. */
+export interface MarkFrame {
+    readonly cx: number;
+    readonly cy: number;
+    readonly hx: number;
+    readonly hy: number;
+    readonly angle: number;
+    readonly r: number;
+}
+```
+
+**`ctx.flux` — how it is held, hovered and present this frame:**
+
+```ts
+/**
+ * What moves, per entity — the builder's springs, each 0..1 and SNAPPED to its target when settled
+ * (the B7 trap: a spring that never quite lands keeps the desk awake forever). `lift` follows the
+ * `Grab` fact (held), `hover` the local mouse pointer's exact hit (the B9 pairing — never the
+ * dead-band `Targets`), `fade` the delete ghost (1 alive … 0 gone). `ring` is ALWAYS 0 from the
+ * builder: the kinds' own selection ring retired at D4a (the marks draw the selection) and its
+ * spring went at D6; the Node oracle alone hands a ring, for the baseline against the prototype.
+ */
+export interface ObjectFlux {
+    readonly lift: number;
+    readonly hover: number;
+    readonly ring: number;
+    readonly fade: number;
+}
+```
+
+**`tray.hang` — how its specimen hangs on the pegboard:**
+
+```ts
+/** How a kind hangs on the tray: its size (CSS px), its pegs (pitches from its hang point), its accessory. */
+export interface TrayHang {
+    readonly w: number;
+    readonly h: number;
+    /** The holes the accessory plugs into, `[dx, dy]` pitches from the hang point — the top edge's centre, or the bottom edge's on a shelf. */
+    readonly pegs: readonly (readonly [number, number])[];
+    readonly accessory: TrayAccessory;
+}
+```
+
 ## Where logic goes
 
 Three places, each for its own kind of state (ICE design-015's law: facts in the
@@ -631,24 +853,32 @@ declaration and program checks: `binding.kind` names a real export
 (`object-export-missing`) holding a desk kind (`object-kind-invalid`) whose registry name
 is the row's type (`object-kind-misnamed`), hanging by a tray entry that says how
 (`object-tray-hang-missing`, `object-tray-category-invalid`), providing `desk.object`
-(`object-provides-no-desk-object`); its `create`, run on a RECORDING device that answers
+(`object-provides-no-desk-object`), its held tools ones ICE takes and runs
+(`object-tool-invalid`, `object-tool-inert`); every name the built module imports from the
+door one the door exports (`import-name-unknown`); its `create`, run on a RECORDING device that answers
 every call as WebGPU does short of compiling, names only the kit's pieces
 (`object-kit-piece-unknown`), asks for its shader as WGSL TEXT (`object-wgsl-not-text`)
 that READS — entry points its pipelines name (`object-wgsl-unread`), bindings each stage
 uses laid in its layout (`object-wgsl-binding-unlaid`), bind groups that fill their
 layouts (`object-bind-group-mismatch`). NOTHING COMPILES IT: a shader naming what nothing
 declares passes, and every kind with shaders carries the note `object-wgsl-not-compiled`
-(the still that would compile and draw it waits on ICE). `pnpm playground <dir>` runs the
+(`try`, below, is what compiles it). `plugin-playground <dir>` (`pnpm playground` in a checkout) runs the
 same harness over every DECLARED STATE — each fixture in `playground/states.ts` (its props
 validated first, `state-invalid`) × idle, selected, held, open (when the kind opens),
 contained (when it provides `desk.containable`) × every zoom the desk's LOD names — through
 resolve, record, hit (`state-hit-missed`: it must hit its own box), frame, chip, the
 opening, prepare and drawRange (`state-spawn-failed`, `state-render-failed`,
 `state-draw-ill-formed`), then dispose. A unit test calls it the same way. `inspect` lists
-each kind with its tray chip, its hang, what it provides, its export and a `null` refusal.
+each kind with its tray chip, its hang, what it provides, its export, the states it is
+driven through and, with `--json`, a `null` refusal.
+
+SEEING IT DRAWN: neither compiles your WGSL. `vibefield-plugin try <dir>` does — the app
+makes the kind on its own device and draws it on a fresh board: a WGSL error comes back as
+the compiler's own line at YOUR file's line and column (`try-kind-refused`), a kind laid but
+drawn nowhere as `try-not-picked`, and a kind drawn as `ok … DRAWN`, with stills (`cli.md`).
 
 WHERE IT RUNS: `check` runs the harness in plain Node — no `document`, no
-`OffscreenCanvas`; `pnpm playground` runs it in happy-dom — a `document`, still no
+`OffscreenCanvas`; the playground runs it in happy-dom — a `document`, still no
 `OffscreenCanvas` or `createImageBitmap`; your own unit test runs in whatever
 environment its vitest file declares. A `create` that reaches for a browser global its
 environment lacks gets the note `object-create-not-run-here` (its states are still

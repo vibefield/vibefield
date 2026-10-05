@@ -3,9 +3,11 @@
 
 # Refusal codes
 
-Every code `check` and its siblings can emit. `code` is stable — branch on it.
-`expected` in the verdict is the concrete fix for that instance; the guidance
-column is the general one.
+Every code `vibefield-plugin` can emit — `check`, `inspect`, `emit-manifest`, `try`,
+`dev-link`, `pack` and the registry commands — then the kind harness's state codes and
+the playground's own. `code` is stable — branch on it. `expected` in the verdict is the
+concrete fix for that instance; the guidance column is the general one. `create-plugin`
+and `plugin-build` answer in their own words (`--help`).
 
 ## Refusals (exit 1)
 
@@ -18,7 +20,7 @@ column is the general one.
 | `artifact-unmappable-specifier` | artifact | the bundle imports a bare specifier the host import map cannot bind (§11.6) | `import only HOST_SINGLETON_MODULE_SPECIFIERS, or let the plugin bundle it in` |
 | `behavior-presence-budget-exceeded` | manifest | the plugin's charged ephemeral facets exceed one renderer presence window | reduce maxFacetBytes claims or remove optional presence producers; the whole plugin set must fit 48 KiB including per-facet envelopes |
 | `behavior-store-unsupported` | manifest | a legacy host release does not admit this behavior store | upgrade the host; current releases admit bounded ephemeral behaviors and no longer emit this code |
-| `binding-missing` | activation | `the manifest declares a command, surface or behavior that activate never bound (§12.1); a widget row needs none on the desk build — the host compiles it faceless (DK-2), and an object's binding is its module's export (the object-* codes)` | bind every declared command, surface and behavior during activate(ctx) |
+| `binding-missing` | activation | `the manifest declares a command, surface or behavior that activate never bound (§12.1) — an object needs no binding there: its code half is its module's export, held by the object-* codes` | bind every declared command, surface and behavior during activate(ctx) |
 | `binding-undeclared` | activation | activate registered a command, surface or behavior the manifest does not declare (§12.1) — an object's kind is never registered: the host reads binding.kind | declare it in the manifest first, or stop registering it |
 | `dev-root-unknown` | dev-link | no dev-linked plugin root could be resolved for this machine | `pass --root <dir>, or run inside the repo whose dev session watches examples/plugins` |
 | `docs-stale` | docs | the committed docs are not what the current schemas generate | regenerate with `pnpm gen:docs` and commit the result |
@@ -51,8 +53,8 @@ column is the general one.
 | `object-wgsl-binding-unlaid` | activation | a binding a pipeline's stage statically uses is not in that pipeline's layout, or is laid as another kind of resource | carry every binding the WGSL's entry points use in the pipeline's layout, at its @group/@binding, as the same kind of resource |
 | `object-wgsl-not-text` | activation | the kind's create asked for a shader module whose code is not WGSL text — the shader did not arrive inlined | import the kind's .wgsl files (plugin-build inlines each as its text) and compose them with kitWgsl |
 | `object-wgsl-unread` | activation | a pipeline names an entry point its WGSL does not declare for that stage, or overrides a constant it never declares — read from the text, no compiler | name the entry points the WGSL declares (`@vertex fn vs`, `@fragment fn fs` by default) and override only what it declares |
-| `objects-need-desk` | activation | the manifest declares object kinds (contributes.objects) — object kinds need the desk; this build draws widgets (§12.8); said only by the ICE 0.11 build — the desk build (DK-2) activates object kinds and no door says it | kept for the record: on the desk build an object kind activates like any plugin; a host that still says this code predates the desk — run the desk build |
-| `onwidget-activation-retired` | manifest | `the retired onWidget:<type> activation event — an object's activation event is onObject:<type> (DK-9)` | `rename it onObject:<type>: it fires when the type's first instance appears in the document (manifest.md)` |
+| `objects-need-desk` | activation | a host from before the desk refused object kinds (contributes.objects) with this code; this build activates them like any plugin and never says it | kept for the record: on the desk build an object kind activates like any plugin; a host that still says this code predates the desk — run the desk build |
+| `onwidget-activation-retired` | manifest | `the retired onWidget:<type> activation event — an object's activation event is onObject:<type>` | `rename it onObject:<type>: it fires when the type's first instance appears in the document (manifest.md)` |
 | `pack-refused` | pack | the .vfplugin bundle could not be produced (unsafe entry name, missing entry) | `pack walks vibefield.plugin.json + dist/** + assets/** — keep entries inside them` |
 | `plugin-dir-invalid` | input | the path given is not a directory holding a plugin | pass the directory that holds vibefield.plugin.json |
 | `release-not-found` | registry | the index carries no entry for the requested plugin id | check the id, or submit the plugin to the index first |
@@ -70,7 +72,7 @@ column is the general one.
 | `usage` | input | the command line could not be understood | run `vibefield-plugin --help`; every command is non-interactive |
 | `wall-violation` | wall | plugin runtime code imports something outside the SDK door (§11.3, wall R10) | import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior, /desk), @vibefield/contracts types, or react |
 | `widget-context-retired` | manifest | the retired widget-context command placement — a command on an object's context menu is placed object-context | rename the placement object-context — the retired word is no alias |
-| `widgets-contribution-retired` | manifest | the retired contributes.widgets — a face on the desk is an object kind the desk draws (DK-8) | declare it under contributes.objects: its durable half (size, props, groups, interaction) and binding.kind, the renderer export that holds its kind (objects.md) |
+| `widgets-contribution-retired` | manifest | the retired contributes.widgets — a face on the desk is an object kind the desk draws | declare it under contributes.objects: its durable half (size, props, groups, interaction) and binding.kind, the renderer export that holds its kind (objects.md) |
 
 ## Notes (exit 0)
 
@@ -94,3 +96,46 @@ command — honest absence beats a blank.
 | `submit-index-repo-absent` | registry | the index repository does not exist yet, so submitting is a human step | keep the row; add it to registry/index.json and sign it when the repo exists |
 | `try-desk-awake` | try | the desk did not come to rest with the kind on it, and the kind's own due() asks for frames | a kind whose local() ticks answers due(now) with the next time it needs a frame — Infinity when nothing moves (objects.md, Wakes) |
 | `try-stills` | try | where the run's stills of the whole board are (each object's own stills are on its row) | look at them: the desk drew what they show, by day and by night |
+
+## The kind harness's state codes
+
+The kind-conformance harness drives a kind through its declared states in the playground
+and in your own unit test (`check` runs its declaration and program rows, above). Each
+state code, and what passes:
+
+| code | what passes |
+| --- | --- |
+| `state-draw-ill-formed` | set the pipeline your create made, and a bind group of its layout at every index, before each draw |
+| `state-hit-missed` | a hit that answers a part (`content`) somewhere in the object's own box — what is picked is what is drawn |
+| `state-invalid` | props the row declares, each of its declared kind |
+| `state-render-failed` | a pass whose prepare answers how many of the records it was handed will draw (0 … n) and whose drawRange draws them, neither throwing |
+| `state-spawn-failed` | a world half that lays every state out: resolve and record (and rung, frame, chip, the opening) answer without throwing, in finite numbers |
+
+## The playground's own codes
+
+What `plugin-playground` says before a kind's states are driven (quoted from its source):
+
+```ts
+export type RefusalCode =
+  // --- plugin-level: the run never reached a state ---
+  /** no `vibefield.plugin.json` at the given path */
+  | "manifest-missing"
+  /** the manifest exists and the contracts schema refused it */
+  | "manifest-invalid"
+  /** the manifest declares object kinds but no renderer source exists to export them */
+  | "renderer-entry-missing"
+  /** the renderer module could not be imported (syntax, bad import, throw at top level) */
+  | "renderer-import-failed"
+  /** `activate` threw, or bound a type the manifest does not declare */
+  | "activation-failed"
+  // --- type-level: the fixtures for one declared type could not be read ---
+  /** `playground/states.ts` exists but its default export is not the declared shape */
+  | "states-invalid"
+  /** the states file names a type this manifest does not contribute */
+  | "states-unknown-type"
+  /** a declared type's state record is empty — say so rather than silently pass zero rows */
+  | "states-empty"
+  // --- state-level: one fixture's props (`validateState`; the kind harness says it on its rows) ---
+  /** the fixture's props violate the manifest's declared prop schema */
+  | "state-invalid";
+```

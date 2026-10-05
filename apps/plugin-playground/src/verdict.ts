@@ -24,6 +24,8 @@ export interface Refusal {
   readonly detail: string;
 }
 
+// DK-10: refusals.md QUOTES this union between the markers — the playground's codes were in no doc.
+// docs:begin playground-codes
 export type RefusalCode =
   // --- plugin-level: the run never reached a state ---
   /** no `vibefield.plugin.json` at the given path */
@@ -46,6 +48,7 @@ export type RefusalCode =
   // --- state-level: one fixture's props (`validateState`; the kind harness says it on its rows) ---
   /** the fixture's props violate the manifest's declared prop schema */
   | "state-invalid";
+// docs:end playground-codes
 
 /**
  * Codes RETIRED by name — never emitted again. DK-8: `widget-unbuildable` (the host could not build

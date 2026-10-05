@@ -7,17 +7,11 @@
 under it; every one is optional, and the cross-field invariants in `manifest.md`
 decide which entry module and which capability each kind requires.
 
-`widgets` is RETIRED (DK-8): a manifest that still says it is refused with
-`widgets-contribution-retired` — a face on the desk is an object kind, below.
-
 ## Objects
 
 An object is a kind the desk DRAWS — one WebGPU renderer, the kind's own GPU
 program — declared by its DURABLE half (the type, its props, its size) and bound
 by ONE export name; `tray` hangs it on the pegboard. `objects.md` is the deep end.
-
-The desk build activates an object like any contribution; the ICE 0.11 build
-refused it with `objects-need-desk` (object kinds need the desk; this build draws widgets).
 
 | field | type | required | rules |
 | --- | --- | --- | --- |
@@ -128,7 +122,7 @@ binds a handler with `ctx.commands.register(id, handler)`.
   {
     "id": "com.example.tools.tidy",
     "title": "Tidy the selection",
-    "description": "Align the selected widgets to a grid",
+    "description": "Align the selected objects to a grid",
     "placements": [
       "palette",
       "canvas-context"

@@ -357,7 +357,7 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
   },
   // --- the object door (DK-0f) ---
   {
-    topic: "a widget's view fields are retired on an object, each refused by name",
+    topic: "the old canvas face's view fields are retired on an object, each refused by name",
     manifest: { ...base(), contributes: { objects: [object({ surface: "dom" })] } },
   },
   {

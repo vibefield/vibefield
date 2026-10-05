@@ -7,8 +7,6 @@
 // Codes are kebab-case and STABLE: an agent branches on them, so renaming one
 // is a breaking change to the kit's interface, not a wording fix.
 
-import { OBJECTS_NEED_DESK } from "@vibefield/contracts";
-
 export interface RefusalClass {
   /** the row that emits it */
   readonly check: string;
@@ -66,7 +64,7 @@ export const REFUSAL_CATALOG = {
     check: "manifest",
     level: "refuse",
     meaning:
-      "the retired contributes.widgets — a face on the desk is an object kind the desk draws (DK-8)",
+      "the retired contributes.widgets — a face on the desk is an object kind the desk draws",
     guidance:
       "declare it under contributes.objects: its durable half (size, props, groups, interaction) and binding.kind, the renderer export that holds its kind (objects.md)",
   },
@@ -74,7 +72,7 @@ export const REFUSAL_CATALOG = {
     check: "manifest",
     level: "refuse",
     meaning:
-      "the retired onWidget:<type> activation event — an object's activation event is onObject:<type> (DK-9)",
+      "the retired onWidget:<type> activation event — an object's activation event is onObject:<type>",
     guidance:
       "rename it onObject:<type>: it fires when the type's first instance appears in the document (manifest.md)",
   },
@@ -168,7 +166,7 @@ export const REFUSAL_CATALOG = {
     check: "activation",
     level: "refuse",
     meaning:
-      "the manifest declares a command, surface or behavior that activate never bound (§12.1); a widget row needs none on the desk build — the host compiles it faceless (DK-2), and an object's binding is its module's export (the object-* codes)",
+      "the manifest declares a command, surface or behavior that activate never bound (§12.1) — an object needs no binding there: its code half is its module's export, held by the object-* codes",
     guidance: "bind every declared command, surface and behavior during activate(ctx)",
   },
   // --- the object rows (DK-6; DK-7: the SDK's kind-conformance harness — its declaration and its
@@ -319,7 +317,8 @@ export const REFUSAL_CATALOG = {
   "objects-need-desk": {
     check: "activation",
     level: "refuse",
-    meaning: `the manifest declares object kinds (contributes.objects) — ${OBJECTS_NEED_DESK.message} (§12.8); said only by the ICE 0.11 build — the desk build (DK-2) activates object kinds and no door says it`,
+    meaning:
+      "a host from before the desk refused object kinds (contributes.objects) with this code; this build activates them like any plugin and never says it",
     guidance:
       "kept for the record: on the desk build an object kind activates like any plugin; a host that still says this code predates the desk — run the desk build",
   },

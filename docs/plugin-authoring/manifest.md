@@ -4,10 +4,12 @@
 # The manifest
 
 `vibefield.plugin.json` is the installed contract. It is EMITTED from a typed
-`manifest.ts` by `plugin-build`'s manifest stage, canonicalized (keys sorted,
-2-space indent, one trailing newline) so the same manifest always produces the
-same bytes — the plugin's `manifestHash` and its packed artifact's sha256 both
-derive from them.
+`src/manifest.ts` by ONE writer — plugin-build's `emitManifest`, which the plugin's
+`gen:manifest` script calls with an install and `vibefield-plugin emit-manifest <dir>`
+calls with none — validated, defaulted and canonicalized (keys sorted, 2-space indent,
+one trailing newline), so the same manifest always produces the same bytes: the
+plugin's `manifestHash` and its packed artifact's sha256 both derive from them.
+`plugin-build` READS it and never writes it; re-emit after every edit of `manifest.ts`.
 
 ## Top-level fields
 
@@ -56,7 +58,7 @@ the schema itself says — `check` prints it verbatim with a pointer.
 | an activation event names something the plugin declares | `activation` | activation event onObject:com.example.demo.nothing names no owned declaration |
 | the retired onWidget: activation event is refused by name — it is onObject: | `activation.0` | activation event onWidget:com.example.demo is retired: an object's activation event is onObject:com.example.demo — it fires when the type's first instance appears in the document |
 | the retired widget-context command placement is refused by name — it is object-context | `contributes.commands.0.placements.0` | placement widget-context is retired: a command on an object's context menu is placed object-context |
-| a widget's view fields are retired on an object, each refused by name | `contributes.objects.0.surface` | surface is retired on an object: its kind IS the face — the desk draws it, there is no dom or gl |
+| the old canvas face's view fields are retired on an object, each refused by name | `contributes.objects.0.surface` | surface is retired on an object: its kind IS the face — the desk draws it, there is no dom or gl |
 | a tray entry's face names declared props, each a value of its prop's kind | `contributes.objects.0.tray.props.style` | tray props value for style is not one of its options |
 
 ## Activation events
