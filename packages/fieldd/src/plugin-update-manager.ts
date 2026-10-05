@@ -63,7 +63,9 @@ export interface PluginUpdateSourceRevokeRequest {
 }
 
 export interface PluginUpdateManagerOptions {
-  readonly plugins: Pick<PluginRegistryService, "get" | "commitEpoch">;
+  readonly plugins: Pick<PluginRegistryService, "get" | "commitEpoch"> &
+    /** §18.5 — advanced by every applied dev-linked reload; absent, no reload is ever seen. */
+    Partial<Pick<PluginRegistryService, "rendererServingRevision">>;
   readonly modules: Pick<PluginModuleAuthority, "prepareCandidate" | "prepareRecovery">;
   readonly serviceHost: () => Pick<
     ServiceHost,
@@ -121,6 +123,8 @@ interface IssuedSourceLease {
  */
 export class PluginUpdateManager {
   private readonly coordinators = new Map<string, PluginUpdateCoordinator>();
+  /** The plugin's serving revision each coordinator was made at (§18.5 — a dev reload advances it). */
+  private readonly coordinatorRevisions = new Map<string, number>();
   private readonly activeByPlugin = new Map<string, UpdateEpisodeRuntime>();
   private readonly episodes = new Map<string, UpdateEpisodeRuntime>();
   private readonly sourceLeases = new Map<string, IssuedSourceLease>();
@@ -175,29 +179,38 @@ export class PluginUpdateManager {
     const existing = this.coordinators.get(pluginId);
     if (existing !== undefined) {
       if (
-        !sameArtifact(existing.currentArtifact, artifact) ||
-        existing.commitEpoch !== commitEpoch
+        sameArtifact(existing.currentArtifact, artifact) &&
+        existing.commitEpoch === commitEpoch
       ) {
-        // Durable pointer publication refreshes the registry before the awaited commit callback
-        // returns to the coordinator. During that one-way interval, reconnects must still find
-        // the exact coordinator that owns the candidate/next-epoch transition. No other mismatch
-        // is tolerated, and the exception disappears with the active episode.
-        const active = this.activeByPlugin.get(pluginId);
-        if (
-          active !== undefined &&
-          sameArtifact(existing.currentArtifact, active.oldArtifact) &&
-          sameArtifact(artifact, active.candidateArtifact) &&
-          commitEpoch === existing.commitEpoch + 1
-        ) {
-          return existing;
-        }
+        return existing;
+      }
+      // Durable pointer publication refreshes the registry before the awaited commit callback
+      // returns to the coordinator. During that one-way interval, reconnects must still find
+      // the exact coordinator that owns the candidate/next-epoch transition.
+      const active = this.activeByPlugin.get(pluginId);
+      if (
+        active !== undefined &&
+        sameArtifact(existing.currentArtifact, active.oldArtifact) &&
+        sameArtifact(artifact, active.candidateArtifact) &&
+        commitEpoch === existing.commitEpoch + 1
+      ) {
+        return existing;
+      }
+      // §18.5 — a DEV-LINKED RELOAD moves the registry's artifact outside any update episode (the
+      // daemon deactivates the old module, swaps the registry, reactivates — daemon.ts
+      // `plugins.reload`) and advances the plugin's serving revision. The coordinator belongs to the
+      // artifact it was made for: it is retired, and one is made for the reloaded artifact, so a
+      // renderer that boots after the reload subscribes (DK-9: the windows replaced to carry an
+      // update's kinds were refused their lane, the plugin skipped, its objects a ghost stub). No
+      // other mismatch is tolerated.
+      if (active !== undefined || !this.reloadedSince(pluginId)) {
         throw new RpcCallError(
           "CONFLICT",
           `${pluginId}: registry artifact or epoch moved outside the update coordinator`,
           false,
         );
       }
-      return existing;
+      this.retireCoordinator(pluginId, existing);
     }
     const coordinator = new PluginUpdateCoordinator({
       pluginId,
@@ -207,12 +220,34 @@ export class PluginUpdateManager {
       ...(this.options.deadlines === undefined ? {} : { deadlines: this.options.deadlines }),
     });
     this.coordinators.set(pluginId, coordinator);
+    this.coordinatorRevisions.set(pluginId, this.servingRevision(pluginId));
     this.coordinatorDiagnosticDisposers.set(
       pluginId,
       coordinator.subscribe(() => this.emitDiagnosticsChanged()),
     );
     this.emitDiagnosticsChanged();
     return coordinator;
+  }
+
+  private servingRevision(pluginId: string): number {
+    return this.options.plugins.rendererServingRevision?.(pluginId) ?? 0;
+  }
+
+  /** A §18.5 dev-linked reload applied since this plugin's coordinator was made. */
+  private reloadedSince(pluginId: string): boolean {
+    const made = this.coordinatorRevisions.get(pluginId);
+    return made !== undefined && made !== this.servingRevision(pluginId);
+  }
+
+  /** Let a coordinator go whose artifact a dev-linked reload replaced: its deadline work stopped and
+   * its listeners cleared (a subscription that still holds it hears nothing more), its diagnostics
+   * subscription released. */
+  private retireCoordinator(pluginId: string, coordinator: PluginUpdateCoordinator): void {
+    coordinator.dispose(`${pluginId}: the plugin was reloaded (§18.5)`);
+    this.coordinators.delete(pluginId);
+    this.coordinatorRevisions.delete(pluginId);
+    this.coordinatorDiagnosticDisposers.get(pluginId)?.();
+    this.coordinatorDiagnosticDisposers.delete(pluginId);
   }
 
   beginRegistryUpdate(candidate: PluginRegistryUpdateCandidate): PluginUpdateStart {

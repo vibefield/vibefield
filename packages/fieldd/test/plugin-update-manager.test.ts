@@ -610,3 +610,75 @@ describe("PluginUpdateManager (PRC-5e)", () => {
     expect(rig.revocations).toHaveLength(1);
   });
 });
+
+describe("a §18.5 dev-linked reload and the update coordinator (DK-9)", () => {
+  // The dev-linked reload swaps the registry's artifact OUTSIDE any update episode and advances the
+  // plugin's serving revision. Until DK-9 the coordinator kept the old artifact and refused every later
+  // lane subscription ("moved outside the update coordinator") — so the windows replaced to carry an
+  // update's kinds booted without the plugin, its objects a ghost stub.
+  function reloadable() {
+    let current = record("a", { source: "dev-linked" });
+    let revision = 0;
+    const manager = new PluginUpdateManager({
+      plugins: {
+        get: (pluginId) => (pluginId === PLUGIN_ID ? current : undefined),
+        commitEpoch: (pluginId) => (pluginId === PLUGIN_ID ? 1 : undefined),
+        rendererServingRevision: () => revision,
+      },
+      modules: {
+        prepareCandidate: vi.fn(),
+        prepareRecovery: vi.fn(),
+      } as unknown as PluginUpdateManagerOptions["modules"],
+      serviceHost: () => null,
+      retireOldAuthority: async () => undefined,
+      mintSourceLease: vi.fn() as unknown as PluginUpdateManagerOptions["mintSourceLease"],
+      revokeSourceLease: async () => undefined,
+      requestRendererReplacement: async () => undefined,
+    });
+    return {
+      manager,
+      reload(character: string) {
+        current = record(character, { source: "dev-linked" });
+        revision += 1;
+      },
+      move(character: string) {
+        current = record(character, { source: "dev-linked" });
+      },
+      current: () => current,
+    };
+  }
+
+  it("retires the old artifact's coordinator and makes one for the reloaded artifact — a renderer booting after the reload subscribes live", () => {
+    const plugin = reloadable();
+    const before = plugin.manager.coordinatorFor(PLUGIN_ID);
+    before?.registerRenderer({
+      identity: A,
+      artifact: artifact(plugin.current()),
+      send: () => undefined,
+    });
+    plugin.reload("b");
+    const after = plugin.manager.coordinatorFor(PLUGIN_ID);
+    expect(after).toBeDefined();
+    expect(after).not.toBe(before);
+    expect(after?.currentArtifact).toEqual(artifact(plugin.current()));
+    // the window replaced to carry the new kinds: its new document's lane
+    expect(
+      after?.registerRenderer({
+        identity: { participantId: A.participantId, incarnation: "document-a2" },
+        artifact: artifact(plugin.current()),
+        send: () => undefined,
+      }),
+    ).toBe("live");
+    // made ONCE: the next lookup is the same coordinator
+    expect(plugin.manager.coordinatorFor(PLUGIN_ID)).toBe(after);
+  });
+
+  it("an artifact moved with no reload behind it is still refused", () => {
+    const plugin = reloadable();
+    plugin.manager.coordinatorFor(PLUGIN_ID);
+    plugin.move("b");
+    expect(() => plugin.manager.coordinatorFor(PLUGIN_ID)).toThrow(
+      /moved outside the update coordinator/,
+    );
+  });
+});
