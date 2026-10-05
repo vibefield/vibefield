@@ -26,7 +26,8 @@ export const REFUSAL_CATALOG = {
     check: "manifest",
     level: "refuse",
     meaning: "the plugin directory has no vibefield.plugin.json",
-    guidance: "run `pnpm gen:manifest` in the plugin (the manifest is emitted from manifest.ts)",
+    guidance:
+      "emit it from src/manifest.ts: `vibefield-plugin emit-manifest <dir>` (in a workspace with an install, `pnpm gen:manifest` does the same)",
   },
   "manifest-unreadable": {
     check: "manifest",
@@ -81,7 +82,23 @@ export const REFUSAL_CATALOG = {
     check: "manifest",
     level: "refuse",
     meaning: "the committed vibefield.plugin.json is not the canonical emission of itself",
-    guidance: "re-emit with `pnpm gen:manifest`; never hand-edit the canonical artifact",
+    guidance:
+      "re-emit it from src/manifest.ts — `vibefield-plugin emit-manifest <dir>` (or `pnpm gen:manifest` with an install); never hand-edit the canonical artifact",
+  },
+  "manifest-source-missing": {
+    check: "manifest",
+    level: "refuse",
+    meaning:
+      "emit-manifest found no src/manifest.ts — the manifest is AUTHORED there (TypeScript) and emitted to JSON",
+    guidance:
+      "author it in src/manifest.ts as `export const manifest: PluginManifestV1 = { … }` (the scaffold's shape)",
+  },
+  "manifest-source-unloadable": {
+    check: "manifest",
+    level: "refuse",
+    meaning: "src/manifest.ts did not load in Node, or exports no `manifest`",
+    guidance:
+      "keep it a plain module: `export const manifest`, `import type` for types, values only from @vibefield/contracts or the SDK — the detail quotes the error",
   },
   "manifest-unknown-key": {
     check: "manifest",
@@ -416,8 +433,81 @@ export const REFUSAL_CATALOG = {
   "dev-link-next-steps": {
     check: "dev-link",
     level: "note",
-    meaning: "what closes the loop after linking — developer mode, then plugins.reload",
-    guidance: "the copy is what the daemon re-reads, so re-run dev-link after each build",
+    meaning:
+      "what closes the loop after linking — a developer session of the app reads the root (a person's step); `try` draws it without one",
+    guidance:
+      "re-run dev-link after each build (the copy is what the daemon re-reads); `vibefield-plugin try <dir>` puts its kinds on the desk and says whether each is drawn",
+  },
+
+  // --- try (DK-10: the plugin's kinds on the desk, in the product) ------------------
+  "try-no-objects": {
+    check: "try",
+    level: "refuse",
+    meaning: "the manifest declares no object kind, so there is nothing to lay on the desk",
+    guidance:
+      "declare the kind under contributes.objects (objects.md) and export what its binding.kind names",
+  },
+  "try-unbuilt": {
+    check: "try",
+    level: "refuse",
+    meaning:
+      "the renderer entry the manifest names is not on disk — the desk loads the BUILT module",
+    guidance: "run `plugin-build` in the plugin's directory first (it writes dist/renderer.js)",
+  },
+  "try-app-missing": {
+    check: "try",
+    level: "refuse",
+    meaning:
+      "no VibeField app beside this kit to launch — try runs the app from the checkout the kit is installed in",
+    guidance:
+      "run the kit from a checkout of the VibeField repository (its root package.json has smoke:plugin)",
+  },
+  "try-not-laid": {
+    check: "try",
+    level: "refuse",
+    meaning:
+      "the app's fresh board did not lay one of the plugin's kinds — not registered (its plugin was not staged, or the host refused its row), or not placed",
+    guidance:
+      "the row must provide `desk.object`; the verdict's detail and the app's log (try.log beside the stills) say which",
+  },
+  "try-kind-refused": {
+    check: "try",
+    level: "refuse",
+    meaning:
+      "the desk refused the kind on the host's device — its WGSL did not compile or its pipeline did not build (refused at create), or its world half threw three times (quarantined); its objects wear the missing face",
+    guidance:
+      "the detail quotes the desk's own reason — for WGSL, the compiler's first line with its place (label:line:column); fix it, rebuild, try again",
+  },
+  "try-not-picked": {
+    check: "try",
+    level: "refuse",
+    meaning:
+      "the object was laid and its kind made, but nothing of it was picked on the drawn frame",
+    guidance:
+      'draw where the object lies (resolve → record → the pass), and make hit() answer "content" over what the pass draws — look at the still',
+  },
+  "try-app-failed": {
+    check: "try",
+    level: "refuse",
+    meaning:
+      "the app's try run ended before it judged every kind (it could not build, start, or reach its desk)",
+    guidance:
+      "read the app's log (try.log beside the stills); the plugin is implicated only if a row above names it",
+  },
+  "try-desk-awake": {
+    check: "try",
+    level: "note",
+    meaning:
+      "the desk did not come to rest with the kind on it, and the kind's own due() asks for frames",
+    guidance:
+      "a kind whose local() ticks answers due(now) with the next time it needs a frame — Infinity when nothing moves (objects.md, Wakes)",
+  },
+  "try-stills": {
+    check: "try",
+    level: "note",
+    meaning:
+      "where the run's stills of the whole board are (each object's own stills are on its row)",
+    guidance: "look at them: the desk drew what they show, by day and by night",
   },
 
   // --- docs ---------------------------------------------------------------------

@@ -126,3 +126,54 @@ describe("the kit on a plugin outside any workspace, nothing installed (DK-10)",
     expect(result.contributions?.objects?.[0]?.refusal).toBeNull();
   });
 });
+
+describe("emit-manifest — the scaffold's gen:manifest, run by the kit with nothing installed (DK-10)", () => {
+  // The bar's three agents each wrote an emitter of their own: `pnpm gen:manifest` (tsx + @vibefield/plugin-build)
+  // cannot run outside a workspace, and pnpm 11 first tries an install that the template's `catalog:` refuses.
+  it("writes vibefield.plugin.json from src/manifest.ts — an edit lands canonical, and check holds it", async () => {
+    const source = join(plugin, "src", "manifest.ts");
+    const json = join(plugin, "vibefield.plugin.json");
+    const original = { source: readFileSync(source, "utf8"), json: readFileSync(json, "utf8") };
+    try {
+      writeFileSync(
+        source,
+        original.source.replace('title: "Card",', 'title: "Card, re-emitted",'),
+      );
+      const emitted = await kit("emit-manifest", plugin);
+      expect(emitted.code).toBe(0);
+      expect(emitted.rows.map((r) => r.level)).toEqual(["pass"]);
+      expect(JSON.parse(readFileSync(json, "utf8")).title).toBe("Card, re-emitted");
+      const checked = await kit("check", plugin);
+      expect(checked.rows.some((r) => r.detail.includes("its own canonical emission"))).toBe(true);
+    } finally {
+      writeFileSync(source, original.source);
+      writeFileSync(json, original.json);
+    }
+  });
+
+  it("refuses a manifest that fails the contract, naming the issue, and writes nothing", async () => {
+    const source = join(plugin, "src", "manifest.ts");
+    const json = join(plugin, "vibefield.plugin.json");
+    const original = { source: readFileSync(source, "utf8"), json: readFileSync(json, "utf8") };
+    try {
+      writeFileSync(source, original.source.replace("schemaVersion: 1,", "schemaVersion: 0,"));
+      const emitted = await kit("emit-manifest", plugin);
+      expect(emitted.code).toBe(1);
+      expect(emitted.rows[0]?.code).toBe("manifest-invalid");
+      expect(readFileSync(json, "utf8")).toBe(original.json);
+    } finally {
+      writeFileSync(source, original.source);
+    }
+  });
+
+  it("refuses a directory with no src/manifest.ts", async () => {
+    const empty = mkdtempSync(join(tmpdir(), "dk-10-no-manifest-"));
+    try {
+      const emitted = await kit("emit-manifest", empty);
+      expect(emitted.code).toBe(1);
+      expect(emitted.rows[0]?.code).toBe("manifest-source-missing");
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  });
+});

@@ -9,11 +9,13 @@ import type { PluginManifestV1 } from "@vibefield/contracts";
 import { checkPlugin } from "./check";
 import { devLink, resolveDevRoot } from "./dev-link";
 import { checkDocsFresh, writeDocs } from "./docs-command";
+import { emitManifestCommand } from "./emit-manifest-command";
 import { formatInspection, inspectPlugin } from "./inspect";
 import { checkManifest } from "./manifest-check";
 import { artifactNameFor, packPlugin } from "./pack-command";
 import { loadPlugin } from "./plugin-dir";
 import { lookupRelease, signIndex, submitPlugin } from "./registry-commands";
+import { tryPlugin } from "./try-command";
 import { createEmitter, EXIT_HARNESS, EXIT_OK, exitCodeFor, refuse, type Verdict } from "./verdict";
 
 export const HELP = `vibefield-plugin — the VibeField plugin authoring kit
@@ -23,9 +25,14 @@ usage: vibefield-plugin <command> [options]
 commands:
   check <dir>                     run the authoring suite over a plugin directory
   inspect <dir>                   print what the host will see (contributions, grants, hashes)
+  emit-manifest <dir>             write vibefield.plugin.json from src/manifest.ts (gen:manifest, no install)
   pack <dir> [--out <file>]       write the deterministic .vfplugin and its sha256
   dev-link <dir> [--root <dir>]   copy the plugin where a developer-mode session finds it
                      [--remove]   undo a link this command made
+  try <dir> [--shots <dir>]       put its kinds ON THE DESK: the app, on a fresh profile with this plugin
+                                  staged alone, lays one object of each kind on a fresh board and holds
+                                  each one DRAWN (its WGSL compiled on the device, picked where it lies);
+                                  stills by day and night in <dir>/.vibefield-try (about a minute)
   submit <dir> [--artifact <f>]   print the registry index row for an artifact
   release lookup <id> --index <path> --key <public key file>
                                   verify an index signature, then print the release row
@@ -120,6 +127,13 @@ export async function runCli(argv: readonly string[], io: CliIo = consoleIo): Pr
         break;
       }
 
+      case "emit-manifest": {
+        const dir = command[1];
+        if (dir === undefined) return usage(emitter.emit.bind(emitter), "emit-manifest <dir>");
+        emitAll(await emitManifestCommand(dir));
+        break;
+      }
+
       case "inspect": {
         const dir = command[1];
         if (dir === undefined) return usage(emitter.emit.bind(emitter), "inspect <dir>");
@@ -191,6 +205,25 @@ export async function runCli(argv: readonly string[], io: CliIo = consoleIo): Pr
             devRoot,
             remove: flags.get("remove") === true,
           }).verdicts,
+        );
+        break;
+      }
+
+      case "try": {
+        const dir = command[1];
+        if (dir === undefined) return usage(emitter.emit.bind(emitter), "try <dir>");
+        const loaded = requireManifest(dir);
+        if (!loaded.ok) {
+          emitAll(loaded.verdicts);
+          break;
+        }
+        const shots = flagString(flags, "shots");
+        emitAll(
+          await tryPlugin({
+            root: loaded.root,
+            manifest: loaded.manifest,
+            ...(shots !== undefined ? { shots } : {}),
+          }),
         );
         break;
       }

@@ -32,9 +32,31 @@ registerHooks({
   },
 });
 
+// DK-10: every agent of the ten-minute bar asked `plugin-build --help` first, and the bin built a plugin at
+// `./--help` ("no vibefield.plugin.json in …/--help"). An option is never a directory.
+const USAGE = `plugin-build [<plugin dir>]        (default: the current directory)
+
+Builds the plugin its vibefield.plugin.json describes: the renderer bundle (./dist/renderer.js — each
+.wgsl file inlined as its text, the host's singletons left as bare imports its import map binds), the
+service bundle when the manifest has one, then the artifact checks. It READS the manifest and never
+writes it: emit that from src/manifest.ts first — \`vibefield-plugin emit-manifest <dir>\` (or
+\`pnpm gen:manifest\` in a workspace with an install).
+
+exit 0  built            exit 1  refused — the stage that refused, and why`;
+
+const arg = process.argv[2];
+if (arg === "--help" || arg === "-h") {
+  console.log(USAGE);
+  process.exit(0);
+}
+if (arg?.startsWith("-")) {
+  console.error(`plugin-build: unknown option ${arg}\n\n${USAGE}`);
+  process.exit(1);
+}
+
 const { buildPlugin, PluginBuildError } = await import("../src/build.ts");
 
-const target = process.argv[2] ?? process.cwd();
+const target = arg ?? process.cwd();
 
 try {
   const report = await buildPlugin({ root: target });

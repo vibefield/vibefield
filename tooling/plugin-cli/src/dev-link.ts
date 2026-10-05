@@ -165,15 +165,18 @@ export function devLink(opts: {
       note(
         "dev-link",
         "activation-unbuilt",
-        "no dist/ was copied — run plugin-build to make the widgets loadable",
+        "no dist/ was copied — run plugin-build to make its kinds loadable",
       ),
     );
   verdicts.push(
     note(
       "dev-link",
       "dev-link-next-steps",
-      "next: enable developer mode, then call plugins.reload — the copy is what the daemon re-reads, so re-run dev-link after each build",
-      { expected: "plugin-build && vibefield-plugin dev-link <dir> && plugins.reload" },
+      "next: a developer session of the app (`pnpm dev` in a checkout, FIELDD_PLUGIN_DEV_ROOTS naming this root) reads it at boot, and its plugins.reload re-reads it — a person's step; to see your kinds DRAWN without one, `vibefield-plugin try <dir>`. Re-run dev-link after each build: the copy is what the daemon re-reads",
+      {
+        expected:
+          "plugin-build && vibefield-plugin dev-link <dir> (a person's session), or vibefield-plugin try <dir>",
+      },
     ),
   );
   return { verdicts, linkPath };
