@@ -110,6 +110,7 @@ import {
   type PhysicalSoakOptions,
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
+import { selectionBarRows } from "./smoke-selection-bar";
 import {
   countersOf,
   judgeWindow,
@@ -980,6 +981,23 @@ export async function runSmokeCanvas(opts: {
           problems.push(...(await kindFaultRows(win, fixtures, shotDir)));
         }
       } else {
+        // DK-11: the selection bar, its grown menu, right-click and the status line — over the first board at its
+        // arrival fit, before the pad row moves the camera (testing/smoke-selection-bar.ts)
+        try {
+          problems.push(
+            ...(await selectionBarRows({
+              win,
+              plugins: {
+                disable: (id) => opts.handle.client.request("plugins.disable", { id }),
+                enable: (id) => opts.handle.client.request("plugins.enable", { id }),
+              },
+              shotDir,
+              say: (line) => console.log(line),
+            })),
+          );
+        } catch (error) {
+          problems.push(`DK-11: ${error instanceof Error ? error.message : String(error)}`);
+        }
         // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
         // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
         const pad = await commentPadRow(win, shotDir);
