@@ -1341,7 +1341,8 @@ export function GodviewDeck({
   // (`@vibecook/puppeteer-views`, PU-14): the badge growing out of the top
   // edge, the `model · effort` readout, the context meter along the bottom,
   // and the ghost verbs under the pointer. VibeField supplies what only a host
-  // can — the agent facts behind each pane (the window's one fold), the pane's
+  // can — the agent facts behind each pane (the chrome's facts on the window's
+  // one board, MV-3d), the pane's
   // own colour, the device a remote replica came from, the terminal ink the
   // frame mixes with, and the three verbs — and reinterprets none of it
   // (DESIGN.md §1.1).

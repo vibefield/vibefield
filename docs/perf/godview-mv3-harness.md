@@ -71,12 +71,15 @@ frame scheduler moved into rAF. Every cell now carries two totals.
 ```sh
 # the paired gate, A/B: B replays its model stream, A the fold corpus; R = 7; builds both first
 pnpm perf:godview --a <A checkout> --b <B checkout> [--out <dir>]
+# an A that already reads the model (any base after MV-3b) replays ITS model stream too; with
+# the default `fold` source its stage would draw nothing (MV-3d's A/B, 2026-10-05)
+pnpm perf:godview --a <A checkout> --b <B checkout> --source-a model [--out <dir>]
 # A/A on one checkout (the null arm alone); a model-reading build: --source-a model
 pnpm perf:godview [--a <checkout>]
 # the gate's negative control: B = A's own build + a synthetic load, judged against A′
 pnpm perf:godview --synthetic-b view:2
-# before/after captures; one checkout = the A/A control
-pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
+# before/after captures; one checkout = the A/A control (a model-reading A: --source-a model)
+pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--source-a model] [--out <dir>]
 ```
 
 **The runner** works as follows.

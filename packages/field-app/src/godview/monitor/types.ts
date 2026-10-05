@@ -6,8 +6,9 @@ import type { MonitorAgent as ViewsMonitorAgent } from "@vibecook/puppeteer-view
 // run, the persona, the fold's row verbatim) for its chrome and verbs; the
 // backend computes those facts now (MV-D22), the window's verbs read their joins
 // off the board rows the fold keeps (`model-board.ts` `HeldModelRow`), and the
-// find sheet's native session id is joined from the fold where the sheet reads
-// it (`useMonitorAgents.ts` `findAgents`). The reference app does the same on
+// find sheet's native session id is joined from the chrome's facts on the run's
+// own board row where the sheet reads it (MV-3d: `useMonitorAgents.ts`
+// `findAgentsOf`). The reference app does the same on
 // its side (`renderer/monitor/types.ts` there), which is the whole point of
 // AR-D13a: one view, two hosts, each with its own facts beside the row.
 
