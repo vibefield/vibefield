@@ -28,6 +28,14 @@ class TestIntersectionObserver implements IntersectionObserver {
 let root: Root | null = null;
 let container: HTMLDivElement | null = null;
 
+// A PAGE-SCALE BUDGET (DK-11, measured): every test here renders the WHOLE catalog page in its beforeEach, then re-renders
+// or queries it whole. Alone that render takes 1.3–1.7 s and a test's body at most 0.9 s; inside the full `pnpm test` on a
+// shared machine (load 111–310, 2026-10-05) the render took up to 31.5 s (mean 7–8 s) and a body up to 5.0 s — past
+// vitest's 10 s hook and 5 s test defaults, so every gate failed here. 60 s gives the worst render measured about twice
+// its time; a render that hangs still fails. The suite's other page-scale files budget 30–60 s (doc-manager,
+// history-search).
+const PAGE_BUDGET_MS = 60_000;
+
 beforeEach(async () => {
   window.localStorage.clear();
   document.documentElement.classList.remove("dark");
@@ -38,14 +46,14 @@ beforeEach(async () => {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => root?.render(<DesignSystemPage />));
-});
+}, PAGE_BUDGET_MS);
 
 afterEach(() => {
   if (root !== null) act(() => root?.unmount());
   root = null;
   container?.remove();
   container = null;
-});
+}, PAGE_BUDGET_MS);
 
 function button(label: string): HTMLButtonElement {
   const match = Array.from(container?.querySelectorAll("button") ?? []).find(
@@ -56,7 +64,7 @@ function button(label: string): HTMLButtonElement {
   return match;
 }
 
-describe("design system page", () => {
+describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
   it("exposes explicit Studio live and product-focus controls only when hosted", async () => {
     const state: DesignSystemStudioState = {
       appearance: defaultProductAppearance(),
