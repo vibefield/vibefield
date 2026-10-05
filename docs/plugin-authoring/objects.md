@@ -836,6 +836,62 @@ export interface ObjectFlux {
 }
 ```
 
+**`create(device, format, mat)` — the mat a pass is made on** (its view block, and the plates a
+kind lit as the mat is samples: the gobo `silhouette` and the blue `noiseTexture`), **and the
+record store a pass keeps** (`createRecordStore`: a record is packed into its slot only when it
+changed — `pack` writes its fields and returns the block records it used, 0 without blocks):
+
+```ts
+/**
+ * A SLOT'S MAT as a kind's pass reads it: what the slot lends every kind drawn in it — the mat's animated silhouette (the
+ * lamp's gobo through the wind, this slot's own), the blue noise, the rulers' glyph atlas and its metrics, and the version
+ * of those assets (a pass rebinds when it turns over). `KindProgram.create` makes a kind's root pass on the root's; every
+ * other slot's pass is `spawn`ed onto that slot's. The ground's `CuttingMat` is the one there is; a kind never makes one.
+ */
+export interface MatPass {
+    /**
+     * The slot's ONE VIEW BLOCK (design-016 K-L3): a `MatUniforms` buffer the slot writes once a frame — the camera and box, the
+     * clocks, the lamp's gobo, the night, the portal chain, the objects' presence (`view.w`; the mat's own is `presence.x`) — which every kind pass binds at
+     * `@group(0) @binding(0)` as `u` (`kitWgsl`'s `view` piece). A kind never writes it and never keeps a copy.
+     */
+    readonly view: GPUBuffer;
+    /** The slot's animated gobo silhouette (r8, PLATE_SIZE²) — what an object's shadow and dapple sample. */
+    readonly silhouette: GPUTextureView;
+    /** The blue-noise tile (NOISE_SIZE², shared by every slot). */
+    readonly noiseTexture: GPUTexture;
+    /** The rulers' glyph atlas (a 1×1 empty cell until a host uploads one) and its metrics. */
+    readonly glyphTexture: GPUTexture;
+    readonly glyphs: GlyphAtlasMeta;
+    /** Turns over whenever a plate, the noise or the glyphs land: a pass holding a bind group over them rebinds. */
+    readonly assetVersion: number;
+    /**
+     * The view block's bytes as the slot last uploaded them, and the key of what the silhouette holds (K7a): a layered kind whose
+     * layer was drawn from the same bytes and key, with nothing of its own moved, lays it again without drawing it. Absent (a host's
+     * own mat): the layer is always drawn.
+     */
+    readonly viewBytes?: Uint8Array;
+    readonly silhouetteKey?: number;
+}
+/** How the pass packs one record into its slot; `blocks` (when the store has them) and `blockBase` name the slot's block. Returns the block records used (0 without blocks). */
+export type RecordPacker<R, F extends string, B extends string> = (record: R, aux: number, into: StructBuffer<F>, slot: number, blocks: StructBuffer<B> | null, blockBase: number) => number;
+export interface RecordStoreOptions<R, F extends string, B extends string = never> {
+    readonly device: GPUDevice;
+    readonly def: StructDef<F>;
+    /** Slots at the start; grown by doubling up to `max` (65,536). */
+    readonly capacity: number;
+    readonly max?: number;
+    /** The records buffer's label (`paper/notes`); the draw list is `<label> order`, the blocks `blocks.label`. */
+    readonly label: string;
+    readonly pack: RecordPacker<R, F, B>;
+    /** A fixed block of `per` sub-records of `def` a slot (the mini mat's chips). */
+    readonly blocks?: {
+        readonly def: StructDef<B>;
+        readonly per: number;
+        readonly label: string;
+    };
+}
+```
+
 **`ctx.lamp` — the desk's one light; and the palette `theme(palette, name)` is handed** (the
 desk's own roles; a host may hand more — VibeField's adds its pens, papers and inks):
 

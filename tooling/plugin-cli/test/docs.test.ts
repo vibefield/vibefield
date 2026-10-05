@@ -262,6 +262,8 @@ describe("coverage of what an author has to know", () => {
       "TEMPORARY dev root", // try never touches your dev root
       "module-scope names, complete",
       "`engines.app` is the app versions",
+      "export interface MatPass", // the plates a kind lit as the mat is samples
+      "export interface RecordStoreOptions", // the record store's pack contract
     ])
       expect(all, `nothing tells an author about ${topic}`).toContain(topic);
   });
