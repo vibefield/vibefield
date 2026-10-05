@@ -1,5 +1,6 @@
-/* THE STATUS LINE (DESIGN.md §8 "The status line", §10): centred under the head at y 56, above the
-   cover (60) and below the line (62); one notice at a time. */
+/* THE STATUS LINE (DESIGN.md §8 "The status line", §10): centred under the head at y 56 — 8 under the
+   tools in hand, y 112, while an object is held (R12) — above the cover (60) and below the line (62);
+   one notice at a time. */
 .vf-status-line {
   position: absolute;
   z-index: 61;
@@ -20,6 +21,11 @@
   line-height: 1.35;
   transform: translateX(-50%);
   animation: vf-status-line-in 240ms var(--vf-ease-island) both;
+}
+
+/* An object in hand: the tools in hand stand under the head (top 64, 40 tall), and the line 8 under them. */
+.vf-status-line[data-held] {
+  top: 112px;
 }
 
 .vf-status-line__text {
@@ -55,8 +61,10 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  /* M6: a fade only, its duration halved */
   .vf-status-line {
     animation-name: vf-status-line-fade;
+    animation-duration: 120ms;
   }
 
   @keyframes vf-status-line-fade {

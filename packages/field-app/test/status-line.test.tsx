@@ -8,12 +8,13 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { StatusLine } from "../src/frame/StatusLine";
+import { StatusLine, StatusLineView } from "../src/frame/StatusLine";
 import {
   getStatusNotice,
   resetStatusLineForTest,
   STATUS_STAND_MS,
   sayStatus,
+  statusLineSaid,
   withdrawStatus,
 } from "../src/frame/status-line";
 
@@ -75,6 +76,42 @@ describe("the status line", () => {
     expect(run).toHaveBeenCalledTimes(1);
     act(() => withdrawStatus("desk-degraded"));
     expect(host.querySelector(".vf-status-line")).toBeNull();
+    act(() => root.unmount());
+  });
+
+  it("DK-11: says two plain notices said together one after the other, each for its 2.4s — one at a time, neither lost", () => {
+    sayStatus({ id: "missing:a", text: "Clock · plugin off" });
+    sayStatus({ id: "missing:b", text: "Dial · plugin gone" });
+    sayStatus({ id: "missing:b", text: "Dial · plugin gone" }); // waiting its turn: not said twice
+    expect(getStatusNotice()?.text).toBe("Clock · plugin off");
+    vi.advanceTimersByTime(STATUS_STAND_MS);
+    expect(getStatusNotice()?.text).toBe("Dial · plugin gone");
+    vi.advanceTimersByTime(STATUS_STAND_MS);
+    expect(getStatusNotice()).toBeNull();
+    // the log says what was said, in order, each once
+    expect(statusLineSaid()).toEqual([
+      { id: "missing:a", text: "Clock · plugin off" },
+      { id: "missing:b", text: "Dial · plugin gone" },
+    ]);
+  });
+
+  it("DK-11: a waiting notice withdrawn before its turn is never said", () => {
+    sayStatus({ id: "a", text: "first" });
+    sayStatus({ id: "b", text: "second" });
+    withdrawStatus("b");
+    vi.advanceTimersByTime(STATUS_STAND_MS);
+    expect(getStatusNotice()).toBeNull();
+    expect(statusLineSaid().map((n) => n.id)).toEqual(["a"]);
+  });
+
+  it("DK-11: stands under the tools in hand (y 112) while an object is held, under the head otherwise (R12)", () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const notice = { id: "n", text: "Clock · plugin off" };
+    act(() => root.render(<StatusLineView notice={notice} />));
+    expect(host.querySelector(".vf-status-line")?.hasAttribute("data-held")).toBe(false);
+    act(() => root.render(<StatusLineView notice={notice} held />));
+    expect(host.querySelector(".vf-status-line")?.hasAttribute("data-held")).toBe(true);
     act(() => root.unmount());
   });
 });

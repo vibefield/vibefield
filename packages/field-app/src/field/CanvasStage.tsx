@@ -21,10 +21,11 @@ import { getPluginRegistrySnapshot } from "../plugin-host/plugin-registry-store"
 import type { WindowKinds } from "../plugin-host/window-kinds";
 import { useAppTheme } from "../theme";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
-import { installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
+import { deskCensus, installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
 import { feedDesk } from "./desk/desk-feed";
 import { deskGpu, HEAL_DELAYS_MS, type HealKind, healDelay, healKind } from "./desk/desk-gpu";
 import { deskLook, fieldDeskLayer } from "./desk/desk-layer";
+import { announceMissing } from "./desk/desk-notices";
 import { objectWords } from "./desk/desk-object-words";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
 
@@ -44,7 +45,10 @@ import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./d
 //     boot's first and each retry it made — `failed` with no device yet is mounted again: a missing
 //     adapter up to three times over ~2 s, a refused device once; then the card. A Reload the person
 //     asked for is outside the chain and never retried;
-//   DESK_READY (ready AND the first frame presented, after CANVAS_READY) and `window.__vfDesk`.
+//   DESK_READY (ready AND the first frame presented, after CANVAS_READY) and `window.__vfDesk`;
+//   THE WORDS (DK-11, desk-object-words.ts) — the chrome's words for an object of a type on this mount, read
+//     against the kinds the layer was MOUNTED without — and the status line's notices (desk-notices.ts): each
+//     type on the board the desk draws as missing said once, at the first frame and whenever the faults move.
 // THE KINDS (DK-9, plugin-host/window-kinds.ts; ICE I25 — the kind set is fixed for a layer's life): the
 // layer is mounted with the catalog's kinds LESS those of a plugin that is off (the structural `catalog`
 // a host hands its layer, read at the mount alone), so a disabled plugin's objects wear ICE's missing
@@ -81,6 +85,8 @@ export function CanvasStage({
   /** The theme the mounted layer wears — made in it, or last re-dressed to it. */
   const wornRef = useRef(theme);
   const handleRef = useRef<DeskLayerHandle | null>(null);
+  /** The types the mounted layer was made WITHOUT (DK-9's off set, as read at its mount — DK-11's words). */
+  const mountedOffRef = useRef<ReadonlySet<string>>(new Set());
   const deskRef = useRef<MountedDesk | null>(null);
   // The desk's own generation within the engine's: Reload remounts the layer (a new factory —
   // `<Desk>` disposes the mount and makes the next), the engine and its document untouched.
@@ -142,6 +148,7 @@ export function CanvasStage({
               },
             });
       handleRef.current = handle;
+      mountedOffRef.current = off;
       wornRef.current = dressed;
       return handle;
     };
@@ -167,25 +174,41 @@ export function CanvasStage({
     let readySaid = false;
     let frame: number | null = null;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
-    const desk: MountedDesk = { engine: ce, handle, generation, mount, theme: themeRef.current };
+    // the chrome's words for a type ON THIS MOUNT: against the kinds the layer was made without (I25 — a plugin
+    // turned on again draws only at the next mount: "remount to draw it"), the registry and the desk's faults now
+    const mountedOff = mountedOffRef.current;
+    const builtIn = Object.fromEntries(
+      ce.catalog
+        .widgetTypes()
+        .filter((widget) => widget.type.startsWith("desk."))
+        .map((widget) => [widget.type, widget.tray?.label ?? widget.type] as const),
+    );
+    const words = (type: string) =>
+      objectWords(type, {
+        snapshot: getPluginRegistrySnapshot(),
+        off: mountedOff,
+        faults: (handle.status().faults ?? []).map((fault) => fault.kind),
+        kinded: objectKindOf(ce.catalog.widget(type)) !== undefined,
+        builtIn,
+      });
+    const desk: MountedDesk = {
+      engine: ce,
+      handle,
+      generation,
+      mount,
+      theme: themeRef.current,
+      words,
+    };
     deskRef.current = desk;
     const unpublish = publishDesk(desk);
     // the plates and the rulers' atlas, the moment the mat is here
     const feed = feedDesk(handle, ce);
-    const undoDoor = installDeskDoor(desk, feed.platesSet, (type) =>
-      objectWords(type, {
-        snapshot: getPluginRegistrySnapshot(),
-        off: kinds?.off() ?? new Set(),
-        faults: (handle.status().faults ?? []).map((fault) => fault.kind),
-        kinded: objectKindOf(ce.catalog.widget(type)) !== undefined,
-        builtIn: Object.fromEntries(
-          ce.catalog
-            .widgetTypes()
-            .filter((widget) => widget.type.startsWith("desk."))
-            .map((widget) => [widget.type, widget.tray?.label ?? widget.type] as const),
-        ),
-      }),
-    );
+    const undoDoor = installDeskDoor(desk, feed.platesSet);
+    // the status line says each type the desk draws as missing — once (desk-notices.ts)
+    const announce = (): void => {
+      announceMissing(Object.keys(deskCensus(ce)), words);
+    };
+    let faultsSeen = (handle.status().faults ?? []).length;
 
     // DESK_READY: the status `ready` AND the first frame presented (its GPU work done).
     const awaitFirstFrame = (): void => {
@@ -194,6 +217,7 @@ export function CanvasStage({
       if (perf.frames >= 1 && perf.boot.presented !== undefined) {
         readySaid = true;
         emitDeskReadyMarker({ generation, mount, boot: perf.boot, frames: perf.frames });
+        announce();
         return;
       }
       frame = requestAnimationFrame(awaitFirstFrame);
@@ -243,6 +267,12 @@ export function CanvasStage({
       }
       setStatus(next);
       if (next.state === "ready") awaitFirstFrame();
+      // a kind gone missing after the first frame (quarantined at three strikes — ICE I24): said once
+      const faults = (next.faults ?? []).length;
+      if (faults !== faultsSeen) {
+        faultsSeen = faults;
+        if (readySaid) announce();
+      }
       const notice = degradedNotice(next);
       if (notice === null) withdrawStatus("desk-degraded");
       else sayStatus({ id: "desk-degraded", text: notice, act: { label: "Reload", run: remount } });
@@ -277,7 +307,7 @@ export function CanvasStage({
       if (deskRef.current === desk) deskRef.current = null;
       if (handleRef.current === handle) handleRef.current = null;
     };
-  }, [ce, generation, mount, remount, kinds]);
+  }, [ce, generation, mount, remount]);
 
   if (refused !== null) {
     return (

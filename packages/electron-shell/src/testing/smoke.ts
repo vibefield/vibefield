@@ -2030,7 +2030,7 @@ async function deskWhere(
   }
 }
 
-/** The bar's words for an object type through the door (DK-9; the bar is DK-11's). */
+/** The bar's words for an object type through the door (DK-9; DK-11's five words — the bar prints them). */
 async function deskWords(
   win: BrowserWindow,
   type: string,
@@ -2544,7 +2544,7 @@ async function rectBeside(win: BrowserWindow, box: ObjectBox): Promise<ViewRect 
  *     strikes and the desk quarantines it, `status().faults` naming it second, the desk's state still `ready`;
  *   FACES — each broken clock wears ICE's MISSING face where it lies: picked as its type by its box (the face
  *     is pickable), its pixels not what the desk draws beside it, its contrast below a drawn clock's; the bar's words
- *     "Broken clock · faulted", "Faulty clock · faulted";
+ *     "Broken clock · can't draw", "Faulty clock · can't draw" (DK-11: R24's word for a faulted kind);
  *   THE REST DRAWS — a seconds clock laid beside them ticks on its own (its box's pixels change over a second
  *     and a half), its words its title alone, no other kind in `faults`; and the frame rate with the wind
  *     blowing HOLDS through the quarantine (at least 75% of the rate before it). The still is
@@ -2674,7 +2674,7 @@ async function kindFaultRows(
     }
     const label = words[name]?.label;
     const title = name === "broken" ? "Broken clock" : "Faulty clock";
-    if (label !== `${title} · faulted`)
+    if (label !== `${title} · can't draw`)
       problems.push(`the bar's words for the ${name} clock were ${JSON.stringify(words[name])}`);
     if (px === null) problems.push(`the ${name} clock's box was not read back`);
     else {

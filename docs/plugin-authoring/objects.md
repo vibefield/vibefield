@@ -1063,8 +1063,10 @@ desk, and nothing refuses an update. What the host does instead:
   the window — the same board reopens on it behind the veil, nothing lost.
 - **Disabled, or removed** — the desk remounts WITHOUT it: your objects stay on the
   board, data and all, and wear the desk's MISSING face (a faint hatched card the size
-  of the object, picked by its box); the selection bar names each one:
-  `Clock · plugin off`. Enabled again, they draw.
+  of the object, picked by its box); the selection bar names each one where its acts
+  would stand — `Clock · plugin off` (disabled), `Clock · plugin gone` (removed) — and
+  the status line says it once. Enabled again, they draw; until the desk has remounted
+  with you, `remount to draw it`.
 - **Updated** — your new artifact's kinds are compiled in a NEW renderer: the window
   saves its board, replaces its renderer and reopens the board with them. A
   `schemaVersion` bump runs your binding's `migrate` chain on the board's objects as
@@ -1079,4 +1081,4 @@ desk, and nothing refuses an update. What the host does instead:
 - **When it breaks** — a kind whose WGSL does not compile is refused at create; one
   whose world half throws is struck, and quarantined at the third strike. The rest of
   the desk draws on, your objects wear the missing face, `status().faults` names your
-  kind once, and the bar says `faulted`.
+  kind once, and the bar and the status line say `can't draw`.

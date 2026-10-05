@@ -126,11 +126,15 @@ vi.mock("@vibecook/ice/react", async (importOriginal) => {
 });
 
 const { CanvasStage } = await import("../src/field/CanvasStage");
-const { createFieldEngine, buildRegistry } = await import("../src/field-engine");
+const { createFieldEngine, buildRegistry, seedField } = await import("../src/field-engine");
+const { createDeskBlobStore } = await import("../src/field/desk/desk-blobs");
+const { resetDeskNoticesForTest } = await import("../src/field/desk/desk-notices");
 const { emitCanvasReadyMarker, resetDeskMarkersForTest } = await import(
   "../src/development-console"
 );
-const { getStatusNotice, resetStatusLineForTest } = await import("../src/frame/status-line");
+const { getStatusNotice, resetStatusLineForTest, STATUS_STAND_MS, statusLineSaid } = await import(
+  "../src/frame/status-line"
+);
 const { resetAppThemeForTest, setAppTheme } = await import("../src/theme");
 const { BEFORE_THE_DESK } = await import("../src/field/desk/desk-words");
 const { DEVICE_RETRY_MS, HEAL_DELAYS_MS, REFUSE_DEVICE, REFUSE_FIRST_DEVICE } = await import(
@@ -161,6 +165,7 @@ beforeEach(() => {
   layers.length = 0;
   resetDeskMarkersForTest();
   resetStatusLineForTest();
+  resetDeskNoticesForTest();
   resetAppThemeForTest();
   host = document.createElement("div");
   document.body.append(host);
@@ -177,8 +182,10 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function mountStage(refused: boolean = false, kinds?: unknown) {
+async function mountStage(refused: boolean = false, kinds?: unknown, seeded = false) {
   const ce = createFieldEngine(buildRegistry());
+  // DK-11: a board laid with the first-run seed (the six and the pad), for the rows that read its census
+  if (seeded) await seedField(ce, ce.docs.create(), createDeskBlobStore());
   await act(async () =>
     root.render(
       createElement(CanvasStage, {
@@ -548,9 +555,38 @@ describe("the Canvas stage mounts the desk", () => {
     expect(door?.words("vibefield.comment-pad")).toMatchObject({ state: "plugin off" });
     expect(door?.words("desk.note")).toMatchObject({ state: null });
     expect(door?.words("vendor.absent.thing")).toMatchObject({
-      state: "not installed",
-      label: "vendor.absent.thing · not installed",
+      state: "no kind",
+      label: "vendor.absent.thing · no kind",
     });
+  });
+
+  it("DK-11: says each type the desk draws as missing on the status line ONCE, at the mount's first frame — a remount says nothing again", async () => {
+    const kinds = fakeKinds(["vibefield.comment-pad"]);
+    await mountStage(false, kinds, true);
+    const presented = async (h: FakeHandle): Promise<void> => {
+      h.frames = 1;
+      h.device = 1;
+      h.presented = 12;
+      await act(async () => h.move({ state: "ready" }));
+      await wait(50);
+    };
+    expect(statusLineSaid()).toEqual([]); // nothing before the first frame
+    await presented(current());
+    const once = [
+      {
+        id: "missing:vibefield.comment-pad:plugin off",
+        text: "vibefield.comment-pad · plugin off",
+      },
+    ];
+    expect(statusLineSaid()).toEqual(once);
+    expect(getStatusNotice()?.text).toBe("vibefield.comment-pad · plugin off");
+    await wait(STATUS_STAND_MS + 50); // said, and gone: the line's own dedupe no longer stands in for "once"
+    expect(getStatusNotice()).toBeNull();
+    // the window's kinds move again with the pad still off — a new mount: its word is not said a second time
+    await act(async () => kinds.move(["vibefield.comment-pad"]));
+    expect(layers).toHaveLength(2);
+    await presented(current());
+    expect(statusLineSaid().filter((n) => n.id.startsWith("missing:"))).toEqual(once);
   });
 
   it("installs window.__vfDesk for its mount and takes it away with it", async () => {

@@ -18,6 +18,7 @@ import type {
   ThemeName,
 } from "@vibecook/ice/desk";
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
+import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 import type { ObjectWords } from "./desk-object-words";
@@ -40,7 +41,18 @@ export interface MountedDesk {
   readonly mount: number;
   /** The theme the bridge last dressed the desk in. */
   theme: ThemeName;
+  /** DK-9/DK-11 — the chrome's words for an object of a type on THIS mount (desk-object-words.ts): its human
+   * name, and why the desk draws it as missing — read by the bar, its grown menu and the status line. */
+  readonly words?: (type: string) => ObjectWords;
 }
+
+/** What the chrome says of a type when the mount names no words: the type, drawn. */
+export const plainWords = (type: string): ObjectWords => ({
+  type,
+  title: type,
+  state: null,
+  label: type,
+});
 
 let current: MountedDesk | null = null;
 const listeners = new Set<() => void>();
@@ -209,9 +221,12 @@ export interface VfDeskDoor {
   /** The wind's policy: read, or set (a freeze witness makes the desk busy before covering it). */
   ambient(mode?: AmbientMode): AmbientMode;
   memory(): GpuMemory | null;
-  /** DK-9 — what the selection bar (DK-11's) prints for an object of `type`: its title, and why the desk
-   * draws it as missing ("plugin off", "not installed", "faulted"), the label "Clock · plugin off". */
+  /** DK-9, DK-11 — what the selection bar prints for an object of `type`: its human name, and why the desk
+   * draws it as missing ("plugin off", "plugin gone", "no kind", "remount to draw it", "can't draw"), the
+   * label "Clock · plugin off". */
   words(type: string): ObjectWords;
+  /** DK-11 — every notice the status line has said this session, in order (each said ONCE). */
+  notices(): readonly SaidNotice[];
 }
 
 const pickOf = (
@@ -227,16 +242,8 @@ const pickOf = (
       };
 
 /** Install `window.__vfDesk` for one mount; the returned undo removes it if it is still this one's. */
-export function installDeskDoor(
-  desk: MountedDesk,
-  platesSet: () => boolean,
-  words: (type: string) => ObjectWords = (type) => ({
-    type,
-    title: type,
-    state: null,
-    label: type,
-  }),
-): () => void {
+export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): () => void {
+  const words = desk.words ?? plainWords;
   const { handle, engine } = desk;
   let ambient: AmbientMode = "idle";
   const door: VfDeskDoor = {
@@ -298,6 +305,7 @@ export function installDeskDoor(
     },
     memory: () => handle.gpuMemory()?.read() ?? null,
     words,
+    notices: statusLineSaid,
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;
