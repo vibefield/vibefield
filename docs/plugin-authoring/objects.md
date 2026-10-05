@@ -283,7 +283,7 @@ The kind, whole (`ObjectKind`, from the door):
 | `rezoom` / `rung(ctx)` | no | the record reads the zoom continuously / only through a rung (a raster's band) |
 | `face(G)` · `faceLaw` · `insideGrid` | no | a CONTAINER kind: the window its inside shows through, its chip law, its inside's grid |
 | `reads` | no | components and tags beyond its props the builder journals for it |
-| `composite` · `card` | no | a layered kind (its own target, laid once) · the card material (drawn by the desk's one flat-card pipeline) |
+| `composite` · `card` | no | a layered kind (its own target, laid once) · a CARD MATERIAL (quoted below): its objects drawn by the desk's one flat-card pipeline with its own WGSL — an option ON TOP of its own pass, never instead of one |
 
 The pass (`KindPass`): `spawn(mat)` makes another slot's pass on the shared
 pipelines; `prepare(encoder, slot, records, extra)` uploads this frame's records in
@@ -919,6 +919,61 @@ export interface TrayHang {
     /** The holes the accessory plugs into, `[dx, dy]` pitches from the hang point — the top edge's centre, or the bottom edge's on a shelf. */
     readonly pegs: readonly (readonly [number, number])[];
     readonly accessory: TrayAccessory;
+}
+```
+
+**`card` — a card material: an option ON TOP of the kind's own pass, never instead of one.** A
+kind that declares one has its objects drawn by the desk's ONE flat-card pipeline, with its own
+WGSL functions over its own records, so objects of every card kind interleaved in paint order are
+one draw (without one, a run of one kind ends at the next object of another). It is not a way to
+draw a card without a pass: the kind still makes its pass — `prepare` uploads the records,
+`cardResources()` hands the card its bindings (a material whose pass hands none throws), and
+`cardSlot(i)` hands the card each record it may draw, by its slot in the kind's records (−1, or no
+`cardSlot` at all: the pass draws that record itself — so without it the card draws nothing of
+the kind). The kind draws every object itself whenever ICE leaves it out of the card: when it is
+`composite`, when its material names no fragment (`frag` or `fragInline`), when its bindings
+would pass the device's limits, when a binding or card-function name is already another kind's
+or a struct or module names like another's with different text (the kind registered first keeps
+it, and a plugin registers after the built-ins — prefix every name with your own; the card's own
+`u`, `gobo_tex`, `noise_tex` and `cards` are never a material's), or when its material does not
+compile — that one alone said on the console. The door exports `KindProgram`, whose `card` is
+typed by these two:
+
+```ts
+/**
+ * A kind's CARD MATERIAL (K7b, design-016 §6 K7 — the run question). In mixed sibling order a run of one kind ends at the next
+ * object of another (rig:scale: draws ≈ 0.3 × the objects drawn, at every zoom); the kinds that declare a material are composed
+ * into ONE pipeline, so interleaved objects of every such kind are one run, one draw. Each object is drawn there by its OWN kind's
+ * functions over its own kind's records, uniforms and textures — the pixels its own pipeline makes. The card's module is the
+ * kit's pieces and every material's structs and modules (deduplicated by name and label), then its bindings, its `only`, its
+ * card functions (`shaders.entry` — the same text its own pass composes) and a dispatch on the card's material.
+ */
+export interface CardMaterial {
+    /**
+     * The kind's program as its own pass composes it — the kit's pieces, its structs, its pure modules — its `entry` the CARD FUNCTIONS
+     * over its bindings; asked when the card is composed (a host's text read then, as a pass reads it when it is made).
+     */
+    shaders(): ComposeOptions;
+    /** WGSL the card composes that the kind's own entry defines otherwise (a texel read from its thumbnails alone — the card binds no pool). */
+    readonly only?: string;
+    /** Its bindings beyond the slot's view block and mat (`u`, `gobo_tex`, `noise_tex` — the card's), in its pass's `cardResources` order. */
+    readonly bindings: readonly CardBinding[];
+    /** `fn <quad>(slot: u32, vid: u32) -> vec4f`: corner `vid`'s clip position; (2, 2, 2, 1) — the degenerate — collapses a culled one. */
+    readonly quad: string;
+    /** `fn <frag>(slot: u32, clip: vec4f) -> vec4f`: the fragment's premultiplied colour through the slot's presentation; alpha < 0 = discard. */
+    readonly frag?: string;
+    /**
+     * The fragment WRITTEN OUT instead of `frag`'s call: WGSL statements over `slot` and `in.clip` that set `c` (or discard) — the
+     * kind's own entry's fragment, statement for statement. For a kind whose shade reached through one more function compiles to
+     * other bits (the board's: one LSB on a pixel a scene — measured, K7b): the card then runs the very code its entry runs.
+     */
+    readonly fragInline?: string;
+}
+/** A binding of a CARD MATERIAL (K7b): the WGSL the card declares after `@group(0) @binding(n)`, and its layout (the stages, what it is). */
+export interface CardBinding {
+    /** Whole, after the attribute: `var<uniform> paper_k: PaperUniforms` — its name UNIQUE across every kind's material (a kind prefixes its own). */
+    readonly wgsl: string;
+    readonly entry: BindKind;
 }
 ```
 

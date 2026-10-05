@@ -264,6 +264,10 @@ describe("coverage of what an author has to know", () => {
       "`engines.app` is the app versions",
       "export interface MatPass", // the plates a kind lit as the mat is samples
       "export interface RecordStoreOptions", // the record store's pack contract
+      // DK-10 — run 1's note, arrived late: the kind table's `card` row read as a pass-less flat card
+      "an option ON TOP of the kind's own pass, never instead of one",
+      "export interface CardMaterial",
+      "export interface CardBinding",
     ])
       expect(all, `nothing tells an author about ${topic}`).toContain(topic);
   });
