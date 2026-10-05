@@ -433,11 +433,27 @@ export const INDEX_TIMELINE = {
  *
  * The rest bound what a door asks the worker to do: PATH_CHARS the longest
  * relative path a request may name, NAME_CHARS the longest entry name an
- * answer carries, QUERY_CHARS the longest search query. A search reads only
- * what the root's engine has walked, so it first walks the root breadth-first
- * — at most SEARCH_WALK_DIRS folders, for at most SEARCH_WALK_MS — and says
- * `complete: false` when either bound cut the walk (never "no matches" for a
- * folder it did not read). TS-only: no native reader. */
+ * answer carries, QUERY_CHARS the longest search query.
+ *
+ * SEARCH (the lead's ruling, 2026-10-05): a search walks the asked subtree
+ * breadth-first ON DEMAND — until it has seen SEARCH_WALK_ENTRIES entries, or
+ * for SEARCH_WALK_MS, whichever comes first, skipping a folder whose read does
+ * not answer within READ_TIMEOUT_MS (an iCloud-evicted folder blocks a read
+ * while it downloads; the same bound holds a page's child counts) — and says
+ * `complete: false` when
+ * any of those cut it: never an empty answer that reads as "no matches" for
+ * folders it did not read. A narrower `path` covers deeper. The walk reads
+ * NAMES from the filesystem, not into mille's engine (measured: mille's
+ * hydration grows super-linearly — 22 000 entries took 15 s), keeps them
+ * beside the export's engine for SEARCH_CACHE_MS so a reader typing asks
+ * again for free, and hands mille only the hits (their ids).
+ *
+ * ENGINES: the worker holds one mille engine per export it was asked about
+ * (mille refuses overlapping roots in one engine, and the home export holds
+ * every place); an engine with no ask for HOST_IDLE_MS is disposed, and at
+ * most HOSTS_MAX live at once — at the cap the least recently used idle one
+ * goes, and an ask that finds every engine busy is refused RESOURCE_EXHAUSTED
+ * (retryable). TS-only: no native reader. */
 export const WORKSPACE_LIMITS = {
   LIST_PAGE: 200,
   TAILNET_PAGE: 100,
@@ -449,8 +465,12 @@ export const WORKSPACE_LIMITS = {
   PATH_CHARS: 4_096,
   NAME_CHARS: 1_024,
   QUERY_CHARS: 256,
-  SEARCH_WALK_DIRS: 2_000,
-  SEARCH_WALK_MS: 1_500,
+  SEARCH_WALK_ENTRIES: 100_000,
+  SEARCH_WALK_MS: 5_000,
+  READ_TIMEOUT_MS: 2_000,
+  SEARCH_CACHE_MS: 60_000,
+  HOST_IDLE_MS: 300_000,
+  HOSTS_MAX: 16,
 } as const;
 
 /** FS-1a — the files service's honest refusal vocabulary

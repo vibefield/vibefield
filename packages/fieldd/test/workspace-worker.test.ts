@@ -20,7 +20,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { WorkspaceEntry, WorkspaceSearchHit } from "@vibefield/contracts";
+import { WorkspaceEntry } from "@vibefield/contracts";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   FILES_HOST_BUNDLE,
@@ -220,45 +220,32 @@ describe("the files worker (fieldd's supervisor over the real bundle)", () => {
     expect((gone as FilesHostRefusal).error.code).toBe("root-missing");
   });
 
-  it("searches one root, bounded: kinds, the limit and `clipped`, never outside it", async () => {
+  it("searches a root or a subtree, bounded: kinds, the limit, `clipped`, never outside it", async () => {
     const { root } = tree();
     const supervisor = await ready();
-    const all = await supervisor.request("search", {
-      rootPath: root,
-      q: "needle",
-      limit: 10,
-      kinds: "all",
-    });
-    for (const hit of all.hits) WorkspaceSearchHit.parse(hit);
-    expect(all.hits.map((hit) => hit.path).sort()).toEqual([
-      join(root, "deep", "a", "b", "needle-file.md"),
-      join(root, "deep", "needle-folder"),
+    const search = (q: string, kinds: "all" | "dirs", limit = 10, segments: string[] = []) =>
+      supervisor.request("search", { rootPath: root, segments, q, limit, kinds });
+    const all = await search("needle", "all");
+    // the worker's hits are RELATIVE to the export; the door makes them absolute
+    expect(all.hits.map((hit) => hit.relativePath).sort()).toEqual([
+      "deep/a/b/needle-file.md",
+      "deep/needle-folder",
     ]);
-    expect(all.complete).toBe(true);
-    expect(all.clipped).toBe(false);
-    const dirs = await supervisor.request("search", {
-      rootPath: root,
-      q: "needle",
-      limit: 10,
-      kinds: "dirs",
-    });
-    expect(dirs.hits.map((hit) => hit.name)).toEqual(["needle-folder"]);
-    const cut = await supervisor.request("search", {
-      rootPath: root,
-      q: "d0",
-      limit: 5,
-      kinds: "dirs",
-    });
+    expect(all.hits.find((hit) => hit.name === "needle-folder")?.kind).toBe("dir");
+    expect(all).toMatchObject({ complete: true, clipped: false });
+    expect(all.walked).toBeGreaterThan(250);
+    expect((await search("needle", "dirs")).hits.map((hit) => hit.name)).toEqual(["needle-folder"]);
+    // a subtree: only what lies below `deep/a`
+    const sub = await search("needle", "all", 10, ["deep", "a"]);
+    expect(sub.hits.map((hit) => hit.relativePath)).toEqual(["deep/a/b/needle-file.md"]);
+    const cut = await search("d0", "dirs", 5);
     expect(cut.hits).toHaveLength(5);
     expect(cut.clipped).toBe(true);
     // the link out of the root is never walked: its folder is never a hit
-    const secret = await supervisor.request("search", {
-      rootPath: root,
-      q: "secret",
-      limit: 10,
-      kinds: "all",
-    });
-    expect(secret.hits).toEqual([]);
+    expect((await search("secret", "all")).hits).toEqual([]);
+    // a subtree behind a symlink is refused like a listing behind one
+    const behind = await refusal(search("secret", "all", 10, ["escape"]));
+    expect((behind as FilesHostRefusal).error.code).toBe("not-found");
   });
 
   it("restarts a killed worker: questions in flight hear `restarting`, the generation moves", async () => {

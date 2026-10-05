@@ -1,1 +1,7 @@
-{ "rootId": "r_9b2d5e8a1c4f7036ad52", "q": "vibe", "limit": 20, "kinds": "dirs" }
+{
+  "rootId": "r_9b2d5e8a1c4f7036ad52",
+  "q": "vibe",
+  "limit": 20,
+  "kinds": "dirs",
+  "path": "Projects"
+}

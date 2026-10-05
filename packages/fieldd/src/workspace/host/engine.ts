@@ -1,10 +1,19 @@
-import { lstat, readdir, realpath, stat } from "node:fs/promises";
+import { lstat, realpath, stat } from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
 import { createFileExplorerHost, type Entry, type FileExplorerHost } from "@vibecook/mille";
-import type { WorkspaceEntry, WorkspaceEntryKind, WorkspaceSearchHit } from "@vibefield/contracts";
+import type { WorkspaceEntry, WorkspaceEntryKind } from "@vibefield/contracts";
 import { WORKSPACE_LIMITS } from "@vibefield/contracts/registries";
 import { isWithin } from "../paths";
-import type { ListArgs, ListValue, SearchArgs, SearchValue, WorkerErrorCode } from "../protocol";
+import type {
+  ListArgs,
+  ListValue,
+  SearchArgs,
+  SearchValue,
+  WorkerErrorCode,
+  WorkerSearchHit,
+} from "../protocol";
+import { ENTRY, HUNG_READS_MAX, matchName, type NameWalk, timedRead, walkNames } from "./names";
 
 // FS-1a — the files worker's ENGINES: mille's host, ONE PER EXPORT.
 //
@@ -13,7 +22,11 @@ import type { ListArgs, ListValue, SearchArgs, SearchValue, WorkerErrorCode } fr
 // (mille-binding explorer.rs, mille-core store.rs) — and the home export holds
 // every place. So this is mille-truffle's own model (`server.ts` acquireHost):
 // an engine per export, created on the first ask that names it, disposed
-// after `ENGINE_IDLE_MS` without one, inside the one always-on worker.
+// after `WORKSPACE_LIMITS.HOST_IDLE_MS` without one, inside the one always-on
+// worker, at most `WORKSPACE_LIMITS.HOSTS_MAX` alive at once (the least
+// recently used idle one goes at the cap; all busy is a retryable refusal).
+// A place nested in the home directory is its OWN export: asked by its root
+// id, it is answered by its own engine, never by walking home.
 //
 // Each engine: `initialWalk: "roots-only"` (the root row, nothing walked until
 // asked), `followSymlinks: false` (mille's spelling of "none": a symlink is
@@ -24,24 +37,40 @@ import type { ListArgs, ListValue, SearchArgs, SearchValue, WorkerErrorCode } fr
 // no watcher: a folder listed once goes stale, so a folder listed AGAIN is
 // reconciled against the disk first (`resync`) — the door's answer is the
 // disk's, never a cache's.
+//
+// `followSymlinks: false` holds on EVERY engine (the lead's ruling, 2026-10-05:
+// mille's "smart" behaves like false today, and a followed link is recorded as
+// a plain folder, which would defeat the symlink guard for ticketed sessions).
+//
+// A SEARCH does not walk into the engine: mille's hydration grows
+// super-linearly with its store (measured: 22 000 entries in 15 s), so the
+// search reads names from the filesystem (host/names.ts), bounded, and hands
+// the engine only its hits. Its hits are RELATIVE to the export's root (as
+// mille's own search over the port will say them, M6); the door composes the
+// absolute path.
 
 /** mille's `EntryKind` (mille-core entry.rs). */
 const KIND = { FILE: 0, DIR: 1, SYMLINK: 2, UNAVAILABLE: 4 } as const;
 
-/** An engine with no ask for this long is disposed (its store, its native
+/** How often idle engines are looked for. An engine idle past
+ * `WORKSPACE_LIMITS.HOST_IDLE_MS` is disposed (its store, its native
  * explorer); the next ask makes a fresh one. Entry ids are stable while an
  * engine lives — the answers say so (`WorkspaceEntry.id`). */
-export const ENGINE_IDLE_MS = 5 * 60_000;
-/** How often idle engines are looked for. */
 const SWEEP_MS = 60_000;
 /** Folder child counts read at once for one page. */
 const COUNT_CONCURRENCY = 16;
-/** Folders a search's walk never descends, beside hidden and ignored ones:
- * vendored trees whose names would bury every real hit. */
-const SEARCH_SKIP = new Set(["node_modules"]);
-/** How many raw matches a search reads from mille before it filters to the
- * root, the kinds and the live disk. */
-const SEARCH_SCAN = 5_000;
+/** Subtree name walks kept beside one engine (host/names.ts), and in the
+ * whole worker at most this many walked entries (two full walks: some 40 MB
+ * measured) — the oldest walk anywhere goes first. */
+const WALKS_KEPT = 2;
+const WALK_CACHE_ENTRIES = 2 * WORKSPACE_LIMITS.SEARCH_WALK_ENTRIES;
+/** The wire's kind for a name walk's entry kind. */
+const ENTRY_KIND_NAMES: Record<number, WorkspaceEntryKind> = {
+  [ENTRY.FILE]: "file",
+  [ENTRY.DIR]: "dir",
+  [ENTRY.SYMLINK]: "symlink",
+  [ENTRY.OTHER]: "other",
+};
 
 export class WorkerFailure extends Error {
   constructor(
@@ -52,15 +81,31 @@ export class WorkerFailure extends Error {
   }
 }
 
+/** One export's engine, as the worker holds it. `active` is counted from the
+ * moment an ask names the export — before its engine exists — so an engine an
+ * ask is waiting for is never the one evicted. */
 interface Slot {
   rootPath: string;
-  host: FileExplorerHost;
+  pending: Promise<FileExplorerHost>;
+  host: FileExplorerHost | null;
   lastUsed: number;
   active: number;
+  /** the search's name walks of this export, by subtree (host/names.ts) */
+  walks: Map<string, NameWalk>;
 }
 
+/** An acquired slot: its engine is there. */
+type Live = Slot & { host: FileExplorerHost };
+
 export interface EnginesOptions {
+  /** test seams; production: WORKSPACE_LIMITS.HOST_IDLE_MS / HOSTS_MAX /
+   * SEARCH_WALK_ENTRIES / SEARCH_WALK_MS */
   idleMs?: number;
+  hostsMax?: number;
+  walkEntries?: number;
+  walkMs?: number;
+  /** the user's home folder (its top-level Library is never walked) */
+  home?: string;
   now?: () => number;
   platform?: NodeJS.Platform;
 }
@@ -79,17 +124,23 @@ function kindOf(entry: Entry): WorkspaceEntryKind {
 }
 
 /** A folder's visible children, as the OS lists them (a leading dot is not
- * counted); undefined when it cannot be read. No engine is asked: counting a
- * page's folders must not hydrate their children into the store. */
-async function countChildren(path: string): Promise<number | undefined> {
-  try {
-    const names = await readdir(path);
-    let count = 0;
-    for (const name of names) if (!name.startsWith(".")) count += 1;
-    return count;
-  } catch {
-    return undefined;
-  }
+ * counted); undefined when it cannot be read in time (`READ_TIMEOUT_MS` — an
+ * iCloud-evicted folder blocks a read while it downloads) or at all. No engine
+ * is asked: counting a page's folders must not hydrate their children into
+ * the store. */
+async function countChildren(
+  path: string,
+  hung: Set<string>,
+  page: { timeouts: number },
+): Promise<number | undefined> {
+  // a page whose reads hang stops counting (the rest go without a count)
+  if (hung.has(path) || page.timeouts >= HUNG_READS_MAX) return undefined;
+  const entries = await timedRead(path, WORKSPACE_LIMITS.READ_TIMEOUT_MS, hung);
+  if (entries === "timeout") page.timeouts += 1;
+  if (entries === null || entries === "timeout") return undefined;
+  let count = 0;
+  for (const entry of entries) if (!entry.name.startsWith(".")) count += 1;
+  return count;
 }
 
 async function mapLimit<T, R>(
@@ -122,21 +173,32 @@ export async function assertRoot(rootPath: string): Promise<void> {
 }
 
 export class Engines {
-  readonly #slots = new Map<string, Promise<Slot>>();
+  readonly #slots = new Map<string, Slot>();
   readonly #idleMs: number;
+  readonly #hostsMax: number;
+  readonly #walkEntries: number;
+  readonly #walkMs: number;
+  readonly #home: string;
+  /** folders whose read hung (a search walk's or a child count's,
+   * host/names.ts) — never read again while that read holds its thread */
+  readonly #hung = new Set<string>();
   readonly #now: () => number;
   readonly #platform: NodeJS.Platform;
   readonly #sweeper: NodeJS.Timeout;
 
   constructor(opts: EnginesOptions = {}) {
-    this.#idleMs = opts.idleMs ?? ENGINE_IDLE_MS;
+    this.#idleMs = opts.idleMs ?? WORKSPACE_LIMITS.HOST_IDLE_MS;
+    this.#hostsMax = Math.max(1, opts.hostsMax ?? WORKSPACE_LIMITS.HOSTS_MAX);
+    this.#walkEntries = opts.walkEntries ?? WORKSPACE_LIMITS.SEARCH_WALK_ENTRIES;
+    this.#walkMs = opts.walkMs ?? WORKSPACE_LIMITS.SEARCH_WALK_MS;
+    this.#home = opts.home ?? homedir();
     this.#now = opts.now ?? Date.now;
     this.#platform = opts.platform ?? process.platform;
     this.#sweeper = setInterval(() => void this.sweep(), Math.min(SWEEP_MS, this.#idleMs));
     this.#sweeper.unref();
   }
 
-  /** Engines alive now. */
+  /** Engines alive (or being made) now. */
   get count(): number {
     return this.#slots.size;
   }
@@ -153,23 +215,58 @@ export class Engines {
     }
   }
 
-  async #acquire(rootPath: string): Promise<Slot> {
-    let pending = this.#slots.get(rootPath);
-    if (pending === undefined) {
-      pending = createFileExplorerHost({
+  /** At the cap: the least recently used IDLE engine goes (synchronously out
+   * of the table, disposed in the background), or every engine is answering
+   * and the ask is refused, retryable. */
+  #evictOne(): void {
+    let victim: Slot | null = null;
+    for (const slot of this.#slots.values()) {
+      if (slot.active > 0 || slot.host === null) continue;
+      if (victim === null || slot.lastUsed < victim.lastUsed) victim = slot;
+    }
+    if (victim === null || victim.host === null)
+      throw new WorkerFailure(
+        "busy",
+        `every one of the ${this.#hostsMax} file engines is answering; ask again shortly`,
+      );
+    this.#slots.delete(victim.rootPath);
+    void victim.host.dispose().catch(() => undefined);
+  }
+
+  async #acquire(rootPath: string): Promise<Live> {
+    let slot = this.#slots.get(rootPath);
+    if (slot === undefined) {
+      if (this.#slots.size >= this.#hostsMax) this.#evictOne();
+      const pending = createFileExplorerHost({
         roots: [rootPath],
         initialWalk: "roots-only",
         followSymlinks: false,
         respectIgnore: true,
         compactFolders: false,
-      }).then((host) => ({ rootPath, host, lastUsed: this.#now(), active: 0 }));
-      this.#slots.set(rootPath, pending);
-      pending.catch(() => this.#slots.delete(rootPath));
+      });
+      const made: Slot = {
+        rootPath,
+        pending,
+        host: null,
+        lastUsed: this.#now(),
+        active: 0,
+        walks: new Map(),
+      };
+      slot = made;
+      this.#slots.set(rootPath, made);
+      pending.catch(() => {
+        if (this.#slots.get(rootPath) === made) this.#slots.delete(rootPath);
+      });
     }
-    const slot = await pending;
     slot.active += 1;
     slot.lastUsed = this.#now();
-    return slot;
+    try {
+      slot.host = await slot.pending;
+    } catch (error) {
+      slot.active -= 1;
+      throw error;
+    }
+    return slot as Live;
   }
 
   #release(slot: Slot): void {
@@ -179,7 +276,7 @@ export class Engines {
 
   /** The engine's root row — refreshed when the folder came back after the
    * engine saw it gone (mille keeps a gone root as `Unavailable`). */
-  async #rootEntry(slot: Slot): Promise<Entry> {
+  async #rootEntry(slot: Live): Promise<Entry> {
     const fx = slot.host.local;
     let root = fx.getSnapshot().roots()[0];
     if (root === undefined || root.kind === KIND.UNAVAILABLE) {
@@ -192,7 +289,7 @@ export class Engines {
   }
 
   /** A child of a loaded folder by name; `fresh` reconciles the folder first. */
-  async #child(slot: Slot, parent: number, name: string, fresh: boolean): Promise<Entry | null> {
+  async #child(slot: Live, parent: number, name: string, fresh: boolean): Promise<Entry | null> {
     const fx = slot.host.local;
     if (fresh) await fx.resync(parent);
     else await fx.prefetch(parent);
@@ -208,7 +305,7 @@ export class Engines {
    * symlink on the way refused as absent, and its real path proved inside the
    * root's before anything is read from it. */
   async #folder(
-    slot: Slot,
+    slot: Live,
     rootReal: string,
     segments: readonly string[],
   ): Promise<{ id: number; abs: string }> {
@@ -248,6 +345,7 @@ export class Engines {
       const entries =
         args.kinds === "dirs" ? page.entries.filter((e) => e.kind === KIND.DIR) : [...page.entries];
       const slice = entries.slice(args.offset, args.offset + args.limit);
+      const counting = { timeouts: 0 };
       const wire = await mapLimit(slice, COUNT_CONCURRENCY, async (entry) => {
         const path = join(abs, entry.name);
         const kind = kindOf(entry);
@@ -261,7 +359,7 @@ export class Engines {
         if (kind === "file" && Number.isSafeInteger(entry.size) && entry.size >= 0)
           row.size = entry.size;
         if (kind === "dir") {
-          const count = await countChildren(path);
+          const count = await countChildren(path, this.#hung, counting);
           if (count !== undefined) row.childCount = count;
         }
         return row;
@@ -278,90 +376,102 @@ export class Engines {
     }
   }
 
-  /** Walk the root breadth-first so a search has names to match: folders not
-   * read yet are read, at most `SEARCH_WALK_DIRS` of them and for at most
-   * `SEARCH_WALK_MS`; hidden, ignored and vendored folders and symlinks are
-   * not descended. Answers whether the walk reached every folder it would. */
-  async #walk(slot: Slot, rootId: number): Promise<boolean> {
-    const fx = slot.host.local;
-    const deadline = this.#now() + WORKSPACE_LIMITS.SEARCH_WALK_MS;
-    let read = 0;
-    const queue: number[] = [rootId];
-    for (let head = 0; head < queue.length; head += 1) {
-      const id = queue[head] as number;
-      if (!fx.getSnapshot().directoryChildrenLoaded(id)) {
-        if (read >= WORKSPACE_LIMITS.SEARCH_WALK_DIRS || this.#now() > deadline) return false;
-        try {
-          await fx.prefetch(id);
-        } catch {
-          // an unreadable folder holds no names; the walk goes on
-        }
-        read += 1;
-      }
-      const snapshot = fx.getSnapshot();
-      for (const childId of snapshot.childrenOf(id)) {
-        const child = snapshot.getById(childId);
-        if (
-          child !== null &&
-          child.kind === KIND.DIR &&
-          !child.isHidden &&
-          !child.isIgnored &&
-          !SEARCH_SKIP.has(child.name)
-        )
-          queue.push(childId);
-      }
+  /** The subtree's NAMES (host/names.ts): this export's walk of that subtree
+   * when one ran within SEARCH_CACHE_MS (a reader typing a query asks again
+   * and again), else a fresh walk — kept beside the engine for its life, at
+   * most WALKS_KEPT of them. */
+  async #names(slot: Live, abs: string, startRel: string): Promise<NameWalk> {
+    const now = this.#now();
+    for (const [key, walk] of slot.walks)
+      if (now - walk.at > WORKSPACE_LIMITS.SEARCH_CACHE_MS) slot.walks.delete(key);
+    const kept = slot.walks.get(startRel);
+    if (kept !== undefined) return kept;
+    const walk = await walkNames({
+      start: abs,
+      startRel,
+      home: abs === this.#home,
+      maxEntries: this.#walkEntries,
+      deadline: now + this.#walkMs,
+      readTimeoutMs: WORKSPACE_LIMITS.READ_TIMEOUT_MS,
+      hung: this.#hung,
+      now: this.#now,
+    });
+    slot.walks.set(startRel, walk);
+    if (slot.walks.size > WALKS_KEPT) {
+      const oldest = [...slot.walks.entries()].sort((a, b) => a[1].at - b[1].at)[0];
+      if (oldest !== undefined) slot.walks.delete(oldest[0]);
     }
-    return true;
+    this.#trimWalks(walk);
+    return walk;
+  }
+
+  /** The worker-wide bound on kept walks: the oldest anywhere goes until the
+   * kept entries fit WALK_CACHE_ENTRIES (never the walk just made). */
+  #trimWalks(keep: NameWalk): void {
+    const all: Array<{ slot: Slot; key: string; walk: NameWalk }> = [];
+    let total = 0;
+    for (const slot of this.#slots.values())
+      for (const [key, walk] of slot.walks) {
+        all.push({ slot, key, walk });
+        total += walk.walked;
+      }
+    all.sort((a, b) => a.walk.at - b.walk.at);
+    for (const item of all) {
+      if (total <= WALK_CACHE_ENTRIES) break;
+      if (item.walk === keep) continue;
+      item.slot.walks.delete(item.key);
+      total -= item.walk.walked;
+    }
   }
 
   async search(args: SearchArgs): Promise<SearchValue> {
-    await this.#rootReal(args.rootPath);
+    const rootReal = await this.#rootReal(args.rootPath);
     const slot = await this.#acquire(args.rootPath);
     try {
-      const root = await this.#rootEntry(slot);
-      const complete = await this.#walk(slot, root.id);
-      const fx = slot.host.local;
-      const snapshot = fx.getSnapshot();
-      const raw = fx.search(args.q, { limit: SEARCH_SCAN });
-      const pathOf = (id: number): string | null => {
-        const names: string[] = [];
-        let cursor: number | null | undefined = id;
-        for (let hop = 0; hop < 1_024 && cursor !== null && cursor !== undefined; hop += 1) {
-          const entry = snapshot.getById(cursor);
-          if (entry === null) return null;
-          if (entry.parentId === null || entry.parentId === undefined)
-            return entry.id === root.id ? join(slot.rootPath, ...names.reverse()) : null;
-          names.push(entry.name);
-          cursor = entry.parentId;
-        }
-        return null;
-      };
-      const matched: WorkspaceSearchHit[] = [];
-      let more = raw.length >= SEARCH_SCAN;
-      for (const hit of raw) {
-        const entry = hit.entry;
-        if (entry.id === root.id) continue;
-        if (args.kinds === "dirs" && entry.kind !== KIND.DIR) continue;
-        const path = pathOf(entry.id);
-        if (path === null) continue;
-        // the store may remember a name the disk no longer has (no watcher)
-        try {
-          await lstat(path);
-        } catch {
-          continue;
-        }
-        if (matched.length === args.limit) {
+      const { abs } = await this.#folder(slot, rootReal, args.segments);
+      const walk = await this.#names(slot, abs, args.segments.join("/"));
+      const scored: Array<{ index: number; score: number }> = [];
+      for (let index = 0; index < walk.rels.length; index += 1) {
+        const kind = walk.kinds[index] as number;
+        if (args.kinds === "dirs" && kind !== ENTRY.DIR) continue;
+        const rel = walk.rels[index] as string;
+        const score = matchName(args.q, rel.slice(rel.lastIndexOf("/") + 1));
+        if (score !== null) scored.push({ index, score });
+      }
+      scored.sort(
+        (a, b) =>
+          b.score - a.score ||
+          (walk.rels[a.index] as string).length - (walk.rels[b.index] as string).length ||
+          (walk.rels[a.index] as string).localeCompare(walk.rels[b.index] as string),
+      );
+      const hits: WorkerSearchHit[] = [];
+      let more = false;
+      for (const { index } of scored) {
+        if (hits.length === args.limit) {
           more = true;
           break;
         }
-        matched.push({
-          id: entry.id,
-          name: entry.name.slice(0, WORKSPACE_LIMITS.NAME_CHARS),
-          path,
-          kind: kindOf(entry),
+        const relativePath = walk.rels[index] as string;
+        const absolute = join(slot.rootPath, ...relativePath.split("/"));
+        // the name list may be a minute old: a hit is read from the disk again,
+        // and given the engine's id (mille hydrates just its ancestor chain)
+        try {
+          await lstat(absolute);
+        } catch {
+          continue;
+        }
+        const id = await slot.host.local.resolvePath(absolute).catch(() => null);
+        if (id === null || id === undefined) continue;
+        hits.push({
+          id,
+          name: relativePath
+            .slice(relativePath.lastIndexOf("/") + 1)
+            .slice(0, WORKSPACE_LIMITS.NAME_CHARS),
+          relativePath,
+          kind: ENTRY_KIND_NAMES[walk.kinds[index] as number] ?? "other",
         });
       }
-      return { hits: matched, clipped: more, complete };
+      return { hits, clipped: more, complete: walk.complete, walked: walk.walked };
     } finally {
       this.#release(slot);
     }
@@ -370,16 +480,10 @@ export class Engines {
   /** Dispose every engine idle past its lease. */
   async sweep(): Promise<void> {
     const now = this.#now();
-    for (const [rootPath, pending] of [...this.#slots]) {
-      let slot: Slot;
-      try {
-        slot = await pending;
-      } catch {
-        continue;
-      }
-      if (slot.active > 0 || now - slot.lastUsed < this.#idleMs) continue;
-      if (this.#slots.get(rootPath) !== pending) continue;
-      this.#slots.delete(rootPath);
+    for (const slot of [...this.#slots.values()]) {
+      if (slot.host === null || slot.active > 0 || now - slot.lastUsed < this.#idleMs) continue;
+      if (this.#slots.get(slot.rootPath) !== slot) continue;
+      this.#slots.delete(slot.rootPath);
       await slot.host.dispose().catch(() => undefined);
     }
   }
@@ -389,7 +493,7 @@ export class Engines {
     const slots = [...this.#slots.values()];
     this.#slots.clear();
     await Promise.all(
-      slots.map((pending) => pending.then((slot) => slot.host.dispose()).catch(() => undefined)),
+      slots.map((slot) => slot.pending.then((host) => host.dispose()).catch(() => undefined)),
     );
   }
 }

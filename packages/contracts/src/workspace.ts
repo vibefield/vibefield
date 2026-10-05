@@ -29,9 +29,14 @@ import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 // reads none of it, so no Rust is generated; the fixtures are parsed here and
 // by fieldd's tests against the real worker's answers (EL9).
 
+/** The shape every root id has: mille's export-id rule (mille-truffle
+ * `exports.ts`), because FS-1b hands a root's id to mille AS its export id. */
+export const WORKSPACE_ROOT_ID_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$/;
+
 /** A root's id: stable across restarts — a digest of the root's kind and
- * path — so a phone's kept id still names the same folder tomorrow. */
-export const WorkspaceRootId = z.string().min(1).max(64);
+ * path — so a phone's kept id still names the same folder tomorrow. Always
+ * a valid mille export id (`WORKSPACE_ROOT_ID_PATTERN`). */
+export const WorkspaceRootId = z.string().regex(WORKSPACE_ROOT_ID_PATTERN);
 export type WorkspaceRootId = z.infer<typeof WorkspaceRootId>;
 
 /** What a root is (FS-D4): a PLACE — a folder an agent was spawned in, added
@@ -157,11 +162,13 @@ export const WorkspaceListResult = z
   .passthrough();
 export type WorkspaceListResult = z.infer<typeof WorkspaceListResult>;
 
-/** `workspace.search {rootId, q, limit?, kinds?, device?}` — names matching
- * `q` (mille's fuzzy matcher) within one root, best first. */
+/** `workspace.search {rootId, path?, q, limit?, kinds?, device?}` — names
+ * matching `q` (mille's fuzzy matcher) in the subtree at `path` (relative to
+ * the root; absent = the whole root), best first. */
 export const WorkspaceSearchParams = z
   .object({
     rootId: WorkspaceRootId,
+    path: WorkspaceRelativePath.optional(),
     q: z.string().min(1).max(WORKSPACE_LIMITS.QUERY_CHARS),
     limit: z.number().int().min(1).max(WORKSPACE_LIMITS.SEARCH_HITS).optional(),
     kinds: WorkspaceListKinds.optional(),
@@ -174,10 +181,15 @@ export const WorkspaceSearchHit = z
   .object({
     id: z.number().int().nonnegative(),
     name: z.string().min(1).max(WORKSPACE_LIMITS.NAME_CHARS),
+    /** the absolute path on the root's desktop (the door composes it from the
+     * root's path and `relativePath`) */
     path: z
       .string()
       .min(1)
       .max(WORKSPACE_LIMITS.PATH_CHARS * 2),
+    /** the hit's path below the root, POSIX separators — what a
+     * `workspace.list` of a folder hit asks with */
+    relativePath: z.string().min(1).max(WORKSPACE_LIMITS.PATH_CHARS),
     kind: WorkspaceEntryKind,
   })
   .passthrough();
@@ -189,9 +201,10 @@ export const WorkspaceSearchResult = z
     hits: z.array(WorkspaceSearchHit),
     /** more matched than the answer holds */
     clipped: z.boolean(),
-    /** the search read every folder of the root it walks (hidden, ignored and
-     * symlinked folders are not walked); false when the walk's bounds
-     * (`WORKSPACE_LIMITS.SEARCH_WALK_*`) cut it — a miss is then not a "no" */
+    /** the search read every folder of the subtree it walks (hidden, ignored,
+     * vendored and symlinked folders are not walked); false when the walk's
+     * bounds (`WORKSPACE_LIMITS.SEARCH_WALK_*`) cut it — a miss is then not a
+     * "no" */
     complete: z.boolean(),
   })
   .passthrough();

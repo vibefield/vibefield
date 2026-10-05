@@ -69,6 +69,11 @@ export const FILES_HOST_SUPERVISION = {
   RESTART_WINDOW_MS: 60_000,
   /** one question's budget (a list of a huge folder, a cold search walk) */
   REQUEST_TIMEOUT_MS: 20_000,
+  /** the worker's I/O thread pool (libuv's default is 4): a folder read that
+   * blocks — an iCloud-evicted folder downloading — holds one thread until it
+   * answers, and the worker stops reading after two such in a walk or a page
+   * (host/names.ts), so this leaves room for many of them */
+  THREADPOOL_SIZE: 16,
 } as const;
 
 export type FilesHostTimings = { [K in keyof typeof FILES_HOST_SUPERVISION]: number };
@@ -359,7 +364,10 @@ export class FilesHostSupervisor extends EventEmitter {
     try {
       proc = this.#spawn(launch.command, [...launch.args], {
         stdio: ["ignore", "pipe", "pipe", "ipc"],
-        env: workerEnvironment(this.#opts.environment ?? process.env),
+        env: {
+          UV_THREADPOOL_SIZE: String(this.#t.THREADPOOL_SIZE),
+          ...workerEnvironment(this.#opts.environment ?? process.env),
+        },
         // WIN-3 — a background worker never flashes a console window
         windowsHide: true,
       });

@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { WORKSPACE_ROOT_ID_PATTERN, WorkspaceRootId } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { type BrowseFacts, enumerateBrowseExports } from "../src/workspace/browse-exports";
 import {
@@ -80,6 +81,24 @@ describe("the request path rule (FS-D4: confined requests)", () => {
     expect(isWithin("/a/b", "/etc", "linux")).toBe(false);
     expect(isWithin("C:\\Users\\ada", "C:\\Users\\ada\\x", "win32")).toBe(true);
     expect(isWithin("C:\\Users\\ada", "D:\\x", "win32")).toBe(false);
+  });
+
+  it("names every root with a valid mille export id (the lead's ruling: fs1b hands it to mille)", () => {
+    const paths = [
+      "/Users/ada",
+      "/Volumes/Samsung Red",
+      "C:\\",
+      "/home/ada/プロジェクト",
+      `/${"x".repeat(4_000)}`,
+    ];
+    for (const kind of ["place", "browse", "picked", "project"] as const)
+      for (const path of paths) {
+        const id = rootIdFor(kind, path);
+        expect(id, `${kind} ${path.slice(0, 40)}`).toMatch(WORKSPACE_ROOT_ID_PATTERN);
+        expect(WorkspaceRootId.safeParse(id).success).toBe(true);
+      }
+    for (const bad of ["", "-r", ".r", "r/x", "../x", "r x", "r".repeat(65)])
+      expect(WorkspaceRootId.safeParse(bad).success, JSON.stringify(bad)).toBe(false);
   });
 
   it("names a root by a digest of its kind and path, stable and distinct", () => {

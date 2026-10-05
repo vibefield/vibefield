@@ -1,8 +1,8 @@
 import type {
   WorkspaceEntry,
+  WorkspaceEntryKind,
   WorkspaceGitFacts,
   WorkspaceListKinds,
-  WorkspaceSearchHit,
 } from "@vibefield/contracts";
 
 // FS-1a — fieldd ↔ its files worker: the CONTROL pipe, Node's child IPC
@@ -38,6 +38,9 @@ export type WorkerErrorCode =
   | "not-a-directory"
   /** the request itself is malformed (the door checks first; the belt) */
   | "invalid"
+  /** every engine is answering and the cap (`WORKSPACE_LIMITS.HOSTS_MAX`)
+   * leaves no room for another: ask again shortly */
+  | "busy"
   | "internal";
 
 export interface WorkerError {
@@ -67,15 +70,30 @@ export interface ListValue {
 
 export interface SearchArgs {
   rootPath: string;
+  /** the subtree searched, below the root (`parseRelativePath`); [] = all */
+  segments: string[];
   q: string;
   limit: number;
   kinds: WorkspaceListKinds;
 }
 
+/** A hit as the worker says it: its path RELATIVE to the export's root (as
+ * mille's own search over the port will say it, M6). The door composes the
+ * absolute `path` from the root's path. */
+export interface WorkerSearchHit {
+  id: number;
+  name: string;
+  /** below the export's root, POSIX separators */
+  relativePath: string;
+  kind: WorkspaceEntryKind;
+}
+
 export interface SearchValue {
-  hits: WorkspaceSearchHit[];
+  hits: WorkerSearchHit[];
   clipped: boolean;
   complete: boolean;
+  /** entries the walk had seen when it stopped (the coverage's measure) */
+  walked: number;
 }
 
 export interface GitFactsArgs {

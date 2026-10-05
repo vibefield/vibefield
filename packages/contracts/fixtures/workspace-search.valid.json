@@ -5,13 +5,15 @@
       "id": 42,
       "name": "vibe-field",
       "path": "/Users/ada/Projects/project100/vibe-field",
-      "kind": "dir"
+      "kind": "dir",
+      "relativePath": "Projects/project100/vibe-field"
     },
     {
       "id": 911,
       "name": "vibe.md",
       "path": "/Users/ada/notes/vibe.md",
-      "kind": "file"
+      "kind": "file",
+      "relativePath": "notes/vibe.md"
     }
   ],
   "clipped": false,

@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { join } from "node:path";
 import {
   type CallerContext,
   PRODUCT_API_LIMITS,
@@ -173,6 +174,11 @@ export class WorkspaceDoors {
             );
           case "invalid":
             throw new RpcCallError("PRECONDITION_FAILED", error.message, false);
+          case "busy":
+            throw new RpcCallError("RESOURCE_EXHAUSTED", error.message, true, {
+              service: WORKSPACE_SERVICE.SERVICE,
+              limit: WORKSPACE_LIMITS.HOSTS_MAX,
+            });
           default:
             this.#logger.warn(
               "fieldd.workspace.worker_failed",
@@ -257,21 +263,37 @@ export class WorkspaceDoors {
     if (!parsed.success)
       throw new RpcCallError(
         "PRECONDITION_FAILED",
-        `expected { rootId, q (1..${WORKSPACE_LIMITS.QUERY_CHARS} chars), limit? (1..${WORKSPACE_LIMITS.SEARCH_HITS}), kinds?: "dirs" | "all", device? }`,
+        `expected { rootId, path? (relative), q (1..${WORKSPACE_LIMITS.QUERY_CHARS} chars), limit? (1..${WORKSPACE_LIMITS.SEARCH_HITS}), kinds?: "dirs" | "all", device? }`,
         false,
       );
+    const path = parseRelativePath(parsed.data.path);
+    if (!path.ok)
+      throw new RpcCallError("PRECONDITION_FAILED", relativePathRefusal(path.reason), false, {
+        reason: path.reason,
+      });
     const ceiling = Math.min(WORKSPACE_LIMITS.SEARCH_HITS, workspacePageLimit(ctx.principal));
     const limit = Math.min(parsed.data.limit ?? ceiling, ceiling);
     const root = this.#root(parsed.data.rootId);
     const value = await this.#ask(root, () =>
       this.#supervisor.request("search", {
         rootPath: root.path,
+        segments: path.segments,
         q: parsed.data.q,
         limit,
         kinds: parsed.data.kinds ?? "all",
       }),
     );
-    const answer = WorkspaceSearchResultSchema.safeParse({ rootId: root.rootId, ...value });
+    // the worker's hits are relative to the export (mille's own shape, M6);
+    // the absolute path on this desktop is composed here, from the root's
+    const answer = WorkspaceSearchResultSchema.safeParse({
+      rootId: root.rootId,
+      hits: value.hits.map((hit) => ({
+        ...hit,
+        path: join(root.path, ...hit.relativePath.split("/")),
+      })),
+      clipped: value.clipped,
+      complete: value.complete,
+    });
     if (!answer.success) {
       this.#logger.warn(
         "fieldd.workspace.answer_malformed",

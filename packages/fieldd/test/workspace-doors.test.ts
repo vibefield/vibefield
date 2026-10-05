@@ -254,8 +254,25 @@ describe("the door tier, by principal (FS-D6 (a))", () => {
     const found = WorkspaceSearchResult.parse(
       await win.call("workspace.search", { rootId: home.rootId, q: "repo", kinds: "dirs" }),
     );
-    expect(found.hits.map((hit) => hit.path)).toEqual([join(world.home, "Projects", "repo")]);
+    // the door composes the absolute path from the root's path and the hit's relative one
+    expect(found.hits.map((hit) => [hit.path, hit.relativePath])).toEqual([
+      [join(world.home, "Projects", "repo"), "Projects/repo"],
+    ]);
     expect(found).toMatchObject({ rootId: home.rootId, clipped: false, complete: true });
+    // a subtree: `path` narrows the search, under the same path rule as a list
+    const within = WorkspaceSearchResult.parse(
+      await win.call("workspace.search", { rootId: home.rootId, path: "wide", q: "f01" }),
+    );
+    expect(within.hits.length).toBeGreaterThan(0);
+    expect(within.hits.every((hit) => hit.relativePath.startsWith("wide/"))).toBe(true);
+    for (const path of ["..", "/etc"])
+      expect(
+        (await win.callErr("workspace.search", { rootId: home.rootId, path, q: "x" })).data?.kind,
+      ).toBe("PRECONDITION_FAILED");
+    expect(
+      (await win.callErr("workspace.search", { rootId: home.rootId, path: "escape", q: "x" })).data
+        ?.kind,
+    ).toBe("NOT_FOUND");
     // a place: the repository, as a spawn there makes it
     world.daemon.workspace.registry.touchPlace(join(world.home, "Projects", "repo"));
     const facts = WorkspaceGitFactsResult.parse(
