@@ -1,0 +1,394 @@
+/* THE SELECTION BAR (DK-11; DESIGN.md §8 "The selection bar", "The bar grown — More, and right-click"; §5 the
+ * line's glass and the menus' solid, R20; §6 M1, M4, M6). Tokens only. ONE element through every role: the bar on
+ * the line's glass over the selection's brackets, and the same piece grown into its solid menu (MC-D6, FC-D14).
+ *
+ * Where it stands is written by the view (a transform, imperatively, on each publish); everything it looks like
+ * is here. Over the desk and under the frame (§10): above the canvas, below the head (50), the attention stack and
+ * the old sheet (40, 50), the cover (60), the status line (61) and the line, the edges and the corner (62).
+ *
+ * The material lives on `.vf-bar-panel`, which grows from the bar's own row to the menu (R6, R20): its insets
+ * come from the view (`--vf-bar-grow-*`). The list stands at its grown place (`--vf-bar-list-*`) — the rows fade
+ * and rise nearest first as the material reaches them — and the row of cells stays where the bar stood (M2).
+ */
+
+.vf-bar {
+  position: absolute;
+  z-index: 30;
+  top: 0;
+  left: 0;
+  width: max-content;
+  height: 40px;
+  will-change: transform, opacity;
+  user-select: none;
+  -webkit-app-region: no-drag;
+}
+
+/* ── THE MATERIAL: the bar on the line's glass; grown, the same piece firmed to solid ──────────────────── */
+
+/* the bar at rest: the line's glass (§5), its hairline (the strong one by night) and the island shadow */
+.vf-bar-glass {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  border-radius: 20px;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+}
+
+.dark .vf-bar-glass {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}
+
+/* grown: the solid (§5's menus — the grown bar's corners 20, R20) grows from the bar's own row on the island
+   curve over 600 ms, its surface fading in over 160 ms (the Me menu's grow); folding, the content goes first,
+   the shape folds from 80 ms over 600 ms and the surface fades as it reaches the bar (M4) */
+.vf-bar-panel {
+  position: absolute;
+  z-index: 0;
+  top: calc(var(--vf-bar-grow-t, 0px) * -1);
+  right: calc(var(--vf-bar-grow-r, 0px) * -1);
+  bottom: calc(var(--vf-bar-grow-b, 0px) * -1);
+  left: calc(var(--vf-bar-grow-l, 0px) * -1);
+  border-radius: 20px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    top var(--vf-bar-grow-ms, 600ms) var(--vf-ease-island) var(--vf-bar-fold-ms, 80ms),
+    right var(--vf-bar-grow-ms, 600ms) var(--vf-ease-island) var(--vf-bar-fold-ms, 80ms),
+    bottom var(--vf-bar-grow-ms, 600ms) var(--vf-ease-island) var(--vf-bar-fold-ms, 80ms),
+    left var(--vf-bar-grow-ms, 600ms) var(--vf-ease-island) var(--vf-bar-fold-ms, 80ms),
+    opacity var(--vf-bar-firm-ms, 160ms) ease
+    calc(var(--vf-bar-fold-ms, 80ms) + var(--vf-bar-grow-ms, 600ms) - var(--vf-bar-firm-ms, 160ms));
+}
+
+.vf-bar[data-open] .vf-bar-panel {
+  opacity: 1;
+  transition:
+    top var(--vf-bar-grow-ms, 600ms) var(--vf-ease-island),
+    right var(--vf-bar-grow-ms, 600ms) var(--vf-ease-island),
+    bottom var(--vf-bar-grow-ms, 600ms) var(--vf-ease-island),
+    left var(--vf-bar-grow-ms, 600ms) var(--vf-ease-island),
+    opacity var(--vf-bar-firm-ms, 160ms) ease;
+}
+
+/* the strong hairline between the list and the bar's own row, 12 in from each side */
+.vf-bar-hairline {
+  position: absolute;
+  right: 12px;
+  left: 12px;
+  height: 1px;
+  background: var(--vf-hairline-strong);
+  opacity: 0;
+  transition: opacity var(--vf-bar-out-ms, 120ms) ease;
+}
+
+.vf-bar[data-dir="up"] .vf-bar-hairline {
+  bottom: 40px;
+}
+
+.vf-bar[data-dir="down"] .vf-bar-hairline {
+  top: 40px;
+}
+
+.vf-bar[data-open] .vf-bar-hairline {
+  opacity: 1;
+  transition: opacity var(--vf-bar-row-ms, 240ms) ease var(--vf-bar-firm-ms, 160ms);
+}
+
+/* ── THE ROW: Send to… · rule · the kind's acts · Duplicate · Tape · More · rule · Delete ─────────────── */
+
+.vf-bar-row {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  box-sizing: border-box;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  white-space: nowrap;
+}
+
+.vf-bar-cell,
+.vf-bar-send {
+  display: inline-flex;
+  flex: none;
+  height: 32px;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  font: 500 13px / 1 var(--vf-font-sans);
+  cursor: pointer;
+  transition:
+    background-color 120ms ease,
+    color 120ms ease,
+    transform 120ms ease;
+}
+
+.vf-bar-cell {
+  width: 32px;
+  color: var(--vf-text-secondary);
+}
+
+/* an act with no glyph: its label alone, a text cell (R3) */
+.vf-bar-cell--text {
+  width: auto;
+  padding: 0 10px;
+}
+
+.vf-bar-cell:hover {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-bar-cell:active {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+  transform: scale(0.95);
+}
+
+/* More, its menu open: shown on — the inverted solid */
+.vf-bar-cell[aria-expanded="true"],
+.vf-bar-cell[aria-expanded="true"]:hover {
+  color: var(--vf-foreground-inverse);
+  background: var(--vf-foreground);
+}
+
+/* Delete arms only while hovered: the danger ink on the red at 12% */
+.vf-bar-cell[data-act="delete"]:hover {
+  color: var(--vf-ink-danger);
+  background: color-mix(in srgb, var(--vf-red) 12%, transparent);
+}
+
+/* Send to… — the bar's one word: agents 16 and the words at 13/500 on the ready fill, a 32 pill padded 0 12 0
+   10, gap 7; under the pointer 14%, pressed 0.97 (R25). Until DK-14 it opens nothing: it WAITS, faint by ink
+   (the line's mic is the precedent), and its tooltip says "next". */
+.vf-bar-send {
+  gap: 7px;
+  padding: 0 12px 0 10px;
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-bar-send:hover {
+  background: color-mix(in srgb, var(--vf-foreground) 14%, transparent);
+}
+
+.vf-bar-send:active {
+  transform: scale(0.97);
+}
+
+.vf-bar-send[aria-disabled="true"],
+.vf-bar-send[aria-disabled="true"]:hover,
+.vf-bar-send[aria-disabled="true"]:active {
+  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  transform: none;
+  cursor: default;
+}
+
+.vf-bar-cell:focus-visible,
+.vf-bar-send:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}
+
+/* the rule: 1 × 18 in the strong hairline, 5 clear each side (the row's 2 gap and 3 of its own) */
+.vf-bar-rule {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  margin: 0 3px;
+  background: var(--vf-hairline-strong);
+}
+
+/* a missing face selected: its name and why, where the kind's acts would stand — a label, not a control */
+.vf-bar-words {
+  padding: 0 8px;
+  color: var(--vf-text-secondary);
+  font: 500 13px / 32px var(--vf-font-sans);
+  cursor: default;
+}
+
+/* ── THE LIST: the grown menu's rows, nearest first ───────────────────────────────────────────────────── */
+
+.vf-bar-list {
+  position: absolute;
+  z-index: 1;
+  left: var(--vf-bar-list-x, 0px);
+  display: flex;
+  box-sizing: border-box;
+  width: var(--vf-bar-list-w, 244px);
+  max-height: var(--vf-bar-list-h, none);
+  flex-direction: column;
+  gap: 1px;
+  padding: 2px 6px 6px;
+  overflow: hidden;
+  color: var(--vf-text-primary);
+  visibility: hidden;
+  pointer-events: none;
+  transition: visibility 0s linear var(--vf-bar-out-ms, 120ms);
+}
+
+/* grown up: above the bar, read bottom-up, nearest first; padded 6 6 2 */
+.vf-bar[data-dir="up"] .vf-bar-list {
+  bottom: 41px;
+  flex-direction: column-reverse;
+  padding: 6px 6px 2px;
+}
+
+/* grown down: the bar's own row heads it; padded 2 6 6 */
+.vf-bar[data-dir="down"] .vf-bar-list {
+  top: 41px;
+}
+
+.vf-bar[data-scroll="true"] .vf-bar-list {
+  overflow-y: auto;
+}
+
+.vf-bar[data-open] .vf-bar-list {
+  visibility: visible;
+  pointer-events: auto;
+  transition: none;
+}
+
+.vf-bar-item,
+.vf-bar-eye,
+.vf-bar-sep {
+  opacity: 0;
+  transform: translateY(4px);
+  transition:
+    opacity var(--vf-bar-out-ms, 120ms) ease,
+    transform var(--vf-bar-out-ms, 120ms) ease,
+    background-color 120ms ease;
+}
+
+/* grown down the rows rise from the other side: toward the bar's row they came from */
+.vf-bar[data-dir="down"] .vf-bar-item,
+.vf-bar[data-dir="down"] .vf-bar-eye,
+.vf-bar[data-dir="down"] .vf-bar-sep {
+  transform: translateY(-4px);
+}
+
+.vf-bar[data-open] .vf-bar-item,
+.vf-bar[data-open] .vf-bar-eye,
+.vf-bar[data-open] .vf-bar-sep {
+  opacity: 1;
+  transform: none;
+  transition:
+    opacity var(--vf-bar-row-ms, 240ms) ease var(--vf-bar-delay, 160ms),
+    transform var(--vf-bar-row-ms, 240ms) ease var(--vf-bar-delay, 160ms),
+    background-color 120ms ease;
+}
+
+/* rows 34 tall, corners 12, padded 0 10, 13/500 in primary ink; the hot one in the ready fill */
+.vf-bar-item {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  flex: none;
+  align-items: center;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 12px;
+  color: var(--vf-text-primary);
+  background: none;
+  font: 500 13px / 1.2 var(--vf-font-sans);
+  text-align: left;
+  cursor: pointer;
+}
+
+.vf-bar-item[data-hot] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-bar-item[data-danger]:hover {
+  color: var(--vf-ink-danger);
+  background: color-mix(in srgb, var(--vf-red) 12%, transparent);
+}
+
+.vf-bar-item[aria-disabled="true"] {
+  color: var(--vf-text-tertiary);
+  cursor: default;
+}
+
+.vf-bar-item:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: -2px;
+}
+
+.vf-bar-item-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* the key at the row's end, said (FR-5): 11/500 in tertiary ink */
+.vf-bar-key {
+  flex: none;
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--vf-text-tertiary);
+  font: 500 11px / 1 var(--vf-font-sans);
+  letter-spacing: 0.02em;
+}
+
+.vf-bar-item[data-danger]:hover .vf-bar-key {
+  color: inherit;
+}
+
+/* between groups: the strong hairline, 10 in, 4 above and below */
+.vf-bar-sep {
+  height: 1px;
+  flex: none;
+  margin: 4px 10px;
+  border: 0;
+  background: var(--vf-hairline-strong);
+}
+
+/* the eyebrow at the far end, in the mat's print: mono 10, capitals, 0.08em, tertiary, padded 8 10 5 */
+.vf-bar-eye {
+  flex: none;
+  padding: 8px 10px 5px;
+  overflow: hidden;
+  color: var(--vf-text-tertiary);
+  font: 500 10px / 1.2 var(--vf-font-mono);
+  letter-spacing: 0.08em;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* M6 (R8): no growth and no rise — the solid fades in WHOLE at its full size (and out, then folds unseen), every
+   duration halved (the view's numbers) */
+.vf-bar[data-motion="fade"] .vf-bar-panel {
+  transition:
+    opacity var(--vf-bar-grow-ms, 300ms) ease,
+    top 0s linear var(--vf-bar-grow-ms, 300ms),
+    right 0s linear var(--vf-bar-grow-ms, 300ms),
+    bottom 0s linear var(--vf-bar-grow-ms, 300ms),
+    left 0s linear var(--vf-bar-grow-ms, 300ms);
+}
+
+.vf-bar[data-motion="fade"][data-open] .vf-bar-panel {
+  transition: opacity var(--vf-bar-grow-ms, 300ms) ease;
+}
+
+.vf-bar[data-motion="fade"] .vf-bar-item,
+.vf-bar[data-motion="fade"] .vf-bar-eye,
+.vf-bar[data-motion="fade"] .vf-bar-sep {
+  transform: none;
+}

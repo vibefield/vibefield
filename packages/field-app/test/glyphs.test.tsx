@@ -155,7 +155,10 @@ describe("the glyph set", () => {
     // are chrome silhouettes drawn from the wall (DESIGN.md §8), and the OS
     // marks are their owners' marks, kept exact like the vendor marks (§13).
     // The catalog (design-system/) is a harness and keeps its own fixtures.
+    // DK-11 (R2): the desk bar's ONE path renderer for a kind's own drawing —
+    // one component, one <svg> — and no other file of the bar's.
     const allow = new Map<string, number>([
+      ["field/desk/bar/KindGlyph.tsx", 1],
       ["godview/os-marks.tsx", 1],
       ["hud/edge-tray/EdgeTrayView.tsx", 2],
     ]);

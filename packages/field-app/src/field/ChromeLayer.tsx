@@ -38,6 +38,7 @@ import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
 import { WidgetTray } from "../hud/WidgetTray";
 import { SettingsPanel } from "../panels";
 import type { MagnetGridGlyph } from "./canvas-appearance";
+import { SelectionBar } from "./desk/bar/SelectionBar";
 import { useSettingsChord } from "./me-menu-wiring";
 import { isCommandPaletteChord, listenForProductChord } from "./product-chords";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
@@ -417,9 +418,24 @@ export function ChromeLayer({
         lineActs={lineActs}
       />
 
+      {/* THE SELECTION BAR (DK-11; DESIGN.md §8 "The selection bar", "The
+          bar grown"): object chrome on the desk's selection — over the desk
+          and under the frame (§10), placed imperatively from the desk's
+          anchor; More or a right-click grows it into its menu, one of the
+          frame's open surfaces. After the line in the document, so Tab from
+          the draft reaches it (R9). Not shown over a covered view, nor over
+          the field receded under a sheet. */}
+      <SelectionBar
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        hidden={covered || trayOpen || docsOpen || showSettings}
+        keys={keys}
+      />
+
       {/* THE STATUS LINE (DESIGN.md §8, §10): the desk's notices under the
-          head — a degraded desk's banner and its Reload (R18) — standing
-          with the frame, above the cover. */}
+          head — a degraded desk's banner and its Reload (R18), a type the desk
+          cannot draw, a type to remount (DK-11) — standing with the frame,
+          above the cover, under the tools in hand while an object is held. */}
       <StatusLine />
 
       {/* The loading veil rides ABOVE all chrome — loading is modal (B4 §2). */}

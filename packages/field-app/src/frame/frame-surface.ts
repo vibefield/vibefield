@@ -11,7 +11,9 @@
 // this one value (DESIGN.md §10). Until the Peek lands, History's search — the
 // room's own sheet (the search interim, 2026-10-04; DESIGN.md §8 "History") —
 // is in it too, so the palette, a drawer, the Me menu, Settings and a change
-// of view fold the sheet, and opening it folds them.
+// of view fold the sheet, and opening it folds them. DK-11: the selection
+// bar's grown menu joins them — the canon's ninth (DESIGN.md §10 "The mat's
+// places", R5), the tenth value beside History's interim sheet.
 
 export type FrameSurface =
   /** Objects — on this build the widget tray's sheet behind the line. */
@@ -33,7 +35,11 @@ export type FrameSurface =
   /** History's search until the Peek lands: the room's own sheet, grown from
    * its strip's launcher (`history/search.ts`). Dated; it leaves with the
    * interim. */
-  | "history-search";
+  | "history-search"
+  /** The selection bar grown into its menu, by More or a right-click (DK-11;
+   * DESIGN.md §10 "The mat's places": the one owner's ninth, R5) — the bar
+   * over the desk's selection, never the frame's own. */
+  | "selection";
 
 /** What a surface's own close asks of the owner: fold it if it is the one
  * open, and leave the others alone — the tray's Esc must not close @'s list. */

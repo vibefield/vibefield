@@ -15,10 +15,12 @@ import type {
   DeskLayerStatus,
   GpuMemory,
   PickResult,
+  SelectionAnchor,
   ThemeName,
 } from "@vibecook/ice/desk";
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
 import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
+import { type BarStats, readBarStats } from "./bar/bar-stats";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 import type { ObjectWords } from "./desk-object-words";
@@ -227,6 +229,12 @@ export interface VfDeskDoor {
   words(type: string): ObjectWords;
   /** DK-11 — every notice the status line has said this session, in order (each said ONCE). */
   notices(): readonly SaidNotice[];
+  /** DK-11 — the selection bar's counters: the anchor's publishes it heard, its placements (imperative writes) and
+   * its view's renders — renderer-wide (a row reads its deltas: placements ≤ publishes, never a render per frame). */
+  bar(): BarStats;
+  /** DK-11 — the selection's anchor as the desk last published it (`handle.selection.anchor()`) — what the bar is
+   * placed from; null on a handle without the door. A read. */
+  anchor(): SelectionAnchor | null;
 }
 
 const pickOf = (
@@ -306,6 +314,8 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     memory: () => handle.gpuMemory()?.read() ?? null,
     words,
     notices: statusLineSaid,
+    bar: readBarStats,
+    anchor: () => (handle as Partial<DeskLayerHandle>).selection?.anchor() ?? null,
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;
