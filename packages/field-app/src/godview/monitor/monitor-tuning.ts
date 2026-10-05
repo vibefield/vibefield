@@ -1,8 +1,8 @@
 import {
-  type AgentMonitorView,
   loadMonitorParameters,
   type MonitorParameterGroup,
   type MonitorParameters,
+  type MonitorViewEntry,
   monitorParameterDefaults,
   monitorViewFor,
   normalizeMonitorParameters,
@@ -33,7 +33,7 @@ const STAGE_STORAGE_KEY = "vf-godview-monitor-stage-v1";
  * revision (AR-5: the reference's `parametersRevision`, the 2026-09-09 lock),
  * so every installation lands on the new defaults instead of keeping what an
  * older design had saved; later tunes persist as before. */
-function viewParametersKey(view: AgentMonitorView): string {
+function viewParametersKey(view: MonitorViewEntry): string {
   return `vf-godview-monitor-parameters-v1:${view.id}${view.parametersRevision ? `:${view.parametersRevision}` : ""}`;
 }
 
@@ -54,7 +54,7 @@ export function storedStageParameters(): MonitorParameters {
 }
 
 export interface MonitorTuning {
-  view: AgentMonitorView;
+  view: MonitorViewEntry;
   /** The active view's own bag, already normalized to its controls. */
   parameters: MonitorParameters;
   stageParameters: MonitorParameters;

@@ -22,6 +22,7 @@ export type {
   MonitorSpawnMenu,
   MonitorSpawnTarget,
   MonitorTheme,
+  MonitorViewEntry,
   PaneAttachment,
 } from "@vibecook/puppeteer-views";
 

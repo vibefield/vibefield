@@ -1,6 +1,10 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { AgentMonitorState } from "@vibecook/puppeteer-core";
-import type { MonitorCapabilities, MonitorViewInput } from "@vibecook/puppeteer-view-sdk";
+import type {
+  MonitorCapabilities,
+  MonitorView,
+  MonitorViewInput,
+} from "@vibecook/puppeteer-view-sdk";
 import {
   type LegacyMonitorView,
   legacyView,
@@ -16,12 +20,13 @@ import type {
 import { projectColourFor } from "@vibecook/puppeteer-view-sdk/toolkit";
 import {
   type AgentMonitorProps,
-  type AgentMonitorView,
   EMPTY_STATUS_LEDGER,
   endStatusLane,
+  isPortedMonitorView,
   type MonitorHistoryBook,
   type MonitorPalette,
   type MonitorParameters,
+  type MonitorViewEntry,
   observeStatuses,
   type ProfileTab,
   type StatusLedger,
@@ -72,6 +77,7 @@ import {
   VIBEFIELD_SHIM,
   type WindowRowFacts,
 } from "./window-rows";
+import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
 
 /**
  * THE WINDOW (MV-3b; MV-D18, MV-D22). What is left of the seam once the
@@ -79,9 +85,11 @@ import {
  *
  *   · THE REPLICA — the window's copy of the backend's model, fed by
  *     `GodviewAgentsProvider` through the door's model port (`model-replica.ts`,
- *     one subscription per window, PF6). The views draw it through the view
- *     host's legacy bridge (L6, L9): the shim's rows in VibeField's words
- *     (`window-rows.ts`), one update per frame.
+ *     one subscription per window, PF6). List and rain are SDK views (MV-4):
+ *     they draw it as themselves, cut to the window's rows
+ *     (`window-view.ts`). The swarm and the timeline still draw it through the
+ *     view host's legacy bridge (L6, L9): the shim's rows in VibeField's words
+ *     (`window-rows.ts`). Either way, one update per frame.
  *   · THE LOCAL JOIN — what only this window knows, handed to the replica
  *     (`setLocal`): its panes and the colour each wears, the pane the person is
  *     working in, the row they pointed at, where they asked terminals to be
@@ -158,11 +166,16 @@ export interface MonitorPaneFacts {
 export interface MonitorAgentsResult {
   /** The window's replica, for the view host; an empty one while there is no feed. */
   replica: MonitorReplicaLike;
+  /** MV-4 — the replica cut to the rows the stage shows, for a PORTED view's
+   * host (`window-view.ts`): the chosen desktop's, in the stage's order, peers
+   * greyed by standing — what the bridge hands a legacy view, as the model. */
+  viewReplica: MonitorReplicaLike;
   /** The model as the replica last published it. */
   model: MonitorModel;
-  /** A view through the legacy bridge (L6): the same bridge for the same view
-   * while its component stands (a perf probe installed or removed rebuilds it). */
-  viewFor(view: AgentMonitorView): LegacyMonitorView;
+  /** The view a registry entry mounts: a ported one as itself (MV-4), a legacy
+   * one through the bridge (L6) — the same bridge for the same view while its
+   * component stands (a perf probe installed or removed rebuilds it). */
+  viewFor(view: MonitorViewEntry): MonitorView;
   /** The view host's commands: select and create route to this window's door. */
   commands: ViewSlotCommands;
   /** What the backend lends a view beyond the model (MV-D4): today's spawn menu. */
@@ -966,10 +979,11 @@ export function useMonitorAgents({
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
   const actions = useMemo<MonitorActions>(() => ({ select, createAt }), [createAt, select]);
 
-  // ── the views, through the legacy bridge (L6) ────────────────────────────
+  // ── the views: ported ones as themselves, the rest through the bridge (L6) ─
   // The bridge's `toProps` reads host state beside the input through `latest`,
   // so a view switch or a frame always finds this render's facts; a change of
-  // those facts alone redraws the mounted view (`refresh`).
+  // those facts alone redraws the mounted view (`refresh`). A ported view reads
+  // the same rows, as the model, through `viewReplica` (MV-4).
   const agentsById = useMemo(() => new Map(agents.map((row) => [row.id, row] as const)), [agents]);
   const historyFor = useCallback(
     (device: string | null, chosen: string | undefined): GodviewHistoryBook => {
@@ -999,6 +1013,13 @@ export function useMonitorAgents({
     select,
     createAt,
   };
+  /** MV-4 — the model a ported view draws: the replica cut to the rows the
+   * bridge would hand a legacy view, read through `latest` as `toProps` reads
+   * them, so it always finds this render's facts. */
+  const viewReplica = useMemo<WindowViewReplica>(
+    () => createWindowViewReplica(replica, (current) => latest.current.viewRows(current)),
+    [replica],
+  );
   /** What the views were last given, so a change of window facts alone can draw them again. */
   const given = useRef<{
     rows: readonly ViewsMonitorAgent[] | undefined;
@@ -1019,16 +1040,22 @@ export function useMonitorAgents({
       ...(latest.current.spawnMenu !== undefined ? { spawnMenu: latest.current.spawnMenu } : {}),
     };
   }, []);
-  // One bridge per view, built when the stage first asks for it and kept while
-  // its component stands — the registry's four, or whatever view a host hands
-  // the stage. MV-0: the component is the view's own, or the lab's counting
-  // wrapper around it while a perf probe is installed
+  // One bridge per legacy view, built when the stage first asks for it and kept
+  // while its component stands — the registry's swarm and timeline, or whatever
+  // legacy view a host hands the stage. MV-0: the component is the view's own,
+  // or the lab's counting wrapper around it while a perf probe is installed
   // (`monitor/perf/instrumented-view.tsx`); a probe installed or removed rebuilds.
+  // A PORTED view (MV-4: list, rain) mounts as itself and is not wrapped: its
+  // work is inside the lab's every-root totals, which are what gate (M33).
+  // `/testing`'s commit counter does not fit here — it rebuilds the view
+  // without its root class (L18's stylesheet scope), so the lab would measure
+  // an unstyled view, and it is a tests' subpath (L16).
   const bridges = useRef(
     new Map<string, { component: ComponentType<AgentMonitorProps>; view: LegacyMonitorView }>(),
   );
   const viewFor = useCallback(
-    (view: AgentMonitorView): LegacyMonitorView => {
+    (view: MonitorViewEntry): MonitorView => {
+      if (isPortedMonitorView(view)) return view.view;
       const Component = instrumentedMonitorView(view);
       const held = bridges.current.get(view.id);
       if (held !== undefined && held.component === Component) return held.view;
@@ -1041,15 +1068,17 @@ export function useMonitorAgents({
   // The window facts the views read moved without the model moving (the device
   // filter, a desktop's standing, a transferred body, the spawn menu, fieldd's
   // history landing): a view whose props changed draws again (the bridge's
-  // `refresh`, for host state beside the input).
+  // `refresh`, for host state beside the input; a ported view's replica hears
+  // it when the rows it is handed changed).
   useLayoutEffect(() => {
+    viewReplica.refresh();
     const was = given.current;
     if (was.rows === undefined) return;
     const rows = latest.current.viewRows(replica.getSnapshot().model);
     const history = latest.current.history();
     if (rows === was.rows && history === was.history && spawnMenu === was.spawnMenu) return;
     for (const held of bridges.current.values()) held.view.refresh();
-  }, [replica, placed, spawnMenu, historySeed, chosenProfile, deviceChosen]);
+  }, [replica, viewReplica, placed, spawnMenu, historySeed, chosenProfile, deviceChosen]);
 
   // The view host reads its commands through the latest props; these reach the latest window too.
   const commands = useMemo<ViewSlotCommands>(
@@ -1096,6 +1125,7 @@ export function useMonitorAgents({
 
   return {
     replica,
+    viewReplica,
     model,
     viewFor,
     commands,

@@ -6,6 +6,7 @@ import {
   FindSheet,
   type HistoryPort,
   InstrumentBar,
+  isPortedMonitorView,
   MONITOR_CHROME_ATTRIBUTE,
   MONITOR_STAGE_CLASS,
   MONITOR_VIEWS,
@@ -40,7 +41,7 @@ import {
 } from "./monitor/launcher-keys";
 import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
-import type { AgentMonitorView, MonitorAgent } from "./monitor/types";
+import type { MonitorAgent, MonitorViewEntry } from "./monitor/types";
 import {
   type MonitorPaneFacts,
   type MonitorSourceCounts,
@@ -208,7 +209,7 @@ const noStatusCycle = (): void => undefined;
 const noThemeSwitch = (): void => undefined;
 
 export interface GodviewMonitorProps {
-  view: AgentMonitorView;
+  view: MonitorViewEntry;
   parameters: MonitorParameters;
   theme?: GodviewTheme;
   notice?: string | null;
@@ -283,9 +284,11 @@ export function GodviewMonitor({
   const [deviceChoice, setDeviceChoice] = useState<string | null>(null);
   // MV-3b — THE WINDOW on the replica (`useMonitorAgents`): the backend's rows
   // through this window's one door, joined with the deck's panes, the chosen
-  // tab and the chosen desktop; the views through the view host's legacy bridge.
+  // tab and the chosen desktop; list and rain as SDK views on the window's cut
+  // of it (MV-4), the swarm and the timeline through the view host's legacy bridge.
   const {
     replica,
+    viewReplica,
     viewFor,
     commands,
     capabilities,
@@ -612,8 +615,10 @@ export function GodviewMonitor({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [showTabs, tabKey]);
 
-  /** The chosen view through the legacy bridge — whatever view the host hands the stage. */
+  /** The chosen view: a ported one as itself (MV-4), a legacy one through the
+   * bridge — whatever view the host hands the stage. */
   const hostedView = viewFor(view);
+  const ported = isPortedMonitorView(view);
   return (
     <>
       <InstrumentBar
@@ -699,12 +704,17 @@ export function GodviewMonitor({
           sources.remote === 0 ? "Agent monitor" : "Agent monitor — local and remote sessions"
         }
       >
-        {/* One view, through the view host's legacy bridge (L6), drawn from this
-            window's replica (MV-3b): one update per frame, on the host's ONE
-            frame scheduler (M7). The swarm's physics still lives in OUR worker
-            (GT-D16) — the bridge re-provides the driver above the old view. */}
+        {/* One view, drawn from this window's replica (MV-3b): one update per
+            frame, on the host's ONE frame scheduler (M7). List and rain are SDK
+            views (MV-4) and read the window's cut of the model from their first
+            frame — a switch between a ported view and a legacy one mounts a
+            fresh slot (the key) rather than handing the new view the other
+            kind's model for a frame. The swarm and the timeline mount through
+            the legacy bridge (L6); the swarm's physics still lives in OUR worker
+            (GT-D16), and the bridge re-provides the driver above the old view. */}
         <MonitorViewHost
-          replica={replica}
+          key={ported ? "view" : "legacy"}
+          replica={ported ? viewReplica : replica}
           view={hostedView}
           stage={stageGeometry}
           theme={monitorTheme}

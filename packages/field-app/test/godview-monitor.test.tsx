@@ -630,12 +630,14 @@ describe("the monitor stage", () => {
     // dealt once and drawn at the theme's own lightness and chroma — so three
     // projects are three colours, and the pane no agent claims belongs to no
     // project and wears the ramp. A palette that resolved nothing would make
-    // all four black, which is exactly what the tint fallback is for.
+    // all four black, which is exactly what the tint fallback is for. Since
+    // MV-4 the list is an SDK view and its row colour is its own property
+    // (L18: `--mv-list-colour`, set from the row's `colour`).
     const host = await mountMonitor("list");
     const byProject = new Map<string, string>();
     for (const row of host.querySelectorAll<HTMLElement>(".vf-monitor-list-row")) {
       const project = row.querySelector(".vf-monitor-list-project")?.textContent ?? "";
-      byProject.set(project, row.style.getPropertyValue("--agent-color"));
+      byProject.set(project, row.style.getPropertyValue("--mv-list-colour"));
     }
     const ramp = byProject.get("scratch");
     const dealt = ["vibe-field", "voyager", "jabali"].map((project) => {
@@ -1416,9 +1418,12 @@ function Probe(props: AgentMonitorProps): ReactElement {
   probed = props;
   return <div className="probe-view" />;
 }
+// A legacy view of its own: since MV-4 the list is an SDK view, so a probe
+// spread from its registry entry would mount the list itself, never the probe.
 const PROBE_VIEW: AgentMonitorView = {
-  ...monitorViewFor("list"),
   id: "probe",
+  label: "PROBE",
+  parameterGroups: [],
   Component: Probe,
 };
 
