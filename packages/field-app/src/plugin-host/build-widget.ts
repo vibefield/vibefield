@@ -1,6 +1,6 @@
 import { type AnyBehaviorDef, defineWidget, p, type WidgetType } from "@vibecook/ice";
 import { defineObject, isObjectKind } from "@vibecook/ice/desk";
-import type { ObjectContribution, PropSpec, WidgetContribution } from "@vibefield/contracts";
+import type { ObjectContribution, PropSpec } from "@vibefield/contracts";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
 
 // §12.2 — the HOST builds every prefab from manifest data; plugins never call
@@ -11,14 +11,13 @@ import type { ObjectBinding } from "@vibefield/plugin-sdk";
 // vocabulary is the engine's verbatim (PLUG-P1a), so mapping is 1:1; anything
 // the engine can't express refuses loudly rather than approximating.
 //
-// DK-2 (desk/landing, ICE 0.14.0): a widget's FACE is its object kind. ICE refuses
-// the DOM/R3F face fields at definition (`surface`, `component`, `chrome`,
-// `animated`, `preview`, `instancePreview`, `sizeMode`, a container's
-// `framePreview`), so a `widgets` row compiles FACELESS — its durable half only,
-// bound to NO kind: the document's data survives and the entity stays pickable by
-// its box (ICE draws it with its missing face from 0.15.0, DK-D18 as amended;
-// until then it is invisible). An `objects` row compiles through `defineObject`
-// with the kind its renderer module exports.
+// DK-2 (desk/landing, ICE 0.14.0): a face is an OBJECT KIND. An `objects` row
+// compiles through `defineObject` with the kind its renderer module exports; a type
+// with no kind to bind — an object whose export is missing or refused, a ghost stub
+// for a plugin this device does not have — compiles FACELESS from its durable half,
+// its data preserved and its entity pickable by its box (ICE draws its missing face
+// from 0.15.0, DK-D18 as amended). DK-8: the `widgets` rows this builder also
+// compiled faceless RETIRED with `contributes.widgets` (`buildWidgetType` with them).
 
 function buildProp(type: string, name: string, spec: PropSpec) {
   switch (spec.kind) {
@@ -53,10 +52,28 @@ function buildProp(type: string, name: string, spec: PropSpec) {
 // buildRegistry() calls (tests, multiple windows in one renderer).
 const built = new Map<string, WidgetType>();
 
-/** The durable half both doors share: props, groups, interaction, container,
+/** A row's DURABLE half — what a prefab is built from whether or not a kind draws it. */
+export type DurableRow = Pick<
+  ObjectContribution,
+  | "type"
+  | "schemaVersion"
+  | "minSize"
+  | "props"
+  | "groups"
+  | "interaction"
+  | "container"
+  | "provides"
+  | "ports"
+  | "behaviors"
+>;
+
+/** A faceless prefab's input: a durable half and the size a new one spawns at. */
+export type FacelessRow = DurableRow & Pick<ObjectContribution, "size">;
+
+/** The durable half every build shares: props, groups, interaction, container,
  * provides, ports and the behavior riders. */
 function durableHalf(
-  row: WidgetContribution | ObjectContribution,
+  row: DurableRow,
   owner: { pluginId: string; pluginTitle: string } | undefined,
   behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }>,
 ) {
@@ -95,27 +112,6 @@ function durableHalf(
     ...(row.ports !== undefined ? { ports: row.ports } : {}),
     ...(behaviors.length > 0 ? { behaviors } : {}),
   };
-}
-
-/** A LEGACY `widgets` row → a FACELESS widget type (DK-2): the manifest's durable half
- * and its `defaultSize`, no face of any kind — none of the fields ICE 0.14 refuses
- * ever reaches `defineWidget`. */
-export function buildWidgetType(
-  w: WidgetContribution,
-  owner?: { pluginId: string; pluginTitle: string },
-  behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }> = new Map(),
-): WidgetType {
-  const cached = built.get(w.type);
-  if (cached !== undefined) return cached;
-  const def = { ...durableHalf(w, owner, behaviorBindings), defaultSize: w.defaultSize };
-  // Boundary cast, attested: zod `.optional()` infers `| undefined` on every
-  // optional under exactOptionalPropertyTypes, which WidgetDef's optionals
-  // reject. Runtime values are parse products — absent keys stay ABSENT (zod
-  // never materializes `key: undefined`), and defineWidget's own
-  // definition-time validation is the enforcement net behind this seam.
-  const widget = defineWidget(def as Parameters<typeof defineWidget>[0]);
-  built.set(w.type, widget);
-  return widget;
 }
 
 /** An `objects` row + the kind its renderer module exports → an OBJECT type, through
@@ -159,7 +155,7 @@ export function buildObjectType(
     ...(binding.host !== undefined ? { host: binding.host } : {}),
     ...(binding.menu !== undefined ? { menu: binding.menu } : {}),
   };
-  // The same attested zod boundary as above. The binding's members are typed since the
+  // The same attested zod boundary as `buildFacelessType`'s. The binding's members are typed since the
   // SDK's `/desk` door (DK-6) — ICE's own `ObjectKind`, `DriverFactory`, `ObjectHost`,
   // `MenuActionDef` — yet they are a plugin's DATA at run time, so `isObjectKind` checked
   // the kind and `defineObject`/`defineWidget` validate the rest at definition.
@@ -186,19 +182,35 @@ export function objectBindingsFrom(
   return out;
 }
 
-/** An `objects` row whose kind could not be bound (no such export, not a desk kind, a
- * refused binding) still keeps its document's data: the type compiles FACELESS from
- * its durable half — no tray (a specimen is the kind's own drawing) — and ICE draws
- * it with its missing face from 0.15.0 (DK-D18 as amended). */
+/** A type no kind draws, compiled FACELESS from its durable half and its size — no
+ * tray (a specimen is a kind's own drawing), no face: ICE draws it with its missing
+ * face from 0.15.0 (DK-D18 as amended). Two callers: an `objects` row whose kind
+ * could not be bound (no such export, not a desk kind, a refused binding) keeps its
+ * document's data; a ghost stub keeps an absent plugin's (ghost-stubs.ts). */
+export function buildFacelessType(
+  row: FacelessRow,
+  owner?: { pluginId: string; pluginTitle: string },
+  behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }> = new Map(),
+): WidgetType {
+  const cached = built.get(row.type);
+  if (cached !== undefined) return cached;
+  const def = { ...durableHalf(row, owner, behaviorBindings), defaultSize: row.size };
+  // Boundary cast, attested: zod `.optional()` infers `| undefined` on every
+  // optional under exactOptionalPropertyTypes, which WidgetDef's optionals
+  // reject. Runtime values are parse products — absent keys stay ABSENT (zod
+  // never materializes `key: undefined`), and defineWidget's own
+  // definition-time validation is the enforcement net behind this seam.
+  const widget = defineWidget(def as Parameters<typeof defineWidget>[0]);
+  built.set(row.type, widget);
+  return widget;
+}
+
+/** An `objects` row whose kind could not be bound still keeps its document's data:
+ * its type compiles FACELESS (`buildFacelessType`). */
 export function buildFacelessObjectType(
   o: ObjectContribution,
   owner?: { pluginId: string; pluginTitle: string },
   behaviorBindings: ReadonlyMap<string, { readonly handle: AnyBehaviorDef }> = new Map(),
 ): WidgetType {
-  const cached = built.get(o.type);
-  if (cached !== undefined) return cached;
-  const def = { ...durableHalf(o, owner, behaviorBindings), defaultSize: o.size };
-  const widget = defineWidget(def as Parameters<typeof defineWidget>[0]);
-  built.set(o.type, widget);
-  return widget;
+  return buildFacelessType(o, owner, behaviorBindings);
 }

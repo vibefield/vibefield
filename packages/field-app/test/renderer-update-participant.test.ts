@@ -110,7 +110,7 @@ describe("RendererUpdateParticipant", () => {
 
   it("acknowledges retained old directly when static preparation refused before disturbance", async () => {
     const runtime = new FakeRuntime();
-    runtime.prepareError = new Error("fixed widget projection changed");
+    runtime.prepareError = new Error("fixed object projection changed");
     const participant = new RendererUpdateParticipant(runtime);
     let candidateReleases = 0;
     let oldReleases = 0;

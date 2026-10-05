@@ -1,7 +1,7 @@
 import type { WidgetType } from "@vibecook/ice";
-import { isDistributablePluginId, type WidgetContribution } from "@vibefield/contracts";
+import { isDistributablePluginId } from "@vibefield/contracts";
 import { getRendererLogger } from "../logging";
-import { buildWidgetType } from "./build-widget";
+import { buildFacelessType, type FacelessRow } from "./build-widget";
 
 // P3c — ghost stubs (§12.4, the ABSENT case): a board can carry widgets of a
 // plugin this device does not have at all. The envelope header names every
@@ -39,20 +39,18 @@ export function buildGhostWidgetTypes(
   for (const [type, version] of Object.entries(headerPrefabVersions)) {
     if (packScope.has(type)) continue;
     if (!isDistributablePluginId(type)) continue; // engine-internal — never ours to stub
-    const contribution: WidgetContribution = {
+    // DK-8: a HOST-LOCAL row (it was a WidgetContribution until `contributes.widgets`
+    // retired) — the same durable half and spawn size the stub has carried since P3c.
+    const stub: FacelessRow = {
       type,
-      title: type,
-      description: "preserved content from a plugin this device does not have",
-      category: "Tools",
       schemaVersion: version,
-      sizeMode: "fixed",
-      defaultSize: { w: 240, h: 160 },
+      size: { w: 240, h: 160 },
       props: {},
       groups: {},
       provides: ["widget"],
       interaction: { selectable: true, movable: true, resizable: true, snap: "target" },
     };
-    out.push(buildWidgetType(contribution));
+    out.push(buildFacelessType(stub));
     getRendererLogger()
       .child({ component: "plugin.host" })
       .warn(

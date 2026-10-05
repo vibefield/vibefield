@@ -8,14 +8,8 @@ import {
 } from "@vibecook/ice";
 import type { BlobStore } from "@vibecook/ice/desk/kit";
 import { DESK_ENGINE, DESK_OBJECTS } from "@vibecook/ice/desk/objects";
-import type {
-  ObjectContribution,
-  PluginManifestV1,
-  PluginRecord,
-  WidgetContribution,
-} from "@vibefield/contracts";
-import { setPreviewBackground } from "@vibefield/design-kit";
-import { PluginRegistry, safePreviewToCss } from "@vibefield/plugin-runtime";
+import type { ObjectContribution, PluginManifestV1, PluginRecord } from "@vibefield/contracts";
+import { PluginRegistry } from "@vibefield/plugin-runtime";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
 import { deskBlobs } from "./field/desk/desk-blobs";
 import { type SeedOptions, seedDesk } from "./field/desk/desk-seed";
@@ -23,7 +17,6 @@ import { getRendererLogger } from "./logging";
 import {
   buildFacelessObjectType,
   buildObjectType,
-  buildWidgetType,
   objectBindingsFrom,
 } from "./plugin-host/build-widget";
 import { RendererWindowController } from "./plugin-host/renderer-controller";
@@ -43,23 +36,21 @@ import {
 // blind-seed). `seedField` is the first-run payload — and the persistence
 // tests' named census.
 
-/** Build every declared prefab from DECLARATION data (§12.2). DK-2 (desk/landing, ICE 0.14.0):
- * a `widgets` row compiles FACELESS — it binds to nothing the desk draws (its React binding is
- * gone; `contributes.widgets` is refused with a dated sentence at DK-8) — and an `objects` row
- * compiles through `defineObject` with the kind its module exports. An object whose kind cannot
- * be bound (no export, not a desk kind, a refused binding) still registers FACELESS so its
- * document's data survives (ICE's missing face draws it from 0.15.0), and the host says why. */
-function buildWidgets(
+/** Build every declared prefab from DECLARATION data (§12.2): an `objects` row compiles through
+ * `defineObject` with the kind its module exports (DK-2, desk/landing, ICE 0.14.0). An object
+ * whose kind cannot be bound (no export, not a desk kind, a refused binding) still registers
+ * FACELESS so its document's data survives (ICE's missing face draws it from 0.15.0), and the host
+ * says why. DK-8: the `widgets` rows this built faceless RETIRED with `contributes.widgets` — the
+ * manifest refuses the contribution by name, pointing at `objects`. */
+function buildPrefabs(
   title: string,
   pluginId: string,
-  contributions: readonly WidgetContribution[],
   objects: readonly ObjectContribution[],
   activation: ActivatedRenderer,
   objectBindings: ReadonlyMap<string, ObjectBinding> = new Map(),
 ): Record<string, WidgetType> {
   const owner = { pluginId, pluginTitle: title };
   const built: Record<string, WidgetType> = {};
-  for (const w of contributions) built[w.type] = buildWidgetType(w, owner, activation.behaviors);
   for (const o of objects) {
     const binding = objectBindings.get(o.type);
     try {
@@ -91,10 +82,9 @@ function registerCanonical(
 ): void {
   registry.registerV1(
     manifest,
-    buildWidgets(
+    buildPrefabs(
       manifest.title,
       manifest.id,
-      manifest.contributes?.widgets ?? [],
       manifest.contributes?.objects ?? [],
       activation,
       objectBindings,
@@ -112,10 +102,9 @@ function registerStaged(
 ): void {
   registry.registerRecord(
     record,
-    buildWidgets(
+    buildPrefabs(
       record.title,
       record.id,
-      record.contributions.widgets,
       record.contributions.objects ?? [],
       activation,
       objectBindings,
@@ -189,7 +178,7 @@ export function buildRegistry(
         { pluginId: staged.record.id },
       );
     }
-    // §11.4: ordinary failed plugins register face-only widgets. A behavior
+    // §11.4: ordinary failed plugins still register their prefabs. A behavior
     // plugin whose sealed code identities are unavailable cannot be defined
     // honestly; isolate that plugin and leave its document data untouched.
     try {
@@ -238,14 +227,9 @@ export function buildRegistry(
       );
     }
   }
-  // Spine wiring: declared SafePreview data → design-kit's silhouette registry
-  // (folder minis + tray fallbacks read previewBackground — one source, P-3).
-  for (const plugin of registry.all()) {
-    for (const w of plugin.widgetContributions) {
-      const css = safePreviewToCss(w.preview);
-      if (css !== undefined) setPreviewBackground(w.type, css);
-    }
-  }
+  // DK-8: the SafePreview → silhouette wiring (folder minis + tray fallbacks read
+  // `previewBackground`) RETIRED with the widget rows that declared a `preview`; an
+  // object's specimen is its kind's own drawing on the pegboard.
   return registry;
 }
 

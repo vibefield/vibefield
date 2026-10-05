@@ -719,18 +719,21 @@ export class PluginRegistryService extends EventEmitter {
     return this.snapshot().plugins.find((p) => p.id === id) ?? candidate;
   }
 
-  /** §18.5 — durable widget schemas may only move forward, for both dev
-   * reload and immutable registry candidates. */
+  /** §18.5 — durable schemas may only move forward, for both dev reload and
+   * immutable registry candidates. DK-8: the law's rows are OBJECT rows — it held
+   * WIDGET rows until `contributes.widgets` retired, and an object's type and
+   * schemaVersion are the same durable promise (the host compiles both into one
+   * process-permanent prefab). */
   private assertDurableSchemaProgress(old: PluginRecord, candidate: PluginRecord): void {
     const oldVersions = new Map(
-      old.contributions.widgets.map((widget) => [widget.type, widget.schemaVersion] as const),
+      (old.contributions.objects ?? []).map((row) => [row.type, row.schemaVersion] as const),
     );
-    for (const widget of candidate.contributions.widgets) {
-      const prior = oldVersions.get(widget.type);
-      if (prior !== undefined && widget.schemaVersion < prior) {
+    for (const row of candidate.contributions.objects ?? []) {
+      const prior = oldVersions.get(row.type);
+      if (prior !== undefined && row.schemaVersion < prior) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          `widget ${widget.type} regresses schemaVersion ${prior} → ${widget.schemaVersion} (§18.5); live version untouched`,
+          `object ${row.type} regresses schemaVersion ${prior} → ${row.schemaVersion} (§18.5); live version untouched`,
           false,
           { pluginKind: "PLUGIN_SCHEMA_VIOLATION" },
         );

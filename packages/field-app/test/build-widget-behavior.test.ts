@@ -1,10 +1,13 @@
-import { ObjectContribution, WidgetContribution } from "@vibefield/contracts";
+import { ObjectContribution } from "@vibefield/contracts";
 import { defineBehavior, p } from "@vibefield/plugin-sdk/behavior";
 import type { ObjectKind } from "@vibefield/plugin-sdk/desk";
 import { describe, expect, it } from "vitest";
-import { buildObjectType, buildWidgetType } from "../src/plugin-host/build-widget";
+import { buildFacelessObjectType, buildObjectType } from "../src/plugin-host/build-widget";
 
-describe("host-built widget behavior riders", () => {
+// DK-8: these rows held WIDGET rows (compiled faceless) until `contributes.widgets` retired; the
+// faceless path that remains is an OBJECT row's whose kind could not be bound, and it keeps the same
+// rider law — a document's riders survive the missing face.
+describe("host-built behavior riders", () => {
   it("resolves the manifest id through the sealed code map and stays dormant", () => {
     const pluginId = "com.example.widget-rider";
     let inits = 0;
@@ -17,18 +20,18 @@ describe("host-built widget behavior riders", () => {
         },
       },
     });
-    const contribution = WidgetContribution.parse({
+    const contribution = ObjectContribution.parse({
       type: `${pluginId}.card`,
       title: "Card",
       schemaVersion: 1,
-      surface: "dom",
-      sizeMode: "fixed",
-      defaultSize: { w: 100, h: 80 },
+      size: { w: 100, h: 80 },
+      provides: ["desk.object"],
       behaviors: [{ id: Rider.name, data: { count: 3 } }],
+      binding: { kind: "card" },
     });
 
-    // DK-2: a widget row compiles FACELESS — there is no binding argument any more.
-    const widget = buildWidgetType(
+    // an unbound object row compiles FACELESS — no kind argument at all
+    const widget = buildFacelessObjectType(
       contribution,
       { pluginId, pluginTitle: "Rider" },
       new Map([[Rider.name, { handle: Rider }]]),
@@ -46,36 +49,36 @@ describe("host-built widget behavior riders", () => {
     const Other = defineBehavior(`${pluginId}:other`, { store: "runtime" });
     const Ephemeral = defineBehavior(`${pluginId}:facet`, { store: "ephemeral" });
     const contribution = (behaviorId: string, suffix: string) =>
-      WidgetContribution.parse({
+      ObjectContribution.parse({
         type: `${pluginId}.${suffix}`,
         title: suffix,
         schemaVersion: 1,
-        surface: "dom",
-        sizeMode: "fixed",
-        defaultSize: { w: 100, h: 80 },
+        size: { w: 100, h: 80 },
+        provides: ["desk.object"],
         behaviors: [{ id: behaviorId }],
+        binding: { kind: "card" },
       });
     const owner = { pluginId, pluginTitle: "Defense" };
 
-    expect(() => buildWidgetType(contribution(Rider.name, "missing"), owner)).toThrow(
+    expect(() => buildFacelessObjectType(contribution(Rider.name, "missing"), owner)).toThrow(
       /no sealed code binding/,
     );
     expect(() =>
-      buildWidgetType(
+      buildFacelessObjectType(
         contribution(Rider.name, "mismatch"),
         owner,
         new Map([[Rider.name, { handle: Other }]]),
       ),
     ).toThrow(/does not match/);
     expect(() =>
-      buildWidgetType(
+      buildFacelessObjectType(
         contribution("com.other:rider", "foreign"),
         owner,
         new Map([["com.other:rider", { handle: Rider }]]),
       ),
     ).toThrow(/outside plugin/);
     expect(() =>
-      buildWidgetType(
+      buildFacelessObjectType(
         contribution(Ephemeral.name, "ephemeral"),
         owner,
         new Map([[Ephemeral.name, { handle: Ephemeral }]]),

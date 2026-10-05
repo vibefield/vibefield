@@ -364,9 +364,9 @@ export class RendererPluginController {
     );
     if (sameArtifactIdentity(input.oldArtifact, input.candidateArtifact))
       throw new Error(`${this.pluginId}: renderer replacement candidate equals retained old`);
-    if (!sameFixedWidgetProjection(this.currentSource.record, input.candidate.record)) {
+    if (!sameFixedObjectProjection(this.currentSource.record, input.candidate.record)) {
       throw new Error(
-        `${this.pluginId}: renderer replacement changes the fixed widget projection; replace the document generation`,
+        `${this.pluginId}: renderer replacement changes the fixed object projection; replace the document generation`,
       );
     }
 
@@ -483,9 +483,9 @@ export class RendererPluginController {
     if (input.source.module.moduleUrl === episode.oldSource.module.moduleUrl) {
       throw new Error(`${this.pluginId}: retained-old recovery requires a fresh module URL`);
     }
-    if (!sameFixedWidgetProjection(episode.oldSource.record, input.source.record)) {
+    if (!sameFixedObjectProjection(episode.oldSource.record, input.source.record)) {
       throw new Error(
-        `${this.pluginId}: retained-old recovery changed the fixed widget projection`,
+        `${this.pluginId}: retained-old recovery changed the fixed object projection`,
       );
     }
     const source = freezeRendererSource(input.source);
@@ -850,10 +850,14 @@ function canonicalOpaqueJson(value: unknown): string {
   return JSON.stringify(visit(value));
 }
 
-function sameFixedWidgetProjection(old: PluginRecord, candidate: PluginRecord): boolean {
+/** The rows the window compiled into process-permanent prefabs (ICE's catalog cannot
+ * un-define a type) may not change under a same-realm replacement — a changed row needs a new
+ * document generation. DK-8: the law's rows are OBJECT rows; it held WIDGET rows until
+ * `contributes.widgets` retired. (What an update may do with a kind's CODE is DK-9's.) */
+function sameFixedObjectProjection(old: PluginRecord, candidate: PluginRecord): boolean {
   return (
-    canonicalOpaqueJson(old.contributions.widgets) ===
-    canonicalOpaqueJson(candidate.contributions.widgets)
+    canonicalOpaqueJson(old.contributions.objects ?? []) ===
+    canonicalOpaqueJson(candidate.contributions.objects ?? [])
   );
 }
 

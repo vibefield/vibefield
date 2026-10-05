@@ -289,7 +289,8 @@ function PluginRow({
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const toggleable = plugin.state === "enabled" || plugin.state === "disabled";
   const uninstallable = plugin.source === "registry" || plugin.source === "sideload";
-  const widgetCount = plugin.contributions.widgets.length;
+  // DK-8: a plugin's canvas contributions are its OBJECT kinds (`contributes.widgets` retired)
+  const objectCount = plugin.contributions.objects?.length ?? 0;
   const settingsProperties = (plugin.contributions as { settings?: SettingsContribution }).settings
     ?.properties;
   const hasSettings =
@@ -323,7 +324,7 @@ function PluginRow({
             <SettingsPill>v{plugin.version}</SettingsPill>
           </div>
           <p className={`mt-1 truncate ${labelCls}`} title={plugin.id}>
-            {plugin.id} · {widgetCount} widget{widgetCount === 1 ? "" : "s"}
+            {plugin.id} · {objectCount} object{objectCount === 1 ? "" : "s"}
           </p>
         </div>
         <div className="flex items-center gap-2">

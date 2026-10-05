@@ -1,9 +1,10 @@
 /**
  * DK-2 — the SDK's canvas door on the desk build (desk/landing, ICE 0.14.0).
  *
- * The host compiles a legacy `widgets` row FACELESS (no field ICE refuses ever
- * reaches `defineWidget`) and an `objects` row through `defineObject` with the
- * kind its module exports; the engine is ICE's desk preset; the ghost-stub
+ * The host compiles an `objects` row through `defineObject` with the kind its
+ * module exports, and a type no kind draws FACELESS (DK-8: the legacy `widgets`
+ * rows it also compiled faceless retired with `contributes.widgets`); the engine
+ * is ICE's desk preset; the ghost-stub
  * filter reads the engine's full pack scope; an illegal tool is refused, never
  * thrown. All headless — a unit over the registry and the engine, no GPU.
  */
@@ -16,7 +17,7 @@ import {
   Viewport,
 } from "@vibecook/ice";
 import { objectKindOf } from "@vibecook/ice/desk";
-import { type PluginManifestV1, WidgetContribution } from "@vibefield/contracts";
+import type { PluginManifestV1 } from "@vibefield/contracts";
 import type { ObjectBinding, ObjectKind } from "@vibefield/plugin-sdk/desk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -26,7 +27,7 @@ import {
   setFieldTool,
 } from "../src/field-engine";
 import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
-import { buildObjectType, buildWidgetType } from "../src/plugin-host/build-widget";
+import { buildFacelessType, buildObjectType } from "../src/plugin-host/build-widget";
 import { buildGhostWidgetTypes } from "../src/plugin-host/ghost-stubs";
 
 interface Logged {
@@ -67,9 +68,7 @@ function fakeKind(name: string): ObjectKind {
 }
 
 function manifest(id: string, contributes: PluginManifestV1["contributes"]): PluginManifestV1 {
-  const types = [...(contributes?.widgets ?? []), ...(contributes?.objects ?? [])].map(
-    (row) => row.type,
-  );
+  const types = (contributes?.objects ?? []).map((row) => row.type);
   return {
     manifestVersion: 1,
     id,
@@ -131,44 +130,42 @@ beforeEach(() => {
 });
 afterEach(() => setRendererLogger(previous));
 
-describe("DK-2 — a legacy widgets row compiles FACELESS", () => {
-  it("registers without a face though its manifest still carries the refused fields", () => {
-    // `surface`/`sizeMode` are what ICE 0.14 REFUSES at definition; an old manifest
-    // still says them (the contract tolerates them), and none may reach defineWidget.
-    const row = WidgetContribution.parse({
+describe("DK-2 — a type no kind draws compiles FACELESS", () => {
+  it("registers without a face: its durable half and its size, no kind (a ghost stub's, an unbound object's)", () => {
+    // DK-8: this row held a legacy `widgets` row (its refused `surface`/`sizeMode` never reaching
+    // defineWidget) until `contributes.widgets` retired; the faceless builder is the one that remains
+    const widget = buildFacelessType({
       type: "com.example.dk2faceless.row",
-      title: "Row",
       schemaVersion: 1,
-      surface: "gl",
-      sizeMode: "fixed",
-      defaultSize: { w: 120, h: 80 },
+      size: { w: 120, h: 80 },
+      props: {},
+      groups: {},
     });
-    const widget = buildWidgetType(row);
     expect(widget.type).toBe("com.example.dk2faceless.row");
     expect(widget.object).toBeUndefined();
     expect(objectKindOf(widget)).toBeUndefined();
   });
 
-  it("its entity is pickable by its box on the desk engine — no kind, no GPU", () => {
+  it("an unbound object's entity is pickable by its box on the desk engine — no kind, no GPU", () => {
     const registry = buildRegistry({
       generation: -1,
       staged: [],
       bundled: [
         {
           manifest: manifest("com.example.dk2faceless", {
-            widgets: [
+            objects: [
               {
                 type: LEGACY,
                 title: "Legacy",
                 schemaVersion: 1,
-                surface: "dom",
-                sizeMode: "fixed",
-                defaultSize: { w: 200, h: 100 },
+                size: { w: 200, h: 100 },
                 // placed on the desk like any object: the desk canvas places by this key
                 provides: ["desk.object"],
                 interaction: { selectable: true, movable: true },
                 props: {},
                 groups: {},
+                // the module exports no such name: the row registers faceless, its data kept
+                binding: { kind: "missing" },
               },
             ],
           }),

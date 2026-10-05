@@ -5,7 +5,19 @@ import { PluginRegistry } from "../src/index";
 
 // C1c: the registry speaks ONLY the canonical V1. Ownership stays the §6.2
 // exact type map; declared⇄provided parity and cross-plugin collisions refuse
-// at registration.
+// at registration. DK-8: every declared row is an OBJECT's — the manifest
+// refuses `contributes.widgets` by name — so these fixtures declare object kinds.
+
+/** One object row: the durable half and the export that would draw it. */
+const objectRow = (type: string, kind = "card") => ({
+  type,
+  title: "Note",
+  schemaVersion: 1,
+  size: { w: 240, h: 160 },
+  props: {},
+  groups: {},
+  binding: { kind },
+});
 
 const manifest = (over: Partial<PluginManifestV1> = {}): PluginManifestV1 => ({
   manifestVersion: 1,
@@ -16,55 +28,32 @@ const manifest = (over: Partial<PluginManifestV1> = {}): PluginManifestV1 => ({
   entries: { renderer: "./dist/renderer.js" },
   activation: [],
   capabilities: [],
-  contributes: {
-    widgets: [
-      {
-        type: "note.card",
-        title: "Note",
-        schemaVersion: 1,
-        surface: "dom",
-        sizeMode: "fixed",
-        defaultSize: { w: 240, h: 160 },
-        props: {},
-        groups: {},
-      },
-    ],
-  },
+  contributes: { objects: [objectRow("note.card")] },
   ...over,
 });
 
 describe("PluginRegistry", () => {
-  it("DK-2: registers a manifest's object kinds beside its widgets — the desk draws objects", () => {
+  it("DK-2: registers a manifest's object kinds — the desk draws objects", () => {
     const r = new PluginRegistry<unknown>();
     const withObjects = manifest({
       activation: ["onWidget:note.clock"],
-      contributes: {
-        ...manifest().contributes,
-        objects: [
-          {
-            type: "note.clock",
-            title: "Clock",
-            schemaVersion: 1,
-            size: { w: 160, h: 160 },
-            props: {},
-            groups: {},
-            binding: { kind: "clock" },
-          },
-        ],
-      },
+      contributes: { objects: [objectRow("note.card"), objectRow("note.clock", "clock")] },
     });
-    // DK-0f's `objects-need-desk` door is flipped off: an object is a widget type to the
-    // engine, so it joins the exact map under the same declared⇄provided law.
+    // DK-0f's `objects-need-desk` door is flipped off: each kind's type joins the exact map
+    // under the declared⇄provided law.
     expect(() => r.registerV1(withObjects, { "note.card": "impl" })).toThrow(
       /declares note\.clock but provides no implementation/,
     );
     r.registerV1(withObjects, { "note.card": "impl", "note.clock": "kind" });
     expect(r.ownerOf("note.clock")).toBe("note");
-    expect(r.plugin("note")?.objectContributions.map((o) => o.type)).toEqual(["note.clock"]);
+    expect(r.plugin("note")?.objectContributions.map((o) => o.type)).toEqual([
+      "note.card",
+      "note.clock",
+    ]);
     expect([...r.allWidgets().keys()]).toEqual(["note.card", "note.clock"]);
   });
 
-  it("registers and exposes namespaced widgets through the exact map", () => {
+  it("registers and exposes namespaced types through the exact map", () => {
     const r = new PluginRegistry<string>();
     r.registerV1(manifest(), { "note.card": "impl" });
     expect(r.hasWidget("note.card")).toBe(true);
@@ -77,12 +66,9 @@ describe("PluginRegistry", () => {
     expect([...r.allWidgets().keys()]).toEqual(["note.card"]);
   });
 
-  it("rejects widgets outside the plugin namespace (V1 validation)", () => {
+  it("rejects types outside the plugin namespace (V1 validation)", () => {
     const r = new PluginRegistry();
-    const bad = manifest();
-    bad.contributes = {
-      widgets: [{ ...(bad.contributes?.widgets?.[0] as object), type: "other.card" } as never],
-    };
+    const bad = manifest({ contributes: { objects: [objectRow("other.card")] } });
     expect(() => r.registerV1(bad, { "other.card": {} })).toThrow(/must be note/);
   });
 
@@ -101,16 +87,13 @@ describe("PluginRegistry", () => {
     expect(() => r.registerV1(manifest({ id: "Bad_Id" }), {})).toThrow(/manifest invalid/);
   });
 
-  it("refuses a cross-plugin widget-type collision", () => {
+  it("refuses a cross-plugin type collision", () => {
     const r = new PluginRegistry<string>();
     r.registerV1(manifest(), { "note.card": "impl" });
     // a DIFFERENT plugin whose bare type collides: id "note.card" owns the
-    // bare widget type "note.card" by the owned-name rule — the exact map
+    // bare type "note.card" by the owned-name rule — the exact map
     // refuses it at registration.
     const collider = manifest({ id: "note.card" });
-    collider.contributes = {
-      widgets: [{ ...(collider.contributes?.widgets?.[0] as object), type: "note.card" } as never],
-    };
     expect(() => r.registerV1(collider, { "note.card": "impl2" })).toThrow(/already owned/);
   });
 });
@@ -134,20 +117,7 @@ const record = (over: Partial<PluginRecord> = {}): PluginRecord =>
     enabled: true,
     requestedCapabilities: [],
     grantedCapabilities: [],
-    contributions: {
-      widgets: [
-        {
-          type: "note.card",
-          title: "Note",
-          schemaVersion: 1,
-          surface: "dom",
-          sizeMode: "fixed",
-          defaultSize: { w: 240, h: 160 },
-          props: {},
-          groups: {},
-        },
-      ],
-    },
+    contributions: { objects: [objectRow("note.card")] },
     renderer: "inactive",
     service: "none",
     ...over,
@@ -159,17 +129,7 @@ describe("PluginRegistry.registerRecord (staged)", () => {
     const staged = record({
       contributions: {
         ...record().contributions,
-        objects: [
-          {
-            type: "note.clock",
-            title: "Clock",
-            schemaVersion: 1,
-            size: { w: 160, h: 160 },
-            props: {},
-            groups: {},
-            binding: { kind: "clock" },
-          },
-        ],
+        objects: [objectRow("note.card"), objectRow("note.clock", "clock")],
       },
     });
     expect(() => r.registerRecord(staged, { "note.card": "impl" })).toThrow(
@@ -177,7 +137,10 @@ describe("PluginRegistry.registerRecord (staged)", () => {
     );
     r.registerRecord(staged, { "note.card": "impl", "note.clock": "kind" });
     expect(r.ownerOf("note.clock")).toBe("note");
-    expect(r.plugin("note")?.objectContributions.map((o) => o.type)).toEqual(["note.clock"]);
+    expect(r.plugin("note")?.objectContributions.map((o) => o.type)).toEqual([
+      "note.card",
+      "note.clock",
+    ]);
   });
 
   it("registers from a sanitized record and owns its types the same way", () => {
@@ -194,7 +157,9 @@ describe("PluginRegistry.registerRecord (staged)", () => {
     const [registered] = r.all();
     expect(registered?.id).toBe("note");
     expect(registered?.title).toBe("Notes");
-    expect(registered?.widgetContributions.map((w) => w.type)).toEqual(["note.card"]);
+    expect(registered?.objectContributions.map((o) => o.type)).toEqual(["note.card"]);
+    // DK-8: no widget rows — `contributes.widgets` retired, and the row carries none to read
+    expect(registered).not.toHaveProperty("widgetContributions");
     // The provenance is honest in both directions: a staged row carries the
     // record it came from and NO manifest, because this process never saw one.
     expect(registered?.record?.installRevision).toBe("rev-1");
@@ -223,8 +188,8 @@ describe("PluginRegistry.registerRecord (staged)", () => {
 
   it("refuses a type another plugin already owns, across BOTH doors", () => {
     // The collision that matters is the cross-door one: a manifest-registered
-    // built-in and a staged plugin claiming the same widget type would be two
-    // owners in one exact map, and the map is what resolution trusts.
+    // plugin and a staged plugin claiming the same type would be two owners in
+    // one exact map, and the map is what resolution trusts.
     const r = new PluginRegistry<string>();
     r.registerV1(manifest(), { "note.card": "impl" });
     expect(() => r.registerRecord(record({ id: "note.card" }), { "note.card": "impl2" })).toThrow(
@@ -233,85 +198,14 @@ describe("PluginRegistry.registerRecord (staged)", () => {
   });
 });
 
-// TP-S2b-widget — THE THIRD AUTHORITY. Built-ins are host source, so what this
-// door has to defend is not validation (there is no artifact to validate) but
-// the NAMESPACE: a built-in that could contribute any type at all would be able
-// to squat a plugin's, and the collision check alone would only catch it when
-// the plugin happened to register first.
-describe("PluginRegistry.registerBuiltIn (the host's own contributions)", () => {
-  const contributor = { id: "vibefield.terminal", title: "Terminal", version: "0.1.0" };
-  const contribution = (type: string) => ({
-    type,
-    title: "Terminal mirror",
-    schemaVersion: 1,
-    surface: "dom" as const,
-    sizeMode: "fixed" as const,
-    defaultSize: { w: 420, h: 280 },
-    props: {},
-    groups: {},
-  });
-
-  it("registers host widgets with no manifest and no record behind them", () => {
+// DK-8: TP-S2b-widget's THIRD authority — `registerBuiltIn`, the host registering its own WIDGET
+// contributions — retired with `contributes.widgets` (its one caller, the terminal mirror, left at
+// DK-5). Both doors left register object rows under the same laws, above.
+describe("the host's built-in widget door", () => {
+  it("is gone with the widgets contribution — no door registers a widget row", () => {
+    expect(PluginRegistry.prototype).not.toHaveProperty("registerBuiltIn");
     const r = new PluginRegistry<string>();
-    r.registerBuiltIn(contributor, [contribution("vibefield.terminal.mirror")], {
-      "vibefield.terminal.mirror": "impl",
-    });
-    expect(r.ownerOf("vibefield.terminal.mirror")).toBe("vibefield.terminal");
-    const [registered] = r.all();
-    // The provenance is honest in all three directions: this row is the host's,
-    // nothing staged it, and no manifest describes it.
-    expect(registered?.builtIn).toBe(true);
-    expect(registered?.v1).toBeUndefined();
-    expect(registered?.record).toBeUndefined();
-    expect(registered?.behaviorContributions).toEqual([]);
-  });
-
-  it("holds built-in types to the owned-name rule", () => {
-    const r = new PluginRegistry<string>();
-    // `<id>.<segment>` and the bare id are owned; anything else is not.
-    expect(() =>
-      r.registerBuiltIn(contributor, [contribution("vibefield.note")], {
-        "vibefield.note": "impl",
-      }),
-    ).toThrow(/may not contribute widget type vibefield\.note/);
-    expect(() =>
-      r.registerBuiltIn(contributor, [contribution("vibefield.terminal.a.b")], {
-        "vibefield.terminal.a.b": "impl",
-      }),
-    ).toThrow(/may not contribute/);
-  });
-
-  it("refuses a contributor id distribution could never carry", () => {
-    const r = new PluginRegistry<string>();
-    expect(() =>
-      r.registerBuiltIn({ id: "terminal", title: "Terminal", version: "0.1.0" }, [], {}),
-    ).toThrow(/not a distributable plugin id/);
-  });
-
-  it("cannot outrank a plugin, and a plugin cannot outrank it", () => {
-    // The same exact map, in both directions — which is the whole reason the
-    // third door goes through `bind()` rather than beside it.
-    const first = new PluginRegistry<string>();
-    const mirror = contribution("vibefield.terminal.mirror");
-    first.registerBuiltIn(contributor, [mirror], { "vibefield.terminal.mirror": "impl" });
-    // A staged plugin claiming a built-in's type refuses at registration. It is
-    // a type that plugin's own MANIFEST could never legally declare either, but
-    // the record door does not re-parse a manifest — so this check is the one
-    // actually standing between the two.
-    const base = record({ id: "vibefield.impostor" });
-    const impostor: PluginRecord = {
-      ...base,
-      contributions: { ...base.contributions, widgets: [mirror] },
-    };
-    expect(() => first.registerRecord(impostor, { "vibefield.terminal.mirror": "impl" })).toThrow(
-      /already owned by plugin vibefield\.terminal/,
-    );
-
-    // And a built-in cannot arrive twice under the same contributor id.
-    const second = new PluginRegistry<string>();
-    second.registerBuiltIn(contributor, [mirror], { "vibefield.terminal.mirror": "impl" });
-    expect(() =>
-      second.registerBuiltIn(contributor, [mirror], { "vibefield.terminal.mirror": "impl" }),
-    ).toThrow(/already registered/);
+    r.registerV1(manifest(), { "note.card": "impl" });
+    expect(r.plugin("note")).not.toHaveProperty("builtIn");
   });
 });

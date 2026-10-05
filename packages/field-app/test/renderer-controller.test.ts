@@ -66,16 +66,16 @@ function record(
     deniedCapabilities: [],
     grantGeneration: options.grantGeneration ?? 1,
     contributions: {
-      widgets: [
+      objects: [
         {
           type: `${id}.card`,
           title: "Card",
           schemaVersion: 1,
-          surface: "dom",
-          sizeMode: "fixed",
-          defaultSize: { w: 100, h: 100 },
+          size: { w: 100, h: 100 },
+          provides: ["desk.object"],
           props: {},
           groups: {},
+          binding: { kind: "card" },
         },
       ],
       commands: commandsAndSurfaces ? [{ id: `${id}.run`, title: "Run" }] : [],
@@ -894,7 +894,7 @@ describe("PRC-5d renderer replacement participant", () => {
     expect(candidateAuthorityReleases).toBe(1);
   });
 
-  it("refuses a changed fixed widget projection before old authority closes", async () => {
+  it("refuses a changed fixed object projection before old authority closes", async () => {
     const id = "prc.renderer.replacement.projection";
     const oldRecord = record(id);
     let oldSignal: AbortSignal | undefined;
@@ -913,12 +913,13 @@ describe("PRC-5d renderer replacement participant", () => {
     const runtime = new RendererWindowController("field");
     runtime.add(controller);
     await runtime.reconcile(snapshot(oldRecord));
+    // DK-8: the law's rows are the window's compiled OBJECT rows — a changed size is a changed prefab
     const changed = replacementRecord(oldRecord, "c", {
       contributions: {
         ...oldRecord.contributions,
-        widgets: oldRecord.contributions.widgets.map((widget) => ({
-          ...widget,
-          defaultSize: { w: 200, h: 100 },
+        objects: (oldRecord.contributions.objects ?? []).map((row) => ({
+          ...row,
+          size: { w: 200, h: 100 },
         })),
       },
     });
@@ -938,7 +939,7 @@ describe("PRC-5d renderer replacement participant", () => {
           },
         },
       }),
-    ).rejects.toThrow(/fixed widget projection/);
+    ).rejects.toThrow(/fixed object projection/);
     expect(oldSignal?.aborted).toBe(false);
     expect(isCommandBound(`${id}.run`)).toBe(true);
     expect(imported).toBe(false);

@@ -1,29 +1,17 @@
 import type { PluginManifestV1 } from "@vibefield/contracts";
 import { PluginRegistry } from "@vibefield/plugin-runtime";
 import { describe, expect, it } from "vitest";
-import { buildCatalog } from "../src/hud/tray-catalog";
+import { buildCatalog, CATEGORIES } from "../src/hud/tray-catalog";
 
-// buildCatalog is a pure derivation over a live PluginRegistry (no ICE, no DOM):
-// each canonical manifest widget row joined with its registered def becomes a
-// tray tile. We register one fake plugin and assert the join, the category
-// fallback, and def identity.
-//
-// Not tested here: buildCatalog's `def === undefined` skip guard. registerV1()
-// enforces declared-vs-provided parity (it throws on either mismatch — covered
-// by packages/plugin-runtime/test/registry.test.ts), so a declared row with no
-// implementation is unrepresentable through the public API; the guard is
-// belt-and-braces for a future non-register construction path.
+// buildCatalog is the old Objects sheet's tile list, a pure derivation over a live
+// PluginRegistry (no ICE, no DOM). Its tiles were the plugins' WIDGET rows; DK-8 retired
+// `contributes.widgets`, and the rows a registry carries now are OBJECTS — which hang on the
+// desk's pegboard, drawn by their own kinds, never as tiles here. The pegboard behind the
+// line's ⊕ replaces the sheet and this module at DK-13. (The rows this file held — the widget
+// join, its category and SafePreview silhouette, and the `gl → 3D` fallback DK-2 left red for
+// DK-13 — retired with the widget rows they joined.)
 
-interface FakeDef {
-  surface: "dom" | "gl";
-}
-
-const domImpl: FakeDef = { surface: "dom" };
-const glImpl: FakeDef = { surface: "gl" };
-
-// "fake.a": explicit category + preview. "fake.b": neither → category falls back
-// off the def's surface ("gl" → "3D"), preview stays absent.
-const fakeManifest: PluginManifestV1 = {
+const objectManifest: PluginManifestV1 = {
   manifestVersion: 1,
   id: "fake",
   version: "0.0.0",
@@ -33,66 +21,35 @@ const fakeManifest: PluginManifestV1 = {
   activation: [],
   capabilities: [],
   contributes: {
-    widgets: [
+    objects: [
       {
-        type: "fake.a",
-        title: "Fake A",
+        type: "fake.pad",
+        title: "Fake pad",
         schemaVersion: 1,
-        surface: "dom",
-        sizeMode: "fixed",
-        defaultSize: { w: 4, h: 3 },
-        category: "Tools",
-        preview: { kind: "color", value: "#123456" },
+        size: { w: 220, h: 280 },
+        provides: ["fake.pad", "desk.object"],
         props: {},
         groups: {},
-      },
-      {
-        type: "fake.b",
-        title: "Fake B",
-        schemaVersion: 1,
-        surface: "gl",
-        sizeMode: "fixed",
-        defaultSize: { w: 4, h: 3 },
-        props: {},
-        groups: {},
+        tray: {
+          category: "comments",
+          label: "Fake pad",
+          hang: { w: 110, h: 140, accessory: "hook", pegs: [[0, -0.5]] },
+        },
+        binding: { kind: "pad" },
       },
     ],
   },
 };
 
-function fakeRegistry(): PluginRegistry<FakeDef> {
-  const registry = new PluginRegistry<FakeDef>();
-  registry.registerV1(fakeManifest, { "fake.a": domImpl, "fake.b": glImpl });
-  return registry;
-}
-
-describe("buildCatalog", () => {
-  it("joins one entry per declared widget", () => {
-    const catalog = buildCatalog(fakeRegistry());
-    expect(catalog).toHaveLength(2);
-    expect(catalog.map((e) => e.type)).toEqual(["fake.a", "fake.b"]);
+describe("buildCatalog (the old Objects sheet, until DK-13)", () => {
+  it("lists no tile for an object row — an object hangs on the pegboard, not in the sheet", () => {
+    const registry = new PluginRegistry<string>();
+    registry.registerV1(objectManifest, { "fake.pad": "kind" });
+    expect(registry.plugin("fake")?.objectContributions).toHaveLength(1);
+    expect(buildCatalog(registry)).toEqual([]);
   });
 
-  it("takes titles from the manifest", () => {
-    const catalog = buildCatalog(fakeRegistry());
-    expect(catalog.map((e) => e.title)).toEqual(["Fake A", "Fake B"]);
-  });
-
-  it("uses the manifest category and SafePreview-derived CSS when present", () => {
-    const a = buildCatalog(fakeRegistry()).find((e) => e.type === "fake.a");
-    expect(a?.category).toBe("Tools");
-    expect(a?.preview).toBe("#123456");
-  });
-
-  it("falls back to a surface-derived category when the manifest omits one", () => {
-    const b = buildCatalog(fakeRegistry()).find((e) => e.type === "fake.b");
-    expect(b?.category).toBe("3D"); // gl surface → "3D"
-    expect(b?.preview).toBeUndefined();
-  });
-
-  it("carries the live widget def by identity", () => {
-    const catalog = buildCatalog(fakeRegistry());
-    expect(catalog.find((e) => e.type === "fake.a")?.def).toBe(domImpl);
-    expect(catalog.find((e) => e.type === "fake.b")?.def).toBe(glImpl);
+  it("keeps the sheet's shelves until the sheet itself goes", () => {
+    expect(CATEGORIES).toEqual(["All", "Cards", "3D", "Nodes", "Tools"]);
   });
 });

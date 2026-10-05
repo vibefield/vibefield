@@ -144,7 +144,7 @@ function client(): FielddClient {
   } as unknown as FielddClient;
 }
 
-async function mount(): Promise<void> {
+async function mount(contributions: Record<string, unknown> = {}): Promise<void> {
   const plugin = PluginRecord.parse({
     id: PLUGIN_ID,
     version: "1.0.0",
@@ -157,7 +157,7 @@ async function mount(): Promise<void> {
     enabled: true,
     requestedCapabilities: [],
     grantedCapabilities: [],
-    contributions: {},
+    contributions,
     renderer: "active",
     service: "none",
   });
@@ -180,6 +180,25 @@ afterEach(() => {
   container?.remove();
   container = null;
   setPluginRegistrySnapshot({ generation: 0, plugins: [], problems: [] });
+});
+
+describe("PluginsSection's plugin row", () => {
+  it("counts the plugin's OBJECT kinds — its widget count retired with `contributes.widgets` (DK-8)", async () => {
+    await mount({
+      objects: [
+        {
+          type: `${PLUGIN_ID}.pad`,
+          title: "Pad",
+          schemaVersion: 1,
+          size: { w: 220, h: 280 },
+          provides: ["desk.object"],
+          binding: { kind: "pad" },
+        },
+      ],
+    });
+    expect(container?.textContent).toContain(`${PLUGIN_ID} · 1 object`);
+    expect(container?.textContent).not.toMatch(/\d widgets?\b/);
+  });
 });
 
 describe("PluginsSection runtime diagnostics", () => {

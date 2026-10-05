@@ -154,27 +154,31 @@ describe("developer reload (§18.5)", () => {
     expect(registry.get(ID)?.version).toBe("1.0.0");
   });
 
-  it("durable widget schemas may only move forward", async () => {
-    const widget = (schemaVersion: number) => ({
+  it("durable object schemas may only move forward", async () => {
+    // DK-8: the §18.5 law holds OBJECT rows — the WIDGET rows it held retired with
+    // `contributes.widgets`; an object's schemaVersion is the same durable promise
+    const object = (schemaVersion: number) => ({
       type: `${ID}.card`,
       title: "Card",
       schemaVersion,
-      surface: "dom",
-      sizeMode: "fixed",
-      defaultSize: { w: 100, h: 100 },
+      size: { w: 100, h: 100 },
+      provides: ["desk.object"],
+      binding: { kind: "card" },
     });
-    const withWidget = (v: number) =>
+    const withObject = (v: number) =>
       manifest({
         entries: { renderer: "./renderer.js", service: "./service.js" },
-        contributes: { widgets: [widget(v)] },
+        contributes: { objects: [object(v)] },
         activation: ["onStartup"],
       });
-    const { registry, pluginDir } = await setup(withWidget(3));
-    writeFileSync(join(pluginDir, "vibefield.plugin.json"), JSON.stringify(withWidget(2)));
-    await expect(registry.validateReload(ID)).rejects.toThrowError(/regresses schemaVersion/);
-    writeFileSync(join(pluginDir, "vibefield.plugin.json"), JSON.stringify(withWidget(4)));
+    const { registry, pluginDir } = await setup(withObject(3));
+    writeFileSync(join(pluginDir, "vibefield.plugin.json"), JSON.stringify(withObject(2)));
+    await expect(registry.validateReload(ID)).rejects.toThrowError(
+      /object vibefield\.fixture\.[a-z.-]*card regresses schemaVersion 3 → 2/,
+    );
+    writeFileSync(join(pluginDir, "vibefield.plugin.json"), JSON.stringify(withObject(4)));
     const ok = await registry.validateReload(ID);
-    expect(ok.contributions.widgets[0]?.schemaVersion).toBe(4);
+    expect(ok.contributions.objects?.[0]?.schemaVersion).toBe(4);
   });
 
   it("reload is dev-linked only", async () => {

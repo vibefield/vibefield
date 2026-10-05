@@ -1,53 +1,36 @@
-import {
-  type PluginRegistry,
-  safePreviewToCss,
-  WIDGET_CATEGORIES,
-  type WidgetCategory,
-} from "@vibefield/plugin-runtime";
+import type { PluginRegistry } from "@vibefield/plugin-runtime";
 
-// The P-3 seam (thinking-widgetlab-port): the tray reads the PluginRegistry,
-// never ICE's module-global catalog — labels, categories, and preview
-// silhouettes are manifest DATA, so the sheet needs zero per-widget code
-// knowledge. Pure derivation; unit-tested without ICE. The category union has
-// ONE source (contracts' WIDGET_CATEGORIES); the tray only adds "All".
-// C1c: reads the canonical V1 contributes directly (SafePreview → CSS).
+// The P-3 seam (thinking-widgetlab-port): the old tray's SHEET (Objects, behind the line)
+// reads the PluginRegistry, never ICE's module-global catalog. Its tiles were the plugins'
+// WIDGET rows — title, category, SafePreview silhouette — and DK-8 RETIRED
+// `contributes.widgets`: no plugin declares one, so the sheet lists none. An OBJECT hangs on
+// the desk's pegboard, drawn by its own kind; the pegboard behind the line's ⊕ replaces this
+// sheet, its tray state and this module at DK-13 (the plan's R21), and nothing here re-aims
+// the sheet at objects ahead of it.
 
-export const CATEGORIES = ["All", ...WIDGET_CATEGORIES] as const;
+/** The sheet's shelves — the widget era's four (contracts' `WIDGET_CATEGORIES` until DK-8),
+ * kept sheet-local until DK-13 deletes the sheet; the tray adds "All". */
+export const SHELVES = ["Cards", "3D", "Nodes", "Tools"] as const;
+export type Shelf = (typeof SHELVES)[number];
+export const CATEGORIES = ["All", ...SHELVES] as const;
 export type TrayCategory = (typeof CATEGORIES)[number];
 
-/** What a tray tile needs: the live widget def joined with its manifest row. */
+/** What a tray tile needs: the live prefab joined with its manifest row. */
 export interface CatalogEntry<W> {
   type: string;
   title: string;
-  category: WidgetCategory;
-  /** CSS background for the silhouette fallback (manifest SafePreview) */
+  category: Shelf;
+  /** CSS background for the silhouette fallback */
   preview?: string;
   def: W;
 }
 
+/** The sheet's tiles: NONE since DK-8 — the widget rows it joined are refused by the
+ * manifest, and the registry's rows are objects, which hang on the pegboard (DK-13). */
 export function buildCatalog<W>(
-  registry: PluginRegistry<W>,
-  /** P3c — plugins the fieldd registry reports disabled: registered (schemas
-   * stay live for existing boards) but never offered for NEW spawns. */
-  disabledPlugins?: ReadonlySet<string>,
+  _registry: PluginRegistry<W>,
+  /** P3c — plugins the fieldd registry reports disabled (kept for the sheet's call) */
+  _disabledPlugins?: ReadonlySet<string>,
 ): CatalogEntry<W>[] {
-  const out: CatalogEntry<W>[] = [];
-  for (const plugin of registry.all()) {
-    if (disabledPlugins?.has(plugin.id)) continue;
-    for (const w of plugin.widgetContributions) {
-      const def = plugin.widgets.get(w.type);
-      if (def === undefined) continue; // registerV1 guarantees the pair; belt and braces
-      const preview = safePreviewToCss(w.preview);
-      out.push({
-        type: w.type,
-        title: w.title,
-        // DK-2 (ICE 0.14.0): `WidgetType.surface` is gone with the widget faces, so
-        // the "3D" fallback for GL cards went with it; an uncategorized row is a Card.
-        category: w.category ?? "Cards",
-        ...(preview !== undefined ? { preview } : {}),
-        def,
-      });
-    }
-  }
-  return out;
+  return [];
 }
