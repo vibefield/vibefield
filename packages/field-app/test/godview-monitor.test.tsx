@@ -56,7 +56,10 @@ import type { GodviewMonitorFacts } from "../src/development-console";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import { usagePortOver } from "../src/godview/monitor/doors";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
-import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
+import {
+  GodviewAgentsProvider,
+  useMonitorFeed,
+} from "../src/godview/monitor/GodviewAgentsProvider";
 import { monitorHoldsKeys, takeLauncherKeys } from "../src/godview/monitor/launcher-keys";
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
@@ -2151,5 +2154,156 @@ describe("MV-W4 — the motion a ported view may make", () => {
     await act(async () => query.set(true));
     await settle();
     expect(recording.lastInput?.theme).toMatchObject({ reducedMotion: true });
+  });
+});
+
+// ---- M59 — VibeField's two swarm items ---------------------------------------
+//
+// The swarm keys a body by `visualId ?? id`, a window-local fact: a launcher's
+// agent takes the fresh shell's body (the deck's `terminalVisualIds`), so the
+// person sees one body across the handoff. VibeField hands it through the
+// replica's local join, computed once per published model and the SAME map
+// while no body moved (M64). And a create answers: the slot reads the host's
+// fulfilment as opened and its rejection as a refusal (SB §2.6), so a birth
+// waits for its row and gives up at once when nothing opened.
+
+describe("M59 — the body a row continues, and a create that answers", () => {
+  /** Every `setLocal` the window's replica was handed, read off the feed itself. */
+  let joins: { visualIds?: ReadonlyMap<string, string> | undefined }[] = [];
+  function JoinSpy(): null {
+    const feed = useMonitorFeed();
+    if (feed !== null && !vi.isMockFunction(feed.replica.setLocal)) {
+      const setLocal = feed.replica.setLocal.bind(feed.replica);
+      vi.spyOn(feed.replica, "setLocal").mockImplementation((local) => {
+        joins.push(local);
+        setLocal(local);
+      });
+    }
+    return null;
+  }
+
+  async function renderSpied(
+    entry: MonitorViewEntry,
+    door: MonitorDoor | null,
+    panes: MonitorPaneFacts,
+  ): Promise<void> {
+    syncBoard(panes);
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <JoinSpy />
+          <GodviewMonitor view={entry} parameters={{}} door={door} panes={panes} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+  }
+
+  async function mountSpied(
+    door: MonitorDoor | null,
+    panes: MonitorPaneFacts = PANES,
+  ): Promise<{ recording: RecordingView; entry: MonitorViewEntry }> {
+    joins = [];
+    const recording = createRecordingView("spatial-probe");
+    const entry: MonitorViewEntry = {
+      id: "spatial-probe",
+      label: "SPATIAL",
+      parameterGroups: [],
+      view: recording.view,
+    };
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await renderSpied(entry, door, panes);
+    return { recording, entry };
+  }
+
+  const rowOf = (recording: RecordingView, id: string) => recording.lastInput?.model.byId.get(id);
+
+  it("hands the view the shell's body for a launcher's agent, through the replica's join, and the same map while no body moved", async () => {
+    const door = fakeDoor();
+    const { recording, entry } = await mountSpied(door);
+    // a managed agent's body is its pane's session; an unclaimed shell is its own row
+    expect(rowOf(recording, "run-codex")?.visualId).toBe("run-codex-pty");
+    expect(rowOf(recording, "pane-1")).toBeDefined();
+    expect(rowOf(recording, "pane-1")?.visualId).toBeUndefined();
+    const before = joins.at(-1)?.visualIds;
+    expect(before?.get("run-codex")).toBe("run-codex-pty");
+
+    // a state-only publish: the claude run goes idle, no body moves
+    const calls = joins.length;
+    const models = recording.inputs.length;
+    door.push([
+      managedSummary({
+        runtimeRunId: "run-claude",
+        kind: "claude",
+        label: "Claude",
+        status: "idle",
+        cwd: "/project/vibe-field",
+        createdAt: "2026-09-12T10:00:00.000Z",
+      }),
+      ...ROWS.slice(1),
+    ]);
+    await settle();
+    expect(rowOf(recording, "run-claude")?.status).toBe("idle");
+    expect(recording.inputs.length).toBeGreaterThan(models);
+    // the join is handed again (the model moved, and the row kinds ride it), never a new body map
+    expect(joins.length).toBeGreaterThan(calls);
+    for (const join of joins.slice(calls)) expect(join.visualIds).toBe(before);
+
+    // the launcher hands the shell's pane to the codex agent: the agent keeps the shell's body,
+    // and the shell's own row speaks for no second body
+    const handoff: MonitorPaneFacts = {
+      ...PANES,
+      terminalVisualIds: new Map([["run-codex-pty", "pane-1"]]),
+    };
+    await renderSpied(entry, door, handoff);
+    expect(joins.at(-1)?.visualIds?.get("run-codex")).toBe("pane-1");
+    expect(rowOf(recording, "run-codex")?.visualId).toBe("pane-1");
+    expect(rowOf(recording, "pane-1")).toBeUndefined();
+    expect(recording.mounts).toBe(1);
+  });
+
+  it("answers a view's create with the host's own outcome: opened, or refused at once", async () => {
+    const door = fakeDoor();
+    const { recording } = await mountSpied(door);
+    const commands = recording.commands[0];
+    if (commands === undefined) throw new Error("the view was handed no commands");
+    let answer: { opened: boolean } | undefined;
+    await act(async () => {
+      answer = await commands.create({ x: 40, y: 50 });
+    });
+    expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith();
+    expect(answer).toEqual({ opened: true });
+
+    door.createTerminal.mockResolvedValueOnce({
+      state: "failed",
+      reason: "terminal capacity reached",
+    });
+    await act(async () => {
+      answer = await commands.create({ x: 40, y: 50 });
+    });
+    expect(answer).toEqual({ opened: false });
+    expect(ackText(container as HTMLElement)).toBe(
+      "terminal could not be opened — terminal capacity reached",
+    );
+
+    door.createTerminal.mockResolvedValueOnce({ state: "no-pane" });
+    await act(async () => {
+      answer = await commands.create();
+    });
+    expect(answer).toEqual({ opened: false });
+  });
+
+  it("refuses a create with no deck, in its own words", async () => {
+    const { recording } = await mountSpied(null);
+    let answer: { opened: boolean } | undefined;
+    await act(async () => {
+      answer = await recording.commands[0]?.create();
+    });
+    expect(answer).toEqual({ opened: false });
+    expect(ackText(container as HTMLElement)).toBe(
+      "no terminal can be opened yet — the deck has no connection",
+    );
   });
 });

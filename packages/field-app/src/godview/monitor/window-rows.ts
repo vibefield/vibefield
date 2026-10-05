@@ -157,6 +157,30 @@ export function createWindowRows(): WindowRows {
 }
 
 /**
+ * M59 — each drawn row's spatial identity, for the replica's local join
+ * (`setLocal({ visualIds })`): the visual id the window rows gave a row, kept
+ * only where it is not the row's own id, since a view reads `visualId ?? id`.
+ */
+export function visualIdsOf(rows: readonly ViewsMonitorAgent[]): ReadonlyMap<string, string> {
+  const ids = new Map<string, string>();
+  for (const row of rows) {
+    if (row.visualId !== undefined && row.visualId !== row.id) ids.set(row.id, row.visualId);
+  }
+  return ids;
+}
+
+/** The same entries, so a window can keep handing the join the SAME map while no body moved (M64). */
+export function sameVisualIds(
+  left: ReadonlyMap<string, string>,
+  right: ReadonlyMap<string, string>,
+): boolean {
+  if (left === right) return true;
+  if (left.size !== right.size) return false;
+  for (const [id, visualId] of right) if (left.get(id) !== visualId) return false;
+  return true;
+}
+
+/**
  * The ids in the order the seam drew its rows: this desktop's agents by birth
  * (the model's own order among agents), then its terminals — the panes' in pane
  * order, the floor's in roster order, the rest by birth — then other desktops'

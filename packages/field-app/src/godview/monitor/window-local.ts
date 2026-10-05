@@ -11,10 +11,11 @@ import type { MonitorPaneFacts } from "./useMonitorAgents";
  *
  * The backend computes every row once; a window holds its panes, the pane the
  * person is working in, the row they last pointed at, the places they asked
- * terminals to be born, and what each pane's terminal is doing (M28). Nothing
- * here derives a business fact: it maps the deck's facts, keyed by floor
- * session, onto the model's ids through the board rows the fold kept beside
- * the model (`HeldModelRow`), and hands the replica the join.
+ * terminals to be born, what each pane's terminal is doing (M28), and the body
+ * each row continues (M59, computed by the window rows). Nothing here derives
+ * a business fact: it maps the deck's facts, keyed by floor session, onto the
+ * model's ids through the board rows the fold kept beside the model
+ * (`HeldModelRow`), and hands the replica the join.
  *
  * THE JOINS, read off this desktop's board rows and never guessed:
  *   · a bare terminal's row stands for the floor session its board row names
@@ -115,6 +116,8 @@ export interface WindowLocalInput {
   readonly previewSelectedId: string | undefined;
   /** SB-3 — where each terminal was asked for, by FLOOR SESSION (the door's answer, or a claim) */
   readonly spawnHints: ReadonlyMap<string, { x: number; y: number }>;
+  /** M59 — the body each row continues, by ROW id (`visualIdsOf`): the same map while none moved */
+  readonly visualIds?: ReadonlyMap<string, string> | undefined;
   readonly receded: ((row: MonitorAgentRow) => boolean) | undefined;
   readonly visible: (row: MonitorAgentRow) => boolean;
 }
@@ -183,6 +186,7 @@ export function windowLocal(input: WindowLocalInput): MonitorReplicaLocal {
     activeIds,
     spawnHints,
     activity,
+    ...(input.visualIds !== undefined ? { visualIds: input.visualIds } : {}),
     visible: input.visible,
     ...(input.receded !== undefined ? { receded: input.receded } : {}),
   };

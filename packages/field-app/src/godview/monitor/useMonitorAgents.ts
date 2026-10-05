@@ -62,6 +62,8 @@ import {
   deviceOfRow,
   narrowToDevice,
   rowOrder,
+  sameVisualIds,
+  visualIdsOf,
   type WindowRowFacts,
 } from "./window-rows";
 import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
@@ -80,9 +82,10 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *   · THE LOCAL JOIN — what only this window knows, handed to the replica
  *     (`setLocal`): its panes and the colour each wears, the pane the person is
  *     working in, the row they pointed at, where they asked terminals to be
- *     born, what each pane's terminal is doing (M28), which rows the chosen
- *     profile tab recedes, and which rows this window shows at all (M3: the
- *     live ones, and none whose pane has exited).
+ *     born, what each pane's terminal is doing (M28), the body each row
+ *     continues (M59: a launcher's agent takes the shell's place), which rows
+ *     the chosen profile tab recedes, and which rows this window shows at all
+ *     (M3: the live ones, and none whose pane has exited).
  *   · THE VERBS — every one through the DOOR the deck built (`MonitorDoor`): a
  *     local row's select mounts its PTY in the active pane, a peer's attaches
  *     its terminal there, create opens an empty terminal — and every outcome is
@@ -458,6 +461,18 @@ export function useMonitorAgents({
   );
   /** Every row, in the stage's order, patched for this window (no device filter). */
   const agents = windowRows.rowsFor(model, rowFacts);
+  // M59 — the body each row continues, for a view that places rows in space
+  // (the swarm keys its bodies by `visualId ?? id`): the window rows' own rule
+  // (a launcher's agent takes the fresh shell's body, `terminalVisualIds`; a
+  // row keeps the body it wore), handed to the replica's join below. Computed
+  // once per published model, and the SAME map while no row's body moved
+  // (M64), so a state-only publish re-diffs no row in the join.
+  const visualIdsRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const visualIds = useMemo(() => {
+    const next = visualIdsOf(agents);
+    if (!sameVisualIds(visualIdsRef.current, next)) visualIdsRef.current = next;
+    return visualIdsRef.current;
+  }, [agents]);
 
   // DS-3 — the device filter's choices and the choice as the board still has it
   const devices = useMemo<readonly DeviceChoice[]>(() => {
@@ -591,11 +606,12 @@ export function useMonitorAgents({
         links,
         previewSelectedId: selectedId,
         spawnHints: hints,
+        visualIds,
         receded,
         visible,
       }),
     // keyed by the pane facts the join reads, not by the array the deck republishes
-    [joins, kindOf, panesKey, links, selectedId, hints, receded, visible],
+    [joins, kindOf, panesKey, links, selectedId, hints, visualIds, receded, visible],
   );
   useLayoutEffect(() => {
     feed?.replica.setLocal(local);
@@ -932,8 +948,12 @@ export function useMonitorAgents({
         const row = latest.current.agentsById.get(agentId);
         if (row !== undefined) latest.current.select(row);
       },
+      // M59 — the host's REAL answer: the slot reads the create's fulfilment as
+      // opened and its rejection (`createAt` refuses with the sentence it said)
+      // as a refusal, so a view's birth waits for its row and gives up at once
+      // when nothing opened (SB §2.6).
       create(at, target) {
-        void latest.current.createAt(at, target).catch(() => undefined);
+        return latest.current.createAt(at, target);
       },
     }),
     [],
