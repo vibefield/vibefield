@@ -288,11 +288,14 @@ const CANVAS_CENSUS = {
 
 /** Every way the line disagrees with the census, named — a smoke that fails
  * should say what it saw, not that something was wrong. */
-function censusFailures(facts: CanvasFacts): string[] {
+function censusFailures(
+  facts: CanvasFacts,
+  minStaged: number = CANVAS_CENSUS.minStagedPlugins,
+): string[] {
   const problems: string[] = [];
-  if (facts.stagedPlugins < CANVAS_CENSUS.minStagedPlugins) {
+  if (facts.stagedPlugins < minStaged) {
     problems.push(
-      `${facts.stagedPlugins} staged plugin(s), expected at least ${CANVAS_CENSUS.minStagedPlugins} — the renderer did not load through the staged path`,
+      `${facts.stagedPlugins} staged plugin(s), expected at least ${minStaged} — the renderer did not load through the staged path`,
     );
   }
   return problems;
@@ -822,6 +825,8 @@ export async function runSmokeCanvas(opts: {
 }): Promise<void> {
   const gpu = !process.argv.includes("--disable-gpu");
   const shotDir = process.env["VF_SMOKE_SHOT_DIR"];
+  // DK-9: a run staged with the fault fixture (`smoke:kind-faults`) runs the kind-fault rows
+  const faultRun = process.env["VF_SMOKE_KIND_FAULTS"] === "1";
   // Shown with the GPU on: a still of the window (the desk under the frame) is the grader's, and
   // a shown window is what the desk's frame loop and the capture door are made for.
   const win = createMainWindow({
@@ -874,14 +879,28 @@ export async function runSmokeCanvas(opts: {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
-      // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
-      // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
-      const pad = await commentPadRow(win, shotDir);
-      problems.push(...pad.problems);
-      problems.push(...(await deskRetryRow(win, opts.viteUrl)));
-      if (pad.typed) problems.push(...(await commentPadReopenRow(win)));
-      // DK-9: last — it leaves the desk on its card
-      problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
+      if (faultRun) {
+        // DK-9: the fault fixture's run (`smoke:kind-faults`) — the witnesses above ran with the broken kind
+        // refused at the boot; the fault rows lay the broken clocks beside a drawn one. The pad's, the retry's
+        // and the refusal's rows are smoke:canvas's own run.
+        const fixtures = kindFixtures();
+        if (fixtures?.mode !== "faults") {
+          problems.push(
+            "VF_SMOKE_KIND_FAULTS without the staged fault fixture (packaging/stage-kind-fixtures.mjs faults)",
+          );
+        } else {
+          problems.push(...(await kindFaultRows(win, fixtures, shotDir)));
+        }
+      } else {
+        // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
+        // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
+        const pad = await commentPadRow(win, shotDir);
+        problems.push(...pad.problems);
+        problems.push(...(await deskRetryRow(win, opts.viteUrl)));
+        if (pad.typed) problems.push(...(await commentPadReopenRow(win)));
+        // DK-9: last — it leaves the desk on its card
+        problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
+      }
     } else {
       problems.push(...(await commentPadCensusRow(win)));
       const card = await expectDeskUnavailableCard(win);
@@ -1738,7 +1757,11 @@ function physicalSoakOptions(
 interface DoorDesk {
   readonly generation: number;
   readonly mount: number;
+  /** The desks this renderer has mounted, this one included (DK-9). */
+  readonly mounts: number;
   readonly state: string;
+  /** The kinds the desk draws as missing, contained (ICE I24) — absent while none. */
+  readonly faults: readonly { readonly kind: string; readonly reason: string }[];
   readonly boot: Readonly<Record<string, number>>;
   readonly frames: number;
   readonly census: Record<string, number>;
@@ -1748,7 +1771,8 @@ const DOOR_DESK = `(() => {
   const d = globalThis.__vfDesk;
   if (d === undefined) return null;
   const perf = d.perf();
-  return { generation: d.generation, mount: d.mount, state: d.status().state, boot: perf.boot, frames: perf.frames, census: d.census() };
+  const status = d.status();
+  return { generation: d.generation, mount: d.mount, mounts: d.mounts(), state: status.state, faults: status.faults ?? [], boot: perf.boot, frames: perf.frames, census: d.census() };
 })()`;
 
 /** Where a window stands when it shows no desk — the stage, the document's load, the card. */
@@ -1773,16 +1797,21 @@ interface WindowDesk {
 async function windowDesks(
   windows: readonly BrowserWindow[],
   timeoutMs = 60_000,
+  /** What window `index`'s board must hold (DK-9: a window's OWN census, carried across a restart); absent,
+   * the seed's six, one each. */
+  holds?: (index: number, census: Readonly<Record<string, number>>) => boolean,
 ): Promise<{ desks: WindowDesk[]; problems: string[] }> {
   const desks: WindowDesk[] = [];
   const problems: string[] = [];
-  const holdsTheSeed = (desk: DoorDesk | null): desk is DoorDesk =>
-    desk !== null &&
-    desk.state === "ready" &&
-    desk.frames >= 1 &&
-    desk.boot["presented"] !== undefined &&
-    CANVAS_CENSUS.seed.every((type) => desk.census[type] === 1);
   for (const [index, win] of windows.entries()) {
+    const holdsTheSeed = (desk: DoorDesk | null): desk is DoorDesk =>
+      desk !== null &&
+      desk.state === "ready" &&
+      desk.frames >= 1 &&
+      desk.boot["presented"] !== undefined &&
+      (holds === undefined
+        ? CANVAS_CENSUS.seed.every((type) => desk.census[type] === 1)
+        : holds(index, desk.census));
     const js = <T>(expression: string): Promise<T> =>
       win.webContents.executeJavaScript(expression, true) as Promise<T>;
     const deadline = Date.now() + timeoutMs;
@@ -1795,13 +1824,771 @@ async function windowDesks(
     desks.push({ docId, desk });
     if (!holdsTheSeed(desk)) {
       problems.push(
-        `window ${index + 1}: no desk holding the seed's six within ${timeoutMs}ms (${JSON.stringify(
+        `window ${index + 1}: no desk holding ${holds === undefined ? "the seed's six" : "its board's census"} within ${timeoutMs}ms (${JSON.stringify(
           desk ?? (await js<unknown>(SCENE_DIAGNOSIS)),
         )})`,
       );
     }
   }
   return { desks, problems };
+}
+
+/** DK-9 — the plugin fixtures this run was staged with (`packaging/stage-kind-fixtures.mjs`), or null when
+ * the run was not staged (the soak's lab runner: no runtime rows, only the restarts). */
+interface KindFixtures {
+  readonly mode: "restart" | "faults";
+  readonly root: string;
+  readonly clock?: string;
+  readonly clockRoot?: string;
+  readonly clockV2?: string;
+  /** the plugin NEW to the renderers for the ENABLE row, and its one object type (a minute dial) */
+  readonly fresh?: string;
+  readonly freshType?: string;
+  readonly broken?: readonly string[];
+}
+
+function kindFixtures(): KindFixtures | null {
+  const raw = process.env["VF_KIND_FIXTURES"];
+  return raw === undefined || raw.length === 0 ? null : (JSON.parse(raw) as KindFixtures);
+}
+
+/** One object type's box on the drawn frame (the desk's own pick every 8 CSS px of the view), the entity
+ * and part the last pick on it answered, and how many picks it took — each one runs the kind's `hit`. */
+interface ObjectBox {
+  readonly x0: number;
+  readonly y0: number;
+  readonly x1: number;
+  readonly y1: number;
+  readonly entity: number;
+  readonly part: string;
+  readonly picks: number;
+}
+
+async function objectBox(
+  win: BrowserWindow,
+  type: string,
+  /** One object of the type (what `__vfFieldSmoke.spawnWidget` answered); absent, every object of it. */
+  entity?: string,
+): Promise<ObjectBox | null> {
+  return (await win.webContents.executeJavaScript(
+    `(() => {
+      const d = globalThis.__vfDesk;
+      const el = document.querySelector("[data-desk]");
+      if (d === undefined || el === null) return null;
+      const r = el.getBoundingClientRect();
+      const only = ${JSON.stringify(entity ?? null)};
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, entity = -1, part = "", picks = 0;
+      for (let y = 4; y < r.height; y += 8)
+        for (let x = 4; x < r.width; x += 8) {
+          const hit = d.pick({ x, y });
+          if (hit === null || hit.type !== ${JSON.stringify(type)}) continue;
+          if (only !== null && String(hit.entity) !== only) continue;
+          picks += 1;
+          x0 = Math.min(x0, x); y0 = Math.min(y0, y); x1 = Math.max(x1, x); y1 = Math.max(y1, y);
+          entity = hit.entity; part = hit.part;
+        }
+      return x0 === Infinity ? null : { x0, y0, x1, y1, entity, part, picks };
+    })()`,
+    true,
+  )) as ObjectBox | null;
+}
+
+/** A window's desk once it is DRAWN (ready, a frame presented) and `want` holds of it — through the door,
+ * polled; a renderer mid-replacement answers nothing for a moment, which is waited out. */
+async function deskWhere(
+  win: BrowserWindow,
+  label: string,
+  want: (desk: DoorDesk) => boolean,
+  timeoutMs = 60_000,
+): Promise<DoorDesk> {
+  const deadline = Date.now() + timeoutMs;
+  let desk: DoorDesk | null = null;
+  for (;;) {
+    desk = await (
+      win.webContents.executeJavaScript(DOOR_DESK, true) as Promise<DoorDesk | null>
+    ).catch(() => null);
+    if (
+      desk !== null &&
+      desk.state === "ready" &&
+      desk.frames >= 1 &&
+      desk.boot["presented"] !== undefined &&
+      want(desk)
+    ) {
+      return desk;
+    }
+    if (Date.now() > deadline) {
+      const scene = await (
+        win.webContents.executeJavaScript(SCENE_DIAGNOSIS, true) as Promise<unknown>
+      ).catch(() => null);
+      throw new Error(`${label}: not within ${timeoutMs}ms (${JSON.stringify(desk ?? scene)})`);
+    }
+    await sleep(100);
+  }
+}
+
+/** The bar's words for an object type through the door (DK-9; the bar is DK-11's). */
+async function deskWords(
+  win: BrowserWindow,
+  type: string,
+): Promise<{ title: string; state: string | null; label: string } | null> {
+  return (await win.webContents.executeJavaScript(
+    `globalThis.__vfDesk?.words(${JSON.stringify(type)}) ?? null`,
+    true,
+  )) as { title: string; state: string | null; label: string } | null;
+}
+
+/** A rect of the view, CSS px (ICE's `CaptureRect`). */
+interface ViewRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
+}
+
+/** The rect a box's picks span — inside the object, every point of it picked as its type. */
+const rectOf = (box: ObjectBox): ViewRect => ({
+  x: box.x0,
+  y: box.y0,
+  width: Math.max(8, box.x1 - box.x0),
+  height: Math.max(8, box.y1 - box.y0),
+});
+
+/** A rect of the last presented frame read back (the capture door at its rect): the sample's numbers and its
+ * pixels' FNV-1a hash — two reads of ONE rect are the same pixels or not. */
+interface BoxPixels extends DeskSampleFacts {
+  readonly hash: string;
+}
+
+async function boxPixels(win: BrowserWindow, rect: ViewRect): Promise<BoxPixels | null> {
+  return (await win.webContents.executeJavaScript(
+    `(async () => {
+      const d = globalThis.__vfDesk;
+      if (d === undefined) return null;
+      const bitmap = await d.capture({ rect: ${JSON.stringify(rect)} });
+      if (bitmap === undefined) return null;
+      const { width, height } = bitmap;
+      const ctx = new OffscreenCanvas(width, height).getContext("2d");
+      ctx.drawImage(bitmap, 0, 0);
+      bitmap.close();
+      const data = ctx.getImageData(0, 0, width, height).data;
+      const colors = new Set();
+      let h = 0x811c9dc5, min = 255, max = 0, sum = 0;
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i], g = data[i + 1], b = data[i + 2];
+        h = Math.imul(h ^ r, 0x01000193);
+        h = Math.imul(h ^ g, 0x01000193);
+        h = Math.imul(h ^ b, 0x01000193);
+        colors.add(((r >> 3) << 10) | ((g >> 3) << 5) | (b >> 3));
+        const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+        if (luma < min) min = luma;
+        if (luma > max) max = luma;
+        sum += luma;
+      }
+      const n = Math.max(1, width * height);
+      return { width, height, hash: (h >>> 0).toString(16), colors: colors.size, lumaMin: Math.round(min), lumaMax: Math.round(max), lumaMean: Math.round(sum / n) };
+    })()`,
+    true,
+  )) as BoxPixels | null;
+}
+
+/**
+ * DK-9 — A FROZEN DESK CONSUMES NO RENDER TIME, AT REST OR UNDER A COVER (DK-D25; the plan's soak row "the
+ * idle row still"): the wind made to blow first (`ambient("live")`) so frames move, then a covered view
+ * PARKS the desk — not one frame, not one submit, for a second — then, back on Canvas and the wind still,
+ * the desk at REST idles at zero for two seconds (clear of the example clock's minute turn).
+ */
+async function deskStillness(win: BrowserWindow): Promise<{ facts: object; problems: string[] }> {
+  const js = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const problems: string[] = [];
+  await js(`globalThis.__vfDesk.ambient("live")`);
+  const busy0 = await deskCounters(win);
+  await sleep(400);
+  const busy1 = await deskCounters(win);
+  await js(`globalThis.vibefield.view.set("history")`);
+  await waitForRendererFact(
+    win,
+    "the cover over the canvas",
+    10_000,
+    `document.querySelector('.field-scene[data-covered="true"]') !== null`,
+  );
+  await sleep(700); // the freeze walks its settle before it parks
+  const parked0 = await deskCounters(win);
+  await sleep(1_000);
+  const parked1 = await deskCounters(win);
+  await js(`globalThis.vibefield.view.set("canvas")`);
+  await js(`globalThis.__vfDesk.ambient("idle")`);
+  try {
+    await waitForRendererFact(
+      win,
+      "the desk at rest",
+      45_000,
+      "globalThis.__vfDesk.rest().asleep === true",
+      "globalThis.__vfDesk.rest().asleep",
+    );
+  } catch (error) {
+    // WHY it is awake: the frame loop's wakes that grew over a second, and the desk's registered wake taken apart
+    type Rest = { wakes: Record<string, number>; timed: number; steps: number; due: unknown };
+    const a = await js<Rest>("globalThis.__vfDesk.rest()");
+    await sleep(1_000);
+    const b = await js<Rest>("globalThis.__vfDesk.rest()");
+    const grew = Object.fromEntries(
+      Object.entries(b.wakes)
+        .map(([reason, n]) => [reason, n - (a.wakes[reason] ?? 0)] as const)
+        .filter(([, n]) => n > 0),
+    );
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} — awake by ${JSON.stringify({ wakesInASecond: grew, timedInASecond: b.timed - a.timed, stepsInASecond: b.steps - a.steps, due: b.due })}`,
+    );
+  }
+  const intoMinute = Date.now() % 60_000;
+  if (intoMinute < 1_000) await sleep(1_000 - intoMinute);
+  else if (intoMinute > 56_000) await sleep(61_000 - intoMinute);
+  const rest0 = await deskCounters(win);
+  await sleep(2_000);
+  const rest1 = await deskCounters(win);
+  if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
+  if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
+    problems.push(`a cover did not park the desk (${JSON.stringify({ parked0, parked1 })})`);
+  }
+  if (rest1.frames !== rest0.frames || rest1.submits !== rest0.submits) {
+    problems.push(`the desk did not idle at zero (${JSON.stringify({ rest0, rest1 })})`);
+  }
+  return { facts: { busy0, busy1, parked0, parked1, rest0, rest1 }, problems };
+}
+
+/** What `plugins.reload` was answered, as a fact: null when it reloaded, its refusal's words otherwise. */
+async function reloadAnswer(handle: FielddHandle, id: string): Promise<string | null> {
+  try {
+    await handle.client.request("plugins.reload", { id });
+    return null;
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error);
+  }
+}
+
+/**
+ * DK-9 — THE RUNTIME WITH KINDS, IN THE PRODUCT (the plan's addendum (13)–(15); ICE I25), over fieldd with the
+ * two windows, each on its own board — the plugin set changed mid-session and each window's desk REMOUNTED,
+ * measured by `perf().boot`:
+ *   ENABLE (a plugin these renderers never staged — the fixture's minute dial, off since before the windows
+ *     opened): staged, each board REOPENS on a new engine (a new generation), its pack stamped (no other
+ *     desktop holds the boards) and its kind PLACED at once in each window;
+ *   DISABLE the clock: each desk remounts on its engine WITHOUT its kind — the clock keeps its data and wears
+ *     ICE's MISSING face, picked by its box, the bar's words "Clock · plugin off" (`dk-9-missing-face.png`);
+ *   ENABLE it again: each desk remounts with its kind — drawn again: OFF, its box drew the missing face (at
+ *     least 15 colours fewer and less contrast than the same box ON);
+ *   UPDATE it (v1 → v2, `schemaVersion` 2, a `migrate` chain): each window saves its board and its renderer
+ *     is REPLACED — it reopens ITS board with the v2 kind, the chain run on each clock it carries;
+ *   REGRESS it (`schemaVersion` 1 over v2): fieldd refuses (§18.5) and the renderers are untouched.
+ * Returns the problems, each row's facts, and the renderers' CANVAS_READY after the update (the soak's base).
+ */
+async function kindRuntimeRows(opts: {
+  windows: readonly BrowserWindow[];
+  handle: FielddHandle;
+  fixtures: KindFixtures;
+  shotDir: string | undefined;
+}): Promise<{ problems: string[]; facts: Record<string, unknown>; canvas: CanvasFacts[] | null }> {
+  const { windows, handle, fixtures, shotDir } = opts;
+  const problems: string[] = [];
+  const facts: Record<string, unknown> = {};
+  const clock = fixtures.clock ?? "";
+  const fresh = fixtures.fresh ?? "";
+  const freshType = fixtures.freshType ?? "";
+  const at = (win: BrowserWindow) => windows.indexOf(win) + 1;
+  const before = await Promise.all(
+    windows.map((win) =>
+      deskWhere(win, `window ${at(win)}: the desk before the runtime rows`, () => true),
+    ),
+  );
+
+  // ENABLE — a plugin new to these renderers: staged, and each board reopens on a NEW ENGINE
+  await handle.client.request("plugins.enable", { id: fresh });
+  const enabled = await Promise.all(
+    windows.map((win, i) =>
+      deskWhere(
+        win,
+        `window ${at(win)}: the board reopened on a new engine with the new plugin's kind`,
+        (desk) => desk.generation > (before[i]?.generation ?? 0),
+        90_000,
+      ),
+    ),
+  );
+  const placed: unknown[] = [];
+  for (const [i, win] of windows.entries()) {
+    const entity = await win.webContents
+      .executeJavaScript(
+        `globalThis.__vfFieldSmoke.spawnWidget(${JSON.stringify(freshType)}, { x: ${900 + 40 * i}, y: 300, w: 150, h: 150, props: { seconds: false } })`,
+        true,
+      )
+      .then(
+        (value: unknown) => value,
+        (error: unknown) => ({ refused: error instanceof Error ? error.message : String(error) }),
+      );
+    placed.push(entity);
+  }
+  const freshCensus = await Promise.all(
+    windows.map(
+      async (win) =>
+        (
+          await deskWhere(
+            win,
+            `window ${at(win)}: the new plugin's dial placed`,
+            (d) => (d.census[freshType] ?? 0) >= 1,
+            10_000,
+          ).catch(() => null)
+        )?.census[freshType] ?? 0,
+    ),
+  );
+  facts["enable"] = {
+    plugin: fresh,
+    remounts: enabled.map((d) => ({
+      generation: d.generation,
+      mount: d.mount,
+      mounts: d.mounts,
+      boot: d.boot,
+    })),
+    placed,
+    census: freshCensus,
+  };
+  console.log(`SMOKE_PLUGIN_KINDS_ENABLE ${JSON.stringify(facts["enable"])}`);
+  for (const [i, d] of enabled.entries()) {
+    if (d.mount !== 0)
+      problems.push(`window ${i + 1}: the enable's new generation is mount ${d.mount}, not 0`);
+    if ((freshCensus[i] ?? 0) < 1)
+      problems.push(
+        `window ${i + 1}: the new plugin's kind was not placed (${JSON.stringify(placed[i])})`,
+      );
+  }
+
+  // DISABLE the clock — the desk remounts WITHOUT its kind: the missing face, the bar's words
+  await handle.client.request("plugins.disable", { id: clock });
+  const off = await Promise.all(
+    windows.map((win, i) =>
+      deskWhere(
+        win,
+        `window ${at(win)}: the desk remounted without the clock's kind`,
+        (desk) =>
+          desk.generation === enabled[i]?.generation && desk.mount > (enabled[i]?.mount ?? 0),
+      ),
+    ),
+  );
+  await sleep(400);
+  const offWords = await Promise.all(windows.map((win) => deskWords(win, clock)));
+  const offBoxes = await Promise.all(windows.map((win) => objectBox(win, clock)));
+  const offSamples = await Promise.all(
+    windows.map((win, i) => {
+      const box = offBoxes[i];
+      return box === null || box === undefined
+        ? Promise.resolve(null)
+        : boxPixels(win, rectOf(box));
+    }),
+  );
+  if (shotDir !== undefined && windows[0] !== undefined) {
+    mkdirSync(shotDir, { recursive: true });
+    writeFileSync(join(shotDir, "dk-9-missing-face.png"), (await windows[0].capturePage()).toPNG());
+  }
+  facts["disable"] = {
+    plugin: clock,
+    remounts: off.map((d) => ({ generation: d.generation, mount: d.mount, boot: d.boot })),
+    words: offWords,
+    picked: offBoxes,
+    sample: offSamples,
+    census: off.map((d) => d.census[clock] ?? 0),
+  };
+  console.log(`SMOKE_PLUGIN_KINDS_DISABLE ${JSON.stringify(facts["disable"])}`);
+  for (const [i, words] of offWords.entries()) {
+    if (words?.label !== "Clock · plugin off")
+      problems.push(
+        `window ${i + 1}: the bar's words for an off clock were ${JSON.stringify(words)}`,
+      );
+    if (offBoxes[i] === null)
+      problems.push(`window ${i + 1}: the off clock's missing face was not picked by its box`);
+    if ((off[i]?.census[clock] ?? 0) < 1)
+      problems.push(`window ${i + 1}: the off clock's data left the board`);
+  }
+
+  // ENABLE it again — the desk remounts WITH its kind
+  await handle.client.request("plugins.enable", { id: clock });
+  const on = await Promise.all(
+    windows.map((win, i) =>
+      deskWhere(
+        win,
+        `window ${at(win)}: the desk remounted with the clock's kind`,
+        (desk) => desk.generation === off[i]?.generation && desk.mount > (off[i]?.mount ?? 0),
+      ),
+    ),
+  );
+  await sleep(400);
+  const onWords = await Promise.all(windows.map((win) => deskWords(win, clock)));
+  const onSamples = await Promise.all(
+    windows.map((win, i) => {
+      const box = offBoxes[i];
+      return box === null || box === undefined
+        ? Promise.resolve(null)
+        : boxPixels(win, rectOf(box));
+    }),
+  );
+  facts["reenable"] = {
+    remounts: on.map((d) => ({ generation: d.generation, mount: d.mount, boot: d.boot })),
+    words: onWords,
+    sample: onSamples,
+  };
+  console.log(`SMOKE_PLUGIN_KINDS_REENABLE ${JSON.stringify(facts["reenable"])}`);
+  for (const [i, words] of onWords.entries()) {
+    if (words?.state !== null)
+      problems.push(`window ${i + 1}: the clock enabled again still says ${JSON.stringify(words)}`);
+    const a = offSamples[i];
+    const b = onSamples[i];
+    if (a === null || a === undefined || b === null || b === undefined) {
+      problems.push(
+        `window ${i + 1}: the clock's box was not read back off and on (${JSON.stringify({ a, b })})`,
+      );
+    } else if (a.colors + 15 > b.colors || a.lumaMax - a.lumaMin >= b.lumaMax - b.lumaMin) {
+      // the box OFF is ICE's missing face — a wash and a hatch of one ink: at least 15 colours fewer, and less
+      // contrast, than the same box drawn by the clock's kind (its dial, numerals and hands). A hash cannot
+      // tell them apart: two mounts of one scene differ by a pixel or two.
+      problems.push(
+        `window ${i + 1}: the clock's box OFF is not the missing face — it draws what it draws ON (${JSON.stringify({ off: a, on: b })})`,
+      );
+    }
+  }
+
+  // UPDATE it — v2 (schemaVersion 2, a migrate chain): each renderer REPLACED, each board reopened with v2
+  const docIds = await Promise.all(
+    windows.map(
+      (win) =>
+        win.webContents.executeJavaScript(
+          'sessionStorage.getItem("vf-window-doc")',
+          true,
+        ) as Promise<string | null>,
+    ),
+  );
+  const ready = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 120_000));
+  const root = fixtures.clockRoot ?? "";
+  const v2 = fixtures.clockV2 ?? "";
+  writeFileSync(
+    join(root, "vibefield.plugin.json"),
+    readFileSync(join(v2, "vibefield.plugin.json")),
+  );
+  writeFileSync(join(root, "dist", "renderer.js"), readFileSync(join(v2, "dist", "renderer.js")));
+  const updateAnswer = await reloadAnswer(handle, clock);
+  console.log(
+    `SMOKE_PLUGIN_KINDS_UPDATE_ANSWER ${JSON.stringify({ plugin: clock, answer: updateAnswer })}`,
+  );
+  if (updateAnswer !== null) {
+    for (const wait of ready) void wait.catch(() => undefined);
+    problems.push(`the clock's update was refused: ${updateAnswer}`);
+    return { problems, facts, canvas: null };
+  }
+  const canvas = (await Promise.all(ready)).map((raw) => JSON.parse(raw) as CanvasFacts);
+  const updated = await Promise.all(
+    windows.map((win) =>
+      deskWhere(
+        win,
+        `window ${at(win)}: the replaced renderer drew its board with v2`,
+        (desk) => desk.mounts === 1,
+        120_000,
+      ),
+    ),
+  );
+  const reopened = await Promise.all(
+    windows.map(
+      (win) =>
+        win.webContents.executeJavaScript(
+          'sessionStorage.getItem("vf-window-doc")',
+          true,
+        ) as Promise<string | null>,
+    ),
+  );
+  const migrated = await Promise.all(
+    windows.map(
+      (win) =>
+        win.webContents.executeJavaScript(
+          `globalThis.__vfDesk?.objects(${JSON.stringify(clock)}).map((o) => ({ style: o.props.style, stamp: o.props.stamp })) ?? null`,
+          true,
+        ) as Promise<{ style: unknown; stamp: unknown }[] | null>,
+    ),
+  );
+  facts["update"] = {
+    plugin: clock,
+    answer: updateAnswer,
+    boards: { before: docIds, after: reopened },
+    remounts: updated.map((d) => ({
+      generation: d.generation,
+      mount: d.mount,
+      mounts: d.mounts,
+      boot: d.boot,
+    })),
+    migrated,
+  };
+  console.log(`SMOKE_PLUGIN_KINDS_UPDATE ${JSON.stringify(facts["update"])}`);
+  for (const [i, clocks] of migrated.entries()) {
+    if (reopened[i] !== docIds[i])
+      problems.push(`window ${i + 1} reopened ${reopened[i]}, not its own ${docIds[i]}`);
+    if (clocks === null || clocks.length === 0)
+      problems.push(`window ${i + 1}: no clock after the update`);
+    else if (!clocks.every((c) => c.stamp === "migrated-from-v1" && c.style === "station")) {
+      problems.push(
+        `window ${i + 1}: the migrate chain did not run on its clocks (${JSON.stringify(clocks)})`,
+      );
+    }
+  }
+
+  // REGRESS it — schemaVersion 1 over v2: refused by fieldd (§18.5), the renderers untouched
+  const v1 = JSON.parse(readFileSync(join(v2, "vibefield.plugin.json"), "utf8")) as {
+    version: string;
+    contributes: { objects: { schemaVersion: number }[] };
+  };
+  v1.version = "0.3.0";
+  for (const row of v1.contributes.objects) row.schemaVersion = 1;
+  writeFileSync(join(root, "vibefield.plugin.json"), `${JSON.stringify(v1, null, 2)}\n`);
+  const pids = windows.map((win) => win.webContents.getOSProcessId());
+  const heard: string[] = [];
+  const listeners = windows.map((win) => {
+    const listen = (...args: unknown[]): void => {
+      const text = args.map(consoleText).find((candidate) => candidate.length > 0) ?? "";
+      if (text.startsWith("CANVAS_READY ")) heard.push(`window ${at(win)}`);
+    };
+    win.webContents.on("console-message", listen);
+    return () => win.webContents.off("console-message", listen);
+  });
+  const regressAnswer = await reloadAnswer(handle, clock);
+  await sleep(3_000);
+  for (const off of listeners) off();
+  const still = await Promise.all(
+    windows.map((win) =>
+      deskWhere(win, `window ${at(win)}: the desk after the refusal`, () => true),
+    ),
+  );
+  facts["regress"] = {
+    answer: regressAnswer,
+    reloaded: heard,
+    desks: still.map((d) => ({ generation: d.generation, mount: d.mount, mounts: d.mounts })),
+    pidsSame: windows.map((win, i) => win.webContents.getOSProcessId() === pids[i]),
+  };
+  console.log(`SMOKE_PLUGIN_KINDS_REGRESS ${JSON.stringify(facts["regress"])}`);
+  if (regressAnswer === null || !regressAnswer.includes("regresses schemaVersion 2 → 1")) {
+    problems.push(`a regressing schemaVersion was not refused by fieldd (${regressAnswer})`);
+  }
+  if (heard.length > 0) problems.push(`a refused update replaced a renderer (${heard.join(", ")})`);
+  // the LIVE version stays v2: its manifest goes back on disk, so a fieldd restarted below reads v2, not the
+  // refused v1 (a v1 row would hold every migrated board read-only — the doc's packs newer than its kind)
+  writeFileSync(
+    join(root, "vibefield.plugin.json"),
+    readFileSync(join(v2, "vibefield.plugin.json")),
+  );
+  return { problems, facts, canvas };
+}
+
+/** A rect of the view beside `box` where no object is picked — what the desk draws under the objects there (the
+ * mat, or a pad the objects lie on): at its height (or width) and 48 px more below, above, right or left of it,
+ * the first wholly inside the view that no pick answers at its corners or centre; null when none is. */
+async function rectBeside(win: BrowserWindow, box: ObjectBox): Promise<ViewRect | null> {
+  const r = rectOf(box);
+  return (await win.webContents.executeJavaScript(
+    `(() => {
+      const d = globalThis.__vfDesk;
+      const el = document.querySelector("[data-desk]");
+      if (d === undefined || el === null) return null;
+      const view = el.getBoundingClientRect();
+      const r = ${JSON.stringify(r)};
+      const candidates = [
+        { ...r, y: r.y + r.height + 48 },
+        { ...r, y: r.y - r.height - 48 },
+        { ...r, x: r.x + r.width + 48 },
+        { ...r, x: r.x - r.width - 48 },
+      ];
+      for (const c of candidates) {
+        if (c.x < 0 || c.y < 0 || c.x + c.width > view.width || c.y + c.height > view.height) continue;
+        const points = [
+          [c.x, c.y], [c.x + c.width, c.y], [c.x, c.y + c.height], [c.x + c.width, c.y + c.height],
+          [c.x + c.width / 2, c.y + c.height / 2],
+        ];
+        if (points.every(([x, y]) => d.pick({ x, y }) === null)) return c;
+      }
+      return null;
+    })()`,
+    true,
+  )) as ViewRect | null;
+}
+
+/**
+ * DK-9 — A PLUGIN'S KIND FAULTS, CONTAINED IN THE RUNNING PRODUCT (the plan's addendum (16), DK-7's note; ICE I24),
+ * on a run staged with DK-7's fault fixture (`stage-kind-fixtures.mjs faults` — the clock declaring its two broken
+ * kinds beside its own row, through `FIELDD_PLUGIN_DEV_ROOTS` for this run alone, never under `examples/plugins`):
+ *   BOOT — the broken clock's WGSL does not compile: the desk REFUSED its kind at create and booted without it,
+ *     `status().faults` naming it ("refused at create — …") and nothing else;
+ *   QUARANTINE — a faulty clock laid (its `record` throws from its third call, its `hit` on every pick): three
+ *     strikes and the desk quarantines it, `status().faults` naming it second, the desk's state still `ready`;
+ *   FACES — each broken clock wears ICE's MISSING face where it lies: picked as its type by its box (the face
+ *     is pickable), its pixels not what the desk draws beside it, its contrast below a drawn clock's; the bar's words
+ *     "Broken clock · faulted", "Faulty clock · faulted";
+ *   THE REST DRAWS — a seconds clock laid beside them ticks on its own (its box's pixels change over a second
+ *     and a half), its words its title alone, no other kind in `faults`; and the frame rate with the wind
+ *     blowing HOLDS through the quarantine (at least 75% of the rate before it). The still is
+ *     `dk-9-fault-faces.png`.
+ */
+async function kindFaultRows(
+  win: BrowserWindow,
+  fixtures: KindFixtures,
+  shotDir: string | undefined,
+): Promise<string[]> {
+  const js = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const problems: string[] = [];
+  const clock = fixtures.clock ?? CANVAS_CENSUS.exampleClock;
+  const [broken, faulty] = fixtures.broken ?? [];
+  if (broken === undefined || faulty === undefined) {
+    return [`the fault fixture named no broken kinds (${JSON.stringify(fixtures)})`];
+  }
+  type Status = { state: string; faults: { kind: string; reason: string }[] };
+  const status = (): Promise<Status> =>
+    js(
+      "(() => { const s = globalThis.__vfDesk.status(); return { state: s.state, faults: s.faults ?? [] }; })()",
+    );
+  /** Frames a second with the wind blowing (a busy desk draws every frame), over two seconds. */
+  const frameRate = async (): Promise<number> => {
+    await js(`globalThis.__vfDesk.ambient("live")`);
+    await sleep(300);
+    const a = await deskCounters(win);
+    const t0 = performance.now();
+    await sleep(2_000);
+    const b = await deskCounters(win);
+    const rate = ((b.frames - a.frames) * 1_000) / (performance.now() - t0);
+    await js(`globalThis.__vfDesk.ambient("idle")`);
+    return Math.round(rate * 10) / 10;
+  };
+
+  // BOOT — the broken kind refused at create, from the first frame
+  const atBoot = await status();
+  const refused = atBoot.faults.find((fault) => fault.kind === broken);
+  if (refused === undefined || !refused.reason.startsWith("refused at create")) {
+    problems.push(`the desk did not refuse the broken clock at create (${JSON.stringify(atBoot)})`);
+  }
+  const others = atBoot.faults.filter((fault) => fault.kind !== broken);
+  if (others.length > 0)
+    problems.push(`the desk booted with other faults (${JSON.stringify(others)})`);
+  const rateBefore = await frameRate();
+
+  // three clocks in a row, on the calendar pad: one that draws (a SECONDS clock — it ticks on its own), the broken, the faulty
+  const lay = (type: string, x: number, props: object): Promise<string> =>
+    js(
+      `globalThis.__vfFieldSmoke.spawnWidget(${JSON.stringify(type)}, { x: ${x}, y: 960, w: 150, h: 150, props: ${JSON.stringify(props)} })`,
+    );
+  const ticking = await lay(clock, 760, { seconds: true });
+  const brokenAt = await lay(broken, 960, {});
+  const faultyAt = await lay(faulty, 1160, {});
+
+  // QUARANTINE — three strikes from its own records, no pick asked; a pick's strikes only if the records never come
+  const isOut = (s: Status): boolean => s.faults.some((fault) => fault.kind === faulty);
+  let after = await status();
+  const deadline = Date.now() + 20_000;
+  while (!isOut(after) && Date.now() < deadline) {
+    await sleep(200);
+    after = await status();
+  }
+  const pickedToStrike = !isOut(after);
+  if (pickedToStrike) {
+    await objectBox(win, faulty, faultyAt); // every pick on it throws: a strike each
+    await sleep(200);
+    after = await status();
+  }
+  const quarantined = after.faults.find((fault) => fault.kind === faulty);
+  if (quarantined === undefined)
+    problems.push(`the faulty clock was not quarantined (${JSON.stringify(after)})`);
+  if (after.state !== "ready")
+    problems.push(`a kind's fault moved the desk's state to ${after.state}`);
+  const strangers = after.faults.filter((fault) => fault.kind !== broken && fault.kind !== faulty);
+  if (strangers.length > 0)
+    problems.push(`a kind that draws was named missing (${JSON.stringify(strangers)})`);
+
+  // FACES — the missing face where each broken clock lies, picked; the seconds clock drawn and ticking
+  await sleep(300);
+  const boxes = {
+    ticking: await objectBox(win, clock, ticking),
+    broken: await objectBox(win, broken, brokenAt),
+    faulty: await objectBox(win, faulty, faultyAt),
+  };
+  const words = {
+    clock: await deskWords(win, clock),
+    broken: await deskWords(win, broken),
+    faulty: await deskWords(win, faulty),
+  };
+  const beside = boxes.broken === null ? null : await rectBeside(win, boxes.broken);
+  const pixels = {
+    ticking: boxes.ticking === null ? null : await boxPixels(win, rectOf(boxes.ticking)),
+    broken: boxes.broken === null ? null : await boxPixels(win, rectOf(boxes.broken)),
+    faulty: boxes.faulty === null ? null : await boxPixels(win, rectOf(boxes.faulty)),
+    beside: beside === null ? null : await boxPixels(win, beside),
+  };
+  await sleep(1_500);
+  const tickedOn = boxes.ticking === null ? null : await boxPixels(win, rectOf(boxes.ticking));
+  const rateAfter = await frameRate();
+  if (shotDir !== undefined) {
+    mkdirSync(shotDir, { recursive: true });
+    writeFileSync(join(shotDir, "dk-9-fault-faces.png"), (await win.capturePage()).toPNG());
+  }
+  console.log(
+    `SMOKE_CANVAS_FAULTS ${JSON.stringify({
+      atBoot,
+      after,
+      pickedToStrike,
+      laid: { ticking, broken: brokenAt, faulty: faultyAt },
+      boxes,
+      words,
+      beside,
+      pixels,
+      tickedOn,
+      frameRate: { before: rateBefore, after: rateAfter },
+    })}`,
+  );
+  for (const [name, type, box, px] of [
+    ["broken", broken, boxes.broken, pixels.broken],
+    ["faulty", faulty, boxes.faulty, pixels.faulty],
+  ] as const) {
+    if (box === null) {
+      problems.push(`the ${name} clock's missing face was not picked as ${type}`);
+      continue;
+    }
+    const label = words[name]?.label;
+    const title = name === "broken" ? "Broken clock" : "Faulty clock";
+    if (label !== `${title} · faulted`)
+      problems.push(`the bar's words for the ${name} clock were ${JSON.stringify(words[name])}`);
+    if (px === null) problems.push(`the ${name} clock's box was not read back`);
+    else {
+      if (
+        pixels.beside !== null &&
+        px.lumaMean === pixels.beside.lumaMean &&
+        px.colors === pixels.beside.colors
+      ) {
+        problems.push(
+          `the ${name} clock's box draws what lies beside it — no face (${JSON.stringify({ px, beside: pixels.beside })})`,
+        );
+      }
+      const drawn = pixels.ticking;
+      if (drawn !== null && px.lumaMax - px.lumaMin >= drawn.lumaMax - drawn.lumaMin) {
+        problems.push(
+          `the ${name} clock's box is as contrasty as a drawn clock's — not the missing face (${JSON.stringify({ px, drawn })})`,
+        );
+      }
+    }
+  }
+  if (pixels.beside === null) problems.push("no unpicked rect beside the broken clock to read");
+  if (boxes.ticking === null) problems.push("the seconds clock beside the faults was not picked");
+  if (words.clock?.state !== null)
+    problems.push(`the clock's words carry a state (${JSON.stringify(words.clock)})`);
+  if (pixels.ticking === null || tickedOn === null || pixels.ticking.hash === tickedOn.hash) {
+    problems.push(
+      `the seconds clock beside the faults did not tick on (${JSON.stringify({ was: pixels.ticking, now: tickedOn })})`,
+    );
+  }
+  if (rateAfter < rateBefore * 0.75) {
+    problems.push(
+      `the frame rate fell through the quarantine (${rateBefore} → ${rateAfter} frames a second)`,
+    );
+  }
+  return problems;
 }
 
 /** Before a restart (DK-5): each window's board SAVED at fieldd — listed with its schema and its
@@ -1897,13 +2684,30 @@ export async function runSmokePluginRestart(opts: {
     if (config.durationMs !== null) {
       powerSaveBlockerId = powerSaveBlocker.start("prevent-app-suspension");
     }
-    const initialReady = windows.map((win) => waitForConsole(win, "CANVAS_READY ", 60_000));
-    await Promise.all(
-      windows.map((win) => loadRenderer(win, "smoke-plugin-restart", opts.viteUrl)),
-    );
-    let currentCanvas = (await Promise.all(initialReady)).map(
-      (raw) => JSON.parse(raw) as CanvasFacts,
-    );
+    // DK-9 — the runtime rows' fixtures (packaging/stage-kind-fixtures.mjs), when the run was staged: the
+    // fixture's dial plugin is turned OFF before any window opens, so its enable below is a plugin new to
+    // the renderers (the product's and the dev set's plugins are staged as every dev run stages them)
+    const fixtures = gpu ? kindFixtures() : null;
+    if (fixtures?.fresh !== undefined) {
+      await opts.handle.client.request("plugins.disable", { id: fixtures.fresh });
+    }
+    // DK-9 — THE LAUNCH (the plan's Phase 3 input (2)): window 1 opens the first board (the examples on it,
+    // the clock among them) and holds it; THEN window 2 opens — a NEW window while another holds the last
+    // board: the most recent board no window holds, else a new one, never the degraded in-memory session
+    const launch = async (
+      win: BrowserWindow,
+      search: Record<string, string>,
+    ): Promise<CanvasFacts> => {
+      const ready = waitForConsole(win, "CANVAS_READY ", 60_000);
+      await loadRenderer(win, "smoke-plugin-restart", opts.viteUrl, search);
+      const facts = JSON.parse(await ready) as CanvasFacts;
+      if (gpu) await deskWhere(win, "the launched window's desk", () => true);
+      return facts;
+    };
+    let currentCanvas = [
+      await launch(primary, { [SEED_EXAMPLES]: "1" }),
+      await launch(auxiliary, {}),
+    ];
     console.log(`SMOKE_PLUGIN_RESTART_INITIAL ${JSON.stringify(currentCanvas)}`);
     const initialProblems = [
       ...smokeProfileFailures(),
@@ -1913,10 +2717,66 @@ export async function runSmokePluginRestart(opts: {
     ];
     let desks: WindowDesk[] = [];
     const remounts: Readonly<Record<string, number>>[][] = [];
+    /** Each window's board's census after the launch's rows — what every restart must reopen (DK-9). */
+    let baseline: Readonly<Record<string, number>>[] = [];
     if (gpu) {
-      const read = await windowDesks(windows);
-      desks = read.desks;
-      initialProblems.push(...read.problems);
+      const boards = await Promise.all(
+        windows.map(
+          (win) =>
+            win.webContents.executeJavaScript(
+              '({ docId: sessionStorage.getItem("vf-window-doc"), board: globalThis.__vfDesk?.board() ?? null, name: document.querySelector(".vf-head-name")?.textContent ?? null })',
+              true,
+            ) as Promise<{
+              docId: string | null;
+              board: { state: string } | null;
+              name: string | null;
+            }>,
+        ),
+      );
+      console.log(`SMOKE_PLUGIN_RESTART_LAUNCH ${JSON.stringify(boards)}`);
+      const [first, second] = boards;
+      if (first?.docId === null || second?.docId === null || first?.docId === second?.docId) {
+        initialProblems.push(
+          `the second window did not open a board of its own (${JSON.stringify(boards)})`,
+        );
+      }
+      if (second?.board?.state === "detached" || second?.name === "In memory") {
+        initialProblems.push(
+          `the second window opened the degraded session (${JSON.stringify(second)})`,
+        );
+      }
+      // window 2's board holds VibeField's kinds too: the comment pad, a minute clock and a note
+      for (const [type, x, y, w, h, props] of [
+        [CANVAS_CENSUS.commentPad, 120, 120, 220, 280, {}],
+        [CANVAS_CENSUS.exampleClock, 420, 140, 150, 150, { seconds: false }],
+        ["desk.note", 640, 140, 200, 200, {}],
+      ] as const) {
+        await auxiliary.webContents.executeJavaScript(
+          `globalThis.__vfFieldSmoke.spawnWidget(${JSON.stringify(type)}, { x: ${x}, y: ${y}, w: ${w}, h: ${h}, props: ${JSON.stringify(props)} })`,
+          true,
+        );
+      }
+      if (fixtures !== null) {
+        const rows = await kindRuntimeRows({
+          windows,
+          handle: opts.handle,
+          fixtures,
+          shotDir: process.env["VF_SMOKE_SHOT_DIR"],
+        });
+        initialProblems.push(...rows.problems);
+        if (rows.canvas !== null) currentCanvas = rows.canvas; // the renderers the update replaced
+      } else {
+        console.log("SMOKE_PLUGIN_KINDS skipped — the run was not staged (no VF_KIND_FIXTURES)");
+      }
+      const first2 = await windowDesks([primary]);
+      const second2 = await windowDesks([auxiliary], 60_000, (_index, census) =>
+        [CANVAS_CENSUS.commentPad, CANVAS_CENSUS.exampleClock, "desk.note"].every(
+          (type) => (census[type] ?? 0) >= 1,
+        ),
+      );
+      desks = [...first2.desks, ...second2.desks];
+      baseline = desks.map((desk) => desk.desk?.census ?? {});
+      initialProblems.push(...first2.problems, ...second2.problems);
       console.log(
         `SMOKE_PLUGIN_RESTART_DESK ${JSON.stringify({ phase: "initial", windows: desks })}`,
       );
@@ -1948,6 +2808,18 @@ export async function runSmokePluginRestart(opts: {
     let currentConnections = await Promise.all(windows.map(rendererConnection));
     const initialFieldd = await settlePluginRuntimeHealth(currentHandle);
     const expectedFielddRuntime = initialFieldd.vector;
+    /** The fieldd runtime counters a sample disagrees on, by name — the verdict counts them; this says which. */
+    const fielddDrift = (
+      vector: CountVector,
+    ): Record<string, { expected: number; sampled: number }> =>
+      Object.fromEntries(
+        [...new Set([...Object.keys(expectedFielddRuntime), ...Object.keys(vector)])]
+          .filter((key) => (expectedFielddRuntime[key] ?? 0) !== (vector[key] ?? 0))
+          .map((key) => [
+            key,
+            { expected: expectedFielddRuntime[key] ?? 0, sampled: vector[key] ?? 0 },
+          ]),
+      );
     const nativePid = initialFieldd.health.nativePid;
     if (nativePid === null || !pidAlive(nativePid)) {
       throw new Error("restart smoke requires one live field-native process");
@@ -2076,6 +2948,11 @@ export async function runSmokePluginRestart(opts: {
         },
       };
       samples.push(sample);
+      if ((sample.exact.fielddRuntimeVectorMismatches ?? 0) > 0) {
+        console.log(
+          `SMOKE_PLUGIN_RESTART_FIELDD_DRIFT ${JSON.stringify({ cycle, drift: fielddDrift(settled.vector) })}`,
+        );
+      }
       console.log(`PLUGIN_RUNTIME_SOAK_SAMPLE ${JSON.stringify(sample)}`);
       cycle += 1;
       return sample;
@@ -2122,8 +2999,11 @@ export async function runSmokePluginRestart(opts: {
       );
       if (gpu) {
         // the desk REMOUNTED in each replaced renderer, on the SAME board it drew (its own
-        // `vf-window-doc`), its six intact — a board made now would have been seeded afresh
-        const read = await windowDesks(windows);
+        // `vf-window-doc`), every kind it held intact (DK-9: each window's own census — the seed's six and
+        // the clock in one, the pad, a clock and a note in the other, and what the runtime rows laid)
+        const read = await windowDesks(windows, 60_000, (index, census) =>
+          Object.entries(baseline[index] ?? {}).every(([type, count]) => census[type] === count),
+        );
         console.log(
           `SMOKE_PLUGIN_RESTART_DESK ${JSON.stringify({ phase: "recovered", cycle, windows: read.desks })}`,
         );
@@ -2135,7 +3015,36 @@ export async function runSmokePluginRestart(opts: {
               `window ${index + 1} reopened ${desk.docId ?? "no board"}, not its own ${before ?? "(none)"}`,
             );
           }
+          // DK-9: no fault rows — every kind the board holds is drawn by its kind
+          if ((desk.desk?.faults.length ?? 0) > 0) {
+            replacementProblems.push(
+              `window ${index + 1}: the recovered desk names faults ${JSON.stringify(desk.desk?.faults)}`,
+            );
+          }
+          // DK-9: one desk per launch — the replaced renderer mounted ONE
+          if (desk.desk !== null && desk.desk.mounts !== 1) {
+            replacementProblems.push(
+              `window ${index + 1}: the replaced renderer mounted ${desk.desk.mounts} desks, not one`,
+            );
+          }
         }
+        // DK-9 (DK-D25): the desk consumes no render time at rest and under a cover, cycle after cycle
+        const stillness: (object | null)[] = [];
+        for (const [index, win] of windows.entries()) {
+          try {
+            const still = await deskStillness(win);
+            stillness.push(still.facts);
+            replacementProblems.push(
+              ...still.problems.map((problem) => `window ${index + 1}: ${problem}`),
+            );
+          } catch (error) {
+            stillness.push(null);
+            replacementProblems.push(
+              `window ${index + 1}: ${error instanceof Error ? error.message : String(error)}`,
+            );
+          }
+        }
+        console.log(`SMOKE_PLUGIN_RESTART_STILL ${JSON.stringify({ cycle, windows: stillness })}`);
         remounts.push(read.desks.map((desk) => desk.desk?.boot ?? {}));
         desks = read.desks;
       } else {

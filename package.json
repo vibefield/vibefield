@@ -18,6 +18,7 @@
     "//smoke:browser-widget": "RETIRED at DK-5 with the browser page widget it drove (DK-D20: vibefield.browser keeps only its Artifacts panel; the page returns under PORTALS)",
     "smoke:studio": "pnpm --filter @vibefield/desktop smoke:studio",
     "smoke:plugin-restart": "pnpm --filter @vibefield/desktop smoke:plugin-restart",
+    "smoke:kind-faults": "pnpm --filter @vibefield/desktop smoke:kind-faults",
     "playground": "node apps/plugin-playground/bin/plugin-playground.mjs",
     "plugin": "node tooling/plugin-cli/bin/vibefield-plugin.mjs",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",

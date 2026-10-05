@@ -173,12 +173,16 @@ sidecar was built from source while the window's Go half was open, and comes fro
   `pnpm dev:design:web` for the catalog-only browser loop. Rules in `docs/UI_SYSTEM.md`.
 - `pnpm smoke:studio` — opt-in physical Electron gate for Studio/product session and preload
   isolation, real UI edit/apply, product reload replay, Studio-close restoration, and fieldd.
-- `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` / `pnpm smoke:plugin-restart` —
-  desktop smoke checks. Each runs Electron on its OWN profile, fresh under the OS temp and removed
-  after (`apps/desktop/packaging/run-smoke.mjs`; main mints one for a hand-started smoke), never
-  the app's shared one. `smoke:canvas` and `smoke:plugin-restart` keep the GPU and draw the desk
-  (`--disable-gpu` asserts its unavailable card instead). `smoke:browser-widget` RETIRED at DK-5
-  with the page widget it drove.
+- `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` / `pnpm smoke:plugin-restart` /
+  `pnpm smoke:kind-faults` — desktop smoke checks. Each runs Electron on its OWN profile, fresh
+  under the OS temp and removed after (`apps/desktop/packaging/run-smoke.mjs`; main mints one for a
+  hand-started smoke), never the app's shared one. `smoke:canvas`, `smoke:plugin-restart` and
+  `smoke:kind-faults` keep the GPU and draw the desk (`--disable-gpu` asserts its unavailable card
+  instead). `smoke:plugin-restart` and `smoke:kind-faults` run on plugin fixtures staged for that
+  ONE run (`apps/desktop/packaging/stage-kind-fixtures.mjs`: a temporary `FIELDD_PLUGIN_DEV_ROOTS`,
+  never `examples/plugins`) — the restart smoke enables, disables, updates and regresses the clock
+  before its restarts; the faults smoke boots the desk beside DK-7's broken clocks.
+  `smoke:browser-widget` RETIRED at DK-5 with the page widget it drove.
 - `pnpm --filter @vibefield/desktop build:screenshot-helper` / `test:screenshot-helper` /
   `verify:screenshot-helper` — the native screenshot helper (Swift on macOS, Rust on Windows;
   `apps/desktop/native/*/screenshot-helper`). Outside `pnpm verify` like the SCK helper and the

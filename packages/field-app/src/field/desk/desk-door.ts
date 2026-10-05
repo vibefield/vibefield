@@ -170,7 +170,18 @@ export interface VfDeskDoor {
   submits(): { readonly total: number; readonly buffers: number } | null;
   /** The engine's loop at rest (K7a): asleep, or parked under a freeze — the idle a still waits for
    * and the idle-zero row reads (DK-4). */
-  rest(): { readonly asleep: boolean; readonly parked: boolean; readonly sleeps: number };
+  /** The engine's frame loop at rest or not (DK-5), and — DK-9 — WHY it is awake: its outside wakes counted by
+   * reason (`world`, `input`, `doc`, `presence`, `desk:…`), the steps its own timer started, and the desk's
+   * registered wake taken apart (ICE's `due`: when each part is next due, `Infinity` never on its own). */
+  rest(): {
+    readonly asleep: boolean;
+    readonly parked: boolean;
+    readonly sleeps: number;
+    readonly wakes: Readonly<Record<string, number>>;
+    readonly timed: number;
+    readonly steps: number;
+    readonly due: ReturnType<DeskLayerHandle["due"]>;
+  };
   pick(point: { readonly x: number; readonly y: number }): {
     readonly entity: number;
     readonly type: string;
@@ -240,7 +251,15 @@ export function installDeskDoor(
     },
     rest: () => {
       const stats = engine.frame.sleepStats();
-      return { asleep: stats.asleep, parked: engine.frame.isParked(), sleeps: stats.sleeps };
+      return {
+        asleep: stats.asleep,
+        parked: engine.frame.isParked(),
+        sleeps: stats.sleeps,
+        wakes: stats.wakes,
+        timed: stats.timed,
+        steps: stats.steps,
+        due: handle.due(performance.now()),
+      };
     },
     pick: (point) => pickOf(handle.pick(point)),
     capture: (opts) => handle.capture(opts),
