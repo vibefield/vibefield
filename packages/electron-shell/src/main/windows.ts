@@ -104,6 +104,14 @@ export async function loadRenderer(
     if (mode === "godview-perf-lab") {
       url.searchParams.set("godviewPerf", "1");
       url.searchParams.set("godviewReplay", "1");
+      // MV-5 — a lab launch asked for the dev server's renderer (the SIGTRAP
+      // probe's dev run: the swarm's worker served by Vite), with the same switches
+      if (process.env["VF_GODVIEW_LAB_RENDERER"] === "dev") {
+        const dev = new URL(viteUrl);
+        for (const [key, value] of url.searchParams) dev.searchParams.set(key, value);
+        await win.loadURL(dev.href);
+        return;
+      }
     }
     await win.loadURL(url.href);
     return;

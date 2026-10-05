@@ -4265,7 +4265,6 @@ export async function runSmokeGodview(opts: {
       .catch(() => monitorWatch.current() ?? firstMonitor);
     verdict["monitorView"] = monitor.viewId;
     verdict["monitorAgents"] = monitor.agents;
-    verdict["swarmPhysics"] = monitor.swarmPhysics;
     if (monitor.viewId !== "swarm") {
       throw new Error(`the monitor opened on "${monitor.viewId}", not the default swarm`);
     }
@@ -4314,10 +4313,20 @@ export async function runSmokeGodview(opts: {
     // for a renderer that cannot start a worker (a fixture under happy-dom is
     // one), and a fallback that shipped would look EXACTLY like the slice
     // working while undoing it. This row is the only thing standing between
-    // those two states, so it asserts rather than reports.
-    if (monitor.swarmPhysics !== "worker") {
+    // those two states, so it asserts rather than reports. MV-5: the worker is
+    // the view's own (MV-D7) and the word is its report, which can land a frame
+    // after the field settles — so the row waits for the word, then judges it.
+    const simulated = await monitorWatch
+      .until(
+        (facts) => facts.swarmPhysics !== "none",
+        "the swarm to say where its physics run (its report)",
+        10_000,
+      )
+      .catch(() => monitorWatch.current() ?? monitor);
+    verdict["swarmPhysics"] = simulated.swarmPhysics;
+    if (simulated.swarmPhysics !== "worker") {
       throw new Error(
-        `the swarm is simulating "${monitor.swarmPhysics}", not in its worker — GT-D16's whole point is that this runs off the main thread`,
+        `the swarm is simulating "${simulated.swarmPhysics}", not in its worker — GT-D16's whole point is that this runs off the main thread`,
       );
     }
     // AR-5: what the swarm PAINTED with. WebGPU is a fact of this host's GPU,
@@ -4338,8 +4347,10 @@ export async function runSmokeGodview(opts: {
       );
     }
     if (painted.swarmRenderer === "unavailable") {
+      // MV-5: the word is the view's report (the marker above); what the stage
+      // SAYS is the view's own honest line, its status notice on the field
       const said = (await win.webContents.executeJavaScript(
-        `(document.querySelector(".vf-monitor-swarm [data-swarm-renderer='unavailable']")?.textContent ?? "").toUpperCase()`,
+        `(document.querySelector('.vf-monitor-swarm .vf-monitor-swarm-empty[role="status"]')?.textContent ?? "").toUpperCase()`,
       )) as string;
       if (!said.includes("WEBGPU")) {
         throw new Error("the swarm has no WebGPU here and the stage does not say so");

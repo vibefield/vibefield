@@ -7,12 +7,14 @@
 // and the JS heap.
 //
 // DORMANT. Nothing here runs unless `installGodviewPerfLab` was asked for by the
-// renderer's URL (`godviewPerf=1`, set only by the Electron lab); the two
-// product hooks that feed it (`instrumentedMonitorView` in GodviewMonitor, the
-// post counter in swarm-physics-driver) read `activeProbe()` and do nothing on
-// `null`. When on, it adds a rAF loop (the frame sampler, the same observer
-// effect `frame-stats.ts` makes and declares), prototype wrappers on the canvas
-// contexts, and one MutationObserver on the stage.
+// renderer's URL (`godviewPerf=1`, set only by the Electron lab); the product
+// hook that feeds it (`instrumentedMonitorView` in GodviewMonitor) reads
+// `activeProbe()` and does nothing on `null`. (MV-5: the swarm's worker is the
+// view's own now, MV-D7, so no host code posts to it and the post counter reads
+// 0 on a build past MV-5 — a context row, never a gate one.) When on, it adds
+// a rAF loop (the frame sampler, the same observer effect `frame-stats.ts`
+// makes and declares), prototype wrappers on the canvas contexts, and one
+// MutationObserver on the stage.
 //
 // React's production build never calls `Profiler.onRender`, so "renders" and
 // "commits" are counted by a wrapper component the host mounts around the view

@@ -189,11 +189,13 @@ export async function selectView(
   await monitor.until((value) => value.viewId === view, `the monitor to report ${view}`, 15_000);
 }
 
-/** What the swarm says it renders with (`data-swarm-renderer`), when it is mounted. */
+/** What the swarm says it renders with, when it is mounted: its report, which the view
+ * host's slot mirrors on ITS element since MV-5 (`data-monitor-view-renderer`, W5 — the
+ * view's own DOM is never read). */
 export async function swarmRenderer(win: BrowserWindow): Promise<string | null> {
   return await page<string | null>(
     win,
-    `document.querySelector("[data-swarm-renderer]")?.getAttribute("data-swarm-renderer") ?? null`,
+    `document.querySelector('[data-monitor-view-slot][data-monitor-view="swarm"]')?.getAttribute("data-monitor-view-renderer") ?? null`,
   );
 }
 

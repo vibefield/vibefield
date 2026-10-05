@@ -128,10 +128,11 @@
    `.vf-deck-framed .ghostty-pane` transition has the same specificity and is
    imported later, so this selector was a deletion-by-override — and it was
    crossfading nothing anyway, since the pane is transparent and ghosttea paints
-   its ground on a canvas. Deleted rather than left to be quietly outranked. */
+   its ground on a canvas. Deleted rather than left to be quietly outranked.
+   MV-5 (M59, W5): minus the SWARM too — its crossfade is the view's own now
+   (`swarm.css`, under its root class), and no host rule names a view's class. */
 .vf-godview-header,
 .vf-godview-monitor-stage,
-.vf-monitor-swarm,
 .vf-godview-terminal-deck,
 .vf-godview-terminal-deck .ghostty-window,
 .vf-godview-terminal-deck .ghosttea-workspace-body,

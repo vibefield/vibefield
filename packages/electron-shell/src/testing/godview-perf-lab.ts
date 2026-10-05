@@ -21,6 +21,7 @@ import {
   teardownLab,
   untilEnded,
 } from "./godview-lab-window";
+import { runGodviewWorkerWindows } from "./godview-worker-windows";
 
 // THE GODVIEW PERF LAB (MV-0, step 6; `design-mv.md` §5 "per-view counters,
 // under the same replay"). The product, Godview open, the real pair against an
@@ -60,7 +61,9 @@ import {
 //                            stream's rows — the proof on a build whose window
 //                            does not read the model yet; never in a gate run
 //   VF_GODVIEW_LAB           `capture`: this launch is the capture tool's
-//                            (`godview-capture.ts`), not a perf run
+//                            (`godview-capture.ts`), not a perf run;
+//                            `worker-windows`: the SIGTRAP probe's
+//                            (`godview-worker-windows.ts`, MV-5)
 //   VF_GODVIEW_PERF_SYNTHETIC  M33's negative controls, `view:<ms>` (a busy wait
 //                            in every counted view render) and/or `root:<ms>`
 //                            (a side React root committing once per frame with
@@ -97,7 +100,7 @@ export interface GodviewPerfCell {
   memory: { rendererMB: number | null; gpuMB: number | null; processes: number };
   loadavg: number[];
   startedAt: number;
-  /** MV-3c — what the swarm rendered with in this cell (`data-swarm-renderer`) */
+  /** MV-3c — what the swarm rendered with in this cell (its report, as the slot mirrors it) */
   swarmRenderer: string | null;
   /** MV-3c — the witness's verdict after the cell (`VF_GODVIEW_PERF_WITNESS=1`) */
   witness?: unknown;
@@ -118,6 +121,11 @@ export async function runGodviewPerfLab(opts: {
   // MV-3c — the capture tool shares this mode, its pair and its one window
   if (process.env["VF_GODVIEW_LAB"] === "capture") {
     await runGodviewCapture(opts);
+    return;
+  }
+  // MV-5 — the SIGTRAP probe shares the pair, and opens and destroys windows on purpose
+  if (process.env["VF_GODVIEW_LAB"] === "worker-windows") {
+    await runGodviewWorkerWindows(opts);
     return;
   }
   const out =

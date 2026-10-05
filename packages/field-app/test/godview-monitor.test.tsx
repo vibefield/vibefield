@@ -14,7 +14,7 @@
  *      and the deck's unclaimed pane on it
  *   2. THE CLAIM — the local chip counts managed agents, in the DOM and in the
  *      marker, and nothing on the stage says "mock" any more
- *   3. PF6 — closing disposes: every interval cleared, the physics disposed
+ *   3. PF6 — closing disposes: every interval cleared, the view unmounted
  *   4. select mounts an existing session; create opens an empty terminal
  *   5. with no door there are no rows and no invented ones
  *
@@ -23,10 +23,10 @@
  * does not have, so it draws its honest unavailable notice and its keyboard list
  * instead of DOM bubbles — the rows are still there to assert on, in
  * `.vf-monitor-swarm-list`, and anything that needs laid-out rows uses the list
- * view. And the physics engine belongs to the package, which resolves its own
- * matter-js copy, so the disposal claim below is made at the DRIVER — the seam
- * the stage actually owns — rather than by spying on an engine in this
- * workspace's copy that the package would never have called.
+ * view. Since MV-5 the swarm is an SDK view that brings its own physics worker
+ * (MV-D7): happy-dom has no `Worker`, so its driver runs the same host in this
+ * thread and the view SAYS so (`report`: `physics: "inline"`), which is what
+ * the stage reads — never the view's DOM, and never a driver of its own.
  */
 
 import { readdirSync, readFileSync } from "node:fs";
@@ -44,10 +44,6 @@ import {
   monitorParameterDefaults,
   monitorViewFor,
 } from "@vibecook/puppeteer-views";
-import {
-  createInlineSwarmPhysicsDriver,
-  type SwarmPhysicsDriver,
-} from "@vibecook/puppeteer-views/physics";
 import type { AgentPersona, AgentProfileSet, TerminalInfo } from "@vibefield/contracts";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -64,7 +60,6 @@ import { monitorHoldsKeys, takeLauncherKeys } from "../src/godview/monitor/launc
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
-import { setSwarmPhysicsDriverFactory } from "../src/godview/views/swarm/swarm-physics-driver";
 import { managedSummary } from "./managed-session-fixture";
 import { type ScriptedModelBoard, scriptedModelBoard, terminalInfoOf } from "./model-board-fixture";
 
@@ -249,32 +244,12 @@ let markers: GodviewMonitorFacts[] = [];
  * literally the difference between these two sets. */
 let openedIntervals: number[] = [];
 let clearedIntervals: number[] = [];
-let builtDrivers = 0;
-let disposedDrivers = 0;
 
 beforeEach(() => {
   markers = [];
   openedIntervals = [];
   clearedIntervals = [];
-  builtDrivers = 0;
-  disposedDrivers = 0;
   localStorage.clear();
-  // GT-3c: happy-dom has no `Worker`, so the swarm simulates in-thread. The
-  // stand-in is not a mock — it is the package's own inline driver, the same
-  // host and the same world the worker runs — wrapped only to count the
-  // lifecycle the stage is responsible for.
-  setSwarmPhysicsDriverFactory((options) => {
-    builtDrivers += 1;
-    const driver: SwarmPhysicsDriver = createInlineSwarmPhysicsDriver(options);
-    return {
-      mode: driver.mode,
-      post: (command, transfer) => driver.post(command, transfer),
-      dispose: () => {
-        disposedDrivers += 1;
-        driver.dispose();
-      },
-    };
-  });
   for (const [name, value] of Object.entries(TOKENS)) {
     document.documentElement.style.setProperty(name, value);
   }
@@ -301,7 +276,6 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
-  setSwarmPhysicsDriverFactory(undefined);
   board?.dispose();
   board = null;
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
@@ -439,6 +413,65 @@ describe("the monitor stage", () => {
     expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("20px");
   });
 
+  it("hands a view the chrome's rectangles as the stage's obstacles, unrounded, as the swarm measured them (MV-D19)", async () => {
+    // Before MV-5 the swarm read the chrome's elements off the host's DOM and
+    // steered its bodies around their rects, in its own coordinates. Now the
+    // host measures and hands them over: the usage column and the claims strip,
+    // in the stage's coordinates (the view's root fills the stage), with the
+    // fractions a layout gives — so the bodies steer exactly as they did.
+    const fire = driveObservers();
+    const recording = createRecordingView("obstacle-probe");
+    const entry: MonitorViewEntry = {
+      id: "obstacle-probe",
+      label: "OBSTACLES",
+      parameterGroups: [],
+      view: recording.view,
+    };
+    const door = fakeDoor();
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    const host = container;
+    const stage = host.querySelector<HTMLElement>(".vf-godview-monitor-stage");
+    const chrome = host.querySelector<HTMLElement>(".vf-monitor-chrome");
+    const claims = host.querySelector<HTMLElement>(".vf-monitor-claims");
+    const box = (left: number, top: number, width: number, height: number): DOMRect =>
+      ({
+        left,
+        top,
+        width,
+        height,
+        right: left + width,
+        bottom: top + height,
+      }) as DOMRect;
+    stage!.getBoundingClientRect = () => box(10, 44, 900, 356);
+    chrome!.getBoundingClientRect = () => box(18.5, 52.25, 54, 340);
+    claims!.getBoundingClientRect = () => box(82, 55, 300, 9.5);
+    act(() => {
+      for (const publish of fire) publish();
+    });
+    await settle();
+    expect(recording.lastInput?.stage).toEqual({
+      width: 900,
+      height: 356,
+      // the insets stay whole pixels: the list's band arithmetic (M58)
+      insets: { top: 21, right: 0, bottom: 0, left: 63 },
+      obstacles: [
+        { x: 8.5, y: 8.25, width: 54, height: 340 },
+        { x: 72, y: 11, width: 300, height: 9.5 },
+      ],
+    });
+  });
+
   it("gives a silent strip no room at all, so the package's own band stands", async () => {
     const fire = driveObservers();
     // No door: nobody has been asked yet, so there is no claim to make and
@@ -466,10 +499,10 @@ describe("the monitor stage", () => {
   });
 
   it("names no ported view in a host stylesheet (W5), and defines every skin name the views read (L18)", () => {
-    // List and rain carry their own stylesheets since MV-4 (L18): no
-    // VibeField rule may name their classes or their root classes — swept over
-    // every stylesheet of this package and the design kit. The timeline's host
-    // rule stays until it ports (mv56-vf).
+    // List and rain carry their own stylesheets since MV-4, the swarm (and its
+    // spawn bloom) since MV-5 (L18): no VibeField rule may name their classes or
+    // their root classes — swept over every stylesheet of this package and the
+    // design kit. The timeline's host rule stays until its own commit.
     const stylesheets = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory()
@@ -492,6 +525,10 @@ describe("the monitor stage", () => {
         /vf-rain/,
         /\.mv-list\b/,
         /\.mv-rain\b/,
+        /vf-monitor-swarm/,
+        /vf-swarm/,
+        /vf-bloom/,
+        /\.mv-swarm\b/,
       ]) {
         expect(css, `${path} names ${name}`).not.toMatch(name);
       }
@@ -639,39 +676,22 @@ describe("the monitor stage", () => {
   it("says WEBGPU UNAVAILABLE rather than drawing an empty field on a device with no GPU", async () => {
     // The honest-states law where AR-5's port put it. happy-dom has no WebGPU,
     // and a swarm that answered that with a blank canvas would look exactly
-    // like a field with nothing in it. The section says what painted, the
-    // marker repeats it, and the rows are still reachable underneath.
-    // The marker follows the attribute through a MutationObserver. happy-dom
-    // (20.11) hands each observed node its report callback through a WeakRef
-    // nothing else holds, so a collection mid-run silenced it (~2 in 10
-    // whole-file runs, always green alone) — the observer's word is delivered by
-    // hand, as in the spawn-bloom row below; the stage's reading of it is what
-    // is under test.
-    const observers = new Set<{ callback: MutationCallback }>();
-    class HandDeliveredObserver {
-      constructor(readonly callback: MutationCallback) {}
-      observe(): void {
-        observers.add(this);
-      }
-      disconnect(): void {
-        observers.delete(this);
-      }
-      takeRecords(): MutationRecord[] {
-        return [];
-      }
-    }
-    vi.stubGlobal("MutationObserver", HandDeliveredObserver);
+    // like a field with nothing in it. The view says so on its stage and to its
+    // host (MV-5: its `report`, which the slot mirrors on ITS element — W5: the
+    // stage never reads the view's DOM), the marker repeats it, and the rows
+    // are still reachable underneath.
     const host = await mountMonitor();
     const swarm = host.querySelector(".vf-monitor-swarm");
-    expect(swarm?.getAttribute("data-swarm-renderer")).toBe("unavailable");
-    expect(swarm?.querySelector(".vf-monitor-empty")?.textContent).toContain("WEBGPU UNAVAILABLE");
-    await act(async () => {
-      for (const observer of [...observers]) {
-        observer.callback([], observer as unknown as MutationObserver);
-      }
-    });
+    expect(swarm?.querySelector('.vf-monitor-swarm-empty[role="status"]')?.textContent).toContain(
+      "WEBGPU UNAVAILABLE",
+    );
+    expect(swarm?.querySelectorAll(".vf-monitor-swarm-list li button").length).toBe(4);
     expect(latest().swarmRenderer).toBe("unavailable");
-    // …and the physics still ran: what is missing is the painter, not the world.
+    expect(
+      host.querySelector("[data-monitor-view-slot]")?.getAttribute("data-monitor-view-renderer"),
+    ).toBe("unavailable");
+    // …and the physics still ran, in this thread (no Worker here): what is
+    // missing is the painter, not the world.
     expect(latest().swarmPhysics).toBe("inline");
   });
 
@@ -736,8 +756,8 @@ describe("the monitor stage", () => {
     }
   });
 
-  it("PF6: closing disposes — every timer cleared, the subscription closed, the physics driver disposed", async () => {
-    await mountMonitor();
+  it("PF6: closing disposes — every timer cleared, the subscription closed, the view and its physics gone", async () => {
+    const host = await mountMonitor();
     // MV-3b: the clocks the seam ran here (the mesh poll, the 10 s now) are the
     // backend's now, so there is no interval to count on; the window's ONE model
     // subscription is what the stage holds open, and whatever it still opens
@@ -745,10 +765,11 @@ describe("the monitor stage", () => {
     expect(board?.opened(), "the model board never opened").toBe(1);
     expect(board?.closed()).toBe(0);
     expect(clearedIntervals).not.toEqual(expect.arrayContaining(openedIntervals));
-    expect(builtDrivers, "the swarm never started its physics").toBeGreaterThan(0);
+    // the swarm's physics runs, by the view's own word (MV-D7: its driver is its own)
+    expect(latest().swarmPhysics, "the swarm never started its physics").toBe("inline");
 
-    // the view lives in the bridge's own React root, which the host releases a
-    // microtask after its own commit (one root never unmounts inside another's)
+    // the view lives in its own React root, which the host releases a microtask
+    // after its own commit (one root never unmounts inside another's)
     await act(async () => {
       root?.unmount();
       await Promise.resolve();
@@ -757,13 +778,13 @@ describe("the monitor stage", () => {
 
     // The whole PF6 claim for this stage, and it is stronger than the deck's:
     // the deck stays mounted and SILENCED, this is gone. Nothing is left
-    // ticking, the board is closed, and the physics world was torn down rather
-    // than left pumping.
+    // ticking, the board is closed, and the view was unmounted — its physics go
+    // with it (the view's own disposal, held by its suite in puppeteer).
     for (const id of openedIntervals) {
       expect(clearedIntervals, `interval ${id} survived the close`).toContain(id);
     }
     expect(board?.closed(), "the model subscription outlived the close").toBe(1);
-    expect(disposedDrivers, "a physics driver outlived the close").toBe(builtDrivers);
+    expect(host.querySelector("[data-monitor-view-root]"), "a view outlived the close").toBeNull();
   });
 
   it("keeps a live shell on the roster after a select takes its pane (GT-6b)", async () => {
@@ -1316,88 +1337,83 @@ describe("the profile tabs (AR-S5)", () => {
     expect(chosenTab(host)).toBe("work");
   });
 
-  it("yields every key to a spawn bloom that has the keyboard — ⌥2 switches no tab, ⌘F opens no sheet (SB-3)", async () => {
-    const host = await mountMonitor("list", tabDoor());
-    const stage = host.querySelector<HTMLElement>('section[aria-label^="Agent monitor"]');
-    // the bloom's menu as the views mark it while it holds the keys (P1b)
-    const menu = document.createElement("div");
-    menu.setAttribute("data-bloom-holds-keys", "true");
-    menu.tabIndex = -1;
-    const bud = document.createElement("div");
-    bud.setAttribute("role", "menuitem");
-    menu.appendChild(bud);
-    stage?.appendChild(menu);
-    const press = (init: KeyboardEventInit, at: EventTarget): KeyboardEvent => {
+  /** A view that says, through its `report`, that it holds the keys — the spawn bloom's word since MV-5 (MV-D8). */
+  async function mountReporting(door: MonitorDoor): Promise<{
+    host: HTMLElement;
+    holdKeys(held: boolean): Promise<void>;
+  }> {
+    const recording = createRecordingView("keys-probe");
+    const entry: MonitorViewEntry = {
+      id: "keys-probe",
+      label: "KEYS",
+      parameterGroups: [],
+      view: recording.view,
+    };
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    const host = container;
+    return {
+      host,
+      holdKeys: async (held) => {
+        await act(async () => recording.commands[0]?.report({ keysHeld: held }));
+      },
+    };
+  }
+
+  it("yields every key to a view that holds the keys — ⌥2 switches no tab, ⌘F opens no sheet (SB-3)", async () => {
+    // The spawn bloom held open, or opened for the keys, says so in its report
+    // (MV-D8); the stage reads that word, never the bloom's DOM (W5).
+    const { host, holdKeys } = await mountReporting(tabDoor());
+    const press = (init: KeyboardEventInit): KeyboardEvent => {
       const event = new KeyboardEvent("keydown", { bubbles: true, cancelable: true, ...init });
-      at.dispatchEvent(event);
+      window.dispatchEvent(event);
       return event;
     };
     let passed: KeyboardEvent | undefined;
-    try {
-      await act(async () => {
-        passed = press({ code: "Digit2", key: "2", altKey: true }, bud);
-      });
-      expect(passed?.defaultPrevented).toBe(false);
-      expect(chosenTab(host)).toBe("all");
-      await act(async () => {
-        passed = press({ code: "KeyF", key: "f", metaKey: true }, bud);
-      });
-      expect(passed?.defaultPrevented).toBe(false);
-      // the find sheet did not open (it would hold the keys if it had)
-      expect(monitorHoldsKeys()).toBe(false);
-    } finally {
-      menu.remove();
-    }
-    // the same key anywhere else is the strip's, as before
+    await holdKeys(true);
     await act(async () => {
-      passed = press({ code: "Digit2", key: "2", altKey: true }, window);
+      passed = press({ code: "Digit2", key: "2", altKey: true });
+    });
+    expect(passed?.defaultPrevented).toBe(false);
+    expect(chosenTab(host)).toBe("all");
+    await act(async () => {
+      passed = press({ code: "KeyF", key: "f", metaKey: true });
+    });
+    expect(passed?.defaultPrevented).toBe(false);
+    // the find sheet did not open (it would be drawn, and hold the keys itself)
+    expect(host.querySelector(".vf-find-sheet")).toBeNull();
+    // once the view lets them go, the same key is the strip's, as before
+    await holdKeys(false);
+    await act(async () => {
+      passed = press({ code: "Digit2", key: "2", altKey: true });
     });
     expect(passed?.defaultPrevented).toBe(true);
     expect(chosenTab(host)).toBe("work");
   });
 
-  it("holds the keys while a spawn bloom is open, so the deck's launchers stand aside for its ⎋ (SB-3)", async () => {
-    // The stage reads the bloom's state through a MutationObserver. happy-dom
-    // (20.11) hands each observed node its report callback through a WeakRef
-    // nothing else holds, so a collection mid-file silences the observer — the
-    // observer's word is delivered by hand here, and the stage's own reading of
-    // it (and what it does about it) is what is under test.
-    const observers = new Set<{ callback: MutationCallback }>();
-    class HandDeliveredObserver {
-      constructor(readonly callback: MutationCallback) {}
-      observe(): void {
-        observers.add(this);
-      }
-      disconnect(): void {
-        observers.delete(this);
-      }
-      takeRecords(): MutationRecord[] {
-        return [];
-      }
-    }
-    vi.stubGlobal("MutationObserver", HandDeliveredObserver);
-    const deliver = async (): Promise<void> => {
-      await act(async () => {
-        for (const observer of [...observers]) {
-          observer.callback([], observer as unknown as MutationObserver);
-        }
-      });
-    };
-    const host = await mountMonitor("list", tabDoor());
-    const stage = host.querySelector<HTMLElement>('section[aria-label^="Agent monitor"]');
-    const bloom = document.createElement("div");
-    bloom.className = "vf-bloom";
-    bloom.setAttribute("data-bloom-state", "idle");
-    stage?.appendChild(bloom);
-    await deliver();
+  it("holds the keys while the view holds them, so the deck's launchers stand aside (SB-3)", async () => {
+    const { holdKeys } = await mountReporting(tabDoor());
     expect(monitorHoldsKeys()).toBe(false);
-    bloom.setAttribute("data-bloom-state", "open");
-    await deliver();
+    await holdKeys(true);
     expect(monitorHoldsKeys()).toBe(true);
-    bloom.setAttribute("data-bloom-state", "committed");
-    await deliver();
+    await holdKeys(false);
     expect(monitorHoldsKeys()).toBe(false);
-    bloom.remove();
+    // a view that holds them when the stage closes gives them back with it
+    await holdKeys(true);
+    expect(monitorHoldsKeys()).toBe(true);
+    act(() => root?.unmount());
+    root = null;
+    expect(monitorHoldsKeys()).toBe(false);
   });
 
   it("holds the keys over a fresh pane's launcher while the find sheet is up (QL-D2's other half)", async () => {
@@ -1816,12 +1832,13 @@ const pointer = (
 const bloomOf = (host: HTMLElement): HTMLElement | null => host.querySelector(".vf-bloom");
 const budOf = (host: HTMLElement, kind: string, id: string): HTMLElement | null =>
   host.querySelector<HTMLElement>(`[data-bloom-bud-kind="${kind}"][data-bloom-bud-id="${id}"]`);
-/** A bud's centre in the field, from the geometry it was drawn with. */
+/** A bud's centre in the field, from the geometry it was drawn with: the view's own
+ * properties, `--mv-swarm-bloom-*` since MV-5 (L18; `--vf-bloom-*` before). */
 const centreOf = (bud: HTMLElement | null): { x: number; y: number } => {
   if (bud === null) throw new Error("no such bud");
   const px = (name: string): number => Number.parseFloat(bud.style.getPropertyValue(name));
-  const d = px("--vf-bloom-d");
-  return { x: px("--vf-bloom-tx") + d / 2, y: px("--vf-bloom-ty") + d / 2 };
+  const d = px("--mv-swarm-bloom-d");
+  return { x: px("--mv-swarm-bloom-tx") + d / 2, y: px("--mv-swarm-bloom-ty") + d / 2 };
 };
 
 /** Press on the empty ground and hold past 520 ms; then wait out the new

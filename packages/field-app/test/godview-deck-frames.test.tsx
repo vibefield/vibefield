@@ -2004,10 +2004,11 @@ describe("births under an Agent Profile (SB-3)", () => {
       '[data-bloom-bud-kind="profile"][data-bloom-bud-id="work"]',
     );
     if (bud === null) throw new Error("the hold bloomed no Work bud");
+    // the bud's geometry is the view's own properties (L18: `--mv-swarm-bloom-*` since MV-5)
     const px = (name: string): number => Number.parseFloat(bud.style.getPropertyValue(name));
     const work = {
-      x: px("--vf-bloom-tx") + px("--vf-bloom-d") / 2,
-      y: px("--vf-bloom-ty") + px("--vf-bloom-d") / 2,
+      x: px("--mv-swarm-bloom-tx") + px("--mv-swarm-bloom-d") / 2,
+      y: px("--mv-swarm-bloom-ty") + px("--mv-swarm-bloom-d") / 2,
     };
     await act(async () => {
       pointer("pointermove", work.x, work.y);

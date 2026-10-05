@@ -1,4 +1,4 @@
-import type { MonitorTheme, StageGeometry } from "@vibecook/puppeteer-view-sdk";
+import type { MonitorTheme, StageGeometry, ViewReport } from "@vibecook/puppeteer-view-sdk";
 import { frameScheduler, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
 import {
   type AccountUsagePort,
@@ -35,11 +35,7 @@ import { monitorAgentCounts } from "./monitor/agents";
 import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
 import type { DeviceChoice } from "./monitor/device-filter";
 import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
-import {
-  bloomOwnsKeyEvent,
-  launcherOwnsKeyEvent,
-  setMonitorHoldsKeys,
-} from "./monitor/launcher-keys";
+import { launcherOwnsKeyEvent, setMonitorHoldsKeys } from "./monitor/launcher-keys";
 import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
 import type { MonitorAgent, MonitorViewEntry } from "./monitor/types";
@@ -49,7 +45,6 @@ import {
   useMonitorAgents,
 } from "./monitor/useMonitorAgents";
 import { OsMark } from "./os-marks";
-import { currentSwarmPhysicsMode } from "./views/swarm/swarm-physics-driver";
 
 const ACKNOWLEDGEMENT_MS = 2_600;
 
@@ -168,6 +163,9 @@ const NO_DRAWN: ReadonlySet<string> = new Set();
 function markerRunsKey(runs: readonly ChromeRun[]): string {
   return JSON.stringify(monitorRunFacts(runs, NO_DRAWN));
 }
+
+/** What a view has said about itself before it says anything. */
+const NO_REPORT: ViewReport = Object.freeze({});
 
 /** The stage before it is measured: no size, no chrome. */
 const EMPTY_STAGE: StageGeometry = Object.freeze({
@@ -380,8 +378,22 @@ export function GodviewMonitor({
     setMonitorHoldsKeys(true);
     return () => setMonitorHoldsKeys(false);
   }, [findOpen]);
-  /** What the swarm is painting with, read off its own element (AR-5). */
-  const [swarmRenderer, setSwarmRenderer] = useState("none");
+  // MV-5 (W5) — what the mounted view says about itself (`commands.report`):
+  // what it paints with, where its simulation runs, and whether it holds the
+  // keys. Never read off its DOM; the slot clears it when the view changes.
+  const [viewReport, setViewReport] = useState<ViewReport>(NO_REPORT);
+  /** Read by the capture listeners at event time: a report lands between renders. */
+  const viewHoldsKeysRef = useRef(false);
+  const onReport = useCallback((report: ViewReport): void => {
+    viewHoldsKeysRef.current = report.keysHeld === true;
+    setViewReport(report);
+  }, []);
+  /** AR-5: what the swarm paints with — `starting` while its physics runs and its device has not answered. */
+  const swarmRenderer =
+    viewReport.renderer ?? (viewReport.physics !== undefined ? "starting" : "none");
+  /** GT-3c: where its physics runs — `worker`, the honest `inline`, or `none` for a view with none. */
+  const swarmPhysics = viewReport.physics ?? "none";
+  const viewHoldsKeys = viewReport.keysHeld === true;
   /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */
   const [usageTiles, setUsageTiles] = useState(-1);
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
@@ -432,9 +444,9 @@ export function GodviewMonitor({
   );
 
   // Views that lay out in flow clear the chrome with these two insets — the
-  // list as the stage's `insets.left` and `insets.top` since MV-4 (M58), the
-  // timeline as the two variables until it ports; the swarm instead reads the
-  // chrome elements' rects directly and steers bodies around them.
+  // list and the timeline as the stage's `insets.left` and `insets.top` (M58);
+  // the swarm instead steers its bodies around the chrome's rectangles, the
+  // stage's `obstacles` (MV-D19).
   //
   // The RIGHT inset is the package's own idea (`monitor/chrome.ts`): the usage
   // column down the left edge is host chrome, and a view that cares finds it
@@ -478,12 +490,14 @@ export function GodviewMonitor({
       stage.style.setProperty("--vf-monitor-claims-bottom", `${bottom}px`);
       // the same measurement as the view host's stage (MV-D19): the chrome's
       // right edge as the left inset, the strip's bottom as the top one, both
-      // elements as obstacles
+      // elements as obstacles — unrounded, the rectangles the swarm measured
+      // off these two elements itself before it ported, so its bodies steer
+      // exactly as they did
       const rect = (box: DOMRect) => ({
-        x: Math.round(box.left - stageRect.left),
-        y: Math.round(box.top - stageRect.top),
-        width: Math.round(box.width),
-        height: Math.round(box.height),
+        x: box.left - stageRect.left,
+        y: box.top - stageRect.top,
+        width: box.width,
+        height: box.height,
       });
       setStageGeometry({
         width: Math.round(stageRect.width),
@@ -495,60 +509,23 @@ export function GodviewMonitor({
     const observer = new ResizeObserver(publish);
     observer.observe(chrome);
     observer.observe(claims);
+    // the stage itself too: a window that resizes moves the stage's size
+    // without resizing the column or the strip
+    observer.observe(stage);
     publish();
     return () => observer.disconnect();
   }, []);
 
-  // The swarm says what painted on its section (`data-swarm-renderer`); the
-  // marker repeats it. Observed rather than read once, because the device
-  // answers after the mount.
+  // SB-3 — while the view holds the keys (the spawn bloom held open, or opened
+  // for the keys: its `report`, MV-D8) the monitor holds them, as it does while
+  // the find sheet is up (QL-D2's other half): the deck's launchers stand aside,
+  // and the stage's own chords below yield. A HOLD's bloom needs no hold: its ⎋
+  // is the swarm field's own, heard with the focus on the field.
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || typeof MutationObserver === "undefined") return;
-    const read = (): void => {
-      const painted = stage
-        .querySelector("[data-swarm-renderer]")
-        ?.getAttribute("data-swarm-renderer");
-      setSwarmRenderer(painted ?? "none");
-    };
-    const observer = new MutationObserver(read);
-    observer.observe(stage, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["data-swarm-renderer"],
-    });
-    read();
-    return () => observer.disconnect();
-  }, [view.id]);
-
-  // SB-3 — while the spawn bloom is open the monitor holds the keys, as it does
-  // while the find sheet is up (QL-D2's other half): the deck's launchers stand
-  // aside, so a HOLD bloom's ⎋ — the swarm's own window listener, which does not
-  // move the focus — is never first taken by a launcher in the focused pane.
-  // Read off the bloom's own DOM (`data-bloom-state`), observed like the renderer.
-  const [bloomOpen, setBloomOpen] = useState(false);
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || typeof MutationObserver === "undefined") return;
-    const read = (): void => {
-      setBloomOpen(stage.querySelector('.vf-bloom[data-bloom-state="open"]') !== null);
-    };
-    const observer = new MutationObserver(read);
-    observer.observe(stage, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["data-bloom-state"],
-    });
-    read();
-    return () => observer.disconnect();
-  }, [view.id]);
-  useEffect(() => {
-    if (!bloomOpen) return;
+    if (!viewHoldsKeys) return;
     setMonitorHoldsKeys(true);
     return () => setMonitorHoldsKeys(false);
-  }, [bloomOpen]);
+  }, [viewHoldsKeys]);
 
   // The usage column's tiles, counted off the chrome slot the same way: the
   // column is the package's, its batch arrives on the door's schedule, and a
@@ -573,9 +550,6 @@ export function GodviewMonitor({
   }, [acknowledgement, clearAcknowledgement]);
 
   useEffect(() => {
-    // Read rather than passed down: the swarm chooses its physics home in its
-    // own mount effect, and React runs a child's effects BEFORE its parent's —
-    // so by the time this line is written the choice has already been made.
     emitGodviewMonitorMarker({
       viewId: view.id,
       agents: agents.length,
@@ -589,7 +563,7 @@ export function GodviewMonitor({
       remoteHosts: sources.hosts,
       remoteState: sources.remoteState,
       ...(sources.remoteReason !== undefined ? { remoteReason: sources.remoteReason } : {}),
-      swarmPhysics: currentSwarmPhysicsMode(),
+      swarmPhysics,
       swarmRenderer,
       usageTiles,
       findSheet: findOpen ? "open" : "closed",
@@ -597,7 +571,18 @@ export function GodviewMonitor({
       shownAgents: shown.length,
       runs,
     });
-  }, [agents, view.id, sources, swarmRenderer, usageTiles, findOpen, chosenId, shown, runs]);
+  }, [
+    agents,
+    view.id,
+    sources,
+    swarmPhysics,
+    swarmRenderer,
+    usageTiles,
+    findOpen,
+    chosenId,
+    shown,
+    runs,
+  ]);
 
   const closeFind = useCallback((): void => setFindOpen(false), []);
 
@@ -610,8 +595,8 @@ export function GodviewMonitor({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-      // SB-3: a spawn bloom that has the keyboard holds every key
-      if (bloomOwnsKeyEvent(event)) return;
+      // SB-3: a view that holds the keys (a spawn bloom with the keyboard) holds every key
+      if (viewHoldsKeysRef.current) return;
       // ⌘F summons Find (AR-5, D6): the sheet over the stage, the reference's chord.
       if (event.code === "KeyF") {
         event.preventDefault();
@@ -636,8 +621,8 @@ export function GodviewMonitor({
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
       if (launcherOwnsKeyEvent(event)) return;
-      // SB-3: nor does it take ⌥-digits from a spawn bloom that has the keyboard
-      if (bloomOwnsKeyEvent(event)) return;
+      // SB-3: nor does it take ⌥-digits from a view that holds the keys
+      if (viewHoldsKeysRef.current) return;
       const digit = /^Digit([0-9])$/.exec(event.code);
       if (digit === null) return;
       const index = Number(digit[1]);
@@ -740,13 +725,12 @@ export function GodviewMonitor({
         }
       >
         {/* One view, drawn from this window's replica (MV-3b): one update per
-            frame, on the host's ONE frame scheduler (M7). List and rain are SDK
-            views (MV-4) and read the window's cut of the model from their first
-            frame — a switch between a ported view and a legacy one mounts a
-            fresh slot (the key) rather than handing the new view the other
-            kind's model for a frame. The swarm and the timeline mount through
-            the legacy bridge (L6); the swarm's physics still lives in OUR worker
-            (GT-D16), and the bridge re-provides the driver above the old view. */}
+            frame, on the host's ONE frame scheduler (M7). All four views are SDK
+            views (MV-4…MV-6) and read the window's cut of the model from their
+            first frame — a switch between a ported view and a legacy one a host
+            hands the stage mounts a fresh slot (the key) rather than handing the
+            new view the other kind's model for a frame. The swarm brings its own
+            physics worker (MV-D7) and says what it runs and paints (`onReport`). */}
         <MonitorViewHost
           key={ported ? "view" : "legacy"}
           replica={ported ? viewReplica : replica}
@@ -756,6 +740,7 @@ export function GodviewMonitor({
           parameters={parameters}
           capabilities={capabilities}
           commands={commands}
+          onReport={onReport}
           scheduler={frameScheduler}
           className="vf-monitor-view-slot"
         />

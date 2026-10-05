@@ -205,12 +205,13 @@ export interface GodviewMonitorFacts {
    * It is on the marker because a fallback is INVISIBLE otherwise — a swarm
    * simulated on the main thread looks exactly like a swarm simulated off it,
    * and the difference is the entire slice. The smoke asserts `worker` on the
-   * swarm view, which turns a silent regression into a failed row.
+   * swarm view, which turns a silent regression into a failed row. Since MV-5
+   * the worker is the view's own (MV-D7) and the word is its `report`.
    */
   swarmPhysics: string;
   /** AR-5: what the swarm is painting with — `webgpu`, `unavailable` (the
    * honest line on the stage), or `starting` before the device answered; `none`
-   * when the swarm is not the mounted view. */
+   * when the swarm is not the mounted view. The view's `report` since MV-5. */
   swarmRenderer: string;
   /** AR-5: the tiles the usage column is showing (one per account the door
    * reported, whatever its state); `-1` while no column is mounted. A count,

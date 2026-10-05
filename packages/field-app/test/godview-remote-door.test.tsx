@@ -58,11 +58,8 @@ import {
   type ScriptedOpen,
   scriptedModelBoard,
 } from "./model-board-fixture";
-import { useInlineSwarmPhysics } from "./swarm-physics-inline";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-useInlineSwarmPhysics();
 
 const ROW_VIEW = "list";
 
