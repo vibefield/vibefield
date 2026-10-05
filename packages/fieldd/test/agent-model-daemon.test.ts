@@ -5,6 +5,8 @@ import {
   AGENT_SESSION_RECORD_FORMAT,
   AgentDeskRow,
   AgentDeskTerminalRow,
+  AgentFieldSnapshot,
+  AgentModelDeskRow,
   AgentModelMeshOpen,
   AgentModelSnapshot,
   type AgentSessionRecord,
@@ -168,6 +170,20 @@ describe("MV-3a — the model board through the door, and the report of what a w
       attachable: false,
       provider: { id: "scripted" },
     });
+    // MV-3d — the window's run row carries the chrome's facts beside the model:
+    // the native session the record names, and the exit fieldd witnessed (no
+    // mirror: nothing observed this run in this boot; no workspace, no directory)
+    expect(AgentModelDeskRow.parse(rows.run).local).toEqual({
+      nativeSessionId: "native-1",
+      exited: true,
+    });
+    // …which no other board carries: not the desk cut a peer reads, nor the field row
+    for (const projection of ["desk", "field"]) {
+      const other = (await rpc.call("agent.subscribe", { projection })) as { snapshot: unknown };
+      const otherRows = AgentFieldSnapshot.parse(other.snapshot).rows;
+      expect(otherRows.some((row) => row.runtimeRunId === RUN)).toBe(true);
+      for (const row of otherRows) expect("local" in row).toBe(false);
+    }
     const pane = AgentDeskTerminalRow.parse(rows.pane);
     expect(pane).toMatchObject({
       runtimeRunId: PANE,

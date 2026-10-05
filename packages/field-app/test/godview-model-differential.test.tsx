@@ -26,12 +26,22 @@
  * and why it is invisible; an unnamed difference fails. The cost rate compares
  * under a float tolerance (M27 rounds it once).
  *
- * OUT OF THE CORPUS'S REACH — peers. The corpus's mesh frames are the pre-MV desk
- * wire (`deskRowOf(foldRowOf(peer))`, no `monitorRow`), and the peer desktop's
- * states are not kept on the corpus, so the new path has no owner backend to
- * produce a peer's model row from them. Peer rows are counted and skipped here;
- * the owner side is mv2-pu's differential, and the window's words for a peer are
- * pinned against today's by `godview-remote-door.test.tsx`.
+ * PEERS (MV-3d, M39). The corpus's mesh frames are the pre-MV desk wire
+ * (`deskRowOf(foldRowOf(peer))`, no `monitorRow`): the oracle drew each peer from
+ * them through the pre-MV seam (`monitorAgentFromMesh`), and nothing in them can
+ * feed the new path, which draws a peer from the model row its OWNER's backend
+ * computed. So the peer gets that owner here: the corpus generator's own peer
+ * fold rows (`CorpusTick.peer`, its mirrors — what the corpus's desk rows were
+ * cut from) run through a peer desktop's own fieldd backend and desk cut
+ * (`model-board-fixture.ts` `peer`, the real `agent-monitor.ts` and
+ * `projectDeskRow`), and its board reaches the window at exactly the corpus
+ * frames where the oracle's mesh moved (the open and each of the peer's desk
+ * deltas). The rows are read through JSON once the corpus is complete, as the
+ * B arm's model stream reads them (`perf/lib/model-stream.ts`). Peers are paired
+ * by their run and tallied apart from this desktop's rows; every difference is
+ * fixed or named (`PEER_ACCEPTED`). The oracle needs no regenerating: the corpus
+ * is unchanged, so its peer rows are the pre-MV seam's rendering of these very
+ * frames.
  *
  * The seeded oracles (`*-seeded`) replayed with a localStorage usage cache the
  * pre-MV seam carried; L11 retired it (a ruled difference), so they are skipped.
@@ -54,8 +64,16 @@ import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
-import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
-import { type Corpus, type CorpusRecipe, generateCorpus } from "../src/godview/monitor/perf/corpus";
+import {
+  GodviewAgentsProvider,
+  useMonitorFeed,
+} from "../src/godview/monitor/GodviewAgentsProvider";
+import {
+  type Corpus,
+  type CorpusRecipe,
+  type CorpusTick,
+  generateCorpus,
+} from "../src/godview/monitor/perf/corpus";
 import type { RecordedFrame } from "../src/godview/monitor/perf/frame-recorder";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import { type MonitorPaneFacts, useMonitorAgents } from "../src/godview/monitor/useMonitorAgents";
@@ -129,6 +147,13 @@ const ACCEPTED: Record<string, string> = {
     "the seam stamped `native` after the oracle's probe; the backend stamps it on the row",
 };
 
+/**
+ * M39 — the peers' differences, accepted by name: the path as the views read it,
+ * and why. Filled from the differential's own report (see the run's log), never
+ * ahead of it.
+ */
+const PEER_ACCEPTED: Record<string, string> = {};
+
 /** Field paths the differential compares around, never on: how each side names a row. */
 const IDENTITY = new Set(["id", "visualId"]);
 /** M27 — the burn rate is rounded once; a float ulp is not a difference. */
@@ -168,7 +193,6 @@ class Tally {
   readonly mismatches = new Map<string, Mismatch>();
   compared = 0;
   rows = 0;
-  peersSkipped = 0;
   /** M38 — oracle rows of the one shape the two paths decide differently (see `isM38Shape`) */
   m38Rows = 0;
   /** M38 — those of them the replica hides, accepted by name */
@@ -212,15 +236,15 @@ class Tally {
     }
   }
 
-  report(): string {
+  report(accepted: Record<string, string> = ACCEPTED): string {
     const lines = [
-      `rows compared ${this.rows} · peers skipped ${this.peersSkipped} · missing ${this.missing.length} · extra ${this.extra.length}`,
+      `rows compared ${this.rows} · missing ${this.missing.length} · extra ${this.extra.length}`,
       `  M38 rows (no mirror, no PTY, not exited) in the oracle: ${this.m38Rows} · hidden by the one liveness rule: ${this.m38Hidden}`,
     ];
     for (const entry of [...this.mismatches.values()].sort((x, y) => y.count - x.count)) {
       const { seq, key, path, oracle, replica } = entry.example;
       lines.push(
-        `  ${entry.field} ×${entry.count}${entry.field in ACCEPTED ? " (accepted)" : ""} — e.g. seq ${seq} ${key} ${path}: oracle ${JSON.stringify(oracle)} · replica ${JSON.stringify(replica)}`,
+        `  ${entry.field} ×${entry.count}${entry.field in accepted ? " (accepted)" : ""} — e.g. seq ${seq} ${key} ${path}: oracle ${JSON.stringify(oracle)} · replica ${JSON.stringify(replica)}`,
       );
     }
     for (const item of this.missing.slice(0, 5))
@@ -295,8 +319,12 @@ function floorOf(panes: MonitorPaneFacts): TerminalInfo[] {
   ];
 }
 
-let latest: { agents: readonly ViewsMonitorAgent[]; runByRow: ReadonlyMap<string, string> } | null =
-  null;
+let latest: {
+  agents: readonly ViewsMonitorAgent[];
+  runByRow: ReadonlyMap<string, string>;
+  /** a peer row's run, off the board row it rode in on */
+  runOf: (id: string) => string | undefined;
+} | null = null;
 
 function Probe({
   door,
@@ -306,8 +334,9 @@ function Probe({
   panes: MonitorPaneFacts;
 }): ReactElement | null {
   const palette = useMonitorPalette();
+  const feed = useMonitorFeed();
   const { agents, runByRow } = useMonitorAgents({ palette, door, panes });
-  latest = { agents, runByRow };
+  latest = { agents, runByRow, runOf: (id) => feed?.held(id)?.board.runtimeRunId };
   return null;
 }
 
@@ -334,7 +363,16 @@ async function frame(): Promise<void> {
   });
 }
 
-async function replay(oracle: Oracle, corpus: Corpus): Promise<Tally> {
+/** What a peer is named by on both sides: its run on its own desktop. */
+function peerKey(run: string | undefined, fallback: string): string {
+  return `peer:${run ?? fallback}`;
+}
+
+async function replay(
+  oracle: Oracle,
+  corpus: Corpus,
+  ticks: readonly CorpusTick[],
+): Promise<{ tally: Tally; peers: Tally }> {
   vi.useFakeTimers({
     toFake: ["Date", "setTimeout", "clearTimeout", "setInterval", "clearInterval"],
   });
@@ -366,7 +404,7 @@ async function replay(oracle: Oracle, corpus: Corpus): Promise<Tally> {
   const held = board;
   const door: MonitorDoor = {
     model: held.port,
-    // peers are out of the corpus's reach (see the header): the mesh port stays quiet
+    // the mesh board's own port is unread by the window (MV-3b): peers ride the model port
     observeMesh: () => () => undefined,
     devices: {
       subscribe: (deliver) => {
@@ -400,7 +438,38 @@ async function replay(oracle: Oracle, corpus: Corpus): Promise<Tally> {
   });
   await frame();
 
+  // M39 — the peer's own fold rows at each tick, and its desktop as the roster names it
+  const peerRowsAt = new Map<number, readonly AgentSessionSummary[]>();
+  for (const tick of ticks) if (tick.peer !== undefined) peerRowsAt.set(tick.tMs, tick.peer);
+  const peerDevice = corpus.roster.find((device) => device.deviceId === corpus.meta.peer);
+  let peerPlaced = false;
+  const peerBoardAt = async (tMs: number): Promise<void> => {
+    const rows = peerRowsAt.get(tMs);
+    if (rows === undefined) throw new Error(`the corpus's peer has no rows at ${tMs} ms`);
+    await act(async () => {
+      // fieldd's mesh board places a desktop by its STATE first (`#setState`),
+      // then relays its board: the window's standing for it comes from that
+      // frame (a peer with no standing draws greyed, the pre-MV seam's rule)
+      if (!peerPlaced) {
+        peerPlaced = true;
+        held.push({
+          device: corpus.meta.peer,
+          state: "live",
+          asOf: new Date(Date.now()).toISOString(),
+        });
+      }
+      held.peer({
+        device: corpus.meta.peer,
+        ...(peerDevice?.name !== undefined ? { name: peerDevice.name } : {}),
+        ...(peerDevice?.platform !== undefined ? { platform: peerDevice.platform } : {}),
+        state: "live",
+        rows,
+      });
+    });
+  };
+
   const tally = new Tally();
+  const peers = new Tally();
   for (let index = 0; index < corpus.frames.length; index += 1) {
     const entry = corpus.frames[index] as RecordedFrame;
     const next = corpus.frames[index + 1];
@@ -410,6 +479,11 @@ async function replay(oracle: Oracle, corpus: Corpus): Promise<Tally> {
         foldListener?.(entry.rows);
         held.publish(entry.rows);
       });
+    }
+    // where the oracle's mesh moved, the peer's own board moves (M39)
+    if (entry.kind === "mesh-open") await peerBoardAt(entry.t);
+    if (entry.kind === "mesh-frame" && entry.frame.device === corpus.meta.peer) {
+      await peerBoardAt(entry.t);
     }
     await frame();
     // the gap to the next frame passes on the fake clock, so the backend's
@@ -425,14 +499,23 @@ async function replay(oracle: Oracle, corpus: Corpus): Promise<Tally> {
     const got = latest;
     if (got === null) throw new Error("the probe never rendered");
     const replicaRows = new Map<string, ViewsMonitorAgent>();
+    const replicaPeers = new Map<string, ViewsMonitorAgent>();
     for (const row of got.agents) {
-      if (row.remote !== undefined) continue;
+      if (row.remote !== undefined) {
+        replicaPeers.set(peerKey(got.runOf(row.id), row.id), row);
+        continue;
+      }
       replicaRows.set(replicaKey(row, got.runByRow), row);
     }
     const seen = new Set<string>();
+    const seenPeers = new Set<string>();
     for (const agent of expected.agents) {
       if (agent.remote !== undefined) {
-        tally.peersSkipped += 1;
+        const key = peerKey(agent.agent?.runtimeRunId, agent.id);
+        seenPeers.add(key);
+        const row = replicaPeers.get(key);
+        if (row === undefined) peers.missing.push({ seq: entry.seq, key });
+        else peers.compare(entry.seq, key, viewReadProjection(agent), viewReadProjection(row));
         continue;
       }
       const key = oracleKey(agent);
@@ -450,8 +533,11 @@ async function replay(oracle: Oracle, corpus: Corpus): Promise<Tally> {
     for (const key of replicaRows.keys()) {
       if (!seen.has(key)) tally.extra.push({ seq: entry.seq, key });
     }
+    for (const key of replicaPeers.keys()) {
+      if (!seenPeers.has(key)) peers.extra.push({ seq: entry.seq, key });
+    }
   }
-  return tally;
+  return { tally, peers };
 }
 
 const oracleFiles = existsSync(ORACLE_DIR)
@@ -467,15 +553,27 @@ describe.skipIf(oracleFiles.length === 0)(
       it(`${name}: every row the views read, frame by frame`, async () => {
         const oracle = readOracle(join(ORACLE_DIR, name));
         expect(oracle.meta.seededCache).toBe(false);
-        const corpus = generateCorpus(oracle.meta.recipe);
-        const tally = await replay(oracle, corpus);
+        const lived: CorpusTick[] = [];
+        const corpus = generateCorpus(oracle.meta.recipe, (tick) => lived.push(tick));
+        // through JSON once the corpus is complete, as the B arm's stream reads them
+        const ticks = JSON.parse(JSON.stringify(lived)) as CorpusTick[];
+        const { tally, peers } = await replay(oracle, corpus, ticks);
         const report = tally.report();
-        console.log(`[differential] ${name}\n${report}`);
+        const peerReport = peers.report(PEER_ACCEPTED);
+        console.log(`[differential] ${name}\n${report}\n[peers] ${name}\n${peerReport}`);
         const unexplained = [...tally.mismatches.keys()].filter((field) => !(field in ACCEPTED));
         expect(unexplained, report).toEqual([]);
         expect(tally.missing, report).toEqual([]);
         expect(tally.extra, report).toEqual([]);
         expect(tally.rows).toBeGreaterThan(0);
+        // M39 — the peers: the same membership, the same visible facts but the named ones
+        const peersUnexplained = [...peers.mismatches.keys()].filter(
+          (field) => !(field in PEER_ACCEPTED),
+        );
+        expect(peersUnexplained, peerReport).toEqual([]);
+        expect(peers.missing, peerReport).toEqual([]);
+        expect(peers.extra, peerReport).toEqual([]);
+        expect(peers.rows).toBeGreaterThan(0);
       }, 600_000);
     }
   },
