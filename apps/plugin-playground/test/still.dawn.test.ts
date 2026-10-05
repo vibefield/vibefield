@@ -13,7 +13,9 @@
 //    line as core's, on its own row;
 //  - the desk clock (examples/plugins/desk-clock — ICE's kind ported as a plugin): held to ITS golden, blessed once by the
 //    named flag; and, staged exactly as ICE stages its own clock still, it draws ICE's committed golden byte for byte —
-//    the port, the product's type build and the still door all ICE's, pixel for pixel.
+//    the port, the product's type build and the still door all ICE's, pixel for pixel;
+//  - the comment pad (plugins/comment-pad — VibeField's own first kind): held to ITS golden over its four playground states,
+//    blessed once by the named flag — its dress drawn, its writing NOT: a still lends no host service, so no text raster.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -41,6 +43,7 @@ const BIN = resolve(HERE, "..", "bin", "plugin-playground.mjs");
 const REPO = resolve(HERE, "..", "..", "..");
 const FIXTURE = join(HERE, "fixtures", "still-kinds");
 const CLOCK = join(REPO, "examples", "plugins", "desk-clock");
+const PAD = join(REPO, "plugins", "comment-pad");
 
 interface Ran {
   readonly code: number;
@@ -297,6 +300,39 @@ describe("the desk clock — ICE's kind as VibeField's plugin", () => {
       }
     } finally {
       gpu.destroy();
+    }
+  });
+});
+
+describe("the comment pad — VibeField's own first kind", () => {
+  let ran: Ran;
+  beforeAll(async () => {
+    ran = await still(PAD);
+  });
+
+  it("is held to its golden: its four playground states by day and by night, blessed once by the named flag", () => {
+    expect(ran.code).toBe(0);
+    expect(ran.stills.map((s) => `${s.state} · ${s.theme}: ${s.code}`)).toEqual([
+      "default · day: ok",
+      "written · day: ok",
+      "long · day: ok",
+      "pink · day: ok",
+      "default · night: ok",
+      "written · night: ok",
+      "long · night: ok",
+      "pink · night: ok",
+    ]);
+  });
+
+  it("draws its dress and not its writing: a still lends no text raster, so `written` and `long` are the blank pad's bytes", () => {
+    // ICE's `createStill` hands a kind no host service — the pad writes through the host's TEXT_RASTER — so its comments
+    // are not in its still; its accent is. When a still can carry a text raster this row turns, and the golden is re-blessed.
+    const sha = (state: string, theme: string) =>
+      ran.stills.find((s) => s.state === state && s.theme === theme)?.sha256;
+    for (const theme of ["day", "night"]) {
+      expect(sha("written", theme), theme).toBe(sha("default", theme));
+      expect(sha("long", theme), theme).toBe(sha("default", theme));
+      expect(sha("pink", theme), theme).not.toBe(sha("default", theme));
     }
   });
 });
