@@ -58,6 +58,22 @@ export function keepsGpu(mode: ShellMode, argv: readonly string[]): boolean {
   );
 }
 
+/**
+ * TP-S0c, grown at DK-9: the modes whose window must keep its animation frames while COVERED. Chromium
+ * suspends rAF and backgrounds the renderer of an occluded window — for a lab that counts frames that is not
+ * "slow", it is zero, and the zero is the compositor's, not the subject's. The terminal perf lab measures frames;
+ * so do the GPU-on DESK SMOKES (smoke-canvas, smoke-plugin-restart — its soak): their idle, stillness and frame-rate
+ * rows count frames and submits, and on a shared Mac a window something else came to sit on had its desk loop wait
+ * for a frame that never came (awake, not a step in a second — DK-9's soak, cycle 1). Production backgrounds a
+ * covered window — a battery feature — and so does every other mode.
+ */
+export function keepsFramesWhenCovered(mode: ShellMode, argv: readonly string[]): boolean {
+  if (mode === "terminal-perf-lab") return true;
+  return (
+    (mode === "smoke-canvas" || mode === "smoke-plugin-restart") && !argv.includes("--disable-gpu")
+  );
+}
+
 // The `--terminal-direct-door` rollback flag RETIRED at TP-S3e: the routed
 // transport is the only one, the production CSP admits the cells' loopback
 // WebSockets unconditionally (security-policy.ts), and the bridge it selected

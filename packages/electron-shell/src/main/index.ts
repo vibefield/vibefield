@@ -86,7 +86,7 @@ import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
-import { isSmokeLike, keepsGpu, parseMode } from "./modes";
+import { isSmokeLike, keepsFramesWhenCovered, keepsGpu, parseMode } from "./modes";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
@@ -162,8 +162,10 @@ if (!keepsGpu(MODE, process.argv)) {
 // something else had come to sit on top of. These two switches keep the renderer
 // awake so a measured zero is the terminal's and not the compositor's. They are
 // mode-gated because a PRODUCTION shell should absolutely background an occluded
-// window — that is a battery feature, and only the lab wants it off.
-if (MODE === "terminal-perf-lab") {
+// window — that is a battery feature, and only the labs want it off: the perf lab
+// and, since DK-9, the GPU-on desk smokes, whose idle and stillness rows count
+// frames (`keepsFramesWhenCovered`, modes.ts).
+if (keepsFramesWhenCovered(MODE, process.argv)) {
   app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
 }

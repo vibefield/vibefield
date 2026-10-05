@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   isSmokeLike,
+  keepsFramesWhenCovered,
   keepsGpu,
   parseMode,
   type ShellMode,
@@ -109,6 +110,22 @@ describe("keepsGpu", () => {
     expect(keepsGpu("smoke-plugin-restart", ["--disable-gpu"])).toBe(false);
     expect(keepsGpu("live-surfaces-lab", ["--disable-gpu"])).toBe(true);
     expect(keepsGpu("production", ["--disable-gpu"])).toBe(true);
+  });
+});
+
+describe("keepsFramesWhenCovered", () => {
+  // TP-S0c, grown at DK-9: the frame-counting labs keep a covered window's frames — the terminal perf lab and
+  // the GPU-on desk smokes (their idle, stillness and frame-rate rows); production backgrounds a covered window.
+  const kept = new Set<ShellMode>(["terminal-perf-lab", "smoke-canvas", "smoke-plugin-restart"]);
+
+  it.each(ALL_MODES)("%s", (mode) => {
+    expect(keepsFramesWhenCovered(mode, [])).toBe(kept.has(mode));
+  });
+
+  it("not for a desk smoke run GPU-less (nothing draws there to count)", () => {
+    expect(keepsFramesWhenCovered("smoke-canvas", ["--disable-gpu"])).toBe(false);
+    expect(keepsFramesWhenCovered("smoke-plugin-restart", ["--disable-gpu"])).toBe(false);
+    expect(keepsFramesWhenCovered("terminal-perf-lab", ["--disable-gpu"])).toBe(true);
   });
 });
 
