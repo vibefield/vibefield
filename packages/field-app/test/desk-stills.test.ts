@@ -31,15 +31,47 @@ afterEach(() => {
 
 const PNG = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 1, 2, 3]);
 
-/** The engine's frame loop as the stills read it: asleep or parked is the desk at rest. */
+/** The engine's frame loop as the stills read it: asleep is the desk at rest; a cover's freeze is announced at its edges
+ * (ICE's `frame.onChange` — every freeze taken, every one thawed; the park itself is not announced). */
 function frame(rest = false) {
-  const state = { asleep: rest, parked: false };
+  const state = { asleep: rest, parked: false, frozen: false };
+  const listeners = new Set<() => void>();
+  const announce = (): void => {
+    for (const fn of [...listeners]) fn();
+  };
   return {
     state,
+    /** A cover rises: the freeze taken — it walks its settle, the desk still presenting, not parked. */
+    cover() {
+      state.frozen = true;
+      state.parked = false;
+      announce();
+    },
+    /** The settle walked: the gate parks (unannounced, as ICE's). */
+    park() {
+      state.parked = true;
+    },
+    /** A second freeze taken or let go while the first still holds the desk parked. */
+    nested() {
+      announce();
+    },
+    /** The cover lifts: the last freeze thawed, the desk drawing again. */
+    lift() {
+      state.frozen = false;
+      state.parked = false;
+      announce();
+    },
     engine: {
       frame: {
         sleepStats: () => ({ asleep: state.asleep, sleeps: 0, wakes: {}, timed: 0, steps: 0 }),
         isParked: () => state.parked,
+        isFrozen: () => state.frozen,
+        onChange: (fn: () => void) => {
+          listeners.add(fn);
+          return () => {
+            listeners.delete(fn);
+          };
+        },
       },
     } as unknown as Parameters<typeof createDeskStills>[0]["engine"],
   };
@@ -130,13 +162,47 @@ describe("a board's still — at its close, and once on the desk's idle", () => 
     h.s.dispose();
   });
 
-  it("a desk parked under a cover is at rest too: its parked frame is the still", async () => {
+  it("DK-10b — under a cover the desk costs nothing: a still owed while it is PARKED is not taken until the cover lifts, then at once", async () => {
     vi.useFakeTimers();
     const h = stills();
-    h.f.state.parked = true;
+    h.f.cover();
+    h.f.park();
+    h.s.owe(); // a save acknowledged under the parked cover (the restart smoke's window 1)
+    await vi.advanceTimersByTimeAsync(REST_POLL_MS * 5);
+    expect(h.d.asks).toHaveLength(0); // not one capture — not one submit — while the cover stands (DESIGN.md R16)
+    expect(h.s.owed()).toBe(true);
+    // a second freeze taken or let go while parked is no edge; nor is a sleeping flag under the freeze a rest
+    h.f.nested();
+    h.f.state.asleep = true;
+    await vi.advanceTimersByTimeAsync(REST_POLL_MS * 2);
+    expect(h.d.asks).toHaveLength(0);
+    // …and the patience does not run out under the cover: the still is the thaw's, whenever it comes
+    await vi.advanceTimersByTimeAsync(REST_PATIENCE_MS + REST_POLL_MS);
+    expect(h.s.owed()).toBe(true);
+    h.f.state.asleep = false;
+    h.f.lift(); // the cover lifts: taken AT ONCE — no poll waited for
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.d.asks).toEqual([{ scale: STILL_SCALE }]);
+    expect(h.kept).toEqual([PNG]);
+    expect(h.s.owed()).toBe(false);
+    h.s.dispose();
+  });
+
+  it("DK-10b — a still owed as a cover rises is taken at once, while the freeze walks its settle — before the park", async () => {
+    vi.useFakeTimers();
+    const h = stills(); // the desk busy: not asleep
     h.s.owe();
-    await vi.advanceTimersByTimeAsync(REST_POLL_MS);
-    expect(h.kept).toHaveLength(1);
+    h.f.cover(); // the freeze taken: settling, not parked
+    await vi.advanceTimersByTimeAsync(0); // microtasks only — no poll has run
+    expect(h.d.asks).toEqual([{ scale: STILL_SCALE }]);
+    expect(h.kept).toEqual([PNG]);
+    expect(h.s.owed()).toBe(false);
+    h.f.park();
+    await vi.advanceTimersByTimeAsync(REST_POLL_MS * 3);
+    expect(h.d.asks).toHaveLength(1); // nothing more under the parked cover
+    h.f.lift();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(h.d.asks).toHaveLength(1); // nothing owed: the thaw takes nothing
     h.s.dispose();
   });
 

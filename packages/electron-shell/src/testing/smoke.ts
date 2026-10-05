@@ -1095,7 +1095,8 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   if (thawed.frames <= parked1.frames) problems.push("the desk did not draw again after the cover");
 
   // the explorer's still FIRST: a still is owed after the board's save and taken at the desk's first
-  // rest — and its capture submits GPU work, so the idle row waits until it has been taken
+  // rest or at a cover's edge — here as the freeze row's cover rose, never under the parked cover
+  // (DK-10b) — and its capture submits GPU work, so the idle row waits until it has been taken
   problems.push(...(await explorerStillRow(win, shotDir)));
   problems.push(...(await deskIdleRow(win)));
   // the desk at rest: both captures below read the same last frame

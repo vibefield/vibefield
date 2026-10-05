@@ -12,9 +12,16 @@ import {
 // wake, no frame counted — a quarter of the view, every kind in it since ICE 0.15.0-desk.2). Taken TWICE in a board's life and never per
 // frame: at its CLOSE (the manager asks before the switch, the new board or the window's end takes the
 // desk away), and ONCE ON IDLE after an edit settles — the persistence path owes a still after each
-// acknowledged save, and the still is taken the first time the desk's loop is at rest (asleep, or parked
-// under a cover) after that. A timer looks for the rest only while a still is owed — none at rest
-// otherwise, the desk's idle-zero kept. PF6: an owed still waits out a hidden window at the source.
+// acknowledged save, and the still is taken the first time the desk's loop is at rest (asleep) after
+// that, or at a cover's edge (below). A timer looks for the rest only while a still is owed — none at
+// rest otherwise, the desk's idle-zero kept. PF6: an owed still waits out a hidden window at the source.
+//
+// DK-10b — UNDER A COVER THE DESK COSTS NOTHING (DESIGN.md "The covers over the desk", DK-D25 ruled, R16:
+// the desk runs zero frames and zero submits for as long as the cover stands). A capture is a submit, so a
+// PARKED desk is no rest for a still: one owed as a cover rises is taken at once while the freeze walks its
+// settle — the desk still presenting, before the park (DK-15's own order: the capture, then the freeze) —
+// and one owed under a parked cover waits, and is taken at once as the cover lifts. Found by DK-10b: the
+// still taken under a parked cover landed in the smokes' parked second ("a cover did not park the desk").
 
 /** A thumbnail's size: a quarter of the view at its device ratio (what `capture({ scale: 0.25 })` names). */
 export const STILL_SCALE = 0.25;
@@ -100,9 +107,10 @@ export function createDeskStills(opts: DeskStillsOptions): DeskStills {
   let taking: Promise<boolean> | null = null;
   let disposed = false;
 
+  /** Asleep — never under a cover: a freeze's settle and its park are the cover's, and its edges take the still. */
   const atRest = (): boolean => {
     const frame = opts.engine.frame;
-    return frame.sleepStats().asleep || frame.isParked();
+    return frame.sleepStats().asleep && !frame.isFrozen();
   };
 
   /** One still, kept — never two at once. */
@@ -152,6 +160,8 @@ export function createDeskStills(opts: DeskStillsOptions): DeskStills {
   const look = (): void => {
     timer = null;
     if (disposed || !owing) return;
+    // under a cover nothing is looked for — its edges take the still (`stopEdges`), and the patience runs uncovered
+    if (opts.engine.frame.isFrozen()) return;
     if (now() - owedAt > REST_PATIENCE_MS) {
       owing = false; // the desk never rested: the board's close takes its still
       return;
@@ -169,6 +179,22 @@ export function createDeskStills(opts: DeskStillsOptions): DeskStills {
       }
     });
   };
+
+  // THE COVER'S EDGES (ICE's `frame.onChange`: every freeze taken, every one thawed). As the first is taken the freeze walks its
+  // settle and the desk still presents — not parked; as the last thaws the desk draws again. An owed still is taken AT ONCE at
+  // either edge (the capture's submit lands before the park, or after the thaw), and never once the cover is parked.
+  const stopEdges = opts.engine.frame.onChange(() => {
+    if (disposed || !owing) return;
+    if (opts.engine.frame.isParked() || vis.isHidden()) return;
+    stop();
+    owing = false;
+    void take().then((kept) => {
+      if (!kept && !disposed) {
+        owing = true;
+        arm();
+      }
+    });
+  });
 
   return {
     owe() {
@@ -195,6 +221,7 @@ export function createDeskStills(opts: DeskStillsOptions): DeskStills {
       disposed = true;
       owing = false;
       stop();
+      stopEdges();
     },
   };
 }

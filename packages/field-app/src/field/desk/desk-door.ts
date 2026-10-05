@@ -168,8 +168,8 @@ export interface VfDeskDoor {
   perf(): DeskLayerPerf;
   /** Every queue submit since the mount (the instrument installs at the mount); null before the device. */
   submits(): { readonly total: number; readonly buffers: number } | null;
-  /** The engine's loop at rest (K7a): asleep, or parked under a freeze — the idle a still waits for
-   * and the idle-zero row reads (DK-4). */
+  /** The engine's loop at rest (K7a): asleep — the idle a still waits for and the idle-zero row reads (DK-4) —
+   * or parked under a freeze, where the desk costs nothing and no still is taken (DK-10b; the cover's edges take it). */
   /** The engine's frame loop at rest or not (DK-5), and — DK-9 — WHY it is awake: its outside wakes counted by
    * reason (`world`, `input`, `doc`, `presence`, `desk:…`), the steps its own timer started, and the desk's
    * registered wake taken apart (ICE's `due`: when each part is next due, `Infinity` never on its own). */
