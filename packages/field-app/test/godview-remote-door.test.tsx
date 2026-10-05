@@ -412,6 +412,67 @@ describe("another desktop's agents as monitor citizens (DS-3)", () => {
   });
 });
 
+describe("MV-5/MV-6 — the swarm and the timeline on the window's cut, named changes (M9, M60)", () => {
+  const MINUTE = 60_000;
+  /** NOW-relative: a fixed date would expire under the timeline's day horizon. */
+  const ago = (minutes: number): string => new Date(Date.now() - minutes * MINUTE).toISOString();
+
+  it("M9: a peer's swarm body names the context share its own backend measured — CTX:41%, where the shim's peer said CTX:--%", async () => {
+    // The legacy shim gave a peer no core facts (`peerMonitor: "omit"`), so the
+    // swarm's body for it read `CTX:--%` and drew no ring. The ported swarm
+    // reads the model uniformly: the peer's desk cut carries the share.
+    const studio = [peerRow("run-s1", { contextPercent: 41 }), peerRow("run-s2")];
+    const host = await mountEntry(fakeDoor(null, LOCAL_ROWS, studio), monitorViewFor("swarm"));
+    const labels = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.vf-monitor-swarm-list button[data-agent-bubble-source="remote"]',
+      ),
+    ].map((button) => button.getAttribute("aria-label") ?? "");
+    expect(labels).toHaveLength(2);
+    expect(labels.filter((label) => label.includes(", CTX:41%"))).toHaveLength(1);
+    // a peer that measured nothing still says so, as any body does
+    expect(labels.filter((label) => label.includes(", CTX:--%"))).toHaveLength(1);
+    // M4: the line under the name is reply-first through the toolkit's one rule —
+    // a peer's says where it runs, then its state (VibeField's words already)
+    expect(labels.every((label) => label.includes(": studio · working"))).toBe(true);
+  });
+
+  it("M9 + M60: a peer's lane starts its current state at the row's statusSince — never at the moment this window first heard it", async () => {
+    // Runtime only (MV-6): a lane is born at its row's birth and claims its
+    // current state from `statusSince`. The shim's peer carried no core facts,
+    // so the old timeline's lane began where the window's ledger first saw it
+    // ("under a minute"); the ported timeline reads the peer's own clock.
+    const studio = [
+      peerRow("run-s1", {
+        createdAt: ago(30),
+        status: "blocked",
+        blocker: { kind: "question", question: "Keep the old export?" },
+      }),
+    ];
+    const host = await mountEntry(fakeDoor(null, LOCAL_ROWS, studio), monitorViewFor("timeline"));
+    const lanes = [
+      ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-timeline-agents button"),
+    ].map((button) => button.textContent ?? "");
+    const peer = lanes.find((label) => label.startsWith("on studio, "));
+    expect(peer, lanes.join(" | ")).toBeDefined();
+    expect(peer).toContain("blocked on a question for 30 minutes");
+  });
+
+  it("M60: a run that ended has no lane — the timeline holds the live rows the window shows, and no ledger lays an ended one under them", async () => {
+    const local = [
+      ...LOCAL_ROWS,
+      managedSummary({ runtimeRunId: "run-gone", kind: "grok", label: "Grok", alive: false }),
+    ];
+    const host = await mountEntry(fakeDoor(null, local, STUDIO_ROWS), monitorViewFor("timeline"));
+    const lanes = [
+      ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-timeline-agents button"),
+    ].map((button) => button.textContent ?? "");
+    // two local runs and the peer's two: the ended grok run is no lane
+    expect(lanes).toHaveLength(4);
+    expect(lanes.some((label) => label.includes("Grok"))).toBe(false);
+  });
+});
+
 describe("select routes by source", () => {
   it("another desktop's run that names no PTY says so, and asks the door nothing", async () => {
     const door = fakeDoor();

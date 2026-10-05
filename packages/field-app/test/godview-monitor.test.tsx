@@ -409,8 +409,34 @@ describe("the monitor stage", () => {
     // list as `stage.insets.top` — no host rule names the list (W5).
     const list = host.querySelector<HTMLElement>(".vf-monitor-list");
     expect(list?.style.getPropertyValue("--mv-list-inset-top")).toBe("20px");
-    // the same measurement, still published for the timeline's host rule
-    expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("20px");
+    // no CSS variable on the stage any more: the timeline's host rule went with
+    // MV-6, and nothing reads the legacy pair
+    expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("");
+    expect(stage?.style.getPropertyValue("--vf-monitor-chrome-right")).toBe("");
+  });
+
+  it("starts the timeline AT the claims strip's bottom, through the stage alone — 11px higher than the old host rule (GT-6a, M63)", async () => {
+    // NAMED VISIBLE CHANGE (M63): `godview.css` padded the timeline by the
+    // strip's bottom PLUS the list's 11px band. The ported timeline clears the
+    // strip itself from `stage.insets.top` and starts at it, as puppeteer's
+    // Godview draws it; no host rule names it (W5).
+    const fire = driveObservers();
+    const host = await mountMonitor("timeline");
+    const stage = host.querySelector<HTMLElement>(".vf-godview-monitor-stage");
+    const claims = host.querySelector<HTMLElement>(".vf-monitor-claims");
+    expect(claims?.textContent ?? "").toContain("managed agent");
+    stage!.getBoundingClientRect = () => rect(44, 400);
+    claims!.getBoundingClientRect = () => rect(55, 64);
+    act(() => {
+      for (const publish of fire) publish();
+    });
+    await settle();
+    const timeline = host.querySelector<HTMLElement>(".vf-monitor-timeline");
+    expect(timeline?.closest(".mv-timeline")).not.toBeNull();
+    expect(timeline?.style.getPropertyValue("--mv-timeline-inset-top")).toBe("20px");
+    // the timeline's own stylesheet starts it at the inset; nothing of the
+    // host's pads it (the old rule computed 20px + 11px)
+    expect(timeline?.style.paddingTop ?? "").toBe("");
   });
 
   it("hands a view the chrome's rectangles as the stage's obstacles, unrounded, as the swarm measured them (MV-D19)", async () => {
@@ -495,14 +521,13 @@ describe("the monitor stage", () => {
         .querySelector<HTMLElement>(".vf-monitor-list")
         ?.style.getPropertyValue("--mv-list-inset-top"),
     ).toBe("0px");
-    expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("0px");
   });
 
   it("names no ported view in a host stylesheet (W5), and defines every skin name the views read (L18)", () => {
     // List and rain carry their own stylesheets since MV-4, the swarm (and its
-    // spawn bloom) since MV-5 (L18): no VibeField rule may name their classes or
-    // their root classes — swept over every stylesheet of this package and the
-    // design kit. The timeline's host rule stays until its own commit.
+    // spawn bloom) since MV-5, the timeline since MV-6 (L18): no VibeField rule
+    // may name their classes or their root classes — swept over every
+    // stylesheet of this package and the design kit.
     const stylesheets = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory()
@@ -529,6 +554,9 @@ describe("the monitor stage", () => {
         /vf-swarm/,
         /vf-bloom/,
         /\.mv-swarm\b/,
+        /vf-monitor-timeline/,
+        /\.mv-timeline\b/,
+        /--vf-monitor-flow-band/,
       ]) {
         expect(css, `${path} names ${name}`).not.toMatch(name);
       }
@@ -2158,6 +2186,29 @@ describe("MV-W4 — the motion a ported view may make", () => {
     const { entry, recording } = recordingEntry();
     await mountUnder(entry);
     expect(recording.inputs[0]?.theme).toMatchObject({ animations: true, reducedMotion: false });
+  });
+
+  it("NAMED (MV-W4): the swarm holds still under reduced motion and moves again when it is let go — where the old swarm ran regardless", async () => {
+    const query = reducedMotionQuery(true);
+    const host = await mountMonitor("swarm");
+    const swarm = (): Element | null => host.querySelector(".vf-monitor-swarm");
+    expect(swarm()?.classList.contains("is-still")).toBe(true);
+    await act(async () => query.set(false));
+    await settle();
+    expect(swarm()?.classList.contains("is-still")).toBe(false);
+    await act(async () => query.set(true));
+    await settle();
+    expect(swarm()?.classList.contains("is-still")).toBe(true);
+  });
+
+  it("NAMED (MV-W4): the swarm holds still while the stage's animations switch is off", async () => {
+    reducedMotionQuery(false);
+    const entry = monitorViewFor("swarm");
+    const door = await mountUnder(entry, false);
+    const swarm = (): Element | null => container?.querySelector(".vf-monitor-swarm") ?? null;
+    expect(swarm()?.classList.contains("is-still")).toBe(true);
+    await renderUnder(entry, door, true);
+    expect(swarm()?.classList.contains("is-still")).toBe(false);
   });
 
   it("hands the view the viewer's reduced motion, live: a change reaches it with nothing else moving", async () => {

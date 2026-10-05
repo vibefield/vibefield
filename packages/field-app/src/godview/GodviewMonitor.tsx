@@ -427,17 +427,17 @@ export function GodviewMonitor({
   const emptyUnder =
     chosen !== undefined && agents.length > 0 && shown.length === 0 ? chosen : undefined;
 
-  // MV-D19 — the view host's stage: the same measurement the CSS variables
-  // below publish, as plain data. The legacy views keep reading the variables
-  // and the chrome's rects (insets are advisory, `design-mv.md` §5); a ported
-  // view reads this instead (MV-4: the list's band and gutter are its insets).
+  // MV-D19 — the view host's stage: the chrome measured below, as plain data.
+  // Every view reads it (MV-4…MV-6): the list's and the timeline's band and
+  // gutter are its insets, the swarm steers around its obstacles. The CSS
+  // variables the legacy views read off the stage are gone with them.
   const [stageGeometry, setStageGeometry] = useState<StageGeometry>(EMPTY_STAGE);
   // MV-W4 — the motion a view may make: none while the viewer asks for reduced
   // motion, and none while the stage's animations switch is off (the lab's
-  // kill switch, the catalog's still stage). A ported view's loop stops on
-  // either (the rain draws once per change instead); the legacy views keep
-  // their own rules until they port. Both are known at the first render, so a
-  // view mounted under a still stage never starts its loop.
+  // kill switch, the catalog's still stage). A view's loop stops on either
+  // (the rain draws once per change instead, the swarm holds still and pauses
+  // its physics). Both are known at the first render, so a view mounted under
+  // a still stage never starts its loop.
   const monitorTheme = useMemo<MonitorTheme>(
     () => ({ scheme: theme, tokens: palette, reducedMotion, animations }),
     [theme, palette, reducedMotion, animations],
@@ -473,21 +473,18 @@ export function GodviewMonitor({
       const stageRect = stage.getBoundingClientRect();
       const chromeRect = chrome.getBoundingClientRect();
       const chromeRight = Math.round(chromeRect.right - stageRect.left);
-      stage.style.setProperty("--vf-monitor-chrome-right", `${chromeRight}px`);
       // A strip with nothing to say takes no room: it publishes 0, and the
       // view's own band then measures from the stage's top exactly as before.
       // The GAP is not published — the list's own stylesheet adds its band to
-      // the inset, and `godview.css` adds the same band for the timeline, so no
-      // new spacing number is invented here (docs/UI_SYSTEM.md: a visual
-      // constant belongs in DESIGN.md and the token sheet, never loose in a
-      // component).
+      // the inset, and the timeline starts at it (M63) — so no new spacing
+      // number is invented here (docs/UI_SYSTEM.md: a visual constant belongs
+      // in DESIGN.md and the token sheet, never loose in a component).
       //
       // "Nothing to say" is read off the HEIGHT, not off the child count: the
       // strip always carries its `aria-live` acknowledgement span, empty or
       // not, so counting children would reserve a band for a silent strip.
       const claimsRect = claims.getBoundingClientRect();
       const bottom = claimsRect.height === 0 ? 0 : Math.round(claimsRect.bottom - stageRect.top);
-      stage.style.setProperty("--vf-monitor-claims-bottom", `${bottom}px`);
       // the same measurement as the view host's stage (MV-D19): the chrome's
       // right edge as the left inset, the strip's bottom as the top one, both
       // elements as obstacles — unrounded, the rectangles the swarm measured

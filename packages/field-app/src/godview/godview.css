@@ -456,30 +456,23 @@
    them printing over each other — "1 MANAGED AGENT · MESH UNAVAILABLE…" under
    "1 SESSIONS" in the same corner.
 
-   No new spacing number is invented: the band under the strip is the package's
-   OWN top band, applied again from the strip's measured bottom (published by
-   `GodviewMonitor`, 0 when the strip is empty — which reproduces the package's
-   rule exactly). The rain and the swarm keep their full bleed: the swarm steers
-   its bodies around chrome by rect, and the rain is a canvas the column already
-   crosses. DESIGN.md §9: two claims that overlap are one unreadable claim.
+   No new spacing number is invented: the strip's measured bottom is the one
+   number this host hands over (0 when the strip is empty — which reproduces the
+   package's rule exactly), and a view's own band stands past it. The rain and
+   the swarm keep their full bleed: the swarm steers its bodies around the
+   chrome's rectangles (the stage's obstacles), and the rain is a canvas the
+   column already crosses. DESIGN.md §9: two claims that overlap are one
+   unreadable claim.
    TL (2026-10-02): the timeline lays out in flow (its map strip is a row at
    its top), so it starts below the strip as the list does.
 
-   MV-4 (M58, W5): the list is an SDK view now and clears the strip ITSELF —
-   the view host hands it the strip's measured bottom as `stage.insets.top`
-   (the same measurement `GodviewMonitor` publishes below), and its own
-   stylesheet starts its band 11px past it. So no host rule names it. The
-   timeline still lays out under this one until it ports (mv56-vf), which
-   deletes the rule and the band with it. */
-.vf-godview-monitor-stage {
-  /* the flow views' own top band (the list's stylesheet draws it as 11px too) */
-  --vf-monitor-flow-band: 11px;
-}
-
-.vf-godview-monitor-stage .vf-monitor-timeline {
-  padding-top: calc(var(--vf-monitor-claims-bottom, 0px) + var(--vf-monitor-flow-band));
-}
-
+   MV-4 / MV-6 (M58, M63, W5): both flow views — the list and the timeline —
+   are SDK views and clear the strip THEMSELVES: the view host hands them the
+   strip's measured bottom as `stage.insets.top` (`GodviewMonitor`, 0 for a
+   silent strip), and no host rule names them. The list starts its own 11px
+   band past it; the timeline starts AT it, as puppeteer's Godview draws it —
+   11px higher than the host rule that stood here put it, since that rule added
+   the list's band to the timeline too (named in MV-6). */
 .vf-monitor-claims {
   position: absolute;
   z-index: 7;
