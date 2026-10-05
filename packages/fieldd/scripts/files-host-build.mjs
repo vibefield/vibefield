@@ -16,7 +16,7 @@
 // the replacement did not happen FAILS (a mille release that renames its
 // loader must be noticed at the pin move, EL8 — never shipped as a worker that
 // dies on its first import).
-import { copyFileSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 
 export const FIELDD_ROOT = resolve(import.meta.dirname, "..");
@@ -41,7 +41,12 @@ export function milleNativePlugin(state = { swapped: 0 }) {
         state.swapped = 0;
       });
       build.onResolve({ filter: /^\.\/native\.js$/ }, (args) => {
-        if (!MILLE_DIST.test(args.importer)) return undefined;
+        const installed = realpathSync(join(FIELDD_ROOT, "node_modules", "@vibecook", "mille"));
+        if (
+          !MILLE_DIST.test(args.importer) &&
+          !args.importer.startsWith(join(installed, "dist") + "/")
+        )
+          return undefined;
         state.swapped += 1;
         return { path: NATIVE_SHIM };
       });
@@ -84,6 +89,8 @@ export function installedMilleNativeFile(fielddRoot = FIELDD_ROOT) {
   const triple = milleTriple(process.platform, process.arch, isMusl());
   if (triple === null) return null;
   const mille = realpathSync(join(fielddRoot, "node_modules", "@vibecook", "mille"));
+  const local = join(mille, `mille.${triple}.node`);
+  if (existsSync(local)) return { triple, file: local };
   const pkg = join(dirname(mille), `mille-${triple}`);
   const manifest = JSON.parse(readFileSync(join(pkg, "package.json"), "utf8"));
   return { triple, file: join(pkg, manifest.main ?? `mille.${triple}.node`) };

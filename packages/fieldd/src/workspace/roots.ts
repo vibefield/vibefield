@@ -20,7 +20,7 @@ import {
   enumerateBrowseExports,
   ownBrowseFacts,
 } from "./browse-exports";
-import { displayName, isExcludedRoot, rootIdFor } from "./paths";
+import { displayName, isFilesystemRoot, rootIdFor } from "./paths";
 
 // FS-1a (L2; `thinking-files-service.md` §6) — the ROOTS REGISTRY: what this
 // desktop's files service exports, fieldd-owned, under the user root at
@@ -57,9 +57,6 @@ export interface RootsRegistryOptions {
   isDirectory?: (path: string) => boolean;
   /** its real path, or null when it cannot be read (a test's seam) */
   realpath?: (path: string) => string | null;
-  /** is this real path never a place? (a test's seam; default
-   * `isExcludedRoot` for the registry's platform) */
-  isExcluded?: (realPath: string) => boolean;
   now?: () => Date;
   logger?: Logger;
 }
@@ -230,7 +227,7 @@ export class RootsRegistry {
     if (!(this.#opts.isDirectory ?? defaultIsDirectory)(path)) return false;
     const real = (this.#opts.realpath ?? defaultRealpath)(path);
     if (real === null) return false;
-    return !(this.#opts.isExcluded ?? ((p: string) => isExcludedRoot(p, this.#platform)))(real);
+    return !isFilesystemRoot(real, this.#platform);
   }
 
   /** Re-read the disk's word on every place (`missing`) — a flip is persisted

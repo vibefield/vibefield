@@ -34,6 +34,7 @@ import { existsSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { milleAliases } from "./mille-aliases.mjs";
 import { readLock, siblingDir } from "./siblings.mjs";
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -189,6 +190,47 @@ for (const name of TYPE_PEERS) {
     const [version] = [...versions.keys()];
     report.push(`${name}@${version} (types: one version here and in every linked sibling)`);
   }
+}
+
+// FS-1b: the room brings a link to its own mille checkout. Both renderer
+// resolvers must alias every exported entry to the locked checkout, and our
+// direct consumers must resolve that same checkout. A version string alone
+// cannot distinguish two unreleased builds.
+const milleEntry = readLock(ROOT)?.siblings?.mille;
+if (milleEntry) {
+  const aliases = milleAliases(ROOT);
+  for (const [consumer, name] of [
+    ["packages/fieldd", "@vibecook/mille"],
+    ["packages/field-app", "@vibecook/mille"],
+    ["packages/field-app", "@vibecook/mille-ui"],
+  ]) {
+    const expected = aliases.find((alias) => alias.find === name)?.replacement;
+    let actual;
+    try {
+      actual = realpathSync(join(ROOT, consumer, "node_modules", name));
+    } catch {}
+    const folder = milleEntry.packages[name];
+    if (!expected || !actual || actual !== realpathSync(join(siblingDir(ROOT, milleEntry), folder)))
+      problems.push(`${consumer} resolves ${name} outside the locked mille checkout`);
+  }
+  for (const config of [
+    "packages/electron-shell/vite.config.ts",
+    "packages/field-app/vitest.config.ts",
+  ]) {
+    const source = readFileSync(join(ROOT, config), "utf8");
+    if (
+      !source.includes('from "../../scripts/mille-aliases.mjs"') ||
+      !/alias:\s*\[\s*\.\.\.milleAliases\(/.test(source)
+    )
+      problems.push(`${config} must install the locked mille aliases before other aliases`);
+  }
+  for (const alias of aliases) {
+    if (!existsSync(alias.replacement))
+      problems.push(
+        `${alias.find} has no built export at ${alias.replacement}; build the pinned mille sibling`,
+      );
+  }
+  report.push(`mille@${milleEntry.sha.slice(0, 8)} (daemon, renderer and room pinned together)`);
 }
 
 if (problems.length > 0) {

@@ -6,6 +6,7 @@ import { WorkspaceDoors } from "./doors";
 import { chooseFilesHostLaunch, type FilesHostLaunch, ownFilesHostFacts } from "./launch";
 import { RootsRegistry } from "./roots";
 import { type FilesHostLaunchSpec, FilesHostSupervisor, type FilesHostTimings } from "./supervisor";
+import { WorkspaceTickets } from "./tickets";
 
 // FS-1a — the files service as fieldd composes it: the roots registry, the
 // worker's supervisor and the doors, built at boot and STARTED with the daemon
@@ -29,8 +30,6 @@ export interface WorkspaceServiceConfig {
   browse?: (() => BrowseFacts) | undefined;
   /** test seam: the roots subscription's re-read cadence */
   rootsPollMs?: number | undefined;
-  /** test seam: which real paths are never places (default `isExcludedRoot`) */
-  isExcluded?: ((realPath: string) => boolean) | undefined;
   logger: Logger;
 }
 
@@ -38,6 +37,7 @@ export interface WorkspaceService {
   registry: RootsRegistry;
   supervisor: FilesHostSupervisor;
   doors: WorkspaceDoors;
+  tickets: WorkspaceTickets;
   start(): void;
   stop(): Promise<void>;
 }
@@ -54,7 +54,6 @@ export function createWorkspaceService(config: WorkspaceServiceConfig): Workspac
     file: join(config.dataDir, ...LAYOUT.WORKSPACE_ROOTS_FILE),
     deviceId: config.deviceId,
     ...(config.browse !== undefined ? { browse: config.browse } : {}),
-    ...(config.isExcluded !== undefined ? { isExcluded: config.isExcluded } : {}),
     logger: config.logger.child({ component: "workspace_roots" }),
   });
   const supervisor = new FilesHostSupervisor({
@@ -68,12 +67,26 @@ export function createWorkspaceService(config: WorkspaceServiceConfig): Workspac
     ...(config.rootsPollMs !== undefined ? { rootsPollMs: config.rootsPollMs } : {}),
     logger: config.logger.child({ component: "workspace_doors" }),
   });
+  const tickets = new WorkspaceTickets(registry, supervisor);
+  const unlisten = registry.onChange(() => {
+    if (supervisor.health().phase !== "ready") return;
+    void supervisor
+      .request("retainRoots", {
+        rootIds: registry
+          .roots()
+          .filter((root) => !root.missing)
+          .map((root) => root.rootId),
+      })
+      .catch(() => undefined);
+  });
   return {
+    tickets,
     registry,
     supervisor,
     doors,
     start: () => supervisor.start(),
     stop: async () => {
+      unlisten();
       doors.dispose();
       await supervisor.stop();
     },

@@ -70,7 +70,6 @@ function registry(
     deviceId: () => "dev_test",
     browse: browseOf(home),
     // a temporary folder on macOS lives under /private, which is never a place
-    isExcluded: () => false,
     ...extra,
   });
 }
@@ -152,7 +151,7 @@ describe("the roots registry (places, persisted; browse exports, live)", () => {
     expect(roots.find(rootIdFor("place", gone))?.missing).toBe(true);
   });
 
-  it("never makes the system's folders or a folder that is not there a place", () => {
+  it("exports places wherever work ran, but refuses filesystem roots and absent folders", () => {
     const { file, folder } = world();
     const home = folder("home");
     const real = new RootsRegistry({
@@ -163,12 +162,20 @@ describe("the roots registry (places, persisted; browse exports, live)", () => {
       realpath: (path) => (path === "/tmp/x" ? "/private/tmp/x" : path),
       isDirectory: () => true,
     });
-    expect(real.touchPlace("/System/Library")).toBe(false);
-    expect(real.touchPlace("/Library/Caches")).toBe(false);
-    expect(real.touchPlace("/tmp/x")).toBe(false); // /tmp is /private/tmp
+    expect(real.touchPlace("/System/Library")).toBe(true);
+    expect(real.touchPlace("/Library/Caches")).toBe(true);
+    expect(real.touchPlace("/tmp/x")).toBe(true); // /tmp is /private/tmp
     expect(real.touchPlace("/")).toBe(false);
     expect(registry(file, home).touchPlace(join(home, "not-there"))).toBe(false);
-    expect(existsSync(file)).toBe(false);
+    expect(real.touchPlace("/var/folders/work")).toBe(true);
+    const windows = new RootsRegistry({
+      file,
+      deviceId: () => "win",
+      platform: "win32",
+      realpath: (p) => p,
+      isDirectory: () => true,
+    });
+    expect(windows.touchPlace("C:\\")).toBe(false);
   });
 
   it("sets aside a file that does not parse and starts empty — never a failed boot", () => {

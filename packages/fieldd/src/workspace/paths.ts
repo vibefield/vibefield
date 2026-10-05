@@ -102,3 +102,10 @@ export function displayName(path: string, platform: NodeJS.Platform): string {
   const base = p.basename(path);
   return base.length > 0 ? base : path;
 }
+
+/** A place may be anywhere work ran, except a whole filesystem root (FS-1b). */
+export function isFilesystemRoot(realPath: string, platform: NodeJS.Platform): boolean {
+  const paths = platform === "win32" ? win32 : posix;
+  const normalized = paths.normalize(realPath);
+  return normalized === paths.parse(normalized).root;
+}

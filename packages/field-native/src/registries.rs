@@ -15,6 +15,7 @@ pub mod ports {
     pub const TERMINAL_CELLS_SERVE: u16 = 9422;
     pub const FIELDD_PRODUCT_SERVE: u16 = 9423;
     pub const INDEX_SERVE: u16 = 9424;
+    pub const WORKSPACE_SERVE: u16 = 0;
     pub const DOC_SYNC_QUIC: u16 = 9440;
     pub const PRESENCE_UDP: u16 = 9441;
     pub const RELAY_HTTPS: u16 = 443;

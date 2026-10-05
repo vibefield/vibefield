@@ -1760,10 +1760,31 @@ export const METHODS: MethodDef[] = [
   // a root's git facts. `workspace.read` — already in the tailnet preset and
   // plugin-eligible, so the handlers gate by PRINCIPAL (FS-D6 (a), RO-13's
   // rule): a plugin, an MCP agent and a guest are refused whatever they hold;
-  // a window, the shell, a self phone and a self peer are served. `federate`:
+  // a renderer participant window, a self phone and a self peer read rows. `federate`:
   // a foreign `device` forwards the call whole and the owner answers from its
   // own worker (another desktop's roots are its own). Idempotent reads, every
-  // one. The attached tier's `workspace.openTicket` is FS-1b's, not declared.
+  // one. FS-1b attaches only this desktop's renderer windows; close releases a lease.
+  defineMethod({
+    surface: "product",
+    method: "workspace.fileAction",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.closeTicket",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.openTicket",
+    scope: "workspace.read",
+    idempotent: false,
+    locality: "federate",
+  }),
   defineMethod({
     surface: "product",
     method: "workspace.roots",

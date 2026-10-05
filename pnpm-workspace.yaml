@@ -151,8 +151,10 @@ overrides:
   # packages/fieldd/src/workspace/ alone; field-app may take `/port` and
   # mille-ui, which FS-1b adds). A `link:` window (`../mille-pin`) opens only for
   # the unreleased M4/M6/M7 work and closes at mille's next release.
-  "@vibecook/mille": 0.3.4
   # ---- SIBLING MODE (AR-0, 2026-09-12) --------------------------------------
+  # FS-1b: M4/M6/M7 at the lock's mille SHA; close at its first registry release.
+  "@vibecook/mille": link:../mille-pin/packages/mille
+  "@vibecook/mille-ui": link:../mille-pin/packages/mille-ui
   # chopsticks and spaghetti retired on 2026-09-04 (James): the agent runtime is
   # puppeteer, agent history is rosetta. Neither is published, so they enter as
   # `link:` rows to SIBLING CHECKOUTS beside this repo, pinned by revision in

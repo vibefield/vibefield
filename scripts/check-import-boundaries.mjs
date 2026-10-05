@@ -492,15 +492,23 @@ const RULES = [
     // per-platform binaries are loaded by an explicit path, never imported).
     enforce: true,
     description:
-      "@vibecook/mille only under packages/fieldd/src/workspace/host (the files worker); field-app only @vibecook/mille/port + @vibecook/mille-ui; nothing else imports mille",
+      "@vibecook/mille only under packages/fieldd/src/workspace/host (the files worker); field-app only @vibecook/mille/port + @vibecook/mille/remote + @vibecook/mille-ui; nothing else imports mille",
     applies: (p) => SOURCE_EXT.test(p),
     // the one wall whose verdict depends on WHERE the import is: the loop
     // hands every importTest the file's repo-relative path as well
     importTest: (s, p) => {
       if (!(importsModule(s, "@vibecook/mille") || s.startsWith("@vibecook/mille-"))) return false;
       if (under(p, MILLE_WORKER_DIR)) return !importsModule(s, "@vibecook/mille");
+      // Integration witnesses may dial the worker using only the same
+      // native-free clients as the renderer; the engine stays behind the wall.
+      if (isTestPath(p) && underAny(p, ["packages/fieldd", "packages/field-app"]))
+        return !(s === "@vibecook/mille/port" || s === "@vibecook/mille/remote");
       if (under(p, "packages/field-app/src"))
-        return !(s === "@vibecook/mille/port" || importsModule(s, "@vibecook/mille-ui"));
+        return !(
+          s === "@vibecook/mille/port" ||
+          s === "@vibecook/mille/remote" ||
+          importsModule(s, "@vibecook/mille-ui")
+        );
       return true;
     },
   },
@@ -1044,8 +1052,12 @@ function runSelfTest() {
       body: 'import { createFileExplorerHost } from "@vibecook/mille";\nimport { createFramedStreamHostChannel } from "@vibecook/mille/node";\nexport const h = createFileExplorerHost;\nexport const c = createFramedStreamHostChannel;\n',
     },
     {
+      file: "packages/fieldd/test/clean-mille-client.test.ts",
+      body: 'import { connectWebSocketChannel } from "@vibecook/mille/remote";\nexport const connect = connectWebSocketChannel;\n',
+    },
+    {
       file: "packages/field-app/src/clean-mille-client.ts",
-      body: 'import { connectFileExplorer } from "@vibecook/mille/port";\nimport { FileTree } from "@vibecook/mille-ui";\nexport const c = connectFileExplorer;\nexport const t = FileTree;\n',
+      body: 'import { connectFileExplorer } from "@vibecook/mille/port";\nimport { FileTree } from "@vibecook/mille-ui";\nimport { connectWebSocketChannel } from "@vibecook/mille/remote";\nexport const remote = connectWebSocketChannel;\nexport const c = connectFileExplorer;\nexport const t = FileTree;\n',
     },
     {
       file: "packages/field-app/src/clean-view-door.ts",

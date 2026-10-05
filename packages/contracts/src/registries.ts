@@ -108,6 +108,8 @@ export const PORTS = {
    * egress route may target only a door that demands its own grant); it joins
    * that list at the pin move, in review. */
   INDEX_SERVE: 9424,
+  /** FS-1b: the files worker binds an ephemeral loopback listener per generation. */
+  WORKSPACE_SERVE: 0,
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
   DOC_SYNC_QUIC: 9440,
   /** presence + device heartbeats (UDP, lossy). */
@@ -471,6 +473,15 @@ export const WORKSPACE_LIMITS = {
   SEARCH_CACHE_MS: 60_000,
   HOST_IDLE_MS: 300_000,
   HOSTS_MAX: 16,
+  TICKETS_MAX: 256,
+  SOCKETS_MAX: 128,
+  ATTACH_TIMEOUT_MS: 10_000,
+  GIT_REQUEST_BYTES: 64 * 1024,
+  GIT_REQUESTS_IN_FLIGHT: 8,
+  SOCKET_BUFFER_BYTES: 32 * 1024 * 1024,
+  RENEW_BEFORE_MS: 30_000,
+  RETRY_MIN_MS: 500,
+  RETRY_MAX_MS: 10_000,
 } as const;
 
 /** FS-1a — the files service's honest refusal vocabulary

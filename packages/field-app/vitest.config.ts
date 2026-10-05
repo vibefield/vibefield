@@ -1,4 +1,6 @@
+import { resolve } from "node:path";
 import { defineConfig } from "vitest/config";
+import { milleAliases } from "../../scripts/mille-aliases.mjs";
 
 // Renderer unit tests under happy-dom, with the localStorage setup shim (theme.ts
 // reads localStorage at init). Tests live in test/, not colocated with src, so
@@ -13,6 +15,7 @@ export default defineConfig({
   resolve: {
     dedupe: ["react", "react-dom"],
     alias: [
+      ...milleAliases(resolve(import.meta.dirname, "../..")),
       // The scroll lock under the room's Radix dialog (react-remove-scroll and
       // the four helpers it imports) publishes no `exports`, so vitest's
       // Node-style resolution takes each one's ES5 CommonJS `main` — which Node
@@ -47,7 +50,12 @@ export default defineConfig({
         // "Invalid hook call" the moment History's search rendered (the search
         // interim, 2026-10-04). Inlined, Vite resolves that tree's `react` as it
         // does for the bundle — one React.
-        inline: ["@vibecook/ghosttea-react", /[\\/]clients[\\/]room[\\/]node_modules[\\/]/],
+        inline: [
+          "@vibecook/mille",
+          "@vibecook/mille-ui",
+          "@vibecook/ghosttea-react",
+          /[\\/]clients[\\/]room[\\/]node_modules[\\/]/,
+        ],
       },
     },
   },

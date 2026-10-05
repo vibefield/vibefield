@@ -169,6 +169,8 @@ export function installedMilleNative(
   } catch {
     return null;
   }
+  const local = join(mille, milleNativeFileName(triple));
+  if (existsSync(local)) return local;
   const platformPackage = join(dirname(mille), `mille-${triple}`);
   try {
     const manifest = JSON.parse(readFileSync(join(platformPackage, "package.json"), "utf8")) as {

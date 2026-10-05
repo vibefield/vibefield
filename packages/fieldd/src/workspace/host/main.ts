@@ -25,6 +25,8 @@ let engines: InstanceType<EngineModule["Engines"]> | null = null;
 let gitModule: GitModule | null = null;
 let failureClass: EngineModule["WorkerFailure"] | null = null;
 let stopping = false;
+let listener: import("./listener").WorkspaceListener | null = null;
+let resolveConfined: typeof import("./listener").resolveConfined | null = null;
 
 function send(message: FromWorker): void {
   if (typeof process.send === "function" && process.connected) process.send(message);
@@ -55,6 +57,25 @@ async function answer(op: WorkerOp, args: unknown): Promise<unknown> {
   if (engines === null || gitModule === null) throw new Error("the engine is not loaded");
   const ask = (args ?? {}) as Record<string, unknown>;
   switch (op) {
+    case "resolve":
+      if (resolveConfined === null) throw new Error("files listener is not ready");
+      return resolveConfined(
+        String(ask["rootPath"]),
+        ask["segments"] as string[],
+        ask["file"] === true,
+      );
+    case "registerTicket":
+      if (listener === null) throw new Error("files listener is not ready");
+      listener.register(args as import("../protocol").AttachRegistration);
+      return { port: listener.port };
+    case "closeTicket":
+      return listener?.closeTicket(String(ask["clientId"]), String(ask["ticket"])) ?? false;
+    case "revokeClient":
+      listener?.revokeClient(String(ask["clientId"]));
+      return null;
+    case "retainRoots":
+      listener?.retainRoots(ask["rootIds"] as string[]);
+      return null;
     case "list":
       return await engines.list(args as Parameters<typeof engines.list>[0]);
     case "search":
@@ -88,6 +109,7 @@ async function shutdown(code: number): Promise<never> {
   if (!stopping) {
     stopping = true;
     try {
+      await listener?.close();
       await engines?.disposeAll();
     } catch {
       // the process is leaving either way
@@ -104,8 +126,11 @@ async function init(milleNative: string): Promise<void> {
     failureClass = engine.WorkerFailure;
     assertRoot = engine.assertRoot;
     engines = new engine.Engines();
+    const serving = await import("./listener");
+    resolveConfined = serving.resolveConfined;
+    listener = await serving.WorkspaceListener.start(engines);
     const mille = await import("./mille-identity");
-    send({ t: "ready", pid: process.pid, mille: mille.milleIdentity() });
+    send({ t: "ready", pid: process.pid, port: listener.port, mille: mille.milleIdentity() });
   } catch (error) {
     send({
       t: "fatal",

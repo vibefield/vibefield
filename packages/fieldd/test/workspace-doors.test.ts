@@ -28,6 +28,7 @@ import {
   WORKSPACE_LIMITS,
   WorkspaceGitFactsResult,
   WorkspaceListResult,
+  WorkspaceOpenTicketResult,
   type WorkspaceRoot,
   WorkspaceRootsDelta,
   WorkspaceRootsOpen,
@@ -65,6 +66,9 @@ afterEach(async () => {
 });
 
 const DOORS = [
+  ["workspace.openTicket", { rootId: "r_x" }],
+  ["workspace.closeTicket", { ticket: "a".repeat(43) }],
+  ["workspace.fileAction", { rootId: "r_x", path: "", action: "copyPath" }],
   ["workspace.roots", {}],
   ["workspace.list", { rootId: "r_x" }],
   ["workspace.search", { rootId: "r_x", q: "x" }],
@@ -144,7 +148,7 @@ async function boot(opts: { filesHost?: false } = {}): Promise<World> {
     allowedOrigins: ["file://"],
     filesHost: opts.filesHost === false ? false : launch,
     filesHostTimings: { RESTART_BASE_MS: 50, RESTART_MAX_MS: 200 },
-    workspace: { browse: browseOf(home), isExcluded: () => false, rootsPollMs: 100 },
+    workspace: { browse: browseOf(home), rootsPollMs: 100 },
   });
   cleanup.push(() => daemon.stop());
   if (opts.filesHost !== false)
@@ -311,6 +315,9 @@ describe("the door tier, by principal (FS-D6 (a))", () => {
       { kind: "tailnet", login: TEST_LOGIN },
     ] as const) {
       const ctx = ctxOf(principal as CallerContext["principal"], "inproc-port");
+      expect(() => world.daemon.workspace.tickets.check(ctx, { rootId: "r_x" })).toThrow(
+        expect.objectContaining({ kind: "FORBIDDEN_SCOPE" }),
+      );
       expect(() => doors.roots(ctx, {}), principal.kind).toThrow(
         expect.objectContaining({ kind: "FORBIDDEN_SCOPE" }),
       );
@@ -439,5 +446,62 @@ describe("places, rows and the worker's life", () => {
     const error = await win.callErr("workspace.list", { rootId: home.rootId });
     expect(error.data).toMatchObject({ kind: "UNAVAILABLE", retryable: false });
     expect(WorkspaceUnavailableDetails.parse(error.data?.details).state).toBe("off");
+  });
+});
+
+describe("the attached door (FS-1b)", () => {
+  it("refuses plain local tokens and shell-main on every files door", async () => {
+    const { daemon } = await boot();
+    for (const grant of [
+      { token: daemon.tokens.mint(["workspace.read"], "plain").token, kind: "renderer" as const },
+      { token: daemon.shellToken, kind: "shell-main" as const },
+    ]) {
+      const rpc = await open(`ws://127.0.0.1:${daemon.controlPort}`);
+      await helloAs(rpc, grant.token, grant.kind);
+      for (const [method, params] of [
+        ...DOORS,
+        ["workspace.subscribe", { scope: "roots" }] as const,
+      ])
+        expect((await rpc.callErr(method, params)).data?.kind, method).toBe("FORBIDDEN_SCOPE");
+    }
+  });
+
+  it("mints a confined read-only pair; frees unused grants; projects worker health", async () => {
+    const world = await boot();
+    const win = await windowOf(world.daemon, ["workspace.read"]);
+    const home = homeRoot(WorkspaceRootsResult.parse(await win.call("workspace.roots", {})));
+    for (let i = 0; i < WORKSPACE_LIMITS.SESSIONS_PER_CLIENT + 2; i += 1) {
+      const ticket = WorkspaceOpenTicketResult.parse(
+        await win.call("workspace.openTicket", {
+          rootId: home.rootId,
+          path: "Projects/repo",
+        }),
+      );
+      expect(ticket.rootPath).toBe(join(world.home, "Projects", "repo"));
+      expect(ticket.ticket).not.toBe(ticket.gitTicket);
+      expect(ticket.generation).toBe(world.daemon.workspace.supervisor.health().generation);
+      expect(await win.call("workspace.closeTicket", { ticket: ticket.ticket })).toEqual({
+        closed: true,
+      });
+      expect(await win.call("workspace.closeTicket", { ticket: ticket.ticket })).toEqual({
+        closed: false,
+      });
+    }
+    for (const path of ["escape", "Projects/gone"])
+      expect(
+        (await win.callErr("workspace.openTicket", { rootId: home.rootId, path })).data?.kind,
+      ).toBe("NOT_FOUND");
+    expect(
+      await win.call("workspace.fileAction", {
+        rootId: home.rootId,
+        path: "Projects/repo/src/a.ts",
+        action: "copyPath",
+      }),
+    ).toEqual({ path: join(world.home, "Projects", "repo", "src", "a.ts") });
+    const phone = await tailnetCaller(world, TEST_LOGIN);
+    expect((await phone.callErr("workspace.openTicket", { rootId: home.rootId })).data?.kind).toBe(
+      "FORBIDDEN_SCOPE",
+    );
+    expect(world.daemon.health().workspace.phase).toBe("ready");
   });
 });

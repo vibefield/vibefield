@@ -1,0 +1,15 @@
+name: Prepare the pinned mille sibling
+description: Build the files service engine and renderer at the locked revision, with the host's React peers.
+runs:
+  using: composite
+  steps:
+    - name: Fetch mille at its locked revision
+      shell: bash
+      run: node scripts/siblings.mjs fetch mille
+    - uses: dtolnay/rust-toolchain@stable
+    - name: Install mille and bind the host peers
+      shell: bash
+      run: node scripts/siblings.mjs install-js mille
+    - name: Build mille and its renderer
+      shell: bash
+      run: node scripts/siblings.mjs build-js mille

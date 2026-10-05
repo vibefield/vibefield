@@ -333,9 +333,25 @@ export class Engines {
     return { id, abs };
   }
 
+  /** Hold the same host the row doors use for the full attached session. */
+  async attach(rootPath: string): Promise<{ host: FileExplorerHost; release: () => void }> {
+    if ((await this.#rootReal(rootPath)) !== rootPath)
+      throw new WorkerFailure("not-found", "the exported folder changed");
+    const slot = await this.#acquire(rootPath);
+    let released = false;
+    return {
+      host: slot.host,
+      release: () => {
+        if (released) return;
+        released = true;
+        this.#release(slot);
+      },
+    };
+  }
+
   async list(args: ListArgs): Promise<ListValue> {
     const rootReal = await this.#rootReal(args.rootPath);
-    const slot = await this.#acquire(args.rootPath);
+    const slot = await this.#acquire(rootReal);
     try {
       const { id, abs } = await this.#folder(slot, rootReal, args.segments);
       const fx = slot.host.local;
@@ -426,7 +442,7 @@ export class Engines {
 
   async search(args: SearchArgs): Promise<SearchValue> {
     const rootReal = await this.#rootReal(args.rootPath);
-    const slot = await this.#acquire(args.rootPath);
+    const slot = await this.#acquire(rootReal);
     try {
       const { abs } = await this.#folder(slot, rootReal, args.segments);
       const walk = await this.#names(slot, abs, args.segments.join("/"));

@@ -486,7 +486,6 @@ async function setup(config: SetupConfig): Promise<Box> {
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
     // FS-1a — every run's folder is a place; a test root on macOS lives under
     // /private, which the files service never exports, so the rule is lifted
-    workspace: { isExcluded: () => false },
     // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget
     ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
   });
@@ -1175,7 +1174,6 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     const reseeded = new RootsRegistry({
       file: join(dataDir, "reseeded-roots.json"),
       deviceId: () => "dev_test",
-      isExcluded: () => false,
     });
     expect(reseeded.seedPlaces(daemon.agents.recordedPlaces())).toBe(1);
     expect(reseeded.roots().find((root) => root.kind === "place")?.path).toBe(envOut);

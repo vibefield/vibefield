@@ -3,7 +3,7 @@
 // platform), the worker's launch (development bundle, packaged executable,
 // source run) and the installed engine's resolution.
 import { existsSync, mkdirSync, mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { WORKSPACE_ROOT_ID_PATTERN, WorkspaceRootId } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
@@ -198,7 +198,7 @@ describe("the browse exports (L2: one enumerator, a fixture per platform)", () =
   it("this machine: the real home directory leads", () => {
     const [first] = enumerateBrowseExports({
       platform: process.platform,
-      home: join(tmpdir()),
+      home: homedir(),
       user: "",
       fs: { readdir: () => [], realpath: (p) => p, isDirectory: () => true, exists: () => true },
     });

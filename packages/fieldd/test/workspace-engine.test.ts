@@ -78,6 +78,24 @@ describe("the worker's engines (one per export, bounded)", () => {
     expect(WORKSPACE_LIMITS.HOSTS_MAX).toBeGreaterThanOrEqual(2);
   });
 
+  it("an attached lease survives idle sweeping and cap pressure until released", async () => {
+    const a = base();
+    const b = base();
+    let clock = 100;
+    const e = engines({ hostsMax: 1, idleMs: 50, now: () => clock });
+    const held = await e.attach(a);
+    clock += 100;
+    await e.sweep();
+    expect(e.count).toBe(1);
+    await expect(list(e, b)).rejects.toMatchObject({ code: "busy" });
+    held.release();
+    held.release();
+    clock += 51;
+    await e.sweep();
+    expect(e.count).toBe(0);
+    expect((await list(e, b)).path).toBe(b);
+  });
+
   it("disposes an engine idle past its lease", async () => {
     const dir = base();
     mkdirSync(join(dir, "x"));

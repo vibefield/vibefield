@@ -173,11 +173,19 @@ import {
   TransportCredit,
 } from "../src/terminal-pipeline";
 import {
+  WorkspaceCloseTicketParams,
+  WorkspaceCloseTicketResult,
+  WorkspaceFileActionParams,
+  WorkspaceFileActionResult,
   WorkspaceGitFactsParams,
   WorkspaceGitFactsResult,
+  WorkspaceGitOpen,
+  WorkspaceGitOpened,
   WorkspaceGitPortTranscript,
   WorkspaceListParams,
   WorkspaceListResult,
+  WorkspaceOpenTicketParams,
+  WorkspaceOpenTicketResult,
   WorkspaceRootsDelta,
   WorkspaceRootsFile,
   WorkspaceRootsOpen,
@@ -468,6 +476,14 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "workspace-unavailable": WorkspaceUnavailableDetails,
   "workspace-git-port": WorkspaceGitPortTranscript,
   "workspace-roots-file": WorkspaceRootsFile,
+  "workspace-open-ticket-params": WorkspaceOpenTicketParams,
+  "workspace-open-ticket": WorkspaceOpenTicketResult,
+  "workspace-close-ticket-params": WorkspaceCloseTicketParams,
+  "workspace-close-ticket": WorkspaceCloseTicketResult,
+  "workspace-git-open": WorkspaceGitOpen,
+  "workspace-git-opened": WorkspaceGitOpened,
+  "workspace-file-action-params": WorkspaceFileActionParams,
+  "workspace-file-action": WorkspaceFileActionResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

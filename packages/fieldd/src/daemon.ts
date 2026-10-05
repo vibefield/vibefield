@@ -136,6 +136,7 @@ import {
   type TerminalRuntimeSessionsResult,
   TerminalSessionParams,
   TerminalTakeGeometryParams,
+  WorkspaceFileActionParams,
 } from "@vibefield/contracts";
 import type { AuditHealthV1 } from "@vibefield/contracts/diagnostics";
 import type { LoggingHealthV1 } from "@vibefield/contracts/logging";
@@ -241,7 +242,8 @@ import { TokenService } from "./token-service";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
 import { createWorkspaceService, type WorkspaceService } from "./workspace/service";
-import type { FilesHostTimings } from "./workspace/supervisor";
+import type { FilesHostHealth, FilesHostTimings } from "./workspace/supervisor";
+import { workspaceError } from "./workspace/tickets";
 
 // fieldd bootstrap (design-02 §3.6, P0 slice): tokens → NativeLink (pair +
 // health subscription) → ProductAPI listen → run files → ready. SUPERSEDED is
@@ -443,7 +445,6 @@ export interface FielddConfig {
   workspace?: {
     browse?: () => BrowseFacts;
     rootsPollMs?: number;
-    isExcluded?: (realPath: string) => boolean;
   };
 }
 
@@ -486,6 +487,7 @@ export interface FielddHealth {
    * (a bearer per start, rosettad-supervisor.ts); the projection still carries
    * neither the origin nor any credential.* */
   rosettad: RosettadHealth;
+  workspace: FilesHostHealth;
   docs: { state: string; docCount: number };
   plugins: { count: number; enabled: number; invalid: number };
   logging: LoggingHealthV1 | null;
@@ -826,7 +828,6 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     timings: config.filesHostTimings,
     browse: config.workspace?.browse,
     rootsPollMs: config.workspace?.rootsPollMs,
-    isExcluded: config.workspace?.isExcluded,
     logger,
   });
   const agents = new AgentRuntimeService({
@@ -1338,6 +1339,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       nativeBuild: native.nativeBuild ?? null,
       native: latestHealth,
       rosettad: rosettad?.health() ?? ROSETTAD_UNCONFIGURED, // the projection, never state()
+      workspace: workspace.supervisor.health(),
       docs: docs.health(),
       plugins: plugins.health(),
       logging: logging?.health() ?? null,
@@ -1389,12 +1391,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     native.on("connected", emitHealth);
     supervisor.on("transition", emitHealth);
     rosettad?.on("transition", emitHealth);
+    workspace.supervisor.on("transition", emitHealth);
     detachHealthSources = () => {
       audit.off("health", emitHealth);
       native.off("reconnecting", emitHealth);
       native.off("connected", emitHealth);
       supervisor.off("transition", emitHealth);
       rosettad?.off("transition", emitHealth);
+      workspace.supervisor.off("transition", emitHealth);
       mesh.off("reconciled", emitHealth);
       mesh.off("serves-changed", emitHealth);
       plugins.off("changed", emitHealth);
@@ -1955,6 +1959,44 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     api.registerSubscription("workspace.subscribe", (ctx, params, emit) =>
       workspace.doors.subscribe(ctx, params, emit),
     );
+    api.register("workspace.closeTicket", (ctx, params) => workspace.tickets.close(ctx, params));
+    api.register("workspace.openTicket", async (ctx, params) => {
+      const ask = workspace.tickets.check(ctx, params);
+      return audit.required(
+        ctx,
+        {
+          action: "workspace.ticket.mint",
+          target: { kind: "workspace-root", id: ask.root.rootId },
+        },
+        () => workspace.tickets.mint(ask, () => windowTokenIds.has(ask.clientId)),
+        (ticket) => ({
+          outcome: "succeeded",
+          attrs: { expiresAt: ticket.expiresAt, access: ticket.access },
+        }),
+        (ticket) => workspace.tickets.closeForClient(ask.clientId, ticket.ticket).then(() => {}),
+      );
+    });
+    api.register("workspace.fileAction", async (ctx, params) => {
+      const parsed = WorkspaceFileActionParams.safeParse(params);
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected {rootId, path, action}", false);
+      const ask = workspace.tickets.check(ctx, parsed.data);
+      try {
+        const path = await workspace.supervisor.request("resolve", {
+          rootPath: ask.root.path,
+          segments: ask.segments,
+          file: true,
+        });
+        if (parsed.data.action === "revealInFileManager") {
+          if (!api.revealPathAvailable())
+            throw new RpcCallError("UNAVAILABLE", "The desktop shell is not answering", true);
+          await api.revealPath({ path });
+        }
+        return { path };
+      } catch (error) {
+        return workspaceError(error);
+      }
+    });
     api.register("index.openTicket", async (ctx, params) => {
       const ask = indexTickets.check(ctx, params);
       return await audit.required(
@@ -2847,6 +2889,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         windowTokenIds.delete(tokenId);
         windowTokenParticipants.delete(tokenId);
         const revoked = tokens.revoke(tokenId);
+        await workspace.tickets.revokeClient(tokenId);
         const droppedConnections = api.dropTokenConnections(tokenId);
         if (participant !== undefined && pluginUpdatesForCleanup !== null) {
           lifecycleTask ??=

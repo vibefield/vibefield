@@ -35,8 +35,7 @@ import { FilesHostRefusal, type FilesHostSupervisor, FilesHostUnavailable } from
 //      guards the device roster and the artifact list, so the scope proves
 //      nothing about files: a PLUGIN (renderer or service), an MCP AGENT and a
 //      TAILNET GUEST are refused FORBIDDEN_SCOPE whatever they hold. A window
-//      (a local token, the renderer's participant or not — the shell mints
-//      both), the shell, a self phone (`tailnet`, `self: true`) and a self peer
+//      with a renderer participant, a self phone (`tailnet`, `self: true`) and a self peer
 //      daemon (`peer-fieldd`) are served.
 //   2. WHAT — the params (PRECONDITION_FAILED, the caller's to fix), then the
 //      path rule (paths.ts: `..`, an absolute path, a drive letter → refused;
@@ -51,7 +50,7 @@ import { FilesHostRefusal, type FilesHostSupervisor, FilesHostUnavailable } from
 // TAILNET caller's at most TAILNET_PAGE — the DOOR's cut, never the worker's
 // — with `clipped` and `nextCursor` saying more follows. A self peer daemon
 // keeps a window's pages (it asks on behalf of one, `tailnet-rows.ts`'s rule).
-// `workspace.roots` is cut the same way, oldest places first.
+// `workspace.roots` is cut the same way, newest places first.
 
 /** The cursor's spelling: the next page's offset (opaque to readers). */
 function cursorOf(offset: number): string {
@@ -66,14 +65,24 @@ function offsetOf(cursor: string | undefined): number {
   return Number(match[1]);
 }
 
+/** A shell-minted renderer participant, authenticated on the local door. */
+export function isWorkspaceWindow(ctx: CallerContext): boolean {
+  return (
+    ctx.principal.kind === "local-token" &&
+    ctx.principal.rendererParticipant !== undefined &&
+    ctx.transport === "ws-loopback" &&
+    ctx.clientKind === "renderer"
+  );
+}
+
 /** FS-D6 — the principal gate. */
 export function admitWorkspaceReader(ctx: CallerContext, method: string): void {
   const principal = ctx.principal;
-  const refused =
-    principal.kind === "plugin" ||
-    principal.kind === "mcp-agent" ||
-    principal.kind === "tailnet-guest" ||
-    (principal.kind === "tailnet" && principal.self !== true);
+  const refused = !(
+    isWorkspaceWindow(ctx) ||
+    (principal.kind === "tailnet" && principal.self === true) ||
+    principal.kind === "peer-fieldd"
+  );
   if (refused)
     throw new RpcCallError(
       "FORBIDDEN_SCOPE",
@@ -313,10 +322,16 @@ export class WorkspaceDoors {
     if (!parsed.success)
       throw new RpcCallError("PRECONDITION_FAILED", "expected { rootId, device? }", false);
     const root = this.#root(parsed.data.rootId);
-    // a gone folder is NOT_FOUND like any other door's (the worker checks)
-    const value = await this.#ask(root, () =>
-      this.#supervisor.request("gitFacts", { rootPath: root.path }),
-    );
+    const path = parseRelativePath(parsed.data.path);
+    if (!path.ok)
+      throw new RpcCallError("PRECONDITION_FAILED", relativePathRefusal(path.reason), false);
+    const value = await this.#ask(root, async () => {
+      const rootPath = await this.#supervisor.request("resolve", {
+        rootPath: root.path,
+        segments: path.segments,
+      });
+      return this.#supervisor.request("gitFacts", { rootPath });
+    });
     const answer = WorkspaceGitFactsResult.safeParse(value);
     if (!answer.success)
       throw new RpcCallError("INTERNAL", "the files service answered out of contract", false);

@@ -8,8 +8,7 @@ import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 // bounded rows over fieldd's product API: the roots it exports, a folder's
 // entries page by page, a search within one root, a root's git facts, and a
 // rows subscription of the roots. The attached tier (a ticket → mille's own
-// channel over a WebSocket, `workspace.openTicket`) is FS-1b's and is not
-// declared here.
+// channel over a WebSocket, `workspace.openTicket`) follows below (FS-1b).
 //
 // THE PATH RULE (FS-D4 (a) as corrected 2026-10-05): a REQUEST names a root
 // by its id and a path RELATIVE to that root — POSIX separators, no `..`, no
@@ -22,7 +21,7 @@ import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 // WHO (FS-D6 (a)): `workspace.read`, by PRINCIPAL — RO-13's rule. The scope is
 // plugin-eligible and guards other doors, so these doors refuse a plugin
 // (renderer or service), an MCP agent and a tailnet guest FORBIDDEN_SCOPE
-// whatever it holds; a window, the shell, a self phone and a self peer daemon
+// whatever it holds; a renderer participant window, a self phone and a self peer daemon
 // are served. A tailnet caller's pages are cut at `WORKSPACE_LIMITS.TAILNET_PAGE`.
 //
 // TS-only, like the agent plane (gen-jsonschema.ts's header): field-native
@@ -214,6 +213,7 @@ export type WorkspaceSearchResult = z.infer<typeof WorkspaceSearchResult>;
 export const WorkspaceGitFactsParams = z
   .object({
     rootId: WorkspaceRootId,
+    path: WorkspaceRelativePath.optional(),
     device: z.string().min(1).max(256).optional(),
   })
   .passthrough();
@@ -341,3 +341,72 @@ export const WorkspaceGitPortTranscript = z
   .object({ exchanges: z.array(WorkspaceGitPortExchange).min(1) })
   .passthrough();
 export type WorkspaceGitPortTranscript = z.infer<typeof WorkspaceGitPortTranscript>;
+
+/** FS-1b: an attached tree and git port on the same worker listener. */
+const WorkspaceLoopbackSocket = z
+  .string()
+  .url()
+  .refine((value) => {
+    const url = new URL(value);
+    return (
+      url.protocol === "ws:" &&
+      url.hostname === "127.0.0.1" &&
+      url.port !== "" &&
+      url.username === "" &&
+      url.password === "" &&
+      url.search === "" &&
+      url.hash === ""
+    );
+  }, "expected a credential-free loopback WebSocket endpoint");
+export const WorkspaceEndpointSet = z
+  .object({
+    treeUrl: WorkspaceLoopbackSocket,
+    gitUrl: WorkspaceLoopbackSocket,
+  })
+  .passthrough();
+export type WorkspaceEndpointSet = z.infer<typeof WorkspaceEndpointSet>;
+export const WorkspaceOpenTicketParams = z
+  .object({
+    rootId: WorkspaceRootId,
+    path: WorkspaceRelativePath.optional(),
+    device: z.string().min(1).max(256).optional(),
+  })
+  .passthrough();
+export type WorkspaceOpenTicketParams = z.infer<typeof WorkspaceOpenTicketParams>;
+export const WorkspaceCredential = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
+export const WorkspaceOpenTicketResult = z
+  .object({
+    device: z.string().min(1).max(256),
+    rootId: WorkspaceRootId,
+    rootPath: z.string().min(1).max(WORKSPACE_LIMITS.PATH_CHARS),
+    endpoints: WorkspaceEndpointSet,
+    ticket: WorkspaceCredential,
+    gitTicket: WorkspaceCredential,
+    expiresAt: z.number().int().positive(),
+    generation: z.number().int().positive(),
+    access: z.literal("read-only"),
+  })
+  .passthrough();
+export type WorkspaceOpenTicketResult = z.infer<typeof WorkspaceOpenTicketResult>;
+export const WorkspaceCloseTicketParams = z.object({ ticket: WorkspaceCredential }).passthrough();
+export type WorkspaceCloseTicketParams = z.infer<typeof WorkspaceCloseTicketParams>;
+export const WorkspaceCloseTicketResult = z.object({ closed: z.boolean() }).passthrough();
+export type WorkspaceCloseTicketResult = z.infer<typeof WorkspaceCloseTicketResult>;
+
+export const WorkspaceGitOpen = z
+  .object({
+    type: z.literal("open"),
+    rootId: WorkspaceRootId,
+    credential: WorkspaceCredential,
+  })
+  .passthrough();
+export const WorkspaceGitOpened = z.object({ type: z.literal("ready") }).passthrough();
+
+export const WorkspaceFileActionParams = z
+  .object({
+    rootId: WorkspaceRootId,
+    path: WorkspaceRelativePath,
+    action: z.enum(["copyPath", "revealInFileManager"]),
+  })
+  .passthrough();
+export const WorkspaceFileActionResult = z.object({ path: z.string().min(1) }).passthrough();

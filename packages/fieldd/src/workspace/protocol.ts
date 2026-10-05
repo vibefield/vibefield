@@ -13,12 +13,12 @@ import type {
 // refuses overlapping roots in one engine, and the home export holds every
 // place). mille's channel enters at FS-1b, for the ATTACHED tier, on the
 // worker's own listener. This pipe is fieldd's and the worker's only: one
-// trust domain (FS-D7), nothing on it is a credential.
+// trust domain (FS-D7). FS-1b registers secret attach credentials on this pipe.
 //
 //   fieldd → worker  {t: "init", milleNative}            first, once
 //                    {t: "req", id, op, args}              a door's question
 //                    {t: "shutdown"}                       dispose the engines, exit 0
-//   worker → fieldd  {t: "ready", pid, mille}             the READY line of a generation
+//   worker → fieldd  {t: "ready", pid, port, mille}             the READY line of a generation
 //                    {t: "fatal", reason}                  it cannot run (the addon did not load)
 //                    {t: "res", id, ok, value | error}     an answer
 //                    {t: "log", level, event, message, fields?}
@@ -118,7 +118,22 @@ export interface StatsValue {
   engines: number;
 }
 
+/** A pair of independent, single-use credentials under one expiring lease. */
+export interface AttachRegistration {
+  rootId: string;
+  rootPath: string;
+  clientId: string;
+  ticket: string;
+  gitTicket: string;
+  expiresAt: number;
+}
+
 export interface WorkerOps {
+  resolve: { args: { rootPath: string; segments: string[]; file?: boolean }; value: string };
+  registerTicket: { args: AttachRegistration; value: { port: number } };
+  closeTicket: { args: { clientId: string; ticket: string }; value: boolean };
+  revokeClient: { args: { clientId: string }; value: null };
+  retainRoots: { args: { rootIds: string[] }; value: null };
   list: { args: ListArgs; value: ListValue };
   search: { args: SearchArgs; value: SearchValue };
   gitFacts: { args: GitFactsArgs; value: GitFactsValue };
@@ -128,7 +143,18 @@ export interface WorkerOps {
 
 export type WorkerOp = keyof WorkerOps;
 
-export const WORKER_OPS: readonly WorkerOp[] = ["list", "search", "gitFacts", "git", "stats"];
+export const WORKER_OPS: readonly WorkerOp[] = [
+  "list",
+  "search",
+  "gitFacts",
+  "git",
+  "stats",
+  "resolve",
+  "registerTicket",
+  "closeTicket",
+  "revokeClient",
+  "retainRoots",
+];
 
 export type ToWorker =
   | { t: "init"; milleNative: string }
@@ -139,6 +165,7 @@ export type FromWorker =
   | {
       t: "ready";
       pid: number;
+      port: number;
       mille: { packageVersion: string; nativeVersion: string };
     }
   | { t: "fatal"; reason: string }
