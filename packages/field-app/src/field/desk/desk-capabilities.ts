@@ -17,6 +17,14 @@ import {
 // plugin enabled mid-session adds its own at the enable (the registry snapshot that says so). Idempotent: a board
 // that carries them all is not written. A marker is forever (ICE's meta has no delete), which is why a disabled
 // plugin's packs are never stamped on its behalf.
+//
+// THE ENABLE'S STAMP WAITS (DK-9; DK-5 input (2)): a pack stamped on a board ANOTHER desktop holds open
+// would re-gate that desktop read-only until it reopened (its catalog lacks the type). So a pack the board
+// LACKS is stamped only while no other desktop holds it live — fieldd's word (`doc.holders`: the peers
+// whose presence lane reaches the board's room) — and otherwise waits, said once, for the board's next
+// open or the next snapshot that asks again; THIS desktop draws the kind at once, and places it once the
+// stamp lands (ICE refuses `pack-disabled` before). A pack the board already carries is never asked about.
+// Its other half: a desktop handed a pack it lacks learns it live (the session reopens on a ghost stub).
 
 /** How many times a held board is asked again after a publish before the host says so and lets it be. */
 const RETRIES = 3;
@@ -54,20 +62,79 @@ export function upgradeFieldCapabilities(
   return ce.docs.upgradeCapabilities(types);
 }
 
+/** The packs the open board LACKS of what is on (`capabilityTypes`, those this engine compiles) — what an
+ * upgrade would stamp. Empty when nothing is missing or no writable board is open. */
+export function lackingCapabilities(
+  ce: CanvasEngine,
+  registry: PluginRegistry<WidgetType>,
+  snapshot: PluginRegistrySnapshot | null = getPluginRegistrySnapshot(),
+): string[] {
+  const session = ce.docs.current();
+  if (session === undefined || session.readOnly) return [];
+  const docPacks = session.versionReport().docPacks;
+  return capabilityTypes(registry, snapshot).filter(
+    (type) => ce.catalog.widget(type) !== undefined && docPacks[type] === undefined,
+  );
+}
+
+export interface CapabilityBindingOptions {
+  /** DK-9 — whether another desktop holds the board open NOW (fieldd's `doc.holders`). Absent: no wait. */
+  readonly heldElsewhere?: () => Promise<boolean>;
+}
+
 /**
  * The open board's packs, kept: upgraded NOW (the open — call it with the document live and writable, before its
  * journal is replayed, while the facade's gate is clean) and again at every registry snapshot (a plugin enabled
  * mid-session). A board the gate holds is asked once more after the next publish — at most `RETRIES` times, then
- * the host says why and leaves it for the next snapshot or open (never a retry per frame). Returns the unbind.
+ * the host says why and leaves it for the next snapshot or open (never a retry per frame). DK-9: with
+ * `heldElsewhere`, a pack the board LACKS waits while another desktop holds it open. Returns the unbind.
  */
 export function bindCapabilityUpgrades(
   ce: CanvasEngine,
   registry: PluginRegistry<WidgetType>,
+  opts: CapabilityBindingOptions = {},
 ): () => void {
   let ended = false;
   let tries = 0;
   let pendingRetry: (() => void) | null = null;
+  let asking = false;
+  let waitedFor = "";
   const attempt = (): void => {
+    if (ended) return;
+    const heldElsewhere = opts.heldElsewhere;
+    if (heldElsewhere === undefined) {
+      upgrade();
+      return;
+    }
+    const lacking = lackingCapabilities(ce, registry);
+    if (lacking.length === 0 || asking) return;
+    asking = true;
+    void heldElsewhere().then(
+      (held) => {
+        asking = false;
+        if (ended) return;
+        if (!held) {
+          upgrade();
+          return;
+        }
+        const key = lacking.join(" ");
+        if (key === waitedFor) return; // said once per wait
+        waitedFor = key;
+        getRendererLogger()
+          .child({ component: "board.session" })
+          .info(
+            "renderer.board.capabilities_waiting",
+            "Another desktop holds this board open: its new packs wait for the board's next open",
+            { types: lacking },
+          );
+      },
+      () => {
+        asking = false;
+        if (!ended) upgrade();
+      },
+    );
+  };
+  const upgrade = (): void => {
     if (ended) return;
     try {
       upgradeFieldCapabilities(ce, registry);

@@ -1,7 +1,15 @@
 import type { CanvasEngine } from "@vibecook/ice";
-import type { DeskLayerHandle, DeskLayerStatus } from "@vibecook/ice/desk";
+import { type DeskLayerHandle, type DeskLayerStatus, objectKindOf } from "@vibecook/ice/desk";
 import { Desk, type KeymapEntry, type LayerFactory } from "@vibecook/ice/react";
-import { type ReactElement, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import {
   emitDeskReadyMarker,
   emitDeskRetryMarker,
@@ -9,12 +17,15 @@ import {
 } from "../development-console";
 import { sayStatus, withdrawStatus } from "../frame/status-line";
 import { getRendererLogger } from "../logging";
+import { getPluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
+import type { WindowKinds } from "../plugin-host/window-kinds";
 import { useAppTheme } from "../theme";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
 import { feedDesk } from "./desk/desk-feed";
 import { deskGpu, HEAL_DELAYS_MS, type HealKind, healDelay, healKind } from "./desk/desk-gpu";
 import { deskLook, fieldDeskLayer } from "./desk/desk-layer";
+import { objectWords } from "./desk/desk-object-words";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
 
 // THE CANVAS STAGE (§5.4.3; DK-3, the host swap): the DESK drawn — ICE's `<Desk engine layer>` over
@@ -34,6 +45,10 @@ import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./d
 //     adapter up to three times over ~2 s, a refused device once; then the card. A Reload the person
 //     asked for is outside the chain and never retried;
 //   DESK_READY (ready AND the first frame presented, after CANVAS_READY) and `window.__vfDesk`.
+// THE KINDS (DK-9, plugin-host/window-kinds.ts; ICE I25 — the kind set is fixed for a layer's life): the
+// layer is mounted with the catalog's kinds LESS those of a plugin that is off (the structural `catalog`
+// a host hands its layer, read at the mount alone), so a disabled plugin's objects wear ICE's missing
+// face; and when the window's kinds change, the desk REMOUNTS (a new mount, a new layer on this engine).
 // The old composition — `<InfiniteCanvas>`, the GL bridge and router, the R3F portal, the GL lanes,
 // the cursor halo — left with ICE 0.14.0; `InfiniteCanvasGround` (DK-2's stub) folded in here: the
 // catalog's specimen mounts the same layer (`fieldDeskLayer`) on an engine of its own, and nothing
@@ -47,13 +62,19 @@ export interface CanvasStageProps {
   generation: number;
   /** A board refused at open (ruling 7 — from before the desk): the card, and no desk at all. */
   refused?: DeskUnavailableWords | null;
+  /** DK-9 — the window's kinds: the types the desk is mounted without, and when they change. */
+  kinds?: WindowKinds;
 }
+
+const NO_KINDS_CHANGE = (): (() => void) => () => undefined;
+const KINDS_UNCHANGED = (): number => 0;
 
 export function CanvasStage({
   ce,
   keymapOverrides,
   generation,
   refused = null,
+  kinds,
 }: CanvasStageProps): ReactElement {
   const theme = useAppTheme().resolved;
   const themeRef = useRef(theme);
@@ -66,6 +87,28 @@ export function CanvasStage({
   const [mount, setMount] = useState(0);
   const [status, setStatus] = useState<DeskLayerStatus>({ state: "pending" });
   const remount = useCallback(() => setMount((n) => n + 1), []);
+  // DK-9: the window's kinds changed (a plugin turned off or on) — a new mount, mounted with them
+  const kindsStore = useMemo(
+    () =>
+      kinds === undefined
+        ? { subscribe: NO_KINDS_CHANGE, version: KINDS_UNCHANGED }
+        : {
+            subscribe: (fn: () => void) => kinds.subscribe(fn),
+            version: () => kinds.version(),
+          },
+    [kinds],
+  );
+  const kindsVersion = useSyncExternalStore(
+    kindsStore.subscribe,
+    kindsStore.version,
+    kindsStore.version,
+  );
+  const kindsSeen = useRef(kindsVersion);
+  useEffect(() => {
+    if (kindsSeen.current === kindsVersion) return;
+    kindsSeen.current = kindsVersion;
+    remount();
+  }, [kindsVersion, remount]);
   // The relaunch heal, per stage — per engine generation: the mounts of its chain (the boot's first,
   // and each retry it made) and the retries each kind has spent (desk-gpu.ts `HEAL_DELAYS_MS`).
   const [retrying, setRetrying] = useState(false);
@@ -85,13 +128,24 @@ export function CanvasStage({
       gpuLedger: import.meta.env.DEV,
       ...(gpu === undefined ? {} : { gpu }),
     });
+    // the kinds of what is ON (DK-9): a plugin that is off has its types left out of the catalog the
+    // layer is mounted with — read once, at the mount, as ICE reads it
+    const off = kinds?.off() ?? new Set<string>();
     return (ctx) => {
-      const handle = factory(ctx);
+      const handle =
+        off.size === 0
+          ? factory(ctx)
+          : factory({
+              ...ctx,
+              catalog: {
+                widgetTypes: () => ctx.catalog.widgetTypes().filter((type) => !off.has(type.type)),
+              },
+            });
       handleRef.current = handle;
       wornRef.current = dressed;
       return handle;
     };
-  }, [ce, mount]);
+  }, [ce, mount, kinds]);
 
   // THE THEME BRIDGE (ruling 2; r4 §4): every change of the owner's answer re-dresses the live desk
   // — and only a change: the layer was MADE in the theme it wears (`wornRef`).
@@ -118,7 +172,20 @@ export function CanvasStage({
     const unpublish = publishDesk(desk);
     // the plates and the rulers' atlas, the moment the mat is here
     const feed = feedDesk(handle, ce);
-    const undoDoor = installDeskDoor(desk, feed.platesSet);
+    const undoDoor = installDeskDoor(desk, feed.platesSet, (type) =>
+      objectWords(type, {
+        snapshot: getPluginRegistrySnapshot(),
+        off: kinds?.off() ?? new Set(),
+        faults: (handle.status().faults ?? []).map((fault) => fault.kind),
+        kinded: objectKindOf(ce.catalog.widget(type)) !== undefined,
+        builtIn: Object.fromEntries(
+          ce.catalog
+            .widgetTypes()
+            .filter((widget) => widget.type.startsWith("desk."))
+            .map((widget) => [widget.type, widget.tray?.label ?? widget.type] as const),
+        ),
+      }),
+    );
 
     // DESK_READY: the status `ready` AND the first frame presented (its GPU work done).
     const awaitFirstFrame = (): void => {
@@ -210,7 +277,7 @@ export function CanvasStage({
       if (deskRef.current === desk) deskRef.current = null;
       if (handleRef.current === handle) handleRef.current = null;
     };
-  }, [ce, generation, mount, remount]);
+  }, [ce, generation, mount, remount, kinds]);
 
   if (refused !== null) {
     return (

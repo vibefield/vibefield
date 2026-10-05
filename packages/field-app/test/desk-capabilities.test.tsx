@@ -13,9 +13,14 @@ import type { ObjectBinding, ObjectKind } from "@vibefield/plugin-sdk/desk";
 import { LoroDoc } from "loro-crdt";
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { DocManager, DocManagerState } from "../src/doc-manager";
-import { capabilityTypes, upgradeFieldCapabilities } from "../src/field/desk/desk-capabilities";
+import {
+  bindCapabilityUpgrades,
+  capabilityTypes,
+  lackingCapabilities,
+  upgradeFieldCapabilities,
+} from "../src/field/desk/desk-capabilities";
 import { useWorkspaceSession, type WorkspaceSession } from "../src/field/use-workspace-session";
 import { buildRegistry, createFieldEngine } from "../src/field-engine";
 import { setPluginRegistrySnapshot } from "../src/plugin-host/plugin-registry-store";
@@ -140,6 +145,10 @@ function mount(initialBytes: Uint8Array) {
     contentApplied: () => undefined,
     canvasPresented: () => undefined,
     refuseBeforeTheDesk: () => undefined,
+    // DK-9: the session registers each generation's reopen and asks fieldd for the board's holders
+    registerReopen: () => () => undefined,
+    heldLiveElsewhere: async () => false,
+    remount: async () => false,
   } as unknown as DocManager;
   let session: WorkspaceSession | undefined;
   function Harness() {
@@ -243,6 +252,94 @@ describe("the pack markers — at every open, the packs of what is on", () => {
     const before = version();
     expect(upgradeFieldCapabilities(ce, registry, null)).toBe(false);
     expect(version()).toBe(before);
+    ce.dispose();
+  });
+});
+
+describe("DK-9 — the enable's stamp WAITS while another desktop holds the board (DK-5 input (2))", () => {
+  const settle = () => act(async () => new Promise((r) => setTimeout(r, 0)));
+
+  it("a pack the board LACKS waits while another desktop holds it open, said once — and lands once none does", async () => {
+    const registry = buildRegistry(plugins);
+    const ce = createFieldEngine(registry);
+    const res = ce.docs.open(boardWithoutThePlugin());
+    if (!res.ok) throw new Error(res.reason);
+    ce.world.sync();
+    setPluginRegistrySnapshot(snapshot(true));
+    const frame = rootFrame(ce);
+    let held = true;
+    const heldElsewhere = vi.fn(async () => held);
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const unbind = bindCapabilityUpgrades(ce, registry, { heldElsewhere });
+    await settle();
+    expect(heldElsewhere).toHaveBeenCalledTimes(1);
+    // THIS desktop draws the kind (its type is in the catalog); placing waits for the stamp
+    expect(lackingCapabilities(ce, registry)).toEqual([CLOCK]);
+    expect(ce.placement.canPlace(CLOCK, frame)).toMatchObject({ reason: "pack-disabled" });
+    expect(
+      decodeEnvelope(res.session.exportEnvelope(1)).header.prefabVersions[CLOCK],
+    ).toBeUndefined();
+
+    await act(async () => setPluginRegistrySnapshot(snapshot(true))); // asked again: still held
+    await settle();
+    expect(heldElsewhere).toHaveBeenCalledTimes(2);
+    expect(ce.placement.canPlace(CLOCK, frame)).toMatchObject({ reason: "pack-disabled" });
+
+    held = false; // the other desktop let the board go: the next ask stamps
+    await act(async () => setPluginRegistrySnapshot(snapshot(true)));
+    await settle();
+    expect(ce.placement.canPlace(CLOCK, frame)).toMatchObject({ ok: true });
+    expect(decodeEnvelope(res.session.exportEnvelope(1)).header.prefabVersions[CLOCK]).toBe(1);
+
+    // nothing lacking now: fieldd is never asked again
+    await act(async () => setPluginRegistrySnapshot(snapshot(true)));
+    await settle();
+    expect(heldElsewhere).toHaveBeenCalledTimes(3);
+    info.mockRestore();
+    unbind();
+    ce.dispose();
+  });
+
+  it("lands at the board's NEXT OPEN with no other holder — the binding a new open makes stamps at once", async () => {
+    const registry = buildRegistry(plugins);
+    setPluginRegistrySnapshot(snapshot(true));
+    const held = createFieldEngine(registry);
+    const bytes = boardWithoutThePlugin();
+    const first = held.docs.open(bytes);
+    if (!first.ok) throw new Error(first.reason);
+    const unbindHeld = bindCapabilityUpgrades(held, registry, { heldElsewhere: async () => true });
+    await settle();
+    expect(lackingCapabilities(held, registry)).toEqual([CLOCK]);
+    unbindHeld();
+    held.dispose();
+
+    const next = createFieldEngine(registry); // the board's next open
+    const reopened = next.docs.open(bytes);
+    if (!reopened.ok) throw new Error(reopened.reason);
+    next.world.sync();
+    const unbind = bindCapabilityUpgrades(next, registry, { heldElsewhere: async () => false });
+    await settle();
+    expect(lackingCapabilities(next, registry)).toEqual([]);
+    expect(next.placement.canPlace(CLOCK, rootFrame(next))).toMatchObject({ ok: true });
+    unbind();
+    next.dispose();
+  });
+
+  it("with no word from fieldd (an older daemon, no daemon) the stamp lands as before", async () => {
+    const registry = buildRegistry(plugins);
+    setPluginRegistrySnapshot(snapshot(true));
+    const ce = createFieldEngine(registry);
+    const res = ce.docs.open(boardWithoutThePlugin());
+    if (!res.ok) throw new Error(res.reason);
+    ce.world.sync();
+    const unbind = bindCapabilityUpgrades(ce, registry, {
+      heldElsewhere: async () => {
+        throw new Error("doc.holders: no such method");
+      },
+    });
+    await settle();
+    expect(lackingCapabilities(ce, registry)).toEqual([]);
+    unbind();
     ce.dispose();
   });
 });

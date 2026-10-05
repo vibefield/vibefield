@@ -396,6 +396,79 @@ describe("DocManager launch pipeline (B4)", () => {
   });
 });
 
+describe("DK-9 — the same board on a NEW generation (DocManager.remount)", () => {
+  it("ends the typing, flushes, and opens the board AS IT STANDS on a new generation over the SAME lane — saving goes on", async () => {
+    const { daemon } = await stack();
+    const manager = managerFor(daemon);
+    await manager.boot();
+    const first = manager.getState().pending;
+    if (first === null || first.lane === null) throw new Error("no board");
+    const ce = await applyPending(manager);
+    await until(() => manager.getState().phase === "ready");
+    await putCurrent(manager, ce);
+    const endInput = vi.fn();
+    manager.registerReopen(first.generation, {
+      endInput,
+      export: () => ce.docs.current()?.exportEnvelope(Date.now()) ?? null,
+    });
+    // an edit since the open: on the board as it stands, never at fieldd yet
+    const note = ce.ops.spawnWidget("desk.note", { x: 900, y: 900, undoable: false });
+    ce.world.sync();
+    expect(note).toBeDefined();
+    const before = deskCensus(ce)["desk.note"] ?? 0;
+
+    expect(await manager.remount("plugin-enabled")).toBe(true);
+    const next = manager.getState().pending;
+    expect(next?.generation).toBe(first.generation + 1);
+    expect(next?.docId).toBe(first.docId);
+    expect(next?.lane).toBe(first.lane); // no second writer, no round trip
+    expect(next?.seed).toBe(false);
+    expect(next?.initialUpdates).toEqual([]);
+    expect(endInput).toHaveBeenCalledTimes(1);
+
+    const reopened = createFieldEngine(buildRegistry());
+    cleanup.push(() => reopened.dispose());
+    const res = reopened.docs.open(next?.initialBytes ?? new Uint8Array());
+    if (!res.ok) throw new Error(res.reason);
+    reopened.world.sync();
+    expect(deskCensus(reopened)["desk.note"]).toBe(before); // the edit came along
+    manager.contentApplied(next?.generation ?? 0);
+    await until(() => manager.getState().phase === "ready");
+    // the lane the board kept takes the new generation's saves
+    await putCurrent(manager, reopened);
+    expect(await daemon.docs.readDoc(first.docId)).not.toBeNull();
+  }, 30_000);
+
+  it("asks fieldd who holds the board LIVE (`doc.holders`): none on a lone desktop — no other holder, the stamp lands", async () => {
+    const { daemon } = await stack();
+    const manager = managerFor(daemon);
+    await manager.boot();
+    const docId = manager.getState().pending?.docId ?? "";
+    await applyPending(manager);
+    const client = new FielddClient({
+      url: `ws://127.0.0.1:${daemon.controlPort}`,
+      token: daemon.shellToken,
+      clientKind: "debug",
+    });
+    client.connect();
+    cleanup.push(() => client.close());
+    expect(await client.request("doc.holders", { docId })).toEqual({ docId, live: [] });
+    expect(await manager.heldLiveElsewhere(docId)).toBe(false);
+    expect(await manager.heldLiveElsewhere("")).toBe(false); // an in-memory board is nobody's
+  }, 30_000);
+
+  it("refuses with no applied board to carry — the state untouched", async () => {
+    const { daemon } = await stack();
+    const manager = managerFor(daemon);
+    expect(await manager.remount("plugin-enabled")).toBe(false);
+    await manager.boot();
+    // booted, but nothing applied yet (no generation registered its reopen)
+    const pending = manager.getState().pending;
+    expect(await manager.remount("plugin-enabled")).toBe(false);
+    expect(manager.getState().pending).toBe(pending);
+  }, 30_000);
+});
+
 describe("boards from before the desk (DK-3, ruling 7)", () => {
   /** An `ice.default` board — what the pre-desk build saved — PUT under the last schema it knew. */
   async function putBeforeTheDesk(manager: DocManager): Promise<void> {

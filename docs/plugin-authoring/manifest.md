@@ -66,9 +66,11 @@ the schema itself says — `check` prints it verbatim with a pointer.
   `backgroundReason` that says why in the user's words.
 - `onObject:<object type>`, `onCommand:<command id>`, `onSurface:<surface id>`,
   `onService:<x.pluginId.method>` — each must name something this manifest
-  declares. `onObject:` fires when the type's first instance appears in the
-  document — independent of the kind's pass, which the desk makes for every
-  registered kind at its mount.
+  declares. `onObject:` activates the plugin no later than its type's first
+  instance appearing in the document — this build activates every enabled
+  renderer at its boot, so it has fired before any board opens — and it is
+  independent of the kind's pass, which the desk makes for every registered kind
+  at its mount, an instance on the board or not.
 - `onWidget:<type>` is RETIRED and refused by name (`onwidget-activation-retired`):
   an object's activation event is `onObject:<type>`.
 

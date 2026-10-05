@@ -61,10 +61,10 @@ One entry per kind under `contributes.objects`:
   placeable but hangs nowhere.
 - `binding.kind` names the export (an identifier) that holds the kind — one name,
   read by the host, never registered from `activate`.
-- `onObject:<type>` is an object's activation event — fired when the type's first
-  instance appears in the document, independent of the kind's pass (the desk makes
-  every registered kind's pass at its mount). The retired `onWidget:<type>` is
-  refused by name (`onwidget-activation-retired`).
+- `onObject:<type>` is an object's activation event — the plugin is activated no
+  later than the type's first instance appearing in the document, independent of
+  the kind's pass (the desk makes every registered kind's pass at its mount). The
+  retired `onWidget:<type>` is refused by name (`onwidget-activation-retired`).
 
 The widget-era view fields are RETIRED on an object and refused by name:
 
@@ -646,3 +646,39 @@ resolve, record, hit (`state-hit-missed`: it must hit its own box), frame, chip,
 opening, prepare and drawRange (`state-spawn-failed`, `state-render-failed`,
 `state-draw-ill-formed`), then dispose. A unit test calls it the same way. `inspect` lists
 each kind with its tray chip, its hang, what it provides, its export and a `null` refusal.
+
+WHERE IT RUNS: `check` runs the harness in plain Node — no `document`, no
+`OffscreenCanvas`; `pnpm playground` runs it in happy-dom — a `document`, still no
+`OffscreenCanvas` or `createImageBitmap`; your own unit test runs in whatever
+environment its vitest file declares. A `create` that reaches for a browser global its
+environment lacks gets the note `object-create-not-run-here` (its states are still
+driven, without its pass), so the two can say different notes for one kind — a kind
+that needs a browser global says which in its README.
+
+## At run time — enable, disable, update
+
+A desk's kinds are the set it was MOUNTED with: nothing registers a kind on a live
+desk, and nothing refuses an update. What the host does instead:
+
+- **Enabled** — the desk REMOUNTS with your kind: on the same engine when this window
+  had registered it before (you were turned off), on a new engine when it is new to
+  the window — the same board reopens on it behind the veil, nothing lost.
+- **Disabled, or removed** — the desk remounts WITHOUT it: your objects stay on the
+  board, data and all, and wear the desk's MISSING face (a faint hatched card the size
+  of the object, picked by its box); the selection bar names each one:
+  `Clock · plugin off`. Enabled again, they draw.
+- **Updated** — your new artifact's kinds are compiled in a NEW renderer: the window
+  saves its board, replaces its renderer and reopens the board with them. A
+  `schemaVersion` bump runs your binding's `migrate` chain on the board's objects as
+  it reopens; a `schemaVersion` that goes DOWN is refused by fieldd —
+  `regresses schemaVersion` — and the live version stays. A type a board met before
+  your plugin was here (a stub kept its data) is redefined the same way.
+- **Its pack** — placing your kind needs its pack on the board, stamped when the board
+  opens and when you are enabled. While ANOTHER desktop holds the board open the stamp
+  waits — it would hold that desktop read-only — and lands at the board's next open;
+  this desktop draws your objects meanwhile. A desktop handed a pack it lacks reopens
+  on a stub for it and stays writable.
+- **When it breaks** — a kind whose WGSL does not compile is refused at create; one
+  whose world half throws is struck, and quarantined at the third strike. The rest of
+  the desk draws on, your objects wear the missing face, `status().faults` names your
+  kind once, and the bar says `faulted`.

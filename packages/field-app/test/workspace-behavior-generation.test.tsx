@@ -108,6 +108,10 @@ describe("workspace behavior generation ownership", () => {
       getState: () => state,
       contentApplied: () => trace.push("content-applied"),
       canvasPresented: () => undefined,
+      // DK-9: the session registers each generation's reopen and asks fieldd for the board's holders
+      registerReopen: () => () => undefined,
+      heldLiveElsewhere: async () => false,
+      remount: async () => false,
     } as unknown as DocManager;
     let session: WorkspaceSession | undefined;
     setRendererLogger(
@@ -180,6 +184,10 @@ describe("workspace behavior generation ownership", () => {
       getState: () => state,
       contentApplied: () => trace.push("content-applied"),
       canvasPresented: () => undefined,
+      // DK-9: the session registers each generation's reopen and asks fieldd for the board's holders
+      registerReopen: () => () => undefined,
+      heldLiveElsewhere: async () => false,
+      remount: async () => false,
     } as unknown as DocManager;
     let session: WorkspaceSession | undefined;
     setRendererLogger(
@@ -252,6 +260,10 @@ describe("workspace behavior generation ownership", () => {
       getState: () => state,
       contentApplied: () => trace.push("content-applied"),
       canvasPresented: () => undefined,
+      // DK-9: the session registers each generation's reopen and asks fieldd for the board's holders
+      registerReopen: () => () => undefined,
+      heldLiveElsewhere: async () => false,
+      remount: async () => false,
     } as unknown as DocManager;
     let session: WorkspaceSession | undefined;
     setRendererLogger(

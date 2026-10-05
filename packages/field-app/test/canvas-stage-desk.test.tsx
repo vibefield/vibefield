@@ -27,6 +27,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 interface FakeHandle {
   readonly opts: DeskLayerOptions;
+  /** The context the layer was mounted with — its structural `catalog` (DK-9). */
+  ctx?: { catalog?: { widgetTypes(): readonly { type: string }[] } };
   state: DeskLayerStatus;
   frames: number;
   /** ms since the mount the device arrived — undefined until it does (ICE's `perf().boot.device`). */
@@ -90,8 +92,9 @@ vi.mock("@vibecook/ice/desk", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@vibecook/ice/desk")>();
   return {
     ...actual,
-    deskLayer: (opts: DeskLayerOptions) => () => {
+    deskLayer: (opts: DeskLayerOptions) => (ctx: FakeHandle["ctx"]) => {
       const h = fakeHandle(opts);
+      if (ctx !== undefined) h.ctx = ctx;
       layers.push(h);
       return h;
     },
@@ -101,20 +104,22 @@ vi.mock("@vibecook/ice/desk", async (importOriginal) => {
 vi.mock("@vibecook/ice/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@vibecook/ice/react")>();
   function Desk({
+    engine,
     layer,
     onReady,
   }: {
+    engine?: { catalog: unknown };
     layer: (ctx: unknown) => { dispose(): void };
     onReady?: (h: unknown) => (() => void) | undefined;
   }): ReactElement {
     useEffect(() => {
-      const handle = layer({});
+      const handle = layer({ catalog: engine?.catalog });
       const undo = onReady?.({ layer: handle });
       return () => {
         if (typeof undo === "function") undo();
         handle.dispose();
       };
-    }, [layer, onReady]);
+    }, [engine, layer, onReady]);
     return createElement("div", { "data-fake-desk": "" });
   }
   return { ...actual, Desk };
@@ -172,7 +177,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 
-async function mountStage(refused: boolean = false) {
+async function mountStage(refused: boolean = false, kinds?: unknown) {
   const ce = createFieldEngine(buildRegistry());
   await act(async () =>
     root.render(
@@ -181,11 +186,36 @@ async function mountStage(refused: boolean = false) {
         keymapOverrides: [],
         generation: 7,
         refused: refused ? BEFORE_THE_DESK : null,
+        ...(kinds === undefined ? {} : { kinds: kinds as never }),
       }),
     ),
   );
   return ce;
 }
+
+/** The window's kinds as the stage reads them (DK-9): the types left off the desk, and a version. */
+function fakeKinds(off: readonly string[] = []) {
+  const listeners = new Set<() => void>();
+  let version = 0;
+  let current = new Set(off);
+  return {
+    off: () => current,
+    version: () => version,
+    subscribe: (fn: () => void) => {
+      listeners.add(fn);
+      return () => listeners.delete(fn);
+    },
+    /** A plugin turned off or on: the off set moves and the stage is told. */
+    move(next: readonly string[]) {
+      current = new Set(next);
+      version += 1;
+      for (const fn of [...listeners]) fn();
+    },
+  };
+}
+
+const mountedTypes = (h: FakeHandle): string[] =>
+  (h.ctx?.catalog?.widgetTypes() ?? []).map((type) => type.type);
 
 const current = (): FakeHandle => {
   const h = layers.at(-1);
@@ -486,6 +516,41 @@ describe("the Canvas stage mounts the desk", () => {
     const card = host.querySelector("[data-desk-unavailable]");
     expect(card?.getAttribute("data-desk-unavailable")).toBe("before-the-desk");
     expect(card?.querySelector("strong")?.textContent).toBe("This board is from before the desk");
+  });
+
+  it("DK-9: mounts the layer WITHOUT the kinds of a plugin that is off — its objects wear ICE's missing face", async () => {
+    await mountStage(false, fakeKinds(["vibefield.comment-pad"]));
+    const types = mountedTypes(current());
+    expect(types).toContain("desk.note"); // the desk's own, and every kind that is on
+    expect(types).not.toContain("vibefield.comment-pad");
+  });
+
+  it("DK-9: REMOUNTS when the window's kinds change — a new mount, the layer made with the kinds of what is on", async () => {
+    const kinds = fakeKinds();
+    await mountStage(false, kinds);
+    const first = current();
+    expect(mountedTypes(first)).toContain("vibefield.comment-pad");
+    await act(async () => kinds.move(["vibefield.comment-pad"])); // the pad's plugin turned off
+    expect(layers).toHaveLength(2);
+    expect(first.disposed).toBe(true);
+    expect(current().opts.name).toBe("vibefield/desk#1");
+    expect(mountedTypes(current())).not.toContain("vibefield.comment-pad");
+    await act(async () => kinds.move([])); // and on again
+    expect(layers).toHaveLength(3);
+    expect(mountedTypes(current())).toContain("vibefield.comment-pad");
+  });
+
+  it('DK-9: the door says the bar\'s words — a kind that is off: its title and "plugin off"', async () => {
+    await mountStage(false, fakeKinds(["vibefield.comment-pad"]));
+    const door = (
+      globalThis as { __vfDesk?: { words(type: string): { label: string; state: string | null } } }
+    ).__vfDesk;
+    expect(door?.words("vibefield.comment-pad")).toMatchObject({ state: "plugin off" });
+    expect(door?.words("desk.note")).toMatchObject({ state: null });
+    expect(door?.words("vendor.absent.thing")).toMatchObject({
+      state: "not installed",
+      label: "vendor.absent.thing · not installed",
+    });
   });
 
   it("installs window.__vfDesk for its mount and takes it away with it", async () => {

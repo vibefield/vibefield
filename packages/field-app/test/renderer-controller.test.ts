@@ -894,16 +894,14 @@ describe("PRC-5d renderer replacement participant", () => {
     expect(candidateAuthorityReleases).toBe(1);
   });
 
-  it("refuses a changed fixed object projection before old authority closes", async () => {
+  it("DK-9: an update with CHANGED object rows is never refused — it prepares and commits, and the window hears it settle (its kinds are the next realm's)", async () => {
     const id = "prc.renderer.replacement.projection";
     const oldRecord = record(id);
-    let oldSignal: AbortSignal | undefined;
     const controller = new RendererPluginController(
       oldRecord,
       moduleRow(id),
       {
         activate(ctx) {
-          oldSignal = ctx.signal;
           ctx.commands?.register(`${id}.run`, () => undefined);
         },
       },
@@ -913,36 +911,54 @@ describe("PRC-5d renderer replacement participant", () => {
     const runtime = new RendererWindowController("field");
     runtime.add(controller);
     await runtime.reconcile(snapshot(oldRecord));
-    // DK-8: the law's rows are the window's compiled OBJECT rows — a changed size is a changed prefab
+    // a changed size and a bumped schemaVersion: the object's durable half moves with the update
     const changed = replacementRecord(oldRecord, "c", {
       contributions: {
         ...oldRecord.contributions,
         objects: (oldRecord.contributions.objects ?? []).map((row) => ({
           ...row,
+          schemaVersion: row.schemaVersion + 1,
           size: { w: 200, h: 100 },
         })),
       },
     });
     let imported = false;
-
-    await expect(
-      runtime.prepareReplacement({
-        updateId: "pupd_renderer_projection",
-        oldArtifact: artifact(oldRecord),
-        candidateArtifact: artifact(changed),
-        candidate: {
-          record: changed,
-          module: replacementModule(changed, "candidate-projection"),
-          load: async () => {
-            imported = true;
-            return { activate: () => undefined };
-          },
+    let settled = 0;
+    runtime.onSettled(() => {
+      settled += 1;
+    });
+    expect(runtime.updating(id)).toBe(false);
+    const preparing = runtime.prepareReplacement({
+      updateId: "pupd_renderer_projection",
+      oldArtifact: artifact(oldRecord),
+      candidateArtifact: artifact(changed),
+      candidate: {
+        record: changed,
+        module: replacementModule(changed, "candidate-projection"),
+        load: async () => {
+          imported = true;
+          return {
+            activate(ctx) {
+              ctx.commands?.register(`${id}.run`, () => undefined);
+            },
+          };
         },
-      }),
-    ).rejects.toThrow(/fixed object projection/);
-    expect(oldSignal?.aborted).toBe(false);
-    expect(isCommandBound(`${id}.run`)).toBe(true);
-    expect(imported).toBe(false);
+      },
+    });
+    expect(runtime.updating(id)).toBe(true);
+    await expect(preparing).resolves.toMatchObject({ state: "prepared" });
+    expect(imported).toBe(true);
+    await runtime.reconcile(snapshot(changed)); // the candidate pointer before the commit command
+    expect(runtime.updating(id)).toBe(true);
+    runtime.commitReplacement({
+      updateId: "pupd_renderer_projection",
+      candidateArtifact: artifact(changed),
+      commitEpoch: 2,
+    });
+    expect(runtime.updating(id)).toBe(false);
+    expect(controller.snapshot.state).toBe("active");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(settled).toBe(1);
     await runtime.close();
   });
 

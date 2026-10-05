@@ -20,6 +20,7 @@ import type {
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
+import type { ObjectWords } from "./desk-object-words";
 
 // THE DESK MOUNTED NOW, and its DOOR (DK-3). One desk draws in the Canvas stage at a time — one layer
 // per committed engine generation, remounted by Reload (ruling 1) — and two readers want it outside
@@ -197,6 +198,9 @@ export interface VfDeskDoor {
   /** The wind's policy: read, or set (a freeze witness makes the desk busy before covering it). */
   ambient(mode?: AmbientMode): AmbientMode;
   memory(): GpuMemory | null;
+  /** DK-9 — what the selection bar (DK-11's) prints for an object of `type`: its title, and why the desk
+   * draws it as missing ("plugin off", "not installed", "faulted"), the label "Clock · plugin off". */
+  words(type: string): ObjectWords;
 }
 
 const pickOf = (
@@ -212,7 +216,16 @@ const pickOf = (
       };
 
 /** Install `window.__vfDesk` for one mount; the returned undo removes it if it is still this one's. */
-export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): () => void {
+export function installDeskDoor(
+  desk: MountedDesk,
+  platesSet: () => boolean,
+  words: (type: string) => ObjectWords = (type) => ({
+    type,
+    title: type,
+    state: null,
+    label: type,
+  }),
+): () => void {
   const { handle, engine } = desk;
   let ambient: AmbientMode = "idle";
   const door: VfDeskDoor = {
@@ -265,6 +278,7 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       return ambient;
     },
     memory: () => handle.gpuMemory()?.read() ?? null,
+    words,
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;

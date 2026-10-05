@@ -211,6 +211,69 @@ export async function prepareRendererPlugins(
   };
 }
 
+/**
+ * DK-9 — A PLUGIN ENABLED MID-SESSION whose kinds this realm never defined: staged by the boot's own
+ * path, one plugin at a time — fieldd's approval read FRESH (an enable mints its module's URL), its
+ * update lane opened, its module imported and activated on the window's runtime — so the next document
+ * generation's registry compiles its kinds (window-kinds.ts). A plugin fieldd has not approved, or
+ * whose module will not load, is simply not staged: its objects keep the missing face.
+ */
+export async function stageAdditionalPlugins(
+  pluginIds: readonly string[],
+  deps: StagedLoaderDeps,
+  runtime: RendererWindowController,
+): Promise<PreparedStagedPlugin[]> {
+  const log = getRendererLogger().child({ component: "plugin.host" });
+  const approved = await withBudget(
+    readApproved(deps, true),
+    deps.budgetMs ?? STAGED_MODULES_BUDGET_MS,
+  );
+  if (approved === "overdue" || approved === null) {
+    log.warn(
+      "renderer.plugins.enable_unstaged",
+      "The plugin authority did not answer: a plugin enabled mid-session was not staged",
+      { plugins: [...pluginIds] },
+    );
+    return [];
+  }
+  const out: PreparedStagedPlugin[] = [];
+  for (const pluginId of pluginIds) {
+    const module = approved.modules.find((entry) => entry.pluginId === pluginId);
+    if (module === undefined) {
+      log.warn(
+        "renderer.plugins.enable_unapproved",
+        "A plugin enabled mid-session has no approved module yet",
+        { pluginId },
+      );
+      continue;
+    }
+    let channel: RendererUpdateChannel | undefined;
+    if (deps.subscribe !== undefined && deps.pluginClientBackend !== undefined) {
+      try {
+        channel = await RendererUpdateChannel.open(pluginId, {
+          request: deps.request,
+          subscribe: deps.subscribe,
+          backend: deps.pluginClientBackend,
+          ...(deps.importModule === undefined ? {} : { importModule: deps.importModule }),
+          logger: log.child({ pluginId }),
+        });
+        runtime.addUpdateChannel(channel);
+      } catch (error) {
+        log.error(
+          "renderer.plugins.update_subscribe_failed",
+          "A plugin could not establish its update lane and was skipped",
+          error,
+          { pluginId },
+        );
+        continue;
+      }
+    }
+    const staged = await stageOne(module, approved.records, deps, log, runtime, channel);
+    if (staged !== null) out.push(staged);
+  }
+  return out;
+}
+
 interface ApprovedSet {
   readonly generation: number;
   readonly modules: readonly PluginModuleUrls[];

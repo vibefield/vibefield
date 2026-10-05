@@ -122,6 +122,10 @@ describe("the workspace session refuses it at open", () => {
       contentApplied: () => trace.push("content-applied"),
       canvasPresented: () => undefined,
       refuseBeforeTheDesk: (docId: string) => trace.push(`refused:${docId}`),
+      // DK-9: the session registers each generation's reopen and asks fieldd for the board's holders
+      registerReopen: () => () => undefined,
+      heldLiveElsewhere: async () => false,
+      remount: async () => false,
     } as unknown as DocManager;
     let session: WorkspaceSession | undefined;
     opens.count = 0;

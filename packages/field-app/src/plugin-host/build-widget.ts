@@ -52,6 +52,24 @@ function buildProp(type: string, name: string, spec: PropSpec) {
 // buildRegistry() calls (tests, multiple windows in one renderer).
 const built = new Map<string, WidgetType>();
 
+/** How this REALM defined a type (DK-9 — the runtime with kinds): ICE's catalog cannot un-define or
+ * re-define a type in a realm (`defineWidget` throws "already defined"; strata's components are global),
+ * so a kind change the realm already defined differently — an update's new code or schema, a type a
+ * board's ghost stub defined faceless — is a NEW realm's (a replaced renderer), never this one's. */
+export interface TypeDefinition {
+  /** `kind`: drawn by this binding's kind; `faceless`: no kind (a ghost stub, an unbound row). */
+  readonly face: "kind" | "faceless";
+  readonly schemaVersion: number;
+  /** The binding the kind came from (`kind` only) — an update's is another object. */
+  readonly binding?: ObjectBinding;
+}
+const definitions = new Map<string, TypeDefinition>();
+
+/** What this realm defined `type` as, or undefined when it never did (DK-9). */
+export function typeDefinition(type: string): TypeDefinition | undefined {
+  return definitions.get(type);
+}
+
 /** A row's DURABLE half — what a prefab is built from whether or not a kind draws it. */
 export type DurableRow = Pick<
   ObjectContribution,
@@ -161,6 +179,7 @@ export function buildObjectType(
   // the kind and `defineObject`/`defineWidget` validate the rest at definition.
   const object = defineObject(def as Parameters<typeof defineObject>[0]);
   built.set(o.type, object);
+  definitions.set(o.type, { face: "kind", schemaVersion: o.schemaVersion, binding });
   return object;
 }
 
@@ -202,6 +221,7 @@ export function buildFacelessType(
   // definition-time validation is the enforcement net behind this seam.
   const widget = defineWidget(def as Parameters<typeof defineWidget>[0]);
   built.set(row.type, widget);
+  definitions.set(row.type, { face: "faceless", schemaVersion: row.schemaVersion });
   return widget;
 }
 

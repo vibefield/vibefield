@@ -203,6 +203,11 @@ describe("coverage of what an author has to know", () => {
       // DK-9 — the activation event renamed clean: the new name, and the old one's refusal
       "onObject:<object type>",
       "onwidget-activation-retired",
+      // DK-9 — the runtime with kinds: what enable, disable and update do; where a kind's test runs
+      "At run time — enable, disable, update",
+      "plugin off",
+      "regresses schemaVersion",
+      "WHERE IT RUNS",
       "resolve(ctx)",
       "KindLocal.due",
     ])

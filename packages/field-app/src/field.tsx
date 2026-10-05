@@ -36,7 +36,13 @@ import {
   subscribePluginRegistry,
   usePluginRegistryFeed,
 } from "./plugin-host/plugin-registry-store";
-import type { PreparedRendererPlugins } from "./plugin-host/staged-loader";
+import { RendererWindowController } from "./plugin-host/renderer-controller";
+import {
+  type PreparedRendererPlugins,
+  type StagedLoaderDeps,
+  stageAdditionalPlugins,
+} from "./plugin-host/staged-loader";
+import { WindowKinds } from "./plugin-host/window-kinds";
 import type { ProductPresentationContextReporter } from "./presentation-context";
 import { useTheme } from "./theme";
 
@@ -98,30 +104,79 @@ export function FieldView({
     setPluginClientBackend({ windowClient: fielddClient });
     return () => setPluginClientBackend(null);
   }, [fielddClient]);
+  // THE RUNTIME WITH KINDS (DK-9, plugin-host/window-kinds.ts): the window's plugin set over its life —
+  // a plugin turned off or on remounts the desk without or with its kinds; one enabled that this
+  // renderer never defined is staged and the board reopens on a new engine; a kind it defined otherwise
+  // (an update) saves the board and replaces the renderer, which reopens it.
+  const kinds = useMemo(() => {
+    if (plugins === undefined) return undefined;
+    const log = getRendererLogger().child({ component: "plugin.kinds" });
+    return new WindowKinds(plugins, {
+      stage: async (pluginIds, existing) => {
+        const runtime = existing ?? new RendererWindowController();
+        const deps: StagedLoaderDeps = {
+          request: async (method, params) => await fielddClient.request(method, params),
+          subscribe: async (method, params, onEvent) => {
+            const subscription = await fielddClient.subscribe(method, params, onEvent);
+            return { snapshot: subscription.snapshot, unsubscribe: subscription.unsubscribe };
+          },
+          pluginClientBackend: { windowClient: fielddClient },
+          windowId: runtime.windowId,
+        };
+        return { staged: await stageAdditionalPlugins(pluginIds, deps, runtime), runtime };
+      },
+      remountGeneration: async (reason) => await manager.remount(reason),
+      replaceRenderer: () => {
+        // the board saved first (its lease closed, its lane drained) — then a NEW realm, which stages
+        // the approved set and reopens this window's own board (`vf-window-doc`) with the new kinds
+        void manager
+          .shutdown()
+          .catch((error: unknown) =>
+            log.error(
+              "renderer.plugins.replace_save_failed",
+              "The board did not save first",
+              error,
+            ),
+          )
+          .finally(() => globalThis.location?.reload());
+      },
+      updating: (pluginId) => plugins.runtime?.updating(pluginId) ?? false,
+      logger: log,
+    });
+  }, [plugins, manager, fielddClient]);
   useEffect(() => {
-    const runtime = plugins?.runtime;
-    if (runtime === undefined) return;
+    if (kinds === undefined) return;
     const reconcile = (): void => {
       const snapshot = getPluginRegistrySnapshot();
       if (snapshot === null) return;
-      void runtime.reconcile(snapshot).catch((error) => {
-        getRendererLogger()
-          .child({ component: "plugin.host" })
-          .error(
-            "renderer.plugins.reconcile_failed",
-            "Renderer plugin targets could not converge on the registry observation",
-            error,
-          );
-      });
+      const runtime = kinds.current().runtime;
+      void (runtime === undefined ? Promise.resolve() : runtime.reconcile(snapshot))
+        .then(() => kinds.observe(snapshot))
+        .catch((error) => {
+          getRendererLogger()
+            .child({ component: "plugin.host" })
+            .error(
+              "renderer.plugins.reconcile_failed",
+              "Renderer plugin targets could not converge on the registry observation",
+              error,
+            );
+        });
     };
     reconcile();
-    return subscribePluginRegistry(reconcile);
-  }, [plugins]);
+    const offRegistry = subscribePluginRegistry(reconcile);
+    // an update's episode settled (its commit, an old recovery): the kinds re-read the last snapshot
+    const offSettled = kinds.current().runtime?.onSettled(() => void kinds.again());
+    return () => {
+      offRegistry();
+      offSettled?.();
+    };
+  }, [kinds]);
 
   const { ce, registry, generation, docState, beforeTheDesk } = useWorkspaceSession(
     manager,
     plugins,
     profile,
+    kinds,
   );
   // Ruling 7: a board from before the desk is refused at open — by its header
   // here, or by the open's own word the manager keeps.
@@ -296,6 +351,7 @@ export function FieldView({
             keymapOverrides={keymapOverrides}
             generation={generation}
             refused={refused ? BEFORE_THE_DESK : null}
+            {...(kinds === undefined ? {} : { kinds })}
           />
         )}
       </div>

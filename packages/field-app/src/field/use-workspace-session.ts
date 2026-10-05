@@ -14,9 +14,11 @@ import {
 import { setActiveCanvasEngine } from "../plugin-host/canvas-engine-ref";
 import { buildGhostWidgetTypes } from "../plugin-host/ghost-stubs";
 import type { PreparedRendererPlugins } from "../plugin-host/staged-loader";
+import type { WindowKinds } from "../plugin-host/window-kinds";
 import { deskBlobs } from "./desk/desk-blobs";
 import { bindCapabilityUpgrades } from "./desk/desk-capabilities";
 import { currentDesk, deskCensus } from "./desk/desk-door";
+import { watchPacksLearned } from "./desk/desk-packs";
 import { seedsExamples } from "./desk/desk-seed";
 import { createDeskStills } from "./desk/desk-stills";
 import { isBeforeTheDesk, rootIsBeforeTheDesk } from "./desk/pre-desk";
@@ -114,7 +116,16 @@ function logBehaviorGenerationEvent(event: BehaviorGenerationEvent): void {
 // THE PACK MARKERS (DK-4, DK-D17): every writable board this session opens or
 // makes gains the packs of what is on — the desk's kinds and the enabled
 // plugins' object kinds — at the open, and again when a plugin is enabled
-// mid-session; ICE refuses to place a kind whose pack the board lacks.
+// mid-session; ICE refuses to place a kind whose pack the board lacks. DK-9: a
+// pack the board LACKS waits while another desktop holds it open (fieldd's
+// `doc.holders`), and a pack a live update brings that this engine does not
+// compile is LEARNED — the board reopens on a ghost stub for it, writable.
+//
+// THE RUNTIME WITH KINDS (DK-9, plugin-host/window-kinds.ts): each generation's
+// registry is built from the window's plugin set AS IT STANDS at that
+// generation — the boot's, grown by a plugin enabled mid-session — and every
+// opened board registers its REOPEN, what `DocManager.remount` asks of it to
+// carry the same board onto a new engine.
 
 export interface WorkspaceSession {
   ce: CanvasEngine;
@@ -134,6 +145,9 @@ export function useWorkspaceSession(
   /** Supervisor-owned identity. No profile means the optional room coeffect
    * stays off; persistence and every non-ephemeral behavior remain unchanged. */
   profile?: FieldUserProfile,
+  /** DK-9 — the window's kinds: its plugin set per generation (`current()`), which a mid-session
+   * enable grows. Absent (harnesses): the boot's `plugins`, fixed. */
+  kinds?: WindowKinds,
 ): WorkspaceSession {
   const docState = useSyncExternalStore(manager.subscribe, manager.getState);
   const pending = docState.pending;
@@ -148,7 +162,11 @@ export function useWorkspaceSession(
   // kinds draw is DK-9's; the widget-face swapper, faces.tsx, retired with
   // `contributes.widgets` at DK-8). The registry is therefore stable for the
   // whole mount again.
-  const registry = useMemo(() => buildRegistry(plugins), [plugins]);
+  // DK-9: re-read per generation — the same object until a plugin enabled mid-session was staged, so a
+  // doc switch rebuilds nothing; the generation that remount opens compiles the grown set's kinds
+  // (`generation` in the deps is the re-read's clock)
+  const prepared = useMemo(() => kinds?.current() ?? plugins, [kinds, plugins, generation]);
+  const registry = useMemo(() => buildRegistry(prepared), [prepared]);
   // Ghost stubs (§12.4 absent case): the pending doc's envelope header names
   // every widget type + pack version pre-open; types NO pack of this engine
   // covers register as FACELESS preserving stubs AT THE DOC'S VERSION, so the
@@ -228,6 +246,24 @@ export function useWorkspaceSession(
     const lane = pending.lane;
     let closePresence = (): void => {};
     let unbindCapabilities = (): void => {};
+    let unregisterReopen = (): void => {};
+    let stopLearning = (): void => {};
+    // DK-9: what a remount on a new engine asks of THIS generation — the typing ended (its session
+    // commits as the editor's lease ends) and the board's envelope as it stands
+    const registerReopen = (): void => {
+      unregisterReopen = manager.registerReopen(pending.generation, {
+        endInput: () => {
+          const desk = currentDesk();
+          if (desk !== null && desk.engine === ce) desk.handle.editor().blur();
+        },
+        export: () => ce.docs.current()?.exportEnvelope(Date.now()) ?? null,
+      });
+    };
+    // DK-9 (DK-5 input (2)): a pack the board lacks waits while another desktop holds it open
+    const capabilityOptions =
+      lane === null || pending.docId.length === 0
+        ? {}
+        : { heldElsewhere: () => manager.heldLiveElsewhere(pending.docId) };
     const connectPresence = (): void => {
       if (lane === null || profile === undefined) return;
       try {
@@ -250,6 +286,8 @@ export function useWorkspaceSession(
       behaviorConnection?.close(reason);
       closePresence();
       unbindCapabilities();
+      unregisterReopen();
+      stopLearning();
       ce.docs.close();
     };
     if (pending.initialBytes !== null) {
@@ -291,7 +329,8 @@ export function useWorkspaceSession(
       }
       // DK-D17: the packs of what is on, upgraded at the open — before the journal, while the
       // facade's gate is clean (each applied record leaves it to be judged at the next publish).
-      if (!res.session.readOnly) unbindCapabilities = bindCapabilityUpgrades(ce, registry);
+      if (!res.session.readOnly)
+        unbindCapabilities = bindCapabilityUpgrades(ce, registry, capabilityOptions);
       try {
         for (const update of pending.initialUpdates) res.session.applyRemote(update);
       } catch (error) {
@@ -321,6 +360,23 @@ export function useWorkspaceSession(
       connectPresence();
       behaviorConnection?.refresh();
       ce.world.sync();
+      registerReopen();
+      // DK-9: a pack a live update brings that this engine does not compile is LEARNED — the board
+      // reopens on a ghost stub for it, writable — never held read-only until a reopen
+      const session = res.session;
+      stopLearning = watchPacksLearned(session, {
+        learn: (types) => {
+          getRendererLogger()
+            .child({ component: "board.session", docId: pending.docId })
+            .info("renderer.board.pack_learned", "A live update brought a pack this board learns", {
+              types: [...types],
+            });
+          void manager.remount("pack-learned");
+        },
+        stuck: (types) => {
+          setBoardStatus({ state: "readonly", detail: `needs ${types.join(", ")}` });
+        },
+      });
       if (res.session.readOnly) {
         // P2 — the engine's pack-marker gate (ghost probe 2026-07-23): a board
         // carrying widgets of an UNREGISTERED plugin (or a newer schema) opens
@@ -340,7 +396,8 @@ export function useWorkspaceSession(
     } else {
       const session = ce.docs.create();
       // ICE stamps the whole catalog on a new board; the binding keeps a plugin enabled later
-      unbindCapabilities = bindCapabilityUpgrades(ce, registry);
+      unbindCapabilities = bindCapabilityUpgrades(ce, registry, capabilityOptions);
+      registerReopen();
       connectPresence();
       behaviorConnection?.refresh();
       // The first-run board belongs to the bootstrap default doc alone (seed
@@ -386,6 +443,8 @@ export function useWorkspaceSession(
       behaviorConnection?.close("document-close");
       closePresence();
       unbindCapabilities();
+      unregisterReopen();
+      stopLearning();
       unregisterStills();
       stills.dispose();
       unbindPersistence();

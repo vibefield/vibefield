@@ -1,4 +1,5 @@
 import {
+  DocHoldersResult,
   DocListResult,
   DocOpenResult,
   DocRegistryEntry,
@@ -104,6 +105,15 @@ export interface DocPersistenceLease {
   close(): Promise<void>;
 }
 
+/** DK-9 — the open board's REOPEN, per generation (the workspace session's): what a remount on a new
+ * engine needs of the generation it replaces. */
+export interface DocReopen {
+  /** End what the person is typing (the desk's one editor: a typing session commits as its lease ends). */
+  endInput(): void;
+  /** The board's envelope as it stands now, or null when no document is open. */
+  export(): Uint8Array | null;
+}
+
 function withTimeout<T>(p: Promise<T>, ms: number, what: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(() => reject(new Error(`${what} timed out after ${ms}ms`)), ms);
@@ -197,6 +207,7 @@ export class DocManager {
     },
   );
   private activeStills: { generation: number; docId: string; taker: DocStillTaker } | null = null;
+  private activeReopen: { generation: number; reopen: DocReopen } | null = null;
 
   constructor(
     private readonly client: FielddClient,
@@ -451,6 +462,80 @@ export class DocManager {
     return () => {
       if (this.activeStills === registration) this.activeStills = null;
     };
+  }
+
+  /** The open board's reopen, per generation (DK-9 — `remount` asks the generation it replaces). */
+  registerReopen(generation: number, reopen: DocReopen): () => void {
+    const registration = { generation, reopen };
+    this.activeReopen = registration;
+    return () => {
+      if (this.activeReopen === registration) this.activeReopen = null;
+    };
+  }
+
+  /**
+   * DK-9 — THE SAME BOARD, A NEW GENERATION (window-kinds.ts: a plugin enabled with kinds new to this
+   * renderer; the ghost-stub path learning a pack live): the board reopens on a NEW ENGINE, behind the
+   * veil, the B4 remount's path — what the person is typing ends (its session commits), the board's
+   * saves are flushed, and its envelope AS IT STANDS opens on the next generation over the SAME lane (no
+   * second writer, no round trip; a push held meanwhile is taken by the next generation's listener). The
+   * engine, the desk and its device are the new generation's; the document is the one it was. False when
+   * there is no applied board to reopen (a switch in flight answers for itself).
+   */
+  async remount(reason: string): Promise<boolean> {
+    const pending = this.state.pending;
+    const active = this.activeReopen;
+    if (
+      pending === null ||
+      active === null ||
+      active.generation !== this.appliedGeneration ||
+      pending.generation !== this.appliedGeneration
+    ) {
+      getRendererLogger()
+        .child({ component: "docs.manager", docId: pending?.docId })
+        .info("renderer.docs.remount_skipped", "No applied board to remount", { reason });
+      return false;
+    }
+    const held = this.state.heldElsewhere;
+    this.stage(0, "remounting the desk");
+    try {
+      await this.waitForSwitchCover();
+      active.reopen.endInput();
+      await this.flushActivePersistence();
+      const bytes = active.reopen.export();
+      if (bytes === null) throw new Error("the open board could not be exported for its remount");
+      this.installSession({
+        ...pending,
+        generation: ++this.generation,
+        initialBytes: bytes,
+        initialUpdates: [],
+        seed: false,
+      });
+      // an in-memory board in another window's place stays in it across its own remount
+      if (held !== undefined && pending.lane === null) this.patch({ heldElsewhere: held });
+      getRendererLogger()
+        .child({ component: "docs.manager", docId: pending.docId })
+        .info("renderer.docs.remounted", "The board reopened on a new generation", {
+          reason,
+          generation: this.generation,
+        });
+      return true;
+    } catch (e) {
+      this.recoverToCurrent("remount", e);
+      return false;
+    }
+  }
+
+  /** DK-9 (DK-5 input (2)) — whether ANOTHER desktop holds this board open now (fieldd's word,
+   * `doc.holders`): a pack the board lacks waits while one does. No answer (an older fieldd, no
+   * daemon) is no holder known — the stamp lands as before. */
+  async heldLiveElsewhere(docId: string): Promise<boolean> {
+    if (docId.length === 0) return false;
+    try {
+      return DocHoldersResult.parse(await this.request("doc.holders", { docId })).live.length > 0;
+    } catch {
+      return false;
+    }
   }
 
   registerPersistence(generation: number, lease: DocPersistenceLease): () => void {

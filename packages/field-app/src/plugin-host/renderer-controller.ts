@@ -209,6 +209,11 @@ export class RendererPluginController {
     return this.currentCandidate?.activation ?? this.lastFailure;
   }
 
+  /** An update episode is in flight (DK-9: the window's kinds move once it settles). */
+  get updating(): boolean {
+    return this.replacementEpisode !== undefined;
+  }
+
   get snapshot() {
     return this.controller.snapshot();
   }
@@ -364,11 +369,11 @@ export class RendererPluginController {
     );
     if (sameArtifactIdentity(input.oldArtifact, input.candidateArtifact))
       throw new Error(`${this.pluginId}: renderer replacement candidate equals retained old`);
-    if (!sameFixedObjectProjection(this.currentSource.record, input.candidate.record)) {
-      throw new Error(
-        `${this.pluginId}: renderer replacement changes the fixed object projection; replace the document generation`,
-      );
-    }
+    // DK-9 (the plan's addendum (13)): an update WITH KINDS is never refused here. Its activation
+    // replaces in this realm like any update's; its KINDS are another realm's — ICE's catalog cannot
+    // re-define a type in a realm — so once its episode settles the window's kinds plan replaces the
+    // renderer, which reopens its board with them (window-kinds.ts). Until DK-9 a changed object row
+    // was refused "replace the document generation" and no generation ever came.
 
     const oldTarget = this.targetFor(this.currentSource.record, this.currentSource.module);
     const candidateSource = freezeRendererSource(input.candidate);
@@ -850,10 +855,10 @@ function canonicalOpaqueJson(value: unknown): string {
   return JSON.stringify(visit(value));
 }
 
-/** The rows the window compiled into process-permanent prefabs (ICE's catalog cannot
- * un-define a type) may not change under a same-realm replacement — a changed row needs a new
- * document generation. DK-8: the law's rows are OBJECT rows; it held WIDGET rows until
- * `contributes.widgets` retired. (What an update may do with a kind's CODE is DK-9's.) */
+/** The retained OLD's object rows, as recovered: a retained-old recovery restores exactly the rows the
+ * window compiled (ICE's catalog cannot un-define a type). DK-9: a CANDIDATE's changed rows are no
+ * longer refused at prepare — an update with kinds replaces the renderer once it settles
+ * (window-kinds.ts); this law now guards only the recovery's identity. */
 function sameFixedObjectProjection(old: PluginRecord, candidate: PluginRecord): boolean {
   return (
     canonicalOpaqueJson(old.contributions.objects ?? []) ===
@@ -874,6 +879,8 @@ export class RendererWindowController {
   private behaviorDiagnostics = new Map<string, PluginRuntimeBehaviorGenerationDiagnostic>();
   private readonly updateChannels = new Set<{ close(): Promise<void> }>();
   private readonly inFlight = new Set<Promise<void>>();
+  /** DK-9: told after an update's commit or old recovery settles — the window's kinds move then. */
+  private readonly settledListeners = new Set<() => void>();
   private closeTask: Promise<void> | undefined;
   private closed = false;
 
@@ -970,6 +977,29 @@ export class RendererWindowController {
     return this.controllers.get(pluginId);
   }
 
+  /** Whether `pluginId` is mid-update in this window (its kinds move when the episode settles). */
+  updating(pluginId: string): boolean {
+    return this.controllers.get(pluginId)?.updating ?? false;
+  }
+
+  /** Hear each update episode settle (a commit, an old recovery) — DK-9's kinds plan re-reads then. */
+  onSettled(listener: () => void): () => void {
+    this.settledListeners.add(listener);
+    return () => this.settledListeners.delete(listener);
+  }
+
+  private settled(): void {
+    queueMicrotask(() => {
+      for (const listener of [...this.settledListeners]) {
+        try {
+          listener();
+        } catch {
+          // a listener is observation; the update's ack is never its hostage
+        }
+      }
+    });
+  }
+
   isActiveArtifact(artifact: PluginUpdateArtifact): boolean {
     return this.controllers.get(artifact.pluginId)?.isActiveArtifact(artifact) ?? false;
   }
@@ -984,13 +1014,22 @@ export class RendererWindowController {
 
   commitReplacement(input: CommitRendererReplacementInput): ActivatedRenderer {
     if (this.closed) throw new Error("renderer window controller is closed");
-    return this.requireController(input.candidateArtifact.pluginId).commitReplacement(input);
+    const activation = this.requireController(input.candidateArtifact.pluginId).commitReplacement(
+      input,
+    );
+    this.settled();
+    return activation;
   }
 
   recoverOld(input: RecoverOldRendererInput): Promise<RecoverOldRendererResult> {
     if (this.closed) return Promise.reject(new Error("renderer window controller is closed"));
     const controller = this.requireController(input.oldArtifact.pluginId);
-    return this.track(controller.recoverOld(input));
+    const task = this.track(controller.recoverOld(input));
+    void task.then(
+      () => this.settled(),
+      () => this.settled(),
+    );
+    return task;
   }
 
   /** DEV-only fallback bridge. Production staged artifacts always publish through a controller. */
@@ -1029,7 +1068,10 @@ export class RendererWindowController {
     // authority synchronously even while an earlier observation is still draining.
     const task = Promise.all(
       [...this.controllers.values()].map(async (controller) => {
+        const updating = controller.updating;
         await controller.reconcile(records.get(controller.pluginId) ?? null);
+        // the candidate's observation can be what ends an episode (its commit came first)
+        if (updating && !controller.updating) this.settled();
       }),
     ).then(() => undefined);
     this.inFlight.add(task);

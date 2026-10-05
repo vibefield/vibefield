@@ -70,6 +70,10 @@ async function mountWith(initialBytes: Uint8Array) {
       registered.push([generation, docId]);
       return () => undefined;
     },
+    // DK-9: the session registers each generation's reopen and asks fieldd for the board's holders
+    registerReopen: () => () => undefined,
+    heldLiveElsewhere: async () => false,
+    remount: async () => false,
   } as unknown as DocManager;
   function Harness() {
     useWorkspaceSession(manager);
