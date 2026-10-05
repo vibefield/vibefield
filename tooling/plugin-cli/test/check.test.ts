@@ -132,6 +132,29 @@ describe("check — manifest-invalid (the control run)", () => {
     expect(REFUSAL_CATALOG["onwidget-activation-retired"].guidance).toContain("onObject:<type>");
   });
 
+  it("refuses the widget-context placement BY NAME, pointing at object-context — one verdict, no alias (DK-10)", async () => {
+    const base = baseManifest();
+    const commands = (base["contributes"] as { commands: Record<string, unknown>[] }).commands;
+    const retired = makePlugin({
+      rawManifest: `${JSON.stringify(
+        {
+          ...base,
+          contributes: {
+            commands: [{ ...commands[0], placements: ["palette", "widget-context"] }],
+          },
+        },
+        null,
+        2,
+      )}\n`,
+    });
+    const refusals = (await checkPlugin({ dir: retired })).filter(
+      (v) => v.level === "refuse" && v.check === "manifest",
+    );
+    expect(refusals.map((v) => v.code)).toEqual(["widget-context-retired"]);
+    expect(refusals[0]?.pointer).toBe("/contributes/commands/0/placements/1");
+    expect(refusals[0]?.detail).toContain("object-context");
+  });
+
   it("preserves stable behavior admission codes and exact pointers", async () => {
     const withSystems = baseManifest();
     withSystems["contributes"] = {

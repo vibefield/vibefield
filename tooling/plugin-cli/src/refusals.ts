@@ -78,6 +78,13 @@ export const REFUSAL_CATALOG = {
     guidance:
       "rename it onObject:<type>: it fires when the type's first instance appears in the document (manifest.md)",
   },
+  "widget-context-retired": {
+    check: "manifest",
+    level: "refuse",
+    meaning:
+      "the retired widget-context command placement — a command on an object's context menu is placed object-context",
+    guidance: "rename the placement object-context — the retired word is no alias",
+  },
   "manifest-stale": {
     check: "manifest",
     level: "refuse",

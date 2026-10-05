@@ -120,7 +120,7 @@ binds a handler with `ctx.commands.register(id, handler)`.
 | `title` | string | yes | at least 1 character; at most 80 characters |
 | `description` | string | no | at most 500 characters |
 | `icon` | string | no | asset paths are ./-relative POSIX, no .., no schemes |
-| `placements` | `palette` \| `widget-context` \| `canvas-context` \| `hud` \| `godview`[] | yes | at least 1 item(s) |
+| `placements` | `palette` \| `object-context` \| `canvas-context` \| `hud` \| `godview`[] | yes | at least 1 item(s) |
 | `args` | object | no | — |
 
 ```json

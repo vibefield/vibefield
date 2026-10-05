@@ -69,6 +69,7 @@ column is the general one.
 | `try-unbuilt` | try | the renderer entry the manifest names is not on disk — the desk loads the BUILT module | run `plugin-build` in the plugin's directory first (it writes dist/renderer.js) |
 | `usage` | input | the command line could not be understood | run `vibefield-plugin --help`; every command is non-interactive |
 | `wall-violation` | wall | plugin runtime code imports something outside the SDK door (§11.3, wall R10) | import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior, /desk), @vibefield/contracts types, or react |
+| `widget-context-retired` | manifest | the retired widget-context command placement — a command on an object's context menu is placed object-context | rename the placement object-context — the retired word is no alias |
 | `widgets-contribution-retired` | manifest | the retired contributes.widgets — a face on the desk is an object kind the desk draws (DK-8) | declare it under contributes.objects: its durable half (size, props, groups, interaction) and binding.kind, the renderer export that holds its kind (objects.md) |
 
 ## Notes (exit 0)

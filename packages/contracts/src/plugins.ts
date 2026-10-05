@@ -149,6 +149,37 @@ export const ONWIDGET_ACTIVATION_RETIRED = {
     `activation event ${event} is retired: an object's activation event is onObject:${event.slice("onWidget:".length)} — it fires when the type's first instance appears in the document`,
 } as const;
 
+/** DK-10 (the plan's addendum (15), its principle applied to the last plugin-facing word that said widget): a command
+ * placed on an OBJECT's context menu is `object-context`; the retired `widget-context` is REFUSED BY NAME — no alias:
+ * the parse fails with the one issue, and nothing is ever accepted under the old word. VibeField's own vocabulary
+ * (ICE places no commands), read by nothing on the desk build, zero users. */
+export const WIDGET_CONTEXT_RETIRED = {
+  code: "widget-context-retired",
+  message:
+    "placement widget-context is retired: a command on an object's context menu is placed object-context",
+} as const;
+
+/** Where a command may be placed. */
+export const COMMAND_PLACEMENTS = [
+  "palette",
+  "object-context",
+  "canvas-context",
+  "hud",
+  "godview",
+] as const;
+export type CommandPlacement = (typeof COMMAND_PLACEMENTS)[number];
+
+const CommandPlacementSpec = z.preprocess((value, ctx) => {
+  if (value !== "widget-context") return value;
+  ctx.addIssue({
+    code: z.ZodIssueCode.custom,
+    message: WIDGET_CONTEXT_RETIRED.message,
+    params: { pluginIssueCode: WIDGET_CONTEXT_RETIRED.code },
+  });
+  // the parse has FAILED on the issue above; the value handed on only keeps the enum from saying it a second time
+  return "object-context";
+}, z.enum(COMMAND_PLACEMENTS));
+
 export const ActivationEvent = z
   .string()
   .max(PLUGIN_LIMITS.ID_MAX * 2)
@@ -643,7 +674,9 @@ export type PluginManifestIssueCode =
   /** DK-8: `contributes.widgets` is refused by name — a face is an object kind */
   | "widgets-contribution-retired"
   /** DK-9: the `onWidget:` activation event is refused by name — it is `onObject:` */
-  | "onwidget-activation-retired";
+  | "onwidget-activation-retired"
+  /** DK-10: the `widget-context` command placement is refused by name — it is `object-context` */
+  | "widget-context-retired";
 
 /** DK-8: the one refusal `contributes.widgets` meets at every door that validates a
  * manifest (fieldd's loader, `vibefield-plugin check`, the registry), said once. */
@@ -875,9 +908,7 @@ export const CommandContribution = z
     title: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
     description: z.string().max(PLUGIN_LIMITS.TEXT_MAX).optional(),
     icon: RelativeAssetPath.optional(),
-    placements: z
-      .array(z.enum(["palette", "widget-context", "canvas-context", "hud", "godview"]))
-      .min(1),
+    placements: z.array(CommandPlacementSpec).min(1),
     args: JsonSchemaObject.optional(),
   })
   .passthrough();

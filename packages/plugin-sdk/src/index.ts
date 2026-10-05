@@ -386,7 +386,7 @@ export function createStorageSurfaces(client: PluginProductClient): {
  * gesture (§13.1). `selection` is the current canvas selection at invoke time;
  * `windowId` names the invoking window. */
 export interface CommandInvocation {
-  source: "palette" | "widget-context" | "canvas-context" | "hud" | "godview";
+  source: "palette" | "object-context" | "canvas-context" | "hud" | "godview";
   windowId: string;
   selection: string[];
   userGesture: boolean;

@@ -10,6 +10,7 @@ import {
   PLUGIN_LIMITS,
   PluginManifestV1,
   validatePluginManifest,
+  WIDGET_CONTEXT_RETIRED,
   WIDGETS_CONTRIBUTION_RETIRED,
 } from "../src/plugins";
 
@@ -675,6 +676,33 @@ describe("the object contribution (DK-0f)", () => {
     // a malformed event is still the shape refusal, naming the vocabulary as it is now
     expect(refused(withObjects([object()], { activation: ["onClock:x"] }))).toContain(
       "activation.0: activation events: onStartup | on{Object,Command,Surface,Service}:<owned id>",
+    );
+  });
+
+  it("DK-10: the retired widget-context placement is refused BY NAME — one issue naming object-context, no alias", () => {
+    const command = (placements: string[]) => ({
+      ...base(),
+      activation: ["onCommand:com.example.demo.go"],
+      contributes: { commands: [{ id: "com.example.demo.go", title: "Go", placements }] },
+    });
+    const result = validatePluginManifest(command(["palette", "widget-context"]));
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // ONE issue, its stable code, pointing at the new word — never a second "invalid enum value" for the same word,
+    // and the old word never accepted in place of the new one
+    expect(result.issueDetails).toEqual([
+      {
+        code: WIDGET_CONTEXT_RETIRED.code,
+        path: ["contributes", "commands", 0, "placements", 1],
+        message: WIDGET_CONTEXT_RETIRED.message,
+      },
+    ]);
+    expect(WIDGET_CONTEXT_RETIRED.code).toBe("widget-context-retired");
+    expect(WIDGET_CONTEXT_RETIRED.message).toContain("object-context");
+    expect(validatePluginManifest(command(["palette", "object-context"])).ok).toBe(true);
+    // a word nobody ever used is still the enum's refusal, naming the vocabulary as it is now
+    expect(refused(command(["sidebar"]))[0]).toContain(
+      "Expected 'palette' | 'object-context' | 'canvas-context' | 'hud' | 'godview'",
     );
   });
 

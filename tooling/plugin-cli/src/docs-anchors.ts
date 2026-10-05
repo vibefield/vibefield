@@ -345,6 +345,16 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
     topic: "the retired onWidget: activation event is refused by name — it is onObject:",
     manifest: { ...base(), activation: ["onWidget:com.example.demo"] },
   },
+  {
+    topic: "the retired widget-context command placement is refused by name — it is object-context",
+    manifest: {
+      ...base(),
+      activation: ["onCommand:com.example.demo.go"],
+      contributes: {
+        commands: [{ id: "com.example.demo.go", title: "Go", placements: ["widget-context"] }],
+      },
+    },
+  },
   // --- the object door (DK-0f) ---
   {
     topic: "a widget's view fields are retired on an object, each refused by name",
