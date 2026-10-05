@@ -10,21 +10,37 @@
 //    then held; a still that moved is refused against its golden, naming the host; a `--state` bless mends that one state
 //    and keeps the rest;
 //  - under strata's DEV build (`node --conditions=development`, as vitest loads it) every still names ICE core's `Tray`
-//    line as core's, on its own row.
+//    line as core's, on its own row;
+//  - the desk clock (examples/plugins/desk-clock — ICE's kind ported as a plugin): held to ITS golden, blessed once by the
+//    named flag; and, staged exactly as ICE stages its own clock still, it draws ICE's committed golden byte for byte —
+//    the port, the product's type build and the still door all ICE's, pixel for pixel.
 import { execFile } from "node:child_process";
+import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import type { WidgetType } from "@vibecook/ice";
+import { createStill } from "@vibecook/ice/desk";
+import type { ObjectContribution } from "@vibefield/contracts";
+import { buildObjectType } from "@vibefield/field-app/object-types";
+import type { ObjectBinding } from "@vibefield/plugin-sdk";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { CORE_TRAY_LINE, STILL_GOLDEN, type StillGolden } from "../src/still";
+import {
+  CORE_TRAY_LINE,
+  STILL_GOLDEN,
+  type StillGolden,
+  type StillGpu,
+  stillGpu,
+} from "../src/still";
 import type { RunSummary, StillVerdict, Verdict } from "../src/verdict";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const BIN = resolve(HERE, "..", "bin", "plugin-playground.mjs");
 const REPO = resolve(HERE, "..", "..", "..");
 const FIXTURE = join(HERE, "fixtures", "still-kinds");
+const CLOCK = join(REPO, "examples", "plugins", "desk-clock");
 
 interface Ran {
   readonly code: number;
@@ -208,5 +224,79 @@ describe("under strata's dev build, every still names ICE core's line as core's"
     // the bin under Node's default conditions loads strata's production build: nothing is said
     const quiet = await still(scaffold, ["--state", "vendor.demo:default"]);
     for (const s of quiet.stills) expect(s.said).toBeUndefined();
+  });
+});
+
+/** ICE's own clock still — `examples/desk-clock/test/still.ts` and its `test/still.golden.json` at 0.15.0-desk.3 (ICE
+ * `189c84d`): three 150-unit dials at 2026-09-28 10:08:42 UTC (the oracle's hour), 480 × 200 CSS px at dpr 2, ICE's still
+ * palette. A golden is Dawn's bytes on the host that blessed it — this suite's host draws them. */
+const ICE_CLOCK = {
+  at: Date.UTC(2026, 8, 28, 10, 8, 42),
+  dials: [
+    { cx: -160, props: { style: "classic", zone: "+00:00" } },
+    { cx: 0, props: { style: "station", ring24: true, zone: "+09:00" } },
+    { cx: 160, props: { style: "graphite", seconds: false, zone: "-05:00" } },
+  ],
+  golden: {
+    light: "27fe69ee68f5e3886673f34376af7993e9aa88c310728b8d3ae09f1a84e3dd33",
+    dark: "9285a72f63a5cb59de1ad80fc9a5879991bbc5a6d2957c6c2a49b0155f707107",
+  },
+} as const;
+
+describe("the desk clock — ICE's kind as VibeField's plugin", () => {
+  it("is held to its golden: its default state by day and by night, blessed once by the named flag", async () => {
+    const ran = await still(CLOCK);
+    expect(ran.code).toBe(0);
+    expect(ran.stills.map((s) => `${s.state} · ${s.theme}: ${s.code}`)).toEqual([
+      "default · day: ok",
+      "default · night: ok",
+    ]);
+    for (const s of ran.stills) expect(s.detail).toContain("held to its golden");
+  });
+
+  it("draws ICE's own clock still byte for byte, staged as ICE stages it — through the product's type build", async () => {
+    const gpu: StillGpu = await stillGpu();
+    try {
+      // the clock's code half and durable half, as the plugin ships them (its .wgsl inlined as text by the config's plugin)
+      const src = join(CLOCK, "src", "index.ts");
+      const mod = (await import(/* @vite-ignore */ src)) as {
+        readonly clock: ObjectBinding;
+        readonly deskClockManifest: {
+          readonly contributes?: { readonly objects?: readonly ObjectContribution[] };
+        };
+      };
+      const row = mod.deskClockManifest.contributes?.objects?.[0] as ObjectContribution;
+      const type: WidgetType = buildObjectType({ ...row, behaviors: [] }, mod.clock);
+      for (const theme of ["light", "dark"] as const) {
+        const shot = await createStill({
+          device: gpu.device,
+          format: "rgba8unorm",
+          size: { width: 480, height: 200 },
+          dpr: 2,
+          objects: [type],
+          theme,
+          stage: ({ engine, pinAsset }) => {
+            for (const d of ICE_CLOCK.dials) {
+              const e = engine.ops.spawnWidget(row.type, {
+                x: d.cx - 75,
+                y: -75,
+                w: 150,
+                h: 150,
+                props: { ...d.props },
+                undoable: false,
+              });
+              pinAsset(e, { at: ICE_CLOCK.at });
+            }
+          },
+        });
+        expect([shot.width, shot.height]).toEqual([960, 400]);
+        expect(createHash("sha256").update(shot.rgba).digest("hex"), theme).toBe(
+          ICE_CLOCK.golden[theme],
+        );
+        shot.dispose();
+      }
+    } finally {
+      gpu.destroy();
+    }
   });
 });

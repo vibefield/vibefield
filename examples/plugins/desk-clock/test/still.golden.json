@@ -1,0 +1,15 @@
+{
+  "host": "Metal driver on macOS Version 26.5.2 (Build 25F84) (apple metal-3) · darwin-arm64 · webgpu 0.4.0",
+  "stills": {
+    "vibefield.example.desk-clock:default:day": {
+      "width": 532,
+      "height": 532,
+      "sha256": "ee4ff6cce6b1b61ef8f78ea0a30c46e628f16d9f3ba1614a0f38bea9b41349ed"
+    },
+    "vibefield.example.desk-clock:default:night": {
+      "width": 532,
+      "height": 532,
+      "sha256": "f289b0198402413edc298f2f0a0f178502bc2c10017da6fe33c133d1ed4420e8"
+    }
+  }
+}
