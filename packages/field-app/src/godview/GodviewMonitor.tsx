@@ -26,6 +26,7 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
 import { DeviceFilterChip } from "./DeviceFilterChip";
@@ -208,6 +209,29 @@ const noStatusCycle = (): void => undefined;
  * handler — the ask on record, beside the counters'. */
 const noThemeSwitch = (): void => undefined;
 
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+function reducedMotionQuery(): MediaQueryList | null {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia(REDUCED_MOTION)
+    : null;
+}
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  const query = reducedMotionQuery();
+  if (query === null) return () => undefined;
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const readReducedMotion = (): boolean => reducedMotionQuery()?.matches ?? false;
+
+/** MV-W4 — the viewer's reduced-motion preference, live: a change reaches the
+ * mounted view without waiting for the stage to render for another reason. */
+function usePrefersReducedMotion(): boolean {
+  return useSyncExternalStore(subscribeReducedMotion, readReducedMotion, () => false);
+}
+
 export interface GodviewMonitorProps {
   view: MonitorViewEntry;
   parameters: MonitorParameters;
@@ -222,6 +246,11 @@ export interface GodviewMonitorProps {
   panes?: MonitorPaneFacts;
   /** The product shell overlays native macOS controls on the leading edge. */
   reserveWindowControls?: boolean;
+  /** MV-W4 — the stage's animations switch, the value its owner hands
+   * `GodviewStage` (GT-3p: the lab's kill switch; the catalog's still stage).
+   * Off, a ported view's loop holds still, as the stage's CSS loops do under
+   * the attribute the stage writes from the same value. */
+  animations?: boolean;
   onSelectView?: (viewId: string) => void;
   onToggleTuning?: () => void;
 }
@@ -235,6 +264,7 @@ export function GodviewMonitor({
   door = null,
   panes,
   reserveWindowControls = false,
+  animations = true,
   onSelectView,
   onToggleTuning,
 }: GodviewMonitorProps): ReactElement {
@@ -248,6 +278,7 @@ export function GodviewMonitor({
     godviewRootRef.current = stageRef.current?.closest(".vf-godview") ?? null;
   }, []);
   const palette = useMonitorPalette(godviewRootRef);
+  const reducedMotion = usePrefersReducedMotion();
 
   // AR-S5 — THE PROFILE TABS (the agents-settings record's T3). The feed is
   // the one Settings reads, held only while this stage is (PF6). A chosen tab
@@ -389,13 +420,15 @@ export function GodviewMonitor({
   // and the chrome's rects (insets are advisory, `design-mv.md` §5); a ported
   // view reads this instead (MV-4: the list's band and gutter are its insets).
   const [stageGeometry, setStageGeometry] = useState<StageGeometry>(EMPTY_STAGE);
-  const reducedMotion =
-    typeof window !== "undefined" && typeof window.matchMedia === "function"
-      ? window.matchMedia("(prefers-reduced-motion: reduce)").matches
-      : false;
+  // MV-W4 — the motion a view may make: none while the viewer asks for reduced
+  // motion, and none while the stage's animations switch is off (the lab's
+  // kill switch, the catalog's still stage). A ported view's loop stops on
+  // either (the rain draws once per change instead); the legacy views keep
+  // their own rules until they port. Both are known at the first render, so a
+  // view mounted under a still stage never starts its loop.
   const monitorTheme = useMemo<MonitorTheme>(
-    () => ({ scheme: theme, tokens: palette, reducedMotion, animations: true }),
-    [theme, palette, reducedMotion],
+    () => ({ scheme: theme, tokens: palette, reducedMotion, animations }),
+    [theme, palette, reducedMotion, animations],
   );
 
   // Views that lay out in flow clear the chrome with these two insets — the

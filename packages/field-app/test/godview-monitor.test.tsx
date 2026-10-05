@@ -33,12 +33,14 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import { MONITOR_SKIN } from "@vibecook/puppeteer-view-sdk";
+import { createRecordingView, type RecordingView } from "@vibecook/puppeteer-view-sdk/testing";
 import {
   type AccountUsagePort,
   type AgentMonitorProps,
   type AgentMonitorView,
   DEFAULT_MONITOR_VIEW_ID,
   type HistoryPort,
+  type MonitorViewEntry,
   monitorParameterDefaults,
   monitorViewFor,
 } from "@vibecook/puppeteer-views";
@@ -2015,5 +2017,139 @@ describe("the spawn bloom, driven (SB-3)", () => {
     );
     expect(door.createTerminal).toHaveBeenCalledExactlyOnceWith({ profileSet: "work" });
     expect(ackText(host)).toBe("terminal opened under Work in the active pane");
+  });
+
+  it("puts the list's ＋ TERMINAL menu away when the window loses focus — W2's focus dismissal, named in MV-4", async () => {
+    // The ported menu touches nothing outside its view (MV-W2): a press
+    // elsewhere is heard as the focus leaving the menu, never through a
+    // document listener. So the window losing focus — the browser blurs the
+    // focused row with no element to go to — puts it away too, where the old
+    // menu stayed open. Only VibeField opens this menu (its profiles feed
+    // offers the choice), so only VibeField can see the change.
+    const door = bloomDoor();
+    const { host } = await mountBloom(door, "list");
+    const menu = (): Element | null =>
+      host.querySelector('[role="menu"][aria-label="New terminal"]');
+    await act(async () => host.querySelector<HTMLButtonElement>(".vf-monitor-list-new")?.click());
+    expect(menu()).not.toBeNull();
+    const focused = document.activeElement;
+    expect(focused === null ? false : menu()?.contains(focused)).toBe(true);
+    await act(async () => {
+      // what the browser does to the focused element when its window loses focus
+      focused?.dispatchEvent(new FocusEvent("blur", { relatedTarget: null }));
+      focused?.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+      window.dispatchEvent(new FocusEvent("blur"));
+    });
+    expect(menu()).toBeNull();
+    expect(door.createTerminal).not.toHaveBeenCalled();
+  });
+});
+
+// ---- MV-W4 — the motion a view may make ------------------------------------
+//
+// A ported view's loop stops while the viewer asks for reduced motion, or
+// while the stage's animations switch is off (GT-3p: the value the overlay
+// hands `GodviewStage` from the lab's kill switch, and the catalog hands it
+// off). The rain reads both off its input's theme and draws once per change
+// instead (its own suite, puppeteer's `RainView.test.tsx`); what this stage
+// owes it is the theme, from the view's first input. A recording view stands
+// in for the rain: it keeps every input the view host hands it.
+
+describe("MV-W4 — the motion a ported view may make", () => {
+  function recordingEntry(): { entry: MonitorViewEntry; recording: RecordingView } {
+    const recording = createRecordingView("motion-probe");
+    return {
+      recording,
+      entry: { id: "motion-probe", label: "MOTION", parameterGroups: [], view: recording.view },
+    };
+  }
+
+  async function renderUnder(
+    entry: MonitorViewEntry,
+    door: MonitorDoor,
+    animations?: boolean,
+  ): Promise<void> {
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor
+            view={entry}
+            parameters={{}}
+            door={door}
+            panes={PANES}
+            {...(animations !== undefined ? { animations } : {})}
+          />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+  }
+
+  async function mountUnder(entry: MonitorViewEntry, animations?: boolean): Promise<MonitorDoor> {
+    const door = fakeDoor();
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await renderUnder(entry, door, animations);
+    return door;
+  }
+
+  /** A media query the test answers, and changes. */
+  function reducedMotionQuery(matches: boolean): { set(next: boolean): void } {
+    const listeners = new Set<() => void>();
+    const query = {
+      get matches() {
+        return matches;
+      },
+      media: "(prefers-reduced-motion: reduce)",
+      addEventListener: (_type: string, listener: () => void) => listeners.add(listener),
+      removeEventListener: (_type: string, listener: () => void) => listeners.delete(listener),
+    };
+    vi.stubGlobal("matchMedia", (media: string) =>
+      media === query.media
+        ? query
+        : { matches: false, media, addEventListener() {}, removeEventListener() {} },
+    );
+    return {
+      set(next) {
+        matches = next;
+        for (const listener of [...listeners]) listener();
+      },
+    };
+  }
+
+  it("hands the view a still theme from its first input while the stage's switch is off, and a moving one when it comes back on", async () => {
+    reducedMotionQuery(false);
+    const { entry, recording } = recordingEntry();
+    const door = await mountUnder(entry, false);
+    expect(recording.mounts).toBe(1);
+    // the switch was off before the view mounted: its loop never starts
+    expect(recording.inputs[0]?.theme).toMatchObject({ animations: false, reducedMotion: false });
+    expect(recording.inputs.every((input) => input.theme.animations === false)).toBe(true);
+    // the lab turns the switch back on while the stage stands
+    await renderUnder(entry, door, true);
+    expect(recording.mounts).toBe(1);
+    expect(recording.lastInput?.theme).toMatchObject({ animations: true, reducedMotion: false });
+  });
+
+  it("moves by default: a host that hands no switch keeps today's motion", async () => {
+    reducedMotionQuery(false);
+    const { entry, recording } = recordingEntry();
+    await mountUnder(entry);
+    expect(recording.inputs[0]?.theme).toMatchObject({ animations: true, reducedMotion: false });
+  });
+
+  it("hands the view the viewer's reduced motion, live: a change reaches it with nothing else moving", async () => {
+    const query = reducedMotionQuery(true);
+    const { entry, recording } = recordingEntry();
+    await mountUnder(entry);
+    expect(recording.inputs[0]?.theme).toMatchObject({ animations: true, reducedMotion: true });
+    await act(async () => query.set(false));
+    await settle();
+    expect(recording.lastInput?.theme).toMatchObject({ animations: true, reducedMotion: false });
+    await act(async () => query.set(true));
+    await settle();
+    expect(recording.lastInput?.theme).toMatchObject({ reducedMotion: true });
   });
 });

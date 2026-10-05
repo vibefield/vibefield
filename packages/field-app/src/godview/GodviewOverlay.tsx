@@ -217,6 +217,8 @@ export function GodviewOverlay(): ReactElement | null {
               door={remoteDoor}
               panes={panes}
               reserveWindowControls={getHost().platform === "darwin"}
+              // MV-W4: the same switch, for a ported view's own loop
+              animations={labSwitches.animations}
               onSelectView={monitor.selectView}
               onToggleTuning={() => setTuningOpen((current) => !current)}
             />
