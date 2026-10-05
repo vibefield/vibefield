@@ -397,8 +397,16 @@ export class ServiceHost {
     }
   }
 
+  /** No entry and nothing to run — a plugin with no service (or a disabled one): an enable or a dev reload
+   * of it makes NO entry. DK-9: each runtime enable or reload of a service-less plugin (an object kind's)
+   * left an empty entry and its controller behind — the physical soak's `serviceHost.entries` drift. */
+  private nothingToRun(pluginId: string): boolean {
+    return !this.entries.has(pluginId) && this.serviceTarget(pluginId) === null;
+  }
+
   /** explicit (re)start — clears crash history (user re-enable clears quarantine, §18.3) */
   async restartFresh(pluginId: string): Promise<void> {
+    if (this.nothingToRun(pluginId)) return;
     const e = this.entry(pluginId);
     e.crashTimes = [];
     if (e.restartTimer !== null) {
@@ -510,6 +518,7 @@ export class ServiceHost {
     const updateEpisode = this.candidateEpisodes.get(pluginId);
     if (updateEpisode?.state === "prepared")
       throw new Error(`${pluginId}: candidate update ${updateEpisode.updateId} owns the service`);
+    if (this.nothingToRun(pluginId)) return;
     const e = this.entry(pluginId);
     if (e.stopTask !== null) await e.stopTask;
     if (this.disposed) return;

@@ -269,6 +269,21 @@ function candidateRecord(base: TestRecord, slot: string): PluginRecord {
 }
 
 describe("ServiceHost exact target controller (PRC-3c)", () => {
+  it("DK-9: an enable or a dev reload of a plugin with NO service makes no entry — nothing is left behind", async () => {
+    const rig = createRig();
+    rig.update((record) => ({ ...record, service: "none" }));
+    await rig.host.restartFresh(pluginId); // a runtime enable / a §18.5 dev reload
+    await rig.host.start(pluginId);
+    expect(rig.host.census().entries).toBe(0);
+    expect(rig.workers).toHaveLength(0);
+    // a plugin that HAS a service still gets its entry and its worker
+    rig.update((record) => ({ ...record, service: "inactive" }));
+    await rig.host.restartFresh(pluginId);
+    expect(rig.host.census().entries).toBe(1);
+    expect(rig.workers).toHaveLength(1);
+    await rig.host.stopAll();
+  });
+
   it("projects passively and logs exactly once per service lifecycle transition", async () => {
     const { logger, calls } = lifecycleLogger();
     const changed = vi.fn();
