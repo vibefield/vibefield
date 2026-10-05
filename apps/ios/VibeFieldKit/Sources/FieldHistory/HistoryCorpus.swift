@@ -316,11 +316,14 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
   /// SP-6 — what was attached to the PROMPT, as placeholders' words (`image
   /// shot.png on studio`): drawn under the panel, never relayed (H-D9).
   public let promptAttachments: [String]
+  /// SP-6 — the words under a prompt the door cut at its bound (`clipped ·
+  /// 14 KB on studio`); nil for a prompt carried whole.
+  public let promptClipped: String?
 
   public init(
     id: String, at: String, dayPill: HistoryDayPill? = nil, prompt: String, promptAnchor: String? = nil,
     model: String, facts: String, isLive: Bool = false, segments: [HistorySegment],
-    promptAttachments: [String] = []
+    promptAttachments: [String] = [], promptClipped: String? = nil
   ) {
     self.id = id
     self.at = at
@@ -332,6 +335,7 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
     self.isLive = isLive
     self.segments = segments
     self.promptAttachments = promptAttachments
+    self.promptClipped = promptClipped
   }
 }
 
@@ -357,10 +361,16 @@ public enum HistorySegment: Identifiable, Equatable, Sendable, Codable {
   /// attachment kind (image · document · audio · video · file, open),
   /// `label` the name when the index had one.
   case attachment(id: String, kind: String, label: String?)
+  /// SP-6 — the words under a reply whose text the door CUT at its bound
+  /// (`INDEX_TIMELINE.TEXT_CHARS`): `clipped · 14 KB on studio`, in the
+  /// record's honest-state voice, so a body never reads as complete when it
+  /// is not; the whole is read in the room, which has the ticket.
+  case clipped(id: String, words: String)
 
   public var id: String {
     switch self {
-    case .prose(let id, _, _, _), .ledger(let id, _, _, _, _, _), .attachment(let id, _, _): id
+    case .prose(let id, _, _, _), .ledger(let id, _, _, _, _, _), .attachment(let id, _, _), .clipped(let id, _):
+      id
     }
   }
 
@@ -566,6 +576,10 @@ extension HistoryCorpus {
                 text:
                   "Eleven glyphs, all resolving. The build script asserted inline.svg began with <svg before the assets barrel had re-exported it — an ordering bug in the check, not in the glyphs. No badge survives at 12px, so none is drawn.",
                 anchor: "h3"),
+              // SP-6 — the honest-state words: a reply the door cut at its bound,
+              // and an attachment whose bytes the index did not record
+              .clipped(id: "t2-c1", words: "clipped · 14 KB on studio"),
+              .attachment(id: "t2-a1", kind: "image", label: "image specimen-12px.png · omitted from the record on studio"),
             ]),
           HistoryTurn(
             id: "t3", at: "11:31:08", dayPill: .init(time: "11:31", after: "after 1h 19m"),

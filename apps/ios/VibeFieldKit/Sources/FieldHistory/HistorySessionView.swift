@@ -219,6 +219,9 @@ struct HistorySessionView: View {
       if !turn.prompt.isEmpty || turn.promptAnchor != nil {
         prompt(turn)
       }
+      if let words = turn.promptClipped {
+        clippedNote(words)
+      }
       ForEach(Array(turn.promptAttachments.enumerated()), id: \.offset) { _, words in
         placeholder(words)
       }
@@ -296,7 +299,26 @@ struct HistorySessionView: View {
       ledger(id: id, summary: summary, duration: duration, failed: failed, isLive: isLive, lines: lines)
     case .attachment(_, _, let label):
       placeholder(label ?? "attachment on \(corpus.desktop)")
+    case .clipped(_, let words):
+      clippedNote(words)
     }
+  }
+
+  /// SP-6 — the honest-state line under a text the door cut: `clipped · 14 KB
+  /// on studio`, the record's voice, never a body that reads as whole.
+  private func clippedNote(_ words: String) -> some View {
+    HStack(spacing: 6) {
+      Image(systemName: "scissors")
+        .font(.system(size: 10.5, weight: .medium))
+      Text(words)
+        .font(ChromeType.sans(11.5))
+        .monospacedDigit()
+        .lineLimit(1)
+    }
+    .foregroundStyle(ChromePalette.inkFaint)
+    .padding(.horizontal, 4)
+    .padding(.vertical, 2)
+    .accessibilityLabel(words)
   }
 
   /// SP-6 — what the phone does not carry, said: `image shot.png on studio`.

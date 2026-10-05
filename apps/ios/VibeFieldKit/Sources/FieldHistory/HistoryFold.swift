@@ -413,13 +413,17 @@ extension FieldHistoryModel {
         tokens > 0 ? tokensWord(tokens).figure + tokensWord(tokens).unit : nil,
       ].compactMap { $0 }.joined(separator: " · ")
       let promptAttachments = group.prompt?.attachments.map { attachmentWords($0, desktop: desktop) } ?? []
+      let promptClipped = group.prompt.flatMap { prompt -> String? in
+        prompt.textClipped ? clippedWords(byteLen: prompt.textByteLen, desktop: desktop) : nil
+      }
       turns.append(
         HistoryTurn(
           id: group.prompt?.timelineId ?? group.body.first?.timelineId ?? "turn-\(index)",
           at: clockSeconds(at), dayPill: pill, prompt: group.prompt?.text ?? "",
           promptAnchor: group.prompt?.timelineId,
           model: [model.isEmpty ? nil : model, effort].compactMap { $0 }.joined(separator: " · "),
-          facts: facts, isLive: isLive, segments: segments, promptAttachments: promptAttachments))
+          facts: facts, isLive: isLive, segments: segments, promptAttachments: promptAttachments,
+          promptClipped: promptClipped))
       previousEnd = stamps.max() ?? at ?? previousEnd
     }
     return HistoryDocument(
@@ -440,10 +444,43 @@ extension FieldHistoryModel {
     return "\(hours / 24)d"
   }
 
-  /// `image on studio` — the placeholder's words (H-D9: not relayed).
-  static func attachmentWords(_ attachment: IndexTimelineAttachment, desktop: String) -> String {
+  /// `image shot.png on studio` — the placeholder's words (H-D9: not relayed);
+  /// an attachment whose bytes the index did NOT record says its reason in
+  /// the honest-state voice — rosetta's `AttachmentUnavailableReason` read
+  /// into words (`not recorded` · `omitted` · `unreadable` · `unsupported`),
+  /// an unheard-of reason carried as itself — never a broken image.
+  public static func attachmentWords(_ attachment: IndexTimelineAttachment, desktop: String) -> String {
     let what = attachment.name.map { "\(attachment.kind) \($0)" } ?? attachment.kind
-    return attachment.available ? "\(what) on \(desktop)" : "\(what) · not recorded"
+    guard attachment.available else { return "\(what) · \(unavailableWords(attachment.reason)) on \(desktop)" }
+    return "\(what) on \(desktop)"
+  }
+
+  /// rosetta's reason an attachment's bytes are not in the record, as a phrase.
+  public static func unavailableWords(_ reason: String?) -> String {
+    switch reason {
+    case nil: "not recorded"
+    case "not_recorded": "not recorded"
+    case "omitted": "omitted from the record"
+    case "invalid_data": "unreadable in the record"
+    case "unsupported_media": "unsupported media"
+    case let other?: other.replacingOccurrences(of: "_", with: " ")
+    }
+  }
+
+  /// `clipped · 14 KB on studio` — the words under a text the door cut at its
+  /// bound (`textClipped`), with the whole's size when the index named one
+  /// (`textByteLen`, a text that lives in an asset upstream); `clipped on
+  /// studio` when it did not. A body that was cut never reads as complete.
+  public static func clippedWords(byteLen: Int64?, desktop: String) -> String {
+    guard let byteLen, byteLen > 0 else { return "clipped on \(desktop)" }
+    return "clipped · \(byteWords(byteLen)) on \(desktop)"
+  }
+
+  /// `14 KB` · `1.2 MB` · `812 B` — a size, the record's units.
+  public static func byteWords(_ bytes: Int64) -> String {
+    if bytes >= 1_048_576 { return String(format: "%.1f MB", Double(bytes) / 1_048_576) }
+    if bytes >= 1_024 { return "\(Int((Double(bytes) / 1_024).rounded())) KB" }
+    return "\(bytes) B"
   }
 
   /// A reply's rows as segments: prose paragraphs, attachments as placeholders,
@@ -461,6 +498,9 @@ extension FieldHistoryModel {
       case "agent":
         flush()
         out.append(.prose(id: row.timelineId, at: clockSeconds(row.at), text: row.text ?? "", anchor: row.timelineId))
+        if row.textClipped {
+          out.append(.clipped(id: "\(row.timelineId)/clipped", words: clippedWords(byteLen: row.textByteLen, desktop: desktop)))
+        }
         for attachment in row.attachments {
           out.append(.attachment(id: "\(row.timelineId)/\(attachment.id)", kind: attachment.kind, label: attachmentWords(attachment, desktop: desktop)))
         }

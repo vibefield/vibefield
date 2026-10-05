@@ -17,7 +17,7 @@ import Testing
     #expect(status.searchReachable == true)
     #expect(status.searchReadiness == "ready")
     #expect(status.searchDone == 90411 && status.searchTotal == 90411)
-    #expect(status.runtimeCount == 1)
+    #expect(status.runtimeCount == 2)  // the golden's discovered root and its enrolled one ("Kim")
     #expect(status.enabledKinds == ["claude-code"])
     #expect(status.unknownFields.isEmpty)
   }

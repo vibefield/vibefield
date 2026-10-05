@@ -109,7 +109,9 @@ struct HistoryFoldTests {
     #expect(turn.prompt.hasPrefix("Run the specimen"))
     #expect(turn.promptAnchor == "t0")
     #expect(turn.model == "claude-opus-5 · high")
-    #expect(turn.facts.hasSuffix("· 15"))
+    // both agent rows carry a REQUEST's usage (rosetta's `scope: request`; a tool
+    // round-trip is two requests of one response): the turn sums its requests
+    #expect(turn.facts.hasSuffix("· 36"))
     // the Bash line, then the reply, then its image as words, then the message
     #expect(turn.segments.count == 4)
     guard case .ledger(_, let summary, _, let failed, let isLive, let lines) = turn.segments[0] else {
@@ -157,6 +159,56 @@ struct HistoryFoldTests {
     #expect(document.turns[1].prompt == "And then?")
     #expect(document.turns[1].dayPill?.after == "after 1h 19m")
     #expect(document.liveSince == "11:45")
+  }
+
+  @Test("a cut text says so, with the whole's size; an attachment without bytes says its reason — never a body that reads as whole")
+  func honestWords() throws {
+    #expect(FieldHistoryModel.clippedWords(byteLen: 14_336, desktop: "studio") == "clipped · 14 KB on studio")
+    #expect(FieldHistoryModel.clippedWords(byteLen: 2_300_000, desktop: "mini") == "clipped · 2.2 MB on mini")
+    #expect(FieldHistoryModel.clippedWords(byteLen: 812, desktop: "studio") == "clipped · 812 B on studio")
+    #expect(FieldHistoryModel.clippedWords(byteLen: nil, desktop: "studio") == "clipped on studio")
+    #expect(FieldHistoryModel.unavailableWords("not_recorded") == "not recorded")
+    #expect(FieldHistoryModel.unavailableWords("omitted") == "omitted from the record")
+    #expect(FieldHistoryModel.unavailableWords("invalid_data") == "unreadable in the record")
+    #expect(FieldHistoryModel.unavailableWords("unsupported_media") == "unsupported media")
+    #expect(FieldHistoryModel.unavailableWords("too_large") == "too large")
+    #expect(FieldHistoryModel.unavailableWords(nil) == "not recorded")
+    let header = try IndexSessionResult(json: try Fixture.json("index-session.valid")).session
+    let cutPrompt = try IndexTimelineRow(
+      json: .object([
+        "timelineId": .string("p1"), "sessionId": .string("s1"), "ordinal": .int(1), "kind": .string("user"),
+        "group": .object(["id": .string("turn-1"), "kind": .string("human_turn")]),
+        "text": .string("a prompt cut at the bound"), "textClipped": .bool(true), "textByteLen": .int(14_336),
+      ]))
+    let cutReply = try IndexTimelineRow(
+      json: .object([
+        "timelineId": .string("r1"), "sessionId": .string("s1"), "ordinal": .int(2), "kind": .string("agent"),
+        "group": .object(["id": .string("turn-1"), "kind": .string("agent_cycle")]),
+        "text": .string("a reply cut at the bound"), "textClipped": .bool(true),
+        "attachments": .array([
+          .object([
+            "id": .string("a1"), "kind": .string("document"), "name": .string("notes.pdf"),
+            "available": .bool(false), "reason": .string("omitted"),
+          ])
+        ]),
+      ]))
+    let document = FieldHistoryModel.document(
+      header: header, rows: [cutPrompt, cutReply], desktop: "studio", agentLabel: "Claude", nextCursor: nil,
+      watermark: nil, liveSince: nil, now: now)
+    let turn = try #require(document.turns.first)
+    #expect(turn.promptClipped == "clipped · 14 KB on studio")
+    #expect(turn.segments.count == 3)
+    #expect(turn.segments[1] == .clipped(id: "r1/clipped", words: "clipped on studio"))
+    #expect(turn.segments[2] == .attachment(id: "r1/a1", kind: "document", label: "document notes.pdf · omitted from the record on studio"))
+    // a whole text carries no such words
+    let whole = FieldHistoryModel.document(
+      header: header, rows: try IndexTimelineResult(json: try Fixture.json("index-timeline.valid")).entries,
+      desktop: "studio", agentLabel: "Claude", nextCursor: nil, watermark: nil, liveSince: nil, now: now)
+    #expect(whole.turns.first?.promptClipped == nil)
+    let wholeHasClipped = whole.turns.first?.segments.contains { segment in
+      if case .clipped = segment { return true } else { return false }
+    } ?? false
+    #expect(!wholeHasClipped)
   }
 
   @Test("the run's sentence: acts first, then looks, the edited files named, thoughts only alone")
