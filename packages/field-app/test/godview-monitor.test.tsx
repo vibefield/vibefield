@@ -461,6 +461,20 @@ describe("the monitor stage", () => {
     expect(pressedView(host)).toBe("SWARM view");
   });
 
+  it("draws the model's rows before the full board's first frame, and the find sheet never reads the shim's monitor (M47)", async () => {
+    // The window holds two subscriptions, and the model board's open can reach
+    // it before the full board's first frame. The find sheet is always mounted
+    // and computes its scope on every render; it once read the legacy shim's
+    // `monitor` on such a row, a sketch with no `session`, and threw in
+    // render, which unmounted the whole window (build-mv M47).
+    const door = fakeDoor();
+    // the full board's listener stands, and no frame has come yet
+    door.observe = vi.fn(() => () => undefined);
+    const host = await mountMonitor(DEFAULT_MONITOR_VIEW_ID, door);
+    expect(pressedView(host)).toBe("SWARM view");
+    expect(latest().localAgents).toBe(3);
+  });
+
   it("names every run of the fold on the marker — its pane, whose doing it is, drawn or not (AR-7)", async () => {
     // A name typed at a pane's prompt is a run like any other: its row joins
     // the pane its shell is (an INTERACTIVE cell's session, not the agent

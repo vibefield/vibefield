@@ -1024,15 +1024,20 @@ export function useMonitorAgents({
     const byRun = new Map(fold.rows.map((row) => [row.runtimeRunId, row] as const));
     return agents.map((row) => {
       if (row.agent === undefined || row.remote !== undefined) return row;
+      // M47: the shim's `monitor` is a sketch for the views (no `session`, no
+      // `freshness`) and never the sheet's, which reads the mirror's clocks and
+      // native session id. A local row carries the fold's mirror when the fold
+      // has named its run, and no mirror at all before that: the model board's
+      // open can reach the window before the full board's first frame.
+      const { monitor: _sketch, ...facet } = row.agent;
       const run = joins.runByRow.get(row.id);
       const summary = run === undefined ? undefined : byRun.get(run);
-      if (summary === undefined) return row;
       return {
         ...row,
         agent: {
-          ...row.agent,
-          nativeSessionId: summary.sessionId,
-          ...(summary.monitor !== undefined
+          ...facet,
+          ...(summary !== undefined ? { nativeSessionId: summary.sessionId } : {}),
+          ...(summary?.monitor !== undefined
             ? { monitor: summary.monitor as unknown as AgentMonitorState }
             : {}),
         },
