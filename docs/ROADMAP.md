@@ -893,6 +893,14 @@ about 22 hours across four GT-5 builders and the whole IOS-3 ladder.
 
 ## Next up — the options on the table (James's call)
 
+- **FS — the files service (PROPOSED 2026-10-04, unruled; `thinking-files-service.md`, the page The Files Service).** mille as an
+  operating-system service of VibeField: one engine per desktop in a fieldd-owned worker, a door tier of bounded rows
+  (`workspace.roots/list/search/gitFacts`) and an attached tier by ticket (`workspace.openTicket`, mille's channel over a
+  WebSocket — loopback for windows, the sidecar route for phones and peers), roots as exports (places, picks, project roots),
+  read-only v1. Consumers in order: the History room's worktree guest (FS-1 = AR-8d redefined) → the phone's folder picker at
+  spawn (FS-2, the mesh feature James named) → the desk's tree with DK (FS-3) → across desktops at truffle's egress release
+  (FS-4 = DS-9 step 2) → the phone's file viewer (FS-5). Upstream asks M4–M7 (a WebSocket channel with a credential;
+  `mille-git`; search over the port; the relay in a Worker). Gated on James's ruling of FS-D1…D14.
 - **DS — after wave 2 (LANDED 2026-10-01 `fa31207f`; LANDED §DS wave 2; `work/ds-wave2-2026-10-01.md`).** The plane is
   built, consumed on this side and hardened; the phone's ground (SP-1, SP-2, DS-4b) is laid. **James's (unchanged):** merge, release
   and pin the four sibling branches — truffle `rfc026-egress` (the pin move flips `truffle-egress` ON; the review's follow-ups plus
