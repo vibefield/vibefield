@@ -56,10 +56,34 @@ export const workspacePaths = Object.freeze({
   serviceHarnessOutput: join(repoRoot, "packages", "fieldd", "dist", "service-harness.mjs"),
   fielddWasm: join(repoRoot, "packages", "fieldd", "dist", "loro_wasm_bg.wasm"),
   agentShimOutput: join(repoRoot, "packages", "fieldd", "dist", "agent-shim.cjs"),
+  // FS-1a (L1) — the files worker's bundle and mille's native engine, beside
+  // the daemon's bundle (fieldd resolves both against its own directory)
+  filesHostOutput: join(repoRoot, "packages", "fieldd", "dist", "files-host.cjs"),
+  milleNativeOutput: join(
+    repoRoot,
+    "packages",
+    "fieldd",
+    "dist",
+    `mille.${milleTriple(process.platform, process.arch)}.node`,
+  ),
   nativeOutput: join(repoRoot, "target", "debug", nativeName),
   contractsSource: join(repoRoot, "packages", "contracts", "src"),
   nativeSource: join(repoRoot, "packages", "field-native", "src"),
 });
+
+/** mille's napi triple (fieldd's workspace/launch.ts `milleTriple`, musl
+ * read the way mille's own loader reads it). */
+function milleTriple(platform, arch) {
+  if (platform === "darwin") return `darwin-${arch}`;
+  if (platform === "win32") return `win32-${arch}-msvc`;
+  let musl = false;
+  try {
+    musl = !process.report?.getReport()?.header?.glibcVersionRuntime;
+  } catch {
+    musl = false;
+  }
+  return `linux-${arch}-${musl ? "musl" : "gnu"}`;
+}
 
 export function toRepoRelative(path) {
   return relative(repoRoot, path).split("\\").join("/");

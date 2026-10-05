@@ -399,6 +399,11 @@ export interface AgentRuntimeServiceOptions {
   /** AR-7 test seam: how often a typed run's pid is asked, and the grace its
    * terminal's own exit report is given (defaults in agent-typed-run.ts) */
   typedWatch?: TypedWatchOptions;
+  /** FS-1a (L2) — a run entered the fold in this folder at this moment
+   * (spawned, resumed, re-attached or adopted): the files service makes the
+   * folder a PLACE, or moves its `lastActiveAt`. Called after the record is
+   * written; a listener that throws is logged and the run goes on. */
+  onPlace?: (cwd: string, at: string) => void;
   now?: () => Date;
   logger?: Logger;
 }
@@ -853,6 +858,21 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
       });
     }
     return { providers };
+  }
+
+  /** FS-1a (L2) — the folders this user's runs worked in, as the VERIFIED
+   * session records keep them (a record a same-uid process dropped in is set
+   * aside by the store, EL7): one `{cwd, at}` per record, `at` its last
+   * update. The files service seeds its places from these once per boot. */
+  recordedPlaces(): Array<{ cwd: string; at: string }> {
+    try {
+      return this.records.list().map((record) => ({ cwd: record.cwd, at: record.updatedAt }));
+    } catch (error) {
+      this.logger.warn("fieldd.agents.records_unreadable", "Session records could not be listed", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return [];
+    }
   }
 
   /** QL — the newest session record per agent (any `spawnedBy`: a spawn, a
@@ -2080,6 +2100,14 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
         continuation: { ...info.continuation },
         reattach: { state: "attached", at: now },
         updatedAt: now,
+      });
+    }
+    // FS-1a — the folder this run works in is a place of the files service
+    try {
+      this.opts.onPlace?.(launch.cwd, now);
+    } catch (error) {
+      this.logger.warn("fieldd.agents.place_failed", "A run's folder could not be made a place", {
+        error: error instanceof Error ? error.message : String(error),
       });
     }
     const entry: ManagedEntry = {

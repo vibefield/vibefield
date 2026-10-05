@@ -66,6 +66,13 @@ const nativeName = process.platform === "win32" ? "field-native.exe" : "field-na
 // TC-S2 — field-native's second binary, the terminal cell. Same crate, same `cargo build`.
 const cellName = process.platform === "win32" ? "field-terminal-host.exe" : "field-terminal-host";
 const fielddName = process.platform === "win32" ? "fieldd.exe" : "fieldd";
+// FS-1a — mille's napi triple (fieldd workspace/launch.ts `milleTriple`)
+const milleNativeName = (() => {
+  if (process.platform === "darwin") return `mille.darwin-${process.arch}.node`;
+  if (process.platform === "win32") return `mille.win32-${process.arch}-msvc.node`;
+  const musl = !process.report?.getReport()?.header?.glibcVersionRuntime;
+  return `mille.linux-${process.arch}-${musl ? "musl" : "gnu"}.node`;
+})();
 const truffleSidecarName = process.platform === "win32" ? "sidecar-slim.exe" : "sidecar-slim";
 const trufflePlatform = `${process.platform}-${process.arch}`;
 const truffleSidecarPackages = new Set([
@@ -150,6 +157,24 @@ const PLAN = [
     stage: "bin/loro_wasm_bg.wasm",
     from: "packages/fieldd/dist/loro_wasm_bg.wasm",
     kind: "file",
+  },
+  {
+    // FS-1a (L1): the files worker's bundle. The packaged fieldd re-runs ITSELF with
+    // `--vibefield-role=files-host`, and that role loads this file from beside the
+    // executable — a real file on disk, as the service harness is.
+    stage: "bin/files-host.cjs",
+    from: "packages/fieldd/dist/files-host.cjs",
+    kind: "file",
+  },
+  {
+    // FS-1a: mille's native file engine, dlopened by the worker from the explicit path
+    // fieldd hands it (workspace/launch.ts) — staged by fieldd's build from the installed
+    // per-platform package, named by mille's own triple.
+    stage: `bin/${milleNativeName}`,
+    from: `packages/fieldd/dist/${milleNativeName}`,
+    kind: "file",
+    mode: DATA_MODE,
+    produce: "pnpm --filter @vibefield/fieldd build",
   },
   {
     stage: `bin/${nativeName}`,

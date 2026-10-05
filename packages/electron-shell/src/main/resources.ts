@@ -216,10 +216,11 @@ export function resolvePackagedResources(opts: {
   return {
     packaged: true,
     developmentDockIconPath: null,
-    // A REAL executable, not Electron wearing a hat (EDP-14). Its two sidecars —
-    // service-harness.mjs and loro_wasm_bg.wasm — are staged beside it because
-    // fieldd resolves both against its own __dirname, which probe P-A verified
-    // is the executable's directory inside a SEA, independent of cwd.
+    // A REAL executable, not Electron wearing a hat (EDP-14). Its sidecars —
+    // service-harness.mjs and loro_wasm_bg.wasm, and since FS-1a the files
+    // worker's files-host.cjs and mille's native engine — are staged beside it
+    // because fieldd resolves them against its own __dirname, which probe P-A
+    // verified is the executable's directory inside a SEA, independent of cwd.
     fielddCommand: join(bin, exe("fieldd", platform)),
     fielddArgs: [],
     fielddNeedsNodeMode: false,

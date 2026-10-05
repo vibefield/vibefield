@@ -238,6 +238,10 @@ import {
 } from "./terminal-serve";
 import { type TerminalProfileBinding, TerminalService } from "./terminal-service";
 import { TokenService } from "./token-service";
+import type { BrowseFacts } from "./workspace/browse-exports";
+import type { FilesHostLaunch } from "./workspace/launch";
+import { createWorkspaceService, type WorkspaceService } from "./workspace/service";
+import type { FilesHostTimings } from "./workspace/supervisor";
 
 // fieldd bootstrap (design-02 §3.6, P0 slice): tokens → NativeLink (pair +
 // health subscription) → ProductAPI listen → run files → ready. SUPERSEDED is
@@ -422,6 +426,25 @@ export interface FielddConfig {
   /** Deterministic PRC-5f test seam. Production uses the contract-pinned
    * budgets; tests may shorten them without sleeping through wall-clock policy. */
   pluginUpdateDeadlines?: Partial<PluginUpdateDeadlines>;
+  /** FS-1a — the files worker (workspace/service.ts; FS-D11 (b): always on,
+   * started with this daemon and stopped with it). Absent = resolved from this
+   * process: the `files-host.cjs` bundle and mille's engine beside fieldd's
+   * bundle, or the packaged executable's `files-host` role — a source run has
+   * neither and reads `unconfigured`, honestly. `false` = OFF: L6's test-only
+   * knob for a daemon that does not exercise files (its doors answer
+   * UNAVAILABLE `off`); bin.ts never sets it and no environment variable
+   * reaches it, so it is never a user setting. A launch = a test's own worker. */
+  filesHost?: false | FilesHostLaunch;
+  /** FS-1a test seams: the worker's supervision timings; the browse
+   * enumerator's facts, the roots subscription's re-read cadence, and the rule
+   * that keeps the system's folders from being places (a test's temporary
+   * folder on macOS lives under `/private`, which is never exported). */
+  filesHostTimings?: Partial<FilesHostTimings>;
+  workspace?: {
+    browse?: () => BrowseFacts;
+    rootsPollMs?: number;
+    isExcluded?: (realPath: string) => boolean;
+  };
 }
 
 export interface FielddHealth {
@@ -550,6 +573,9 @@ export interface FielddDaemon {
   agentGateway: AgentGatewayService | null;
   /** NF-3 — the floor's terminal service (tests type into a pane through it). */
   terminals: TerminalService;
+  /** FS-1a — the files service: the roots registry, the worker's supervisor
+   * and the doors (tests kill the worker and watch its generation move). */
+  workspace: WorkspaceService;
   stop(): Promise<void>;
   /** WIN-D5 — the process owner (bin.ts) registers what "please stop" means
    * (its own graceful shutdown: stop() then exit). The `system.shutdown`
@@ -787,6 +813,22 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // the api owns — built later in this boot, so bound through a ref too. GT-7:
   // Settings → Terminal's file actions (the terminal service) reach it here.
   let shellApi: ProductApi | null = null;
+  // FS-1a — the files service (workspace/service.ts): the roots registry, the
+  // worker's supervisor and the doors. Built here so every run that enters the
+  // fold below adds its folder as a place; the worker STARTS once boot has
+  // committed and stops with the daemon (FS-D11 (b)). The device id is read at
+  // every answer — the device service is bound further down.
+  const workspace = createWorkspaceService({
+    dataDir: config.dataDir,
+    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    filesHost: config.filesHost,
+    bundleDir: typeof __dirname === "string" ? __dirname : undefined,
+    timings: config.filesHostTimings,
+    browse: config.workspace?.browse,
+    rootsPollMs: config.workspace?.rootsPollMs,
+    isExcluded: config.workspace?.isExcluded,
+    logger,
+  });
   const agents = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
@@ -819,6 +861,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AR-7 — `invoke` is answered from the launchers that stand; a typed run
     // is proven and watched against the same seams the gateway places it by
     launchers: () => gatewayRef?.launchers() ?? null,
+    // FS-1a (L2) — every run's folder is a place of the files service
+    onPlace: (cwd, at) => {
+      workspace.registry.touchPlace(cwd, at);
+    },
     ...(config.agentGateway?.processTable !== undefined
       ? { processTable: config.agentGateway.processTable }
       : {}),
@@ -1897,6 +1943,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // terminal mint's precedent), the record naming the session, what the
     // grant may do (RO-13: `files` for the desktop window) and when it
     // expires, never the grant.
+    // FS-1a — the files service's door tier (workspace/doors.ts): bounded rows
+    // from the files worker, gated by PRINCIPAL (FS-D6 (a)) — a plugin, an MCP
+    // agent and a guest are refused whatever they hold — cut at the tailnet's
+    // page for a phone (L4), honest UNAVAILABLE {service: "workspace"} while
+    // the worker cannot answer. `federate`: a foreign `device` forwards whole.
+    api.register("workspace.roots", (ctx, params) => workspace.doors.roots(ctx, params));
+    api.register("workspace.list", (ctx, params) => workspace.doors.list(ctx, params));
+    api.register("workspace.search", (ctx, params) => workspace.doors.search(ctx, params));
+    api.register("workspace.gitFacts", (ctx, params) => workspace.doors.gitFacts(ctx, params));
+    api.registerSubscription("workspace.subscribe", (ctx, params, emit) =>
+      workspace.doors.subscribe(ctx, params, emit),
+    );
     api.register("index.openTicket", async (ctx, params) => {
       const ask = indexTickets.check(ctx, params);
       return await audit.required(
@@ -4951,6 +5009,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // the successor spawns its own rosettad over the SAME db — ours must
           // be gone first, and stop() resolves only after the real exit
           rosettad?.stop() ?? Promise.resolve(),
+          workspace.stop(), // FS-1a — the files worker leaves with the daemon
         ]);
         indexTail.dispose(); // SP-6 — the session sockets close with the daemon they follow
         indexCatalog.dispose();
@@ -5348,6 +5407,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     indexCatalog.start(); // DS-6 — follows the daemon's transitions from its first
     indexMesh?.start(); // DS-6 — the replicas load, then follow the roster
     void rosettad?.start();
+    // FS-1a — boot has committed: the files worker starts with the daemon
+    // (FS-D11 (b), always on; readiness is a transition, never a boot gate),
+    // and the places this user's runs already recorded are seeded once.
+    workspace.start();
+    try {
+      workspace.registry.seedPlaces(agents.recordedPlaces());
+    } catch (error) {
+      logger.warn(
+        "fieldd.workspace.seed_failed",
+        "Places could not be seeded from the session records",
+        {
+          error: error instanceof Error ? error.message : String(error),
+        },
+      );
+    }
     let stopPromise: Promise<void> | null = null;
     const stop = (): Promise<void> => {
       stopPromise ??= (async () => {
@@ -5368,6 +5442,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
           indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
+          await workspace.stop(); // FS-1a — the files worker stops with the daemon (FS-D11 (b))
           detachHealthSources?.();
           endpoints.dispose();
           mcp.dispose();
@@ -5462,6 +5537,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       agentUsage,
       agentGateway: gateway,
       terminals,
+      workspace,
       stop,
       onShutdownRequest(callback) {
         shutdownRequested = callback;
@@ -5479,6 +5555,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     await gatewayRef?.stop().catch(() => undefined); // AR-7b — nor a listener of the gateway's
     await agents.dispose();
     await rosettad?.stop();
+    await workspace.stop(); // FS-1a — started only after ready; the guard is stated
     // The earliest supersession window, which the `stopForSupersession` listener
     // is not yet in scope to see: a takeover that lands while the services are
     // still being built kills the mgmt socket under whatever request is in
