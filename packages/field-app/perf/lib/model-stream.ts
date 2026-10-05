@@ -352,6 +352,10 @@ export async function computeModelStream(
   // snapshot follows a moment later
   const warm = board.open("model", AGENT_FIELD.FULL_TICK_MS, () => undefined);
   await time.advance(0);
+  // the window's model board IS its screen (L5, M20): fieldd opens the screen
+  // with the subscription and an empty report (`daemon.ts` openScreen), so marks
+  // accrue from here, as they do for the lab's window (build-mv M51)
+  const screen = here.service.openScreen("the-lab-window");
   const reader = board.open("model", AGENT_FIELD.FULL_TICK_MS, record);
   warm.dispose();
   const open = wire(reader.open) as AgentModelMeshOpen;
@@ -377,6 +381,7 @@ export async function computeModelStream(
   if (pendingMark !== null) {
     throw new Error(`no model frame carried the marker's change (${JSON.stringify(pendingMark)})`);
   }
+  screen();
   reader.dispose();
   board.dispose();
   here.service.dispose();

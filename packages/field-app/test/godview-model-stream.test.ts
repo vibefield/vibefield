@@ -174,6 +174,23 @@ describe("the model stream", () => {
     expect(mark.after).toBeLessThan(fold?.seq ?? 0);
   });
 
+  it("opens the window's screen with its board, so a turn that ends unseen marks its row unread (M51)", async () => {
+    // A real window's model board IS its screen: fieldd opens it with the
+    // subscription and an empty report (M20), and marks accrue from there. A
+    // stream computed with no screen never marks a row, and the lab's B arm
+    // drew "idle" where A drew "reply unseen" (build-mv M51).
+    // eight seconds: the two-second recipe's only flip falls in the marker's
+    // quiet window, on the marker agent, so no turn ends after the screen opens
+    const { stream } = await streamOf({ n: 10, durationMs: 8_000, seed: 1 });
+    const unread = modelFrames(stream).some(
+      (frame) =>
+        "delta" in frame.frame &&
+        frame.frame.device === stream.meta.here &&
+        frame.frame.delta.upserts.some((row) => row.monitorRow?.unread === true),
+    );
+    expect(unread).toBe(true);
+  });
+
   it("the window adapter folds it whole: no gap, every desktop's rows held at the end", async () => {
     const { corpus, stream } = await streamOf(RECIPE);
     const recipe = corpus.meta.recipe;
