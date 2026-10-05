@@ -150,19 +150,8 @@ function base(): ProbeManifest {
   };
 }
 
-function widget(overrides: Record<string, unknown> = {}): Record<string, unknown> {
-  return {
-    type: "com.example.demo.card",
-    title: "Card",
-    schemaVersion: 1,
-    surface: "dom",
-    sizeMode: "fixed",
-    defaultSize: { w: 200, h: 120 },
-    ...overrides,
-  };
-}
-
-/** DK-0f — the object door's probes mutate this minimal kind. */
+/** DK-0f — the probes mutate this minimal kind (DK-8: every durable row is an object's —
+ * `contributes.widgets` is refused by name, a shape refusal no invariant probe can print). */
 function object(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     type: "com.example.demo.clock",
@@ -204,8 +193,9 @@ export interface InvariantProbe {
 /** Each probe breaks exactly one rule. The docs print the schema's message. */
 export const INVARIANT_PROBES: readonly InvariantProbe[] = [
   {
-    topic: "a contribution that renders needs a renderer entry",
-    manifest: { ...base(), entries: undefined, contributes: { widgets: [widget()] } },
+    topic:
+      "a contribution that renders — an object kind, a command, a surface — needs the renderer entry",
+    manifest: { ...base(), entries: undefined, contributes: { objects: [object()] } },
   },
   {
     topic: "dynamic services and contributed MCP tools need a service entry",
@@ -283,18 +273,18 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
   },
   {
     topic: "every contributed name is owned by the plugin's id",
-    manifest: { ...base(), contributes: { widgets: [widget({ type: "someone.else.card" })] } },
+    manifest: { ...base(), contributes: { objects: [object({ type: "someone.else.card" })] } },
   },
   {
     topic: "ids are unique within their collection",
-    manifest: { ...base(), contributes: { widgets: [widget(), widget()] } },
+    manifest: { ...base(), contributes: { objects: [object(), object()] } },
   },
   {
     topic: "conflict groups name declared props, and each prop joins at most one",
     manifest: {
       ...base(),
       contributes: {
-        widgets: [widget({ props: { text: { kind: "string" } }, groups: { body: ["missing"] } })],
+        objects: [object({ props: { text: { kind: "string" } }, groups: { body: ["missing"] } })],
       },
     },
   },
@@ -303,8 +293,8 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
     manifest: {
       ...base(),
       contributes: {
-        widgets: [
-          widget({
+        objects: [
+          object({
             props: { text: { kind: "string", mutable: false } },
             groups: { body: ["text"] },
           }),
@@ -317,7 +307,7 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
     manifest: {
       ...base(),
       contributes: {
-        widgets: [widget({ props: { mode: { kind: "enum", options: ["a", "b"], default: "c" } } })],
+        objects: [object({ props: { mode: { kind: "enum", options: ["a", "b"], default: "c" } } })],
       },
     },
   },
@@ -353,22 +343,8 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
   },
   // --- the object door (DK-0f) ---
   {
-    topic: "an object kind renders too, so it needs the renderer entry",
-    manifest: { ...base(), entries: undefined, contributes: { objects: [object()] } },
-  },
-  {
     topic: "a widget's view fields are retired on an object, each refused by name",
     manifest: { ...base(), contributes: { objects: [object({ surface: "dom" })] } },
-  },
-  {
-    topic: "one type, one contribution — never both a widget and an object",
-    manifest: {
-      ...base(),
-      contributes: {
-        widgets: [widget({ type: "com.example.demo.clock" })],
-        objects: [object()],
-      },
-    },
   },
   {
     topic: "a tray entry's face names declared props, each a value of its prop's kind",

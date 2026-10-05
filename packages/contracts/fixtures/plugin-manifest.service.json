@@ -32,17 +32,16 @@
         "risk": "read"
       }
     ],
-    "widgets": [
+    "objects": [
       {
         "type": "com.example.metrics.chart",
         "title": "Metrics chart",
         "schemaVersion": 1,
-        "surface": "dom",
-        "sizeMode": "fixed",
-        "defaultSize": {
+        "size": {
           "w": 329,
           "h": 155
         },
+        "provides": ["com.example.metrics.chart", "desk.object"],
         "ports": [
           {
             "id": "out",
@@ -63,7 +62,10 @@
           {
             "id": "com.example.metrics:ticker"
           }
-        ]
+        ],
+        "binding": {
+          "kind": "chart"
+        }
       }
     ],
     "behaviors": [

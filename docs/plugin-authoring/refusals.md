@@ -56,6 +56,7 @@ column is the general one.
 | `systems-contribution-superseded` | manifest | the retired contributes.systems shape cannot express an ICE behavior descriptor | define through @vibefield/plugin-sdk/behavior and declare under contributes.behaviors |
 | `usage` | input | the command line could not be understood | run `vibefield-plugin --help`; every command is non-interactive |
 | `wall-violation` | wall | plugin runtime code imports something outside the SDK door (§11.3, wall R10) | import @vibefield/plugin-sdk (+ /ui, /canvas, /behavior, /desk), @vibefield/contracts types, or react |
+| `widgets-contribution-retired` | manifest | the retired contributes.widgets — a face on the desk is an object kind the desk draws (DK-8) | declare it under contributes.objects: its durable half (size, props, groups, interaction) and binding.kind, the renderer export that holds its kind (objects.md) |
 
 ## Notes (exit 0)
 

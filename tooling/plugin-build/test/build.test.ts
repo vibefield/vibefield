@@ -330,7 +330,6 @@ describe("buildPlugin", () => {
   it("DK-6 — generatesStylesheet: DOM contributions or none at all keep it; objects alone drop it", () => {
     expect(generatesStylesheet({})).toBe(true);
     expect(generatesStylesheet({ contributes: { surfaces: [1] } })).toBe(true);
-    expect(generatesStylesheet({ contributes: { objects: [1], widgets: [1] } })).toBe(true);
     expect(generatesStylesheet({ contributes: { objects: [1], surfaces: [1] } })).toBe(true);
     expect(generatesStylesheet({ contributes: { objects: [1] } })).toBe(false);
   });

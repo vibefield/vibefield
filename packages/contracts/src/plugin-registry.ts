@@ -10,7 +10,6 @@ import {
   PluginId,
   SettingsContribution,
   SurfaceContribution,
-  WidgetContribution,
 } from "./plugins";
 
 // Plugin registry wire surface (plugin spec §9.4/§22.1, slice P2): what
@@ -103,10 +102,11 @@ export type SanitizedMcp = z.infer<typeof SanitizedMcp>;
  * stay out (they name executables); SanitizedMcp is the visible slice. */
 export const SanitizedContributions = z
   .object({
-    widgets: z.array(WidgetContribution).default([]),
-    /** DK-0f — object kinds, carried so the roster and `inspect` list them;
-     * on this build the row that declares any is `incompatible`
-     * (`OBJECTS_NEED_DESK`), never activated. */
+    /** DK-0f — object kinds, carried so the roster, the renderer's registry and
+     * `inspect` list them (the desk build activates them since DK-2). DK-8: the
+     * `widgets` section beside it RETIRED with `contributes.widgets` — a record
+     * from an older daemon that still carries one keeps it as an unknown field
+     * (passthrough), read by no one. */
     objects: z.array(ObjectContribution).default([]),
     /** Full data-only behavior descriptors are public renderer authority. */
     behaviors: z.array(BehaviorContribution).default([]),

@@ -28,16 +28,19 @@ describe("generated docs teach the shipped API", () => {
     // schema-walk's inline-object threshold is calibrated to this exact shape;
     // if interaction outgrows it again, this reds instead of the table silently
     // collapsing (which is how keyboard/keyboardEscape nearly shipped invisible).
-    const widgets = read("docs/plugin-authoring/widgets.md");
-    expect(widgets).toContain("sweepContained?: boolean");
-    expect(widgets).toContain("keyboard?: `shared` \\| `exclusive`");
-    expect(widgets).toContain("keyboardEscape?: `release` \\| `widget`");
+    // (DK-8: on objects.md — widgets.md retired with `contributes.widgets`)
+    const objects = read("docs/plugin-authoring/objects.md");
+    expect(objects).toContain("sweepContained?: boolean");
+    expect(objects).toContain("keyboard?: `shared` \\| `exclusive`");
+    expect(objects).toContain("keyboardEscape?: `release` \\| `widget`");
   });
 
   it("keeps parser tombstones out of the author-facing vocabulary", () => {
     const manifest = read("docs/plugin-authoring/manifest.md");
     expect(manifest).toContain("behaviors?: object[]");
     expect(manifest).not.toContain("systems?:");
+    // DK-8: `widgets` is a tombstone too — refused by name, never taught as a field
+    expect(manifest).not.toContain("widgets?:");
   });
 });
 
@@ -72,7 +75,7 @@ describe("generated docs quote the shipped object code", () => {
   });
 
   it("no page teaches the React face the desk retired (DK-2): no CardShell, no component binding", () => {
-    for (const page of ["README.md", "context.md", "widgets.md", "objects.md"]) {
+    for (const page of ["README.md", "context.md", "objects.md"]) {
       const text = read(`docs/plugin-authoring/${page}`);
       expect(text, page).not.toContain("CardShell");
       expect(text, page).not.toContain("WidgetComponentProps");

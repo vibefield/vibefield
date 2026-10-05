@@ -326,7 +326,6 @@ export class PluginRegistryService extends EventEmitter {
         deniedCapabilities: [],
         grantGeneration: this.grantGenerations.get(idCandidate) ?? 0,
         contributions: {
-          widgets: [],
           objects: [],
           behaviors: [],
           commands: [],
@@ -380,9 +379,8 @@ export class PluginRegistryService extends EventEmitter {
       deniedCapabilities: grants.denied,
       grantGeneration: this.grantGenerations.get(m.id) ?? 0,
       contributions: {
-        widgets: m.contributes?.widgets ?? [],
         objects: m.contributes?.objects ?? [],
-        // PRC-4d: renderer-safe, code-free canonical ICE descriptors. Widget
+        // PRC-4d: renderer-safe, code-free canonical ICE descriptors. Object
         // riders and their declaration table must cross this boundary together.
         behaviors: m.contributes?.behaviors ?? [],
         commands: m.contributes?.commands ?? [],

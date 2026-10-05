@@ -36,8 +36,7 @@ import {
   SurfaceContribution,
   TRAY_ACCESSORIES,
   TrayEntryContribution,
-  WIDGET_CATEGORIES,
-  WidgetContribution,
+  WIDGETS_CONTRIBUTION_RETIRED,
 } from "@vibefield/contracts";
 import {
   type CtxFaceRow,
@@ -175,7 +174,6 @@ function readme(): string {
         [
           ["`manifest.md`", "every manifest field, its rules, and the cross-field invariants"],
           ["`contributions.md`", "each contribution kind's shape, with a worked example"],
-          ["`widgets.md`", "props, conflict groups, ports, and how a widget binds"],
           [
             "`objects.md`",
             "an object kind on the desk: its durable half, its tray entry, the export that draws it, what the kind receives",
@@ -372,7 +370,7 @@ function manifestDoc(): string {
       "",
       "- `onStartup` — service entries only, requires the `background` capability and a",
       "  `backgroundReason` that says why in the user's words.",
-      "- `onWidget:<widget type>`, `onCommand:<command id>`, `onSurface:<surface id>`,",
+      "- `onWidget:<object type>`, `onCommand:<command id>`, `onSurface:<surface id>`,",
       "  `onService:<x.pluginId.method>` — each must name something this manifest",
       "  declares.",
       "",
@@ -421,7 +419,6 @@ function manifestDoc(): string {
 
 function contributionsDoc(): string {
   const examples = loadExamples();
-  const widgetSlice = contributionSlice(examples.minimal, "widgets");
   const objectSlice = contributionSlice(examples.objects, "objects");
   const commandSlice = contributionSlice(examples.commandsAndSurfaces, "commands");
   const surfaceSlice = contributionSlice(examples.commandsAndSurfaces, "surfaces");
@@ -452,21 +449,13 @@ function contributionsDoc(): string {
     "under it; every one is optional, and the cross-field invariants in `manifest.md`",
     "decide which entry module and which capability each kind requires.",
     "",
-    kindSection("Widgets", WidgetContribution, widgetSlice, [
-      "A widget is a canvas card. The manifest owns its DURABLE schema — the type, its",
-      "props, its size behaviour — and code binds a component to it. `widgets.md` is",
-      "the deep end; the field table is here.",
-      "",
-      `Categories: ${WIDGET_CATEGORIES.map((c) => `\`${c}\``).join(", ")}.`,
-      "",
-      "Widgets are the canvas face of THIS build. They retire with the desk build (DK-8),",
-      "where every canvas face is an object; a type is one or the other, never both.",
-    ]),
+    "`widgets` is RETIRED (DK-8): a manifest that still says it is refused with",
+    `\`${WIDGETS_CONTRIBUTION_RETIRED.code}\` — a face on the desk is an object kind, below.`,
+    "",
     kindSection("Objects", ObjectContribution, objectSlice, [
       "An object is a kind the desk DRAWS — one WebGPU renderer, the kind's own GPU",
-      "program — declared with the same durable half as a widget and bound by ONE export",
-      "name instead of a React component; `tray` hangs it on the pegboard. `objects.md`",
-      "is the deep end.",
+      "program — declared by its DURABLE half (the type, its props, its size) and bound",
+      "by ONE export name; `tray` hangs it on the pegboard. `objects.md` is the deep end.",
       "",
       "The desk build activates an object like any contribution; the ICE 0.11 build",
       `refused it with \`${OBJECTS_NEED_DESK.code}\` (${OBJECTS_NEED_DESK.message}).`,
@@ -555,28 +544,78 @@ function contributionsDoc(): string {
   ]);
 }
 
-// --- widgets ---------------------------------------------------------------------
+// --- objects ---------------------------------------------------------------------
+//
+// DK-0f (2026-10-02): the object door's reference, written for the ten-minute
+// bar (DK-D30) — an agent reads these files and nothing else, so what a kind
+// receives and must answer is spelled out here rather than pointed at. DK-6: the
+// SDK's `/desk` door carries the kind's types, and the worked example is the
+// repo's own plugin — ICE's desk clock ported (examples/plugins/desk-clock) —
+// QUOTED from its source at generation (`quotedRegion`), never cited by path.
 
-function widgetsDoc(): string {
+function objectsDoc(): string {
+  const examples = loadExamples();
   const propVariants = variantsOf(PropSpec) ?? [];
-  return document("Widgets", [
-    "A widget type is declared once in the manifest and bound once in code. The",
-    "declaration is DURABLE: the canvas stores documents against it, so its type name,",
-    "prop names and group names outlive any particular implementation.",
+  const slice = contributionSlice(examples.objects, "objects");
+  const retired = Object.entries(OBJECT_RETIRED_FIELDS);
+  return document("Objects", [
+    "An OBJECT is a canvas face the desk DRAWS. One WebGPU renderer draws every object",
+    "on the cutting mat straight from the document, and a KIND is the GPU program that",
+    "draws its own objects — its WGSL, its pass, its geometry, its pick. Whatever a",
+    "built-in kind can do, a plugin kind declares the same way (ICE design-016 K-L2,",
+    "plugin parity): there is no React component and no DOM under the camera.",
     "",
-    section("Declaring", [
-      fieldTable(fieldsOf(WidgetContribution)),
-      "",
-      "A widget binds NO face on the desk build: the desk draws object kinds, so the",
-      "host compiles every widget type FACELESS from this row (`surface` is retired — an",
-      "old manifest's value is tolerated and read by no one), and `contributes.widgets`",
-      "itself retires at DK-8 — declare an OBJECT (`objects.md`) for a canvas face.",
-      "`defaultSize` sets the prefab the host builds; `interaction` carries the canvas's",
-      "own flags (selectable, movable, resizable, snap, dragOn, solid, sweepContained).",
+    "The manifest owns the DURABLE half — the type name, prop names and group names",
+    "outlive any implementation — and names ONE export of the renderer module that",
+    "holds the kind. The host compiles the two halves into the prefab (`defineObject`,",
+    "through the engine's one `defineWidget`); plugin code never does.",
+    "",
+    section("On this build", [
+      "The desk build (the `desk/landing` branch) ACCEPTS the contract below at every",
+      "door: fieldd's roster lists the plugin's kinds as an ordinary row, `check`",
+      "activates it like any plugin, and the renderer's registry registers each kind's",
+      "type and compiles it through `defineObject`. The ICE 0.11 build refused it with",
+      `\`${OBJECTS_NEED_DESK.code}\` (${OBJECTS_NEED_DESK.message}); \`inspect\` keeps`,
+      "its `refusal` field, and it reads `null`. `contributes.widgets` — the canvas face",
+      `before the desk — is refused with \`${WIDGETS_CONTRIBUTION_RETIRED.code}\` (DK-8).`,
       "",
     ]),
+    section("Declaring", [
+      "One entry per kind under `contributes.objects`:",
+      "",
+      fieldTable(fieldsOf(ObjectContribution)),
+      "",
+      "- `type` is the durable name, `<pluginId>` or `<pluginId>.<name>`.",
+      "- `size` is what a new one spawns at, in world units; `minSize` bounds a resize",
+      "  (`interaction.resizable`). There is no size mode: an object is its size.",
+      "- `interaction`, `container`, `props`, `groups`, `behaviors` carry the canvas's",
+      "  durable vocabulary — Props and Conflict groups, below, say each in full.",
+      "- `provides` is what the DESK PLACES BY, never a type list: `desk.object` lies on",
+      "  the desk (declare it, or nothing places the kind), `desk.containable` goes into",
+      "  a mini mat (then declare `chip`, below), `desk.pinnable` pins to a calendar's",
+      "  day. A container's own `container.accepts`/`provides` use the same keys.",
+      "- `ports` are accepted and recorded; the desk draws no wire until the STRING",
+      "  program lands — a kind with ports hangs and places like any other meanwhile.",
+      "- `tray` hangs a specimen on the pegboard (next section); absent, the kind is",
+      "  placeable but hangs nowhere.",
+      "- `binding.kind` names the export (an identifier) that holds the kind — one name,",
+      "  read by the host, never registered from `activate`.",
+      "- `onWidget:<type>` is an object's activation event — the ENGINE's name for a",
+      "  prefab, kept when the widget contribution retired.",
+      "",
+      "The widget-era view fields are RETIRED on an object and refused by name:",
+      "",
+      table(
+        ["field", "where it went"],
+        retired.map(([field, why]) => [`\`${field}\``, why]),
+      ),
+      "",
+      ...(slice === undefined
+        ? []
+        : [fence("json", jsonBlock(slice.value)), "", `*(${slice.source})*`, ""]),
+    ]),
     section("Props", [
-      "Props are the widget's durable data. Each is one of these kinds:",
+      "Props are the object's durable data. Each is one of these kinds:",
       "",
       table(
         ["kind", "fields", "notes"],
@@ -598,8 +637,8 @@ function widgetsDoc(): string {
     ]),
     section("Conflict groups", [
       "Props that change together belong in a named group. The name is durable: the",
-      "engine generates a component named `<widget type>:<group name>` from it, and two",
-      "editors writing different groups of the same widget never conflict.",
+      "engine generates a component named `<object type>:<group name>` from it, and two",
+      "editors writing different groups of the same object never conflict.",
       "",
       "- Omitting `groups` is the common case — ungrouped props join the engine's",
       "  default `props` group.",
@@ -622,103 +661,6 @@ function widgetsDoc(): string {
         ].join("\n"),
       ),
       "",
-    ]),
-    section("Ports", [
-      "A node-style widget declares ports; the engine renders and routes the wires.",
-      "Each port has an `id`, a `side` (`n`/`e`/`s`/`w`), an optional `index` along that",
-      "side, and an optional `accepts` list. Omitting `accepts` means it connects to",
-      "anything. Port ids are unique within a widget.",
-      "",
-    ]),
-    section("Binding", [
-      "On the desk build a widget row binds NOTHING the desk draws (DK-2): the host compiles",
-      "it FACELESS from the manifest — its document data kept, drawn as the desk's missing",
-      "face, picked by its box. The door that once bound it, `ctx.widgets.register`, RETIRED",
-      "at DK-8 with the contribution itself. A face on the desk is an OBJECT KIND, declared",
-      "under `contributes.objects` and drawn by its own WGSL — `objects.md`.",
-      "",
-    ]),
-    section("Reading and writing props", [
-      "An object's props arrive in its kind's `ObjectContext.props` each frame (cached from the",
-      "document, never re-read); writes go through the document's doors, one transaction and one",
-      "undo step each — a menu act's `api.setProps(entity, patch)`, a held tool's",
-      "`api.setProps(patch)`, a driver's `docs` at a gesture's end (`objects.md`, What the kind",
-      "receives). The `/canvas` door's hooks (`useWidgetProps(world, entity, type)`, `useOps()`)",
-      "stay for screen-space React — a HUD surface reading the world — never under the camera.",
-      "",
-    ]),
-  ]);
-}
-
-// --- objects ---------------------------------------------------------------------
-//
-// DK-0f (2026-10-02): the object door's reference, written for the ten-minute
-// bar (DK-D30) — an agent reads these files and nothing else, so what a kind
-// receives and must answer is spelled out here rather than pointed at. DK-6: the
-// SDK's `/desk` door carries the kind's types, and the worked example is the
-// repo's own plugin — ICE's desk clock ported (examples/plugins/desk-clock) —
-// QUOTED from its source at generation (`quotedRegion`), never cited by path.
-
-function objectsDoc(): string {
-  const examples = loadExamples();
-  const slice = contributionSlice(examples.objects, "objects");
-  const retired = Object.entries(OBJECT_RETIRED_FIELDS);
-  return document("Objects", [
-    "An OBJECT is a canvas face the desk DRAWS. One WebGPU renderer draws every object",
-    "on the cutting mat straight from the document, and a KIND is the GPU program that",
-    "draws its own objects — its WGSL, its pass, its geometry, its pick. Whatever a",
-    "built-in kind can do, a plugin kind declares the same way (ICE design-016 K-L2,",
-    "plugin parity): there is no React component and no DOM under the camera.",
-    "",
-    "The manifest owns the DURABLE half exactly as a widget's — the type name, prop",
-    "names and group names outlive any implementation — and names ONE export of the",
-    "renderer module that holds the kind. The host compiles the two halves into the",
-    "prefab (`defineObject`, through the one `defineWidget`); plugin code never does.",
-    "",
-    section("On this build", [
-      "The desk build (the `desk/landing` branch) ACCEPTS the contract below at every",
-      "door: fieldd's roster lists the plugin's kinds as an ordinary row, `check`",
-      "activates it like any plugin, and the renderer's registry registers each kind's",
-      "type and compiles it through `defineObject`. The ICE 0.11 build refused it with",
-      `\`${OBJECTS_NEED_DESK.code}\` (${OBJECTS_NEED_DESK.message}); \`inspect\` keeps`,
-      "its `refusal` field, and it reads `null`. `contributes.widgets` retires at DK-8.",
-      "",
-    ]),
-    section("Declaring", [
-      "One entry per kind under `contributes.objects`:",
-      "",
-      fieldTable(fieldsOf(ObjectContribution)),
-      "",
-      "- `type` is the durable name, `<pluginId>` or `<pluginId>.<name>`; a type is ONE",
-      "  contribution — never both a widget and an object.",
-      "- `size` is what a new one spawns at, in world units; `minSize` bounds a resize",
-      "  (`interaction.resizable`). There is no size mode: an object is its size.",
-      "- `interaction`, `container`, `props`, `groups`, `behaviors` carry the widget's",
-      "  vocabulary verbatim — `widgets.md`'s Props and Conflict groups sections apply",
-      "  word for word (an object's props are its durable data, grouped the same way).",
-      "- `provides` is what the DESK PLACES BY, never a type list: `desk.object` lies on",
-      "  the desk (declare it, or nothing places the kind), `desk.containable` goes into",
-      "  a mini mat (then declare `chip`, below), `desk.pinnable` pins to a calendar's",
-      "  day. A container's own `container.accepts`/`provides` use the same keys.",
-      "- `ports` are accepted and recorded; the desk draws no wire until the STRING",
-      "  program lands — a kind with ports hangs and places like any other meanwhile.",
-      "- `tray` hangs a specimen on the pegboard (next section); absent, the kind is",
-      "  placeable but hangs nowhere.",
-      "- `binding.kind` names the export (an identifier) that holds the kind — one name,",
-      "  read by the host, never registered from `activate`.",
-      "- `onWidget:<type>` is the activation event for an object too: to the engine an",
-      "  object is a widget.",
-      "",
-      "A widget's view fields are RETIRED on an object and refused by name:",
-      "",
-      table(
-        ["field", "where it went"],
-        retired.map(([field, why]) => [`\`${field}\``, why]),
-      ),
-      "",
-      ...(slice === undefined
-        ? []
-        : [fence("json", jsonBlock(slice.value)), "", `*(${slice.source})*`, ""]),
     ]),
     section("The tray entry", [
       "The pegboard tray hangs what the entry says, drawn by the kind itself — a",
@@ -1174,9 +1116,9 @@ function cliDoc(): string {
         level: "refuse",
         check: "manifest",
         code: "manifest-invalid",
-        pointer: "/contributes/widgets/0/type",
-        expected: "declare com.example.notes.card, or register the declared type",
-        detail: "widget type other.card must be com.example.notes or com.example.notes.<name>",
+        pointer: "/contributes/objects",
+        expected: "an object type this plugin owns: com.example.notes or com.example.notes.<name>",
+        detail: "object type other.card must be com.example.notes or com.example.notes.<name>",
       }),
     ),
     "",
@@ -1307,7 +1249,6 @@ export const DOC_FILES = [
   "README.md",
   "manifest.md",
   "contributions.md",
-  "widgets.md",
   "objects.md",
   "context.md",
   "cli.md",
@@ -1320,7 +1261,6 @@ export function generateDocs(): Map<string, string> {
     ["README.md", readme()],
     ["manifest.md", manifestDoc()],
     ["contributions.md", contributionsDoc()],
-    ["widgets.md", widgetsDoc()],
     ["objects.md", objectsDoc()],
     ["context.md", contextDoc()],
     ["cli.md", cliDoc()],

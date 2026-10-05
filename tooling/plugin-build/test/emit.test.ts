@@ -7,35 +7,35 @@ import { canonicalJson } from "../src/canonical";
 import { emitManifest } from "../src/emit";
 
 // Shaped like packages/contracts/fixtures/plugin-manifest.valid.json — the
-// minimal real plugin (a renderer-only note widget, spec §7.2-adjacent).
+// minimal real plugin (a renderer-only note KIND, spec §7.2-adjacent; a widget
+// row until DK-8 retired `contributes.widgets`).
 const VALID_MANIFEST = {
   manifestVersion: 1,
   id: "com.example.notes",
   version: "0.1.0",
   title: "Example Notes",
-  description: "A renderer-only note widget — the minimal real plugin",
+  description: "A renderer-only note kind — the minimal real plugin: one object, one export",
   engines: { app: "^0.1.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
   activation: ["onWidget:com.example.notes"],
   capabilities: ["doc.write"],
   contributes: {
-    widgets: [
+    objects: [
       {
         type: "com.example.notes",
         title: "Note",
         description: "A sticky note",
-        category: "Cards",
-        preview: { kind: "color", value: "#F6E7A9" },
         schemaVersion: 1,
-        surface: "dom",
-        sizeMode: "fixed",
-        defaultSize: { w: 260, h: 180 },
+        size: { w: 260, h: 180 },
         minSize: { w: 120, h: 90 },
+        interaction: { selectable: true, movable: true, resizable: true, snap: "both" },
+        provides: ["com.example.notes", "desk.object"],
         props: {
           text: { kind: "string", default: "", maxLength: 4000 },
           color: { kind: "enum", options: ["yellow", "blue", "pink"], default: "yellow" },
         },
         groups: { text: ["text"], color: ["color"] },
+        binding: { kind: "note" },
       },
     ],
   },

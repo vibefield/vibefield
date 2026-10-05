@@ -7,96 +7,14 @@
 under it; every one is optional, and the cross-field invariants in `manifest.md`
 decide which entry module and which capability each kind requires.
 
-## Widgets
-
-A widget is a canvas card. The manifest owns its DURABLE schema — the type, its
-props, its size behaviour — and code binds a component to it. `widgets.md` is
-the deep end; the field table is here.
-
-Categories: `Cards`, `3D`, `Nodes`, `Tools`.
-
-Widgets are the canvas face of THIS build. They retire with the desk build (DK-8),
-where every canvas face is an object; a type is one or the other, never both.
-
-| field | type | required | rules |
-| --- | --- | --- | --- |
-| `type` | string | yes | at most 128 characters |
-| `title` | string | yes | at least 1 character; at most 80 characters |
-| `description` | string | no | at most 500 characters |
-| `icon` | string | no | asset paths are ./-relative POSIX, no .., no schemes |
-| `category` | `Cards` \| `3D` \| `Nodes` \| `Tools` | no | — |
-| `preview` | one of `color`, `gradient`, `asset` | no | discriminated by `kind` |
-| `schemaVersion` | number | yes | `integer; > 0` |
-| `sizeMode` | `fixed` \| `auto-height` \| `auto` | yes | — |
-| `defaultSize` | { w: number, h: number } | yes | — |
-| `minSize` | { w: number, h: number } | no | — |
-| `maxSize` | { w: number, h: number } | no | — |
-| `interaction` | { selectable?: boolean, movable?: boolean, resizable?: boolean, snap?: `source` \| `target` \| `both` \| `none`, dragOn?: `press` \| `longPress`, solid?: boolean, sweepContained?: boolean, keyboard?: `shared` \| `exclusive`, keyboardEscape?: `release` \| `widget` } | no | — |
-| `container` | `{ accepts: string[], provides?: string[], portal?: object }` | no | — |
-| `provides` | `string[]` | no | at most 16 item(s) |
-| `ports` | { id: string, side: `n` \| `e` \| `s` \| `w`, index?: number, accepts?: string[] }[] | no | at most 16 item(s) |
-| `props` | object mapping name → one of `string`, `number`, `boolean`, `enum`, `json`, `entity-ref`, `session-ref`, `terminal-ref`, `artifact-ref`, `file-ref` | no | discriminated by `kind`; defaults to `{}` |
-| `groups` | `object mapping name → string[]` | no | at least 1 item(s); defaults to `{}` |
-| `behaviors` | `{ id: string, data?: object mapping name → recursive shape }[]` | no | at most 16 item(s) |
-
-```json
-[
-  {
-    "type": "com.example.notes",
-    "title": "Note",
-    "description": "A sticky note",
-    "category": "Cards",
-    "preview": {
-      "kind": "color",
-      "value": "#F6E7A9"
-    },
-    "schemaVersion": 1,
-    "surface": "dom",
-    "sizeMode": "fixed",
-    "defaultSize": {
-      "w": 260,
-      "h": 180
-    },
-    "minSize": {
-      "w": 120,
-      "h": 90
-    },
-    "props": {
-      "text": {
-        "kind": "string",
-        "default": "",
-        "maxLength": 4000
-      },
-      "color": {
-        "kind": "enum",
-        "options": [
-          "yellow",
-          "blue",
-          "pink"
-        ],
-        "default": "yellow"
-      }
-    },
-    "groups": {
-      "text": [
-        "text"
-      ],
-      "color": [
-        "color"
-      ]
-    }
-  }
-]
-```
-
-*(@vibefield/contracts fixtures/plugin-manifest.valid.json)*
+`widgets` is RETIRED (DK-8): a manifest that still says it is refused with
+`widgets-contribution-retired` — a face on the desk is an object kind, below.
 
 ## Objects
 
 An object is a kind the desk DRAWS — one WebGPU renderer, the kind's own GPU
-program — declared with the same durable half as a widget and bound by ONE export
-name instead of a React component; `tray` hangs it on the pegboard. `objects.md`
-is the deep end.
+program — declared by its DURABLE half (the type, its props, its size) and bound
+by ONE export name; `tray` hangs it on the pegboard. `objects.md` is the deep end.
 
 The desk build activates an object like any contribution; the ICE 0.11 build
 refused it with `objects-need-desk` (object kinds need the desk; this build draws widgets).

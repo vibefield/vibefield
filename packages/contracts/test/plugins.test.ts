@@ -9,6 +9,7 @@ import {
   PLUGIN_LIMITS,
   PluginManifestV1,
   validatePluginManifest,
+  WIDGETS_CONTRIBUTION_RETIRED,
 } from "../src/plugins";
 
 // The §7.1 invariants, exercised as mutations of one known-good manifest. The
@@ -25,16 +26,16 @@ const base = () => ({
   activation: ["onWidget:com.example.demo"],
   capabilities: ["doc.write"],
   contributes: {
-    widgets: [
+    // DK-8: the base's one row is an OBJECT — `contributes.widgets` is refused by name
+    objects: [
       {
         type: "com.example.demo",
         title: "Demo",
         schemaVersion: 1,
-        surface: "dom",
-        sizeMode: "fixed",
-        defaultSize: { w: 100, h: 100 },
+        size: { w: 100, h: 100 },
         props: { label: { kind: "string", maxLength: 40 } },
         groups: { label: ["label"] },
+        binding: { kind: "demo" },
       },
     ],
   },
@@ -48,9 +49,9 @@ const behaviorBase = () => {
     capabilities: [...m.capabilities, "canvas.write"],
     contributes: {
       ...m.contributes,
-      widgets: [
+      objects: [
         {
-          ...m.contributes.widgets[0]!,
+          ...m.contributes.objects[0]!,
           behaviors: [{ id, data: { count: 3, mode: "row", meta: { title: "Root" } } }],
         },
       ],
@@ -105,7 +106,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     expect(r.ok).toBe(true);
   });
 
-  it("widgets/commands/surfaces/behaviors require entries.renderer", () => {
+  it("objects/commands/surfaces/behaviors require entries.renderer", () => {
     refuse((m) => ({ ...m, entries: {} }), /require entries\.renderer/);
   });
 
@@ -150,12 +151,12 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     refuse((m) => ({ ...m, activation: ["onWidget:com.example.other"] }), /names no owned/);
   });
 
-  it("widget types stay in the plugin namespace", () => {
+  it("object types stay in the plugin namespace", () => {
     refuse(
       (m) => ({
         ...m,
         activation: [],
-        contributes: { widgets: [{ ...m.contributes.widgets[0]!, type: "com.other.demo" }] },
+        contributes: { objects: [{ ...m.contributes.objects[0]!, type: "com.other.demo" }] },
       }),
       /must be com\.example\.demo/,
     );
@@ -164,23 +165,23 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
   it("the keyboard claim is a declared, bounded field (S2 — the mind map's door)", () => {
     // Declared values parse AND survive typed (before S2 they rode .passthrough()).
     const m = base();
-    m.contributes.widgets[0] = {
-      ...m.contributes.widgets[0],
+    m.contributes.objects[0] = {
+      ...m.contributes.objects[0],
       interaction: { keyboard: "exclusive", keyboardEscape: "release" },
-    } as (typeof m.contributes.widgets)[0];
+    } as (typeof m.contributes.objects)[0];
     const r = validatePluginManifest(m);
     expect(r.ok).toBe(true);
     if (r.ok) {
-      const w = r.manifest.contributes?.widgets?.[0];
+      const w = r.manifest.contributes?.objects?.[0];
       expect(w?.interaction?.keyboard).toBe("exclusive");
       expect(w?.interaction?.keyboardEscape).toBe("release");
     }
     // A bogus value is REFUSED — the pre-S2 behavior (silent flow to the engine) is the bug.
     refuse((b) => {
-      b.contributes.widgets[0] = {
-        ...b.contributes.widgets[0],
+      b.contributes.objects[0] = {
+        ...b.contributes.objects[0],
         interaction: { keyboard: "bogus" },
-      } as unknown as (typeof b.contributes.widgets)[0];
+      } as unknown as (typeof b.contributes.objects)[0];
       return b;
     }, /keyboard/i);
   });
@@ -188,7 +189,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
   it("groups are named, disjoint, and reference declared props; omitting them is legal", () => {
     const withGroups = (m: ReturnType<typeof base>, groups: Record<string, string[]>) => ({
       ...m,
-      contributes: { widgets: [{ ...m.contributes.widgets[0]!, groups }] },
+      contributes: { objects: [{ ...m.contributes.objects[0]!, groups }] },
     });
     // ungrouped props auto-join the engine's "props" default group (engine truth)
     expect(validatePluginManifest(withGroups(base(), {})).ok).toBe(true);
@@ -247,7 +248,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     });
   });
 
-  it("accepts and preserves the complete strict behavior descriptor and widget rider", () => {
+  it("accepts and preserves the complete strict behavior descriptor and object rider", () => {
     const result = validatePluginManifest(behaviorBase());
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -256,7 +257,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
       "tick",
       "dispose",
     ]);
-    expect(result.manifest.contributes?.widgets?.[0]?.behaviors?.[0]?.data).toEqual({
+    expect(result.manifest.contributes?.objects?.[0]?.behaviors?.[0]?.data).toEqual({
       count: 3,
       mode: "row",
       meta: { title: "Root" },
@@ -273,7 +274,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     const ephemeral = structuredClone(behaviorBase());
     ephemeral.contributes.behaviors[0]!.definition.store = "ephemeral";
     ephemeral.contributes.behaviors[0]!.definition.phase = "publish";
-    ephemeral.contributes.widgets[0]!.behaviors = [];
+    ephemeral.contributes.objects[0]!.behaviors = [];
     const unattested = validatePluginManifest(ephemeral);
     expect(unattested.ok).toBe(false);
     if (!unattested.ok) {
@@ -294,7 +295,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
 
   it("charges a plugin's ephemeral declarations including measured per-facet envelopes", () => {
     const manifest = structuredClone(behaviorBase());
-    manifest.contributes.widgets[0]!.behaviors = [];
+    manifest.contributes.objects[0]!.behaviors = [];
     const first = manifest.contributes.behaviors[0]!;
     first.definition.store = "ephemeral";
     first.definition.phase = "publish";
@@ -347,19 +348,19 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
       },
       {
         mutate: (value) => {
-          value.contributes.widgets[0]!.behaviors[0]!.id = "com.example.demo:missing";
+          value.contributes.objects[0]!.behaviors[0]!.id = "com.example.demo:missing";
         },
         pattern: /names no same-plugin behavior/,
       },
       {
         mutate: (value) => {
-          value.contributes.widgets[0]!.behaviors[0]!.data.count = 99;
+          value.contributes.objects[0]!.behaviors[0]!.data.count = 99;
         },
         pattern: /does not match behavior schema/,
       },
       {
         mutate: (value) => {
-          Object.assign(value.contributes.widgets[0]!.behaviors[0]!.data, { ghost: true });
+          Object.assign(value.contributes.objects[0]!.behaviors[0]!.data, { ghost: true });
         },
         pattern: /undeclared behavior data field/,
       },
@@ -452,8 +453,8 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
       },
       {
         mutate: (value) => {
-          value.contributes.widgets[0]!.behaviors.push(
-            structuredClone(value.contributes.widgets[0]!.behaviors[0]!),
+          value.contributes.objects[0]!.behaviors.push(
+            structuredClone(value.contributes.objects[0]!.behaviors[0]!),
           );
         },
         pattern: /duplicate attachment/,
@@ -469,32 +470,15 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     }
   });
 
-  it("rejects duplicate widget types and traversal paths", () => {
+  it("rejects duplicate object types and traversal paths", () => {
     refuse(
       (m) => ({
         ...m,
-        contributes: { widgets: [m.contributes.widgets[0]!, m.contributes.widgets[0]!] },
+        contributes: { objects: [m.contributes.objects[0]!, m.contributes.objects[0]!] },
       }),
-      /duplicate widget types/,
+      /duplicate object types/,
     );
     refuse((m) => ({ ...m, icon: "./a/../b.svg" }), /-relative POSIX/);
-  });
-
-  it("preview gradients refuse url() smuggling", () => {
-    refuse(
-      (m) => ({
-        ...m,
-        contributes: {
-          widgets: [
-            {
-              ...m.contributes.widgets[0]!,
-              preview: { kind: "gradient", value: "linear-gradient(url(http://x))" },
-            },
-          ],
-        },
-      }),
-      /no url/,
-    );
   });
 
   it("tolerant reader: unknown fields survive a parse round-trip", () => {
@@ -506,8 +490,8 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
 
 // DK-0f — the object door's CONTRACT, ahead of the desk: the schema accepts a
 // kind's durable half plus its tray entry and its export name, refuses the
-// widget's view fields BY NAME, holds one type to one contribution, and names
-// the one refusal every host door gives on this build.
+// widget's view fields BY NAME, and names the one refusal every host door gave
+// on the 0.11 build. DK-8: `contributes.widgets` itself is refused by name.
 describe("the object contribution (DK-0f)", () => {
   const CLOCK = "com.example.demo.clock";
   const object = (over: Record<string, unknown> = {}) => ({
@@ -542,13 +526,13 @@ describe("the object contribution (DK-0f)", () => {
     return r.ok ? [] : r.issues;
   };
 
-  it("accepts a well-formed objects manifest — alone, and beside widgets on this build", () => {
+  it("accepts a well-formed objects manifest — alone, and beside another kind", () => {
     expect(validatePluginManifest(withObjects([object()])).ok).toBe(true);
     expect(findUnknownManifestKeys(withObjects([object()]))).toEqual([]);
     const both = {
       ...base(),
       activation: [...base().activation, `onWidget:${CLOCK}`],
-      contributes: { ...base().contributes, objects: [object()] },
+      contributes: { ...base().contributes, objects: [...base().contributes.objects, object()] },
     };
     expect(validatePluginManifest(both).ok).toBe(true);
     // the tray entry is optional (placeable, hangs nowhere); hang/order/local ride it
@@ -617,14 +601,31 @@ describe("the object contribution (DK-0f)", () => {
     ).toContain("contributes.objects.0: duplicate port ids: out");
   });
 
-  it("one type, one contribution — a widget and an object never share a type", () => {
-    const shared = {
-      ...base(),
-      contributes: { ...base().contributes, objects: [object({ type: "com.example.demo" })] },
+  it("refuses contributes.widgets BY NAME, pointing at objects — the widget contribution retired (DK-8)", () => {
+    // a row the 0.11 build accepted, verbatim: refused with the stable code, wherever it stands
+    const legacyRow = {
+      type: "com.example.demo.card",
+      title: "Card",
+      schemaVersion: 1,
+      surface: "dom",
+      sizeMode: "fixed",
+      defaultSize: { w: 100, h: 100 },
     };
-    expect(refused(shared)).toContain(
-      "contributes.objects: type com.example.demo is declared as both a widget and an object — one type, one contribution",
-    );
+    for (const rows of [[legacyRow], []]) {
+      const raw = { ...base(), contributes: { ...base().contributes, widgets: rows } };
+      const result = validatePluginManifest(raw);
+      expect(result.ok).toBe(false);
+      if (result.ok) return;
+      expect(result.issueDetails).toContainEqual({
+        code: "widgets-contribution-retired",
+        path: ["contributes", "widgets"],
+        message: WIDGETS_CONTRIBUTION_RETIRED.message,
+      });
+      // the key is RECOGNIZED — the author meets the refusal, never an unknown-key shrug
+      expect(findUnknownManifestKeys(raw)).toEqual([]);
+    }
+    expect(WIDGETS_CONTRIBUTION_RETIRED.code).toBe("widgets-contribution-retired");
+    expect(WIDGETS_CONTRIBUTION_RETIRED.message).toContain("declare it under contributes.objects");
   });
 
   it("objects need a renderer entry, stay in the plugin's namespace, and are unique", () => {
@@ -684,7 +685,7 @@ describe("the object contribution (DK-0f)", () => {
       message: "object kinds need the desk; this build draws widgets",
     });
     expect(declaresObjects(withObjects([object()]).contributes)).toBe(true);
-    expect(declaresObjects(base().contributes)).toBe(false);
+    expect(declaresObjects({ commands: [] })).toBe(false);
     expect(declaresObjects({ objects: [] })).toBe(false);
     expect(declaresObjects(undefined)).toBe(false);
   });
@@ -708,7 +709,7 @@ describe("helpers", () => {
 
   it("findUnknownManifestKeys surfaces top and contributes levels", () => {
     expect(
-      findUnknownManifestKeys({ ...base(), extra: 1, contributes: { widgets: [], typo: [] } }),
+      findUnknownManifestKeys({ ...base(), extra: 1, contributes: { objects: [], typo: [] } }),
     ).toEqual(["extra", "contributes.typo"]);
     expect(findUnknownManifestKeys(base())).toEqual([]);
   });

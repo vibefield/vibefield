@@ -198,6 +198,8 @@ describe("coverage of what an author has to know", () => {
       "desk.object",
       "binding.kind",
       "objects-need-desk",
+      // DK-8 — the retired widget contribution's refusal, and where its rows went
+      "widgets-contribution-retired",
       "resolve(ctx)",
       "KindLocal.due",
     ])

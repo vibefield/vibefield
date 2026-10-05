@@ -17,7 +17,6 @@ schema this app actually enforces (contracts 0.1.0).
 | --- | --- |
 | `manifest.md` | every manifest field, its rules, and the cross-field invariants |
 | `contributions.md` | each contribution kind's shape, with a worked example |
-| `widgets.md` | props, conflict groups, ports, and how a widget binds |
 | `objects.md` | an object kind on the desk: its durable half, its tray entry, the export that draws it, what the kind receives |
 | `context.md` | `activate(ctx)`, which faces exist when, and the lifecycle |
 | `cli.md` | the build → check → pack → dev-link loop |

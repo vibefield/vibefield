@@ -2,9 +2,9 @@
   "generation": 3,
   "plugins": [
     {
-      "id": "vibefield.note",
+      "id": "vibefield.comment-pad",
       "version": "0.1.0",
-      "title": "Notes",
+      "title": "Comment pad",
       "source": "bundled",
       "manifestHash": "sha256:9f2b1c8d3e4a5f60718293a4b5c6d7e8f9a0b1c2d3e4f5a6b7c8d9e0f1a2b3c4",
       "installRevision": "9f2b1c8d3e4a",
@@ -14,30 +14,31 @@
       "requestedCapabilities": [],
       "grantedCapabilities": [],
       "contributions": {
-        "widgets": [
+        "objects": [
           {
-            "category": "Cards",
-            "defaultSize": { "h": 180, "w": 260 },
-            "description": "A sticky note — double-click to edit",
-            "groups": {},
+            "binding": { "kind": "commentPad" },
+            "description": "A pad of comments on the desk — write a line, it stays",
+            "groups": { "ink": ["text"] },
             "interaction": {
               "movable": true,
-              "resizable": true,
+              "resizable": false,
               "selectable": true,
-              "snap": "target"
+              "snap": "both"
             },
-            "minSize": { "h": 80, "w": 120 },
-            "preview": { "kind": "color", "value": "#f6e7a9" },
             "props": {
-              "color": { "default": "#f6e7a9", "kind": "string" },
-              "text": { "default": "", "kind": "string" }
+              "text": { "default": "", "kind": "string", "maxLength": 20000 }
             },
-            "provides": ["widget"],
+            "provides": ["vibefield.comment-pad", "desk.object", "desk.containable"],
             "schemaVersion": 1,
-            "sizeMode": "fixed",
-            "surface": "dom",
-            "title": "Note",
-            "type": "vibefield.note"
+            "size": { "h": 280, "w": 220 },
+            "title": "Comment pad",
+            "tray": {
+              "category": "comments",
+              "hang": { "accessory": "hook", "h": 140, "pegs": [[0, -0.5]], "w": 110 },
+              "label": "Comment pad",
+              "order": 0
+            },
+            "type": "vibefield.comment-pad"
           }
         ],
         "commands": [],
@@ -58,7 +59,7 @@
       "enabled": false,
       "requestedCapabilities": ["canvas.read"],
       "grantedCapabilities": [],
-      "contributions": { "widgets": [], "commands": [], "surfaces": [] },
+      "contributions": { "commands": [], "surfaces": [] },
       "renderer": "none",
       "service": "none",
       "lastError": {

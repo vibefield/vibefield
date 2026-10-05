@@ -185,23 +185,19 @@ interface ManifestShape {
   contributes?: {
     objects?: readonly unknown[];
     surfaces?: readonly unknown[];
-    widgets?: readonly unknown[];
   };
 }
 
 /**
  * Does this plugin's renderer get the GENERATED stylesheet (Tailwind's utilities, scoped beneath
- * `[data-vf-plugin]`)? It is for what draws DOM — a HUD surface, a legacy `widgets` row (until DK-8
- * retires them). A plugin that contributes OBJECTS and nothing that draws DOM gets none (DK-6): a kind
+ * `[data-vf-plugin]`)? It is for what draws DOM — a HUD surface (the legacy `widgets` rows that also
+ * drew DOM retired at DK-8). A plugin that contributes OBJECTS and nothing that draws DOM gets none (DK-6): a kind
  * has no CSS — the desk draws it — and Tailwind scanning a kind's words ("shadow", "ring", "fixed")
  * would otherwise ship a stylesheet nothing uses. A stylesheet the plugin imports itself still ships.
  */
 export function generatesStylesheet(manifest: Pick<ManifestShape, "contributes">): boolean {
   const c = manifest.contributes;
-  const kindsOnly =
-    (c?.objects?.length ?? 0) > 0 &&
-    (c?.surfaces?.length ?? 0) === 0 &&
-    (c?.widgets?.length ?? 0) === 0;
+  const kindsOnly = (c?.objects?.length ?? 0) > 0 && (c?.surfaces?.length ?? 0) === 0;
   return !kindsOnly;
 }
 

@@ -4,15 +4,19 @@
   ],
   "capabilities": [],
   "contributes": {
-    "widgets": [
+    "objects": [
       {
-        "defaultSize": {
+        "binding": {
+          "kind": "card"
+        },
+        "provides": [
+          "desk.object"
+        ],
+        "schemaVersion": 1,
+        "size": {
           "h": 120,
           "w": 200
         },
-        "schemaVersion": 1,
-        "sizeMode": "fixed",
-        "surface": "dom",
         "title": "Card",
         "type": "vibefield.fixture.badengines.card"
       }

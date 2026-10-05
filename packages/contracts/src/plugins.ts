@@ -7,16 +7,18 @@ import { SCOPES, type Scope } from "./registries";
 // duplicate). TS-only by design (never in the Rust gen bundle): field-native
 // exposes no plugin loader (spec §4.2), so no Rust reader exists.
 //
-// Two shapes ship in slice P0:
-//   - PluginManifestV1 — the target contract (tolerant reader, P3: passthrough
-//     everywhere; cross-field invariants in one superRefine). Its ID rule
-//     tolerates single-segment DEV ALIASES (note/field/widgetlab) until the
-//     §21.2 durable-ID ratification; `isDistributablePluginId` is the strict
-//     rule distribution will gate on.
-//   - LegacyPluginManifest — the walking-skeleton shape the P0 built-ins
-//     authored. TOMBSTONE (C1c): every plugin is canonical V1 now and the
-//     adapter is deleted; the shape stays only until C2's doc migration
-//     confirms nothing on disk still needs a reader for it.
+// PluginManifestV1 is the contract (tolerant reader, P3: passthrough everywhere;
+// cross-field invariants in one superRefine). Its ID rule tolerates
+// single-segment DEV ALIASES (note/field/widgetlab) until the §21.2 durable-ID
+// ratification; `isDistributablePluginId` is the strict rule distribution will
+// gate on. (P0 shipped a second shape, `LegacyPluginManifest` — the walking
+// skeleton's, widgets and all — tombstoned at C1c; DK-8 deleted it with
+// `contributes.widgets`.)
+//
+// DK-8 (desk/landing): `contributes.widgets` is REFUSED by name — the stable
+// issue code `widgets-contribution-retired`, pointing at `contributes.objects`.
+// A face on the desk is an OBJECT KIND: the manifest's durable half and ONE
+// export of the renderer module (spec §12.8).
 
 // --- limits (spec §7.1/§10.4/§16.3: every string and collection is bounded) ---
 
@@ -26,8 +28,6 @@ export const PLUGIN_LIMITS = {
   TITLE_MAX: 80,
   TEXT_MAX: 500, // descriptions, backgroundReason, capability explanations
   PATH_MAX: 256,
-  PREVIEW_MAX: 400,
-  WIDGETS_MAX: 64,
   OBJECTS_MAX: 64,
   PROPS_MAX: 64,
   PORTS_MAX: 16,
@@ -135,37 +135,10 @@ export type RelativeModulePath = z.infer<typeof RelativeModulePath>;
 
 // --- shared vocabularies ------------------------------------------------------
 
-/** Tray shelves (P-3, widgetlab port). The tray adds "All" on top. */
-export const WIDGET_CATEGORIES = ["Cards", "3D", "Nodes", "Tools"] as const;
-export type WidgetCategory = (typeof WIDGET_CATEGORIES)[number];
-
 /** A declared JSON Schema (spec §20.4 subset). Structural validation and the
  * ajv compile limits are host-side; the manifest carries a bounded object. */
 export const JsonSchemaObject = z.object({}).passthrough();
 export type JsonSchemaObject = z.infer<typeof JsonSchemaObject>;
-
-/** §8.2: previews are schema-sanitized — a color, a gradient, or an approved
- * asset. Raw CSS from manifests died with the legacy WidgetDecl (its own D22
- * threat note demanded exactly this). */
-export const SafePreview = z.discriminatedUnion("kind", [
-  z.object({ kind: z.literal("color"), value: z.string().regex(/^#[0-9a-fA-F]{3,8}$/) }),
-  z.object({
-    kind: z.literal("gradient"),
-    value: z
-      .string()
-      .max(PLUGIN_LIMITS.PREVIEW_MAX)
-      .refine(
-        (v) =>
-          (v.startsWith("linear-gradient(") || v.startsWith("radial-gradient(")) &&
-          !v.includes("url(") &&
-          !v.includes(";") &&
-          !v.includes("}"),
-        "gradient previews are a single gradient function, no url()/injection",
-      ),
-  }),
-  z.object({ kind: z.literal("asset"), path: RelativeAssetPath }),
-]);
-export type SafePreview = z.infer<typeof SafePreview>;
 
 export const ActivationEvent = z
   .string()
@@ -182,9 +155,10 @@ export const ActivationEvent = z
   );
 export type ActivationEvent = z.infer<typeof ActivationEvent>;
 
-// --- widget contribution (spec §8.2, the v0.2 vocabulary — enumerated FROM the
+// --- the durable vocabulary (spec §8.2, the v0.2 vocabulary — enumerated FROM the
 // shipped built-ins: folder demanded container, nodes demanded ports/provides,
-// every widgetlab card demanded interaction) ----------------------------------
+// every widgetlab card demanded interaction; an OBJECT's durable half since DK-0f,
+// and the only rows that carry it since `contributes.widgets` retired at DK-8) -----
 
 /** ICE p.json inner shapes (props.ts JsonShape, mirrored 1:1 — validation-only,
  * never their own strata components; the outer json prop is ONE string cell). */
@@ -643,7 +617,17 @@ export type PluginManifestIssueCode =
   | "manifest-invalid"
   | "behavior-store-unsupported"
   | "behavior-presence-budget-exceeded"
-  | "systems-contribution-superseded";
+  | "systems-contribution-superseded"
+  /** DK-8: `contributes.widgets` is refused by name — a face is an object kind */
+  | "widgets-contribution-retired";
+
+/** DK-8: the one refusal `contributes.widgets` meets at every door that validates a
+ * manifest (fieldd's loader, `vibefield-plugin check`, the registry), said once. */
+export const WIDGETS_CONTRIBUTION_RETIRED = {
+  code: "widgets-contribution-retired",
+  message:
+    "contributes.widgets is retired: a face is an object kind the desk draws — declare it under contributes.objects (its durable half, and the renderer export that draws it)",
+} as const;
 
 export interface PluginManifestIssue {
   readonly code: PluginManifestIssueCode;
@@ -653,9 +637,9 @@ export interface PluginManifestIssue {
 
 const SizeSpec = z.object({ w: z.number().positive(), h: z.number().positive() }).passthrough();
 
-// The DURABLE vocabulary a widget and an object share (DK-0f lifted these out of
-// WidgetContribution unchanged so ObjectContribution declares the same shapes
-// by name — one definition, one generated table cell for each).
+// The DURABLE vocabulary an object declares (DK-0f lifted these out of the widget
+// contribution unchanged; DK-8 retired that contribution, and they stay named so
+// each is one definition and one generated table cell).
 
 /** ICE interaction flags — durable contract, host-derived into the prefab.
  * Vocabulary is the engine's WidgetInteraction verbatim: snap
@@ -717,46 +701,6 @@ const PortSpecs = z
       .passthrough(),
   )
   .max(PLUGIN_LIMITS.PORTS_MAX);
-
-export const WidgetContribution = z
-  .object({
-    type: z.string().max(PLUGIN_LIMITS.ID_MAX * 2),
-    title: z.string().min(1).max(PLUGIN_LIMITS.TITLE_MAX),
-    description: z.string().max(PLUGIN_LIMITS.TEXT_MAX).optional(),
-    icon: RelativeAssetPath.optional(),
-    category: z.enum(WIDGET_CATEGORIES).optional(),
-    preview: SafePreview.optional(),
-
-    schemaVersion: z.number().int().positive(),
-    // `surface` (`"dom" | "gl"`) RETIRED at DK-2 (desk/landing, ICE 0.14.0): the desk
-    // draws no DOM or GL widget face — a widget binds to nothing and its type compiles
-    // FACELESS. An old manifest's `surface` is tolerated by the passthrough and read by
-    // no one; `contributes.widgets` itself is refused with a dated sentence at DK-8.
-    /** engine vocabulary (defineWidget): resizability is interaction.resizable */
-    sizeMode: z.enum(["fixed", "auto-height", "auto"]),
-    defaultSize: SizeSpec,
-    minSize: SizeSpec.optional(),
-    /** reserved — no engine support yet (defineWidget has no maxSize); hosts ignore */
-    maxSize: SizeSpec.optional(),
-
-    interaction: InteractionFlags.optional(),
-    container: ContainerSpec.optional(),
-    /** leaf drop-matching currency when not a container (engine: container wins). */
-    provides: z.array(z.string()).max(16).optional(),
-    ports: PortSpecs.optional(),
-
-    props: z.record(PropSpec).optional().default({}),
-    /** NAMED conflict groups (engine truth: the generated strata component is
-     * `${type}:${groupName}`, so names are DURABLE). Ungrouped props auto-join
-     * the engine's "props" default group — omitting groups entirely is the
-     * common case and exactly what all 21 shipped widgets do. */
-    groups: z.record(z.array(z.string()).min(1)).optional().default({}),
-    /** Declarative ICE behavior riders. The renderer binds code separately;
-     * these rows are data-only, same-plugin durable/runtime attachments. */
-    behaviors: z.array(WidgetBehaviorAttachment).max(PLUGIN_LIMITS.WIDGET_BEHAVIORS_MAX).optional(),
-  })
-  .passthrough();
-export type WidgetContribution = z.infer<typeof WidgetContribution>;
 
 // --- the object contribution (spec v0.4 §12.8 — DK-0f, 2026-10-02: the door's CONTRACT,
 // ahead of the desk) -------------------------------------------------------------
@@ -1041,19 +985,21 @@ export type PluginCapabilityContribution = z.infer<typeof PluginCapabilityContri
 
 // --- the manifest (spec §7.1) -------------------------------------------------
 
-/** The `contributes` block, named (DK-0f: with `objects` beside `widgets` the
- * INFERRED manifest type crossed tsc's serialization cap — TS7056, the P0
- * lesson repeating — so the block and the manifest shape below carry explicit
- * annotations; a named reference stays compact). */
+/** The `contributes` block, named (DK-0f: with `objects` beside the then-live
+ * `widgets` the INFERRED manifest type crossed tsc's serialization cap — TS7056,
+ * the P0 lesson repeating — so the block and the manifest shape below carry
+ * explicit annotations; a named reference stays compact). */
 const PluginContributesFields = {
   capabilities: z
     .array(PluginCapabilityContribution)
     .max(PLUGIN_LIMITS.CAPABILITIES_MAX)
     .optional(),
-  widgets: z.array(WidgetContribution).max(PLUGIN_LIMITS.WIDGETS_MAX).optional(),
-  /** DK-0f: object kinds on the desk — may stand beside `widgets` in one
-   * manifest on this build (a type is one or the other, never both);
-   * `widgets` retires with the desk build (DK-8). */
+  /** Explicit tombstone (DK-8): the widget contribution is RETIRED — refused with
+   * `widgets-contribution-retired`, pointing at `objects`. A face on the desk is
+   * an object kind; an old manifest that still says `widgets` is told where its
+   * rows went rather than read as an unknown key. */
+  widgets: z.never().optional(),
+  /** DK-0f: object kinds on the desk — the canvas's one face since DK-8. */
   objects: z.array(ObjectContribution).max(PLUGIN_LIMITS.OBJECTS_MAX).optional(),
   /** Explicit tombstone: the former scheduler-shaped contribution was
    * never consumed and is superseded by the ICE behavior contract. */
@@ -1121,13 +1067,11 @@ function dupes(ids: string[]): string[] {
   return [...out];
 }
 
-/** Owned-name rule: `<pluginId>` itself (widgets only) or `<pluginId>.<one segment>`.
+/** Owned-name rule: `<pluginId>` itself (an object type) or `<pluginId>.<one segment>`.
  *
- * Exported since TP-S2b-widget: the host's BUILT-IN widget door registers
- * contributions that never pass through `validatePluginManifest`, and holds
- * them to this same rule. One namespace law, one implementation — a second copy
- * in the runtime package is how a built-in would eventually come to squat a
- * plugin's widget type. */
+ * Exported since TP-S2b-widget, when the host's BUILT-IN widget door held its own
+ * rows to this same rule (that door retired with `contributes.widgets` at DK-8);
+ * create-plugin's planner states it too. One namespace law, one implementation. */
 export function isOwnedName(id: string, name: string, allowBare: boolean): boolean {
   if (allowBare && name === id) return true;
   if (!name.startsWith(`${id}.`)) return false;
@@ -1154,7 +1098,6 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
 
     // entry requirements (§7.1 invariants)
     const rendererNeeds = [
-      c.widgets?.length ? "widgets" : null,
       c.objects?.length ? "objects" : null,
       c.commands?.length ? "commands" : null,
       c.surfaces?.length ? "surfaces" : null,
@@ -1197,31 +1140,14 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
     }
 
     // ownership + uniqueness per collection (§6.2 — exact names, never split)
-    const widgetTypes = (c.widgets ?? []).map((w) => w.type);
     const objectTypes = (c.objects ?? []).map((o) => o.type);
-    for (const w of c.widgets ?? [])
-      if (!isOwnedName(m.id, w.type, true))
-        issue(`widget type ${w.type} must be ${m.id} or ${m.id}.<name>`, [
-          "contributes",
-          "widgets",
-        ]);
     for (const o of c.objects ?? [])
       if (!isOwnedName(m.id, o.type, true))
         issue(`object type ${o.type} must be ${m.id} or ${m.id}.<name>`, [
           "contributes",
           "objects",
         ]);
-    // one type, one contribution (DK-0f): a widget and an object of one type
-    // would be two prefabs for one durable name
-    const widgetTypeSet = new Set(widgetTypes);
-    for (const t of objectTypes)
-      if (widgetTypeSet.has(t))
-        issue(`type ${t} is declared as both a widget and an object — one type, one contribution`, [
-          "contributes",
-          "objects",
-        ]);
     for (const [label, ids] of [
-      ["widget types", widgetTypes],
       ["object types", objectTypes],
       ["command ids", (c.commands ?? []).map((x) => x.id)],
       ["surface ids", (c.surfaces ?? []).map((x) => x.id)],
@@ -1270,13 +1196,10 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
           "capabilities",
         ]);
 
-    // widgets and objects: props/groups/ports coherence (§8.2) — the DURABLE
-    // half is one law for both (DK-0f), so one walk checks both collections
+    // objects: props/groups/ports coherence (§8.2) — the DURABLE half's law
+    // (DK-0f wrote it once for widgets and objects; the widgets retired at DK-8)
     const behaviorRows = new Map((c.behaviors ?? []).map((row) => [row.id, row] as const));
-    const durableHalf = (
-      w: WidgetContribution | ObjectContribution,
-      path: (string | number)[],
-    ): void => {
+    const durableHalf = (w: ObjectContribution, path: (string | number)[]): void => {
       const propNames = Object.keys(w.props);
       if (propNames.length > PLUGIN_LIMITS.PROPS_MAX) issue("too many props", path);
       // Explicit groups: names are DURABLE component suffixes (`${type}:${name}`),
@@ -1333,7 +1256,7 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
           continue;
         }
         if (declaration.definition.store === "ephemeral") {
-          issue("ephemeral behaviors cannot ride widgets", [...attachmentPath, "id"]);
+          issue("ephemeral behaviors cannot ride an object", [...attachmentPath, "id"]);
         }
         const fields = new Map(
           declaration.definition.schema.map((field) => [field.name, field.spec] as const),
@@ -1348,12 +1271,10 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
         }
       }
     };
-    for (const [wi, w] of (c.widgets ?? []).entries())
-      durableHalf(w, ["contributes", "widgets", wi]);
     for (const [oi, o] of (c.objects ?? []).entries()) {
       const path = ["contributes", "objects", oi];
       durableHalf(o, path);
-      // the widget's view fields are refused BY NAME on an object (the tolerant
+      // a widget's view fields are refused BY NAME on an object (the tolerant
       // reader would otherwise keep them silently, and a ported widget would
       // never learn what moved)
       for (const [field, why] of Object.entries(OBJECT_RETIRED_FIELDS))
@@ -1430,15 +1351,16 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
     // activation events name owned declarations (§8.1)
     const commandIds = new Set((c.commands ?? []).map((x) => x.id));
     const surfaceIds = new Set((c.surfaces ?? []).map((x) => x.id));
-    // an object is a widget to the engine (defineObject compiles through
-    // defineWidget), so `onWidget:` names an object type too — the activation
-    // vocabulary does not grow for the desk
+    // an object is a widget to the ENGINE (defineObject compiles through
+    // defineWidget), so `onWidget:` names an object type — the activation
+    // vocabulary did not grow for the desk, and keeps its name with the
+    // widget contribution retired (DK-8)
     const objectTypeSet = new Set(objectTypes);
     for (const e of m.activation) {
       if (e === "onStartup") continue;
       const [kind, target] = [e.slice(0, e.indexOf(":")), e.slice(e.indexOf(":") + 1)];
       const ok =
-        (kind === "onWidget" && (widgetTypeSet.has(target) || objectTypeSet.has(target))) ||
+        (kind === "onWidget" && objectTypeSet.has(target)) ||
         (kind === "onCommand" && commandIds.has(target)) ||
         (kind === "onSurface" && surfaceIds.has(target)) ||
         (kind === "onService" && declaredMethods.has(target));
@@ -1466,6 +1388,8 @@ const KNOWN_TOP_KEYS = new Set([
 ]);
 const KNOWN_CONTRIBUTES_KEYS = new Set([
   "capabilities",
+  // Retired but recognized (DK-8) so callers receive the stable retired
+  // verdict, not a misleading unknown-key warning.
   "widgets",
   "objects",
   "behaviors",
@@ -1497,12 +1421,11 @@ export type PluginManifestValidation =
   | { ok: true; manifest: PluginManifestV1; unknownKeys: string[] }
   | { ok: false; issues: string[]; issueDetails: PluginManifestIssue[] };
 
-function hasSupersededSystems(raw: unknown): boolean {
+/** Does the raw manifest's `contributes` carry this (retired) key? */
+function hasRetiredContribution(raw: unknown, key: "systems" | "widgets"): boolean {
   if (raw === null || typeof raw !== "object") return false;
   const contributes = (raw as Record<string, unknown>)["contributes"];
-  return (
-    contributes !== null && typeof contributes === "object" && Object.hasOwn(contributes, "systems")
-  );
+  return contributes !== null && typeof contributes === "object" && Object.hasOwn(contributes, key);
 }
 
 /** The host entry point: parse + invariants + unknown-key visibility. Strict
@@ -1511,14 +1434,22 @@ function hasSupersededSystems(raw: unknown): boolean {
 export function validatePluginManifest(raw: unknown): PluginManifestValidation {
   const parsed = PluginManifestV1.safeParse(raw);
   if (!parsed.success) {
-    const supersededSystems = hasSupersededSystems(raw);
+    const supersededSystems = hasRetiredContribution(raw, "systems");
+    const retiredWidgets = hasRetiredContribution(raw, "widgets");
     const issueDetails: PluginManifestIssue[] = parsed.error.issues.map((entry) => {
-      const systemPath =
-        supersededSystems && entry.path[0] === "contributes" && entry.path[1] === "systems";
+      const at = (key: string) => entry.path[0] === "contributes" && entry.path[1] === key;
+      const systemPath = supersededSystems && at("systems");
+      const widgetPath = retiredWidgets && at("widgets");
       const customCode =
         entry.code === z.ZodIssueCode.custom
           ? (entry.params?.["pluginIssueCode"] as PluginManifestIssueCode | undefined)
           : undefined;
+      if (widgetPath)
+        return {
+          code: WIDGETS_CONTRIBUTION_RETIRED.code,
+          path: entry.path,
+          message: WIDGETS_CONTRIBUTION_RETIRED.message,
+        };
       return {
         code: systemPath ? "systems-contribution-superseded" : (customCode ?? "manifest-invalid"),
         path: entry.path,
@@ -1636,32 +1567,3 @@ export function computeEffectiveGrants(input: EffectiveGrantsInput): EffectiveGr
   }
   return out;
 }
-
-// --- the legacy walking-skeleton shape (spec §21.1 bridge; retires at P1) -----
-
-/** Today's TS-authored manifest (id is a single dev-era segment; widgets carry
- * presentation-only decls; scopes are granted wholesale). plugin-runtime
- * validates against this and adapts to V1 — see its adapter. */
-export const LegacyWidgetDecl = z
-  .object({
-    type: z.string().min(1),
-    title: z.string().min(1),
-    defaultSize: SizeSpec,
-    description: z.string().max(PLUGIN_LIMITS.TEXT_MAX).optional(),
-    category: z.enum(WIDGET_CATEGORIES).optional(),
-    /** raw CSS background (legacy only — V1 previews are SafePreview) */
-    preview: z.string().max(PLUGIN_LIMITS.PREVIEW_MAX).optional(),
-  })
-  .passthrough();
-export type LegacyWidgetDecl = z.infer<typeof LegacyWidgetDecl>;
-
-export const LegacyPluginManifest = z
-  .object({
-    id: z.string().regex(ID_SEGMENT_RE),
-    version: z.string().min(1),
-    title: z.string().min(1),
-    widgets: z.array(LegacyWidgetDecl),
-    scopes: z.array(z.string().refine((s) => (SCOPES as readonly string[]).includes(s))),
-  })
-  .passthrough();
-export type LegacyPluginManifest = z.infer<typeof LegacyPluginManifest>;

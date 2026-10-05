@@ -63,10 +63,11 @@ function newService(
   return svc;
 }
 
-/** A minimal VALID manifest object (one owned widget + renderer entry), used to
+/** A minimal VALID manifest object (one owned object kind + renderer entry), used to
  * seed writable dev-linked roots at test time (reload discovery). */
 function validManifest(id: string): Record<string, unknown> {
-  const widgetType = `${id}.card`;
+  // DK-8: the one row is an OBJECT — `contributes.widgets` is refused by name
+  const objectType = `${id}.card`;
   return {
     manifestVersion: 1,
     id,
@@ -74,17 +75,17 @@ function validManifest(id: string): Record<string, unknown> {
     title: id,
     engines: { app: ">=0.0.0", contracts: "^0.1.0" },
     entries: { renderer: "./renderer.js" },
-    activation: [`onWidget:${widgetType}`],
+    activation: [`onWidget:${objectType}`],
     capabilities: [],
     contributes: {
-      widgets: [
+      objects: [
         {
-          type: widgetType,
+          type: objectType,
           title: "Card",
           schemaVersion: 1,
-          surface: "dom",
-          sizeMode: "fixed",
-          defaultSize: { w: 200, h: 120 },
+          size: { w: 200, h: 120 },
+          provides: ["desk.object"],
+          binding: { kind: "card" },
         },
       ],
     },
@@ -139,15 +140,17 @@ describe("PluginRegistryService — discovery", () => {
     }
 
     const alpha = svc.get("vibefield.fixture.alpha");
-    expect(alpha?.contributions.widgets).toHaveLength(1);
-    expect(alpha?.contributions.widgets[0]?.type).toBe("vibefield.fixture.alpha.card");
+    expect(alpha?.contributions.objects).toHaveLength(1);
+    expect(alpha?.contributions.objects[0]?.type).toBe("vibefield.fixture.alpha.card");
+    // DK-8: a record carries no widget rows — the contribution retired
+    expect(alpha?.contributions).not.toHaveProperty("widgets");
     expect(alpha?.contributions.commands).toEqual([]);
     expect(alpha?.contributions.surfaces).toEqual([]);
 
     expect(svc.health()).toEqual({ count: 2, enabled: 2, invalid: 0 });
   });
 
-  it("projects behavior declarations and widget riders together without executing code", async () => {
+  it("projects behavior declarations and object riders together without executing code", async () => {
     const root = mkdtempSync(join(tmpdir(), "plugreg-behavior-"));
     cleanup.push(() => rmSync(root, { recursive: true, force: true }));
     const id = "vibefield.fixture.behavior";
@@ -156,15 +159,15 @@ describe("PluginRegistryService — discovery", () => {
       ...validManifest(id),
       capabilities: ["canvas.write"],
       contributes: {
-        widgets: [
+        objects: [
           {
             type: `${id}.card`,
             title: "Card",
             schemaVersion: 1,
-            surface: "dom",
-            sizeMode: "fixed",
-            defaultSize: { w: 200, h: 120 },
+            size: { w: 200, h: 120 },
+            provides: ["desk.object"],
             behaviors: [{ id: behaviorId, data: { count: 3 } }],
+            binding: { kind: "card" },
           },
         ],
         behaviors: [
@@ -196,8 +199,8 @@ describe("PluginRegistryService — discovery", () => {
     expect(record?.state).toBe("enabled");
     expect(record?.grantedCapabilities).toContain("canvas.write");
     expect(record?.contributions.behaviors).toEqual(manifest.contributes.behaviors);
-    expect(record?.contributions.widgets[0]?.behaviors).toEqual(
-      manifest.contributes.widgets[0]?.behaviors,
+    expect(record?.contributions.objects[0]?.behaviors).toEqual(
+      manifest.contributes.objects[0]?.behaviors,
     );
     expect(PluginRegistrySnapshot.safeParse(svc.snapshot()).success).toBe(true);
   });
@@ -248,7 +251,7 @@ describe("PluginRegistryService — invalid & incompatible roots", () => {
     expect(row?.enabled).toBe(false);
     expect(row?.compatible).toBe(true);
     expect(row?.renderer).toBe("none");
-    expect(row?.contributions.widgets).toEqual([]); // invalid rows carry no contributions
+    expect(row?.contributions.objects).toEqual([]); // invalid rows carry no contributions
     expect(row?.lastError?.kind).toBe("PLUGIN_INVALID");
     expect(row?.lastError?.message).toContain("entries.renderer");
   });
@@ -293,7 +296,6 @@ describe("PluginRegistryService — invalid & incompatible roots", () => {
     expect(JSON.stringify(row)).not.toContain(OBJECTS_NEED_DESK.code);
     // the contract is recorded: the roster lists the kind it activates
     expect(row?.contributions.objects.map((o) => o.type)).toEqual([type]);
-    expect(row?.contributions.widgets).toEqual([]);
   });
 
   it("marks a manifest with an unsatisfiable contracts range incompatible (a row, not a problem)", async () => {

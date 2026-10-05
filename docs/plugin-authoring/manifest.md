@@ -25,7 +25,7 @@ derive from them.
 | `activation` | `string[]` | yes | `each item: at most 128 characters; each item: activation events: onStartup \| on{Widget,Command,Surface,Service}:<owned id>; at most 64 item(s)` |
 | `backgroundReason` | string | no | at least 1 character; at most 500 characters |
 | `capabilities` | `string[]` | yes | `each item: at most 72 characters; each item: capability must be a core scope or x.<pluginId>.<name>; at most 32 item(s)` |
-| `contributes` | `{ capabilities?: object[], widgets?: object[], objects?: object[], behaviors?: object[], commands?: object[], surfaces?: object[], settings?: object, services?: object[], mcp?: object }` | no | — |
+| `contributes` | `{ capabilities?: object[], objects?: object[], behaviors?: object[], commands?: object[], surfaces?: object[], settings?: object, services?: object[], mcp?: object }` | no | — |
 
 `engines.app` and `engines.contracts` are semver ranges the host checks before
 a plugin loads; `engines.platforms` narrows to `darwin`/`linux`/`win32`.
@@ -39,7 +39,7 @@ the schema itself says — `check` prints it verbatim with a pointer.
 
 | rule | pointer | message |
 | --- | --- | --- |
-| a contribution that renders needs a renderer entry | `entries` | widgets require entries.renderer |
+| a contribution that renders — an object kind, a command, a surface — needs the renderer entry | `entries` | objects require entries.renderer |
 | dynamic services and contributed MCP tools need a service entry | `entries` | dynamic services and contributed MCP tools require entries.service |
 | declaring dynamic services requires the services.provide capability | `capabilities` | declaring dynamic services requires the services.provide capability |
 | settings access from code requires storage.self | `capabilities` | settings access from code requires the storage.self capability |
@@ -47,16 +47,14 @@ the schema itself says — `check` prints it verbatim with a pointer.
 | onStartup is a background power, and pays the honesty tax | `activation` | onStartup requires entries.service |
 | onStartup is a background power, and pays the honesty tax | `capabilities` | onStartup requires the background capability |
 | onStartup is a background power, and pays the honesty tax | `backgroundReason` | onStartup requires a non-empty backgroundReason |
-| every contributed name is owned by the plugin's id | `contributes.widgets` | `widget type someone.else.card must be com.example.demo or com.example.demo.<name>` |
-| ids are unique within their collection | `contributes` | duplicate widget types: com.example.demo.card |
-| conflict groups name declared props, and each prop joins at most one | `contributes.widgets.0` | group names undeclared prop missing |
-| an immutable prop belongs to no conflict group | `contributes.widgets.0` | immutable prop text must not belong to a conflict group |
-| a prop default must satisfy its own prop spec | `contributes.widgets.0` | enum default c not in options for prop mode |
+| every contributed name is owned by the plugin's id | `contributes.objects` | `object type someone.else.card must be com.example.demo or com.example.demo.<name>` |
+| ids are unique within their collection | `contributes` | duplicate object types: com.example.demo.clock |
+| conflict groups name declared props, and each prop joins at most one | `contributes.objects.0` | group names undeclared prop missing |
+| an immutable prop belongs to no conflict group | `contributes.objects.0` | immutable prop text must not belong to a conflict group |
+| a prop default must satisfy its own prop spec | `contributes.objects.0` | enum default c not in options for prop mode |
 | `a service namespace is x.<pluginId>` | `contributes.services` | service namespace x.com.example.other must be x.com.example.demo |
 | an activation event names something the plugin declares | `activation` | activation event onWidget:com.example.demo.nothing names no owned declaration |
-| an object kind renders too, so it needs the renderer entry | `entries` | objects require entries.renderer |
 | a widget's view fields are retired on an object, each refused by name | `contributes.objects.0.surface` | surface is retired on an object: its kind IS the face — the desk draws it, there is no dom or gl |
-| one type, one contribution — never both a widget and an object | `contributes.objects` | type com.example.demo.clock is declared as both a widget and an object — one type, one contribution |
 | a tray entry's face names declared props, each a value of its prop's kind | `contributes.objects.0.tray.props.style` | tray props value for style is not one of its options |
 
 ## Activation events
@@ -65,7 +63,7 @@ the schema itself says — `check` prints it verbatim with a pointer.
 
 - `onStartup` — service entries only, requires the `background` capability and a
   `backgroundReason` that says why in the user's words.
-- `onWidget:<widget type>`, `onCommand:<command id>`, `onSurface:<surface id>`,
+- `onWidget:<object type>`, `onCommand:<command id>`, `onSurface:<surface id>`,
   `onService:<x.pluginId.method>` — each must name something this manifest
   declares.
 
@@ -124,8 +122,6 @@ Every string and collection in a manifest is bounded (§7.1). The numbers:
 | `TITLE_MAX` | 80 |
 | `TEXT_MAX` | 500 |
 | `PATH_MAX` | 256 |
-| `PREVIEW_MAX` | 400 |
-| `WIDGETS_MAX` | 64 |
 | `OBJECTS_MAX` | 64 |
 | `PROPS_MAX` | 64 |
 | `PORTS_MAX` | 16 |
@@ -199,17 +195,19 @@ Every string and collection in a manifest is bounded (§7.1). The numbers:
         "risk": "read"
       }
     ],
-    "widgets": [
+    "objects": [
       {
         "type": "com.example.metrics.chart",
         "title": "Metrics chart",
         "schemaVersion": 1,
-        "surface": "dom",
-        "sizeMode": "fixed",
-        "defaultSize": {
+        "size": {
           "w": 329,
           "h": 155
         },
+        "provides": [
+          "com.example.metrics.chart",
+          "desk.object"
+        ],
         "ports": [
           {
             "id": "out",
@@ -234,7 +232,10 @@ Every string and collection in a manifest is bounded (§7.1). The numbers:
           {
             "id": "com.example.metrics:ticker"
           }
-        ]
+        ],
+        "binding": {
+          "kind": "chart"
+        }
       }
     ],
     "behaviors": [

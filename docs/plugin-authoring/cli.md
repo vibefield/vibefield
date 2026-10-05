@@ -12,9 +12,9 @@ rows passed), `1` (at least one refusal) or `2` (the kit itself failed). With
   "level": "refuse",
   "check": "manifest",
   "code": "manifest-invalid",
-  "pointer": "/contributes/widgets/0/type",
-  "expected": "declare com.example.notes.card, or register the declared type",
-  "detail": "widget type other.card must be com.example.notes or com.example.notes.<name>"
+  "pointer": "/contributes/objects",
+  "expected": "an object type this plugin owns: com.example.notes or com.example.notes.<name>",
+  "detail": "object type other.card must be com.example.notes or com.example.notes.<name>"
 }
 ```
 

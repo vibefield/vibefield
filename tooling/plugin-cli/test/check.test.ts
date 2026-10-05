@@ -86,6 +86,36 @@ describe("check — manifest-invalid (the control run)", () => {
     expect(verdicts.some((v) => v.check === "schema")).toBe(false);
   });
 
+  it("refuses contributes.widgets BY NAME, pointing at contributes.objects (DK-8)", async () => {
+    // a widget row the 0.11 build accepted, verbatim — the author is told where its rows went
+    const withWidgets = baseManifest({
+      contributes: {
+        ...(baseManifest()["contributes"] as Record<string, unknown>),
+        widgets: [
+          {
+            type: `${FIXTURE_ID}.card`,
+            title: "Card",
+            schemaVersion: 1,
+            surface: "dom",
+            sizeMode: "fixed",
+            defaultSize: { w: 200, h: 120 },
+          },
+        ],
+      },
+    });
+    const retired = makePlugin({ rawManifest: `${JSON.stringify(withWidgets, null, 2)}\n` });
+    const verdicts = await checkPlugin({ dir: retired });
+    const refusal = verdicts.find((v) => v.code === "widgets-contribution-retired");
+    expect(refusal?.level).toBe("refuse");
+    expect(refusal?.pointer).toBe("/contributes/widgets");
+    expect(refusal?.detail).toContain("declare it under contributes.objects");
+    expect(REFUSAL_CATALOG["widgets-contribution-retired"].guidance).toContain(
+      "contributes.objects",
+    );
+    // never shrugged off as an unknown key
+    expect(verdicts.some((v) => v.code === "manifest-unknown-key")).toBe(false);
+  });
+
   it("preserves stable behavior admission codes and exact pointers", async () => {
     const withSystems = baseManifest();
     withSystems["contributes"] = {

@@ -9,10 +9,10 @@ draws its own objects — its WGSL, its pass, its geometry, its pick. Whatever a
 built-in kind can do, a plugin kind declares the same way (ICE design-016 K-L2,
 plugin parity): there is no React component and no DOM under the camera.
 
-The manifest owns the DURABLE half exactly as a widget's — the type name, prop
-names and group names outlive any implementation — and names ONE export of the
-renderer module that holds the kind. The host compiles the two halves into the
-prefab (`defineObject`, through the one `defineWidget`); plugin code never does.
+The manifest owns the DURABLE half — the type name, prop names and group names
+outlive any implementation — and names ONE export of the renderer module that
+holds the kind. The host compiles the two halves into the prefab (`defineObject`,
+through the engine's one `defineWidget`); plugin code never does.
 
 ## On this build
 
@@ -21,7 +21,8 @@ door: fieldd's roster lists the plugin's kinds as an ordinary row, `check`
 activates it like any plugin, and the renderer's registry registers each kind's
 type and compiles it through `defineObject`. The ICE 0.11 build refused it with
 `objects-need-desk` (object kinds need the desk; this build draws widgets); `inspect` keeps
-its `refusal` field, and it reads `null`. `contributes.widgets` retires at DK-8.
+its `refusal` field, and it reads `null`. `contributes.widgets` — the canvas face
+before the desk — is refused with `widgets-contribution-retired` (DK-8).
 
 ## Declaring
 
@@ -45,13 +46,11 @@ One entry per kind under `contributes.objects`:
 | `tray` | { category: string, label: string, order?: number, hang: object, props?: object mapping name → one of string, number, boolean, take?: one of `"face"`, object mapping name → one of string, number, boolean, local?: boolean } | no | — |
 | `binding` | { kind: string } | yes | — |
 
-- `type` is the durable name, `<pluginId>` or `<pluginId>.<name>`; a type is ONE
-  contribution — never both a widget and an object.
+- `type` is the durable name, `<pluginId>` or `<pluginId>.<name>`.
 - `size` is what a new one spawns at, in world units; `minSize` bounds a resize
   (`interaction.resizable`). There is no size mode: an object is its size.
-- `interaction`, `container`, `props`, `groups`, `behaviors` carry the widget's
-  vocabulary verbatim — `widgets.md`'s Props and Conflict groups sections apply
-  word for word (an object's props are its durable data, grouped the same way).
+- `interaction`, `container`, `props`, `groups`, `behaviors` carry the canvas's
+  durable vocabulary — Props and Conflict groups, below, say each in full.
 - `provides` is what the DESK PLACES BY, never a type list: `desk.object` lies on
   the desk (declare it, or nothing places the kind), `desk.containable` goes into
   a mini mat (then declare `chip`, below), `desk.pinnable` pins to a calendar's
@@ -62,10 +61,10 @@ One entry per kind under `contributes.objects`:
   placeable but hangs nowhere.
 - `binding.kind` names the export (an identifier) that holds the kind — one name,
   read by the host, never registered from `activate`.
-- `onWidget:<type>` is the activation event for an object too: to the engine an
-  object is a widget.
+- `onWidget:<type>` is an object's activation event — the ENGINE's name for a
+  prefab, kept when the widget contribution retired.
 
-A widget's view fields are RETIRED on an object and refused by name:
+The widget-era view fields are RETIRED on an object and refused by name:
 
 | field | where it went |
 | --- | --- |
@@ -146,6 +145,51 @@ A widget's view fields are RETIRED on an object and refused by name:
 ```
 
 *(@vibefield/contracts fixtures/plugin-manifest.objects.json)*
+
+## Props
+
+Props are the object's durable data. Each is one of these kinds:
+
+| kind | fields | notes |
+| --- | --- | --- |
+| `string` | `optional`, `mutable`, `default`, `maxLength` | — |
+| `number` | `optional`, `mutable`, `default`, `min`, `max` | — |
+| `boolean` | `optional`, `mutable`, `default` | — |
+| `enum` | `optional`, `mutable`, `options`, `default` | — |
+| `json` | `optional`, `mutable`, `inner`, `default`, `maxBytes` | `inner` describes the nested shape; the value rides one string cell |
+| `entity-ref` | `optional`, `mutable` | an opaque host reference — the host resolves it, the plugin never parses it |
+| `session-ref` | `optional`, `mutable` | an opaque host reference — the host resolves it, the plugin never parses it |
+| `terminal-ref` | `optional`, `mutable` | an opaque host reference — the host resolves it, the plugin never parses it |
+| `artifact-ref` | `optional`, `mutable` | an opaque host reference — the host resolves it, the plugin never parses it |
+| `file-ref` | `optional`, `mutable` | an opaque host reference — the host resolves it, the plugin never parses it |
+
+Every kind also accepts `optional` and `mutable` (default true). A default must
+satisfy its own spec — an enum default outside `options`, a number outside
+`min`/`max`, a string over `maxLength` are all refused at emit.
+
+## Conflict groups
+
+Props that change together belong in a named group. The name is durable: the
+engine generates a component named `<object type>:<group name>` from it, and two
+editors writing different groups of the same object never conflict.
+
+- Omitting `groups` is the common case — ungrouped props join the engine's
+  default `props` group.
+- A group name matches `[a-z][a-z0-9-]*`, every member must be a declared prop,
+  and a prop belongs to at most one group.
+- An immutable prop (`mutable: false`) belongs to no group at all.
+
+```ts
+props: {
+  title: { kind: "string", default: "" },
+  body: { kind: "string", default: "" },
+  color: { kind: "enum", options: ["amber", "slate"], default: "amber" },
+},
+groups: {
+  text: ["title", "body"],   // one editor typing
+  style: ["color"],          // another recolouring — no conflict
+},
+```
 
 ## The tray entry
 

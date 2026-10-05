@@ -61,6 +61,14 @@ export const REFUSAL_CATALOG = {
     guidance:
       "define through @vibefield/plugin-sdk/behavior and declare under contributes.behaviors",
   },
+  "widgets-contribution-retired": {
+    check: "manifest",
+    level: "refuse",
+    meaning:
+      "the retired contributes.widgets — a face on the desk is an object kind the desk draws (DK-8)",
+    guidance:
+      "declare it under contributes.objects: its durable half (size, props, groups, interaction) and binding.kind, the renderer export that holds its kind (objects.md)",
+  },
   "manifest-stale": {
     check: "manifest",
     level: "refuse",
