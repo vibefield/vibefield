@@ -1,9 +1,10 @@
 import type { PluginManifestV1 } from "@vibefield/contracts";
 
 // The CANONICAL manifest (plugin spec §7.1): the durable contract, from which
-// the host reconstructs the object (§12.2). This file is the ONLY writer of
-// `vibefield.plugin.json` — edit here, then run `pnpm gen:manifest`. Hand-edit
-// the JSON and `pnpm plugin check` refuses it with `manifest-stale`.
+// the host reconstructs the object (§12.2). This file is the ONLY source of
+// `vibefield.plugin.json` — edit here, then re-emit it: `vibefield-plugin
+// emit-manifest <dir>` (or `pnpm gen:manifest` with an install). Never edit the
+// JSON by hand: `check` refuses JSON that is not canonical (`manifest-stale`).
 //
 // The declaration is durable in the strongest sense: the desk stores documents
 // against `type` and against each prop NAME, so those outlive any particular

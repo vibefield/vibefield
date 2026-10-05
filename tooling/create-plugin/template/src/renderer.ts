@@ -12,7 +12,7 @@ import type { DiscGeometry, DiscRecord } from "./record";
 //  - top-level code stays PURE. Making the kind object is declaration; registration, I/O and timers
 //    start in `activate` — never here.
 //  - the SDK is the only door (wall R10): `@vibefield/plugin-sdk` and its subpaths (`/desk` for a
-//    kind), `@vibefield/contracts` types. Importing `@vibecook/ice` directly is refused by `pnpm plugin
+//    kind), `@vibefield/contracts` types. Importing `@vibecook/ice` directly is refused by `vibefield-plugin
 //    check` (`wall-violation`) and by the build, even though every name in `/desk` is ICE's — reaching
 //    it THROUGH the SDK is what runs your kind on the host's one copy.
 

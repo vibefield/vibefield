@@ -7,30 +7,39 @@ kinds.
 
 ## The ten-minute path
 
-1. **Install** — `pnpm install` at the repository root (this directory joined the workspace when it
-   was scaffolded under `plugins/` or `examples/plugins/`).
-2. **Build** — `pnpm --filter {{packageName}} build`: plugin-build writes `dist/renderer.js`, your
-   `.wgsl` inlined into it as text (no stylesheet: a kind has no CSS).
-3. **Check** — `pnpm plugin check <this directory>`: every row passes — the manifest, the import wall,
-   and the activation's object rows (your export is a desk kind named by its type; it hangs on
-   "things" by a hook; its WGSL arrived as text and READS — the note says nothing compiled it).
-   `pnpm plugin inspect <this directory>` says the same as data.
-4. **Judge it** — `pnpm playground <this directory>`: the SDK's kind-conformance harness drives your
-   kind through every state in `playground/states.ts`, in every mode it declares, at every zoom the
-   desk's LOD names; `pnpm --filter {{packageName}} test` runs the same harness (`test/kind.test.ts`)
-   beside the manifest contract. The Dawn STILL of each state is a `todo` there: it waits on a desk
-   ICE does not publish yet (VibeField's ask I30).
-5. **Mount it** — a dev session (`pnpm dev`) stages every built plugin under `plugins/` and
-   `examples/plugins/` (elsewhere: `pnpm plugin dev-link <this directory>`), and the desk mounts your
-   kind beside its own. Nothing lays one yet: you take it from the pegboard, under "things", once
-   VibeField wires the pegboard into the desk's chrome (DK-13); until then the kind is compiled and
-   waiting.
+The kit's commands are `plugin-build`, `vibefield-plugin` and `plugin-playground` (in a checkout of VibeField they
+are also its root scripts: `pnpm plugin …`, `pnpm playground …`). Outside a checkout's workspace NOTHING IS
+INSTALLED here, and nothing needs to be: the kit's commands build, judge and try this plugin, binding the SDK to the
+copy they run from, as the app's import map does. Only this package's own `pnpm` scripts (`gen:manifest`, `test`,
+`typecheck`) need an install, which only a checkout's workspace gives — scaffold under its `plugins/` for those.
+
+1. **Edit** — `src/manifest.ts` (the durable half: the type, props, size, tray), `src/kind.ts` and
+   `src/shaders.wgsl` (what it draws).
+2. **Emit the manifest** after every edit of `src/manifest.ts` — `vibefield-plugin emit-manifest <this directory>`
+   (`pnpm gen:manifest` with an install). Never edit `vibefield.plugin.json` by hand.
+3. **Build** — `plugin-build <this directory>`: `dist/renderer.js`, your `.wgsl` inlined into it as text (no
+   stylesheet: a kind has no CSS).
+4. **Check** — `vibefield-plugin check <this directory>`: the manifest, the import wall, and your kind against the
+   BUILT module — a desk kind named by its type, how it hangs, its held tools, every name it imports from the SDK's
+   door, its WGSL READ (entry points, bindings) and never compiled here. `vibefield-plugin inspect` says it as data.
+5. **Judge it** — `plugin-playground <this directory>`: the SDK's kind-conformance harness drives your kind through
+   every state in `playground/states.ts`, in every mode it declares, at every zoom the desk's LOD names (with an
+   install, `test/kind.test.ts` runs the same harness beside the manifest contract).
+6. **Put it on the desk** — `vibefield-plugin try <this directory>`: the app, on a fresh profile with this plugin
+   staged alone, lays one of your object on a fresh board and says whether it is DRAWN — its WGSL compiled on the
+   host's device (a compile error comes back as the compiler's own line), picked where it lies — with stills by day
+   and by night in `.vibefield-try/`. About a minute (the first run builds the app). The Dawn STILL in
+   `test/kind.test.ts` is a `todo` until VibeField's pin carries ICE's `createStill` (I30).
+
+A person's dev session (`pnpm dev` in a checkout) finds the plugin through `vibefield-plugin dev-link <this
+directory>` (`FIELDD_PLUGIN_DEV_ROOTS`); nothing a person can do lays one on the desk yet — the pegboard will, under
+"things", once VibeField wires it into the desk's chrome (DK-13).
 
 ## Make it yours
 
 | file | what it is |
 | --- | --- |
-| `src/manifest.ts` | the DURABLE half: the type, its props (`color`), its size, what it provides (`desk.object`), its tray entry; emitted to `vibefield.plugin.json` by `pnpm gen:manifest` |
+| `src/manifest.ts` | the DURABLE half: the type, its props (`color`), its size, what it provides (`desk.object`), its tray entry; emitted to `vibefield.plugin.json` by `vibefield-plugin emit-manifest` (or `pnpm gen:manifest`) |
 | `src/renderer.ts` | the export the manifest's `binding.kind` names — the object's code half (`ObjectBinding`) |
 | `src/kind.ts` | the kind, whole: `create` (its pass, on the host's device), `resolve` (where it lies), `record` (what the pass draws), `hit` (what a press picks) |
 | `src/pass.ts` | its pass: one pipeline, a record store, one instanced draw |

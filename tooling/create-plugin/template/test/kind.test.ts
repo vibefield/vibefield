@@ -13,7 +13,7 @@ import type { DiscGeometry } from "../src/record";
 import { {{className}} } from "../src/renderer";
 
 // THE KIND'S TEST — the SDK's KIND-CONFORMANCE HARNESS (`@vibefield/plugin-sdk/testing`), the one
-// `pnpm playground` and `pnpm plugin check` run, with no GPU and no DOM: your object's code half (the
+// `plugin-playground` and `vibefield-plugin check` run, with no GPU and no DOM: your object's code half (the
 // export the manifest's `binding.kind` names) against its durable half (the manifest row) — its
 // declaration, its program (`create` on a recording device: its WGSL arrives as text and READS — its
 // entry points, the bindings each stage uses laid in its layout — never compiled), every state in
@@ -59,8 +59,8 @@ describe("{{title}}'s kind, judged by the kind-conformance harness", () => {
     expect(k.hit(G, 100 + 50, 80 + 50)).toBeNull(); // in the rect, off the disc
   });
 
-  // The STILL — a Dawn frame of each state on a bare mat, held to this plugin's golden — needs a
-  // desk with no window on a given device, which ICE does not publish yet (VibeField's ask I30).
-  // Until it lands the harness READS your WGSL and never compiles it: `pnpm dev` is where it draws.
-  it.todo("its STILL — a Dawn frame of each state held to this plugin's golden (waits on ICE's ask I30)");
+  // The STILL — a Dawn frame of each state on a bare mat, held to this plugin's golden — needs ICE's host-less
+  // desk (`createStill`, VibeField's ask I30), which VibeField's pin does not carry yet. Until it does the harness
+  // READS your WGSL and never compiles it: `vibefield-plugin try <dir>` compiles and draws it in the app.
+  it.todo("its STILL — a Dawn frame of each state held to this plugin's golden (waits on the pin carrying ICE's I30)");
 });

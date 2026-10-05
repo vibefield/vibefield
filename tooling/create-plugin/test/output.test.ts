@@ -150,6 +150,18 @@ describe("the scaffolded tree", () => {
     // the README says the ten-minute path; the kind test runs the SDK's kind-conformance harness over
     // the playground states, and its still is a `todo` naming the ICE ask it waits on (DK-7)
     expect(readFileSync(join(dir, "README.md"), "utf8")).toContain("## The ten-minute path");
+    // DK-10: the path works OUTSIDE a checkout's workspace too — the kit's own commands, nothing installed — and it
+    // ends ON THE DESK (`try`); the bar's agents met a path that began `pnpm install` at a repo root they never had
+    const readme = readFileSync(join(dir, "README.md"), "utf8");
+    for (const step of [
+      "vibefield-plugin emit-manifest <this directory>",
+      "plugin-build <this directory>",
+      "vibefield-plugin check <this directory>",
+      "plugin-playground <this directory>",
+      "vibefield-plugin try <this directory>",
+    ])
+      expect(readme, `the README's path never says ${step}`).toContain(step);
+    expect(readme).toContain("NOTHING IS\nINSTALLED here, and nothing needs to be");
     const kindTest = readFileSync(join(dir, "test", "kind.test.ts"), "utf8");
     expect(kindTest).toContain(
       'import { runKindConformance } from "@vibefield/plugin-sdk/testing";',

@@ -129,7 +129,7 @@ function placementVerdict(root: string, placement: WorkspacePlacement): Verdict 
   return note(
     "workspace",
     "workspace-outside",
-    `outside a pnpm workspace that declares this path — the template's workspace:* and catalog: dependencies cannot resolve here, and the SDK is not published, so install it from a checkout of the repository and point a dev session at this plugin with ${DEV_ROOTS_ENV}`,
+    `outside a pnpm workspace: NOTHING TO INSTALL — the kit's own commands (plugin-build, vibefield-plugin, plugin-playground) build, judge and try this plugin, binding the SDK to the copy they run from, as the app's import map binds it. Only the scaffold's own pnpm scripts (gen:manifest, test, typecheck) need an install, and their workspace:* and catalog: dependencies resolve only inside a checkout's workspace; vibefield-plugin emit-manifest stands in for gen:manifest. A person's dev session finds it through ${DEV_ROOTS_ENV} (vibefield-plugin dev-link)`,
     { pointer: root },
   );
 }
@@ -138,22 +138,38 @@ function placementVerdict(root: string, placement: WorkspacePlacement): Verdict 
  * should never have to guess the next call from prose. DK-6: the BUILD sits
  * before `check` — an object kind's rows (its export a desk kind named by its
  * type, its WGSL arrived as text) read the built module, and without one
- * `check` can only note that it is unbuilt. */
+ * `check` can only note that it is unbuilt. DK-10: the last step puts it ON
+ * THE DESK (`try`); and OUTSIDE a workspace the steps are the kit's own
+ * commands, never the checkout's `pnpm` scripts (`pnpm plugin`, `pnpm
+ * playground` run only at a checkout's root — the bar's agents could not). */
 function nextStepsVerdict(
   root: string,
   placement: WorkspacePlacement,
   packageName: string,
 ): Verdict {
-  const target =
-    placement.member && placement.root !== undefined
-      ? relative(placement.root, root).split(sep).join("/")
-      : root;
+  if (placement.member && placement.root !== undefined) {
+    const target = relative(placement.root, root).split(sep).join("/");
+    const steps = [
+      "pnpm install",
+      `pnpm --filter ${packageName} build`,
+      `pnpm plugin check ${target}`,
+      `pnpm playground ${target}`,
+      `pnpm plugin try ${target}`,
+    ];
+    return note("next", "next-steps", steps.join(" · "), { pointer: root });
+  }
   const steps = [
-    ...(placement.member ? ["pnpm install", `pnpm --filter ${packageName} build`] : []),
-    `pnpm plugin check ${target}`,
-    `pnpm playground ${target}`,
+    `plugin-build ${root}`,
+    `vibefield-plugin check ${root}`,
+    `plugin-playground ${root}`,
+    `vibefield-plugin try ${root}`,
   ];
-  return note("next", "next-steps", steps.join(" · "), { pointer: root });
+  return note(
+    "next",
+    "next-steps",
+    `${steps.join(" · ")} (after an edit of src/manifest.ts: vibefield-plugin emit-manifest ${root})`,
+    { pointer: root },
+  );
 }
 
 function messageOf(error: unknown): string {

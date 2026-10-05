@@ -172,17 +172,25 @@ describe("the next three commands are named, verbatim", () => {
     );
     expect(printed).toContain("pnpm plugin check plugins/demo");
     expect(printed).toContain("pnpm playground plugins/demo");
+    // DK-10: the last step puts it on the desk
+    expect(printed).toContain("pnpm plugin try plugins/demo");
   });
 
-  it("drops install, and says why, for a scaffold outside the workspace", async () => {
+  it("drops install, says why, and names the KIT'S OWN commands for a scaffold outside the workspace (DK-10)", async () => {
+    // the checkout's `pnpm plugin` / `pnpm playground` run only at a checkout's root — the ten-minute bar's agents,
+    // scaffolding outside it, could run neither; the kit's commands need nothing installed
     const io = capture();
     const dir = unusedPath();
     await runCli(args(dir), io);
     const printed = io.lines.join("\n");
-    expect(printed).toContain("outside a pnpm workspace");
+    expect(printed).toContain("outside a pnpm workspace: NOTHING TO INSTALL");
     expect(printed).toContain("FIELDD_PLUGIN_DEV_ROOTS");
-    expect(printed).toContain(`pnpm plugin check ${dir}`);
-    expect(printed).toContain(`pnpm playground ${dir}`);
+    expect(printed).toContain(
+      `plugin-build ${dir} · vibefield-plugin check ${dir} · plugin-playground ${dir} · vibefield-plugin try ${dir}`,
+    );
+    expect(printed).toContain(`vibefield-plugin emit-manifest ${dir}`);
+    expect(printed).not.toContain("pnpm plugin check");
+    expect(printed).not.toContain("pnpm playground");
     expect(printed).not.toContain("pnpm install");
   });
 

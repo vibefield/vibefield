@@ -76,9 +76,9 @@ export const REFUSAL_CATALOG = {
     check: "workspace",
     level: "note",
     meaning:
-      "the scaffold is outside this repository's pnpm workspace, so its workspace:/catalog: dependencies resolve to nothing",
+      "the scaffold is outside a pnpm workspace: nothing to install for the kit's commands, which bind the SDK themselves; the scaffold's own pnpm scripts need a checkout's workspace",
     guidance:
-      "scaffold inside the workspace (plugins/*), or wait for published SDK packages — they do not exist yet",
+      "build, judge and try it with the kit's commands (plugin-build, vibefield-plugin check / emit-manifest / try, plugin-playground); scaffold under a checkout's plugins/ for the pnpm scripts",
   },
   "workspace-member": {
     check: "workspace",
@@ -89,8 +89,10 @@ export const REFUSAL_CATALOG = {
   "next-steps": {
     check: "next",
     level: "note",
-    meaning: "the commands that take the scaffold from files on disk to a rendered widget",
-    guidance: "run them in order; each one answers in verdicts",
+    meaning:
+      "the commands that take the scaffold from files on disk to its object drawn on the desk",
+    guidance:
+      "run them in order; each one answers in verdicts, and the last (try) says whether each kind is drawn",
   },
 
   // --- the harness itself --------------------------------------------------------
