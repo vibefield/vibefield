@@ -23,6 +23,16 @@ import { getRendererLogger } from "./logging";
 // the bootstrap default doc only; user-created docs open empty). Persistence
 // status still flows through the board-status store (SystemSection's row); this
 // store owns phase/doc/docs.
+//
+// THE LAUNCH'S BOARD (DK-9, the plan's Phase 3 input (2)): the window's OWN board
+// (`vf-window-doc`, a renderer replaced under it) is the one EXPLICIT open — it is
+// waited for while a lock still closes, and if another window holds it the window
+// falls back to the degraded in-memory session, which the head's pill names
+// (`heldElsewhere`). A NEW window asks for no board in particular: the last board,
+// then the most recent, each ONLY if no window holds it (a held one is skipped at
+// the lock's first word, never waited on), else a new board — the first-run
+// composition only when there is no board at all. Never the degraded session for a
+// board the person did not ask for.
 
 const LAST_DOC_KEY = "vf-last-doc";
 /** THIS WINDOW'S board (DK-5): sessionStorage is the window's own and outlives its renderer, so a
@@ -61,6 +71,10 @@ export interface DocManagerState {
   /** Boards FROM BEFORE THE DESK (DK-3, ruling 7): the registry's (last saved below schema 3) and
    * any the open refused — listed by the explorer with Delete, never opened. Absent: none. */
   beforeTheDesk?: readonly string[];
+  /** DK-9 — the board this window asked for EXPLICITLY (its own, `vf-window-doc`) that another
+   * window holds: the window shows the degraded in-memory session in its place and the head's pill
+   * says so. Absent whenever the window holds the board it shows. */
+  heldElsewhere?: { readonly docId: string; readonly name: string } | undefined;
 }
 
 /** A board's stills while it is open (DK-4, field/desk/desk-stills.ts): owed one after an edit
@@ -124,6 +138,11 @@ function readWindowDocId(): string | null {
   } catch {
     return null;
   }
+}
+
+/** The lock's refusal (design-02 §3.5): another lane — another window — writes this board. */
+function writerBusy(e: unknown): boolean {
+  return e instanceof FielddRpcError && e.kind === "PRECONDITION_FAILED";
 }
 
 function writeLastDocId(docId: string): void {
@@ -204,35 +223,68 @@ export class DocManager {
 
   // ---- lifecycle ----
 
-  /** Launch: pick the doc (last-open → most-recent → create the default) and open it. */
+  /** Launch: this window's own board (EXPLICIT — waited for, and if another window holds it the
+   * degraded session the pill names); else the last board, else the most recent, each only if no
+   * window holds it; else a new board (the first-run composition only when there is none). DK-9. */
   async boot(): Promise<void> {
     if (this.booted) return; // StrictMode double-effect
     this.booted = true;
     this.stage(0, "opening doc");
+    let explicit: DocRegistryEntry | undefined;
+    // A board from before the desk is never the launch's (ruling 7): it is
+    // listed, refused, and offered for deletion — never opened.
+    const openable = (d: DocRegistryEntry): boolean =>
+      d.deletedAt === undefined && !this.isBeforeTheDesk(d);
     try {
-      const docs = await this.refreshDocs();
-      // A board from before the desk is never the launch's (ruling 7): it is
-      // listed, refused, and offered for deletion — never opened.
-      const openable = (d: DocRegistryEntry): boolean =>
-        d.deletedAt === undefined && !this.isBeforeTheDesk(d);
+      let docs = await this.refreshDocs();
       const remembered = (docId: string | null): DocRegistryEntry | undefined =>
         docId === null ? undefined : docs.find((d) => d.docId === docId && openable(d));
-      let entry =
-        remembered(readWindowDocId()) ?? // this window's own board (DK-5)
-        remembered(readLastDocId()) ??
-        docs.find(openable) ?? // list is updatedAt-desc
-        null;
-      let seed = false;
-      if (entry === null) {
-        entry = DocRegistryEntry.parse(
-          await this.request("doc.create", { name: DEFAULT_DOC_NAME }),
-        );
-        seed = true;
-        await this.refreshDocs();
+      // this window's own board (DK-5): the one board the launch was ASKED for
+      explicit = remembered(readWindowDocId());
+      if (explicit !== undefined) {
+        await this.openSession(explicit, false);
+        return;
       }
-      await this.openSession(entry, seed);
+      // a new window (DK-9): the last board, then the most recent (the list is updatedAt-desc) —
+      // a board another window holds is skipped at the lock's first word, never waited on. Two new
+      // windows may race for one board (the one this launch just made among them): the loser chooses
+      // again from a fresh list, at most three times.
+      const seen = new Set<string>();
+      for (let round = 0; ; round++) {
+        for (const entry of [remembered(readLastDocId()), ...docs.filter(openable)]) {
+          if (entry === undefined || seen.has(entry.docId)) continue;
+          seen.add(entry.docId);
+          try {
+            await this.openSession(entry, false, { busyRetries: 0 });
+            return;
+          } catch (e) {
+            if (!writerBusy(e)) throw e;
+            getRendererLogger()
+              .child({ component: "docs.manager", docId: entry.docId })
+              .info(
+                "renderer.docs.launch_skipped_held",
+                "Another window holds this board; skipped",
+              );
+          }
+        }
+        // every board is held — or there is none: a new board, the first-run composition only for the first
+        const first = !docs.some(openable);
+        const entry = DocRegistryEntry.parse(
+          await this.request("doc.create", { name: first ? DEFAULT_DOC_NAME : "Untitled" }),
+        );
+        seen.add(entry.docId);
+        docs = await this.refreshDocs();
+        try {
+          await this.openSession(entry, first, { busyRetries: 0 });
+          return;
+        } catch (e) {
+          if (!writerBusy(e) || round >= 2) throw e;
+          docs = await this.refreshDocs(); // another window took the board just made: choose again
+        }
+      }
     } catch (e) {
-      this.degradedSession(e);
+      if (explicit !== undefined && writerBusy(e)) this.heldElsewhereSession(explicit, e);
+      else this.degradedSession(e);
     }
   }
 
@@ -262,7 +314,7 @@ export class DocManager {
       await this.flushActivePersistence();
       await this.openSession(entry, false);
     } catch (e) {
-      this.recoverToCurrent("switch", e);
+      this.recoverToCurrent("switch", e, entry);
     }
   }
 
@@ -283,10 +335,12 @@ export class DocManager {
 
   /** A failed SWITCH must never demote the running board — the current doc
    * stays on screen and stays live; only a failed BOOT degrades (no board
-   * exists yet to keep). */
-  private recoverToCurrent(what: string, e: unknown): void {
+   * exists yet to keep) — and a switch the lock refused with nothing applied yet
+   * is the EXPLICIT open's fallback the pill names (DK-9). */
+  private recoverToCurrent(what: string, e: unknown, asked?: DocRegistryEntry): void {
     if (this.appliedGeneration === 0) {
-      this.degradedSession(e);
+      if (asked !== undefined && writerBusy(e)) this.heldElsewhereSession(asked, e);
+      else this.degradedSession(e);
       return;
     }
     getRendererLogger()
@@ -455,8 +509,15 @@ export class DocManager {
     return withTimeout(this.client.request(method, params), this.opts.timeoutMs ?? 8_000, method);
   }
 
-  private async openSession(entry: DocRegistryEntry, seed: boolean): Promise<void> {
+  private async openSession(
+    entry: DocRegistryEntry,
+    seed: boolean,
+    /** How often a busy writer is asked again (75 ms apart): 20 for a board this window asked for
+     * (its own predecessor's lock may still be closing), 0 for a launch's probe (DK-9). */
+    opts: { readonly busyRetries?: number } = {},
+  ): Promise<void> {
     const timeoutMs = this.opts.timeoutMs ?? 8_000;
+    const busyRetries = opts.busyRetries ?? 20;
     // A predecessor lane may still be closing. drain() settles when the CLIENT
     // initiates close, but the daemon's writer lock clears only when the SERVER
     // observes the socket close — so a fast switch-back can still read
@@ -478,8 +539,7 @@ export class DocManager {
         break;
       } catch (e) {
         candidate.close();
-        const busy = e instanceof FielddRpcError && e.kind === "PRECONDITION_FAILED";
-        if (!busy || attempt >= 20) throw e;
+        if (!writerBusy(e) || attempt >= busyRetries) throw e;
         await new Promise((r) => setTimeout(r, 75));
       }
     }
@@ -509,6 +569,30 @@ export class DocManager {
     const persistence = this.activePersistence;
     if (persistence === null || persistence.generation !== this.appliedGeneration) return;
     await persistence.lease.flush();
+  }
+
+  /** DK-9 — the EXPLICIT open's fallback: the board this window asked for is held by another window,
+   * so it shows the degraded in-memory session — an empty board that saves nothing — and the head's
+   * pill says whose place it stands in (`heldElsewhere`). */
+  private heldElsewhereSession(asked: DocRegistryEntry, e: unknown): void {
+    getRendererLogger()
+      .child({ component: "docs.manager", docId: asked.docId })
+      .warn(
+        "renderer.docs.held_elsewhere",
+        "The board this window asked for is held by another window; it opened in memory",
+        { reason: e instanceof Error ? e.message : String(e) },
+      );
+    this.installSession({
+      generation: ++this.generation,
+      docId: "",
+      name: asked.name,
+      lane: null,
+      initialBytes: null,
+      initialUpdates: [],
+      seed: false,
+    });
+    this.patch({ heldElsewhere: { docId: asked.docId, name: asked.name } });
+    setBoardStatus({ state: "detached", detail: `“${asked.name}” is open in another window` });
   }
 
   /** Honest degraded launch (B3 law): the field still opens, in memory, with
@@ -550,7 +634,12 @@ export class DocManager {
       });
       setBoardStatus({ state: "live", lastSavedAt: null });
     }
-    this.patch({ doc: { docId: pending.docId, name: pending.name }, pending });
+    // a session this window holds is never in another window's place (DK-9)
+    this.patch({
+      doc: { docId: pending.docId, name: pending.name },
+      pending,
+      ...(this.state.heldElsewhere === undefined ? {} : { heldElsewhere: undefined }),
+    });
   }
 
   /** The veil's last stage (DK-4): the board is applied, and the desk draws it — the veil waits for

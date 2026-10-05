@@ -275,7 +275,11 @@ export function FieldView({
           sheet is up. Only the wrapper transforms — the tray handoff
           ratio-corrects, so the transient scale never skews engine picks.
           KEYED by doc generation: a switch remounts the whole canvas stack
-          (engine + the desk's layer and its device) — see the session. */}
+          (engine + the desk's layer and its device) — see the session.
+          DK-9 (the plan's Phase 3 input (1)): the stage WAITS for the board —
+          no desk is mounted for generation 0, the transient before the open
+          lands, so a launch acquires ONE device and boots ONE desk (its
+          `perf().boot` counted once); the veil covers the wait. */}
       <div
         key={generation}
         className="field-scene"
@@ -286,12 +290,14 @@ export function FieldView({
         inert={covered}
         data-doc-loading={docState.phase === "loading" ? "true" : "false"}
       >
-        <CanvasStage
-          ce={ce}
-          keymapOverrides={keymapOverrides}
-          generation={generation}
-          refused={refused ? BEFORE_THE_DESK : null}
-        />
+        {generation === 0 ? null : (
+          <CanvasStage
+            ce={ce}
+            keymapOverrides={keymapOverrides}
+            generation={generation}
+            refused={refused ? BEFORE_THE_DESK : null}
+          />
+        )}
       </div>
       <ChromeLayer
         ce={ce}

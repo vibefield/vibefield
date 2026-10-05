@@ -501,6 +501,36 @@ describe("the fields explorer, grown from the pill", () => {
   });
 });
 
+describe("in another window's place (DK-9, the launch's board)", () => {
+  it("says the board is in memory — the name, an attention dot naming whose place it stands in — and never renames it", () => {
+    act(() =>
+      setDocSyncStatuses([syncStatus({ docId: DOC_A, state: "peer-declined", reason: "x" })]),
+    );
+    const manager = fakeManager({
+      doc: { docId: "", name: "Studio" },
+      heldElsewhere: { docId: DOC_B, name: "Studio" },
+    });
+    mount({ manager });
+    expect(pathNames()).toEqual(["In memory"]);
+    const dot = $("[data-sync-dot]") as HTMLElement;
+    expect(dot.dataset.dot).toBe("attention");
+    expect(dot.title).toBe(
+      "“Studio” is open in another window — this window's board is in memory and saves nothing",
+    );
+    expect(dot.getAttribute("aria-label")).toBe(dot.title);
+    clickTimes(button("In memory"), 2);
+    expect($(".vf-head-rename")).toBeNull();
+    expect(manager.rename).not.toHaveBeenCalled();
+  });
+
+  it("is the board's own name and its own dot again once the window holds a board", () => {
+    act(() => setDocSyncStatuses([]));
+    mount({ manager: fakeManager() });
+    expect(pathNames()).toEqual(["Field"]);
+    expect($("[data-sync-dot]")).toBeNull();
+  });
+});
+
 describe("the sync dot and the tiles' sync words (C6-4, UA-D7)", () => {
   it("stays quiet for in-step AND for transient syncing — no flicker on routine traffic", () => {
     act(() => setDocSyncStatuses([syncStatus({ docId: DOC_A, state: "in-step" })]));

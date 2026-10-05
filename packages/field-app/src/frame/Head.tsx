@@ -93,6 +93,17 @@ export function syncDot(status: DocSyncStatus): HeadDot | null {
   }
 }
 
+/** DK-9 — the pill IN ANOTHER WINDOW'S PLACE: the board this window asked for (its own) is held by
+ * another window, so it shows an in-memory board that saves nothing. The pill's name says "In memory"
+ * and this dot, in attention (§2.5 — nothing failed), says whose place it stands in. */
+export const IN_MEMORY_NAME = "In memory";
+export function heldDot(held: { readonly name: string }): HeadDot {
+  return {
+    tone: "attention",
+    title: `“${held.name}” is open in another window — this window's board is in memory and saves nothing`,
+  };
+}
+
 /** A tile's sync word; null when there is nothing worth a word. */
 function syncCaption(status: DocSyncStatus | undefined): string | null {
   if (status === undefined || status.state === "in-step") return null;
@@ -272,11 +283,13 @@ export function Head({
     [fold, hot, onSurfaceChange, zoom, zoomOpen],
   );
 
+  const held = state.heldElsewhere;
   const beginRename = useCallback(() => {
-    if (busy || state.doc === null) return;
+    // an in-memory board in another window's place has no name of its own to change (DK-9)
+    if (busy || state.doc === null || held !== undefined) return;
     renamingNow.current = true;
     setRenaming(state.doc.name);
-  }, [busy, state.doc]);
+  }, [busy, state.doc, held]);
 
   // Renaming begins where it was asked for: the caret in the name, all of it
   // chosen, so typing replaces it.
@@ -358,9 +371,9 @@ export function Head({
   return (
     <HeadView
       place={{
-        name: state.doc?.name ?? "…",
+        name: held !== undefined ? IN_MEMORY_NAME : (state.doc?.name ?? "…"),
         path,
-        dot: current === undefined ? null : syncDot(current),
+        dot: held !== undefined ? heldDot(held) : current === undefined ? null : syncDot(current),
         renaming,
         renameRef,
         open: fieldsOpen,

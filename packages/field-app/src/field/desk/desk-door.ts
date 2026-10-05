@@ -43,8 +43,11 @@ export interface MountedDesk {
 
 let current: MountedDesk | null = null;
 const listeners = new Set<() => void>();
+/** How many desks this renderer has mounted (DK-9: a launch mounts ONE — no transient generation). */
+let mounted = 0;
 
 export function publishDesk(desk: MountedDesk): () => void {
+  mounted += 1;
   current = desk;
   for (const fn of listeners) fn();
   return () => {
@@ -56,6 +59,11 @@ export function publishDesk(desk: MountedDesk): () => void {
 
 export function currentDesk(): MountedDesk | null {
   return current;
+}
+
+/** The desks this renderer has mounted, this one included — a launch's is 1 (DK-9). */
+export function desksMounted(): number {
+  return mounted;
 }
 
 export function subscribeDesk(fn: () => void): () => void {
@@ -152,6 +160,9 @@ export function deskObjects(
 export interface VfDeskDoor {
   readonly generation: number;
   readonly mount: number;
+  /** The desks this renderer has mounted, this one included (DK-9: a launch mounts ONE — the stage
+   * waits for the board, so no device is acquired and dropped for a transient generation 0). */
+  mounts(): number;
   status(): DeskLayerStatus;
   perf(): DeskLayerPerf;
   /** Every queue submit since the mount (the instrument installs at the mount); null before the device. */
@@ -207,6 +218,7 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
   const door: VfDeskDoor = {
     generation: desk.generation,
     mount: desk.mount,
+    mounts: desksMounted,
     status: () => handle.status(),
     perf: () => handle.perf(),
     submits: () => {

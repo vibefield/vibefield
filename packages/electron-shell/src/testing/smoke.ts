@@ -867,6 +867,7 @@ export async function runSmokeCanvas(opts: {
     const problems = [...smokeProfileFailures(), ...censusFailures(JSON.parse(raw) as CanvasFacts)];
     const verdict = await deskVerdict;
     console.log(`SMOKE_CANVAS_DESK ${gpu ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
+    if (gpu) problems.push(...(await deskBootRow(win, [...deskSaid.said])));
     problems.push(...(await deskSeedFailures(win)));
     problems.push(...(await exampleClockRow(win, gpu)));
     if (gpu) {
@@ -879,23 +880,36 @@ export async function runSmokeCanvas(opts: {
       problems.push(...pad.problems);
       problems.push(...(await deskRetryRow(win, opts.viteUrl)));
       if (pad.typed) problems.push(...(await commentPadReopenRow(win)));
+      // DK-9: last — it leaves the desk on its card
+      problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
     } else {
       problems.push(...(await commentPadCensusRow(win)));
       const card = await expectDeskUnavailableCard(win);
       console.log(`SMOKE_CANVAS_CARD ${JSON.stringify(card)}`);
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
-      // a retry first (one per stage that booted — the boot's transient generation may be one), the
-      // card said once, and last
+      // DK-9: the heal's rule — a missing adapter (no GPU at all) is retried THREE times over ~2 s,
+      // each said with its attempt, then the card said once, last; ONE stage (no transient generation),
+      // so four desks mounted in all
       const said = deskSaid.said;
-      if (
-        said[0] !== "DESK_RETRY" ||
-        said.filter((name) => name === "DESK_UNAVAILABLE").length !== 1 ||
-        said.at(-1) !== "DESK_UNAVAILABLE"
-      ) {
+      const retries = deskSaid.facts.filter((_, index) => said[index] === "DESK_RETRY");
+      const mounts = (
+        (await win.webContents.executeJavaScript(DOOR_MOUNTS, true)) as { mounts: number } | null
+      )?.mounts;
+      console.log(`SMOKE_CANVAS_HEAL ${JSON.stringify({ said, retries, mounts })}`);
+      if (said.join(" ") !== "DESK_RETRY DESK_RETRY DESK_RETRY DESK_UNAVAILABLE") {
         problems.push(
-          `the boot's no-adapter was not retried before the card (${said.join(" → ")})`,
+          `the boot's no-adapter was not retried three times before the card (${said.join(" → ")})`,
         );
       }
+      if (
+        retries.some(
+          (retry, index) =>
+            retry["kind"] !== "no-adapter" || retry["attempt"] !== index + 1 || retry["of"] !== 3,
+        )
+      ) {
+        problems.push(`the retries were ${JSON.stringify(retries)}, not no-adapter 1…3 of 3`);
+      }
+      if (mounts !== 4) problems.push(`the heal mounted ${mounts} desks, not 4 (the boot and 3)`);
       if (card.title.length === 0) problems.push("the unavailable card has no words");
       if (card.detail === null || card.detail.length === 0) {
         problems.push("the unavailable card does not carry ICE's message");
@@ -1036,17 +1050,106 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
 
 /** The desk's verdict markers (`DESK_RETRY`, `DESK_READY`, `DESK_UNAVAILABLE`) as a window says
  * them, in order — the marker names only; `stop()` ends the listening. */
-function deskMarkerLog(win: BrowserWindow): { readonly said: string[]; stop(): void } {
+function deskMarkerLog(win: BrowserWindow): {
+  readonly said: string[];
+  /** Each marker's payload, in the order said (DK-9: a retry's `kind`, `attempt` and `of`). */
+  readonly facts: Record<string, unknown>[];
+  stop(): void;
+} {
   const said: string[] = [];
+  const facts: Record<string, unknown>[] = [];
   const listen = (...args: unknown[]): void => {
     // ONE line per event: Electron hands both the event (carrying `message`) and the positional
     // message, so reading every argument would count each line twice
     const text = args.map(consoleText).find((candidate) => candidate.length > 0) ?? "";
-    const name = /^(DESK_(?:RETRY|READY|UNAVAILABLE)) /u.exec(text)?.[1];
-    if (name !== undefined) said.push(name);
+    const match = /^(DESK_(?:RETRY|READY|UNAVAILABLE)) (.*)$/su.exec(text);
+    if (match?.[1] === undefined) return;
+    said.push(match[1]);
+    try {
+      facts.push(JSON.parse(match[2] ?? "{}") as Record<string, unknown>);
+    } catch {
+      facts.push({});
+    }
   };
   win.webContents.on("console-message", listen);
-  return { said, stop: () => win.webContents.off("console-message", listen) };
+  return { said, facts, stop: () => win.webContents.off("console-message", listen) };
+}
+
+/** The desks this renderer mounted (DK-9 — `window.__vfDesk.mounts()`), and the mounted one's facts. */
+const DOOR_MOUNTS =
+  "(() => { const d = globalThis.__vfDesk; return d === undefined ? null : { mounts: d.mounts(), generation: d.generation, mount: d.mount, boot: d.perf().boot }; })()";
+
+/**
+ * DK-9 — ONE DESK PER LAUNCH (the plan's Phase 3 input (1)): the stage WAITS for the board, so the
+ * launch mounts no desk for the transient generation 0 — no device acquired and dropped, no retry said
+ * for a stage that never held a board — and `perf().boot` is counted ONCE: the desk that said
+ * DESK_READY is this renderer's first and only (generation 1, mount 0).
+ */
+async function deskBootRow(win: BrowserWindow, said: readonly string[]): Promise<string[]> {
+  const facts = (await win.webContents.executeJavaScript(DOOR_MOUNTS, true)) as {
+    mounts: number;
+    generation: number;
+    mount: number;
+    boot: Record<string, number>;
+  } | null;
+  console.log(`SMOKE_CANVAS_BOOT ${JSON.stringify({ ...facts, said })}`);
+  if (facts === null) return ["no desk door after DESK_READY"];
+  const problems: string[] = [];
+  if (facts.mounts !== 1) {
+    problems.push(
+      `the launch mounted ${facts.mounts} desks — the stage must wait for the board (one per launch)`,
+    );
+  }
+  if (facts.generation !== 1 || facts.mount !== 0) {
+    problems.push(
+      `the launch's desk is generation ${facts.generation} mount ${facts.mount}, not 1/0`,
+    );
+  }
+  if (said.join(" ") !== "DESK_READY") {
+    problems.push(`the launch said ${said.join(" → ")}, not one DESK_READY`);
+  }
+  return problems;
+}
+
+/**
+ * DK-9 — THE HEAL'S ONCE (the plan's Phase 3 input (7)): a REFUSED device — an adapter lost
+ * mid-request — is retried ONCE, then the card. The window reloads with the door that makes the first
+ * TWO mounts' `requestDevice` reject (field/desk/desk-gpu.ts `deskRefuseDevice`): the stage must say
+ * one DESK_RETRY (`refused`, attempt 1 of 1), then DESK_UNAVAILABLE with the refused card and its
+ * Reload — two desks mounted, never a third.
+ */
+async function deskRefusalRow(win: BrowserWindow, viteUrl: string): Promise<string[]> {
+  const log = deskMarkerLog(win);
+  const problems: string[] = [];
+  try {
+    const unavailable = waitForConsole(win, "DESK_UNAVAILABLE ", 60_000);
+    await loadRenderer(win, "smoke-canvas", viteUrl, { deskRefuseDevice: "2" });
+    await unavailable;
+    const card = await expectDeskUnavailableCard(win);
+    // the retry's budget is spent at the card: wait out one more retry's length — nothing more is said
+    await sleep(1_500);
+    const facts = (await win.webContents.executeJavaScript(DOOR_MOUNTS, true)) as {
+      mounts: number;
+    } | null;
+    const retries = log.facts.filter((_, index) => log.said[index] === "DESK_RETRY");
+    console.log(
+      `SMOKE_CANVAS_REFUSED ${JSON.stringify({ said: log.said, retries, card, mounts: facts?.mounts ?? null })}`,
+    );
+    if (log.said.join(" ") !== "DESK_RETRY DESK_UNAVAILABLE") {
+      problems.push(`a refused device said ${log.said.join(" → ")}, not one retry then the card`);
+    }
+    const retry = retries[0];
+    if (retry?.["kind"] !== "refused" || retry["attempt"] !== 1 || retry["of"] !== 1) {
+      problems.push(`the refused device's retry was ${JSON.stringify(retry)}, not refused 1 of 1`);
+    }
+    if (card.kind !== "refused" || !card.reload) {
+      problems.push(`the refused card was ${JSON.stringify(card)}, not refused with its Reload`);
+    }
+    if (facts?.mounts !== 2) problems.push(`a refused device made ${facts?.mounts} mounts, not 2`);
+  } finally {
+    log.stop();
+  }
+  return problems;
 }
 
 /**

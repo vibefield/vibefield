@@ -263,6 +263,107 @@ describe("DocManager launch pipeline (B4)", () => {
     expect(fresh.getState().pending?.docId).toBe(theirs);
   }, 30_000);
 
+  it("DK-9: a NEW window while another holds the last board opens the most recent board NO window holds — never the degraded session", async () => {
+    const { daemon } = await stack();
+    const a = managerFor(daemon);
+    await a.boot(); // the first run: a seeded "Field", now held by window A's lane
+    const held = a.getState().pending?.docId ?? "";
+    await putCurrent(a, await applyPending(a));
+    await until(() => a.getState().phase === "ready");
+    expect(localStorage.getItem("vf-last-doc")).toBe(held);
+    const other = (await a.refreshDocs()).length;
+    const client = new FielddClient({
+      url: `ws://127.0.0.1:${daemon.controlPort}`,
+      token: daemon.shellToken,
+      clientKind: "debug",
+    });
+    client.connect();
+    cleanup.push(() => client.close());
+    const free = ((await client.request("doc.create", { name: "Studio" })) as { docId: string })
+      .docId;
+    expect(other).toBe(1);
+
+    const b = managerFor(daemon); // a NEW window: no board of its own
+    await b.boot();
+    const pending = b.getState().pending;
+    expect(pending?.docId).toBe(free); // the last board was held: skipped, never waited on
+    expect(pending?.lane).not.toBeNull();
+    expect(pending?.seed).toBe(false);
+    expect(b.getState().heldElsewhere).toBeUndefined();
+    expect(a.getState().pending?.docId).toBe(held); // A keeps its board
+  }, 30_000);
+
+  it("DK-9: a NEW window when EVERY board is held opens a NEW board — empty, saved — never the degraded session", async () => {
+    const { daemon } = await stack();
+    const a = managerFor(daemon);
+    await a.boot();
+    const held = a.getState().pending?.docId ?? "";
+    await putCurrent(a, await applyPending(a));
+    await until(() => a.getState().phase === "ready");
+
+    const b = managerFor(daemon);
+    await b.boot();
+    const pending = b.getState().pending;
+    expect(pending?.docId).not.toBe(held);
+    expect(pending?.docId).not.toBe("");
+    expect(pending?.lane).not.toBeNull(); // a real board this window holds
+    expect(pending?.seed).toBe(false); // the first-run composition is the first board's alone
+    expect(pending?.name).toBe("Untitled");
+    expect(b.getState().heldElsewhere).toBeUndefined();
+    expect((await b.refreshDocs()).map((d) => d.docId)).toContain(pending?.docId);
+  }, 30_000);
+
+  it("DK-9: two NEW windows launching at once each land on a board of their own — never the degraded session", async () => {
+    const { daemon } = await stack();
+    const a = managerFor(daemon);
+    const b = managerFor(daemon);
+    await Promise.all([a.boot(), b.boot()]);
+    const [pa, pb] = [a.getState().pending, b.getState().pending];
+    expect(pa?.lane).not.toBeNull();
+    expect(pb?.lane).not.toBeNull();
+    expect(pa?.docId).not.toBe("");
+    expect(pb?.docId).not.toBe("");
+    expect(pa?.docId).not.toBe(pb?.docId);
+    expect(a.getState().heldElsewhere).toBeUndefined();
+    expect(b.getState().heldElsewhere).toBeUndefined();
+  }, 30_000);
+
+  it("DK-9: a window whose OWN board another window holds falls back to the in-memory session the pill names — the explicit open's fallback", async () => {
+    const store = new Map<string, string>();
+    Object.defineProperty(globalThis, "sessionStorage", {
+      value: {
+        getItem: (key: string) => store.get(key) ?? null,
+        setItem: (key: string, value: string) => void store.set(key, String(value)),
+        removeItem: (key: string) => void store.delete(key),
+        clear: () => store.clear(),
+      },
+      configurable: true,
+    });
+    cleanup.push(() => {
+      Reflect.deleteProperty(globalThis, "sessionStorage");
+    });
+    const { daemon } = await stack();
+    const a = managerFor(daemon);
+    await a.boot();
+    const held = a.getState().pending?.docId ?? "";
+    const name = a.getState().pending?.name ?? "";
+    await putCurrent(a, await applyPending(a));
+    await until(() => a.getState().phase === "ready");
+    expect(store.get("vf-window-doc")).toBe(held);
+
+    // window B's renderer was replaced while its board (`held`) was taken by A: B asks for it BY NAME
+    const b = managerFor(daemon);
+    await b.boot();
+    const pending = b.getState().pending;
+    expect(pending?.lane).toBeNull(); // in memory: nothing it does is saved
+    expect(pending?.docId).toBe("");
+    expect(pending?.seed).toBe(false); // an empty board in its place, never a demo board
+    expect(b.getState().heldElsewhere).toEqual({ docId: held, name });
+    expect(store.get("vf-window-doc")).toBe(held); // it still asks for its own board next time
+    await applyPending(b);
+    await until(() => b.getState().phase === "ready");
+  }, 30_000);
+
   it("a stale vf-last-doc falls back to the most recent doc, never a blind seed", async () => {
     const { daemon } = await stack();
     const manager = managerFor(daemon);

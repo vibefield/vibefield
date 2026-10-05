@@ -801,7 +801,13 @@ The hot-point glow and rim retire with CardShell (above).
     tertiary ink (the ready fill and primary under the pointer) — which grows the fields explorer.
     **A double-click renames** in place, as do Return and Space on the focused name: the name
     becomes an input with no border, on the ready fill, corners 6, as wide as what is typed, all of
-    it chosen; Return or leaving commits, Esc reverts. The sync dot (C6-4, above) follows the field's name. **Inside a
+    it chosen; Return or leaving commits, Esc reverts. The sync dot (C6-4, above) follows the field's name. **In another
+    window's place** (DK-9): when the board a window asked for — its own, reopened under a new
+    renderer — is held by another window, the window shows an empty in-memory board that saves
+    nothing, and the pill says so: the name reads **"In memory"**, never renamable, and the dot is
+    `--vf-orange` (attention, nothing failed) titled "“Studio desk” is open in another window — this
+    window's board is in memory and saves nothing". A new window never lands here: it opens the
+    most recent board no window holds, else a new one. **Inside a
     folder the crumbs fold into the pill** (FC-D9): `Studio desk › Sketches` — the earlier names
     are buttons in tertiary ink (primary under the pointer) that go there in one flight, a
     `chevron` 11 in faint ink stands between names, and the last is the name; **Esc goes up one**,
