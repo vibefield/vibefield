@@ -1753,6 +1753,56 @@ export const METHODS: MethodDef[] = [
     locality: "stream",
     subscription: { shape: "rows", cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS },
   }),
+  // ── workspace.* — FS-1a, the files service's DOOR TIER
+  // (thinking-files-service.md §3, RULED 2026-10-05; workspace.ts) ──
+  // Bounded rows from fieldd's files worker (mille's engine): the roots this
+  // desktop exports, a folder's entries page by page, a search within a root,
+  // a root's git facts. `workspace.read` — already in the tailnet preset and
+  // plugin-eligible, so the handlers gate by PRINCIPAL (FS-D6 (a), RO-13's
+  // rule): a plugin, an MCP agent and a guest are refused whatever they hold;
+  // a window, the shell, a self phone and a self peer are served. `federate`:
+  // a foreign `device` forwards the call whole and the owner answers from its
+  // own worker (another desktop's roots are its own). Idempotent reads, every
+  // one. The attached tier's `workspace.openTicket` is FS-1b's, not declared.
+  defineMethod({
+    surface: "product",
+    method: "workspace.roots",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.list",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.search",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.gitFacts",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  // L3 — the roots as rows (DS-L3) at the stream floor: a place appears when
+  // an agent is spawned in a new folder, a root flips `missing`, a volume
+  // mounts. Roots move a few times a day; a phone's radio has no use for more.
+  defineMethod({
+    surface: "product",
+    method: "workspace.subscribe",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "stream",
+    subscription: { shape: "rows", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS },
+  }),
   // ── agents.* (AR-1 — the contract; handlers land with puppeteer's first
   // import at AR-2, until when the dispatcher answers NOT_FOUND for them) ──
   // Distribution is MACHINE scope (AR-D15/D16): the installs puppeteer

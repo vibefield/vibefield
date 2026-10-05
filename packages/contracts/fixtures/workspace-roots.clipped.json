@@ -1,0 +1,24 @@
+{
+  "roots": [
+    {
+      "rootId": "r_6f1c2a9e0b7d4c3a8e21",
+      "name": "vibe-field",
+      "path": "/Users/ada/Projects/vibe-field",
+      "device": "dev_7d3c9b",
+      "kind": "place",
+      "missing": false,
+      "lastActiveAt": "2026-10-05T16:20:11.402Z",
+      "futureField": "a newer daemon's field rides through (tolerant reader)"
+    },
+    {
+      "rootId": "r_77aa01bc23de45f06789",
+      "name": "C:\\",
+      "path": "C:\\",
+      "device": "dev_win01",
+      "kind": "picked",
+      "missing": false,
+      "lastActiveAt": null
+    }
+  ],
+  "clipped": true
+}

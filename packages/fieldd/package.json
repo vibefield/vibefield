@@ -24,6 +24,7 @@
   "dependencies": {
     "@rosetta/protocol": "*",
     "@vibecook/ghosttea-client": "*",
+    "@vibecook/mille": "*",
     "@vibecook/puppeteer-builtin-providers": "*",
     "@vibecook/puppeteer-core": "*",
     "@vibecook/puppeteer-record": "*",

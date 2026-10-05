@@ -420,6 +420,75 @@ export const INDEX_TIMELINE = {
   OBJECT_CHARS: 200,
 } as const;
 
+/** FS-1a (`thinking-files-service.md` §3, §4; FS-D12 RULED (a), 2026-10-05)
+ * — the files service's bounds (`workspace.ts`). The door tier answers in
+ * pages: LIST_PAGE rows a `workspace.list` page holds at most (a window's
+ * default and ceiling), TAILNET_PAGE for a caller that crossed the tailnet (a
+ * self phone: the cut is the DOOR's, `clipped` and `nextCursor` say so), and
+ * SEARCH_HITS a `workspace.search` answers at most. The attached tier's
+ * numbers ride beside them for FS-1b, which mints them (`workspace.openTicket`
+ * is not built here): TICKET_TTL_MS a ticket's life, MAX_FILE_BYTES the most
+ * one read hands over, SESSIONS_PER_CLIENT / SESSIONS_PER_EXPORT the attached
+ * sessions one client and one export hold (mille-truffle's defaults).
+ *
+ * The rest bound what a door asks the worker to do: PATH_CHARS the longest
+ * relative path a request may name, NAME_CHARS the longest entry name an
+ * answer carries, QUERY_CHARS the longest search query. A search reads only
+ * what the root's engine has walked, so it first walks the root breadth-first
+ * — at most SEARCH_WALK_DIRS folders, for at most SEARCH_WALK_MS — and says
+ * `complete: false` when either bound cut the walk (never "no matches" for a
+ * folder it did not read). TS-only: no native reader. */
+export const WORKSPACE_LIMITS = {
+  LIST_PAGE: 200,
+  TAILNET_PAGE: 100,
+  SEARCH_HITS: 100,
+  TICKET_TTL_MS: 600_000,
+  MAX_FILE_BYTES: 16 * 1024 * 1024,
+  SESSIONS_PER_CLIENT: 4,
+  SESSIONS_PER_EXPORT: 16,
+  PATH_CHARS: 4_096,
+  NAME_CHARS: 1_024,
+  QUERY_CHARS: 256,
+  SEARCH_WALK_DIRS: 2_000,
+  SEARCH_WALK_MS: 1_500,
+} as const;
+
+/** FS-1a — the files service's honest refusal vocabulary
+ * (`UnavailableDetails`): `service` on every UNAVAILABLE a `workspace.*` door
+ * answers, and the worker's phases a reader branches on. STARTING: the first
+ * generation is booting; RESTARTING: a generation died and the next is on its
+ * backoff (retryable); OFF: the worker is switched off for this daemon (a
+ * test-only knob, L6 — never a user setting); UNCONFIGURED: this daemon has no
+ * worker to run (an embedded daemon with no bundle beside it); FAILED: the
+ * restart intensity tripped, or the worker cannot be spawned at all; STOPPED:
+ * the daemon is shutting down. TS-only: no native reader. */
+export const WORKSPACE_SERVICE = {
+  SERVICE: "workspace",
+  STATE_STARTING: "starting",
+  STATE_RESTARTING: "restarting",
+  STATE_OFF: "off",
+  STATE_UNCONFIGURED: "unconfigured",
+  STATE_FAILED: "failed",
+  STATE_STOPPED: "stopped",
+} as const;
+
+/** FS-1a (FS-D8 RULED (a), its interim; FS-D5 (a) read-only v1) — the git
+ * port's protocol, rosetta's room convention (`{id, op, args}` →
+ * `{id, ok, value | error}`, `clients/app/electron/fx-host.mjs`), pinned by
+ * `fixtures/workspace-git-port.valid.json` until mille's own `GitService`
+ * (the mille-git spec's PR 8) replaces the interim. READ_OPS answer; WRITE_OPS
+ * are refused with READ_ONLY_ERROR whatever the caller holds; any other op
+ * answers `unknown op: <op>`. DIFF_BYTES and LOG_LIMIT are rosetta's own
+ * bounds, kept. TS-only: no native reader. */
+export const WORKSPACE_GIT = {
+  READ_OPS: ["branch", "status", "log", "diff", "commitFiles"],
+  WRITE_OPS: ["stage", "unstage", "discard", "commit", "commitAll", "amend"],
+  READ_ONLY_ERROR: "read-only in v1",
+  DIFF_BYTES: 8 * 1024 * 1024,
+  LOG_LIMIT: 200,
+  TIMEOUT_MS: 10_000,
+} as const;
+
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded
@@ -1098,6 +1167,13 @@ export const LAYOUT = {
   MACHINE_AGENTS_DIR: ["machine", "agents"],
   MACHINE_DISTRIBUTION_FILE: ["machine", "agents", "distribution.json"],
   MACHINE_UPDATES_DIR: ["machine", "agents", "updates"],
+  /** FS-1a (`thinking-files-service.md` §6) — the files service's state under
+   * this user: the roots registry (`roots.json`, fieldd-owned, written
+   * atomically) — every place an agent was spawned, with when it was last
+   * active and whether its folder is still there. The browse exports (the
+   * home directory, the mounted volumes) are enumerated live, never kept. */
+  WORKSPACE_DIR: ["workspace"],
+  WORKSPACE_ROOTS_FILE: ["workspace", "roots.json"],
 } as const;
 
 /** The segments that live at the VibeField ROOT and never re-root under

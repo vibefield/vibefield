@@ -46,6 +46,7 @@ overrides:
   '@vibecook/ghosttea-client': 0.12.0
   '@vibecook/ghosttea-electron': 0.12.0
   '@vibecook/ghosttea-protocol': 0.12.0
+  '@vibecook/mille': 0.3.4
   '@vibecook/ghosttea-react': link:../ghosttea-0.11.2/packages/ghosttea-react
   '@vibecook/puppeteer-runtime': link:../puppeteer/packages/runtime
   '@vibecook/puppeteer-builtin-providers': link:../puppeteer/packages/builtin-providers
@@ -499,6 +500,9 @@ importers:
       '@vibecook/ghosttea-client':
         specifier: 0.12.0
         version: 0.12.0
+      '@vibecook/mille':
+        specifier: 0.3.4
+        version: 0.3.4(react@19.2.7)
       '@vibecook/puppeteer-builtin-providers':
         specifier: link:../../../puppeteer/packages/builtin-providers
         version: link:../../../puppeteer/packages/builtin-providers
@@ -1943,6 +1947,67 @@ packages:
       react-dom:
         optional: true
       three:
+        optional: true
+
+  '@vibecook/mille-darwin-arm64@0.3.4':
+    resolution: {integrity: sha512-+Dwz4gnxKIwhhMdS55bMT5nDXn5v0R8gqUQ4V8OwJBC97Mhap/xG5j5OtNO9bYsgJoaQ+MjuRG452zNJkbjzoA==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [darwin]
+
+  '@vibecook/mille-darwin-x64@0.3.4':
+    resolution: {integrity: sha512-NO/N0sqMAMyOc1FM6Gq9PDN+skDp4Gx7EOloFj61dZ/Dy1JFkb0D19ksiYchaFv4wHou9n0RBTjHF8uVOzWsRA==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [darwin]
+
+  '@vibecook/mille-linux-arm64-gnu@0.3.4':
+    resolution: {integrity: sha512-tC3olN7w4X/RWKo0yzH0gYzEklnH1rcCdB482kkccNaQ6QiDR1V8OHZKqvp5vqPO9d+EJ8EaEs7NtFQGzFZXTg==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [glibc]
+
+  '@vibecook/mille-linux-arm64-musl@0.3.4':
+    resolution: {integrity: sha512-4fcEMoIArjHsq0GLEg8uq0wQ5/vqW7+z4V+G0SF4Mfpn6gFAe2v7mm4j6rUbAa3DpmifxiXaXaFEmlf84Z01SA==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [linux]
+    libc: [musl]
+
+  '@vibecook/mille-linux-x64-gnu@0.3.4':
+    resolution: {integrity: sha512-uWHoYhM9TezLm0GDvQ3zm3RdmOztQ3a3BIe5ADb/so1HURcgpq7D2ZQM9BJ5X4MmouYrxgQ5oYfooj7OX/+cDg==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [linux]
+    libc: [glibc]
+
+  '@vibecook/mille-linux-x64-musl@0.3.4':
+    resolution: {integrity: sha512-Ao5MwgoBLYrc3cV8R4yQbVPh/nuE6QIL4lXoC5Igvud5Nxa1tljZNiz34ZSMLB+5sZNjisEfKpjdX0k26yOw9g==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [linux]
+    libc: [musl]
+
+  '@vibecook/mille-win32-arm64-msvc@0.3.4':
+    resolution: {integrity: sha512-Kevgk3XPchxbag78ZHy3and+hDykUpSVz6hbQn6BERIw/d3V4W/mb+OT/+gkT8D1BBmcKd/hTP7TF4Hmkx9qfQ==}
+    engines: {node: '>=18'}
+    cpu: [arm64]
+    os: [win32]
+
+  '@vibecook/mille-win32-x64-msvc@0.3.4':
+    resolution: {integrity: sha512-5SnSz8Y0Eu80qaMbFZ9ct+S8NAe6+m3YkXzP1xEYUYVKEpTQZr2IlQ6WHHRw6JRXlSmApbXxB0sviVlvhW2TGg==}
+    engines: {node: '>=18'}
+    cpu: [x64]
+    os: [win32]
+
+  '@vibecook/mille@0.3.4':
+    resolution: {integrity: sha512-6lvJCLYJ+7tOJDhwAwKVRI1UkrucF8V63MSDSTu/wf/1/Q/bBY/JKu3ewEX831ctvvqeNFG0zl9JxukCaV48bg==}
+    engines: {node: '>=20'}
+    peerDependencies:
+      react: '>=18'
+    peerDependenciesMeta:
+      react:
         optional: true
 
   '@vibecook/strata-ecs@0.13.0':
@@ -4566,6 +4631,42 @@ snapshots:
       react: 19.2.7
       react-dom: 19.2.7(react@19.2.7)
       three: 0.185.1
+
+  '@vibecook/mille-darwin-arm64@0.3.4':
+    optional: true
+
+  '@vibecook/mille-darwin-x64@0.3.4':
+    optional: true
+
+  '@vibecook/mille-linux-arm64-gnu@0.3.4':
+    optional: true
+
+  '@vibecook/mille-linux-arm64-musl@0.3.4':
+    optional: true
+
+  '@vibecook/mille-linux-x64-gnu@0.3.4':
+    optional: true
+
+  '@vibecook/mille-linux-x64-musl@0.3.4':
+    optional: true
+
+  '@vibecook/mille-win32-arm64-msvc@0.3.4':
+    optional: true
+
+  '@vibecook/mille-win32-x64-msvc@0.3.4':
+    optional: true
+
+  '@vibecook/mille@0.3.4(react@19.2.7)':
+    optionalDependencies:
+      '@vibecook/mille-darwin-arm64': 0.3.4
+      '@vibecook/mille-darwin-x64': 0.3.4
+      '@vibecook/mille-linux-arm64-gnu': 0.3.4
+      '@vibecook/mille-linux-arm64-musl': 0.3.4
+      '@vibecook/mille-linux-x64-gnu': 0.3.4
+      '@vibecook/mille-linux-x64-musl': 0.3.4
+      '@vibecook/mille-win32-arm64-msvc': 0.3.4
+      '@vibecook/mille-win32-x64-msvc': 0.3.4
+      react: 19.2.7
 
   '@vibecook/strata-ecs@0.13.0(loro-crdt@1.13.8)(react@19.2.7)':
     optionalDependencies:

@@ -201,6 +201,8 @@ pub mod layout {
     pub const MACHINE_AGENTS_DIR: &[&str] = &["machine", "agents"];
     pub const MACHINE_DISTRIBUTION_FILE: &[&str] = &["machine", "agents", "distribution.json"];
     pub const MACHINE_UPDATES_DIR: &[&str] = &["machine", "agents", "updates"];
+    pub const WORKSPACE_DIR: &[&str] = &["workspace"];
+    pub const WORKSPACE_ROOTS_FILE: &[&str] = &["workspace", "roots.json"];
     /// Every entry, for the cross-language fixture test.
     pub const ALL: &[(&str, &[&str])] = &[
         ("FIELDD_RUN_DIR", FIELDD_RUN_DIR),
@@ -253,5 +255,7 @@ pub mod layout {
         ("MACHINE_AGENTS_DIR", MACHINE_AGENTS_DIR),
         ("MACHINE_DISTRIBUTION_FILE", MACHINE_DISTRIBUTION_FILE),
         ("MACHINE_UPDATES_DIR", MACHINE_UPDATES_DIR),
+        ("WORKSPACE_DIR", WORKSPACE_DIR),
+        ("WORKSPACE_ROOTS_FILE", WORKSPACE_ROOTS_FILE),
     ];
 }

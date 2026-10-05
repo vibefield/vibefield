@@ -172,6 +172,22 @@ import {
   TransferGeometry,
   TransportCredit,
 } from "../src/terminal-pipeline";
+import {
+  WorkspaceGitFactsParams,
+  WorkspaceGitFactsResult,
+  WorkspaceGitPortTranscript,
+  WorkspaceListParams,
+  WorkspaceListResult,
+  WorkspaceRootsDelta,
+  WorkspaceRootsFile,
+  WorkspaceRootsOpen,
+  WorkspaceRootsParams,
+  WorkspaceRootsResult,
+  WorkspaceSearchParams,
+  WorkspaceSearchResult,
+  WorkspaceSubscribeParams,
+  WorkspaceUnavailableDetails,
+} from "../src/workspace";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 
@@ -435,6 +451,23 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-attach-refused": AttachRefused,
   "tp-protocol-limits": ProtocolLimits,
   "tp-tagged-message": TaggedTpMessage,
+  // FS-1a — the files service's door tier (workspace.ts): every door's params
+  // and answer, the roots' rows, the honest refusal, and the git port's
+  // protocol (L7 — fieldd's tests run each exchange against the real worker).
+  "workspace-roots-params": WorkspaceRootsParams,
+  "workspace-roots": WorkspaceRootsResult,
+  "workspace-list-params": WorkspaceListParams,
+  "workspace-list": WorkspaceListResult,
+  "workspace-search-params": WorkspaceSearchParams,
+  "workspace-search": WorkspaceSearchResult,
+  "workspace-git-facts-params": WorkspaceGitFactsParams,
+  "workspace-git-facts": WorkspaceGitFactsResult,
+  "workspace-subscribe-params": WorkspaceSubscribeParams,
+  "workspace-roots-open": WorkspaceRootsOpen,
+  "workspace-roots-delta": WorkspaceRootsDelta,
+  "workspace-unavailable": WorkspaceUnavailableDetails,
+  "workspace-git-port": WorkspaceGitPortTranscript,
+  "workspace-roots-file": WorkspaceRootsFile,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

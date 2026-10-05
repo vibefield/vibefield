@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "places": [
+    {
+      "path": "/Users/ada/Projects/vibe-field",
+      "addedAt": "2026-09-30T10:00:00.000Z",
+      "lastActiveAt": "2026-10-05T16:20:11.402Z",
+      "missing": false
+    },
+    {
+      "path": "/Users/ada/scratch/old-spike",
+      "addedAt": "2026-09-12T08:01:55.000Z",
+      "lastActiveAt": "2026-09-12T08:01:55.000Z",
+      "missing": true
+    }
+  ]
+}

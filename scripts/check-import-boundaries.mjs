@@ -479,7 +479,36 @@ const RULES = [
     applies: (p) => SOURCE_EXT.test(p) && !underAny(p, ["packages/fieldd", "packages/field-app"]),
     importTest: (s) => s.startsWith("@vibecook/puppeteer-") || s.startsWith("@rosetta/"),
   },
+  {
+    id: "R24",
+    // FS-1a (L5; thinking-files-service.md §4): mille's engine — the native
+    // walker, watcher and ignore parser behind its root entry — runs in ONE
+    // process, fieldd's files worker, and never in the daemon, Electron main or
+    // the renderer. So the root entry and every other entry of
+    // `@vibecook/mille` are imported only under the worker's own directory;
+    // the renderer (field-app) may take the client half that loads nothing
+    // native — `@vibecook/mille/port` — and `@vibecook/mille-ui` (FS-1b's
+    // tree), nothing else; no other package imports any mille package (the
+    // per-platform binaries are loaded by an explicit path, never imported).
+    enforce: true,
+    description:
+      "@vibecook/mille only under packages/fieldd/src/workspace/host (the files worker); field-app only @vibecook/mille/port + @vibecook/mille-ui; nothing else imports mille",
+    applies: (p) => SOURCE_EXT.test(p),
+    // the one wall whose verdict depends on WHERE the import is: the loop
+    // hands every importTest the file's repo-relative path as well
+    importTest: (s, p) => {
+      if (!(importsModule(s, "@vibecook/mille") || s.startsWith("@vibecook/mille-"))) return false;
+      if (under(p, MILLE_WORKER_DIR)) return !importsModule(s, "@vibecook/mille");
+      if (under(p, "packages/field-app/src"))
+        return !(s === "@vibecook/mille/port" || importsModule(s, "@vibecook/mille-ui"));
+      return true;
+    },
+  },
 ];
+
+// FS-1a (R24) — the files worker's directory: the one place mille's engine is
+// imported (packages/fieldd/src/workspace/host/main.ts is its entry).
+const MILLE_WORKER_DIR = "packages/fieldd/src/workspace/host";
 
 // AR-0 walls (R20/R21): the packages each plane may import — the SAME sets the
 // sibling block in pnpm-workspace.yaml and packages/*/package.json declare.
@@ -635,7 +664,7 @@ function runCheck(root) {
               ruleSpecs = allSpecs;
             }
             for (const spec of ruleSpecs) {
-              if (r.importTest(spec)) {
+              if (r.importTest(spec, rel)) {
                 violations.push({ id: r.id, file: rel, line: lineNo, offender: spec });
               }
             }
@@ -852,6 +881,34 @@ function runSelfTest() {
       file: "packages/electron-shell/src/main/uses-rosetta.ts",
       body: 'import { RosettaClient } from "@rosetta/protocol";\n',
     },
+    // FS-1a (R24) — mille's engine outside the files worker: in the daemon's
+    // own process, in Electron main, the root entry in the renderer, a
+    // platform binary imported by name, and mille-ui outside field-app.
+    {
+      id: "R24",
+      file: "packages/fieldd/src/workspace/doors.ts",
+      body: 'import { createFileExplorerHost } from "@vibecook/mille";\n',
+    },
+    {
+      id: "R24",
+      file: "packages/electron-shell/src/main/uses-mille.ts",
+      body: 'import { createFramedStreamHostChannel } from "@vibecook/mille/node";\n',
+    },
+    {
+      id: "R24",
+      file: "packages/field-app/src/uses-mille-root.ts",
+      body: 'import { FileExplorer } from "@vibecook/mille";\n',
+    },
+    {
+      id: "R24",
+      file: "packages/fieldd/src/workspace/host/uses-binary.ts",
+      body: 'const native = require("@vibecook/mille-darwin-arm64");\n',
+    },
+    {
+      id: "R24",
+      file: "packages/plugin-sdk/src/uses-mille-ui.ts",
+      body: 'import { FileTree } from "@vibecook/mille-ui";\n',
+    },
   ];
   const cleans = [
     // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
@@ -980,6 +1037,16 @@ function runSelfTest() {
       file: "packages/fieldd/src/clean-runtime-door.ts",
       body: 'import { createBuiltinAgentRuntime } from "@vibecook/puppeteer-builtin-providers";\nimport type { AgentRuntime } from "@vibecook/puppeteer-runtime";\nimport { PROTOCOL_VERSION } from "@rosetta/protocol";\nexport const r = createBuiltinAgentRuntime;\nexport type R = AgentRuntime;\nexport const v = PROTOCOL_VERSION;\n',
     },
+    // FS-1a (R24) — the two doors mille has: the worker takes any entry, the
+    // renderer the native-free client and the tree.
+    {
+      file: "packages/fieldd/src/workspace/host/clean-engine.ts",
+      body: 'import { createFileExplorerHost } from "@vibecook/mille";\nimport { createFramedStreamHostChannel } from "@vibecook/mille/node";\nexport const h = createFileExplorerHost;\nexport const c = createFramedStreamHostChannel;\n',
+    },
+    {
+      file: "packages/field-app/src/clean-mille-client.ts",
+      body: 'import { connectFileExplorer } from "@vibecook/mille/port";\nimport { FileTree } from "@vibecook/mille-ui";\nexport const c = connectFileExplorer;\nexport const t = FileTree;\n',
+    },
     {
       file: "packages/field-app/src/clean-view-door.ts",
       body: 'import type { AgentMonitorState } from "@vibecook/puppeteer-core";\nimport { createMonitorStore } from "@vibecook/puppeteer-monitor";\nimport type { SessionRow } from "@rosetta/protocol";\nexport type S = AgentMonitorState;\nexport const m = createMonitorStore;\nexport type Row = SessionRow;\n',
@@ -1054,6 +1121,9 @@ function runSelfTest() {
       console.log(`  ${gated ? "PASS" : "FAIL"}  ${id} detected and GATED (AR-0)`);
       if (!gated) ok = false;
     }
+    const r24Gated = found.some((v) => v.id === "R24" && ENFORCE_BY_ID.get(v.id) === true);
+    console.log(`  ${r24Gated ? "PASS" : "FAIL"}  R24 detected and GATED (FS-1a)`);
+    if (!r24Gated) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

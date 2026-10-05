@@ -1,0 +1,17 @@
+{
+  "epoch": "fieldd-2b9e",
+  "since": 4,
+  "revision": 5,
+  "upserts": [
+    {
+      "rootId": "r_6f1c2a9e0b7d4c3a8e21",
+      "name": "vibe-field",
+      "path": "/Users/ada/Projects/vibe-field",
+      "device": "dev_7d3c9b",
+      "kind": "place",
+      "missing": false,
+      "lastActiveAt": "2026-10-05T16:20:11.402Z"
+    }
+  ],
+  "removed": ["r_3e8c1a6f9d2b5047be19"]
+}
