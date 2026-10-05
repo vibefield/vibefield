@@ -66,6 +66,10 @@ export function keepsGpu(mode: ShellMode, argv: readonly string[]): boolean {
  * rows count frames and submits, and on a shared Mac a window something else came to sit on had its desk loop wait
  * for a frame that never came (awake, not a step in a second — DK-9's soak, cycle 1). Production backgrounds a
  * covered window — a battery feature — and so does every other mode.
+ * The gate does TWO things: main/index.ts appends Chromium's two switches (DK-9), and since DK-11 the main window's own
+ * `backgroundThrottling` is off (window-policy.ts `mainWindowPreferences`) — the switches alone still let a new window's
+ * page blink `hidden` for about a second, once, early in its life (measured on Electron 43.1.1), the blink a frame-counting
+ * row read as zero.
  */
 export function keepsFramesWhenCovered(mode: ShellMode, argv: readonly string[]): boolean {
   if (mode === "terminal-perf-lab") return true;

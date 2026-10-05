@@ -121,6 +121,14 @@ import {
 } from "./smoke-stillness";
 import { TRY_FLAG, TRY_SEARCH_KEY, TRY_TYPES_ENV, tryBoardRows, tryTypes } from "./smoke-try";
 import {
+  DRAWN_BUDGET_MS,
+  hiddenDuring,
+  hiddenSinceLoad,
+  neverDrawn,
+  PAGE_VISIBILITY,
+  type PageVisibility,
+} from "./smoke-visibility";
+import {
   leakedVariables,
   readTypedAgentCalls,
   type StagedTypedAgent,
@@ -352,6 +360,53 @@ async function stillnessSample(win: BrowserWindow): Promise<StillnessSample> {
   return sample;
 }
 
+/** DK-11 — the page's visibility and its non-visible transitions so far (testing/smoke-visibility.ts; the first read arms
+ * the page's recorder). */
+async function pageVisibility(win: BrowserWindow): Promise<PageVisibility> {
+  return (await win.webContents.executeJavaScript(PAGE_VISIBILITY, true)) as PageVisibility;
+}
+
+/**
+ * DK-11 — BEFORE A FRAME-COUNTING ROW'S FIRST SAMPLE: wait for the page to be visible (an occluded page's animation frames are
+ * paused — its count is the compositor's zero, not the desk's), up to DRAWN_BUDGET_MS. Answers the reading the row's window
+ * is judged from (`hiddenDuring` at its end), or the NAMED cause when the page never became visible. No frame-counting row
+ * needs the window's FOCUS — frames need visibility only (the idle row's "focused" is the line's DOM focus, its own check).
+ */
+async function drawnWindow(
+  win: BrowserWindow,
+  row: string,
+): Promise<{ readonly start: PageVisibility } | { readonly problem: string }> {
+  const t0 = Date.now();
+  let seen = await pageVisibility(win);
+  while (seen.visibility !== "visible" && Date.now() - t0 < DRAWN_BUDGET_MS) {
+    await sleep(100);
+    seen = await pageVisibility(win);
+  }
+  return seen.visibility === "visible"
+    ? { start: seen }
+    : { problem: neverDrawn(row, seen, Date.now() - t0) };
+}
+
+/** DK-11 — wait for ONE frame drawn after now (a still's, a theme's): on a page that stays hidden, throw the NAMED cause
+ * rather than the frame wait's timeout, which named the symptom ("a frame drawn … did not happen"). */
+async function waitForFrameDrawn(win: BrowserWindow, what: string): Promise<void> {
+  const drawn = await drawnWindow(win, what);
+  if ("problem" in drawn) throw new Error(drawn.problem);
+  const from = (await deskCounters(win)).frames;
+  await waitForRendererFact(win, what, 10_000, `globalThis.__vfDesk.perf().frames > ${from}`);
+}
+
+/** DK-11 — a frame-counting row's window, judged once its last sample is taken: null, or the named cause. */
+async function windowHidden(
+  win: BrowserWindow,
+  row: string,
+  drawn: { readonly start: PageVisibility } | { readonly problem: string },
+): Promise<string | null> {
+  return "problem" in drawn
+    ? drawn.problem
+    : hiddenDuring(row, drawn.start, await pageVisibility(win));
+}
+
 /**
  * DK-10b — THE DESK'S TWO SECONDS AT REST, judged (testing/smoke-stillness.ts): taken once the desk is asleep (`waitAtRest`)
  * and clear of the example clock's minute turn — DK-6: the seed's clock is a MINUTE clock, and its registered wake moves the
@@ -362,16 +417,27 @@ async function stillnessSample(win: BrowserWindow): Promise<StillnessSample> {
 async function deskRestWindow(
   win: BrowserWindow,
   waitAtRest: () => Promise<unknown>,
-): Promise<{ rest0: DeskCounters; rest1: DeskCounters; disturbed: Moved[]; moved: Moved | null }> {
+): Promise<{
+  rest0: DeskCounters;
+  rest1: DeskCounters;
+  disturbed: Moved[];
+  moved: Moved | null;
+  /** DK-11: the named cause when the page was not visible through the two seconds — then their zero proves nothing */
+  hidden: string | null;
+}> {
   const disturbed: Moved[] = [];
   for (let attempt = 1; ; attempt += 1) {
     await waitAtRest();
     const intoMinute = Date.now() % 60_000;
     if (intoMinute < 1_000) await sleep(1_000 - intoMinute);
     else if (intoMinute > 56_000) await sleep(61_000 - intoMinute);
+    const drawn = await drawnWindow(win, "the rest window");
     const a = await stillnessSample(win);
     await sleep(2_000);
     const b = await stillnessSample(win);
+    const hidden = await windowHidden(win, "the rest window", drawn);
+    if (hidden !== null)
+      return { rest0: countersOf(a), rest1: countersOf(b), disturbed, moved: null, hidden };
     const verdict = judgeWindow(a, b, attempt);
     if (verdict.kind === "again") {
       disturbed.push(verdict.moved);
@@ -382,6 +448,7 @@ async function deskRestWindow(
       rest1: countersOf(b),
       disturbed,
       moved: verdict.kind === "moved" ? verdict.moved : null,
+      hidden: null,
     };
   }
 }
@@ -767,13 +834,7 @@ async function commentPadRow(
       10_000,
       `globalThis.__vfDesk.theme() === ${JSON.stringify(name)}`,
     );
-    const from = (await deskCounters(win)).frames;
-    await waitForRendererFact(
-      win,
-      `a frame drawn ${name}`,
-      10_000,
-      `globalThis.__vfDesk.perf().frames > ${from}`,
-    );
+    await waitForFrameDrawn(win, `a frame drawn ${name}`);
     await sleep(400);
     if (shotDir !== undefined) {
       const m = 40;
@@ -956,6 +1017,8 @@ export async function runSmokeCanvas(opts: {
     const deskVerdict = waitForConsole(win, gpu ? "DESK_READY " : "DESK_UNAVAILABLE ", 60_000);
     // the first board lays the examples where the run asks (DK-8, ruling 1): the CLOCK row needs its clock
     await loadRenderer(win, "smoke-canvas", opts.viteUrl, { [SEED_EXAMPLES]: "1" });
+    // DK-11: the page's visibility recorder armed as the window loads — the occluded row asks whether it EVER went hidden
+    await pageVisibility(win);
     const raw = await canvasReady;
     console.log(`SMOKE_CANVAS ${raw}`);
     const problems = [...smokeProfileFailures(), ...censusFailures(JSON.parse(raw) as CanvasFacts)];
@@ -1112,13 +1175,7 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
       10_000,
       `globalThis.__vfDesk.theme() === ${JSON.stringify(name)}`,
     );
-    const from = (await deskCounters(win)).frames;
-    await waitForRendererFact(
-      win,
-      `a frame drawn ${name}`,
-      10_000,
-      `globalThis.__vfDesk.perf().frames > ${from}`,
-    );
+    await waitForFrameDrawn(win, `a frame drawn ${name}`);
     await sleep(400);
     if (shotDir !== undefined) {
       mkdirSync(shotDir, { recursive: true });
@@ -1137,10 +1194,13 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   // THE FREEZE UNDER A COVER (FR-1's `engine.frame.freeze("cover")`): the wind made to blow first
   // (`ambient("live")`), so the desk is BUSY and frames move — then a covered view parks it: not one
   // frame, not one submit, for a whole second. Back to Canvas, it draws again.
+  // DK-11: each counted second judged on a VISIBLE page (smoke-visibility.ts) — never read through an occluded blink
+  const busyDrawn = await drawnWindow(win, "the freeze row's busy second");
   await js(`globalThis.__vfDesk.ambient("live")`);
   const busy0 = await deskCounters(win);
   await sleep(500);
   const busy1 = await deskCounters(win);
+  const busyHidden = await windowHidden(win, "the freeze row's busy second", busyDrawn);
   await js(`globalThis.vibefield.view.set("history")`);
   await waitForRendererFact(
     win,
@@ -1158,26 +1218,34 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
     "globalThis.__vfDesk.rest().parked === true",
     "globalThis.__vfDesk.rest()",
   );
+  const parkedDrawn = await drawnWindow(win, "the freeze row's parked second");
   const parkedA = await stillnessSample(win);
   await sleep(1000);
   const parkedB = await stillnessSample(win);
+  const parkedHidden = await windowHidden(win, "the freeze row's parked second", parkedDrawn);
   const parked0 = countersOf(parkedA);
   const parked1 = countersOf(parkedB);
   await js(`globalThis.vibefield.view.set("canvas")`);
+  const thawDrawn = await drawnWindow(win, "the freeze row's thaw");
   await sleep(700);
   const thawed = await deskCounters(win);
+  const thawHidden = await windowHidden(win, "the freeze row's thaw", thawDrawn);
   await js(`globalThis.__vfDesk.ambient("idle")`);
   // what reached the parked desk in its second — a presence tick, a world write — and drew nothing (DK-10b)
   const parkedWakes = movedBy(parkedA, parkedB).wakes;
   const freeze = { busy0, busy1, parked0, parked1, parkedWakes, thawed };
   console.log(`SMOKE_CANVAS_FREEZE ${JSON.stringify(freeze)}`);
-  if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
-  if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
+  if (busyHidden !== null) problems.push(busyHidden);
+  else if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
+  if (parkedHidden !== null) problems.push(parkedHidden);
+  else if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
     problems.push(
       `a cover did not park the desk (${JSON.stringify({ parked0, parked1, movedBy: movedBy(parkedA, parkedB) })})`,
     );
   }
-  if (thawed.frames <= parked1.frames) problems.push("the desk did not draw again after the cover");
+  if (thawHidden !== null) problems.push(thawHidden);
+  else if (thawed.frames <= parked1.frames)
+    problems.push("the desk did not draw again after the cover");
 
   // the explorer's still FIRST: a still is owed after the board's save and taken at the desk's first
   // rest or at a cover's edge — here as the freeze row's cover rose, never under the parked cover
@@ -1186,7 +1254,81 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   problems.push(...(await deskIdleRow(win)));
   // the desk at rest: both captures below read the same last frame
   problems.push(...(await quarterStillRow(win)));
+  // DK-11: last, with the wind — a window laid over ours, on purpose, and the desk still drawing
+  const occluded = await occludedRow(win);
+  console.log(`SMOKE_CANVAS_OCCLUDED ${JSON.stringify(occluded.facts)}`);
+  problems.push(...occluded.problems);
   return problems;
+}
+
+/**
+ * DK-11 — A COVERED WINDOW KEEPS DRAWING (the grade's fix 2, its permanent witness): another window laid over ours — as
+ * another lane's windows land on a shared screen — on purpose: an opaque, frameless, never-focused window over the smoke
+ * window's frame and a margin, the wind blowing. The page must stay VISIBLE — not one non-visible transition in the covered
+ * window, nor at any time since the window loaded (the recorder is armed at the load) — and the desk keep drawing (≥ 10 frames
+ * in 1.5 s). The gated modes keep the page visible whole (`mainWindowPreferences`). Without that, DK-9's switches alone let a
+ * new window's page blink `hidden` for about a second ONCE, early in its life, covered or not (measured on Electron 43.1.1:
+ * a later cover no longer blinks) — the blink a frame-counting row read as zero one run in two; this row asks for the whole
+ * life, so it fails with the named cause every time.
+ */
+async function occludedRow(win: BrowserWindow): Promise<{ facts: object; problems: string[] }> {
+  const js = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const row = "the occluded row";
+  const drawn = await drawnWindow(win, row);
+  if ("problem" in drawn) return { facts: { drawn: false }, problems: [drawn.problem] };
+  const under = win.getBounds();
+  const margin = 24;
+  const occluder = new BrowserWindow({
+    x: under.x - margin,
+    y: under.y - margin,
+    width: under.width + 2 * margin,
+    height: under.height + 2 * margin,
+    show: false,
+    frame: false,
+    focusable: false,
+    alwaysOnTop: true,
+    skipTaskbar: true,
+    hasShadow: false,
+    backgroundColor: "#000000",
+    webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
+  });
+  try {
+    await js(`globalThis.__vfDesk.ambient("live")`);
+    occluder.showInactive();
+    // the window server lays the occlusion down a moment after the show (measured: ~0.3 s)
+    await sleep(300);
+    const over = occluder.getBounds();
+    const covers =
+      occluder.isVisible() &&
+      over.x <= under.x &&
+      over.y <= under.y &&
+      over.x + over.width >= under.x + under.width &&
+      over.y + over.height >= under.y + under.height;
+    const a = await deskCounters(win);
+    await sleep(1_500);
+    const b = await deskCounters(win);
+    const end = await pageVisibility(win);
+    const frames = b.frames - a.frames;
+    const hidden = hiddenDuring(row, drawn.start, end) ?? hiddenSinceLoad(row, end);
+    const problems: string[] = [];
+    if (!covers)
+      problems.push(
+        `${row}: the occluder did not cover the window (${JSON.stringify({ under, over, visible: occluder.isVisible() })})`,
+      );
+    if (hidden !== null) problems.push(hidden);
+    else if (frames < 10)
+      problems.push(
+        `${row}: a covered window drew ${frames} frames in 1.5 s with the wind blowing`,
+      );
+    return {
+      facts: { covers, under, over, visibility: { start: drawn.start, end }, frames },
+      problems,
+    };
+  } finally {
+    occluder.destroy();
+    await js(`globalThis.__vfDesk.ambient("idle")`);
+  }
 }
 
 /** The desk's verdict markers (`DESK_RETRY`, `DESK_READY`, `DESK_UNAVAILABLE`) as a window says
@@ -1387,7 +1529,7 @@ async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
   );
   // the two seconds are taken clear of the example clock's minute turn (DK-6), so the zero is still the whole
   // witness: not a frame, not a submit, between the wakes — and a window a person's input moved is taken again (DK-10b)
-  const { rest0, rest1, disturbed, moved } = await deskRestWindow(win, () =>
+  const { rest0, rest1, disturbed, moved, hidden } = await deskRestWindow(win, () =>
     waitForRendererFact(
       win,
       "the desk at rest",
@@ -1405,7 +1547,8 @@ async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
   );
   const problems: string[] = [];
   if (!focused || !stillFocused) problems.push("the line was not focused over the resting desk");
-  if (moved !== null) {
+  if (hidden !== null) problems.push(hidden);
+  else if (moved !== null) {
     problems.push(
       `the desk did not idle at zero submits (${JSON.stringify({ rest0, rest1, movedBy: moved, ...outside })})`,
     );
@@ -2123,10 +2266,13 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
   const js = <T>(expression: string): Promise<T> =>
     win.webContents.executeJavaScript(expression, true) as Promise<T>;
   const problems: string[] = [];
+  // DK-11: each counted window judged on a VISIBLE page (smoke-visibility.ts)
+  const busyDrawn = await drawnWindow(win, "the stillness row's busy second");
   await js(`globalThis.__vfDesk.ambient("live")`);
   const busy0 = await deskCounters(win);
   await sleep(400);
   const busy1 = await deskCounters(win);
+  const busyHidden = await windowHidden(win, "the stillness row's busy second", busyDrawn);
   await js(`globalThis.vibefield.view.set("history")`);
   await waitForRendererFact(
     win,
@@ -2144,9 +2290,11 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
     "globalThis.__vfDesk.rest().parked === true",
     "globalThis.__vfDesk.rest()",
   );
+  const parkedDrawn = await drawnWindow(win, "the stillness row's parked second");
   const parkedA = await stillnessSample(win);
   await sleep(1_000);
   const parkedB = await stillnessSample(win);
+  const parkedHidden = await windowHidden(win, "the stillness row's parked second", parkedDrawn);
   const parked0 = countersOf(parkedA);
   const parked1 = countersOf(parkedB);
   await js(`globalThis.vibefield.view.set("canvas")`);
@@ -2176,15 +2324,18 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
       );
     }
   };
-  const { rest0, rest1, disturbed, moved } = await deskRestWindow(win, waitAtRest);
+  const { rest0, rest1, disturbed, moved, hidden } = await deskRestWindow(win, waitAtRest);
   const outside = disturbed.length > 0 ? { disturbed } : {};
-  if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
-  if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
+  if (busyHidden !== null) problems.push(busyHidden);
+  else if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
+  if (parkedHidden !== null) problems.push(parkedHidden);
+  else if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
     problems.push(
       `a cover did not park the desk (${JSON.stringify({ parked0, parked1, movedBy: movedBy(parkedA, parkedB) })})`,
     );
   }
-  if (moved !== null) {
+  if (hidden !== null) problems.push(hidden);
+  else if (moved !== null) {
     problems.push(
       `the desk did not idle at zero (${JSON.stringify({ rest0, rest1, movedBy: moved, ...outside })})`,
     );
@@ -2586,15 +2737,20 @@ async function kindFaultRows(
     js(
       "(() => { const s = globalThis.__vfDesk.status(); return { state: s.state, faults: s.faults ?? [] }; })()",
     );
-  /** Frames a second with the wind blowing (a busy desk draws every frame), over two seconds. */
+  /** Frames a second with the wind blowing (a busy desk draws every frame), over two seconds — on a VISIBLE page (DK-11:
+   * a window hidden inside the two seconds has no rate to give; its named cause stands in the rows' problems). */
+  const rateHidden: string[] = [];
   const frameRate = async (): Promise<number> => {
     await js(`globalThis.__vfDesk.ambient("live")`);
     await sleep(300);
+    const drawn = await drawnWindow(win, "the frame rate's two seconds");
     const a = await deskCounters(win);
     const t0 = performance.now();
     await sleep(2_000);
     const b = await deskCounters(win);
     const rate = ((b.frames - a.frames) * 1_000) / (performance.now() - t0);
+    const hidden = await windowHidden(win, "the frame rate's two seconds", drawn);
+    if (hidden !== null) rateHidden.push(hidden);
     await js(`globalThis.__vfDesk.ambient("idle")`);
     return Math.round(rate * 10) / 10;
   };
@@ -2722,7 +2878,8 @@ async function kindFaultRows(
       `the seconds clock beside the faults did not tick on (${JSON.stringify({ was: pixels.ticking, now: tickedOn })})`,
     );
   }
-  if (rateAfter < rateBefore * 0.75) {
+  if (rateHidden.length > 0) problems.push(...rateHidden);
+  else if (rateAfter < rateBefore * 0.75) {
     problems.push(
       `the frame rate fell through the quarantine (${rateBefore} → ${rateAfter} frames a second)`,
     );

@@ -1,6 +1,11 @@
 import type { BrowserWindow, WebContents, WebPreferences } from "electron";
 import { describe, expect, it, type Mock, vi } from "vitest";
-import { assertSecurePreferences, WindowRegistry, webPreferences } from "../src/main/window-policy";
+import {
+  assertSecurePreferences,
+  mainWindowPreferences,
+  WindowRegistry,
+  webPreferences,
+} from "../src/main/window-policy";
 
 // The PURE window policy (ESR §5.2.2–5.2.3). Electron appears as TYPES only: the
 // registry is driven by structural fakes cast through `unknown`, so this suite
@@ -140,6 +145,23 @@ describe("assertSecurePreferences", () => {
   it("returns the same object so it can wrap the factory call inline", () => {
     const prefs = webPreferences("/p.cjs");
     expect(assertSecurePreferences(prefs)).toBe(prefs);
+  });
+});
+
+describe("mainWindowPreferences (DK-11)", () => {
+  it("keeps production's policy byte for byte — a covered window stops drawing there, a battery feature", () => {
+    expect(mainWindowPreferences("/p.cjs", false)).toEqual(webPreferences("/p.cjs"));
+    expect(mainWindowPreferences("/p.cjs", false).backgroundThrottling).toBe(true);
+  });
+
+  it("turns Electron's hidden-renderer throttling OFF for a mode that counts a covered window's frames — and nothing else", () => {
+    const kept = mainWindowPreferences("/p.cjs", true);
+    expect(kept.backgroundThrottling).toBe(false);
+    // the hardened set untouched: the one field differs, and the factory's last word still passes
+    const { backgroundThrottling: _a, ...rest } = kept;
+    const { backgroundThrottling: _b, ...policy } = webPreferences("/p.cjs");
+    expect(rest).toEqual(policy);
+    expect(() => assertSecurePreferences(kept)).not.toThrow();
   });
 });
 

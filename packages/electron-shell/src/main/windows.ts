@@ -1,7 +1,7 @@
 import { BrowserWindow, screen } from "electron";
 import { APP_ENTRY_URL } from "./app-protocol";
-import { isSmokeLike, type ShellMode } from "./modes";
-import { assertSecurePreferences, webPreferences } from "./window-policy";
+import { isSmokeLike, keepsFramesWhenCovered, type ShellMode } from "./modes";
+import { assertSecurePreferences, mainWindowPreferences, webPreferences } from "./window-policy";
 
 // Runtime window construction (ESR §5.2.2–5.2.3): ALL BrowserWindow creation
 // flows through here with the one web-preferences policy. The registry lives in
@@ -25,7 +25,10 @@ export function createMainWindow(opts: {
     show: opts.show,
     title: "VibeField",
     backgroundColor: "#171717", // pre-paint = the dark canvas token (--vf-canvas-bg)
-    webPreferences: assertSecurePreferences(webPreferences(opts.preloadPath)),
+    // DK-11: a mode that counts a covered window's frames keeps its page visible when covered (window-policy.ts)
+    webPreferences: assertSecurePreferences(
+      mainWindowPreferences(opts.preloadPath, keepsFramesWhenCovered(opts.mode, process.argv)),
+    ),
   });
   if (fillWorkArea) win.setBounds(screen.getPrimaryDisplay().workArea);
   // Dev opens the tools by default (James, 2026-08-02) — detached, so the

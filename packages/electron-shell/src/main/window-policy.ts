@@ -45,6 +45,25 @@ export function webPreferences(preloadPath: string): WebPreferences {
   };
 }
 
+/**
+ * The MAIN window's preferences (DK-11): the one policy above — and, for a mode that counts a COVERED window's frames
+ * (`keepsFramesWhenCovered`: the terminal perf lab and the GPU-on desk smokes), Electron's hidden-renderer throttling OFF.
+ * DK-9's two Chromium switches (`disable-backgrounding-occluded-windows`, `disable-renderer-backgrounding`) keep a covered
+ * renderer running, yet its page still blinks `hidden` for about a second as it is covered — measured on Electron 43.1.1 in
+ * a scratch app: a window laid over another, the covered page "hidden" ~1 s then "visible" again, no animation frame in
+ * between; with neither, "hidden" for good. This Chromium has no `MacWebContentsOcclusion` feature left to disable.
+ * Electron's `backgroundThrottling: false` keeps the page VISIBLE through it (no `visibilitychange` at all, 120 frames a
+ * second while covered, measured) — so a frame-counting row is never read through a blink. Production keeps the policy's
+ * `true`: a covered window SHOULD stop drawing there (a battery feature); not a security field (assertSecurePreferences).
+ */
+export function mainWindowPreferences(
+  preloadPath: string,
+  keepFramesWhenCovered: boolean,
+): WebPreferences {
+  const prefs = webPreferences(preloadPath);
+  return keepFramesWhenCovered ? { ...prefs, backgroundThrottling: false } : prefs;
+}
+
 /** The factory's last word before `new BrowserWindow` (ESP §13.1: "call-site
  * overrides cannot weaken it"). A presentation option is welcome; a relaxed
  * security field throws where it is written rather than shipping a quietly
