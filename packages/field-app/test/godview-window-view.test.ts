@@ -131,6 +131,34 @@ describe("the model a ported view draws in this window (MV-4)", () => {
     expect(view.getSnapshot().model.byId.get("a")).toBe(model.byId.get("a"));
   });
 
+  it("hands a peer's facts on whole — its context share, its account, its wait, reply and effort (M9)", () => {
+    // The legacy shim dropped a peer's core facts (`peerMonitor: "omit"`); a
+    // ported view draws the model uniformly, so the cut passes them as the
+    // peer's backend computed them. Only the standing and the profile are the
+    // window's (above).
+    const owner = peer("p", 2, {
+      context: { usedPercent: 41 },
+      account: "team",
+      status: "blocked",
+      wait: { kind: "question", since: 3, question: "Ship it?" },
+      reply: { text: "Ready when you are." },
+      effort: { value: "high", intent: "observed" },
+      writable: false,
+    });
+    const model = fixtureModel([local("a", 1), owner]);
+    const facts = { current: factsOf(["a", "p"]), device: null };
+    const view = createWindowViewReplica(handReplica(model), windowReader(facts));
+    expect(view.getSnapshot().model.byId.get("p")).toMatchObject({
+      context: { usedPercent: 41 },
+      account: "team",
+      wait: { kind: "question", question: "Ship it?" },
+      reply: { text: "Ready when you are." },
+      effort: { value: "high" },
+      writable: false,
+      stale: false,
+    });
+  });
+
   it("says what moved since its last publication, by id", () => {
     const a = local("a", 1);
     const b = local("b", 2);

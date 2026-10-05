@@ -30,11 +30,16 @@
  * happy-dom does not have); the routing is view-independent.
  */
 
+import type { AgentView } from "@vibecook/puppeteer-view-sdk";
+import { createRecordingView } from "@vibecook/puppeteer-view-sdk/testing";
 import {
   type AccountUsagePort,
   type HistoryPort,
+  type MonitorViewEntry,
   monitorParameterDefaults,
   monitorViewFor,
+  rainDataString,
+  rainTailLength,
 } from "@vibecook/puppeteer-views";
 import type { AgentModelMeshFrame, DeviceInfo } from "@vibefield/contracts";
 import { act } from "react";
@@ -258,6 +263,22 @@ async function mountMonitor(
   return container;
 }
 
+/** A registry entry of the test's own (a ported view), on the same door and stage. */
+async function mountEntry(door: MonitorDoor, entry: MonitorViewEntry): Promise<HTMLElement> {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor view={entry} parameters={{}} door={door} panes={{ sessionIds: [] }} />
+      </GodviewAgentsProvider>,
+    );
+  });
+  await settle();
+  return container;
+}
+
 const latest = (): GodviewMonitorFacts => markers[markers.length - 1] as GodviewMonitorFacts;
 const rows = (host: HTMLElement): HTMLButtonElement[] => [
   ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-list-row"),
@@ -341,6 +362,45 @@ describe("another desktop's agents as monitor citizens (DS-3)", () => {
     });
     expect(door.closed()).toBe(1);
     expect(door.opened()).toBe(2);
+  });
+
+  it("M9 (MV-4): a peer's row draws the model's facts — the list its context share, the rain's column its CTX and a tail that follows it", async () => {
+    // The legacy shim gave a peer no core facts (`peerMonitor: "omit"`, M9's
+    // scope), so its context cell read "—" and its rain column named no CTX.
+    // The ported views draw the model uniformly: the peer's own backend
+    // computed the share, its desk cut carried it, and the window hands it on.
+    const studio = [peerRow("run-s1", { contextPercent: 41 }), peerRow("run-s2")];
+    const view = await mountMonitor(fakeDoor(null, LOCAL_ROWS, studio));
+    const context = (row: HTMLButtonElement | undefined): string | null | undefined =>
+      row?.querySelector(".vf-monitor-list-context")?.textContent;
+    const measured = remoteRows(view).find((row) => context(row) === "41%");
+    expect(measured).toBeDefined();
+    // a peer that reported none still says so, as any row does
+    expect(remoteRows(view).map(context).sort()).toEqual(["41%", "—"]);
+
+    // the rain reads the same cut of the model: the window hands a ported view the
+    // peer's row whole, so the rain's own words for it name the share
+    act(() => root?.unmount());
+    container?.remove();
+    const recording = createRecordingView("cut-probe");
+    const entry: MonitorViewEntry = {
+      id: "cut-probe",
+      label: "CUT",
+      parameterGroups: [],
+      view: recording.view,
+    };
+    await mountEntry(fakeDoor(null, LOCAL_ROWS, studio), entry);
+    const peers = (recording.lastInput?.model.agents ?? []).filter(
+      (row: AgentView) => !row.device.self,
+    );
+    const share = peers.find((row) => row.context?.usedPercent === 41);
+    if (share === undefined) throw new Error("the peer's measured row reaches the view");
+    // (the column flattens its symbols to spaces, so `CTX:41%` reads `CTX 41%`)
+    expect(rainDataString(share)).toContain("CTX 41%");
+    // its tail follows the share (an unmeasured window sits mid-scale)
+    const unmeasured = { ...share, context: undefined };
+    expect(rainTailLength(share, 100, 1, 0)).not.toBe(rainTailLength(unmeasured, 100, 1, 0));
+    expect(rainTailLength(share, 100, 1, 0)).toBeCloseTo(0.41 * 100 * 0.9);
   });
 
   it("an asleep desktop keeps its rows, greyed — asleep is a state, not an absence", async () => {
