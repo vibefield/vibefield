@@ -24,12 +24,16 @@ copy they run from, as the app's import map does. Only this package's own `pnpm`
    door, its WGSL READ (entry points, bindings) and never compiled here. `vibefield-plugin inspect` says it as data.
 5. **Judge it** — `plugin-playground <this directory>`: the SDK's kind-conformance harness drives your kind through
    every state in `playground/states.ts`, in every mode it declares, at every zoom the desk's LOD names (with an
-   install, `test/kind.test.ts` runs the same harness beside the manifest contract).
+   install, `test/kind.test.ts` runs the same harness beside the manifest contract). Then **see it drawn** —
+   `plugin-playground <this directory> --still`: each state DRAWN on Dawn (the kit's WebGPU, no window) as one object on
+   a bare mat by day and by night, its WGSL COMPILED (an error is the compiler's own line), judged drawn, inside its
+   `reach` and steady, and held to `test/still.golden.json` — which you bless ONCE on your machine with `--still
+   --bless`. A golden is Dawn's bytes on the host that blessed it: another machine re-blesses locally and never commits
+   over yours. `test/kind.test.ts` runs the still too.
 6. **Put it on the desk** — `vibefield-plugin try <this directory>`: the app, on a fresh profile with this plugin
    staged alone, lays one of your object on a fresh board and says whether it is DRAWN — its WGSL compiled on the
    host's device (a compile error comes back as the compiler's own line), picked where it lies — with stills by day
-   and by night in `.vibefield-try/`. Well under a minute while the app's build is cached. The headless STILL in
-   `test/kind.test.ts` is a `todo` until the kit carries one.
+   and by night in `.vibefield-try/`. Well under a minute while the app's build is cached.
 
 A person's dev session (`pnpm dev` in a checkout) finds the plugin through `vibefield-plugin dev-link <this
 directory>` (`FIELDD_PLUGIN_DEV_ROOTS`); nothing a person can do lays one on the desk yet — the pegboard will, under
@@ -46,6 +50,7 @@ directory>` (`FIELDD_PLUGIN_DEV_ROOTS`); nothing a person can do lays one on the
 | `src/record.ts` | the GPU record, declared once — its WGSL struct is generated from it |
 | `src/shaders.wgsl` | its own WGSL, after the kit's `view`, `portal` and `light` pieces (`src/shaders.ts` names them) |
 | `playground/states.ts` | the states the kind harness drives it through — each validated against the manifest's props first |
+| `test/still.golden.json` | your stills' golden — written ONCE by `plugin-playground <this directory> --still --bless`, on your machine (absent until then) |
 
 The reference is the plugin authoring docs' `objects.md`; the worked example it quotes is ICE's desk clock
 ported to a plugin — a desk state that wakes the desk only when a hand must move, a menu act, held tools, a chip

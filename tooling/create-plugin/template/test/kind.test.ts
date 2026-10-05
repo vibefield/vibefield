@@ -1,3 +1,7 @@
+import { execFile } from "node:child_process";
+import { createRequire } from "node:module";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   DEFAULT_GRID,
   type Entity,
@@ -59,8 +63,61 @@ describe("{{title}}'s kind, judged by the kind-conformance harness", () => {
     expect(k.hit(G, 100 + 50, 80 + 50)).toBeNull(); // in the rect, off the disc
   });
 
-  // The STILL — a Dawn frame of each state on a bare mat, held to this plugin's golden — needs a headless GPU
-  // still the kit does not carry yet (ICE's createStill, I30). Until it does the harness READS your WGSL and never
-  // compiles it: `vibefield-plugin try <dir>` compiles and draws it in the app.
-  it.todo("its STILL — a Dawn frame of each state held to this plugin's golden (when the kit carries a headless still, I30)");
+  // Its STILL — `plugin-playground <this directory> --still`, the kit's own Dawn (Node's WebGPU: the playground's
+  // dependency, never this plugin's), with no window: each state above drawn as ONE object on a bare mat, by day and by
+  // night — its WGSL COMPILED on a real device (a WGSL error comes back as the compiler's own line at your file's line and
+  // column, which the harness above cannot see), drawn at all, nothing past its `reach`, the same bytes twice — and held to
+  // this plugin's golden, test/still.golden.json, which you bless ONCE on your machine: `plugin-playground <this
+  // directory> --still --bless`. Until then each still says `still-unblessed` — a note, never a failure. A golden is
+  // Dawn's bytes on the host that blessed it: another machine re-blesses locally and never commits over yours. The
+  // stills' PNGs land in .vibefield-still/.
+  it("its STILL — each state drawn on Dawn by day and by night: compiled, drawn, inside its reach, steady, held to its golden", async () => {
+    const plugin = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+    const playground = createRequire(import.meta.url).resolve("@vibefield/plugin-playground/bin");
+    const ran = await new Promise<{ code: number; stdout: string; stderr: string }>((done) => {
+      execFile(
+        process.execPath,
+        [playground, plugin, "--still", "--json"],
+        { maxBuffer: 64 * 1024 * 1024 },
+        (error, stdout, stderr) =>
+          done({
+            code: error === null ? 0 : Number((error as { code?: unknown }).code ?? 1),
+            stdout,
+            stderr,
+          }),
+      );
+    });
+    const rows = ran.stdout
+      .trim()
+      .split("\n")
+      .filter((line) => line.startsWith("{"))
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            kind: string;
+            status?: string;
+            code?: string;
+            state?: string;
+            theme?: string;
+            detail?: string;
+          },
+      );
+    const stills = rows.filter((r) => r.kind === "still");
+    // each refusal with what it says — a WGSL error's own line among them
+    expect(
+      stills
+        .filter((s) => s.status === "refused")
+        .map((s) => `${s.state} · ${s.theme}: ${s.code} — ${s.detail}`),
+    ).toEqual([]);
+    // the three playground states, by day and by night
+    expect(stills.map((s) => `${s.state} · ${s.theme}`)).toEqual([
+      "default · day",
+      "coral · day",
+      "unparsed · day",
+      "default · night",
+      "coral · night",
+      "unparsed · night",
+    ]);
+    expect(ran.code, ran.stderr).toBe(0);
+  }, 120_000);
 });

@@ -29,9 +29,9 @@ let scaffold:
   | { readonly root: string; readonly dir: string; readonly empty: string; readonly bare: string }
   | undefined;
 
-/** The create-plugin bin into `root/<name>`, its three workspace dependencies linked as an install
+/** The create-plugin bin into `root/<name>`, its four workspace dependencies linked as an install
  * links them (unless `installed` is false) — so the playground judges exactly the files an author is
- * handed, never a copy kept here. */
+ * handed, never a copy kept here. (DK-11: the fourth, the playground itself, is its still test's.) */
 async function scaffoldTemplate(root: string, name: string, installed = true): Promise<string> {
   const dir = join(root, name);
   await promisify(execFile)(process.execPath, [
@@ -49,6 +49,7 @@ async function scaffoldTemplate(root: string, name: string, installed = true): P
     ["plugin-sdk", "packages/plugin-sdk"],
     ["contracts", "packages/contracts"],
     ["plugin-build", "tooling/plugin-build"],
+    ["plugin-playground", "apps/plugin-playground"],
   ] as const)
     symlinkSync(join(REPO, path), join(dir, "node_modules", "@vibefield", name), "dir");
   return dir;

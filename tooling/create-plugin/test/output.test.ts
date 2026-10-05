@@ -148,7 +148,8 @@ describe("the scaffolded tree", () => {
       tray: { category: "things", hang: { accessory: "hook" } },
     });
     // the README says the ten-minute path; the kind test runs the SDK's kind-conformance harness over
-    // the playground states, and its still is a `todo` naming the ICE ask it waits on (DK-7)
+    // the playground states, and its STILL is real since DK-11 (ICE's I30 landed): the kit's `--still` over the
+    // plugin's own directory, held to its golden — the playground a devDependency, its Dawn the playground's alone
     expect(readFileSync(join(dir, "README.md"), "utf8")).toContain("## The ten-minute path");
     // DK-10: the path works OUTSIDE a checkout's workspace too — the kit's own commands, nothing installed — and it
     // ends ON THE DESK (`try`); the bar's agents met a path that began `pnpm install` at a repo root they never had
@@ -167,7 +168,15 @@ describe("the scaffolded tree", () => {
       'import { runKindConformance } from "@vibefield/plugin-sdk/testing";',
     );
     expect(kindTest).toContain("binding: Demo,");
-    expect(kindTest).toMatch(/it\.todo\("its STILL — .*I30\)"\)/);
+    expect(kindTest).not.toContain("it.todo");
+    expect(kindTest).toContain(
+      'createRequire(import.meta.url).resolve("@vibefield/plugin-playground/bin")',
+    );
+    expect(kindTest).toContain('[playground, plugin, "--still", "--json"]');
+    expect(pkg["devDependencies"]?.["@vibefield/plugin-playground"]).toBe("workspace:*");
+    expect(Object.keys({ ...pkg["dependencies"], ...pkg["devDependencies"] })).not.toContain(
+      "webgpu",
+    );
   });
 
   it("ships a substituted, React-free behavior authoring example", async () => {

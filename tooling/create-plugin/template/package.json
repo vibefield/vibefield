@@ -19,6 +19,7 @@
   "devDependencies": {
     "@types/node": "catalog:",
     "@vibefield/plugin-build": "workspace:*",
+    "@vibefield/plugin-playground": "workspace:*",
     "@webgpu/types": "^0.1.74",
     "tsx": "^4.19.0",
     "typescript": "catalog:",
