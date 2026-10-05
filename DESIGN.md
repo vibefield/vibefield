@@ -1027,7 +1027,11 @@ The hot-point glow and rim retire with CardShell (above).
   lock; FC-D14 solid; R1, R4, R5, R6, R20, R23, R26; DK-D29, DK-D24; DK-11): **More grows the bar
   into its menu** — ONE element (M1), on the island curve over 600ms, the Me menu's grow — upward,
   or downward when its top would cross 94, the bar's own row then heading it (R6); when it fits
-  neither way the list scrolls inside it, clamped between 94 and 660 and never over the line (R6).
+  neither way the list scrolls inside it, clamped between the safe top (94) and 8 above the line
+  (700 at 780 — the foot every menu keeps, §5), never over the line (R6). *Corrected 2026-10-05
+  (DK-11, measured):* this said "between 94 and 660", but 660 is the bar's own lowest TOP, its
+  foot 8 above the line; a menu grown down from a bar at y 350 ends at 699 — whole, 8 above the
+  line — where a 660 clamp would have made a list that fits scroll.
   **The bar's row never moves** (M2): More stays under the pointer, shown on. The menu is **solid**
   (§5's menus, with the grown bar's two exceptions — R20: corners 20, the bar's own, and placed from
   its own row), at least **244** wide (the bar's width when wider), centred on the bar and kept 42
