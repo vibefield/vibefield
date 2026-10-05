@@ -110,6 +110,14 @@ import {
   type PhysicalSoakOptions,
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
+import {
+  countersOf,
+  judgeWindow,
+  type Moved,
+  movedBy,
+  STILLNESS_SAMPLE,
+  type StillnessSample,
+} from "./smoke-stillness";
 import { TRY_FLAG, TRY_SEARCH_KEY, TRY_TYPES_ENV, tryBoardRows, tryTypes } from "./smoke-try";
 import {
   leakedVariables,
@@ -331,6 +339,50 @@ async function deskCounters(win: BrowserWindow): Promise<DeskCounters> {
   )) as DeskCounters | null;
   if (counters === null) throw new Error("window.__vfDesk is not installed");
   return counters;
+}
+
+/** DK-10b — one end of a stillness window (testing/smoke-stillness.ts): the counters, the wakes by reason, the outside input. */
+async function stillnessSample(win: BrowserWindow): Promise<StillnessSample> {
+  const sample = (await win.webContents.executeJavaScript(
+    STILLNESS_SAMPLE,
+    true,
+  )) as StillnessSample | null;
+  if (sample === null) throw new Error("window.__vfDesk is not installed");
+  return sample;
+}
+
+/**
+ * DK-10b — THE DESK'S TWO SECONDS AT REST, judged (testing/smoke-stillness.ts): taken once the desk is asleep (`waitAtRest`)
+ * and clear of the example clock's minute turn — DK-6: the seed's clock is a MINUTE clock, and its registered wake moves the
+ * resting desk at each minute's turn (by its law, a hair before it), by design. A window moved while outside input reached the
+ * desk (a person at a shared machine touched the wind) is taken again, up to STILLNESS_TRIES; the last window's counters are
+ * the row's, with what moved it when it moved — a red row names its waker.
+ */
+async function deskRestWindow(
+  win: BrowserWindow,
+  waitAtRest: () => Promise<unknown>,
+): Promise<{ rest0: DeskCounters; rest1: DeskCounters; disturbed: Moved[]; moved: Moved | null }> {
+  const disturbed: Moved[] = [];
+  for (let attempt = 1; ; attempt += 1) {
+    await waitAtRest();
+    const intoMinute = Date.now() % 60_000;
+    if (intoMinute < 1_000) await sleep(1_000 - intoMinute);
+    else if (intoMinute > 56_000) await sleep(61_000 - intoMinute);
+    const a = await stillnessSample(win);
+    await sleep(2_000);
+    const b = await stillnessSample(win);
+    const verdict = judgeWindow(a, b, attempt);
+    if (verdict.kind === "again") {
+      disturbed.push(verdict.moved);
+      continue;
+    }
+    return {
+      rest0: countersOf(a),
+      rest1: countersOf(b),
+      disturbed,
+      moved: verdict.kind === "moved" ? verdict.moved : null,
+    };
+  }
 }
 
 /** The open board's census through the door (DK-3): polled until it is the desk seed's six kinds,
@@ -1079,9 +1131,11 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
     `document.querySelector('.field-scene[data-covered="true"]') !== null`,
   );
   await sleep(700); // the freeze walks its settle before it parks
-  const parked0 = await deskCounters(win);
+  const parkedA = await stillnessSample(win);
   await sleep(1000);
-  const parked1 = await deskCounters(win);
+  const parkedB = await stillnessSample(win);
+  const parked0 = countersOf(parkedA);
+  const parked1 = countersOf(parkedB);
   await js(`globalThis.vibefield.view.set("canvas")`);
   await sleep(700);
   const thawed = await deskCounters(win);
@@ -1090,7 +1144,9 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   console.log(`SMOKE_CANVAS_FREEZE ${JSON.stringify(freeze)}`);
   if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
   if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
-    problems.push(`a cover did not park the desk (${JSON.stringify({ parked0, parked1 })})`);
+    problems.push(
+      `a cover did not park the desk (${JSON.stringify({ parked0, parked1, movedBy: movedBy(parkedA, parkedB) })})`,
+    );
   }
   if (thawed.frames <= parked1.frames) problems.push("the desk did not draw again after the cover");
 
@@ -1300,30 +1356,30 @@ async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
   const focused = await js<boolean>(
     `(() => { const line = document.querySelector(${JSON.stringify(LINE_INPUT)}); line?.focus(); return line !== null && document.activeElement === line; })()`,
   );
-  await waitForRendererFact(
-    win,
-    "the desk at rest",
-    45_000,
-    "globalThis.__vfDesk.rest().asleep === true",
-    "globalThis.__vfDesk.rest()",
+  // the two seconds are taken clear of the example clock's minute turn (DK-6), so the zero is still the whole
+  // witness: not a frame, not a submit, between the wakes — and a window a person's input moved is taken again (DK-10b)
+  const { rest0, rest1, disturbed, moved } = await deskRestWindow(win, () =>
+    waitForRendererFact(
+      win,
+      "the desk at rest",
+      45_000,
+      "globalThis.__vfDesk.rest().asleep === true",
+      "globalThis.__vfDesk.rest()",
+    ),
   );
-  // DK-6: the seed's example clock is a MINUTE clock, and its registered wake moves the resting desk
-  // at each minute's turn (by its law, a hair before it) — by design. The two seconds are taken clear
-  // of a turn, so the zero is still the whole witness: not a frame, not a submit, between the wakes.
-  const intoMinute = Date.now() % 60_000;
-  if (intoMinute < 1_000) await sleep(1_000 - intoMinute);
-  else if (intoMinute > 56_000) await sleep(61_000 - intoMinute);
-  const rest0 = await deskCounters(win);
-  await sleep(2_000);
-  const rest1 = await deskCounters(win);
   const stillFocused = await js<boolean>(
     `document.activeElement === document.querySelector(${JSON.stringify(LINE_INPUT)})`,
   );
-  console.log(`SMOKE_CANVAS_IDLE ${JSON.stringify({ focused, stillFocused, rest0, rest1 })}`);
+  const outside = disturbed.length > 0 ? { disturbed } : {};
+  console.log(
+    `SMOKE_CANVAS_IDLE ${JSON.stringify({ focused, stillFocused, rest0, rest1, ...outside })}`,
+  );
   const problems: string[] = [];
   if (!focused || !stillFocused) problems.push("the line was not focused over the resting desk");
-  if (rest1.submits !== rest0.submits || rest1.frames !== rest0.frames) {
-    problems.push(`the desk did not idle at zero submits (${JSON.stringify({ rest0, rest1 })})`);
+  if (moved !== null) {
+    problems.push(
+      `the desk did not idle at zero submits (${JSON.stringify({ rest0, rest1, movedBy: moved, ...outside })})`,
+    );
   }
   return problems;
 }
@@ -2050,48 +2106,52 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
     `document.querySelector('.field-scene[data-covered="true"]') !== null`,
   );
   await sleep(700); // the freeze walks its settle before it parks
-  const parked0 = await deskCounters(win);
+  const parkedA = await stillnessSample(win);
   await sleep(1_000);
-  const parked1 = await deskCounters(win);
+  const parkedB = await stillnessSample(win);
+  const parked0 = countersOf(parkedA);
+  const parked1 = countersOf(parkedB);
   await js(`globalThis.vibefield.view.set("canvas")`);
   await js(`globalThis.__vfDesk.ambient("idle")`);
-  try {
-    await waitForRendererFact(
-      win,
-      "the desk at rest",
-      45_000,
-      "globalThis.__vfDesk.rest().asleep === true",
-      "globalThis.__vfDesk.rest().asleep",
-    );
-  } catch (error) {
-    // WHY it is awake: the frame loop's wakes that grew over a second, and the desk's registered wake taken apart
-    type Rest = { wakes: Record<string, number>; timed: number; steps: number; due: unknown };
-    const a = await js<Rest>("globalThis.__vfDesk.rest()");
-    await sleep(1_000);
-    const b = await js<Rest>("globalThis.__vfDesk.rest()");
-    const grew = Object.fromEntries(
-      Object.entries(b.wakes)
-        .map(([reason, n]) => [reason, n - (a.wakes[reason] ?? 0)] as const)
-        .filter(([, n]) => n > 0),
-    );
-    throw new Error(
-      `${error instanceof Error ? error.message : String(error)} — awake by ${JSON.stringify({ wakesInASecond: grew, timedInASecond: b.timed - a.timed, stepsInASecond: b.steps - a.steps, due: b.due })}`,
-    );
-  }
-  const intoMinute = Date.now() % 60_000;
-  if (intoMinute < 1_000) await sleep(1_000 - intoMinute);
-  else if (intoMinute > 56_000) await sleep(61_000 - intoMinute);
-  const rest0 = await deskCounters(win);
-  await sleep(2_000);
-  const rest1 = await deskCounters(win);
+  const waitAtRest = async (): Promise<void> => {
+    try {
+      await waitForRendererFact(
+        win,
+        "the desk at rest",
+        45_000,
+        "globalThis.__vfDesk.rest().asleep === true",
+        "globalThis.__vfDesk.rest().asleep",
+      );
+    } catch (error) {
+      // WHY it is awake: the frame loop's wakes that grew over a second, and the desk's registered wake taken apart
+      type Rest = { wakes: Record<string, number>; timed: number; steps: number; due: unknown };
+      const a = await js<Rest>("globalThis.__vfDesk.rest()");
+      await sleep(1_000);
+      const b = await js<Rest>("globalThis.__vfDesk.rest()");
+      const grew = Object.fromEntries(
+        Object.entries(b.wakes)
+          .map(([reason, n]) => [reason, n - (a.wakes[reason] ?? 0)] as const)
+          .filter(([, n]) => n > 0),
+      );
+      throw new Error(
+        `${error instanceof Error ? error.message : String(error)} — awake by ${JSON.stringify({ wakesInASecond: grew, timedInASecond: b.timed - a.timed, stepsInASecond: b.steps - a.steps, due: b.due })}`,
+      );
+    }
+  };
+  const { rest0, rest1, disturbed, moved } = await deskRestWindow(win, waitAtRest);
+  const outside = disturbed.length > 0 ? { disturbed } : {};
   if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
   if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
-    problems.push(`a cover did not park the desk (${JSON.stringify({ parked0, parked1 })})`);
+    problems.push(
+      `a cover did not park the desk (${JSON.stringify({ parked0, parked1, movedBy: movedBy(parkedA, parkedB) })})`,
+    );
   }
-  if (rest1.frames !== rest0.frames || rest1.submits !== rest0.submits) {
-    problems.push(`the desk did not idle at zero (${JSON.stringify({ rest0, rest1 })})`);
+  if (moved !== null) {
+    problems.push(
+      `the desk did not idle at zero (${JSON.stringify({ rest0, rest1, movedBy: moved, ...outside })})`,
+    );
   }
-  return { facts: { busy0, busy1, parked0, parked1, rest0, rest1 }, problems };
+  return { facts: { busy0, busy1, parked0, parked1, rest0, rest1, ...outside }, problems };
 }
 
 /** What `plugins.reload` was answered, as a fact: null when it reloaded, its refusal's words otherwise. */
