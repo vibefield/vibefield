@@ -428,6 +428,31 @@ describe("MV-3a — the model's row on the wire (MV-D22, MV-D18)", () => {
     // a terminal row is this desktop's windows' only: the path never leaves the device
     expect(terminal.monitorRow.detail).toBe("/Users/james/Projects/notes");
   });
+
+  it("M41 — the row says its home desktop's write policy, and a row from an older daemon without it still parses", () => {
+    // a declared fact, not passthrough: the home backend computed it (today it IS attachable's rule)
+    expect(MonitorAgentRow.shape.writable).toBeDefined();
+    expect(row).toMatchObject({ attachable: true, writable: true });
+    expect(desk.monitorRow).toMatchObject({ attachable: true, writable: true });
+    expect(terminal.monitorRow).toMatchObject({ attachable: true, writable: true });
+    // the home desktop's own word, never re-derived on the way: the two may part
+    expect(
+      MonitorAgentRow.parse({
+        ...(golden("monitor-agent-row.valid.json") as object),
+        writable: false,
+      }),
+    ).toMatchObject({ attachable: true, writable: false });
+    // the tolerant reader (an older peer's row has none): it parses, and stays absent here — the
+    // window adapter fills it from `attachable`, the rule that daemon applied
+    const { writable: _absent, ...older } = golden("monitor-agent-row.valid.json") as Record<
+      string,
+      unknown
+    >;
+    const parsed = MonitorAgentRow.parse(older);
+    expect(parsed.writable).toBeUndefined();
+    expect(parsed.attachable).toBe(true);
+    expect(MonitorAgentRow.safeParse({ ...older, writable: "yes" }).success).toBe(false);
+  });
 });
 
 describe("MV-3d — the chrome's facts ride this desktop's own rows of the model board (M35, M42)", () => {

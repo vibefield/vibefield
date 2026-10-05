@@ -158,6 +158,49 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
     expect(fold.held("run-loft-w")).toBeUndefined();
     expect(fold.heldRows()).toHaveLength(2);
   });
+
+  it("M41 — the write policy rides every row: the home desktop's word as sent, and attachable's rule for a peer on an older daemon", () => {
+    const fold = new ModelBoardFold();
+    // the goldens carry the backend's value on every row: this desktop's agent and terminal, the peer's run
+    expect(fold.open(OPEN).rows.map((row) => [row.id, row.writable])).toEqual([
+      ["run-studio-q", true],
+      ["pty-s4", true],
+      ["run-loft-w", true],
+    ]);
+    const peer = OPEN.devices[1]?.snapshot?.rows[0];
+    if (peer === undefined || peer.kind === "terminal" || peer.monitorRow === undefined) {
+      throw new Error("the peer's desk row");
+    }
+    const upsert = (monitorRow: typeof peer.monitorRow, revision: number) =>
+      fold.frame({
+        device: PEER,
+        delta: {
+          epoch: "fieldd-5d2c8f1a0b7e4c93.2",
+          since: revision - 1,
+          revision,
+          upserts: [{ ...peer, monitorRow }],
+          removed: [],
+        },
+      });
+    // the home desktop's own word is never re-derived: here the two part
+    const parted = upsert({ ...peer.monitorRow, attachable: true, writable: false }, 18);
+    expect(parted !== null && parted !== "gap" ? parted.upserts[0] : undefined).toMatchObject({
+      attachable: true,
+      writable: false,
+    });
+    // a peer on an older daemon sends none: the row takes the rule that daemon applied
+    const { writable: _none, ...older } = peer.monitorRow;
+    const filled = upsert({ ...older, attachable: false }, 19);
+    expect(filled !== null && filled !== "gap" ? filled.upserts[0] : undefined).toMatchObject({
+      attachable: false,
+      writable: false,
+    });
+    const attachable = upsert({ ...older, attachable: true }, 20);
+    expect(
+      attachable !== null && attachable !== "gap" ? attachable.upserts[0] : undefined,
+    ).toMatchObject({ attachable: true, writable: true });
+    expect(fold.held("run-loft-w")?.row.writable).toBe(true);
+  });
 });
 
 describe("MV-3d — the chrome's runs: this desktop's run rows, split from the model as they land", () => {

@@ -280,6 +280,14 @@ export const MonitorAgentRow = z
     profileSet: z.string().optional(),
     /** a pane on the owning desktop can show it now */
     attachable: z.boolean(),
+    /** M41 — whether a pane on ANOTHER desktop may type into this run, by its
+     * home desktop's policy: computed once by the row's home backend (today it
+     * equals `attachable`), read by a view only for a row from another desktop
+     * (the list's host chip, the swarm's host line). Optional on the wire, the
+     * tolerant reader's rule: a peer on an older daemon sends none, and the
+     * window adapter fills it from `attachable` — the rule that daemon applied —
+     * so the SDK's row always carries it. */
+    writable: z.boolean().optional(),
   })
   .passthrough();
 export type MonitorAgentRow = z.infer<typeof MonitorAgentRow>;

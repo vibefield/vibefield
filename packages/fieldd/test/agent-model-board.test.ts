@@ -163,6 +163,35 @@ describe("the two cuts of the model's row (M16, M21)", () => {
     const row = deskProjector(() => undefined)(working);
     expect("monitorRow" in row).toBe(false);
   });
+
+  it("M41 — the home backend's write policy rides both cuts as the contract declares it: writable where a PTY is named, not where none is", async () => {
+    const monitor = await testMonitor({
+      summaries: [working, summary({ runtimeRunId: "run-headless", noTerminal: true })],
+    });
+    const named = monitor.row("run-working");
+    const headless = monitor.row("run-headless");
+    // computed once by the home backend; today it IS attachable's rule
+    expect(named).toMatchObject({ attachable: true, writable: true });
+    expect(headless).toMatchObject({ attachable: false, writable: false });
+    for (const row of [named, headless]) {
+      // a peer reads the owner's value, and so does this desktop's own window
+      expect(peerMonitorRow(row).writable).toBe(row.writable);
+      expect(windowMonitorRow(row).writable).toBe(row.writable);
+      // EL9: what the window's adapter parses keeps it, a declared field
+      expect(MonitorAgentRow.parse(peerMonitorRow(row)).writable).toBe(row.writable);
+    }
+    // the desk projector a peer's board is cut with carries it on the desk row
+    const session = monitor.fold
+      .list()
+      .sessions.find((candidate) => candidate.runtimeRunId === "run-headless");
+    if (session === undefined) throw new Error("the fold lists the headless run");
+    const desk = AgentDeskRow.parse({
+      ...deskProjector((id) => monitor.service.rowForRun(id))(session),
+      revision: 1,
+    });
+    expect(desk.monitorRow).toMatchObject({ attachable: false, writable: false });
+    monitor.service.dispose();
+  });
 });
 
 describe("who may ask the model board (MV-D18, M16, L8)", () => {

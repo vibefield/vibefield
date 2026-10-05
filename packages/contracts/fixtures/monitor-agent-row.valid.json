@@ -66,5 +66,6 @@
   },
   "tier": "managed",
   "profileSet": "native",
-  "attachable": true
+  "attachable": true,
+  "writable": true
 }

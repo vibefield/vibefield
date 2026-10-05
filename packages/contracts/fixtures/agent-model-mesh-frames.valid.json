@@ -36,7 +36,8 @@
               "os": "mac"
             },
             "profileSet": "native",
-            "attachable": true
+            "attachable": true,
+            "writable": true
           }
         }
       ],

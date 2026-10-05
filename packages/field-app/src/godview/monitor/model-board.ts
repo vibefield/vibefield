@@ -84,12 +84,18 @@ export function isTerminalBoardRow(row: AgentModelBoardRow): row is AgentDeskTer
 
 /** The wire row as the SDK's row, with the reader's one fact joined. The wire
  * mirrors the SDK field for field (fieldd parses real backend rows through the
- * contract); the OS mark is kept only when it is one of the SDK's words. */
+ * contract); the OS mark is kept only when it is one of the SDK's words.
+ *
+ * M41 — `writable` is the home desktop's own word and passes as sent. A peer
+ * on an older daemon sends none (the tolerant reader), and the row is then
+ * given the rule that daemon applied, `attachable`, so the SDK's row always
+ * carries the fact and no view derives write policy. */
 export function modelRowFrom(wire: WireMonitorRow, here: string | undefined): MonitorAgentRow {
   const { os, ...device } = wire.device;
   const marked = os !== undefined && SDK_OS.has(os) ? (os as DeviceOs) : undefined;
   return {
     ...wire,
+    writable: wire.writable ?? wire.attachable,
     device: {
       ...device,
       ...(marked !== undefined ? { os: marked } : {}),
