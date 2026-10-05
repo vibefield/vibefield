@@ -9,8 +9,9 @@ import type {
 import type { RecordedFrame } from "./frame-recorder";
 
 // THE REPLAY DOOR (MV-0): a `MonitorDoor` whose two streams are fed from a
-// corpus instead of a daemon. `useLocalAgentField` and `useMeshField` subscribe
-// to it exactly as they subscribe to the deck's door, and `deliver(frame)` hands
+// corpus instead of a daemon. `useLocalAgentField` and `useMeshField` (the
+// pre-MV seam's readers, retired by MV-3d and MV-3b) subscribe to it exactly as
+// they subscribe to the deck's door, and `deliver(frame)` hands
 // them what the recorder wrote down — so what runs downstream is TODAY'S seam on
 // recorded or generated inputs, with nothing of the seam replaced.
 //

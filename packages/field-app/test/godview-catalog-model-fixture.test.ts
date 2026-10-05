@@ -11,6 +11,11 @@
  * board row's key, kind, shape (`status` present or not) and PTY join, and the
  * model row whole. Wire stamps the window never reads (`revision`, `epoch`,
  * `asOf`) are left out. The clock is pinned so both backends stamp the same now.
+ *
+ * MV-3d — and what the chrome reads of a run row beside the model: the chrome's
+ * facts (`local`, this desktop's rows only), the status and its clock (the
+ * AR-7 marker, the find sheet). The pane frame's model, effort and context
+ * share are not compared: the catalog mounts no deck (`GodviewUnavailableDeck`).
  */
 
 import type { AgentModelMeshOpen } from "@vibefield/contracts";
@@ -60,6 +65,13 @@ function windowReads(open: AgentModelMeshOpen) {
                 replaced: row.terminal.replaced,
               },
         monitorRow: row.monitorRow,
+        ...("status" in row
+          ? {
+              status: row.status,
+              statusSince: row.statusSince,
+              local: (row as { local?: unknown }).local,
+            }
+          : {}),
       })),
   }));
 }

@@ -10,6 +10,7 @@ import {
 } from "../src/godview/monitor/agent-status";
 import { folderName } from "../src/godview/monitor/folder-name";
 import { paneFrameAgentFacts } from "../src/godview/monitor/pane-frame-facts";
+import { chromeRunOf } from "./chrome-run-fixture";
 import { managedSummary } from "./managed-session-fixture";
 
 // The reference app's `agent-status.test.ts`, ported at GT-3m, re-fed at AR-3
@@ -138,7 +139,7 @@ describe("Godview agent status", () => {
     // which is exactly what it must keep taking once the tool is read
     // correctly. Stated here rather than assumed, because "the frame reads the
     // nested field too" would be a claim about code that draws no blocker.
-    const facts = paneFrameAgentFacts(blocked);
+    const facts = paneFrameAgentFacts(chromeRunOf(blocked));
     expect(facts?.status).toBe("blocked");
     expect(Object.keys(facts ?? {})).not.toContain("tool");
   });

@@ -3,9 +3,12 @@ import {
   AGENT_FIELD,
   AgentDeskRow,
   AgentDeskTerminalRow,
+  AgentFieldRow,
   type AgentModelBoardRow,
   AgentModelDelta,
+  AgentModelDeskRow,
   AgentModelSnapshot,
+  type AgentSessionSummary,
   AgentSubscribeParams,
   MonitorAgentRow,
 } from "@vibefield/contracts";
@@ -13,8 +16,10 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   createFieldSubscription,
   deskProjector,
+  localFactsOf,
   peerMonitorRow,
   projectDeskRow,
+  projectFieldRow,
   refuseBoardAsk,
   windowMonitorRow,
 } from "../src/agent-field";
@@ -108,8 +113,11 @@ describe("the model board — this desktop's windows' cut", () => {
       monitor: monitor.service,
       emit: () => undefined,
     });
-    const first = AgentDeskRow.parse(board.snapshot.rows[0]);
+    const first = AgentModelDeskRow.parse(board.snapshot.rows[0]);
     expect(first.monitorRow).toBeUndefined();
+    // MV-3d — the chrome's facts are the fold's, not the backend's: they ride
+    // from the first frame (the marker names every run of the fold)
+    expect(first.local?.nativeSessionId).toBe("run-working-native");
     board.dispose();
     monitor.service.dispose();
   });
@@ -317,6 +325,171 @@ describe("EL9 — what the window's adapter parses is what fieldd sends", () => 
     expect(delta.removed).toEqual(["pty-bare"]);
     const rows: AgentModelBoardRow[] = delta.upserts;
     expect(rows).toHaveLength(0);
+    board.dispose();
+    monitor.service.dispose();
+  });
+});
+
+// MV-3d (M35, M42) — THE CHROME'S FACTS: what the window's chrome reads of a run
+// beside the model (the deck's pane frames and launchers, the find sheet, the
+// AR-7 marker) rides the run's own row of the model board, so `full` is no
+// longer asked while Godview is open. The window's cut carries them; no peer,
+// no phone and no model row ever does.
+
+/** A run as core and fieldd report it once its provider has spoken: the
+ * session's start, the newest evidence and the context's source in the
+ * mirror's own words, typed at a pane's prompt (AR-7). */
+function spoken(runtimeRunId: string, cwd: string): AgentSessionSummary {
+  const row = summary({ runtimeRunId, status: "working", contextPercent: 41, cwd });
+  const monitor = row.monitor;
+  if (monitor === undefined) throw new Error("the fixture's run has a mirror");
+  return {
+    ...row,
+    spawnedBy: "user-shell",
+    monitor: {
+      ...monitor,
+      session: { nativeSessionId: `${runtimeRunId}-native`, startedAt: "2026-09-13T09:58:00.000Z" },
+    },
+  };
+}
+
+describe("MV-3d — the chrome's facts ride the window's own run rows (M35, M42)", () => {
+  it("the window's cut carries each fact a chrome reader reads; the peer's desk cut, the phone's field row and the model's row carry none", async () => {
+    const typed = spoken("run-typed", "/Users/me/src/vibe-field");
+    const starting = summary({ runtimeRunId: "run-starting", monitor: false, cwd: "/repo/wt" });
+    const exited = summary({ runtimeRunId: "run-exited", exited: true });
+    const monitor = await testMonitor({ summaries: [typed, starting, exited] });
+    monitor.rows();
+    const board = createModelSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: () => undefined,
+      epoch: "boot.5",
+    });
+    const rows = AgentModelSnapshot.parse(board.snapshot).rows.map((row) =>
+      AgentModelDeskRow.parse(row),
+    );
+    const [run, unspoken, ended] = rows;
+    expect(run?.local).toEqual({
+      nativeSessionId: "run-typed-native",
+      cwd: "/Users/me/src/vibe-field",
+      spawnedBy: "user-shell",
+      mirror: {
+        alive: true,
+        startedAt: "2026-09-13T09:58:00.000Z",
+        lastEvidenceAt: "2026-09-13T10:05:00.000Z",
+        contextSource: "provider",
+      },
+    });
+    // before the provider speaks: no mirror, and the workspace names the directory
+    expect(unspoken?.local).toEqual({ nativeSessionId: "run-starting-native", cwd: "/repo/wt" });
+    // fieldd witnessed the exit; the mirror's own liveness rides beside it, verbatim
+    expect(ended?.local).toMatchObject({ exited: true, mirror: { alive: true } });
+    expect(ended?.alive).toBe(false);
+    // the path is the window's alone (EL7 B1): the model's row names the folder
+    expect(run?.monitorRow?.project.name).toBe("vibe-field");
+    expect(JSON.stringify(run?.monitorRow)).not.toContain("/Users/me");
+    // the desk cut a peer reads, and the phone's field row, carry none
+    for (const source of [typed, starting, exited]) {
+      const desk = deskProjector((id) => monitor.service.rowForRun(id))(source);
+      expect("local" in desk).toBe(false);
+      expect("local" in projectFieldRow(source)).toBe(false);
+      expect(
+        "local" in
+          projectDeskRow(source, undefined, monitor.service.rowForRun(source.runtimeRunId), "peer"),
+      ).toBe(false);
+    }
+    // and a peer's desk board, end to end, with the backend behind it
+    const peerFrames: unknown[] = [];
+    const peerBoard = createFieldSubscription({
+      list: () => monitor.fold.list(),
+      subscribe: (fn) => monitor.fold.subscribe(fn),
+      emit: (delta) => peerFrames.push(delta),
+      project: deskProjector((id) => monitor.service.rowForRun(id)),
+      minIntervalMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+      epoch: "boot.6",
+    });
+    for (const row of peerBoard.snapshot.rows) {
+      expect("local" in AgentDeskRow.parse(row)).toBe(false);
+      AgentFieldRow.parse(row);
+    }
+    peerBoard.dispose();
+    board.dispose();
+    monitor.service.dispose();
+  });
+
+  it("an empty word is no directory, and a context source that is not a word is none", () => {
+    const row = summary({ runtimeRunId: "run-b", cwd: "" });
+    const nowhere: AgentSessionSummary = { ...row, workspace: { mode: "direct" } };
+    expect(localFactsOf(nowhere).cwd).toBeUndefined();
+    const odd: AgentSessionSummary = {
+      ...row,
+      monitor: {
+        ...(row.monitor as NonNullable<AgentSessionSummary["monitor"]>),
+        context: { usedTokens: 1, capacityTokens: 2, usedPercent: 50, percentageSource: 7 },
+      },
+    };
+    expect(localFactsOf(odd).mirror).not.toHaveProperty("contextSource");
+  });
+
+  it("a moved fact upserts the run's row in the board's next delta; a republish that moves none sends nothing", async () => {
+    vi.useFakeTimers();
+    const base = spoken("run-a", "/Users/me/src/vibe-field");
+    const monitor = await testMonitor({ summaries: [base] });
+    monitor.rows();
+    const frames: AgentModelDelta[] = [];
+    const board = createModelSubscription({
+      fold: monitor.fold,
+      monitor: monitor.service,
+      emit: (delta) => frames.push(AgentModelDelta.parse(delta)),
+      epoch: "boot.7",
+    });
+    const tick = (): void => {
+      vi.advanceTimersByTime(AGENT_FIELD.FULL_TICK_MS + 1);
+    };
+    const local = (frame: AgentModelDelta | undefined) =>
+      AgentModelDeskRow.parse(frame?.upserts[0]).local;
+    tick();
+    // the same rows again, as new objects: no fact moved, so nothing is sent
+    monitor.fold.publish([structuredClone(base)]);
+    tick();
+    expect(frames).toHaveLength(0);
+    // the vendor's own session id learned: only the chrome reads it
+    const learned: AgentSessionSummary = { ...base, sessionId: "vendor-session-1" };
+    monitor.fold.publish([learned]);
+    tick();
+    expect(frames).toHaveLength(1);
+    expect(frames[0]?.upserts.map((row) => row.runtimeRunId)).toEqual(["run-a"]);
+    expect(local(frames[0])?.nativeSessionId).toBe("vendor-session-1");
+    // the agent moves to another directory: the path rides the row
+    const mirror = learned.monitor as NonNullable<AgentSessionSummary["monitor"]>;
+    const moved: AgentSessionSummary = {
+      ...learned,
+      monitor: { ...mirror, environment: { ...mirror.environment, cwd: "/Users/me/src/rosetta" } },
+    };
+    monitor.fold.publish([moved]);
+    tick();
+    expect(frames).toHaveLength(2);
+    expect(local(frames[1])?.cwd).toBe("/Users/me/src/rosetta");
+    // the run exits while its pane stays on the floor: the marker's `exited`
+    const ended: AgentSessionSummary = {
+      ...moved,
+      continuation: { persisted: true, resumable: true, exited: true },
+    };
+    monitor.fold.publish([ended]);
+    tick();
+    expect(frames).toHaveLength(3);
+    expect(local(frames[2])?.exited).toBe(true);
+    // and still: a republish of what was last sent sends nothing
+    monitor.fold.publish([structuredClone(ended)]);
+    tick();
+    expect(frames).toHaveLength(3);
+    // the chain is unbroken
+    let revision = board.snapshot.revision;
+    for (const frame of frames) {
+      expect(frame.since).toBe(revision);
+      revision = frame.revision;
+    }
     board.dispose();
     monitor.service.dispose();
   });

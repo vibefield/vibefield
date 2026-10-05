@@ -2,6 +2,7 @@ import { createMonitorReplica, type MonitorReplica } from "@vibecook/puppeteer-m
 import type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";
 import { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
 import { useEffect, useState } from "react";
+import type { ChromeFacts } from "./chrome-facts";
 import { meshBoardFailure } from "./doors";
 import { type HeldModelRow, type ModelBoardDevice, ModelBoardFold } from "./model-board";
 import type { ModelBoardPort } from "./remote-door";
@@ -32,9 +33,16 @@ import type { ModelBoardPort } from "./remote-door";
  *
  * MV-3b: the board arrives through the door's model PORT (`remote-door.ts`
  * `ModelBoardPort` — the two verbs, never a client), `GodviewAgentsProvider`
- * mounts the hook below beside the fold, and `GodviewMonitor` draws the replica.
- * The fold's held rows (`held`, `heldRows`) are the window's own joins: the
- * pane a model id stands for, the run a model id was dealt to.
+ * mounts the hook below, and `GodviewMonitor` draws the replica. The fold's
+ * held rows (`held`, `heldRows`) are the window's own joins: the pane a model id
+ * stands for, the run a model id was dealt to.
+ *
+ * MV-3d (M35, M19) — THE SPLIT: each of this desktop's run rows goes two ways
+ * as it lands. Its model row goes to the replica, as above; the row whole, with
+ * the chrome's facts it carries (`local`), goes to `chrome` — the window's store
+ * for the deck's pane frames, the find sheet and the AR-7 marker. Those read
+ * nothing else now: the fold's `full` board is not asked while Godview is open,
+ * and the one subscription below is the window's only one (PF6 unchanged).
  */
 
 export type MonitorFeedState =
@@ -58,6 +66,8 @@ export interface GodviewMonitorFeed {
   subscribe(listener: () => void): () => void;
   /** L5 — the rows the active pane shows, by model id; re-sent after a re-open */
   reportShown(ids: readonly string[]): void;
+  /** MV-3d — this desktop's runs as the chrome reads them (never the views') */
+  readonly chrome: ChromeFacts;
   dispose(): void;
 }
 
@@ -91,6 +101,9 @@ export function createGodviewMonitorFeed(
   });
   const fold = new ModelBoardFold();
   const listeners = new Set<() => void>();
+  const chromeListeners = new Set<() => void>();
+  /** the runs the chrome's listeners last heard of */
+  let chromeRuns = fold.runs();
   const retryMin = opts.retryMinMs ?? MESH_RETRY_MIN_MS;
   const retryMax = opts.retryMaxMs ?? MESH_RETRY_MAX_MS;
   let state: MonitorFeedState = { state: "connecting" };
@@ -104,6 +117,21 @@ export function createGodviewMonitorFeed(
   const publish = (next: MonitorFeedState): void => {
     state = next;
     for (const listener of [...listeners]) {
+      try {
+        listener();
+      } catch (error) {
+        opts.onError?.(error);
+      }
+    }
+  };
+
+  /** MV-3d — the chrome hears this desktop's runs move, and nothing else: a
+   * frame that touched only peers or terminals keeps the array it had. */
+  const chromeMoved = (): void => {
+    const next = fold.runs();
+    if (next === chromeRuns) return;
+    chromeRuns = next;
+    for (const listener of [...chromeListeners]) {
       try {
         listener();
       } catch (error) {
@@ -158,6 +186,7 @@ export function createGodviewMonitorFeed(
       }
       failures = 0;
       replica.apply(fold.open(parsed.data));
+      chromeMoved();
       publish({ state: "live", here: fold.here });
       sendReport();
     };
@@ -173,6 +202,7 @@ export function createGodviewMonitorFeed(
         reopen();
         return;
       }
+      chromeMoved();
       if ("state" in parsed.data) {
         publish(state); // the devices moved
         return;
@@ -230,6 +260,13 @@ export function createGodviewMonitorFeed(
       lastReport = [...ids];
       sendReport();
     },
+    chrome: {
+      runs: () => fold.runs(),
+      subscribe(listener) {
+        chromeListeners.add(listener);
+        return () => chromeListeners.delete(listener);
+      },
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -240,6 +277,7 @@ export function createGodviewMonitorFeed(
       unsubscribe?.();
       unsubscribe = null;
       listeners.clear();
+      chromeListeners.clear();
       replica.dispose();
     },
   };
@@ -247,8 +285,8 @@ export function createGodviewMonitorFeed(
 
 /**
  * The feed while a door with a model board is held and Godview is open (PF6):
- * one subscription per window, opened on mount and closed on unmount, like the
- * fold's `useLocalAgentField`. Null without a board or while not subscribed.
+ * one subscription per window — since MV-3d the window's only one — opened on
+ * mount and closed on unmount. Null without a board or while not subscribed.
  */
 export function useMonitorReplica(
   board: ModelBoardPort | null,

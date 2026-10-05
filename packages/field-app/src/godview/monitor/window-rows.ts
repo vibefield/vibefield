@@ -2,9 +2,8 @@ import type { MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
 import type { MonitorAgent as ViewsMonitorAgent } from "@vibecook/puppeteer-views";
 import { type LegacyShimOptions, toMonitorAgents } from "@vibecook/puppeteer-views/legacy";
 import type { RowsDeviceState } from "@vibefield/contracts";
-import type { HeldModelRow } from "./model-board";
+import { type HeldModelRow, isTerminalBoardRow } from "./model-board";
 import type { MonitorPaneFacts } from "./useMonitorAgents";
-import { isTerminalBoardRow } from "./window-local";
 
 /**
  * MV-3b (L9, M4, M9) — THE WINDOW'S ROWS: the legacy shim's rows for the

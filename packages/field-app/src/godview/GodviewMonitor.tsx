@@ -30,9 +30,9 @@ import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../develo
 import { DeviceFilterChip } from "./DeviceFilterChip";
 import type { GodviewTheme } from "./GodviewTuningPanel";
 import { monitorAgentCounts } from "./monitor/agents";
+import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
 import type { DeviceChoice } from "./monitor/device-filter";
-import type { AgentSessionSummary } from "./monitor/facet-types";
-import { useAgentFold } from "./monitor/GodviewAgentsProvider";
+import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
 import {
   bloomOwnsKeyEvent,
   launcherOwnsKeyEvent,
@@ -130,32 +130,41 @@ export function remoteUnavailableClaim(sources: MonitorSourceCounts): string | n
 }
 
 /**
- * AR-7 — the fold's rows as the marker names them: every run, whether the
- * stage draws it or not. The pane is the fold's own join (`terminal`, a LOCAL
+ * AR-7 — this desktop's runs as the marker names them: every run, whether the
+ * stage draws it or not. The pane is the run's own join (`terminal`, a LOCAL
  * row only — a peer's session id names no pane here), the provenance is the
  * row's word with the contract's default (absent reads `app`), and `drawn` is
  * asked of the RUNS the stage actually shows (MV-3b: the model's rows, each
- * joined to its run through the board row it rode in on). The fold stays the
- * marker's source (M19): the model carries neither the PTY join, nor the
- * provenance, nor the exit a smoke reads here.
+ * joined to its run through the board row it rode in on). The model carries
+ * neither the PTY join, nor the provenance, nor the exit a smoke reads here
+ * (M19): MV-3d reads them off each run's row of the model board, the chrome's
+ * facts beside the model (`local`), where the fold's `full` row used to be.
  */
 export function monitorRunFacts(
-  rows: readonly AgentSessionSummary[],
+  runs: readonly ChromeRun[],
   drawnRuns: ReadonlySet<string>,
 ): GodviewMonitorRunFacts[] {
-  return rows.map((row) => {
-    const terminal = row.terminal?.hosted === "local" ? row.terminal.runtimeSessionId : undefined;
+  return runs.map((run) => {
+    const terminal = run.terminal?.hosted === "local" ? run.terminal.runtimeSessionId : undefined;
     return {
-      run: row.runtimeRunId,
-      provider: row.kind,
+      run: run.runtimeRunId,
+      provider: run.kind,
       ...(terminal !== undefined && terminal !== "" ? { terminal } : {}),
-      spawnedBy: row.spawnedBy ?? "app",
-      status: row.status,
-      exited: row.continuation?.exited === true,
-      observed: row.monitor !== undefined,
-      drawn: drawnRuns.has(row.runtimeRunId),
+      spawnedBy: run.local?.spawnedBy ?? "app",
+      status: run.status,
+      exited: run.local?.exited === true,
+      observed: run.local?.mirror !== undefined,
+      drawn: drawnRuns.has(run.runtimeRunId),
     };
   });
+}
+
+const NO_DRAWN: ReadonlySet<string> = new Set();
+
+/** What the marker states of the runs before `drawn` is joined: a key, so the
+ * stage renders again for a marker fact and never for a token count. */
+function markerRunsKey(runs: readonly ChromeRun[]): string {
+  return JSON.stringify(monitorRunFacts(runs, NO_DRAWN));
 }
 
 /** The stage before it is measured: no size, no chrome. */
@@ -342,13 +351,16 @@ export function GodviewMonitor({
   /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */
   const [usageTiles, setUsageTiles] = useState(-1);
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
-  // AR-7 — the fold's rows for the marker, handed on as the SAME object until
-  // a fact the marker states moves: the fold sends a whole board at fieldd's
-  // tick while an agent works, and a token count is no news to this line (the
-  // identity rule the deck's frame facts follow in `GodviewAgentsProvider`).
-  // `drawn` is asked of the runs behind the agent rows the stage shows, through
-  // the board's join (`runByRow`) — observed or not.
-  const fold = useAgentFold();
+  // AR-7 — this desktop's runs for the marker, handed on as the SAME object
+  // until a fact the marker states moves: a working agent's row moves several
+  // times a second, and a token count is no news to this line (the identity
+  // rule the deck's frame facts follow in `GodviewAgentsProvider`). MV-3d: the
+  // runs are the chrome's (`chrome-facts.ts`), and the stage hears them only
+  // when the marker's own key moves. `drawn` is asked of the runs behind the
+  // agent rows the stage shows, through the board's join (`runByRow`) —
+  // observed or not.
+  const chrome = useMonitorFeed()?.chrome ?? null;
+  useChromeKey(chrome, markerRunsKey);
   const runFacts = useRef<{ key: string; runs: GodviewMonitorRunFacts[] }>({ key: "", runs: [] });
   const drawnRuns = useMemo(
     () =>
@@ -360,7 +372,7 @@ export function GodviewMonitor({
       ),
     [shown, runByRow],
   );
-  const nextRuns = monitorRunFacts(fold.rows, drawnRuns);
+  const nextRuns = monitorRunFacts(chrome?.runs() ?? NO_RUNS, drawnRuns);
   const runsKey = JSON.stringify(nextRuns);
   if (runsKey !== runFacts.current.key) runFacts.current = { key: runsKey, runs: nextRuns };
   const runs = runFacts.current.runs;

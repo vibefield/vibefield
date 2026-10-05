@@ -3,7 +3,7 @@ import type {
   MonitorReplicaLocal,
 } from "@vibecook/puppeteer-monitor/replica";
 import type { MonitorActivity, MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";
-import type { HeldModelRow } from "./model-board";
+import { type HeldModelRow, isTerminalBoardRow } from "./model-board";
 import type { MonitorPaneFacts } from "./useMonitorAgents";
 
 /**
@@ -49,13 +49,6 @@ const NO_JOINS: BoardJoins = Object.freeze({
   replacements: Object.freeze([]),
   terminalRows: Object.freeze([]),
 });
-
-/** A board row is a terminal's when it is of the terminal kind and carries no status of its own. */
-export function isTerminalBoardRow(
-  board: HeldModelRow["board"],
-): board is Extract<HeldModelRow["board"], { kind: "terminal" }> {
-  return board.kind === "terminal" && !("status" in board);
-}
 
 export function boardJoins(held: readonly HeldModelRow[], here: string | undefined): BoardJoins {
   if (here === undefined) return NO_JOINS;

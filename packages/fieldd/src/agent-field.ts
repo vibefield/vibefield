@@ -3,13 +3,14 @@ import {
   AGENT_FIELD,
   type AgentDeskBlocker,
   type AgentDeskMessage,
-  AgentDeskRow,
   AgentDeskTerminalRow,
   type AgentFieldBlocker,
   type AgentFieldDelta,
   AgentFieldRow,
   type AgentFieldSnapshot,
   type AgentListResult,
+  AgentModelDeskRow,
+  type AgentModelLocalFacts,
   type AgentSessionSummary,
   type AgentSessionTerminal,
   type AgentSubscribeParams,
@@ -164,8 +165,10 @@ export function refuseBoardAsk(principal: string, ask: AgentSubscribeParams): Rp
 const ProjectedRowSchema = AgentFieldRow.omit({ revision: true });
 export type ProjectedFieldRow = (typeof ProjectedRowSchema)["_output"];
 /** MV-3a — the model board's two row shapes before the counter stamps them,
- * derived the same way and for the same reason (`Omit` would swallow them). */
-const ProjectedDeskRowSchema = AgentDeskRow.omit({ revision: true });
+ * derived the same way and for the same reason (`Omit` would swallow them).
+ * MV-3d — the run's row is the model board's own (`AgentModelDeskRow`): the desk
+ * row with the chrome's facts beside it. */
+const ProjectedDeskRowSchema = AgentModelDeskRow.omit({ revision: true });
 export type ProjectedDeskRow = (typeof ProjectedDeskRowSchema)["_output"];
 const ProjectedTerminalRowSchema = AgentDeskTerminalRow.omit({ revision: true });
 export type ProjectedTerminalRow = (typeof ProjectedTerminalRowSchema)["_output"];
@@ -462,6 +465,51 @@ export function projectModelTerminalRow(
   };
 }
 
+// MV-3d (M35, M42) — THE CHROME'S FACTS, CUT FOR THIS DESKTOP'S OWN WINDOW.
+// The window draws chrome beside the views that the model does not serve, by
+// design (M19; MV-D17): the deck's pane frames and launchers, the find sheet,
+// the AR-7 marker. They read the fold's `full` board until MV-3d — a second
+// subscription sending the whole board every 16 ms while anything moved — and
+// read these facts now, riding the run's own row of the `model` board
+// (`AgentModelDeskRow.local`). Each fact is one a reader reads and the rest of
+// the row does not say; what the row already carries (the provider, its label,
+// the status and its clock, the PTY join, the model, the effort, the context
+// share) is read off the row. The window cut alone carries them: the `desk` cut
+// a peer receives never does, `monitorRow` never does, the phone's field row
+// never does — which is what lets `cwd` be a PATH (EL7 B1).
+
+/** The fold's facts the window's chrome reads of one run, beside the model.
+ * Pure, key order fixed, so the board's change detection (the projected row's
+ * JSON) moves exactly when one of them does. */
+export function localFactsOf(summary: AgentSessionSummary): AgentModelLocalFacts {
+  const monitor = summary.monitor;
+  // the pane frame's chain (`pane-frame-facts.ts`): the directory the provider
+  // observed, else the workspace's source path, else its root — `||`, so an
+  // empty word names nothing
+  const cwd =
+    monitor?.environment?.cwd || summary.workspace?.sourcePath || summary.workspace?.root || "";
+  const startedAt = monitor?.session?.startedAt;
+  const lastEvidenceAt = monitor?.freshness?.lastEvidenceAt;
+  const contextSource = objectAt(monitor, "context")?.["percentageSource"];
+  return {
+    nativeSessionId: summary.sessionId,
+    ...(cwd !== "" ? { cwd } : {}),
+    ...(summary.spawnedBy !== undefined ? { spawnedBy: summary.spawnedBy } : {}),
+    ...(summary.continuation?.exited === true ? { exited: true } : {}),
+    ...(monitor !== undefined
+      ? {
+          mirror: {
+            alive: monitor.alive,
+            // verbatim, an empty word included: the find sheet tells "" from absent
+            ...(startedAt !== undefined ? { startedAt } : {}),
+            ...(lastEvidenceAt !== undefined ? { lastEvidenceAt } : {}),
+            ...(typeof contextSource === "string" ? { contextSource } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
 /**
  * DS-3 — the DESK row: the field row plus the reply line, the blocker's
  * question and the cost (DS-D4; `AgentDeskRow` in the contract). Content is
@@ -475,6 +523,10 @@ export function projectModelTerminalRow(
  * (`peerMonitorRow`), this desktop's own window's when `audience` says so.
  * Absent (the backend has not assembled the run yet, or a caller without the
  * backend), the row carries none and a reader draws what it was sent.
+ *
+ * MV-3d — the window's cut also carries the chrome's facts (`localFactsOf`),
+ * whether or not the backend has assembled the run: the marker names every run
+ * of the fold. A peer's cut never does.
  */
 export function projectDeskRow(
   summary: AgentSessionSummary,
@@ -514,6 +566,7 @@ export function projectDeskRow(
               : peerMonitorRow(monitorRow, chars),
         }
       : {}),
+    ...(audience === "window" ? { local: localFactsOf(summary) } : {}),
   };
 }
 

@@ -10,8 +10,10 @@ import type { MeshBoardFailure, MonitorDoor } from "../remote-door";
 // half reports — each stamped with a monotonic clock and the wall clock. The
 // seam is the DOOR because the door is where the renderer's reading of the
 // daemon begins: what is recorded here is exactly what `useLocalAgentField`
-// and `useMeshField` would have been handed, so a corpus replayed through the
-// same door drives today's seam with today's inputs and nothing invented.
+// and `useMeshField` would have been handed (the pre-MV seam's two readers;
+// MV-3b retired the second, MV-3d the first — the window reads the model board
+// alone now), so a corpus replayed through the same door drives that seam with
+// its own inputs and nothing invented.
 //
 // It changes nothing it does not record. `recordingDoor` tees; it never holds a
 // frame back, reorders one, or copies one (the listener receives the object the

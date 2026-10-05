@@ -46,9 +46,10 @@ import {
 } from "react";
 import { createSwarmPhysicsDriver } from "../views/swarm/swarm-physics-driver";
 import type { MonitorFloorRecord } from "./agents";
+import { type ChromeRun, NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
 import { deviceFacet, useDeviceRoster } from "./devices";
-import { useAgentFold, useMonitorFeed } from "./GodviewAgentsProvider";
+import { useMonitorFeed } from "./GodviewAgentsProvider";
 import type { HeldModelRow } from "./model-board";
 import type { GodviewMonitorFeed, MonitorFeedState } from "./model-replica";
 import { instrumentedMonitorView } from "./perf/instrumented-view";
@@ -171,8 +172,9 @@ export interface MonitorAgentsResult {
   agents: readonly MonitorAgent[];
   /** The rows the stage shows: the chosen desktop's, the chosen profile's unreceded. */
   shown: readonly MonitorAgent[];
-  /** The rows the find sheet reads: the window's rows joined with the fold's
-   * native session ids and mirrors (the chrome's own reader, M19). */
+  /** The rows the find sheet reads: the window's rows joined with each run's
+   * native session id and mirror clocks (the chrome's own reader, M19; MV-3d:
+   * off the chrome's facts, `findAgentsOf`). */
   findAgents: readonly MonitorAgent[];
   /** The run behind each of this desktop's agent rows (`BoardJoins.runByRow`):
    * the marker's join, observed or not (the shim omits the mirror until the
@@ -325,6 +327,75 @@ function createNarrowing(): (
  * re-provides it above the old view (L6: `wrap`). */
 function wrapWithPhysics(view: ReactElement): ReactElement {
   return createElement(SwarmPhysicsProvider, { factory: createSwarmPhysicsDriver }, view);
+}
+
+/** What the find sheet's join keys on, per run: the session it joins rosetta
+ * by, whether the provider has spoken, and the two clocks it scopes by — never
+ * the newest evidence, which moves with every frame a working agent sends and
+ * is read fresh whenever the join is made. */
+export function findJoinKey(runs: readonly ChromeRun[]): string {
+  return runs
+    .map((run) => {
+      const mirror = run.local?.mirror;
+      return `${run.runtimeRunId}:${run.local?.nativeSessionId ?? ""}:${mirror === undefined ? "-" : "m"}:${mirror?.startedAt ?? ""}:${mirror === undefined ? "" : run.statusSince}`;
+    })
+    .join("\n");
+}
+
+/**
+ * The rows the find sheet reads: each of this desktop's agent rows joined, by
+ * the run it was dealt, with what the sheet asks of the run and the model does
+ * not say — the provider-native session id it joins rosetta's hits by, and,
+ * once the provider has spoken, the mirror's clocks it scopes and dates them by
+ * (`session.startedAt`, `statusSince`, `freshness.lastEvidenceAt`). A peer's row
+ * and a terminal stay as they are.
+ *
+ * The legacy shim's `agent.monitor` is the VIEWS' (its header: "never for the
+ * find sheet or other chrome") and is never handed on: it carries no `session`
+ * and no `freshness`, and the sheet reads `monitor?.session.nativeSessionId`
+ * and `monitor?.freshness.lastEvidenceAt` on every render, open or closed. A
+ * shim monitor reaching the sheet threw there and unmounted the whole stage
+ * (build-mv M47: at 283cf3e9, any observed local row the model board delivered
+ * before the fold's `full` board did). So a local row carries the mirror's
+ * clocks when the provider has spoken, and no monitor at all when it has not.
+ */
+export function findAgentsOf(
+  agents: readonly MonitorAgent[],
+  runByRow: ReadonlyMap<string, string>,
+  runs: readonly ChromeRun[],
+): readonly MonitorAgent[] {
+  const byRun = new Map(runs.map((run) => [run.runtimeRunId, run] as const));
+  return agents.map((row) => {
+    if (row.agent === undefined || row.remote !== undefined) return row;
+    const runId = runByRow.get(row.id);
+    const run = runId === undefined ? undefined : byRun.get(runId);
+    const local = run?.local;
+    const mirror = local?.mirror;
+    const { monitor: _views, ...facet } = row.agent;
+    return {
+      ...row,
+      agent: {
+        ...facet,
+        ...(local?.nativeSessionId !== undefined ? { nativeSessionId: local.nativeSessionId } : {}),
+        // The sheet reads these three of the mirror and nothing else
+        // (`find-model.ts`), so they are what it is handed, in the mirror's own
+        // shape — the one widening, as the legacy shim's: the sheet's type
+        // wants Core's whole state, and nothing here invents the rest of it.
+        ...(run !== undefined && mirror !== undefined
+          ? {
+              monitor: {
+                statusSince: run.statusSince,
+                session: mirror.startedAt !== undefined ? { startedAt: mirror.startedAt } : {},
+                freshness:
+                  mirror.lastEvidenceAt !== undefined
+                    ? { lastEvidenceAt: mirror.lastEvidenceAt }
+                    : {},
+              } as unknown as AgentMonitorState,
+            }
+          : {}),
+      },
+    };
+  });
 }
 
 export function useMonitorAgents({
@@ -1012,34 +1083,16 @@ export function useMonitorAgents({
   );
   // The find sheet joins rosetta's hits by the provider-native session id and
   // scopes them from the mirror's clocks — facts the model does not carry
-  // (M19): they come from the fold, joined by the run each row was dealt.
-  const fold = useAgentFold();
-  const foldJoinKey = fold.rows
-    .map(
-      (row) =>
-        `${row.runtimeRunId}:${row.sessionId}:${row.monitor === undefined ? "-" : "m"}:${(row.monitor?.session as { startedAt?: string } | undefined)?.startedAt ?? ""}:${row.monitor?.statusSince ?? ""}`,
-    )
-    .join("\n");
-  const findAgents = useMemo<readonly MonitorAgent[]>(() => {
-    const byRun = new Map(fold.rows.map((row) => [row.runtimeRunId, row] as const));
-    return agents.map((row) => {
-      if (row.agent === undefined || row.remote !== undefined) return row;
-      const run = joins.runByRow.get(row.id);
-      const summary = run === undefined ? undefined : byRun.get(run);
-      if (summary === undefined) return row;
-      return {
-        ...row,
-        agent: {
-          ...row.agent,
-          nativeSessionId: summary.sessionId,
-          ...(summary.monitor !== undefined
-            ? { monitor: summary.monitor as unknown as AgentMonitorState }
-            : {}),
-        },
-      };
-    });
-    // keyed by the fold facts the sheet reads, not by the fold's 16 ms frames
-  }, [agents, joins, foldJoinKey]);
+  // (M19). MV-3d: they ride each run's row of the model board (the chrome's
+  // facts), joined by the run each row was dealt; the sheet's join moves only
+  // when a fact it keys moves, and reads the newest of them when it does.
+  const chrome = feed?.chrome ?? null;
+  const findKey = useChromeKey(chrome, findJoinKey);
+  const findAgents = useMemo<readonly MonitorAgent[]>(
+    () => findAgentsOf(agents, joins.runByRow, chrome?.runs() ?? NO_RUNS),
+    // keyed by the facts the sheet joins on, not by every frame a run moves in
+    [agents, joins, findKey, chrome],
+  );
 
   return {
     replica,

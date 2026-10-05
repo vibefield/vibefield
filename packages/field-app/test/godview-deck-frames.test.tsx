@@ -306,8 +306,9 @@ const runtimeEvents = new EventTarget();
 const usedSessions = new Set<string>();
 const remoteSessions = new Set<string>();
 let deckDoor: RemoteSessionDoor | null = null;
-/** What the fold's `observe` is currently answering with. */
+/** The fold rows fieldd's scripted board starts from (the window reads them off the model board). */
 let foldRows: readonly AgentSessionSummary[] = [];
+/** The fold's next publish, through the board (set by `foldDoor`). */
 let foldFrame: ((rows: readonly AgentSessionSummary[]) => void) | null = null;
 /** The props the deck handed the workspace — its birth doors live there. */
 let workspaceProps: Record<string, unknown> = {};
@@ -426,6 +427,9 @@ let board: ScriptedModelBoard | null = null;
 
 function foldDoor(): MonitorDoor {
   board ??= scriptedModelBoard({ rows: foldRows });
+  // MV-3d — the frames read the window's one subscription, the model board: a
+  // fold frame reaches them as fieldd's next publish, its rows cut by fieldd
+  foldFrame = (rows) => board?.publish(rows);
   return {
     model: board.port,
     observeMesh: vi.fn(({ onOpen }) => {
@@ -433,12 +437,10 @@ function foldDoor(): MonitorDoor {
       return () => undefined;
     }),
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
+    // the fold's `full` board: no longer asked by the window (MV-3d)
     observe: ({ onFrame }) => {
-      foldFrame = onFrame;
       onFrame(foldRows);
-      return () => {
-        foldFrame = null;
-      };
+      return () => undefined;
     },
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),

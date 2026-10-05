@@ -5,7 +5,9 @@ import type {
   MonitorModelSnapshot,
 } from "@vibecook/puppeteer-view-sdk/model";
 import type {
+  AgentDeskTerminalRow,
   AgentModelBoardRow,
+  AgentModelDeskRow,
   AgentModelMeshFrame,
   AgentModelMeshOpen,
   RowsDelta,
@@ -29,6 +31,13 @@ import type {
  * replaces everything). No business fact is derived here — every row is the
  * backend's `monitorRow`, read as the contract says, with the one
  * reader-relative fact joined: `device.self`.
+ *
+ * MV-3d (M35, M19) — the fold also keeps THIS desktop's run rows whole, beside
+ * the model and never in it: every run row of the answering desktop's board,
+ * assembled by the backend or not, with the chrome's facts it rode in with
+ * (`local`). That is what the window's chrome reads — the deck's pane frames,
+ * the find sheet, the AR-7 marker — now that the fold's `full` board is no
+ * longer asked (`runs()`; `model-replica.ts` publishes it as `chrome`).
  */
 
 /** A desktop as the board stands it: its state and when that was established. */
@@ -67,6 +76,12 @@ interface HeldDevice {
 
 const SDK_OS = new Set<string>(["mac", "windows", "linux", "ios", "android"]);
 
+/** A board row is a bare terminal's when it is of the terminal kind and carries
+ * no status of its own; every other row is a run's (a desk row). */
+export function isTerminalBoardRow(row: AgentModelBoardRow): row is AgentDeskTerminalRow {
+  return row.kind === "terminal" && !("status" in row);
+}
+
 /** The wire row as the SDK's row, with the reader's one fact joined. The wire
  * mirrors the SDK field for field (fieldd parses real backend rows through the
  * contract); the OS mark is kept only when it is one of the SDK's words. */
@@ -93,6 +108,10 @@ export class ModelBoardFold {
   #here: string | undefined;
   readonly #devices = new Map<string, HeldDevice>();
   readonly #held = new Map<string, HeldModelRow>();
+  /** MV-3d — this desktop's run rows by board key, in the board's order */
+  readonly #runs = new Map<string, AgentModelDeskRow>();
+  /** `#runs` as handed out: the same array until a run row moves */
+  #runsList: readonly AgentModelDeskRow[] | null = null;
 
   /** The answering desktop: fieldd lists itself first (`AgentMeshOpen`). */
   get here(): string | undefined {
@@ -113,6 +132,17 @@ export class ModelBoardFold {
     return [...this.#held.values()];
   }
 
+  /**
+   * MV-3d — this desktop's runs as its board last sent them: every run row of
+   * the answering desktop, the model's row and the chrome's facts (`local`) on
+   * each, in the board's order. The SAME array until one of them moves: a frame
+   * that touches only peers' rows or terminals hands back the one it had.
+   */
+  runs(): readonly AgentModelDeskRow[] {
+    this.#runsList ??= Object.freeze([...this.#runs.values()]);
+    return this.#runsList;
+  }
+
   /** Every desktop the board lists, in the board's order. */
   devices(): ModelBoardDevice[] {
     return [...this.#devices.entries()].map(([device, held]) => ({
@@ -126,6 +156,8 @@ export class ModelBoardFold {
   open(open: AgentModelMeshOpen): MonitorModelSnapshot {
     this.#devices.clear();
     this.#held.clear();
+    this.#runs.clear();
+    this.#runsList = null;
     this.#here = open.devices[0]?.device;
     for (const entry of open.devices) {
       const held: HeldDevice = { state: entry.state, asOf: entry.asOf, idByKey: new Map() };
@@ -179,7 +211,9 @@ export class ModelBoardFold {
     }
     const upserts: MonitorAgentRow[] = [];
     const removed: string[] = [];
+    const here = frame.device === this.#here;
     for (const row of delta.upserts) {
+      if (here) this.#takeRun(row);
       const previous = held.idByKey.get(row.runtimeRunId);
       const wire = monitorRowOf(row);
       if (wire === undefined) {
@@ -202,6 +236,7 @@ export class ModelBoardFold {
       upserts.push(next);
     }
     for (const key of delta.removed) {
+      if (here && this.#runs.delete(key)) this.#runsList = null;
       const id = held.idByKey.get(key);
       if (id === undefined) continue;
       held.idByKey.delete(key);
@@ -222,8 +257,14 @@ export class ModelBoardFold {
     held.idByKey = new Map();
     held.epoch = snapshot.epoch;
     held.revision = snapshot.revision;
+    const here = device === this.#here;
+    if (here) {
+      this.#runs.clear();
+      this.#runsList = null;
+    }
     const upserts: MonitorAgentRow[] = [];
     for (const row of snapshot.rows) {
+      if (here) this.#takeRun(row);
       const wire = monitorRowOf(row);
       if (wire === undefined) continue;
       const next = modelRowFrom(wire, this.#here);
@@ -232,6 +273,18 @@ export class ModelBoardFold {
       upserts.push(next);
     }
     return upserts;
+  }
+
+  /** One of this desktop's board rows, for the chrome: a run row is kept whole
+   * (assembled by the backend or not); a key that turned into a terminal row
+   * is a run no more. */
+  #takeRun(row: AgentModelBoardRow): void {
+    if (isTerminalBoardRow(row)) {
+      if (this.#runs.delete(row.runtimeRunId)) this.#runsList = null;
+      return;
+    }
+    this.#runs.set(row.runtimeRunId, row);
+    this.#runsList = null;
   }
 
   #keyOf(held: HeldDevice, id: string): string {

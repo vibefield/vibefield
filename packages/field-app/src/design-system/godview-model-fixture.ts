@@ -16,9 +16,10 @@ import type { DeviceOs, MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/mod
 import {
   AGENT_CATALOG,
   AGENT_FIELD,
-  type AgentDeskRow,
   type AgentDeskTerminalRow,
   type AgentModelBoardRow,
+  type AgentModelDeskRow,
+  type AgentModelLocalFacts,
   type AgentModelMeshDevice,
   type AgentModelMeshOpen,
   type AgentProfileSet,
@@ -378,8 +379,38 @@ function wireRowOf(row: MonitorAgentRow, peer: boolean): WireMonitorRow {
   } as unknown as WireMonitorRow;
 }
 
+/** `agent-field.ts` `localFactsOf` (MV-3d): the fold's facts this desktop's window reads
+ * beside the model — the chrome's (the find sheet's join and clocks, the marker's, the pane
+ * frame's) — on this desktop's rows only, never a peer's. */
+function localFactsOf(summary: AgentSessionSummary): AgentModelLocalFacts {
+  const monitor = summary.monitor;
+  const cwd =
+    monitor?.environment?.cwd || summary.workspace?.sourcePath || summary.workspace?.root || "";
+  const startedAt = monitor?.session?.startedAt;
+  const lastEvidenceAt = monitor?.freshness?.lastEvidenceAt;
+  const contextSource = (monitor?.context as { percentageSource?: unknown } | undefined)
+    ?.percentageSource;
+  return {
+    nativeSessionId: summary.sessionId,
+    ...(cwd !== "" ? { cwd } : {}),
+    ...(summary.spawnedBy !== undefined ? { spawnedBy: summary.spawnedBy } : {}),
+    ...(summary.continuation?.exited === true ? { exited: true } : {}),
+    ...(monitor !== undefined
+      ? {
+          mirror: {
+            alive: monitor.alive,
+            ...(startedAt !== undefined ? { startedAt } : {}),
+            ...(lastEvidenceAt !== undefined ? { lastEvidenceAt } : {}),
+            ...(typeof contextSource === "string" ? { contextSource } : {}),
+          },
+        }
+      : {}),
+  };
+}
+
 /** `agent-field.ts` `projectDeskRow`, as far as the window reads a board row: the key, the
- * PTY join and the model row; the rest only parses. */
+ * PTY join, the model row, and (this desktop's rows) the chrome's facts; the rest only
+ * parses. */
 function boardRowsOf(
   desk: HostedDesktop,
   device: CatalogDesktop,
@@ -397,7 +428,7 @@ function boardRowsOf(
     claimed.add(id);
     const monitorRow = wireRowOf(row, peer);
     const since = summary.monitor?.statusSince ?? summary.stateChangedAt ?? summary.createdAt;
-    const desk_: AgentDeskRow = {
+    const desk_: AgentModelDeskRow = {
       runtimeRunId: summary.runtimeRunId,
       revision: snapshot.revision,
       kind: summary.kind,
@@ -420,6 +451,7 @@ function boardRowsOf(
       },
       ...(summary.terminal !== undefined ? { terminal: summary.terminal } : {}),
       monitorRow,
+      ...(peer ? {} : { local: localFactsOf(summary) }),
     };
     rows.push(desk_);
   }
