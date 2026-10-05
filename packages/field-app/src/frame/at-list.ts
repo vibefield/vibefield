@@ -129,7 +129,9 @@ export function atList(sources: AtSources): AtList {
       id: "past",
       label: "Past session…",
       glyph: "history",
-      why: "History is not wired yet",
+      // AR-8c: History is wired (rosetta's room); a past session still has
+      // no door into a message (DESIGN.md §8, the line)
+      why: "No past-session door on the line yet",
     },
   ];
   for (const row of rows) if (matches(query, row.label)) add.push(row);

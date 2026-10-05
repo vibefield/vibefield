@@ -241,6 +241,29 @@
   overflow: hidden;
 }
 
+/* AR-8c — History's plates: a window of the frame's own proportions, the
+   canvas's ground under the cover's glass, so the view's own placement (its
+   columns ending at the reserve, its edges, its glass) reads as the window
+   draws it. The view and the line are the product's; this only stages them. */
+.vf-ds-history-plate {
+  position: relative;
+  isolation: isolate;
+  height: 780px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-history-plate.is-short {
+  height: 520px;
+}
+
 /* One Frame FR-4 — the corner's plates (the page's "Your face" plates): the
    window's bottom-left — the line at its own place, your face where the
    corner holds it (16 from the left, 24 from the foot), its menu open above

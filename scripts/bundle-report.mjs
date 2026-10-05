@@ -49,6 +49,15 @@ const MARKERS = [
   ["logging-contracts", /vibefield\.logging\.contract\.v1/],
   ["diagnostics-contracts", /vibefield\.diagnostics\.contract\.v1/],
 ];
+// History's room (AR-8c's follow-up, 2026-10-04): rosetta's room is its OWN lazy
+// chunk, named for the module the product imports it through, and carries its
+// sheet with it. Two markers find it wherever it lands: the room's own words in
+// its code (a string the minifier keeps; the host says them only in comments)
+// and its root's rules in a sheet. Read apart from MARKERS, because a sheet is
+// read here too and a long base64 run in one must not read as the world's wasm.
+const HISTORY_CHUNK = "HistoryRoomView";
+const HISTORY_CODE = /rosettad is not answering/;
+const HISTORY_SHEET = /\.ah-frame\b[^{}]*\{/;
 for (const name of readdirSync(assetsDir)) {
   const path = join(assetsDir, name);
   if (!statSync(path).isFile()) continue;
@@ -58,6 +67,10 @@ for (const name of readdirSync(assetsDir)) {
   const staticImports = [...text.matchAll(/(?:from|import)\s*"\.\/([^"]+\.js)"/g)].map((m) => m[1]);
   const dynamicImports = [...text.matchAll(/import\(\s*"\.\/([^"]+\.js)"\s*\)/g)].map((m) => m[1]);
   const markers = MARKERS.filter(([, re]) => re.test(text)).map(([label]) => label);
+  const history = name.endsWith(".css")
+    ? HISTORY_SHEET.test(buf.toString("utf8"))
+    : HISTORY_CODE.test(text);
+  if (history) markers.push("history-room");
   chunks.set(name, {
     raw: buf.length,
     gzip: gzipSync(buf).length,
@@ -145,6 +158,47 @@ if (args.includes("--assert")) {
   if (!lazyCarriesWorld) {
     problems.push("no lazy chunk carries the workspace (three/loro) — the split did not happen");
   }
+  // History's room (2026-10-04): its code and its sheet in ONE lazy chunk named
+  // for its module — never in the initial graph, never in another chunk (the
+  // world's above all, which every window loads at boot), and reached by a
+  // dynamic import only: a static import of it from any chunk would load it
+  // with that chunk.
+  const isHistory = (name) => name.startsWith(`${HISTORY_CHUNK}-`);
+  for (const [name, c] of chunks) {
+    if (c.markers.includes("history-room")) {
+      if (initial.has(name)) problems.push(`${name}: History's room in the initial graph`);
+      else if (!isHistory(name)) {
+        problems.push(`${name}: History's room rides another chunk (${HISTORY_CHUNK}'s alone)`);
+      }
+    }
+    for (const dep of c.staticImports) {
+      if (isHistory(dep)) problems.push(`${name}: imports ${dep} statically — History not lazy`);
+    }
+  }
+  const historyCode = [...chunks].find(
+    ([name, c]) =>
+      isHistory(name) &&
+      name.endsWith(".js") &&
+      !initial.has(name) &&
+      c.markers.includes("history-room"),
+  );
+  const historySheet = [...chunks].find(
+    ([name, c]) =>
+      isHistory(name) &&
+      name.endsWith(".css") &&
+      !initial.has(name) &&
+      c.markers.includes("history-room"),
+  );
+  if (historyCode === undefined) {
+    problems.push(
+      `no lazy ${HISTORY_CHUNK} chunk carries History's room — the split did not happen`,
+    );
+  }
+  if (historySheet === undefined) {
+    problems.push(
+      `no lazy ${HISTORY_CHUNK} sheet carries the room's rules — its sheet rides elsewhere`,
+    );
+  }
   for (const rel of ["main/index.cjs", "preload/index.cjs"]) {
     if (!shellFiles[rel]) {
       problems.push(`${rel}: shell bundle missing under ${distDir} (stale report path?)`);
@@ -174,7 +228,11 @@ if (args.includes("--assert")) {
     console.error(`\nbundle assert FAILED:\n  ${problems.join("\n  ")}`);
     process.exit(1);
   }
-  console.log(`\nbundle assert OK — initial ${kb(initRaw)} raw / ${kb(initGzip)} gz, world lazy`);
+  const [codeName, code] = historyCode;
+  const [sheetName, sheet] = historySheet;
+  console.log(
+    `\nbundle assert OK — initial ${kb(initRaw)} raw / ${kb(initGzip)} gz, world lazy, History lazy (${codeName} ${kb(code.raw)} raw / ${kb(code.gzip)} gz + ${sheetName} ${kb(sheet.raw)} raw / ${kb(sheet.gzip)} gz)`,
+  );
 }
 
 const report = {

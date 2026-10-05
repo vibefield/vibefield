@@ -159,6 +159,38 @@ for (const name of TRACKED) {
   );
 }
 
+/** AR-8c (2026-10-03) — the React peers' TYPES. A linked sibling ships its
+ * SOURCE (puppeteer's views, rosetta's room), so this tree's TypeScript
+ * compiles it in field-app's program, where each file's `react` resolves the
+ * types installed beside IT — the sibling checkout's own `@types/react`. Two
+ * installs are one to the compiler only at the same VERSION (it redirects a
+ * second copy of name@version to the first); at two versions one program holds
+ * two React type worlds. Physical copies are expected — every checkout has its
+ * own install — so the members and the linked package directories are
+ * compared by version alone, and a second version is the failure. */
+const TYPE_PEERS = ["@types/react", "@types/react-dom"];
+const typeRoots = members();
+for (const name of TYPE_PEERS) {
+  const versions = new Map(); // version -> dirs that resolve it
+  for (const dir of typeRoots) {
+    const hit = resolveFrom(dir, name);
+    if (hit === null) continue;
+    const version = JSON.parse(readFileSync(hit, "utf8")).version;
+    const from = versions.get(version) ?? [];
+    from.push(dir === ROOT ? "." : dir.startsWith(ROOT) ? dir.slice(ROOT.length + 1) : dir);
+    versions.set(version, from);
+  }
+  if (versions.size > 1) {
+    problems.push(
+      `${name} resolves at ${versions.size} versions across this tree and its linked siblings — one program would hold two React type worlds:\n` +
+        [...versions].map(([version, from]) => `      ${version}  ← ${from.join(", ")}`).join("\n"),
+    );
+  } else if (versions.size === 1) {
+    const [version] = [...versions.keys()];
+    report.push(`${name}@${version} (types: one version here and in every linked sibling)`);
+  }
+}
+
 if (problems.length > 0) {
   process.stderr.write(`\n✗ EL8 single-copy law violated:\n\n  ${problems.join("\n\n  ")}\n\n`);
   process.stderr.write(

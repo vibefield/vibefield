@@ -55,6 +55,7 @@ overrides:
   '@vibecook/puppeteer-view-sdk': link:../puppeteer/packages/view-sdk
   '@vibecook/puppeteer-views': link:../puppeteer/packages/views
   '@rosetta/protocol': link:../rosetta-pin/clients/ts
+  '@rosetta/room': link:../rosetta-pin/clients/room
 
 importers:
 
@@ -396,6 +397,9 @@ importers:
       '@rosetta/protocol':
         specifier: link:../../../rosetta-pin/clients/ts
         version: link:../../../rosetta-pin/clients/ts
+      '@rosetta/room':
+        specifier: link:../../../rosetta-pin/clients/room
+        version: link:../../../rosetta-pin/clients/room
       '@vibecook/ghosttea-protocol':
         specifier: 0.12.0
         version: 0.12.0

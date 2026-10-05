@@ -129,7 +129,9 @@ the fenced block of `pnpm-workspace.yaml` (packages ask for `"*"`; only directly
 are rows; adapters never — walls R20–R22), and `rosettad` is built from the pinned rosetta checkout by
 `pnpm siblings:build` (cargo's own target dir, the SSD) and reaches fieldd as `FIELDD_ROSETTAD_BIN`.
 `pnpm preflight` fails on a missing checkout or a revision ≠ the pin and warns on a dirty tree;
-`pnpm siblings` prints the state; `pnpm siblings:pin` is the deliberate upgrade event (EL8).
+`pnpm siblings` prints the state; `pnpm siblings:pin` is the deliberate upgrade event (EL8), and since
+2026-10-04 it also typechecks the consumers — a sibling type change the consumer's compiler alone can
+see fails the pin loudly (the new SHAs stay recorded; `--skip-typecheck` for the deliberate case).
 `scripts/siblings.mjs` is the ONE reader of the lock (preflight, `check:deps`, the Nx cache stamp
 and the dev runner all go through it). Sibling *sources* reach the fieldd and renderer builds
 through esbuild's and Vite's own input tracking, never through the runner's watchers, so the

@@ -1232,7 +1232,10 @@ export type IndexProjectDayResult = z.infer<typeof IndexProjectDayResult>;
 // One leg, `session`: `/ws/sessions/{id}`. rosetta's grant (RO-10) opens that
 // route, the session's HTTP pages and the assets — never the lists, search,
 // `/ws/meta`, or the live-file read — so an HTTP leg is DS-7's to add if a
-// reader needs one, not this slice's to guess.
+// reader needs one, not this slice's to guess. *RO-13 (2026-10-04): a grant
+// that carries `files` also opens the session's recorded-file read; fieldd
+// mints that scope for the desktop window alone, so a tailnet holder's grant
+// still reads no file.*
 
 /** rosetta's session socket route, before the session id. */
 export const REMOTE_INDEX_SESSION_PATH_PREFIX = "/ws/sessions/" as const;
@@ -1384,8 +1387,13 @@ export type IndexTicketUnavailableDetails = z.infer<typeof IndexTicketUnavailabl
  *    the tailnet `session` leg for a caller across the tailnet.
  *  - `grant`: rosetta's RO-10 grant, OPAQUE to a client —
  *    `base64url(JCS {cid, exp, scope, sid, v}) "." base64url(HMAC-SHA256)`,
- *    exact `sid`, `scope: ["read"]` (rosetta AUTH.md §5; at most 4,096 bytes,
- *    its verifier's bound). Carried as `Authorization: Rosetta-Grant <grant>`
+ *    exact `sid`, `scope` by who asked (rosetta AUTH.md §5; at most 4,096
+ *    bytes, its verifier's bound). *RO-13 (2026-10-04): this said
+ *    `scope: ["read"]`; the desktop window's grant now carries
+ *    `["read", "files"]` — `files` opens the session's recorded-file read
+ *    (AUTH.md §5.4) — and every other holder's `["read"]` (fieldd's
+ *    `indexTicketScopes`). The shape here is unchanged: the grant stays
+ *    opaque.* Carried as `Authorization: Rosetta-Grant <grant>`
  *    or, from a browser, the subprotocol pair `rosetta`, `rosetta.grant.<grant>`
  *    — never in the URL. (§5.4, written before RO-10 was built, called it
  *    `transportGrant` after the cell's; rosetta's is one per-session string,

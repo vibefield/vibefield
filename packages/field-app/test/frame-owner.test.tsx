@@ -251,7 +251,14 @@ describe("the frame's one owner of the open surface", () => {
 
   it("runs Godview's New terminal through the line, whose note says what came of it", async () => {
     const newTerminal = vi.fn(async () => ({ state: "opened" as const }));
-    mount({ panes: [], onScreen: true, newTerminal, paste: () => false });
+    mount({
+      panes: [],
+      onScreen: true,
+      newTerminal,
+      paste: () => false,
+      canPlace: true,
+      place: async () => ({ state: "opened" }),
+    });
     act(() => setViewNow?.("godview"));
     act(() => setSurfaceNow?.("palette"));
     expect($('[data-row="create"]')?.textContent).toContain("New terminal");

@@ -165,7 +165,7 @@ describe("@'s list (DESIGN.md §8, FC-D1)", () => {
     const l = list("", "godview", false);
     const why = new Map(l.add.flatMap((row) => (row.kind === "add" ? [[row.id, row.why]] : [])));
     expect(why.get("file")).toBe("No file door on the desktop yet");
-    expect(why.get("past")).toBe("History is not wired yet");
+    expect(why.get("past")).toBe("No past-session door on the line yet");
     expect(why.get("capture")).toBe("No capture here");
     expect(atStops(l).map((row) => row.id)).toEqual([
       "clipboard",

@@ -1,0 +1,88 @@
+/* The History view (AR-8c; DESIGN.md §8 "History", §10; One Frame §9 —
+   FC-D6, FC-D15, FC-D16): rosetta's room on the cover's glass. Tokens only. The
+   room's own sheet (`@rosetta/room/styles/room.css`) enters with the room, in
+   its chunk (`HistoryRoomView.tsx`, since 2026-10-04 — the app's manifest
+   carried it until then), so it loads AFTER this sheet, which the faces before
+   the room bring on the canvas's chunk (`HistoryOpening.tsx`). Nothing here and
+   nothing there meet: every rule the room brings is scoped to its root
+   (`.ah-frame`) and to the layers it portals (`.ah-layer`), its broad ones are
+   `:where()` (no weight against a class here), and its `!important`s outrank
+   the motion floor below by weight or say the same thing. */
+
+/* The view's own ground: the covers' glass, 72% (FC-D16). The room is mounted
+   as a HOST surface, so it paints no ground and no plate of its own, and its
+   paper fades frost over this glass instead (the package's `surface="host"`). */
+.vf-history {
+  position: absolute;
+  inset: 0;
+  background: color-mix(in srgb, var(--vf-chrome-solid) 72%, transparent);
+}
+
+/* FC-D15: the room ENDS at the reserve (692 in the default window) — the line
+   and the face sit on the view's own ground, never on a row. Its top band is
+   the head's and its side edges keep the notches' slivers clear; both are the
+   room's own edge inset (`HistoryRoomView`, from `frame-geometry.ts`). */
+.vf-history-room {
+  position: absolute;
+  inset: 0 0 var(--vf-history-reserve) 0;
+}
+
+/* Where the room's dialogs land (its `portalContainer`): a containing block
+   for their fixed layers that ends at the reserve too, so a dialog is never
+   drawn under the line. Empty, it takes no pointer; what lands in it does. */
+.vf-history-layers {
+  position: absolute;
+  inset: 0 0 var(--vf-history-reserve) 0;
+  contain: layout;
+  pointer-events: none;
+}
+
+.vf-history-layers > * {
+  pointer-events: auto;
+}
+
+/* The host's words in the room's state slot: the consent line. */
+.vf-history-state {
+  display: grid;
+  flex: 1;
+  place-items: center;
+  padding: 0 24px;
+}
+
+/* The faces before the room (2026-10-04; DESIGN.md §8 "History" — "Its first
+   open says 'Opening History'"): the same words' place, in the room's box and
+   inside the edges the room keeps — the head's band above, the slivers' 8 at
+   each side (`HistoryOpening.tsx` projects the frame's numbers) — and the
+   room's own top edge, the hairline under the head band, so the room takes the
+   face's place with nothing appearing at its edge. */
+.vf-history-face {
+  position: absolute;
+  inset: var(--vf-history-head) var(--vf-history-edge) 0;
+  border-top: 1px solid var(--vf-hairline);
+}
+
+/* LATE, as the veil's words are (§8): invisible for 120ms, then a 180ms plain
+   `ease` fade — a room already loaded never flashes them. */
+.vf-history-face[data-late] {
+  animation: vf-history-late 180ms ease 120ms both;
+}
+
+@keyframes vf-history-late {
+  from {
+    opacity: 0;
+  }
+}
+
+/* M6, the floor the room asks of its host (the reference host's own rule,
+   scoped to the room and its layers): motion collapses under reduced motion. */
+@media (prefers-reduced-motion: reduce) {
+  .vf-history *,
+  .vf-history-layers * {
+    /* biome-ignore lint/complexity/noImportantStyles: the room's own transitions are scoped rules this floor must outrank. */
+    animation-duration: 0.01ms !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    animation-iteration-count: 1 !important;
+    /* biome-ignore lint/complexity/noImportantStyles: as above. */
+    transition-duration: 0.01ms !important;
+  }
+}

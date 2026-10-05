@@ -46,7 +46,15 @@ import {
   spliceDraft,
 } from "./draft";
 import type { FrameSurface } from "./frame-surface";
-import { type LineViewDoor, newTerminalNote, useGodviewLineDoor } from "./line-door";
+import {
+  type HistoryLineDoor,
+  type LineViewDoor,
+  newTerminalNote,
+  resumeNote,
+  resumeWaits,
+  useGodviewLineDoor,
+  useHistoryLineDoor,
+} from "./line-door";
 import type { ViewKeys } from "./views";
 
 // THE LINE'S CONTROLLER (DESIGN.md §8 "The line", §10; One Frame FR-2). It owns
@@ -89,6 +97,8 @@ export interface ComposerProps {
   /** Adapters — the catalog's fixtures; the product takes the defaults. What
    * Godview lends the line (undefined: the deck's published door). */
   godview?: LineViewDoor | null;
+  /** What History lends the line (undefined: History's published door). */
+  history?: HistoryLineDoor | null;
   clipboard?: ClipboardStore;
   host?: ComposerHost;
   writeClipboard?: (text: string) => Promise<void>;
@@ -219,6 +229,7 @@ export function Composer({
   onSurfaceChange,
   actsRef,
   godview,
+  history,
   clipboard = clipboardStore,
   host: hostProp,
   writeClipboard = defaultWriteClipboard,
@@ -226,6 +237,8 @@ export function Composer({
 }: ComposerProps): ReactElement {
   const published = useGodviewLineDoor();
   const door = godview === undefined ? published : godview;
+  const publishedHistory = useHistoryLineDoor();
+  const historyDoor = history === undefined ? publishedHistory : history;
   const host = hostProp ?? getHost();
   const lineRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -481,10 +494,23 @@ export function Composer({
     say(newTerminalNote(await door.newTerminal()), "create");
   }, [door, say]);
 
+  // History's create is Resume (AR-8c): the chosen session, continued in its
+  // own agent; the note says what came of it — in History, or in Godview once
+  // the frame has moved there to show the pane.
+  const resume = useCallback(async () => {
+    const waits = resumeWaits(historyDoor);
+    if (historyDoor === null || waits !== null) {
+      say(resumeNote({ state: "refused", reason: waits ?? "choose a session first" }), "create");
+      return;
+    }
+    say(resumeNote(await historyDoor.resume()), "create");
+  }, [historyDoor, say]);
+
   const create = useCallback(() => {
     if (view === "canvas") onSurfaceChange(surface === "objects" ? null : "objects");
     else if (view === "godview") void newTerminal();
-  }, [newTerminal, onSurfaceChange, surface, view]);
+    else if (view === "history") void resume();
+  }, [newTerminal, onSurfaceChange, resume, surface, view]);
 
   // The palette runs the view's act through the line (One Frame FR-3), so the
   // two doors to one act are one implementation and speak with one note.
@@ -649,7 +675,7 @@ export function Composer({
 
   const createWaits =
     view === "history"
-      ? "choose a session first"
+      ? resumeWaits(historyDoor)
       : view === "godview" && door === null
         ? "the deck is not connected yet"
         : null;

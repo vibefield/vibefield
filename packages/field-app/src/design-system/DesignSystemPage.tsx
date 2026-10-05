@@ -11,6 +11,7 @@ import { FaceStickersSection } from "./sections/FaceStickersSection";
 import { FoundationsSection } from "./sections/FoundationsSection";
 import { GlyphsSection } from "./sections/GlyphsSection";
 import { GodviewSection } from "./sections/GodviewSection";
+import { HistorySection } from "./sections/HistorySection";
 import { IconsSection } from "./sections/IconsSection";
 import { InventorySection } from "./sections/InventorySection";
 import { LiveSurfacesSection } from "./sections/LiveSurfacesSection";
@@ -37,6 +38,7 @@ const NAV_ITEMS = [
   ["live-surfaces", "Live surfaces", "09"],
   ["onboarding", "Onboarding", "10"],
   ["godview", "Control room", "11"],
+  ["history", "History", "11a"],
   ["inventory", "Coverage index", "12"],
 ] as const;
 
@@ -144,6 +146,7 @@ export function DesignSystemPage({
         <LiveSurfacesSection />
         <OnboardingSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <GodviewSection dark={dark} />
+        <HistorySection />
         <InventorySection />
       </main>
 

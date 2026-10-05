@@ -1,0 +1,74 @@
+import type { RoomSelection, RoomTarget } from "@rosetta/room";
+import { type ReactElement, useMemo, useState } from "react";
+import { Composer } from "../frame/Composer";
+import type { FrameSurface } from "../frame/frame-surface";
+import type { HistoryLineDoor } from "../frame/line-door";
+import { ViewsTrackView } from "../frame/ViewsTrack";
+import type { ViewKeys } from "../frame/views";
+import { HistoryRoomView } from "../history/HistoryRoomView";
+import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
+import {
+  FIXTURE_CHOSEN_SESSION,
+  FIXTURE_UNAVAILABLE_WORDS,
+  type HistoryState,
+  historyFixturePorts,
+} from "./history-fixtures";
+
+// History, in the catalog (AR-8c): the SHIPPING view (`HistoryRoomView`) over
+// the room package's fixture ports (`history-fixtures.ts`). The markup and the
+// CSS are the product's and the package's; this file stages them. Nothing is
+// kept between runs (`storage={null}`): a catalog writes no preferences.
+
+/** The view in one state, filling whatever plate holds it. */
+export function HistoryPreview({ state = "room" }: { state?: HistoryState }): ReactElement {
+  const [ports] = useState(() => historyFixturePorts(state));
+  const [openAt] = useState<RoomTarget | null>(() =>
+    state === "chosen" ? { sessionId: FIXTURE_CHOSEN_SESSION } : null,
+  );
+  return (
+    <HistoryRoomView
+      ports={ports}
+      unavailable={state === "unavailable" ? FIXTURE_UNAVAILABLE_WORDS : null}
+      openAt={openAt}
+      storage={null}
+    />
+  );
+}
+
+/** A session chosen in the room, and the line's create — Resume — live for it:
+ * the room's own selection is what History lends the line (the product wires
+ * the same report through `HistoryView`), and pressing Resume here answers as
+ * a placed pane would ("Resumed in the active pane"). */
+export function HistoryResumePlate({ keys = "mac" }: { keys?: ViewKeys }): ReactElement {
+  const [ports] = useState(() => historyFixturePorts("chosen"));
+  const [openAt] = useState<RoomTarget>({ sessionId: FIXTURE_CHOSEN_SESSION });
+  const [selection, setSelection] = useState<RoomSelection | null>(null);
+  const [surface, setSurface] = useState<FrameSurface | null>(null);
+  const [clipboard] = useState(fixtureClipboardStore);
+  const door = useMemo<HistoryLineDoor>(
+    () => ({
+      chosen: selection?.sessionId ?? null,
+      waits: null,
+      resume: async () => ({ state: "resumed" }),
+    }),
+    [selection],
+  );
+  return (
+    <>
+      <HistoryRoomView ports={ports} openAt={openAt} onSelect={setSelection} storage={null} />
+      <Composer
+        view="history"
+        keys={keys}
+        surface={surface}
+        onSurfaceChange={setSurface}
+        godview={FIXTURE_LINE_DOOR}
+        history={door}
+        clipboard={clipboard}
+        host={{ screenshotStillUrl: fixtureStillUrl }}
+        writeClipboard={async () => undefined}
+        bindKeys={false}
+        track={<ViewsTrackView view="history" keys={keys} />}
+      />
+    </>
+  );
+}
