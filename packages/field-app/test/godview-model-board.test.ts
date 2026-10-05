@@ -4,7 +4,7 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createMonitorReplica } from "@vibecook/puppeteer-monitor/replica";
 import type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";
-import { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
+import { AgentModelDeskRow, AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import { ModelBoardFold } from "../src/godview/monitor/model-board";
 import { createGodviewMonitorFeed } from "../src/godview/monitor/model-replica";
@@ -160,6 +160,89 @@ describe("ModelBoardFold — one chain from every desktop's own", () => {
   });
 });
 
+describe("MV-3d — the chrome's runs: this desktop's run rows, split from the model as they land", () => {
+  const ownEpoch = "fieldd-9b04c1e27a6d5f30.9";
+  const own = (): AgentModelDeskRow => {
+    const row = OPEN.devices[0]?.snapshot?.rows[0];
+    if (row === undefined) throw new Error("the fixture's own run");
+    return AgentModelDeskRow.parse(row);
+  };
+  const terminal = () => {
+    const row = OPEN.devices[0]?.snapshot?.rows[1];
+    if (row === undefined) throw new Error("the fixture's own terminal");
+    return row;
+  };
+
+  it("holds every run row of this desktop with the facts beside it — model row or not — and never a terminal's or a peer's", () => {
+    const fold = new ModelBoardFold();
+    fold.open(OPEN);
+    expect(fold.runs().map((run) => run.runtimeRunId)).toEqual(["run-studio-q"]);
+    expect(fold.runs()[0]?.local).toMatchObject({
+      cwd: "/Users/james/Projects/project100/vibe-field",
+      spawnedBy: "user-shell",
+      mirror: { alive: true },
+    });
+    // a run the backend has not assembled yet: no model row, so no row of the
+    // model — and still a run the chrome reads (the marker names every run)
+    const { monitorRow: _none, ...unassembled } = own();
+    fold.frame({
+      device: HERE,
+      delta: {
+        epoch: ownEpoch,
+        since: 61,
+        revision: 62,
+        upserts: [{ ...unassembled, runtimeRunId: "run-new", revision: 1 }],
+        removed: [],
+      },
+    });
+    expect(fold.runs().map((run) => run.runtimeRunId)).toEqual(["run-studio-q", "run-new"]);
+    expect(fold.heldRows().some((held) => held.board.runtimeRunId === "run-new")).toBe(false);
+  });
+
+  it("keeps the SAME array until one of this desktop's runs moves: a peer's frame, a terminal's, a state change wake nothing", () => {
+    const fold = new ModelBoardFold();
+    fold.open(OPEN);
+    const first = fold.runs();
+    expect(fold.runs()).toBe(first);
+    fold.frame(FRAMES[1] as AgentModelMeshFrame); // the peer goes stale
+    fold.frame(FRAMES[2] as AgentModelMeshFrame); // the peer's run leaves
+    expect(fold.runs()).toBe(first);
+    fold.frame({
+      device: HERE,
+      delta: {
+        epoch: ownEpoch,
+        since: 61,
+        revision: 62,
+        upserts: [{ ...terminal(), revision: 4 }],
+        removed: [],
+      },
+    });
+    expect(fold.runs()).toBe(first);
+    // the run's own row moves (a fact beside the model): a new array, with it
+    const moved = {
+      ...own(),
+      revision: 12,
+      local: { ...own().local, cwd: "/Users/james/src/rosetta" },
+    };
+    fold.frame({
+      device: HERE,
+      delta: { epoch: ownEpoch, since: 62, revision: 63, upserts: [moved], removed: [] },
+    });
+    const second = fold.runs();
+    expect(second).not.toBe(first);
+    expect(second[0]?.local?.cwd).toBe("/Users/james/src/rosetta");
+    // and leaves
+    fold.frame({
+      device: HERE,
+      delta: { epoch: ownEpoch, since: 63, revision: 64, upserts: [], removed: ["run-studio-q"] },
+    });
+    expect(fold.runs()).toEqual([]);
+    // a re-open replaces them whole
+    fold.open(OPEN);
+    expect(fold.runs().map((run) => run.runtimeRunId)).toEqual(["run-studio-q"]);
+  });
+});
+
 describe("the replica over the fold — structural sharing, the host's order", () => {
   it("applies the open and the frames; an untouched row keeps its object", () => {
     const frame = manualFrame();
@@ -256,6 +339,29 @@ describe("createGodviewMonitorFeed — the one door, re-asked on a gap, the scre
     expect(door.opens).toBe(3);
     feed.dispose();
     expect(door.unsubscribed).toBe(3);
+  });
+
+  it("MV-3d — publishes this desktop's runs as the chrome, and tells its listeners when, and only when, they move", async () => {
+    const door = fakeBoard();
+    const feed = createGodviewMonitorFeed({ board: door, scheduler: manualFrame() });
+    let heard = 0;
+    feed.chrome.subscribe(() => {
+      heard += 1;
+    });
+    await settle();
+    expect(heard).toBe(1); // the open
+    const opened = feed.chrome.runs();
+    expect(opened.map((run) => run.runtimeRunId)).toEqual(["run-studio-q"]);
+    door.push(FRAMES[1]); // the peer goes stale
+    door.push(FRAMES[2]); // the peer's run leaves
+    expect(heard).toBe(1);
+    expect(feed.chrome.runs()).toBe(opened);
+    door.push(FRAMES[0]); // this desktop's run leaves (its terminal goes idle)
+    expect(heard).toBe(2);
+    expect(feed.chrome.runs()).toEqual([]);
+    feed.dispose();
+    door.push(FRAMES[0]);
+    expect(heard).toBe(2);
   });
 
   it("reports what the pane shows while the board is open, and again after a re-open", async () => {
