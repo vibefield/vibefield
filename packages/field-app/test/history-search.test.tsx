@@ -340,6 +340,11 @@ describe("History's search until the Peek lands (the search interim)", () => {
     // `shortcut: null`: no key is spent on opening the sheet, so none is printed.
     expect(launcher?.querySelector("kbd")).toBeNull();
     expect(launcher?.textContent).toContain("Search");
+    // The layer it hangs from starts at the head band's foot and ends at the
+    // reserve: the frame's numbers, projected (the rule: ui-system-boundaries).
+    const glass = slot()?.querySelector<HTMLElement>(".vf-history:has(.ah-frame)");
+    expect(glass?.style.getPropertyValue("--vf-history-head")).toBe("52px");
+    expect(glass?.style.getPropertyValue("--vf-history-reserve")).toBe("88px");
     const input = await openSheet();
     // The sheet portals into the room's layer, and it is the frame's surface.
     expect(sheet()?.closest(".vf-history-layers")).not.toBeNull();
