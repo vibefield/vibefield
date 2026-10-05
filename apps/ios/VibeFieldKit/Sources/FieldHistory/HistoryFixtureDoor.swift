@@ -63,14 +63,10 @@
       case "index.search": return try answer("index-search-result.valid")
       case "index.timeline":
         var page = try answer("index-timeline.valid")
-        if let asked = params?["sessionId"]?.stringValue, var fields = page.objectValue {
-          fields["sessionId"] = .string(asked)
-          fields["entries"] = .array(
-            (fields["entries"]?.arrayValue ?? []).map { row in
-              guard var entry = row.objectValue else { return row }
-              entry["sessionId"] = .string(asked)
-              return .object(entry)
-            })
+        if var fields = page.objectValue {
+          let asked = params?["sessionId"]?.stringValue
+          if let asked { fields["sessionId"] = .string(asked) }
+          fields["entries"] = .array(Self.grown(fields["entries"]?.arrayValue ?? [], asked: asked))
           // the golden page says more lies behind its cursor; the fixture
           // holds one page, so the top is here
           fields["nextCursor"] = .null
@@ -80,6 +76,36 @@
       default:
         throw FieldProductError(kind: "NOT_FOUND", message: "the fixture door does not answer \(method)")
       }
+    }
+
+    /// The golden's four rows, re-keyed to the session asked for and GROWN:
+    /// repeated as eight turns under their own ids, ordinals and stamps (an
+    /// hour and a half apart) so the document SCROLLS and the arrival pill has
+    /// a page to stand under — a four-row document shows its end at once. The
+    /// page and the tail's open serve the same grown rows.
+    static let grownTurns = 8
+    static func grown(_ golden: [JSONValue], asked: String?) -> [JSONValue] {
+      var rows: [JSONValue] = []
+      for repeatIndex in 0..<grownTurns {
+        for row in golden {
+          guard var entry = row.objectValue else { continue }
+          if let asked { entry["sessionId"] = .string(asked) }
+          if repeatIndex > 0 {
+            if let id = entry["timelineId"]?.stringValue { entry["timelineId"] = .string("\(id)-\(repeatIndex)") }
+            if let ordinal = entry["ordinal"]?.intValue { entry["ordinal"] = .int(ordinal + Int64(repeatIndex) * 10) }
+            if let at = entry["at"]?.intValue { entry["at"] = .int(at + Int64(repeatIndex) * 5_400_000) }
+            if var group = entry["group"]?.objectValue, let id = group["id"]?.stringValue {
+              group["id"] = .string("\(id)-\(repeatIndex)")
+              entry["group"] = .object(group)
+            }
+            if let response = entry["responseId"]?.stringValue {
+              entry["responseId"] = .string("\(response)-\(repeatIndex)")
+            }
+          }
+          rows.append(.object(entry))
+        }
+      }
+      return rows
     }
 
     public func tail(
@@ -92,25 +118,11 @@
       }
       let open = try answer("index-session-tail-open.snapshot")
       let asked = params?["sessionId"]?.stringValue
-      // the open's snapshot, re-keyed to the session asked for, and grown:
-      // the golden's four rows repeated as eight turns under their own ids
-      // and ordinals, so the document SCROLLS and the arrival pill has a
-      // page to stand under (a four-row document shows its end at once)
+      // the open's snapshot: the SAME grown rows the page served (rosetta's
+      // ids agree across its page and its socket), so the open patches the
+      // page and only the scripted delta below is an arrival
       if var snapshot = open["snapshot"]?.objectValue {
-        let golden = snapshot["rows"]?.arrayValue ?? []
-        var rows: [JSONValue] = []
-        for repeatIndex in 0..<8 {
-          for (offset, row) in golden.enumerated() {
-            guard var entry = row.objectValue else { continue }
-            if let asked { entry["sessionId"] = .string(asked) }
-            let base = entry["timelineId"]?.stringValue ?? "t\(offset)"
-            entry["timelineId"] = .string(repeatIndex == 0 ? base : "\(base)-\(repeatIndex)")
-            entry["ordinal"] = .int(Int64(repeatIndex * 10 + offset))
-            if let at = entry["at"]?.intValue { entry["at"] = .int(at + Int64(repeatIndex) * 5_400_000) }
-            rows.append(.object(entry))
-          }
-        }
-        snapshot["rows"] = .array(rows)
+        snapshot["rows"] = .array(Self.grown(snapshot["rows"]?.arrayValue ?? [], asked: asked))
         onSnapshot(.object(snapshot))
       }
       onTailDelta = onDelta
@@ -119,13 +131,15 @@
         Task { @MainActor [weak self] in
           try? await Task.sleep(for: deltaAfter)
           guard let self, let deliver = self.onTailDelta, var delta = Self.fixture("index-session-tail-delta.valid")?.objectValue else { return }
-          // the golden delta patches t1; a NEW row beside it is what the
-          // arrival pill counts
-          var appended = (Self.fixture("index-timeline.valid")?["entries"]?.arrayValue?.last?.objectValue) ?? [:]
+          // the golden delta patches t1; a NEW row after the grown page's last
+          // is what the arrival pill counts
+          let grownPage = Self.grown(Self.fixture("index-timeline.valid")?["entries"]?.arrayValue ?? [], asked: asked)
+          var appended = grownPage.last?.objectValue ?? [:]
           appended["timelineId"] = .string("t-arrival")
           appended["ordinal"] = .int(999)
           appended["kind"] = .string("agent")
           appended["text"] = .string("Eleven glyphs, all resolving — the tail delivered this row.")
+          if let at = appended["at"]?.intValue { appended["at"] = .int(at + 60_000) }
           if let asked { appended["sessionId"] = .string(asked) }
           delta["upserts"] = .array((delta["upserts"]?.arrayValue ?? []).map { row in
             guard var entry = row.objectValue, let asked else { return row }

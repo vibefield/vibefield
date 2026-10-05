@@ -537,6 +537,10 @@ extension HistoryCorpus {
             promptAnchor: "h1", model: "claude-opus-5 · high", facts: "48s · 21.4K",
             segments: [
               .prose(id: "t1-p1", at: "10:02:21", text: "Reading what the map covers today before I cut anything.", anchor: nil),
+              // SP-6 — the honest-state words: a reply the door cut at its bound,
+              // and an attachment whose bytes the index did not record
+              .clipped(id: "t1-c1", words: "clipped · 14 KB on studio"),
+              .attachment(id: "t1-a1", kind: "image", label: "image icon-map.png · omitted from the record on studio"),
               .ledger(
                 id: "t1-l1", summary: "2 reads · 1 search", duration: "11s", failed: 0, isLive: false,
                 lines: [
@@ -576,10 +580,6 @@ extension HistoryCorpus {
                 text:
                   "Eleven glyphs, all resolving. The build script asserted inline.svg began with <svg before the assets barrel had re-exported it — an ordering bug in the check, not in the glyphs. No badge survives at 12px, so none is drawn.",
                 anchor: "h3"),
-              // SP-6 — the honest-state words: a reply the door cut at its bound,
-              // and an attachment whose bytes the index did not record
-              .clipped(id: "t2-c1", words: "clipped · 14 KB on studio"),
-              .attachment(id: "t2-a1", kind: "image", label: "image specimen-12px.png · omitted from the record on studio"),
             ]),
           HistoryTurn(
             id: "t3", at: "11:31:08", dayPill: .init(time: "11:31", after: "after 1h 19m"),

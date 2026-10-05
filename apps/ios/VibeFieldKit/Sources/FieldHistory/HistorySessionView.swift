@@ -27,6 +27,10 @@ struct HistorySessionView: View {
   /// How close to the foot counts as "at the end": the bar's clearance plus a
   /// line, so the end is seen when the last row is readable above the glass.
   static let endSlack: CGFloat = 120
+  /// The app bar's row and its margin stand over the scroll's foot: the
+  /// content's last row and the arrival pill both clear it, or the pill
+  /// hangs behind the glass where no one sees it.
+  static let barClearance: CGFloat = 80
 
   private var awake: Bool { standing.isAwake }
   private var color: Color {
@@ -56,7 +60,7 @@ struct HistorySessionView: View {
           Color.clear.frame(height: 1).id("end")
         }
         .padding(.horizontal, HistoryParts.sidePadding)
-        .padding(.bottom, 80)
+        .padding(.bottom, Self.barClearance)
       }
       // The arrival pill's one fact: whether the document's END is on screen.
       // Read from the scroll's geometry, not an `onAppear` on the end marker —
@@ -188,7 +192,7 @@ struct HistorySessionView: View {
         .liquidGlassCapsule()
       }
       .buttonStyle(.plain)
-      .padding(.bottom, 12)
+      .padding(.bottom, Self.barClearance + 12)
       .transition(.opacity.combined(with: .offset(y: 6)))
       .accessibilityLabel("\(arrivals) new rows, scroll to them")
     }
@@ -330,8 +334,10 @@ struct HistorySessionView: View {
       Text(words)
         .font(ChromeType.sans(12.5))
         .foregroundStyle(ChromePalette.inkTertiary)
-        .lineLimit(1)
-        .truncationMode(.middle)
+        // the reason an attachment has no bytes is the row's point: wrap, never cut the middle out
+        .lineLimit(2)
+        .truncationMode(.tail)
+        .multilineTextAlignment(.leading)
       Spacer(minLength: 0)
     }
     .padding(.horizontal, 12)
