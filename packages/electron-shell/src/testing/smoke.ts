@@ -1130,7 +1130,16 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
     10_000,
     `document.querySelector('.field-scene[data-covered="true"]') !== null`,
   );
-  await sleep(700); // the freeze walks its settle before it parks
+  // the freeze walks its settle, then PARKS (ICE frame-control): the parked second starts AT the park — the gate's own
+  // word, never a fixed delay after the cover shows, which a late freeze (its passive effect behind a slow paint) or a
+  // stalled frame outlasts (DK-10b, grade 2: the settle step landed inside the second — one frame, one submit)
+  await waitForRendererFact(
+    win,
+    "the desk parked under the cover",
+    10_000,
+    "globalThis.__vfDesk.rest().parked === true",
+    "globalThis.__vfDesk.rest()",
+  );
   const parkedA = await stillnessSample(win);
   await sleep(1000);
   const parkedB = await stillnessSample(win);
@@ -1140,7 +1149,9 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   await sleep(700);
   const thawed = await deskCounters(win);
   await js(`globalThis.__vfDesk.ambient("idle")`);
-  const freeze = { busy0, busy1, parked0, parked1, thawed };
+  // what reached the parked desk in its second — a presence tick, a world write — and drew nothing (DK-10b)
+  const parkedWakes = movedBy(parkedA, parkedB).wakes;
+  const freeze = { busy0, busy1, parked0, parked1, parkedWakes, thawed };
   console.log(`SMOKE_CANVAS_FREEZE ${JSON.stringify(freeze)}`);
   if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
   if (parked1.frames !== parked0.frames || parked1.submits !== parked0.submits) {
@@ -2105,7 +2116,16 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
     10_000,
     `document.querySelector('.field-scene[data-covered="true"]') !== null`,
   );
-  await sleep(700); // the freeze walks its settle before it parks
+  // the freeze walks its settle, then PARKS (ICE frame-control): the parked second starts AT the park — the gate's own
+  // word, never a fixed delay after the cover shows, which a late freeze (its passive effect behind a slow paint) or a
+  // stalled frame outlasts (DK-10b, grade 2: the settle step landed inside the second — one frame, one submit)
+  await waitForRendererFact(
+    win,
+    "the desk parked under the cover",
+    10_000,
+    "globalThis.__vfDesk.rest().parked === true",
+    "globalThis.__vfDesk.rest()",
+  );
   const parkedA = await stillnessSample(win);
   await sleep(1_000);
   const parkedB = await stillnessSample(win);
@@ -2151,7 +2171,11 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
       `the desk did not idle at zero (${JSON.stringify({ rest0, rest1, movedBy: moved, ...outside })})`,
     );
   }
-  return { facts: { busy0, busy1, parked0, parked1, rest0, rest1, ...outside }, problems };
+  const parkedWakes = movedBy(parkedA, parkedB).wakes;
+  return {
+    facts: { busy0, busy1, parked0, parked1, parkedWakes, rest0, rest1, ...outside },
+    problems,
+  };
 }
 
 /** What `plugins.reload` was answered, as a fact: null when it reloaded, its refusal's words otherwise. */
