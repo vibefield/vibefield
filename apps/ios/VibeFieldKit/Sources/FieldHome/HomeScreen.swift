@@ -3,6 +3,8 @@ import FieldDesign
 import FieldHistory
 import FieldInput
 import FieldMesh
+import FieldProduct
+import FieldWorkspace
 import FieldSwarm
 import FieldTerminal
 import SwiftUI
@@ -20,6 +22,8 @@ import UIKit
 /// a peer's session is a guest here.
 public struct HomeScreen: View {
   @State private var feed = MockAgentField()
+  @State private var createSheetOpen = false
+  @State private var workspaceLaunch: WorkspaceLaunch?
   @State private var mesh = MeshModel()
   @State private var remoteField = RemoteSessionField(source: nil)
   /// IOS-4b — the live field: the devices store, the doors it names, and the
@@ -234,7 +238,13 @@ public struct HomeScreen: View {
         // rendering at 120 Hz is a battery spent on nobody.
         isActive: scenePhase == .active && selectedTab == .field,
         onSelect: { bubble in openCard(on: bubble) },
-        onCreate: { _ in feed.spawn() }
+        onCreate: { _ in
+          #if DEBUG
+            if mockActive { return feed.spawn() }
+          #endif
+          beginCreate()
+          return nil
+        }
       ) {
         chrome
       }
@@ -247,6 +257,17 @@ public struct HomeScreen: View {
     // The lab covers the stage (IOS-6c); presented here rather than on the
     // body's chain, which is already at the type-checker's limit.
     .fullScreenCover(isPresented: swarmLabBinding) { SwarmLabView(focus: swarmLabFocusValue) }
+    .onAppear {
+      #if DEBUG
+        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-vf-demo-workspace=") }) {
+          workspaceLaunch = WorkspaceFixtureDoor.model()
+          createSheetOpen = true
+        }
+      #endif
+    }
+    .sheet(isPresented: $createSheetOpen) {
+      if let workspaceLaunch { CreateSessionSheet(model: workspaceLaunch) }
+    }
     // --- IOS-6d: every projection and every change of the card's subject
     // folds the ledgers; the theme's tint moves the project colours with it.
     // On the stage for the same reason as the cover above.
@@ -259,6 +280,7 @@ public struct HomeScreen: View {
     .onChange(of: linkDesktops) {
       rememberAccount()
       syncHistoryDesktops()
+      workspaceLaunch?.update(workspaceDesktops)
     }
     // SP-6 — the home moved: the History groups re-order and the home's
     // reader takes the shared door
@@ -293,6 +315,26 @@ public struct HomeScreen: View {
     // RETIRED 2026-09-23 (IOS-8g): the TERMINAL chip in the top-right. What it
     // opened is the session card's `···` now; the field's corners are the
     // account's and the tab bar's.
+  }
+
+  private var workspaceDesktops: [WorkspaceDesktop] {
+    (link?.desktops ?? []).map { desktop in
+      WorkspaceDesktop(id: desktop.deviceId, name: desktop.name, platform: desktop.platform,
+        online: desktop.state == .ready)
+    }
+  }
+
+  private func beginCreate() {
+    if workspaceLaunch == nil {
+      workspaceLaunch = WorkspaceLaunch(desktops: workspaceDesktops, home: link?.home) { device, method, params in
+        guard let link else {
+          throw FieldProductError(kind: "UNAVAILABLE", message: "Connect a desktop", retryable: true)
+        }
+        return try await link.workspaceCall(on: device, method: method, params: params)
+      }
+    }
+    workspaceLaunch?.update(workspaceDesktops)
+    createSheetOpen = true
   }
 
   // MARK: - IOS-9e: the pages, and the bar over them
@@ -1622,6 +1664,8 @@ public struct HomeScreen: View {
     #endif
     selection = nil
     closeCard()
+    createSheetOpen = false
+    workspaceLaunch = nil
     closeLink()
     mesh.signOut()
     assembly.projects = .empty

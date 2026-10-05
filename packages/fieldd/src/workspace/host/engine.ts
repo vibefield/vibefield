@@ -15,7 +15,7 @@ import type {
 } from "../protocol";
 import { ENTRY, HUNG_READS_MAX, matchName, type NameWalk, timedRead, walkNames } from "./names";
 
-// FS-1a — the files worker's ENGINES: mille's host, ONE PER EXPORT.
+// FS-1a/FS-1b — the files worker's ENGINES: one host per canonical root.
 //
 // The record (§4) pictured one `createFileExplorerHost` holding every export;
 // mille refuses that — "workspace roots must be unique and non-overlapping"
@@ -30,10 +30,10 @@ import { ENTRY, HUNG_READS_MAX, matchName, type NameWalk, timedRead, walkNames }
 //
 // Each engine: `initialWalk: "roots-only"` (the root row, nothing walked until
 // asked), `followSymlinks: false` (mille's spelling of "none": a symlink is
-// listed as one and never descended), folders one per row. No session is ever
-// ATTACHED here in FS-1a, and mille arms its watcher and its 16 ms fan-out
-// tick only on an attach (host.js `ensureBackgroundServices`) — so an export
-// nobody is attached to has no watcher (FS-D12) by construction. The price of
+// listed as one and never descended), folders one per row. FS-1b attaches hold
+// an active lease and arm mille's watcher and 16 ms fan-out tick (host.js
+// `ensureBackgroundServices`); row-only engines have no watcher (FS-D12).
+// A narrowed ticket has its own canonical subtree root. The price of
 // no watcher: a folder listed once goes stale, so a folder listed AGAIN is
 // reconciled against the disk first (`resync`) — the door's answer is the
 // disk's, never a cache's.

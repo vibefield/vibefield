@@ -178,7 +178,7 @@ export class RootsRegistry {
 
   /** A run entered the fold in `cwd` at `at` (ISO): the folder becomes a place,
    * or its `lastActiveAt` moves forward. A folder the service never exports
-   * (`isExcludedRoot`, on its real path) or one that is not there is not
+   * (a filesystem root, on its real path) or one that is not there is not
    * added. Answers whether anything changed. */
   touchPlace(cwd: string, at?: string): boolean {
     this.#load();

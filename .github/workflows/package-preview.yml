@@ -19,10 +19,8 @@
 # inferred from a path or a developer username, so a preview build has no identity to sign
 # with and no origin to impersonate.
 #
-# This repo builds STANDALONE since 2026-07-28: truffle-core is an exact crates-io pin
-# (=0.7.12) and @vibecook/ice an exact registry pin (0.2.0), so nothing clones or builds
-# siblings here. If a new petition window restores a [patch] + siblings.lock.json, restore
-# the sibling-checkout step from git history (byte-identical to verify.yml's, per EL8).
+# Sibling windows are prepared at their exact lock revisions, including mille's
+# native addon (FS-1b). This lane still carries no signing or publishing grant.
 name: package-preview
 
 on:

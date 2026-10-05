@@ -188,3 +188,15 @@ it("dies mid-session and serves a fresh snapshot on the next worker generation",
       .some((row) => row.name === "after-restart.txt"),
   );
 });
+
+it("withdraws an attached root that disappears without another door read", async () => {
+  const { root, ticket } = await world();
+  const tree = await connect(await ticket());
+  cleanup.push(() => tree.close());
+  let closed = false;
+  tree.channel.onClose(() => {
+    closed = true;
+  });
+  rmSync(root, { recursive: true, force: true });
+  await until(() => closed, WORKSPACE_LIMITS.ATTACHED_ROOT_CHECK_MS + 5_000);
+}, 30_000);

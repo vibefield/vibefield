@@ -72,6 +72,8 @@ export class WorkspaceListener {
   readonly #credentials = new Map<string, Credential>();
   readonly #pairs = new Set<Pair>();
   #stopped = false;
+  #rootTimer: NodeJS.Timeout | null = null;
+  #checkingRoots = false;
 
   private constructor(server: WebSocketServer, engines: Engines) {
     this.#server = server;
@@ -127,8 +129,42 @@ export class WorkspaceListener {
     };
     pair.timer.unref();
     this.#pairs.add(pair);
+    if (this.#rootTimer === null) {
+      this.#rootTimer = setInterval(
+        () => void this.#checkRoots(),
+        WORKSPACE_LIMITS.ATTACHED_ROOT_CHECK_MS,
+      );
+      this.#rootTimer.unref();
+    }
     this.#credentials.set(ask.ticket, { pair, leg: "tree" });
     this.#credentials.set(ask.gitTicket, { pair, leg: "git" });
+  }
+
+  // A port-only client may never ask a row door again. Root disappearance or
+  // replacement must still close its grant without needing a roots subscriber.
+  async #checkRoots(): Promise<void> {
+    if (this.#checkingRoots || this.#stopped) return;
+    this.#checkingRoots = true;
+    try {
+      const byPath = new Map<string, Pair[]>();
+      for (const pair of this.#pairs) {
+        const pairs = byPath.get(pair.rootPath) ?? [];
+        pairs.push(pair);
+        byPath.set(pair.rootPath, pairs);
+      }
+      await Promise.all(
+        [...byPath].map(async ([path, pairs]) => {
+          try {
+            if ((await resolveConfined(path, [])) === path) return;
+          } catch {
+            /* a missing, replaced or unreadable root withdraws its grant */
+          }
+          for (const pair of pairs) this.#revoke(pair);
+        }),
+      );
+    } finally {
+      this.#checkingRoots = false;
+    }
   }
 
   closeTicket(clientId: string, ticket: string): boolean {
@@ -157,6 +193,10 @@ export class WorkspaceListener {
     this.#credentials.delete(pair.ticket);
     this.#credentials.delete(pair.gitTicket);
     this.#pairs.delete(pair);
+    if (this.#pairs.size === 0 && this.#rootTimer !== null) {
+      clearInterval(this.#rootTimer);
+      this.#rootTimer = null;
+    }
     for (const socket of pair.sockets) socket.terminate();
     pair.sockets.clear();
   }

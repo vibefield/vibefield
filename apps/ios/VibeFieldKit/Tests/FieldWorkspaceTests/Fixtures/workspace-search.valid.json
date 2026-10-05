@@ -1,0 +1,21 @@
+{
+  "rootId": "r_9b2d5e8a1c4f7036ad52",
+  "hits": [
+    {
+      "id": 42,
+      "name": "vibe-field",
+      "path": "/Users/ada/Projects/project100/vibe-field",
+      "kind": "dir",
+      "relativePath": "Projects/project100/vibe-field"
+    },
+    {
+      "id": 911,
+      "name": "vibe.md",
+      "path": "/Users/ada/notes/vibe.md",
+      "kind": "file",
+      "relativePath": "notes/vibe.md"
+    }
+  ],
+  "clipped": false,
+  "complete": true
+}

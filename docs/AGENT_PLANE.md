@@ -10,6 +10,12 @@ from three repositories and one spine. **puppeteer** is the managed-session runt
 fieldd. **rosetta** is the agent data plane, a `rosettad` process per user root supervised by fieldd.
 **VibeField** composes the two at the native session id and owns custody, policy and presentation.
 
+The files service is a separate low-level seam: **mille** runs in a fieldd-owned
+worker, with bounded row doors for own devices and a ticketed direct plane for
+History's worktree guest. The phone's folder picker uses those rows and sends
+`agent.spawn {cwd}` to the selected desktop. See the [workspace API](agent-plane/api.html#workspace)
+and [ownership and import wall](agent-plane/architecture.html#files-service).
+
 ## The ownership law
 
 Stated at `draft/thinking-ar-agent-plane.md` §1. Read the middle column as hard as the left one.

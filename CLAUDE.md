@@ -154,6 +154,15 @@ the lock, supplying six Cargo patches and the React renderer. Run
 as rosettad; `node scripts/siblings.mjs build-js` rebuilds just those exports after edits.
 CI uses the same commands. Existing checkouts are never reset by `fetch`.
 
+**Files service sibling window (FS-1b, 2026-10-05):** `../mille-pin` is a dedicated
+checkout at `siblings.lock.json`'s revision, supplying mille and mille-ui together for the
+unreleased WebSocket channel. `node scripts/siblings.mjs fetch mille`, then named
+`install-js mille` / `build-js mille`, prepares it. Host React peers are linked only inside
+that dedicated checkout's generated node_modules; its source and lock stay unchanged.
+Renderer and test aliases share the lock's built exports, including rosetta's nested
+consumer. R24 permits native mille only in the files worker and browser client/port/remote
+entries plus mille-ui in field-app. Exit is an exact npm version after the release.
+
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version). Go is NO LONGER a prereq — truffle's mesh
 sidecar was built from source while the window's Go half was open, and comes from npm again.

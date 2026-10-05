@@ -25,6 +25,7 @@ let package = Package(
     .library(name: "FieldSwarm", targets: ["FieldSwarm"]),
     .library(name: "FieldHome", targets: ["FieldHome"]),
     .library(name: "FieldHistory", targets: ["FieldHistory"]),
+    .library(name: "FieldWorkspace", targets: ["FieldWorkspace"]),
   ],
   dependencies: [
     // The Ghosttea Apple stack (terminal + Truffle mesh). Exact pin — EL8:
@@ -252,11 +253,13 @@ let package = Package(
     ),
     // The home screen: the field's composition, bubble chrome, session card —
     // and since IOS-9a the tab bar the two views stand under.
+    .target(name: "FieldWorkspace", dependencies: ["FieldProduct", "FieldDesign"], resources: [.copy("Fixtures")]),
+    .testTarget(name: "FieldWorkspaceTests", dependencies: ["FieldWorkspace", "FieldProduct"], resources: [.copy("Fixtures")]),
     .target(
       name: "FieldHome",
       dependencies: [
         "FieldDesign", "SwarmPhysics", "FieldAgents", "FieldMesh", "FieldTerminal", "FieldInput",
-        "FieldSwarm", "FieldHistory",
+        "FieldSwarm", "FieldHistory", "FieldWorkspace", "FieldProduct",
       ],
       resources: [.process("Resources")]
     ),
