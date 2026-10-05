@@ -9,40 +9,65 @@ import SwiftUI
 /// The FIELD is not here (IOS-9e): it is the bar's, where the search circle
 /// morphs into it at the bottom above the keyboard — so this view takes the
 /// words and the kind as bindings and never owns a text field of its own.
+///
+/// SP-6 — over the doors the words are ASKED of every desktop that answers
+/// (`index.search`, debounced), each desktop's hits under its own head when
+/// there is more than one; a desktop that cannot answer says so in H-D7's
+/// words and its last answer stands. The mock's corpus is matched locally.
 public struct HistorySearchView: View {
-  let corpus: HistoryCorpus?
-  let standing: FieldHistoryModel.DesktopStanding
+  let desktops: [HistoryDesktopReader]
   @Binding var query: String
   @Binding var kind: FieldHistoryModel.SearchKind
   /// A hit was tapped: where it lands. The home screen switches tabs.
   let onLand: (FieldHistoryModel.Landing, String) -> Void
+  /// The words, asked of the desktops (the home screen routes it).
+  let onSearch: (String, FieldHistoryModel.SearchKind) -> Void
 
   public init(
-    corpus: HistoryCorpus?, standing: FieldHistoryModel.DesktopStanding, query: Binding<String>,
-    kind: Binding<FieldHistoryModel.SearchKind>, onLand: @escaping (FieldHistoryModel.Landing, String) -> Void
+    desktops: [HistoryDesktopReader], query: Binding<String>,
+    kind: Binding<FieldHistoryModel.SearchKind>,
+    onLand: @escaping (FieldHistoryModel.Landing, String) -> Void,
+    onSearch: @escaping (String, FieldHistoryModel.SearchKind) -> Void = { _, _ in }
   ) {
-    self.corpus = corpus
-    self.standing = standing
+    self.desktops = desktops
     _query = query
     _kind = kind
     self.onLand = onLand
+    self.onSearch = onSearch
   }
 
   @Environment(\.colorScheme) private var scheme
 
+  /// The words are asked after a pause in typing; the pause is the record's
+  /// own debounce for a question that crosses a radio.
+  static let askAfter: Duration = .milliseconds(350)
+
   public var body: some View {
     ScrollView {
-      if let corpus {
-        results(corpus)
-      } else {
+      if desktops.isEmpty {
         QuietNote(
-          title: "Search runs on your desktop's index",
-          text: "This build has no search read yet — it lands with the index reads (H-1). The field is the bar's; the answers are owed.")
+          title: "Search runs on your desktops' index",
+          text: "No desktop of this account answers right now; the answers arrive from the first whose door does.")
+      } else {
+        LazyVStack(alignment: .leading, spacing: 0) {
+          ForEach(desktops) { reader in
+            if desktops.count > 1 { DesktopHead(name: reader.name, standing: reader.standing, isHome: reader.isHome) }
+            results(reader.corpus, standing: reader.standing)
+          }
+        }
+        .padding(.bottom, 24)
       }
     }
     .scrollDismissesKeyboard(.interactively)
     .safeAreaInset(edge: .top, spacing: 0) { scopes }
     .background(ChromePalette.paper.ignoresSafeArea())
+    .task(id: "\(query)|\(kind.rawValue)") {
+      let words = query.trimmingCharacters(in: .whitespaces)
+      guard !words.isEmpty else { return }
+      try? await Task.sleep(for: Self.askAfter)
+      guard !Task.isCancelled else { return }
+      onSearch(words, kind)
+    }
   }
 
   /// The kinds, as the system's own segmented control (glass on iOS 26).
@@ -59,21 +84,26 @@ public struct HistorySearchView: View {
     .background(ChromePalette.paper)
   }
 
-  private func results(_ corpus: HistoryCorpus) -> some View {
-    let groups = FieldHistoryModel.hits(for: query, kind: kind, in: corpus)
+  private func results(_ corpus: HistoryCorpus, standing: FieldHistoryModel.DesktopStanding) -> some View {
+    let groups = FieldHistoryModel.visibleHits(query: query, kind: kind, in: corpus)
     let matches = FieldHistoryModel.matchCount(groups)
     let quiet = FieldHistoryModel.quiet(query: query, kind: kind, matches: matches, corpus: corpus, standing: standing)
     let terms = FieldHistoryModel.terms(query)
+    let asked = corpus.searchedQuery == query.trimmingCharacters(in: .whitespaces) || corpus.searchedQuery == nil
     return LazyVStack(alignment: .leading, spacing: 0) {
-      Text(FieldHistoryModel.searchFoot(query: query, matches: matches, standing: standing, desktop: corpus.desktop))
-        .font(ChromeType.sans(12, .medium))
-        .monospacedDigit()
-        .foregroundStyle(ChromePalette.inkFaint)
-        .padding(.horizontal, HistoryParts.sidePadding)
-        .padding(.top, 8)
-        .padding(.bottom, 4)
-        .accessibilityAddTraits(.updatesFrequently)
-      if let quiet {
+      Text(
+        !asked && !terms.isEmpty
+          ? "Asking \(corpus.desktop)…"
+          : FieldHistoryModel.searchFoot(query: query, matches: matches, standing: standing, desktop: corpus.desktop)
+      )
+      .font(ChromeType.sans(12, .medium))
+      .monospacedDigit()
+      .foregroundStyle(ChromePalette.inkFaint)
+      .padding(.horizontal, HistoryParts.sidePadding)
+      .padding(.top, 8)
+      .padding(.bottom, 4)
+      .accessibilityAddTraits(.updatesFrequently)
+      if let quiet, asked {
         QuietNote(title: quiet.title, text: quiet.body)
       } else if terms.isEmpty {
         recent(corpus)
@@ -81,17 +111,16 @@ public struct HistorySearchView: View {
         ForEach(groups) { group in
           groupHead(group, corpus: corpus)
           ForEach(group.rows) { hit in
-            hitRow(hit, in: group, terms: terms)
+            hitRow(hit, in: group, corpus: corpus, terms: terms)
           }
         }
       }
     }
-    .padding(.bottom, 24)
   }
 
   private func recent(_ corpus: HistoryCorpus) -> some View {
     VStack(alignment: .leading, spacing: 0) {
-      DayHeader(text: "Recent")
+      if !corpus.recentSearches.isEmpty { DayHeader(text: "Recent") }
       ForEach(corpus.recentSearches, id: \.self) { word in
         Button {
           query = word
@@ -121,10 +150,12 @@ public struct HistorySearchView: View {
     return HStack(alignment: .center, spacing: 8) {
       Capsule().fill(color).frame(width: 3, height: 14)
       HStack(spacing: 4) {
-        Text(project?.name ?? group.projectId)
-          .fontWeight(.semibold)
-          .foregroundStyle(ChromePalette.ink)
-        Text("›").foregroundStyle(ChromePalette.inkFaint)
+        if let project {
+          Text(project.name)
+            .fontWeight(.semibold)
+            .foregroundStyle(ChromePalette.ink)
+          Text("›").foregroundStyle(ChromePalette.inkFaint)
+        }
         Text(group.sessionTitle)
           .foregroundStyle(ChromePalette.inkSecondary)
           .lineLimit(1)
@@ -145,9 +176,8 @@ public struct HistorySearchView: View {
     .accessibilityElement(children: .combine)
   }
 
-  private func hitRow(_ hit: HistoryHit, in group: HistoryHitGroup, terms: [String]) -> some View {
+  private func hitRow(_ hit: HistoryHit, in group: HistoryHitGroup, corpus: HistoryCorpus, terms: [String]) -> some View {
     Button {
-      guard let corpus else { return }
       onLand(FieldHistoryModel.landing(for: hit, in: group, corpus: corpus), query.trimmingCharacters(in: .whitespaces))
     } label: {
       HStack(alignment: .top, spacing: 10) {

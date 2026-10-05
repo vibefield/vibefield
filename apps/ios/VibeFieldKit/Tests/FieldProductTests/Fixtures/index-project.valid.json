@@ -1,0 +1,66 @@
+{
+  "projectId": "p1",
+  "heatmap": [
+    {
+      "day": "2026-08-26",
+      "tokens": 123,
+      "costMicroUsd": 4210,
+      "billedMicroUsd": null,
+      "unpricedTokens": 23,
+      "unrecordedOutput": 0,
+      "reportedCostAdjustmentMicroUsd": 0
+    }
+  ],
+  "usage": {
+    "models": [
+      {
+        "day": "2026-08-26",
+        "model": "claude-opus-5",
+        "tokens": 100,
+        "costMicroUsd": 4210,
+        "billedMicroUsd": null,
+        "unpricedTokens": 0,
+        "unrecordedOutput": 0,
+        "reportedCostAdjustmentMicroUsd": 0
+      },
+      {
+        "day": "2026-08-26",
+        "model": "unknown",
+        "tokens": 23,
+        "costMicroUsd": null,
+        "billedMicroUsd": null,
+        "unpricedTokens": 23,
+        "unrecordedOutput": 0,
+        "reportedCostAdjustmentMicroUsd": 0
+      }
+    ],
+    "hours": [
+      {
+        "hour": 15,
+        "tokens": 123,
+        "costMicroUsd": null,
+        "billedMicroUsd": null,
+        "unpricedTokens": 0,
+        "unrecordedOutput": 0,
+        "reportedCostAdjustmentMicroUsd": 0
+      }
+    ]
+  },
+  "contribution": [
+    {
+      "sessionId": "s1",
+      "projectId": "p1",
+      "commits": 1,
+      "edits": 2,
+      "loc": 30,
+      "messages": 41,
+      "tokens": 5,
+      "costMicroUsd": 88,
+      "billedMicroUsd": 12,
+      "unpricedTokens": 0,
+      "unrecordedOutput": 0,
+      "reportedCostAdjustmentMicroUsd": 0
+    }
+  ],
+  "clipped": false
+}

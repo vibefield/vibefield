@@ -240,7 +240,16 @@ let package = Package(
     // Takes FieldDesign for the tokens and FieldAgents for the dealt project
     // colour; names no mesh and no Ghosttea product, so the tab's decisions
     // (`FieldHistoryModel`) test without a simulator.
-    .target(name: "FieldHistory", dependencies: ["FieldDesign", "FieldAgents"]),
+    // SP-6 — the reads over a desktop's door (`HistoryDesktopReader`) take
+    // FieldProduct for the client's two verbs and the tolerant readers; the
+    // contracts' goldens under `Fixtures/` feed `-vf-demo-history-door`, the
+    // real reads over an in-process door (byte-identical copies, the gate
+    // keeps the word "copy" true). Still no mesh and no Ghosttea product.
+    .target(
+      name: "FieldHistory",
+      dependencies: ["FieldDesign", "FieldAgents", "FieldProduct"],
+      resources: [.copy("Fixtures")]
+    ),
     // The home screen: the field's composition, bubble chrome, session card —
     // and since IOS-9a the tab bar the two views stand under.
     .target(
@@ -311,6 +320,12 @@ let package = Package(
     .testTarget(name: "FieldHomeTests", dependencies: ["FieldHome"]),
     // The History tab's DECISIONS (H-D4): ranking, the scope line, the search's
     // matching and counts, where a hit lands, the stepper's ring.
-    .testTarget(name: "FieldHistoryTests", dependencies: ["FieldHistory"]),
+    .testTarget(
+      name: "FieldHistoryTests",
+      dependencies: ["FieldHistory", "FieldProduct"],
+      // SP-6 — the contracts' OWN goldens, copied in (EL9 on the third side):
+      // the fold reads the same bytes the TypeScript tests parse.
+      resources: [.copy("Fixtures")]
+    ),
   ]
 )

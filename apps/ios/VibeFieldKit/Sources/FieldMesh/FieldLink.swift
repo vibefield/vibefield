@@ -563,6 +563,23 @@ public final class FieldLink {
     deviceId == home ? homeClient : nil
   }
 
+  /// SP-6 — a door to one self desktop for the History tab's whole reading of
+  /// it (SP-D2 (a): History is a multi-door client — each desktop's index is
+  /// read where it lives, never through the home). The HOME's own client when
+  /// the desktop is the home (shared; `owned` false — the caller never closes
+  /// it); else a client opened for this desktop, counted against the phone's
+  /// budget like every door (one per desktop, `PhoneConnectionBudget`), which
+  /// the caller closes when the reading ends (`owned` true). Only a door this
+  /// phone has heard ANSWER is opened — nil for any other, in the honest
+  /// shape of "there is no door to ask".
+  public func openHistoryDoor(_ deviceId: String) -> (client: FieldProductClient, owned: Bool)? {
+    if deviceId == home, let homeClient { return (homeClient, false) }
+    guard let entry = found[deviceId], case .answering = entry.admission,
+      let url = entry.doorURL, endpointRefusals[deviceId] == nil
+    else { return nil }
+    return (FieldProductClient(url: url, transport: transport, options: doorOptions(deviceId)), true)
+  }
+
   /// TM-5 — a routed terminal ticket for one session on one desktop.
   ///
   /// This is the whole of the phone's attach authority: `terminal.openTicket`

@@ -1,0 +1,44 @@
+{
+  "//": "DS-6 — `index.projects {scope: \"mesh\"}`: the merged replica's projects, newest activity first (the owner's clock; device, then id, break ties), one row per {device, project} — the family groups them, never merges them. The asleep laptop's project is listed, greyed by its source; `cursor` asks for the next page.",
+  "rows": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "projectId": "p-4f1c2a9e",
+      "name": "vibe-field",
+      "rootPaths": ["/Users/me/Projects/vibe-field"],
+      "gitRepo": "github.com:jamesyong42/vibe-field",
+      "family": "github.com/jamesyong42/vibe-field",
+      "sessionCount": 412,
+      "lastActivityAt": 1759276800000
+    },
+    {
+      "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+      "projectId": "p-1b9e77aa",
+      "name": "vibe-field",
+      "rootPaths": ["/Users/me/code/vibe-field"],
+      "gitRepo": "https://github.com/jamesyong42/vibe-field",
+      "family": "github.com/jamesyong42/vibe-field",
+      "sessionCount": 37,
+      "lastActivityAt": 1759190400000
+    }
+  ],
+  "cursor": "eyJ0IjoxNzU5MTkwNDAwMDAwLCJkIjoiMDFKOVpNMFBRN1czRTZSOFQyWTRVMUk1TzkiLCJrIjoicC0xYjllNzdhYSJ9",
+  "sources": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "name": "studio",
+      "self": true,
+      "state": "live",
+      "asOf": "2026-09-30T23:40:00.000Z",
+      "rows": 134
+    },
+    {
+      "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+      "name": "laptop",
+      "self": false,
+      "state": "asleep",
+      "asOf": "2026-09-30T02:12:44.000Z",
+      "rows": 58
+    }
+  ]
+}

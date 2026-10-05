@@ -1,0 +1,21 @@
+{
+  "//": "`index.search`'s own answer (AR-5e) — the projection fieldd folds from index-search.rosetta-20.json plus the facts lookup that scoped it: the wire hit's session s1 attributed to the root a reader navigates to (s0), joined to the live run by its provider-native id. A catching-up projection still answers.",
+  "answered": true,
+  "state": {
+    "readiness": "catching-up",
+    "canonicalReady": true
+  },
+  "hits": [
+    {
+      "sessionId": "s1",
+      "rootSessionId": "s0",
+      "nativeSessionId": "native-s0",
+      "title": "Named",
+      "timelineId": "t1",
+      "kind": "user",
+      "at": 1,
+      "snippet": "[needle] in a haystack"
+    }
+  ],
+  "clipped": false
+}

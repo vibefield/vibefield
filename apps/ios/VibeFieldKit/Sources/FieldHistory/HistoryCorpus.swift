@@ -4,14 +4,21 @@ import Foundation
 /// session's document, the search hits — as VALUES, the shapes the record's
 /// six screens read and nothing about where they came from.
 ///
-/// Today the only source is `HistoryCorpus.mock` (the History records' own
-/// invented corpus, the one every design page drew — `-vf-mock`). The reads
-/// over the door (`index.projects` · `index.project` · `index.session` ·
-/// `index.timeline` · `index.search`, H-1/H-2) fill the same values when they
-/// land; nothing in the views knows the difference, which is the point.
-public struct HistoryCorpus: Equatable, Sendable {
-  /// The desktop whose index this is.
+/// Two sources fill them: `HistoryCorpus.mock` (the History records' own
+/// invented corpus, the one every design page drew — `-vf-mock`,
+/// `-vf-demo-history`) and, since SP-6, the reads over a desktop's door
+/// (`index.projects` · `index.sessions` · `index.project` · `index.session` ·
+/// `index.timeline` + the tail · `index.search`, `HistoryDesktopReader`), one
+/// corpus per desktop. Nothing in the views knows the difference, which is the
+/// point. `Codable` because a corpus read from a desktop is CACHED and replayed
+/// while that desktop cannot answer (airplane mode, H-D7's words).
+public struct HistoryCorpus: Equatable, Sendable, Codable {
+  /// The desktop whose index this is — its NAME, the word the honest states
+  /// carry (`studio is asleep · read 11:42`).
   public var desktop: String
+  /// The desktop's durable device id (the mesh's), the key everything about
+  /// a desktop is filed under; the routes name it.
+  public var deviceId: String
   public var sessionCount: Int
   public var agentCount: Int
   /// When this phone last read the index — the word the asleep states carry.
@@ -20,15 +27,21 @@ public struct HistoryCorpus: Equatable, Sendable {
   public var live: [HistoryLive]
   public var sessions: [String: [HistorySession]]
   public var hits: [HistoryHitGroup]
+  /// SP-6 — the query `hits` answer, when a DESKTOP answered them (the local
+  /// term filter then stands aside: the index widened word fragments, and a
+  /// hit it found is a hit). nil: `hits` is the whole corpus's, filtered here.
+  public var searchedQuery: String?
   public var recentSearches: [String]
   public var documents: [String: HistoryDocument]
 
   public init(
-    desktop: String, sessionCount: Int, agentCount: Int, readAt: String, projects: [HistoryProject],
-    live: [HistoryLive], sessions: [String: [HistorySession]], hits: [HistoryHitGroup],
-    recentSearches: [String], documents: [String: HistoryDocument]
+    desktop: String, deviceId: String = "dev-1", sessionCount: Int, agentCount: Int, readAt: String,
+    projects: [HistoryProject], live: [HistoryLive], sessions: [String: [HistorySession]],
+    hits: [HistoryHitGroup], searchedQuery: String? = nil, recentSearches: [String],
+    documents: [String: HistoryDocument]
   ) {
     self.desktop = desktop
+    self.deviceId = deviceId
     self.sessionCount = sessionCount
     self.agentCount = agentCount
     self.readAt = readAt
@@ -36,8 +49,17 @@ public struct HistoryCorpus: Equatable, Sendable {
     self.live = live
     self.sessions = sessions
     self.hits = hits
+    self.searchedQuery = searchedQuery
     self.recentSearches = recentSearches
     self.documents = documents
+  }
+
+  /// A desktop nothing has been read from yet: the shape every reader starts
+  /// at, and what a cache that holds nothing answers.
+  public static func empty(desktop: String, deviceId: String) -> HistoryCorpus {
+    HistoryCorpus(
+      desktop: desktop, deviceId: deviceId, sessionCount: 0, agentCount: 0, readAt: "", projects: [],
+      live: [], sessions: [:], hits: [], recentSearches: [], documents: [:])
   }
 
   public func project(_ id: String) -> HistoryProject? { projects.first { $0.id == id } }
@@ -46,7 +68,7 @@ public struct HistoryCorpus: Equatable, Sendable {
 }
 
 /// The ledger row: identity, location, quantity — and the marks of who worked here.
-public struct HistoryProject: Identifiable, Equatable, Sendable {
+public struct HistoryProject: Identifiable, Equatable, Sendable, Codable {
   public let id: String
   public let name: String
   /// The dealt colour's sequence (record §02): the row's accent and wash.
@@ -67,11 +89,15 @@ public struct HistoryProject: Identifiable, Equatable, Sendable {
   public let moreAgents: Int
   public let spark: [Int]
   public let stats: HistoryProjectStats?
+  /// SP-6 — the project's 53 weeks of 7 as the index counted them (0…4 per
+  /// day, from `index.project`'s heatmap); nil draws the record's seeded
+  /// pattern, which is the mock's and the honest "not read yet".
+  public let ribbon: [[Int]]?
 
   public init(
     id: String, name: String, seq: Int, path: String, missing: Bool = false, figure: String, unit: String,
     spend: Double, last: String, recencyMinutes: Int, agents: [HistoryAgentShare], moreAgents: Int = 0,
-    spark: [Int], stats: HistoryProjectStats? = nil
+    spark: [Int], stats: HistoryProjectStats? = nil, ribbon: [[Int]]? = nil
   ) {
     self.id = id
     self.name = name
@@ -87,12 +113,13 @@ public struct HistoryProject: Identifiable, Equatable, Sendable {
     self.moreAgents = moreAgents
     self.spark = spark
     self.stats = stats
+    self.ribbon = ribbon
   }
 
   public var isLive: Bool { last == "now" }
 }
 
-public struct HistoryAgentShare: Equatable, Sendable {
+public struct HistoryAgentShare: Equatable, Sendable, Codable {
   public let agent: String
   public let share: Int
 
@@ -103,7 +130,7 @@ public struct HistoryAgentShare: Equatable, Sendable {
 }
 
 /// A project's four figures.
-public struct HistoryProjectStats: Equatable, Sendable {
+public struct HistoryProjectStats: Equatable, Sendable, Codable {
   public let sessions: String
   public let messages: String
   public let tokens: String
@@ -122,8 +149,8 @@ public struct HistoryProjectStats: Equatable, Sendable {
 }
 
 /// A session running right now, and where a tap on it goes.
-public struct HistoryLive: Identifiable, Equatable, Sendable {
-  public enum Destination: Equatable, Sendable {
+public struct HistoryLive: Identifiable, Equatable, Sendable, Codable {
+  public enum Destination: Equatable, Sendable, Codable {
     case session(String)
     case project
   }
@@ -145,8 +172,8 @@ public struct HistoryLive: Identifiable, Equatable, Sendable {
   }
 }
 
-public struct HistorySession: Identifiable, Equatable, Sendable {
-  public enum Tone: Equatable, Sendable {
+public struct HistorySession: Identifiable, Equatable, Sendable, Codable {
+  public enum Tone: Equatable, Sendable, Codable {
     case orange
   }
 
@@ -180,7 +207,7 @@ public struct HistorySession: Identifiable, Equatable, Sendable {
 }
 
 /// Search hits, grouped under the session they were found in.
-public struct HistoryHitGroup: Identifiable, Equatable, Sendable {
+public struct HistoryHitGroup: Identifiable, Equatable, Sendable, Codable {
   public let id: String
   public let projectId: String
   /// The session the hits belong to — a document when the corpus holds one.
@@ -201,8 +228,8 @@ public struct HistoryHitGroup: Identifiable, Equatable, Sendable {
   }
 }
 
-public struct HistoryHit: Identifiable, Equatable, Sendable {
-  public enum Who: Equatable, Sendable {
+public struct HistoryHit: Identifiable, Equatable, Sendable, Codable {
+  public enum Who: Equatable, Sendable, Codable {
     case you
     case agent
   }
@@ -226,22 +253,31 @@ public struct HistoryHit: Identifiable, Equatable, Sendable {
 
 // MARK: - The document
 
-public struct HistoryDocument: Identifiable, Equatable, Sendable {
+public struct HistoryDocument: Identifiable, Equatable, Sendable, Codable {
   public let id: String
   public let projectId: String
   public let title: String
   public let agentName: String
   public let agent: String
+  /// The branch, when the index named one; empty draws no branch (a listing
+  /// row carries none — the mock's branches are the record's).
   public let branch: String
   public let startedAt: String
   public let startDay: String
   public let turns: [HistoryTurn]
   /// The live line's words, when the last run is still going.
   public let liveSince: String?
+  /// SP-6 — the page door's continuation to OLDER rows than this document
+  /// holds (nil: the whole session is here, or the mock's).
+  public let nextCursor: String?
+  /// SP-6 — rosetta's projection generation these rows belong to; the
+  /// cache's stamp beside the session's own.
+  public let watermark: String?
 
   public init(
     id: String, projectId: String, title: String, agentName: String, agent: String, branch: String, startedAt: String,
-    startDay: String, turns: [HistoryTurn], liveSince: String? = nil
+    startDay: String, turns: [HistoryTurn], liveSince: String? = nil, nextCursor: String? = nil,
+    watermark: String? = nil
   ) {
     self.id = id
     self.projectId = projectId
@@ -253,6 +289,8 @@ public struct HistoryDocument: Identifiable, Equatable, Sendable {
     self.startDay = startDay
     self.turns = turns
     self.liveSince = liveSince
+    self.nextCursor = nextCursor
+    self.watermark = watermark
   }
 
   /// Every anchor a hit can land on, in reading order.
@@ -263,7 +301,7 @@ public struct HistoryDocument: Identifiable, Equatable, Sendable {
   }
 }
 
-public struct HistoryTurn: Identifiable, Equatable, Sendable {
+public struct HistoryTurn: Identifiable, Equatable, Sendable, Codable {
   public let id: String
   public let at: String
   /// A day pill before the prompt, when the gap earned one: `11:31 · after 1h 19m`.
@@ -275,10 +313,14 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable {
   public let facts: String
   public let isLive: Bool
   public let segments: [HistorySegment]
+  /// SP-6 — what was attached to the PROMPT, as placeholders' words (`image
+  /// shot.png on studio`): drawn under the panel, never relayed (H-D9).
+  public let promptAttachments: [String]
 
   public init(
     id: String, at: String, dayPill: HistoryDayPill? = nil, prompt: String, promptAnchor: String? = nil,
-    model: String, facts: String, isLive: Bool = false, segments: [HistorySegment]
+    model: String, facts: String, isLive: Bool = false, segments: [HistorySegment],
+    promptAttachments: [String] = []
   ) {
     self.id = id
     self.at = at
@@ -289,11 +331,12 @@ public struct HistoryTurn: Identifiable, Equatable, Sendable {
     self.facts = facts
     self.isLive = isLive
     self.segments = segments
+    self.promptAttachments = promptAttachments
   }
 }
 
 /// The gap between turns, said once: the clock and how long it had been.
-public struct HistoryDayPill: Equatable, Sendable {
+public struct HistoryDayPill: Equatable, Sendable, Codable {
   public let time: String
   public let after: String
 
@@ -303,15 +346,21 @@ public struct HistoryDayPill: Equatable, Sendable {
   }
 }
 
-public enum HistorySegment: Identifiable, Equatable, Sendable {
+public enum HistorySegment: Identifiable, Equatable, Sendable, Codable {
   /// A paragraph of the reply. `anchor` is the hit id search lands on.
   case prose(id: String, at: String, text: String, anchor: String?)
   /// A folded run: the sentence of nouns, the duration, the failed count, the ladder.
   case ledger(id: String, summary: String, duration: String, failed: Int, isLive: Bool, lines: [HistoryLedgerLine])
+  /// SP-6 — something attached to a message that this phone does NOT carry
+  /// (H-D9, EL2: images and files are not relayed): an honest placeholder in
+  /// the row — `image on studio` — never a broken image. `kind` is rosetta's
+  /// attachment kind (image · document · audio · video · file, open),
+  /// `label` the name when the index had one.
+  case attachment(id: String, kind: String, label: String?)
 
   public var id: String {
     switch self {
-    case .prose(let id, _, _, _), .ledger(let id, _, _, _, _, _): id
+    case .prose(let id, _, _, _), .ledger(let id, _, _, _, _, _), .attachment(let id, _, _): id
     }
   }
 
@@ -321,8 +370,8 @@ public enum HistorySegment: Identifiable, Equatable, Sendable {
   }
 }
 
-public struct HistoryLedgerLine: Identifiable, Equatable, Sendable {
-  public enum State: Equatable, Sendable {
+public struct HistoryLedgerLine: Identifiable, Equatable, Sendable, Codable {
+  public enum State: Equatable, Sendable, Codable {
     case ok
     case failed
     case running

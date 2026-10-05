@@ -6,21 +6,34 @@ import SwiftUI
 /// the right, the day pill, and the live line under which the tail arrives.
 /// A landed search rings its anchor and scrolls to it; the stepper (the
 /// tab bar's accessory) walks the ring.
+///
+/// SP-6 — over a door: "Earlier" at the top asks the page door for the older
+/// page while the session has one (`document.nextCursor`); rows the tail
+/// appends while the reader is up the page count in the ARRIVAL PILL at the
+/// foot (`N new`), a tap scrolls to them; an attachment the index recorded is
+/// a placeholder row (`image on studio`), never a broken image (H-D9).
 struct HistorySessionView: View {
   let document: HistoryDocument
   let corpus: HistoryCorpus
   let standing: FieldHistoryModel.DesktopStanding
   @Bindable var router: HistoryRouter
+  var arrivals: Int = 0
+  var onNeed: (HistoryNeed) -> Void = { _ in }
 
   @Environment(\.colorScheme) private var scheme
   @State private var expanded: Set<String> = []
+  @State private var atEnd = false
 
-  private var awake: Bool { standing != .asleep }
+  /// How close to the foot counts as "at the end": the bar's clearance plus a
+  /// line, so the end is seen when the last row is readable above the glass.
+  static let endSlack: CGFloat = 120
+
+  private var awake: Bool { standing.isAwake }
   private var color: Color {
     HistoryParts.projectColor(seq: corpus.project(document.projectId)?.seq ?? 0, scheme: scheme)
   }
   private var litAnchor: String? {
-    guard let landed = router.landed, landed.sessionId == document.id else { return nil }
+    guard let landed = router.landed, landed.sessionId == document.id, landed.device == corpus.deviceId else { return nil }
     return landed.anchor
   }
 
@@ -29,21 +42,38 @@ struct HistorySessionView: View {
       ScrollView {
         LazyVStack(alignment: .leading, spacing: 0) {
           head
-          RuleLine(text: "Session start · \(document.startDay)")
+          if document.nextCursor != nil {
+            earlier
+          } else {
+            RuleLine(text: "Session start · \(document.startDay)")
+          }
           ForEach(document.turns) { turn in
             turnView(turn)
           }
           if let since = document.liveSince, awake {
             RuleLine(text: "Live · new since \(since)", tone: ChromePalette.green, rule: ChromePalette.green.opacity(0.38))
           }
+          Color.clear.frame(height: 1).id("end")
         }
         .padding(.horizontal, HistoryParts.sidePadding)
         .padding(.bottom, 80)
+      }
+      // The arrival pill's one fact: whether the document's END is on screen.
+      // Read from the scroll's geometry, not an `onAppear` on the end marker —
+      // a lazy stack lays its last rows out ahead of the viewport, which read
+      // as "seen" and cleared the count before anyone saw a row.
+      .onScrollGeometryChange(for: Bool.self) { geometry in
+        geometry.contentOffset.y + geometry.containerSize.height
+          >= geometry.contentSize.height - Self.endSlack
+      } action: { _, endOnScreen in
+        atEnd = endOnScreen
+        if endOnScreen { onNeed(.seen(device: corpus.deviceId, session: document.id)) }
       }
       .foldsBar(router)
       .background(ChromePalette.paper.ignoresSafeArea())
       .navigationTitle(document.title)
       .navigationBarTitleDisplayMode(.inline)
+      .overlay(alignment: .bottom) { arrivalPill(proxy) }
       .toolbar {
         ToolbarItem(placement: .topBarTrailing) {
           Menu {
@@ -57,13 +87,16 @@ struct HistorySessionView: View {
           .accessibilityLabel("More")
         }
       }
+      .onAppear { onNeed(.session(device: corpus.deviceId, id: document.id)) }
       .onChange(of: litAnchor, initial: true) { _, anchor in
         guard let anchor else { return }
         withAnimation(FieldMotion.ease(0.45)) { proxy.scrollTo(anchor, anchor: .center) }
       }
       .onDisappear {
         // Leaving the document ends the landing: the stepper has nothing to walk.
-        if router.landed?.sessionId == document.id, !router.path.contains(.session(document.id)) {
+        if router.landed?.sessionId == document.id,
+          !router.path.contains(.session(device: corpus.deviceId, id: document.id))
+        {
           router.clearLanding()
         }
       }
@@ -74,7 +107,7 @@ struct HistorySessionView: View {
     VStack(alignment: .leading, spacing: 0) {
       HStack(spacing: 8) {
         Capsule().fill(color).frame(width: 3, height: 13)
-        Text(corpus.project(document.projectId)?.name ?? document.projectId)
+        Text(corpus.project(document.projectId)?.name ?? corpus.desktop)
           .font(ChromeType.sans(13, .medium))
           .foregroundStyle(ChromePalette.inkTertiary)
       }
@@ -87,10 +120,12 @@ struct HistorySessionView: View {
       HStack(spacing: 8) {
         AgentMark(agent: document.agent, opacity: 0.8)
         Text(document.agentName)
-        Text("·")
-        HStack(spacing: 4) {
-          Image(systemName: "arrow.triangle.branch").font(.system(size: 10, weight: .medium))
-          Text(document.branch).font(ChromeType.mono(11.5))
+        if !document.branch.isEmpty {
+          Text("·")
+          HStack(spacing: 4) {
+            Image(systemName: "arrow.triangle.branch").font(.system(size: 10, weight: .medium))
+            Text(document.branch).font(ChromeType.mono(11.5))
+          }
         }
         Text("·")
         HStack(spacing: 4) {
@@ -104,6 +139,58 @@ struct HistorySessionView: View {
       .monospacedDigit()
       .foregroundStyle(ChromePalette.inkTertiary)
       .padding(.top, 6)
+    }
+  }
+
+  /// SP-6 — the older page's door: a rule with a button in it.
+  private var earlier: some View {
+    HStack(spacing: 10) {
+      Rectangle().fill(ChromePalette.ruleStrong).frame(height: 1)
+      Button {
+        onNeed(.older(device: corpus.deviceId, session: document.id))
+      } label: {
+        Text(awake ? "Earlier" : "Earlier · needs \(corpus.desktop)")
+          .font(ChromeType.sans(10.5, .medium))
+          .textCase(.uppercase)
+          .tracking(ChromeType.tracking(0.07, of: 10.5))
+          .foregroundStyle(awake ? ChromePalette.inkSecondary : ChromePalette.inkFaint)
+          .fixedSize()
+      }
+      .buttonStyle(.plain)
+      .disabled(!awake)
+      .accessibilityLabel("Read the earlier rows")
+      Rectangle().fill(ChromePalette.ruleStrong).frame(height: 1)
+    }
+    .padding(.vertical, 18)
+  }
+
+  /// SP-6 — the arrival pill: rows the tail appended while the reader was
+  /// up the page; a tap scrolls to the end and the count clears.
+  @ViewBuilder
+  private func arrivalPill(_ proxy: ScrollViewProxy) -> some View {
+    if arrivals > 0, !atEnd {
+      Button {
+        withAnimation(FieldMotion.ease(0.45)) { proxy.scrollTo("end", anchor: .bottom) }
+        onNeed(.seen(device: corpus.deviceId, session: document.id))
+      } label: {
+        HStack(spacing: 6) {
+          LivePulse(awake: awake)
+          Text("\(arrivals) new")
+            .font(ChromeType.sans(13, .medium))
+            .monospacedDigit()
+            .foregroundStyle(ChromePalette.ink)
+          Image(systemName: "arrow.down")
+            .font(.system(size: 11, weight: .semibold))
+            .foregroundStyle(ChromePalette.inkTertiary)
+        }
+        .padding(.horizontal, 14)
+        .frame(height: 36)
+        .liquidGlassCapsule()
+      }
+      .buttonStyle(.plain)
+      .padding(.bottom, 12)
+      .transition(.opacity.combined(with: .offset(y: 6)))
+      .accessibilityLabel("\(arrivals) new rows, scroll to them")
     }
   }
 
@@ -129,8 +216,15 @@ struct HistorySessionView: View {
       .padding(.vertical, 18)
     }
     VStack(alignment: .leading, spacing: 0) {
-      prompt(turn)
-      responseHead(turn)
+      if !turn.prompt.isEmpty || turn.promptAnchor != nil {
+        prompt(turn)
+      }
+      ForEach(Array(turn.promptAttachments.enumerated()), id: \.offset) { _, words in
+        placeholder(words)
+      }
+      if !turn.segments.isEmpty {
+        responseHead(turn)
+      }
       ForEach(turn.segments) { segment in
         segmentView(segment)
       }
@@ -139,13 +233,14 @@ struct HistorySessionView: View {
   }
 
   private func prompt(_ turn: HistoryTurn) -> some View {
-    Text(turn.prompt)
+    Text(turn.prompt.isEmpty ? "(an empty prompt)" : turn.prompt)
       .font(ChromeType.sans(15))
       .lineSpacing(4)
-      .foregroundStyle(ChromePalette.ink)
+      .foregroundStyle(turn.prompt.isEmpty ? ChromePalette.inkFaint : ChromePalette.ink)
       .padding(.horizontal, 15)
       .padding(.top, 11)
       .padding(.bottom, 12)
+      .frame(maxWidth: .infinity, alignment: .leading)
       .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(ChromePalette.fill))
       .overlay {
         if let anchor = turn.promptAnchor, litAnchor == anchor {
@@ -183,12 +278,13 @@ struct HistorySessionView: View {
   private func segmentView(_ segment: HistorySegment) -> some View {
     switch segment {
     case .prose(let id, let at, let text, let anchor):
-      Text(text)
+      Text(text.isEmpty ? "(no words)" : text)
         .font(ChromeType.sans(15))
         .lineSpacing(4)
-        .foregroundStyle(ChromePalette.ink)
+        .foregroundStyle(text.isEmpty ? ChromePalette.inkFaint : ChromePalette.ink)
         .padding(.vertical, 6)
         .padding(.horizontal, 4)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .background {
           RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(ChromePalette.attention.opacity(0.14))
@@ -198,7 +294,29 @@ struct HistorySessionView: View {
         .accessibilityLabel("\(document.agentName), at \(at): \(text)")
     case .ledger(let id, let summary, let duration, let failed, let isLive, let lines):
       ledger(id: id, summary: summary, duration: duration, failed: failed, isLive: isLive, lines: lines)
+    case .attachment(_, _, let label):
+      placeholder(label ?? "attachment on \(corpus.desktop)")
     }
+  }
+
+  /// SP-6 — what the phone does not carry, said: `image shot.png on studio`.
+  private func placeholder(_ words: String) -> some View {
+    HStack(spacing: 8) {
+      Image(systemName: "photo")
+        .font(.system(size: 12, weight: .medium))
+        .foregroundStyle(ChromePalette.inkFaint)
+      Text(words)
+        .font(ChromeType.sans(12.5))
+        .foregroundStyle(ChromePalette.inkTertiary)
+        .lineLimit(1)
+        .truncationMode(.middle)
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, 12)
+    .frame(minHeight: 34)
+    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(ChromePalette.cardHairline, lineWidth: 0.5))
+    .padding(.vertical, 4)
+    .accessibilityLabel(words)
   }
 
   private func ledger(id: String, summary: String, duration: String, failed: Int, isLive: Bool, lines: [HistoryLedgerLine]) -> some View {

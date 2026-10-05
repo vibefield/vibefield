@@ -1,0 +1,25 @@
+{
+  "session": {
+    "sessionId": "s1",
+    "nativeSessionId": "native-s1",
+    "rootSessionId": "s0",
+    "title": "Named",
+    "summary": "A summary",
+    "cwd": "/w/rosetta",
+    "updatedAt": 20000,
+    "activity": {
+      "firstAt": 11000,
+      "lastAt": 19000
+    },
+    "streamState": "streaming",
+    "projectId": "p1",
+    "provider": "claude",
+    "startedAt": 10000,
+    "parentSessionId": "s0",
+    "profileId": "claude:work-1c7e",
+    "project": {
+      "id": "p1",
+      "name": "rosetta"
+    }
+  }
+}

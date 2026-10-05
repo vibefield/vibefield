@@ -70,6 +70,17 @@ public struct HomeScreen: View {
   /// The History tab's stack, its landed search and whether its scroll has
   /// folded the bar — shared with search, so a hit can land across the switch.
   @State private var history = HistoryRouter()
+  /// SP-6 — History grouped by desktop: one reader per self desktop whose
+  /// door answers (over the link's doors), the cache's reader for one that
+  /// does not; the mock and the demo arguments mount a fixed one instead.
+  @State private var historyDesktops = HistoryDesktops()
+  #if DEBUG
+    /// `-vf-demo-history` (the mock's corpus, no tailnet) and
+    /// `-vf-demo-history-door` / `-offline` (the REAL reads over an in-process
+    /// door answering the contracts' goldens; the latter then replays them
+    /// from the cache with the door gone).
+    @State private var demoHistory = false
+  #endif
   /// Search's words and kind: the bar's field writes them, the page reads them.
   @State private var searchQuery = ""
   @State private var searchKind: FieldHistoryModel.SearchKind = .any
@@ -245,7 +256,13 @@ public struct HomeScreen: View {
     // --- end IOS-6d
     // IOS-8c — every listing teaches the account's memory: which desktops it
     // has, and — from the first door that answers with a user id — its face.
-    .onChange(of: linkDesktops) { rememberAccount() }
+    .onChange(of: linkDesktops) {
+      rememberAccount()
+      syncHistoryDesktops()
+    }
+    // SP-6 — the home moved: the History groups re-order and the home's
+    // reader takes the shared door
+    .onChange(of: linkHome) { syncHistoryDesktops() }
     // IOS-8d — on the stage for the type-checker's sake, like the cover above.
     .confirmationDialog(
       "Sign out of \(accountLogin ?? "this account")?", isPresented: $signOutPending,
@@ -312,6 +329,9 @@ public struct HomeScreen: View {
     }
     // Every push and pop opens the bar again, the way the system's does.
     .onChange(of: history.path) { history.barMinimized = false }
+    #if DEBUG
+      .onChange(of: mockDesktopIsUp) { syncMockHistory() }
+    #endif
   }
 
   /// The field, under the bar's glass to the screen's edge.
@@ -321,21 +341,29 @@ public struct HomeScreen: View {
   }
 
   private var historyTab: some View {
-    HistoryLedgerView(corpus: historyCorpus, standing: historyStanding, router: history)
-      .safeAreaInset(edge: .bottom, spacing: 0) {
-        Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing))
-      }
+    HistoryLedgerView(desktops: historyDesktops.readers, router: history) { need in
+      historyDesktops.need(need)
+    }
+    .safeAreaInset(edge: .bottom, spacing: 0) {
+      Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: history.stepperShowing))
+    }
   }
 
   private var searchTab: some View {
-    HistorySearchView(corpus: historyCorpus, standing: historyStanding, query: $searchQuery, kind: $searchKind) {
-      landing, query in
-      // A hit lands in History: the router pushes where it lives, and the
-      // switch follows.
-      searchFocused = false
-      history.land(landing, query: query)
-      selectedTab = .history
-    }
+    HistorySearchView(
+      desktops: historyDesktops.readers, query: $searchQuery, kind: $searchKind,
+      onLand: { landing, query in
+        // A hit lands in History: the router pushes where it lives, and the
+        // switch follows.
+        searchFocused = false
+        history.land(landing, query: query)
+        selectedTab = .history
+      },
+      onSearch: { words, kind in
+        // SP-6 — the words asked of every desktop that answers
+        Task { await historyDesktops.search(words, kind: kind) }
+      }
+    )
     .safeAreaInset(edge: .bottom, spacing: 0) {
       Color.clear.frame(height: AppBar.clearance(homeInset: homeInset, stepper: false))
     }
@@ -516,22 +544,58 @@ public struct HomeScreen: View {
   /// The Field tab's orange count (§2.5): the agents waiting on the person.
   private var waitingCount: Int { bubbles.filter { $0.status == .blocked }.count }
 
-  /// What History reads. Today: the mock's corpus, or nothing — the index
-  /// reads (H-1) are owed, and the tab says so in words rather than drawing
-  /// an empty ledger.
-  private var historyCorpus: HistoryCorpus? {
+  /// SP-6 — what History reads: the link's self desktops, each over its own
+  /// door (the home's shared, the rest opened for the reading — SP-D2 (a)),
+  /// the home first; a desktop the roster lists but whose door does not
+  /// answer, and one this account remembers that the tailnet does not list,
+  /// replay the cache as `asleep`. The mock and the demo arguments own the
+  /// readers while they stand.
+  private func syncHistoryDesktops() {
     #if DEBUG
-      if mock != nil { return .mock }
+      if mock != nil || demoHistory { return }
     #endif
-    return nil
+    guard let link else {
+      historyDesktops.allOffline()
+      return
+    }
+    historyDesktops.setHome(link.home)
+    for desktop in link.desktops {
+      let isHome = desktop.deviceId == link.home
+      if case .ready = desktop.state {
+        if let standing = historyDesktops.reader(for: desktop.deviceId), !standing.isReplaying, standing.isHome == isHome {
+          continue
+        }
+        if let door = link.openHistoryDoor(desktop.deviceId) {
+          historyDesktops.attach(
+            deviceId: desktop.deviceId, name: desktop.name, isHome: isHome, door: door.client,
+            ownsDoor: door.owned)
+          continue
+        }
+      }
+      historyDesktops.markOffline(deviceId: desktop.deviceId, name: desktop.name, isHome: isHome)
+    }
+    if let login = accountLogin {
+      for remembered in desktopMemory.remembered(for: login)
+      where !link.desktops.contains(where: { $0.deviceId == remembered.deviceId }) {
+        historyDesktops.markOffline(deviceId: remembered.deviceId, name: remembered.name)
+      }
+    }
   }
 
-  private var historyStanding: FieldHistoryModel.DesktopStanding {
-    #if DEBUG
-      if let mock { return mock.desktopIsUp ? .connected : .asleep }
-    #endif
-    return .asleep
-  }
+  /// The link's home, named so the modifier chain stays cheap to type-check.
+  private var linkHome: String? { link?.home }
+
+  #if DEBUG
+    /// The mock's standing as History reads it (`-vf-mock`: Disconnect puts
+    /// studio to sleep, Connect wakes it).
+    private var mockDesktopIsUp: Bool? { mock?.desktopIsUp }
+
+    private func syncMockHistory() {
+      guard let mock else { return }
+      historyDesktops.mount(
+        .fixed(corpus: .mock, standing: mock.desktopIsUp ? .connected : .asleep))
+    }
+  #endif
 
 
   public var body: some View {
@@ -567,6 +631,7 @@ public struct HomeScreen: View {
           mock = account
           mockActive = true
           feed.start()
+          syncMockHistory()
           if let search = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-search=") }) {
             searchQuery = String(search.dropFirst("-vf-mock-search=".count))
           }
@@ -585,12 +650,82 @@ public struct HomeScreen: View {
             selectedTab = .history
           }
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-open") { accountMenuOpen = true }
+          if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-project=") }) {
+            let id = String(open.dropFirst("-vf-mock-project=".count))
+            if HistoryCorpus.mock.project(id) != nil {
+              history.path = [.project(device: HistoryCorpus.mock.deviceId, id: id)]
+              selectedTab = .history
+            }
+          }
+          if let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-mock-session=") }) {
+            // a document on top, for the screenshot run
+            let id = String(open.dropFirst("-vf-mock-session=".count))
+            if let document = HistoryCorpus.mock.document(id) {
+              history.path = [
+                .project(device: HistoryCorpus.mock.deviceId, id: document.projectId),
+                .session(device: HistoryCorpus.mock.deviceId, id: id),
+              ]
+              selectedTab = .history
+            }
+          }
           // After the tab's own change has opened the bar again, or it would
           // undo the fold the moment it landed.
           if ProcessInfo.processInfo.arguments.contains("-vf-mock-folded") {
             Task {
               try? await Task.sleep(for: .milliseconds(600))
               history.barMinimized = true
+            }
+          }
+        }
+        // SP-6 — History's pictures without a desktop (`-vf-demo-history`:
+        // the mock's corpus as the one group, awake or `-asleep`) and the REAL
+        // reads over an in-process door answering the contracts' goldens
+        // (`-vf-demo-history-door`; `-vf-demo-history-offline` reads them,
+        // then takes the door away so the cache's replay can be photographed;
+        // `-vf-demo-history-session=<id>` puts a document on top, the tail's
+        // scripted delta arriving two seconds in for the arrival pill).
+        if ProcessInfo.processInfo.arguments.contains("-vf-demo-history"), !demoHistory {
+          demoHistory = true
+          let asleep = ProcessInfo.processInfo.arguments.contains("-vf-demo-history-asleep")
+          historyDesktops.mount(.fixed(corpus: .mock, standing: asleep ? .asleep : .connected))
+          selectedTab = .history
+        }
+        if ProcessInfo.processInfo.arguments.contains(where: { $0.hasPrefix("-vf-demo-history-door") || $0.hasPrefix("-vf-demo-history-offline") }), !demoHistory {
+          demoHistory = true
+          let offline = ProcessInfo.processInfo.arguments.contains("-vf-demo-history-offline")
+          let door = HistoryFixtureDoor()
+          historyDesktops.attach(
+            deviceId: "dev-fixture", name: "studio", isHome: true, door: door, ownsDoor: true)
+          selectedTab = .history
+          let open = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-history-session=") })
+            .map { String($0.dropFirst("-vf-demo-history-session=".count)) }
+          Task { @MainActor in
+            // the ledger first (the reads are one in-process answer each),
+            // then the document asked for, then — offline — the door goes
+            var waited = 0
+            while historyDesktops.reader(for: "dev-fixture")?.corpus.projects.isEmpty ?? true, waited < 50 {
+              try? await Task.sleep(for: .milliseconds(100))
+              waited += 1
+            }
+            if let project = ProcessInfo.processInfo.arguments.first(where: { $0.hasPrefix("-vf-demo-history-project=") })
+              .map({ String($0.dropFirst("-vf-demo-history-project=".count)) })
+            {
+              historyDesktops.need(.project(device: "dev-fixture", id: project))
+              history.path = [.project(device: "dev-fixture", id: project)]
+            }
+            if let open {
+              historyDesktops.need(.session(device: "dev-fixture", id: open))
+              waited = 0
+              while historyDesktops.reader(for: "dev-fixture")?.corpus.document(open) == nil, waited < 50 {
+                try? await Task.sleep(for: .milliseconds(100))
+                waited += 1
+              }
+              history.path = [.session(device: "dev-fixture", id: open)]
+            }
+            if offline {
+              historyDesktops.forget(deviceId: "dev-fixture")
+              historyDesktops.markOffline(deviceId: "dev-fixture", name: "studio", isHome: true)
+              if let open { historyDesktops.reader(for: "dev-fixture")?.replayDocument(open) }
             }
           }
         }
@@ -927,8 +1062,12 @@ public struct HomeScreen: View {
       // subscription down and rebuilding it on every shade pull would spend
       // exactly the bytes §5 is trying to save.
       switch phase {
-      case .background: link?.pause()
-      case .active: link?.resume()
+      case .background:
+        link?.pause()
+        historyDesktops.pause()  // SP-6 — the tails go; the rows stay
+      case .active:
+        link?.resume()
+        historyDesktops.resume()
       default: break
       }
       switch phase {
@@ -1119,6 +1258,7 @@ public struct HomeScreen: View {
   private func closeLink() {
     link?.stop()
     link = nil
+    historyDesktops.allOffline()  // SP-6 — every History group replays the cache
     #if DEBUG
       // A fixture that has been stopped no longer owns anything, and a flag
       // left standing would refuse the live path for the rest of the process.

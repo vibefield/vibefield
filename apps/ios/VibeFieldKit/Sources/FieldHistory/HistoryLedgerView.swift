@@ -7,15 +7,24 @@ import SwiftUI
 /// comparison, the wash of spend behind the row scaled to the biggest
 /// project. Pushed screens ride the tab's own `NavigationStack`, whose path
 /// is the router's so a search hit can land here from the other tab.
+///
+/// SP-6 — GROUPED BY DESKTOP: one ledger per self desktop (the home first),
+/// each under its own name when there is more than one; a desktop whose door
+/// does not answer draws what this phone last read of it, dimmed, under
+/// H-D7's words with the desktop's name. What a screen needs read (a project's
+/// sessions and figures, a session's document and tail, an older page) it
+/// asks through `onNeed`; the mock answers none, its corpus is whole.
 public struct HistoryLedgerView: View {
-  let corpus: HistoryCorpus?
-  let standing: FieldHistoryModel.DesktopStanding
+  let desktops: [HistoryDesktopReader]
   @Bindable var router: HistoryRouter
+  let onNeed: (HistoryNeed) -> Void
 
-  public init(corpus: HistoryCorpus?, standing: FieldHistoryModel.DesktopStanding, router: HistoryRouter) {
-    self.corpus = corpus
-    self.standing = standing
+  public init(
+    desktops: [HistoryDesktopReader], router: HistoryRouter, onNeed: @escaping (HistoryNeed) -> Void = { _ in }
+  ) {
+    self.desktops = desktops
     self.router = router
+    self.onNeed = onNeed
   }
 
   @State private var rank: FieldHistoryModel.Rank = .spend
@@ -24,10 +33,16 @@ public struct HistoryLedgerView: View {
   public var body: some View {
     NavigationStack(path: $router.path) {
       ScrollView {
-        if let corpus {
-          ledger(corpus)
+        if desktops.isEmpty {
+          noDesktop
         } else {
-          notBuilt
+          LazyVStack(alignment: .leading, spacing: 0) {
+            ForEach(desktops) { reader in
+              if desktops.count > 1 { DesktopHead(name: reader.name, standing: reader.standing, isHome: reader.isHome) }
+              ledger(reader)
+            }
+          }
+          .padding(.bottom, 40)
         }
       }
       .foldsBar(router)
@@ -40,57 +55,81 @@ public struct HistoryLedgerView: View {
     .tint(ChromePalette.ink)
   }
 
+  private func reader(_ device: String) -> HistoryDesktopReader? {
+    desktops.first { $0.deviceId == device }
+  }
+
   @ViewBuilder
   private func destination(_ route: HistoryRouter.Route) -> some View {
     switch route {
-    case .project(let id):
-      if let corpus, let project = corpus.project(id) {
-        HistoryProjectView(project: project, sessions: corpus.sessions(of: id), corpus: corpus, standing: standing, router: router)
+    case .project(let device, let id):
+      if let reader = reader(device), let project = reader.corpus.project(id) {
+        HistoryProjectView(
+          project: project, sessions: reader.corpus.sessions(of: id), corpus: reader.corpus,
+          standing: reader.standing, router: router, onNeed: onNeed)
       } else {
         QuietNote(title: "This project is not in the index", text: "Nothing was read for it on this phone.")
       }
-    case .session(let id):
-      if let corpus, let document = corpus.document(id) {
-        HistorySessionView(document: document, corpus: corpus, standing: standing, router: router)
+    case .session(let device, let id):
+      if let reader = reader(device), let document = reader.corpus.document(id) {
+        HistorySessionView(
+          document: document, corpus: reader.corpus, standing: reader.standing, router: router,
+          arrivals: reader.arrivals[id] ?? 0, onNeed: onNeed)
+      } else if let reader = reader(device), reader.standing.isAwake {
+        QuietNote(title: "Reading the session on \(reader.name)", text: "Its header, its newest rows and its tail arrive over the desktop's door.")
+          .onAppear { onNeed(.session(device: device, id: id)) }
       } else {
-        QuietNote(title: "This session has no document here", text: "Only its row was read; the turns arrive with the timeline read.")
+        QuietNote(
+          title: "This session has no document here",
+          text: "Only its row was read; the turns arrive with the timeline read once the desktop answers.")
       }
     }
   }
 
-  // MARK: - The ledger
+  // MARK: - One desktop's ledger
 
-  private func ledger(_ corpus: HistoryCorpus) -> some View {
-    let awake = standing != .asleep
+  private func ledger(_ reader: HistoryDesktopReader) -> some View {
+    let corpus = reader.corpus
+    let standing = reader.standing
+    let awake = standing.isAwake
     let live = FieldHistoryModel.liveHeader(corpus, standing: standing)
     let ranked = FieldHistoryModel.projects(corpus.projects, rankedBy: rank)
     return LazyVStack(alignment: .leading, spacing: 0) {
-      scope(corpus)
-      GroupHead(live.label, count: live.count)
-      VStack(spacing: 6) {
-        ForEach(corpus.live) { row in
-          liveRow(row, corpus: corpus, awake: awake)
+      scope(corpus, standing: standing)
+      if corpus.projects.isEmpty, !awake {
+        QuietNote(
+          title: "\(corpus.desktop) has not been read yet",
+          text: "Nothing of its history is on this phone; its ledger arrives when its door answers.")
+      } else if corpus.projects.isEmpty {
+        QuietNote(
+          title: "No project in \(corpus.desktop)'s index yet",
+          text: "Its index lists no project. Choose whose history it reads on the desktop (Settings → Agents).")
+      } else {
+        GroupHead(live.label, count: live.count)
+        VStack(spacing: 6) {
+          ForEach(corpus.live) { row in
+            liveRow(row, corpus: corpus, awake: awake)
+          }
         }
-      }
-      .padding(.horizontal, 16)
-      GroupHead("Projects") { rankSegment }
-      LazyVStack(spacing: 0) {
-        ForEach(ranked) { project in
-          projectRow(project, among: corpus.projects, awake: awake)
+        .padding(.horizontal, 16)
+        GroupHead("Projects") { rankSegment }
+        LazyVStack(spacing: 0) {
+          ForEach(ranked) { project in
+            projectRow(project, device: corpus.deviceId, among: corpus.projects, awake: awake)
+          }
         }
+        .padding(.horizontal, 8)
+        Text("Spend over 30 days · the wash is scaled to \(ranked.first?.name ?? "the biggest project")")
+          .font(ChromeType.sans(11.5))
+          .foregroundStyle(ChromePalette.inkFaint)
+          .padding(.horizontal, HistoryParts.sidePadding)
+          .padding(.top, 14)
+          .padding(.bottom, 24)
       }
-      .padding(.horizontal, 8)
-      Text("Spend over 30 days · the wash is scaled to \(ranked.first?.name ?? "the biggest project")")
-        .font(ChromeType.sans(11.5))
-        .foregroundStyle(ChromePalette.inkFaint)
-        .padding(.horizontal, HistoryParts.sidePadding)
-        .padding(.top, 14)
-        .padding(.bottom, 24)
     }
-    .padding(.bottom, 40)
   }
 
-  private func scope(_ corpus: HistoryCorpus) -> some View {
+  private func scope(_ corpus: HistoryCorpus, standing: FieldHistoryModel.DesktopStanding) -> some View {
     VStack(alignment: .leading, spacing: 5) {
       Text(FieldHistoryModel.scopeLine(corpus, standing: standing))
         .font(ChromeType.sans(13))
@@ -142,10 +181,17 @@ public struct HistoryLedgerView: View {
 
   private func liveRow(_ row: HistoryLive, corpus: HistoryCorpus, awake: Bool) -> some View {
     let color = HistoryParts.projectColor(seq: corpus.project(row.projectId)?.seq ?? 0, scheme: scheme)
+    let device = corpus.deviceId
     return Button {
       switch row.destination {
-      case .session(let id): router.path = [.project(row.projectId), .session(id)]
-      case .project: router.path = [.project(row.projectId)]
+      case .session(let id):
+        onNeed(.session(device: device, id: id))
+        router.path =
+          row.projectId.isEmpty
+          ? [.session(device: device, id: id)]
+          : [.project(device: device, id: row.projectId), .session(device: device, id: id)]
+      case .project:
+        router.path = [.project(device: device, id: row.projectId)]
       }
     } label: {
       HStack(alignment: .center, spacing: 12) {
@@ -177,11 +223,12 @@ public struct HistoryLedgerView: View {
     .accessibilityLabel("\(row.title), \(row.agent), running \(row.running)")
   }
 
-  private func projectRow(_ project: HistoryProject, among all: [HistoryProject], awake: Bool) -> some View {
+  private func projectRow(_ project: HistoryProject, device: String, among all: [HistoryProject], awake: Bool) -> some View {
     let color = HistoryParts.projectColor(seq: project.seq, scheme: scheme)
     let share = FieldHistoryModel.share(of: project, among: all)
     return Button {
-      router.path = [.project(project.id)]
+      onNeed(.project(device: device, id: project.id))
+      router.path = [.project(device: device, id: project.id)]
     } label: {
       HStack(alignment: .top, spacing: 12) {
         Capsule().fill(color).opacity(0.5).frame(width: 3).frame(maxHeight: .infinity)
@@ -202,7 +249,15 @@ public struct HistoryLedgerView: View {
             .truncationMode(.middle)
             .padding(.top, 2)
           HStack(alignment: .center, spacing: 10) {
-            Sparkline(values: project.spark, color: color)
+            if project.spark.isEmpty {
+              // SP-6 — figures not read yet: the session count stands in,
+              // honestly labelled, until `index.project` answers
+              Text("sessions")
+                .font(ChromeType.sans(11))
+                .foregroundStyle(ChromePalette.inkFaint)
+            } else {
+              Sparkline(values: project.spark, color: color)
+            }
             FigureText(figure: project.figure, unit: project.unit)
             Spacer(minLength: 0)
             LastWord(word: project.last, isLive: project.isLive, awake: awake)
@@ -222,12 +277,12 @@ public struct HistoryLedgerView: View {
       .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
     .buttonStyle(HistoryRowStyle())
-    .accessibilityLabel("\(project.name), \(project.figure) \(project.unit) tokens, last \(project.last)")
+    .accessibilityLabel("\(project.name), \(project.figure) \(project.unit.isEmpty ? "sessions" : project.unit + " tokens"), last \(project.last)")
   }
 
-  // MARK: - Honest-missing (the real path, before the reads)
+  // MARK: - Honest-missing: no desktop's door answers and nothing is cached
 
-  private var notBuilt: some View {
+  private var noDesktop: some View {
     VStack(alignment: .leading, spacing: 0) {
       Text("no desktop has been read")
         .font(ChromeType.sans(13))
@@ -235,10 +290,44 @@ public struct HistoryLedgerView: View {
         .padding(.horizontal, HistoryParts.sidePadding)
         .padding(.top, 2)
       QuietNote(
-        title: "History reads your desktop's index over its door",
+        title: "History reads your desktops' index over their doors",
         text:
-          "This build has no reads for it yet — the ledger, a project and a session's document arrive with the index reads (H-1). Until then the tab shows the shape of what it will read, and says so.")
+          "No desktop of this account answers right now, and this phone has read none before. The ledger, a project and a session's document arrive from the first desktop whose door answers.")
     }
     .padding(.bottom, 40)
+  }
+}
+
+/// SP-6 — a desktop's head over its ledger when the tab groups more than one:
+/// the name, the home's mark, and the standing's dot.
+struct DesktopHead: View {
+  let name: String
+  let standing: FieldHistoryModel.DesktopStanding
+  let isHome: Bool
+
+  var body: some View {
+    HStack(spacing: 8) {
+      Circle()
+        .fill(standing.isAwake ? ChromePalette.green : ChromePalette.inkFaint)
+        .frame(width: 7, height: 7)
+      Text(name)
+        .font(ChromeType.sans(17, .semibold))
+        .foregroundStyle(ChromePalette.ink)
+      if isHome {
+        Text("home")
+          .font(ChromeType.sans(10.5, .medium))
+          .textCase(.uppercase)
+          .tracking(ChromeType.tracking(0.07, of: 10.5))
+          .foregroundStyle(ChromePalette.inkFaint)
+          .padding(.horizontal, 7)
+          .frame(height: 18)
+          .background(Capsule().fill(ChromePalette.fill))
+      }
+      Spacer(minLength: 0)
+    }
+    .padding(.horizontal, HistoryParts.sidePadding)
+    .padding(.top, 26)
+    .padding(.bottom, 6)
+    .accessibilityElement(children: .combine)
   }
 }

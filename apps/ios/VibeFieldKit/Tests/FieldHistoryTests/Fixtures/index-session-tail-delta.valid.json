@@ -1,0 +1,42 @@
+{
+  "epoch": "tail-s1-3f9a1c2e.1",
+  "since": 1,
+  "revision": 2,
+  "upserts": [
+    {
+      "timelineId": "t1",
+      "sessionId": "s1",
+      "ordinal": 7,
+      "kind": "tool_use",
+      "at": 3700000,
+      "model": "claude-opus-5",
+      "effort": "high",
+      "group": {
+        "id": "turn-1",
+        "kind": "human_turn"
+      },
+      "responseId": "response-1",
+      "tool": {
+        "name": "Bash",
+        "family": "shell",
+        "status": "succeeded",
+        "failed": false,
+        "object": "one",
+        "result": "exit 0",
+        "attachments": [
+          {
+            "id": "tool-image-1",
+            "kind": "image",
+            "available": true
+          }
+        ]
+      },
+      "usage": {
+        "input": 10,
+        "output": 5
+      },
+      "costMicroUsd": 175
+    }
+  ],
+  "removed": []
+}
