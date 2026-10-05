@@ -59,6 +59,13 @@ The catalog currently mounts these shipping views directly:
   draw — both notches whole on Canvas, both slivers over Godview, the notch a sliver grows into
   (over History), the clipboard's drawer open over Godview, and Artifacts' drawer holding the Hub
   through the plugin's own fixture door (`ArtifactsDrawer`)
+- the desk's selection bar (DK-11): `SelectionBarView` over fixture selections, a plate per state —
+  one object with its kind's own act (drawn by the bar's one path renderer), two ("Send 2 to…"),
+  taped ("Lift the tape"), a missing face ("Clock · plugin off"), an act with no glyph and a name
+  the set lacks, and the bar grown up, down near the top, with Clean up, and scrolling where it fits
+  neither way — its cells and rows read by the product's own model (`barCells`, `menuGroups`,
+  `menuEyebrow`); and the status line's notices — a missing face's word, and its place under the
+  tools in hand
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their

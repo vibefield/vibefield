@@ -668,3 +668,8 @@
   color: var(--vf-ds-muted);
   font-size: 9px;
 }
+
+/* DK-11: the status line stands 8 under the tools in hand (y 112) while an object is held. */
+.vf-ds-status-line-stage--held {
+  height: 170px;
+}

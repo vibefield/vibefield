@@ -89,6 +89,22 @@ export function StatusSection(): ReactElement {
             <DeskUnavailableView words={BEFORE_THE_DESK} />
           </div>
         </Specimen>
+        <Specimen
+          title="The status line — a missing face's word, said once"
+          source="frame/StatusLine.tsx"
+        >
+          <div className="vf-ds-status-line-stage">
+            <StatusLineView notice={{ id: "missing", text: "Clock · plugin off" }} />
+          </div>
+        </Specimen>
+        <Specimen
+          title="The status line — under the tools in hand while an object is held"
+          source="frame/StatusLine.tsx"
+        >
+          <div className="vf-ds-status-line-stage vf-ds-status-line-stage--held">
+            <StatusLineView notice={{ id: "remount", text: "Dial · remount to draw it" }} held />
+          </div>
+        </Specimen>
         <Specimen title="The status line — a degraded desk" source="frame/StatusLine.tsx">
           <div className="vf-ds-status-line-stage">
             <StatusLineView

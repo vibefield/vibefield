@@ -102,7 +102,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line)/m,
     );
   });
 
@@ -253,6 +253,23 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("useVisiblePluginSurfaces");
   });
 
+  it("keeps the selection bar's fixture an ADAPTER — the product's own model over fixture selections, never the bar's markup (DK-11)", () => {
+    // The catalog stands in for what a host supplies — the desk's anchor (a box on the plate) and the selection's
+    // facts — and mounts the shipping bar over them, its cells and rows read by the product's own model. Never the
+    // bar's own classes, never a stylesheet, never the desk's doors or the host.
+    const fixture = source("design-system/SelectionBarPreview.tsx");
+    expect(fixture).toContain("SelectionBarView");
+    // the CALLS, not the names (an import alone would satisfy a name)
+    for (const model of ["barCells(", "menuGroups(", "menuEyebrow("])
+      expect(fixture).toContain(model);
+    expect(fixture).not.toMatch(/className="vf-bar/);
+    expect(fixture).not.toContain("<style");
+    // the doors a host holds, and the controller (`<SelectionBar` — never `SelectionBarView`)
+    for (const door of [/\bgetHost\b/, /\bcurrentDesk\b/, /\bpublishDesk\b/, /<SelectionBar\s/]) {
+      expect(fixture).not.toMatch(door);
+    }
+  });
+
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
     // The temptation for a widget whose pixels need a privileged producer is to
     // draw convincing ones. The catalog is held to supplying what a HOST
@@ -329,7 +346,8 @@ describe("UI system ownership boundaries", () => {
     const corner = source("design-system/CornerPreview.tsx");
     const edges = source("design-system/EdgesPreview.tsx");
     const history = source("design-system/HistoryPreview.tsx");
-    const catalog = `${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const bar = source("design-system/SelectionBarPreview.tsx");
+    const catalog = `${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -410,6 +428,9 @@ describe("UI system ownership boundaries", () => {
       // and Artifacts' drawer holding the Hub (the side panel retired into it)
       "EdgesPlate",
       "ArtifactsDrawer",
+      // DK-11 — the desk's selection bar over fixture selections, and grown into its menu
+      "SelectionBarPlate",
+      "SelectionBarView",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -423,6 +444,8 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<AppearancePlate\s/u);
     expect(page).toMatch(/<EdgesPlate\s/u);
     expect(page).toMatch(/<ArtifactsDrawer\s/u);
+    // …and the selection bar's plates mounted (DK-11).
+    expect(page).toMatch(/<SelectionBarPlate\s/u);
     // …and History's plates mounted on the page in each state the host owns
     // (AR-8c): the room, a choice with Resume live, unavailable, consent.
     expect(page).toMatch(/<HistoryPreview state="room"/u);
@@ -494,6 +517,10 @@ describe("UI system ownership boundaries", () => {
       "frame/HeadView.tsx",
       "account/MeMenu.tsx",
       "panels/AppearanceSection.tsx",
+      "field/desk/bar/SelectionBar.tsx",
+      "field/desk/bar/SelectionBarView.tsx",
+      "field/desk/bar/KindGlyph.tsx",
+      "frame/StatusLine.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -518,6 +545,8 @@ describe("UI system ownership boundaries", () => {
       "frame/composer.css",
       "frame/head.css",
       "frame/menu.css",
+      "frame/status-line.css",
+      "field/desk/bar/selection-bar.css",
       "terminal/mirror/mirror.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);

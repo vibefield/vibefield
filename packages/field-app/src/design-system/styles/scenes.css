@@ -1725,3 +1725,54 @@
   font-size: 11px;
   line-height: 1.5;
 }
+
+/* DK-11 — the selection bar's plates: a 560 × 400 stretch of the desk's view, the shipping bar standing over a
+   stand-in selection — the object a plain card, the desk's pencil brackets (GPU marks in the product) a dashed
+   outline 6 out — placed from the plate's own anchor. The bar's place, size and grow are the view's; this only
+   stages it. */
+.vf-ds-bar-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-bar-plate {
+  position: relative;
+  isolation: isolate;
+  width: 560px;
+  height: 400px;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-bar-object {
+  position: absolute;
+  border-radius: 6px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    0 10px 24px var(--vf-hairline-strong);
+}
+
+.vf-ds-bar-brackets {
+  position: absolute;
+  border: 1.5px dashed var(--vf-select);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.vf-ds-bar-caption {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  color: var(--vf-ds-muted);
+  font-size: 10px;
+  font-weight: 550;
+}

@@ -27,6 +27,7 @@ import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
+import { BAR_STATES, SelectionBarPlate } from "../SelectionBarPreview";
 import { SwitchPreview } from "../SwitchPreview";
 import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
 
@@ -322,6 +323,27 @@ export function ChromeSection({
         <AppearancePlate pick="auto" />
         <p className="vf-ds-stage-caption">
           Settings → Appearance — the same setting, the same three (FC-D5).
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The selection bar — over the desk's selection, and grown into its menu"
+        source="field/desk/bar/* · DESIGN.md §8, §13, §10"
+        bleed
+      >
+        <div className="vf-ds-bar-plates">
+          {BAR_STATES.map((state) => (
+            <SelectionBarPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          The desk's object chrome (DK-11): the bar on the line's glass, 10 above the selection's
+          brackets (or 10 below under the safe top) — Send to… · rule · the kind's acts · Duplicate
+          · Tape it down · More · rule · Delete. A kind's own drawing is the bar's one path renderer
+          (the clock's stopwatch); an act with no glyph is its label; a name the set lacks is the
+          `missing` mark. Taped, Lift the tape and no Duplicate; a missing face names its type and
+          word where the acts would stand. More grows the same element into its solid menu — up, or
+          down near the top — nearest first, the eyebrow at the far end. Send to… waits for DK-14.
         </p>
       </Specimen>
 
