@@ -20,27 +20,16 @@ import type {
 import { projectColourFor } from "@vibecook/puppeteer-view-sdk/toolkit";
 import {
   type AgentMonitorProps,
-  EMPTY_STATUS_LEDGER,
-  endStatusLane,
   isPortedMonitorView,
-  type MonitorHistoryBook,
   type MonitorPalette,
   type MonitorParameters,
   type MonitorViewEntry,
-  observeStatuses,
   type ProfileTab,
-  type StatusLedger,
-  SwarmPhysicsProvider,
-  seedStatusHistory,
-  statusHistoryBook,
   type MonitorAgent as ViewsMonitorAgent,
 } from "@vibecook/puppeteer-views";
-import { toMonitorAgent } from "@vibecook/puppeteer-views/legacy";
 import type { AgentProfileSet } from "@vibefield/contracts";
 import {
   type ComponentType,
-  createElement,
-  type ReactElement,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -49,7 +38,6 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { createSwarmPhysicsDriver } from "../views/swarm/swarm-physics-driver";
 import type { MonitorFloorRecord } from "./agents";
 import { type ChromeRun, NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
@@ -58,7 +46,7 @@ import { useMonitorFeed } from "./GodviewAgentsProvider";
 import type { HeldModelRow } from "./model-board";
 import type { GodviewMonitorFeed, MonitorFeedState } from "./model-replica";
 import { instrumentedMonitorView } from "./perf/instrumented-view";
-import { profileTabs, recedeOutside } from "./profile-tabs";
+import { profileTabs } from "./profile-tabs";
 import type { LocalMountOutcome, MonitorDoor } from "./remote-door";
 import { spawnMenuOf, targetsHere } from "./spawn-menu";
 import type { MonitorActions, MonitorAgent, MonitorSpawnMenu, MonitorSpawnTarget } from "./types";
@@ -74,7 +62,6 @@ import {
   deviceOfRow,
   narrowToDevice,
   rowOrder,
-  VIBEFIELD_SHIM,
   type WindowRowFacts,
 } from "./window-rows";
 import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
@@ -85,11 +72,11 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *
  *   · THE REPLICA — the window's copy of the backend's model, fed by
  *     `GodviewAgentsProvider` through the door's model port (`model-replica.ts`,
- *     one subscription per window, PF6). List and rain are SDK views (MV-4):
- *     they draw it as themselves, cut to the window's rows
- *     (`window-view.ts`). The swarm and the timeline still draw it through the
- *     view host's legacy bridge (L6, L9): the shim's rows in VibeField's words
- *     (`window-rows.ts`). Either way, one update per frame.
+ *     one subscription per window, PF6). All four views are SDK views — list
+ *     and rain (MV-4), the swarm (MV-5) and the timeline (MV-6): they draw it as
+ *     themselves, cut to the window's rows (`window-view.ts`), one update per
+ *     frame. A legacy component a host hands the stage still mounts through the
+ *     view host's bridge (L6, L9) on the shim's rows (`window-rows.ts`).
  *   · THE LOCAL JOIN — what only this window knows, handed to the replica
  *     (`setLocal`): its panes and the colour each wears, the pane the person is
  *     working in, the row they pointed at, where they asked terminals to be
@@ -103,12 +90,12 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *     window sees promises.
  *   · THE SCREEN — what the active pane shows, reported to the backend
  *     (`reportShown`, L5), which keeps the unread marks.
- *   · THE STATUS LEDGER (L10) — fed through the shim until MV-6, exactly as the
- *     seam fed it, with fieldd's history laid under it once the board is live.
  *
  * What left: the fold's assembly (`agents.ts`), the usage and unread ledgers and
  * the project colours (the backend's, L4/L5/L11), the mesh board's second reader
- * (`mesh-field.ts`; the one door carries peers), and the localStorage caches.
+ * (`mesh-field.ts`; the one door carries peers), the localStorage caches, and
+ * (MV-6, L10, MV-D13) the status ledger with fieldd's history laid under it:
+ * Godview is runtime only, and the timeline draws births and current states.
  */
 
 export interface UseMonitorAgentsOptions {
@@ -212,12 +199,6 @@ export interface MonitorAgentsResult {
   spawnMenu: MonitorSpawnMenu | undefined;
   /** The model board's honest state (`no-door` · `connecting` · `live` · `unavailable`). */
   feed: MonitorFeedState;
-}
-
-/** The package's book with this host's rows: every row the ledger holds came
- * from this hook's own rows, so `ended` is Godview's `MonitorAgent`. */
-export interface GodviewHistoryBook extends MonitorHistoryBook {
-  readonly ended: readonly MonitorAgent[];
 }
 
 /** The local half's honest state, in the marker's words (`GodviewMonitorFacts.localState`). */
@@ -333,13 +314,6 @@ function createNarrowing(): (
     lastHere = here;
     return last;
   };
-}
-
-/** The swarm's physics lives in OUR worker (GT-D16); the package's view is
- * handed the driver through its context and never learns which. The bridge
- * re-provides it above the old view (L6: `wrap`). */
-function wrapWithPhysics(view: ReactElement): ReactElement {
-  return createElement(SwarmPhysicsProvider, { factory: createSwarmPhysicsDriver }, view);
 }
 
 /** What the find sheet's join keys on, per run: the session it joins rosetta
@@ -464,6 +438,8 @@ export function useMonitorAgents({
     // the key stands for the held rows and `here`
     [joinsKey],
   );
+  const joinsRef = useRef(joins);
+  joinsRef.current = joins;
 
   // ── the rows as the views read them ──────────────────────────────────────
   const windowRows = useMemo(createWindowRows, []);
@@ -482,8 +458,6 @@ export function useMonitorAgents({
   );
   /** Every row, in the stage's order, patched for this window (no device filter). */
   const agents = windowRows.rowsFor(model, rowFacts);
-  const rowFactsRef = useRef(rowFacts);
-  rowFactsRef.current = rowFacts;
 
   // DS-3 — the device filter's choices and the choice as the board still has it
   const devices = useMemo<readonly DeviceChoice[]>(() => {
@@ -632,122 +606,6 @@ export function useMonitorAgents({
   useEffect(() => {
     feed?.reportShown(shownKey === "" ? [] : shownKey.split("\n"));
   }, [feed, shownKey]);
-
-  // ── the status ledger (L10, TL-D8), fed through the shim until MV-6 ──────
-  const statusRef = useRef<StatusLedger>(EMPTY_STATUS_LEDGER);
-  /** Lane → when fieldd says the run exited, for the runs its ledger answered. */
-  const exitsRef = useRef<ReadonlyMap<string, number>>(new Map());
-  const historyRef = useRef<GodviewHistoryBook>(
-    statusHistoryBook(EMPTY_STATUS_LEDGER) as GodviewHistoryBook,
-  );
-  const [historySeed, setHistorySeed] = useState(0);
-  const colourFor = useMemo(
-    () => projectColourFor({ tint: { l: tintL, c: tintC }, neutral }),
-    [tintL, tintC, neutral],
-  );
-  /** TL-D6 — an ended run's last row, for the timeline's faint lane: the hidden
-   * model row through the shim, coloured as its project was. */
-  const endedRowOf = useCallback(
-    (row: MonitorAgentRow): MonitorAgent =>
-      toMonitorAgent(
-        {
-          ...row,
-          colour: colourFor(row.project.seq),
-          active: false,
-          receded: false,
-        },
-        VIBEFIELD_SHIM,
-      ),
-    [colourFor],
-  );
-  /** A run fieldd says ended, still on the board but no longer drawn, keeps
-   * its lane faint (TL-D6): named from its row, ended where fieldd saw it end. */
-  const withEndedLanes = useCallback(
-    (status: StatusLedger, current: MonitorModel): StatusLedger => {
-      if (feed === null) return status;
-      let next = status;
-      for (const entry of feed.heldRows()) {
-        if (current.byId.has(entry.row.id)) continue;
-        const endedAtMs = exitsRef.current.get(entry.row.id);
-        if (endedAtMs === undefined || !next.lanes.has(entry.row.id)) continue;
-        next = endStatusLane(next, endedRowOf(entry.row), endedAtMs);
-      }
-      return next;
-    },
-    [feed, endedRowOf],
-  );
-  const foldLedger = useCallback(
-    (current: MonitorModel): void => {
-      const nowMs = Date.now();
-      const rows = windowRows.rowsFor(current, rowFactsRef.current);
-      const status = withEndedLanes(observeStatuses(statusRef.current, rows, nowMs), current);
-      statusRef.current = status;
-      historyRef.current = statusHistoryBook(status) as GodviewHistoryBook;
-    },
-    [windowRows, withEndedLanes],
-  );
-  useEffect(() => {
-    if (feed === null) return;
-    // folded once per published model, before the view host's update in the
-    // same frame reads it (the slot's listener was subscribed first and defers
-    // to the frame; this one runs in the publication)
-    return feed.replica.subscribe(() => foldLedger(feed.replica.getSnapshot().model));
-  }, [feed, foldLedger]);
-  // fieldd's ledger, laid under what the window watched — asked once the board
-  // is live, which is when Godview opens and again after fieldd comes back. A
-  // fieldd from before the door refuses, and the record is then what this
-  // window watched. Lanes are keyed by the ROW the run was dealt (M22: a
-  // promoted shell's run carries the shell's id); a run no longer on the board
-  // keeps its run id, which nothing joins.
-  const statusPort = door?.statusHistory;
-  const boardLive = feedFacts.state.state === "live";
-  const joinsRef = useRef(joins);
-  joinsRef.current = joins;
-  useEffect(() => {
-    if (statusPort === undefined || !boardLive) return;
-    let alive = true;
-    void statusPort
-      .load()
-      .then((runs) => {
-        if (!alive) return;
-        const nowMs = Date.now();
-        const exits = new Map(exitsRef.current);
-        let ledger = statusRef.current;
-        for (const run of runs) {
-          const recordedFromMs = Date.parse(run.recordedFrom);
-          if (!Number.isFinite(recordedFromMs)) continue;
-          const endedAtMs = run.exitedAt === undefined ? Number.NaN : Date.parse(run.exitedAt);
-          const laneId = joinsRef.current.rowByRun.get(run.runtimeRunId) ?? run.runtimeRunId;
-          ledger = seedStatusHistory(
-            ledger,
-            laneId,
-            {
-              recordedFromMs,
-              changes: run.changes.map((change) => ({
-                status: change.status,
-                atMs: Date.parse(change.at),
-                ...(change.blocker ? { blocker: change.blocker } : {}),
-                ...(change.did ? { did: change.did } : {}),
-              })),
-              ...(Number.isFinite(endedAtMs) ? { endedAtMs } : {}),
-            },
-            nowMs,
-          );
-          if (Number.isFinite(endedAtMs)) exits.set(laneId, endedAtMs);
-        }
-        exitsRef.current = exits;
-        // the runs the record says ended, named from the board's rows now —
-        // the next publication would do it too, but there need not be one
-        ledger = withEndedLanes(ledger, replica.getSnapshot().model);
-        statusRef.current = ledger;
-        historyRef.current = statusHistoryBook(ledger) as GodviewHistoryBook;
-        setHistorySeed((seed) => seed + 1);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [statusPort, boardLive, replica, withEndedLanes]);
 
   // ── the verbs, through the door ──────────────────────────────────────────
   const announce = useCallback((message: string): void => {
@@ -979,25 +837,17 @@ export function useMonitorAgents({
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
   const actions = useMemo<MonitorActions>(() => ({ select, createAt }), [createAt, select]);
 
-  // ── the views: ported ones as themselves, the rest through the bridge (L6) ─
-  // The bridge's `toProps` reads host state beside the input through `latest`,
-  // so a view switch or a frame always finds this render's facts; a change of
-  // those facts alone redraws the mounted view (`refresh`). A ported view reads
-  // the same rows, as the model, through `viewReplica` (MV-4).
+  // ── the views: ported ones as themselves, a legacy one through the bridge ──
+  // A ported view reads the window's rows, as the model, through `viewReplica`
+  // (MV-4): all four registry views since MV-5/MV-6. A legacy component a host
+  // hands the stage mounts through the bridge (L6), whose `toProps` reads host
+  // state beside the input through `latest`, so a view switch or a frame always
+  // finds this render's facts; a change of those facts alone redraws the
+  // mounted view (`refresh`).
   const agentsById = useMemo(() => new Map(agents.map((row) => [row.id, row] as const)), [agents]);
-  const historyFor = useCallback(
-    (device: string | null, chosen: string | undefined): GodviewHistoryBook => {
-      const book = historyRef.current;
-      // TL — the record, its ended lanes narrowed exactly as the live rows are
-      const ended = recedeOutside(narrowToDevice(book.ended, device, here), chosen);
-      return ended === book.ended ? book : { ...book, ended };
-    },
-    [here],
-  );
   const latest = useRef({
     viewRows: (current: MonitorModel) =>
       narrow(windowRows.rowsFor(current, rowFacts), deviceChosen, here),
-    history: () => historyFor(deviceChosen, chosenProfile),
     actions,
     spawnMenu,
     agentsById,
@@ -1006,7 +856,6 @@ export function useMonitorAgents({
   });
   latest.current = {
     viewRows: (current) => narrow(windowRows.rowsFor(current, rowFacts), deviceChosen, here),
-    history: () => historyFor(deviceChosen, chosenProfile),
     actions,
     spawnMenu,
     agentsById,
@@ -1023,30 +872,27 @@ export function useMonitorAgents({
   /** What the views were last given, so a change of window facts alone can draw them again. */
   const given = useRef<{
     rows: readonly ViewsMonitorAgent[] | undefined;
-    history: GodviewHistoryBook | undefined;
     spawnMenu: MonitorSpawnMenu | undefined;
-  }>({ rows: undefined, history: undefined, spawnMenu: undefined });
+  }>({ rows: undefined, spawnMenu: undefined });
   /** The old view's props from the bridge's input and this render's facts. */
   const toProps = useCallback((input: MonitorViewInput): AgentMonitorProps => {
     const rows = latest.current.viewRows(input.model);
-    const history = latest.current.history();
-    given.current = { rows, history, spawnMenu: latest.current.spawnMenu };
+    given.current = { rows, spawnMenu: latest.current.spawnMenu };
     return {
       agents: rows,
       parameters: input.parameters as MonitorParameters,
       actions: latest.current.actions,
       palette: input.theme.tokens as MonitorPalette,
-      history,
       ...(latest.current.spawnMenu !== undefined ? { spawnMenu: latest.current.spawnMenu } : {}),
     };
   }, []);
   // One bridge per legacy view, built when the stage first asks for it and kept
-  // while its component stands — the registry's swarm and timeline, or whatever
-  // legacy view a host hands the stage. MV-0: the component is the view's own,
+  // while its component stands — whatever legacy view a host hands the stage
+  // (the registry holds none since MV-6). MV-0: the component is the view's own,
   // or the lab's counting wrapper around it while a perf probe is installed
   // (`monitor/perf/instrumented-view.tsx`); a probe installed or removed rebuilds.
-  // A PORTED view (MV-4: list, rain) mounts as itself and is not wrapped: its
-  // work is inside the lab's every-root totals, which are what gate (M33).
+  // A PORTED view mounts as itself and is not wrapped: its work is inside the
+  // lab's every-root totals, which are what gate (M33).
   // `/testing`'s commit counter does not fit here — it rebuilds the view
   // without its root class (L18's stylesheet scope), so the lab would measure
   // an unstyled view, and it is a tests' subpath (L16).
@@ -1059,26 +905,25 @@ export function useMonitorAgents({
       const Component = instrumentedMonitorView(view);
       const held = bridges.current.get(view.id);
       if (held !== undefined && held.component === Component) return held.view;
-      const bridged = legacyView<AgentMonitorProps>(view, Component, toProps, wrapWithPhysics);
+      const bridged = legacyView<AgentMonitorProps>(view, Component, toProps);
       bridges.current.set(view.id, { component: Component, view: bridged });
       return bridged;
     },
     [toProps],
   );
   // The window facts the views read moved without the model moving (the device
-  // filter, a desktop's standing, a transferred body, the spawn menu, fieldd's
-  // history landing): a view whose props changed draws again (the bridge's
-  // `refresh`, for host state beside the input; a ported view's replica hears
-  // it when the rows it is handed changed).
+  // filter, a desktop's standing, a transferred body, the spawn menu): a view
+  // whose props changed draws again (the bridge's `refresh`, for host state
+  // beside the input; a ported view's replica hears it when the rows it is
+  // handed changed).
   useLayoutEffect(() => {
     viewReplica.refresh();
     const was = given.current;
     if (was.rows === undefined) return;
     const rows = latest.current.viewRows(replica.getSnapshot().model);
-    const history = latest.current.history();
-    if (rows === was.rows && history === was.history && spawnMenu === was.spawnMenu) return;
+    if (rows === was.rows && spawnMenu === was.spawnMenu) return;
     for (const held of bridges.current.values()) held.view.refresh();
-  }, [replica, viewReplica, placed, spawnMenu, historySeed, chosenProfile, deviceChosen]);
+  }, [replica, viewReplica, placed, spawnMenu, chosenProfile, deviceChosen]);
 
   // The view host reads its commands through the latest props; these reach the latest window too.
   const commands = useMemo<ViewSlotCommands>(
