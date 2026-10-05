@@ -38,7 +38,7 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   system — puppeteer (the agent runtime, in fieldd) · rosetta (agent history, `rosettad` per user
   root) · this repo (custody, policy, presentation). Its umbrella page
   `docs/agent-plane/architecture.html` carries the ownership law (AR-L1: VibeField knows no vendor),
-  the seams, the walls R20–R23, the data domains and the status legend; `system.html` the
+  the seams, the walls R20–R23 (and R24, 2026-10-05: mille is imported only by fieldd's files worker and through field-app's allowed entries — FS-1a), the data domains and the status legend; `system.html` the
   aggregation and `api.html` the doors. Read it before touching a seam: a seam change updates the
   page that OWNS the seam first, then the umbrella's table.
 
