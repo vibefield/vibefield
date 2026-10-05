@@ -246,6 +246,15 @@ describe("coverage of what an author has to know", () => {
       "renderer-import-failed",
       "## The kind harness's state codes",
       "state-hit-missed",
+      // DK-10 — the fourth agent's notes (it landed its object in 5½ minutes; these it had to guess)
+      "once more at rest by night", // the harness's by-night state, in the documented list
+      "BY NIGHT:", // how a kind follows the night: per-theme colours, or lit as the mat is
+      "export type ThemeName",
+      "fn clock_colour(",
+      "`u.night`",
+      "export declare function cssColor", // what `rgb` parses
+      "picked across W × H", // what try's box measures
+      "the ONLY dev plugin staged",
     ])
       expect(all, `nothing tells an author about ${topic}`).toContain(topic);
   });

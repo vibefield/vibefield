@@ -90,9 +90,12 @@ DRAWN:
    — its WGSL COMPILED, the one place the kit compiles it; picked where it lies on the
    drawn frame.
 
-It takes about a minute (the first run builds the app; later runs reuse the build),
-shows the app's window while it runs, and needs the machine's GPU. Build first —
-`try` stages what `plugin-build` wrote. A kind that draws:
+It takes well under a minute while the app's build is cached, longer the first time after
+the app changed (it builds it); it shows the app's window while it runs, and needs the
+machine's GPU. Your plugin is the ONLY dev plugin staged (the app's own bundled plugins
+load as always), and the board holds only your kinds. Build first — `try` stages what
+`plugin-build` wrote. A kind that draws ("picked across W × H" is the box of the points,
+scanned every 6 CSS px, where the desk's pick found it — a little inside its drawing):
 
 ```text
 ok     try   acme.card staged alone in a dev root of its own (a copy of its bundle) and the app run on a fresh profile — its log: <dir>/.vibefield-try/try.log

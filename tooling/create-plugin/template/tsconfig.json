@@ -4,7 +4,7 @@
   // deep it was placed is a scaffold that breaks the moment someone moves it.
   // These options ARE tsconfig.base.json's, plus what an object kind adds — the
   // DOM libs and the WebGPU globals its pass names (`GPUDevice`, `GPUBlendState`)
-  // — and `test/output.test.ts` fails if the two ever drift apart.
+  // — and create-plugin's own test (in the kit, not in this scaffold) fails if the two ever drift apart.
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",

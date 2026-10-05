@@ -8,7 +8,7 @@ export const Disc = defineStruct("Disc", [
   ["centre", "vec2f"], // where it lies, world units
   ["radius", "f32"], // world units, the hand's lift in
   ["alpha", "f32"], // its presence: 1 alive, fading to 0 as a deleted one goes
-  ["colour", "vec4f"], // its colour (sRGB, 0–1); unused
+  ["colour", "vec4f"], // its colour (sRGB, 0–1 in xyz; w unused)
 ] as const);
 
 /** The most discs one slot's pass draws (the record store grows to it). */

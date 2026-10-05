@@ -6,8 +6,8 @@
 An OBJECT is a canvas face the desk DRAWS. One WebGPU renderer draws every object
 on the cutting mat straight from the document, and a KIND is the GPU program that
 draws its own objects — its WGSL, its pass, its geometry, its pick. Whatever a
-built-in kind can do, a plugin kind declares the same way (ICE design-016 K-L2,
-plugin parity): there is no React component and no DOM under the camera.
+built-in kind can do, a plugin kind declares the same way (plugin parity): there
+is no React component and no DOM under the camera.
 
 The manifest owns the DURABLE half — the type name, prop names and group names
 outlive any implementation — and names ONE export of the renderer module that
@@ -197,7 +197,7 @@ groups: {
 
 The pegboard tray hangs what the entry says, drawn by the kind itself — a
 specimen is the kind's stateless drawing of `tray.props` over the object's
-defaults (ICE design-017 §8, design-018 §6).
+defaults.
 
 | field | type | required | rules |
 | --- | --- | --- | --- |
@@ -264,8 +264,7 @@ compiles the prefab from the manifest's durable half, and registers the kind wit
 the desk's renderer before the first frame: every kind's pass is created together
 at mount, which is why the binding is a static export and not a call.
 
-The kind, whole (`ObjectKind` — ICE `packages/desk/src/kinds/world.ts`; its program
-half `packages/desk/src/kind.ts`):
+The kind, whole (`ObjectKind`, from the door):
 
 | member | required | what it is |
 | --- | --- | --- |
@@ -295,8 +294,7 @@ reports), `idle(ms)`/`idleAt(ms)` (let device targets go when nothing drew),
 
 ## The worked example — ICE's desk clock as a plugin
 
-`examples/plugins/desk-clock` is ICE's worked third-party kind
-(`infinite-canvas-engine/examples/desk-clock`) ported to a VibeField plugin through
+`examples/plugins/desk-clock` is ICE's worked third-party kind, ported to a VibeField plugin through
 `@vibefield/plugin-sdk/desk` alone — the PARITY WITNESS: the product draws it beside the
 desk's six built-ins, from a plugin. Its law, hands, zone and wakes are ICE's verbatim; the
 code below is QUOTED from its source when these docs are generated, so it is the code that
@@ -602,6 +600,19 @@ export declare const numberProp: (props: Readonly<Record<string, unknown>>, name
 export declare const stringProp: (props: Readonly<Record<string, unknown>>, name: string, fallback: string) => string;
 ```
 
+A colour prop reads through `rgb` (the CSS syntaxes `cssColor` parses, to sRGB 0..1):
+
+```ts
+export type RGB = readonly [number, number, number];
+/**
+ * Parse the CSS colour syntaxes tokens.css uses — `#rrggbb`, `rgb(r g b / p%)`,
+ * `rgba(r, g, b, a)` — into sRGB 0..1 + alpha. The swap chain is a plain
+ * 8-bit format, so what CSS shows is what the shader writes.
+ */
+export declare function cssColor(css: string): RGBA;
+export declare const rgb: (css: string) => RGB;
+```
+
 A boolean is `typeof v === "boolean" ? v : fallback` — the worked example's own `flagProp`
 (its `src/kind.ts`) is exactly that. A menu act's `api.props(e)` and a held tool's
 `api.props()` hand the same flat record; `setProps(patch)` writes the props you name.
@@ -632,6 +643,7 @@ a kind reads (its others are the mat's own — reach them only through the `ligh
 | `u.box` | this slot's box on the attachment, CSS px (`x, y, w, h`) — what a kind culls against |
 | `u.portals` | the portal chain `portal_cover` reads: each container face's centre and half extents, CSS px |
 | `u.clips` | each face's corner radius and on (0/1 — a 0 ends the chain), beside `portals` |
+| `u.night` | `x` the night's amount — 0 the day's light exactly, 1 full night — what a kind mixes its day and night colours by |
 
 The conventions the scaffold's shader keeps: world units, y DOWN (the screen's own axes);
 a kind's rect CENTRED (`cx, cy, w, h`); CSS px = (world − `u.cam.xy`) × `mat_zoom(u)`;
@@ -642,12 +654,36 @@ u.portals, u.clips, mat_dpr(u))` — so inside a mini mat's face it fades with n
 
 A record's GPU struct is `defineStruct(name, fields)` — its WGSL generated from the one
 declaration, so the CPU and the GPU cannot drift; `kitWgsl(…, { structs: [It] })` puts it in
-scope. Its field types, laid out (and padded) by WGSL's own alignment rules — a `vec2f`
-first, then the scalars, then each `vec4f`, keeps it tight, as the scaffold's record does:
+scope. Its field types, laid out by WGSL's own alignment rules (`defineStruct` pads as WGSL
+does) — a `vec2f` first, scalars filling to 16 bytes, then each `vec4f`, as the scaffold's
+record does, wastes nothing:
 
 ```ts
 /** The scalar and vector types, and a fixed array of vec4f (`array<vec4f, N>`: stride 16, legal in a uniform block) — the portal chain's. */
 export type FieldType = "f32" | "i32" | "u32" | "vec2f" | "vec3f" | "vec4f" | "mat4x4f" | `array<vec4f, ${number}>`;
+```
+
+BY NIGHT: a kind that writes its colours straight out draws at daytime brightness on the
+night desk (the scaffold's disc does). Two ways to follow the night: pick your colours per
+theme in `theme(palette, name)` — the `look` your record reads, `name` one of
+
+```ts
+export type ThemeName = "light" | "dark";
+```
+
+— or LIGHT your albedo as the mat lights itself, as the worked example does: the `light`
+piece's `shade_mat` by day, `night_mat` by night, mixed by `u.night.x` (the gobo and noise
+it passes are the mat's own plates, which its pass binds beside the view block):
+
+```wgsl
+// The colour on screen of a lit albedo: the mat's day chain, the night's, or between (a clock is lit as the mat is).
+fn clock_colour(u: MatUniforms, albedo: vec3f, gobo: f32, noise: f32) -> vec3f {
+  let day = shade_mat(u, albedo, gobo);
+  if (u.night.x <= 0.0) { return day; }
+  let night = night_mat(u, srgb_to_linear(albedo), gobo, noise);
+  if (u.night.x >= 1.0) { return night; }
+  return mix(day, night, u.night.x);
+}
 ```
 
 ## Shapes the desk takes — ICE's own declarations
@@ -812,8 +848,8 @@ export interface TrayHang {
 
 ## Where logic goes
 
-Three places, each for its own kind of state (ICE design-015's law: facts in the
-world, flux outside it):
+Three places, each for its own kind of state (the desk's law: facts in the world,
+flux outside it):
 
 1. **desk state** — `kind.local(host)` → `KindLocal` (`tick`, `due`, `landed`,
    `forget`): what you DRAW from flux and WHEN the desk must wake for it. Per desk,
@@ -865,7 +901,8 @@ declares passes, and every kind with shaders carries the note `object-wgsl-not-c
 (`try`, below, is what compiles it). `plugin-playground <dir>` (`pnpm playground` in a checkout) runs the
 same harness over every DECLARED STATE — each fixture in `playground/states.ts` (its props
 validated first, `state-invalid`) × idle, selected, held, open (when the kind opens),
-contained (when it provides `desk.containable`) × every zoom the desk's LOD names — through
+contained (when it provides `desk.containable`) × every zoom the desk's LOD names, and each
+fixture once more at rest by night — through
 resolve, record, hit (`state-hit-missed`: it must hit its own box), frame, chip, the
 opening, prepare and drawRange (`state-spawn-failed`, `state-render-failed`,
 `state-draw-ill-formed`), then dispose. A unit test calls it the same way. `inspect` lists

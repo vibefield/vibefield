@@ -161,6 +161,7 @@ fn clock_print(x: vec2f, style: u32, ring24: bool, fpx: f32) -> vec2f {
   return vec2f(ink, lume);
 }
 
+// docs:begin colour
 // The colour on screen of a lit albedo: the mat's day chain, the night's, or between (a clock is lit as the mat is).
 fn clock_colour(u: MatUniforms, albedo: vec3f, gobo: f32, noise: f32) -> vec3f {
   let day = shade_mat(u, albedo, gobo);
@@ -169,6 +170,7 @@ fn clock_colour(u: MatUniforms, albedo: vec3f, gobo: f32, noise: f32) -> vec3f {
   if (u.night.x >= 1.0) { return night; }
   return mix(day, night, u.night.x);
 }
+// docs:end colour
 
 // A hand's lit colour at x: its two facets turned from the lamp or toward it (a ridge along the hand).
 fn clock_facet(x: vec2f, a: f32, L: vec3f, albedo: vec3f) -> vec3f {

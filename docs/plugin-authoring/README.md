@@ -164,7 +164,7 @@ with an install) and never edit the JSON by hand: `check` refuses JSON that is n
 (`manifest-stale`), but a canonical JSON that went stale reads as any other:
 
 ```ts
-// src/manifest.ts — typed against the contract, so a mistake is a type error
+// src/manifest.ts — typed against the contract: a type error where TypeScript runs, and emit-manifest refuses it either way
 import type { PluginManifestV1 } from "@vibefield/contracts";
 
 export const manifest: PluginManifestV1 = {
