@@ -11,7 +11,7 @@
   "entries": {
     "renderer": "./dist/renderer.js"
   },
-  "activation": ["onWidget:com.example.clock"],
+  "activation": ["onObject:com.example.clock"],
   "capabilities": ["doc.write"],
   "contributes": {
     "objects": [

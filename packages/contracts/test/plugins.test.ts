@@ -6,6 +6,7 @@ import {
   isSafeRelativePath,
   OBJECT_RETIRED_FIELDS,
   OBJECTS_NEED_DESK,
+  ONWIDGET_ACTIVATION_RETIRED,
   PLUGIN_LIMITS,
   PluginManifestV1,
   validatePluginManifest,
@@ -23,7 +24,7 @@ const base = () => ({
   title: "Demo",
   engines: { app: "^0.1.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: ["onWidget:com.example.demo"],
+  activation: ["onObject:com.example.demo"],
   capabilities: ["doc.write"],
   contributes: {
     // DK-8: the base's one row is an OBJECT — `contributes.widgets` is refused by name
@@ -148,7 +149,7 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
   });
 
   it("activation events must name owned declarations", () => {
-    refuse((m) => ({ ...m, activation: ["onWidget:com.example.other"] }), /names no owned/);
+    refuse((m) => ({ ...m, activation: ["onObject:com.example.other"] }), /names no owned/);
   });
 
   it("object types stay in the plugin namespace", () => {
@@ -516,7 +517,7 @@ describe("the object contribution (DK-0f)", () => {
   });
   const withObjects = (objects: unknown[], over: Record<string, unknown> = {}) => ({
     ...base(),
-    activation: [`onWidget:${CLOCK}`],
+    activation: [`onObject:${CLOCK}`],
     contributes: { objects },
     ...over,
   });
@@ -531,7 +532,7 @@ describe("the object contribution (DK-0f)", () => {
     expect(findUnknownManifestKeys(withObjects([object()]))).toEqual([]);
     const both = {
       ...base(),
-      activation: [...base().activation, `onWidget:${CLOCK}`],
+      activation: [...base().activation, `onObject:${CLOCK}`],
       contributes: { ...base().contributes, objects: [...base().contributes.objects, object()] },
     };
     expect(validatePluginManifest(both).ok).toBe(true);
@@ -642,12 +643,38 @@ describe("the object contribution (DK-0f)", () => {
     );
   });
 
-  it("an object type is an onWidget activation target — an object is a widget to the engine", () => {
+  it("an object type is an onObject activation target — and only a type the manifest declares", () => {
     expect(validatePluginManifest(withObjects([object()])).ok).toBe(true);
     expect(
-      refused(withObjects([object()], { activation: ["onWidget:com.example.demo.nothing"] })),
+      refused(withObjects([object()], { activation: ["onObject:com.example.demo.nothing"] })),
     ).toContain(
-      "activation: activation event onWidget:com.example.demo.nothing names no owned declaration",
+      "activation: activation event onObject:com.example.demo.nothing names no owned declaration",
+    );
+  });
+
+  it("DK-9: the retired onWidget: activation event is refused BY NAME — one verdict naming onObject:, no alias", () => {
+    const raw = withObjects([object()], { activation: [`onWidget:${CLOCK}`] });
+    const result = validatePluginManifest(raw);
+    expect(result.ok).toBe(false);
+    if (result.ok) return;
+    // ONE issue: the retired name, its stable code, pointing at the new one — never a second
+    // "names no owned declaration" for the same event, and never accepted as an alias
+    expect(result.issueDetails).toEqual([
+      {
+        code: ONWIDGET_ACTIVATION_RETIRED.code,
+        path: ["activation", 0],
+        message: ONWIDGET_ACTIVATION_RETIRED.message(`onWidget:${CLOCK}`),
+      },
+    ]);
+    expect(ONWIDGET_ACTIVATION_RETIRED.code).toBe("onwidget-activation-retired");
+    expect(result.issueDetails[0]?.message).toContain(`onObject:${CLOCK}`);
+    // the same event under its new name is the plugin's own activation
+    expect(
+      validatePluginManifest(withObjects([object()], { activation: [`onObject:${CLOCK}`] })).ok,
+    ).toBe(true);
+    // a malformed event is still the shape refusal, naming the vocabulary as it is now
+    expect(refused(withObjects([object()], { activation: ["onClock:x"] }))).toContain(
+      "activation.0: activation events: onStartup | on{Object,Command,Surface,Service}:<owned id>",
     );
   });
 

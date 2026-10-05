@@ -24,7 +24,7 @@ export const FIRST_PARTY_NAMESPACE = "vibefield";
 export interface PlanInput {
   readonly id: string;
   readonly title: string;
-  readonly widgetType?: string | undefined;
+  readonly objectType?: string | undefined;
   /** allow the reserved `vibefield.*` namespace */
   readonly firstParty?: boolean | undefined;
 }
@@ -35,7 +35,7 @@ export interface PlanInput {
 export interface Plan {
   readonly id: string;
   readonly title: string;
-  readonly widgetType: string;
+  readonly objectType: string;
   /** the workspace package name, derived: `vendor.demo` → `@vendor/plugin-demo` */
   readonly packageName: string;
   /** the component identifier, derived from the title: `Demo Board` → `DemoBoard` */
@@ -77,14 +77,29 @@ export function planScaffold(input: PlanInput): PlanResult {
     );
   }
 
-  const widgetType = (input.widgetType ?? id).trim();
-  if (!ownsName(id, widgetType)) {
+  // DK-9 (the plan's addendum (15)): the flag renamed clean — `--object-type`; the retired
+  // `--widget-type` (and a programmatic caller's `widgetType`) is REFUSED BY NAME, never aliased
+  if ((input as { widgetType?: unknown }).widgetType !== undefined) {
     return no(
       refuse(
         "id",
-        "widget-type-invalid",
-        `widget type ${JSON.stringify(widgetType)} must be ${id} or ${id}.<name>`,
-        { pointer: "--widget-type" },
+        "widget-type-retired",
+        "--widget-type is retired: an object's type is --object-type",
+        {
+          pointer: "--widget-type",
+          expected: "--object-type <type>",
+        },
+      ),
+    );
+  }
+  const objectType = (input.objectType ?? id).trim();
+  if (!ownsName(id, objectType)) {
+    return no(
+      refuse(
+        "id",
+        "object-type-invalid",
+        `object type ${JSON.stringify(objectType)} must be ${id} or ${id}.<name>`,
+        { pointer: "--object-type" },
       ),
     );
   }
@@ -94,7 +109,7 @@ export function planScaffold(input: PlanInput): PlanResult {
     plan: {
       id,
       title,
-      widgetType,
+      objectType,
       packageName: packageNameFor(id),
       className: classNameFor(title, id),
     },

@@ -61,8 +61,10 @@ One entry per kind under `contributes.objects`:
   placeable but hangs nowhere.
 - `binding.kind` names the export (an identifier) that holds the kind — one name,
   read by the host, never registered from `activate`.
-- `onWidget:<type>` is an object's activation event — the ENGINE's name for a
-  prefab, kept when the widget contribution retired.
+- `onObject:<type>` is an object's activation event — fired when the type's first
+  instance appears in the document, independent of the kind's pass (the desk makes
+  every registered kind's pass at its mount). The retired `onWidget:<type>` is
+  refused by name (`onwidget-activation-retired`).
 
 The widget-era view fields are RETIRED on an object and refused by name:
 

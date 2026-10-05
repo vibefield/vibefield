@@ -1,6 +1,6 @@
 {
   "activation": [
-    "onWidget:vibefield.fixture.badengines.card"
+    "onObject:vibefield.fixture.badengines.card"
   ],
   "capabilities": [],
   "contributes": {

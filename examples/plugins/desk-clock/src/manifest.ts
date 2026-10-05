@@ -28,7 +28,7 @@ export const deskClockManifest: PluginManifestV1 = {
     "ICE's analogue desk clock as a VibeField plugin — its own WGSL, pass, wake, tray entry, menu act and held tools, through the SDK's /desk door alone",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: [`onWidget:${CLOCK_TYPE}`],
+  activation: [`onObject:${CLOCK_TYPE}`],
   capabilities: [], // a kind draws what it is handed; it asks for nothing
   contributes: {
     objects: [

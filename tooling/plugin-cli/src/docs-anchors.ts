@@ -339,7 +339,11 @@ export const INVARIANT_PROBES: readonly InvariantProbe[] = [
   },
   {
     topic: "an activation event names something the plugin declares",
-    manifest: { ...base(), activation: ["onWidget:com.example.demo.nothing"] },
+    manifest: { ...base(), activation: ["onObject:com.example.demo.nothing"] },
+  },
+  {
+    topic: "the retired onWidget: activation event is refused by name — it is onObject:",
+    manifest: { ...base(), activation: ["onWidget:com.example.demo"] },
   },
   // --- the object door (DK-0f) ---
   {

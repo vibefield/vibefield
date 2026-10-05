@@ -97,7 +97,7 @@ describe("the scaffolded tree", () => {
 
   it("DK-6 — is an OBJECT KIND: its WGSL and pass through the SDK's /desk door, no React, no card, no CSS", async () => {
     const dir = unusedPath();
-    await scaffoldPlugin({ id: "vendor.demo", title: "Demo", widgetType: "vendor.demo.disc", dir });
+    await scaffoldPlugin({ id: "vendor.demo", title: "Demo", objectType: "vendor.demo.disc", dir });
 
     const files = tree(dir);
     expect(files.filter((f) => /\.(css|tsx)$/.test(f))).toEqual([]);
@@ -194,7 +194,7 @@ describe("the manifest is emitted, not templated", () => {
     await scaffoldPlugin({
       id: "com.example.notes",
       title: "Example Notes",
-      widgetType: "com.example.notes.card",
+      objectType: "com.example.notes.card",
       dir,
     });
 
@@ -206,7 +206,7 @@ describe("the manifest is emitted, not templated", () => {
     };
     expect(manifest.id).toBe("com.example.notes");
     expect(manifest.title).toBe("Example Notes");
-    expect(manifest.activation).toEqual(["onWidget:com.example.notes.card"]);
+    expect(manifest.activation).toEqual(["onObject:com.example.notes.card"]);
     expect(manifest.contributes.objects[0]?.type).toBe("com.example.notes.card");
   });
 });

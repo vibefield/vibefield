@@ -17,7 +17,7 @@ const VALID_MANIFEST = {
   description: "A renderer-only note kind — the minimal real plugin: one object, one export",
   engines: { app: "^0.1.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: ["onWidget:com.example.notes"],
+  activation: ["onObject:com.example.notes"],
   capabilities: ["doc.write"],
   contributes: {
     objects: [

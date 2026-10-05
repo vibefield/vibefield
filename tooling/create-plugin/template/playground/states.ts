@@ -9,7 +9,7 @@
 // Authoring-time only: this directory never enters a `.vfplugin`, the same way
 // `scripts/` and `test/` do not.
 export default {
-  "{{widgetType}}": {
+  "{{objectType}}": {
     // the default a new one is made with
     default: {},
     // a colour of its own

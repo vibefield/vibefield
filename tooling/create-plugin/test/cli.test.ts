@@ -81,6 +81,37 @@ describe("exit codes are law", () => {
   });
 });
 
+describe("DK-9 — the flag renamed clean: --object-type, the retired --widget-type refused by name", () => {
+  it("--object-type sets the contributed object's type", async () => {
+    const io = capture();
+    const dir = unusedPath();
+    expect(await runCli(args(dir, ["--object-type", `${VALID.id}.disc`, "--json"]), io)).toBe(
+      EXIT_OK,
+    );
+    const result = JSON.parse(io.lines.at(-1) ?? "{}") as Record<string, unknown>;
+    expect(result["objectType"]).toBe(`${VALID.id}.disc`);
+    expect(result).not.toHaveProperty("widgetType");
+  });
+
+  it("--widget-type exits 1 with widget-type-retired naming --object-type, and writes nothing — with or without a value", async () => {
+    for (const flag of [["--widget-type", `${VALID.id}.disc`], ["--widget-type"]]) {
+      const io = capture();
+      const dir = unusedPath();
+      expect(await runCli(args(dir, [...flag, "--json"]), io)).toBe(EXIT_REFUSED);
+      const rows = io.lines.map((line) => JSON.parse(line) as Record<string, unknown>);
+      expect(rows.map((row) => row["code"])).toEqual(["widget-type-retired"]);
+      expect(rows[0]?.["pointer"]).toBe("--widget-type");
+      expect(rows[0]?.["expected"]).toBe("--object-type <type>");
+      expect(existsSync(dir)).toBe(false);
+    }
+  });
+
+  it("--help names --object-type and no --widget-type option", () => {
+    expect(HELP).toContain("--object-type <type>");
+    expect(HELP).not.toMatch(/^\s+--widget-type /m);
+  });
+});
+
 describe("the two registers", () => {
   it("prints one JSON verdict per line under --json, then a result object", async () => {
     const io = capture();

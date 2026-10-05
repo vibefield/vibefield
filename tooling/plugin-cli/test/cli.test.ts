@@ -148,7 +148,7 @@ describe("the two registers", () => {
     const clock = `${baseManifest()["id"] as string}.clock`;
     const root = makePlugin({
       manifest: {
-        activation: [`onWidget:${clock}`],
+        activation: [`onObject:${clock}`],
         contributes: {
           objects: [
             {
@@ -218,7 +218,7 @@ describe("the two registers", () => {
     const inspect = async (files: Record<string, string>) => {
       const io = capture();
       const root = makePlugin({
-        manifest: { activation: [`onWidget:${clock}`], contributes: { objects: [row] } },
+        manifest: { activation: [`onObject:${clock}`], contributes: { objects: [row] } },
         files,
       });
       await runCli(["inspect", root, "--json"], io);

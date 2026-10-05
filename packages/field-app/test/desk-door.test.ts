@@ -76,7 +76,7 @@ function manifest(id: string, contributes: PluginManifestV1["contributes"]): Plu
     title: id,
     engines: { app: ">=0.0.0", contracts: "^0.1.0" },
     entries: { renderer: "./dist/renderer.js" },
-    activation: types.map((type) => `onWidget:${type}`),
+    activation: types.map((type) => `onObject:${type}`),
     capabilities: [],
     contributes,
   } as PluginManifestV1;

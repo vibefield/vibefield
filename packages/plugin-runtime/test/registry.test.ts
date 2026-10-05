@@ -36,7 +36,7 @@ describe("PluginRegistry", () => {
   it("DK-2: registers a manifest's object kinds — the desk draws objects", () => {
     const r = new PluginRegistry<unknown>();
     const withObjects = manifest({
-      activation: ["onWidget:note.clock"],
+      activation: ["onObject:note.clock"],
       contributes: { objects: [objectRow("note.card"), objectRow("note.clock", "clock")] },
     });
     // DK-0f's `objects-need-desk` door is flipped off: each kind's type joins the exact map

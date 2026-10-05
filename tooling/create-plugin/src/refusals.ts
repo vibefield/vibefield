@@ -56,11 +56,19 @@ export const REFUSAL_CATALOG = {
     meaning: "the title is empty or over the manifest's title limit",
     guidance: "pass a --title of 1 to 80 characters",
   },
-  "widget-type-invalid": {
+  "object-type-invalid": {
     check: "id",
     level: "refuse",
-    meaning: "the widget type is not owned by the plugin id (§6.2)",
-    guidance: "a widget type is <id> or <id>.<name>; omit --widget-type to use the id itself",
+    meaning: "the object type is not owned by the plugin id (§6.2)",
+    guidance: "an object type is <id> or <id>.<name>; omit --object-type to use the id itself",
+  },
+  "widget-type-retired": {
+    check: "id",
+    level: "refuse",
+    meaning:
+      "the retired --widget-type flag — the contributed object's type is --object-type (DK-9)",
+    guidance:
+      "pass --object-type <type> (or omit it to use the plugin id); --widget-type is no alias",
   },
 
   // --- where the scaffold landed ------------------------------------------------

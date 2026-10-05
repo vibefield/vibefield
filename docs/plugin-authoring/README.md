@@ -57,7 +57,7 @@ The manifest, complete and minimal — one object kind (`objects.md` says every 
     "renderer": "./dist/renderer.js"
   },
   "activation": [
-    "onWidget:com.example.clock"
+    "onObject:com.example.clock"
   ],
   "capabilities": [
     "doc.write"
@@ -170,7 +170,7 @@ export const manifest: PluginManifestV1 = {
   title: "Example Clock",
   engines: { app: "^0.1.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: ["onWidget:com.example.clock"],
+  activation: ["onObject:com.example.clock"],
   capabilities: [],
   contributes: { objects: [/* … */] },
 };

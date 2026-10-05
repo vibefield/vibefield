@@ -116,6 +116,22 @@ describe("check — manifest-invalid (the control run)", () => {
     expect(verdicts.some((v) => v.code === "manifest-unknown-key")).toBe(false);
   });
 
+  it("refuses the onWidget: activation event BY NAME, pointing at onObject: — one verdict, no alias (DK-9)", async () => {
+    const retired = makePlugin({
+      rawManifest: `${JSON.stringify(
+        baseManifest({ activation: [`onCommand:${FIXTURE_COMMAND}`, `onWidget:${FIXTURE_ID}`] }),
+        null,
+        2,
+      )}\n`,
+    });
+    const verdicts = await checkPlugin({ dir: retired });
+    const refusals = verdicts.filter((v) => v.level === "refuse" && v.check === "manifest");
+    expect(refusals.map((v) => v.code)).toEqual(["onwidget-activation-retired"]);
+    expect(refusals[0]?.pointer).toBe("/activation/1");
+    expect(refusals[0]?.detail).toContain(`onObject:${FIXTURE_ID}`);
+    expect(REFUSAL_CATALOG["onwidget-activation-retired"].guidance).toContain("onObject:<type>");
+  });
+
   it("preserves stable behavior admission codes and exact pointers", async () => {
     const withSystems = baseManifest();
     withSystems["contributes"] = {
@@ -368,7 +384,7 @@ describe("check — object kinds on the desk build", () => {
   ];
   const objectPlugin = (module: string) =>
     makePlugin({
-      manifest: { activation: [`onWidget:${CLOCK}`], contributes: { objects } },
+      manifest: { activation: [`onObject:${CLOCK}`], contributes: { objects } },
       files: { "dist/renderer.js": module },
     });
   const activation = (verdicts: Awaited<ReturnType<typeof checkPlugin>>) =>
@@ -388,7 +404,7 @@ describe("check — object kinds on the desk build", () => {
   it("activates objects standing beside a command — the command's binding rows run as before", async () => {
     const root = makePlugin({
       manifest: {
-        activation: [`onWidget:${CLOCK}`, `onCommand:${FIXTURE_COMMAND}`],
+        activation: [`onObject:${CLOCK}`, `onCommand:${FIXTURE_COMMAND}`],
         contributes: { ...(baseManifest()["contributes"] as object), objects },
       },
       files: { "dist/renderer.js": objectRendererModule({ binds: [FIXTURE_COMMAND] }) },
@@ -438,7 +454,7 @@ describe("check — object kinds on the desk build", () => {
   it("DK-7 — refuses a row that does not provide desk.object, the key the desk places by", async () => {
     const root = makePlugin({
       manifest: {
-        activation: [`onWidget:${CLOCK}`],
+        activation: [`onObject:${CLOCK}`],
         contributes: { objects: [{ ...objects[0], provides: [CLOCK] }] },
       },
       files: { "dist/renderer.js": objectRendererModule() },

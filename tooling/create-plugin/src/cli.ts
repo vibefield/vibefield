@@ -17,8 +17,8 @@ required:
   --dir <target>         where to write it — must be empty or not exist
 
 options:
-  --widget-type <type>   the contributed object's type (default: the plugin id) — an
-                         object is a widget to the engine, so the flag keeps its name
+  --object-type <type>   the contributed object's type (default: the plugin id); the
+                         retired --widget-type is refused by name
   --first-party          allow the reserved vibefield.* namespace
   --json                 one JSON object per line: verdicts, then a result object
   --help                 this text
@@ -106,7 +106,9 @@ export async function runCli(argv: readonly string[], io: CliIo = consoleIo): Pr
       id,
       title,
       dir,
-      widgetType: flagString(flags, "widget-type"),
+      objectType: flagString(flags, "object-type"),
+      // refused by name in the plan (`widget-type-retired`) — read here only to say so
+      ...(flags.has("widget-type") ? { widgetType: flagString(flags, "widget-type") ?? "" } : {}),
       firstParty: flags.get("first-party") === true,
     });
     for (const verdict of result.verdicts) emitter.emit(verdict);
@@ -118,7 +120,7 @@ export async function runCli(argv: readonly string[], io: CliIo = consoleIo): Pr
           root: result.root,
           id: result.plan.id,
           title: result.plan.title,
-          widgetType: result.plan.widgetType,
+          objectType: result.plan.objectType,
           packageName: result.plan.packageName,
           files: result.files,
         }),

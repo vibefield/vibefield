@@ -13,7 +13,7 @@
     "service": "./dist/service.js"
   },
   "host": "worker",
-  "activation": ["onService:x.com.example.metrics.snapshot", "onWidget:com.example.metrics.chart"],
+  "activation": ["onService:x.com.example.metrics.snapshot", "onObject:com.example.metrics.chart"],
   "capabilities": [
     "services.provide",
     "storage.self",

@@ -1,6 +1,6 @@
 {
   "activation": [
-    "onWidget:vibefield.example.desk-clock"
+    "onObject:vibefield.example.desk-clock"
   ],
   "capabilities": [],
   "contributes": {

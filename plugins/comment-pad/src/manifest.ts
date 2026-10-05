@@ -26,7 +26,7 @@ export const commentPadManifest: PluginManifestV1 = {
     "A pad of comments lying on the desk — tap it and write in the desk's hand; its lines are the document's, undoable, shared with every peer",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: [`onWidget:${COMMENT_PAD_TYPE}`],
+  activation: [`onObject:${COMMENT_PAD_TYPE}`],
   capabilities: [], // a kind draws what it is handed and writes its own cell through the desk's gate; it asks for nothing
   contributes: {
     objects: [

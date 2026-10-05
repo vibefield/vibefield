@@ -1,6 +1,6 @@
 {
   "activation": [
-    "onWidget:vibefield.behavior-conformance.card"
+    "onObject:vibefield.behavior-conformance.card"
   ],
   "capabilities": [
     "canvas.write"

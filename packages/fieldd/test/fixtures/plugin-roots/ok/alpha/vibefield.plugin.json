@@ -1,6 +1,6 @@
 {
   "activation": [
-    "onWidget:vibefield.fixture.alpha.card"
+    "onObject:vibefield.fixture.alpha.card"
   ],
   "capabilities": [],
   "contributes": {

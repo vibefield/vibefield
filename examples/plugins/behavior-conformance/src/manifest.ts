@@ -27,7 +27,7 @@ export const behaviorConformanceManifest: PluginManifestV1 = {
   title: "Behavior conformance",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: [`onWidget:${CARRIER_TYPE}`],
+  activation: [`onObject:${CARRIER_TYPE}`],
   capabilities: ["canvas.write"],
   contributes: {
     behaviors: [

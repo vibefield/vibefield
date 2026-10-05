@@ -11,7 +11,7 @@
   "entries": {
     "renderer": "./dist/renderer.js"
   },
-  "activation": ["onWidget:note.card"],
+  "activation": ["onObject:note.card"],
   "capabilities": [],
   "contributes": {
     "objects": [

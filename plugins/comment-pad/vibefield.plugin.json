@@ -1,6 +1,6 @@
 {
   "activation": [
-    "onWidget:vibefield.comment-pad"
+    "onObject:vibefield.comment-pad"
   ],
   "capabilities": [],
   "contributes": {

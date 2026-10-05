@@ -7,7 +7,7 @@
 // cut from, DK-6: an object kind — its kind, its pass, its `.wgsl`) instead of
 // reconstructed from a generator.
 //
-// ESCAPING, which is the one subtle thing here. `{{id}}`, `{{widgetType}}`,
+// ESCAPING, which is the one subtle thing here. `{{id}}`, `{{objectType}}`,
 // `{{packageName}}` and `{{className}}` are grammar-restricted or derived, so
 // they are safe by construction. `{{title}}` is arbitrary author text and every
 // place it appears is inside a double-quoted string in TS or JSON, a `//` line

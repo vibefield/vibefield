@@ -167,7 +167,7 @@ describe("title-invalid", () => {
   });
 });
 
-describe("widget-type-invalid — every contributed id is owned by the plugin id", () => {
+describe("object-type-invalid — every contributed id is owned by the plugin id", () => {
   it.each([
     ["other.card", "a type under someone else's id"],
     ["vendor.demoish", "a prefix match that is not a segment boundary"],
@@ -177,26 +177,37 @@ describe("widget-type-invalid — every contributed id is owned by the plugin id
     // against the single-segment pattern, not against the dotted-id grammar.
     // Found by the emit backstop refusing a plan this file first accepted.
     ["vendor.demo.a.b", "two segments under the id"],
-  ])("refuses %j — %s", async (widgetType) => {
-    const result = await scaffoldPlugin({ ...VALID, widgetType, dir: unusedPath() });
-    expect(codes(result.verdicts)).toEqual(["widget-type-invalid"]);
+  ])("refuses %j — %s", async (objectType) => {
+    const result = await scaffoldPlugin({ ...VALID, objectType, dir: unusedPath() });
+    expect(codes(result.verdicts)).toEqual(["object-type-invalid"]);
   });
 
   // THE CONTROL: the id itself and one name under it, which are the two legal shapes.
   it.each(["vendor.demo", "vendor.demo.card", "vendor.demo.a-card"])(
     "accepts %j",
-    async (widgetType) => {
-      const result = await scaffoldPlugin({ ...VALID, widgetType, dir: unusedPath() });
+    async (objectType) => {
+      const result = await scaffoldPlugin({ ...VALID, objectType, dir: unusedPath() });
       expect(codes(result.verdicts)).toEqual([]);
     },
   );
 
-  it("defaults the widget type to the plugin id", async () => {
+  it("defaults the object type to the plugin id", async () => {
     const dir = unusedPath();
     const result = await scaffoldPlugin({ ...VALID, dir });
-    expect(result.plan?.widgetType).toBe(VALID.id);
+    expect(result.plan?.objectType).toBe(VALID.id);
     const manifest: unknown = JSON.parse(readFileSync(join(dir, "vibefield.plugin.json"), "utf8"));
-    expect((manifest as { activation: string[] }).activation).toEqual([`onWidget:${VALID.id}`]);
+    expect((manifest as { activation: string[] }).activation).toEqual([`onObject:${VALID.id}`]);
+  });
+});
+
+describe("DK-9 — the retired widgetType is refused BY NAME, never an alias of objectType", () => {
+  it("a caller still passing widgetType is refused widget-type-retired, pointing at --object-type, and nothing is written", async () => {
+    const dir = unusedPath();
+    const result = await scaffoldPlugin({ ...VALID, ...{ widgetType: "vendor.demo.card" }, dir });
+    expect(codes(result.verdicts)).toEqual(["widget-type-retired"]);
+    expect(result.verdicts[0]?.detail).toContain("--object-type");
+    expect(result.plan).toBeUndefined();
+    expect(existsSync(dir)).toBe(false);
   });
 });
 
@@ -210,7 +221,11 @@ describe("the catalog is the enumeration", () => {
     record((await scaffoldPlugin({ id: "demo", title: "x", dir: unusedPath() })).verdicts);
     record((await scaffoldPlugin({ id: "vibefield.x", title: "x", dir: unusedPath() })).verdicts);
     record((await scaffoldPlugin({ id: VALID.id, title: "", dir: unusedPath() })).verdicts);
-    record((await scaffoldPlugin({ ...VALID, widgetType: "other.x", dir: unusedPath() })).verdicts);
+    record((await scaffoldPlugin({ ...VALID, objectType: "other.x", dir: unusedPath() })).verdicts);
+    record(
+      (await scaffoldPlugin({ ...VALID, ...{ widgetType: "vendor.demo" }, dir: unusedPath() }))
+        .verdicts,
+    );
     const occupied = freshDir();
     writeAt(occupied, "a", "a");
     record((await scaffoldPlugin({ ...VALID, dir: occupied })).verdicts);

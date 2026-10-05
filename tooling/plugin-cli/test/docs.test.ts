@@ -51,7 +51,7 @@ describe("generation", () => {
 
   it("keeps every table cell parseable as a table cell", () => {
     // A `|` inside a cell ends it. This bit the activation rule, whose message
-    // is literally `onStartup | onWidget:…`.
+    // is literally `onStartup | onObject:…`.
     for (const [name, content] of generateDocs()) {
       for (const line of content.split("\n")) {
         if (!line.startsWith("| ")) continue;
@@ -200,6 +200,9 @@ describe("coverage of what an author has to know", () => {
       "objects-need-desk",
       // DK-8 — the retired widget contribution's refusal, and where its rows went
       "widgets-contribution-retired",
+      // DK-9 — the activation event renamed clean: the new name, and the old one's refusal
+      "onObject:<object type>",
+      "onwidget-activation-retired",
       "resolve(ctx)",
       "KindLocal.due",
     ])

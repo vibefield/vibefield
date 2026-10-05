@@ -18,7 +18,7 @@ import { shaders } from "./shaders";
 // desk must wake for it — ICE's desk clock is the worked example), `open` (picked up: held tools).
 
 /** The kind's registry name — the host's rule: it IS the object's type, one id and no second namespace. */
-export const KIND_NAME = "{{widgetType}}";
+export const KIND_NAME = "{{objectType}}";
 
 /** The colour a new one has — the manifest's `color` default. */
 export const DEFAULT_COLOR = "#e4c46a";

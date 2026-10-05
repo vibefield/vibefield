@@ -140,19 +140,41 @@ export type RelativeModulePath = z.infer<typeof RelativeModulePath>;
 export const JsonSchemaObject = z.object({}).passthrough();
 export type JsonSchemaObject = z.infer<typeof JsonSchemaObject>;
 
+/** DK-9 (the plan's addendum (15)): the plugin-facing vocabulary renamed clean — an object's
+ * activation event is `onObject:<type>`; the retired `onWidget:<type>` is REFUSED BY NAME (no
+ * alias), the stable issue code `onwidget-activation-retired` pointing at the new name. */
+export const ONWIDGET_ACTIVATION_RETIRED = {
+  code: "onwidget-activation-retired",
+  message: (event: string): string =>
+    `activation event ${event} is retired: an object's activation event is onObject:${event.slice("onWidget:".length)} — it fires when the type's first instance appears in the document`,
+} as const;
+
 export const ActivationEvent = z
   .string()
   .max(PLUGIN_LIMITS.ID_MAX * 2)
-  .refine(
-    (e) =>
+  .superRefine((e, ctx) => {
+    if (e.startsWith("onWidget:")) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: ONWIDGET_ACTIVATION_RETIRED.message(e),
+        params: { pluginIssueCode: ONWIDGET_ACTIVATION_RETIRED.code },
+      });
+      return;
+    }
+    const ok =
       e === "onStartup" ||
-      ((e.startsWith("onWidget:") ||
+      ((e.startsWith("onObject:") ||
         e.startsWith("onCommand:") ||
         e.startsWith("onSurface:") ||
         e.startsWith("onService:")) &&
-        e.split(":")[1] !== ""),
-    "activation events: onStartup | on{Widget,Command,Surface,Service}:<owned id>",
-  );
+        e.split(":")[1] !== "");
+    if (!ok) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "activation events: onStartup | on{Object,Command,Surface,Service}:<owned id>",
+      });
+    }
+  });
 export type ActivationEvent = z.infer<typeof ActivationEvent>;
 
 // --- the durable vocabulary (spec §8.2, the v0.2 vocabulary — enumerated FROM the
@@ -619,7 +641,9 @@ export type PluginManifestIssueCode =
   | "behavior-presence-budget-exceeded"
   | "systems-contribution-superseded"
   /** DK-8: `contributes.widgets` is refused by name — a face is an object kind */
-  | "widgets-contribution-retired";
+  | "widgets-contribution-retired"
+  /** DK-9: the `onWidget:` activation event is refused by name — it is `onObject:` */
+  | "onwidget-activation-retired";
 
 /** DK-8: the one refusal `contributes.widgets` meets at every door that validates a
  * manifest (fieldd's loader, `vibefield-plugin check`, the registry), said once. */
@@ -1351,16 +1375,18 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
     // activation events name owned declarations (§8.1)
     const commandIds = new Set((c.commands ?? []).map((x) => x.id));
     const surfaceIds = new Set((c.surfaces ?? []).map((x) => x.id));
-    // an object is a widget to the ENGINE (defineObject compiles through
-    // defineWidget), so `onWidget:` names an object type — the activation
-    // vocabulary did not grow for the desk, and keeps its name with the
-    // widget contribution retired (DK-8)
+    // `onObject:` names an object type (DK-9 renamed it from `onWidget:`, which the
+    // event schema above refuses by name) — fired when the type's first instance
+    // appears in the document, independent of the kind's pass, which the desk makes
+    // for every registered kind at its mount
     const objectTypeSet = new Set(objectTypes);
     for (const e of m.activation) {
       if (e === "onStartup") continue;
+      // refused BY NAME by the event schema — one verdict for it, not a second "names no owned"
+      if (e.startsWith("onWidget:")) continue;
       const [kind, target] = [e.slice(0, e.indexOf(":")), e.slice(e.indexOf(":") + 1)];
       const ok =
-        (kind === "onWidget" && objectTypeSet.has(target)) ||
+        (kind === "onObject" && objectTypeSet.has(target)) ||
         (kind === "onCommand" && commandIds.has(target)) ||
         (kind === "onSurface" && surfaceIds.has(target)) ||
         (kind === "onService" && declaredMethods.has(target));

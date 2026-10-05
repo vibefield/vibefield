@@ -12,7 +12,7 @@
     "renderer": "./dist/renderer.js"
   },
   "activation": [
-    "onWidget:vibefield.fixture-invalid.card"
+    "onObject:vibefield.fixture-invalid.card"
   ],
   "capabilities": [],
   "contributes": {

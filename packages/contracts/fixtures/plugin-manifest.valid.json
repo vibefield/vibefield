@@ -11,7 +11,7 @@
   "entries": {
     "renderer": "./dist/renderer.js"
   },
-  "activation": ["onWidget:com.example.notes"],
+  "activation": ["onObject:com.example.notes"],
   "capabilities": ["doc.write"],
   "contributes": {
     "objects": [

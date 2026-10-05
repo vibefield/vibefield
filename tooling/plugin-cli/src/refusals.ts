@@ -69,6 +69,14 @@ export const REFUSAL_CATALOG = {
     guidance:
       "declare it under contributes.objects: its durable half (size, props, groups, interaction) and binding.kind, the renderer export that holds its kind (objects.md)",
   },
+  "onwidget-activation-retired": {
+    check: "manifest",
+    level: "refuse",
+    meaning:
+      "the retired onWidget:<type> activation event — an object's activation event is onObject:<type> (DK-9)",
+    guidance:
+      "rename it onObject:<type>: it fires when the type's first instance appears in the document (manifest.md)",
+  },
   "manifest-stale": {
     check: "manifest",
     level: "refuse",
@@ -129,7 +137,7 @@ export const REFUSAL_CATALOG = {
     check: "activation",
     level: "refuse",
     meaning:
-      "activate registered a widget type, command, surface or behavior the manifest does not declare (§12.1)",
+      "activate registered a command, surface or behavior the manifest does not declare (§12.1) — an object's kind is never registered: the host reads binding.kind",
     guidance: "declare it in the manifest first, or stop registering it",
   },
   "binding-missing": {

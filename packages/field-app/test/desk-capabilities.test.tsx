@@ -46,7 +46,7 @@ const manifest: PluginManifestV1 = {
   title: "DK-4 capabilities",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
-  activation: [`onWidget:${CLOCK}`],
+  activation: [`onObject:${CLOCK}`],
   capabilities: [],
   contributes: {
     objects: [

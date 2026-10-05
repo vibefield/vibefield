@@ -75,7 +75,7 @@ function validManifest(id: string): Record<string, unknown> {
     title: id,
     engines: { app: ">=0.0.0", contracts: "^0.1.0" },
     entries: { renderer: "./renderer.js" },
-    activation: [`onWidget:${objectType}`],
+    activation: [`onObject:${objectType}`],
     capabilities: [],
     contributes: {
       objects: [
@@ -263,7 +263,7 @@ describe("PluginRegistryService — invalid & incompatible roots", () => {
     const type = `${id}.face`;
     writePluginDir(root, "clock", {
       ...validManifest(id),
-      activation: [`onWidget:${type}`],
+      activation: [`onObject:${type}`],
       contributes: {
         objects: [
           {

@@ -101,7 +101,7 @@ const BANNER = [
  * agent looking at the raw file.
  *
  * Two hazards, both seen in real schema messages: a `|` inside a cell ends the
- * cell (the activation rule's `onStartup | onWidget:…` did exactly that), and an
+ * cell (the activation rule's `onStartup | onObject:…` did exactly that), and an
  * angle-bracketed placeholder like `<name>` is swallowed as an HTML tag when the
  * page is rendered. So a cell carrying markdown-significant characters is
  * wrapped in a code span — unless it already carries one, in which case the
@@ -230,7 +230,7 @@ function readme(): string {
           '  title: "Example Clock",',
           '  engines: { app: "^0.1.0", contracts: "^0.1.0" },',
           '  entries: { renderer: "./dist/renderer.js" },',
-          '  activation: ["onWidget:com.example.clock"],',
+          '  activation: ["onObject:com.example.clock"],',
           "  capabilities: [],",
           "  contributes: { objects: [/* … */] },",
           "};",
@@ -370,9 +370,13 @@ function manifestDoc(): string {
       "",
       "- `onStartup` — service entries only, requires the `background` capability and a",
       "  `backgroundReason` that says why in the user's words.",
-      "- `onWidget:<object type>`, `onCommand:<command id>`, `onSurface:<surface id>`,",
+      "- `onObject:<object type>`, `onCommand:<command id>`, `onSurface:<surface id>`,",
       "  `onService:<x.pluginId.method>` — each must name something this manifest",
-      "  declares.",
+      "  declares. `onObject:` fires when the type's first instance appears in the",
+      "  document — independent of the kind's pass, which the desk makes for every",
+      "  registered kind at its mount.",
+      "- `onWidget:<type>` is RETIRED and refused by name (`onwidget-activation-retired`):",
+      "  an object's activation event is `onObject:<type>`.",
       "",
       "An empty `activation` list is legal: the plugin is registered, and loads when",
       "something it contributes is first reached.",
@@ -600,8 +604,10 @@ function objectsDoc(): string {
       "  placeable but hangs nowhere.",
       "- `binding.kind` names the export (an identifier) that holds the kind — one name,",
       "  read by the host, never registered from `activate`.",
-      "- `onWidget:<type>` is an object's activation event — the ENGINE's name for a",
-      "  prefab, kept when the widget contribution retired.",
+      "- `onObject:<type>` is an object's activation event — fired when the type's first",
+      "  instance appears in the document, independent of the kind's pass (the desk makes",
+      "  every registered kind's pass at its mount). The retired `onWidget:<type>` is",
+      "  refused by name (`onwidget-activation-retired`).",
       "",
       "The widget-era view fields are RETIRED on an object and refused by name:",
       "",

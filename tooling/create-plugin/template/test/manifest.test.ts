@@ -22,7 +22,7 @@ describe("{{id}}", () => {
   const row = manifest.contributes?.objects?.[0];
 
   it("declares one object, drawn by the export its binding names — a desk kind named by its type", () => {
-    expect(row?.type).toBe("{{widgetType}}");
+    expect(row?.type).toBe("{{objectType}}");
     // the host reads the export off the module's NAMESPACE by its binding name (spec §12.8)
     const exported = (rendererModule as unknown as Record<string, { kind?: unknown }>)[
       row?.binding.kind ?? ""

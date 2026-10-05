@@ -22,7 +22,7 @@ derive from them.
 | `engines` | { app: string, contracts: string, platforms?: `darwin` \| `linux` \| `win32`[] } | yes | — |
 | `entries` | { renderer?: string, service?: string } | no | — |
 | `host` | `worker` \| `process` | no | — |
-| `activation` | `string[]` | yes | `each item: at most 128 characters; each item: activation events: onStartup \| on{Widget,Command,Surface,Service}:<owned id>; at most 64 item(s)` |
+| `activation` | `string[]` | yes | `each item: at most 128 characters; each item: activation events: onStartup \| on{Object,Command,Surface,Service}:<owned id>; at most 64 item(s)` |
 | `backgroundReason` | string | no | at least 1 character; at most 500 characters |
 | `capabilities` | `string[]` | yes | `each item: at most 72 characters; each item: capability must be a core scope or x.<pluginId>.<name>; at most 32 item(s)` |
 | `contributes` | `{ capabilities?: object[], objects?: object[], behaviors?: object[], commands?: object[], surfaces?: object[], settings?: object, services?: object[], mcp?: object }` | no | — |
@@ -53,7 +53,8 @@ the schema itself says — `check` prints it verbatim with a pointer.
 | an immutable prop belongs to no conflict group | `contributes.objects.0` | immutable prop text must not belong to a conflict group |
 | a prop default must satisfy its own prop spec | `contributes.objects.0` | enum default c not in options for prop mode |
 | `a service namespace is x.<pluginId>` | `contributes.services` | service namespace x.com.example.other must be x.com.example.demo |
-| an activation event names something the plugin declares | `activation` | activation event onWidget:com.example.demo.nothing names no owned declaration |
+| an activation event names something the plugin declares | `activation` | activation event onObject:com.example.demo.nothing names no owned declaration |
+| the retired onWidget: activation event is refused by name — it is onObject: | `activation.0` | activation event onWidget:com.example.demo is retired: an object's activation event is onObject:com.example.demo — it fires when the type's first instance appears in the document |
 | a widget's view fields are retired on an object, each refused by name | `contributes.objects.0.surface` | surface is retired on an object: its kind IS the face — the desk draws it, there is no dom or gl |
 | a tray entry's face names declared props, each a value of its prop's kind | `contributes.objects.0.tray.props.style` | tray props value for style is not one of its options |
 
@@ -63,9 +64,13 @@ the schema itself says — `check` prints it verbatim with a pointer.
 
 - `onStartup` — service entries only, requires the `background` capability and a
   `backgroundReason` that says why in the user's words.
-- `onWidget:<object type>`, `onCommand:<command id>`, `onSurface:<surface id>`,
+- `onObject:<object type>`, `onCommand:<command id>`, `onSurface:<surface id>`,
   `onService:<x.pluginId.method>` — each must name something this manifest
-  declares.
+  declares. `onObject:` fires when the type's first instance appears in the
+  document — independent of the kind's pass, which the desk makes for every
+  registered kind at its mount.
+- `onWidget:<type>` is RETIRED and refused by name (`onwidget-activation-retired`):
+  an object's activation event is `onObject:<type>`.
 
 An empty `activation` list is legal: the plugin is registered, and loads when
 something it contributes is first reached.
@@ -175,7 +180,7 @@ Every string and collection in a manifest is bounded (§7.1). The numbers:
   "host": "worker",
   "activation": [
     "onService:x.com.example.metrics.snapshot",
-    "onWidget:com.example.metrics.chart"
+    "onObject:com.example.metrics.chart"
   ],
   "capabilities": [
     "services.provide",
