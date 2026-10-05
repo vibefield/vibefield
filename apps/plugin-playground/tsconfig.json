@@ -7,7 +7,8 @@
     // it: this harness loads the product graph THROUGH Vite, so Vite's ambient
     // module types (`import.meta.env`, `*.css`) are its build-tool ambience —
     // field-app's own src/env.d.ts is not in this program.
-    "types": ["node", "vite/client"],
+    // @webgpu/types: the still's Dawn device (DK-11, src/still.ts) — this CLI's own `webgpu` devDependency
+    "types": ["node", "vite/client", "@webgpu/types"],
     "noEmit": true,
     // an app, not a library — same reason field-app sets it: no declaration
     // emit, so types inferred from ice's transitive strata dep raise no TS2742

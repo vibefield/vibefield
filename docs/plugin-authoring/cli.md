@@ -30,7 +30,7 @@ plugin — they bind the SDK to the copy they run from, as the app's import map 
 | --- | --- | --- |
 | `vibefield-plugin <command> <dir>` | this page's commands, below | `pnpm plugin <command> <dir>` |
 | `plugin-build [<dir>]` | the build (default: the current directory): `dist/renderer.js` with each `.wgsl` inlined as its text, the service bundle, the artifact checks — it READS the manifest and never writes it (`--help`) | `pnpm --filter <package> build` |
-| `plugin-playground <dir> [--json] [--state <type>[:<name>]]` | the kind-conformance harness over every declared state (`objects.md`, Checking it) | `pnpm playground <dir>` |
+| `plugin-playground <dir> [--json] [--state <type>[:<name>]] [--still [--bless]]` | the kind-conformance harness over every declared state; `--still` draws each on Dawn, compiled, held to the plugin's golden (`--bless` writes it once; `objects.md`, Checking it) | `pnpm playground <dir>` |
 
 `create-plugin --id <vendor.name> --title <title> --dir <dir>` scaffolds a plugin and prints
 these commands, in order, for where it landed.

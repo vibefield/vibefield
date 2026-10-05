@@ -3,8 +3,9 @@
 The headless **verdict runner** (plugin spec §5.4 item 5, §24.2 "every state
 render fixture").
 
-It judges a plugin with no window, no daemon, no device and no build step, and
-answers pass/fail with a machine-readable diagnostic. It is scriptable
+It judges a plugin with no window, no daemon, no device (but `--still`'s Dawn,
+below) and no build step, and answers pass/fail with a machine-readable
+diagnostic. It is scriptable
 acceptance, not a visual bench — VibeField Studio (`pnpm dev:design`) exists for
 eyes beside the real product; this exists for agents and CI.
 
@@ -33,18 +34,65 @@ judged by the SDK's **kind-conformance harness** (`@vibefield/plugin-sdk/testing
 A widget row has no face on the desk (it retires at DK-8); its states are judged
 on their props against the declared schema, nothing mounted.
 
-**The Dawn still is not here yet.** A still per kind on a bare mat, held to a
-per-plugin golden, needs a host-less desk on a given device, and ICE's published
-entries do not expose one (the mat's shader set is unpublished; `surface()`
-needs a canvas) — VibeField's ICE ask **I30**. Until it lands, every kind with
-shaders carries the note `object-wgsl-not-compiled`: its WGSL was read, never
-compiled, so an unresolved name or a type error passes here.
+Without `--still` nothing compiles a kind's WGSL here: every kind with shaders
+carries the note `object-wgsl-not-compiled` — its WGSL was read, never compiled,
+so an unresolved name or a type error passes the harness.
 
 ```sh
 node apps/plugin-playground/bin/plugin-playground.mjs examples/plugins/desk-clock
 node apps/plugin-playground/bin/plugin-playground.mjs examples/plugins/desk-clock --json
 node apps/plugin-playground/bin/plugin-playground.mjs <plugin> --state <type>:<state>
+node apps/plugin-playground/bin/plugin-playground.mjs <plugin> --still           # draw each state on Dawn
+node apps/plugin-playground/bin/plugin-playground.mjs <plugin> --still --bless   # write its golden, once
 ```
+
+## The still (`--still`, DK-11)
+
+`--still` also DRAWS each object kind on **Dawn** — Node's WebGPU, the `webgpu`
+package, a devDependency of this CLI and of nothing else — with no window and no
+app, through ICE's `createStill` (petition I30, `@vibecook/ice/desk`): for each
+state the harness drove, ONE object of the kind on a bare mat, by day and by
+night, built as the product builds it (field-app's `buildObjectType`) under the
+palette the product mounts its desk with. It does what the harness cannot: the
+kind's WGSL is **compiled** on a real device — a WGSL error comes back as the
+compiler's own line at your file's line and column (`still-failed`) — and its
+pixels are judged:
+
+- **drawn** — some of its box is off the bare mat (`still-blank`: it compiled and
+  drew nothing);
+- **inside its reach** — nothing past its rect grown by `kind.reach` moved
+  (`still-past-reach`: the desk culls and pads an object by its reach);
+- **steady** — drawn twice, the same bytes (`still-unsteady`: a look that reads a
+  wall clock or a random);
+- **held to the plugin's golden**, `test/still.golden.json` — each still's size
+  and the sha-256 of its RGBA, **blessed once by the named flag**: `--still
+  --bless` writes it (a deliberate event; say so in its commit). No golden yet is
+  a note (`still-unblessed`); other bytes are a refusal (`still-golden-mismatch`,
+  naming the host that blessed it). `--bless` with `--state` mends that state and
+  keeps the rest.
+
+**A golden is host-specific.** It is Dawn's bytes on the host that blessed it —
+its GPU, its driver and OS, and this CLI's Dawn (`webgpu` 0.4.0, ICE's own) — and
+it records that host. Another host is expected to differ: re-bless there locally,
+and never commit a second host's golden over the first. For the same reason the
+stills never run in `pnpm test` (CI's hosts carry no such GPU); `pnpm still` runs
+this package's Dawn suite (`test/still.dawn.test.ts`). No adapter is a harness
+error (exit 2), never a refusal.
+
+A still is ICE's facts and pins: a kind is handed no `local` (a clock shows its
+shop time), no host services (no text raster — the comment pad's writing is not
+in its still) and no chrome. Each still's PNG lands in `<plugin>/.vibefield-still/`
+(ignored here) for a reader's eye.
+
+**The strata `Tray` line is ICE core's, not yours.** Under strata's DEV build —
+vitest, or `node --conditions=development` — every still prints `strata: access:
+in phase "react", systems "trayInput", "trayLay" declare write of "Tray" …`: two
+of ICE core's own systems (`packages/core/src/systems/tray.ts`) share a phase,
+and strata's access check says so at every engine it schedules, and a still makes
+one. Each still names it on its own row (`said`, by `ice-core`) so no author goes
+looking for it; anything else said while a still is drawn is listed beneath its
+row as said. The bin, under Node's default conditions, loads strata's production
+build and says nothing.
 
 Exit codes are law (P8-D8): **0** every row passed (a note is not a refusal) ·
 **1** at least one refusal · **2** the harness itself failed. Nothing prompts.

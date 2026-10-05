@@ -113,7 +113,8 @@ state code, and what passes:
 
 ## The playground's own codes
 
-What `plugin-playground` says before a kind's states are driven (quoted from its source):
+What `plugin-playground` says before a kind's states are driven, and with `--still` of each
+state's still (quoted from its source):
 
 ```ts
 export type RefusalCode =
@@ -138,4 +139,25 @@ export type RefusalCode =
   // --- state-level: one fixture's props (`validateState`; the kind harness says it on its rows) ---
   /** the fixture's props violate the manifest's declared prop schema */
   | "state-invalid";
+
+/** `--still` (DK-11): what the playground says of each state's STILL — one object of the kind on a bare mat, drawn on
+ * Dawn through ICE's `createStill` by day and by night, its WGSL compiled (src/still.ts). */
+export type StillCode =
+  /** the still could not be drawn: the type could not be built as the host builds it, or `createStill` rejected — a kind
+   * refused at create (a WGSL error is the compiler's own line), a GPU error, a throw in its world half */
+  | "still-failed"
+  /** drawn twice, the bytes differ — its look reads a wall clock or a random */
+  | "still-unsteady"
+  /** nothing of it was drawn: its box is the bare mat's */
+  | "still-blank"
+  /** pixels moved past its rect grown by its `reach` — the desk culls and pads it by its reach */
+  | "still-past-reach"
+  /** its bytes are not the golden's (`test/still.golden.json`; the golden names the host that blessed it) */
+  | "still-golden-mismatch"
+  /** `test/still.golden.json` is not a golden `--still --bless` writes */
+  | "still-golden-invalid"
+  /** (a note) no golden holds it yet — `--still --bless` once, on your machine */
+  | "still-unblessed"
+  /** (a note) the kind harness refused the kind, so its stills were not drawn */
+  | "still-not-drawn";
 ```

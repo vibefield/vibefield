@@ -13,6 +13,8 @@ __pycache__/
 .turbo/
 .nx/
 .vibefield/
+# a plugin's stills as `plugin-playground --still` writes them (DK-11) — for eyes, never a source
+.vibefield-still/
 
 # env & secrets (the committed template is the one exception)
 .env

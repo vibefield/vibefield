@@ -19,6 +19,7 @@
     "./logo-studio": "./src/design-system/logo/mount.tsx",
     "./design-system/studio-controller": "./src/design-system/studio-controller.ts",
     "./logging": "./src/logging.ts",
+    "./object-types": "./src/plugin-host/build-widget.ts",
     "./terminal-perf-lab": "./src/perf/terminal-perf-lab.ts",
     "./spike": "./src/spike/spike-loro.ts"
   },

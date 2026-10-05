@@ -1045,6 +1045,24 @@ makes the kind on its own device and draws it on a fresh board: a WGSL error com
 the compiler's own line at YOUR file's line and column (`try-kind-refused`), a kind laid but
 drawn nowhere as `try-not-picked`, and a kind drawn as `ok … DRAWN`, with stills (`cli.md`).
 
+A STILL WITHOUT THE APP: `plugin-playground <dir> --still` draws each declared state on
+DAWN — Node's WebGPU, the playground's own devDependency — through ICE's `createStill`:
+one object of your kind on a bare mat, by day and by night, built as the host builds it,
+its WGSL COMPILED (an error is the compiler's own line at your file's line and column,
+`still-failed`), and judged: drawn (`still-blank` — it compiled and drew nothing), inside
+its reach (`still-past-reach` — the desk culls and pads it by `reach`), steady
+(`still-unsteady` — drawn twice, other bytes), and held to YOUR golden,
+`test/still.golden.json`: each still's size and the sha-256 of its pixels, blessed ONCE
+by the named flag, `--still --bless` (`still-unblessed` until then, `still-golden-mismatch`
+after; `--bless --state <type>:<name>` mends one state). A GOLDEN IS HOST-SPECIFIC —
+Dawn's bytes on the machine that blessed it (its GPU, driver and OS, and the playground's
+Dawn), which the file records: another machine re-blesses locally and never commits over
+it. A still hands your kind no `local` and lends it no host service (no text raster), so
+what those draw is not in it. Under strata's DEV build (vitest, `node
+--conditions=development`) every still prints strata's access warning about `"Tray"`
+(`trayInput`, `trayLay`): ICE CORE'S, said at every engine a still makes and named as
+core's on the still's row — never yours.
+
 WHERE IT RUNS: `check` runs the harness in plain Node — no `document`, no
 `OffscreenCanvas`; the playground runs it in happy-dom — a `document`, still no
 `OffscreenCanvas` or `createImageBitmap`; your own unit test runs in whatever

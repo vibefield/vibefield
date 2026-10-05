@@ -20,6 +20,12 @@ allowBuilds:
   # Nx validates its native binary for the current platform. Nx Cloud is not
   # configured, so its guarded postinstall performs no network setup.
   nx: true
+  # Dawn for Node — the playground's `--still` (DK-11; ICE's I30 `createStill` on a
+  # headless device), a devDependency of the playground CLI ONLY, at ICE's own
+  # exact version. Its prebuilt binaries ship in the tarball; the postinstall
+  # only strips macOS's quarantine attribute from darwin-universal.dawn.node
+  # (`xattr -d com.apple.quarantine`) — nothing is downloaded or compiled.
+  webgpu: true
 # EL8 — exactly ONE loro-crdt resolution across the whole tree (strata/ICE/app;
 # CRDT docs are only interoperable within a single wasm instance).
 # @vibecook/ice: EXACT registry pin (EL8: "exact pins on all @vibecook/*"),

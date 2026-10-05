@@ -4,12 +4,14 @@
   "version": "0.1.0",
   "type": "module",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./bin": "./bin/plugin-playground.mjs"
   },
   "bin": {
     "plugin-playground": "./bin/plugin-playground.mjs"
   },
   "scripts": {
+    "still": "vitest run --config vitest.still.config.ts",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
@@ -30,7 +32,9 @@
     "@types/node": "catalog:",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
+    "@webgpu/types": "^0.1.74",
     "typescript": "catalog:",
-    "vitest": "catalog:"
+    "vitest": "catalog:",
+    "webgpu": "0.4.0"
   }
 }

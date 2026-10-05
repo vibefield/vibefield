@@ -2,7 +2,7 @@
 // to branch on the answer, a table for whoever is going to read it. Neither is
 // generated from the other's text — both project the same records, so the
 // human line can never say something the machine line does not.
-import type { RunResult, Verdict } from "./verdict";
+import type { RunResult, StillSaid, Verdict } from "./verdict";
 
 export function toNdjson(result: RunResult): string {
   return [...result.verdicts, result.summary].map((v) => `${JSON.stringify(v)}\n`).join("");
@@ -33,6 +33,14 @@ interface Row {
   readonly under: readonly string[];
 }
 
+/** A line said while a still was drawn, as a reader meets it under the still's row: ICE core's named as core's. */
+function saidLine(s: StillSaid): string {
+  const times = s.times > 1 ? ` ×${s.times}` : "";
+  return s.by === "ice-core"
+    ? `said${times} by ICE CORE, not this kind (strata's dev check on core's own Tray systems, at every still's engine): ${s.line}`
+    : `said${times}: ${s.line}`;
+}
+
 function rowsOf(result: RunResult): Row[] {
   const { plugin } = result.summary;
   const rows: Row[] = [];
@@ -47,6 +55,21 @@ function rowsOf(result: RunResult): Row[] {
         state: "—",
         note: `export ${v.binding} · ${v.states} state${v.states === 1 ? "" : "s"} driven by the kind harness · refusal: ${v.refusal ?? "none"}`,
         under: [],
+      });
+      continue;
+    }
+    if (v.kind === "still") {
+      // DK-11: a state's still, by day or by night — its PNG and whatever was said while it was drawn beneath it
+      const under: string[] = [];
+      if (v.status !== "pass" && v.expected !== undefined) under.push(`expected: ${v.expected}`);
+      if (v.png !== undefined) under.push(`still: ${v.png}`);
+      for (const s of v.said ?? []) under.push(saidLine(s));
+      rows.push({
+        mark: v.status === "pass" ? "STILL" : (MARK[v.status] ?? v.status.toUpperCase()),
+        type: shortType(v.type, plugin),
+        state: v.theme === undefined ? v.state : `${v.state} · ${v.theme}`,
+        note: v.status === "pass" ? v.detail : `${v.code}: ${v.detail}`,
+        under,
       });
       continue;
     }
@@ -90,7 +113,8 @@ export function toTable(result: RunResult): string {
   lines.push(
     `  ${summary.passed} passed · ${summary.skipped} skipped · ${summary.refused} refused ` +
       `(${summary.states} state${summary.states === 1 ? "" : "s"}, ` +
-      `${summary.objects} object${summary.objects === 1 ? "" : "s"})`,
+      `${summary.objects} object${summary.objects === 1 ? "" : "s"}` +
+      `${summary.stills === undefined ? "" : `, ${summary.stills} still${summary.stills === 1 ? "" : "s"}`})`,
   );
   return `${lines.join("\n")}\n`;
 }

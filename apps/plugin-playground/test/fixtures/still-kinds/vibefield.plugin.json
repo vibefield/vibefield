@@ -1,0 +1,215 @@
+{
+  "manifestVersion": 1,
+  "id": "vibefield.fixture-still-kinds",
+  "version": "0.1.0",
+  "title": "Still kinds fixture",
+  "description": "CONTROL (DK-11): object kinds that pass the kind harness and break one way each that only a STILL sees \u2014 drawn on Dawn by `plugin-playground --still` \u2014 beside one drawn whole.",
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "activation": [],
+  "capabilities": [],
+  "contributes": {
+    "objects": [
+      {
+        "type": "vibefield.fixture-still-kinds.drawn",
+        "title": "drawn",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-still-kinds.drawn",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "drawn",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Drawn"
+        }
+      },
+      {
+        "type": "vibefield.fixture-still-kinds.blank",
+        "title": "blank",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-still-kinds.blank",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "blank",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Blank"
+        }
+      },
+      {
+        "type": "vibefield.fixture-still-kinds.uncompiled",
+        "title": "uncompiled",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-still-kinds.uncompiled",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "uncompiled",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Uncompiled"
+        }
+      },
+      {
+        "type": "vibefield.fixture-still-kinds.past-reach",
+        "title": "past-reach",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-still-kinds.past-reach",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "past-reach",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "PastReach"
+        }
+      },
+      {
+        "type": "vibefield.fixture-still-kinds.unsteady",
+        "title": "unsteady",
+        "schemaVersion": 1,
+        "size": {
+          "w": 120,
+          "h": 120
+        },
+        "provides": [
+          "vibefield.fixture-still-kinds.unsteady",
+          "desk.object"
+        ],
+        "props": {
+          "color": {
+            "kind": "string",
+            "default": "#e4c46a",
+            "maxLength": 32
+          }
+        },
+        "groups": {},
+        "tray": {
+          "category": "things",
+          "label": "unsteady",
+          "hang": {
+            "w": 96,
+            "h": 96,
+            "accessory": "hook",
+            "pegs": [
+              [
+                0,
+                -0.5
+              ]
+            ]
+          }
+        },
+        "binding": {
+          "kind": "Unsteady"
+        }
+      }
+    ]
+  }
+}

@@ -48,6 +48,27 @@ export type RefusalCode =
   // --- state-level: one fixture's props (`validateState`; the kind harness says it on its rows) ---
   /** the fixture's props violate the manifest's declared prop schema */
   | "state-invalid";
+
+/** `--still` (DK-11): what the playground says of each state's STILL — one object of the kind on a bare mat, drawn on
+ * Dawn through ICE's `createStill` by day and by night, its WGSL compiled (src/still.ts). */
+export type StillCode =
+  /** the still could not be drawn: the type could not be built as the host builds it, or `createStill` rejected — a kind
+   * refused at create (a WGSL error is the compiler's own line), a GPU error, a throw in its world half */
+  | "still-failed"
+  /** drawn twice, the bytes differ — its look reads a wall clock or a random */
+  | "still-unsteady"
+  /** nothing of it was drawn: its box is the bare mat's */
+  | "still-blank"
+  /** pixels moved past its rect grown by its `reach` — the desk culls and pads it by its reach */
+  | "still-past-reach"
+  /** its bytes are not the golden's (`test/still.golden.json`; the golden names the host that blessed it) */
+  | "still-golden-mismatch"
+  /** `test/still.golden.json` is not a golden `--still --bless` writes */
+  | "still-golden-invalid"
+  /** (a note) no golden holds it yet — `--still --bless` once, on your machine */
+  | "still-unblessed"
+  /** (a note) the kind harness refused the kind, so its stills were not drawn */
+  | "still-not-drawn";
 // docs:end playground-codes
 
 /**
@@ -129,6 +150,43 @@ export interface TypeVerdict {
   readonly detail: string;
 }
 
+/** The two lights a still is drawn in (ICE's `light` and `dark`). */
+export type StillTheme = "day" | "night";
+
+/** A line said on the console while a still was drawn, and who said it: `ice-core` is strata's dev access check on ICE
+ * core's own `Tray` systems, said at every engine a still makes — never the kind's. */
+export interface StillSaid {
+  readonly by: "ice-core" | "unattributed";
+  readonly line: string;
+  readonly times: number;
+}
+
+/**
+ * One STILL (DK-11, `--still`): a state of an object kind drawn on Dawn through ICE's `createStill` — one object on a bare mat
+ * — by day or by night, its WGSL compiled; judged drawn, inside its reach, steady, and held to the plugin's golden. A row about
+ * the kind as a whole (not drawn, not built) has the state `—` and no theme.
+ */
+export interface StillVerdict {
+  readonly kind: "still";
+  readonly plugin: string;
+  readonly type: string;
+  /** the fixture's name, or `—` for a row about the kind as a whole */
+  readonly state: string;
+  readonly theme?: StillTheme;
+  readonly status: VerdictStatus;
+  readonly code: StillCode | "ok";
+  readonly expected?: string;
+  readonly detail: string;
+  /** the still, device px, and the sha-256 of its RGBA — present once drawn */
+  readonly width?: number;
+  readonly height?: number;
+  readonly sha256?: string;
+  /** where its PNG was written */
+  readonly png?: string;
+  /** what was said on the console while it was drawn, each line attributed */
+  readonly said?: readonly StillSaid[];
+}
+
 export interface RunSummary {
   readonly kind: "summary";
   readonly plugin: string;
@@ -139,10 +197,18 @@ export interface RunSummary {
   readonly passed: number;
   readonly skipped: number;
   readonly refused: number;
+  /** `--still` only: the still rows said (each state by day and by night) */
+  readonly stills?: number;
   readonly exit: 0 | 1;
 }
 
-export type Verdict = ObjectVerdict | KindRow | PluginVerdict | TypeVerdict | RunSummary;
+export type Verdict =
+  | ObjectVerdict
+  | KindRow
+  | StillVerdict
+  | PluginVerdict
+  | TypeVerdict
+  | RunSummary;
 
 export interface RunResult {
   readonly verdicts: readonly Verdict[];

@@ -225,6 +225,7 @@ vibefield-plugin emit-manifest .  # src/manifest.ts → vibefield.plugin.json  (
 plugin-build .                    # dist/renderer.js, its .wgsl inlined      (pnpm build)
 vibefield-plugin check .          # the whole suite, against the BUILT module
 plugin-playground .               # its kind driven through every declared state
+plugin-playground . --still       # each state DRAWN on Dawn, held to test/still.golden.json
 vibefield-plugin try .            # ON THE DESK: drawn — or why not — with stills
 ```
 
@@ -268,8 +269,9 @@ build preset — every file already in the shape `check` demands.
   key-sorted JSON; its hash is the plugin's identity. Edit `src/manifest.ts` and
   re-emit (`vibefield-plugin emit-manifest`); `check` refuses JSON that is not
   canonical (`manifest-stale`).
-- **On the desk means `try`.** `check` and the playground READ a kind's WGSL and never
-  compile it, and nothing a person can do lays a plugin's kind yet (the pegboard that
+- **On the desk means `try`.** `check` and the playground READ a kind's WGSL (only
+  `plugin-playground --still` compiles and draws it, off the desk, on Dawn), and
+  nothing a person can do lays a plugin's kind yet (the pegboard that
   hangs your tray entry is still to come). `vibefield-plugin try <dir>` lays one on a
   fresh board in the app and says whether it is DRAWN — its WGSL compiled on the device,
   picked where it lies — with stills by day and by night (`cli.md`).

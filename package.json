@@ -21,6 +21,7 @@
     "smoke:kind-faults": "pnpm --filter @vibefield/desktop smoke:kind-faults",
     "smoke:plugin": "pnpm --filter @vibefield/desktop smoke:plugin",
     "playground": "node apps/plugin-playground/bin/plugin-playground.mjs",
+    "still": "pnpm --filter @vibefield/plugin-playground still",
     "plugin": "node tooling/plugin-cli/bin/vibefield-plugin.mjs",
     "smoke:godview": "pnpm --filter @vibefield/desktop smoke:godview",
     "smoke:terminal-door": "pnpm --filter @vibefield/desktop smoke:terminal-door",

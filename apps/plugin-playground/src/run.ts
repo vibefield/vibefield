@@ -38,6 +38,7 @@ import {
   runKindConformance,
 } from "@vibefield/plugin-sdk/testing";
 import { readStatesModule, STATES_RELATIVE_PATH, type StatesFile } from "./states";
+import { openStills, type StillRun, type StillRunOptions, stillFixtures } from "./still";
 import { messageOf, pointer, type RunResult, type RunSummary, type Verdict } from "./verdict";
 
 /** What `boot` hands the CLI: a module loader over the real transform pipeline. */
@@ -51,19 +52,28 @@ export interface RunOptions {
   /** `<type>:<state>` — run one row. A missing state name runs every state of
    * that type. */
   readonly only?: string | undefined;
+  /** `--still` (DK-11): also draw each kind's states on Dawn and hold them to the plugin's golden (still.ts) */
+  readonly still?: StillRunOptions | undefined;
 }
 
-function summarize(plugin: string, objects: number, verdicts: readonly Verdict[]): RunSummary {
+function summarize(
+  plugin: string,
+  objects: number,
+  verdicts: readonly Verdict[],
+  drewStills = false,
+): RunSummary {
   let passed = 0;
   let skipped = 0;
   let refused = 0;
   let states = 0;
+  let stills = 0;
   for (const v of verdicts) {
     if (v.kind === "summary") continue;
     if (v.kind === "object") {
       // the kind's own row SUMMARIZES its harness rows (counted below): it adds the states driven
       states += v.states;
-    } else if (v.kind === "kind") {
+    } else if (v.kind === "kind" || v.kind === "still") {
+      if (v.kind === "still") stills += 1;
       if (v.status === "pass") passed += 1;
       else if (v.status === "note") skipped += 1;
       else refused += 1;
@@ -79,6 +89,7 @@ function summarize(plugin: string, objects: number, verdicts: readonly Verdict[]
     passed,
     skipped,
     refused,
+    ...(drewStills ? { stills } : {}),
     exit: refused > 0 ? 1 : 0,
   };
 }
@@ -262,6 +273,12 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
     }
   }
 
+  // --- the stills (DK-11, `--still`): each kind's states drawn on Dawn, held to the plugin's golden -------
+  const stills: StillRun | undefined =
+    options.still === undefined
+      ? undefined
+      : openStills(root, manifest.id, options.still, options.only !== undefined);
+
   // --- the object kinds: the kind-conformance harness (DK-7) ---------------
   // Each row's code half is the module's export its binding names — read off the
   // namespace as the host reads it (`objectBindingsFrom`) — judged against the row
@@ -316,7 +333,21 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
         ...(v.expected !== undefined && v.status !== "pass" ? { expected: v.expected } : {}),
         detail: v.detail,
       });
+    // …and its stills, of the fixtures the harness drove (DK-11): a refused kind is not drawn
+    if (stills !== undefined)
+      verdicts.push(
+        ...(await stills.kind({
+          row: object,
+          binding: namespace[object.binding.kind],
+          fixtures: stillFixtures(object, report.plan.fixtures, declared),
+          refusal: first === undefined ? null : first.code,
+        })),
+      );
   }
+  stills?.close();
 
-  return { verdicts, summary: summarize(manifest.id, objects.length, verdicts) };
+  return {
+    verdicts,
+    summary: summarize(manifest.id, objects.length, verdicts, stills !== undefined),
+  };
 }
