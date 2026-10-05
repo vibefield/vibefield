@@ -113,7 +113,12 @@ overrides:
   # below a device ratio of 1 drew two kinds of six). VibeField's DK-4
   # `captureScale` workaround retires with it. Nothing else moves; strata
   # 0.13.0 and loro ^1.13.8 unchanged.
-  "@vibecook/ice": 0.15.0-desk.2
+  # 2026-10-05 bumped 0.15.0-desk.2 → 0.15.0-desk.3 (DK-11) — desk.2 and I30
+  # (ICE CHANGELOG `### Added`, last block: `createStill`, a host-less desk on
+  # the caller's device for a plugin's still — the playground's `--still`, the
+  # template's still test and the plugins' Dawn stills, DK-9 §7(d)). ADDITIVE:
+  # nothing else moves; strata 0.13.0 and loro ^1.13.8 unchanged.
+  "@vibecook/ice": 0.15.0-desk.3
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -228,7 +233,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.15.0-desk.2'
+  - '@vibecook/ice@0.15.0-desk.3'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'
