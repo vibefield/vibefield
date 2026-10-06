@@ -208,21 +208,10 @@ export function MeMenuView({
   };
 
   const onMenuKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
+    // On Theme, ← → choose — the kit's segmented control's own keys since R19 (DK-13: it chooses, the focus with
+    // the choice, as a radio's does, and claims the key), so a key it took is not the menu's to walk with.
+    if (event.defaultPrevented) return;
     const active = document.activeElement as HTMLElement | null;
-    // On Theme, ← → choose (the selection follows the focus, as a radio's does).
-    const themeRow = active?.closest("[data-me-theme]");
-    if (themeRow !== null && themeRow !== undefined && onThemeChange !== undefined) {
-      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-        event.preventDefault();
-        const buttons = Array.from(themeRow.querySelectorAll<HTMLButtonElement>("button"));
-        const at = buttons.indexOf(active as HTMLButtonElement);
-        const to = (at + (event.key === "ArrowRight" ? 1 : buttons.length - 1)) % buttons.length;
-        const option = THEME_LABELS[to];
-        if (option !== undefined) onThemeChange(themeChoice(option));
-        buttons[to]?.focus({ preventScroll: true });
-        return;
-      }
-    }
     const list = items();
     const index = list.indexOf(active as HTMLElement);
     const move = (to: number): void => {

@@ -380,6 +380,22 @@ describe("MeMenuView", () => {
     expect(document.activeElement).toBe(item("New user…"));
   });
 
+  it("leaves Home and End on Theme to its control (R19): they choose its ends, the focus kept on Theme", async () => {
+    const onThemeChange = vi.fn();
+    await mountView({ theme: { preference: "dark", resolved: "dark" }, onThemeChange });
+    face().focus();
+    await key(face(), "ArrowUp");
+    await key(document.activeElement as Element, "ArrowUp");
+    expect((document.activeElement as HTMLElement).textContent).toBe("Dark");
+    await key(document.activeElement as Element, "End");
+    expect(onThemeChange).toHaveBeenLastCalledWith("auto");
+    expect(document.activeElement?.closest("[data-me-theme]")).not.toBeNull();
+    expect(document.activeElement?.textContent).toBe("Auto");
+    await key(document.activeElement as Element, "Home");
+    expect(onThemeChange).toHaveBeenLastCalledWith("light");
+    expect(document.activeElement?.textContent).toBe("Light");
+  });
+
   it("keeps the corner the face's alone: on the foot axis, above the cover, no devtools (FR-4)", () => {
     // The 44 button at 16 from the left and 24 from the foot — x 16–60, y
     // 712–756 at 1180 × 780, centred on the line's axis, 734 — in the frame's

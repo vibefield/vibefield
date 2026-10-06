@@ -212,6 +212,8 @@
 }
 
 .vf-ui-segmented {
+  position: relative;
+  isolation: isolate;
   display: grid;
   grid-auto-columns: minmax(0, 1fr);
   grid-auto-flow: column;
@@ -225,7 +227,36 @@
   background: var(--vf-fill);
 }
 
+/* R19 (DK-13) — THE THUMB: its own element under the chosen segment, placed from the segment's measured box (a
+   transform and a size, written by the primitive), sliding 300 ms on the island curve across widths (§6). Until it
+   is placed the chosen segment wears its look itself (below), so a control is never drawn without its choice. */
+.vf-ui-segmented-thumb {
+  position: absolute;
+  z-index: 0;
+  top: 0;
+  left: 0;
+  box-sizing: border-box;
+  width: 0;
+  height: 0;
+  border: 1px solid var(--vf-hairline);
+  border-radius: 999px;
+  background: var(--vf-chrome-solid);
+  box-shadow: 0 2px 6px rgb(0 0 0 / 8%);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    transform 300ms var(--vf-ease-island),
+    width 300ms var(--vf-ease-island),
+    height 300ms var(--vf-ease-island);
+}
+
+.vf-ui-segmented[data-thumb="placed"] > .vf-ui-segmented-thumb {
+  opacity: 1;
+}
+
 .vf-ui-segmented button {
+  position: relative;
+  z-index: 1;
   min-height: 34px;
   padding: 0 12px;
   border: 1px solid transparent;
@@ -259,6 +290,13 @@
   color: var(--vf-foreground);
   background: var(--vf-chrome-solid);
   box-shadow: 0 2px 6px rgb(0 0 0 / 8%);
+}
+
+/* the thumb placed: it is the choice's look, and the chosen segment is only its label over it */
+.vf-ui-segmented[data-thumb="placed"] button[aria-pressed="true"] {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
 }
 
 .vf-ui-empty-state {
@@ -461,6 +499,11 @@
   .vf-ui-switch__thumb,
   .vf-ui-segmented button {
     transition-duration: 90ms;
+  }
+
+  /* reduced motion: the thumb does not travel — it stands under the new choice at once (M6: fades only) */
+  .vf-ui-segmented-thumb {
+    transition: none;
   }
 }
 

@@ -662,4 +662,34 @@ describe("UI system ownership boundaries", () => {
     const swarmDir = readdirSync(join(PACKAGE_ROOT, "src", "godview", "views", "swarm")).sort();
     expect(swarmDir).toEqual(["swarm-physics-driver.ts", "swarm-physics.worker.ts"]);
   });
+  it("keeps the segmented control's thumb and keys the kit's (R19, DK-13)", () => {
+    // The primitive owns the anatomy — the thumb element, ids distinct from labels, ← → Home End — so no
+    // composition grows a thumb of its own and no catalog replica draws one; a composition may only CUT the
+    // kit's (the pegboard's filters, cut for the wood).
+    const kitDir = join(PACKAGE_ROOT, "../design-kit/src");
+    const primitives = readFileSync(join(kitDir, "primitives.tsx"), "utf8");
+    const primitivesCss = readFileSync(join(kitDir, "primitives.css"), "utf8");
+    expect(primitives).toContain('className="vf-ui-segmented-thumb"');
+    expect(primitives).toContain("export function segmentForKey(");
+    expect(primitives).toContain("export interface SegmentedOption<T extends string>");
+    expect(primitivesCss).toMatch(
+      /^\.vf-ui-segmented-thumb \{[^}]*transform 300ms var\(--vf-ease-island\)/m,
+    );
+    const cuts = new Set(["field/desk/pegboard/pegboard.css"]);
+    const walk = (dir: string): string[] =>
+      readdirSync(join(PACKAGE_ROOT, "src", dir), { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? walk(join(dir, entry.name))
+          : /\.(?:css|tsx?)$/u.test(entry.name)
+            ? [join(dir, entry.name)]
+            : [],
+      );
+    for (const file of walk(".")) {
+      const text = source(file);
+      if (cuts.has(file)) continue;
+      // a RULE, not a mention: prose may name the class to say who owns it
+      expect(text, file).not.toMatch(/\.vf-ui-segmented-thumb[^\n{]*\{/u);
+      expect(text, file).not.toMatch(/className="[^"]*vf-ui-segmented-thumb/u);
+    }
+  });
 });

@@ -11,6 +11,18 @@ code and how the design catalog stays identical to the product.
 2. **Primitives — `packages/design-kit/src/primitives.tsx` and `primitives.css`**
    Owns reusable control and state anatomy: buttons, icon buttons, fields, switches, segmented
    controls, pills, empty/unavailable states, notices, placeholders, and status dots.
+   *The segmented control, extended (R19, DK-13 — a kit change):* it draws its THUMB as its own
+   element under the chosen segment — placed from that segment's measured box at once, then sliding
+   300 ms on the island curve across widths (standing still under reduced motion) — so the chosen
+   segment is only its label over it; until the thumb can be measured the segment wears the look
+   itself. An option is a string (its id and its label, as before) or `{ id, label, title? }`, so an
+   id need not be what it shows (the pegboard's All is `""`). ← → Home End choose — from the segment
+   the focus is on, the focus moving with the choice, the keys claimed so the desk's keymap never
+   hears them — and the chosen segment is the group's one stop of Tab. Every segmented control in
+   the app gained the thumb and the keys at once (Settings, the Me menu's Theme, Setup's face); the
+   Me menu leaves Theme's arrows and Home End to the control. A composition may CUT the kit's
+   anatomy (the pegboard's filters, cut for the wood, `field/desk/pegboard/pegboard.css`) but never
+   grows a thumb of its own — `ui-system-boundaries.test.ts` holds it.
 3. **Product compositions — colocated component and CSS files**
    A domain component owns its structure and its namespaced stylesheet. Runtime-heavy components
    split into a controller and a controller-free view/frame, so state adapters can mount the exact
