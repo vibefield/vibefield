@@ -18,7 +18,6 @@ export {
   UserFaceView,
   type UserFaceViewProps,
 } from "./face";
-export { previewBackground, setPreviewBackground } from "./preview";
 export {
   EmptyState,
   InlineNotice,

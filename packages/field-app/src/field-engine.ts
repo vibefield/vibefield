@@ -228,8 +228,9 @@ export function buildRegistry(
     }
   }
   // DK-8: the SafePreview → silhouette wiring (folder minis + tray fallbacks read
-  // `previewBackground`) RETIRED with the widget rows that declared a `preview`; an
-  // object's specimen is its kind's own drawing on the pegboard.
+  // `previewBackground`) RETIRED with the widget rows that declared a `preview`;
+  // DK-13 deleted the registry and its readers with the Objects sheet. An object's
+  // specimen is its kind's own drawing on the pegboard.
   return registry;
 }
 

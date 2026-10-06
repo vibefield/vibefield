@@ -1,8 +1,11 @@
 // The design kit, as SDK re-exports (§11.3: design-kit primitives reach
 // plugins THROUGH the SDK — never a direct @vibefield/design-kit dependency).
-// CURATED, not `export *`: host-side registry writes (setPreviewBackground)
-// and spine internals stay out; what's here is exactly the surface the shipped
-// plugins render with. Growing this list is a deliberate SDK change.
+// CURATED, not `export *`: host-side writes and spine internals stay out;
+// what's here is exactly the surface the shipped plugins render with. Growing
+// (or shrinking) this list is a deliberate SDK change. DK-13: `previewBackground`
+// — the widget era's preview-silhouette read, never written since DK-8 retired
+// the widget rows' `preview` — left with the Objects sheet that read it; an
+// object's specimen is its kind's own drawing on the desk's pegboard.
 //
 // DK-2 (desk/landing, ICE 0.14.0): the CARD FACE half is CUT — `CardShell` and
 // `useDragLift` (they lifted a DOM card under the camera through ICE's removed
@@ -18,7 +21,6 @@ export {
   type GradientStop,
   InlineNotice,
   PlaceholderFace,
-  previewBackground,
   SegmentedControl,
   StatusDot,
   UiButton,

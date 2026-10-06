@@ -751,7 +751,7 @@ describe("UI system ownership boundaries", () => {
       /@media \(prefers-reduced-motion: reduce\) \{[^@]*\.vf-pegboard-ring \{\s*transition: opacity 60ms ease-out;/su,
     );
   });
-  it("keeps the old Objects sheet, its tray island's state and its tile list gone (DK-13, R21) — the pegboard replaced them", () => {
+  it("keeps the old Objects sheet, its tray island's state, its tile list and its preview silhouettes gone (DK-13, R21) — the pegboard replaced them", () => {
     const exists = (relativePath: string): boolean => {
       try {
         source(relativePath);
@@ -764,6 +764,14 @@ describe("UI system ownership boundaries", () => {
       expect(exists(gone), gone).toBe(false);
     // …and the sheet's tile list's own test with it
     expect(readdirSync(join(PACKAGE_ROOT, "test"))).not.toContain("tray-catalog.test.ts");
+    // …and design-kit's preview silhouettes — the registry the sheet's tiles and the SDK's /ui door read (DK-8: never
+    // written since the widget rows' `preview` retired): no module, no barrel export, no SDK re-export
+    const kit = (file: string): string =>
+      readFileSync(join(PACKAGE_ROOT, "../design-kit/src", file), "utf8");
+    expect(readdirSync(join(PACKAGE_ROOT, "../design-kit/src"))).not.toContain("preview.ts");
+    expect(kit("index.ts")).not.toMatch(/from "\.\/preview"/u);
+    const sdkUi = readFileSync(join(PACKAGE_ROOT, "../plugin-sdk/src/ui.ts"), "utf8");
+    expect(sdkUi).not.toMatch(/^\s*previewBackground,$/mu);
     const walk = (dir: string): string[] =>
       readdirSync(join(PACKAGE_ROOT, "src", dir), { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory()
