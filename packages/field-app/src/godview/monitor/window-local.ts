@@ -130,6 +130,25 @@ function rowOfSession(input: WindowLocalInput, sessionId: string): string | unde
   return undefined;
 }
 
+/** Only these row kinds participate in the local join. A model publish can
+ * replace every row while the pane activity and pending spawn decisions stay
+ * the same. Joins, panes and hints have their own identities in the caller. */
+export function windowKindsKey(
+  input: Pick<WindowLocalInput, "joins" | "kindOf" | "panes" | "spawnHints">,
+): string {
+  const kinds: Array<MonitorAgentRow["kind"] | undefined> = [];
+  for (const sessionId of input.spawnHints.keys()) {
+    const rowId = input.joins.rowBySession.get(sessionId) ?? sessionId;
+    kinds.push(input.kindOf(rowId));
+  }
+  for (const session of input.panes.sessions ?? []) {
+    if (session.activity?.kind === undefined) continue;
+    const rowId = input.joins.rowBySession.get(session.id);
+    kinds.push(rowId === undefined ? undefined : input.kindOf(rowId));
+  }
+  return JSON.stringify(kinds);
+}
+
 export function windowLocal(input: WindowLocalInput): MonitorReplicaLocal {
   const { panes } = input;
   // The deck owns pane colours and keeps them while this monitor is closed. A

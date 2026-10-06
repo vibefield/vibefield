@@ -212,6 +212,66 @@ export function rowOrder(
   ];
 }
 
+interface RowOrderFact {
+  readonly id: string;
+  readonly device: string;
+  readonly createdAt: number;
+  readonly terminal: string | undefined;
+}
+
+function orderTerminal(entry: HeldModelRow): string | undefined {
+  return isTerminalBoardRow(entry.board)
+    ? (entry.board.terminal.runtimeSessionId ?? entry.row.id)
+    : undefined;
+}
+
+/** Ordering changes with membership, birth, desktop and pane/floor order,
+ * never a token tick. Keep copies of those facts so a republished or mutated
+ * input cannot make the cache overlook a hand-off or a reordered pane. */
+export function createRowOrder(): typeof rowOrder {
+  let facts: readonly RowOrderFact[] | undefined;
+  let lastHere: string | undefined;
+  let paneIds: readonly string[] = [];
+  let floorIds: readonly string[] = [];
+  let last: readonly string[] = Object.freeze([]);
+  return (held, here, panes) => {
+    const floor = panes.floor ?? [];
+    const previous = facts;
+    if (
+      previous !== undefined &&
+      here === lastHere &&
+      held.length === previous.length &&
+      held.every((entry, index) => {
+        const was = previous[index];
+        return (
+          was !== undefined &&
+          was.id === entry.row.id &&
+          was.device === entry.device &&
+          was.createdAt === entry.row.createdAt &&
+          was.terminal === orderTerminal(entry)
+        );
+      }) &&
+      sameList(panes.sessionIds, paneIds) &&
+      floor.length === floorIds.length &&
+      floor.every((entry, index) => entry.sessionId === floorIds[index])
+    ) {
+      return last;
+    }
+    const next = rowOrder(held, here, panes);
+    if (!sameList(next, last)) last = Object.freeze(next);
+    facts = held.map((entry) => ({
+      id: entry.row.id,
+      device: entry.device,
+      createdAt: entry.row.createdAt,
+      terminal: orderTerminal(entry),
+    }));
+    lastHere = here;
+    paneIds = [...panes.sessionIds];
+    floorIds = floor.map((entry) => entry.sessionId);
+    return last;
+  };
+}
+
 /** The desktop a row lives on: a peer's own, else this one (`here`). */
 export function deviceOfRow(row: AgentView, here: string | undefined): string | undefined {
   return row.device.self ? here : row.device.id;

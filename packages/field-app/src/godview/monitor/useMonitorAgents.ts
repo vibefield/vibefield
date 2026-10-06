@@ -36,13 +36,14 @@ import {
   boardJoins,
   boardJoinsKey,
   paneFactsKey,
+  windowKindsKey,
   windowLocal,
 } from "./window-local";
 import {
+  createRowOrder,
   createWindowRows,
   deviceOfRow,
   narrowToDevice,
-  rowOrder,
   sameVisualIds,
   visualIdsOf,
   type WindowRowFacts,
@@ -353,7 +354,8 @@ export function useMonitorAgents({
   // ── the rows as the views read them ──────────────────────────────────────
   const windowRows = useMemo(createWindowRows, []);
   const standingKey = feedFacts.devices.map((entry) => `${entry.device}:${entry.state}`).join("\n");
-  const orderKey = rowOrder(held, here, panes).join("\n");
+  const orderFor = useMemo(createRowOrder, []);
+  const orderKey = orderFor(held, here, panes).join("\n");
   const visualKey = [...(panes.terminalVisualIds ?? [])].map(([a, b]) => `${a}:${b}`).join("\n");
   const rowFacts = useMemo<WindowRowFacts>(
     () => ({
@@ -503,6 +505,7 @@ export function useMonitorAgents({
     [model, feed],
   );
   const panesKey = paneFactsKey(panes);
+  const kindsKey = windowKindsKey({ joins, kindOf, panes, spawnHints: hints });
   const local = useMemo(
     () =>
       windowLocal({
@@ -516,8 +519,9 @@ export function useMonitorAgents({
         receded,
         visible,
       }),
-    // keyed by the pane facts the join reads, not by the array the deck republishes
-    [joins, kindOf, panesKey, links, selectedId, hints, visualIds, receded, visible],
+    // The kinds key covers every kindOf lookup the join makes. Model-only
+    // publishes keep the local facts and do not re-diff the replica.
+    [joins, kindsKey, panesKey, links, selectedId, hints, visualIds, receded, visible],
   );
   useLayoutEffect(() => {
     feed?.replica.setLocal(local);

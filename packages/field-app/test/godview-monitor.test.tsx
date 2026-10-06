@@ -2366,9 +2366,10 @@ describe("M59 — the body a row continues, and a create that answers", () => {
     await settle();
     expect(rowOf(recording, "run-claude")?.status).toBe("idle");
     expect(recording.inputs.length).toBeGreaterThan(models);
-    // the join is handed again (the model moved, and the row kinds ride it), never a new body map
-    expect(joins.length).toBeGreaterThan(calls);
-    for (const join of joins.slice(calls)) expect(join.visualIds).toBe(before);
+    // No window fact changed: the model still reaches the view, but the
+    // replica is not handed identical local facts on every state/usage tick.
+    expect(joins).toHaveLength(calls);
+    expect(joins.at(-1)?.visualIds).toBe(before);
 
     // the launcher hands the shell's pane to the codex agent: the agent keeps the shell's body,
     // and the shell's own row speaks for no second body
