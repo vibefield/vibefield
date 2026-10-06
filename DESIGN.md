@@ -1019,9 +1019,9 @@ The hot-point glow and rim retire with CardShell (above).
     demo's (R1, DK-D24); Send to… and More have none.
   - **Motion** — away for a gesture (a drag, a marquee, a pan, a pinch) and while a note is being
     written (the anchor's `gesturing`, `editing`): out in 90ms, back 200ms after it ends, in over
-    180ms (ICE's, as built); away too while @'s list is open from Send to… (below). Deselected, it
-    fades out over 120ms `ease-out` (R8). Reduced motion (M6) halves every duration, fades only
-    (R8).
+    180ms (ICE's, as built); away too from Send to…'s press while its chip flies and @'s list is
+    open (below). Deselected, it fades out over 120ms `ease-out` (R8). Reduced motion (M6) halves
+    every duration, fades only (R8).
   - **A missing face** selected (below): the bar names the type where the kind's acts would stand.
 - **The bar grown — More, and right-click** (Chrome on the Mat §3.2; MC-D6 ruled through One Frame's
   lock; FC-D14 solid; R1, R4, R5, R6, R20, R23, R26; DK-D29, DK-D24; DK-11): **More grows the bar
@@ -1150,6 +1150,14 @@ The hot-point glow and rim retire with CardShell (above).
   and comes back when it folds. Reduced motion (M6): no flight — the chip fades in at the caret.
   The picker Marks on the Mat drew growing out of the bar was never built and is not; an agent
   reading or rendering the desk itself is the AGENT'S EYES program, beyond a chip.
+  *Corrected 2026-10-06 (DK-14, measured):* the bar over a selection steps aside **from the press**,
+  not only once the list is open: hiding the marks for the still clears the selection for one fade of
+  the brackets and a capture (the act's record: the still taken 144–160ms after the press, the
+  selection put back then), and a bar left standing would fade out and back in under the flying chip
+  (R8's deselect). Measured in
+  smoke:canvas: the bar away 16ms after the press, back 208ms after the list folds — R8's 200;
+  aimed, 200 after the chip lands, there being no list. The tools in hand never step aside for it
+  (plan addendum (50)): in hand nothing is cleared — the hand is drawn out of the marks.
 - **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24; R11, R12, R24):
   an object the desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a
   type this build never registered — ghost stubs register faceless types only — or one registered
