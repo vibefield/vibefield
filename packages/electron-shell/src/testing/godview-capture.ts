@@ -4,6 +4,7 @@ import { gzipSync } from "node:zlib";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
+import { type LabDeckState, singlePaneLabDeck } from "./godview-lab-readiness";
 import {
   cdp,
   type LabSource,
@@ -19,6 +20,7 @@ import {
   swarmRenderer,
   teardownLab,
   untilEnded,
+  waitForLabDeck,
 } from "./godview-lab-window";
 
 // THE GODVIEW CAPTURE TOOL (MV-3c; build-mv M30, M31, M32) — the Electron half
@@ -66,6 +68,7 @@ export interface GodviewCapture {
   content: { colours: number; offModal: number };
   swarmRenderer: string | null;
   delivered: number;
+  deck: LabDeckState;
 }
 
 /** A capture's content, sampled on a grid of the BGRA bitmap. */
@@ -170,6 +173,7 @@ export async function runGodviewCapture(opts: {
       options: windowOptions,
       onWindow: opts.onWindow,
     });
+    await waitForLabDeck(lab);
     const { win, monitor } = lab;
     // what a capture holds still (M32): the zone, the locale, the motion
     pinned = {
@@ -202,6 +206,7 @@ export async function runGodviewCapture(opts: {
           await sleep(settleMs);
           const state = await page<{ delivered: number }>(win, "window.__vfGodviewReplay.state()");
           const name = `${view}-${theme}-t${t}`;
+          const deck = singlePaneLabDeck(lab.deck.current());
           const shot = await capture(win, out, name);
           const record: GodviewCapture = {
             name,
@@ -212,6 +217,7 @@ export async function runGodviewCapture(opts: {
             ...shot,
             swarmRenderer: view === "swarm" ? await swarmRenderer(win) : null,
             delivered: state.delivered,
+            deck,
           };
           captures.push(record);
           say({ kind: "capture", ...record });

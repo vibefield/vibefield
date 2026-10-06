@@ -28,7 +28,14 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { gunzipSync } from "node:zlib";
 import { diffBitmaps, diffImage, encodePng, judgeCapture } from "./capture-godview-diff.mjs";
-import { buildRoot, builtBundle, launchLab, log, modelStreams } from "./godview-lab-arms.mjs";
+import {
+  assertLabBuilt,
+  assertLabDeckProof,
+  buildRoot,
+  launchLab,
+  log,
+  modelStreams,
+} from "./godview-lab-arms.mjs";
 
 const argv = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -89,6 +96,12 @@ async function captureArm(arm, spec) {
   const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
   if (code !== 0)
     throw new Error(`arm ${arm} exited ${code} (log: ${join(outDir, `${spec.dir}.log`)})`);
+  if (!Array.isArray(manifest?.captures) || manifest.captures.length === 0) {
+    throw new Error(`arm ${arm}: no captures (${dir})`);
+  }
+  for (const [index, capture] of manifest.captures.entries()) {
+    assertLabDeckProof(capture?.deck, `arm ${arm} capture ${index}`);
+  }
   return { dir, manifest };
 }
 
@@ -104,14 +117,7 @@ async function main() {
       await buildRoot(root, join(outDir, `build-${root === rootA ? "A" : "B"}.log`));
     }
   }
-  for (const [arm, { root }] of Object.entries(ARMS)) {
-    if (builtBundle(root) === null) {
-      log(
-        `arm ${arm}: ${root} is not built — run pnpm --filter @vibefield/desktop build:all there`,
-      );
-      process.exit(2);
-    }
-  }
+  for (const { root } of Object.values(ARMS)) assertLabBuilt(root);
   const streams = new Map();
   for (const [arm, spec] of Object.entries(ARMS)) {
     if (spec.source !== "model") continue;

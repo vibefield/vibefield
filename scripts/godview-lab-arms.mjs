@@ -4,7 +4,7 @@
 // in the lab's mode with an environment, one fresh Electron process per launch.
 
 import { spawn } from "node:child_process";
-import { existsSync, writeFileSync } from "node:fs";
+import { accessSync, constants, statSync, writeFileSync } from "node:fs";
 import { loadavg } from "node:os";
 import { join } from "node:path";
 
@@ -41,8 +41,28 @@ export function run(command, args, cwd, env, logPath) {
   });
 }
 
-/** Build a root's desktop app with React's profiling client (M33's render time). */
+function nativeBinaries(root) {
+  const suffix = process.platform === "win32" ? ".exe" : "";
+  return {
+    native: join(root, "target", "debug", `field-native${suffix}`),
+    cell: join(root, "target", "debug", `field-terminal-host${suffix}`),
+  };
+}
+
+/** Build both native executables, then the desktop with React's profiling client.
+ * Desktop build:all covers JS only. A missing terminal-host leaves the deck
+ * dormant and silently removes its render work from a whole-window sample. */
 export async function buildRoot(root, logPath) {
+  log(`build ${root} (field-native + field-terminal-host)`);
+  const nativeEnv = { ...process.env, CARGO_TARGET_DIR: join(root, "target") };
+  delete nativeEnv.CARGO_BUILD_TARGET_DIR;
+  await run(
+    "cargo",
+    ["build", "--locked", "-p", "field-native", "--bins"],
+    root,
+    nativeEnv,
+    `${logPath}.native`,
+  );
   log(`build ${root} (VF_REACT_PROFILING=1)`);
   await run(
     "pnpm",
@@ -53,10 +73,41 @@ export async function buildRoot(root, logPath) {
   );
 }
 
-/** The root's testing bundle, or null when it is not built. */
-export function builtBundle(root) {
+/** --no-build still requires the complete app, including the terminal cell. */
+export function assertLabBuilt(root) {
   const bundle = join(root, "packages", "electron-shell", "dist", "testing", "smoke.cjs");
-  return existsSync(bundle) ? bundle : null;
+  for (const [path, mode] of [
+    [bundle, constants.R_OK],
+    [join(root, "packages", "fieldd", "dist", "bin.cjs"), constants.R_OK],
+    ...Object.values(nativeBinaries(root)).map((path) => [path, constants.X_OK]),
+  ]) {
+    try {
+      accessSync(path, mode);
+      if (!statSync(path).isFile()) throw new Error("Expected a file");
+    } catch (cause) {
+      throw new Error(`Lab artifact missing or inaccessible: ${path}. Run without --no-build.`, {
+        cause,
+      });
+    }
+  }
+}
+
+/** Reports from every arm must prove the same healthy initial shell. Old
+ * testing bundles need the same readiness instrumentation before comparison. */
+export function assertLabDeckProof(state, context) {
+  if (
+    state?.active !== true ||
+    state.panes !== 1 ||
+    state.sessions !== 1 ||
+    state.poolPhase !== "open" ||
+    state.rosterState !== "observed" ||
+    state.rendererBackend !== "webgpu" ||
+    state.error !== undefined
+  ) {
+    throw new Error(
+      `${context}: missing healthy one-pane deck proof. Every arm needs the same lab readiness checks.`,
+    );
+  }
 }
 
 /** The model streams a root's fieldd answers for `recipes`, computed in THAT
@@ -86,6 +137,8 @@ export async function modelStreams(root, dir, recipes, logPath) {
  * `prefix`; the whole output lands at `logPath`. Resolves with the exit code.
  */
 export function launchLab({ root, env, logPath, echo, prefix }) {
+  assertLabBuilt(root);
+  const binaries = nativeBinaries(root);
   return new Promise((done, fail) => {
     const child = spawn(
       "pnpm",
@@ -99,7 +152,16 @@ export function launchLab({ root, env, logPath, echo, prefix }) {
       ],
       {
         cwd: join(root, "apps", "desktop"),
-        env: { ...process.env, TMPDIR: "/tmp", ...env },
+        env: {
+          ...process.env,
+          TMPDIR: "/tmp",
+          ...env,
+          // Every arm runs its own built hosts, even when the invoking shell
+          // has a development override aimed at another checkout.
+          FIELDD_BIN: join(root, "packages", "fieldd", "dist", "bin.cjs"),
+          FIELDD_NATIVE_BIN: binaries.native,
+          FIELD_NATIVE_CELL_BIN: binaries.cell,
+        },
         stdio: ["ignore", "pipe", "pipe"],
       },
     );

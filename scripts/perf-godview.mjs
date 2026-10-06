@@ -46,16 +46,17 @@
 //
 // Every root is built first with React's profiling client (`VF_REACT_PROFILING=1
 // pnpm --filter @vibefield/desktop build:all` in that checkout); with
-// `--no-build` it must already be built, and the runner stops when the testing
-// bundle is missing. Every arm runs the same window mode (M31: offscreen by
+// `--no-build` both native executables and the JS hosts must already be built.
+// Every arm runs the same window mode (M31: offscreen by
 // default, never focused, never on top — proven: the swarm renders WebGPU
 // there), the same clock, the same warm-up.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import {
+  assertLabBuilt,
+  assertLabDeckProof,
   buildRoot,
-  builtBundle,
   launchLab,
   log,
   modelStreams,
@@ -116,13 +117,7 @@ const ARMS = {
 };
 
 function assertBuilt() {
-  for (const [arm, { root }] of Object.entries(ARMS)) {
-    if (builtBundle(root) !== null) continue;
-    log(
-      `arm ${arm}: ${root} is not built — run VF_REACT_PROFILING=1 pnpm --filter @vibefield/desktop build:all there, or drop --no-build`,
-    );
-    process.exit(2);
-  }
+  for (const { root } of Object.values(ARMS)) assertLabBuilt(root);
 }
 
 async function launch(arm, { root, source, modelDir, synthetic }, round) {
@@ -154,7 +149,16 @@ async function launch(arm, { root, source, modelDir, synthetic }, round) {
       `arm ${arm} round ${round} exited ${code} (${out} ${existsSync(out) ? "written" : "missing"})`,
     );
   }
-  return JSON.parse(readFileSync(out, "utf8"));
+  const sample = JSON.parse(readFileSync(out, "utf8"));
+  if (!Array.isArray(sample?.cells) || sample.cells.length === 0) {
+    throw new Error(`arm ${arm} round ${round}: no measured cells (${out})`);
+  }
+  for (const [index, cell] of sample.cells.entries()) {
+    const context = `arm ${arm} round ${round} cell ${index}`;
+    assertLabDeckProof(cell?.deck?.start, `${context} start`);
+    assertLabDeckProof(cell?.deck?.end, `${context} end`);
+  }
+  return sample;
 }
 
 /** The gate table's columns: the totals, the decisive frame rows, the components. */

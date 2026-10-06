@@ -6,6 +6,7 @@ import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { runGodviewCapture } from "./godview-capture";
 import { type MetricTotals, metricTotals, parseSynthetic } from "./godview-lab-measures";
+import { type LabDeckState, singlePaneLabDeck } from "./godview-lab-readiness";
 import {
   type LabWindow,
   labWindowOptions,
@@ -20,6 +21,7 @@ import {
   swarmRenderer,
   teardownLab,
   untilEnded,
+  waitForLabDeck,
 } from "./godview-lab-window";
 import { runGodviewWorkerWindows } from "./godview-worker-windows";
 
@@ -97,6 +99,8 @@ export interface GodviewPerfCell {
   swarmRenderer: string | null;
   /** M33 — Chromium's main-thread totals per second over the cell */
   totals: MetricTotals | null;
+  /** The same healthy one-pane host workload at both ends of this sample. */
+  deck: { start: LabDeckState; end: LabDeckState };
 }
 
 export async function runGodviewPerfLab(opts: {
@@ -156,6 +160,7 @@ export async function runGodviewPerfLab(opts: {
       options: windowOptions,
       onWindow: opts.onWindow,
     });
+    await waitForLabDeck(lab);
     const { win, monitor } = lab;
     await page(win, `window.__vfGodviewReplay.setClock(${JSON.stringify(clock)})`);
     say({
@@ -195,6 +200,7 @@ export async function runGodviewPerfLab(opts: {
         await selectView(win, monitor, view);
         await sleep(settleMs);
         await page(win, "window.__vfGodviewPerf.reset()");
+        const deckAtStart = singlePaneLabDeck(lab.deck.current());
         const metricsAtStart = await pageMetrics(win);
         const replayStart = await page<{
           phase: string;
@@ -216,6 +222,7 @@ export async function runGodviewPerfLab(opts: {
         // last frame's work finish before the report is read
         await sleep(400);
         const metricsAtEnd = await pageMetrics(win);
+        const deckAtEnd = singlePaneLabDeck(lab.deck.current());
         const report = await page<Record<string, unknown>>(win, "window.__vfGodviewPerf.report()");
         const replay = await page<Record<string, unknown>>(win, "window.__vfGodviewReplay.state()");
         const metrics = app.getAppMetrics();
@@ -237,6 +244,7 @@ export async function runGodviewPerfLab(opts: {
           startedAt: cellStartedAt,
           swarmRenderer: view === "swarm" ? await swarmRenderer(win) : null,
           totals: metricTotals(metricsAtStart, metricsAtEnd),
+          deck: { start: deckAtStart, end: deckAtEnd },
         };
         cells.push(cell);
         const frames = (report["frames"] ?? {}) as Record<string, number>;

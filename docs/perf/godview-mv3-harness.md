@@ -12,6 +12,15 @@ fold replay door, differential oracle test and legacy view counters have retired
 inputs and model generation, the model player, all-root/CDP/frame/DOM/canvas probes, and paired
 and capture readers remain. The dated results below remain evidence of their original SHAs.
 
+**Measurement erratum (2026-10-06, build-mv M137–M139):** two historical control targets had
+`field-native` but lacked `field-terminal-host`. Their monitors could replay while the terminal
+deck stayed empty, omitting real host work from whole-window measurements. Building the missing
+cell at the MV-4 control's exact source revision restored a healthy deck without changing its
+existing `field-native` bytes. Both runners now require complete native artifacts and healthy
+one-pane proof from every arm. Historical measurements remain archived; they do not establish
+this workload qualification. New comparisons must use the same readiness instrumentation in
+historical testing bundles and record those adaptations; old reports without proof are refused.
+
 ## What A and B measure
 
 - **A and B** each receive their checkout's model stream: the answer to the window's one
@@ -32,6 +41,13 @@ and capture readers remain. The dated results below remain evidence of their ori
   page's focus is emulated over CDP.
 - **The swarm renderer is reported by the view** through SDK commands; the host mirrors that
   report on its own slot. The runner prints `webgpu` for each swarm cell.
+- **The real terminal deck is ready before replay starts.** The lab waits for an active deck,
+  an open pool, an observed roster and a WebGPU terminal renderer before installing the corpus
+  clock. Every measured cell records exactly one pane and one session at both boundaries;
+  every capture records the same proof. Missing, faulted or unequal workloads fail the run.
+  Readiness checks and proof reads sit outside the measured interval. This workload contract
+  applies to performance and capture; the separate worker lifecycle probe checks worker
+  readiness across multiple window realms.
 - **One window per process in measurements:** MV-0 observed an Electron 43 crash after destroying
   an offscreen window and opening another. The dedicated worker-window probe now exercises that
   lifecycle separately; each slice's logs carry its result.
@@ -85,9 +101,16 @@ pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
 
 **The runner** works as follows.
 
-- It builds every distinct root with `VF_REACT_PROFILING=1` (`--no-build` skips that), and
-  computes each model-reading root's streams in that root.
-- It waits for load < 60 before the first launch (L17).
+- It builds both `field-native` and `field-terminal-host` from every distinct root with
+  `cargo build --locked -p field-native --bins`, placing them in that root's `target/debug`,
+  then builds the desktop with `VF_REACT_PROFILING=1`. Each launch explicitly selects that
+  root's fieldd and native executables. It computes each model-reading root's streams there.
+- `--no-build` skips building, but still checks the readable JS hosts and both executable
+  native files. Neither a JS-only desktop build nor a lone `field-native` is a complete arm.
+- It waits below the configured load ceiling before every arm launch (`--load-max`, default
+  60; the final quiet qualification uses 8) and records launch load (L17, M107).
+- It rejects any arm report lacking healthy one-pane proof at either end of any cell. This
+  includes historical testing bundles that have not received equivalent readiness checks.
 - Each round launches A, B and A′ in alternating order, one fresh Electron process per launch.
 - Every view × n ∈ {10, 20, 60} gets an 8 s cell.
 - It reads paired T, MAD and z with A′ − A as the null arm, read the same way.
@@ -98,6 +121,8 @@ pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
 
 **The capture tool** works as follows.
 
+- It uses the same complete builds, arm-specific executables and deck readiness checks.
+  Every capture must report healthy one-pane proof before its pixels can be compared.
 - **What it captures:** each theme × view × fixed frame of a replayed corpus.
   - The page's `Date.now` is frozen at that frame's corpus wall.
   - The timezone is UTC and the locale en-US (over CDP).

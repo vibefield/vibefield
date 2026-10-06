@@ -5,6 +5,7 @@ import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import type { PageMetrics } from "./godview-lab-measures";
+import { type LabDeckState, labDeckReady } from "./godview-lab-readiness";
 import { REACT_COMMIT_HOOK_SOURCE } from "./react-commit-hook";
 
 // THE GODVIEW LAB'S WINDOW (MV-3c; build-mv M31, M32) — what the perf lab and
@@ -239,6 +240,7 @@ export async function pageMetrics(win: BrowserWindow): Promise<PageMetrics | nul
 export interface LabWindow {
   win: BrowserWindow;
   monitor: MarkerTail<MonitorFacts>;
+  deck: MarkerTail<LabDeckState>;
   options: LabWindowOptions;
   focusEmulated: boolean;
   /** what the offscreen page reports drawing at (`getFrameRate`); null shown */
@@ -298,6 +300,7 @@ export async function openLabWindow(opts: {
     const canvas = new MarkerTail<Record<string, unknown>>(win, "CANVAS_READY ");
     const bridge = new MarkerTail<{ installed: boolean }>(win, "GODVIEW_PERF_LAB ");
     const monitor = new MarkerTail<MonitorFacts>(win, "GODVIEW_MONITOR ");
+    const deck = new MarkerTail<LabDeckState>(win, "GODVIEW_DECK ");
 
     // A blank first document, so CDP answers before the product loads: a command
     // sent before the first navigation is never answered (the first offscreen
@@ -329,6 +332,7 @@ export async function openLabWindow(opts: {
     return {
       win,
       monitor,
+      deck,
       options,
       focusEmulated,
       frameRate: offscreen ? win.webContents.getFrameRate() : null,
@@ -346,6 +350,20 @@ export async function openLabWindow(opts: {
     if (!win.isDestroyed() && !win.webContents.isDestroyed())
       win.webContents.removeListener("console-message", consoleMessage);
   }
+}
+
+/** Perf and capture measure a fresh single-window host, so wait before replay
+ * shifts its clock. The worker lifecycle probe opens auxiliary realms and has
+ * its own worker-readiness contract; it does not measure a terminal workload. */
+export async function waitForLabDeck(lab: LabWindow): Promise<void> {
+  await lab.deck.until(
+    (state) => {
+      if (state.error !== undefined) throw new Error(`Terminal deck: ${state.error}`);
+      return labDeckReady(state);
+    },
+    "the terminal deck to open a pane with an observed roster and WebGPU",
+    60_000,
+  );
 }
 
 /** Whole lines per `executeJavaScript`: a model stream of n=60 is ~23 MB. */
