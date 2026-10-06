@@ -31,6 +31,17 @@ export function parseMode(argv: readonly string[]): ShellMode {
   return "production";
 }
 
+/** The Godview worker probe can serve the renderer from Vite while keeping
+ * its isolated data root and stop-owned pair. Only RENDERER policies use this
+ * answer; daemon lifetime, resources and test dispatch always use ShellMode.
+ * The flag has no effect outside that lab, especially in production. */
+export function rendererPolicyMode(
+  mode: ShellMode,
+  godviewLabRenderer: string | undefined,
+): ShellMode {
+  return mode === "godview-perf-lab" && godviewLabRenderer === "dev" ? "dev" : mode;
+}
+
 /** Test-harness modes: transient, port-isolated runs that never present UI.
  * They skip the single-instance lock (slice-0 finding 1: a lock-blocked smoke
  * exited 0 with no output — a silent false pass) and the workarea fill. */

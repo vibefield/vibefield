@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isSmokeLike, parseMode, type ShellMode, shutdownPolicy } from "../src/main/modes";
+import {
+  isSmokeLike,
+  parseMode,
+  rendererPolicyMode,
+  type ShellMode,
+  shutdownPolicy,
+} from "../src/main/modes";
 
 // Mode selection is parsed ONCE (ESR §5.2.6). These lock the precedence, the
 // smoke-like classification, and the daemon-lifetime policy so no downstream
@@ -10,6 +16,7 @@ const ALL_MODES: readonly ShellMode[] = [
   "dev",
   "smoke",
   "smoke-canvas",
+  "smoke-browser-widget",
   "smoke-plugin-restart",
   "smoke-godview",
   "live-surfaces-lab",
@@ -30,6 +37,7 @@ describe("parseMode", () => {
     expect(parseMode(["--dev"])).toBe("dev");
     expect(parseMode(["--smoke"])).toBe("smoke");
     expect(parseMode(["--smoke-canvas"])).toBe("smoke-canvas");
+    expect(parseMode(["--smoke-browser-widget"])).toBe("smoke-browser-widget");
     expect(parseMode(["--smoke-plugin-restart"])).toBe("smoke-plugin-restart");
     expect(parseMode(["--smoke-godview"])).toBe("smoke-godview");
     expect(parseMode(["--live-surfaces-lab"])).toBe("live-surfaces-lab");
@@ -71,6 +79,7 @@ describe("isSmokeLike", () => {
   const smokeLike = new Set<ShellMode>([
     "smoke",
     "smoke-canvas",
+    "smoke-browser-widget",
     "smoke-plugin-restart",
     "smoke-godview",
     "live-surfaces-lab",
@@ -118,3 +127,20 @@ describe("shutdownPolicy", () => {
 // TP-S3e: `parseDirectTerminalDoor` retired with the bridge — the routed
 // transport is unconditional and the CSP test asserts the widened policy on
 // purpose (security-policy.test.ts).
+
+describe("the worker lab's renderer policy", () => {
+  it("admits Vite without changing the lab's isolation or daemon lifetime", () => {
+    const mode = parseMode(["--godview-perf-lab"]);
+    expect(rendererPolicyMode(mode, "dev")).toBe("dev");
+    expect(isSmokeLike(mode)).toBe(true);
+    expect(shutdownPolicy(mode)).toBe("stop-owned");
+    expect(rendererPolicyMode(mode, undefined)).toBe(mode);
+    expect(rendererPolicyMode(mode, "packaged")).toBe(mode);
+    expect(rendererPolicyMode(mode, "DEV")).toBe(mode);
+  });
+
+  it.each(ALL_MODES.filter((mode) => mode !== "godview-perf-lab"))(
+    "ignores the lab override in %s",
+    (mode) => expect(rendererPolicyMode(mode, "dev")).toBe(mode),
+  );
+});

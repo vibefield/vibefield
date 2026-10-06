@@ -85,7 +85,7 @@ import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
-import { isSmokeLike, parseMode } from "./modes";
+import { isSmokeLike, parseMode, rendererPolicyMode } from "./modes";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
@@ -130,6 +130,7 @@ import { createMainWindow, loadRenderer } from "./windows";
 // contains none of that code (ESR-12), and packaging simply omits the file.
 
 const MODE = parseMode(process.argv);
+const RENDERER_POLICY_MODE = rendererPolicyMode(MODE, process.env["VF_GODVIEW_LAB_RENDERER"]);
 // TP-S3a — the direct terminal door (TP-D1 as ratified): a rollback flag, OFF
 // until S3e; it widens the production CSP to the cells' loopback ports and, at
 // S3b, routes the pool's transport. Parsed once, beside the mode.
@@ -442,7 +443,7 @@ async function main(
   } catch {
     importMapHashes = [];
   }
-  installCsp(MODE, importMapHashes);
+  installCsp(RENDERER_POLICY_MODE, importMapHashes);
   // The renderer's own origin. Dev serves from Vite instead, so the handler is
   // pointless there; every other mode loads vibefield-app://shell and would show
   // a blank window without it. Root is the built renderer beside dist/main.
@@ -477,7 +478,7 @@ async function main(
       });
     },
   });
-  const appCsp = buildCsp(MODE, importMapHashes);
+  const appCsp = buildCsp(RENDERER_POLICY_MODE, importMapHashes);
   if (MODE !== "dev") {
     installAppProtocol({
       root: rendererRoot,
@@ -511,7 +512,7 @@ async function main(
     );
   });
   installWebContentsBackstop(
-    MODE,
+    RENDERER_POLICY_MODE,
     (contents) => {
       if (registry.ownsHost(contents)) return;
       logger.warn(
@@ -794,6 +795,7 @@ async function main(
     if (existing !== undefined) return existing;
     const sup = buildSupervisor({
       mode: MODE,
+      rendererPolicyMode: RENDERER_POLICY_MODE,
       root: userRoot,
       resources,
       viteUrl: VITE_URL,

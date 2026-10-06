@@ -25,8 +25,10 @@ import { REACT_COMMIT_HOOK_SOURCE } from "./react-commit-hook";
 //
 // Either way the page's focus is EMULATED over CDP (`Emulation.setFocusEmulationEnabled`),
 // so ⌘2 and the instrument bar's keys behave as in a focused window. One
-// window per process: Electron 43 dies when an offscreen window is destroyed
-// and another opens (M32), so a tool reloads the one it has.
+// window per perf/capture process: M32 found an Electron 43 crash after an
+// offscreen window was destroyed and another opened, so those tools reload
+// their window. The worker lifecycle probe deliberately exercises that path
+// and multiple product realms; extra live windows register as auxiliaries.
 //
 // M33 — TOTAL WORK. The same CDP session installs the React commit hook before
 // any page script runs (`react-commit-hook.ts`: every root's commits and render
@@ -256,6 +258,8 @@ export async function openLabWindow(opts: {
   preloadPath: string;
   viteUrl: string;
   registry: WindowRegistry;
+  /** Extra product realms in the worker lifecycle probe, never another primary. */
+  role?: "primary" | "auxiliary";
   options: LabWindowOptions;
   onWindow?: ((window: BrowserWindow) => void) | undefined;
 }): Promise<LabWindow> {
@@ -267,56 +271,81 @@ export async function openLabWindow(opts: {
     show: false,
     ...(offscreen ? { offscreen: { deviceScaleFactor: options.scale } } : {}),
   });
-  opts.registry.adopt(win);
-  win.webContents.setBackgroundThrottling(false);
-  if (offscreen) {
-    app.dock?.hide();
-    win.webContents.setFrameRate(options.fps);
-  } else {
-    win.showInactive();
-  }
-  opts.onWindow?.(win);
-
-  const canvas = new MarkerTail<Record<string, unknown>>(win, "CANVAS_READY ");
-  const bridge = new MarkerTail<{ installed: boolean }>(win, "GODVIEW_PERF_LAB ");
-  const monitor = new MarkerTail<MonitorFacts>(win, "GODVIEW_MONITOR ");
-
-  // A blank first document, so CDP answers before the product loads: a command
-  // sent before the first navigation is never answered (the first offscreen
-  // trial hung there, no renderer spawned). The hook then precedes every page
-  // script of every document this window loads — with the Page domain enabled
-  // first: registered without it, the script never ran in the product's
-  // document (a trial read it registered and the page without it).
-  await win.loadURL("about:blank");
-  await cdp(win, "Page.enable");
-  await cdp(win, "Page.addScriptToEvaluateOnNewDocument", { source: REACT_COMMIT_HOOK_SOURCE });
-  await loadRenderer(win, "godview-perf-lab", opts.viteUrl);
-  // asked again once the page exists: the rate set on a window that has not
-  // navigated yet did not hold (the first offscreen trial drew at 60)
-  if (offscreen) win.webContents.setFrameRate(options.fps);
-  // the page believes it has focus; the person keeps theirs (M31)
-  const focusEmulated =
-    (await cdp(win, "Emulation.setFocusEmulationEnabled", { enabled: true })) !== null;
-  const metered = (await cdp(win, "Performance.enable", { timeDomain: "timeTicks" })) !== null;
-  await canvas.until(() => true, "the renderer to report CANVAS_READY", 90_000);
-  await bridge.until((value) => value.installed, "the lab bridges to install", 30_000);
-  await page(win, "localStorage.clear()");
-  // the page's word, not the command's: the hook is ours and it is standing
-  const reactHook = await page<boolean>(win, `typeof window.__vfReactCommits === "object"`);
-
-  // Godview, as a person opens it; the monitor stage mounts the default view
-  pressGodviewKey(win);
-  await monitor.until(() => true, "the monitor stage to mount", 60_000);
-  await page(win, `window.__vfGodviewPerf.observeStage(".vf-godview-monitor-stage")`);
-  return {
-    win,
-    monitor,
-    options,
-    focusEmulated,
-    frameRate: offscreen ? win.webContents.getFrameRate() : null,
-    reactHook,
-    metered,
+  const startup: string[] = [];
+  const remember = (message: string): void => {
+    startup.push(message.slice(0, 1_000));
+    if (startup.length > 20) startup.shift();
   };
+  const consoleMessage = (...args: unknown[]): void => {
+    for (const arg of args) {
+      const text = consoleText(arg);
+      if (text) remember(text);
+    }
+  };
+  win.webContents.on("console-message", consoleMessage);
+  try {
+    if (opts.role === "auxiliary") opts.registry.adoptAuxiliary(win);
+    else opts.registry.adopt(win);
+    win.webContents.setBackgroundThrottling(false);
+    if (offscreen) {
+      app.dock?.hide();
+      win.webContents.setFrameRate(options.fps);
+    } else {
+      win.showInactive();
+    }
+    opts.onWindow?.(win);
+
+    const canvas = new MarkerTail<Record<string, unknown>>(win, "CANVAS_READY ");
+    const bridge = new MarkerTail<{ installed: boolean }>(win, "GODVIEW_PERF_LAB ");
+    const monitor = new MarkerTail<MonitorFacts>(win, "GODVIEW_MONITOR ");
+
+    // A blank first document, so CDP answers before the product loads: a command
+    // sent before the first navigation is never answered (the first offscreen
+    // trial hung there, no renderer spawned). The hook then precedes every page
+    // script of every document this window loads — with the Page domain enabled
+    // first: registered without it, the script never ran in the product's
+    // document (a trial read it registered and the page without it).
+    await win.loadURL("about:blank");
+    await cdp(win, "Page.enable");
+    await cdp(win, "Page.addScriptToEvaluateOnNewDocument", { source: REACT_COMMIT_HOOK_SOURCE });
+    await loadRenderer(win, "godview-perf-lab", opts.viteUrl);
+    // asked again once the page exists: the rate set on a window that has not
+    // navigated yet did not hold (the first offscreen trial drew at 60)
+    if (offscreen) win.webContents.setFrameRate(options.fps);
+    // the page believes it has focus; the person keeps theirs (M31)
+    const focusEmulated =
+      (await cdp(win, "Emulation.setFocusEmulationEnabled", { enabled: true })) !== null;
+    const metered = (await cdp(win, "Performance.enable", { timeDomain: "timeTicks" })) !== null;
+    await canvas.until(() => true, "the renderer to report CANVAS_READY", 90_000);
+    await bridge.until((value) => value.installed, "the lab bridges to install", 30_000);
+    await page(win, "localStorage.clear()");
+    // the page's word, not the command's: the hook is ours and it is standing
+    const reactHook = await page<boolean>(win, `typeof window.__vfReactCommits === "object"`);
+
+    // Godview, as a person opens it; the monitor stage mounts the default view
+    pressGodviewKey(win);
+    await monitor.until(() => true, "the monitor stage to mount", 60_000);
+    await page(win, `window.__vfGodviewPerf.observeStage(".vf-godview-monitor-stage")`);
+    return {
+      win,
+      monitor,
+      options,
+      focusEmulated,
+      frameRate: offscreen ? win.webContents.getFrameRate() : null,
+      reactHook,
+      metered,
+    };
+  } catch (error) {
+    if (!win.isDestroyed()) win.destroy();
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(
+      `${message}${startup.length ? `\nRenderer startup:\n${startup.join("\n")}` : ""}`,
+      { cause: error },
+    );
+  } finally {
+    if (!win.isDestroyed() && !win.webContents.isDestroyed())
+      win.webContents.removeListener("console-message", consoleMessage);
+  }
 }
 
 /** Whole lines per `executeJavaScript`: a model stream of n=60 is ~23 MB. */

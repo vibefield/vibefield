@@ -107,6 +107,7 @@ export async function runGodviewWorkerWindows(opts: {
       preloadPath: opts.preloadPath,
       viteUrl: opts.viteUrl,
       registry: opts.registry,
+      role: opts.registry.primary() === null ? "primary" : "auxiliary",
       options,
       onWindow: opts.onWindow,
     });

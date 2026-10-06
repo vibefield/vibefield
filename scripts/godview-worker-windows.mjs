@@ -17,6 +17,7 @@
 import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { createInterface } from "node:readline";
 
 const argv = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -40,17 +41,30 @@ async function startDevServer(lines) {
   server.stdout.on("data", (chunk) => lines.push(`[vite] ${String(chunk).trimEnd()}`));
   server.stderr.on("data", (chunk) => lines.push(`[vite] ${String(chunk).trimEnd()}`));
   const url = `http://localhost:${DEV_PORT}/`;
+  let spawnError;
+  server.once("error", (error) => {
+    spawnError = error;
+  });
   const deadline = Date.now() + 60_000;
-  for (;;) {
-    try {
-      const answer = await fetch(url);
-      if (answer.ok) return { server, url };
-    } catch {
-      // not up yet
+  try {
+    for (;;) {
+      if (spawnError) throw spawnError;
+      if (server.exitCode !== null || server.signalCode !== null) {
+        throw new Error(`the dev server exited ${server.signalCode ?? server.exitCode}`);
+      }
+      try {
+        const answer = await fetch(url, { signal: AbortSignal.timeout(1_000) });
+        await answer.body?.cancel();
+        if (answer.ok) return { server, url };
+      } catch {
+        // not up yet
+      }
+      if (Date.now() > deadline) throw new Error("the dev server never answered");
+      await new Promise((done) => setTimeout(done, 500));
     }
-    if (server.exitCode !== null) throw new Error(`the dev server exited ${server.exitCode}`);
-    if (Date.now() > deadline) throw new Error("the dev server never answered");
-    await new Promise((done) => setTimeout(done, 500));
+  } catch (error) {
+    stopDevServer(server);
+    throw error;
   }
 }
 
@@ -72,27 +86,37 @@ function runLab(env, lines) {
         stdio: ["ignore", "pipe", "pipe"],
       },
     );
-    child.stdout.on("data", (chunk) => {
-      for (const line of String(chunk).split("\n")) {
-        if (line.startsWith("GODVIEW_WORKER_WINDOWS")) log(`  ${line.slice(0, 240)}`);
-        lines.push(line);
-      }
+    createInterface({ input: child.stdout }).on("line", (line) => {
+      if (line.startsWith("GODVIEW_WORKER_WINDOWS")) log(`  ${line.slice(0, 240)}`);
+      lines.push(line);
     });
     child.stderr.on("data", (chunk) => lines.push(String(chunk)));
     child.on("error", fail);
-    child.on("exit", (code, signal) => done({ code, signal }));
+    child.on("close", (code, signal) => done({ code, signal }));
   });
+}
+
+function stopDevServer(server) {
+  if (server.pid === undefined) return;
+  try {
+    process.kill(-server.pid, "SIGTERM");
+  } catch (error) {
+    if (error.code !== "ESRCH") throw error;
+  }
 }
 
 const lines = [];
 let devServer = null;
 let verdict = 1;
 try {
-  const env = {};
+  // The named arm is explicit even when the parent shell has lab overrides.
+  const env = {
+    VF_GODVIEW_PERF_WINDOW: "offscreen",
+    VF_GODVIEW_LAB_RENDERER: dev ? "dev" : "packaged",
+  };
   if (dev) {
     devServer = await startDevServer(lines);
     env.VITE_DEV_SERVER_URL = devServer.url;
-    env.VF_GODVIEW_LAB_RENDERER = "dev";
     log(`godview worker windows · dev server ${devServer.url}`);
   } else {
     log("godview worker windows · packaged renderer");
@@ -110,13 +134,7 @@ try {
 } catch (error) {
   log(`WORKER WINDOWS PROBE FAIL: ${error instanceof Error ? error.message : String(error)}`);
 } finally {
-  if (devServer !== null) {
-    try {
-      process.kill(-devServer.server.pid, "SIGTERM");
-    } catch {
-      // already gone
-    }
-  }
+  if (devServer !== null) stopDevServer(devServer.server);
   writeFileSync(out, lines.join("\n"));
   log(`log: ${out}`);
 }
