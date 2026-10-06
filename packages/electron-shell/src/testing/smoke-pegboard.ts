@@ -546,7 +546,7 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
       `BAR: the selection did not persist under the board (${JSON.stringify({ boxBefore, boxAfter })})`,
     );
   say(
-    `SMOKE_CANVAS_BOARD_BAR ${JSON.stringify({ hiddenWhileOut: out.bar, after: closed.bar, boxBefore, boxAfter })}`,
+    `SMOKE_CANVAS_BOARD_BAR ${JSON.stringify({ shownWhileOut: out.bar, after: closed.bar, boxBefore, boxAfter })}`,
   );
   await deselect();
 
