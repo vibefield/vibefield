@@ -191,9 +191,7 @@ export function StageBoard({ open }: { open: boolean }): ReactElement {
     if (el === null) return;
     // a scene with no layout (a test's window) is the playground's nominal 1180 × 640
     const measure = (): void =>
-      setSize(
-        el.clientWidth > 0 ? { w: el.clientWidth, h: el.clientHeight } : { w: 1180, h: 640 },
-      );
+      setSize(el.clientWidth > 0 ? { w: el.clientWidth, h: el.clientHeight } : { w: 1180, h: 640 });
     measure();
     if (typeof ResizeObserver === "undefined") return;
     const resize = new ResizeObserver(measure);
