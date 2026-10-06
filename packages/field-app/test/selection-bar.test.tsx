@@ -588,7 +588,7 @@ describe("the tools in hand (DK-12)", () => {
   /** Picked up, and the travel over. */
   const inHandNow = (over: Parameters<typeof held>[0] = {}): void => {
     act(() => selection.publish({ held: held(over) }));
-    act(() => vi.advanceTimersByTime(560));
+    act(() => vi.advanceTimersByTime(560 + 100));
   };
 
   it("TRAVELS into the hand: the one element to y 64 under the head, centred — the anchor's 560 ms on the island curve, its contents cross-faded over the last 120 (R13)", () => {
@@ -632,7 +632,11 @@ describe("the tools in hand (DK-12)", () => {
       "opacity 180ms ease-out, transform 560ms var(--vf-ease-island), width 120ms ease",
     );
     expect(bar().style.getPropertyValue("--vf-bar-swap-ms")).toBe("120ms");
-    act(() => vi.advanceTimersByTime(120));
+    // declared one beat past the travel's length, so the browser ends both on their own frame — never cut short
+    act(() => vi.advanceTimersByTime(120 + 99));
+    expect(bar().style.transition).toContain("transform 560ms");
+    expect(bar().style.transition).toContain("width 120ms ease");
+    act(() => vi.advanceTimersByTime(1));
     expect(bar().style.transition).toBe("opacity 180ms ease-out");
     expect(handRow().getAttribute("aria-label")).toBe("Tools in hand");
     expect(handRow().hasAttribute("inert")).toBe(false);
@@ -749,7 +753,7 @@ describe("the tools in hand (DK-12)", () => {
     expect(surfaceNow).toBe("selection");
     act(() => selection.publish({ held: held() }));
     expect(surfaceNow).toBeNull();
-    act(() => vi.advanceTimersByTime(560));
+    act(() => vi.advanceTimersByTime(660));
     act(() => selection.publish({ held: held(), gesturing: true, editing: true }));
     act(() => vi.advanceTimersByTime(300));
     expect(bar().dataset.shown).toBe("true");
@@ -765,7 +769,7 @@ describe("the tools in hand (DK-12)", () => {
     expect(bar().style.transition).toBe(
       "opacity 90ms ease-out, visibility 0s linear 90ms, transform 560ms var(--vf-ease-island)",
     );
-    act(() => vi.advanceTimersByTime(600)); // the flight home
+    act(() => vi.advanceTimersByTime(700)); // the flight home
     expect(bar().dataset.face).toBe("selection");
     act(() => selection.publish({ held: undefined }));
     expect(bar().style.transform).toBe("translate(500.0px, 250.0px) translateX(-50%)");

@@ -48,6 +48,13 @@ export interface BarMotion {
 /** The travel into the hand when the anchor carries none (the layer's `hold.travelMs` — DESK_HOLD's 560). */
 export const TRAVEL_MS = 560;
 
+/**
+ * How long the travel's transitions stay declared past its length: the browser starts a transition on the frame after the
+ * style changed, so one taken off at its nominal end by the timer is CANCELLED a frame or two short — its last frames
+ * snapped (DK-12's recorder: the width's 120 ms cut to 101). One beat more lets it end on its own frame.
+ */
+export const TRAVEL_GRACE_MS = 100;
+
 export const BAR_MOTION: BarMotion = {
   awayMs: 90,
   backMs: 200,

@@ -27,6 +27,7 @@ import {
   rowDelay,
   shownTransition,
   swapAt,
+  TRAVEL_GRACE_MS,
   TRAVEL_MS,
   travelTransition,
 } from "./bar-motion";
@@ -350,7 +351,7 @@ export function SelectionBarView({
       setTimeout(() => {
         setTraveling(false);
         setSwapping(false);
-      }, travelMs),
+      }, travelMs + TRAVEL_GRACE_MS),
     );
   }, [role]);
 
