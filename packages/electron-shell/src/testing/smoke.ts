@@ -112,6 +112,7 @@ import {
 } from "./plugin-runtime-soak";
 import { pegboardRows } from "./smoke-pegboard";
 import { selectionBarRows } from "./smoke-selection-bar";
+import { sendToRows } from "./smoke-send-to";
 import {
   countersOf,
   judgeWindow,
@@ -1094,6 +1095,24 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`DK-13: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // DK-14: Send to… — the bar's pill, the grown menu's row and the tools in hand's pill each drafting ONE chip into
+        // the line: its face by kind, the flight, the @ typed, the still, the bar aside, reduced motion
+        // (testing/smoke-send-to.ts) — still at the arrival fit, before the pad row moves the camera
+        try {
+          problems.push(
+            ...(await sendToRows({
+              win,
+              plugins: {
+                disable: (id) => opts.handle.client.request("plugins.disable", { id }),
+                enable: (id) => opts.handle.client.request("plugins.enable", { id }),
+              },
+              shotDir,
+              say: (line) => console.log(line),
+            })),
+          );
+        } catch (error) {
+          problems.push(`DK-14: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
         // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
