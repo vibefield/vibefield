@@ -108,6 +108,8 @@ export const PORTS = {
    * egress route may target only a door that demands its own grant); it joins
    * that list at the pin move, in review. */
   INDEX_SERVE: 9424,
+  /** FS-1b: the files worker binds an ephemeral loopback listener per generation. */
+  WORKSPACE_SERVE: 0,
   /** doc-sync lanes over the mesh (QUIC, snapshot-per-stream). */
   DOC_SYNC_QUIC: 9440,
   /** presence + device heartbeats (UDP, lossy). */
@@ -368,6 +370,144 @@ export const INDEX_MESH = {
   PAGE_DEFAULT_LIMIT: 100,
   PAGE_MAX_LIMIT: 500,
   CHANGES_MIN_INTERVAL_MS: 500,
+  /** SP-6 (2026-10-04) — the floor of ONE session's live tail over the door
+   * (`index.session.subscribe`, a rows subscription): a frame per subscriber
+   * at most this often while the session moves, nothing while it is still.
+   * One second is a reader's pace for a transcript — rosetta's own room
+   * coalesces at 16 ms for a desktop, and a radio has no use for that; the
+   * page door (`index.timeline`) is how the rows before the tail arrive. */
+  SESSION_TAIL_MIN_INTERVAL_MS: 1_000,
+} as const;
+
+/** SP-6 (2026-10-04; `thinking-sync-planes.md` §5.4 "until RO-1", SP-D5 (a))
+ * — one session's transcript over the DOOR, as bounded pages and a tail,
+ * until the ticket (SP-7) moves the bodies to rosetta's own socket.
+ *
+ * PAGE_DEFAULT_LIMIT / PAGE_MAX_LIMIT: `index.timeline`'s page when nothing is
+ * asked, and the most a window may ask (rosetta's own default is 100 and its
+ * ceiling 1,000; the door stops at 500, the catalog pager's own ceiling). A
+ * `tailnet` caller's page is cut at INDEX_TAILNET_LIMITS.MAX_ROWS at the door
+ * and says `clipped`, exactly as the listings are.
+ *
+ * TEXT_CHARS: the most of a row's TEXT a projected row carries — a prompt's
+ * words, a reply paragraph, a thought, a notice's sentence — in UTF-16 code
+ * units, `textClipped` saying when it was cut. rosetta already bounds an
+ * oversized text upstream (a `member` text rides as a preview beside an asset,
+ * and that asset never crosses this door — EL2); this bound is the page's: a
+ * phone page of a hundred rows holds at most some 200 KB of prose, and a
+ * reply longer than this is read whole in the room, which has the ticket.
+ * OBJECT_CHARS: the most of a tool line's object (a command, a path, a query)
+ * and of a failure's summary a row carries; the ladder draws one line.
+ *
+ * The tail itself carries rosetta's own snapshot (its newest 200 rows, the
+ * socket's SNAPSHOT_LIMIT at the pin) and what the session appends after;
+ * a tailnet subscriber's snapshot is cut to INDEX_TAILNET_LIMITS.MAX_ROWS, the
+ * newest first to go — the rows before it are the page door's. TS-only: no
+ * native reader. */
+export const INDEX_TIMELINE = {
+  PAGE_DEFAULT_LIMIT: 100,
+  PAGE_MAX_LIMIT: 500,
+  TEXT_CHARS: 2_000,
+  OBJECT_CHARS: 200,
+} as const;
+
+/** FS-1a (`thinking-files-service.md` §3, §4; FS-D12 RULED (a), 2026-10-05)
+ * — the files service's bounds (`workspace.ts`). The door tier answers in
+ * pages: LIST_PAGE rows a `workspace.list` page holds at most (a window's
+ * default and ceiling), TAILNET_PAGE for a caller that crossed the tailnet (a
+ * self phone: the cut is the DOOR's, `clipped` and `nextCursor` say so), and
+ * SEARCH_HITS a `workspace.search` answers at most. The attached tier's
+ * numbers ride beside them for FS-1b, which mints them (`workspace.openTicket`
+ * is not built here): TICKET_TTL_MS a ticket's life, MAX_FILE_BYTES the most
+ * one read hands over, SESSIONS_PER_CLIENT / SESSIONS_PER_EXPORT the attached
+ * sessions one client and one export hold (mille-truffle's defaults).
+ *
+ * The rest bound what a door asks the worker to do: PATH_CHARS the longest
+ * relative path a request may name, NAME_CHARS the longest entry name an
+ * answer carries, QUERY_CHARS the longest search query.
+ *
+ * SEARCH (the lead's ruling, 2026-10-05): a search walks the asked subtree
+ * breadth-first ON DEMAND — until it has seen SEARCH_WALK_ENTRIES entries, or
+ * for SEARCH_WALK_MS, whichever comes first, skipping a folder whose read does
+ * not answer within READ_TIMEOUT_MS (an iCloud-evicted folder blocks a read
+ * while it downloads; the same bound holds a page's child counts) — and says
+ * `complete: false` when
+ * any of those cut it: never an empty answer that reads as "no matches" for
+ * folders it did not read. A narrower `path` covers deeper. The walk reads
+ * NAMES from the filesystem, not into mille's engine (measured: mille's
+ * hydration grows super-linearly — 22 000 entries took 15 s), keeps them
+ * beside the export's engine for SEARCH_CACHE_MS so a reader typing asks
+ * again for free, and hands mille only the hits (their ids).
+ *
+ * ENGINES: the worker holds one mille engine per export it was asked about
+ * (mille refuses overlapping roots in one engine, and the home export holds
+ * every place); an engine with no ask for HOST_IDLE_MS is disposed, and at
+ * most HOSTS_MAX live at once — at the cap the least recently used idle one
+ * goes, and an ask that finds every engine busy is refused RESOURCE_EXHAUSTED
+ * (retryable). TS-only: no native reader. */
+export const WORKSPACE_LIMITS = {
+  LIST_PAGE: 200,
+  TAILNET_PAGE: 100,
+  SEARCH_HITS: 100,
+  TICKET_TTL_MS: 600_000,
+  MAX_FILE_BYTES: 16 * 1024 * 1024,
+  SESSIONS_PER_CLIENT: 4,
+  SESSIONS_PER_EXPORT: 16,
+  PATH_CHARS: 4_096,
+  NAME_CHARS: 1_024,
+  QUERY_CHARS: 256,
+  SEARCH_WALK_ENTRIES: 100_000,
+  SEARCH_WALK_MS: 5_000,
+  READ_TIMEOUT_MS: 2_000,
+  SEARCH_CACHE_MS: 60_000,
+  HOST_IDLE_MS: 300_000,
+  HOSTS_MAX: 16,
+  TICKETS_MAX: 256,
+  SOCKETS_MAX: 128,
+  ATTACH_TIMEOUT_MS: 10_000,
+  ATTACHED_ROOT_CHECK_MS: 10_000,
+  GIT_REQUEST_BYTES: 64 * 1024,
+  GIT_REQUESTS_IN_FLIGHT: 8,
+  SOCKET_BUFFER_BYTES: 32 * 1024 * 1024,
+  RENEW_BEFORE_MS: 30_000,
+  RETRY_MIN_MS: 500,
+  RETRY_MAX_MS: 10_000,
+} as const;
+
+/** FS-1a — the files service's honest refusal vocabulary
+ * (`UnavailableDetails`): `service` on every UNAVAILABLE a `workspace.*` door
+ * answers, and the worker's phases a reader branches on. STARTING: the first
+ * generation is booting; RESTARTING: a generation died and the next is on its
+ * backoff (retryable); OFF: the worker is switched off for this daemon (a
+ * test-only knob, L6 — never a user setting); UNCONFIGURED: this daemon has no
+ * worker to run (an embedded daemon with no bundle beside it); FAILED: the
+ * restart intensity tripped, or the worker cannot be spawned at all; STOPPED:
+ * the daemon is shutting down. TS-only: no native reader. */
+export const WORKSPACE_SERVICE = {
+  SERVICE: "workspace",
+  STATE_STARTING: "starting",
+  STATE_RESTARTING: "restarting",
+  STATE_OFF: "off",
+  STATE_UNCONFIGURED: "unconfigured",
+  STATE_FAILED: "failed",
+  STATE_STOPPED: "stopped",
+} as const;
+
+/** FS-1a (FS-D8 RULED (a), its interim; FS-D5 (a) read-only v1) — the git
+ * port's protocol, rosetta's room convention (`{id, op, args}` →
+ * `{id, ok, value | error}`, `clients/app/electron/fx-host.mjs`), pinned by
+ * `fixtures/workspace-git-port.valid.json` until mille's own `GitService`
+ * (the mille-git spec's PR 8) replaces the interim. READ_OPS answer; WRITE_OPS
+ * are refused with READ_ONLY_ERROR whatever the caller holds; any other op
+ * answers `unknown op: <op>`. DIFF_BYTES and LOG_LIMIT are rosetta's own
+ * bounds, kept. TS-only: no native reader. */
+export const WORKSPACE_GIT = {
+  READ_OPS: ["branch", "status", "log", "diff", "commitFiles"],
+  WRITE_OPS: ["stage", "unstage", "discard", "commit", "commitAll", "amend"],
+  READ_ONLY_ERROR: "read-only in v1",
+  DIFF_BYTES: 8 * 1024 * 1024,
+  LOG_LIMIT: 200,
+  TIMEOUT_MS: 10_000,
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
@@ -1050,6 +1190,13 @@ export const LAYOUT = {
   MACHINE_AGENTS_DIR: ["machine", "agents"],
   MACHINE_DISTRIBUTION_FILE: ["machine", "agents", "distribution.json"],
   MACHINE_UPDATES_DIR: ["machine", "agents", "updates"],
+  /** FS-1a (`thinking-files-service.md` §6) — the files service's state under
+   * this user: the roots registry (`roots.json`, fieldd-owned, written
+   * atomically) — every place an agent was spawned, with when it was last
+   * active and whether its folder is still there. The browse exports (the
+   * home directory, the mounted volumes) are enumerated live, never kept. */
+  WORKSPACE_DIR: ["workspace"],
+  WORKSPACE_ROOTS_FILE: ["workspace", "roots.json"],
 } as const;
 
 /** The segments that live at the VibeField ROOT and never re-root under

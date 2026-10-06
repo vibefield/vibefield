@@ -1,0 +1,8 @@
+{
+  "sessionId": "s1",
+  "since": {
+    "epoch": "tail-s1-3f9a1c2e.1",
+    "revision": 7
+  },
+  "minIntervalMs": 2000
+}

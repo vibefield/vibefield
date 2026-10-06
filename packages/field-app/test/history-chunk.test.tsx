@@ -8,6 +8,8 @@
  * asks, and while the chunk is on its way the view is the cover's glass with
  * the room's edges saying "Opening History", the line's door already lent;
  * once it lands the room takes the face's place, and from then on it stays.
+ * The room's search (the search interim, 2026-10-04) rides the same boundary:
+ * no launcher and no key before the room is here, the sheet once it is.
  * (The loader, the boundary and the prefetch: `history-chunk-loader.test.tsx`.)
  */
 import { readFileSync } from "node:fs";
@@ -16,9 +18,10 @@ import { fileURLToPath } from "node:url";
 import type { FrameView, FrameViewState } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
-import { act } from "react";
+import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { FrameSurface } from "../src/frame/frame-surface";
 import { resetGodviewLineDoorForTest, resetHistoryLineDoorForTest } from "../src/frame/line-door";
 import { ViewFrame } from "../src/frame/ViewFrame";
 import { resetActiveViewForTest } from "../src/frame/view-state";
@@ -118,22 +121,45 @@ function fieldd() {
   };
 }
 
+let surfaceNow: FrameSurface | null = null;
+
 function mount(): void {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  act(() =>
-    root?.render(
-      <FielddProvider client={fieldd() as unknown as FielddClient}>
+  const client = fieldd();
+  // FieldView's place: the frame's one owner of the open surface, which holds
+  // History's search sheet too while the interim stands.
+  function Owner(): ReactElement {
+    const [surface, setSurface] = useState<FrameSurface | null>(null);
+    surfaceNow = surface;
+    return (
+      <FielddProvider client={client as unknown as FielddClient}>
         <ViewFrame
           godview={<div data-testid="godview-content" />}
-          history={(active) => <HistoryView active={active} />}
-          surface={null}
-          onSurfaceChange={() => undefined}
+          history={(active) => (
+            <HistoryView active={active} surface={surface} onSurfaceChange={setSurface} />
+          )}
+          surface={surface}
+          onSurfaceChange={setSurface}
         />
-      </FielddProvider>,
-    ),
-  );
+      </FielddProvider>
+    );
+  }
+  act(() => root?.render(<Owner />));
+}
+
+/** ⌘G as a person presses it, aimed at whatever holds the keyboard; answers
+ * whether anything claimed it. */
+function commandG(): boolean {
+  const event = new KeyboardEvent("keydown", {
+    key: "g",
+    metaKey: true,
+    bubbles: true,
+    cancelable: true,
+  });
+  (document.activeElement ?? document.body).dispatchEvent(event);
+  return event.defaultPrevented;
 }
 
 function to(view: FrameView): void {
@@ -184,6 +210,10 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     const create = host?.querySelector<HTMLButtonElement>(".vf-line-create");
     expect(create?.getAttribute("aria-disabled")).toBe("true");
     expect(create?.title).toContain("choose a session first");
+    // The search interim rides the room's chunk: until it lands there is no
+    // launcher to press, and ⌘G finds no room to walk, so it is left alone.
+    expect(historySlot()?.querySelector(".ah-launcher")).toBeNull();
+    expect(commandG()).toBe(false);
 
     // The chunk lands: the room takes the face's place, on the same glass.
     room.open();
@@ -195,6 +225,29 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     expect(frame.getAttribute("data-ah-surface")).toBe("host");
     expect(historySlot()?.querySelector("[data-face]")).toBeNull();
     expect(historySlot()?.textContent).not.toContain("Opening History");
+
+    // …and with it the room's search: the strip's pill opens the sheet in the
+    // room's layer, on the frame's one value, and Esc closes it.
+    const launcher = await until(
+      () => historySlot()?.querySelector<HTMLButtonElement>(".ah-launcher__open"),
+      "the room's search launcher",
+    );
+    act(() => launcher.click());
+    const sheet = await until(
+      () => historySlot()?.querySelector<HTMLElement>('.vf-history-layers [role="dialog"]'),
+      "the room's search sheet",
+    );
+    expect(surfaceNow).toBe("history-search");
+    act(() => {
+      (sheet.querySelector("input") ?? sheet).dispatchEvent(
+        new KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true }),
+      );
+    });
+    await until(
+      () => (historySlot()?.querySelector('[role="dialog"]') ? null : true),
+      "the sheet closed by Esc",
+    );
+    expect(surfaceNow).toBeNull();
 
     // And it stays: out and back says nothing again and asks for nothing.
     to("godview");

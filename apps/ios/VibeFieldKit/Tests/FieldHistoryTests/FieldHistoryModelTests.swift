@@ -105,11 +105,18 @@ struct FieldHistoryModelTests {
     let second = vf.rows[1]
     #expect(
       FieldHistoryModel.landing(for: second, in: vf, corpus: corpus)
-        == .session(projectId: "vf", sessionId: "mt-2", ring: ["h1", "h2", "h3"], at: 1))
+        == .session(device: corpus.deviceId, projectId: "vf", sessionId: "mt-2", ring: ["h1", "h2", "h3"], at: 1))
     let mille = corpus.hits[1]
     #expect(
       FieldHistoryModel.landing(for: mille.rows[1], in: mille, corpus: corpus)
-        == .project(projectId: "mille", sessionId: "m2"))
+        == .project(device: corpus.deviceId, projectId: "mille", sessionId: "m2"))
+    // SP-6 — over a door the document is read when the session opens, so a
+    // group without one still lands in the document
+    var asked = corpus
+    asked.searchedQuery = "badge"
+    #expect(
+      FieldHistoryModel.landing(for: mille.rows[1], in: mille, corpus: asked)
+        == .session(device: corpus.deviceId, projectId: "mille", sessionId: "m2", ring: ["m2"], at: 0))
   }
 
   @Test("the stepper says `n of m` and wraps both ways")
@@ -152,7 +159,7 @@ struct FieldHistoryModelTests {
   func landingOpensTheBar() {
     let router = HistoryRouter()
     router.barMinimized = true
-    router.land(.project(projectId: "mille", sessionId: "m2"), query: "badge")
+    router.land(.project(device: "dev-1", projectId: "mille", sessionId: "m2"), query: "badge")
     #expect(!router.barMinimized)
   }
 
@@ -160,8 +167,8 @@ struct FieldHistoryModelTests {
   @MainActor
   func theRouter() {
     let router = HistoryRouter()
-    router.land(.session(projectId: "vf", sessionId: "mt-2", ring: ["h1", "h2", "h3"], at: 1), query: "badge")
-    #expect(router.path == [.project("vf"), .session("mt-2")])
+    router.land(.session(device: "dev-1", projectId: "vf", sessionId: "mt-2", ring: ["h1", "h2", "h3"], at: 1), query: "badge")
+    #expect(router.path == [.project(device: "dev-1", id: "vf"), .session(device: "dev-1", id: "mt-2")])
     #expect(router.stepperShowing)
     #expect(router.landed?.anchor == "h2")
     #expect(router.landed?.words == "2 of 3")
@@ -173,9 +180,16 @@ struct FieldHistoryModelTests {
     #expect(!router.stepperShowing)
     router.clearLanding()
     #expect(router.landed == nil)
-    router.land(.project(projectId: "mille", sessionId: "m2"), query: "badge")
-    #expect(router.path == [.project("mille")])
+    router.land(.project(device: "dev-1", projectId: "mille", sessionId: "m2"), query: "badge")
+    #expect(router.path == [.project(device: "dev-1", id: "mille")])
     #expect(router.rungSession == "m2")
     #expect(router.landed == nil)
+    // SP-6 — a hit whose project the corpus has not named lands straight in
+    // the document, and the stepper stands only for its own device
+    router.land(.session(device: "dev-2", projectId: "", sessionId: "s9", ring: ["t1"], at: 0), query: "x")
+    #expect(router.path == [.session(device: "dev-2", id: "s9")])
+    #expect(router.stepperShowing)
+    router.path = [.session(device: "dev-1", id: "s9")]
+    #expect(!router.stepperShowing)
   }
 }

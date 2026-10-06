@@ -8,7 +8,14 @@
       "cache": false
     },
     "test": {
-      "inputs": ["default", "^default", "{workspaceRoot}/packages/fieldd/package.json"]
+      "inputs": [
+        "default",
+        "^default",
+        "{workspaceRoot}/packages/fieldd/package.json",
+        "{workspaceRoot}/packages/fieldd/scripts/**/*",
+        "{workspaceRoot}/packages/fieldd/src/workspace/**/*",
+        "{workspaceRoot}/packages/contracts/src/**/*"
+      ]
     }
   }
 }

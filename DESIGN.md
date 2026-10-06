@@ -1539,6 +1539,10 @@ The hot-point glow and rim retire with CardShell (above).
     button (GV-D10) and the Peek is not built, so History has no search yet. Its dialogs (a file, an
     image's gallery) land in a layer that ends at the reserve too, so a dialog is never under the line.
     The numbers are the frame's own (`frame/frame-geometry.ts`), never retyped.
+    *Corrected 2026-10-04 (the search interim, below):* History has a search until the Peek lands —
+    the room's own sheet — and the room's layer, where its dialogs and that sheet land, **starts at
+    the head band's foot (52)** as it ends at the reserve, so neither ever covers the band: the band
+    keeps only the lights, and a file shown full screen ends under it too.
   - **Its create is Resume** (`resume`, §13): waiting, faint by ink, until the room has a session
     chosen ("Resume this session — choose a session first"), and waiting with the empty pane
     launcher's own words for one it would not resume ("its folder is gone", "not offered here", "not
@@ -1574,12 +1578,41 @@ The hot-point glow and rim retire with CardShell (above).
     that cannot open says so in the same place, never a blank: **"History could not open"** over
     what failed, in its own words, and a quiet **Retry** (the splash's rule: the plain reason, then
     Retry).
+  - **Until the Peek lands, its search is the room's own sheet** (the search interim, ruled by James
+    2026-10-04; AR-D41 stands — the Peek is the one search, and this sheet leaves when it lands). The
+    room's strip, under the head band, holds the room's launcher — the pill that says what it searches
+    ("Search 11 sessions across 4 agents") — and **no key is spent on opening it**: ⌘K is the
+    palette's (§7), so the pill prints no key and opens with a press. It grows into the room's
+    top-attached sheet in the room's layer: its top on the head band's foot, its foot well above the
+    reserve, centred and never nearer a side than 84, so the slivers stay clear. While it stands the
+    sheet is **one of the frame's open surfaces** (`history-search`, §10): the palette, a drawer, the
+    Me menu, Settings or a change of view folds it, and opening it folds them — so **Esc** closes the
+    sheet, and nothing of the frame's is open to take that Esc first. A hit opens its session and
+    lands the transcript on the message; the stepper it leaves in the transcript's head walks the
+    session's other matches, and VibeField binds the two keys that stepper names: **⌘G** the next
+    match and **⇧⌘G** the previous (Ctrl G and Ctrl Shift G off the Mac), heard on the window's
+    capture phase while History is the view and nothing of the frame's is open. With no match to walk
+    the key is left alone. The empty transcript says **"Pick a session, or search above."** — the
+    room's own sentence named ⌘K, a key VibeField does not give it (RO-14). Recent searches keep
+    under `vf.history.` with the room's other preferences.
   - History follows the app's **theme** (the room reads the page's `.dark` and the kit's `--vf-*`);
     it has no toggle of its own. Under **reduced motion** the room's own transitions collapse — the
     floor the room asks of its host, scoped to the view. Its **preferences** (dealt project tints,
     the fold, recent searches) keep under `vf.history.` in the window's storage, where a refusal
     costs only the memory. ⌘3 out and back keeps the room as it was: its scroll, its choice, its
     open stream.
+- **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
+  keeps one system medium detent through loading, selection, refusal and spawning. Folder
+  comes first, chosen in its own large sheet above the launch sheet. No task field: the
+  terminal takes the task. A single agent or desktop is a quiet fact, multiple choices a
+  dropdown. A desktop choice shows its platform mark and name in the chrome's neutral ink.
+  The picker lists recent places, then home and volumes; folder rows carry child counts
+  when known and the desktop's absolute path. Files and links stay muted behind Show files;
+  links are never traversed. Every row has a discoverable Copy path action. Breadcrumbs and
+  search stay within the chosen export. Offline rows keep their last-known paths and say
+  “studio is asleep · read 11:42”; starting/restarting and partial search coverage are
+  stated explicitly. Forms use the existing chrome palette, system prose and monospaced
+  paths; the sheet radius remains 40 pt, as the phone's other sheets.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views
@@ -1731,7 +1764,9 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   each resting as a sliver over a covered view (§8, edge trays), and your face in the corner with
   its menu above the line (§8, the Me menu). **The frame's one owner now holds all of its open
   surfaces** — `objects · @ · fields · zoom · palette · me · clipboard · artifacts`, one value, so
-  any one opening folds every other (F11); Settings still folds them and is folded by them. **The
+  any one opening folds every other (F11); Settings still folds them and is folded by them.
+  *Until the Peek lands (2026-10-04, the search interim), History's room's sheet is a ninth,
+  `history-search` (§8 "History").* **The
   app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
   shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
   resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's

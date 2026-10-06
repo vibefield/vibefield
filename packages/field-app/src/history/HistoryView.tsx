@@ -1,4 +1,4 @@
-import type { RoomSelection } from "@rosetta/room";
+import type { HistoryRoomHandle, RoomSelection } from "@rosetta/room";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type ReactElement,
@@ -9,17 +9,20 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import type { FrameSurface } from "../frame/frame-surface";
 import {
   publishHistoryLineDoor,
   type ResumeOutcome,
   whenGodviewCanPlace,
 } from "../frame/line-door";
 import { requestView } from "../frame/view-state";
+import { viewKeysOf } from "../frame/views";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import { historyPortsOver } from "./doors";
 import { type ResumeReading, readResume, resumeNative } from "./resume";
 import { HistoryRoomMount } from "./room-chunk";
+import { historySearchSheet, useMatchStepKeys } from "./search";
 
 // HISTORY'S CONTROLLER (AR-8c). It builds the room's ports over this window's
 // fieldd client (`doors.ts`) and holds them for the view's life — the room is
@@ -31,6 +34,11 @@ import { HistoryRoomMount } from "./room-chunk";
 // the canvas's chunk and mounts the room through it, "Opening History" saying
 // so while it arrives — so the ports, the feed's words and the line's door are
 // here from the first open, before the room is.
+//
+// Until the Peek lands it also hosts the room's own search (the search
+// interim, 2026-10-04; `search.ts`): the sheet's open state is the frame's one
+// value, which this controller reads and asks, and ⌘G / ⇧⌘G walk the stepper
+// the sheet leaves while History is the view.
 
 /** How long Resume waits for Godview's deck — mounted on Godview's first open
  * — to be able to place the resumed agent. */
@@ -40,10 +48,30 @@ function log() {
   return getRendererLogger().child({ component: "history" });
 }
 
-export function HistoryView({ active }: { active: boolean }): ReactElement {
+export function HistoryView({
+  active,
+  surface,
+  onSurfaceChange,
+}: {
+  active: boolean;
+  /** The frame's open surface and its one owner's setter: the room's search
+   * sheet is one of them while the interim stands (`history-search`). */
+  surface: FrameSurface | null;
+  onSurfaceChange: (next: FrameSurface | null) => void;
+}): ReactElement {
   const fieldd = useFielddClient();
   const ports = useMemo(
-    () => historyPortsOver(fieldd, { platform: getHost().platform ?? null }),
+    () =>
+      historyPortsOver(fieldd, {
+        platform: getHost().platform ?? null,
+        workspace: {
+          copyText: async (text) => {
+            const diagnostics = getHost().diagnostics;
+            if (diagnostics) await diagnostics.copyText(text);
+            else await navigator.clipboard.writeText(text);
+          },
+        },
+      }),
     [fieldd],
   );
   useEffect(() => () => ports.dispose(), [ports]);
@@ -109,5 +137,23 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   }, [chosen, waits, resume]);
   useEffect(() => () => publishHistoryLineDoor(null), []);
 
-  return <HistoryRoomMount ports={ports} unavailable={words} onSelect={setSelection} />;
+  // The room's search until the Peek lands: the sheet is the frame's one
+  // value, and ⌘G / ⇧⌘G walk the matches a hit leaves (`search.ts`).
+  const search = useMemo(
+    () => historySearchSheet(surface, onSurfaceChange),
+    [surface, onSurfaceChange],
+  );
+  const room = useRef<HistoryRoomHandle | null>(null);
+  const [keys] = useState(() => viewKeysOf(getHost().platform));
+  useMatchStepKeys({ active, frameOpen: surface !== null, keys, room });
+
+  return (
+    <HistoryRoomMount
+      ports={ports}
+      unavailable={words}
+      onSelect={setSelection}
+      search={search}
+      roomRef={room}
+    />
+  );
 }

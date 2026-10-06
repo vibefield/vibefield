@@ -65,8 +65,15 @@ import {
   IndexSessionParams,
   IndexSessionResponse,
   IndexSessionResult,
+  IndexSessionSubscribeParams,
   IndexSessionsResult,
+  IndexSessionTailDelta,
+  IndexSessionTailOpen,
   IndexStatus,
+  IndexTimelineFrameRow,
+  IndexTimelinePageResponse,
+  IndexTimelineParams,
+  IndexTimelineResult,
   IndexUsageResponse,
 } from "../src/agent-index";
 import {
@@ -170,6 +177,32 @@ import {
   TransferGeometry,
   TransportCredit,
 } from "../src/terminal-pipeline";
+import {
+  WorkspaceCloseTicketParams,
+  WorkspaceCloseTicketResult,
+  WorkspaceFileActionParams,
+  WorkspaceFileActionResult,
+  WorkspaceGitFactsParams,
+  WorkspaceGitFactsResult,
+  WorkspaceGitOpen,
+  WorkspaceGitOpened,
+  WorkspaceGitPortTranscript,
+  WorkspaceListParams,
+  WorkspaceListResult,
+  WorkspaceOpenTicketParams,
+  WorkspaceOpenTicketResult,
+  WorkspacePickFolderParams,
+  WorkspacePickFolderResult,
+  WorkspaceRootsDelta,
+  WorkspaceRootsFile,
+  WorkspaceRootsOpen,
+  WorkspaceRootsParams,
+  WorkspaceRootsResult,
+  WorkspaceSearchParams,
+  WorkspaceSearchResult,
+  WorkspaceSubscribeParams,
+  WorkspaceUnavailableDetails,
+} from "../src/workspace";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "fixtures");
 
@@ -308,6 +341,20 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "index-usage": IndexUsageResponse,
   "index-contribution": IndexContributionResponse,
   "index-day-usage": IndexDayUsageResponse,
+  // SP-6 — one session's transcript over the door: rosetta's page body and
+  // its socket frames (both transcribed from the pin's `wire.json`), the page
+  // door's ask and answer over that page, the tail's ask, its open and a
+  // delta, and the cursor refusal (`error-data.index-timeline-cursor-expired`,
+  // the ErrorData prefix).
+  "index-timeline-page": IndexTimelinePageResponse,
+  "index-timeline-frames": z
+    .object({ frames: z.array(IndexTimelineFrameRow), mutations: z.array(z.unknown()) })
+    .passthrough(),
+  "index-timeline-params": IndexTimelineParams,
+  "index-timeline": IndexTimelineResult,
+  "index-session-subscribe-params": IndexSessionSubscribeParams,
+  "index-session-tail-open": IndexSessionTailOpen,
+  "index-session-tail-delta": IndexSessionTailDelta,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,
@@ -433,6 +480,33 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "tp-attach-refused": AttachRefused,
   "tp-protocol-limits": ProtocolLimits,
   "tp-tagged-message": TaggedTpMessage,
+  // FS-1a — the files service's door tier (workspace.ts): every door's params
+  // and answer, the roots' rows, the honest refusal, and the git port's
+  // protocol (L7 — fieldd's tests run each exchange against the real worker).
+  "workspace-pick-folder-params": WorkspacePickFolderParams,
+  "workspace-pick-folder": WorkspacePickFolderResult,
+  "workspace-roots-params": WorkspaceRootsParams,
+  "workspace-roots": WorkspaceRootsResult,
+  "workspace-list-params": WorkspaceListParams,
+  "workspace-list": WorkspaceListResult,
+  "workspace-search-params": WorkspaceSearchParams,
+  "workspace-search": WorkspaceSearchResult,
+  "workspace-git-facts-params": WorkspaceGitFactsParams,
+  "workspace-git-facts": WorkspaceGitFactsResult,
+  "workspace-subscribe-params": WorkspaceSubscribeParams,
+  "workspace-roots-open": WorkspaceRootsOpen,
+  "workspace-roots-delta": WorkspaceRootsDelta,
+  "workspace-unavailable": WorkspaceUnavailableDetails,
+  "workspace-git-port": WorkspaceGitPortTranscript,
+  "workspace-roots-file": WorkspaceRootsFile,
+  "workspace-open-ticket-params": WorkspaceOpenTicketParams,
+  "workspace-open-ticket": WorkspaceOpenTicketResult,
+  "workspace-close-ticket-params": WorkspaceCloseTicketParams,
+  "workspace-close-ticket": WorkspaceCloseTicketResult,
+  "workspace-git-open": WorkspaceGitOpen,
+  "workspace-git-opened": WorkspaceGitOpened,
+  "workspace-file-action-params": WorkspaceFileActionParams,
+  "workspace-file-action": WorkspaceFileActionResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

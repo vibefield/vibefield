@@ -1946,8 +1946,36 @@
               <code>index.openTicket</code> hands a window the loopback pair and an RO-10 grant for that
               session, ten minutes ahead, and the window's own rosetta client dials rosettad with it, so
               no transcript byte crosses fieldd (EL2). The phone's and another desktop's tickets wait on
-              the tailnet set (SP-6, DS-7) and answer <code>direct-plane-unbuilt</code> meanwhile; the
+              the tailnet set (SP-7, DS-7) and answer <code>direct-plane-unbuilt</code> meanwhile; the
               room and its mount are AR-8a and AR-8c. <span class="badge tone-built">Built</span>
+              <em>Corrected 2026-10-04 (SP-6):</em> this said the PHONE's ticket is SP-6's — SP-6 is the
+              phone's History over the DOOR (below); the phone's ticket is SP-7's.
+            </p>
+            <h3>The phone's History lane (SP-6)</h3>
+            <p class="section-note">
+              The phone reads a desktop's real sessions OVER THE DOOR until the ticket (SP-D5 (a), ruled
+              2026-10-03; built 2026-10-04): the catalog doors above for the ledger, a project and search,
+              and two doors of its own — <code>index.timeline</code>, one backward page of a session's
+              rows (the projection of rosetta's page: kind, stamps, bounded words, a tool line's facts,
+              attachments as refs; <code>local</code>, cut at <code>INDEX_TAILNET_LIMITS.MAX_ROWS</code> for
+              a phone and <code>clipped</code>), and <code>index.session.subscribe</code>, the live tail as
+              rows at <code>INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS</code> (1 s). fieldd follows rosetta's
+              own session socket THROUGH rosetta's own client, the bearer riding the subprotocol pair and
+              never leaving fieldd, one socket per session however many subscribers
+              (<code>packages/fieldd/src/index-tail.ts</code>); a tailnet subscriber's snapshot frames carry
+              the newest hundred rows, its deltas every change; rosetta's <code>resync</code>, a dropped
+              socket and the daemon's restart each reset the copy with a <code>.snapshot</code>. On the phone
+              (<code>apps/ios/VibeFieldKit/Sources/FieldHistory/</code>): one reader per self desktop whose
+              door answers, the HOME first (DS-8), the home's shared client or a door opened for the
+              reading; the reads fill the mock's own values; a 24 MiB LRU cache keyed
+              <code>{device, session, stamp}</code> replays a desktop that cannot answer under its own name
+              (<code>mini is asleep · read 11:42</code>); images and files are placeholders, never relayed
+              (H-D9, EL2). The swap to the ticket at SP-7 changes the body's transport, not the phone's
+              model (SP-L2). <span class="badge tone-built">Built</span>
+              <strong>Owed:</strong> SP-7's ticket (truffle's egress release), H-D6's chip (the field's rows
+              carry no provider-native session id), a spend column on the catalog row, the
+              <code>{unchanged}</code> revalidation, the over-the-air run (James).
+              <span class="badge tone-owed">Owed</span>
             </p>
             <h3>The mount (AR-8c)</h3>
             <p class="section-note">
@@ -1957,6 +1985,11 @@
               slot. Pinned at rosetta <code>00b97869</code> (the room merged; EL8 — the Rust and
               <code>clients/ts</code> unchanged from the pin before it).
               <span class="badge tone-built">Built</span>
+              <em>The search interim (2026-10-04, until the Peek lands — AR-D41 stands):</em> History
+              searches with the room's own sheet, its open state one of the frame's surfaces
+              (<code>history-search</code>), no key printed (<code>shortcut: null</code>), the empty
+              transcript in VibeField's words, and ⌘G/⇧⌘G bound by the host to the stepper
+              (<code>history/search.ts</code>).
             </p>
             <div class="contract-list">
               <div class="contract-row">
@@ -1973,7 +2006,9 @@
                   refused in fieldd's own words ("the agent index is starting"), which the room shows under
                   its "rosettad is not answering". One <code>index.project</code> answer serves both the
                   panel's figures and its usage; <code>index.projectDay</code> the day; <code>index.search</code>
-                  the room's search port, which no sheet uses here (the Peek is GT's).
+                  the room's search port, which no sheet uses here (the Peek is GT's). <em>Corrected
+                  2026-10-04 (the search interim):</em> the room's own sheet uses it until the Peek
+                  lands.
                 </p>
               </div>
               <div class="contract-row">
@@ -2033,7 +2068,7 @@
               (526 bytes in 10 frames while the stream opened). <span class="badge tone-built">Built</span>
               <strong>Owed:</strong> the Peek's "Everything" scope and <code>openAt</code> (GT), Jump to for a
               live session, the transcript's delegated threads, attachments, the file door (AR-8d), and
-              the phone's and another desktop's tickets (SP-6, DS-7).
+              the phone's and another desktop's tickets (SP-7, DS-7).
               <span class="badge tone-owed">Owed</span>
             </p>
           </section>
@@ -2090,9 +2125,9 @@
                   </tr>
                   <tr>
                     <td><span class="route">agents/history/&lt;runtimeRunId&gt;.jsonl</span></td>
-                    <td><p>TL-D8 — the status ledger: one line per status change of a managed run (a status, its moment, a blocker's kind and words, a working span's last activity line, each text cut to <code>AGENT_HISTORY.TEXT_CHARS</code>), appended while the run lives and loaded again when a later boot re-attaches it. Kept until the run exits plus <code>AGENT_HISTORY.HORIZON_MS</code>; a ledger with no verified record goes at the next sweep. Read as untrusted: no links followed, the last MiB at most, bad lines skipped.</p></td>
-                    <td><p><code>AgentRuntimeService</code> (<code>agent-status-ledger.ts</code>), append-only, compacted by rewrite</p></td>
-                    <td><p>0700/0600</p></td>
+                    <td><p>Prior TL-D8 files only (corrected 2026-10-06). MV-6 removed the status recorder and its layout key. The product no longer reads, appends, compacts or sweeps this ledger. Existing files remain untouched; deleting them is the user's decision.</p></td>
+                    <td><p>None — retired at MV-6</p></td>
+                    <td><p>unchanged</p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agents/runs/</span></td>

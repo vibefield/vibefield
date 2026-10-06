@@ -8,7 +8,10 @@
 // FR-2 built it as the LINE's owner (Objects and @'s list); FR-3 renamed it
 // the FRAME's when the head's three surfaces joined; FR-4 added the corner's
 // Me menu and the two edges' drawers, so every surface the frame opens is in
-// this one value (DESIGN.md §10).
+// this one value (DESIGN.md §10). Until the Peek lands, History's search — the
+// room's own sheet (the search interim, 2026-10-04; DESIGN.md §8 "History") —
+// is in it too, so the palette, a drawer, the Me menu, Settings and a change
+// of view fold the sheet, and opening it folds them.
 
 export type FrameSurface =
   /** Objects — on this build the widget tray's sheet behind the line. */
@@ -26,7 +29,11 @@ export type FrameSurface =
   /** The left edge's drawer: the clipboard. */
   | "clipboard"
   /** The right edge's drawer: Artifacts (the Artifact Hub). */
-  | "artifacts";
+  | "artifacts"
+  /** History's search until the Peek lands: the room's own sheet, grown from
+   * its strip's launcher (`history/search.ts`). Dated; it leaves with the
+   * interim. */
+  | "history-search";
 
 /** What a surface's own close asks of the owner: fold it if it is the one
  * open, and leave the others alone — the tray's Esc must not close @'s list. */

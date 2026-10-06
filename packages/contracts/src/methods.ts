@@ -1724,6 +1724,114 @@ export const METHODS: MethodDef[] = [
     idempotent: false,
     locality: "federate",
   }),
+  // SP-6 (thinking-sync-planes.md §5.4 "until RO-1"; SP-D5 (a), 2026-10-03;
+  // thinking-ios-history.md H-D2) — one session's transcript over the DOOR,
+  // until the ticket (SP-7) moves the bodies to rosetta's own socket: the
+  // page door and the tail. Both read the history's content, so `index.search`
+  // — every principal that holds it (a window, a self phone) is served; a
+  // tailnet caller's page and snapshot are cut at INDEX_TAILNET_LIMITS.MAX_ROWS
+  // at the door (`tailnetRowLimit`), `clipped` saying so on a page.
+  // `index.timeline` is `local`: the connected desktop's OWN history, which is
+  // the phone's shape (SP-D2 (a) — it dials each desktop; no `device`), and a
+  // peer daemon is refused it by the D36 wall, as `index.recent` is. The tail
+  // is a `rows` stream (SP-L4) at the registry's floor — rosetta's own room
+  // coalesces at 16 ms, a radio has no use for that. The subscription's name
+  // follows the registry's `<family>.<thing>.subscribe` (`index.changes.subscribe`);
+  // H-D2 had called it `index.subscribeSession`, corrected at its source.
+  defineMethod({
+    surface: "product",
+    method: "index.timeline",
+    scope: "index.search",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "index.session.subscribe",
+    scope: "index.search",
+    idempotent: true,
+    locality: "stream",
+    subscription: { shape: "rows", cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS },
+  }),
+  // ── workspace.* — FS-1a, the files service's DOOR TIER
+  // (thinking-files-service.md §3, RULED 2026-10-05; workspace.ts) ──
+  // Bounded rows from fieldd's files worker (mille's engine): the roots this
+  // desktop exports, a folder's entries page by page, a search within a root,
+  // a root's git facts. `workspace.read` — already in the tailnet preset and
+  // plugin-eligible, so the handlers gate by PRINCIPAL (FS-D6 (a), RO-13's
+  // rule): a plugin, an MCP agent and a guest are refused whatever they hold;
+  // a renderer participant window, a self phone and a self peer read rows. `federate`:
+  // a foreign `device` forwards the call whole and the owner answers from its
+  // own worker (another desktop's roots are its own). Idempotent reads, every
+  // one. FS-1b attaches only this desktop's renderer windows; close releases a lease.
+  // FS-3's attended folder choice is local and non-idempotent, unlike the reads.
+  defineMethod({
+    surface: "product",
+    method: "workspace.pickFolder",
+    scope: "workspace.read",
+    idempotent: false,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.fileAction",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.closeTicket",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "local",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.openTicket",
+    scope: "workspace.read",
+    idempotent: false,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.roots",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.list",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.search",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "workspace.gitFacts",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  // L3 — the roots as rows (DS-L3) at the stream floor: a place appears when
+  // an agent is spawned in a new folder, a root flips `missing`, a volume
+  // mounts. Roots move a few times a day; a phone's radio has no use for more.
+  defineMethod({
+    surface: "product",
+    method: "workspace.subscribe",
+    scope: "workspace.read",
+    idempotent: true,
+    locality: "stream",
+    subscription: { shape: "rows", cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS },
+  }),
   // ── agents.* (AR-1 — the contract; handlers land with puppeteer's first
   // import at AR-2, until when the dispatcher answers NOT_FOUND for them) ──
   // Distribution is MACHINE scope (AR-D15/D16): the installs puppeteer

@@ -1,0 +1,39 @@
+{
+  "rootId": "r_9b2d5e8a1c4f7036ad52",
+  "path": "/Users/ada/Projects/project100",
+  "entries": [
+    {
+      "id": 42,
+      "name": "vibe-field",
+      "kind": "dir",
+      "path": "/Users/ada/Projects/project100/vibe-field",
+      "mtime": 1759680011402,
+      "childCount": 31
+    },
+    {
+      "id": 43,
+      "name": "puppeteer",
+      "kind": "dir",
+      "path": "/Users/ada/Projects/project100/puppeteer",
+      "mtime": 1759593611000
+    },
+    {
+      "id": 44,
+      "name": "latest",
+      "kind": "symlink",
+      "path": "/Users/ada/Projects/project100/latest",
+      "mtime": 1759593611000
+    },
+    {
+      "id": 45,
+      "name": "README.md",
+      "kind": "file",
+      "path": "/Users/ada/Projects/project100/README.md",
+      "size": 2048,
+      "mtime": 1759507211000
+    }
+  ],
+  "nextCursor": null,
+  "clipped": false,
+  "total": 4
+}

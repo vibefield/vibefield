@@ -345,6 +345,12 @@ public final class FieldLink {
   /// AC-D9 — each door's own answer to `agent.catalog`, by device id: the
   /// home's, and an earlier home's until that desktop is forgotten.
   @ObservationIgnored private var catalogs: [String: AgentCatalog] = [:]
+  // History owns these clients; other row readers borrow the same socket.
+  private final class ReadingDoor {
+    weak var client: FieldProductClient?
+    init(_ client: FieldProductClient) { self.client = client }
+  }
+  @ObservationIgnored private var readingDoors: [String: ReadingDoor] = [:]
   /// Homes whose CURRENT connection has been asked for its catalog. Set
   /// synchronously, and cleared whenever the client leaves `ready`, so the next
   /// hello — a new connection — is asked afresh.
@@ -526,6 +532,7 @@ public final class FieldLink {
     boardFrom = nil
     found.removeAll()
     catalogs.removeAll()
+    readingDoors.removeAll()
     catalogAsked.removeAll()
     rosterAskedFor = nil
     catalog = .empty
@@ -561,6 +568,38 @@ public final class FieldLink {
   /// door is held open).
   public func client(for deviceId: String) -> FieldProductClient? {
     deviceId == home ? homeClient : nil
+  }
+
+  /// SP-6 — a door to one self desktop for the History tab's whole reading of
+  /// it (SP-D2 (a): History is a multi-door client — each desktop's index is
+  /// read where it lives, never through the home). The HOME's own client when
+  /// the desktop is the home (shared; `owned` false — the caller never closes
+  /// it); else a client opened for this desktop, counted against the phone's
+  /// budget like every door (one per desktop, `PhoneConnectionBudget`), which
+  /// the caller closes when the reading ends (`owned` true). Only a door this
+  /// phone has heard ANSWER is opened — nil for any other, in the honest
+  /// shape of "there is no door to ask".
+  public func openHistoryDoor(_ deviceId: String) -> (client: FieldProductClient, owned: Bool)? {
+    if deviceId == home, let homeClient { return (homeClient, false) }
+    guard let entry = found[deviceId], case .answering = entry.admission,
+      let url = entry.doorURL, endpointRefusals[deviceId] == nil
+    else { return nil }
+    let client = FieldProductClient(url: url, transport: transport, options: doorOptions(deviceId))
+    readingDoors[deviceId] = ReadingDoor(client)
+    return (client, true)
+  }
+
+  /// FS-2: bounded row reads and spawn on the selected owner. No new socket
+  /// while History already holds its door, and no forwarding through home.
+  public func workspaceCall(
+    on deviceId: String, method: String, params: JSONValue? = nil
+  ) async throws -> JSONValue {
+    guard ["workspace.roots", "workspace.list", "workspace.search", "agent.catalog", "agent.spawn"].contains(method) else {
+      throw FieldProductError(kind: "FORBIDDEN_SCOPE", message: "not a workspace act", retryable: false)
+    }
+    return try await ownerDoor(deviceId, refusal: Self.noTerminalDoor) { client in
+      try await client.call(method, params: params)
+    }
   }
 
   /// TM-5 — a routed terminal ticket for one session on one desktop.
@@ -653,6 +692,9 @@ public final class FieldLink {
     guard let entry = found[deviceId], case .answering = entry.admission,
       let url = entry.doorURL, endpointRefusals[deviceId] == nil
     else { throw refusal }
+    if let client = readingDoors[deviceId]?.client, client.state != .closed {
+      return try await ask(client)
+    }
     let client = FieldProductClient(url: url, transport: transport, options: doorOptions(deviceId))
     defer { client.close() }
     return try await ask(client)

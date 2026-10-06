@@ -17,6 +17,9 @@ export function daemonPlaneInputs(paths, pluginProjects) {
     paths.serviceHarnessOutput,
     paths.fielddWasm,
     paths.agentShimOutput,
+    // FS-1a — the files worker runs with the daemon: a rebuilt worker bounces the pair
+    paths.filesHostOutput,
+    paths.milleNativeOutput,
     paths.nativeOutput,
     ...pluginProjects.flatMap((project) => [
       join(paths.repoRoot, project.manifestFile),

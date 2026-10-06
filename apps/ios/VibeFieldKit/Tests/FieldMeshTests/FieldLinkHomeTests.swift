@@ -388,6 +388,27 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
 
 @MainActor
 @Suite struct FieldLinkOwnerDoorTests {
+  @Test func workspaceBorrowsHistorysOwnerDoorWithoutAnotherBudgetLeg() async throws {
+    let ledger = PhoneConnectionBudget()
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost, homeDoor(studioBoard))
+    await door.route(laptopDoorHost) { method, id, _ in
+      if method == "system.hello" { return [frame(id: id, ack)] }
+      return [frame(id: id, .object(["from": .string("laptop")]))]
+    }
+    let (link, _) = try await homedLink(door: door, budget: ledger)
+    defer { link.stop() }
+    try await waitUntil("home ready") { link.agents.count == 2 }
+    let history = try #require(link.openHistoryDoor("dev-laptop"))
+    defer { history.client.close() }
+    _ = try await history.client.call("index.projects")
+    let answer = try await link.workspaceCall(on: "dev-laptop", method: "workspace.roots")
+    #expect(answer["from"] == .string("laptop"))
+    #expect(await door.dials(to: laptopDoorHost) == 1)
+    #expect(ledger.inUse(.door(desktop: "dev-laptop")) == 1)
+    #expect(ledger.waiting(for: .door(desktop: "dev-laptop")) == 0)
+  }
+
   /// A terminal ticket for a session on ANOTHER desktop dials THAT desktop's
   /// door, on demand — hello, the ticket, nothing else — and lets it go when
   /// the answer is in. A ticket for the home's own session rides the home's

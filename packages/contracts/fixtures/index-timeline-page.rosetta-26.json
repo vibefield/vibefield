@@ -1,0 +1,196 @@
+{
+  "//": "rosetta's timeline page (the body of /api/sessions/{id}/timeline) at protocol 26, transcribed VERBATIM (the `//` note apart) from the pinned checkout's committed golden crates/protocol/tests/golden/wire.json, key `timeline_page`, at revision 00b97869d27a644a237f98ef64b7d51483d33ad4 (siblings.lock.json), sha256 5e1d57fb62b47b9f25d40eac6ddaa654bbc374ff2da4e84194c71db7c521cc72. fieldd PARSES this body (never casts it); a wire change upstream reds the contracts suite here rather than surfacing as an empty document on the phone.",
+  "cursor": "{\"session_id\":\"s1\",\"before\":7,\"watermark\":\"1.2.3\"}",
+  "entries": [
+    {
+      "at": 3600000,
+      "block_index": 0,
+      "body": {
+        "tool": {
+          "action": {
+            "background": false,
+            "command": {
+              "text": "one",
+              "type": "inline"
+            },
+            "cwd": null,
+            "outcome": {
+              "exit_code": 0,
+              "process_id": null,
+              "signal": null
+            },
+            "source_truncated": true,
+            "timeout_ms": null,
+            "type": "shell"
+          },
+          "attachments": [
+            {
+              "byte_len": null,
+              "dimensions": null,
+              "id": "tool-image-1",
+              "kind": "image",
+              "label": null,
+              "media_type": null,
+              "message_ranges": [],
+              "name": null,
+              "source": {
+                "asset": {
+                  "byte_len": 17,
+                  "digest": "09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc",
+                  "image_variants": {
+                    "preview": {
+                      "byte_len": 19,
+                      "digest": "b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9",
+                      "media_type": "image/webp",
+                      "url": "/api/assets/b52df5cf0e656a83a86bc2ff13bb1c9eb6226da58a8e65b83d18fefdcb285af9.webp"
+                    },
+                    "rail": {
+                      "byte_len": 16,
+                      "digest": "519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762",
+                      "media_type": "image/webp",
+                      "url": "/api/assets/519d98f459836c14839edca49654dbeb4d698380f38e80bc37c23725817fc762.webp"
+                    },
+                    "tile": {
+                      "byte_len": 16,
+                      "digest": "72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d",
+                      "media_type": "image/webp",
+                      "url": "/api/assets/72eb3b938fb710cae106aa3e7805002363c6df4d63a1d175a07d816dad47211d.webp"
+                    },
+                    "tile2x": {
+                      "byte_len": 18,
+                      "digest": "18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732",
+                      "media_type": "image/webp",
+                      "url": "/api/assets/18c7bfef4056353384174f2edda6228c7cb0d02d1781ae4a0e078dd1f438d732.webp"
+                    }
+                  },
+                  "media_type": "image/webp",
+                  "url": "/api/assets/09aab85791343d3f141e31e18f5a98b981114f9b2babb2437b5747d98b8502cc.webp"
+                },
+                "type": "asset"
+              }
+            }
+          ],
+          "correlation": {
+            "derivation": "native_id",
+            "key": "toolu_1"
+          },
+          "failure": null,
+          "native": {
+            "id": "toolu_1",
+            "name": "Bash",
+            "namespace": null,
+            "provider": null
+          },
+          "status": {
+            "basis": "native_terminal_record",
+            "value": "succeeded"
+          },
+          "timing": null
+        },
+        "type": "tool_use"
+      },
+      "cost": {
+        "reason": "unknown_model",
+        "status": "unpriced"
+      },
+      "effort": "high",
+      "group": {
+        "derivation": "native",
+        "id": "turn-1",
+        "kind": "human_turn"
+      },
+      "model": "claude-opus-5",
+      "native_id": "u1",
+      "ordinal": 7,
+      "parent_native_id": "u0",
+      "parent_tool_native_id": "toolu_0",
+      "provenance": {
+        "agent_version": "2.1.240",
+        "src_cursor": 4,
+        "src_offset": 1024
+      },
+      "response": {
+        "derivation": "native",
+        "id": "response-1"
+      },
+      "session_id": "s1",
+      "timeline_id": "t1",
+      "usage": {
+        "billed_pico_usd": 1250000,
+        "cache_read": 3,
+        "cache_write": 2,
+        "cache_write_1h": 4,
+        "input": 10,
+        "output": 5,
+        "requests": null,
+        "route": "openrouter",
+        "scope": "request",
+        "service_tier": "standard",
+        "thinking": 1,
+        "web_searches": 1
+      }
+    },
+    {
+      "at": 3800000,
+      "block_index": null,
+      "body": {
+        "event": {
+          "authored_at": 3799000,
+          "body": {
+            "text": "All design deltas landed.",
+            "type": "inline"
+          },
+          "channel": "team",
+          "color": "green",
+          "delivery_id": "delivery-2",
+          "kind": "report",
+          "recipient": "coordinator",
+          "sender": "w2-docs",
+          "source_response_id": "team-response-2",
+          "source_session_id": "team-member-s2",
+          "status": "completed",
+          "summary": "design docs updated",
+          "task_id": "task-2",
+          "team": "refinement",
+          "work_end_timeline_id": "team-work-end",
+          "work_start_timeline_id": "team-work-start"
+        },
+        "type": "collaboration"
+      },
+      "effort": null,
+      "group": {
+        "derivation": "native",
+        "id": "team-delivery-1",
+        "kind": "system_cycle"
+      },
+      "model": null,
+      "native_id": "team-native-1",
+      "ordinal": 9,
+      "parent_native_id": "team-parent-1",
+      "parent_tool_native_id": null,
+      "provenance": {
+        "agent_version": "2.1.240",
+        "src_cursor": 4,
+        "src_offset": 3072
+      },
+      "response": null,
+      "session_id": "s1",
+      "timeline_id": "team-report-1",
+      "usage": {
+        "billed_pico_usd": null,
+        "cache_read": null,
+        "cache_write": null,
+        "cache_write_1h": null,
+        "input": null,
+        "output": null,
+        "requests": null,
+        "route": null,
+        "scope": "request",
+        "service_tier": null,
+        "thinking": null,
+        "web_searches": null
+      }
+    }
+  ],
+  "watermark": "1.2.3"
+}

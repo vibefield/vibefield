@@ -227,6 +227,19 @@ describe("design system page", () => {
     expect(plate("hx")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
       "true",
     );
+    // History's search until the Peek lands (the search interim, 2026-10-04):
+    // every History plate holds the room's search as the product does — the
+    // strip's pill, no key printed, the empty transcript in VibeField's words —
+    // and one plate holds a search, the room's sheet a press away.
+    const history = (state: string): Element | null =>
+      container?.querySelector(`.vf-ds-history-plate[data-state="${state}"]`) ?? null;
+    expect(history("room")?.querySelector(".ah-launcher__open")).not.toBeNull();
+    expect(container?.querySelector(".vf-ds-history-plate .ah-launcher kbd")).toBeNull();
+    expect(history("room")?.querySelector(".ah-col--measure")?.textContent).toContain(
+      "Pick a session, or search above.",
+    );
+    expect(history("search")?.querySelector(".ah-launcher__open")?.textContent).toBe("plus");
+    expect(history("search")?.querySelector('[role="dialog"]')).toBeNull();
   });
 
   it("exposes theme and representative component-state controls", async () => {

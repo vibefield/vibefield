@@ -13,10 +13,23 @@ public enum FieldHistoryModel {
   /// What this phone knows about the desktop whose index it reads.
   public enum DesktopStanding: Equatable, Sendable {
     case connected
-    /// The desktop's node is off the tailnet; figures dim, green is withheld.
+    /// The desktop's node is off the tailnet, or its door does not answer;
+    /// figures dim, green is withheld, what was read stands (H-D7).
     case asleep
     /// The desktop is building its index: a percentage and a denominator.
     case indexing(percent: Int, done: String, total: String)
+    /// SP-6 — the desktop's door speaks another contracts version than this
+    /// phone (the record's `studio speaks protocol 21 · this phone 20`, named
+    /// in the numbers the DOOR compares — contracts, never rosetta's own).
+    case incompatible(theirs: String, ours: String)
+
+    /// Whether the desktop can answer right now: the figures are live.
+    public var isAwake: Bool {
+      switch self {
+      case .connected, .indexing: true
+      case .asleep, .incompatible: false
+      }
+    }
   }
 
   public enum Rank: String, CaseIterable, Sendable {
@@ -48,6 +61,8 @@ public enum FieldHistoryModel {
       return "\(corpus.desktop) is asleep · read \(corpus.readAt)"
     case .indexing(let percent, _, _):
       return "\(corpus.desktop) is indexing · \(percent)%"
+    case .incompatible(let theirs, let ours):
+      return "\(corpus.desktop) speaks contracts \(theirs) · this phone \(ours)"
     }
   }
 
@@ -59,7 +74,7 @@ public enum FieldHistoryModel {
 
   /// The group head over the live rows.
   public static func liveHeader(_ corpus: HistoryCorpus, standing: DesktopStanding) -> (label: String, count: Int?) {
-    if standing == .asleep { return ("Last seen live · \(corpus.readAt)", nil) }
+    if !standing.isAwake { return ("Last seen live · \(corpus.readAt)", nil) }
     return ("Live now", corpus.live.count)
   }
 
@@ -126,7 +141,7 @@ public enum FieldHistoryModel {
 
   /// The foot's count: what the search found, or why it could not look.
   public static func searchFoot(query: String, matches: Int, standing: DesktopStanding, desktop: String) -> String {
-    if standing == .asleep { return "Search needs \(desktop)" }
+    if !standing.isAwake { return "Search needs \(desktop)" }
     if terms(query).isEmpty { return "Recent searches" }
     return "\(matches) \(matches == 1 ? "match" : "matches")"
   }
@@ -138,7 +153,7 @@ public enum FieldHistoryModel {
   }
 
   public static func quiet(query: String, kind: SearchKind, matches: Int, corpus: HistoryCorpus, standing: DesktopStanding) -> Quiet? {
-    if standing == .asleep {
+    if !standing.isAwake {
       return Quiet(
         title: "\(corpus.desktop) is asleep",
         body:
@@ -205,19 +220,26 @@ public enum FieldHistoryModel {
 
   public enum Landing: Equatable, Sendable {
     /// The session's document, with the ring of hits to step through.
-    case session(projectId: String, sessionId: String, ring: [String], at: Int)
-    /// The project, with the session row to ring: the corpus holds no document.
-    case project(projectId: String, sessionId: String)
+    case session(device: String, projectId: String, sessionId: String, ring: [String], at: Int)
+    /// The project, with the session row to ring: the corpus holds no document
+    /// (the mock's rows without one; a door's rows name no project yet).
+    case project(device: String, projectId: String, sessionId: String)
   }
 
+  /// Where a tapped hit goes. Over a DOOR (SP-6) a document is read when the
+  /// session opens, so a group whose session the corpus does not hold yet
+  /// still lands in the document — the reader fills it; only the mock's
+  /// rows without a document land on the project.
   public static func landing(for hit: HistoryHit, in group: HistoryHitGroup, corpus: HistoryCorpus) -> Landing {
-    guard corpus.document(group.sessionId) != nil else {
-      return .project(projectId: group.projectId, sessionId: group.sessionId)
+    let readsOnOpen = corpus.searchedQuery != nil
+    guard readsOnOpen || corpus.document(group.sessionId) != nil else {
+      return .project(device: corpus.deviceId, projectId: group.projectId, sessionId: group.sessionId)
     }
     var ring: [String] = []
     for row in group.rows where !ring.contains(row.anchor) { ring.append(row.anchor) }
     let at = ring.firstIndex(of: hit.anchor) ?? 0
-    return .session(projectId: group.projectId, sessionId: group.sessionId, ring: ring, at: at)
+    let projectId = group.projectId.isEmpty ? (corpus.documents[group.sessionId]?.projectId ?? "") : group.projectId
+    return .session(device: corpus.deviceId, projectId: projectId, sessionId: group.sessionId, ring: ring, at: at)
   }
 
   /// The stepper's words: `2 of 3`.

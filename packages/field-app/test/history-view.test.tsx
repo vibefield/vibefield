@@ -15,9 +15,10 @@ import { fileURLToPath } from "node:url";
 import type { FrameView, FrameViewState } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
-import { act } from "react";
+import { act, type ReactElement, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import type { FrameSurface } from "../src/frame/frame-surface";
 import {
   type LineViewDoor,
   publishGodviewLineDoor,
@@ -152,18 +153,24 @@ function mount(client: ReturnType<typeof fieldd>): void {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  act(() =>
-    root?.render(
+  // FieldView's place: the frame's one owner of the open surface, which holds
+  // History's search sheet too while the interim stands.
+  function Owner(): ReactElement {
+    const [surface, setSurface] = useState<FrameSurface | null>(null);
+    return (
       <FielddProvider client={client as unknown as FielddClient}>
         <ViewFrame
           godview={<div data-testid="godview-content" />}
-          history={(active) => <HistoryView active={active} />}
-          surface={null}
-          onSurfaceChange={() => undefined}
+          history={(active) => (
+            <HistoryView active={active} surface={surface} onSurfaceChange={setSurface} />
+          )}
+          surface={surface}
+          onSurfaceChange={setSurface}
         />
-      </FielddProvider>,
-    ),
-  );
+      </FielddProvider>
+    );
+  }
+  act(() => root?.render(<Owner />));
 }
 
 function to(view: FrameView): void {

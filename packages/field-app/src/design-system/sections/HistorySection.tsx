@@ -1,14 +1,16 @@
 import type { ReactElement } from "react";
 import { HistoryOpenFailedState, HistoryOpeningState } from "../../history/HistoryOpening";
 import { Section, Specimen } from "../catalog-ui";
-import { HistoryPreview, HistoryResumePlate } from "../HistoryPreview";
+import { HistoryPreview, HistoryResumePlate, HistorySearchPlate } from "../HistoryPreview";
 
 // History (AR-8c; DESIGN.md §8 "History"): rosetta's room as the frame holds
 // it, on the package's fixture ports — the shipping view in every state the
 // host owns: the room on the cover's glass, a session chosen with the line's
 // Resume live, the index not answering, and nothing enrolled yet — and the
 // two faces before the room (2026-10-04, the room's own chunk): opening, and
-// a room that could not open.
+// a room that could not open. Until the Peek lands each holds the room's own
+// search as the product does, and one plate holds a search (the search
+// interim, 2026-10-04).
 
 /** A chunk refusal in the loader's own words, real-shaped. */
 const FIXTURE_OPEN_FAILURE =
@@ -34,6 +36,15 @@ export function HistorySection(): ReactElement {
       >
         <div className="vf-ds-history-plate" data-state="chosen">
           <HistoryResumePlate />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Search, until the Peek lands — a search held; press the pill for the room's sheet"
+        source="history/search.ts"
+        bleed
+      >
+        <div className="vf-ds-history-plate" data-state="search">
+          <HistorySearchPlate />
         </div>
       </Specimen>
       <Specimen

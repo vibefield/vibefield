@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
+import { milleAliases } from "../../scripts/mille-aliases.mjs";
 import { readLock, siblingDir } from "../../scripts/siblings.mjs";
 import {
   hostSingletons,
@@ -93,7 +94,11 @@ export default defineConfig(({ mode }) => ({
     renderBlockingEntry(),
   ],
   resolve: {
-    alias: [{ find: /^loro-crdt$/, replacement: "loro-crdt/base64" }, ...reactProfiling],
+    alias: [
+      ...milleAliases(repoRoot),
+      { find: /^loro-crdt$/, replacement: "loro-crdt/base64" },
+      ...reactProfiling,
+    ],
     // one copy each of the stateful libs (ICE marks them external in its dist).
     // P8b-3 adds drei: it became a HOST singleton the moment §11.6's map
     // promised plugins one, so field-app declares it (the anchor the singleton

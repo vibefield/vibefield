@@ -1,5 +1,5 @@
 {
-  "//": "AR-0 sibling mode — machine-coupled checkouts pinned by revision. puppeteer (the agent runtime) and rosetta (agent history) are unpublished, so their packages enter as link: rows in pnpm-workspace.yaml and rosettad is built from source. `pnpm preflight` verifies presence, revision, dirtiness (warn), that the overrides block and the [patch.crates-io] section agree with this file, that a declared SwiftPM link resolves to the pinned checkout and the kit manifest names it, and that a declared sidecar is built and fresh (warn); `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift). truffle is here for the RFC 025 PETITION WINDOW (2026-09-16), which closed on 2026-09-16 for CARGO and NPM — truffle 0.7.14 shipped, so the [patch.crates-io] row and the `patch` key are gone, the crate is an exact registry pin, and the Go sidecar comes from npm so the `go` key is gone too. The `swift` half REMAINS OPEN and is not ours to close: ghosttea pins truffle `exact: \"0.7.12\"` in every published Swift tag, so a kit row at 0.7.14 is unsatisfiable, while 0.7.12 no longer COMPILES because UA-P-5a taught the kit RFC 025's login API. The exit is a ghosttea Swift release at truffle 0.7.14; Package.swift carries both errors verbatim. rosetta's checkout is DEDICATED to its pin (`../rosetta-pin`, W-D10, 2026-10-03): James's working checkout `../rosetta` is nothing this repo reads, so his commits there no longer redden preflight; `node scripts/siblings.mjs fetch rosetta` creates the checkout at the pin on a machine that lacks it (once the pin is on the remote), and `pnpm siblings:build` builds rosettad from it. EXIT — npm (W-D8): replace each link: row with an exact version and delete its entry here.",
+  "//": "AR-0 sibling mode \u2014 machine-coupled checkouts pinned by revision. puppeteer (the agent runtime) and rosetta (agent history) are unpublished, so their packages enter as link: rows in pnpm-workspace.yaml and rosettad is built from source. `pnpm preflight` verifies presence, revision, dirtiness (warn), that the overrides block and the [patch.crates-io] section agree with this file, that a declared SwiftPM link resolves to the pinned checkout and the kit manifest names it, and that a declared sidecar is built and fresh (warn); `pnpm siblings:pin` records the current HEADs deliberately (EL8: upgrades are events, never drift). truffle is here for the RFC 025 PETITION WINDOW (2026-09-16), which closed on 2026-09-16 for CARGO and NPM \u2014 truffle 0.7.14 shipped, so the [patch.crates-io] row and the `patch` key are gone, the crate is an exact registry pin, and the Go sidecar comes from npm so the `go` key is gone too. The `swift` half REMAINS OPEN and is not ours to close: ghosttea pins truffle `exact: \"0.7.12\"` in every published Swift tag, so a kit row at 0.7.14 is unsatisfiable, while 0.7.12 no longer COMPILES because UA-P-5a taught the kit RFC 025's login API. The exit is a ghosttea Swift release at truffle 0.7.14; Package.swift carries both errors verbatim. rosetta's checkout is DEDICATED to its pin (`../rosetta-pin`, W-D10, 2026-10-03): James's working checkout `../rosetta` is nothing this repo reads, so his commits there no longer redden preflight; `node scripts/siblings.mjs fetch rosetta` creates the checkout at the pin on a machine that lacks it (once the pin is on the remote), and `pnpm siblings:build` builds rosettad from it. EXIT \u2014 npm (W-D8): replace each link: row with an exact version and delete its entry here.",
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
@@ -57,6 +57,23 @@
         "ghosttea-text": "native/ghosttea/crates/ghosttea-text",
         "ghosttea-vt": "native/ghosttea/crates/ghosttea-vt",
         "ghosttea-vt-sys": "native/ghosttea/crates/ghosttea-vt-sys"
+      }
+    },
+    "mille": {
+      "path": "../mille-pin",
+      "repository": "https://github.com/vibecook-dev/mille.git",
+      "sha": "baa0de874d3a8449a63171080a59d8ae83f8ecd2",
+      "packages": {
+        "@vibecook/mille": "packages/mille",
+        "@vibecook/mille-ui": "packages/mille-ui"
+      },
+      "pnpm": {
+        "build": ["--filter", "@vibecook/mille", "build"],
+        "afterBuild": ["--filter", "@vibecook/mille-ui", "build"],
+        "hostPeers": {
+          "from": "packages/field-app",
+          "names": ["react", "react-dom", "@types/react", "@types/react-dom"]
+        }
       }
     }
   }

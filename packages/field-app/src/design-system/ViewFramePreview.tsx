@@ -169,7 +169,7 @@ export function ViewFramePreview({
           content={cover.content}
           motion={cover.motion}
           godview={<GodviewPreview theme={dark ? "dark" : "light"} />}
-          history={<HistoryPreview />}
+          history={<HistoryPreview surface={surface} onSurfaceChange={setSurface} />}
         />
         <WidgetTrayFrame
           open={surface === "objects"}

@@ -10,6 +10,27 @@ from three repositories and one spine. **puppeteer** is the managed-session runt
 fieldd. **rosetta** is the agent data plane, a `rosettad` process per user root supervised by fieldd.
 **VibeField** composes the two at the native session id and owns custody, policy and presentation.
 
+The files service is a separate low-level seam: **mille** runs in a fieldd-owned
+worker, with bounded row doors for own devices and a ticketed direct plane for
+History's worktree guest. The phone's folder picker uses those rows and sends
+`agent.spawn {cwd}` to the selected desktop. See the [workspace API](agent-plane/api.html#workspace)
+and [ownership and import wall](agent-plane/architecture.html#files-service).
+
+For DK's tree consumer, `WorkspaceClient.pickFolder()` opens the native picker and
+returns a persisted picked root or `null` on cancellation. Pass that root directly to
+`attach(root, path?)` to obtain an independent recovering lease, without resolving it
+through the bounded roots list. Each `ports` event transfers a fresh tree/git pair;
+the consumer replaces its engine on reconnect and disposes the lease on close.
+The widget, decorations and composer drag integration remain DK's work.
+
+The packaged Files worker has a separate artifact check:
+`pnpm --filter @vibefield/desktop run package:verify:files --native-root <Resources/bin>`.
+It runs the real worker, door and attachment suites against the shipped fieldd executable,
+worker bundle and mille addon. `--require-signed` also requires the frozen macOS team's
+Developer ID signatures, timestamps and hardened runtime on fieldd and the addon; the macOS
+release command runs it before the existing app/notarization checks. The tests' fieldd
+control host remains source-based, so this does not replace an installed-app or phone run.
+
 ## The ownership law
 
 Stated at `draft/thinking-ar-agent-plane.md` §1. Read the middle column as hard as the left one.

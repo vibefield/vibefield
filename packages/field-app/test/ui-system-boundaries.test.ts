@@ -181,6 +181,20 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("getHost");
   });
 
+  it("starts History's layer at the head band's foot and ends it at the reserve, so the room's sheet and dialogs never cover the band (the search interim, 2026-10-04)", () => {
+    // The room's search sheet is top-attached to the layer it portals into, and
+    // its dialogs centre in it: the band 0–52 is the head's and keeps only the
+    // window's lights (DESIGN.md §8 "History"). vitest loads no CSS, so the rule
+    // is held here and its geometry by the catalog's photographs.
+    const css = source("history/history-room-view.css");
+    const rule = css.match(/^\.vf-history-layers \{([^}]*)\}/m)?.[1] ?? "";
+    expect(rule).toContain("inset: var(--vf-history-head) 0 var(--vf-history-reserve) 0;");
+    expect(rule).toContain("contain: layout;");
+    const view = source("history/HistoryRoomView.tsx");
+    expect(view).toMatch(/"--vf-history-head": `\$\{HEAD_BAND_PX\}px`/u);
+    expect(view).toContain("portalContainer={layers}");
+  });
+
   it("keeps History's fixture an ADAPTER — the package's fixture ports, never the room's markup (AR-8c)", () => {
     // The catalog stands in for what a host supplies — the room's four ports —
     // and takes them from the room package's own fixture entry; the view it
@@ -384,6 +398,9 @@ describe("UI system ownership boundaries", () => {
       "HistoryPreview",
       "HistoryRoomView",
       "HistoryResumePlate",
+      // …and its search until the Peek lands — a search held, the room's own
+      // sheet a press on the pill away (the search interim, 2026-10-04)
+      "HistorySearchPlate",
       // …and the two faces before the room, as they ship (2026-10-04)
       "HistoryOpeningState",
       "HistoryOpenFailedState",
@@ -424,6 +441,7 @@ describe("UI system ownership boundaries", () => {
     // (AR-8c): the room, a choice with Resume live, unavailable, consent.
     expect(page).toMatch(/<HistoryPreview state="room"/u);
     expect(page).toMatch(/<HistoryResumePlate\s/u);
+    expect(page).toMatch(/<HistorySearchPlate\s/u);
     expect(page).toMatch(/<HistoryPreview state="unavailable"/u);
     expect(page).toMatch(/<HistoryPreview state="consent"/u);
     // …and the faces before the room (2026-10-04): opening, could not open.

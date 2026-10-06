@@ -1630,11 +1630,37 @@
               </table>
             </div>
             <p class="contract-caption">
-              Two seams named in the design are deliberately absent from this table because they are not built: the
-              renderer's ticketed direct route to <code>rosettad</code> (waits on RO-1) and the native ingress relay
-              that would let a managed session survive a fieldd <em>upgrade</em> rather than only a restart (AR-D6's v2
-              lever). Both appear under Status.
+              Correction (2026-10-05): the renderer's ticketed loopback route to <code>rosettad</code>
+              is built (AR-8b/c); the routed cross-desktop path remains DS-7. The native ingress relay
+              that would let a managed session survive a fieldd <em>upgrade</em> rather than only a restart
+              remains unbuilt (AR-D6's v2 lever).
             </p>
+          </section>
+
+          <section id="files-service">
+            <h2>The files service seam</h2>
+            <p>FS-1b / FS-2 (2026-10-05): mille runs in fieldd's always-on files worker.
+              A lazy, bounded host serves each canonical root; an attached lease keeps its host
+              alive. History's worktree guest receives MessagePorts from a renderer Worker,
+              which presents fieldd-minted credentials directly to the files worker's loopback
+              sockets. File bodies and diffs never cross fieldd RPC or Electron main.</p>
+            <p>Self phones browse bounded rows over their existing product door, copy the
+              desktop's absolute paths, and spawn on the selected owner. Remote attachment and
+              the phone file viewer remain later slices. <a href="api.html#workspace">The API page
+              owns the doors, admission rules and lifecycle.</a></p>
+            <p>FS-3's service prerequisite (2026-10-05): a current local renderer calls
+              <code>workspace.pickFolder</code>; the shell supplies an attended native choice,
+              and fieldd validates and audits that choice before atomically saving a picked root.
+              Cancellation, audit failure, revocation or failed persistence publishes no export.
+              Saved picks retain their canonical path and missing state across daemon restarts.
+              <code>WorkspaceClient.pickFolder()</code> returns a root or null;
+              <code>attach(root, path?)</code> gives an independent recovering port lease even
+              when that root falls outside the bounded roots list. DK still owns the tree widget,
+              decorations and composer drag integration.</p>
+            <p><strong>R24:</strong> native mille imports are confined to the files worker;
+              field-app may import browser client/port/remote and mille-ui entries. Native-free
+              channel imports in tests witness the wire. The sibling window pins mille and
+              mille-ui together at <code>baa0de8</code>; release publication closes the window.</p>
           </section>
 
           <section id="walls">
@@ -1689,8 +1715,8 @@
                 <p>
                   In <code>pnpm-workspace.yaml</code>'s fenced sibling block, a package gets a <code>link:</code> row
                   only if VibeField imports it directly; transitive edges resolve inside the sibling's own tree.
-                  Adapters are never rows and never imports. The lock names six puppeteer packages and one rosetta
-                  client.
+                  Adapters are never rows and never imports. The lock is the authority for the current package list,
+                  including the monitor-view SDK and the browser-safe rosetta clients.
                 </p>
               </div>
             </div>
@@ -1740,7 +1766,7 @@
       roots/&lt;provider&gt;/&lt;uuid&gt;/              <span class="comment">AGENT_ROOTS_DIR — AR-1…S1 roots, adopted in place; none made now</span>
       sessions/ · sessions.key              <span class="comment">AGENT_SESSIONS_DIR — signed records; never a transcript, never a credential</span>
       runs/                                 <span class="comment">AGENT_RUNS_DIR — puppeteer's durable claims, in fieldd's custody</span>
-      history/                              <span class="comment">AGENT_HISTORY_DIR — the status ledger, one .jsonl per run (TL-D8)</span>
+      history/                              <span class="comment">retired at MV-6 — prior files remain; no current writer (corrected 2026-10-06)</span>
     index/                                  <span class="comment">INDEX_DIR — rosetta, one daemon per user</span>
       rosetta.db (+ ledger · assets · search)
       daemons/                              <span class="comment">INDEX_DAEMONS_DIR — fieldd's PRIVATE announce dir, not rosetta's shared one</span>
@@ -2330,7 +2356,7 @@
                   <tr>
                     <td><strong>AR-8</strong></td>
                     <td><p>The History view as spine content, not a plugin — the ingested tier's home, behind the ticketed direct route.</p></td>
-                    <td><span class="badge tone-built">Built</span><p>for one desktop (AR-8c, 2026-10-03): rosetta's room (<code>@rosetta/room</code>, AR-8a, merged upstream <code>00b97869</code>) mounted in the frame's History slot over VibeField's four ports — lists and figures on fieldd's <code>index.*</code> doors (AR-8b), one session's body on the ticket's grant — with Resume as its create; system.html §History, "The mount". <em>Correction 2026-10-03:</em> this row said Designed while AR-8a ∥ AR-8b were in build. Owed: the guest (AR-8d), grouping across desktops (AR-8e = PJ-1), the Peek's Everything scope.</p></td>
+                    <td><span class="badge tone-built">Built</span><p>for one desktop (AR-8c, 2026-10-03): rosetta's room (<code>@rosetta/room</code>, AR-8a, merged upstream <code>00b97869</code>) mounted in the frame's History slot over VibeField's four ports — lists and figures on fieldd's <code>index.*</code> doors (AR-8b), one session's body on the ticket's grant — with Resume as its create; system.html §History, "The mount". <em>Correction 2026-10-03:</em> this row said Designed while AR-8a ∥ AR-8b were in build. Owed: the guest (AR-8d), grouping across desktops (AR-8e = PJ-1), the Peek's Everything scope. <em>2026-10-04 (SP-6):</em> the PHONE's History reads a desktop's real sessions over the door — <code>index.timeline</code> (bounded pages) and <code>index.session.subscribe</code> (the tail as rows at 1 s) beside the catalog doors, grouped by desktop with a 24 MiB cache that replays offline; system.html §History, "The phone's History lane". The phone's ticket is SP-7's.</p></td>
                   </tr>
                   <tr>
                     <td><strong>RO-1</strong></td>

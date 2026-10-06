@@ -9,6 +9,10 @@
 // reason (AR-1…AR-5: src/agent-index.ts, src/agent-session.ts,
 // src/agent-usage.ts) — every one of its seams is fieldd ↔ renderer or
 // fieldd ↔ a sibling daemon over JSON, and field-native reads none of it.
+// The files service's door tier (FS-1a, src/workspace.ts) is absent for the
+// same reason: fieldd ↔ a window, a phone or a peer daemon, and fieldd ↔ its
+// files worker — field-native has no reader. Its LAYOUT rows do reach Rust
+// (gen-registries-rs.ts), as every LAYOUT row does.
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";

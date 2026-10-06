@@ -248,6 +248,17 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
         shape: "rows",
         cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS,
       },
+      // SP-6 — one session's live tail, a reader's pace: a second, not the
+      // room's 16 ms (the rows before the tail are index.timeline's pages)
+      "index.session.subscribe": {
+        shape: "rows",
+        cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS,
+      },
+      // FS-1a (L3) — the files service's roots, as rows at the stream floor
+      "workspace.subscribe": {
+        shape: "rows",
+        cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+      },
       "agent.subscribe": {
         // the bare ask is the full fold at its own tick — served to a phone
         // that asks it (refuseBoardAsk refuses it to a peer daemon only)

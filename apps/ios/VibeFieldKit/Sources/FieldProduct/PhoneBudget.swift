@@ -11,6 +11,8 @@ import Foundation
 /// one door to the HOME desktop, two attached terminals (the open card and one
 /// warm), one web view — and when it rules, the registry moves and this file
 /// moves with it.
+// FS-2 adds no leg: roots/list/search and agent.spawn reuse a desktop's
+// existing product door, including the one held open by History.
 public enum PhoneBudget {
   /// One product-door WebSocket per self desktop: a replacement door waits for
   /// its predecessor's socket to close. *Corrected 2026-10-01 (DS-8): the

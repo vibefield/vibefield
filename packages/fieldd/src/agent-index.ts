@@ -57,9 +57,12 @@ import {
   IndexSessionsResponse,
   type IndexSessionsResult,
   type IndexStatus,
+  IndexTimelinePageResponse,
+  type IndexTimelineResult,
   IndexUsageResponse,
 } from "@vibefield/contracts";
 import { createNoopLogger, durableRenameSync, type Logger } from "@vibefield/logging";
+import { projectTimelineRow } from "./index-timeline";
 import { RpcCallError } from "./native-link";
 import {
   ROSETTAD_UNCONFIGURED,
@@ -522,6 +525,7 @@ interface IndexUsageFiguresProjection {
 const SEARCH_BODY_KEYS = Object.keys(IndexSearchResponse.shape);
 /** the same, for `/api/projects` (QL) */
 const PROJECTS_BODY_KEYS = Object.keys(IndexProjectsResponse.shape);
+const TIMELINE_BODY_KEYS = Object.keys(IndexTimelinePageResponse.shape);
 
 /** QL — one of `index.recent`'s cached join tables, stamped with the daemon
  * generation it was read from and when. */
@@ -1422,6 +1426,67 @@ export class IndexService {
         model: model.model,
         tokens: model.tokens,
       })),
+    };
+  }
+
+  /** SP-6 — `index.timeline`: one backward page of one session's rows, read
+   * from rosetta's `/api/sessions/{id}/timeline` and PROJECTED (`index-timeline.ts`).
+   * `limit` is the DOOR's number (a tailnet caller's bound applied there,
+   * `tailnet-rows.ts`); `boundedBelow` says the door cut the caller's ask (or
+   * its own default) to it, so a page that filled to the limit is `clipped`
+   * — there are rows beyond it the cursor reaches. A 404 is NOT_FOUND; a 410
+   * (rosetta's `cursor_expired`: the session was rewritten under the cursor) is
+   * the caller's to re-read from the head, PRECONDITION_FAILED with
+   * `details.reason: "cursor-expired"`; a body fieldd cannot vouch for is
+   * `malformed`. */
+  async timeline(params: {
+    sessionId: string;
+    cursor?: string | undefined;
+    limit: number;
+    boundedBelow: boolean;
+  }): Promise<IndexTimelineResult> {
+    this.requireReady();
+    const query = [
+      `limit=${params.limit}`,
+      ...(params.cursor !== undefined ? [`cursor=${encodeURIComponent(params.cursor)}`] : []),
+    ].join("&");
+    const body = await this.getBody(
+      `/api/sessions/${encodeURIComponent(params.sessionId)}/timeline?${query}`,
+      {
+        onStatus: (status) =>
+          status === 404
+            ? new RpcCallError("NOT_FOUND", "the agent index holds no such session", false)
+            : status === 410
+              ? new RpcCallError(
+                  "PRECONDITION_FAILED",
+                  "the session was rewritten under the cursor; read again from the head",
+                  false,
+                  { service: "index", reason: "cursor-expired" },
+                )
+              : undefined,
+      },
+    );
+    const parsed = IndexTimelinePageResponse.safeParse(body);
+    if (!parsed.success) {
+      const issue = parsed.error.issues[0];
+      this.logger.warn(
+        "fieldd.index.timeline_malformed",
+        "The index answered a timeline page fieldd cannot read",
+        { issue: issue === undefined ? "?" : `${issue.path.join(".")}: ${issue.message}` },
+      );
+      throw new RpcCallError("UNAVAILABLE", "the agent index answered a malformed timeline", true, {
+        service: "index",
+        state: "malformed",
+      });
+    }
+    this.noteUnknownFields("timeline", body, TIMELINE_BODY_KEYS);
+    const page = parsed.data;
+    return {
+      sessionId: params.sessionId,
+      entries: page.entries.map(projectTimelineRow),
+      nextCursor: page.cursor,
+      clipped: params.boundedBelow && page.entries.length >= params.limit,
+      watermark: page.watermark,
     };
   }
 

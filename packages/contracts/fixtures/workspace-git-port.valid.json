@@ -1,0 +1,107 @@
+{
+  "exchanges": [
+    {
+      "request": { "id": 1, "op": "branch" },
+      "response": {
+        "id": 1,
+        "ok": true,
+        "value": { "name": "main", "upstream": "origin/main", "ahead": 2, "behind": 0 }
+      }
+    },
+    {
+      "request": { "id": 2, "op": "status" },
+      "response": {
+        "id": 2,
+        "ok": true,
+        "value": {
+          "entries": [
+            { "path": "src/a.ts", "original": null, "index": "M", "worktree": "M" },
+            { "path": "notes.md", "original": null, "index": null, "worktree": "?" }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "request": { "id": 3, "op": "log" },
+      "response": {
+        "id": 3,
+        "ok": true,
+        "value": {
+          "commits": [
+            {
+              "sha": "4f1c0d3e2b1a09f8e7d6c5b4a39281706f5e4d3c",
+              "short": "4f1c0d3",
+              "subject": "FS-1a: the files service",
+              "author": "Ada",
+              "timestampMs": 1759680011000,
+              "merge": false,
+              "coAuthors": [{ "name": "Grace", "email": "grace@example.com" }],
+              "pushed": false,
+              "added": 12,
+              "deleted": 3,
+              "files": 2
+            }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "request": { "id": 4, "op": "diff", "args": { "path": "src/a.ts", "staged": false } },
+      "response": {
+        "id": 4,
+        "ok": true,
+        "value": {
+          "text": "diff --git a/src/a.ts b/src/a.ts\n--- a/src/a.ts\n+++ b/src/a.ts\n@@ -1 +1 @@\n-one\n+two\n",
+          "error": null
+        }
+      }
+    },
+    {
+      "request": {
+        "id": 5,
+        "op": "commitFiles",
+        "args": "4f1c0d3e2b1a09f8e7d6c5b4a39281706f5e4d3c"
+      },
+      "response": {
+        "id": 5,
+        "ok": true,
+        "value": {
+          "files": [
+            { "path": "src/a.ts", "original": null, "status": "M", "added": 1, "deleted": 1 }
+          ],
+          "error": null
+        }
+      }
+    },
+    {
+      "request": { "id": 6, "op": "diff", "args": { "path": "../outside.txt" } },
+      "response": { "id": 6, "ok": false, "error": "path escapes the root: ../outside.txt" }
+    },
+    {
+      "request": { "id": 7, "op": "commitFiles", "args": "--output=/tmp/owned" },
+      "response": { "id": 7, "ok": false, "error": "not a commit id: --output=/tmp/owned" }
+    },
+    {
+      "request": { "id": 8, "op": "stage", "args": ["src/a.ts"] },
+      "response": { "id": 8, "ok": false, "error": "read-only in v1" }
+    },
+    {
+      "request": { "id": 9, "op": "unstage", "args": ["src/a.ts"] },
+      "response": { "id": 9, "ok": false, "error": "read-only in v1" }
+    },
+    {
+      "request": { "id": 10, "op": "discard", "args": ["notes.md"] },
+      "response": { "id": 10, "ok": false, "error": "read-only in v1" }
+    },
+    {
+      "request": { "id": 11, "op": "commit", "args": { "message": "x" } },
+      "response": { "id": 11, "ok": false, "error": "read-only in v1" }
+    },
+    {
+      "request": { "id": 12, "op": "push" },
+      "response": { "id": 12, "ok": false, "error": "unknown op: push" }
+    }
+  ]
+}

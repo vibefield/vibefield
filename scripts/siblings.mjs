@@ -51,7 +51,9 @@ import {
   readdirSync,
   readFileSync,
   realpathSync,
+  rmSync,
   statSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
@@ -480,8 +482,44 @@ function runNpm(dir, args) {
 
 /** These packages export generated dist files. Installing VibeField's link:
  * dependencies neither installs the sibling's tools nor builds those files. */
-export function installJavaScript(root) {
-  for (const entry of Object.values(readLock(root)?.siblings ?? {})) {
+/** A source-linked UI uses the host's peers, just as its renderer does.
+ * Only generated node_modules links change; upstream manifests and locks stay
+ * at their pin. Re-run after the sibling's frozen install and before building. */
+export function alignHostPeers(root, entry) {
+  const peers = entry.pnpm?.hostPeers;
+  if (!peers) return;
+  for (const folder of ["", ...Object.values(entry.packages ?? {})]) {
+    for (const name of peers.names) {
+      const source = realpathSync(join(root, peers.from, "node_modules", name));
+      const destination = join(siblingDir(root, entry), folder, "node_modules", name);
+      mkdirSync(dirname(destination), { recursive: true });
+      rmSync(destination, { recursive: true, force: true });
+      symlinkSync(source, destination, process.platform === "win32" ? "junction" : "dir");
+    }
+  }
+}
+
+function runPnpm(dir, args) {
+  const env = { ...process.env };
+  if (env.CARGO_TARGET_DIR) env.CARGO_TARGET_DIR = join(env.CARGO_TARGET_DIR, "siblings", "mille");
+  const run = spawnSync(process.platform === "win32" ? "pnpm.cmd" : "pnpm", args, {
+    cwd: dir,
+    stdio: "inherit",
+    env,
+    shell: process.platform === "win32",
+  });
+  if (run.error) throw run.error;
+  return run.status ?? 1;
+}
+
+export function installJavaScript(root, names = []) {
+  for (const [name, entry] of Object.entries(readLock(root)?.siblings ?? {})) {
+    if (names.length > 0 && !names.includes(name)) continue;
+    if (entry.pnpm) {
+      const result = runPnpm(siblingDir(root, entry), ["install", "--frozen-lockfile"]);
+      if (result !== 0) return result;
+      alignHostPeers(root, entry);
+    }
     if (!entry.javascript) continue;
     const result = runNpm(siblingDir(root, entry), [
       "ci",
@@ -497,9 +535,18 @@ export function installJavaScript(root) {
   return 0;
 }
 
-export function buildJavaScript(root) {
+export function buildJavaScript(root, names = []) {
   let result = null;
-  for (const entry of Object.values(readLock(root)?.siblings ?? {})) {
+  for (const [name, entry] of Object.entries(readLock(root)?.siblings ?? {})) {
+    if (names.length > 0 && !names.includes(name)) continue;
+    if (entry.pnpm) {
+      alignHostPeers(root, entry);
+      result = runPnpm(siblingDir(root, entry), entry.pnpm.build);
+      if (result !== 0) return result;
+      if (entry.pnpm.afterBuild) result = runPnpm(siblingDir(root, entry), entry.pnpm.afterBuild);
+      if (result !== 0) return result;
+      alignHostPeers(root, entry);
+    }
     if (!entry.javascript) continue;
     for (const workspace of entry.javascript.workspaces) {
       result = runNpm(siblingDir(root, entry), ["run", "build", `--workspace=${workspace}`]);
@@ -880,8 +927,8 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     },
     build,
     fetch: (root) => fetchSibling(root, process.argv[3]),
-    "install-js": installJavaScript,
-    "build-js": (root) => buildJavaScript(root) ?? 0,
+    "install-js": (root) => installJavaScript(root, process.argv.slice(3)),
+    "build-js": (root) => buildJavaScript(root, process.argv.slice(3)) ?? 0,
     bin: printBin,
   };
   const handler = handlers[command];

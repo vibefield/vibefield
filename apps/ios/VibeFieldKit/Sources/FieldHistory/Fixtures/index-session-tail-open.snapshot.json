@@ -1,0 +1,98 @@
+{
+  "snapshot": {
+    "epoch": "tail-s1-3f9a1c2e.1",
+    "revision": 1,
+    "rows": [
+      {
+        "timelineId": "t0",
+        "sessionId": "s1",
+        "ordinal": 6,
+        "kind": "user",
+        "at": 3599000,
+        "group": {
+          "id": "turn-1",
+          "kind": "human_turn"
+        },
+        "text": "Run the specimen against the real worktree rows and tell me which ones still go to mush."
+      },
+      {
+        "timelineId": "t1",
+        "sessionId": "s1",
+        "ordinal": 7,
+        "kind": "tool_use",
+        "at": 3600000,
+        "model": "claude-opus-5",
+        "effort": "high",
+        "group": {
+          "id": "turn-1",
+          "kind": "human_turn"
+        },
+        "responseId": "response-1",
+        "tool": {
+          "name": "Bash",
+          "family": "shell",
+          "status": "succeeded",
+          "failed": false,
+          "object": "one",
+          "result": "exit 0",
+          "attachments": [
+            {
+              "id": "tool-image-1",
+              "kind": "image",
+              "available": true
+            }
+          ]
+        },
+        "usage": {
+          "input": 10,
+          "output": 5,
+          "cacheRead": 3,
+          "cacheWrite": 2,
+          "thinking": 1
+        }
+      },
+      {
+        "timelineId": "t2",
+        "sessionId": "s1",
+        "ordinal": 8,
+        "kind": "agent",
+        "at": 3601000,
+        "model": "claude-opus-5",
+        "effort": "high",
+        "group": {
+          "id": "turn-1",
+          "kind": "agent_cycle"
+        },
+        "responseId": "response-1",
+        "text": "Rendering every row the tree draws at 12px, light and dark, and diffing each glyph against its neighbours.",
+        "attachments": [
+          {
+            "id": "img-1",
+            "kind": "image",
+            "name": "specimen.png",
+            "mediaType": "image/png",
+            "byteLen": 48211,
+            "available": true
+          }
+        ],
+        "usage": {
+          "input": 10,
+          "output": 5
+        },
+        "costMicroUsd": 175
+      },
+      {
+        "timelineId": "team-report-1",
+        "sessionId": "s1",
+        "ordinal": 9,
+        "kind": "collaboration",
+        "at": 3800000,
+        "group": {
+          "id": "team-delivery-1",
+          "kind": "system_cycle"
+        },
+        "text": "design docs updated"
+      }
+    ]
+  }
+}

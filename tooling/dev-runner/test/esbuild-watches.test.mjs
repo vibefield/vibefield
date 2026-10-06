@@ -76,6 +76,8 @@ test("a rebuilt shim moves the daemon identity, so the pair restarts as for bin.
     serviceHarnessOutput: join(root, "service-harness.mjs"),
     fielddWasm: join(root, "loro_wasm_bg.wasm"),
     agentShimOutput: join(root, "agent-shim.cjs"),
+    filesHostOutput: join(root, "files-host.cjs"),
+    milleNativeOutput: join(root, "mille.test-triple.node"),
     nativeOutput: join(root, "field-native"),
   };
   const daemonIdentity = () => computeBuildId(root, daemonPlaneInputs(paths, []));
@@ -130,4 +132,85 @@ test("the runner's shim is byte-identical to the one fieldd's own build makes", 
     ours.equals(theirs),
     `the runner's shim (${ours.length} bytes) differs from fieldd's build (${theirs.length} bytes)`,
   );
+});
+
+// FS-1a (L1) — the files worker's bundle. Its build is fieldd's own module
+// (packages/fieldd/scripts/files-host-build.mjs): the plugin that loads mille's
+// native engine by an explicit path cannot be spelled as CLI flags, so the
+// runner imports the definition instead of restating it.
+function filesHostDefinition(paths = workspacePaths) {
+  const definition = esbuildDefinitions(paths).find(
+    (candidate) => candidate.name === "fieldd-files-host",
+  );
+  assert.ok(
+    definition,
+    "no fieldd-files-host definition: under pnpm dev fieldd has no files worker",
+  );
+  return definition;
+}
+
+test("the runner builds the files worker beside the daemon's bundle, with fieldd's own options", async () => {
+  const definition = filesHostDefinition();
+  const options = await definition.options();
+  assert.equal(options.outfile, workspacePaths.filesHostOutput);
+  assert.equal(dirname(options.outfile), dirname(workspacePaths.fielddOutput));
+  assert.equal(options.absWorkingDir, FIELDD_ROOT);
+  assert.ok(
+    options.plugins.some((plugin) => plugin.name === "vibefield-mille-native"),
+    "the files worker's build lost the plugin that loads mille's engine by its explicit path",
+  );
+  assert.equal(dirname(workspacePaths.milleNativeOutput), dirname(workspacePaths.fielddOutput));
+});
+
+test("the runner's files worker is byte-identical to the one fieldd's own build makes", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "vf-dev-files-host-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const runnerOutput = join(root, "runner", "files-host.cjs");
+  const fielddOutput = join(root, "fieldd", "files-host.cjs");
+  const runner = await context(
+    await filesHostDefinition({ ...workspacePaths, filesHostOutput: runnerOutput }).options(),
+  );
+  try {
+    await runner.rebuild();
+  } finally {
+    await runner.dispose();
+  }
+  const own = await import(join(FIELDD_ROOT, "scripts", "files-host-build.mjs"));
+  const fieldd = await context(own.filesHostBuildOptions({ outfile: fielddOutput }));
+  try {
+    await fieldd.rebuild();
+  } finally {
+    await fieldd.dispose();
+  }
+  const [ours, theirs] = await Promise.all([readFile(runnerOutput), readFile(fielddOutput)]);
+  assert.ok(ours.length > 0, "the runner's build wrote an empty worker");
+  assert.ok(ours.equals(theirs), "the runner's files worker differs from fieldd's build");
+});
+
+test("a rebuilt files worker moves the daemon identity, never the shell's", async (t) => {
+  const root = await mkdtemp(join(tmpdir(), "vf-dev-files-host-"));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const paths = {
+    repoRoot: root,
+    mainOutput: join(root, "main.cjs"),
+    preloadOutput: join(root, "preload.cjs"),
+    studioPreloadOutput: join(root, "studio.cjs"),
+    fielddOutput: join(root, "bin.cjs"),
+    serviceHarnessOutput: join(root, "service-harness.mjs"),
+    fielddWasm: join(root, "loro_wasm_bg.wasm"),
+    agentShimOutput: join(root, "agent-shim.cjs"),
+    filesHostOutput: join(root, "files-host.cjs"),
+    milleNativeOutput: join(root, "mille.test-triple.node"),
+    nativeOutput: join(root, "field-native"),
+  };
+  const daemonIdentity = () => computeBuildId(root, daemonPlaneInputs(paths, []));
+  await writeFile(paths.filesHostOutput, "worker-one");
+  const before = await daemonIdentity();
+  await writeFile(paths.filesHostOutput, "worker-two");
+  assert.notEqual(await daemonIdentity(), before);
+  const afterWorker = await daemonIdentity();
+  await writeFile(paths.milleNativeOutput, "engine-two");
+  assert.notEqual(await daemonIdentity(), afterWorker);
+  for (const file of [paths.filesHostOutput, paths.milleNativeOutput])
+    assert.equal(shellPlaneInputs(paths).includes(file), false);
 });

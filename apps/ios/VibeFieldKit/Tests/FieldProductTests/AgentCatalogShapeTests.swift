@@ -38,7 +38,8 @@ import Testing
     let claude = try #require(result.catalog.first)
     #expect(claude.mark == nil)  // absent — the id is the mark key
     #expect(claude.phone == true)
-    #expect(claude.unknownFields == ["admitted", "decision", "layoutRoot", "offers", "seams"])
+    #expect(claude.canSpawn)
+    #expect(claude.unknownFields == ["admitted", "decision", "layoutRoot", "seams"])
 
     // AC-D7: the protocol agent keeps itself off the phone. Its `mark` is
     // absent too since the review (it equalled the id, the contract's own

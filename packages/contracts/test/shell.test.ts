@@ -444,7 +444,10 @@ describe("tray shell commands and app preferences", () => {
 });
 
 describe("AH-3/AH-4 static shell provider", () => {
-  it("pins the folder picker to its one purpose and bounded result union", () => {
+  it("pins the folder picker to its two declared purposes and bounded result union", () => {
+    expect(ShellDialogPickFolderParams.parse({ purpose: "workspace.export" })).toEqual({
+      purpose: "workspace.export",
+    });
     expect(ShellDialogPickFolderParams.parse({ purpose: "artifact.publish" })).toEqual({
       purpose: "artifact.publish",
     });

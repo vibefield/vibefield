@@ -12,7 +12,7 @@ import Foundation
 // Narrowed like every reader in this target: a phone reads a row's id, its
 // label, its status, its mark and whether it is a phone's to show. The seam
 // columns (`seams`, `layoutRoot`) are fieldd's business and "shown by no
-// surface"; `offers`, `admitted` and `decision` have no reader on a phone yet.
+// surface"; `admitted` and `decision` have no reader on a phone yet. FS-2 reads `offers.spawn`.
 // Each of them is CARRIED as an unknown field's name, never refused.
 
 /// `AgentCatalogParams` (`agent-catalog.ts`) — which surface is asking, so the
@@ -56,6 +56,8 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
   public let mark: String?
   /// `surfaces.phone` — `nil` when the row did not say.
   public let phone: Bool?
+  /// A launch choice exists only when THIS desktop explicitly offers it.
+  public let canSpawn: Bool
   public let unknownFields: [String]
 
   public init(json: JSONValue) throws {
@@ -66,6 +68,8 @@ public struct AgentCatalogRow: Sendable, Equatable, Decodable, Identifiable {
     mark = object.string("mark").flatMap { $0.isEmpty ? nil : $0 }
     var surfaces = object.object("surfaces")
     phone = surfaces.bool("phone")
+    var offers = object.object("offers")
+    canSpawn = offers.bool("spawn") == true
     unknownFields = object.unknownFields
   }
 

@@ -2,6 +2,13 @@ import { dirname, join } from "node:path";
 import { context, formatMessages } from "esbuild";
 import { runCommand } from "./processes.mjs";
 
+/** FS-1a — fieldd's own definition of the files worker's bundle (the plugin
+ * that swaps mille's native loader, the define of its version), loaded from
+ * the package that owns it so the runner and `pnpm build` cannot drift. */
+async function filesHostBuild(paths) {
+  return import(join(dirname(dirname(paths.fielddEntry)), "scripts", "files-host-build.mjs"));
+}
+
 /** The watched bundles, as data: a test builds one exactly as the watch below does. */
 export function esbuildDefinitions(paths) {
   return [
@@ -74,6 +81,23 @@ export function esbuildDefinitions(paths) {
       format: "cjs",
       target: "node22",
     },
+    {
+      // FS-1a (L1): fieldd's fourth bundle, the files worker, with mille's
+      // native engine staged beside it. Its options are fieldd's own
+      // (`scripts/files-host-build.mjs` — the plugin that loads the engine by
+      // an explicit path is not expressible as CLI flags), read at build time.
+      name: "fieldd-files-host",
+      outfile: paths.filesHostOutput,
+      cwd: dirname(dirname(paths.fielddEntry)),
+      options: async () =>
+        (await filesHostBuild(paths)).filesHostBuildOptions({
+          fielddRoot: dirname(dirname(paths.fielddEntry)),
+          outfile: paths.filesHostOutput,
+        }),
+      afterBuild: async () => {
+        (await filesHostBuild(paths)).stageMilleNative(dirname(paths.filesHostOutput));
+      },
+    },
   ];
 }
 
@@ -142,7 +166,9 @@ export async function startEsbuildWatches({ paths, log, onArtifactChange }) {
           });
         },
       };
-      const buildContext = await context({ ...esbuildOptions(definition), plugins: [plugin] });
+      const own =
+        definition.options === undefined ? esbuildOptions(definition) : await definition.options();
+      const buildContext = await context({ ...own, plugins: [...(own.plugins ?? []), plugin] });
       contexts.push(buildContext);
       await buildContext.watch();
     }

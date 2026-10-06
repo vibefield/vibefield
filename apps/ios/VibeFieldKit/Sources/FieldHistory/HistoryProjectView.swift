@@ -3,19 +3,25 @@ import SwiftUI
 
 /// A project (H-3): the column head grown (marker · name · count), the four
 /// figures, the 53-week ribbon, and the sessions under their days.
+///
+/// SP-6 — over a door the project's sessions and figures are READ when it
+/// opens (`onNeed(.project)`), and a session row opens its document, which is
+/// read when it opens; the ribbon is the index's own count when the figures
+/// have landed (`project.ribbon`), the record's seeded pattern until then.
 struct HistoryProjectView: View {
   let project: HistoryProject
   let sessions: [HistorySession]
   let corpus: HistoryCorpus
   let standing: FieldHistoryModel.DesktopStanding
   @Bindable var router: HistoryRouter
+  var onNeed: (HistoryNeed) -> Void = { _ in }
 
   @Environment(\.colorScheme) private var scheme
   @State private var receipt: String?
   @State private var rung: String?
 
   private var color: Color { HistoryParts.projectColor(seq: project.seq, scheme: scheme) }
-  private var awake: Bool { standing != .asleep }
+  private var awake: Bool { standing.isAwake }
 
   var body: some View {
     ScrollViewReader { proxy in
@@ -34,6 +40,7 @@ struct HistoryProjectView: View {
       .navigationBarTitleDisplayMode(.inline)
       .overlay(alignment: .bottom) { receiptView }
       .onAppear {
+        onNeed(.project(device: corpus.deviceId, id: project.id))
         // A hit landed here for a session with no document: ring its row.
         if let session = router.rungSession {
           router.rungSession = nil
@@ -98,7 +105,7 @@ struct HistoryProjectView: View {
           .tracking(ChromeType.tracking(-0.02, of: 20))
           .monospacedDigit()
           .foregroundStyle(ChromePalette.ink)
-        if let unit {
+        if let unit, !unit.isEmpty {
           Text(unit)
             .font(ChromeType.sans(12))
             .foregroundStyle(ChromePalette.inkFaint)
@@ -138,6 +145,10 @@ struct HistoryProjectView: View {
           .font(ChromeType.sans(12.5))
           .foregroundStyle(ChromePalette.inkTertiary)
           .lineLimit(2)
+      } else if awake {
+        Text("Reading the figures…")
+          .font(ChromeType.sans(12.5))
+          .foregroundStyle(ChromePalette.inkFaint)
       }
     }
     .padding(14)
@@ -148,7 +159,7 @@ struct HistoryProjectView: View {
   }
 
   private var ribbon: some View {
-    let weeks = FieldHistoryModel.ribbon(seq: project.seq, start: project.id == "mille" ? 22 : 3)
+    let weeks = project.ribbon ?? FieldHistoryModel.ribbon(seq: project.seq, start: project.id == "mille" ? 22 : 3)
     return GeometryReader { geo in
       let gap: CGFloat = 1.5
       let cell = (geo.size.width - gap * 52) / 53
@@ -170,6 +181,11 @@ struct HistoryProjectView: View {
 
   private var sessionList: some View {
     LazyVStack(alignment: .leading, spacing: 0) {
+      if sessions.isEmpty {
+        QuietNote(
+          title: awake ? "Reading the sessions…" : "No sessions read for this project",
+          text: awake ? "The listing arrives over the desktop's door." : "They arrive once \(corpus.desktop) answers.")
+      }
       ForEach(sessions) { session in
         if let day = session.day { DayHeader(text: day) }
         sessionRow(session)
@@ -180,10 +196,11 @@ struct HistoryProjectView: View {
 
   private func sessionRow(_ session: HistorySession) -> some View {
     Button {
-      if corpus.document(session.id) != nil {
-        router.path.append(.session(session.id))
+      if corpus.document(session.id) != nil || awake {
+        onNeed(.session(device: corpus.deviceId, id: session.id))
+        router.path.append(.session(device: corpus.deviceId, id: session.id))
       } else {
-        note("Only \(corpus.documents.values.first?.title.prefix(4) ?? "one") opens in the mock")
+        note("This session's document is not on this phone")
       }
     } label: {
       HStack(alignment: .top, spacing: 12) {
@@ -206,14 +223,16 @@ struct HistoryProjectView: View {
             .foregroundStyle(ChromePalette.inkFaint)
             .opacity(awake ? 1 : 0.55)
           HStack(spacing: 10) {
-            HStack(spacing: 4) {
-              Image(systemName: "arrow.triangle.branch")
-                .font(.system(size: 10, weight: .medium))
-              Text(session.branch)
-                .font(ChromeType.mono(11.5))
+            if !session.branch.isEmpty {
+              HStack(spacing: 4) {
+                Image(systemName: "arrow.triangle.branch")
+                  .font(.system(size: 10, weight: .medium))
+                Text(session.branch)
+                  .font(ChromeType.mono(11.5))
+              }
+              .foregroundStyle(ChromePalette.inkTertiary)
+              .lineLimit(1)
             }
-            .foregroundStyle(ChromePalette.inkTertiary)
-            .lineLimit(1)
             Spacer(minLength: 0)
             LastWord(word: session.last, isLive: session.isLive, awake: awake)
           }

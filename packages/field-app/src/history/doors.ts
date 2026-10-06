@@ -41,6 +41,7 @@ import {
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import { WorkspaceClient, type WorkspaceClientOptions } from "../workspace/client";
 import { type AssetSourceOptions, assetSourceOver, type HistoryAssetSource } from "./asset-source";
 import { type HistorySessionPort, type SessionPortOptions, sessionPortOver } from "./session-port";
 
@@ -230,7 +231,10 @@ export function catalogStatusOf(status: IndexStatus): CatalogStatus | null {
         ? (readiness as SearchReadiness)
         : "building",
     // fieldd projects the search build's counters without rosetta's stage;
-    // the room reads them only in the search sheet, which does not ship here
+    // the room reads them only in its search sheet — which did not ship here
+    // until the search interim (2026-10-04): it does now, and with no counters
+    // a build draws the sheet's fixed sliver of a meter and its own words
+    // ("search is being prepared")
     searchProgress: null,
     ingest,
     // fieldd's projection names the daemon's phase and pid, not its clock
@@ -776,6 +780,7 @@ export interface HistoryPortsOptions {
   readonly catalog?: CatalogPortOptions;
   readonly sessions?: SessionPortOptions;
   readonly assets?: AssetSourceOptions;
+  readonly workspace?: WorkspaceClientOptions;
 }
 
 /** The room's ports over one fieldd client. */
@@ -786,12 +791,14 @@ export function historyPortsOver(
   const catalog = catalogPortOver(client, options.catalog);
   const sessions = sessionPortOver(client, options.sessions);
   const assets = assetSourceOver(sessions, options.assets);
+  const workspace = new WorkspaceClient(client, options.workspace);
   return {
     catalog,
     sessions,
     assets,
-    host: hostPortOver(options.platform),
+    host: { ...hostPortOver(options.platform), worktree: workspace },
     dispose() {
+      workspace.dispose();
       catalog.dispose();
       assets.dispose();
       sessions.dispose();

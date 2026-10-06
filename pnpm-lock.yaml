@@ -46,6 +46,8 @@ overrides:
   '@vibecook/ghosttea-client': 0.12.0
   '@vibecook/ghosttea-electron': 0.12.0
   '@vibecook/ghosttea-protocol': 0.12.0
+  '@vibecook/mille': link:../mille-pin/packages/mille
+  '@vibecook/mille-ui': link:../mille-pin/packages/mille-ui
   '@vibecook/ghosttea-react': link:../ghosttea-0.11.2/packages/ghosttea-react
   '@vibecook/puppeteer-runtime': link:../puppeteer/packages/runtime
   '@vibecook/puppeteer-builtin-providers': link:../puppeteer/packages/builtin-providers
@@ -409,6 +411,12 @@ importers:
       '@vibecook/ice':
         specifier: 0.11.0
         version: 0.11.0(@react-three/fiber@9.6.1(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1))(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(three@0.185.1)
+      '@vibecook/mille':
+        specifier: link:../../../mille-pin/packages/mille
+        version: link:../../../mille-pin/packages/mille
+      '@vibecook/mille-ui':
+        specifier: link:../../../mille-pin/packages/mille-ui
+        version: link:../../../mille-pin/packages/mille-ui
       '@vibecook/puppeteer-core':
         specifier: link:../../../puppeteer/packages/core
         version: link:../../../puppeteer/packages/core
@@ -503,6 +511,9 @@ importers:
       '@vibecook/ghosttea-client':
         specifier: 0.12.0
         version: 0.12.0
+      '@vibecook/mille':
+        specifier: link:../../../mille-pin/packages/mille
+        version: link:../../../mille-pin/packages/mille
       '@vibecook/puppeteer-builtin-providers':
         specifier: link:../../../puppeteer/packages/builtin-providers
         version: link:../../../puppeteer/packages/builtin-providers

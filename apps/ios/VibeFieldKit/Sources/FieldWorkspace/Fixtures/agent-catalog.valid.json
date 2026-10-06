@@ -1,0 +1,302 @@
+{
+  "catalog": [
+    {
+      "id": "claude",
+      "label": "Claude Code",
+      "status": "supported",
+      "seams": {
+        "puppeteer": {
+          "provider": "claude"
+        },
+        "rosetta": {
+          "kind": "claude-code"
+        }
+      },
+      "layoutRoot": "~/.claude",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": true,
+        "history": true,
+        "usage": true,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — supported: spawn, re-attach and the real-daemon history join witnessed here",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "codex",
+      "label": "Codex",
+      "status": "supported",
+      "seams": {
+        "puppeteer": {
+          "provider": "codex"
+        },
+        "rosetta": {
+          "kind": "codex"
+        }
+      },
+      "layoutRoot": "~/.codex",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": true,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — supported: spawn witnessed here, the join on the scripted daemon; real-daemon join owed",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "grok",
+      "label": "Grok",
+      "status": "preview",
+      "seams": {
+        "puppeteer": {
+          "provider": "grok"
+        },
+        "rosetta": {
+          "kind": "grok"
+        }
+      },
+      "layoutRoot": "~/.grok",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": true,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "kimi",
+      "label": "Kimi Code",
+      "status": "preview",
+      "seams": {
+        "puppeteer": {
+          "provider": "kimi"
+        },
+        "rosetta": {
+          "kind": "kimi-code"
+        }
+      },
+      "layoutRoot": "~/.kimi-code",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": true,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "opencode",
+      "label": "OpenCode",
+      "status": "preview",
+      "seams": {
+        "puppeteer": {
+          "provider": "opencode"
+        },
+        "rosetta": {
+          "kind": "opencode"
+        }
+      },
+      "layoutRoot": "~/.local/share/opencode",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": false,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "hermes",
+      "label": "Hermes",
+      "status": "preview",
+      "seams": {
+        "puppeteer": {
+          "provider": "hermes"
+        },
+        "rosetta": {
+          "kind": "hermes"
+        }
+      },
+      "layoutRoot": "~/.hermes",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": false,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "antigravity",
+      "label": "Antigravity",
+      "status": "preview",
+      "seams": {
+        "puppeteer": {
+          "provider": "antigravity"
+        },
+        "rosetta": {
+          "kind": "antigravity"
+        }
+      },
+      "layoutRoot": "~/.gemini/antigravity-cli",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": true,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — preview until a live spawn and history join are witnessed here; personas re-claimed 2026-09-25 at puppeteer 63bf175 (the adapter's profiles port declares supported again — the 2026-09-22 erratum that narrowed it is reversed)",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "copilot",
+      "label": "GitHub Copilot",
+      "status": "preview",
+      "seams": {
+        "puppeteer": {
+          "provider": "copilot"
+        },
+        "rosetta": {
+          "kind": "copilot"
+        }
+      },
+      "layoutRoot": "~/.copilot",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": false,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — preview until a live spawn and history join are witnessed here",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "pi",
+      "label": "Pi",
+      "status": "preview",
+      "seams": {
+        "puppeteer": {
+          "provider": "pi"
+        },
+        "rosetta": {
+          "kind": "pi"
+        }
+      },
+      "layoutRoot": "~/.pi",
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": true,
+        "usage": false,
+        "distribution": true,
+        "personas": true,
+        "invoke": true
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D6 — preview: the real-daemon history join is witnessed here, a live spawn is not",
+      "surfaces": {
+        "desktop": true,
+        "phone": true
+      }
+    },
+    {
+      "id": "acp",
+      "label": "ACP",
+      "status": "preview",
+      "seams": {
+        "puppeteer": {
+          "provider": "acp"
+        },
+        "rosetta": null
+      },
+      "layoutRoot": null,
+      "offers": {
+        "spawn": true,
+        "resume": true,
+        "reattach": false,
+        "history": false,
+        "usage": false,
+        "distribution": false,
+        "personas": false,
+        "invoke": false
+      },
+      "admitted": "2026-09-22",
+      "decision": "AC-D7 — preview, spawn and resume only: a protocol, not a vendor; no ledger, no personas",
+      "surfaces": {
+        "desktop": true,
+        "phone": false
+      }
+    }
+  ]
+}

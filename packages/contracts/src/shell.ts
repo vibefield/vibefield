@@ -355,7 +355,7 @@ export const ARTIFACT_PREVIEW_LIMITS = {
 } as const;
 
 export const ShellDialogPickFolderParams = z
-  .object({ purpose: z.literal("artifact.publish") })
+  .object({ purpose: z.enum(["artifact.publish", "workspace.export"]) })
   .passthrough();
 export type ShellDialogPickFolderParams = z.infer<typeof ShellDialogPickFolderParams>;
 
