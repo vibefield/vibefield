@@ -8,7 +8,7 @@ import * as iceRoot from "@vibecook/ice";
 import * as iceDesk from "@vibecook/ice/desk";
 import * as iceEngine from "@vibecook/ice/desk/engine";
 import * as iceKit from "@vibecook/ice/desk/kit";
-import { describe, expect, expectTypeOf, it } from "vitest";
+import { describe, expect, expectTypeOf, it, vi } from "vitest";
 import type { ObjectBinding, ObjectContext, ObjectHit, ObjectKind } from "../src/desk";
 import * as door from "../src/desk";
 
@@ -67,6 +67,24 @@ describe("the SDK's /desk door", () => {
       expect((door as Record<string, unknown>)[name], name).toBe(
         (iceEngine as Record<string, unknown>)[name],
       );
+  });
+
+  it("hands over the colour parse and the ink it answers for a colour it cannot read — never a throw in a kind's record (I32, DK-12)", () => {
+    expect(door.rgb).toBe(iceDesk.rgb);
+    expect(door.cssColor).toBe(iceDesk.cssColor);
+    expect(door.MISSING_INK).toBe(iceDesk.MISSING_INK);
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    try {
+      // a free-string prop can hold anything: a name the parser does not read is the desk's missing ink, said once
+      const said = "dk-12 a colour no parser reads";
+      expect(door.rgb(said)).toEqual(door.MISSING_INK.slice(0, 3));
+      expect(door.rgb(said)).toEqual(door.MISSING_INK.slice(0, 3));
+      expect(warn.mock.calls.filter((c) => String(c[0]).includes(said))).toHaveLength(1);
+      // the throw is the author's to ask for
+      expect(() => door.rgb(said, { strict: true })).toThrow(/unparsed colour/);
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it("hands a kind's DOM half the two core names ICE's own halves read — the camera and the frame — and nothing else of core's (DK-8)", () => {

@@ -8,7 +8,7 @@ import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { createHarness, type Harness, installDom } from "../src/boot";
 import type { KindRow, ObjectVerdict, RunOptions, RunResult, Verdict } from "../src/index";
 import { RETIRED_CODES } from "../src/verdict";
@@ -188,9 +188,13 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
   });
 
   it("passes the CREATE-PLUGIN TEMPLATE, scaffolded as an author scaffolds it — both of its playground states, every mode, every zoom", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const result = await run({ pluginDir: scaffold?.dir as string, loader: harness });
+    const said = warn.mock.calls.map((c) => String(c[0]));
+    warn.mockRestore();
     const [disc] = objectRows(result);
-    // three fixtures (default, coral, and a colour `rgb` cannot parse — DK-10: drawn as the default, never a strike)
+    // three fixtures (default, coral, and a colour `rgb` cannot parse — drawn in the desk's missing ink and SAID ONCE,
+    // never a strike: ICE's I32 since desk.4, DK-12; DK-10's guard in the template retired with it)
     // × (idle, selected, held × 21 zooms + at rest by night)
     expect(disc).toMatchObject({
       type: "vendor.demo",
@@ -206,6 +210,8 @@ describe("the playground v2: the kind-conformance harness over the repo's kinds 
       ["coral", "pass"],
       ["unparsed", "pass"],
     ]);
+    // the colour it cannot parse is SAID ONCE on the console — however many of its 64 states drew it
+    expect(said.filter((line) => line.includes('unparsed colour "red"'))).toHaveLength(1);
     expect(result.summary.exit).toBe(0);
   });
 

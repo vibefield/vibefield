@@ -6,10 +6,11 @@ import {
   DEFAULT_GRID,
   type Entity,
   lampOf,
+  MISSING_INK,
   type ObjectContext,
 } from "@vibefield/plugin-sdk/desk";
 import { runKindConformance } from "@vibefield/plugin-sdk/testing";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import states from "../playground/states";
 import { kind } from "../src/kind";
 import { manifest } from "../src/manifest";
@@ -31,24 +32,29 @@ describe("{{title}}'s kind, judged by the kind-conformance harness", () => {
 
   it("passes: its declaration, its program, every playground state in every mode and zoom, its dispose", async () => {
     if (row === undefined) throw new Error("the manifest declares no object");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
     const report = await runKindConformance({
       binding: {{className}},
       row,
       at: "/contributes/objects/0",
       states: (states as Record<string, Record<string, Record<string, unknown>>>)[row.type],
     });
+    const said = warn.mock.calls.map((c) => String(c[0]));
+    warn.mockRestore();
     expect(report.verdicts.filter((v) => v.status === "refused")).toEqual([]);
     // the three playground states, each driven in idle, selected and held at every zoom, and once by night
     expect(report.plan.fixtures).toEqual(["default", "coral", "unparsed"]);
     expect(report.states).toBe(3 * (3 * report.plan.zooms.length + 1));
+    // the colour `rgb` cannot parse is SAID ONCE on the console, however many times its state was drawn
+    expect(said.filter((line) => line.includes('"red"'))).toHaveLength(1);
   });
 
-  // What the harness cannot know is YOURS to pin: here, that a disc is picked by its round face.
-  it("is picked by its round face: inside the disc is the object, the corner of its rect is not", () => {
-    const ctx = {
+  /** One object's context, at rest, with these props. */
+  const at = (props: Record<string, unknown>): ObjectContext =>
+    ({
       entity: 1 as Entity,
       rect: { cx: 100, cy: 80, w: 120, h: 120 },
-      props: {},
+      props,
       flux: { lift: 0, hover: 0, ring: 0, fade: 1 },
       look: undefined,
       theme: {} as never,
@@ -56,7 +62,23 @@ describe("{{title}}'s kind, judged by the kind-conformance harness", () => {
       view: { camX: 0, camY: 0, zoom: 1, width: 1200, height: 800, dpr: 2 },
       grid: DEFAULT_GRID,
       dt: 0,
-    } as ObjectContext;
+    }) as ObjectContext;
+
+  // A free-string colour prop can hold anything: what `rgb` cannot read is drawn in the desk's MISSING INK — the object
+  // still drawn and picked, plainly not the colour asked for — never a throw that would strike the kind.
+  it("draws the colour it cannot read in the desk's missing ink, and its own colours as they are", () => {
+    const k = kind();
+    const unread = (states as Record<string, Record<string, Record<string, unknown>>>)["{{objectType}}"]?.unparsed ?? {};
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const G = k.resolve(at(unread));
+    expect(k.record(G, at(unread)).colour).toEqual(MISSING_INK.slice(0, 3));
+    warn.mockRestore();
+    expect(k.record(G, at({ color: "#e8765c" })).colour).not.toEqual(MISSING_INK.slice(0, 3));
+  });
+
+  // What the harness cannot know is YOURS to pin: here, that a disc is picked by its round face.
+  it("is picked by its round face: inside the disc is the object, the corner of its rect is not", () => {
+    const ctx = at({});
     const k = kind();
     const G = k.resolve(ctx) as DiscGeometry;
     expect(k.hit(G, 100 + 59, 80)).toBe("content");

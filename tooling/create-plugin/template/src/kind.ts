@@ -2,7 +2,6 @@ import {
   type ObjectContext,
   type ObjectHit,
   type ObjectKind,
-  type RGB,
   rgb,
   stringProp,
 } from "@vibefield/plugin-sdk/desk";
@@ -24,19 +23,6 @@ export const KIND_NAME = "{{objectType}}";
 /** The colour a new one has — the manifest's `color` default. */
 export const DEFAULT_COLOR = "#e4c46a";
 
-/**
- * A `color` prop as the pass draws it. `rgb` THROWS on a string it cannot parse — a named colour like "red" among
- * them — and `color` is a free string, so the parse is guarded: a throw in `record` would strike the kind (three
- * strikes, and every one of its objects wears the missing face). What it cannot read draws as the default.
- */
-export function colourOf(css: string): RGB {
-  try {
-    return rgb(css);
-  } catch {
-    return rgb(DEFAULT_COLOR);
-  }
-}
-
 export function kind(): ObjectKind<DiscGeometry, DiscRecord> {
   return {
     name: KIND_NAME,
@@ -51,8 +37,10 @@ export function kind(): ObjectKind<DiscGeometry, DiscRecord> {
       r: (Math.min(ctx.rect.w, ctx.rect.h) / 2) * (1 + 0.04 * ctx.flux.lift),
       alpha: ctx.flux.fade,
     }),
-    // its props arrive cached from the document (never re-read per frame)
-    record: (G, ctx) => ({ geometry: G, colour: colourOf(stringProp(ctx.props, "color", DEFAULT_COLOR)) }),
+    // its props arrive cached from the document (never re-read per frame). `color` is a free string, and `rgb` never
+    // throws: one it cannot parse (a named colour like "red") answers the desk's missing ink, `MISSING_INK`, and is said
+    // once on the console — the object drawn, plainly not the colour asked for, and never a strike against the kind
+    record: (G, ctx) => ({ geometry: G, colour: rgb(stringProp(ctx.props, "color", DEFAULT_COLOR)) }),
     // "content" is the object itself (a tap selects it, a drag moves it); null is a miss
     hit: (G, wx, wy): ObjectHit | null => (Math.hypot(wx - G.cx, wy - G.cy) <= G.r ? "content" : null),
   };

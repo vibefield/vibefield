@@ -12,7 +12,8 @@
 //    on the HOST's one device, handed to its `create` (DK-D22 — a plugin gets no device of its own).
 //  - `@vibecook/ice/desk`, CURATED — the kind contract (`ObjectKind`, `KindProgram`, `KindPass`, the
 //    world half's contexts), the placement keys (`DESK_OBJECT`, `CONTAINABLE`, `PINNABLE`), the record
-//    store, the theme's types and `rgb`, the fault ladder's constants. Never the host half: no
+//    store, the theme's types and `rgb` (with `MISSING_INK`, what it answers for a colour it cannot
+//    read — I32), the fault ladder's constants. Never the host half: no
 //    `deskLayer`, no renderer, no profiler — those are the app's.
 //  - `@vibecook/ice` — the core types a kind's acts and tray entry speak: `HeldToolDef`,
 //    `MenuActionDef` and their APIs, `HeldGlyph`, `TrayEntry` (`hang` required), `Entity`, `World`;
@@ -46,6 +47,7 @@ export type {
 export { Active, Camera } from "@vibecook/ice";
 export {
   CONTAINABLE,
+  type ColourParse,
   createRecordStore,
   cssColor,
   type DataChildren,
@@ -69,6 +71,7 @@ export {
   type KindLocal,
   type KindPass,
   type KindProgram,
+  MISSING_INK,
   NO_DOCS,
   numberProp,
   type ObjectContext,

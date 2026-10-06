@@ -14,7 +14,7 @@ export default {
     default: {},
     // a colour of its own
     coral: { color: "#e8765c" },
-    // a colour `rgb` cannot parse (a free string prop can hold anything): it draws as the default, never throws
+    // a colour `rgb` cannot parse (a free string prop can hold anything): drawn in the desk's missing ink, said once
     unparsed: { color: "red" },
   },
 };

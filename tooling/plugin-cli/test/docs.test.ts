@@ -256,7 +256,7 @@ describe("coverage of what an author has to know", () => {
       "picked across W × H", // what try's box measures
       "the ONLY dev plugin staged",
       // DK-10 — the fifth agent's notes
-      "`rgb` THROWS on a string it cannot parse", // a free-string colour strikes the kind unguarded
+      "it answers the desk's missing ink, `MISSING_INK`", // I32 (DK-12): an unparsed colour draws, said once
       "export interface Lamp",
       "export interface Palette",
       "TEMPORARY dev root", // try never touches your dev root
