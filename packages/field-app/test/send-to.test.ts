@@ -386,6 +386,17 @@ describe("SEND TO… — the act (send-to.ts)", () => {
     release();
     await flush();
     expect(calls).toEqual(["capture", "close"]);
+    // the record says so: the selection standing after is the person's, not the one put back
+    expect(lastSend()?.marks.restored).toBe(false);
+  });
+
+  it("the record OBSERVES the marks hidden: a clear that left the selection standing is recorded as none", async () => {
+    vi.mocked(ce.ops.clearSelection).mockImplementation(() => {
+      calls.push("clear");
+    });
+    sendSelection(desk, "bar", seams);
+    await flush();
+    expect(lastSend()?.marks).toEqual({ cleared: false, restored: true });
   });
 
   it("takes nothing, clears nothing, when the line will not take the chip (another still landing)", async () => {

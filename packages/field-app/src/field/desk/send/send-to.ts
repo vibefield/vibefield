@@ -144,6 +144,10 @@ export async function stillOf(
 
 let sendSeq = 0;
 
+/** Two selections the same, in any order. */
+const sameEntities = (a: readonly Entity[], b: readonly Entity[]): boolean =>
+  a.length === b.length && a.every((e) => b.includes(e));
+
 /** What the act needs of the world beyond the desk — a test's doubles stand in for them. */
 export interface SendSeams {
   readonly encode?: PngEncoder;
@@ -215,25 +219,30 @@ export function sendSelection(desk: MountedDesk, from: SendFrom, seams: SendSeam
   void (async () => {
     let still: ChipStill | null = null;
     const hide = !inHand;
+    // the record OBSERVES the marks hidden — nothing selected at the moment the still is taken — and the same
+    // selection standing again after; it never takes the act's word for either
+    let cleared = false;
     try {
       if (hide) {
         // the marks hidden first, by the host's own doors: the selection cleared — and put back below
         engine.ops.clearSelection();
-        noteSend(record.seq, { marks: { cleared: true, restored: false } });
         await (seams.marks ?? marksLeft)(handle);
       }
+      cleared = selectedEntities(engine.world).length === 0;
       if (rect !== null) still = await stillOf(handle, rect, seams.encode);
     } catch {
       still = null; // a capture that failed carries no still; the chip still says what it carries in words
     } finally {
+      let restored = false;
       if (hide) {
         // put back as it was — unless the person has selected something else meanwhile
         if (selectedEntities(engine.world).length === 0) {
           const alive = entities.filter((e) => engine.world.get(e, PrefabId) !== undefined);
           if (alive.length > 0) engine.ops.setSelection(alive);
         }
-        noteSend(record.seq, { marks: { cleared: true, restored: true } });
+        restored = sameEntities(selectedEntities(engine.world), entities);
       }
+      noteSend(record.seq, { marks: { cleared, restored } });
     }
     ticket.attach(still);
   })();
