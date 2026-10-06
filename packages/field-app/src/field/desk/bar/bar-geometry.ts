@@ -19,6 +19,26 @@ export const BAR = {
   foot: 80,
 } as const;
 
+/** The bar IN HAND (§8 "Tools in hand"; MC-D4): under the head, its top at y 64 (centre 84) — 16 under the name pill —
+ * centred on the window. Its foot is 104; the held object's reading fit keeps 12 more (the layer's `hold.top`, 116). */
+export const HAND = {
+  /** the top, CSS px of the view (the head's 48 and the name pill's 16 under it) */
+  top: 64,
+} as const;
+
+/**
+ * Where the bar stands IN HAND (§8 "Tools in hand"): its top at y 64, centred on the window — kept 42 from each side
+ * where the window is narrower than the bar and its sides. The selection's box is not read: the tools are the
+ * hand's, not the object's place on the desk.
+ */
+export function placeHand(view: ViewSize, width: number): BarPlace {
+  return {
+    x: clamp(view.width / 2 - width / 2, BAR.sides, view.width - BAR.sides - width),
+    y: HAND.top,
+    below: false,
+  };
+}
+
 /** The bar grown (§8 "The bar grown — More, and right-click"; R6, R20). */
 export const GROWN = {
   /** at least this wide — the bar's own width when wider */

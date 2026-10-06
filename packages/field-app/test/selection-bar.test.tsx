@@ -48,8 +48,9 @@ const restingAnchor = (over: Partial<SelectionAnchor> = {}): SelectionAnchor => 
 interface FakeSelection {
   anchor(): SelectionAnchor;
   subscribe(fn: () => void): () => void;
-  /** The desk drew a frame that moved what the anchor says: the subscribers are told. */
-  publish(over: Partial<SelectionAnchor>): void;
+  /** The desk drew a frame that moved what the anchor says: the subscribers are told (an `undefined` takes a fact away —
+   * the hand gone). */
+  publish(over: { readonly [K in keyof SelectionAnchor]?: SelectionAnchor[K] | undefined }): void;
 }
 
 function fakeSelection(initial: SelectionAnchor): FakeSelection {
@@ -64,7 +65,7 @@ function fakeSelection(initial: SelectionAnchor): FakeSelection {
       };
     },
     publish(over) {
-      anchor = { ...anchor, ...over };
+      anchor = { ...anchor, ...over } as SelectionAnchor;
       for (const fn of [...listeners]) fn();
     },
   };
@@ -211,8 +212,11 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
     expect(after.publishes - before.publishes).toBe(12);
     expect(after.placements - before.placements).toBe(12);
     expect(after.renders).toBe(before.renders); // the anchor moved; what the bar says did not
-    // the last place: centred over the moved brackets (happy-dom lays nothing out: the bar's own width reads 0)
-    expect(bar().style.transform).toBe(`translate(${(500 + 60).toFixed(1)}px, 250.0px)`);
+    // the last place: centred over the moved brackets (happy-dom lays nothing out: the bar's own width reads 0) — DK-12:
+    // the transform places the bar's CENTRE, so its width may change with its contents without it leaving its place
+    expect(bar().style.transform).toBe(
+      `translate(${(500 + 60).toFixed(1)}px, 250.0px) translateX(-50%)`,
+    );
     expect(after.placements).toBeLessThanOrEqual(after.publishes);
   });
 
@@ -252,7 +256,7 @@ describe("the selection bar over the desk's anchor (DK-11)", () => {
     expect(bar().style.transition).toBe("opacity 90ms ease-out, visibility 0s linear 90ms");
     // the drag carried the object: the gesture's end places the bar where it came to rest
     act(() => selection.publish({ gesturing: false, box: { x0: 100, y0: 400, x1: 300, y1: 500 } }));
-    expect(bar().style.transform).toBe("translate(200.0px, 350.0px)");
+    expect(bar().style.transform).toBe("translate(200.0px, 350.0px) translateX(-50%)");
     act(() => vi.advanceTimersByTime(199));
     expect(bar().dataset.shown).toBe("false");
     act(() => vi.advanceTimersByTime(1));
@@ -501,5 +505,339 @@ describe("the bar's keys and acts (R9; the engine's ops)", () => {
     key("ArrowDown");
     expect(surfaceNow).toBe("selection");
     expect(document.activeElement?.getAttribute("data-row")).toBe("comment");
+  });
+});
+
+// DK-12 — THE TOOLS IN HAND (DESIGN.md §8 "Tools in hand"; R13; ICE I20, I22): when the anchor carries `held` (an object
+// picked up, not flying home) the SAME element travels to y 64 under the head over the anchor's `travelMs` on the island
+// curve, its contents swapping by a 120 ms cross-fade over the travel's last 120 ms, and becomes the tools in hand: Send
+// to… · rule · the kind's tools (dots, cells, faint) · the readout · rule · Done — each tool used through
+// `ops.useHeldTool`, Done through `ops.putDown`; hidden while the object flies home, back over it 200 ms after it lands.
+describe("the tools in hand (DK-12)", () => {
+  /** The notebook's slots as the anchor carries them (bar-hand's own test holds the real kinds' to the canon). */
+  const NOTEBOOK: NonNullable<SelectionAnchor["held"]>["tools"] = [
+    { id: "turn:-1", label: "Previous page", kind: "action", hint: "←", glyph: "chevron-left" },
+    { id: "turn:1", label: "Next page", kind: "action", hint: "→", glyph: "chevron" },
+    {
+      id: "pen:felt",
+      label: "Felt pen",
+      kind: "mode",
+      hint: "1",
+      glyph: "pen",
+      swatch: "rgb(26 26 28)",
+    },
+    {
+      id: "pen:ball",
+      label: "Ballpoint",
+      kind: "mode",
+      hint: "2",
+      glyph: "pen",
+      swatch: "rgb(32 48 112)",
+    },
+    {
+      id: "pen:fountain",
+      label: "Fountain pen",
+      kind: "mode",
+      hint: "3",
+      glyph: "pen",
+      swatch: "rgb(22 40 92)",
+    },
+    {
+      id: "pen:red",
+      label: "Red pen",
+      kind: "mode",
+      hint: "4",
+      glyph: "pen",
+      swatch: "rgb(184 40 32)",
+    },
+    { id: "undo", label: "Undo", kind: "action", hint: "⌘Z", glyph: "undo" },
+  ];
+  type Held = NonNullable<SelectionAnchor["held"]>;
+  const held = (over: { readonly [K in keyof Held]?: Held[K] | undefined } = {}): Held =>
+    ({
+      tools: NOTEBOOK,
+      active: "pen:fountain",
+      landing: false,
+      settled: true,
+      travelMs: 560,
+      readout: "Page 1",
+      ...over,
+    }) as Held;
+  const handRow = (): HTMLElement => {
+    const el = bar().querySelector<HTMLElement>('[data-face-row="hand"]');
+    if (el === null) throw new Error("no tools in hand");
+    return el;
+  };
+  const selectionRow = (): HTMLElement =>
+    bar().querySelector<HTMLElement>('[data-face-row="selection"]') as HTMLElement;
+  const tool = (id: string): HTMLElement => {
+    const el = [...handRow().querySelectorAll<HTMLElement>("[data-tool]")].find(
+      (t) => t.dataset.tool === id,
+    );
+    if (el === undefined) throw new Error(`no ${id} in hand`);
+    return el;
+  };
+  /** The tools in hand as a reader meets them: their acts and tools in order, `|` a rule, the word. */
+  const handSaid = (): string[] =>
+    [...handRow().children].map((el) => {
+      const e = el as HTMLElement;
+      if (e.classList.contains("vf-bar-rule")) return "|";
+      if (e.dataset.readout !== undefined) return `“${e.textContent}”`;
+      return `${e.dataset.gap !== undefined ? "+" : ""}${e.dataset.tool ?? e.dataset.act}`;
+    });
+  /** Picked up, and the travel over. */
+  const inHandNow = (over: Parameters<typeof held>[0] = {}): void => {
+    act(() => selection.publish({ held: held(over) }));
+    act(() => vi.advanceTimersByTime(560));
+  };
+
+  it("TRAVELS into the hand: the one element to y 64 under the head, centred — the anchor's 560 ms on the island curve, its contents cross-faded over the last 120 (R13)", () => {
+    vi.useFakeTimers();
+    mount();
+    expect(bar().style.transform).toBe("translate(500.0px, 250.0px) translateX(-50%)");
+    // every value the root's style takes, in order — the travel's transition must be on BEFORE the new place is written,
+    // or the browser jumps the bar there (desk.js `morphBar`'s order)
+    const styles = new MutationObserver(() => undefined);
+    styles.observe(bar(), {
+      attributes: true,
+      attributeFilter: ["style"],
+      attributeOldValue: true,
+    });
+    act(() => selection.publish({ held: held() }));
+    const values = [
+      ...styles.takeRecords().map((r) => r.oldValue ?? ""),
+      bar().getAttribute("style") ?? "",
+    ];
+    styles.disconnect();
+    const placed = values.find((v) => v.includes("translate(590.0px, 64.0px)"));
+    expect(placed).toBeDefined();
+    expect(placed).toContain("transform 560ms var(--vf-ease-island)");
+    expect(bar().dataset.role).toBe("hand");
+    // the tools in hand stand ready under the selection's row, inert and unread until the cross-fade
+    expect(handRow().hasAttribute("inert")).toBe(true);
+    expect(handRow().getAttribute("aria-hidden")).toBe("true");
+    // still saying the selection as it travels; its new place written with the travel's transition on
+    expect(bar().dataset.face).toBe("selection");
+    expect(bar().dataset.shown).toBe("true");
+    expect(bar().style.transform).toBe("translate(590.0px, 64.0px) translateX(-50%)");
+    expect(bar().style.transition).toBe(
+      "opacity 180ms ease-out, transform 560ms var(--vf-ease-island)",
+    );
+    act(() => vi.advanceTimersByTime(439));
+    expect(bar().dataset.face).toBe("selection");
+    // the travel's last 120 ms: the rows cross-fade, the glass's width following them
+    act(() => vi.advanceTimersByTime(1));
+    expect(bar().dataset.face).toBe("hand");
+    expect(bar().style.transition).toBe(
+      "opacity 180ms ease-out, transform 560ms var(--vf-ease-island), width 120ms ease",
+    );
+    expect(bar().style.getPropertyValue("--vf-bar-swap-ms")).toBe("120ms");
+    act(() => vi.advanceTimersByTime(120));
+    expect(bar().style.transition).toBe("opacity 180ms ease-out");
+    expect(handRow().getAttribute("aria-label")).toBe("Tools in hand");
+    expect(handRow().hasAttribute("inert")).toBe(false);
+    expect(selectionRow().hasAttribute("inert")).toBe(true);
+    // a travel the anchor says is longer is the anchor's (I20)
+    act(() => selection.publish({ held: undefined }));
+    act(() => vi.advanceTimersByTime(600));
+    act(() => selection.publish({ held: held({ travelMs: 800 }) }));
+    expect(bar().style.transition).toBe(
+      "opacity 180ms ease-out, transform 800ms var(--vf-ease-island)",
+    );
+  });
+
+  it("becomes the tools in hand in the canon's order — the pens dots, the one in hand ringed and pressed, the word, Done", () => {
+    vi.useFakeTimers();
+    mount();
+    inHandNow();
+    expect(handSaid()).toEqual([
+      "send",
+      "|",
+      "turn:-1",
+      "turn:1",
+      "+pen:felt",
+      "pen:ball",
+      "pen:fountain",
+      "pen:red",
+      "+undo",
+      "“Page 1”",
+      "|",
+      "done",
+    ]);
+    expect(handRow().querySelectorAll(".vf-bar-dot")).toHaveLength(4);
+    expect(tool("pen:fountain").getAttribute("aria-pressed")).toBe("true");
+    expect(tool("pen:fountain").hasAttribute("data-on")).toBe(true);
+    expect(tool("pen:ball").getAttribute("aria-pressed")).toBe("false");
+    expect(tool("pen:felt").style.getPropertyValue("--vf-bar-swatch")).toBe("rgb(26 26 28)");
+    // an action is never pressed; its glyph by §13's table (chevron-left turned 180)
+    expect(tool("turn:-1").hasAttribute("aria-pressed")).toBe(false);
+    expect(tool("turn:-1").querySelector("[data-glyph]")?.getAttribute("data-glyph")).toBe(
+      "chevron",
+    );
+    expect(tool("pen:felt").getAttribute("title")).toBe("Felt pen  1");
+    const done = handRow().querySelector<HTMLElement>('[data-act="done"]');
+    expect(done?.textContent).toBe("Done");
+    expect(done?.getAttribute("title")).toBe("Put it down  Esc");
+    expect(handRow().querySelector('[data-act="send"]')?.getAttribute("title")).toBe(
+      "Send to… — next",
+    );
+    // the mode in hand moved: the ring and the press follow it
+    act(() => selection.publish({ held: held({ active: "pen:red" }) }));
+    expect(tool("pen:red").getAttribute("aria-pressed")).toBe("true");
+    expect(tool("pen:fountain").getAttribute("aria-pressed")).toBe("false");
+    // a mode without a swatch is a cell, the inverted solid while in hand
+    act(() =>
+      selection.publish({
+        held: held({
+          tools: [{ id: "eraser", label: "Eraser", kind: "mode", hint: "E", glyph: "eraser" }],
+          active: "eraser",
+          readout: undefined,
+        }),
+      }),
+    );
+    expect(tool("eraser").dataset.look).toBe("mode");
+    expect(tool("eraser").getAttribute("aria-pressed")).toBe("true");
+    expect(handRow().querySelector("[data-readout]")).toBeNull();
+  });
+
+  it("uses each tool through ops.useHeldTool and puts it down through ops.putDown — a slot that only waits, never", () => {
+    vi.useFakeTimers();
+    mount();
+    const use = vi.spyOn(ce.ops, "useHeldTool");
+    const putDown = vi.spyOn(ce.ops, "putDown");
+    inHandNow({
+      tools: [...NOTEBOOK, { id: "later", label: "Later" }],
+    });
+    act(() => tool("pen:felt").click());
+    expect(use).toHaveBeenLastCalledWith("pen:felt");
+    act(() => tool("turn:1").click());
+    expect(use).toHaveBeenLastCalledWith("turn:1");
+    act(() => tool("undo").focus());
+    key("Enter");
+    expect(use).toHaveBeenLastCalledWith("undo");
+    expect(keymapHeard).toEqual([]);
+    expect(tool("later").getAttribute("aria-disabled")).toBe("true");
+    act(() => tool("later").click());
+    act(() => handRow().querySelector<HTMLElement>('[data-act="send"]')?.click());
+    expect(use).toHaveBeenCalledTimes(3);
+    act(() => handRow().querySelector<HTMLElement>('[data-act="done"]')?.click());
+    expect(putDown).toHaveBeenCalledTimes(1);
+  });
+
+  it("is a toolbar named “Tools in hand” with one tab stop: ← → between its tools and Done, the word no stop; Esc back to the desk", () => {
+    vi.useFakeTimers();
+    mount();
+    inHandNow();
+    expect([...handRow().querySelectorAll('[tabindex="0"]')]).toHaveLength(1);
+    act(() => tool("undo").focus());
+    key("ArrowRight");
+    expect(document.activeElement?.getAttribute("data-act")).toBe("done");
+    key("ArrowRight");
+    expect(document.activeElement?.getAttribute("data-act")).toBe("send");
+    key("ArrowLeft");
+    key("ArrowLeft");
+    expect(document.activeElement).toBe(tool("undo"));
+    key("Escape");
+    expect(handRow().contains(document.activeElement)).toBe(false);
+    expect(keymapHeard).toEqual([]);
+  });
+
+  it("stays through a stroke or a line written in hand; folds the menu as it goes into the hand", () => {
+    vi.useFakeTimers();
+    mount();
+    act(() => cell("more").click());
+    expect(surfaceNow).toBe("selection");
+    act(() => selection.publish({ held: held() }));
+    expect(surfaceNow).toBeNull();
+    act(() => vi.advanceTimersByTime(560));
+    act(() => selection.publish({ held: held(), gesturing: true, editing: true }));
+    act(() => vi.advanceTimersByTime(300));
+    expect(bar().dataset.shown).toBe("true");
+  });
+
+  it("hides while the object flies home, and is back over it 200 ms after it lands — the bar over the selection again", () => {
+    vi.useFakeTimers();
+    mount();
+    inHandNow();
+    act(() => selection.publish({ held: held({ landing: true }), gesturing: false }));
+    expect(bar().dataset.shown).toBe("false");
+    expect(bar().dataset.role).toBe("selection");
+    expect(bar().style.transition).toBe(
+      "opacity 90ms ease-out, visibility 0s linear 90ms, transform 560ms var(--vf-ease-island)",
+    );
+    act(() => vi.advanceTimersByTime(600)); // the flight home
+    expect(bar().dataset.face).toBe("selection");
+    act(() => selection.publish({ held: undefined }));
+    expect(bar().style.transform).toBe("translate(500.0px, 250.0px) translateX(-50%)");
+    act(() => vi.advanceTimersByTime(199));
+    expect(bar().dataset.shown).toBe("false");
+    act(() => vi.advanceTimersByTime(1));
+    expect(bar().dataset.shown).toBe("true");
+    expect(cellActs()).toEqual(["send", "|", "duplicate", "tape", "more", "|", "delete"]);
+    expect(bar().querySelector('[data-face-row="hand"]')).toBeNull();
+  });
+
+  it("unseen as the hand comes (nothing was selected): stands under the head at once and fades in — no travel", () => {
+    vi.useFakeTimers();
+    act(() => selection.publish({ count: 0, box: null }));
+    mount();
+    expect(bar().dataset.shown).toBe("false");
+    act(() => selection.publish({ count: 1, box: BOX, held: held() }));
+    expect(bar().dataset.face).toBe("hand");
+    expect(bar().dataset.shown).toBe("true");
+    expect(bar().style.transform).toBe("translate(590.0px, 64.0px) translateX(-50%)");
+    expect(bar().style.transition).toBe("opacity 180ms ease-out");
+  });
+
+  it("the word changing is a render and one placement for its publish — never a render per frame (placements ≤ publishes)", () => {
+    vi.useFakeTimers();
+    mount();
+    inHandNow();
+    const before = readBarStats();
+    for (let i = 2; i <= 11; i += 1)
+      act(() => selection.publish({ held: held({ readout: `Page ${i}` }) }));
+    const mid = readBarStats();
+    expect(mid.publishes - before.publishes).toBe(10);
+    expect(mid.renders - before.renders).toBe(10);
+    expect(mid.placements - before.placements).toBe(10);
+    expect(handRow().querySelector("[data-readout]")?.textContent).toBe("Page 11");
+    // the same hand published again (a frame drawn while held): placed, never re-rendered
+    for (let i = 0; i < 5; i += 1)
+      act(() => selection.publish({ held: held({ readout: "Page 11" }) }));
+    const after = readBarStats();
+    expect(after.renders).toBe(mid.renders);
+    expect(after.placements).toBeLessThanOrEqual(after.publishes);
+    expect(bar().style.transform).toBe("translate(590.0px, 64.0px) translateX(-50%)");
+  });
+
+  it("REDUCED MOTION: no travel — out over 60 ms where it stood, then the tools in hand under the head, in over 60 ms (M6, R8)", () => {
+    vi.useFakeTimers();
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      ...matchMedia.call(window, query),
+      matches: query.includes("prefers-reduced-motion"),
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as typeof window.matchMedia;
+    try {
+      mount();
+      const stood = bar().style.transform;
+      act(() => selection.publish({ held: held() }));
+      expect(bar().dataset.shown).toBe("false");
+      expect(bar().style.transition).toBe("opacity 60ms ease-out, visibility 0s linear 60ms");
+      expect(bar().style.transition).not.toContain("transform");
+      expect(bar().style.transform).toBe(stood); // not one frame of travel
+      expect(bar().dataset.face).toBe("selection");
+      act(() => vi.advanceTimersByTime(60));
+      expect(bar().dataset.face).toBe("hand");
+      expect(bar().style.transform).toBe("translate(590.0px, 64.0px) translateX(-50%)");
+      expect(bar().dataset.shown).toBe("true");
+      expect(bar().style.transition).toBe("opacity 60ms ease-out");
+      act(() => vi.advanceTimersByTime(60));
+      expect(bar().style.transition).toBe("opacity 90ms ease-out");
+      expect(bar().dataset.motion).toBe("fade"); // and the dots do not pop (selection-bar.css)
+    } finally {
+      window.matchMedia = matchMedia;
+    }
   });
 });

@@ -8,7 +8,9 @@
  * 94; when it fits neither way the list scrolls, clamped between 94 and the line's reserve (700).
  */
 import { describe, expect, it } from "vitest";
-import { BAR, growMenu, placeBar } from "../src/field/desk/bar/bar-geometry";
+import { BAR, growMenu, HAND, placeBar, placeHand } from "../src/field/desk/bar/bar-geometry";
+import { BAR_MOTION, barMotion, swapAt, travelTransition } from "../src/field/desk/bar/bar-motion";
+import { DESK_HOLD } from "../src/field/desk/desk-layer";
 
 const view = { width: 1180, height: 780 };
 const one = (box: { x0: number; y0: number; x1: number; y1: number }) => ({ box, count: 1, view });
@@ -103,5 +105,31 @@ describe("the bar grown (R6, R20)", () => {
     });
     // grown down from a bar at 300, the list ends at 300 + 41 + 359 = 700: 8 above the line's top
     expect(300 + 41 + 359).toBe(708 - 8);
+  });
+});
+
+// DK-12 — THE TOOLS IN HAND (§8 "Tools in hand"; R13; ICE I20): under the head, top y 64 (centre 84), centred on the
+// window; the held object's reading fit keeps 116 above it (the bar's foot, 104, + 12) and 100 below (the line's 88 +
+// 12); the travel 560 ms on the island curve, the cross-fade its last 120 ms; reduced motion a fade only, halved.
+describe("where the tools in hand stand, and what the layer reserves for them (DK-12)", () => {
+  it("under the head — top y 64, its centre 84 — centred on the window, whatever the selection's box", () => {
+    expect(placeHand(view, 420)).toEqual({ x: (1180 - 420) / 2, y: 64, below: false });
+    expect(HAND.top + BAR.height / 2).toBe(84);
+    // a window narrower than the bar and its sides keeps 42 from the left
+    expect(placeHand({ width: 400, height: 780 }, 420).x).toBe(42);
+  });
+
+  it("the layer keeps 116 above the held object (the bar's foot and 12) and 100 below it (the line's 88 and 12), the travel 560", () => {
+    expect(DESK_HOLD).toEqual({ top: 116, band: 100, travelMs: 560 });
+    expect(DESK_HOLD.top).toBe(HAND.top + BAR.height + 12);
+    expect(DESK_HOLD.band).toBe(88 + 12);
+  });
+
+  it("travels on the island curve over the anchor's travel; the cross-fade is its last 120 ms — reduced, a fade only, halved", () => {
+    expect(travelTransition(560)).toBe("transform 560ms var(--vf-ease-island)");
+    expect(BAR_MOTION).toMatchObject({ swapMs: 120, travels: true });
+    expect(swapAt(BAR_MOTION, 560)).toBe(440);
+    expect(swapAt(BAR_MOTION, 80)).toBe(0); // a travel shorter than the cross-fade swaps at once
+    expect(barMotion(true)).toMatchObject({ swapMs: 60, travels: false });
   });
 });

@@ -2,6 +2,8 @@
 // DK-8 — THE DESK DOOR'S TWO NEW READS (`window.__vfDesk`, what smoke:canvas's pad row reads): an object type's
 // props — the cells of its groups, merged, never the pegboard's specimens — and the board's persistence row. Reads
 // only: the door still writes no document.
+
+import type { Entity } from "@vibecook/ice";
 import { COMMENT_PAD_TYPE } from "@vibefield/plugin-comment-pad";
 import { afterEach, describe, expect, it } from "vitest";
 import { setBoardStatus } from "../src/board-status";
@@ -37,6 +39,29 @@ describe("the desk door's reads (DK-8)", () => {
     expect(door?.board()).toEqual({ state: "live", lastSavedAt: 1234 });
     setBoardStatus({ state: "saving" });
     expect(door?.board()).toEqual({ state: "saving", lastSavedAt: null });
+    undo();
+    ce.dispose();
+  });
+
+  it("DK-12: reads the object IN HAND and where the desk drew it — the held pose seam's frame — and nothing when none is held", async () => {
+    const ce = createFieldEngine(buildRegistry());
+    await seedField(ce, ce.docs.create(), createDeskBlobStore());
+    ce.step(16);
+    const undo = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+      () => false,
+    );
+    const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
+    expect(door?.held()).toBeNull();
+    const notebook = deskObjects(ce, "desk.notebook")[0]?.entity as Entity;
+    ce.ops.open(notebook);
+    // before the desk has drawn it: in hand, no frame yet
+    expect(door?.held()).toEqual({ entity: notebook as number, frame: null });
+    const drawn = { cx: 590, cy: 382, hx: 300, hy: 166, s: 1.4, settled: true };
+    ce.stack.heldPose.current = { frame: (e) => (e === notebook ? drawn : undefined) };
+    expect(door?.held()).toEqual({ entity: notebook as number, frame: drawn });
+    ce.ops.putDown();
+    expect(door?.held()).toBeNull();
     undo();
     ce.dispose();
   });

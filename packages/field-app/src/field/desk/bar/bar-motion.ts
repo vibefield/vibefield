@@ -6,6 +6,11 @@ import { useSyncExternalStore } from "react";
 // curve over 600 ms, the rows fading and rising 4 px nearest first, 160 ms + 26 ms a row (capped at 400 ms), 240
 // ms each; folded back as the Me menu folds — the content out in 120 ms, the shape from 80 ms over 600 ms.
 // REDUCED MOTION (M6, R8) HALVES EVERY DURATION AND FADES ONLY: no growth (the menu fades in whole), no rise.
+//
+// IN HAND (DK-12; §8 "Tools in hand"; R13, M1): the same element TRAVELS into the hand — the anchor's `travelMs` (560, I20)
+// on the island curve — its contents swapping by a 120 ms cross-fade over the travel's last 120 ms, so it arrives as the
+// tools in hand; back the same way when the hand is gone. Reduced motion: no travel — out over half the cross-fade, the
+// new place and contents, in over the other half (a fade only); the dots do not pop.
 
 export interface BarMotion {
   /** Out for a gesture or a note being written. */
@@ -34,7 +39,14 @@ export interface BarMotion {
   readonly grows: boolean;
   /** The rows RISE 4 px as they fade in (false: they fade only). */
   readonly rises: boolean;
+  /** In hand: the contents' cross-fade at the travel's end — or, reduced, the fade out and in again around the jump. */
+  readonly swapMs: number;
+  /** The bar TRAVELS between the selection and the hand (false: it fades, M6). */
+  readonly travels: boolean;
 }
+
+/** The travel into the hand when the anchor carries none (the layer's `hold.travelMs` — DESK_HOLD's 560). */
+export const TRAVEL_MS = 560;
 
 export const BAR_MOTION: BarMotion = {
   awayMs: 90,
@@ -51,6 +63,8 @@ export const BAR_MOTION: BarMotion = {
   rowCap: 400,
   grows: true,
   rises: true,
+  swapMs: 120,
+  travels: true,
 };
 
 /** The bar's motion — under reduced motion every duration halved, fades only (R8, M6). */
@@ -72,8 +86,17 @@ export function barMotion(reduced: boolean): BarMotion {
     rowCap: half(BAR_MOTION.rowCap),
     grows: false,
     rises: false,
+    swapMs: half(BAR_MOTION.swapMs),
+    travels: false,
   };
 }
+
+/** The travel's transform transition (M1): its length the anchor's, on the island curve. */
+export const travelTransition = (travelMs: number): string =>
+  `transform ${travelMs}ms var(--vf-ease-island)`;
+
+/** When the cross-fade starts in a travel: its last `swapMs`, so the bar arrives as the tools in hand. */
+export const swapAt = (m: BarMotion, travelMs: number): number => Math.max(0, travelMs - m.swapMs);
 
 /** A row's reveal delay, `fromNearest` counting from the row next to the bar (0). */
 export const rowDelay = (m: BarMotion, fromNearest: number): number =>

@@ -16,6 +16,7 @@ import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../des
 import type { ObjectWords } from "../desk-object-words";
 import { type BarActId, COMMENT_PAD_TYPE, runBarAct } from "./bar-acts";
 import { offScreen } from "./bar-geometry";
+import { type HandCell, type HeldSlot, handCells, slotsKey } from "./bar-hand";
 import {
   type BarCell,
   barCells,
@@ -25,7 +26,7 @@ import {
   menuGroups,
   type SelectionFacts,
 } from "./bar-model";
-import { useReducedMotion } from "./bar-motion";
+import { TRAVEL_MS, useReducedMotion } from "./bar-motion";
 import { barStats } from "./bar-stats";
 import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 
@@ -45,6 +46,12 @@ import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 // any of them folds it. It closes on Esc, a press elsewhere (the view's), a gesture, a change of selection — and when
 // the bar goes (R5). RIGHT-CLICK (R26, I27 + I28): a `contextmenu` listener over the desk selects the object under
 // the pointer FIRST by the desk's pick (`handle.pick`), then grows this same bar into this same menu (MC-D6).
+//
+// IN HAND (DK-12; §8 "Tools in hand"; R13): when an object is picked up (the anchor's `held`, not flying home) the same
+// bar TRAVELS into the hand and becomes the tools in hand — the kind's slots, the mode in hand, the kind's word — placed
+// under the head whatever the selection's box; each tool used through `ops.useHeldTool(id)`, Done through
+// `ops.putDown()`. While the object flies home (`landing`) the bar steps aside, and comes back over it 200 ms after it
+// lands, as the bar over the selection again.
 
 export interface SelectionBarProps {
   /** The frame's open surface and its one owner's setter (FR-4). */
@@ -78,11 +85,44 @@ interface BarFacts {
   readonly faults: number;
   /** The selection is drawn and some of it is on screen (R7). */
   readonly onScreen: boolean;
-  /** An object is in hand (DK-12's: the bar travels there; until then it steps aside). */
+  /** An object is in hand, not flying home: the bar is the tools in hand (DK-12). */
   readonly inHand: boolean;
-  /** A gesture is on, or a note is being written (R8). */
+  /** A gesture is on, or a note is being written (R8) — or the object in hand flies home. Never while it is in hand. */
   readonly stepAside: boolean;
   readonly selection: SelectionFacts;
+  /** What the bar says in hand (the anchor's `held`), or null with nothing in hand. */
+  readonly hand: HandFacts | null;
+}
+
+/** The hand as the bar says it: the kind's slots (and their key), the mode in hand, the kind's word, the travel. */
+interface HandFacts {
+  readonly key: string;
+  readonly tools: readonly HeldSlot[];
+  readonly active: string;
+  readonly readout: string | undefined;
+  readonly travelMs: number | undefined;
+}
+
+/** The hand's facts as of this anchor — `prev` itself when nothing the bar says of it changed. */
+function readHand(anchor: SelectionAnchor, prev: HandFacts | null): HandFacts | null {
+  const held = anchor.held;
+  if (!inHand(anchor) || held === undefined) return null;
+  const key = slotsKey(held.tools);
+  if (
+    prev !== null &&
+    prev.key === key &&
+    prev.active === held.active &&
+    prev.readout === held.readout &&
+    prev.travelMs === held.travelMs
+  )
+    return prev;
+  return {
+    key,
+    tools: held.tools,
+    active: held.active,
+    readout: held.readout,
+    travelMs: held.travelMs,
+  };
 }
 
 const keyOf = (entities: readonly Entity[]): string =>
@@ -133,7 +173,9 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
   const faults = (desk.handle.status().faults ?? []).length;
   const onScreen = anchor.box !== null && !offScreen(anchor.box, anchor.view);
   const held = inHand(anchor);
-  const stepAside = anchor.gesturing || anchor.editing || anchor.held?.landing === true;
+  // in hand the tools stay through a stroke or a line being written; only the flight home steps them aside
+  const stepAside = !held && (anchor.gesturing || anchor.editing || anchor.held?.landing === true);
+  const hand = readHand(anchor, prev?.hand ?? null);
   if (
     prev !== null &&
     prev.key === key &&
@@ -143,7 +185,8 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
     prev.faults === faults &&
     prev.onScreen === onScreen &&
     prev.inHand === held &&
-    prev.stepAside === stepAside
+    prev.stepAside === stepAside &&
+    prev.hand === hand
   ) {
     return prev;
   }
@@ -163,6 +206,7 @@ function readFacts(anchor: SelectionAnchor, desk: MountedDesk, prev: BarFacts | 
     onScreen,
     inHand: held,
     stepAside,
+    hand,
     // deselected, the bar fades out still saying what it said (R8): its content stays the last selection's
     selection:
       prev !== null && (same || anchor.count === 0)
@@ -215,24 +259,26 @@ function SelectionBarOn({
       if (next !== prev) {
         factsRef.current = next;
         setFacts(next);
-        if (next.selection !== prev.selection) {
+        // what it SAYS changed — the selection's cells, or the hand's — so it is placed once it has re-rendered
+        if (next.selection !== prev.selection || next.hand !== prev.hand) {
           barRef.current?.place(anchor, false);
           return;
         }
       }
-      const placing = next.count > 0 && next.onScreen && !next.inHand && !next.stepAside;
+      // in hand it stands under the head whatever the selection's box; over a selection, only where it can stand
+      const placing = next.inHand || (next.count > 0 && next.onScreen && !next.stepAside);
       barRef.current?.place(anchor, placing);
     };
     read();
     return source.subscribe(read);
   }, [source, desk]);
 
-  const shown = facts.count > 0 && facts.onScreen && !facts.inHand && !hidden;
+  const shown = !hidden && (facts.inHand || (facts.count > 0 && facts.onScreen));
 
-  // R5: the menu closes on a gesture and when the bar goes
+  // R5: the menu closes on a gesture and when the bar goes — into the hand too
   useEffect(() => {
-    if (open && (!shown || facts.stepAside)) fold();
-  }, [open, shown, facts.stepAside, fold]);
+    if (open && (!shown || facts.stepAside || facts.inHand)) fold();
+  }, [open, shown, facts.stepAside, facts.inHand, fold]);
 
   // R5: a change of selection closes it — but a right-click's own selection is the one it grows for (R26)
   const keySeen = useRef(facts.key);
@@ -273,6 +319,20 @@ function SelectionBarOn({
   }, [desk, engine, handle]);
 
   const cells = useMemo(() => barCells(facts.selection, keys), [facts.selection, keys]);
+  const hand = useMemo(
+    () =>
+      facts.hand === null
+        ? NO_HAND
+        : handCells({
+            tools: facts.hand.tools,
+            active: facts.hand.active,
+            ...(facts.hand.readout === undefined ? {} : { readout: facts.hand.readout }),
+          }),
+    [facts.hand],
+  );
+  /** The travel the anchor last told while something was in hand (I20) — the way home keeps it after the hand is gone. */
+  const travel = useRef(TRAVEL_MS);
+  if (facts.hand?.travelMs !== undefined) travel.current = facts.hand.travelMs;
   const groups = useMemo(() => menuGroups(facts.selection, keys), [facts.selection, keys]);
   const eyebrow = useMemo(() => menuEyebrow(facts.selection), [facts.selection]);
 
@@ -298,6 +358,14 @@ function SelectionBarOn({
     },
     [engine],
   );
+  // a tool in hand used through the engine — a mode taken up, an action run — or Done, the object put down
+  const onHand = useCallback(
+    (cell: HandCell): void => {
+      if (cell.kind === "tool") engine.ops.useHeldTool(cell.id);
+      else if (cell.kind === "done") engine.ops.putDown();
+    },
+    [engine],
+  );
 
   return (
     <SelectionBarView
@@ -311,7 +379,13 @@ function SelectionBarOn({
       onOpenChange={onOpenChange}
       onCell={onCell}
       onRow={onRow}
+      held={facts.inHand}
+      hand={hand}
+      travelMs={travel.current}
+      onHand={onHand}
       reduced={reduced}
     />
   );
 }
+
+const NO_HAND: readonly HandCell[] = [];

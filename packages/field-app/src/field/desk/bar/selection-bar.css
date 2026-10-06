@@ -1,9 +1,11 @@
 /* THE SELECTION BAR (DK-11; DESIGN.md §8 "The selection bar", "The bar grown — More, and right-click"; §5 the
- * line's glass and the menus' solid, R20; §6 M1, M4, M6). Tokens only. ONE element through every role: the bar on
- * the line's glass over the selection's brackets, and the same piece grown into its solid menu (MC-D6, FC-D14).
+ * line's glass and the menus' solid, R20; §6 M1, M4, M6) — and THE TOOLS IN HAND (DK-12; §8 "Tools in hand"; R13).
+ * Tokens only. ONE element through every role: the bar on the line's glass over the selection's brackets, the same
+ * piece grown into its solid menu (MC-D6, FC-D14), and the same piece travelled into the hand under the head, its
+ * contents cross-faded (the two rows below, one shown — `data-face`).
  *
- * Where it stands is written by the view (a transform, imperatively, on each publish); everything it looks like
- * is here. Over the desk and under the frame (§10): above the canvas, below the head (50), the attention stack and
+ * Where it stands and how wide its glass is are written by the view (a transform placing its centre, and a width,
+ * imperatively, on each publish); everything it looks like is here. Over the desk and under the frame (§10): above the canvas, below the head (50), the attention stack and
  * the old sheet (40, 50), the cover (60), the status line (61) and the line, the edges and the corner (62).
  *
  * The material lives on `.vf-bar-panel`, which grows from the bar's own row to the menu (R6, R20): its insets
@@ -108,15 +110,32 @@
 
 /* ── THE ROW: Send to… · rule · the kind's acts · Duplicate · Tape · More · rule · Delete ─────────────── */
 
+/* each row stands centred on the element; the one the bar SHOWS (`data-face`) is in, the other out — they cross-fade
+   over 120 ms at the travel's end, the glass's width following them (the view's) */
 .vf-bar-row {
-  position: relative;
+  position: absolute;
   z-index: 2;
+  top: 0;
+  left: 50%;
   display: flex;
   box-sizing: border-box;
+  width: max-content;
   align-items: center;
   gap: 2px;
   padding: 4px;
   white-space: nowrap;
+  translate: -50% 0;
+  transition: opacity var(--vf-bar-swap-ms, 120ms) ease;
+}
+
+.vf-bar[data-face="hand"] .vf-bar-row[data-face-row="selection"],
+.vf-bar[data-face="selection"] .vf-bar-row[data-face-row="hand"] {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition:
+    opacity var(--vf-bar-swap-ms, 120ms) ease,
+    visibility 0s linear var(--vf-bar-swap-ms, 120ms);
 }
 
 .vf-bar-cell,
@@ -220,6 +239,117 @@
   color: var(--vf-text-secondary);
   font: 500 13px / 32px var(--vf-font-sans);
   cursor: default;
+}
+
+/* ── THE TOOLS IN HAND: Send to… · rule · the kind's tools · the readout · rule · Done ─────────────────── */
+
+/* a 6 gap where the run changes between pages, inks and tools (the row's 2 and 4 of its own) */
+.vf-bar-row--hand [data-gap] {
+  margin-left: 4px;
+}
+
+/* a mode in hand without a swatch (the eraser, the calendar's pen): the inverted solid (aria-pressed) */
+.vf-bar-cell[data-look="mode"][aria-pressed="true"],
+.vf-bar-cell[data-look="mode"][aria-pressed="true"]:hover {
+  color: var(--vf-foreground-inverse);
+  background: var(--vf-foreground);
+}
+
+/* a slot declared only, with no kind: it waits, faint by ink */
+.vf-bar-cell[data-look="faint"],
+.vf-bar-cell[data-look="faint"]:hover,
+.vf-bar-cell[data-look="faint"]:active {
+  color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
+  background: transparent;
+  transform: none;
+  cursor: default;
+}
+
+/* a mode with a swatch — a pen, a marker — is a DOT: 12 px in the slot's own ink in a 28 × 32 cell, a 1 px inner ring
+   (black/14; white/20 by night) so a black ink reads on the night glass; it grows 1.18× under the pointer (160 ms, pop) */
+.vf-bar-dot,
+.vf-bar-dot:hover,
+.vf-bar-dot:active {
+  width: 28px;
+  background: transparent;
+  transform: none;
+}
+
+.vf-bar-dot-ink {
+  position: relative;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--vf-bar-swatch, transparent);
+  box-shadow: inset 0 0 0 1px rgb(0 0 0 / 14%);
+  transition: transform 160ms var(--vf-ease-pop);
+}
+
+.dark .vf-bar-dot-ink {
+  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 20%);
+}
+
+.vf-bar-dot:hover .vf-bar-dot-ink {
+  transform: scale(1.18);
+}
+
+/* the one in hand wears a 1.5 px foreground ring 2 px off the dot — the notch pin's ring */
+.vf-bar-dot[data-on] .vf-bar-dot-ink::after {
+  position: absolute;
+  inset: -3.5px;
+  border: 1.5px solid var(--vf-foreground);
+  border-radius: 50%;
+  content: "";
+}
+
+/* the kind's word in hand (I22): one slot after the tools — 12/500 tabular-nums in secondary ink, ≥ 44 wide */
+.vf-bar-readout {
+  box-sizing: border-box;
+  min-width: 44px;
+  padding: 0 4px;
+  color: var(--vf-text-secondary);
+  font: 500 12px / 32px var(--vf-font-sans);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  cursor: default;
+}
+
+/* Done — VibeField's primary at 32: the inverted solid, 13/500, padded 0 15, no glyph, the chip shadow; 0.9 under the
+   pointer, 0.96 pressed (R13) */
+.vf-bar-done {
+  display: inline-flex;
+  flex: none;
+  height: 32px;
+  align-items: center;
+  padding: 0 15px;
+  border: 0;
+  border-radius: 16px;
+  color: var(--vf-foreground-inverse);
+  background: var(--vf-foreground);
+  box-shadow: 0 4px 10px rgb(0 0 0 / 14%);
+  font: 500 13px / 1 var(--vf-font-sans);
+  cursor: pointer;
+  transition:
+    opacity 120ms ease,
+    transform 120ms ease;
+}
+
+.dark .vf-bar-done {
+  box-shadow: 0 4px 10px rgb(0 0 0 / 40%);
+}
+
+.vf-bar-done:hover {
+  opacity: 0.9;
+}
+
+.vf-bar-done:active {
+  transform: scale(0.96);
+}
+
+.vf-bar-done:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
 }
 
 /* ── THE LIST: the grown menu's rows, nearest first ───────────────────────────────────────────────────── */
@@ -390,5 +520,10 @@
 .vf-bar[data-motion="fade"] .vf-bar-item,
 .vf-bar[data-motion="fade"] .vf-bar-eye,
 .vf-bar[data-motion="fade"] .vf-bar-sep {
+  transform: none;
+}
+
+/* …and a dot does not pop (M6: fades only) */
+.vf-bar[data-motion="fade"] .vf-bar-dot:hover .vf-bar-dot-ink {
   transform: none;
 }

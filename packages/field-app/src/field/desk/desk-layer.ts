@@ -21,6 +21,14 @@ import { deskBlobs } from "./desk-blobs";
  * rulers PRINTED at a margin of 60 — the mat's unprinted margin between the window's edge and the
  * rulers' frame, so the top ruler starts below the head's strip and the left one clears the notch.
  */
+/**
+ * THE HAND'S RESERVES (DESIGN.md §8 "Tools in hand"; ICE I20 — `deskLayer({ hold })`): the held object's reading fit
+ * keeps 116 under the view's top — the tools in hand stand at y 64, 40 tall, their foot at 104, and 12 more — and 100
+ * above its foot — the line's 88 and 12; the bar travels into the hand in 560 ms on the island curve, the anchor
+ * carrying it (`HeldAnchor.travelMs`). ICE's own 56 / 72 / 340 are its demo's.
+ */
+export const DESK_HOLD = { top: 116, band: 100, travelMs: 560 } as const;
+
 export const DESK_GRID: GridConfig = {
   fadeIn: GRID.fadeIn,
   mat: { ...DEFAULT_MAT_CONFIG, ruler: { ...DEFAULT_MAT_CONFIG.ruler, on: true, margin: 60 } },
@@ -52,8 +60,9 @@ export interface FieldDeskLayerOptions {
  * The layer the field mounts: the engine catalog's object types (the layer reads them — `objects`
  * adds none), the shipped hand (`text`), the document a note's typing commits into (`docs` — the
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
- * store (`blobs`, DK-D21), the grid, and no further services yet (the kv service rides later). The
- * room's other people stay ICE's cursors until DK-16 draws VibeField's (`cursors` unset — ruling 3).
+ * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), and no
+ * further services yet (the kv service rides later). The room's other people stay ICE's cursors until DK-16 draws
+ * VibeField's (`cursors` unset — ruling 3).
  */
 export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
   return deskLayer({
@@ -64,6 +73,7 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     docs: opts.engine.docs,
     blobs: deskBlobs(),
     grid: DESK_GRID,
+    hold: DESK_HOLD,
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
   });

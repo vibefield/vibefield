@@ -1,6 +1,7 @@
 import {
   type CanvasEngine,
   defineQuery,
+  heldEntity,
   Not,
   Position,
   PrefabId,
@@ -232,6 +233,20 @@ export interface VfDeskDoor {
   /** DK-11 — the selection bar's counters: the anchor's publishes it heard, its placements (imperative writes) and
    * its view's renders — renderer-wide (a row reads its deltas: placements ≤ publishes, never a render per frame). */
   bar(): BarStats;
+  /** DK-12 — the object IN HAND and where the desk drew it this frame: the held pose seam's frame (core's
+   * `HeldScreenFrame` — the shown extent's centre and half extents, CSS px, its scale, whether the pickup settled), the
+   * reading fit's witness; null with nothing held. A read. */
+  held(): {
+    readonly entity: number;
+    readonly frame: {
+      readonly cx: number;
+      readonly cy: number;
+      readonly hx: number;
+      readonly hy: number;
+      readonly s: number;
+      readonly settled: boolean;
+    } | null;
+  } | null;
   /** DK-11 — the selection's anchor as the desk last published it (`handle.selection.anchor()`) — what the bar is
    * placed from; null on a handle without the door. A read. */
   anchor(): SelectionAnchor | null;
@@ -316,6 +331,25 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     notices: statusLineSaid,
     bar: readBarStats,
     anchor: () => (handle as Partial<DeskLayerHandle>).selection?.anchor() ?? null,
+    held: () => {
+      const entity = heldEntity(engine.world);
+      if (entity === undefined) return null;
+      const frame = engine.stack.heldPose.current?.frame(entity);
+      return {
+        entity: entity as number,
+        frame:
+          frame === undefined
+            ? null
+            : {
+                cx: frame.cx,
+                cy: frame.cy,
+                hx: frame.hx,
+                hy: frame.hy,
+                s: frame.s,
+                settled: frame.settled,
+              },
+      };
+    },
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;
