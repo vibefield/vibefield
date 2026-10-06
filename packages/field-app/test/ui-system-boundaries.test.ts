@@ -751,7 +751,7 @@ describe("UI system ownership boundaries", () => {
       /@media \(prefers-reduced-motion: reduce\) \{[^@]*\.vf-pegboard-ring \{\s*transition: opacity 60ms ease-out;/su,
     );
   });
-  it("keeps the old Objects sheet and its tray island's state gone (DK-13, R21) — the pegboard replaced them", () => {
+  it("keeps the old Objects sheet, its tray island's state and its tile list gone (DK-13, R21) — the pegboard replaced them", () => {
     const exists = (relativePath: string): boolean => {
       try {
         source(relativePath);
@@ -760,8 +760,10 @@ describe("UI system ownership boundaries", () => {
         return false;
       }
     };
-    for (const gone of ["hud/WidgetTray.tsx", "hud/WidgetTray.css"])
+    for (const gone of ["hud/WidgetTray.tsx", "hud/WidgetTray.css", "hud/tray-catalog.ts"])
       expect(exists(gone), gone).toBe(false);
+    // …and the sheet's tile list's own test with it
+    expect(readdirSync(join(PACKAGE_ROOT, "test"))).not.toContain("tray-catalog.test.ts");
     const walk = (dir: string): string[] =>
       readdirSync(join(PACKAGE_ROOT, "src", dir), { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory()
@@ -773,7 +775,7 @@ describe("UI system ownership boundaries", () => {
     for (const file of walk(".")) {
       const text = source(file);
       // no reader left: no import of the sheet, no mount of its frame, none of its selectors
-      expect(text, file).not.toMatch(/from "[./]*(?:hud\/)?WidgetTray"/u);
+      expect(text, file).not.toMatch(/from "[./]*(?:hud\/)?(?:WidgetTray|tray-catalog)"/u);
       expect(text, file).not.toMatch(/<WidgetTray(?:Frame)?\s/u);
       expect(text, file).not.toMatch(/\.vf-widget-tray[\w-]*[^\n{]*\{/u);
       expect(text, file).not.toMatch(/className="[^"]*vf-widget-tray/u);
