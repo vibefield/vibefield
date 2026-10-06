@@ -12,6 +12,7 @@ import {
   readFileSync,
   realpathSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -215,5 +216,70 @@ describe("the roots registry (places, persisted; browse exports, live)", () => {
       ["home", null],
     ]);
     expect(roots.seedPlaces([{ cwd: b, at: "2026-10-01T00:00:00.000Z" }])).toBe(0);
+  });
+});
+
+describe("picked roots survive the chooser and the daemon", () => {
+  it("canonicalizes an alias, deduplicates picks, and reloads beside old places", () => {
+    const { file, folder, base } = world();
+    const home = folder("home");
+    const picked = folder("chosen folder");
+    const alias = join(base, "alias");
+    symlinkSync(picked, alias, "junction");
+    const one = registry(file, home);
+    one.touchPlace(home);
+    const expected = one.preparePicked(alias)!;
+    expect(expected.path).toBe(picked);
+    expect(one.roots().some((row) => row.kind === "picked")).toBe(false);
+    let changes = 0;
+    one.onChange(() => changes++);
+    expect(one.registerPicked(expected.path)).toEqual(expected);
+    expect(one.registerPicked(expected.path)).toEqual(expected);
+    expect(changes).toBe(1);
+    const two = registry(file, home);
+    expect(two.find(expected.rootId)).toEqual(expected);
+    expect(two.roots().some((row) => row.kind === "place")).toBe(true);
+    const stored = WorkspaceRootsFile.parse(JSON.parse(readFileSync(file, "utf8")));
+    expect(stored.picked).toHaveLength(1);
+    expect(stored.places).toHaveLength(1);
+  });
+  it("keeps missing picks and refuses to follow a replacement link", () => {
+    const { file, folder } = world();
+    const home = folder("home");
+    const picked = folder("chosen");
+    const elsewhere = folder("elsewhere");
+    const roots = registry(file, home);
+    const original = roots.registerPicked(picked)!;
+    rmSync(picked, { recursive: true });
+    roots.refresh();
+    expect(roots.find(original.rootId)?.missing).toBe(true);
+    symlinkSync(elsewhere, picked, "junction");
+    roots.refresh();
+    expect(roots.find(original.rootId)?.missing).toBe(true);
+    expect(roots.registerPicked(picked)).toBeNull();
+    rmSync(picked);
+    mkdirSync(picked);
+    roots.refresh();
+    expect(roots.find(original.rootId)).toEqual(original);
+  });
+  it("refuses filesystem roots, absent directories and files", () => {
+    const { file, folder, base } = world();
+    const roots = registry(file, folder("home"));
+    const plain = join(base, "plain.txt");
+    writeFileSync(plain, "plain");
+    expect(roots.preparePicked(process.platform === "win32" ? "C:\\" : "/")).toBeNull();
+    expect(roots.preparePicked(plain)).toBeNull();
+    expect(roots.preparePicked(join(base, "absent"))).toBeNull();
+  });
+  it("a failed atomic write publishes no picked row or change event", () => {
+    const { folder, base } = world();
+    const blocked = join(base, "file-not-directory");
+    writeFileSync(blocked, "blocked");
+    const roots = registry(join(blocked, "roots.json"), folder("home"));
+    let changes = 0;
+    roots.onChange(() => changes++);
+    expect(() => roots.registerPicked(folder("chosen"))).toThrow();
+    expect(roots.roots().some((row) => row.kind === "picked")).toBe(false);
+    expect(changes).toBe(0);
   });
 });

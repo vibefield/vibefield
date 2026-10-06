@@ -4,11 +4,13 @@ import {
   readFileSync,
   realpathSync,
   renameSync,
+  rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
 import { dirname } from "node:path";
 import {
+  type WorkspacePickedRecord,
   type WorkspacePlaceRecord,
   type WorkspaceRoot,
   WorkspaceRootsFile,
@@ -36,9 +38,11 @@ import { displayName, isFilesystemRoot, rootIdFor } from "./paths";
 //   · BROWSE exports — the home directory and the mounted volumes
 //     (browse-exports.ts), enumerated LIVE at every reading, never kept.
 //
-// Picks (FS-3) and rosetta's project roots (FS-1b, on consent) are not built.
-// A root's id is a digest of its kind and path (`rootIdFor`), so nothing but
-// the places needs a file. Writes are atomic (a temp file, then a rename); a
+//   · PICKED roots — the native folder picker's canonical directories, kept
+//     beside places. The caller cannot supply a path. Missing picks remain
+//     visible, and a replaced symlink never silently retargets an export.
+// Rosetta's separately registered project roots remain unbuilt.
+// A root's id is a digest of its kind and path (`rootIdFor`). Writes are atomic (a temp file, then a rename); a
 // file that does not parse is set aside with a warning and the registry
 // starts empty — never a boot failure, never a half-written file read.
 
@@ -85,6 +89,7 @@ export class RootsRegistry {
   readonly #logger: Logger;
   /** places by path, in no order (answers sort them) */
   readonly #places = new Map<string, PlaceRecord>();
+  readonly #picked = new Map<string, WorkspacePickedRecord>();
   readonly #listeners = new Set<() => void>();
   readonly #platform: NodeJS.Platform;
   #loaded = false;
@@ -152,12 +157,16 @@ export class RootsRegistry {
       return;
     }
     for (const place of parsed.data.places) this.#places.set(place.path, place);
+    for (const picked of parsed.data.picked ?? []) this.#picked.set(picked.path, picked);
   }
 
-  #persist(): void {
+  #write(picked = this.#picked): void {
     const body = {
       version: 1 as const,
       places: [...this.#places.values()].sort((a, b) => a.path.localeCompare(b.path)),
+      ...(picked.size > 0
+        ? { picked: [...picked.values()].sort((a, b) => a.path.localeCompare(b.path)) }
+        : {}),
     };
     const file = this.#opts.file;
     const temp = `${file}.${randomBytes(6).toString("hex")}.tmp`;
@@ -165,6 +174,19 @@ export class RootsRegistry {
       mkdirSync(dirname(file), { recursive: true, mode: 0o700 });
       writeFileSync(temp, `${JSON.stringify(body, null, 2)}\n`, { mode: 0o600 });
       renameSync(temp, file);
+    } catch (error) {
+      try {
+        rmSync(temp, { force: true });
+      } catch {
+        /* keep the write's error */
+      }
+      throw error;
+    }
+  }
+
+  #persist(): void {
+    try {
+      this.#write();
     } catch (error) {
       this.#logger.warn(
         "fieldd.workspace.roots_write_failed",
@@ -174,6 +196,49 @@ export class RootsRegistry {
         },
       );
     }
+  }
+
+  /** Resolve the trusted native pick without publishing it. Audit completes
+   * before registerPicked; aliases converge on the canonical directory. */
+  preparePicked(path: string): WorkspaceRoot | null {
+    this.#load();
+    const canonical = (this.#opts.realpath ?? defaultRealpath)(path);
+    if (
+      canonical === null ||
+      isFilesystemRoot(canonical, this.#platform) ||
+      !(this.#opts.isDirectory ?? defaultIsDirectory)(canonical)
+    )
+      return null;
+    return {
+      rootId: rootIdFor("picked", canonical),
+      name: displayName(canonical, this.#platform),
+      path: canonical,
+      device: this.#opts.deviceId(),
+      kind: "picked",
+      missing: false,
+      lastActiveAt: null,
+    };
+  }
+
+  /** Strict persistence for an explicit choice: no row or event is exposed
+   * unless the atomic write succeeds. Revalidate the approved canonical path;
+   * replacing it with a symlink while the dialog/audit finishes is refused. */
+  registerPicked(path: string): WorkspaceRoot | null {
+    const root = this.preparePicked(path);
+    if (!root || root.path !== path) return null;
+    const existing = this.#picked.get(path);
+    if (existing && existing.missing !== true) return root;
+    const picked = new Map(this.#picked);
+    const record = {
+      path,
+      addedAt: existing?.addedAt ?? (this.#opts.now ?? (() => new Date()))().toISOString(),
+      missing: false,
+    };
+    picked.set(path, record);
+    this.#write(picked);
+    this.#picked.set(path, record);
+    this.#emit();
+    return root;
   }
 
   /** A run entered the fold in `cwd` at `at` (ISO): the folder becomes a place,
@@ -230,16 +295,25 @@ export class RootsRegistry {
     return !isFilesystemRoot(real, this.#platform);
   }
 
-  /** Re-read the disk's word on every place (`missing`) — a flip is persisted
-   * and heard. Cheap: one stat per place. */
-  refresh(): boolean {
+  /** Refresh saved roots' missing state; a flip is persisted and heard.
+   * Picks also retain their canonical identity when a path becomes a link. */
+  refresh(rootId?: string): boolean {
     this.#load();
     const isDirectory = this.#opts.isDirectory ?? defaultIsDirectory;
     let changed = false;
     for (const [path, place] of this.#places) {
+      if (rootId !== undefined && rootIdFor("place", path) !== rootId) continue;
       const missing = !isDirectory(path);
       if ((place.missing === true) !== missing) {
         this.#places.set(path, { ...place, missing });
+        changed = true;
+      }
+    }
+    for (const [path, picked] of this.#picked) {
+      if (rootId !== undefined && rootIdFor("picked", path) !== rootId) continue;
+      const missing = !isDirectory(path) || (this.#opts.realpath ?? defaultRealpath)(path) !== path;
+      if ((picked.missing === true) !== missing) {
+        this.#picked.set(path, { ...picked, missing });
         changed = true;
       }
     }
@@ -250,7 +324,7 @@ export class RootsRegistry {
     return changed;
   }
 
-  /** Mark one place missing (the worker found its folder gone mid-ask). */
+  /** Mark one saved root missing (the worker found its folder gone mid-ask). */
   markMissing(rootId: string): void {
     this.#load();
     for (const [path, place] of this.#places) {
@@ -260,10 +334,17 @@ export class RootsRegistry {
       this.#emit();
       return;
     }
+    for (const [path, picked] of this.#picked) {
+      if (rootIdFor("picked", path) !== rootId || picked.missing === true) continue;
+      this.#picked.set(path, { ...picked, missing: true });
+      this.#persist();
+      this.#emit();
+      return;
+    }
   }
 
   /** Every root, in the order an answer gives them: places newest first,
-   * then the home directory, then the volumes. Places carry the disk's word
+   * picks by path, then home and volumes. Saved roots carry the disk's word
    * as last read (`refresh` re-reads it). */
   roots(): RootRow[] {
     this.#load();
@@ -281,6 +362,17 @@ export class RootsRegistry {
       missing: place.missing === true,
       lastActiveAt: place.lastActiveAt,
     }));
+    for (const picked of [...this.#picked.values()].sort((a, b) => a.path.localeCompare(b.path))) {
+      rows.push({
+        rootId: rootIdFor("picked", picked.path),
+        name: displayName(picked.path, platform),
+        path: picked.path,
+        device,
+        kind: "picked",
+        missing: picked.missing === true,
+        lastActiveAt: null,
+      });
+    }
     let browse: BrowseExport[] = [];
     try {
       browse = enumerateBrowseExports((this.#opts.browse ?? ownBrowseFacts)());

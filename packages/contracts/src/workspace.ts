@@ -40,10 +40,9 @@ export type WorkspaceRootId = z.infer<typeof WorkspaceRootId>;
 
 /** What a root is (FS-D4): a PLACE — a folder an agent was spawned in, added
  * automatically — or a BROWSE export — the home directory or a mounted volume,
- * for walking the desktop's filesystem the way SFTP does. `picked` (the OS
- * folder picker, FS-3) and `project` (rosetta's project roots on consent) are
- * reserved: no 1a root carries them, and a reader that meets one shows it as
- * a root like any other. */
+ * for walking the desktop's filesystem the way SFTP does. `picked` comes
+ * from the native folder picker (FS-3). `project` (rosetta's project roots
+ * on consent) remains reserved; readers render these selections as roots. */
 export const WorkspaceRootKind = z.enum(["place", "browse", "picked", "project"]);
 export type WorkspaceRootKind = z.infer<typeof WorkspaceRootKind>;
 
@@ -63,7 +62,7 @@ export const WorkspaceRoot = z
     kind: WorkspaceRootKind,
     /** present on a `browse` root */
     browse: WorkspaceBrowseKind.optional(),
-    /** the folder is gone (a place is never dropped for it — PJ's rule) */
+    /** the folder is gone (saved roots are retained as missing) */
     missing: z.boolean(),
     /** a place: when an agent last started there (ISO 8601); null otherwise */
     lastActiveAt: z.string().min(1).max(64).nullable(),
@@ -71,12 +70,23 @@ export const WorkspaceRoot = z
   .passthrough();
 export type WorkspaceRoot = z.infer<typeof WorkspaceRoot>;
 
-/** `workspace.roots {device?}` — places newest first, then the home directory,
- * then the volumes by name. */
+/** `workspace.roots {device?}` — places newest first, picks by path, then
+ * the home directory and volumes by name. */
 export const WorkspaceRootsParams = z
   .object({ device: z.string().min(1).max(256).optional() })
   .passthrough();
 export type WorkspaceRootsParams = z.infer<typeof WorkspaceRootsParams>;
+
+/** FS-3's service-owned prerequisite: the desktop's attended native picker.
+ * No caller supplies a path or a remote device. The shell's choice becomes a
+ * durable named export only after validation and required audit. */
+export const WorkspacePickFolderParams = z.object({}).passthrough();
+export type WorkspacePickFolderParams = z.infer<typeof WorkspacePickFolderParams>;
+export const WorkspacePickFolderResult = z.union([
+  z.object({ canceled: z.literal(true) }).passthrough(),
+  z.object({ canceled: z.literal(false), root: WorkspaceRoot }).passthrough(),
+]);
+export type WorkspacePickFolderResult = z.infer<typeof WorkspacePickFolderResult>;
 
 export const WorkspaceRootsResult = z
   .object({
@@ -279,10 +289,9 @@ export type WorkspaceUnavailableDetails = z.infer<typeof WorkspaceUnavailableDet
 
 // ── the roots registry on disk (`LAYOUT.WORKSPACE_ROOTS_FILE`) ──
 //
-// fieldd's own file (TerminalBindingsFile's precedent): the PLACES only — the
-// browse exports are enumerated live — each with when it was added, when an
-// agent last started there, and whether its folder was gone at the last
-// reading. A place is never dropped for being missing (PJ's rule).
+// fieldd's own file (TerminalBindingsFile's precedent): places and picked
+// directories persist; browse exports are enumerated live. Places also keep
+// the last agent start. Saved roots are retained when missing (PJ's rule).
 
 export const WorkspacePlaceRecord = z
   .object({
@@ -294,10 +303,21 @@ export const WorkspacePlaceRecord = z
   .passthrough();
 export type WorkspacePlaceRecord = z.infer<typeof WorkspacePlaceRecord>;
 
+export const WorkspacePickedRecord = z
+  .object({
+    path: z.string().min(1).max(WORKSPACE_LIMITS.PATH_CHARS),
+    addedAt: z.string().min(1).max(64),
+    missing: z.boolean().optional(),
+  })
+  .passthrough();
+export type WorkspacePickedRecord = z.infer<typeof WorkspacePickedRecord>;
+
 export const WorkspaceRootsFile = z
   .object({
     version: z.literal(1),
     places: z.array(WorkspacePlaceRecord),
+    // Additive to v1: older registries contain places alone.
+    picked: z.array(WorkspacePickedRecord).optional(),
   })
   .passthrough();
 export type WorkspaceRootsFile = z.infer<typeof WorkspaceRootsFile>;

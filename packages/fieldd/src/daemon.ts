@@ -241,6 +241,7 @@ import { type TerminalProfileBinding, TerminalService } from "./terminal-service
 import { TokenService } from "./token-service";
 import type { BrowseFacts } from "./workspace/browse-exports";
 import type { FilesHostLaunch } from "./workspace/launch";
+import { WorkspacePicker } from "./workspace/picker";
 import { createWorkspaceService, type WorkspaceService } from "./workspace/service";
 import type { FilesHostHealth, FilesHostTimings } from "./workspace/supervisor";
 import { workspaceError } from "./workspace/tickets";
@@ -1601,10 +1602,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
 
     api.register("shell.dialog.pickFolder", async (ctx, params) => {
       const parsed = ShellDialogPickFolderParams.safeParse(params);
-      if (!parsed.success) {
+      if (!parsed.success || parsed.data.purpose !== "artifact.publish") {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { purpose: artifact.publish }",
+          "expected { purpose: artifact.publish }; Files uses workspace.pickFolder",
           false,
         );
       }
@@ -1952,6 +1953,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // agent and a guest are refused whatever they hold — cut at the tailnet's
     // page for a phone (L4), honest UNAVAILABLE {service: "workspace"} while
     // the worker cannot answer. `federate`: a foreign `device` forwards whole.
+    const workspacePicker = new WorkspacePicker({
+      registry: workspace.registry,
+      audit,
+      choose: (ctx) =>
+        api.callShellProvider(ctx, "shell.dialog.pickFolder", { purpose: "workspace.export" }),
+      isCurrent: (ctx) =>
+        ctx.principal.kind === "local-token" && windowTokenIds.has(ctx.principal.tokenId),
+    });
+    api.register("workspace.pickFolder", (ctx, params) => workspacePicker.pick(ctx, params));
     api.register("workspace.roots", (ctx, params) => workspace.doors.roots(ctx, params));
     api.register("workspace.list", (ctx, params) => workspace.doors.list(ctx, params));
     api.register("workspace.search", (ctx, params) => workspace.doors.search(ctx, params));

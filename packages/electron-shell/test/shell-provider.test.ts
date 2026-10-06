@@ -682,3 +682,32 @@ describe("RecoveringShellProvider", () => {
     provider.dispose();
   });
 });
+
+it("the Files picker chooses an existing directory with the native provider's parent", async () => {
+  const showOpenDialog = vi.fn(async (_parent: unknown, _options: unknown) => ({
+    canceled: false,
+    filePaths: ["/Users/me/Chosen folder"],
+  }));
+  const { client, provider, native } = await fixture({ showOpenDialog });
+  client.emit(
+    "shell.provider.call",
+    call("shell-workspaceaaaaaaaa", "shell.dialog.pickFolder", { purpose: "workspace.export" }),
+  );
+  await vi.waitFor(() => expect(showOpenDialog).toHaveBeenCalledOnce());
+  expect(showOpenDialog.mock.calls[0]?.[1]).toEqual({
+    title: "Choose a folder for Files",
+    buttonLabel: "Choose Folder",
+    properties: ["openDirectory"],
+  });
+  expect(native.parentWindow).toHaveBeenCalledOnce();
+  await vi.waitFor(() =>
+    expect(client.requests).toContainEqual({
+      method: "shell.provider.resolve",
+      params: {
+        callId: "shell-workspaceaaaaaaaa",
+        outcome: { result: { canceled: false, path: "/Users/me/Chosen folder" } },
+      },
+    }),
+  );
+  provider.dispose();
+});

@@ -8228,3 +8228,40 @@ artifacts; bin.ts only reads rosettad from its environment, and the gateway with
 without the shim). These are recorded in ROADMAP's open debts. The physical-phone witness,
 mille's registry release/window exit, FS-3 with DK, FS-4/DS-7 after truffle egress, and FS-5
 remain. No DK/MV sources or upstream working checkouts were edited; nothing was pushed.
+
+
+## FS-3 service prerequisite — the native folder choice becomes a saved Files export (2026-10-05)
+
+A current desktop renderer can call `workspace.pickFolder {}` and receive cancellation or
+an exported picked root. Electron supplies the attended native choice; fieldd validates
+its canonical directory and requires the selection audit before publishing it. Caller
+paths are ignored, filesystem roots and unavailable folders are refused, and plain tokens,
+plugins, shell-main and remote callers cannot invoke this door. A late choice from a revoked
+window, audit failure or failed atomic save creates no export. The audit records the choice;
+a subsequent persistence refusal does not turn that selection into a registered root.
+
+Picked folders persist beside places in the existing version-1 roots file, deduplicate by
+canonical path, and remain visible as missing when absent or replaced by a symlink.
+`WorkspaceClient.pickFolder()` returns the root or null; `attach(root, path?)` keeps its
+exact export id and returns an independent recovering port lease even outside the bounded
+roots roster. Ticket confinement and the existing read-only direct worker plane still apply.
+The public artifact picker keeps its original purpose; Files uses its own principal-gated door.
+
+**Validation:** `pnpm verify` EXIT 0 (`verify-1.log`), started at load 37.54 with
+no other verify: fieldd 1,902 passed / 23 opt-in skips; field-app 1,552 passed / 1 skipped;
+electron-shell 805 passed / 2 skipped; contracts 817 passed; Rust 302 passed / 9 ignored.
+Generation is fresh. The focused checks passed all 380 rows, including 32 Files/service
+rows; the shell and renderer also parse the new picker contracts/fixtures. `pnpm smoke`
+and `pnpm smoke:godview` each produced their successful product marker and EXIT 0
+(`smoke-isolated.log`, `smoke-godview-isolated.log`, start loads 17.90 / 17.52).
+Each used a fresh isolated Electron profile and the external offscreen/focus-emulation
+harness; no live display or OS input. Godview's offscreen canvas2d fallback and existing
+swarm/timing limitations remain outside this Files claim. Receipts are retained at
+`/Volumes/SamsungRed/lanes/fs3-service`. No iOS source changed or iOS gate was rerun.
+
+**Scope:** this lands FS-3's service and lease prerequisite. The desk's `FileTree`, decorations,
+drag into the composer and pane integration remain DK's consumer work (§5.3 of the FS record).
+The native dialog is witnessed through the shell provider fixture, not by OS input on the live
+display. The integration test uses real fieldd RPC, a real Files worker, native mille and direct
+WebSocket bytes, with fixture native management and dialog responses. No new signed application
+was produced in this slice; the earlier packaging receipt remains tied to `e6d392e0`.

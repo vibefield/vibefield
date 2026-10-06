@@ -8,6 +8,7 @@
 // tailnet page (L4); a search and a git root's facts; a place gone missing
 // (never dropped); the roots as rows (L3); the worker killed mid-life — the
 // door honest (UNAVAILABLE restarting) and recovered; the L6 knob (`off`).
+
 import { execFileSync } from "node:child_process";
 import {
   existsSync,
@@ -20,15 +21,20 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { connectFileExplorerChannel } from "@vibecook/mille/port";
+import { connectWebSocketChannel } from "@vibecook/mille/remote";
 import {
   type CallerContext,
   CONTRACTS_VERSION,
   type Scope,
+  SHELL_PROVIDER_METHODS,
+  ShellProviderCallParams,
   SOCKETS,
   WORKSPACE_LIMITS,
   WorkspaceGitFactsResult,
   WorkspaceListResult,
   WorkspaceOpenTicketResult,
+  WorkspacePickFolderResult,
   type WorkspaceRoot,
   WorkspaceRootsDelta,
   WorkspaceRootsOpen,
@@ -66,6 +72,7 @@ afterEach(async () => {
 });
 
 const DOORS = [
+  ["workspace.pickFolder", {}],
   ["workspace.openTicket", { rootId: "r_x" }],
   ["workspace.closeTicket", { ticket: "a".repeat(43) }],
   ["workspace.fileAction", { rootId: "r_x", path: "", action: "copyPath" }],
@@ -76,6 +83,7 @@ const DOORS = [
 ] as const;
 
 interface World {
+  dataDir: string;
   daemon: FielddDaemon;
   mock: MockMgmtServer;
   home: string;
@@ -153,7 +161,7 @@ async function boot(opts: { filesHost?: false } = {}): Promise<World> {
   cleanup.push(() => daemon.stop());
   if (opts.filesHost !== false)
     await until(() => daemon.workspace.supervisor.health().phase === "ready", 20_000);
-  return { daemon, mock, home, outside };
+  return { daemon, mock, home, outside, dataDir };
 }
 
 async function open(url: string, headers?: Record<string, string>): Promise<WsRpc> {
@@ -504,4 +512,124 @@ describe("the attached door (FS-1b)", () => {
     );
     expect(world.daemon.health().workspace.phase).toBe("ready");
   });
+});
+
+async function pickerShell(daemon: FielddDaemon) {
+  const shell = await open(`ws://127.0.0.1:${daemon.controlPort}`);
+  await helloAs(shell, daemon.shellToken, "shell-main");
+  await shell.call("shell.provider.register", { methods: [...SHELL_PROVIDER_METHODS] });
+  const calls = () =>
+    shell.notifications
+      .filter((n) => n.method === "shell.provider.call")
+      .map((n) => ShellProviderCallParams.parse(n.params));
+  return { shell, calls };
+}
+
+it("the native choice outside browse roots becomes a persistent, confined, read-only attachment", async () => {
+  const w = await boot();
+  const win = await windowOf(w.daemon, ["workspace.read"]);
+  const provider = await pickerShell(w.daemon);
+  writeFileSync(join(w.outside, "chosen.txt"), "picked bytes through the real worker");
+  mkdirSync(join(w.outside, "subfolder"));
+  symlinkSync(w.home, join(w.outside, "escape"), "dir");
+  const answer = win.call("workspace.pickFolder", { path: w.home });
+  await until(() => provider.calls().length === 1);
+  expect(provider.calls()[0]).toMatchObject({
+    method: "shell.dialog.pickFolder",
+    params: { purpose: "workspace.export" },
+    caller: { kind: "local-token", clientKind: "renderer" },
+  });
+  await provider.shell.call("shell.provider.resolve", {
+    callId: provider.calls()[0]!.callId,
+    outcome: { result: { canceled: false, path: w.outside } },
+  });
+  const picked = WorkspacePickFolderResult.parse(await answer);
+  if (picked.canceled) throw new Error("expected the fixture's choice");
+  expect(picked.root).toMatchObject({ path: w.outside, kind: "picked", missing: false });
+  const listed = WorkspaceListResult.parse(
+    await win.call("workspace.list", { rootId: picked.root.rootId, kinds: "all" }),
+  );
+  expect(listed.entries.map((entry) => entry.name)).toContain("chosen.txt");
+  const subtree = WorkspaceOpenTicketResult.parse(
+    await win.call("workspace.openTicket", { rootId: picked.root.rootId, path: "subfolder" }),
+  );
+  expect(subtree.rootPath).toBe(join(w.outside, "subfolder"));
+  await win.call("workspace.closeTicket", { ticket: subtree.ticket });
+  expect(
+    (await win.callErr("workspace.openTicket", { rootId: picked.root.rootId, path: "escape" })).data
+      ?.kind,
+  ).toBe("NOT_FOUND");
+  const grant = WorkspaceOpenTicketResult.parse(
+    await win.call("workspace.openTicket", { rootId: picked.root.rootId }),
+  );
+  const connection = await connectWebSocketChannel(grant.endpoints.treeUrl, {
+    exportId: grant.rootId,
+    credential: grant.ticket,
+    access: "read-only",
+    WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+  });
+  cleanup.push(() => connection.close());
+  const fx = await connectFileExplorerChannel(connection.channel);
+  cleanup.push(() => fx.dispose());
+  await until(() => fx.getSnapshot().roots().length === 1);
+  const treeRoot = fx.getSnapshot().roots()[0]!;
+  await fx.setExpanded({ add: [treeRoot.id], remove: [] });
+  fx.setViewport({ offset: 0, limit: 50 });
+  const rows = () =>
+    fx.getSnapshot().visibleRows({ offset: 0, limit: 50, expanded: new Set([treeRoot.id]) });
+  await until(() => rows().some((row) => row.name === "chosen.txt"));
+  expect(await fx.readText(rows().find((row) => row.name === "chosen.txt")!.id)).toBe(
+    "picked bytes through the real worker",
+  );
+  await expect(fx.create(treeRoot.id, "write-refused.txt", 0)).rejects.toMatchObject({
+    code: "EROFS",
+  });
+  await fx.dispose();
+  connection.close();
+  await w.daemon.stop();
+  const restarted = await bootstrap({
+    dataDir: w.dataDir,
+    controlPort: 0,
+    dataPort: 0,
+    allowedOrigins: ["file://"],
+    filesHost: launch,
+    workspace: { browse: browseOf(w.home) },
+  });
+  cleanup.push(() => restarted.stop());
+  await until(() => restarted.workspace.supervisor.health().phase === "ready", 20_000);
+  const again = await windowOf(restarted, ["workspace.read"]);
+  expect(WorkspaceRootsResult.parse(await again.call("workspace.roots", {})).roots).toContainEqual(
+    picked.root,
+  );
+  expect(
+    WorkspaceListResult.parse(
+      await again.call("workspace.list", { rootId: picked.root.rootId, kinds: "all" }),
+    ).entries.map((entry) => entry.name),
+  ).toContain("chosen.txt");
+}, 20_000);
+
+it("cancel, missing folders and direct shell-purpose bypasses create no export", async () => {
+  const w = await boot();
+  const win = await windowOf(w.daemon, ["workspace.read", "shell.dialog"]);
+  const provider = await pickerShell(w.daemon);
+  expect(
+    (await win.callErr("shell.dialog.pickFolder", { purpose: "workspace.export" })).data?.kind,
+  ).toBe("PRECONDITION_FAILED");
+  expect(provider.calls()).toHaveLength(0);
+  for (const result of [{ canceled: true }, { canceled: false, path: join(w.outside, "absent") }]) {
+    const count = provider.calls().length;
+    const pending = result.canceled
+      ? win.call("workspace.pickFolder", {})
+      : win.callErr("workspace.pickFolder", {});
+    await until(() => provider.calls().length === count + 1);
+    await provider.shell.call("shell.provider.resolve", {
+      callId: provider.calls().at(-1)!.callId,
+      outcome: { result },
+    });
+    if (result.canceled) expect(await pending).toEqual({ canceled: true });
+    else expect(await pending).toMatchObject({ data: { kind: "PRECONDITION_FAILED" } });
+  }
+  expect(w.daemon.workspace.registry.roots().filter((root) => root.kind === "picked")).toEqual([]);
+  const phone = await tailnetCaller(w, TEST_LOGIN);
+  expect((await phone.callErr("workspace.pickFolder", {})).data?.kind).toBe("FORBIDDEN_SCOPE");
 });

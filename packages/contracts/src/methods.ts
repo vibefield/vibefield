@@ -1764,6 +1764,14 @@ export const METHODS: MethodDef[] = [
   // a foreign `device` forwards the call whole and the owner answers from its
   // own worker (another desktop's roots are its own). Idempotent reads, every
   // one. FS-1b attaches only this desktop's renderer windows; close releases a lease.
+  // FS-3's attended folder choice is local and non-idempotent, unlike the reads.
+  defineMethod({
+    surface: "product",
+    method: "workspace.pickFolder",
+    scope: "workspace.read",
+    idempotent: false,
+    locality: "local",
+  }),
   defineMethod({
     surface: "product",
     method: "workspace.fileAction",

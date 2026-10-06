@@ -395,12 +395,17 @@ export class RecoveringShellProvider {
     }
 
     const params = ShellDialogPickFolderParams.parse(call.params);
-    if (params.purpose !== "artifact.publish") throw { kind: "PRECONDITION_FAILED" };
     const { result, parentClosed } = await this.parentedDialog((parent) =>
       this.native.showOpenDialog(parent, {
-        title: "Choose a folder to publish",
+        title:
+          params.purpose === "workspace.export"
+            ? "Choose a folder for Files"
+            : "Choose a folder to publish",
         buttonLabel: "Choose Folder",
-        properties: ["openDirectory", "createDirectory"],
+        properties:
+          params.purpose === "workspace.export"
+            ? ["openDirectory"]
+            : ["openDirectory", "createDirectory"],
       }),
     );
     if (parentClosed || result.canceled || result.filePaths.length !== 1) {

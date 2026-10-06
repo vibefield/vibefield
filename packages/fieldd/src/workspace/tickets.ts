@@ -56,7 +56,7 @@ export class WorkspaceTickets {
     const path = parseRelativePath(parsed.data.path);
     if (!path.ok)
       throw new RpcCallError("PRECONDITION_FAILED", relativePathRefusal(path.reason), false);
-    this.registry.refresh();
+    this.registry.refresh(parsed.data.rootId);
     const root = this.registry.find(parsed.data.rootId);
     if (!root || root.missing)
       throw new RpcCallError("NOT_FOUND", "the exported folder is not available", false);
@@ -69,6 +69,14 @@ export class WorkspaceTickets {
   ): Promise<WorkspaceOpenTicketResult> {
     try {
       // A project below a browse export gets a confined subtree; no arbitrary absolute-path request.
+      if (ask.root.kind === "picked") {
+        const canonical = await this.supervisor.request("resolve", {
+          rootPath: ask.root.path,
+          segments: [],
+        });
+        if (canonical !== ask.root.path)
+          throw new RpcCallError("NOT_FOUND", "The chosen folder was replaced by a link", false);
+      }
       const rootPath = await this.supervisor.request("resolve", {
         rootPath: ask.root.path,
         segments: ask.segments,
@@ -85,6 +93,7 @@ export class WorkspaceTickets {
         expiresAt,
       });
       // Re-check after both awaits: removal or revocation may have raced the mint.
+      this.registry.refresh(ask.root.rootId);
       const currentRoot = this.registry.find(ask.root.rootId);
       if (
         !stillAllowed() ||

@@ -2031,7 +2031,7 @@
             <div class="table-wrap"><table>
               <thead><tr><th>Door</th><th>Request and answer</th><th>Admission</th></tr></thead>
               <tbody>
-                <tr><td><code>workspace.roots</code></td><td>Places newest first, then home and
+                <tr><td><code>workspace.roots</code></td><td>Places newest first, then picked folders, home and
                   mounted volumes. Absolute paths, missing places, and <code>clipped</code>.</td>
                   <td rowspan="5">Renderer participant, self phone or self peer daemon;
                     <code>workspace.read</code>. Plain local tokens, shell-main, plugins,
@@ -2044,6 +2044,12 @@
                   branch, dirty count and worktrees; null outside a repository.</td></tr>
                 <tr><td><code>workspace.subscribe</code></td><td><code>{scope: "roots"}</code>:
                   the roots as a rows subscription.</td></tr>
+                <tr><td><code>workspace.pickFolder</code></td><td>Local attended folder selection:
+                  no input path; cancellation or a persisted <code>picked</code> root. The shell
+                  chooses, fieldd validates and records the canonical folder after required audit.
+                  Repeated picks keep one id; a missing picked folder stays in the registry.</td>
+                  <td>This desktop's renderer participant only, <code>workspace.read</code>.
+                    Plugins, agents, plain tokens and remote callers cannot open this picker.</td></tr>
                 <tr><td><code>workspace.openTicket</code></td><td><code>{rootId, path?}</code>:
                   canonical confined subtree, ephemeral loopback tree/git endpoints, separate
                   single-use credentials, expiry and worker generation.</td>

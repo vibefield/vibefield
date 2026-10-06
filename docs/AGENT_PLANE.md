@@ -16,6 +16,13 @@ History's worktree guest. The phone's folder picker uses those rows and sends
 `agent.spawn {cwd}` to the selected desktop. See the [workspace API](agent-plane/api.html#workspace)
 and [ownership and import wall](agent-plane/architecture.html#files-service).
 
+For DK's tree consumer, `WorkspaceClient.pickFolder()` opens the native picker and
+returns a persisted picked root or `null` on cancellation. Pass that root directly to
+`attach(root, path?)` to obtain an independent recovering lease, without resolving it
+through the bounded roots list. Each `ports` event transfers a fresh tree/git pair;
+the consumer replaces its engine on reconnect and disposes the lease on close.
+The widget, decorations and composer drag integration remain DK's work.
+
 The packaged Files worker has a separate artifact check:
 `pnpm --filter @vibefield/desktop run package:verify:files --native-root <Resources/bin>`.
 It runs the real worker, door and attachment suites against the shipped fieldd executable,

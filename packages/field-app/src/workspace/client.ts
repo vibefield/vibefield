@@ -5,7 +5,8 @@ import {
   WorkspaceGitFactsResult,
   WorkspaceListResult,
   WorkspaceOpenTicketResult,
-  type WorkspaceRoot,
+  WorkspacePickFolderResult,
+  WorkspaceRoot,
   WorkspaceRootsResult,
   WorkspaceSearchResult,
 } from "@vibefield/contracts";
@@ -79,23 +80,37 @@ export class WorkspaceClient implements WorktreeHostPort {
       await this.#door.request("workspace.roots", device ? { device } : {}),
     );
   }
-  /** An independent, recovering lease; dispose releases even an unused ticket. */
-  async attach(rootId: string, path = ""): Promise<WorkspaceLease> {
-    const { roots } = await this.roots();
-    const root = roots.find((row) => row.rootId === rootId && !row.missing);
+  /** Ask the desktop's attended picker; cancellation creates no lease. */
+  async pickFolder(): Promise<WorkspaceRoot | null> {
+    if (this.#disposed) throw new Error("The folder choice closed");
+    const result = WorkspacePickFolderResult.parse(
+      await this.#door.request("workspace.pickFolder", {}),
+    );
+    if (this.#disposed) throw new Error("The folder choice closed");
+    return result.canceled ? null : result.root;
+  }
+  /** An independent, recovering lease; dispose releases even an unused ticket.
+   * A root returned by the picker may lie beyond the bounded roots listing.
+   * Its id still goes to fieldd, which alone decides whether it is exported. */
+  async attach(selected: string | WorkspaceRoot, path = ""): Promise<WorkspaceLease> {
+    if (this.#disposed) throw new Error("The folder choice closed");
+    const root =
+      typeof selected === "string"
+        ? (await this.roots()).roots.find((row) => row.rootId === selected && !row.missing)
+        : WorkspaceRoot.parse(selected);
     if (
       !root ||
+      root.missing ||
+      this.#disposed ||
       /(?:^|[\\/])\.\.?(?:[\\/]|$)/.test(path) ||
       /^[\\/]/.test(path) ||
       path.includes(":")
     )
       throw new Error("This folder is not available");
     const lease = new WorkspaceClient(this.#door, this.#options);
-    const opened = await lease.open(root.path.replace(/[\\/]$/, "") + (path ? "/" + path : ""));
-    if (!opened.ok) {
-      lease.dispose();
-      throw new Error(opened.error);
-    }
+    lease.#root = root.path.replace(/[\\/]$/, "") + (path ? "/" + path : "");
+    lease.#resolved = { root, path };
+    void lease.#attach(++lease.#revision);
     return { ports: (listener) => lease.ports(listener), dispose: () => lease.dispose() };
   }
   async list(rootId: string, path = "", cursor?: string) {

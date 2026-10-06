@@ -4,6 +4,7 @@ import type { WorktreeHostEvent } from "@rosetta/room";
 import {
   WORKSPACE_LIMITS,
   WorkspaceOpenTicketResult,
+  WorkspacePickFolderResult,
   WorkspaceRootsResult,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -168,4 +169,41 @@ describe("workspace leases at the Worker boundary", () => {
       w.request.mock.calls.filter(([method]) => method === "workspace.openTicket"),
     ).toHaveLength(1);
   });
+});
+
+it("a picked root can attach by id even beyond the bounded roots listing", async () => {
+  const w = world();
+  const selected = WorkspacePickFolderResult.parse(
+    JSON.parse(readFileSync(join(fixtures, "workspace-pick-folder.valid.json"), "utf8")),
+  );
+  if (selected.canceled) throw new Error("expected a picked root fixture");
+  const picked = selected.root;
+  const original = w.request.getMockImplementation()!;
+  w.request.mockImplementation(async (method, params) =>
+    method === "workspace.pickFolder"
+      ? { canceled: false, root: picked }
+      : original(method, params),
+  );
+  expect(await w.client.pickFolder()).toEqual(picked);
+  const lease = await w.client.attach(picked);
+  cleanup.push(() => lease.dispose());
+  await settle();
+  expect(w.request).toHaveBeenCalledWith("workspace.openTicket", {
+    rootId: picked.rootId,
+    path: "",
+  });
+  expect(w.request.mock.calls.filter(([method]) => method === "workspace.roots")).toHaveLength(0);
+  const events: WorktreeHostEvent[] = [];
+  lease.ports((event) => events.push(event));
+  w.workers[0]!.emit(ports());
+  expect(events.at(-1)).toMatchObject({ type: "ports", root: picked.path });
+});
+it("canceling a folder pick creates no ticket or Worker", async () => {
+  const w = world();
+  w.request.mockResolvedValue(
+    JSON.parse(readFileSync(join(fixtures, "workspace-pick-folder.cancelled.json"), "utf8")),
+  );
+  expect(await w.client.pickFolder()).toBeNull();
+  expect(w.request).toHaveBeenCalledExactlyOnceWith("workspace.pickFolder", {});
+  expect(w.workers).toHaveLength(0);
 });

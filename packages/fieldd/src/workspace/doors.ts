@@ -147,10 +147,12 @@ export class WorkspaceDoors {
   }
 
   #root(rootId: string): WorkspaceRoot {
+    this.#registry.refresh(rootId);
     const root = this.#registry.find(rootId);
-    if (root === undefined)
-      throw new RpcCallError("NOT_FOUND", "this desktop exports no root with that id", false, {
+    if (root === undefined || root.missing)
+      throw new RpcCallError("NOT_FOUND", "the exported folder is not available", false, {
         rootId,
+        ...(root?.missing ? { missing: true } : {}),
       });
     return root;
   }
@@ -168,7 +170,7 @@ export class WorkspaceDoors {
       if (error instanceof FilesHostRefusal) {
         switch (error.error.code) {
           case "root-missing":
-            if (root.kind === "place") this.#registry.markMissing(root.rootId);
+            this.#registry.markMissing(root.rootId);
             throw new RpcCallError("NOT_FOUND", "the root's folder is gone", false, {
               rootId: root.rootId,
               missing: true,
@@ -211,11 +213,11 @@ export class WorkspaceDoors {
     const all = this.#registry.roots();
     const limit = workspacePageLimit(ctx.principal);
     if (all.length <= limit) return { roots: all, clipped: false };
-    // the cut takes the OLDEST places first: browse exports always stay
-    const browse = all.filter((root) => root.kind !== "place");
-    const places = all.filter((root) => root.kind === "place");
+    // Keep the browse entry points; saved roots use the remaining bounded rows.
+    const browse = all.filter((root) => root.kind === "browse");
+    const saved = all.filter((root) => root.kind !== "browse");
     const keep = Math.max(0, limit - browse.length);
-    return { roots: [...places.slice(0, keep), ...browse].slice(0, limit), clipped: true };
+    return { roots: [...saved.slice(0, keep), ...browse].slice(0, limit), clipped: true };
   }
 
   async list(ctx: CallerContext, params: unknown): Promise<WorkspaceListResult> {

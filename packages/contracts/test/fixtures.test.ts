@@ -186,6 +186,8 @@ import {
   WorkspaceListResult,
   WorkspaceOpenTicketParams,
   WorkspaceOpenTicketResult,
+  WorkspacePickFolderParams,
+  WorkspacePickFolderResult,
   WorkspaceRootsDelta,
   WorkspaceRootsFile,
   WorkspaceRootsOpen,
@@ -462,6 +464,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // FS-1a — the files service's door tier (workspace.ts): every door's params
   // and answer, the roots' rows, the honest refusal, and the git port's
   // protocol (L7 — fieldd's tests run each exchange against the real worker).
+  "workspace-pick-folder-params": WorkspacePickFolderParams,
+  "workspace-pick-folder": WorkspacePickFolderResult,
   "workspace-roots-params": WorkspaceRootsParams,
   "workspace-roots": WorkspaceRootsResult,
   "workspace-list-params": WorkspaceListParams,
