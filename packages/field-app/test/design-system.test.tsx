@@ -178,8 +178,30 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "held:mac",
       "gv:mac",
       "hx:mac",
+      "sent:mac",
+      "faces:mac",
+      "sent-aimed:mac",
       "gv:other",
+      "flight:null",
     ]);
+    // DK-14 — Send to…: a note's chip in its paper with the @ typed and the list open; the faces by kind; the flight
+    const sent = container?.querySelector('.vf-ds-line-plate[data-state="sent"]');
+    expect(
+      sent?.querySelector('.vf-line-chip[data-chip="desk"][data-paper]')?.textContent,
+    ).toContain("Ship the desk by Friday,…");
+    expect(sent?.querySelector(".vf-at-menu")).not.toBeNull();
+    expect(
+      [
+        ...(container?.querySelectorAll(
+          '.vf-ds-line-plate[data-state="faces"] .vf-line-chip[data-chip="desk"] .vf-line-chip-label',
+        ) ?? []),
+      ].map((el) => el.textContent),
+    ).toEqual(["Clock", "2 objects", "Clock"]);
+    expect(
+      container?.querySelector(
+        '.vf-ds-line-plate[data-state="flight"] .vf-line-flier .vf-line-chip',
+      ),
+    ).not.toBeNull();
     // DK-13 — the pegboard: a plate per state over a fixture tray, the shipping filters placed by the product's model
     const boardPlates = [...(container?.querySelectorAll<HTMLElement>(".vf-ds-board-plate") ?? [])];
     expect(boardPlates.map((p) => p.dataset.state)).toEqual([

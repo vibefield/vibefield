@@ -140,8 +140,27 @@
   background-size: 25px 25px;
 }
 
-.vf-ds-line-plate[data-state="at"] {
+.vf-ds-line-plate[data-state="at"],
+.vf-ds-line-plate[data-state="sent"] {
   height: 470px;
+}
+
+/* DK-14 — Send to…'s flight, frozen: where the chip left (the selection, a
+   note's box at the plate's upper left), the flier on its way to the caret. */
+.vf-ds-line-plate[data-state="flight"] {
+  height: 260px;
+}
+
+.vf-ds-send-from {
+  position: absolute;
+  top: 34px;
+  left: 104px;
+  width: 72px;
+  height: 72px;
+  border-radius: 6px;
+  outline: 1.5px solid color-mix(in srgb, var(--vf-select) 60%, transparent);
+  outline-offset: 6px;
+  opacity: 0.6;
 }
 
 /* One Frame FR-3 — the head's plates (the page's §05 and §06): the shipping

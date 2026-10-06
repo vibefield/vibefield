@@ -427,6 +427,9 @@ describe("UI system ownership boundaries", () => {
       "ComposerLinePlate",
       "ComposerLineView",
       "AtMenuView",
+      // DK-14 — Send to…'s chip faces on the shipping line, and its flier frozen in flight
+      "SendFlightPlate",
+      "ChipFlierView",
       // One Frame FR-3 — the head: its view, a plate per state, and the live
       // head on its real controller over fixture doors (the file pill, the
       // breadcrumbs and the − % + pill retired into it)
@@ -468,6 +471,8 @@ describe("UI system ownership boundaries", () => {
     // …and the selection bar's plates mounted (DK-11), and the pegboard's (DK-13).
     expect(page).toMatch(/<SelectionBarPlate\s/u);
     expect(page).toMatch(/<PegboardPlate\s/u);
+    // …and Send to…'s flight (DK-14)
+    expect(page).toMatch(/<SendFlightPlate\s/u);
     // …and the board risen behind the line in both scenes that raise Objects (the playground, the view frame's stage)
     expect(page).toMatch(/<StageBoard\s/u);
     expect(viewFrame).toMatch(/<StageBoard\s/u);

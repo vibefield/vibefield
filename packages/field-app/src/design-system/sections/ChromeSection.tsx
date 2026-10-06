@@ -21,7 +21,7 @@ type MeState = (typeof ME_STATES)[number];
 const TRAY_STATES = ["At rest", "Open", "Pinned", "Empty", "No shell"] as const;
 type TrayState = (typeof TRAY_STATES)[number];
 
-import { ComposerLinePlate, LINE_STATES } from "../ComposerLinePreview";
+import { ComposerLinePlate, LINE_STATES, SendFlightPlate } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
@@ -195,12 +195,15 @@ export function ChromeSection({
             <ComposerLinePlate key={state} state={state} />
           ))}
           <ComposerLinePlate state="gv" keys="other" />
+          <SendFlightPlate />
         </div>
         <p className="vf-ds-stage-caption">
           Every state the page's §03 plates draw for the line — at rest, typing with a chip in the
           sentence, @ open, aimed, Objects out, Godview's New terminal, History's Resume waiting —
           and Godview's keys as Windows prints them, in this page's theme. One plus: Canvas's create
-          — faint while an object is in hand, "Put it down first" (R14).
+          — faint while an object is in hand, "Put it down first" (R14). Send to… (DK-14): a note's
+          chip in its paper and ink with the @ typed after it, a kind's name, several, a missing
+          face's type, an aimed draft that took one with no @ — and the chip in flight to the caret.
         </p>
       </Specimen>
 

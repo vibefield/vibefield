@@ -89,6 +89,12 @@ The catalog currently mounts these shipping views directly:
   (fading in), and a specimen in the keyboard's focus (ringed); the filters placed and filled by
   the product's own model (`placeFilters`, `filterOptions`); and the line's create in hand, faint,
   "Put it down first"
+- Send to… (DK-14): the shipping `ComposerLineView` with the desk's chip in its draft — a note's chip
+  in its paper and ink (the palette's own colours), `snippets` and its first 24 characters, the @
+  typed after it and @'s list open; a kind's name, several ("2 objects", `package`) and a missing
+  face's type side by side; an aimed draft that took a chip with no @, send armed — and the chip IN
+  FLIGHT, the shipping flier (`ChipFlierView`) frozen on its straight line to the caret
+  (`SendFlightPlate`)
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their
