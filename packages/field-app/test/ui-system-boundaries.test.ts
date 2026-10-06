@@ -270,6 +270,19 @@ describe("UI system ownership boundaries", () => {
     }
   });
 
+  it("keeps the pegboard's fixture an ADAPTER — the product's model over a fixture tray, never its markup (DK-13)", () => {
+    // The board is the desk's (drawn on the GPU); the catalog stands a plain board in where it lies and mounts the
+    // shipping chrome over a fixture anchor, placed and filled by the product's own model — never the pegboard's own
+    // classes, never a stylesheet, never the desk's doors or the controller.
+    const fixture = source("design-system/PegboardPreview.tsx");
+    expect(fixture).toMatch(/<PegboardView\s/u);
+    for (const model of ["placeFilters(", "filterOptions("]) expect(fixture).toContain(model);
+    expect(fixture).not.toMatch(/className="vf-pegboard/u);
+    expect(fixture).not.toContain("<style");
+    for (const door of [/\bgetHost\b/u, /\bcurrentDesk\b/u, /\bpublishDesk\b/u, /<Pegboard\s/u])
+      expect(fixture).not.toMatch(door);
+  });
+
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
     // The temptation for a widget whose pixels need a privileged producer is to
     // draw convincing ones. The catalog is held to supplying what a HOST
@@ -347,7 +360,8 @@ describe("UI system ownership boundaries", () => {
     const edges = source("design-system/EdgesPreview.tsx");
     const history = source("design-system/HistoryPreview.tsx");
     const bar = source("design-system/SelectionBarPreview.tsx");
-    const catalog = `${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const pegboard = source("design-system/PegboardPreview.tsx");
+    const catalog = `${pegboard}\n${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -433,6 +447,11 @@ describe("UI system ownership boundaries", () => {
       "SelectionBarView",
       // DK-12 — the same bar as the tools in hand, over the four specimens' fixture hands
       "HandPlate",
+      // DK-13 — the pegboard's chrome over a fixture tray, placed by the product's own model
+      "PegboardPlate",
+      "PegboardView",
+      "placeFilters",
+      "filterOptions",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -446,8 +465,9 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<AppearancePlate\s/u);
     expect(page).toMatch(/<EdgesPlate\s/u);
     expect(page).toMatch(/<ArtifactsDrawer\s/u);
-    // …and the selection bar's plates mounted (DK-11).
+    // …and the selection bar's plates mounted (DK-11), and the pegboard's (DK-13).
     expect(page).toMatch(/<SelectionBarPlate\s/u);
+    expect(page).toMatch(/<PegboardPlate\s/u);
     // …and History's plates mounted on the page in each state the host owns
     // (AR-8c): the room, a choice with Resume live, unavailable, consent.
     expect(page).toMatch(/<HistoryPreview state="room"/u);

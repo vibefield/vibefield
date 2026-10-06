@@ -1776,3 +1776,53 @@
   font-size: 10px;
   font-weight: 550;
 }
+
+/* DK-13 — the pegboard's plates: the shipping chrome (`PegboardView`) over a stand-in for the desk's own drawer, which
+   the desk draws on the GPU behind the line (its board, its specimens, their label tape) — a plain board where it lies,
+   its specimens plain stand-ins, as the selection bar's plates stand an object in. */
+.vf-ds-board-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-board-plate {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 14px;
+  background-color: var(--vf-canvas-bg);
+  background-image: radial-gradient(
+    circle at center,
+    var(--vf-canvas-dot) 1.1px,
+    transparent 1.45px
+  );
+  background-size: 25px 25px;
+}
+
+.vf-ds-board-standin {
+  position: absolute;
+  border-radius: 10px 10px 0 0;
+  background: color-mix(in srgb, var(--vf-foreground) 9%, var(--vf-canvas-bg));
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    0 -6px 28px var(--vf-hairline-strong);
+}
+
+.vf-ds-board-specimen {
+  position: absolute;
+  border-radius: 6px;
+  background: var(--vf-chrome-solid);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    0 6px 14px var(--vf-hairline-strong);
+}
+
+.vf-ds-board-caption {
+  position: absolute;
+  top: 10px;
+  left: 12px;
+  color: var(--vf-ds-muted);
+  font-size: 10px;
+  font-weight: 550;
+}

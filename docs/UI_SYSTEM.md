@@ -84,6 +84,12 @@ The catalog currently mounts these shipping views directly:
   calendar (‹ › · today · the pen, "September") and the example clock (its own five drawings, its
   time) — the held object's stand-in in the reading fit's band (116 under the top, 100 over the
   foot); its cells read by the product's own model (`handCells`)
+- the pegboard's chrome (DK-13): `PegboardView` over a fixture tray — a plain board standing in where
+  the desk draws its own drawer behind the line — a plate per state: out (All), a category chosen,
+  the filters past the band's width (the end where more lies fading), rising at 80 % of the slide
+  (fading in), and a specimen in the keyboard's focus (ringed); the filters placed and filled by
+  the product's own model (`placeFilters`, `filterOptions`); and the line's create in hand, faint,
+  "Put it down first"
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their

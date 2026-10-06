@@ -27,6 +27,7 @@ import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
+import { PEGBOARD_STATES, PegboardPlate } from "../PegboardPreview";
 import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
 import { SwitchPreview } from "../SwitchPreview";
 import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
@@ -223,8 +224,32 @@ export function ChromeSection({
         <p className="vf-ds-stage-caption">
           Every state the page's §03 plates draw for the line — at rest, typing with a chip in the
           sentence, @ open, aimed, Objects out, Godview's New terminal, History's Resume waiting —
-          and Godview's keys as Windows prints them, in this page's theme. One plus: Canvas's
-          create.
+          and Godview's keys as Windows prints them, in this page's theme. One plus: Canvas's create
+          — faint while an object is in hand, "Put it down first" (R14).
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The pegboard — Objects, behind the line"
+        source="field/desk/pegboard/* · DESIGN.md §8, R14, R19"
+        bleed
+      >
+        <div className="vf-ds-board-plates">
+          {PEGBOARD_STATES.map((state) => (
+            <PegboardPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          The board is the desk's own drawer, risen behind the line by its create or B (its lay
+          keeps 88 at the foot, so the last row clears the line); the stage behind it neither
+          recedes nor dims. Over it VibeField draws the filters — the kit's segmented control cut
+          for the wood, centred in the board's clear header band 12 in from its sides, the track
+          sunk at 55 % over a 12 px blur, the thumb sliding 300 ms — All, then the categories the
+          lay offers whose plugin is on, no counts; past the band's width they scroll, the end where
+          more lies fading. They follow the drawer every frame of its slide and fade in over its
+          last 40 %. From the keyboard the board is a stop of Tab after them: the arrows ring the
+          specimen in focus where the desk draws it, ⏎ lays it at the view's centre, Esc closes. The
+          plates stand a plain board in for the desk's.
         </p>
       </Specimen>
 

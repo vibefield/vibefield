@@ -16,8 +16,18 @@ import { ClipboardStore } from "../hud/edge-tray/clipboard-store";
 // typed. The markup and the CSS are the product's.
 
 /** The states the line's plates show: at rest, typing (a chip in the
- * sentence), @ open, aimed, Objects out, Godview's create, History's. */
-export const LINE_STATES = ["rest", "typing", "at", "aimed", "objects", "gv", "hx"] as const;
+ * sentence), @ open, aimed, Objects out, an object in hand (the create faint —
+ * DK-13, R14), Godview's create, History's. */
+export const LINE_STATES = [
+  "rest",
+  "typing",
+  "at",
+  "aimed",
+  "objects",
+  "held",
+  "gv",
+  "hx",
+] as const;
 export type LineState = (typeof LINE_STATES)[number];
 
 export const LINE_STATE_LABEL: Record<LineState, string> = {
@@ -26,6 +36,7 @@ export const LINE_STATE_LABEL: Record<LineState, string> = {
   at: "@ open",
   aimed: "Aimed",
   objects: "Objects open",
+  held: "In hand — Put it down first",
   gv: "Godview",
   hx: "History",
 };
@@ -36,6 +47,7 @@ const VIEW_OF: Record<LineState, FrameView> = {
   at: "canvas",
   aimed: "canvas",
   objects: "canvas",
+  held: "canvas",
   gv: "godview",
   hx: "history",
 };
@@ -158,6 +170,7 @@ export function ComposerLinePlate({
         keys={keys}
         track={<ViewsTrackView view={view} keys={keys} />}
         objectsOpen={state === "objects"}
+        createHeld={state === "held"}
         createWaits={view === "history" ? "choose a session first" : null}
         aim={state === "aimed" ? AIM : null}
         seed={seed}

@@ -175,10 +175,43 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       "at:mac",
       "aimed:mac",
       "objects:mac",
+      "held:mac",
       "gv:mac",
       "hx:mac",
       "gv:other",
     ]);
+    // DK-13 — the pegboard: a plate per state over a fixture tray, the shipping filters placed by the product's model
+    const boardPlates = [...(container?.querySelectorAll<HTMLElement>(".vf-ds-board-plate") ?? [])];
+    expect(boardPlates.map((p) => p.dataset.state)).toEqual([
+      "Out — All",
+      "A category chosen — Surfaces",
+      "Past the band's width — the far end fading",
+      "Rising — 80 % of the slide",
+      "A specimen in the keyboard's focus",
+    ]);
+    const boardPlate = (state: string): HTMLElement | undefined =>
+      boardPlates.find((p) => p.dataset.state === state);
+    expect(
+      [...(boardPlate("Out — All")?.querySelectorAll(".vf-pegboard-track > button") ?? [])].map(
+        (b) => b.textContent,
+      ),
+    ).toEqual(["All", "Comments", "Paper", "Surfaces", "Things"]);
+    expect(
+      boardPlate("A category chosen — Surfaces")?.querySelector(
+        '.vf-pegboard-track > button[aria-pressed="true"]',
+      )?.textContent,
+    ).toBe("Surfaces");
+    expect(
+      boardPlate("A specimen in the keyboard's focus")?.querySelector(
+        ".vf-pegboard-ring[data-shown]",
+      ),
+    ).not.toBeNull();
+    expect(
+      Number(
+        boardPlate("Rising — 80 % of the slide")?.querySelector<HTMLElement>(".vf-pegboard-filters")
+          ?.style.opacity,
+      ),
+    ).toBeCloseTo(0.5, 6);
     // One Frame FR-3: the head — a plate per state the page's head plates draw
     // (and FitPath and renaming, which the brief adds), the zoom's keys as
     // Windows says them last; the live head in the playground.
@@ -232,6 +265,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(plate("typing")?.querySelector(".vf-line-chip")).not.toBeNull();
     expect(plate("aimed")?.querySelector(".vf-line-ph")?.textContent).toBe("Message vibe-field…");
     expect(plate("objects")?.querySelector('.vf-line-create[aria-expanded="true"]')).not.toBeNull();
+    // in hand the create is faint — "Put it down first" (R14)
+    expect(plate("held")?.querySelector(".vf-line-create")?.getAttribute("title")).toBe(
+      "Put it down first",
+    );
+    expect(plate("held")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
+      "true",
+    );
     expect(plate("hx")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
       "true",
     );
