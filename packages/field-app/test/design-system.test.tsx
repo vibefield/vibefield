@@ -248,6 +248,26 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     );
     expect(history("search")?.querySelector(".ah-launcher__open")?.textContent).toBe("plus");
     expect(history("search")?.querySelector('[role="dialog"]')).toBeNull();
+    // DK-12 — the tools in hand: a plate per specimen, the shipping bar in its hand's role, its tools in their order
+    const hands = [...(container?.querySelectorAll(".vf-ds-bar-plate") ?? [])].filter((p) =>
+      p.getAttribute("data-state")?.startsWith("In hand"),
+    );
+    expect(
+      hands.map((p) => p.querySelector("[data-selection-bar]")?.getAttribute("data-face")),
+    ).toEqual(["hand", "hand", "hand", "hand"]);
+    expect(
+      hands.map((p) =>
+        [...(p.querySelectorAll('[data-face-row="hand"] [data-tool]') ?? [])]
+          .map((t) => t.getAttribute("data-tool"))
+          .join(" "),
+      ),
+    ).toEqual([
+      "turn:-1 turn:1 pen:felt pen:ball pen:fountain pen:red undo",
+      "marker:black marker:blue marker:red marker:green eraser undo redo",
+      "month:-1 month:1 today pen",
+      "seconds ring24 zone-back zone-ahead dial",
+    ]);
+    expect(hands[0]?.querySelector("[data-readout]")?.textContent).toBe("Page 1");
   });
 
   it("exposes theme and representative component-state controls", async () => {

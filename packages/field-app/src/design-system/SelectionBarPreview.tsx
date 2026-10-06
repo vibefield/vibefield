@@ -1,4 +1,5 @@
 import { type ReactElement, useMemo, useState } from "react";
+import { type HeldAnchor, type HeldSlot, handCells } from "../field/desk/bar/bar-hand";
 import {
   barCells,
   menuEyebrow,
@@ -6,6 +7,7 @@ import {
   type SelectionFacts,
 } from "../field/desk/bar/bar-model";
 import { type PlaceAnchor, SelectionBarView } from "../field/desk/bar/SelectionBarView";
+import { deskLook } from "../field/desk/desk-layer";
 import type { ObjectWords } from "../field/desk/desk-object-words";
 
 // The selection bar's fixture ADAPTER (DK-11; docs/UI_SYSTEM.md): the shipping bar — `SelectionBarView` — over
@@ -188,3 +190,194 @@ export function SelectionBarPlate({ state }: { state: BarState }): ReactElement 
     </div>
   );
 }
+
+// ── DK-12 — THE TOOLS IN HAND (§8 "Tools in hand"): the same shipping bar in its hand's role, over a fixture HAND — the
+// four specimens' slots as their kinds declare them (ICE's notebook, whiteboard and calendar; the example plugin's
+// clock, its own five drawings), the inks the PRODUCT's palette hands the kinds (`deskLook`), the mode in hand and the
+// kind's word — its cells read by the product's own model (`handCells`). The plate is the top of the desk's view: the
+// bar under the head at y 64, and the held object's stand-in in the reading fit's band (116 under the top, 100 over
+// the foot).
+
+/** The clock's own drawings (examples/plugins/desk-clock `glyphs.ts`): data, as the kind declares them. */
+const CLOCK_GLYPHS = {
+  seconds: STOPWATCH,
+  ring24:
+    "M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18ZM12 16.5a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9ZM12 3v2M21 12h-2M12 21v-2M3 12h2",
+  back: "M12 20a8 8 0 1 0-8-8M4 12l-2-3M4 12l3-2M12 8v4l2 2",
+  ahead: "M12 20a8 8 0 1 1 8-8M20 12l2-3M20 12l-3-2M12 8v4l-2 2",
+  dial: "M7 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM17 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8ZM12 21a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z",
+} as const;
+
+export const HAND_STATES = [
+  "In hand — the notebook",
+  "In hand — the whiteboard",
+  "In hand — the calendar",
+  "In hand — the clock",
+] as const;
+export type HandState = (typeof HAND_STATES)[number];
+
+/** The product's inks for the pens and the markers, by name — what the kinds' looks hand their slots as swatches. */
+function inks(dark: boolean): { pen(name: string): string; marker(name: string): string } {
+  const palette = deskLook(dark ? "dark" : "light").palette as unknown as {
+    readonly pens: Readonly<Record<string, { readonly css: string }>>;
+    readonly markers: Readonly<Record<string, { readonly css: string }>>;
+  };
+  return {
+    pen: (name) => palette.pens[name]?.css ?? "",
+    marker: (name) => palette.markers[name]?.css ?? "",
+  };
+}
+
+/** A specimen's hand as the anchor carries it: its slots in their declared order, the mode in hand, its word. */
+function handOf(state: HandState, dark: boolean): Pick<HeldAnchor, "tools" | "active" | "readout"> {
+  const ink = inks(dark);
+  const pen = (name: string, label: string, hint: string): HeldSlot => ({
+    id: `pen:${name}`,
+    label,
+    kind: "mode",
+    hint,
+    glyph: "pen",
+    swatch: ink.pen(name),
+  });
+  const marker = (name: string, hint: string): HeldSlot => ({
+    id: `marker:${name}`,
+    label: `${name.charAt(0).toUpperCase()}${name.slice(1)} marker`,
+    kind: "mode",
+    hint,
+    glyph: "pen",
+    swatch: ink.marker(name),
+  });
+  const undo: HeldSlot = { id: "undo", label: "Undo", kind: "action", hint: "⌘Z", glyph: "undo" };
+  switch (state) {
+    case "In hand — the notebook":
+      return {
+        tools: [
+          {
+            id: "turn:-1",
+            label: "Previous page",
+            kind: "action",
+            hint: "←",
+            glyph: "chevron-left",
+          },
+          { id: "turn:1", label: "Next page", kind: "action", hint: "→", glyph: "chevron" },
+          pen("felt", "Felt pen", "1"),
+          pen("ball", "Ballpoint", "2"),
+          pen("fountain", "Fountain pen", "3"),
+          pen("red", "Red pen", "4"),
+          undo,
+        ],
+        active: "pen:fountain",
+        readout: "Page 1",
+      };
+    case "In hand — the whiteboard":
+      return {
+        tools: [
+          marker("black", "1"),
+          marker("blue", "2"),
+          marker("red", "3"),
+          marker("green", "4"),
+          { id: "eraser", label: "Eraser", kind: "mode", hint: "E", glyph: "eraser" },
+          undo,
+          { id: "redo", label: "Redo", kind: "action", hint: "⇧⌘Z", glyph: "redo" },
+        ],
+        active: "marker:blue",
+      };
+    case "In hand — the calendar":
+      return {
+        tools: [
+          {
+            id: "month:-1",
+            label: "Previous month",
+            kind: "action",
+            hint: "←",
+            glyph: "chevron-left",
+          },
+          { id: "month:1", label: "Next month", kind: "action", hint: "→", glyph: "chevron" },
+          { id: "today", label: "Today", kind: "action", hint: "T", glyph: "today" },
+          { id: "pen", label: "The pen", kind: "mode", hint: "P", glyph: "pen" },
+        ],
+        active: "pen",
+        readout: "September",
+      };
+    case "In hand — the clock":
+      return {
+        tools: [
+          {
+            id: "seconds",
+            label: "Seconds hand",
+            kind: "action",
+            hint: "S",
+            glyph: { path: CLOCK_GLYPHS.seconds },
+          },
+          {
+            id: "ring24",
+            label: "24-hour ring",
+            kind: "action",
+            hint: "H",
+            glyph: { path: CLOCK_GLYPHS.ring24 },
+          },
+          {
+            id: "zone-back",
+            label: "An hour back",
+            kind: "action",
+            hint: "[",
+            glyph: { path: CLOCK_GLYPHS.back },
+          },
+          {
+            id: "zone-ahead",
+            label: "An hour ahead",
+            kind: "action",
+            hint: "]",
+            glyph: { path: CLOCK_GLYPHS.ahead },
+          },
+          {
+            id: "dial",
+            label: "Next dial",
+            kind: "action",
+            hint: "F",
+            glyph: { path: CLOCK_GLYPHS.dial },
+          },
+        ],
+        active: "",
+        readout: "10:08:42",
+      };
+  }
+}
+
+/** The plate's view: the top of a desk 560 wide and 400 tall. */
+const HAND_VIEW = { width: WIDTH, height: 400 } as const;
+/** The reading fit's band on the plate: 116 under its top, 100 over its foot (the layer's `hold`). */
+const FIT = { top: 116, bottom: 400 - 100 } as const;
+
+/** One plate: the shipping bar as the tools in hand, under the head, over a held object's stand-in. */
+export function HandPlate({ state, dark }: { state: HandState; dark: boolean }): ReactElement {
+  const hand = useMemo(() => handCells(handOf(state, dark)), [state, dark]);
+  const anchor = useMemo<PlaceAnchor>(() => ({ box: null, count: 1, view: HAND_VIEW }), []);
+  return (
+    <div className="vf-ds-bar-plate" data-state={state} style={{ height: HAND_VIEW.height }}>
+      <div
+        className="vf-ds-bar-object"
+        style={{ left: 150, top: FIT.top, width: WIDTH - 300, height: FIT.bottom - FIT.top }}
+      />
+      <SelectionBarView
+        cells={NO_CELLS}
+        groups={NO_GROUPS}
+        eyebrow=""
+        shown
+        stepAside={false}
+        open={false}
+        onOpenChange={() => undefined}
+        onCell={() => undefined}
+        onRow={() => undefined}
+        held
+        hand={hand}
+        onHand={() => undefined}
+        fixed={anchor}
+      />
+      <span className="vf-ds-bar-caption">{state}</span>
+    </div>
+  );
+}
+
+const NO_CELLS: Parameters<typeof SelectionBarView>[0]["cells"] = [];
+const NO_GROUPS: Parameters<typeof SelectionBarView>[0]["groups"] = [];

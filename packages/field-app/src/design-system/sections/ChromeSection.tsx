@@ -27,7 +27,7 @@ import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
-import { BAR_STATES, SelectionBarPlate } from "../SelectionBarPreview";
+import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
 import { SwitchPreview } from "../SwitchPreview";
 import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
 
@@ -344,6 +344,27 @@ export function ChromeSection({
           `missing` mark. Taped, Lift the tape and no Duplicate; a missing face names its type and
           word where the acts would stand. More grows the same element into its solid menu — up, or
           down near the top — nearest first, the eyebrow at the far end. Send to… waits for DK-14.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="The tools in hand — the same bar, under the head"
+        source="field/desk/bar/* · DESIGN.md §8 Tools in hand, §13"
+        bleed
+      >
+        <div className="vf-ds-bar-plates">
+          {HAND_STATES.map((state) => (
+            <HandPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} dark={dark} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          An object picked up (DK-12): the same element travels into the hand — 560 ms on the island
+          curve, its contents cross-fading over the last 120 — and stands under the head at y 64,
+          the held object's reading fit keeping 116 above it and 100 below. Send to… · rule · the
+          kind's tools in their declared order (a 6 gap where the run changes between pages, inks
+          and tools) · the readout · rule · Done. A pen or a marker is a dot in its own ink, the one
+          in hand ringed; a mode without a swatch (the eraser, the calendar's pen) is the inverted
+          solid while in hand; the clock draws its own five through the bar's one path renderer.
         </p>
       </Specimen>
 

@@ -259,8 +259,8 @@ describe("UI system ownership boundaries", () => {
     // bar's own classes, never a stylesheet, never the desk's doors or the host.
     const fixture = source("design-system/SelectionBarPreview.tsx");
     expect(fixture).toContain("SelectionBarView");
-    // the CALLS, not the names (an import alone would satisfy a name)
-    for (const model of ["barCells(", "menuGroups(", "menuEyebrow("])
+    // the CALLS, not the names (an import alone would satisfy a name) — DK-12: the tools in hand's too
+    for (const model of ["barCells(", "menuGroups(", "menuEyebrow(", "handCells("])
       expect(fixture).toContain(model);
     expect(fixture).not.toMatch(/className="vf-bar/);
     expect(fixture).not.toContain("<style");
@@ -431,6 +431,8 @@ describe("UI system ownership boundaries", () => {
       // DK-11 — the desk's selection bar over fixture selections, and grown into its menu
       "SelectionBarPlate",
       "SelectionBarView",
+      // DK-12 — the same bar as the tools in hand, over the four specimens' fixture hands
+      "HandPlate",
     ]) {
       expect(catalog).toContain(productionView);
     }

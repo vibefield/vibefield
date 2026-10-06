@@ -66,6 +66,12 @@ The catalog currently mounts these shipping views directly:
   neither way — its cells and rows read by the product's own model (`barCells`, `menuGroups`,
   `menuEyebrow`); and the status line's notices — a missing face's word, and its place under the
   tools in hand
+- the tools in hand (DK-12): the same `SelectionBarView` in its hand's role (`HandPlate`) under the
+  head at y 64, over the four specimens' fixture hands — the notebook (‹ › · its four pens as dots in
+  the product's inks · undo, "Page 1"), the whiteboard (four markers · the eraser · undo · redo), the
+  calendar (‹ › · today · the pen, "September") and the example clock (its own five drawings, its
+  time) — the held object's stand-in in the reading fit's band (116 under the top, 100 over the
+  foot); its cells read by the product's own model (`handCells`)
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their
