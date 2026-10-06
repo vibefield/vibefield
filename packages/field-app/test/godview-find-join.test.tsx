@@ -34,7 +34,7 @@ import {
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
-import { findAgentsOf } from "../src/godview/monitor/find-agents";
+import { createFindAgents, findJoinKey } from "../src/godview/monitor/find-agents";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import { useMonitorAgents } from "../src/godview/monitor/useMonitorAgents";
@@ -151,7 +151,8 @@ function modelRow(id: string, extra: Partial<AgentView> = {}): AgentView {
   });
 }
 
-describe("the join's rules (`findAgentsOf`)", () => {
+describe("the join's rules (`createFindAgents`)", () => {
+  const findAgentsOf = createFindAgents();
   const spoken = managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" });
   const spokenRun = {
     ...chromeRunOf({
@@ -234,5 +235,91 @@ describe("the join's rules (`findAgentsOf`)", () => {
         (row) => row.agent.id,
       ),
     ).toEqual([peer.id]);
+  });
+
+  it("reuses unchanged rows and lists, preserving input order and local-only joins", () => {
+    const project = createFindAgents();
+    const own = modelRow("row-a");
+    const other = modelRow("row-other");
+    const peer = modelRow("peer", { device: { id: "away", name: "Loft", self: false } });
+    const terminal = modelRow("terminal", { kind: "terminal" });
+    const joins = new Map([
+      [own.id, "run-a"],
+      [peer.id, "run-a"],
+      [terminal.id, "run-a"],
+    ]);
+    const input = [own, other, peer, terminal];
+    const first = project(input, joins, [spokenRun]);
+    // A republished chrome row moved a fact Find does not read.
+    const unrelated = { ...spokenRun, local: { ...spokenRun.local, cwd: "/elsewhere" } };
+    expect(project([...input], new Map(joins), [unrelated])).toBe(first);
+    const changed = project([own, { ...other, status: "blocked" }, peer, terminal], joins, [
+      unrelated,
+    ]);
+    expect(changed).not.toBe(first);
+    expect(changed[0]).toBe(first[0]);
+    expect(changed[1]?.status).toBe("blocked");
+    expect(changed[2]).toBe(first[2]);
+    expect(changed[3]).toBe(first[3]);
+    const reordered = project([terminal, peer, own], joins, [spokenRun]);
+    expect(reordered).toEqual([first[3], first[2], first[0]]);
+    expect(reordered[0]).toBe(first[3]);
+    expect(reordered[1]?.agent?.nativeSessionId).toBeUndefined();
+    expect(reordered[1]?.agent?.monitor).toBeUndefined();
+    expect(reordered[0]?.agent).toBeUndefined();
+  });
+
+  it("refreshes every joined native/clock fact and removes facts that disappear", () => {
+    const project = createFindAgents();
+    const own = modelRow("row-a");
+    const input = [own];
+    const joins = new Map([[own.id, "run-a"]]);
+    const local = spokenRun.local;
+    if (local?.mirror === undefined) throw new Error("fixture must have an observed local run");
+    const first = project(input, joins, [spokenRun]);
+    const evidence = {
+      ...spokenRun,
+      local: { ...local, mirror: { ...local.mirror, lastEvidenceAt: "2026-09-12T10:05:00.000Z" } },
+    };
+    // M19 does not subscribe to evidence ticks, but any subsequent join must
+    // read their latest value even when this model row kept its identity.
+    expect(findJoinKey([evidence])).toBe(findJoinKey([spokenRun]));
+    const second = project(input, joins, [evidence]);
+    expect(second[0]).not.toBe(first[0]);
+    expect(second[0]?.agent?.monitor?.freshness?.lastEvidenceAt).toBe("2026-09-12T10:05:00.000Z");
+    const started = {
+      ...evidence,
+      local: {
+        ...evidence.local,
+        mirror: { ...evidence.local.mirror, startedAt: "2026-09-12T09:50:00.000Z" },
+      },
+    };
+    const third = project(input, joins, [started]);
+    expect(third[0]).not.toBe(second[0]);
+    expect(third[0]?.agent?.monitor?.session?.startedAt).toBe("2026-09-12T09:50:00.000Z");
+    const status = { ...started, statusSince: "2026-09-12T10:03:00.000Z" };
+    const fourth = project(input, joins, [status]);
+    expect(fourth[0]).not.toBe(third[0]);
+    expect(fourth[0]?.agent?.monitor?.statusSince).toBe(status.statusSince);
+    const native = { ...status, local: { ...status.local, nativeSessionId: "resumed-native" } };
+    const fifth = project(input, joins, [native]);
+    expect(fifth[0]).not.toBe(fourth[0]);
+    expect(liveScope(fifth).nativeSessionIds).toEqual(["resumed-native"]);
+    const noClocks = { ...native, local: { ...native.local, mirror: { alive: true } } };
+    const sixth = project(input, joins, [noClocks]);
+    expect(sixth[0]?.agent?.monitor).toEqual({
+      statusSince: status.statusSince,
+      session: {},
+      freshness: {},
+    });
+    const noMirror = { ...native, local: { nativeSessionId: "resumed-native" } };
+    expect(project(input, joins, [noMirror])[0]?.agent?.monitor).toBeUndefined();
+    const missing = project(input, joins, []);
+    expect(missing[0]?.agent?.nativeSessionId).toBeUndefined();
+    expect(missing[0]?.agent?.monitor).toBeUndefined();
+    expect(project(input, new Map([[own.id, "run-gone"]]), [native])).toBe(missing);
+    expect(project(input, joins, [spokenRun])[0]).toEqual(first[0]);
+    // A different window cannot inherit this one's local facts.
+    expect(createFindAgents()(input, joins, [noMirror])[0]?.agent?.monitor).toBeUndefined();
   });
 });

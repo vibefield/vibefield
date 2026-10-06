@@ -52,7 +52,6 @@
 // there), the same clock, the same warm-up.
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
-import { loadavg } from "node:os";
 import { join, resolve } from "node:path";
 import {
   buildRoot,
@@ -225,7 +224,8 @@ async function main() {
   for (let round = 1; round <= rounds; round += 1) {
     const order = !paired ? ["A", "B"] : round % 2 === 1 ? ["A", "B", "A′"] : ["A′", "B", "A"];
     for (const arm of order) {
-      const load = loadavg()[0];
+      // Every arm starts under the same declared ceiling, even after a load spike.
+      const load = await waitForLoad(loadMax);
       loads.push({ round, arm, load });
       log(`round ${round} arm ${arm} (load ${load.toFixed(1)})`);
       runs[arm].push(await launch(arm, ARMS[arm], round));

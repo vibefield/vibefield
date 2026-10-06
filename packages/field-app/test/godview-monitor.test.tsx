@@ -719,6 +719,34 @@ describe("the monitor stage", () => {
     ).toBe(2);
   });
 
+  it("refreshes marker facts from chrome and drawn membership independently", async () => {
+    const door = fakeDoor();
+    await mountMonitor("list", door);
+    const run = (): NonNullable<GodviewMonitorFacts["runs"]>[number] | undefined =>
+      latest().runs?.find((entry) => entry.run === "run-codex");
+    expect(run()).toMatchObject({ spawnedBy: "app", status: "blocked", drawn: true });
+    // Provenance belongs to chrome, so this can change without a new model row.
+    act(() => {
+      door.push(
+        ROWS.map((row) =>
+          row.runtimeRunId === "run-codex" ? { ...row, spawnedBy: "user-shell" } : row,
+        ),
+      );
+    });
+    await settle();
+    expect(run()).toMatchObject({ spawnedBy: "user-shell", status: "blocked", drawn: true });
+    // The pane's exit changes the window's cut, not the run's marker facts.
+    await renderMonitor("list", door, {
+      ...PANES,
+      sessions: (PANES.sessions ?? []).map((session) =>
+        session.id === "run-codex-pty" ? { ...session, exited: true } : session,
+      ),
+    });
+    expect(run()).toMatchObject({ spawnedBy: "user-shell", status: "blocked", drawn: false });
+    await renderMonitor("list", door, PANES);
+    expect(run()).toMatchObject({ spawnedBy: "user-shell", status: "blocked", drawn: true });
+  });
+
   it("says WEBGPU UNAVAILABLE rather than drawing an empty field on a device with no GPU", async () => {
     // The honest-states law where AR-5's port put it. happy-dom has no WebGPU,
     // and a swarm that answered that with a blank canvas would look exactly

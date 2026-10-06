@@ -406,22 +406,19 @@ export function GodviewMonitor({
   // agent rows the stage shows, through the board's join (`runByRow`) —
   // observed or not.
   const chrome = useMonitorFeed()?.chrome ?? null;
-  useChromeKey(chrome, markerRunsKey);
-  const runFacts = useRef<{ key: string; runs: GodviewMonitorRunFacts[] }>({ key: "", runs: [] });
-  const drawnRuns = useMemo(
-    () =>
-      new Set(
-        shown.flatMap((row) => {
-          const run = row.kind !== "agent" ? undefined : runByRow.get(row.id);
-          return run === undefined ? [] : [run];
-        }),
-      ),
-    [shown, runByRow],
+  const markerKey = useChromeKey(chrome, markerRunsKey);
+  const drawnRunIds = shown.flatMap((row) => {
+    const run = row.kind !== "agent" ? undefined : runByRow.get(row.id);
+    return run === undefined ? [] : [run];
+  });
+  const drawnKey = JSON.stringify(drawnRunIds);
+  // Row objects move with token counts; membership does not. Reuse the join
+  // until either the drawn ids or a fact the marker actually states changes.
+  const drawnRuns = useMemo(() => new Set(drawnRunIds), [drawnKey]);
+  const runs = useMemo(
+    () => monitorRunFacts(chrome?.runs() ?? NO_RUNS, drawnRuns),
+    [chrome, markerKey, drawnRuns],
   );
-  const nextRuns = monitorRunFacts(chrome?.runs() ?? NO_RUNS, drawnRuns);
-  const runsKey = JSON.stringify(nextRuns);
-  if (runsKey !== runFacts.current.key) runFacts.current = { key: runsKey, runs: nextRuns };
-  const runs = runFacts.current.runs;
   /** A tab with no sessions under it says so over the stage; with no sessions
    * at all the view's own empty state speaks instead. */
   const emptyUnder =

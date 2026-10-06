@@ -23,7 +23,7 @@ import type { MonitorFloorRecord } from "./agents";
 import { NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
 import { deviceFacet, useDeviceRoster } from "./devices";
-import { findAgentsOf, findJoinKey } from "./find-agents";
+import { createFindAgents, findJoinKey } from "./find-agents";
 import { useMonitorFeed } from "./GodviewAgentsProvider";
 import type { HeldModelRow } from "./model-board";
 import type { GodviewMonitorFeed, MonitorFeedState } from "./model-replica";
@@ -821,10 +821,11 @@ export function useMonitorAgents({
   // when a fact it keys moves, and reads the newest of them when it does.
   const chrome = feed?.chrome ?? null;
   const findKey = useChromeKey(chrome, findJoinKey);
+  const findAgentsOf = useMemo(createFindAgents, []);
   const findAgents = useMemo<readonly FindAgent[]>(
     () => findAgentsOf(agents, joins.runByRow, chrome?.runs() ?? NO_RUNS),
     // keyed by the facts the sheet joins on, not by every frame a run moves in
-    [agents, joins, findKey, chrome],
+    [agents, joins, findKey, chrome, findAgentsOf],
   );
 
   return {

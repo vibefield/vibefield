@@ -21,52 +21,90 @@ export function findJoinKey(runs: readonly ChromeRun[]): string {
  * A peer keeps its established search surface (M9): no local account or
  * transcript join. Only rosetta searches transcripts, through HistoryPort.
  */
-export function findAgentsOf(
+interface CachedFindAgent {
+  readonly nativeSessionId: string | undefined;
+  readonly observed: boolean;
+  readonly statusSince: string | undefined;
+  readonly startedAt: string | undefined;
+  readonly lastEvidenceAt: string | undefined;
+  readonly row: FindAgent;
+}
+
+/** One cache per window. Model rows are immutable; local clocks are compared
+ * separately because chrome facts can move without that model row changing. */
+export function createFindAgents(): (
   agents: readonly AgentView[],
   runByRow: ReadonlyMap<string, string>,
   runs: readonly ChromeRun[],
-): readonly FindAgent[] {
-  const byRun = new Map(runs.map((run) => [run.runtimeRunId, run] as const));
-  return agents.map((row): FindAgent => {
-    const runId = row.device.self ? runByRow.get(row.id) : undefined;
-    const run = runId === undefined ? undefined : byRun.get(runId);
-    const local = run?.local;
-    const mirror = local?.mirror;
-    return {
-      id: row.id,
-      createdAtMs: row.createdAt,
-      status: row.status,
-      project: projectName(row),
-      detail: detailLine(row),
-      color: row.colour,
-      ...(row.kind === "agent"
-        ? {
-            agent: {
-              provider: row.provider ?? { id: "", label: "" },
-              ...(row.model ? { model: row.model } : {}),
-              ...(row.project.branch ? { branch: row.project.branch } : {}),
-              ...(row.device.self && row.account ? { account: row.account } : {}),
-              ...(local?.nativeSessionId !== undefined
-                ? { nativeSessionId: local.nativeSessionId }
-                : {}),
-              // Find reads only these optional clocks. Preserve absence;
-              // neither a terminal nor a full Core state is invented.
-              ...(run !== undefined && mirror !== undefined
-                ? {
-                    monitor: {
-                      statusSince: run.statusSince,
-                      session:
-                        mirror.startedAt !== undefined ? { startedAt: mirror.startedAt } : {},
-                      freshness:
-                        mirror.lastEvidenceAt !== undefined
-                          ? { lastEvidenceAt: mirror.lastEvidenceAt }
-                          : {},
-                    },
-                  }
-                : {}),
-            },
-          }
-        : {}),
-    };
-  });
+) => readonly FindAgent[] {
+  const cached = new WeakMap<AgentView, CachedFindAgent>();
+  let last: readonly FindAgent[] = Object.freeze([]);
+  return (agents, runByRow, runs) => {
+    const byRun = new Map(runs.map((run) => [run.runtimeRunId, run] as const));
+    const next = agents.map((row): FindAgent => {
+      const runId = row.kind === "agent" && row.device.self ? runByRow.get(row.id) : undefined;
+      const run = runId === undefined ? undefined : byRun.get(runId);
+      const local = run?.local;
+      const mirror = local?.mirror;
+      const nativeSessionId = local?.nativeSessionId;
+      const observed = mirror !== undefined;
+      const statusSince = observed ? run?.statusSince : undefined;
+      const startedAt = mirror?.startedAt;
+      const lastEvidenceAt = mirror?.lastEvidenceAt;
+      const held = cached.get(row);
+      if (
+        held !== undefined &&
+        held.nativeSessionId === nativeSessionId &&
+        held.observed === observed &&
+        held.statusSince === statusSince &&
+        held.startedAt === startedAt &&
+        held.lastEvidenceAt === lastEvidenceAt
+      ) {
+        return held.row;
+      }
+      const made: FindAgent = {
+        id: row.id,
+        createdAtMs: row.createdAt,
+        status: row.status,
+        project: projectName(row),
+        detail: detailLine(row),
+        color: row.colour,
+        ...(row.kind === "agent"
+          ? {
+              agent: {
+                provider: row.provider ?? { id: "", label: "" },
+                ...(row.model ? { model: row.model } : {}),
+                ...(row.project.branch ? { branch: row.project.branch } : {}),
+                ...(row.device.self && row.account ? { account: row.account } : {}),
+                ...(nativeSessionId !== undefined ? { nativeSessionId } : {}),
+                // Preserve absence: these clocks are the local mirror's,
+                // never inferred from the presentation model or a peer.
+                ...(run !== undefined && mirror !== undefined
+                  ? {
+                      monitor: {
+                        statusSince: run.statusSince,
+                        session: startedAt !== undefined ? { startedAt } : {},
+                        freshness: lastEvidenceAt !== undefined ? { lastEvidenceAt } : {},
+                      },
+                    }
+                  : {}),
+              },
+            }
+          : {}),
+      };
+      cached.set(row, {
+        nativeSessionId,
+        observed,
+        statusSince,
+        startedAt,
+        lastEvidenceAt,
+        row: made,
+      });
+      return made;
+    });
+    if (next.length !== last.length || next.some((row, index) => row !== last[index])) {
+      last = Object.freeze(next);
+    }
+    return last;
+  };
 }
