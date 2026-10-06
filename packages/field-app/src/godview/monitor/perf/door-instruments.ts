@@ -3,7 +3,8 @@ import type { DevicesPort } from "../remote-door";
 import { godviewPerfLab, installGodviewPerfLab } from "./lab-bridge";
 import { createModelReplayClient, type ModelReplayClient } from "./model-replay-client";
 
-// MV-8: the lab replaces only the model client and device roster. The live
+// MV-8: these doors replace the model client and device roster. Replay pane
+// facts enter separately at the overlay boundary (`replay-panes.ts`). The live
 // fold recorder, desk-board replay door and their URL switch are retired.
 // With no replay requested both adapters return the exact object received.
 export const GODVIEW_REPLAY_PARAM = "godviewReplay";

@@ -21,6 +21,23 @@ one-pane proof from every arm. Historical measurements remain archived; they do 
 this workload qualification. New comparisons must use the same readiness instrumentation in
 historical testing bundles and record those adaptations; old reports without proof are refused.
 
+**Replay-input erratum (2026-10-06, build-mv M147):** restoring the real deck exposed
+another mismatch: the historical fold monitor added its live bare shell, while the model
+stream contained only corpus sessions. A capture reported 26 versus 25 sessions despite
+passing the pixel tolerance. Numerical passes under that protocol do not qualify the final
+comparison. The replay player now publishes the corpus pane header to the monitor at the
+overlay boundary, including managed PTY joins and the active session. The physical deck
+keeps its own healthy terminal. Outside explicit replay, the live pane object passes through
+unchanged. Chunked corpus loads retain pane facts until another header or clear.
+
+Every cell and capture records bounded monitor membership (total, shown, local agents,
+local terminals, remote sessions and remote hosts, plus the selected view). Both runners
+reject absent or malformed proof, different counts and missing/reordered scenarios before
+grading. Readout remains outside measured intervals. Historical arms need the same lab
+fixture and readout adaptation, with source patches and generated artifacts archived and
+restored; product views and backend logic stay at their pins. Corrected and old-input runs
+are separate protocols and must not be pooled.
+
 ## What A and B measure
 
 - **A and B** each receive their checkout's model stream: the answer to the window's one

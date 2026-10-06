@@ -43,3 +43,54 @@ export function singlePaneLabDeck(state: LabDeckState | null): LabDeckState {
     rendererBackend: state.rendererBackend,
   };
 }
+
+/** Comparable row counts from GODVIEW_MONITOR; no identities or agent data. */
+export interface LabMonitorState {
+  viewId: string;
+  agents: number;
+  localAgents: number;
+  terminals: number;
+  remoteSessions: number;
+  remoteHosts: number;
+  shownAgents: number;
+}
+
+/** Read after the measured interval (or immediately before a capture).
+ * A healthy physical deck alone cannot prove equal replay inputs: the old
+ * fold monitor used to count its shell while the offline model did not. */
+export function labMonitorMembership(
+  state: Partial<LabMonitorState> | null,
+  view: string,
+): LabMonitorState {
+  if (
+    typeof view !== "string" ||
+    view.length === 0 ||
+    state === null ||
+    state.viewId !== view ||
+    ![
+      state.agents,
+      state.localAgents,
+      state.terminals,
+      state.remoteSessions,
+      state.remoteHosts,
+      state.shownAgents,
+    ].every((value) => Number.isSafeInteger(value) && (value ?? -1) >= 0) ||
+    (state.agents ?? 0) === 0 ||
+    state.agents !==
+      (state.localAgents ?? 0) + (state.terminals ?? 0) + (state.remoteSessions ?? 0) ||
+    (state.shownAgents ?? 0) > (state.agents ?? 0) ||
+    (state.remoteHosts ?? 0) > (state.remoteSessions ?? 0)
+  ) {
+    throw new Error(`Missing or invalid ${view} monitor membership: ${JSON.stringify(state)}`);
+  }
+  // The checks above require every count. Copy only the bounded proof fields.
+  return {
+    viewId: state.viewId,
+    agents: state.agents,
+    localAgents: state.localAgents,
+    terminals: state.terminals,
+    remoteSessions: state.remoteSessions,
+    remoteHosts: state.remoteHosts,
+    shownAgents: state.shownAgents,
+  } as LabMonitorState;
+}

@@ -56,6 +56,7 @@ import { join, resolve } from "node:path";
 import {
   assertLabBuilt,
   assertLabDeckProof,
+  assertLabMembershipMatches,
   buildRoot,
   launchLab,
   log,
@@ -225,6 +226,7 @@ async function main() {
   log(`load ${loadAtStart.toFixed(1)} < ${loadMax}: starting`);
   const runs = Object.fromEntries(Object.keys(ARMS).map((arm) => [arm, []]));
   const loads = [];
+  let membership;
   for (let round = 1; round <= rounds; round += 1) {
     const order = !paired ? ["A", "B"] : round % 2 === 1 ? ["A", "B", "A′"] : ["A′", "B", "A"];
     for (const arm of order) {
@@ -232,7 +234,15 @@ async function main() {
       const load = await waitForLoad(loadMax);
       loads.push({ round, arm, load });
       log(`round ${round} arm ${arm} (load ${load.toFixed(1)})`);
-      runs[arm].push(await launch(arm, ARMS[arm], round));
+      const sample = await launch(arm, ARMS[arm], round);
+      const proof = sample.cells.map((cell) => ({
+        key: `${cell.view} × ${cell.corpus}`,
+        view: cell.view,
+        monitor: cell.monitor,
+      }));
+      membership ??= proof;
+      assertLabMembershipMatches(membership, proof, `arm ${arm} round ${round}`);
+      runs[arm].push(sample);
     }
   }
 

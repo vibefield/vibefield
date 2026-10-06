@@ -6,7 +6,12 @@ import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { runGodviewCapture } from "./godview-capture";
 import { type MetricTotals, metricTotals, parseSynthetic } from "./godview-lab-measures";
-import { type LabDeckState, singlePaneLabDeck } from "./godview-lab-readiness";
+import {
+  type LabDeckState,
+  type LabMonitorState,
+  labMonitorMembership,
+  singlePaneLabDeck,
+} from "./godview-lab-readiness";
 import {
   type LabWindow,
   labWindowOptions,
@@ -101,6 +106,7 @@ export interface GodviewPerfCell {
   totals: MetricTotals | null;
   /** The same healthy one-pane host workload at both ends of this sample. */
   deck: { start: LabDeckState; end: LabDeckState };
+  monitor: LabMonitorState;
 }
 
 export async function runGodviewPerfLab(opts: {
@@ -223,6 +229,7 @@ export async function runGodviewPerfLab(opts: {
         await sleep(400);
         const metricsAtEnd = await pageMetrics(win);
         const deckAtEnd = singlePaneLabDeck(lab.deck.current());
+        const membership = labMonitorMembership(monitor.current(), view);
         const report = await page<Record<string, unknown>>(win, "window.__vfGodviewPerf.report()");
         const replay = await page<Record<string, unknown>>(win, "window.__vfGodviewReplay.state()");
         const metrics = app.getAppMetrics();
@@ -245,6 +252,7 @@ export async function runGodviewPerfLab(opts: {
           swarmRenderer: view === "swarm" ? await swarmRenderer(win) : null,
           totals: metricTotals(metricsAtStart, metricsAtEnd),
           deck: { start: deckAtStart, end: deckAtEnd },
+          monitor: membership,
         };
         cells.push(cell);
         const frames = (report["frames"] ?? {}) as Record<string, number>;

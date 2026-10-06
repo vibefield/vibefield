@@ -4,7 +4,12 @@ import { gzipSync } from "node:zlib";
 import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-supervisor";
 import type { BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
-import { type LabDeckState, singlePaneLabDeck } from "./godview-lab-readiness";
+import {
+  type LabDeckState,
+  type LabMonitorState,
+  labMonitorMembership,
+  singlePaneLabDeck,
+} from "./godview-lab-readiness";
 import {
   cdp,
   type LabSource,
@@ -69,6 +74,7 @@ export interface GodviewCapture {
   swarmRenderer: string | null;
   delivered: number;
   deck: LabDeckState;
+  monitor: LabMonitorState;
 }
 
 /** A capture's content, sampled on a grid of the BGRA bitmap. */
@@ -207,6 +213,7 @@ export async function runGodviewCapture(opts: {
           const state = await page<{ delivered: number }>(win, "window.__vfGodviewReplay.state()");
           const name = `${view}-${theme}-t${t}`;
           const deck = singlePaneLabDeck(lab.deck.current());
+          const membership = labMonitorMembership(monitor.current(), view);
           const shot = await capture(win, out, name);
           const record: GodviewCapture = {
             name,
@@ -218,6 +225,7 @@ export async function runGodviewCapture(opts: {
             swarmRenderer: view === "swarm" ? await swarmRenderer(win) : null,
             delivered: state.delivered,
             deck,
+            monitor: membership,
           };
           captures.push(record);
           say({ kind: "capture", ...record });

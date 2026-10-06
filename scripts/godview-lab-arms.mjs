@@ -180,3 +180,51 @@ export function launchLab({ root, env, logPath, echo, prefix }) {
     });
   });
 }
+
+/** Validate the bounded monitor proof before timing or pixel grades are read. */
+export function assertLabMonitorProof(state, view, context) {
+  const fields = [
+    "agents",
+    "localAgents",
+    "terminals",
+    "remoteSessions",
+    "remoteHosts",
+    "shownAgents",
+  ];
+  if (
+    typeof view !== "string" ||
+    view.length === 0 ||
+    state?.viewId !== view ||
+    !fields.every((key) => Number.isSafeInteger(state?.[key]) && state[key] >= 0) ||
+    state.agents === 0 ||
+    state.agents !== state.localAgents + state.terminals + state.remoteSessions ||
+    state.shownAgents > state.agents ||
+    state.remoteHosts > state.remoteSessions
+  ) {
+    throw new Error(`${context}: missing or invalid ${view} monitor membership`);
+  }
+  return Object.fromEntries([["viewId", state.viewId], ...fields.map((key) => [key, state[key]])]);
+}
+
+/** Both runners use ordered scenario keys: reject missing, duplicate, reordered
+ * or unequal workloads before spending another launch on an invalid pairing. */
+export function assertLabMembershipMatches(reference, sample, context) {
+  const read = (rows, label) => {
+    const keys = new Set();
+    return rows.map(({ key, view, monitor }) => {
+      if (typeof key !== "string" || key.length === 0 || keys.has(key)) {
+        throw new Error(`${context}: ${label} has an invalid or duplicate scenario key`);
+      }
+      keys.add(key);
+      return [key, assertLabMonitorProof(monitor, view, `${context} ${key}`)];
+    });
+  };
+  const expected = read(reference, "reference");
+  const actual = read(sample, "sample");
+  if (expected.length === 0 || JSON.stringify(expected) !== JSON.stringify(actual)) {
+    throw new Error(
+      `${context}: monitor membership differs from the reference workload: ` +
+        `expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`,
+    );
+  }
+}

@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   type LabDeckState,
   labDeckReady,
+  labMonitorMembership,
   singlePaneLabDeck,
 } from "../src/testing/godview-lab-readiness";
 
@@ -55,5 +56,40 @@ describe("the Godview lab's real host workload", () => {
     expect(snapshot).not.toBe(marker);
     marker.panes = 0;
     expect(snapshot.panes).toBe(1);
+  });
+});
+
+const membership = {
+  viewId: "list",
+  agents: 25,
+  localAgents: 20,
+  terminals: 0,
+  remoteSessions: 5,
+  remoteHosts: 1,
+  shownAgents: 25,
+};
+
+describe("the Godview lab's monitor membership", () => {
+  it.each([
+    null,
+    { viewId: "list", agents: 25 },
+    { ...membership, viewId: "rain" },
+    { ...membership, agents: 26 },
+    { ...membership, terminals: -1 },
+    { ...membership, localAgents: 20.5 },
+    { ...membership, shownAgents: 26 },
+    { ...membership, remoteHosts: 6 },
+    { ...membership, agents: 0, localAgents: 0, remoteSessions: 0, shownAgents: 0, remoteHosts: 0 },
+  ])("rejects incomplete, stale or inconsistent monitor facts: %j", (state) => {
+    expect(() => labMonitorMembership(state, "list")).toThrow("monitor membership");
+  });
+
+  it("copies only bounded comparable facts after the measured interval", () => {
+    const marker = { ...membership, runs: [{ id: "private-run" }], status: "busy" };
+    const proof = labMonitorMembership(marker, "list");
+    expect(proof).toEqual(membership);
+    expect(proof).not.toBe(marker);
+    marker.agents = 0;
+    expect(proof.agents).toBe(25);
   });
 });

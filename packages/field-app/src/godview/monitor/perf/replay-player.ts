@@ -1,6 +1,6 @@
 import type { DeviceInfo } from "@vibefield/contracts";
-import { type Corpus, generateCorpus, parseRecipe, recipeName } from "./corpus";
-import { decodeCorpusJsonl } from "./corpus-codec";
+import { type Corpus, type CorpusPanes, generateCorpus, parseRecipe, recipeName } from "./corpus";
+import { decodeCorpusJsonl, EMPTY_PANES } from "./corpus-codec";
 import type { RecordedFrame } from "./corpus-frames";
 import type { ModelReplayClient, ModelReplayStats } from "./model-replay-client";
 import { MODEL_STREAM_META_KIND, type ModelStreamMeta } from "./model-stream";
@@ -77,6 +77,9 @@ export interface ReplayPlayer {
   stop(): ReplayState;
   state(): ReplayState;
   roster(): readonly DeviceInfo[];
+  /** Pane facts for the monitor only; the physical deck stays live. */
+  panes(): CorpusPanes;
+  onPanes(listener: () => void): () => void;
   /** The roster changed: the door's roster port re-emits. */
   onRoster(listener: (roster: readonly DeviceInfo[]) => void): () => void;
   onMark(listener: (frame: Extract<RecordedFrame, { kind: "mark" }>, at: number) => void): void;
@@ -113,6 +116,8 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
   const now = options.now ?? (() => performance.now());
   let frames: RecordedFrame[] = [];
   let roster: DeviceInfo[] = [];
+  let panes: CorpusPanes = EMPTY_PANES;
+  const paneListeners = new Set<() => void>();
   let corpusName: string | null = null;
   let marker: Corpus["meta"]["marker"] | null = null;
   let durationMs = 0;
@@ -191,6 +196,12 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
   const setRoster = (next: DeviceInfo[]): void => {
     roster = next;
     for (const listener of [...rosterListeners]) listener(roster);
+  };
+
+  const setPanes = (next: CorpusPanes): void => {
+    if (panes === next) return;
+    panes = next;
+    for (const listener of [...paneListeners]) listener();
   };
 
   const modelSince = (): ModelReplayStats | null => {
@@ -351,6 +362,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       endedAt = null;
       marks.length = 0;
       phase = "loaded";
+      setPanes(corpus.panes);
       setRoster(corpus.roster);
       return loaded();
     },
@@ -359,6 +371,8 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       const decoded = decodeCorpusJsonl(text);
       const start = frames.length;
       frames = [...frames, ...decoded.frames];
+      // A later chunk usually has no pane header: keep the published snapshot.
+      if (decoded.panes !== EMPTY_PANES) setPanes(decoded.panes);
       if (decoded.roster.length > 0) setRoster(decoded.roster);
       const first = frames[0];
       const last = frames.at(-1);
@@ -390,6 +404,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       endedAt = null;
       marks.length = 0;
       phase = "empty";
+      setPanes(EMPTY_PANES);
       setRoster([]);
     },
     start(startOptions = {}) {
@@ -415,6 +430,13 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       return state();
     },
     state,
+    panes: () => panes,
+    onPanes(listener) {
+      paneListeners.add(listener);
+      return () => {
+        paneListeners.delete(listener);
+      };
+    },
     roster: () => roster,
     onRoster(listener) {
       rosterListeners.add(listener);

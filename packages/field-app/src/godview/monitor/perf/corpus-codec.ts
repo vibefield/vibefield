@@ -32,7 +32,7 @@ export interface DecodedCorpus {
   frames: RecordedFrame[];
 }
 
-const EMPTY_PANES: CorpusPanes = { sessionIds: [], sessions: [], floor: [] };
+export const EMPTY_PANES: CorpusPanes = { sessionIds: [], sessions: [], floor: [] };
 
 export function decodeCorpusJsonl(text: string): DecodedCorpus {
   let meta: DecodedCorpus["meta"] = {};

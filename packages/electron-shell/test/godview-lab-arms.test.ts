@@ -7,6 +7,8 @@ import { afterEach, beforeAll, describe, expect, it } from "vitest";
 let arms: {
   assertLabBuilt(root: string): void;
   assertLabDeckProof(state: unknown, context: string): void;
+  assertLabMonitorProof(state: unknown, view: string, context: string): unknown;
+  assertLabMembershipMatches(reference: unknown[], sample: unknown[], context: string): void;
 };
 const roots: string[] = [];
 
@@ -95,4 +97,58 @@ describe("a Godview lab arm's built artifacts", () => {
       expect(() => arms.assertLabBuilt(root)).toThrow(native);
     },
   );
+});
+
+describe("paired monitor workloads", () => {
+  const monitor = {
+    viewId: "list",
+    agents: 25,
+    localAgents: 20,
+    terminals: 0,
+    remoteSessions: 5,
+    remoteHosts: 1,
+    shownAgents: 25,
+  };
+  const one = { key: "list × n20", view: "list", monitor };
+  const two = { key: "rain × n20", view: "rain", monitor: { ...monitor, viewId: "rain" } };
+
+  it.each([
+    undefined,
+    null,
+    { viewId: "list", agents: 25 },
+    { ...monitor, viewId: "swarm" },
+    { ...monitor, agents: 26 },
+    { ...monitor, terminals: -1 },
+    { ...monitor, remoteSessions: Number.NaN },
+    { ...monitor, shownAgents: 26 },
+    { ...monitor, remoteHosts: 6 },
+  ])("refuses missing or malformed evidence before grading: %j", (state) => {
+    expect(() => arms.assertLabMonitorProof(state, "list", "A cell")).toThrow(
+      "A cell: missing or invalid list monitor membership",
+    );
+  });
+
+  it("rejects the 26 versus 25 session mismatch even when both decks are healthy", () => {
+    const extraShell = {
+      ...one,
+      monitor: { ...monitor, agents: 26, terminals: 1, shownAgents: 26 },
+    };
+    expect(() => arms.assertLabMembershipMatches([extraShell], [one], "B round 1")).toThrow(
+      "monitor membership differs",
+    );
+  });
+
+  it.each(
+    [[], [one], [two, one], [one, one], [one, two, { ...one, key: "extra" }]].map((sample) => ({
+      sample,
+    })),
+  )("rejects missing, reordered, duplicated or extra scenarios", ({ sample }) => {
+    expect(() => arms.assertLabMembershipMatches([one, two], sample, "A′ round 2")).toThrow();
+  });
+
+  it("accepts equal bounded membership while ignoring unrelated marker details", () => {
+    const sample = { ...one, monitor: { ...monitor, runs: ["unrelated"] } };
+    expect(() => arms.assertLabMembershipMatches([one, two], [sample, two], "B")).not.toThrow();
+    expect(arms.assertLabMonitorProof(sample.monitor, "list", "B")).toEqual(monitor);
+  });
 });

@@ -31,6 +31,7 @@ import { diffBitmaps, diffImage, encodePng, judgeCapture } from "./capture-godvi
 import {
   assertLabBuilt,
   assertLabDeckProof,
+  assertLabMembershipMatches,
   buildRoot,
   launchLab,
   log,
@@ -137,9 +138,17 @@ async function main() {
   }
 
   const held = {};
+  let membership;
   for (const [arm, spec] of Object.entries(ARMS)) {
     log(`arm ${arm}`);
     held[arm] = await captureArm(arm, spec);
+    const proof = held[arm].manifest.captures.map((capture) => ({
+      key: capture.name,
+      view: capture.view,
+      monitor: capture.monitor,
+    }));
+    membership ??= proof;
+    assertLabMembershipMatches(membership, proof, `arm ${arm}`);
   }
 
   const diffDir = join(outDir, "diff");

@@ -19,6 +19,7 @@ import { useGodviewTheme } from "./godview-theme";
 import { useLabSwitches } from "./lab-switches";
 import { GodviewAgentsProvider } from "./monitor/GodviewAgentsProvider";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
+import { useGodviewReplayPanes } from "./monitor/perf/replay-panes";
 import type { RemoteSessionDoor } from "./monitor/remote-door";
 import {
   SCANLINE_DENSITY_KEY,
@@ -105,6 +106,7 @@ export function GodviewOverlay(): ReactElement | null {
    * meet — nothing about a runtime or a workspace passes through here. */
   const [remoteDoor, setRemoteDoor] = useState<RemoteSessionDoor | null>(null);
   const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
+  const monitorPanes = useGodviewReplayPanes(panes);
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -215,7 +217,7 @@ export function GodviewOverlay(): ReactElement | null {
               notice={notice}
               tuningOpen={tuningOpen}
               door={remoteDoor}
-              panes={panes}
+              panes={monitorPanes}
               reserveWindowControls={getHost().platform === "darwin"}
               // MV-W4: the same switch, for a ported view's own loop
               animations={labSwitches.animations}
