@@ -412,7 +412,8 @@ async function windowHidden(
  * and clear of the example clock's minute turn — DK-6: the seed's clock is a MINUTE clock, and its registered wake moves the
  * resting desk at each minute's turn (by its law, a hair before it), by design. A window moved while outside input reached the
  * desk (a person at a shared machine touched the wind) is taken again, up to STILLNESS_TRIES; the last window's counters are
- * the row's, with what moved it when it moved — a red row names its waker.
+ * the row's, with what moved it when it moved — a red row names its waker. DK-12: the last window's outside input is the
+ * row's too (`input` — real motion and a resting pointer's repeats, which wake nothing since ICE's I33), green or red.
  */
 async function deskRestWindow(
   win: BrowserWindow,
@@ -424,6 +425,8 @@ async function deskRestWindow(
   moved: Moved | null;
   /** DK-11: the named cause when the page was not visible through the two seconds — then their zero proves nothing */
   hidden: string | null;
+  /** DK-12: the outside input the last window received — real motion, and a resting pointer's repeats (I33) */
+  input: { readonly outside: number; readonly resting: number };
 }> {
   const disturbed: Moved[] = [];
   for (let attempt = 1; ; attempt += 1) {
@@ -436,8 +439,10 @@ async function deskRestWindow(
     await sleep(2_000);
     const b = await stillnessSample(win);
     const hidden = await windowHidden(win, "the rest window", drawn);
+    const { outside, resting } = movedBy(a, b);
+    const input = { outside, resting };
     if (hidden !== null)
-      return { rest0: countersOf(a), rest1: countersOf(b), disturbed, moved: null, hidden };
+      return { rest0: countersOf(a), rest1: countersOf(b), disturbed, moved: null, hidden, input };
     const verdict = judgeWindow(a, b, attempt);
     if (verdict.kind === "again") {
       disturbed.push(verdict.moved);
@@ -449,6 +454,7 @@ async function deskRestWindow(
       disturbed,
       moved: verdict.kind === "moved" ? verdict.moved : null,
       hidden: null,
+      input,
     };
   }
 }
@@ -1529,7 +1535,7 @@ async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
   );
   // the two seconds are taken clear of the example clock's minute turn (DK-6), so the zero is still the whole
   // witness: not a frame, not a submit, between the wakes — and a window a person's input moved is taken again (DK-10b)
-  const { rest0, rest1, disturbed, moved, hidden } = await deskRestWindow(win, () =>
+  const { rest0, rest1, disturbed, moved, hidden, input } = await deskRestWindow(win, () =>
     waitForRendererFact(
       win,
       "the desk at rest",
@@ -1543,7 +1549,7 @@ async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
   );
   const outside = disturbed.length > 0 ? { disturbed } : {};
   console.log(
-    `SMOKE_CANVAS_IDLE ${JSON.stringify({ focused, stillFocused, rest0, rest1, ...outside })}`,
+    `SMOKE_CANVAS_IDLE ${JSON.stringify({ focused, stillFocused, rest0, rest1, input, ...outside })}`,
   );
   const problems: string[] = [];
   if (!focused || !stillFocused) problems.push("the line was not focused over the resting desk");
@@ -2324,7 +2330,7 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
       );
     }
   };
-  const { rest0, rest1, disturbed, moved, hidden } = await deskRestWindow(win, waitAtRest);
+  const { rest0, rest1, disturbed, moved, hidden, input } = await deskRestWindow(win, waitAtRest);
   const outside = disturbed.length > 0 ? { disturbed } : {};
   if (busyHidden !== null) problems.push(busyHidden);
   else if (busy1.frames <= busy0.frames) problems.push("the desk was not busy before the cover");
@@ -2342,7 +2348,7 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
   }
   const parkedWakes = movedBy(parkedA, parkedB).wakes;
   return {
-    facts: { busy0, busy1, parked0, parked1, parkedWakes, rest0, rest1, ...outside },
+    facts: { busy0, busy1, parked0, parked1, parkedWakes, rest0, rest1, input, ...outside },
     problems,
   };
 }
