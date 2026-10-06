@@ -1,8 +1,7 @@
-import type { CanvasEngine, WidgetType } from "@vibecook/ice";
+import type { CanvasEngine } from "@vibecook/ice";
 import { attachDevtools } from "@vibecook/ice/devtools";
 import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
-import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type Dispatch,
   type ReactElement,
@@ -35,23 +34,25 @@ import { CommandPalette } from "../hud/CommandPalette";
 import { ArtifactsTray, ClipboardTray } from "../hud/edge-tray/EdgeTray";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
-import { WidgetTray } from "../hud/WidgetTray";
 import { SettingsPanel } from "../panels";
 import type { MagnetGridGlyph } from "./canvas-appearance";
 import { SelectionBar } from "./desk/bar/SelectionBar";
+import { useBoardFacts } from "./desk/pegboard/board-door";
+import { Pegboard } from "./desk/pegboard/Pegboard";
 import { useSettingsChord } from "./me-menu-wiring";
 import { isCommandPaletteChord, listenForProductChord } from "./product-chords";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
 import { useMagnetGridGlyph } from "./use-magnet-grid-glyph";
 
-// ChromeLayer (§5.4.3): the head, Objects' sheet (behind the line), the
-// edges, the corner, settings, and overlays — WITHOUT owning document or
-// engine lifetime. All the chrome-scoped effects live here too: the two
-// keyboard additions, the hud-flight dock choreography, the devtools attach,
-// and the sheet/loading stage holds. Sheet open/close STATE stays in FieldView
-// (the canvas recede transform derives from it in the same render — a
-// callback-up would land the recede one frame late). The theme is not here:
-// it has one owner, main's, and `theme.ts` is its mirror (One Frame FC-D5).
+// ChromeLayer (§5.4.3): the head, the pegboard's chrome (Objects, behind the
+// line — the board itself is the desk's), the edges, the corner, settings, and
+// overlays — WITHOUT owning document or engine lifetime. All the chrome-scoped
+// effects live here too: the two keyboard additions, the hud-flight dock
+// choreography, the devtools attach, and the sheet/loading stage holds. Sheet
+// open/close STATE stays in FieldView (the canvas recede transform derives
+// from it in the same render — a callback-up would land the recede one frame
+// late; Objects never recedes it since DK-13). The theme is not here: it has
+// one owner, main's, and `theme.ts` is its mirror (One Frame FC-D5).
 
 // §13.1 windowId: the renderer has no per-window identity yet (v1 is one field
 // window). A stable constant names it honestly; the id becomes real when
@@ -85,7 +86,6 @@ export function useChromeState(): ChromeState {
 export function ChromeLayer({
   ce,
   manager,
-  registry,
   hudMotion,
   docState,
   surface,
@@ -95,20 +95,21 @@ export function ChromeLayer({
 }: {
   ce: CanvasEngine;
   manager: DocManager;
-  registry: PluginRegistry<WidgetType>;
   hudMotion: "out" | "in" | "idle";
   docState: DocManagerState;
   /** The frame's open surface (One Frame FR-2/FR-3/FR-4) and its one owner's
-   * setter — FieldView's, where Objects' and the explorer's recede is
-   * computed. */
+   * setter — FieldView's, where the explorer's recede is computed. */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
   appearanceControlledByStudio: boolean;
   chrome: ChromeState;
 }): ReactElement {
   const { showSettings, setShowSettings, showEcs } = chrome;
-  // Objects, on this build: the widget tray's sheet behind the line.
-  const trayOpen = surface === "objects";
+  // Objects (DK-13): the desk's pegboard behind the line — out while the frame's
+  // surface says so, or while the desk's tray says it is (its fact leads by a
+  // frame either way).
+  const board = useBoardFacts();
+  const boardOut = surface === "objects" || board?.open === true;
   const docsOpen = surface === "fields";
   const paletteOpen = surface === "palette";
   // UA-D19 — the Me menu: one of the frame's open surfaces since FR-4, so the
@@ -178,8 +179,9 @@ export function ChromeLayer({
     return onDesktopState(setDesktopState);
   }, []);
 
-  // The docs sheet + the loading veil quiesce the stage exactly like the tray
-  // (WidgetTray holds for itself).
+  // The docs sheet + the loading veil quiesce the stage (Objects never does
+  // since DK-13: the pegboard is the desk's own, and the stage behind it neither
+  // recedes nor dims — R14).
   useStageHold(ce, docsOpen, "docs-explorer");
   useStageHold(ce, showSettings, "settings-panel");
   useStageHold(ce, docState.phase === "loading", "loading-veil");
@@ -335,16 +337,6 @@ export function ChromeLayer({
         <PluginSurfaceHost slot="hud.attention" windowId={FIELD_WINDOW_ID} />
       </div>
 
-      {/* Objects (One Frame FR-2, DK-D29): the old tray's SHEET, risen behind
-          the line by the line's create or B; its island is gone, so the
-          line's ⊕ is its only door until the pegboard replaces it (DK-13). */}
-      <WidgetTray
-        ce={ce}
-        registry={registry}
-        open={trayOpen}
-        onOpenChange={(open) => onSurfaceChange(open ? "objects" : foldSurface(surface, "objects"))}
-      />
-
       {/* THE CORNER (One Frame FR-4, DESIGN.md §8 "The Me menu", §10): the
           owner's face, the account's one door — the 44px button at 16 from
           the left and 24 from the foot, centred on the foot axis (y 734). Its
@@ -428,9 +420,20 @@ export function ChromeLayer({
       <SelectionBar
         surface={surface}
         onSurfaceChange={onSurfaceChange}
-        hidden={covered || trayOpen || docsOpen || showSettings}
+        hidden={covered || boardOut || docsOpen || showSettings}
         keys={keys}
       />
+
+      {/* THE PEGBOARD'S CHROME (DK-13; DESIGN.md §8 "The pegboard — Objects,
+          behind the line"): the board is the desk's own drawer, risen behind
+          the line by its create or B; over it, the filters in its clear header
+          band and the board's keyboard stop (⏎ lays a specimen at the view's
+          centre). Over the desk, under the frame (§10) — after the bar in the
+          document, so Tab reaches the filters, then the board. While the board
+          is out the selection bar hides (the desk is inert under it, plan
+          addendum 47); the selection persists, and the bar returns as the
+          board folds. */}
+      <Pegboard surface={surface} onSurfaceChange={onSurfaceChange} />
 
       {/* THE STATUS LINE (DESIGN.md §8, §10): the desk's notices under the
           head — a degraded desk's banner and its Reload (R18), a type the desk

@@ -256,9 +256,10 @@ export function FieldView({
   // THE FRAME'S OPEN SURFACE (One Frame FR-2/FR-3/FR-4, `frame/frame-surface.ts`):
   // its one owner. Objects, @'s list, the fields explorer, the zoom's menu and
   // the palette are one value, so any one folds the rest; held here because
-  // the recede derives from Objects and the explorer in this render.
+  // the recede derives from the explorer in this render. Objects — the desk's
+  // pegboard since DK-13 — recedes nothing: the stage behind it neither recedes
+  // nor dims (R14), the desk dimming under the board itself.
   const [surface, setSurfaceRaw] = useState<FrameSurface | null>(null);
-  const trayOpen = surface === "objects";
   const docsOpen = surface === "fields";
   const chrome = useChromeState();
   const appearanceSource = appearanceOverrideSource ?? EMPTY_APPEARANCE_SOURCE;
@@ -275,7 +276,7 @@ export function FieldView({
     },
     [chrome.setShowSettings],
   );
-  const sheetOpen = trayOpen || docsOpen || chrome.showSettings;
+  const sheetOpen = docsOpen || chrome.showSettings;
   // A covered view (One Frame FR-1) recedes the field too — and ChromeLayer
   // freezes it, since a cover covers (DESIGN.md §6).
   const covered = useCovered();
@@ -325,9 +326,10 @@ export function FieldView({
       {onPresentationContextChange !== undefined && (
         <PresentationContextReporter ce={ce} dark={dark} report={onPresentationContextChange} />
       )}
-      {/* The recede (reference design): the canvas eases to 0.98 while the
-          sheet is up. Only the wrapper transforms — the tray handoff
-          ratio-corrects, so the transient scale never skews engine picks.
+      {/* The recede (reference design): the canvas eases to 0.98 while a
+          sheet is up (the explorer, Settings — never the pegboard, DK-13).
+          Only the wrapper transforms, so the transient scale never skews
+          engine picks.
           KEYED by doc generation: a switch remounts the whole canvas stack
           (engine + the desk's layer and its device) — see the session.
           DK-9 (the plan's Phase 3 input (1)): the stage WAITS for the board —
@@ -357,7 +359,6 @@ export function FieldView({
       <ChromeLayer
         ce={ce}
         manager={manager}
-        registry={registry}
         hudMotion={hudMotion}
         docState={docState}
         surface={surface}

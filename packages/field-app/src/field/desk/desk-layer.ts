@@ -29,6 +29,13 @@ import { deskBlobs } from "./desk-blobs";
  */
 export const DESK_HOLD = { top: 116, band: 100, travelMs: 560 } as const;
 
+/**
+ * THE PEGBOARD'S FOOT (DESIGN.md §8 "The pegboard"; ICE I21 — `deskLayer({ tray: { foot } })`): the board's lay keeps 88
+ * at its foot — the line's — so the last row clears the line and the board's scroll still reaches it; the board itself
+ * runs to its edge behind the line.
+ */
+export const DESK_TRAY = { foot: 88 } as const;
+
 export const DESK_GRID: GridConfig = {
   fadeIn: GRID.fadeIn,
   mat: { ...DEFAULT_MAT_CONFIG, ruler: { ...DEFAULT_MAT_CONFIG.ruler, on: true, margin: 60 } },
@@ -60,7 +67,8 @@ export interface FieldDeskLayerOptions {
  * The layer the field mounts: the engine catalog's object types (the layer reads them — `objects`
  * adds none), the shipped hand (`text`), the document a note's typing commits into (`docs` — the
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
- * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), and no
+ * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), the
+ * pegboard's foot (`tray`, DK-13 — its lay clears the line), and no
  * further services yet (the kv service rides later). The room's other people stay ICE's cursors until DK-16 draws
  * VibeField's (`cursors` unset — ruling 3).
  */
@@ -74,6 +82,7 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     blobs: deskBlobs(),
     grid: DESK_GRID,
     hold: DESK_HOLD,
+    tray: DESK_TRAY,
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
   });

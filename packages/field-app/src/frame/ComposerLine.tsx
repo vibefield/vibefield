@@ -53,8 +53,11 @@ export interface ComposerLineViewProps {
   keys: ViewKeys;
   /** The views track — its left end. */
   track: ReactNode;
-  /** Objects is out (Canvas): create wears its ✕. */
+  /** Objects is out (Canvas): create wears its ✕ — the board's `open`, mirrored (DK-13). */
   objectsOpen?: boolean;
+  /** An object is in hand (Canvas): the desk refuses the board — the create is faint by ink, "Put it down first"
+   * (R14). */
+  createHeld?: boolean;
   /** Why the create act waits, said in its tooltip; null when it can act. */
   createWaits?: string | null;
   /** Who the draft goes to — the chip that leads it. */
@@ -73,7 +76,8 @@ export interface ComposerLineViewProps {
   lineRef?: Ref<HTMLDivElement>;
   editorRef?: Ref<HTMLDivElement>;
   editor?: LineEditorHandlers;
-  onCreate?: () => void;
+  /** The create was pressed — `keyboard`: by its keys (Enter or Space on it), not the pointer. */
+  onCreate?: (keyboard: boolean) => void;
   onSend?: () => void;
   onRemoveAim?: () => void;
 }
@@ -83,8 +87,12 @@ const CREATE_GLYPHS = ["plus", "start", "resume"] as const;
 /** @'s list, as the editor names the menu it controls while it is open. */
 const AT_MENU_ID = "vf-line-at-menu";
 
-function createTitle(act: CreateAct, open: boolean, waits: string | null): string {
+/** R14 — the create's word while an object is in hand: the desk refuses the board. */
+export const PUT_IT_DOWN_FIRST = "Put it down first";
+
+function createTitle(act: CreateAct, open: boolean, waits: string | null, held: boolean): string {
   if (open) return "Close  Esc";
+  if (held) return PUT_IT_DOWN_FIRST;
   if (waits !== null) return `${act.name} — ${waits}`;
   return act.key === null ? act.name : `${act.name}  ${act.key}`;
 }
@@ -126,6 +134,7 @@ export function ComposerLineView({
   keys,
   track,
   objectsOpen = false,
+  createHeld = false,
   createWaits = null,
   aim = null,
   seed = [],
@@ -143,6 +152,7 @@ export function ComposerLineView({
 }: ComposerLineViewProps): ReactElement {
   const act = createActOf(view, keys);
   const open = view === "canvas" && objectsOpen;
+  const held = view === "canvas" && !open && createHeld;
   const waits = open ? null : createWaits;
   const placeholder = linePlaceholder(aim);
   return (
@@ -154,12 +164,14 @@ export function ComposerLineView({
         className="vf-line-create"
         data-view={view}
         aria-label={open ? "Close the objects" : act.name}
-        title={createTitle(act, open, waits)}
+        title={createTitle(act, open, waits, held)}
         aria-keyshortcuts={open ? "Escape" : createShortcut(act)}
         {...(view === "canvas" ? { "aria-expanded": open } : {})}
-        {...(waits !== null ? { "aria-disabled": true } : {})}
-        onClick={() => {
-          if (waits === null) onCreate?.();
+        {...(waits !== null || held ? { "aria-disabled": true } : {})}
+        {...(held ? { "data-held": "true" } : {})}
+        onClick={(event) => {
+          // a click with no pointer behind it (detail 0) is the create's keys: Enter or Space on it
+          if (waits === null && !held) onCreate?.(event.detail === 0);
         }}
       >
         {CREATE_GLYPHS.map((glyph) => (

@@ -18,6 +18,7 @@ import type {
   PickResult,
   SelectionAnchor,
   ThemeName,
+  TrayAnchor,
 } from "@vibecook/ice/desk";
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
 import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
@@ -25,6 +26,7 @@ import { type BarStats, readBarStats } from "./bar/bar-stats";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 import type { ObjectWords } from "./desk-object-words";
+import { type BoardStats, readBoardStats } from "./pegboard/board-stats";
 
 // THE DESK MOUNTED NOW, and its DOOR (DK-3). One desk draws in the Canvas stage at a time — one layer
 // per committed engine generation, remounted by Reload (ruling 1) — and two readers want it outside
@@ -47,6 +49,9 @@ export interface MountedDesk {
   /** DK-9/DK-11 — the chrome's words for an object of a type on THIS mount (desk-object-words.ts): its human
    * name, and why the desk draws it as missing — read by the bar, its grown menu and the status line. */
   readonly words?: (type: string) => ObjectWords;
+  /** DK-13 — the types this mount was made WITHOUT (DK-9's off set, as read at its mount): their kinds are not drawn,
+   * so the pegboard offers neither them nor a category of nothing else (P3c). */
+  readonly off?: ReadonlySet<string>;
 }
 
 /** What the chrome says of a type when the mount names no words: the type, drawn. */
@@ -250,6 +255,27 @@ export interface VfDeskDoor {
   /** DK-11 — the selection's anchor as the desk last published it (`handle.selection.anchor()`) — what the bar is
    * placed from; null on a handle without the door. A read. */
   anchor(): SelectionAnchor | null;
+  /** DK-13 — the pegboard: the tray's anchor as the desk last published it (`handle.tray.anchor()` — the drawer as
+   * drawn, its header band, the hand, the categories), the board's scroll and its foot, the specimens as the desk DREW them in its
+   * last frame (ICE's own witness — each one's object on screen), and the pegboard chrome's counters; null on a handle
+   * without the door. A read. */
+  pegboard(): {
+    readonly anchor: TrayAnchor;
+    readonly scroll: number;
+    /** the board's foot inset as the desk drew it (I21 — the layer's `tray.foot`) */
+    readonly foot: number | null;
+    readonly specimens: readonly {
+      readonly type: string;
+      readonly label: string;
+      readonly object: {
+        readonly x0: number;
+        readonly y0: number;
+        readonly x1: number;
+        readonly y1: number;
+      };
+    }[];
+    readonly stats: BoardStats;
+  } | null;
 }
 
 const pickOf = (
@@ -331,6 +357,18 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     notices: statusLineSaid,
     bar: readBarStats,
     anchor: () => (handle as Partial<DeskLayerHandle>).selection?.anchor() ?? null,
+    pegboard: () => {
+      const tray = (handle as Partial<DeskLayerHandle>).tray;
+      if (tray === undefined) return null;
+      const state = tray.state();
+      return {
+        anchor: tray.anchor(),
+        scroll: state.frame?.scroll ?? tray.scroll(),
+        foot: state.frame?.foot ?? null,
+        specimens: state.specimens.map((s) => ({ type: s.type, label: s.label, object: s.object })),
+        stats: readBoardStats(),
+      };
+    },
     held: () => {
       const entity = heldEntity(engine.world);
       if (entity === undefined) return null;

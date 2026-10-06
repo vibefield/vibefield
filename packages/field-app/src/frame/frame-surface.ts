@@ -16,7 +16,8 @@
 // places", R5), the tenth value beside History's interim sheet.
 
 export type FrameSurface =
-  /** Objects — on this build the widget tray's sheet behind the line. */
+  /** Objects — the desk's pegboard behind the line (DK-13): the board out is this surface; the tray's `open` is
+   * the truth and this follows it (`field/desk/pegboard/Pegboard.tsx`). */
   | "objects"
   /** @'s list, grown upward from the caret. */
   | "at"

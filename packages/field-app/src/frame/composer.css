@@ -93,7 +93,8 @@
   transform: rotate(135deg);
 }
 
-/* A create that waits (History's Resume, until a session is chosen): faint
+/* A create that waits (History's Resume, until a session is chosen) — or
+   Objects while an object is in hand, "Put it down first" (DK-13, R14): faint
    by ink, as the Assistant's cell is, and still. */
 .vf-line-create[aria-disabled="true"],
 .vf-line-create[aria-disabled="true"]:hover {

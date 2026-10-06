@@ -340,8 +340,9 @@ export function emitViewKeyMarker(facts: ViewKeyFacts): void {
 export interface LineKeyFacts {
   key: string;
   view: string;
-  /** "opened" / "closed": Objects; "new-terminal": the deck was asked. */
-  outcome: "opened" | "closed" | "new-terminal";
+  /** "opened" / "closed": Objects; "refused": Objects while an object is in hand (DK-13, R14); "new-terminal": the
+   * deck was asked. */
+  outcome: "opened" | "closed" | "refused" | "new-terminal";
 }
 
 export function emitLineKeyMarker(facts: LineKeyFacts): void {

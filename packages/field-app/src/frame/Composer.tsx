@@ -15,6 +15,7 @@ import {
   useState,
 } from "react";
 import { emitLineKeyMarker } from "../development-console";
+import { type BoardLineDoor, useBoardLineDoor } from "../field/desk/pegboard/board-door";
 import { isNewTerminalChord, listenForProductChord } from "../field/product-chords";
 import { type FieldHost, getHost } from "../host";
 import {
@@ -45,7 +46,7 @@ import {
   sendNote,
   spliceDraft,
 } from "./draft";
-import type { FrameSurface } from "./frame-surface";
+import { type FrameSurface, foldSurface } from "./frame-surface";
 import {
   type HistoryLineDoor,
   type LineViewDoor,
@@ -80,7 +81,7 @@ export type ComposerHost = Pick<FieldHost, "screenshotCapture" | "screenshotStil
  * palette's row for the view's act runs the line's own — Objects on Canvas,
  * New terminal in Godview, with the line's note saying what came of it. */
 export interface LineActs {
-  create(): void;
+  create(keyboard?: boolean): void;
 }
 
 export interface ComposerProps {
@@ -99,6 +100,9 @@ export interface ComposerProps {
   godview?: LineViewDoor | null;
   /** What History lends the line (undefined: History's published door). */
   history?: HistoryLineDoor | null;
+  /** The pegboard, Objects on Canvas (DK-13; undefined: the board of the desk mounted now; null: no board — the
+   * create asks the owner for "objects" itself, as the catalog's fixture line does). */
+  objects?: BoardLineDoor | null;
   clipboard?: ClipboardStore;
   host?: ComposerHost;
   writeClipboard?: (text: string) => Promise<void>;
@@ -230,6 +234,7 @@ export function Composer({
   actsRef,
   godview,
   history,
+  objects,
   clipboard = clipboardStore,
   host: hostProp,
   writeClipboard = defaultWriteClipboard,
@@ -239,6 +244,10 @@ export function Composer({
   const door = godview === undefined ? published : godview;
   const publishedHistory = useHistoryLineDoor();
   const historyDoor = history === undefined ? publishedHistory : history;
+  const publishedBoard = useBoardLineDoor();
+  const board = objects === undefined ? publishedBoard : objects;
+  /** R14 — an object is in hand on Canvas: the desk refuses the board (the create faint, "Put it down first"). */
+  const boardRefused = board?.held === true && !board.open;
   const host = hostProp ?? getHost();
   const lineRef = useRef<HTMLDivElement>(null);
   const editorRef = useRef<HTMLDivElement>(null);
@@ -506,11 +515,25 @@ export function Composer({
     say(resumeNote(await historyDoor.resume()), "create");
   }, [historyDoor, say]);
 
-  const create = useCallback(() => {
-    if (view === "canvas") onSurfaceChange(surface === "objects" ? null : "objects");
-    else if (view === "godview") void newTerminal();
-    else if (view === "history") void resume();
-  }, [newTerminal, onSurfaceChange, resume, surface, view]);
+  // Objects on Canvas (DK-13; DESIGN.md §8 "The pegboard"): the create calls the board's `toggle()` and the frame's
+  // owner is told what came of it — the board out is the open surface "objects" (folding any other), shut it is folded.
+  // In hand the desk refuses it (R14). With no board (the catalog's fixture line) the create asks the owner itself.
+  const create = useCallback(
+    (keyboard = false) => {
+      if (view === "canvas") {
+        if (board === null) {
+          onSurfaceChange(surface === "objects" ? null : "objects");
+          return;
+        }
+        if (boardRefused) return;
+        const open = board.toggle(keyboard);
+        if (open === null) return;
+        onSurfaceChange(open ? "objects" : foldSurface(surface, "objects"));
+      } else if (view === "godview") void newTerminal();
+      else if (view === "history") void resume();
+    },
+    [board, boardRefused, newTerminal, onSurfaceChange, resume, surface, view],
+  );
 
   // The palette runs the view's act through the line (One Frame FR-3), so the
   // two doors to one act are one implementation and speak with one note.
@@ -522,22 +545,28 @@ export function Composer({
     };
   }, [actsRef, create]);
 
-  // B — Objects, on Canvas only, never while typing (DESIGN.md §10). Heard on
-  // the window's bubble phase, so a focused pane, a note being typed in or
-  // the draft itself keeps its own b.
+  // B — Objects, on Canvas only, never while typing, never under a cover
+  // (DESIGN.md §8 "The pegboard", §10), and refused while an object is in hand
+  // (R14). Heard on the window's bubble phase, so a focused pane, a note being
+  // typed in or the draft itself keeps its own b. A board B raises takes the
+  // focus (the keyboard asked for it): its specimens are the arrows' at once.
   useEffect(() => {
     if (!bindKeys) return;
     const onKey = (event: globalThis.KeyboardEvent): void => {
       if (event.key !== "b" && event.key !== "B") return;
       if (event.metaKey || event.ctrlKey || event.altKey || event.repeat) return;
       if (view !== "canvas" || isEditable(event.target)) return;
-      const next = surface === "objects" ? null : "objects";
-      onSurfaceChange(next);
-      emitLineKeyMarker({ key: "B", view, outcome: next === null ? "closed" : "opened" });
+      if (boardRefused) {
+        emitLineKeyMarker({ key: "B", view, outcome: "refused" });
+        return;
+      }
+      const wasOpen = board === null ? surface === "objects" : board.open;
+      create(true);
+      emitLineKeyMarker({ key: "B", view, outcome: wasOpen ? "closed" : "opened" });
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [bindKeys, onSurfaceChange, surface, view]);
+  }, [bindKeys, board, boardRefused, create, surface, view]);
 
   // ⌘T — Godview's New terminal: a product chord on the capture phase, so a
   // focused pane never sees it (ghostty's new_tab). Only in Godview: it is
@@ -686,7 +715,8 @@ export function Composer({
         view={view}
         keys={keys}
         track={track}
-        objectsOpen={surface === "objects"}
+        objectsOpen={board === null ? surface === "objects" : board.open}
+        createHeld={boardRefused}
         createWaits={createWaits}
         aim={aim}
         seed={seed}

@@ -11,6 +11,7 @@ import type { FrameView } from "@vibefield/contracts";
 import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import type { BoardLineDoor } from "../src/field/desk/pegboard/board-door";
 import { Composer } from "../src/frame/Composer";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import type { LineViewDoor } from "../src/frame/line-door";
@@ -27,6 +28,9 @@ let host: HTMLElement | null = null;
 let pane: HTMLElement | null = null;
 let surfaceNow: FrameSurface | null = null;
 let setViewNow: ((view: FrameView) => void) | null = null;
+let setHeldNow: ((held: boolean) => void) | null = null;
+let boardOpenNow = false;
+let toggles: boolean[] = [];
 
 function door(overrides: Partial<LineViewDoor> = {}): LineViewDoor {
   return {
@@ -65,6 +69,8 @@ function store(): ClipboardStore {
 
 interface Mount {
   door: LineViewDoor | null;
+  /** The board's door (DK-13): a fixture board when given — undefined, the published one (no desk here: none). */
+  board?: { held: boolean; open?: boolean };
   write: (text: string) => Promise<void>;
   clipboard: ClipboardStore;
 }
@@ -79,8 +85,26 @@ function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
     // FieldView's place: the one owner of the line's open surface.
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     const [shown, setShown] = useState<FrameView>(view);
+    const [boardOpen, setBoardOpen] = useState(options.board?.open ?? false);
+    const [held, setHeld] = useState(options.board?.held ?? false);
     surfaceNow = surface;
     setViewNow = setShown;
+    setHeldNow = setHeld;
+    boardOpenNow = boardOpen;
+    const objects: BoardLineDoor | undefined =
+      options.board === undefined
+        ? undefined
+        : {
+            open: boardOpen,
+            held,
+            toggle(keyboard) {
+              toggles.push(keyboard);
+              // the desk's own rule: refused in hand (R14)
+              if (held && !boardOpen) return false;
+              setBoardOpen(!boardOpen);
+              return !boardOpen;
+            },
+          };
     return (
       <Composer
         view={shown}
@@ -89,6 +113,7 @@ function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
         surface={surface}
         onSurfaceChange={setSurface}
         godview={used.door}
+        {...(objects === undefined ? {} : { objects })}
         clipboard={used.clipboard}
         host={{ screenshotStillUrl: (path) => `still://${path}` }}
         writeClipboard={used.write}
@@ -104,6 +129,8 @@ function mount(view: FrameView, options: Partial<Mount> = {}): Mount {
 
 beforeEach(() => {
   surfaceNow = null;
+  toggles = [];
+  boardOpenNow = false;
   setHost({
     logger: {} as RendererLogger,
     getConnection: () => Promise.resolve({ port: 1, token: "t" }),
@@ -454,5 +481,83 @@ describe("the interim send's paste (the deck's half)", () => {
     expect(document.activeElement).toBe(input);
     expect(pasteIntoPane(deck, "p2", "nowhere")).toBe(false);
     deck.remove();
+  });
+});
+
+describe('the create is the pegboard\'s door (DK-13; DESIGN.md §8 "The pegboard"; R14)', () => {
+  /** A press by the pointer: a click with a press behind it (detail 1) — `click()` alone is the keys' (detail 0). */
+  const pointerClick = (): void => {
+    act(() => {
+      create().dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+  };
+  it("calls the board's toggle and mirrors the board's open — the plus turned into ✕, Close  Esc", () => {
+    mount("canvas", { board: { held: false } });
+    pointerClick();
+    expect(toggles).toEqual([false]);
+    expect(boardOpenNow).toBe(true);
+    expect(surfaceNow).toBe("objects");
+    expect(create().getAttribute("aria-expanded")).toBe("true");
+    expect(create().getAttribute("title")).toBe("Close  Esc");
+    pointerClick();
+    expect(boardOpenNow).toBe(false);
+    expect(surfaceNow).toBeNull();
+    expect(create().getAttribute("aria-expanded")).toBe("false");
+  });
+
+  it("mirrors the BOARD's open, not the surface's: a board out before the owner hears of it wears its ✕", () => {
+    // the desk's own door opened it (a rig's), the frame's surface not yet told
+    mount("canvas", { board: { held: false, open: true } });
+    expect(surfaceNow).toBeNull();
+    expect(create().getAttribute("aria-expanded")).toBe("true");
+    expect(create().getAttribute("title")).toBe("Close  Esc");
+    typeText("@");
+    expect(surfaceNow).toBe("at");
+    expect(create().getAttribute("aria-expanded")).toBe("true");
+  });
+
+  it("asks the board for the focus when the keyboard raised it — B, or the create's own keys", () => {
+    mount("canvas", { board: { held: false } });
+    press(document.body, { key: "b" });
+    expect(toggles).toEqual([true]);
+    expect(surfaceNow).toBe("objects");
+    press(document.body, { key: "b" });
+    expect(toggles).toEqual([true, true]);
+    expect(surfaceNow).toBeNull();
+    // a click with no pointer behind it (Enter or Space on the create): detail 0
+    act(() => {
+      create().dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 0 }));
+    });
+    expect(toggles).toEqual([true, true, true]);
+    act(() => {
+      create().dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1 }));
+    });
+    expect(toggles).toEqual([true, true, true, false]);
+  });
+
+  it('is faint in hand — "Put it down first" — and neither its press nor B asks the board', () => {
+    mount("canvas", { board: { held: true } });
+    expect(create().getAttribute("title")).toBe("Put it down first");
+    expect(create().getAttribute("aria-disabled")).toBe("true");
+    expect(create().getAttribute("data-held")).toBe("true");
+    const said = vi.spyOn(console, "log").mockImplementation(() => undefined);
+    pointerClick();
+    press(document.body, { key: "b" });
+    expect(toggles).toEqual([]);
+    expect(surfaceNow).toBeNull();
+    expect(said.mock.calls.map((c) => String(c[0]))).toContain(
+      'LINE_KEY {"key":"B","view":"canvas","outcome":"refused"}',
+    );
+    said.mockRestore();
+    // put down: the create is the board's door again
+    act(() => setHeldNow?.(false));
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    expect(create().getAttribute("title")).toBe("Objects  B");
+  });
+
+  it("is never faint for the hand outside Canvas — Godview's create is its own", () => {
+    mount("godview", { board: { held: true } });
+    expect(create().hasAttribute("data-held")).toBe(false);
+    expect(create().getAttribute("title")).not.toBe("Put it down first");
   });
 });

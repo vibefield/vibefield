@@ -198,6 +198,7 @@ export function CanvasStage({
       mount,
       theme: themeRef.current,
       words,
+      off: mountedOff,
     };
     deskRef.current = desk;
     const unpublish = publishDesk(desk);

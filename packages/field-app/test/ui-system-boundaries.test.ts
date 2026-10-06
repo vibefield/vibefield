@@ -523,6 +523,8 @@ describe("UI system ownership boundaries", () => {
       "field/desk/bar/SelectionBarView.tsx",
       "field/desk/bar/KindGlyph.tsx",
       "frame/StatusLine.tsx",
+      "field/desk/pegboard/Pegboard.tsx",
+      "field/desk/pegboard/PegboardView.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -549,6 +551,7 @@ describe("UI system ownership boundaries", () => {
       "frame/menu.css",
       "frame/status-line.css",
       "field/desk/bar/selection-bar.css",
+      "field/desk/pegboard/pegboard.css",
       "terminal/mirror/mirror.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
@@ -691,5 +694,40 @@ describe("UI system ownership boundaries", () => {
       expect(text, file).not.toMatch(/\.vf-ui-segmented-thumb[^\n{]*\{/u);
       expect(text, file).not.toMatch(/className="[^"]*vf-ui-segmented-thumb/u);
     }
+  });
+  it("raises the pegboard behind the line — no recede, no backdrop, the bar hidden under it (DK-13, R14, addendum 47)", () => {
+    const chrome = source("field/ChromeLayer.tsx");
+    const field = source("field.tsx");
+    const css = source("field/desk/pegboard/pegboard.css");
+    // the pegboard's chrome over the desk, after the bar in the document (Tab: the filters, then the board)
+    expect(chrome).toMatch(
+      /<Pegboard surface=\{surface\} onSurfaceChange=\{onSurfaceChange\} \/>/u,
+    );
+    expect(chrome.indexOf("<Pegboard")).toBeGreaterThan(chrome.indexOf("<SelectionBar"));
+    // the selection bar hides while the board is out; the selection persists under it
+    expect(chrome).toMatch(/hidden=\{covered \|\| boardOut \|\| docsOpen \|\| showSettings\}/u);
+    // the stage neither recedes nor dims for Objects: only the explorer and Settings recede it
+    expect(field).toContain("const sheetOpen = docsOpen || chrome.showSettings;");
+    expect(field).not.toMatch(/surface === "objects"/u);
+    // chrome does not dim by night: the anchor's night is never read, nor the night's dimming
+    expect(source("field/desk/pegboard/Pegboard.tsx")).not.toMatch(/\.night\b/u);
+    expect(css).not.toContain("backdrop-dim");
+    // the track sunk at 55 % over a 12 px blur; segments 30 tall, padded 0 15, 13/500; the thumb's night hairline
+    expect(css).toContain(
+      "background: color-mix(in srgb, var(--vf-chrome-solid) 55%, transparent);",
+    );
+    expect(css).toContain("backdrop-filter: blur(12px);");
+    expect(css).toContain("inset 0 1px 3px rgb(0 0 0 / 16%)");
+    expect(css).toMatch(
+      /height: 30px;[^}]*padding: 0 15px;[^}]*font-size: 13px;[^}]*font-weight: 500;/su,
+    );
+    expect(css).toMatch(
+      /\.dark \.vf-pegboard-track \.vf-ui-segmented-thumb \{\s*border-color: var\(--vf-hairline-strong\);/u,
+    );
+    expect(css).toContain("box-shadow: 0 2px 6px rgb(0 0 0 / 12%);");
+    // reduced motion: the ring does not travel
+    expect(css).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[^@]*\.vf-pegboard-ring \{\s*transition: opacity 60ms ease-out;/su,
+    );
   });
 });
