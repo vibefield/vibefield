@@ -15,6 +15,7 @@ import {
   useState,
 } from "react";
 import { emitLineKeyMarker } from "../development-console";
+import { useReducedMotion } from "../field/desk/bar/bar-motion";
 import { type BoardLineDoor, useBoardLineDoor } from "../field/desk/pegboard/board-door";
 import { isNewTerminalChord, listenForProductChord } from "../field/product-chords";
 import { type FieldHost, getHost } from "../host";
@@ -32,14 +33,26 @@ import {
   atRow,
   atTakeable,
 } from "./at-list";
-import { AtMenuView, ComposerLineView, type LineNote } from "./ComposerLine";
+import {
+  AtMenuView,
+  ChipFlierView,
+  ComposerLineView,
+  chipTitle,
+  type LineNote,
+  stillSize,
+} from "./ComposerLine";
 import {
   atQueryBefore,
+  type ChipStill,
+  chipPlace,
+  type DeskChip,
   type DraftChip,
   type DraftPart,
   draftBlank,
   draftMessage,
+  draftOffset,
   draftSendable,
+  insertChipAt,
   type LineAim,
   normalizeDraft,
   type SendOutcome,
@@ -56,6 +69,16 @@ import {
   useGodviewLineDoor,
   useHistoryLineDoor,
 } from "./line-door";
+import {
+  currentSendSeq,
+  type LineSendTicket,
+  noteSend,
+  publishLineSend,
+  SEND_MOTION,
+  sendMotion,
+  setLineSendPhase,
+  type WindowBox,
+} from "./line-send";
 import type { ViewKeys } from "./views";
 
 // THE LINE'S CONTROLLER (DESIGN.md §8 "The line", §10; One Frame FR-2). It owns
@@ -169,13 +192,23 @@ export function readEditor(
 
 /** Where a place in the draft is, counted the way the caret moves: one per
  * character, one per chip. */
-function linearOffset(parts: readonly DraftPart[], index: number, offset: number): number {
-  let at = 0;
-  for (let i = 0; i < index; i++) {
-    const part = parts[i];
-    at += part === undefined ? 0 : part.kind === "text" ? part.text.length : 1;
+const linearOffset = draftOffset;
+
+/** A place counted that way, back as a run of text and an offset in it — null past the draft's end, or on a chip. */
+function caretOf(
+  parts: readonly DraftPart[],
+  linear: number,
+): { index: number; offset: number } | null {
+  let left = linear;
+  for (let index = 0; index < parts.length; index++) {
+    const part = parts[index];
+    if (part === undefined) continue;
+    if (part.kind === "text") {
+      if (left <= part.text.length) return { index, offset: left };
+      left -= part.text.length;
+    } else left -= 1;
   }
-  return at + offset;
+  return null;
 }
 
 /** Put the caret `linear` places into the editor (see `linearOffset`). */
@@ -225,6 +258,30 @@ function caretAtStart(editor: HTMLElement, chips: ReadonlyMap<string, DraftChip>
 
 let chipSeq = 0;
 
+/** A desk chip's still lives as a `blob:` URL in this renderer: let it go with its chip. */
+function releaseStill(chip: DraftChip): void {
+  if (chip.kind === "desk" && chip.still !== null) URL.revokeObjectURL(chip.still.url);
+}
+
+/** Send to…'s chip in flight (DK-14): its face, the selection it leaves (window px), the caret it lands at (the
+ * chip's left edge on the line's middle, window px), the record it notes into, and whether the draft was aimed. */
+interface Flight {
+  readonly chip: DeskChip;
+  readonly from: WindowBox;
+  readonly to: { readonly x: number; readonly y: number };
+  readonly seq: number;
+  readonly aimed: boolean;
+}
+
+/** A collapsed range's place on screen, or null where the browser lays none out (an empty editor). */
+function rangePoint(range: Range): { x: number; y: number } | null {
+  if (typeof range.getBoundingClientRect !== "function") return null;
+  const rect = range.getBoundingClientRect();
+  return rect.left === 0 && rect.top === 0 && rect.width === 0 && rect.height === 0
+    ? null
+    : { x: rect.left, y: rect.top + rect.height / 2 };
+}
+
 export function Composer({
   view,
   keys,
@@ -261,6 +318,19 @@ export function Composer({
   const [hot, setHot] = useState<string | null>(null);
   const [note, setNote] = useState<LineNote | null>(null);
   const notes = useRef(0);
+  // SEND TO… (DK-14): the caret the draft last held, the chip in flight and its flier, a chip that fades in instead
+  // (reduced motion), the @ typed and waiting for @'s list, and the timers the act runs on
+  const motion = sendMotion(useReducedMotion());
+  const caretMemo = useRef<number | null>(null);
+  const [flight, setFlight] = useState<Flight | null>(null);
+  const flierRef = useRef<HTMLDivElement>(null);
+  const arriving = useRef<string | null>(null);
+  const sending = useRef(false);
+  const awaitingList = useRef<number | null>(null);
+  const listing = useRef(false);
+  const sendTimers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const aimRef = useRef(aim);
+  aimRef.current = aim;
 
   const items = useClipboardItems(clipboard);
   const minis = useMemo<AtMini[]>(
@@ -312,7 +382,35 @@ export function Composer({
     pendingCaret.current = null;
     editor.focus();
     placeCaret(editor, caret);
+    // reduced motion (M6): Send to…'s chip lands with no flight and fades in at the caret
+    const fading = arriving.current;
+    arriving.current = null;
+    if (fading === null) return;
+    const chip = [...editor.querySelectorAll<HTMLElement>("[data-chip-id]")].find(
+      (el) => el.dataset["chipId"] === fading,
+    );
+    if (chip === undefined) return;
+    chip.style.opacity = "0";
+    void chip.getBoundingClientRect();
+    chip.style.transition = `opacity ${SEND_MOTION.fadeMs}ms ease`;
+    chip.style.opacity = "1";
   }, [revision]);
+
+  // the caret the draft last held, wherever the focus went since — Send to… sets its chip there (§8)
+  useEffect(() => {
+    const onSelection = (): void => {
+      const editor = editorRef.current;
+      const selection = editor?.ownerDocument.getSelection();
+      if (editor === null || editor === undefined || selection === null || selection === undefined)
+        return;
+      if (selection.rangeCount === 0 || !editor.contains(selection.anchorNode)) return;
+      const read = readEditor(editor, chips.current);
+      if (read.caret !== null)
+        caretMemo.current = linearOffset(read.parts, read.caret.index, read.caret.offset);
+    };
+    document.addEventListener("selectionchange", onSelection);
+    return () => document.removeEventListener("selectionchange", onSelection);
+  }, []);
 
   const closeAt = useCallback(() => {
     setAt(null);
@@ -363,6 +461,8 @@ export function Composer({
     if (editor === null) return;
     const read = readEditor(editor, chips.current);
     setParts(normalizeDraft(read.parts));
+    if (read.caret !== null)
+      caretMemo.current = linearOffset(read.parts, read.caret.index, read.caret.offset);
     const part = read.caret === null ? undefined : read.parts[read.caret.index];
     const typed =
       read.caret !== null && part?.kind === "text"
@@ -490,6 +590,7 @@ export function Composer({
     }
     say(sendNote(outcome), "send");
     if (outcome.kind === "copy-refused") return;
+    for (const chip of chips.current.values()) releaseStill(chip);
     chips.current.clear();
     // A paste hands the keyboard to the pane, where Return sends it.
     redraw([], outcome.kind === "pasted" ? null : 0);
@@ -648,12 +749,202 @@ export function Composer({
       if (selection === null || selection === undefined || selection.rangeCount === 0) return;
       const range = selection.getRangeAt(0);
       range.deleteContents();
-      range.insertNode(doc!.createTextNode(flat));
-      range.collapse(false);
+      const node = doc!.createTextNode(flat);
+      range.insertNode(node);
+      // the caret after what was put in, as typing leaves it (an @ typed there opens @'s list)
+      range.setStart(node, node.length);
+      range.collapse(true);
+      selection.removeAllRanges();
+      selection.addRange(range);
       onInput();
     },
     [onInput],
   );
+
+  // ── SEND TO… (DK-14; DESIGN.md §8 "Send to…"; R15, MC-D5, FC-D1) ─────────────────────────────────────────────────
+  // It ONLY DRAFTS: the desk's chrome hands the line ONE chip (line-send.ts) and the line sets it at the caret, the
+  // draft focused; a chip of the object's face flies there first from the selection on a straight line, 1.25 → 0.86
+  // over 560 ms on the island curve (reduced: no flight, the chip fades in at the caret); then the @ is TYPED — 180 ms
+  // after it lands — so @'s list opens exactly as typing opens it, the caret after the chip. A draft already aimed
+  // takes the chip with no @, and send arms. The bar steps aside meanwhile (the phase), back when the list folds.
+
+  const insertTextRef = useRef(insertText);
+  insertTextRef.current = insertText;
+
+  /** The draft focused, its caret put back where it last stood and on to the end of the word there (a chip never
+   * splits one); where that is on screen — the chip's left edge on the line's middle, window px. */
+  const focusCaret = (editor: HTMLElement): { x: number; y: number } => {
+    editor.focus({ preventScroll: true });
+    const read = readEditor(editor, chips.current);
+    const memo = caretMemo.current;
+    const where = memo === null ? null : caretOf(read.parts, memo);
+    placeCaret(editor, chipPlace(read.parts, where));
+    const box = editor.getBoundingClientRect();
+    const middle = box.top + box.height / 2;
+    const selection = editor.ownerDocument.getSelection();
+    const range = selection !== null && selection.rangeCount > 0 ? selection.getRangeAt(0) : null;
+    const point = range === null ? null : rangePoint(range);
+    return { x: point?.x ?? box.left, y: middle };
+  };
+
+  /** The @ typed after the chip — as a person types it, so @'s list opens as typing opens it (FC-D1). */
+  const typeAt = (seq: number): void => {
+    const editor = editorRef.current;
+    if (editor === null) {
+      setLineSendPhase("idle");
+      return;
+    }
+    editor.focus({ preventScroll: true });
+    awaitingList.current = seq;
+    insertTextRef.current?.("@");
+    noteSend(seq, { at: { typed: performance.now() } });
+    // the list opens at a word's start — always, here; were it not to, the act ends rather than hold the bar away
+    sendTimers.current.push(
+      setTimeout(() => {
+        if (awaitingList.current !== seq) return;
+        awaitingList.current = null;
+        setLineSendPhase("idle");
+      }, 1_000),
+    );
+  };
+
+  /** The chip lands: set at the caret (where it stands now, else where it last stood), the caret after it; then the
+   * @, unless the draft was aimed. */
+  const land = (id: string, seq: number, aimed: boolean, fade: boolean): void => {
+    setFlight(null);
+    sending.current = false;
+    const editor = editorRef.current;
+    const chip = chips.current.get(id);
+    if (editor === null || chip === undefined) {
+      setLineSendPhase("idle");
+      return;
+    }
+    const read = readEditor(editor, chips.current);
+    const memo = caretMemo.current;
+    const where = read.caret ?? (memo === null ? null : caretOf(read.parts, memo));
+    const next = insertChipAt(read.parts, where, chip);
+    if (fade) arriving.current = id;
+    redraw(next.parts, next.caret);
+    noteSend(seq, { at: { landed: performance.now() } });
+    if (aimed) {
+      setLineSendPhase("idle");
+      return;
+    }
+    sendTimers.current.push(setTimeout(() => typeAt(seq), motion.atAfterMs));
+  };
+
+  /** The still the desk's capture door gave, attached to its chip wherever the chip is now (in flight, or set). */
+  const attachStill = (id: string, seq: number, still: ChipStill | null): void => {
+    noteSend(seq, {
+      still:
+        still === null ? null : { width: still.width, height: still.height, bytes: still.bytes },
+      at: { captured: performance.now() },
+    });
+    if (still === null) return;
+    const chip = chips.current.get(id);
+    if (chip === undefined || chip.kind !== "desk") {
+      URL.revokeObjectURL(still.url); // the chip went before its still came
+      return;
+    }
+    const next: DeskChip = { ...chip, still };
+    chips.current.set(id, next);
+    const element = [
+      ...(editorRef.current?.querySelectorAll<HTMLElement>("[data-chip-id]") ?? []),
+    ].find((el) => el.dataset["chipId"] === id);
+    if (element !== undefined) {
+      element.dataset["still"] = stillSize(still);
+      element.title = chipTitle(next);
+    }
+  };
+
+  /** The line's side of the door: take the chip, unless another is still landing. */
+  const receive = (chip: DeskChip, from: WindowBox): LineSendTicket | null => {
+    const editor = editorRef.current;
+    if (sending.current || editor === null) return null;
+    sending.current = true;
+    const seq = currentSendSeq();
+    const aimed = aimRef.current !== null;
+    chips.current.set(chip.id, chip);
+    const to = focusCaret(editor);
+    setLineSendPhase("flying");
+    noteSend(seq, { taken: true, aimed, reduced: !motion.flies });
+    if (motion.flies) setFlight({ chip, from, to, seq, aimed });
+    else land(chip.id, seq, aimed, true);
+    return { attach: (still) => attachStill(chip.id, seq, still) };
+  };
+  const receiveRef = useRef(receive);
+  receiveRef.current = receive;
+  const landRef = useRef(land);
+  landRef.current = land;
+
+  useEffect(() => {
+    const unpublish = publishLineSend({
+      receive: (chip, from) => receiveRef.current(chip, from),
+    });
+    return () => {
+      unpublish();
+      for (const t of sendTimers.current) clearTimeout(t);
+      sendTimers.current = [];
+      if (sending.current || listing.current || awaitingList.current !== null)
+        setLineSendPhase("idle");
+    };
+  }, []);
+
+  // THE FLIGHT: one transition on the flier — the transform from the selection's middle at 1.25 to the caret at 0.86,
+  // its fade in as it leaves — written imperatively (M3); it lands on its own `transitionend`, or a beat past its
+  // length should the transition not run (a hidden page).
+  useLayoutEffect(() => {
+    const el = flierRef.current;
+    const line = lineRef.current;
+    if (flight === null || el === null || line === null) return;
+    const box = (
+      (line.offsetParent ?? line.parentElement) as HTMLElement | null
+    )?.getBoundingClientRect();
+    const left = box?.left ?? 0;
+    const top = box?.top ?? 0;
+    const w = el.offsetWidth;
+    const h = el.offsetHeight;
+    const fromX = (flight.from.x0 + flight.from.x1) / 2 - left - w / 2;
+    const fromY = (flight.from.y0 + flight.from.y1) / 2 - top - h / 2;
+    const toX = flight.to.x - left;
+    const toY = flight.to.y - top - h / 2;
+    el.style.transition = "none";
+    el.style.opacity = "0";
+    el.style.transform = `translate(${fromX.toFixed(1)}px, ${fromY.toFixed(1)}px) scale(${motion.fromScale})`;
+    void el.getBoundingClientRect();
+    el.style.transition = `transform ${motion.flightMs}ms var(--vf-ease-island), opacity ${motion.flierFadeMs}ms ease`;
+    el.style.opacity = "1";
+    el.style.transform = `translate(${toX.toFixed(1)}px, ${toY.toFixed(1)}px) scale(${motion.toScale})`;
+    let done = false;
+    const finish = (): void => {
+      if (done) return;
+      done = true;
+      landRef.current(flight.chip.id, flight.seq, flight.aimed, false);
+    };
+    const onEnd = (event: TransitionEvent): void => {
+      if (event.target === el && event.propertyName === "transform") finish();
+    };
+    el.addEventListener("transitionend", onEnd);
+    const timer = setTimeout(finish, motion.flightMs + motion.graceMs);
+    return () => {
+      el.removeEventListener("transitionend", onEnd);
+      clearTimeout(timer);
+    };
+  }, [flight]);
+
+  // the phase follows @'s list: the @ Send to… typed opened it (`listing`); folded, the act is over (`idle`)
+  useEffect(() => {
+    if (surface === "at" && awaitingList.current !== null) {
+      awaitingList.current = null;
+      listing.current = true;
+      setLineSendPhase("listing");
+      return;
+    }
+    if (surface !== "at" && listing.current) {
+      listing.current = false;
+      setLineSendPhase("idle");
+    }
+  }, [surface]);
 
   const onPaste = useCallback(
     (event: ClipboardEvent<HTMLDivElement>) => {
@@ -693,6 +984,8 @@ export function Composer({
       const read = readEditor(editor, chips.current);
       const index = read.parts.findIndex((part) => part.kind === "chip" && part.chip.id === id);
       if (index === -1) return;
+      const gone = chips.current.get(id);
+      if (gone !== undefined) releaseStill(gone);
       chips.current.delete(id);
       redraw(
         normalizeDraft(read.parts.filter((_, i) => i !== index)),
@@ -744,6 +1037,7 @@ export function Composer({
       {atOpen && at !== null ? (
         <AtMenuView list={list} hot={hotId} left={at.left} onHot={setHot} onTake={take} />
       ) : null}
+      {flight === null ? null : <ChipFlierView chip={flight.chip} flierRef={flierRef} />}
     </>
   );
 }

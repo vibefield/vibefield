@@ -13,8 +13,15 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { BoardLineDoor } from "../src/field/desk/pegboard/board-door";
 import { Composer } from "../src/frame/Composer";
+import type { DeskChip } from "../src/frame/draft";
 import type { FrameSurface } from "../src/frame/frame-surface";
 import type { LineViewDoor } from "../src/frame/line-door";
+import {
+  type LineSendTicket,
+  lineSendPhase,
+  sendToLine,
+  setLineSendPhase,
+} from "../src/frame/line-send";
 import { ViewsTrackView } from "../src/frame/ViewsTrack";
 import { pasteIntoPane } from "../src/godview/line-panes";
 import { type FieldHost, setHost } from "../src/host";
@@ -559,5 +566,208 @@ describe('the create is the pegboard\'s door (DK-13; DESIGN.md §8 "The pegboard
     mount("godview", { board: { held: true } });
     expect(create().hasAttribute("data-held")).toBe(false);
     expect(create().getAttribute("title")).not.toBe("Put it down first");
+  });
+});
+
+// ── DK-14 — SEND TO… INTO THE LINE (DESIGN.md §8 "Send to…"; R15; FC-D1) ────────────────────────────────────────────
+// The desk's chrome hands the line ONE chip (`sendToLine`); the line sets it at the caret, the draft focused, after a
+// flight from the selection (1.25 → 0.86, 560 ms on the island curve) — or, under reduced motion, a fade at the caret —
+// then TYPES the @ 180 ms after it lands so @'s list opens as typing opens it, the caret after the chip. A draft already
+// aimed takes it with no @ and send arms. The phase the bar steps aside for follows the list.
+describe("Send to… lands ONE chip in the draft (DK-14)", () => {
+  const FROM = { x0: 400, y0: 300, x1: 600, y1: 440 };
+  const deskChip = (over: Partial<DeskChip> = {}): DeskChip => ({
+    id: `dk14-${Math.random().toString(36).slice(2, 8)}`,
+    kind: "desk",
+    label: "Ship the desk by Friday,…",
+    glyph: "snippets",
+    paper: "#f6e7a9",
+    ink: "#264a9a",
+    objects: [
+      { type: "desk.note", name: "Note", text: "Ship the desk by Friday, then the covers" },
+    ],
+    still: null,
+    ...over,
+  });
+  const withoutPaper = ({ paper: _p, ink: _i, ...rest }: DeskChip): DeskChip => rest;
+  const flier = (): HTMLElement | null => host?.querySelector(".vf-line-flier") ?? null;
+  const chips = (): HTMLElement[] => [
+    ...(host?.querySelectorAll<HTMLElement>('.vf-line-input .vf-line-chip[data-chip="desk"]') ??
+      []),
+  ];
+
+  afterEach(() => {
+    setLineSendPhase("idle");
+  });
+
+  it("flies the chip's face to the caret, sets it there, and TYPES the @ 180 ms after it lands — @'s list open, the caret after it", () => {
+    vi.useFakeTimers();
+    mount("canvas");
+    typeText("look at ");
+    act(() => editor().blur());
+    let ticket: LineSendTicket | null = null;
+    act(() => {
+      ticket = sendToLine(deskChip(), FROM);
+    });
+    expect(ticket).not.toBeNull();
+    expect(lineSendPhase()).toBe("flying");
+    // the draft focused at once; the flier carries the chip's own face
+    expect(document.activeElement).toBe(editor());
+    const f = flier();
+    expect(f?.querySelector(".vf-line-chip")?.getAttribute("data-glyph")).toBe("snippets");
+    expect(f?.textContent).toBe("Ship the desk by Friday,…");
+    expect(f?.style.transition).toBe("transform 560ms var(--vf-ease-island), opacity 140ms ease");
+    expect(f?.style.transform).toMatch(/scale\(0\.86\)$/u);
+    expect(chips()).toHaveLength(0);
+    // no transitions run here: the landing is taken a beat past the flight's 560
+    act(() => vi.advanceTimersByTime(659));
+    expect(chips()).toHaveLength(0);
+    act(() => vi.advanceTimersByTime(1));
+    expect(flier()).toBeNull();
+    expect(chips()).toHaveLength(1);
+    expect(editor().textContent).toBe("look at Ship the desk by Friday,… ");
+    expect(surfaceNow).toBeNull();
+    act(() => vi.advanceTimersByTime(179));
+    expect(host?.querySelector(".vf-at-menu")).toBeNull();
+    act(() => vi.advanceTimersByTime(1));
+    // the @, typed: @'s list open as typing opens it, the line's own surface
+    expect(surfaceNow).toBe("at");
+    expect(host?.querySelector(".vf-at-menu")).not.toBeNull();
+    expect(editor().textContent).toBe("look at Ship the desk by Friday,… @");
+    expect(lineSendPhase()).toBe("listing");
+    // the caret after the chip and its @
+    const selection = window.getSelection();
+    const landed = chips()[0] as HTMLElement;
+    const between = document.createRange();
+    between.setStartAfter(landed);
+    between.setEnd(selection?.anchorNode as Node, selection?.anchorOffset ?? 0);
+    expect(between.toString()).toBe(" @");
+    const rest = document.createRange();
+    rest.selectNodeContents(editor());
+    rest.setStart(selection?.anchorNode as Node, selection?.anchorOffset ?? 0);
+    expect(rest.toString()).toBe("");
+    // the list folds: the act is over, the bar may come back
+    press(editor(), { key: "Escape" });
+    expect(surfaceNow).toBeNull();
+    expect(lineSendPhase()).toBe("idle");
+  });
+
+  it("wears a note's paper and ink, and carries its words in a message — the still's size once it comes", async () => {
+    vi.useFakeTimers();
+    const used = mount("canvas");
+    let ticket: LineSendTicket | null = null;
+    act(() => {
+      ticket = sendToLine(deskChip({ id: "dk14-note" }), FROM);
+    });
+    // the still comes while it flies
+    act(() =>
+      (ticket as LineSendTicket | null)?.attach({
+        url: "blob:x",
+        width: 376,
+        height: 276,
+        bytes: 900,
+      }),
+    );
+    act(() => vi.advanceTimersByTime(660));
+    const [chip] = chips();
+    expect(chip?.hasAttribute("data-paper")).toBe(true);
+    expect(chip?.style.getPropertyValue("--vf-chip-paper")).toBe("#f6e7a9");
+    expect(chip?.style.getPropertyValue("--vf-chip-ink")).toBe("#264a9a");
+    expect(chip?.getAttribute("data-still")).toBe("376 × 276");
+    expect(chip?.getAttribute("title")).toBe(
+      'Note: "Ship the desk by Friday, then the covers" · a still 376 × 276',
+    );
+    act(() => vi.advanceTimersByTime(180));
+    press(editor(), { key: "Escape" });
+    vi.useRealTimers();
+    await act(async () => q<HTMLButtonElement>(".vf-line-send").click());
+    expect(used.write).toHaveBeenCalledWith('Note: "Ship the desk by Friday, then the covers" @');
+  });
+
+  it("a still that comes after the landing is set on the chip where it stands", () => {
+    vi.useFakeTimers();
+    mount("canvas");
+    let ticket: LineSendTicket | null = null;
+    act(() => {
+      ticket = sendToLine(
+        { ...withoutPaper(deskChip()), id: "dk14-late", label: "Clock", glyph: null },
+        FROM,
+      );
+    });
+    act(() => vi.advanceTimersByTime(660));
+    expect(chips()[0]?.hasAttribute("data-still")).toBe(false);
+    act(() =>
+      (ticket as LineSendTicket | null)?.attach({
+        url: "blob:y",
+        width: 200,
+        height: 100,
+        bytes: 9,
+      }),
+    );
+    expect(chips()[0]?.getAttribute("data-still")).toBe("200 × 100");
+    expect(chips()[0]?.getAttribute("data-glyph")).toBe("none");
+    expect(chips()[0]?.querySelector(":scope > svg")).toBeNull();
+  });
+
+  it("takes no second chip while one is still landing", () => {
+    vi.useFakeTimers();
+    mount("canvas");
+    act(() => {
+      sendToLine(deskChip(), FROM);
+    });
+    let second: LineSendTicket | null = null;
+    act(() => {
+      second = sendToLine(deskChip(), FROM);
+    });
+    expect(second).toBeNull();
+    act(() => vi.advanceTimersByTime(660));
+    expect(chips()).toHaveLength(1);
+  });
+
+  it("an AIMED draft takes the chip with no @ — and send arms", () => {
+    vi.useFakeTimers();
+    mount("godview");
+    typeText("@");
+    press(editor(), { key: "Enter" });
+    expect(q('.vf-line-chip[data-chip="aim"]').textContent).toContain("vibe-field");
+    act(() => setViewNow?.("canvas"));
+    expect(q(".vf-line-send").hasAttribute("data-armed")).toBe(false);
+    act(() => {
+      sendToLine(deskChip(), FROM);
+    });
+    act(() => vi.advanceTimersByTime(660));
+    expect(chips()).toHaveLength(1);
+    expect(lineSendPhase()).toBe("idle");
+    act(() => vi.advanceTimersByTime(1_000));
+    expect(editor().textContent).not.toContain("@");
+    expect(surfaceNow).toBeNull();
+    expect(q(".vf-line-send").getAttribute("data-armed")).toBe("true");
+  });
+
+  it("REDUCED MOTION: no flight — the chip fades in at the caret, the @ 90 ms after (M6)", () => {
+    vi.useFakeTimers();
+    const matchMedia = window.matchMedia;
+    window.matchMedia = ((query: string) => ({
+      matches: query === "(prefers-reduced-motion: reduce)",
+      media: query,
+      addEventListener: () => undefined,
+      removeEventListener: () => undefined,
+    })) as unknown as typeof window.matchMedia;
+    try {
+      mount("canvas");
+      act(() => {
+        sendToLine(deskChip(), FROM);
+      });
+      expect(flier()).toBeNull();
+      expect(chips()).toHaveLength(1);
+      expect(chips()[0]?.style.transition).toBe("opacity 120ms ease");
+      expect(chips()[0]?.style.opacity).toBe("1");
+      act(() => vi.advanceTimersByTime(89));
+      expect(surfaceNow).toBeNull();
+      act(() => vi.advanceTimersByTime(1));
+      expect(surfaceNow).toBe("at");
+    } finally {
+      window.matchMedia = matchMedia;
+    }
   });
 });

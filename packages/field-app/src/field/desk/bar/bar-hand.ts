@@ -28,7 +28,8 @@ export type HandRun = "page" | "ink" | "tool";
 export type HandLook = "dot" | "mode" | "action" | "faint";
 
 export type HandCell =
-  /** Send to… — the bar's one word, as on the bar over a selection; DK-14 makes it draft (here it waits). */
+  /** Send to… — the bar's one word, as on the bar over a selection: the object IN HAND drafted into the line as ONE
+   * chip, the object staying in hand (DK-14; plan addendum (50)). */
   | { readonly kind: "send"; readonly label: string; readonly tip: string }
   | { readonly kind: "rule"; readonly at: "lead" | "end" }
   | {
@@ -78,7 +79,7 @@ export const DONE_TIP = tipOf("Put it down", "Esc");
  */
 export function handCells(held: Pick<HeldAnchor, "tools" | "active" | "readout">): HandCell[] {
   const cells: HandCell[] = [
-    { kind: "send", label: "Send to…", tip: "Send to… — next" },
+    { kind: "send", label: "Send to…", tip: "Send to…" },
     { kind: "rule", at: "lead" },
   ];
   let last: HandRun | undefined;

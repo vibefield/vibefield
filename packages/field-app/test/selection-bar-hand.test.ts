@@ -271,7 +271,7 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
     expect(said(handCells({ tools: [], active: "", readout: "" }))).toEqual(said(none));
     expect(none.at(-1)).toEqual({ kind: "done", label: "Done", tip: "Put it down  Esc" });
     expect(DONE_TIP).toBe("Put it down  Esc");
-    expect(none[0]).toEqual({ kind: "send", label: "Send to…", tip: "Send to… — next" });
+    expect(none[0]).toEqual({ kind: "send", label: "Send to…", tip: "Send to…" });
   });
 
   it("keys the slots by everything the bar says of them — a swatch's change is a change, the same slots never are", () => {

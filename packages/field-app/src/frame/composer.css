@@ -139,7 +139,9 @@
   color: var(--vf-text-primary);
   font-size: 14px;
   line-height: 24px;
-  white-space: nowrap;
+  /* one line, its spaces kept as typed: a chip's space after it is a real
+     space, never collapsed away when the next character comes (DK-14) */
+  white-space: pre;
   caret-color: var(--vf-select);
   outline: none;
   cursor: text;
@@ -195,6 +197,49 @@
   box-shadow: inset 0 0 0 1px var(--vf-hairline-strong);
 }
 
+/* Send to…'s chip (DK-14; §8 "Send to…"; R15): the selection from the desk.
+   A kind's name, several's `package` "N objects", a missing face's type: the
+   ready fill (the foreground at 8%) in primary ink, ringed in the strong
+   hairline. A NOTE wears its paper and its ink — the palette's colours, handed
+   in as `--vf-chip-paper` / `--vf-chip-ink` — ringed in its ink at 14%. */
+.vf-line-chip[data-chip="desk"] {
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+  box-shadow: inset 0 0 0 1px var(--vf-hairline-strong);
+}
+
+.vf-line-chip[data-chip="desk"][data-paper] {
+  color: var(--vf-chip-ink, var(--vf-text-primary));
+  background: var(--vf-chip-paper);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--vf-chip-ink, var(--vf-foreground)) 14%, transparent);
+}
+
+/* …and IN FLIGHT: the same face, carried from the selection to the caret by
+   the line's controller (Composer.tsx) — 1.25 → 0.86 on a straight line over
+   560ms on the island curve, written imperatively as a transition (M3, M4).
+   Above the line and @'s list; never a target. */
+.vf-line-flier {
+  position: absolute;
+  z-index: 64;
+  top: 0;
+  left: 0;
+  pointer-events: none;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+
+.vf-line-flier > .vf-line-chip {
+  box-shadow:
+    inset 0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island);
+}
+
+.vf-line-flier > .vf-line-chip[data-paper] {
+  box-shadow:
+    inset 0 0 0 1px color-mix(in srgb, var(--vf-chip-ink, var(--vf-foreground)) 14%, transparent),
+    var(--vf-shadow-island);
+}
+
 .vf-line-chip-x {
   display: grid;
   width: 14px;
@@ -214,6 +259,11 @@
 .vf-line-chip:hover .vf-line-chip-x,
 .vf-line-chip-x:focus-visible {
   opacity: 1;
+}
+
+/* a note's chip: its × in its own ink */
+.vf-line-chip[data-chip="desk"][data-paper] .vf-line-chip-x {
+  color: color-mix(in srgb, var(--vf-chip-ink, var(--vf-foreground)) 60%, transparent);
 }
 
 /* ── MIC (waiting: no dictation door on the desktop) and SEND ───────────── */

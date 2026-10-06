@@ -11,9 +11,11 @@ import {
   useSyncExternalStore,
 } from "react";
 import { type FrameSurface, foldSurface } from "../../../frame/frame-surface";
+import { useLineSendPhase } from "../../../frame/line-send";
 import { inHand } from "../desk-anchor";
 import { currentDesk, type MountedDesk, plainWords, subscribeDesk } from "../desk-door";
 import type { ObjectWords } from "../desk-object-words";
+import { sendSelection } from "../send/send-to";
 import { type BarActId, COMMENT_PAD_TYPE, runBarAct } from "./bar-acts";
 import { offScreen } from "./bar-geometry";
 import { type HandCell, type HeldSlot, handCells, slotsKey } from "./bar-hand";
@@ -52,6 +54,11 @@ import { type SelectionBarHandle, SelectionBarView } from "./SelectionBarView";
 // under the head whatever the selection's box; each tool used through `ops.useHeldTool(id)`, Done through
 // `ops.putDown()`. While the object flies home (`landing`) the bar steps aside, and comes back over it 200 ms after it
 // lands, as the bar over the selection again.
+//
+// SEND TO… (DK-14; §8 "Send to…"): its three doors — the bar's pill, the grown menu's row, the pill in hand — run ONE
+// act (send/send-to.ts): the selection, or the object in hand, drafted into the line as one chip. Over a selection the
+// bar steps aside while the act is on — the chip flying and @'s list open from it — and comes back as the list folds
+// (`useLineSendPhase`); the tools in hand stay under the head (plan addendum (50)).
 
 export interface SelectionBarProps {
   /** The frame's open surface and its one owner's setter (FR-4). */
@@ -274,11 +281,15 @@ function SelectionBarOn({
   }, [source, desk]);
 
   const shown = !hidden && (facts.inHand || (facts.count > 0 && facts.onScreen));
+  // Send to… on: over a selection the bar stands aside (its brackets are being hidden for the still, then the list is
+  // open); in hand the tools stay
+  const sending = useLineSendPhase() !== "idle" && !facts.inHand;
+  const stepAside = facts.stepAside || sending;
 
   // R5: the menu closes on a gesture and when the bar goes — into the hand too
   useEffect(() => {
-    if (open && (!shown || facts.stepAside || facts.inHand)) fold();
-  }, [open, shown, facts.stepAside, facts.inHand, fold]);
+    if (open && (!shown || stepAside || facts.inHand)) fold();
+  }, [open, shown, stepAside, facts.inHand, fold]);
 
   // R5: a change of selection closes it — but a right-click's own selection is the one it grows for (R26)
   const keySeen = useRef(facts.key);
@@ -346,25 +357,29 @@ function SelectionBarOn({
   const onCell = useCallback(
     (cell: BarCell): void => {
       const locked = factsRef.current.locked;
-      if (cell.kind === "act") runBarAct(engine, `act:${cell.id}`, locked);
+      if (cell.kind === "send") sendSelection(desk, "bar");
+      else if (cell.kind === "act") runBarAct(engine, `act:${cell.id}`, locked);
       else if (cell.kind === "desk" && cell.act !== "more") runBarAct(engine, cell.act, locked);
     },
-    [engine],
+    [desk, engine],
   );
   const onRow = useCallback(
     (row: MenuRow): void => {
       if (row.waits !== undefined) return;
-      runBarAct(engine, row.id as BarActId, factsRef.current.locked);
+      if (row.id === "send") sendSelection(desk, "menu");
+      else runBarAct(engine, row.id as BarActId, factsRef.current.locked);
     },
-    [engine],
+    [desk, engine],
   );
-  // a tool in hand used through the engine — a mode taken up, an action run — or Done, the object put down
+  // a tool in hand used through the engine — a mode taken up, an action run — Done, the object put down, or Send to…,
+  // the object drafted while it stays in hand
   const onHand = useCallback(
     (cell: HandCell): void => {
       if (cell.kind === "tool") engine.ops.useHeldTool(cell.id);
       else if (cell.kind === "done") engine.ops.putDown();
+      else if (cell.kind === "send") sendSelection(desk, "hand");
     },
-    [engine],
+    [desk, engine],
   );
 
   return (
@@ -374,7 +389,7 @@ function SelectionBarOn({
       groups={groups}
       eyebrow={eyebrow}
       shown={shown}
-      stepAside={facts.stepAside}
+      stepAside={stepAside}
       open={open && shown}
       onOpenChange={onOpenChange}
       onCell={onCell}

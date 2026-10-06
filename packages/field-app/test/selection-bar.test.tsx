@@ -26,7 +26,9 @@ import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { deskObjects, type MountedDesk, publishDesk } from "../src/field/desk/desk-door";
 import type { ObjectWords } from "../src/field/desk/desk-object-words";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
+import type { DeskChip } from "../src/frame/draft";
 import type { FrameSurface } from "../src/frame/frame-surface";
+import { lastSend, publishLineSend, setLineSendPhase } from "../src/frame/line-send";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -157,6 +159,10 @@ beforeEach(async () => {
       pick,
       canvas,
       status: () => ({ state: "ready" }),
+      // DK-14: the capture door and the frame counters Send to…'s still reads (no still here: undefined)
+      capture: vi.fn(async () => undefined),
+      perf: () => ({ frames: 0 }),
+      dirty: () => false,
     } as unknown as MountedDesk["handle"],
     generation: 1,
     mount: 0,
@@ -371,8 +377,10 @@ describe("the bar grown — More, and right-click (DK-11)", () => {
     mount();
     const front = vi.spyOn(ce.ops, "reorder");
     act(() => cell("more").click());
-    // grown up (the default room) the list reads bottom-up: ↑ walks away from the bar — comment, then (Send to…
-    // waits, so it is no stop) Duplicate, then Bring to front
+    // grown up (the default room) the list reads bottom-up: ↑ walks away from the bar — comment, then Send to…
+    // (DK-14: a row like any other), then Duplicate, then Bring to front
+    key("ArrowUp", document.body);
+    expect(bar().querySelector("[data-hot]")?.getAttribute("data-row")).toBe("send");
     key("ArrowUp", document.body);
     key("ArrowUp", document.body);
     expect(bar().querySelector("[data-hot]")?.getAttribute("data-row")).toBe("front");
@@ -682,9 +690,7 @@ describe("the tools in hand (DK-12)", () => {
     const done = handRow().querySelector<HTMLElement>('[data-act="done"]');
     expect(done?.textContent).toBe("Done");
     expect(done?.getAttribute("title")).toBe("Put it down  Esc");
-    expect(handRow().querySelector('[data-act="send"]')?.getAttribute("title")).toBe(
-      "Send to… — next",
-    );
+    expect(handRow().querySelector('[data-act="send"]')?.getAttribute("title")).toBe("Send to…");
     // the mode in hand moved: the ring and the press follow it
     act(() => selection.publish({ held: held({ active: "pen:red" }) }));
     expect(tool("pen:red").getAttribute("aria-pressed")).toBe("true");
@@ -843,5 +849,116 @@ describe("the tools in hand (DK-12)", () => {
     } finally {
       window.matchMedia = matchMedia;
     }
+  });
+});
+
+// ── DK-14 — SEND TO…'s THREE DOORS (DESIGN.md §8 "Send to…"; R25; plan addendum (50)) ───────────────────────────────
+// The bar's pill, the grown menu's row and the pill in hand each run ONE act: the selection — or the object in hand —
+// handed to the line as ONE chip (a stand-in line here takes it). Over a selection the bar steps aside while the act is
+// on and comes back as it ends; in hand the tools stay under the head and the object stays in hand.
+describe("Send to… — the three doors draft ONE chip (DK-14)", () => {
+  let taken: DeskChip[];
+  let off: () => void;
+  beforeEach(() => {
+    taken = [];
+    off = publishLineSend({
+      receive(chip) {
+        taken.push(chip);
+        setLineSendPhase("flying"); // the line's own first step
+        return { attach: () => undefined };
+      },
+    });
+  });
+  afterEach(() => {
+    off();
+    setLineSendPhase("idle");
+  });
+
+  /** The act's still-taking tail is over (the selection put back, or nothing to put back in hand). */
+  const settled = async (): Promise<void> => {
+    await vi.waitFor(() => expect(lastSend()?.at.pressed).toBeDefined(), { timeout: 2_000 });
+    await vi.waitFor(
+      () => {
+        const s = lastSend();
+        expect(s?.marks.cleared === true ? s.marks.restored : true).toBe(true);
+      },
+      { timeout: 2_000 },
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+  };
+
+  it("the BAR's pill is live — its tip its name, no key — and drafts the selection; the bar steps aside until the act is over", async () => {
+    mount();
+    const pill = cell("send");
+    expect(pill.hasAttribute("aria-disabled")).toBe(false);
+    expect(pill.getAttribute("title")).toBe("Send to…");
+    act(() => pill.click());
+    expect(taken).toHaveLength(1);
+    expect(taken[0]).toMatchObject({ kind: "desk", glyph: "snippets", label: "Note" });
+    expect(taken[0]?.objects.map((o) => o.type)).toEqual(["desk.note"]);
+    expect(lastSend()?.from).toBe("bar");
+    // away at once: the act is on (the marks are hidden for its still, then @'s list is open)
+    expect(bar().getAttribute("data-shown")).toBe("false");
+    await settled();
+    act(() => setLineSendPhase("listing"));
+    expect(bar().getAttribute("data-shown")).toBe("false");
+    act(() => setLineSendPhase("idle"));
+    // back 200 ms after the list folds (R8's back)
+    expect(bar().getAttribute("data-shown")).toBe("false");
+    await vi.waitFor(() => expect(bar().getAttribute("data-shown")).toBe("true"), {
+      timeout: 2_000,
+    });
+  });
+
+  it("the GROWN MENU's row is taken like any other: the menu folds and the same act runs", async () => {
+    mount();
+    act(() => cell("more").click());
+    expect(surfaceNow).toBe("selection");
+    const row = bar().querySelector<HTMLElement>('.vf-bar-list [data-row="send"]');
+    expect(row?.hasAttribute("aria-disabled")).toBe(false);
+    act(() => row?.click());
+    expect(surfaceNow).toBeNull();
+    expect(taken).toHaveLength(1);
+    expect(lastSend()?.from).toBe("menu");
+    await settled();
+  });
+
+  it("IN HAND: the pill in hand drafts the object as DRAWN — it stays in hand, the tools stay under the head", async () => {
+    vi.useFakeTimers();
+    mount();
+    const notebook = deskObjects(ce, "desk.notebook")[0]?.entity as Entity;
+    ce.ops.setSelection([notebook]);
+    ce.ops.open(notebook);
+    ce.stack.heldPose.current = {
+      frame: () => ({ cx: 590, cy: 382, hx: 120, hy: 160, s: 2, settled: true }),
+    } as never;
+    act(() =>
+      selection.publish({
+        held: { tools: [], active: "", landing: false, settled: true, travelMs: 560 },
+      }),
+    );
+    act(() => vi.advanceTimersByTime(660));
+    const pill = bar().querySelector<HTMLElement>('[data-face-row="hand"] [data-act="send"]');
+    expect(pill?.hasAttribute("aria-disabled")).toBe(false);
+    expect(pill?.getAttribute("title")).toBe("Send to…");
+    const putDown = vi.spyOn(ce.ops, "putDown");
+    act(() => pill?.click());
+    expect(taken).toHaveLength(1);
+    // its name as this harness's words give it (the type id; the product's words say "Notebook" — smoke:canvas HAND)
+    expect(taken[0]?.label).toBe("desk.notebook");
+    expect(taken[0]?.objects.map((o) => o.type)).toEqual(["desk.notebook"]);
+    expect(lastSend()).toMatchObject({
+      from: "hand",
+      fromBox: { x0: 470, y0: 222, x1: 710, y1: 542 },
+      marks: { cleared: false, restored: false },
+    });
+    // the object stays in hand; the tools are not stepped aside
+    expect(putDown).not.toHaveBeenCalled();
+    expect(bar().getAttribute("data-role")).toBe("hand");
+    expect(bar().getAttribute("data-shown")).toBe("true");
+    vi.useRealTimers();
+    await settled();
   });
 });

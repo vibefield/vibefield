@@ -15,6 +15,7 @@ import type {
 import { type AtList, type AtRow, atTakeable } from "./at-list";
 import {
   type CreateAct,
+  chipMessage,
   createActOf,
   type DraftChip,
   type DraftPart,
@@ -103,19 +104,87 @@ function createShortcut(act: CreateAct): string | undefined {
   return act.key.startsWith("⌘") ? "Meta+T" : "Control+T";
 }
 
+/** A still's size as a chip says it: "480 × 480". */
+export const stillSize = (still: { readonly width: number; readonly height: number }): string =>
+  `${still.width} × ${still.height}`;
+
+/** What a chip's tooltip says: a capture, its path; a desk chip, what it carries — its words, and its still's size
+ * once attached. */
+export function chipTitle(chip: DraftChip): string {
+  if (chip.kind === "capture") return chip.path;
+  const words = chipMessage(chip);
+  return chip.still === null ? words : `${words} · a still ${stillSize(chip.still)}`;
+}
+
+/** A note's chip wears its paper and its ink (DESIGN.md §8 "Send to…"): the palette's colours, handed to the line's
+ * CSS as two custom properties — content colours, like the bar's swatches. */
+export function chipLook(chip: DraftChip): CSSProperties | undefined {
+  if (chip.kind !== "desk" || chip.paper === undefined) return undefined;
+  return {
+    "--vf-chip-paper": chip.paper,
+    ...(chip.ink === undefined ? {} : { "--vf-chip-ink": chip.ink }),
+  } as CSSProperties;
+}
+
+/** A chip's face — its glyph at 13 and its words: a capture wears `capture`; a desk chip its own glyph or none
+ * (a note `snippets`, several `package`, a kind none — R15). */
+export function ChipFace({ chip }: { chip: DraftChip }): ReactElement {
+  const glyph = chip.kind === "capture" ? "capture" : chip.glyph;
+  return (
+    <>
+      {glyph === null ? null : <FieldGlyph name={glyph} size={13} />}
+      <span className="vf-line-chip-label">{chip.label}</span>
+    </>
+  );
+}
+
+/** The data a chip's element says of itself — its kind, its glyph, a note's paper, its still's size. */
+function chipData(chip: DraftChip): Record<string, string> {
+  if (chip.kind === "capture") return { "data-chip": "capture" };
+  return {
+    "data-chip": "desk",
+    "data-glyph": chip.glyph ?? "none",
+    ...(chip.paper === undefined ? {} : { "data-paper": "" }),
+    ...(chip.still === null ? {} : { "data-still": stillSize(chip.still) }),
+  };
+}
+
+/** Send to…'s chip IN FLIGHT (DK-14; DESIGN.md §8 "Send to…"): the chip of the object's face, the same face the
+ * draft's chip wears, carried by the line's controller from the selection to the caret — placed and moved by it
+ * imperatively (a CSS transition, M3), never a control. */
+export function ChipFlierView({
+  chip,
+  flierRef,
+}: {
+  chip: DraftChip;
+  flierRef?: Ref<HTMLDivElement>;
+}): ReactElement {
+  return (
+    <div ref={flierRef} className="vf-line-flier" aria-hidden="true">
+      <span className="vf-line-chip" {...chipData(chip)} style={chipLook(chip)}>
+        <ChipFace chip={chip} />
+        {/* the chip's × as it stands in the draft (unseen until hovered): the flier is the landed chip's width */}
+        <span className="vf-line-chip-x">
+          <FieldGlyph name="close" size={10} />
+        </span>
+      </span>
+    </div>
+  );
+}
+
 /** A chip, as the editor sets it in the sentence: never editable itself, so
  * the editor's Backspace takes it whole. The × is a glyph, not a letter. */
 export function LineChipView({ chip }: { chip: DraftChip }): ReactElement {
   return (
     <span
       className="vf-line-chip"
-      data-chip={chip.kind}
+      {...chipData(chip)}
       data-chip-id={chip.id}
       contentEditable={false}
-      title={chip.path}
+      title={chipTitle(chip)}
+      style={chipLook(chip)}
     >
-      <FieldGlyph name="capture" size={13} />
-      <span>{chip.label}</span>
+      <ChipFace chip={chip} />
       <button
         type="button"
         className="vf-line-chip-x"

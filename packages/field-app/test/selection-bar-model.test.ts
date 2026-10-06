@@ -135,11 +135,16 @@ describe("the selection bar's cells", () => {
     expect(tipOf("More")).toBe("More");
   });
 
-  it("Send to… waits, saying so in its tip (DK-14 makes it draft)", () => {
+  it("Send to… drafts (DK-14): live, its tip its name — no key, DK-D24 binds none — counting several", () => {
     expect(barCells(facts(), "mac")[0]).toEqual({
       kind: "send",
       label: "Send to…",
-      tip: "Send to… — next",
+      tip: "Send to…",
+    });
+    expect(barCells(facts({ count: 3 }), "other")[0]).toEqual({
+      kind: "send",
+      label: "Send 3 to…",
+      tip: "Send 3 to…",
     });
   });
 });
@@ -198,7 +203,8 @@ describe("the bar grown — its rows, nearest first", () => {
       tape: "⇧⌘L",
       delete: "⌫",
     });
-    expect(rows.find((r) => r.id === "send")).toMatchObject({ waits: "next" });
+    // DK-14: Send to… is a row taken like any other — it waits for nothing
+    expect(rows.find((r) => r.id === "send")).toEqual({ id: "send", label: "Send 2 to…" });
     expect(rows.find((r) => r.id === "delete")).toMatchObject({ danger: true });
   });
 

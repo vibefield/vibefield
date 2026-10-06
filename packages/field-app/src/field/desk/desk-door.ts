@@ -23,6 +23,7 @@ import type {
   TrayAnchor,
 } from "@vibecook/ice/desk";
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
+import { lastSend, type SendRecord } from "../../frame/line-send";
 import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
 import { type BarStats, readBarStats } from "./bar/bar-stats";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
@@ -243,17 +244,11 @@ export interface VfDeskDoor {
   /** DK-12 — the object IN HAND and where the desk drew it this frame: the held pose seam's frame (core's
    * `HeldScreenFrame` — the shown extent's centre and half extents, CSS px, its scale, whether the pickup settled), the
    * reading fit's witness; null with nothing held. A read. */
-  held(): {
-    readonly entity: number;
-    readonly frame: {
-      readonly cx: number;
-      readonly cy: number;
-      readonly hx: number;
-      readonly hy: number;
-      readonly s: number;
-      readonly settled: boolean;
-    } | null;
-  } | null;
+  held(): { readonly entity: number; readonly frame: HeldFrame | null } | null;
+  /** DK-14 — the last Send to… as it went (`frame/line-send.ts`): where it was pressed, the chip's face and what it
+   * carries, the capture's rect and the still's size, the marks hidden and put back, whether the draft was aimed, and
+   * each step's time; null before any. A read. */
+  sent(): SendRecord | null;
   /** DK-11 — the selection's anchor as the desk last published it (`handle.selection.anchor()`) — what the bar is
    * placed from; null on a handle without the door. A read. */
   anchor(): SelectionAnchor | null;
@@ -281,6 +276,40 @@ export interface VfDeskDoor {
     }[];
     readonly stats: BoardStats;
   } | null;
+}
+
+/** Where the desk drew a held frame (core's `HeldScreenFrame`, CSS px of the view). */
+export interface HeldFrame {
+  readonly cx: number;
+  readonly cy: number;
+  readonly hx: number;
+  readonly hy: number;
+  readonly s: number;
+  readonly settled: boolean;
+}
+
+/** The object IN HAND and where the desk drew it this frame — the held pose seam's frame (DK-12) — or null with
+ * nothing held. A read. */
+export function heldNow(
+  engine: CanvasEngine,
+): { readonly entity: number; readonly frame: HeldFrame | null } | null {
+  const entity = heldEntity(engine.world);
+  if (entity === undefined) return null;
+  const frame = engine.stack.heldPose.current?.frame(entity);
+  return {
+    entity: entity as number,
+    frame:
+      frame === undefined
+        ? null
+        : {
+            cx: frame.cx,
+            cy: frame.cy,
+            hx: frame.hx,
+            hy: frame.hy,
+            s: frame.s,
+            settled: frame.settled,
+          },
+  };
 }
 
 const pickOf = (
@@ -380,25 +409,8 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
         stats: readBoardStats(),
       };
     },
-    held: () => {
-      const entity = heldEntity(engine.world);
-      if (entity === undefined) return null;
-      const frame = engine.stack.heldPose.current?.frame(entity);
-      return {
-        entity: entity as number,
-        frame:
-          frame === undefined
-            ? null
-            : {
-                cx: frame.cx,
-                cy: frame.cy,
-                hx: frame.hx,
-                hy: frame.hy,
-                s: frame.s,
-                settled: frame.settled,
-              },
-      };
-    },
+    held: () => heldNow(engine),
+    sent: lastSend,
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;

@@ -89,7 +89,7 @@ export interface SelectionBarViewProps {
   readonly hand?: readonly HandCell[];
   /** DK-12 — the travel between the roles, ms: the anchor's `held.travelMs` (I20); the layer's 560 when it carries none. */
   readonly travelMs?: number;
-  /** DK-12 — a tool used, or Done (the controller runs `ops.useHeldTool` / `ops.putDown`). */
+  /** DK-12 — a tool used, or Done (the controller runs `ops.useHeldTool` / `ops.putDown`); DK-14 — Send to… in hand. */
   readonly onHand?: (cell: HandCell) => void;
   /** Reduced motion (M6, R8): every duration halved, fades only. */
   readonly reduced?: boolean;
@@ -570,7 +570,7 @@ export function SelectionBarView({
   };
 
   const press = (cell: BarCell, fromKeyboard: boolean): void => {
-    if (cell.kind === "send" || cell.kind === "rule" || cell.kind === "words") return;
+    if (cell.kind === "rule" || cell.kind === "words") return;
     if (cell.kind === "desk" && cell.act === "more") {
       focusOnOpen.current = fromKeyboard && !open;
       onOpenChange(!open);
@@ -580,9 +580,14 @@ export function SelectionBarView({
     onCell(cell);
   };
 
-  /** A tool used, or Done: never the waiting Send to…, a faint slot, a rule or the readout. */
+  /** Send to…, a tool used, or Done: never a faint slot, a rule or the readout. */
   const runHand = (cell: HandCell): void => {
-    if (cell.kind === "done" || (cell.kind === "tool" && cell.look !== "faint")) onHand?.(cell);
+    if (
+      cell.kind === "send" ||
+      cell.kind === "done" ||
+      (cell.kind === "tool" && cell.look !== "faint")
+    )
+      onHand?.(cell);
   };
 
   const cellNode = (cell: BarCell, index: number): ReactElement => {
@@ -607,8 +612,8 @@ export function SelectionBarView({
             type="button"
             className="vf-bar-send"
             data-act="send"
-            aria-disabled="true"
             title={cell.tip}
+            onClick={() => press(cell, false)}
             {...stop}
           >
             <FieldGlyph name="agents" size={16} />
@@ -673,8 +678,8 @@ export function SelectionBarView({
             type="button"
             className="vf-bar-send"
             data-act="send"
-            aria-disabled="true"
             title={cell.tip}
+            onClick={() => runHand(cell)}
             {...stop}
           >
             <FieldGlyph name="agents" size={16} />

@@ -20,7 +20,43 @@ export interface CaptureChip {
   readonly path: string;
 }
 
-export type DraftChip = CaptureChip;
+/** One object a desk chip carries (DK-D26): its type, its human name, its durable text (null when it keeps none). */
+export interface ChipObject {
+  readonly type: string;
+  readonly name: string;
+  readonly text: string | null;
+}
+
+/** The still a desk chip carries: the selection through the desk's capture door (ICE I23), as PNG bytes kept in the
+ * renderer under a `blob:` URL, at its own size in device px. */
+export interface ChipStill {
+  readonly url: string;
+  readonly width: number;
+  readonly height: number;
+  /** The PNG's size in bytes. */
+  readonly bytes: number;
+}
+
+/**
+ * The selection sent from the desk (DK-14; DESIGN.md §8 "Send to…"; R15, DK-D26): ONE chip for the whole selection.
+ * Its FACE — a note's paper and ink, `snippets` and its first 24 characters; any other kind its name and no glyph;
+ * several, `package` and "N objects"; a missing face its type's name — and what it CARRIES: the objects' names, their
+ * durable text, and a still (attached once the capture resolves; null until then, or when the desk had none to give).
+ */
+export interface DeskChip {
+  readonly id: string;
+  readonly kind: "desk";
+  readonly label: string;
+  /** `snippets` (a note) or `package` (several); a kind's chip wears none (R15 amended). */
+  readonly glyph: "snippets" | "package" | null;
+  /** A note's paper and ink — its props through the palette's CSS colours. */
+  readonly paper?: string;
+  readonly ink?: string;
+  readonly objects: readonly ChipObject[];
+  readonly still: ChipStill | null;
+}
+
+export type DraftChip = CaptureChip | DeskChip;
 
 export type DraftPart =
   | { readonly kind: "text"; readonly text: string }
@@ -67,11 +103,30 @@ export function draftBlank(parts: readonly DraftPart[]): boolean {
   return parts.every((part) => part.kind === "text" && part.text === "");
 }
 
+/** One object as a message cites it: its name, and its durable text quoted after it when it keeps any. */
+const objectCited = (object: ChipObject): string =>
+  object.text === null || object.text.trim() === ""
+    ? object.name
+    : `${object.name}: "${object.text.replace(/\s+/gu, " ").trim()}"`;
+
+/**
+ * What a chip says in a message (four-views §11's interim send): a capture, the still's path (vendors read image
+ * paths); a desk chip, what it carries in words — its objects' names and their durable text (`Note: "…"`, `Clock`,
+ * `2 objects (Note: "…"; Clock)`). The desk chip's still rides on the chip: no door yet carries it into a message.
+ */
+export function chipMessage(chip: DraftChip): string {
+  if (chip.kind === "capture") return chip.path;
+  const [one, ...rest] = chip.objects;
+  if (one === undefined) return chip.label;
+  if (rest.length === 0) return objectCited(one);
+  return `${chip.objects.length} objects (${chip.objects.map(objectCited).join("; ")})`;
+}
+
 /** The message a send carries until the agent seam exists (four-views §11):
- * the words as typed, and each chip as the path it cites. */
+ * the words as typed, and each chip as it cites itself (`chipMessage`). */
 export function draftMessage(parts: readonly DraftPart[]): string {
   return parts
-    .map((part) => (part.kind === "text" ? part.text : part.chip.path))
+    .map((part) => (part.kind === "text" ? part.text : chipMessage(part.chip)))
     .join("")
     .replace(/\s+/gu, " ")
     .trim();
@@ -114,6 +169,70 @@ export function spliceDraft(
     { kind: "text", text: after },
     ...parts.slice(index + 1),
   ]);
+}
+
+/** Where a place in the draft is, counted the way the caret moves: one per character, one per chip. */
+export function draftOffset(parts: readonly DraftPart[], index: number, offset: number): number {
+  let at = 0;
+  for (let i = 0; i < index; i++) {
+    const part = parts[i];
+    at += part === undefined ? 0 : part.kind === "text" ? part.text.length : 1;
+  }
+  return at + offset;
+}
+
+/** The end of the word `offset` stands in (itself between words, or past the text's end clamped to it). */
+function wordEnd(text: string, offset: number): number {
+  let at = Math.min(Math.max(0, offset), text.length);
+  while (at < text.length && !/\s/u.test(text.charAt(at))) at += 1;
+  return at;
+}
+
+/** Where Send to…'s chip will be set for this caret (`insertChipAt`'s place, before its space): the end of the word
+ * the caret stands in, or the draft's end with no caret — `draftOffset`'s count. */
+export function chipPlace(
+  parts: readonly DraftPart[],
+  caret: { readonly index: number; readonly offset: number } | null,
+): number {
+  const target = caret === null ? undefined : parts[caret.index];
+  if (caret === null || target?.kind !== "text") return draftOffset(parts, parts.length, 0);
+  return draftOffset(parts, caret.index, wordEnd(target.text, caret.offset));
+}
+
+/**
+ * Send to…'s chip set in the draft (DESIGN.md §8 "Send to…": inserted at the caret; "it never splits a word"): at
+ * the caret in part `caret.index` — moved on to the end of the word it stands in — as a token, a space set before it
+ * when it would touch a word and `spliceDraft`'s after it; the caret after the chip and its space. With no caret (the
+ * draft never held one), at the draft's end. Returns the new parts and the caret (`draftOffset`'s count).
+ */
+export function insertChipAt(
+  parts: readonly DraftPart[],
+  caret: { readonly index: number; readonly offset: number } | null,
+  chip: DraftChip,
+): { parts: DraftPart[]; caret: number } {
+  let base: DraftPart[] = [...parts];
+  let index = caret?.index ?? base.length - 1;
+  let offset = caret?.offset ?? Number.POSITIVE_INFINITY;
+  if (base[index]?.kind !== "text") {
+    // no caret, or one at a chip: the end of the draft, in a run of text
+    if (base[base.length - 1]?.kind !== "text") base.push({ kind: "text", text: "" });
+    index = base.length - 1;
+    offset = Number.POSITIVE_INFINITY;
+  }
+  const target = base[index] as { kind: "text"; text: string };
+  let at = wordEnd(target.text, offset);
+  const before = target.text.slice(0, at);
+  const touches = before === "" ? index > 0 : !/\s$/u.test(before);
+  if (touches) {
+    base = base.map((part, i) =>
+      i === index ? { kind: "text", text: `${before} ${target.text.slice(at)}` } : part,
+    );
+    at += 1;
+  }
+  return {
+    parts: spliceDraft(base, index, at, at, chip),
+    caret: draftOffset(base, index, at) + 2,
+  };
 }
 
 /** The placeholder says who it goes to, not a slogan (DESIGN.md §8): at rest it

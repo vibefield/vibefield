@@ -41,7 +41,7 @@ export interface SelectionFacts {
 export type DeskAct = "duplicate" | "tape" | "more" | "delete";
 
 export type BarCell =
-  /** Send to… — the bar's one word; DK-14 makes it draft (here it waits). */
+  /** Send to… — the bar's one word: the selection drafted into the line as ONE chip (DK-14; it never sends). */
   | { readonly kind: "send"; readonly label: string; readonly tip: string }
   | { readonly kind: "rule"; readonly at: "lead" | "end" }
   /** A kind's act: its glyph by §13's table, or its label alone (R3); its label is its tip — no key (R1). */
@@ -77,7 +77,8 @@ export const sendLabel = (count: number): string => (count > 1 ? `Send ${count} 
 export function barCells(f: SelectionFacts, keys: DeskKeys): BarCell[] {
   const k = KEYS[keys];
   const cells: BarCell[] = [
-    { kind: "send", label: sendLabel(f.count), tip: "Send to… — next" },
+    // its tip is its name: Send to… prints no key (DK-D24 binds none)
+    { kind: "send", label: sendLabel(f.count), tip: sendLabel(f.count) },
     { kind: "rule", at: "lead" },
   ];
   const missing = missingOf(f);
@@ -122,7 +123,7 @@ export interface MenuRow {
   readonly id: string;
   readonly label: string;
   readonly key?: string;
-  /** A row that waits, and why (Send to… — DK-14's): drawn, never taken. */
+  /** A row that waits, and why: drawn, never taken (none does since DK-14 made Send to… draft). */
   readonly waits?: string;
   /** Delete: armed red under the pointer. */
   readonly danger?: boolean;
@@ -142,7 +143,7 @@ export function menuGroups(f: SelectionFacts, keys: DeskKeys): MenuRow[][] {
     for (const act of f.menu) near.push({ id: `act:${act.id}`, label: act.label });
   if (f.openable) near.push({ id: "open", label: "Open", key: k.open });
   if (f.commentable) near.push({ id: "comment", label: "Comment" });
-  near.push({ id: "send", label: sendLabel(f.count), waits: "next" });
+  near.push({ id: "send", label: sendLabel(f.count) });
   const arrange: MenuRow[] = [];
   if (!f.locked) arrange.push({ id: "duplicate", label: "Duplicate", key: k.duplicate });
   arrange.push({ id: "front", label: "Bring to front" }, { id: "back", label: "Send to back" });
