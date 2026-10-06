@@ -33,7 +33,7 @@ import {
   FilesHostSupervisor,
   FilesHostUnavailable,
 } from "../src/workspace/supervisor";
-import { filesHostLaunch } from "./files-host-bundle";
+import { filesHostLaunch, sourceFilesHostLaunch } from "./files-host-bundle";
 import { until } from "./ws-rpc";
 
 let launch: FilesHostLaunch;
@@ -346,7 +346,8 @@ describe("the packaged role (L1): fieldd's own bundle re-run as the files worker
       external: ["bufferutil", "utf-8-validate"],
       logLevel: "silent",
     });
-    copyFileSync(launch.args[0] as string, join(dir, FILES_HOST_BUNDLE));
+    const sourceLaunch = await sourceFilesHostLaunch();
+    copyFileSync(sourceLaunch.args[0] as string, join(dir, FILES_HOST_BUNDLE));
     const native = join(dir, `mille.${milleTriple(process.platform, process.arch, false)}.node`);
     copyFileSync(launch.milleNative, native);
     const supervisor = await ready({

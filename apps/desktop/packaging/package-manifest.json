@@ -3,77 +3,367 @@
   "spec": "electron-distribution-and-tray.md §7.3 (allowlist) + §13.2 (stage-content checks)",
   "blockSizeBytes": 4096,
   "packages": {
+    "examples/plugins/behavior-conformance": {
+      "name": "@vibefield/plugin-behavior-conformance",
+      "files": {
+        "dist/renderer.css": {
+          "count": 1,
+          "bytes": [162]
+        },
+        "dist/renderer.js": {
+          "count": 1,
+          "bytes": [2592]
+        }
+      },
+      "bytes": 2754,
+      "installedBytes": 8192
+    },
+    "examples/plugins/kv-service": {
+      "name": "@vibefield/plugin-example-kv",
+      "files": {
+        "service.js": {
+          "count": 1,
+          "bytes": [3248]
+        },
+        "vibefield.plugin.json": {
+          "count": 1,
+          "bytes": [4036]
+        }
+      },
+      "bytes": 7284,
+      "installedBytes": 8192
+    },
+    "examples/plugins/widgetlab": {
+      "name": "@vibefield/plugin-widgetlab",
+      "files": {
+        "dist/renderer.css": {
+          "count": 1,
+          "bytes": [19677]
+        },
+        "dist/renderer.js": {
+          "count": 1,
+          "bytes": [84670]
+        }
+      },
+      "bytes": 104347,
+      "installedBytes": 106496
+    },
     "packages/electron-shell": {
       "name": "@vibefield/electron-shell",
       "files": {
         "dist/main/index.cjs": {
           "count": 1,
-          "bytes": [610479]
+          "bytes": [1425225]
         },
         "dist/preload/index.cjs": {
           "count": 1,
-          "bytes": [234450]
+          "bytes": [690110]
+        },
+        "dist/renderer/assets/CardShell-[hash].js": {
+          "count": 1,
+          "bytes": [5637]
         },
         "dist/renderer/assets/DiagnosticsSection-[hash].js": {
           "count": 1,
-          "bytes": [20413]
+          "bytes": [20566]
+        },
+        "dist/renderer/assets/FieldGlyph-[hash].js": {
+          "count": 1,
+          "bytes": [12617]
+        },
+        "dist/renderer/assets/HistoryRoomView-[hash].css": {
+          "count": 1,
+          "bytes": [165242]
+        },
+        "dist/renderer/assets/HistoryRoomView-[hash].js": {
+          "count": 1,
+          "bytes": [724111]
+        },
+        "dist/renderer/assets/SessionPickerView-[hash].css": {
+          "count": 1,
+          "bytes": [2805]
+        },
+        "dist/renderer/assets/SessionPickerView-[hash].js": {
+          "count": 1,
+          "bytes": [163866]
+        },
+        "dist/renderer/assets/TerminalMirrorWidget-[hash].css": {
+          "count": 1,
+          "bytes": [1297]
+        },
+        "dist/renderer/assets/TerminalMirrorWidget-[hash].js": {
+          "count": 1,
+          "bytes": [4658]
+        },
+        "dist/renderer/assets/base64-[hash].js": {
+          "count": 1,
+          "bytes": [4279365]
+        },
+        "dist/renderer/assets/client-[hash].js": {
+          "count": 1,
+          "bytes": [174855]
+        },
+        "dist/renderer/assets/dist-[hash].js": {
+          "count": 1,
+          "bytes": [318393]
         },
         "dist/renderer/assets/doc-thumbnail-worker-[hash].js": {
           "count": 1,
           "bytes": [3050]
         },
+        "dist/renderer/assets/events-b389eeca.esm-[hash].js": {
+          "count": 1,
+          "bytes": [153000]
+        },
+        "dist/renderer/assets/history-room-view-[hash].css": {
+          "count": 1,
+          "bytes": [850]
+        },
+        "dist/renderer/assets/history-room-view-[hash].js": {
+          "count": 1,
+          "bytes": [18086]
+        },
+        "dist/renderer/assets/host-[hash].js": {
+          "count": 1,
+          "bytes": [180]
+        },
+        "dist/renderer/assets/jsx-runtime-[hash].js": {
+          "count": 1,
+          "bytes": [435]
+        },
+        "dist/renderer/assets/logging-[hash].js": {
+          "count": 1,
+          "bytes": [9903]
+        },
         "dist/renderer/assets/main-[hash].css": {
           "count": 1,
-          "bytes": [55735]
+          "bytes": [241880]
         },
         "dist/renderer/assets/main-[hash].js": {
           "count": 2,
-          "bytes": [306429, 17075]
+          "bytes": [48926, 17075]
+        },
+        "dist/renderer/assets/preload-helper-[hash].js": {
+          "count": 1,
+          "bytes": [1211]
+        },
+        "dist/renderer/assets/preview-[hash].js": {
+          "count": 1,
+          "bytes": [226]
+        },
+        "dist/renderer/assets/primitives-[hash].css": {
+          "count": 1,
+          "bytes": [7214]
+        },
+        "dist/renderer/assets/primitives-[hash].js": {
+          "count": 1,
+          "bytes": [2473]
+        },
+        "dist/renderer/assets/r3f-[hash].js": {
+          "count": 1,
+          "bytes": [23328]
         },
         "dist/renderer/assets/react-[hash].js": {
+          "count": 3,
+          "bytes": [26687, 7532, 1205]
+        },
+        "dist/renderer/assets/react-dom-[hash].js": {
           "count": 1,
-          "bytes": [869]
+          "bytes": [3579]
+        },
+        "dist/renderer/assets/react-three-fiber.esm-[hash].js": {
+          "count": 1,
+          "bytes": [5147]
+        },
+        "dist/renderer/assets/renderer-[hash].css": {
+          "count": 1,
+          "bytes": [5427]
+        },
+        "dist/renderer/assets/renderer-[hash].js": {
+          "count": 1,
+          "bytes": [29635]
+        },
+        "dist/renderer/assets/rolldown-runtime-[hash].js": {
+          "count": 1,
+          "bytes": [751]
+        },
+        "dist/renderer/assets/scheduler-[hash].js": {
+          "count": 1,
+          "bytes": [3564]
+        },
+        "dist/renderer/assets/singleton-loro-crdt.js": {
+          "count": 1,
+          "bytes": [6525]
+        },
+        "dist/renderer/assets/singleton-react-dom.js": {
+          "count": 1,
+          "bytes": [715]
+        },
+        "dist/renderer/assets/singleton-react-jsx-runtime.js": {
+          "count": 1,
+          "bytes": [201]
+        },
+        "dist/renderer/assets/singleton-react-three-drei.js": {
+          "count": 1,
+          "bytes": [1579822]
+        },
+        "dist/renderer/assets/singleton-react-three-fiber.js": {
+          "count": 1,
+          "bytes": [919]
+        },
+        "dist/renderer/assets/singleton-react.js": {
+          "count": 1,
+          "bytes": [1629]
+        },
+        "dist/renderer/assets/singleton-three.js": {
+          "count": 1,
+          "bytes": [15380]
+        },
+        "dist/renderer/assets/singleton-vibecook-ice.js": {
+          "count": 1,
+          "bytes": [8119]
+        },
+        "dist/renderer/assets/singleton-vibefield-plugin-sdk-[hash].js": {
+          "count": 1,
+          "bytes": [575]
+        },
+        "dist/renderer/assets/singleton-vibefield-plugin-sdk-canvas.js": {
+          "count": 1,
+          "bytes": [1091]
+        },
+        "dist/renderer/assets/singleton-vibefield-plugin-sdk-ui.js": {
+          "count": 1,
+          "bytes": [2070]
+        },
+        "dist/renderer/assets/singleton-vibefield-plugin-sdk.js": {
+          "count": 1,
+          "bytes": [214]
+        },
+        "dist/renderer/assets/src-[hash].js": {
+          "count": 2,
+          "bytes": [231885, 1530]
+        },
+        "dist/renderer/assets/swarm-physics.worker-[hash].js": {
+          "count": 1,
+          "bytes": [90818]
+        },
+        "dist/renderer/assets/terminal-render.worker-[hash].js": {
+          "count": 1,
+          "bytes": [107601]
+        },
+        "dist/renderer/assets/three.module-[hash].js": {
+          "count": 1,
+          "bytes": [727645]
+        },
+        "dist/renderer/assets/vision_bundle-[hash].js": {
+          "count": 1,
+          "bytes": [137161]
+        },
+        "dist/renderer/assets/worker-[hash].js": {
+          "count": 1,
+          "bytes": [241309]
+        },
+        "dist/renderer/assets/workspace-[hash].css": {
+          "count": 1,
+          "bytes": [65603]
         },
         "dist/renderer/assets/workspace-[hash].js": {
           "count": 1,
-          "bytes": [6365501]
+          "bytes": [2362738]
         },
         "dist/renderer/index.html": {
           "count": 1,
-          "bytes": [317]
+          "bytes": [3015]
         },
         "dist/testing/smoke.cjs": {
           "count": 1,
-          "bytes": [6991],
+          "bytes": [1346454],
           "neverShip": ["testing-tree", "smoke-or-spike-entry"]
         }
       },
-      "bytes": 7621309,
-      "installedBytes": 7647232
+      "bytes": 15533130,
+      "installedBytes": 15671296
     },
     "packages/fieldd": {
       "name": "@vibefield/fieldd",
       "files": {
+        "dist/agent-shim.cjs": {
+          "count": 1,
+          "bytes": [667149]
+        },
         "dist/bin.cjs": {
           "count": 1,
-          "bytes": [1431516]
+          "bytes": [6842038]
+        },
+        "dist/files-host.cjs": {
+          "count": 1,
+          "bytes": [1070450]
         },
         "dist/loro_wasm_bg.wasm": {
           "count": 1,
           "bytes": [3151654]
         },
+        "dist/mille.darwin-arm64.node": {
+          "count": 1,
+          "bytes": [5697296]
+        },
         "dist/service-harness.mjs": {
           "count": 1,
-          "bytes": [251042]
+          "bytes": [820548]
         }
       },
-      "bytes": 4834212,
-      "installedBytes": 4841472
+      "bytes": 18249135,
+      "installedBytes": 18259968
+    },
+    "plugins/browser": {
+      "name": "@vibefield/plugin-browser",
+      "files": {
+        "dist/renderer.css": {
+          "count": 1,
+          "bytes": [23394]
+        },
+        "dist/renderer.js": {
+          "count": 1,
+          "bytes": [571828]
+        }
+      },
+      "bytes": 595222,
+      "installedBytes": 598016
+    },
+    "plugins/field-tools": {
+      "name": "@vibefield/plugin-field-tools",
+      "files": {
+        "dist/renderer.css": {
+          "count": 1,
+          "bytes": [6649]
+        },
+        "dist/renderer.js": {
+          "count": 1,
+          "bytes": [13539]
+        }
+      },
+      "bytes": 20188,
+      "installedBytes": 24576
+    },
+    "plugins/note": {
+      "name": "@vibefield/plugin-note",
+      "files": {
+        "dist/renderer.css": {
+          "count": 1,
+          "bytes": [2682]
+        },
+        "dist/renderer.js": {
+          "count": 1,
+          "bytes": [2085]
+        }
+      },
+      "bytes": 4767,
+      "installedBytes": 8192
     }
   },
   "totals": {
-    "files": 14,
-    "bytes": 12455521,
-    "installedBytes": 12488704
+    "files": 79,
+    "bytes": 34516827,
+    "installedBytes": 34684928
   }
 }

@@ -8166,3 +8166,65 @@ James ruled the files service's fourteen marks on 2026-10-05 ("all ruled, now pl
 **Corrections at their sources.** The files-service record/build plan now describe canonical-root engines, subtree attachment, paired credentials, the actual doors and admission split; the project-places record marks its earlier “no paths” launch prose superseded by FS-D9 and the shipped system detents; the History record closes AR-8d. The phone had no production launch surface to extend — only a mock spawn gesture — and self-phone `agent.spawn` was already admitted, so no broader scope grant was added. The handover receives a dated completion note, and only this task’s five draft files are snapshotted onto dev-local’s parent tree.
 
 **Owed.** FS-3 with the desk track; FS-4 / DS-7 at truffle’s egress release; FS-5’s phone viewer; PJ-1 / AR-8e after the project-places rulings; the physical-phone run; mille’s release and the later git-service swap; electron-builder `package:dir`, signing the staged `.node`, and the package census. Per-attach lifecycle audit rows are not implemented (mint attempts are audited); the iCloud native directory-read bound remains upstream work. Nothing was pushed; James owns the pushes. Other sessions’ logo work and ghosttea pin edit remain uncommitted in main.
+
+
+## FS packaging closeout — the signed app carries a working files worker (2026-10-05)
+
+**What changed.** `package:verify:files --native-root <Resources/bin>` runs the existing worker,
+door and attachment suites against the packaged fieldd SEA, `files-host.cjs` and mille addon.
+An explicit test-only package path never falls back to a source-built worker. The existing
+CJS role row keeps its separate source fixture. `--require-signed` verifies the nested
+fieldd and mille signatures: the frozen Developer ID team, secure timestamp and hardened
+runtime. The macOS release command runs this check after signing. The signer's automatic
+binary discovery covers mille; a `${arch}` entry in `mac.binaries` would be wrong because
+this electron-builder removes that macro for a single-architecture build.
+
+**Census.** The baseline is refreshed: 79 files, 34,516,827 bytes across build inputs, including
+the Files bundle/addon and the existing handwritten KV service. The census had mistaken that
+valid plugin for an unbuilt package: plugin-build validates its declared service without
+emitting dist. The census now counts its manifest and declared JS entry points, still refusing
+missing generated output, path escapes/symlinks and never-ship material. Three regression tests
+prove the accepted handwritten shape and the missing-output/test-material refusals. This is
+the build inventory; the shipping stage remains its own exact allowlist.
+
+**Packaged proof.** The ordinary `package:dir` succeeded. The final stage includes the release
+native pair, 87 files / 217,792,973 bytes, with only the pre-existing bundled-plugin gap declared.
+A local macOS arm64 Developer ID bundle was built under `package signé/mac-arm64/VibeField.app`
+outside the checkout (spaces and an accent, no ancestor node_modules). Its deep strict signature
+check, all fuse checks, and all 24 Files tests passed: 23 rows use the packaged worker; the CJS
+role row is the existing source fixture. Reads, search, confinement, independent credentials,
+write/replay refusal, expiry, principal/root revocation and restart recovery run through the
+real worker. The fieldd control host remains source-based, and the door tests mock native
+management. This does not prove a full installed-app session or the phone over the tailnet.
+The signed cold READY row took 3.7 seconds. The first unsigned run had 23/24 passing and hit
+the source suite's five-second default on cold READY; the artifact command now gives tests
+30 seconds, leaving the helper's explicit 20-second readiness deadline intact.
+
+**Receipts.** All under `/Volumes/SamsungRed/lanes/fs-package/`: `package-dir-1.log`,
+`signed-package-1.log`, `signed-proof.json`, `signed-fuses.json`, `census-update.log`,
+`census-final.json`, `census-check.log`, and `unsigned-refusal.log` (the release check correctly
+rejects an unsigned preview). The signature check observes the actual nested files; the proof
+also records their hashes and equality of the staged JS/WASM resources.
+
+**Repository gates.** `pnpm verify` (`verify-2.log`) EXIT 0, started at load 12.86 with
+no other verify: fieldd 1,891 passed / 23 opt-in skips, field-app 1,550 passed / 1 skipped,
+Rust 302 passed / 9 ignored; generation is fresh. The first gate exposed an inherited
+`NO_COLOR`/`FORCE_COLOR` warning in a supervisor test's exact stderr assertion. With that
+conflict removed, the focused suite passed (17 / 4 opt-in skips, `rosettad-env-control.log`)
+and the full gate passed; no supervisor source was changed. `pnpm smoke` and
+`pnpm smoke:godview` both completed with their successful product markers and EXIT 0
+(`smoke-isolated.log`, `smoke-godview-isolated.log`), started at loads 16.99 and 16.91.
+The external harness hides windows, emulates focus and gives each run a fresh Electron
+profile; no OS input or live display was used. The first Godview attempt was stopped after
+it hit the running app's shared profile lock; its shutdown's EXIT 0 is not a passing witness.
+`census-final.log` reasserts the strict inventory after both smoke builds. The three census
+regressions and the unsigned-artifact refusal also pass. No iOS source changed or iOS gate
+was rerun in this packaging slice.
+
+**Still owed.** Notarization was deliberately disabled for this local validation; no release
+was published. The complete release still needs bundled plugins (WP8), packaged rosettad
+resolution and staging, and `agent-shim.cjs` beside fieldd (the current stager omits both agent
+artifacts; bin.ts only reads rosettad from its environment, and the gateway withholds launchers
+without the shim). These are recorded in ROADMAP's open debts. The physical-phone witness,
+mille's registry release/window exit, FS-3 with DK, FS-4/DS-7 after truffle egress, and FS-5
+remain. No DK/MV sources or upstream working checkouts were edited; nothing was pushed.

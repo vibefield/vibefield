@@ -16,6 +16,14 @@ History's worktree guest. The phone's folder picker uses those rows and sends
 `agent.spawn {cwd}` to the selected desktop. See the [workspace API](agent-plane/api.html#workspace)
 and [ownership and import wall](agent-plane/architecture.html#files-service).
 
+The packaged Files worker has a separate artifact check:
+`pnpm --filter @vibefield/desktop run package:verify:files --native-root <Resources/bin>`.
+It runs the real worker, door and attachment suites against the shipped fieldd executable,
+worker bundle and mille addon. `--require-signed` also requires the frozen macOS team's
+Developer ID signatures, timestamps and hardened runtime on fieldd and the addon; the macOS
+release command runs it before the existing app/notarization checks. The tests' fieldd
+control host remains source-based, so this does not replace an installed-app or phone run.
+
 ## The ownership law
 
 Stated at `draft/thinking-ar-agent-plane.md` §1. Read the middle column as hard as the left one.
