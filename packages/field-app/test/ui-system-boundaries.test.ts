@@ -699,6 +699,10 @@ describe("UI system ownership boundaries", () => {
     expect(primitivesCss).toMatch(
       /^\.vf-ui-segmented-thumb \{[^}]*transform 300ms var\(--vf-ease-island\)/m,
     );
+    // reduced motion: the thumb does not travel — it stands under the new choice at once (M6)
+    expect(primitivesCss).toMatch(
+      /@media \(prefers-reduced-motion: reduce\) \{[^@]*\.vf-ui-segmented-thumb \{\s*transition: none;/su,
+    );
     const cuts = new Set(["field/desk/pegboard/pegboard.css"]);
     const walk = (dir: string): string[] =>
       readdirSync(join(PACKAGE_ROOT, "src", dir), { withFileTypes: true }).flatMap((entry) =>

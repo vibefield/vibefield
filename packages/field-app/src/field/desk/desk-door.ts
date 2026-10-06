@@ -7,6 +7,8 @@ import {
   PrefabId,
   Size,
   Specimen,
+  specimensOf,
+  trayEntity,
 } from "@vibecook/ice";
 import type {
   AmbientMode,
@@ -264,6 +266,9 @@ export interface VfDeskDoor {
     readonly scroll: number;
     /** the board's foot inset as the desk drew it (I21 — the layer's `tray.foot`) */
     readonly foot: number | null;
+    /** the types core's tray lay HANGS now (the shown category's), in sibling order — the engine catalog's, so a kind
+     * the desk was mounted without is laid (a hang) though never drawn */
+    readonly laid: readonly string[];
     readonly specimens: readonly {
       readonly type: string;
       readonly label: string;
@@ -365,6 +370,12 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
         anchor: tray.anchor(),
         scroll: state.frame?.scroll ?? tray.scroll(),
         foot: state.frame?.foot ?? null,
+        laid: (() => {
+          const at = trayEntity(engine.world);
+          return at === undefined
+            ? []
+            : specimensOf(engine.world, at).map((e) => String(engine.world.get(e, PrefabId)?.id));
+        })(),
         specimens: state.specimens.map((s) => ({ type: s.type, label: s.label, object: s.object })),
         stats: readBoardStats(),
       };

@@ -110,6 +110,7 @@ import {
   type PhysicalSoakOptions,
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
+import { pegboardRows } from "./smoke-pegboard";
 import { selectionBarRows } from "./smoke-selection-bar";
 import {
   countersOf,
@@ -1076,6 +1077,23 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`DK-12: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // DK-13: the pegboard behind the line — the create and B, the filters, the keyboard's insert, the refusals, the
+        // bar hidden under the board, a plugin's category off (testing/smoke-pegboard.ts)
+        try {
+          problems.push(
+            ...(await pegboardRows({
+              win,
+              plugins: {
+                disable: (id) => opts.handle.client.request("plugins.disable", { id }),
+                enable: (id) => opts.handle.client.request("plugins.enable", { id }),
+              },
+              shotDir,
+              say: (line) => console.log(line),
+            })),
+          );
+        } catch (error) {
+          problems.push(`DK-13: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
         // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
