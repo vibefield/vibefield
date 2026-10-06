@@ -10,13 +10,10 @@ import {
 } from "../src/godview/monitor/window-rows";
 import { createWindowViewReplica } from "../src/godview/monitor/window-view";
 
-// MV-4 — THE MODEL A PORTED VIEW DRAWS (`window-view.ts`). List and rain read
-// the model alone, so the window's own facts reach them as the model: the
-// rows the legacy bridge hands a legacy view (the same reader, `window-rows.ts`
-// then `narrowToDevice`), in the same order, as the replica's own `AgentView`s.
-// What a person would see if any of these slipped: the device filter not
-// narrowing the list or the rain, the rain claiming its columns in another
-// order, a sleeping desktop's agents drawn bright.
+// MV-4 / MV-8 — the window's model: order, device membership, peer standing
+// and stable visual identity reach every SDK view without a legacy row bridge.
+// A slip is visible as reordered rain columns, bright sleeping peers or a
+// second swarm body during a launcher hand-off.
 
 const HERE = "desk";
 const PEER = "studio";
@@ -55,7 +52,7 @@ function handReplica(
   };
 }
 
-/** The bridge's reader as `useMonitorAgents` builds it: the window rows, narrowed. */
+/** The window's reader as `useMonitorAgents` builds it: the window rows, narrowed. */
 function windowReader(facts: { current: WindowRowFacts; device: string | null }) {
   const rows = createWindowRows();
   return (model: MonitorModel) =>
@@ -196,5 +193,51 @@ describe("the model a ported view draws in this window (MV-4)", () => {
     expect(view.getSnapshot().model.agents.map((row) => row.id)).toEqual(["p"]);
     view.refresh();
     expect(heard).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("window row identity across a launcher hand-off", () => {
+  it("keeps one body, carries its identity forward and forgets it after removal", () => {
+    const window = createWindowRows();
+    const agent = local("agent", 2);
+    const shell = local("shell", 1, { kind: "terminal" });
+    const facts: WindowRowFacts = {
+      ...factsOf(["agent", "shell"]),
+      sessionByRow: new Map([
+        ["agent", "pty"],
+        ["shell", "pty"],
+      ]),
+      visualIds: new Map([["pty", "launcher-body"]]),
+    };
+    const first = window.rowsFor(fixtureModel([shell, agent]), facts);
+    expect(first).toHaveLength(1);
+    expect(first[0]).toMatchObject({ id: "agent", visualId: "launcher-body" });
+    // The hand-off map is transient. The same row keeps the same drawn body.
+    const after = window.rowsFor(fixtureModel([agent], 2), { ...facts, visualIds: undefined });
+    expect(after).toBe(first);
+    expect(after[0]).toBe(first[0]);
+    // A removed run cannot lend its old body to a later row reusing the id.
+    window.rowsFor(fixtureModel([], 3), factsOf([]));
+    const reborn = local("agent", 3);
+    const fresh = window.rowsFor(fixtureModel([reborn], 4), factsOf(["agent"]));
+    expect(fresh[0]).toBe(reborn);
+    expect(fresh[0]?.visualId).toBeUndefined();
+  });
+
+  it("keeps untouched row identities and the list across equivalent facts", () => {
+    const window = createWindowRows();
+    const a = local("a", 1);
+    const p = peer("p", 2);
+    const model = fixtureModel([a, p]);
+    const first = window.rowsFor(model, factsOf(["a", "p"], "asleep"));
+    expect(first[0]).toBe(a);
+    expect(first[1]).not.toBe(p);
+    expect(window.rowsFor(model, factsOf(["a", "p"], "asleep"))).toBe(first);
+    const changed = window.rowsFor(
+      fixtureModel([{ ...a, status: "blocked" }, p], 2),
+      factsOf(["a", "p"], "asleep"),
+    );
+    expect(changed[0]).not.toBe(first[0]);
+    expect(changed[1]).toBe(first[1]);
   });
 });

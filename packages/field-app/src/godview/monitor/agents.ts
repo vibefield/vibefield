@@ -7,10 +7,9 @@ import type { MonitorAgent } from "./types";
 // colour, its status and detail line, recency, the pane join, the usage
 // ledger's history, the visual-id carry-forward. The backend beside the runtime
 // computes all of that once now (`@vibecook/puppeteer-monitor`, hosted by
-// fieldd — MV-D22), the window's replica applies it, and the legacy shim says
-// it in the views' shape (`window-rows.ts`). Deleted with the differential as
-// its witness (`godview-model-differential.test.ts`): the oracle's rows and the
-// replica's read the same, field by field.
+// fieldd — MV-D22), and the window's replica applies it. The views and these
+// counts read the model directly. The retired MV-3 differential established
+// parity before the old assembly and its oracle went away in MV-8.
 
 /**
  * A LIVE PTY ON THE FLOOR THAT NO PANE IS SHOWING (GT-6b), as the deck reads it
@@ -39,7 +38,7 @@ export function monitorAgentCounts(
 ): Record<AgentVisualStatus, number> {
   const counts: Record<AgentVisualStatus, number> = { idle: 0, working: 0, blocked: 0 };
   for (const agent of agents) {
-    if (agent.agent) counts[agent.status] += 1;
+    if (agent.kind === "agent") counts[agent.status] += 1;
   }
   return counts;
 }

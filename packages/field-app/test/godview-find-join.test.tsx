@@ -15,11 +15,14 @@
  * (build-mv M47: the bundle's `z$` ← `B$`, intermittent with the two
  * subscriptions' race). Since MV-3d the facts ride the run's own row of the
  * model board (`local`), and `findAgentsOf` never hands the sheet the shim's
- * monitor. The first block here is the regression, written against what both
- * trees export so it can be run at 283cf3e9 (red) and here (green); the second
- * holds the join's rules.
+ * monitor. The original regression ran red at 283cf3e9 and green after MV-3d.
+ * The first block keeps that model-only arrival case after MV-8 removes the
+ * old door; the second holds the join's rules.
  */
 
+import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
+import { agentViewFixture } from "@vibecook/puppeteer-view-sdk/testing";
+import type { FindAgent } from "@vibecook/puppeteer-views";
 import {
   buildFindRows,
   FindSheet,
@@ -31,10 +34,10 @@ import {
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, describe, expect, it } from "vitest";
+import { findAgentsOf } from "../src/godview/monitor/find-agents";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
-import type { MonitorAgent } from "../src/godview/monitor/types";
-import { findAgentsOf, useMonitorAgents } from "../src/godview/monitor/useMonitorAgents";
+import { useMonitorAgents } from "../src/godview/monitor/useMonitorAgents";
 import { chromeRunOf } from "./chrome-run-fixture";
 import { managedSummary } from "./managed-session-fixture";
 import { type ScriptedModelBoard, scriptedModelBoard } from "./model-board-fixture";
@@ -56,7 +59,7 @@ const nothing: HistoryPort = {
 let root: Root | null = null;
 let container: HTMLElement | null = null;
 let board: ScriptedModelBoard | null = null;
-let latest: readonly MonitorAgent[] | null = null;
+let latest: readonly FindAgent[] | null = null;
 let errors: unknown[] = [];
 
 afterEach(() => {
@@ -102,10 +105,6 @@ describe("M47 — the find sheet never reads the views' monitor", () => {
     });
     const door: MonitorDoor = {
       model: board.port,
-      // the fold's `full` board: asked by the window at 283cf3e9, never answered
-      // here, so a join from it finds nothing — the race M47 lost
-      observe: () => () => undefined,
-      observeMesh: () => () => undefined,
       attach: async () => ({ state: "no-pane" }),
       createTerminal: async () => ({ state: "no-pane" }),
       mountLocal: async () => ({ state: "no-pane" }),
@@ -140,23 +139,16 @@ describe("M47 — the find sheet never reads the views' monitor", () => {
   });
 });
 
-/** A window row as the legacy shim gives it for an OBSERVED local run: an agent
- * facet whose `monitor` is the views' object (no `session`, no `freshness`). */
-function shimRow(id: string, extra: Partial<MonitorAgent> = {}): MonitorAgent {
-  return {
+/** A backend model row; its local transcript clocks live beside it. */
+function modelRow(id: string, extra: Partial<AgentView> = {}): AgentView {
+  return agentViewFixture({
     id,
-    createdAtMs: Date.parse("2026-09-12T10:00:00.000Z"),
+    createdAt: Date.parse("2026-09-12T10:00:00.000Z"),
     status: "working",
-    project: "vibe-field",
-    detail: "",
-    color: "#000000",
-    active: false,
-    agent: {
-      provider: { id: "codex", label: "Codex" },
-      monitor: { statusSince: "2026-09-12T10:00:00.000Z", blockers: [], usage: {} },
-    },
+    project: { name: "vibe-field" },
+    provider: { id: "codex", label: "Codex" },
     ...extra,
-  } as unknown as MonitorAgent;
+  });
 }
 
 describe("the join's rules (`findAgentsOf`)", () => {
@@ -176,7 +168,7 @@ describe("the join's rules (`findAgentsOf`)", () => {
   );
 
   it("a run the provider has spoken for: its native id, and the mirror's three clocks in the mirror's shape — never the shim's", () => {
-    const [row] = findAgentsOf([shimRow("row-a")], new Map([["row-a", "run-a"]]), [spokenRun]);
+    const [row] = findAgentsOf([modelRow("row-a")], new Map([["row-a", "run-a"]]), [spokenRun]);
     expect(row?.agent?.nativeSessionId).toBe("run-a-native");
     expect(row?.agent?.monitor).toEqual({
       statusSince: "2026-09-12T10:00:00.000Z",
@@ -195,7 +187,7 @@ describe("the join's rules (`findAgentsOf`)", () => {
 
   it("a run before its first state, and a row the chrome holds no run for, carry no monitor at all", () => {
     const rows = findAgentsOf(
-      [shimRow("row-b"), shimRow("row-orphan")],
+      [modelRow("row-b"), modelRow("row-orphan")],
       new Map([
         ["row-b", "run-b"],
         ["row-orphan", "run-gone"],
@@ -214,20 +206,33 @@ describe("the join's rules (`findAgentsOf`)", () => {
     expect(liveScope(rows).nativeSessionIds).toEqual(["run-b-native"]);
   });
 
-  it("leaves a peer's row and a terminal exactly as they are", () => {
-    const peer = shimRow("peer-1", {
-      remote: {
-        deviceId: "desk-peer",
-        deviceName: "Loft",
-        attachable: true,
-        hostWritable: true,
-        cwdLabel: null,
-      },
-    } as Partial<MonitorAgent>);
-    const { agent: _none, ...bare } = shimRow("pty-c");
-    const terminal = bare as MonitorAgent;
-    const rows = findAgentsOf([peer, terminal], new Map(), [spokenRun]);
-    expect(rows[0]).toBe(peer);
-    expect(rows[1]).toBe(terminal);
+  it("keeps peers searchable without joining local transcript clocks or accounts", () => {
+    const peer = modelRow("peer-1", {
+      device: { id: "desk-peer", name: "Loft", self: false },
+      model: "peer-model",
+      account: "peer-secret",
+      project: { name: "rosetta", branch: "mesh" },
+      reply: { text: "Ready for review" },
+    });
+    const terminal = modelRow("pty-c", { kind: "terminal", detail: "running" });
+    const rows = findAgentsOf([peer, terminal], new Map([[peer.id, spokenRun.runtimeRunId]]), [
+      spokenRun,
+    ]);
+    expect(rows[0]).toMatchObject({
+      project: "rosetta",
+      detail: "Loft · Ready for review",
+      agent: { model: "peer-model", branch: "mesh" },
+    });
+    expect(rows[0]?.agent?.account).toBeUndefined();
+    expect(rows[0]?.agent?.nativeSessionId).toBeUndefined();
+    expect(rows[0]?.agent?.monitor).toBeUndefined();
+    expect(rows[1]?.agent).toBeUndefined();
+    expect(rows[1]?.detail).toBe("running");
+    expect(liveScope(rows).nativeSessionIds).toEqual([]);
+    expect(
+      buildFindRows({ agents: rows, facts: new Map(), hits: [], query: "review", nowMs: 0 }).map(
+        (row) => row.agent.id,
+      ),
+    ).toEqual([peer.id]);
   });
 });

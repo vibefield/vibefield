@@ -1,32 +1,16 @@
-import type { MonitorAgent as ViewsMonitorAgent } from "@vibecook/puppeteer-views";
+import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
 
-// THE ROW, since MV-3b: the views package's `MonitorAgent` — the one shape
-// every view sees, in both apps — and nothing beside it. Until MV-3 VibeField
-// kept its own facts on the agent facet (puppeteer's provider id, the tier, the
-// run, the persona, the fold's row verbatim) for its chrome and verbs; the
-// backend computes those facts now (MV-D22), the window's verbs read their joins
-// off the board rows the fold keeps (`model-board.ts` `HeldModelRow`), and the
-// find sheet's native session id is joined from the chrome's facts on the run's
-// own board row where the sheet reads it (MV-3d: `useMonitorAgents.ts`
-// `findAgentsOf`). The reference app does the same on
-// its side (`renderer/monitor/types.ts` there), which is the whole point of
-// AR-D13a: one view, two hosts, each with its own facts beside the row.
+// The stage and its chrome read the SDK's model. Find's shared chrome shape
+// is adapted only where it joins local facts (`find-agents.ts`, M19).
 
+export type { MonitorSpawnMenu, MonitorSpawnTarget } from "@vibecook/puppeteer-view-sdk/model";
 export type {
-  AgentMonitorProps,
-  AgentMonitorView,
-  MonitorActions,
-  MonitorAgentFacet,
   MonitorRemoteFacet,
-  MonitorSession,
-  MonitorSpawnMenu,
-  MonitorSpawnTarget,
   MonitorTheme,
   MonitorViewEntry,
-  PaneAttachment,
 } from "@vibecook/puppeteer-views";
 
-export type MonitorAgent = ViewsMonitorAgent;
+export type MonitorAgent = AgentView;
 
 /** DS-3 — where a row LIVES, as the device filter's chip names it: the
  * roster's name and OS mark for a device id (`devices.ts`), in VibeField's

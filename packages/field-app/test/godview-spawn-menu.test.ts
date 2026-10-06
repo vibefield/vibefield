@@ -1,4 +1,4 @@
-import { menuOf } from "@vibecook/puppeteer-views";
+import { menuOf } from "@vibecook/puppeteer-view-sdk/toolkit";
 import type { AgentPersona, AgentProfileSet } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
 import { profileTabs } from "../src/godview/monitor/profile-tabs";

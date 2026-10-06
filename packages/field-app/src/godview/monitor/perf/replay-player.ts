@@ -1,47 +1,20 @@
 import type { DeviceInfo } from "@vibefield/contracts";
 import { type Corpus, generateCorpus, parseRecipe, recipeName } from "./corpus";
 import { decodeCorpusJsonl } from "./corpus-codec";
-import type { RecordedFrame } from "./frame-recorder";
+import type { RecordedFrame } from "./corpus-frames";
 import type { ModelReplayClient, ModelReplayStats } from "./model-replay-client";
 import { MODEL_STREAM_META_KIND, type ModelStreamMeta } from "./model-stream";
-import type { ReplayDoor } from "./replay-door";
 import { restoreWallClock, shiftWallClock } from "./wall-clock";
 
-// THE PLAYER (MV-0, step 6): a corpus on the recorder's own timeline, in the
-// renderer. The Electron lab loads a RECIPE (the page generates the corpus
-// itself — the same bytes the oracle generated in Node — so no megabytes cross
-// `executeJavaScript`) or pushes a RECORDED corpus's lines, then `start()`s:
-// every frame is delivered to the replay door at its `t` offset from the first,
-// fold frames as TEXT (the deck's parse + zod path), the rest as parsed frames.
-//
-// It owns the corpus's roster, and tells the door's roster listeners when a load
-// replaces it — the deck's door may be built before the lab has loaded anything.
-//
-// MV-3c — THE MODEL SOURCE (the B arm). After a corpus is loaded, the lab may
-// push that corpus's MODEL STREAM (`pushModel`, `model-stream.ts`): what the
-// window's one door answers for it, computed offline by fieldd's own code. A
-// start then plays both on one timeline, interleaved by each model frame's
-// `after` (the corpus frame it follows on the live wire): model frames go to
-// the model replay client as TEXT the page parses, as a socket's message is
-// (`model-replay-client.ts`, which `createGodviewMonitorFeed` is handed under
-// `godviewReplay=1`), the corpus's fold and mesh frames go to the replay door
-// as before, but only while something there still listens — a build whose
-// window no longer reads the fold pays nothing for it, as it would pay nothing
-// live — and the marks are the stream's, moved to the frame that carries the
-// marker's change to the model. With no stream pushed, a start is exactly the
-// fold source above, unchanged.
-//
-// MV-3c (M31) — THE CORPUS CLOCK, on by default for either source: the page's
-// `Date.now` reads the corpus's own wall time from a start to its stop
-// (`wall-clock.ts`), so today's seam and the backend agree on recency
-// (`setClock("real")` keeps the machine's). And each
-// delivery's own work — the frame handed over, and the microtasks it queued
-// (a store's render) — is timed, since an offscreen window pins frame p50 at
-// its frame rate (M32): `state().work`.
+// The renderer's model player. Corpus frames still establish the deterministic
+// clock, roster and ordering used by the offline backend. Only model frames
+// enter the window: MV-8 retired the fold and desk-board replay doors.
+// Deliver one model frame per task, including late frames, so the harness
+// measures the same socket-to-render work as the shipping window.
 
 export type ReplayPhase = "empty" | "loaded" | "playing" | "ended" | "stopped";
 
-export type ReplaySource = "fold" | "model";
+export type ReplaySource = "model";
 
 export type ReplayClock = "real" | "corpus";
 
@@ -62,7 +35,7 @@ export interface ReplayState {
   startedAt: number | null;
   endedAt: number | null;
   marks: { name: string; at: number; seq: number }[];
-  /** the fold listeners standing on the door when `start()` was called */
+  /** Readers at start; retired fold/mesh entries remain zero for report compatibility. */
   listeners: { fold: number; mesh: number; devices: number; model?: number } | null;
   /** MV-3c — what this start plays */
   source: ReplaySource;
@@ -106,13 +79,11 @@ export interface ReplayPlayer {
   roster(): readonly DeviceInfo[];
   /** The roster changed: the door's roster port re-emits. */
   onRoster(listener: (roster: readonly DeviceInfo[]) => void): () => void;
-  /** The door to feed; set by `door-instruments` when the deck builds it. */
-  attach(door: ReplayDoor): void;
   onMark(listener: (frame: Extract<RecordedFrame, { kind: "mark" }>, at: number) => void): void;
   /** MV-3c — append the loaded corpus's model stream lines (whole lines, in
    * chunks; the meta header first). Throws for a stream of another corpus. */
   pushModel(text: string): ReplayModelLoaded;
-  /** MV-3c — drop the model stream: the next start plays the fold source. */
+  /** Drop the model stream; load a new one before the next start. */
   clearModel(): void;
   /** MV-3c — the client the model frames go to; set by `door-instruments`. */
   attachModel(client: ModelReplayClient): void;
@@ -141,12 +112,10 @@ type TimelineEntry = { t: number; corpus: number } | { t: number; model: number 
 export function createReplayPlayer(options: { now?: () => number } = {}): ReplayPlayer {
   const now = options.now ?? (() => performance.now());
   let frames: RecordedFrame[] = [];
-  let lines: (string | null)[] = [];
   let roster: DeviceInfo[] = [];
   let corpusName: string | null = null;
   let marker: Corpus["meta"]["marker"] | null = null;
   let durationMs = 0;
-  let door: ReplayDoor | null = null;
   let phase: ReplayPhase = "empty";
   let delivered = 0;
   let startedAt: number | null = null;
@@ -161,7 +130,6 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
   let modelMeta: Partial<ModelStreamMeta> | null = null;
   let modelLines: ModelLine[] = [];
   let modelClient: ModelReplayClient | null = null;
-  let source: ReplaySource = "fold";
   let skipped = 0;
   let modelAtStart: ModelReplayStats | null = null;
   let timeline: TimelineEntry[] = [];
@@ -226,7 +194,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
   };
 
   const modelSince = (): ModelReplayStats | null => {
-    if (source !== "model" || modelClient === null || modelAtStart === null) return null;
+    if (modelClient === null || modelAtStart === null) return null;
     const now = modelClient.stats();
     return {
       subscribes: now.subscribes - modelAtStart.subscribes,
@@ -239,13 +207,13 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
   const state = (): ReplayState => ({
     phase,
     corpus: corpusName,
-    total: source === "model" ? timeline.length : frames.length,
+    total: timeline.length,
     delivered,
     startedAt,
     endedAt,
     marks: [...marks],
     listeners: listenersAtStart,
-    source,
+    source: "model",
     skipped,
     model: modelSince(),
     clock,
@@ -261,25 +229,6 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
   const halt = (): void => {
     if (timer !== null) clearTimeout(timer);
     timer = null;
-  };
-
-  const deliver = (index: number): void => {
-    const frame = frames[index];
-    if (frame === undefined || door === null) return;
-    if (frame.kind === "mark") {
-      const at = now();
-      marks.push({ name: frame.name, at, seq: frame.seq });
-      markListener?.(frame, at);
-      door.deliver(frame);
-    } else if (frame.kind === "fold") {
-      const line = lines[index];
-      // the deck's path: JSON text → parse → zod → onFrame
-      if (line !== null && line !== undefined) door.deliverText(line);
-      else door.deliver(frame);
-    } else {
-      door.deliver(frame);
-    }
-    delivered = index + 1;
   };
 
   /** The model source's delivery: one timeline entry (`startModel`). */
@@ -305,15 +254,6 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
     } else {
       modelClient?.deliverFrame(frame.frame as Parameters<ModelReplayClient["deliverFrame"]>[0]);
     }
-  };
-
-  /** Whether a corpus frame still has a reader on the door (model source). */
-  const heard = (frame: RecordedFrame): boolean => {
-    if (door === null) return false;
-    const standing = door.listeners();
-    if (frame.kind === "fold" || frame.kind === "fold-error") return standing.fold > 0;
-    if (frame.kind === "mark") return false; // the stream carries the marks
-    return standing.mesh > 0;
   };
 
   /** The two streams on one timeline, by each model frame's `after`. */
@@ -353,11 +293,10 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
     delivered = 0;
     marks.length = 0;
     phase = "playing";
-    const standing = door?.listeners();
     listenersAtStart = {
-      fold: standing?.fold ?? 0,
-      mesh: standing?.mesh ?? 0,
-      devices: standing?.devices ?? 0,
+      fold: 0,
+      mesh: 0,
+      devices: rosterListeners.size,
       model: modelClient?.listeners() ?? 0,
     };
     let index = 0;
@@ -366,7 +305,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       // a corpus frame nobody reads costs nothing, not even a task
       for (
         let entry = timeline[index];
-        entry !== undefined && "corpus" in entry && !heard(frames[entry.corpus] as RecordedFrame);
+        entry !== undefined && "corpus" in entry;
         entry = timeline[index]
       ) {
         index += 1;
@@ -384,10 +323,9 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
         timer = setTimeout(step, Math.max(0, dueAt - now()));
         return;
       }
-      // ONE frame per task, as the fold source delivers them (see `start`)
+      // ONE model frame per task, matching the shipping socket deliveries.
       timed(() => {
-        if ("corpus" in entry) deliver(entry.corpus);
-        else deliverModel(entry.model);
+        if ("model" in entry) deliverModel(entry.model);
       });
       index += 1;
       delivered = index;
@@ -405,9 +343,6 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       const recipe = parseRecipe(recipeText);
       const corpus = generateCorpus(recipe);
       frames = corpus.frames;
-      // the wire's text for every fold frame, once, so the player never
-      // serializes on the timeline it measures
-      lines = frames.map((frame) => (frame.kind === "fold" ? JSON.stringify(frame) : null));
       corpusName = recipeName(recipe);
       marker = corpus.meta.marker;
       durationMs = corpus.meta.recipe.durationMs;
@@ -424,10 +359,6 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       const decoded = decodeCorpusJsonl(text);
       const start = frames.length;
       frames = [...frames, ...decoded.frames];
-      lines = [
-        ...lines,
-        ...decoded.frames.map((frame) => (frame.kind === "fold" ? JSON.stringify(frame) : null)),
-      ];
       if (decoded.roster.length > 0) setRoster(decoded.roster);
       const first = frames[0];
       const last = frames.at(-1);
@@ -451,7 +382,6 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       stopClock();
       dropModel();
       frames = [];
-      lines = [];
       corpusName = null;
       marker = null;
       durationMs = 0;
@@ -467,45 +397,13 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
       if (frames.length === 0) return state();
       const speed = startOptions.speed ?? 1;
       const untilT = startOptions.untilT ?? Number.POSITIVE_INFINITY;
-      source = modelLines.length > 0 ? "model" : "fold";
-      if (source === "model") return startModel(speed, untilT);
-      skipped = 0;
-      modelAtStart = null;
-      works = [];
-      const first = frames[0] as RecordedFrame;
-      startClock(first.t);
-      const origin = now();
-      startedAt = origin;
-      endedAt = null;
-      delivered = 0;
-      marks.length = 0;
-      phase = "playing";
-      listenersAtStart = door?.listeners() ?? null;
-      let index = 0;
-      const step = (): void => {
-        timer = null;
-        if (index >= frames.length || (frames[index] as RecordedFrame).t - first.t > untilT) {
-          endedAt = now();
-          phase = "ended";
-          return;
-        }
-        const frame = frames[index] as RecordedFrame;
-        const dueAt = origin + (frame.t - first.t) / speed;
-        if (dueAt > now()) {
-          timer = setTimeout(step, Math.max(0, dueAt - now()));
-          return;
-        }
-        // ONE frame per task, never a catch-up loop: the daemon's socket hands
-        // the client one message per task too, so after a stall each late frame
-        // is its own render rather than a batch React folds into one — the first
-        // trial's list cell rendered 102 times for ~150 fold frames that way.
-        const at = index;
-        timed(() => deliver(at));
-        index += 1;
-        timer = setTimeout(step, 0);
-      };
-      step();
-      return state();
+      if (modelLines.length === 0 || modelMeta?.corpusFrames !== frames.length) {
+        throw new Error("load this corpus's model stream before starting the replay");
+      }
+      if (modelClient === null || modelClient.listeners() === 0) {
+        throw new Error("the model replay has no window listening");
+      }
+      return startModel(speed, untilT);
     },
     stop() {
       halt();
@@ -524,16 +422,12 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
         rosterListeners.delete(listener);
       };
     },
-    attach(next) {
-      door = next;
-    },
     onMark(listener) {
       markListener = listener;
     },
     pushModel(text) {
       halt();
       if (corpusName === null) throw new Error("load the corpus before its model stream");
-      const fresh = modelLines.length === 0;
       for (const raw of text.split("\n")) {
         const line = raw.trim();
         if (line === "") continue;
@@ -555,9 +449,6 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
         if (modelMeta === null) throw new Error("a model stream starts with its meta header");
         modelLines.push({ t: record["t"] as number, after: record["after"] as number, kind, line });
       }
-      // the fold's text is held only for a window that still reads the fold;
-      // dropped here, before any measurement, so its collection is no cell's
-      if (fresh && (door?.listeners().fold ?? 0) === 0) lines = lines.map(() => null);
       phase = "loaded";
       return {
         corpus: modelMeta?.corpus ?? corpusName,
@@ -573,7 +464,7 @@ export function createReplayPlayer(options: { now?: () => number } = {}): Replay
     attachModel(client) {
       modelClient = client;
     },
-    source: () => (modelLines.length > 0 ? "model" : "fold"),
+    source: () => "model",
     setClock(next) {
       clock = next;
     },

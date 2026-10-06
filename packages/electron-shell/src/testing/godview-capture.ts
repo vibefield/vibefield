@@ -145,7 +145,7 @@ export async function runGodviewCapture(opts: {
   const settleMs = Math.max(0, Number(process.env["VF_GODVIEW_CAPTURE_SETTLE_MS"] ?? 1_500));
   const motion = process.env["VF_GODVIEW_CAPTURE_MOTION"] === "normal" ? "normal" : "reduce";
   const source: LabSource = {
-    kind: process.env["VF_GODVIEW_PERF_SOURCE"] === "model" ? "model" : "fold",
+    kind: process.env["VF_GODVIEW_PERF_SOURCE"] === "fold" ? "fold" : "model",
     modelDir: process.env["VF_GODVIEW_PERF_MODEL_DIR"] || undefined,
   };
   const windowOptions = labWindowOptions();

@@ -1640,19 +1640,30 @@
               diagnostic pane or an exit awaiting shell replacement. All three project to
               one <code>AgentSessionSummary</code>; a reader never branches on provenance.
             </p>
-            <div class="callout warning">
-              <strong>Known defect: the desktop drops its USD readout at the renderer's fold.</strong>
-              puppeteer's <code>MonitorUsageState</code> carries <code>costUsd</code>,
-              <code>costCoverage</code>, <code>costRatePerMin</code>, <code>pricedObservations</code>,
-              <code>unpricedObservations</code> and <code>costHistory</code>. Those fields reach the
-              renderer intact, because the mirror is <code>.passthrough()</code> and upstream added them
-              at the same schema version 3. They are then lost in
-              <code>packages/field-app/src/godview/monitor/useMonitorAgents.ts</code>, whose
-              <code>coreUsage</code> rebuilds the object from an explicit seven-key list of token
-              aggregates. The function's own doc comment says every aggregate is present under its own
-              name — true of the wire, not of this function's output. Recorded in
-              <code>docs/ROADMAP.md</code>'s AR row and <code>docs/LANDED.md</code> §AR-5-1; the fix is
-              not scheduled. <span class="badge tone-owed">Owed</span>
+            <h3 id="monitor-backend">One monitor backend per desktop (MV)</h3>
+            <p>
+              <code>packages/fieldd/src/agent-monitor.ts</code> hosts one
+              <code>@vibecook/puppeteer-monitor</code> backend beside the runtime. Live runtime evidence and host
+              facts (floor inventory, profiles, device and project identity) feed it; it derives recency, unread,
+              cost, spawn choices and model rows once. <code>agent-model-board.ts</code> publishes that model through
+              audience cuts. The desktop's <code>model</code> board carries window-only chrome facts beside its rows;
+              peers get the <code>desk</code> cut and phones the <code>field</code> cut. No runtime object syncs.
+            </p>
+            <p>
+              <code>GodviewAgentsProvider</code> owns the window's one model subscription and replica. The deck,
+              pane badges, Find and monitor share that feed. <code>window-rows.ts</code> keeps pane order, visual
+              identity and peer standing; <code>window-view.ts</code> publishes the selected desktop's rows to
+              <code>MonitorViewHost</code>. One SDK view mounts at a time and owns its resources. No legacy row bridge,
+              fold replay door or live recorder remains. Host chrome is independently contained by
+              <code>ChromeBoundary</code>; a failed reader says it is unavailable while the view continues.
+            </p>
+            <div class="callout">
+              <strong>Corrected at the source (MV).</strong> The old <code>coreUsage</code> seven-key rebuild is gone:
+              SDK views read the backend model's cost fields. Godview is runtime only; <code>agent.history</code>,
+              the fieldd status ledger and <code>LAYOUT.AGENT_HISTORY_DIR</code> are removed. Prior files are not deleted.
+              Future history is read from rosettad, never recorded by the monitor. Transcript ingestion belongs
+              solely to rosetta by law; architecture.html names the pre-existing adapter-reader gap that MV does
+              not close.
             </div>
           </section>
 
@@ -2202,14 +2213,13 @@
               </figcaption>
             </figure>
             <p class="section-note">
-              The walls are wider than today's usage, and it is worth knowing by how much. fieldd imports
-              three of its four admitted packages — <code>puppeteer-record</code> has no importer.
-              field-app imports two of its four — <code>puppeteer-monitor</code> and
-              <code>puppeteer-react</code> have none, and what it does import is
-              <code>puppeteer-core</code> types plus <code>puppeteer-views</code> (including its
-              <code>/physics</code> entry). An adapter import in fieldd would be the product branching on
-              a provider, which is the law these rules exist to hold; native-observation is the adapters'
-              private half and is refused on both sides.
+              <strong>MV update to the dated diagram above:</strong> R20 also admits
+              <code>puppeteer-monitor</code> for fieldd's backend and <code>puppeteer-view-sdk/model</code> for its
+              contract. R21 admits the window's <code>puppeteer-monitor/replica</code> and SDK host, React, toolkit
+              and testing entries. field-app no longer owns swarm physics: the SDK view owns its worker.
+              The exact package and subpath permissions remain in <code>scripts/check-import-boundaries.mjs</code>.
+              Adapter packages and native-observation remain outside both host doors. Inside puppeteer,
+              <code>scripts/check-view-wall.mjs</code> fails MV-W1…W5 violations in every view directory.
             </p>
             <h3>The catalog rule</h3>
             <p class="section-note">

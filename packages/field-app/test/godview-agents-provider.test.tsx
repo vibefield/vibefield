@@ -42,20 +42,12 @@ let root: Root | null = null;
 let container: HTMLElement | null = null;
 let board: ScriptedModelBoard | null = null;
 
-interface ProbeDoor extends MonitorDoor {
-  observe: ReturnType<typeof vi.fn>;
-  observeMesh: ReturnType<typeof vi.fn>;
-}
-
-/** A deck's door whose model port is fieldd's scripted board. `observe` (the
- * fold's `full` board) and `observeMesh` are spies the window must never call. */
-function boardDoor(options: ScriptedModelBoardOptions = {}): ProbeDoor {
+/** The window reads one model port; no legacy feed exists on the door. */
+function boardDoor(options: ScriptedModelBoardOptions = {}): MonitorDoor {
   board?.dispose();
   board = scriptedModelBoard(options);
   return {
     model: board.port,
-    observe: vi.fn(() => () => undefined),
-    observeMesh: vi.fn(() => () => undefined),
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
@@ -73,7 +65,7 @@ function boardDoor(options: ScriptedModelBoardOptions = {}): ProbeDoor {
       snapshot: async () => ({ refreshedAt: "2026-09-13", entries: [] }),
       subscribe: () => () => undefined,
     },
-  } as ProbeDoor;
+  };
 }
 
 /** What each reader last saw, so they can be compared frame by frame. */
@@ -144,8 +136,6 @@ describe("the window's one subscription", () => {
     mount(door);
     await settle();
     expect(board?.opened()).toBe(1);
-    expect(door.observe).not.toHaveBeenCalled();
-    expect(door.observeMesh).not.toHaveBeenCalled();
     expect(container?.querySelector('[data-testid="deck"]')?.textContent).toBe("1");
     // the feed's state is its own (the stage subscribes to it, not this provider)
     expect(seen.feed.at(-1)?.state().state).toBe("live");
@@ -252,7 +242,6 @@ describe("the window's one subscription", () => {
     await settle();
     // PF6: a closed Godview holds no subscription, even with a door in hand
     expect(board?.opened()).toBe(0);
-    expect(door.observe).not.toHaveBeenCalled();
     expect(seen.feed.at(-1)).toBeNull();
     expect(seen.deck.at(-1)?.agents.size).toBe(0);
   });

@@ -1,7 +1,7 @@
 import { AGENT_CATALOG, type AgentSessionSummary } from "@vibefield/contracts";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
 import { catalogModelBoard } from "./godview-model-fixture";
-import { aloneOnTheMesh, NO_HISTORY, NO_USAGE, THIS_MAC } from "./godview-profiles-fixtures";
+import { NO_HISTORY, NO_USAGE, THIS_MAC } from "./godview-profiles-fixtures";
 
 // TL — the catalog's timeline on a fixture door: an afternoon as fieldd's fold
 // would send it, so the specimen drives the shipping path whole — door, the
@@ -162,12 +162,7 @@ export function timelineDoor(): MonitorDoor {
   const board = catalogModelBoard({ device: THIS_MAC, rows });
   return {
     model: board.port,
-    observeMesh: aloneOnTheMesh,
     attach: async () => ({ state: "no-pane" }),
-    observe: ({ onFrame }) => {
-      onFrame(rows);
-      return () => undefined;
-    },
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
     history: NO_HISTORY,

@@ -1,35 +1,16 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
-import type { AgentMonitorState } from "@vibecook/puppeteer-core";
-import type {
-  MonitorCapabilities,
-  MonitorView,
-  MonitorViewInput,
-} from "@vibecook/puppeteer-view-sdk";
-import {
-  type LegacyMonitorView,
-  legacyView,
-  type MonitorReplicaLike,
-  type ViewSlotCommands,
-} from "@vibecook/puppeteer-view-sdk/host";
+import type { MonitorCapabilities } from "@vibecook/puppeteer-view-sdk";
+import { type MonitorReplicaLike, type ViewSlotCommands } from "@vibecook/puppeteer-view-sdk/host";
 import type {
   AgentView,
   ModelChanges,
   MonitorAgentRow,
   MonitorModel,
 } from "@vibecook/puppeteer-view-sdk/model";
-import { projectColourFor } from "@vibecook/puppeteer-view-sdk/toolkit";
-import {
-  type AgentMonitorProps,
-  isPortedMonitorView,
-  type MonitorPalette,
-  type MonitorParameters,
-  type MonitorViewEntry,
-  type ProfileTab,
-  type MonitorAgent as ViewsMonitorAgent,
-} from "@vibecook/puppeteer-views";
+import { projectColourFor, projectName } from "@vibecook/puppeteer-view-sdk/toolkit";
+import { type FindAgent, type MonitorPalette, type ProfileTab } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
 import {
-  type ComponentType,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -39,17 +20,17 @@ import {
   useSyncExternalStore,
 } from "react";
 import type { MonitorFloorRecord } from "./agents";
-import { type ChromeRun, NO_RUNS, useChromeKey } from "./chrome-facts";
+import { NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
 import { deviceFacet, useDeviceRoster } from "./devices";
+import { findAgentsOf, findJoinKey } from "./find-agents";
 import { useMonitorFeed } from "./GodviewAgentsProvider";
 import type { HeldModelRow } from "./model-board";
 import type { GodviewMonitorFeed, MonitorFeedState } from "./model-replica";
-import { instrumentedMonitorView } from "./perf/instrumented-view";
 import { profileTabs } from "./profile-tabs";
 import type { LocalMountOutcome, MonitorDoor } from "./remote-door";
 import { spawnMenuOf, targetsHere } from "./spawn-menu";
-import type { MonitorActions, MonitorAgent, MonitorSpawnMenu, MonitorSpawnTarget } from "./types";
+import type { MonitorAgent, MonitorSpawnMenu, MonitorSpawnTarget } from "./types";
 import {
   type BoardJoins,
   boardJoins,
@@ -77,8 +58,8 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *     one subscription per window, PF6). All four views are SDK views — list
  *     and rain (MV-4), the swarm (MV-5) and the timeline (MV-6): they draw it as
  *     themselves, cut to the window's rows (`window-view.ts`), one update per
- *     frame. A legacy component a host hands the stage still mounts through the
- *     view host's bridge (L6, L9) on the shim's rows (`window-rows.ts`).
+ *     frame. The chrome reads the model too; only Find joins its local facts
+ *     into the shared sheet's rows (`find-agents.ts`, M19).
  *   · THE LOCAL JOIN — what only this window knows, handed to the replica
  *     (`setLocal`): its panes and the colour each wears, the pane the person is
  *     working in, the row they pointed at, where they asked terminals to be
@@ -89,8 +70,8 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *   · THE VERBS — every one through the DOOR the deck built (`MonitorDoor`): a
  *     local row's select mounts its PTY in the active pane, a peer's attaches
  *     its terminal there, create opens an empty terminal — and every outcome is
- *     said out loud, in fieldd's own words. The views still see actions; the
- *     window sees promises.
+ *     said out loud, in fieldd's own words. Views receive SDK commands; the
+ *     window handles the door's promises.
  *   · THE SCREEN — what the active pane shows, reported to the backend
  *     (`reportShown`, L5), which keeps the unread marks.
  *
@@ -156,16 +137,12 @@ export interface MonitorPaneFacts {
 export interface MonitorAgentsResult {
   /** The window's replica, for the view host; an empty one while there is no feed. */
   replica: MonitorReplicaLike;
-  /** MV-4 — the replica cut to the rows the stage shows, for a PORTED view's
+  /** MV-4 — the replica cut to the rows the stage shows, for the view's
    * host (`window-view.ts`): the chosen desktop's, in the stage's order, peers
-   * greyed by standing — what the bridge hands a legacy view, as the model. */
+   * greyed by standing. */
   viewReplica: MonitorReplicaLike;
   /** The model as the replica last published it. */
   model: MonitorModel;
-  /** The view a registry entry mounts: a ported one as itself (MV-4), a legacy
-   * one through the bridge (L6) — the same bridge for the same view while its
-   * component stands (a perf probe installed or removed rebuilds it). */
-  viewFor(view: MonitorViewEntry): MonitorView;
   /** The view host's commands: select and create route to this window's door. */
   commands: ViewSlotCommands;
   /** What the backend lends a view beyond the model (MV-D4): today's spawn menu. */
@@ -178,12 +155,11 @@ export interface MonitorAgentsResult {
   /** The rows the find sheet reads: the window's rows joined with each run's
    * native session id and mirror clocks (the chrome's own reader, M19; MV-3d:
    * off the chrome's facts, `findAgentsOf`). */
-  findAgents: readonly MonitorAgent[];
+  findAgents: readonly FindAgent[];
   /** The run behind each of this desktop's agent rows (`BoardJoins.runByRow`):
-   * the marker's join, observed or not (the shim omits the mirror until the
-   * runtime has spoken, so a row's run is never read off it). */
+   * the marker's join, observed or not. Runtime identity is a local chrome
+   * fact, never inferred from a view's row. */
   runByRow: ReadonlyMap<string, string>;
-  actions: MonitorActions;
   /** How many rows each source contributed, so the stage can scope its claims
    * to the right ones (GT-D17) rather than labeling the whole field. */
   sources: MonitorSourceCounts;
@@ -298,17 +274,16 @@ function remoteStateOf(
   return { remoteState: "no-door" };
 }
 
-/** The views' rows for a model, narrowed to the chosen desktop: one list per
- * (rows, device), so the bridge's rows keep their identity between frames. */
+/** Model rows narrowed to the chosen desktop, retaining identity between frames. */
 function createNarrowing(): (
-  rows: readonly ViewsMonitorAgent[],
+  rows: readonly AgentView[],
   device: string | null,
   here: string | undefined,
-) => readonly ViewsMonitorAgent[] {
-  let lastRows: readonly ViewsMonitorAgent[] | undefined;
+) => readonly AgentView[] {
+  let lastRows: readonly AgentView[] | undefined;
   let lastDevice: string | null = null;
   let lastHere: string | undefined;
-  let last: readonly ViewsMonitorAgent[] = Object.freeze([]);
+  let last: readonly AgentView[] = Object.freeze([]);
   return (rows, device, here) => {
     if (rows === lastRows && device === lastDevice && here === lastHere) return last;
     last = narrowToDevice(rows, device, here);
@@ -317,75 +292,6 @@ function createNarrowing(): (
     lastHere = here;
     return last;
   };
-}
-
-/** What the find sheet's join keys on, per run: the session it joins rosetta
- * by, whether the provider has spoken, and the two clocks it scopes by — never
- * the newest evidence, which moves with every frame a working agent sends and
- * is read fresh whenever the join is made. */
-export function findJoinKey(runs: readonly ChromeRun[]): string {
-  return runs
-    .map((run) => {
-      const mirror = run.local?.mirror;
-      return `${run.runtimeRunId}:${run.local?.nativeSessionId ?? ""}:${mirror === undefined ? "-" : "m"}:${mirror?.startedAt ?? ""}:${mirror === undefined ? "" : run.statusSince}`;
-    })
-    .join("\n");
-}
-
-/**
- * The rows the find sheet reads: each of this desktop's agent rows joined, by
- * the run it was dealt, with what the sheet asks of the run and the model does
- * not say — the provider-native session id it joins rosetta's hits by, and,
- * once the provider has spoken, the mirror's clocks it scopes and dates them by
- * (`session.startedAt`, `statusSince`, `freshness.lastEvidenceAt`). A peer's row
- * and a terminal stay as they are.
- *
- * The legacy shim's `agent.monitor` is the VIEWS' (its header: "never for the
- * find sheet or other chrome") and is never handed on: it carries no `session`
- * and no `freshness`, and the sheet reads `monitor?.session.nativeSessionId`
- * and `monitor?.freshness.lastEvidenceAt` on every render, open or closed. A
- * shim monitor reaching the sheet threw there and unmounted the whole stage
- * (build-mv M47: at 283cf3e9, any observed local row the model board delivered
- * before the fold's `full` board did). So a local row carries the mirror's
- * clocks when the provider has spoken, and no monitor at all when it has not.
- */
-export function findAgentsOf(
-  agents: readonly MonitorAgent[],
-  runByRow: ReadonlyMap<string, string>,
-  runs: readonly ChromeRun[],
-): readonly MonitorAgent[] {
-  const byRun = new Map(runs.map((run) => [run.runtimeRunId, run] as const));
-  return agents.map((row) => {
-    if (row.agent === undefined || row.remote !== undefined) return row;
-    const runId = runByRow.get(row.id);
-    const run = runId === undefined ? undefined : byRun.get(runId);
-    const local = run?.local;
-    const mirror = local?.mirror;
-    const { monitor: _views, ...facet } = row.agent;
-    return {
-      ...row,
-      agent: {
-        ...facet,
-        ...(local?.nativeSessionId !== undefined ? { nativeSessionId: local.nativeSessionId } : {}),
-        // The sheet reads these three of the mirror and nothing else
-        // (`find-model.ts`), so they are what it is handed, in the mirror's own
-        // shape — the one widening, as the legacy shim's: the sheet's type
-        // wants Core's whole state, and nothing here invents the rest of it.
-        ...(run !== undefined && mirror !== undefined
-          ? {
-              monitor: {
-                statusSince: run.statusSince,
-                session: mirror.startedAt !== undefined ? { startedAt: mirror.startedAt } : {},
-                freshness:
-                  mirror.lastEvidenceAt !== undefined
-                    ? { lastEvidenceAt: mirror.lastEvidenceAt }
-                    : {},
-              } as unknown as AgentMonitorState,
-            }
-          : {}),
-      },
-    };
-  });
 }
 
 export function useMonitorAgents({
@@ -478,7 +384,7 @@ export function useMonitorAgents({
   const devices = useMemo<readonly DeviceChoice[]>(() => {
     const counts = new Map<string, number>();
     for (const row of agents) {
-      if (row.agent === undefined) continue;
+      if (row.kind !== "agent") continue;
       const id = deviceOfRow(row, here);
       if (id === undefined) continue;
       counts.set(id, (counts.get(id) ?? 0) + 1);
@@ -684,23 +590,23 @@ export function useMonitorAgents({
 
   /**
    * THE DOOR, opened (GT-D17). A remote row's select is the reference app's
-   * `MonitorActions.select` contract finally meaning what it always said:
+   * `commands.select` means:
    * "Mount this session in the active pane". The mechanics are the deck's —
    * `door.attach` is where the runtime and the workspace live — and the one
    * thing that crosses back is an outcome, said out loud.
    */
   const attachRemote = useCallback(
     async (agent: MonitorAgent): Promise<void> => {
-      const remote = agent.remote;
-      if (remote === undefined) return;
+      if (agent.device.self) return;
+      const remote = agent.device;
       if (door === null) {
-        announce(`${remote.deviceName} cannot be attached yet — the deck has no connection`);
+        announce(`${remote.name} cannot be attached yet — the deck has no connection`);
         return;
       }
-      if (!remote.attachable) {
+      if (!agent.attachable) {
         // DS-4e — a run off the board is attachable when its owner names its
         // PTY; one that names none has nothing a pane can show.
-        announce(`${agent.project} runs on ${remote.deviceName} — it names no terminal to open`);
+        announce(`${projectName(agent)} runs on ${remote.name} — it names no terminal to open`);
         return;
       }
       // the run's PTY on ITS floor when the owner named one, the run otherwise
@@ -708,8 +614,8 @@ export function useMonitorAgents({
       const remoteSessionId =
         board === undefined ? agent.id : (board.terminal?.runtimeSessionId ?? board.runtimeRunId);
       const outcome = await door.attach({
-        deviceId: remote.deviceId,
-        deviceName: remote.deviceName,
+        deviceId: remote.id,
+        deviceName: remote.name,
         remoteSessionId,
       });
       if (outcome.state === "no-pane") {
@@ -717,14 +623,14 @@ export function useMonitorAgents({
         return;
       }
       if (outcome.state === "failed") {
-        announce(`${remote.deviceName} could not be attached — ${outcome.reason}`);
+        announce(`${remote.name} could not be attached — ${outcome.reason}`);
         return;
       }
       setLinks((current) => new Map(current).set(agent.id, outcome.sessionId));
       announce(
         outcome.readWrite
-          ? `${agent.project} attached from ${remote.deviceName}`
-          : `${agent.project} attached from ${remote.deviceName} — view only, the peer refuses writes`,
+          ? `${projectName(agent)} attached from ${remote.name}`
+          : `${projectName(agent)} attached from ${remote.name} — view only, the peer refuses writes`,
       );
     },
     [announce, door, feed],
@@ -740,15 +646,15 @@ export function useMonitorAgents({
     async (agent: MonitorAgent): Promise<void> => {
       const sessionId = joinsRef.current.sessionByRow.get(agent.id);
       if (sessionId === undefined) {
-        announce(`${agent.project} has no terminal here to mount`);
+        announce(`${projectName(agent)} has no terminal here to mount`);
         return;
       }
       if (agent.active && panes.activeSessionId === sessionId) {
-        announce(`${agent.project} is in the active pane`);
+        announce(`${projectName(agent)} is in the active pane`);
         return;
       }
       if (door === null) {
-        announce(`${agent.project} cannot be mounted yet — the deck has no connection`);
+        announce(`${projectName(agent)} cannot be mounted yet — the deck has no connection`);
         return;
       }
       const outcome = await door.mountLocal(sessionId);
@@ -757,18 +663,18 @@ export function useMonitorAgents({
         return;
       }
       if (outcome.state === "failed") {
-        announce(`${agent.project} could not be mounted — ${outcome.reason}`);
+        announce(`${projectName(agent)} could not be mounted — ${outcome.reason}`);
         return;
       }
       setSelectedId(undefined);
-      announce(`${agent.project} mounted in the active pane`);
+      announce(`${projectName(agent)} mounted in the active pane`);
     },
     [announce, door, panes.activeSessionId],
   );
 
   const select = useCallback(
     (agent: MonitorAgent): void => {
-      if (agent.remote !== undefined) {
+      if (!agent.device.self) {
         void attachRemote(agent);
         return;
       }
@@ -851,95 +757,30 @@ export function useMonitorAgents({
   );
 
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
-  const actions = useMemo<MonitorActions>(() => ({ select, createAt }), [createAt, select]);
 
-  // ── the views: ported ones as themselves, a legacy one through the bridge ──
-  // A ported view reads the window's rows, as the model, through `viewReplica`
-  // (MV-4): all four registry views since MV-5/MV-6. A legacy component a host
-  // hands the stage mounts through the bridge (L6), whose `toProps` reads host
-  // state beside the input through `latest`, so a view switch or a frame always
-  // finds this render's facts; a change of those facts alone redraws the
-  // mounted view (`refresh`).
+  // The views read the window's model cut. Commands and reads find this
+  // render's facts through one stable ref; a host-fact change refreshes the cut.
   const agentsById = useMemo(() => new Map(agents.map((row) => [row.id, row] as const)), [agents]);
   const latest = useRef({
     viewRows: (current: MonitorModel) =>
       narrow(windowRows.rowsFor(current, rowFacts), deviceChosen, here),
-    actions,
-    spawnMenu,
     agentsById,
     select,
     createAt,
   });
   latest.current = {
     viewRows: (current) => narrow(windowRows.rowsFor(current, rowFacts), deviceChosen, here),
-    actions,
-    spawnMenu,
     agentsById,
     select,
     createAt,
   };
-  /** MV-4 — the model a ported view draws: the replica cut to the rows the
-   * bridge would hand a legacy view, read through `latest` as `toProps` reads
-   * them, so it always finds this render's facts. */
   const viewReplica = useMemo<WindowViewReplica>(
     () => createWindowViewReplica(replica, (current) => latest.current.viewRows(current)),
     [replica],
   );
-  /** What the views were last given, so a change of window facts alone can draw them again. */
-  const given = useRef<{
-    rows: readonly ViewsMonitorAgent[] | undefined;
-    spawnMenu: MonitorSpawnMenu | undefined;
-  }>({ rows: undefined, spawnMenu: undefined });
-  /** The old view's props from the bridge's input and this render's facts. */
-  const toProps = useCallback((input: MonitorViewInput): AgentMonitorProps => {
-    const rows = latest.current.viewRows(input.model);
-    given.current = { rows, spawnMenu: latest.current.spawnMenu };
-    return {
-      agents: rows,
-      parameters: input.parameters as MonitorParameters,
-      actions: latest.current.actions,
-      palette: input.theme.tokens as MonitorPalette,
-      ...(latest.current.spawnMenu !== undefined ? { spawnMenu: latest.current.spawnMenu } : {}),
-    };
-  }, []);
-  // One bridge per legacy view, built when the stage first asks for it and kept
-  // while its component stands — whatever legacy view a host hands the stage
-  // (the registry holds none since MV-6). MV-0: the component is the view's own,
-  // or the lab's counting wrapper around it while a perf probe is installed
-  // (`monitor/perf/instrumented-view.tsx`); a probe installed or removed rebuilds.
-  // A PORTED view mounts as itself and is not wrapped: its work is inside the
-  // lab's every-root totals, which are what gate (M33).
-  // `/testing`'s commit counter does not fit here — it rebuilds the view
-  // without its root class (L18's stylesheet scope), so the lab would measure
-  // an unstyled view, and it is a tests' subpath (L16).
-  const bridges = useRef(
-    new Map<string, { component: ComponentType<AgentMonitorProps>; view: LegacyMonitorView }>(),
-  );
-  const viewFor = useCallback(
-    (view: MonitorViewEntry): MonitorView => {
-      if (isPortedMonitorView(view)) return view.view;
-      const Component = instrumentedMonitorView(view);
-      const held = bridges.current.get(view.id);
-      if (held !== undefined && held.component === Component) return held.view;
-      const bridged = legacyView<AgentMonitorProps>(view, Component, toProps);
-      bridges.current.set(view.id, { component: Component, view: bridged });
-      return bridged;
-    },
-    [toProps],
-  );
-  // The window facts the views read moved without the model moving (the device
-  // filter, a desktop's standing, a transferred body, the spawn menu): a view
-  // whose props changed draws again (the bridge's `refresh`, for host state
-  // beside the input; a ported view's replica hears it when the rows it is
-  // handed changed).
   useLayoutEffect(() => {
     viewReplica.refresh();
-    const was = given.current;
-    if (was.rows === undefined) return;
-    const rows = latest.current.viewRows(replica.getSnapshot().model);
-    if (rows === was.rows && spawnMenu === was.spawnMenu) return;
-    for (const held of bridges.current.values()) held.view.refresh();
-  }, [replica, viewReplica, placed, spawnMenu, chosenProfile, deviceChosen]);
+  }, [viewReplica, placed, chosenProfile, deviceChosen]);
 
   // The view host reads its commands through the latest props; these reach the latest window too.
   const commands = useMemo<ViewSlotCommands>(
@@ -964,12 +805,10 @@ export function useMonitorAgents({
     () => ({
       // Counted off the window's rows: another desktop's run is an agent row
       // too (DS-3), and it is not one of this desktop's.
-      local: agents.filter((row) => row.agent !== undefined && row.remote === undefined).length,
-      terminals: agents.filter((row) => row.agent === undefined && row.remote === undefined).length,
-      remote: agents.filter((row) => row.remote !== undefined).length,
-      hosts: new Set(
-        agents.flatMap((row) => (row.remote === undefined ? [] : [row.remote.deviceId])),
-      ).size,
+      local: agents.filter((row) => row.kind === "agent" && row.device.self).length,
+      terminals: agents.filter((row) => row.kind === "terminal" && row.device.self).length,
+      remote: agents.filter((row) => !row.device.self).length,
+      hosts: new Set(agents.flatMap((row) => (row.device.self ? [] : [row.device.id]))).size,
       ...localStateOf(feedFacts.state),
       ...remoteStateOf(feedFacts.state),
     }),
@@ -982,7 +821,7 @@ export function useMonitorAgents({
   // when a fact it keys moves, and reads the newest of them when it does.
   const chrome = feed?.chrome ?? null;
   const findKey = useChromeKey(chrome, findJoinKey);
-  const findAgents = useMemo<readonly MonitorAgent[]>(
+  const findAgents = useMemo<readonly FindAgent[]>(
     () => findAgentsOf(agents, joins.runByRow, chrome?.runs() ?? NO_RUNS),
     // keyed by the facts the sheet joins on, not by every frame a run moves in
     [agents, joins, findKey, chrome],
@@ -992,14 +831,12 @@ export function useMonitorAgents({
     replica,
     viewReplica,
     model,
-    viewFor,
     commands,
     capabilities,
     agents,
     shown,
     findAgents,
     runByRow: joins.runByRow,
-    actions,
     sources,
     acknowledgement,
     clearAcknowledgement,

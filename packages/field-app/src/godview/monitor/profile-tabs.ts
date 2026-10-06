@@ -24,7 +24,7 @@ export const NATIVE_PROFILE = "native";
  * since been deleted names no tab and recedes too.
  */
 export function agentProfileSet(agent: MonitorAgent): string | undefined {
-  if (agent.remote !== undefined) return undefined;
+  if (!agent.device.self) return undefined;
   return agent.profileSet;
 }
 
@@ -65,24 +65,4 @@ export function chosenProfile(
 ): AgentProfileSet | undefined {
   if (selected === null || !showsProfileTabs(sets)) return undefined;
   return sets.find((set) => set.id === selected);
-}
-
-/**
- * Rows as the stage draws them under a chosen profile: its own sessions as
- * they are, every other one receded (it keeps its place). The LIVE rows take
- * this from the replica's join (`receded`, the same rule); the timeline's
- * ended lanes take it here. The same list when nothing recedes.
- */
-export function recedeOutside(
-  agents: readonly MonitorAgent[],
-  chosen: string | undefined,
-): readonly MonitorAgent[] {
-  if (chosen === undefined) return agents;
-  let changed = false;
-  const receded = agents.map((agent) => {
-    if (agentProfileSet(agent) === chosen || agent.receded === true) return agent;
-    changed = true;
-    return { ...agent, receded: true };
-  });
-  return changed ? receded : agents;
 }

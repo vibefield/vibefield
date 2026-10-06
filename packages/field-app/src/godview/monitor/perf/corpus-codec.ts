@@ -1,6 +1,6 @@
 import type { DeviceInfo } from "@vibefield/contracts";
 import type { Corpus, CorpusMeta, CorpusPanes } from "./corpus";
-import { decodeFrameLine, encodeFrameLine, type RecordedFrame } from "./frame-recorder";
+import { decodeFrameLine, encodeFrameLine, type RecordedFrame } from "./corpus-frames";
 
 // THE CORPUS ON DISK (MV-0): JSONL. Three header lines the frame decoder skips
 // (`corpus-meta`, `corpus-roster`, `corpus-panes`), then one stamped frame per

@@ -4,8 +4,9 @@
 // once per arm and diffs what the compositor drew:
 //
 //   · A/B (two roots): A, A′ (A again — the A/A control) and B. B's source is
-//     its MODEL STREAM after MV-3b (as the perf runner's), A keeps the fold
-//     corpus. Every capture reads its A/A difference beside its A/B one.
+//     MODEL STREAM (as the perf runner's), and A defaults to its model too.
+//     `--source-a fold` reads a pre-MV-3b checkout through its own old player.
+//     Every capture reads its A/A difference beside its A/B one.
 //   · A/A (one root, the default: this checkout): A and A′ only — the control
 //     itself, the proof that a capture of the same build reproduces.
 //
@@ -48,7 +49,7 @@ const tolerance = Number(option("tolerance", "24"));
 const scale = option("scale", "2");
 const windowMode = option("window", "offscreen") === "shown" ? "shown" : "offscreen";
 const motion = option("motion", "reduce") === "normal" ? "normal" : "reduce";
-const sourceA = option("source-a", "fold") === "model" ? "model" : "fold";
+const sourceA = option("source-a", "model") === "model" ? "model" : "fold";
 const sourceB = option("source-b", paired ? "model" : sourceA) === "model" ? "model" : "fold";
 const build = !argv.includes("--no-build");
 const stamp = new Date().toISOString().replace(/[:.]/g, "-");

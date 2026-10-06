@@ -3,7 +3,7 @@ import type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";
 import { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
 import { useEffect, useState } from "react";
 import type { ChromeFacts } from "./chrome-facts";
-import { meshBoardFailure } from "./doors";
+import { modelBoardFailure } from "./doors";
 import { type HeldModelRow, type ModelBoardDevice, ModelBoardFold } from "./model-board";
 import type { ModelBoardPort } from "./remote-door";
 
@@ -219,7 +219,7 @@ export function createGodviewMonitorFeed(
         {
           onReplayFailed: (cause) => {
             if (!live()) return;
-            const failure = meshBoardFailure(cause);
+            const failure = modelBoardFailure(cause);
             publish({ state: "unavailable", reason: failure.reason, retryable: failure.retryable });
             unsubscribe = null;
             if (failure.retryable) scheduleRetry();
@@ -236,7 +236,7 @@ export function createGodviewMonitorFeed(
       })
       .catch((cause: unknown) => {
         if (!live()) return;
-        const failure = meshBoardFailure(cause);
+        const failure = modelBoardFailure(cause);
         publish({ state: "unavailable", reason: failure.reason, retryable: failure.retryable });
         if (failure.retryable) scheduleRetry();
       });

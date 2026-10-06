@@ -1,6 +1,6 @@
 import type { AgentModelMeshFrame, AgentModelMeshOpen } from "@vibefield/contracts";
 import type { CorpusMeta, ResolvedCorpusRecipe } from "./corpus";
-import type { FrameStamp } from "./frame-recorder";
+import type { FrameStamp } from "./corpus-frames";
 
 // THE MODEL STREAM (MV-3c, build-mv M30) — what the window's ONE door
 // (`agent.subscribe {projection: "model", scope: "mesh"}`, MV-D18) would have

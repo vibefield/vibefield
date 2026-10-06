@@ -432,16 +432,7 @@ function foldDoor(): MonitorDoor {
   foldFrame = (rows) => board?.publish(rows);
   return {
     model: board.port,
-    observeMesh: vi.fn(({ onOpen }) => {
-      onOpen({ devices: [] });
-      return () => undefined;
-    }),
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
-    // the fold's `full` board: no longer asked by the window (MV-3d)
-    observe: ({ onFrame }) => {
-      onFrame(foldRows);
-      return () => undefined;
-    },
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: {
@@ -534,9 +525,9 @@ function PaneLinks({ panes }: { panes: MonitorPaneFacts }): ReactElement {
         <output
           key={agent.id}
           data-session={agent.id}
-          // the views' own read (`viewReadProjection`): the shim leaves it absent when it is the id
+          // The SDK view's spatial identity falls back to its row id.
           data-visual-id={agent.visualId ?? agent.id}
-          data-pane-color={agent.attachment?.color}
+          data-pane-color={agent.attachment?.colour}
           data-palette-lightness={palette.tint.l}
         />
       ))}

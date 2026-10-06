@@ -20,12 +20,7 @@ import {
   useMonitorPalette,
   zoomLayoutApplied,
 } from "@vibecook/puppeteer-views";
-import {
-  AgentInterruptResult,
-  AgentListResult,
-  AgentSpawnResult,
-  type DeviceInfo,
-} from "@vibefield/contracts";
+import { AgentInterruptResult, AgentSpawnResult, type DeviceInfo } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type ComponentProps,
@@ -88,13 +83,13 @@ import { RosterFlips, teeDevicesPort } from "./monitor/devices";
 import {
   devicesPortOver,
   historyPortOver,
-  meshBoardOver,
   modelBoardOver,
   profileSetsPortOver,
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
-import { instrumentMonitorDoor } from "./monitor/perf/door-instruments";
+import { instrumentDevicesPort } from "./monitor/perf/door-instruments";
+
 import type {
   LocalMountOptions,
   LocalMountOutcome,
@@ -1124,22 +1119,10 @@ export function GodviewDeck({
       ) => fieldd.subscribe(method, params, onFrame, opts),
     };
     const built: MonitorDoor = {
-      // DS-3 (2026-09-30, DS-D4) — THE MESH HALF IS THE MESH BOARD. Other
-      // desktops' agents arrive through this window's one door to its own
-      // fieldd (`agent.subscribe {projection: "desk", scope: "mesh"}`), which
-      // multiplexes every self desktop's board (`monitor/mesh-field.ts`). It
-      // replaced `listHosts: () => runtime.listRemoteHosts()` — ghosttea's
-      // mesh-runtime ask, which had no answerer since TM-1 deleted VibeField's
-      // in-process serve, and which under the routed runtime THREW on every
-      // two-second poll ("Remote-host discovery is not part of the routed host
-      // contract"): the SB §9 correction that stood here. Its poll
-      // (`remote-session-field.ts`) retired with it. DS-4e rewired `attach`
-      // below off ghosttea's remote palette onto the routed host.
-      observeMesh: meshBoardOver(doorClient),
       // DS-4e — the monitor's ONE roster subscription, teed: the deck reads the
       // same lists for the names a remote pane says and the flips it asks
       // again on, and opens no second `device.subscribe` of its own
-      devices: teeDevicesPort(devicesPortOver(doorClient), observeRoster),
+      devices: instrumentDevicesPort(teeDevicesPort(devicesPortOver(doorClient), observeRoster)),
       // AR-5 — the find sheet's daemon questions and the usage column's feed,
       // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
       // The views never dial rosettad; the daemon's origin stays in fieldd.
@@ -1162,39 +1145,6 @@ export function GodviewDeck({
           () => undefined,
         );
         return run;
-      },
-      // ── AR-3: the local half — fieldd's fold, and the births into this deck ──
-      observe: ({ onFrame, onError }) => {
-        let cancelled = false;
-        let unsubscribe: (() => void) | null = null;
-        const deliver = (payload: unknown): void => {
-          // the tolerant reader: an unreadable frame is a reason, never a blank
-          const parsed = AgentListResult.safeParse(payload);
-          if (parsed.success) onFrame(parsed.data.sessions);
-          else
-            onError(
-              `agent.subscribe answered an unreadable frame: ${parsed.error.issues[0]?.message ?? "invalid"}`,
-            );
-        };
-        void fieldd
-          .subscribe("agent.subscribe", {}, (payload) => {
-            if (!cancelled) deliver(payload);
-          })
-          .then((subscription) => {
-            if (cancelled) {
-              subscription.unsubscribe();
-              return;
-            }
-            unsubscribe = subscription.unsubscribe;
-            deliver(subscription.snapshot);
-          })
-          .catch((cause: unknown) => {
-            if (!cancelled) onError(cause instanceof Error ? cause.message : String(cause));
-          });
-        return () => {
-          cancelled = true;
-          unsubscribe?.();
-        };
       },
       createTerminal: async (request) => {
         const context = workspaceRef.current;
@@ -1244,9 +1194,7 @@ export function GodviewDeck({
         return run;
       },
     };
-    // MV-0 — the door's instruments (`monitor/perf/door-instruments.ts`): the
-    // same object back unless the renderer's URL asks for a recording.
-    return instrumentMonitorDoor(built);
+    return built;
     /**
      * DS-4e — the remote attach, in three steps, each the answer of its owner:
      *

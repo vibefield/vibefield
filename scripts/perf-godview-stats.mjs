@@ -98,7 +98,8 @@ export function metricTable(frameMs) {
 export function cellMetrics(cell) {
   const r = cell.report;
   const mark = r.marks.find((m) => m.name === "status-flip");
-  const latency = (key) => (mark && mark[key] !== null ? mark[key] - mark.at : Number.NaN);
+  const latency = (key) =>
+    mark && typeof mark[key] === "number" ? mark[key] - mark.at : Number.NaN;
   const view = cell.view;
   const work = cell.replay?.work;
   const totals = cell.totals ?? null;
@@ -123,10 +124,10 @@ export function cellMetrics(cell) {
     "raf work p95 ms/frame": r.raf?.perFrame?.p95 ?? Number.NaN,
     "delivery work ms": work?.totalMs ?? Number.NaN,
     "delivery work p95 ms": work?.p95 ?? Number.NaN,
-    "view renders": r.renders[view] ?? 0,
-    "view commits": r.commits[view] ?? 0,
-    "worker posts": r.postsTotal,
-    "updateAgents posts": r.posts.updateAgents ?? 0,
+    "view renders": r.renders?.[view] ?? Number.NaN,
+    "view commits": r.commits?.[view] ?? Number.NaN,
+    "worker posts": r.postsTotal ?? Number.NaN,
+    "updateAgents posts": r.posts?.updateAgents ?? Number.NaN,
     "canvas2d calls": r.canvas2d.calls,
     "gpu submits": r.gpu.submits,
     "dom mutations": r.dom.mutations,

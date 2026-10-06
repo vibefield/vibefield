@@ -3,8 +3,8 @@
  * THE PROBE'S TOTAL WORK (MV-3c; build-mv M33): every React root's commits and
  * render time between a reset and a report, read off the ledger the lab's
  * DevTools hook publishes — a root the host's root does not contain included —
- * and the two synthetic loads that prove the totals see a view's renders and a
- * separate root's.
+ * and the synthetic side root that proves the totals include a root outside
+ * the host.
  */
 import { afterEach, describe, expect, it } from "vitest";
 import { installGodviewPerfProbe } from "../src/godview/monitor/perf/godview-perf-probe";
@@ -79,20 +79,6 @@ describe("every root's commits", () => {
 });
 
 describe("the synthetic loads (negative controls)", () => {
-  it("a view render waits the asked time inside the render, and only while asked", async () => {
-    const probe = installGodviewPerfProbe();
-    await probe.setSynthetic({ viewRenderMs: 6 });
-    let begun = performance.now();
-    probe.viewRender("list");
-    expect(performance.now() - begun).toBeGreaterThanOrEqual(6);
-    expect(probe.report().synthetic).toEqual({ viewRenderMs: 6 });
-    await probe.setSynthetic({});
-    begun = performance.now();
-    probe.viewRender("list");
-    expect(performance.now() - begun).toBeLessThan(6);
-    expect(probe.report().renders["list"]).toBe(2);
-  });
-
   it("a side root of its own commits once per frame, and leaves with its container", async () => {
     const probe = installGodviewPerfProbe();
     await probe.setSynthetic({ sideRootMs: 0.5 });

@@ -32,20 +32,24 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
-import { MONITOR_SKIN } from "@vibecook/puppeteer-view-sdk";
+import {
+  MONITOR_SKIN,
+  type MonitorCreateAnswer,
+  type MonitorViewCommands,
+  type MonitorViewInput,
+} from "@vibecook/puppeteer-view-sdk";
 import { createRecordingView, type RecordingView } from "@vibecook/puppeteer-view-sdk/testing";
 import {
   type AccountUsagePort,
-  type AgentMonitorProps,
-  type AgentMonitorView,
   DEFAULT_MONITOR_VIEW_ID,
   type HistoryPort,
+  MONITOR_VIEWS,
   type MonitorViewEntry,
   monitorParameterDefaults,
   monitorViewFor,
 } from "@vibecook/puppeteer-views";
 import type { AgentPersona, AgentProfileSet, TerminalInfo } from "@vibefield/contracts";
-import { act, type ReactElement } from "react";
+import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
@@ -165,8 +169,7 @@ interface FakeDoor extends MonitorDoor {
 /** MV-3b — the model board the window's rows come from (`model-board-fixture.ts`):
  * fieldd's real backend on the door's fold rows, with the deck's pane sessions
  * and the roster's PTYs as the floor's inventory (`syncBoard`). One per door,
- * disposed with the test; the fold stays on the door for the readers the model
- * does not serve (the marker, the find sheet). */
+ * disposed with the test; chrome-local facts ride the same model board. */
 let board: ScriptedModelBoard | null = null;
 
 /** fieldd's inventory as the deck's facts imply it: every pane's session, and
@@ -207,26 +210,13 @@ async function settle(): Promise<void> {
 }
 
 function fakeDoor(rows: readonly AgentSessionSummary[] = ROWS): FakeDoor {
-  let publish: ((rows: readonly AgentSessionSummary[]) => void) | null = null;
   board?.dispose();
   const held = scriptedModelBoard({ rows });
   board = held;
   return {
     model: held.port,
-    observeMesh: vi.fn(({ onOpen }) => {
-      onOpen({ devices: [] });
-      return () => undefined;
-    }),
     attach: vi.fn(async () => ({ state: "attached" as const, sessionId: "r", readWrite: true })),
-    observe: vi.fn(({ onFrame }) => {
-      publish = onFrame;
-      onFrame(rows);
-      return () => {
-        publish = null;
-      };
-    }),
     push: (next) => {
-      publish?.(next);
       held.publish(next);
     },
     createTerminal: vi.fn(async () => ({ state: "mounted" as const, sessionId: "born-1" })),
@@ -451,6 +441,7 @@ describe("the monitor stage", () => {
       id: "obstacle-probe",
       label: "OBSTACLES",
       parameterGroups: [],
+      mark: recording.view.manifest.mark,
       view: recording.view,
     };
     const door = fakeDoor();
@@ -594,6 +585,34 @@ describe("the monitor stage", () => {
     expect(pressedView(host)).toBe("SWARM view");
   });
 
+  it("draws each manifest's mark and exposes its keys through the shipping bar (MV-D6, MV-D8)", async () => {
+    const host = await mountMonitor("list");
+    const group = host.querySelector('[role="group"][aria-label="Monitor view"]');
+    for (const entry of MONITOR_VIEWS) {
+      const mark = group?.querySelector(`[aria-label="${entry.label} view"] svg`);
+      expect(mark?.getAttribute("viewBox")).toBe(entry.view.manifest.mark.viewBox);
+      expect(
+        [...(mark?.querySelectorAll("path") ?? [])].map((path) => path.getAttribute("d")),
+      ).toEqual(entry.view.manifest.mark.paths);
+      expect(mark?.classList.contains("is-filled")).toBe(true);
+    }
+    const swarm = monitorViewFor("swarm");
+    const tipHost = group
+      ?.querySelector(`[aria-label="${swarm.label} view"]`)
+      ?.closest(".vf-godview-bar-tip-host");
+    expect(tipHost).not.toBeNull();
+    await act(async () => {
+      const control = tipHost?.querySelector<HTMLButtonElement>("button");
+      expect(control).not.toBeNull();
+      control?.focus();
+    });
+    const keys = tipHost?.querySelector('[role="tooltip"] kbd');
+    expect(keys?.textContent).toBe("⎋ ↵ → ←");
+    expect(keys?.getAttribute("aria-label")).toBe(
+      `while focused: ${swarm.view.manifest.keys?.map((key) => `${key.key}, ${key.label}`).join("; ")}`,
+    );
+  });
+
   it("draws the model's rows before the full board's first frame, and the find sheet never reads the shim's monitor (M47)", async () => {
     // At 283cf3e9 the window held two subscriptions, and the model board's open
     // could reach it before the full board's first frame. The find sheet is
@@ -603,8 +622,7 @@ describe("the monitor stage", () => {
     // board is no longer asked and the sheet's facts ride the model board's own
     // rows (`findAgentsOf`); a full board that never answers changes nothing.
     const door = fakeDoor();
-    // the full board's listener stands, and no frame has come yet
-    door.observe = vi.fn(() => () => undefined);
+    // This door exposes only the model board; no second full-board reader exists.
     const host = await mountMonitor(DEFAULT_MONITOR_VIEW_ID, door);
     expect(pressedView(host)).toBe("SWARM view");
     expect(latest().localAgents).toBe(3);
@@ -1037,24 +1055,19 @@ describe("the monitor stage", () => {
     expect(unsubscribe).toHaveBeenCalledOnce();
   });
 
-  it("carries the deck's own words when a terminal cannot open, then rejects with them", async () => {
-    // Asked as a view asks (`actions.createAt`), through the probe: a create
-    // that opened nothing REJECTS after its words, so a view puts its pending
-    // body away at once (SB-3); the views catch it at every call site.
+  it("carries the deck's own refusal words while the SDK answers that nothing opened", async () => {
+    // The host rejects after its acknowledgement; the SDK resolves that as
+    // opened:false so a view puts its pending body away at once (SB-3, M59).
     const door = fakeDoor();
     door.createTerminal.mockResolvedValueOnce({
       state: "failed",
       reason: "terminal capacity reached",
     });
     const host = await mountProbe(door);
-    await expect(createAt()).rejects.toThrow(
-      "terminal could not be opened — terminal capacity reached",
-    );
+    await expect(createAt()).resolves.toEqual({ opened: false });
     expect(ackText(host)).toBe("terminal could not be opened — terminal capacity reached");
     door.createTerminal.mockResolvedValueOnce({ state: "no-pane" });
-    await expect(createAt()).rejects.toThrow(
-      "no pane to open a terminal in — open one in the deck first",
-    );
+    await expect(createAt()).resolves.toEqual({ opened: false });
     expect(ackText(host)).toContain("no pane");
   });
 
@@ -1375,6 +1388,7 @@ describe("the profile tabs (AR-S5)", () => {
       id: "keys-probe",
       label: "KEYS",
       parameterGroups: [],
+      mark: recording.view.manifest.mark,
       view: recording.view,
     };
     syncBoard(PANES);
@@ -1519,24 +1533,27 @@ describe("the profile tabs (AR-S5)", () => {
 
 // ---- SB-3 — the spawn menu, and the create it asks for ---------------------------
 //
-// The bloom's own surface (P1b) is not in this pin, so these rows read what the
-// stage hands a view through a PROBE — a view that records its props — and
-// drive `createAt(position, target)` exactly as the bloom and the list's menu
-// will: the menu from the tabs' feed, the create under the chosen set, and
+// These rows record the real SDK input and commands, and drive the same
+// create command as the bloom and list menu: the menu from the tabs' feed, the create under the chosen set, and
 // every outcome said, a refusal in fieldd's own words.
 
-let probed: AgentMonitorProps | null = null;
-function Probe(props: AgentMonitorProps): ReactElement {
-  probed = props;
-  return <div className="probe-view" />;
-}
-// A legacy view of its own: since MV-4 the list is an SDK view, so a probe
-// spread from its registry entry would mount the list itself, never the probe.
-const PROBE_VIEW: AgentMonitorView = {
+let probed: MonitorViewInput | null = null;
+let probeCommands: MonitorViewCommands | undefined;
+const probeView = createRecordingView("probe", {
+  onMount: (_root, input, commands) => {
+    probed = input;
+    probeCommands = commands;
+  },
+  onUpdate: (input) => {
+    probed = input;
+  },
+});
+const PROBE_VIEW: MonitorViewEntry = {
   id: "probe",
   label: "PROBE",
+  mark: probeView.view.manifest.mark,
   parameterGroups: [],
-  Component: Probe,
+  view: probeView.view,
 };
 
 async function mountProbe(
@@ -1544,6 +1561,7 @@ async function mountProbe(
   panes: MonitorPaneFacts = PANES,
 ): Promise<HTMLElement> {
   probed = null;
+  probeCommands = undefined;
   container = document.createElement("div");
   document.body.appendChild(container);
   root = createRoot(container);
@@ -1588,38 +1606,34 @@ function slowTabDoor(): TabDoor {
   });
 }
 
-/** A view's `createAt`, inside `act`: a rejection is caught there and thrown
- * after it, so the words it said are committed before the caller reads them. */
+/** The SDK's create answer, after the host's acknowledgement has committed. */
 const createAt = async (
   position?: { x: number; y: number },
   target?: { deviceId?: string; profileSet?: string },
-): Promise<void> => {
-  let failure: unknown;
+): Promise<MonitorCreateAnswer> => {
+  if (probeCommands === undefined) throw new Error("probe is not mounted");
+  let answer!: MonitorCreateAnswer;
   await act(async () => {
-    try {
-      await probed?.actions.createAt(position, target);
-    } catch (cause) {
-      failure = cause;
-    }
+    answer = await probeCommands!.create(position, target);
   });
-  if (failure !== undefined) throw failure;
+  return answer;
 };
 
 describe("the spawn menu and the create it asks for (SB-3)", () => {
   it("offers no menu without a profiles feed — a hold creates at once, as before", async () => {
     await mountProbe(fakeDoor());
     expect(probed).not.toBeNull();
-    expect(probed?.spawnMenu).toBeUndefined();
+    expect(probed?.capabilities.spawn).toBeUndefined();
   });
 
   it("offers this desktop, reading until the feed answers, then its profiles — the same menu object until it changes", async () => {
     const door = slowTabDoor();
     await mountProbe(door);
-    expect(probed?.spawnMenu?.devices).toEqual([
+    expect(probed?.capabilities.spawn?.devices).toEqual([
       { id: HERE_DEVICE_ID, label: "This desktop", self: true, state: "reading" },
     ]);
     await act(async () => door.pushSets(TAB_SETS));
-    const menu = probed?.spawnMenu;
+    const menu = probed?.capabilities.spawn;
     expect(menu?.devices[0]?.state).toBe("ready");
     expect(menu?.devices[0]?.profiles?.map((profile) => profile.id)).toEqual([
       "native",
@@ -1634,7 +1648,7 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
       signedIn: ["Claude Code"],
     });
     await act(async () => door.pushSets([...TAB_SETS]));
-    expect(probed?.spawnMenu).toBe(menu);
+    expect(probed?.capabilities.spawn).toBe(menu);
   });
 
   it("opens a terminal under the chosen profile, says so, and keeps the release point as the spawn hint", async () => {
@@ -1655,7 +1669,7 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
       sessions: [pane("born-1", "/project/born")],
       profileSets: new Map([["born-1", "work"]]),
     });
-    const born = probed?.agents.find((agent) => agent.id === "born-1");
+    const born = probed?.model.agents.find((agent) => agent.id === "born-1");
     // the views match the body drawn at the release point by this, so it is
     // the position as given — never rounded
     expect(born?.spawnHint).toEqual({ x: 120.5, y: 80.25 });
@@ -1676,10 +1690,10 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
       activeSessionId: "old-shell",
       sessions: [pane("old-shell")],
     });
-    const row = (id: string) => probed?.agents.find((agent) => agent.id === id);
-    let creating: void | Promise<void>;
+    const row = (id: string) => probed?.model.agents.find((agent) => agent.id === id);
+    let creating: Promise<MonitorCreateAnswer> | undefined;
     await act(async () => {
-      creating = probed?.actions.createAt({ x: 321.25, y: 123.75 }, { profileSet: "work" });
+      creating = probeCommands?.create({ x: 321.25, y: 123.75 }, { profileSet: "work" });
     });
     // the new shell reaches the stage (the deck's panes) before the door answers
     await renderProbe(door, {
@@ -1707,10 +1721,10 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
         }),
     );
     await mountProbe(door, { sessionIds: [] });
-    const row = (id: string) => probed?.agents.find((agent) => agent.id === id);
-    let creating: void | Promise<void>;
+    const row = (id: string) => probed?.model.agents.find((agent) => agent.id === id);
+    let creating: Promise<MonitorCreateAnswer> | undefined;
     await act(async () => {
-      creating = probed?.actions.createAt({ x: 10.5, y: 20.5 });
+      creating = probeCommands?.create({ x: 10.5, y: 20.5 });
     });
     // another window's shell reaches the roster first, and takes the point…
     const stranger = { sessionId: "stranger", workloadClass: "interactive" as const };
@@ -1739,14 +1753,16 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
     });
     const host = await mountProbe(door);
     const sentence = "terminal could not be opened under Work — that profile no longer exists";
-    await expect(createAt({ x: 10, y: 10 }, { profileSet: "work" })).rejects.toThrow(sentence);
+    await expect(createAt({ x: 10, y: 10 }, { profileSet: "work" })).resolves.toEqual({
+      opened: false,
+    });
     expect(ackText(host)).toBe(sentence);
   });
 
-  it("says, then rejects, when there is no deck to open a terminal in", async () => {
+  it("refuses with an acknowledgement when there is no deck to open a terminal in", async () => {
     const host = await mountProbe(null, { sessionIds: [] });
     const sentence = "no terminal can be opened yet — the deck has no connection";
-    await expect(createAt({ x: 10, y: 10 })).rejects.toThrow(sentence);
+    await expect(createAt({ x: 10, y: 10 })).resolves.toEqual({ opened: false });
     expect(ackText(host)).toBe(sentence);
   });
 
@@ -1778,7 +1794,7 @@ describe("the spawn menu and the create it asks for (SB-3)", () => {
     const host = await mountProbe(door);
     await expect(
       createAt({ x: 10, y: 10 }, { deviceId: "mini", profileSet: "work" }),
-    ).rejects.toThrow("that desktop cannot take a terminal from here yet");
+    ).resolves.toEqual({ opened: false });
     expect(door.createTerminal).not.toHaveBeenCalled();
     expect(ackText(host)).toBe("that desktop cannot take a terminal from here yet");
     // the hub while this desktop's profiles are still being read, a host with no menu
@@ -2108,7 +2124,13 @@ describe("MV-W4 — the motion a ported view may make", () => {
     const recording = createRecordingView("motion-probe");
     return {
       recording,
-      entry: { id: "motion-probe", label: "MOTION", parameterGroups: [], view: recording.view },
+      entry: {
+        id: "motion-probe",
+        label: "MOTION",
+        mark: recording.view.manifest.mark,
+        parameterGroups: [],
+        view: recording.view,
+      },
     };
   }
 
@@ -2277,6 +2299,7 @@ describe("M59 — the body a row continues, and a create that answers", () => {
       id: "spatial-probe",
       label: "SPATIAL",
       parameterGroups: [],
+      mark: recording.view.manifest.mark,
       view: recording.view,
     };
     container = document.createElement("div");
@@ -2373,5 +2396,78 @@ describe("M59 — the body a row continues, and a create that answers", () => {
     expect(ackText(container as HTMLElement)).toBe(
       "no terminal can be opened yet — the deck has no connection",
     );
+  });
+});
+
+// M49 / MV-8: the shipping chrome boundaries, with a real usage reader that
+// throws in render. The model feed and mounted SDK view must survive it.
+describe("a chrome read cannot take down the monitor", () => {
+  it("names the failed piece, keeps delivering the model, and heals on new facts", async () => {
+    let broken = true;
+    const failure = new Error("usage fixture lost its entries");
+    const base = fakeDoor();
+    const door: FakeDoor = {
+      ...base,
+      usage: {
+        ...emptyUsage(),
+        snapshot: async () => ({
+          refreshedAt: CHECKED_AT,
+          get entries() {
+            if (broken) throw failure;
+            return [];
+          },
+        }),
+      },
+    };
+    const recording = createRecordingView("chrome-survivor");
+    const entry: MonitorViewEntry = {
+      id: recording.view.manifest.id,
+      label: recording.view.manifest.label,
+      mark: recording.view.manifest.mark,
+      parameterGroups: [],
+      view: recording.view,
+    };
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const uncaught = vi.fn();
+    const caught = vi.fn();
+    root = createRoot(container, { onUncaughtError: uncaught, onCaughtError: caught });
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    expect(caught.mock.calls.some(([error]) => error === failure)).toBe(true);
+    expect(uncaught).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("Usage unavailable");
+    expect(container.querySelector(".vf-godview-header")).not.toBeNull();
+    expect(recording.mounts).toBe(1);
+    expect(recording.unmounts).toBe(0);
+    const stage = recording.roots[0];
+    expect(stage?.isConnected).toBe(true);
+    const before = recording.updates;
+    await act(async () =>
+      door.push([managedSummary({ runtimeRunId: "surviving-run", cwd: "/project/survives" })]),
+    );
+    await settle();
+    expect(recording.updates).toBeGreaterThan(before);
+    expect(recording.lastInput?.model.agents.some((row) => row.project.name === "survives")).toBe(
+      true,
+    );
+    expect(recording.roots[0]).toBe(stage);
+    expect(recording.unmounts).toBe(0);
+    expect(container.textContent).toContain("Usage unavailable");
+    broken = false;
+    await act(async () => door.push(ROWS));
+    await settle();
+    expect(container.textContent).not.toContain("Usage unavailable");
+    expect(container.querySelector(".vf-usage-column")).not.toBeNull();
+    expect(recording.mounts).toBe(1);
+    expect(recording.unmounts).toBe(0);
+    expect(uncaught).not.toHaveBeenCalled();
   });
 });

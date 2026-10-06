@@ -31,7 +31,11 @@ import {
   decodeCorpusJsonl,
   encodeCorpusJsonl,
 } from "../src/godview/monitor/perf/corpus-codec";
-import type { RecordedFrame } from "../src/godview/monitor/perf/frame-recorder";
+import {
+  decodeFramesJsonl,
+  encodeFramesJsonl,
+  type RecordedFrame,
+} from "../src/godview/monitor/perf/corpus-frames";
 
 const FIXTURES = join(import.meta.dirname, "fixtures", "godview-corpora");
 
@@ -290,6 +294,15 @@ describe("the codec", () => {
     expect(partial.roster).toEqual([]);
     expect(partial.frames).toHaveLength(corpus.meta.counts.fold);
     expect(() => asGeneratedCorpus(partial)).toThrow(/not a generated corpus/);
+  });
+});
+
+describe("the corpus frame codec", () => {
+  it("round-trips stamps and payloads while skipping headers and unreadable lines", () => {
+    const { frames } = generateCorpus({ n: 3, durationMs: 500, seed: 7 });
+    const text = `${JSON.stringify({ kind: "meta", version: 1 })}\nnot json\n${encodeFramesJsonl(frames)}\n{"kind":"fold"}\n`;
+    expect(decodeFramesJsonl(text)).toEqual(JSON.parse(JSON.stringify(frames)));
+    expect(encodeFramesJsonl([])).toBe("");
   });
 });
 

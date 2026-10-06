@@ -6,7 +6,7 @@ import {
   type AgentProfileSet,
   type AgentSessionSummary,
 } from "@vibefield/contracts";
-import type { MeshBoardListener, MonitorDoor } from "../godview/monitor/remote-door";
+import type { MonitorDoor } from "../godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../godview/monitor/useMonitorAgents";
 import { type CatalogDesktop, catalogModelBoard } from "./godview-model-fixture";
 
@@ -212,13 +212,6 @@ export const NO_USAGE: AccountUsagePort = {
   subscribe: () => () => undefined,
 };
 
-/** DS-3 — a desktop alone on the mesh board: the board answers, and no other
- * desktop is on it (no chip, no remote rows). */
-export function aloneOnTheMesh({ onOpen }: MeshBoardListener): () => void {
-  onOpen({ devices: [] });
-  return () => undefined;
-}
-
 /** A door with the fold, the profiles and the model board in it, and no deck:
  * every verb that would need a pane says there is none, as the live door says
  * it. MV-3b: the monitor draws the board (`godview-model-fixture.ts`); the fold
@@ -228,12 +221,7 @@ export function profileTabsDoor(): MonitorDoor {
   const board = catalogModelBoard({ device: THIS_MAC, rows, profiles: PROFILE_TAB_SETS });
   return {
     model: board.port,
-    observeMesh: aloneOnTheMesh,
     attach: async () => ({ state: "no-pane" }),
-    observe: ({ onFrame }) => {
-      onFrame(rows);
-      return () => undefined;
-    },
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
     history: NO_HISTORY,
@@ -352,12 +340,7 @@ export function spawnBloomDoor(onBorn: (birth: CatalogBirth) => void): MonitorDo
   let births = 0;
   return {
     model: board.port,
-    observeMesh: aloneOnTheMesh,
     attach: async () => ({ state: "no-pane" }),
-    observe: ({ onFrame }) => {
-      onFrame(rows);
-      return () => undefined;
-    },
     createTerminal: async (request) => {
       births += 1;
       const sessionId = `catalog-terminal-${births}`;

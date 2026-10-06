@@ -164,11 +164,6 @@ export function meshBoardDoor(): MonitorDoor {
   const board = catalogModelBoard({ device: THIS_MAC, rows, peers: meshPeers(nowIso) });
   return {
     model: board.port,
-    // the mesh port is unread by the window since MV-3b (the one model door carries peers)
-    observeMesh: ({ onOpen }) => {
-      onOpen({ devices: [] });
-      return () => undefined;
-    },
     devices: {
       subscribe: (listener) => {
         listener(meshRoster(now));
@@ -176,10 +171,6 @@ export function meshBoardDoor(): MonitorDoor {
       },
     },
     attach: async () => ({ state: "no-pane" }),
-    observe: ({ onFrame }) => {
-      onFrame(rows);
-      return () => undefined;
-    },
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
     history: {

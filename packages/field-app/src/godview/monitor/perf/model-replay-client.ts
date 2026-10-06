@@ -12,7 +12,7 @@ import type { DoorClient } from "../doors";
 // fieldd, so the window adapter (`createGodviewMonitorFeed`: `ModelBoardFold`,
 // the replica) and every view behind it run exactly as they run live, on
 // recorded answers. Every other call goes to the REAL client when there is one,
-// as the replay door does for the fold's half (`replay-door.ts`).
+// with no second fold subscription or live recorder.
 //
 // It holds what it delivered, folded per desktop like the relay holds it, so a
 // feed that subscribes late — or asks again after a gap — is answered with the

@@ -5,11 +5,16 @@
 against these numbers. They say what today's seam and views cost, so the direction of a later
 delta can be read.
 
-Everything here is reproducible from the repo: the corpora are deterministic (`generateCorpus`),
+The measurements below are historical. Reproduce them from the MV-0 checkout: the corpora are deterministic (`generateCorpus`),
 the oracle and the seam bench are `pnpm --filter @vibefield/field-app perf:godview:{oracle,seam}`,
 the paired harness is `pnpm perf:godview` (outside `pnpm verify`). Raw records beside this file in
 `godview-mv0/`: `aa-baseline-2026-10-03.{json,md}` (the paired run), `seam-cost-2026-10-03.json`,
 `oracle-2026-10-03.json`.
+
+MV-8 retired the live recorder, fold replay door and differential oracle test from current
+source. Stored baseline/oracle evidence remains. The current [model harness](godview-mv3-harness.md)
+keeps deterministic corpus generation and can compare a historical checkout with an explicit
+`--source-a fold`; it records no live status history.
 
 Machine: James's M1 Max, a 120 Hz display (8.3 ms frames), Electron 43, loaded host (memory
 `loaded-host-measurement-discipline`: medians are the estimator, tails are weather; the load

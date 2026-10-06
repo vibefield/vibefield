@@ -12,12 +12,11 @@
 //   · A/A (one root, the default: this checkout): A and B are the same build and
 //     the run IS the null arm.
 //
-// MV-3c — THE B ARM'S SOURCE. After MV-3b the window reads the MODEL (the one
-// door's answer), not the fold. So B is fed each corpus's MODEL STREAM —
-// computed by B's own fieldd code, offline (`perf:godview:model`, run here in
-// B's checkout before the first launch) — and A keeps the fold corpus. Both
-// measure the renderer alone. `--source-a/--source-b fold|model` override it
-// (an A/A of a model-reading build is `--a X --source-a model`).
+// MV-8: both arms default to model streams, computed offline in their own
+// checkout by fieldd's backend (`perf:godview:model`). Only the renderer is
+// measured. A pre-MV-3b checkout still reads fold corpora: choose it explicitly
+// with `--source-a fold` (and `--source-b fold` for an old-tree A/A). Current
+// players reject missing streams instead of falling back to the retired door.
 //
 // M33 — THE GATE READS TOTAL WORK. MV-2's run found per-view rows blind to a
 // view in its own React root (the view host's legacy bridge) and to work the
@@ -28,9 +27,8 @@
 // latencies, rAF work) stay as context. Render time needs React's profiling
 // build, so the runner builds every arm with `VF_REACT_PROFILING=1` first (M32:
 // "A/B perf builds every arm first"; `--no-build` skips it, and a run whose
-// renderer is untimed says so). `--synthetic-b view:<ms>|root:<ms>` makes B
-// the same build plus a synthetic load (a busy wait in each view render, or a
-// side React root committing per frame): the gate's negative control, which the
+// renderer is untimed says so). `--synthetic-b root:<ms>` makes B
+// the same build plus a synthetic load (a side React root committing per frame): the gate's negative control, which the
 // summary must call worse.
 //
 // It waits for the load average to fall below 60 before the first launch (L17),
@@ -44,7 +42,7 @@
 //     [--views swarm,list,rain,timeline] [--out <dir>] [--load-max 60]
 //     [--label <text>] [--source-a fold|model] [--source-b fold|model]
 //     [--window offscreen|shown] [--fps 60] [--scale 2] [--clock corpus|real]
-//     [--no-build] [--synthetic-b view:2|root:2]
+//     [--no-build] [--synthetic-b root:2]
 //
 // Every root is built first with React's profiling client (`VF_REACT_PROFILING=1
 // pnpm --filter @vibefield/desktop build:all` in that checkout); with
@@ -101,7 +99,7 @@ const label = option(
   "label",
   syntheticB !== "" ? `A/B (B = A + synthetic ${syntheticB})` : paired ? "A/B" : "A/A",
 );
-const sourceA = option("source-a", "fold") === "model" ? "model" : "fold";
+const sourceA = option("source-a", "model") === "model" ? "model" : "fold";
 // B reads the model only when it is another build (after MV-3b); a synthetic B is A
 const sourceB =
   option("source-b", rootA !== rootB ? "model" : sourceA) === "model" ? "model" : "fold";

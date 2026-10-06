@@ -42,10 +42,8 @@ import { runGodviewWorkerWindows } from "./godview-worker-windows";
 //
 // MV-3c (build-mv M30, M31, M32):
 //
-//   VF_GODVIEW_PERF_SOURCE   `fold` (default: the corpus, today's seam's input)
-//                            or `model` (the B arm: each corpus's MODEL STREAM —
-//                            what the window's one door answers for it — pushed
-//                            into the page and played into the window adapter)
+//   VF_GODVIEW_PERF_SOURCE   `model` (default). Fold replay retired in MV-8;
+//                            a pre-MV A arm runs its own older lab executable.
 //   VF_GODVIEW_PERF_MODEL_DIR  where `<corpus>.model.jsonl.gz` streams are (model)
 //   VF_GODVIEW_PERF_WARMUP_RECIPE  the discarded warm-up's corpus (default
 //                            `n=10,duration=1500,seed=9,markerQuietMs=50`); under
@@ -56,18 +54,13 @@ import { runGodviewWorkerWindows } from "./godview-worker-windows";
 //   VF_GODVIEW_PERF_WINDOW   `offscreen` (default) or `shown` — never focused,
 //                            never on top (`godview-lab-window.ts`)
 //   VF_GODVIEW_PERF_FPS / _SCALE  the offscreen frame rate and scale (60 / 2)
-//   VF_GODVIEW_PERF_WITNESS  `1`: a second window adapter in the page checks,
-//                            after every cell, that its replica's rows are the
-//                            stream's rows — the proof on a build whose window
-//                            does not read the model yet; never in a gate run
 //   VF_GODVIEW_LAB           `capture`: this launch is the capture tool's
 //                            (`godview-capture.ts`), not a perf run;
 //                            `worker-windows`: the SIGTRAP probe's
 //                            (`godview-worker-windows.ts`, MV-5)
-//   VF_GODVIEW_PERF_SYNTHETIC  M33's negative controls, `view:<ms>` (a busy wait
-//                            in every counted view render) and/or `root:<ms>`
-//                            (a side React root committing once per frame with
-//                            that much render work), e.g. `view:2,root:1`
+//   VF_GODVIEW_PERF_SYNTHETIC  M33's negative control, `root:<ms>`: a separate
+//                            React root commits each frame with that much work.
+//                            `view:<ms>` retired with the legacy view wrapper.
 //
 // M33 — TOTAL WORK. Every cell also carries every React root's commits and
 // summed render time (the probe's `react`, fed by the lab window's DevTools
@@ -102,8 +95,6 @@ export interface GodviewPerfCell {
   startedAt: number;
   /** MV-3c — what the swarm rendered with in this cell (its report, as the slot mirrors it) */
   swarmRenderer: string | null;
-  /** MV-3c — the witness's verdict after the cell (`VF_GODVIEW_PERF_WITNESS=1`) */
-  witness?: unknown;
   /** M33 — Chromium's main-thread totals per second over the cell */
   totals: MetricTotals | null;
 }
@@ -142,13 +133,11 @@ export async function runGodviewPerfLab(opts: {
   const settleMs = Math.max(0, Number(process.env["VF_GODVIEW_PERF_SETTLE_MS"] ?? 1_500));
   const arm = process.env["VF_GODVIEW_PERF_ARM"] ?? "A";
   const source = {
-    kind:
-      process.env["VF_GODVIEW_PERF_SOURCE"] === "model" ? ("model" as const) : ("fold" as const),
+    kind: process.env["VF_GODVIEW_PERF_SOURCE"] === "fold" ? ("fold" as const) : ("model" as const),
     modelDir: process.env["VF_GODVIEW_PERF_MODEL_DIR"] || undefined,
   };
   const warmupRecipe = process.env["VF_GODVIEW_PERF_WARMUP_RECIPE"] || DEFAULT_WARMUP_RECIPE;
   const clock = process.env["VF_GODVIEW_PERF_CLOCK"] === "real" ? "real" : "corpus";
-  const witness = process.env["VF_GODVIEW_PERF_WITNESS"] === "1";
   const synthetic = parseSynthetic(process.env["VF_GODVIEW_PERF_SYNTHETIC"]);
   const windowOptions = labWindowOptions();
   const say = (record: Record<string, unknown>): void => {
@@ -185,11 +174,6 @@ export async function runGodviewPerfLab(opts: {
     if (Object.keys(synthetic).length > 0) {
       await page(win, `window.__vfGodviewPerf.setSynthetic(${JSON.stringify(synthetic)})`);
     }
-    if (witness) {
-      const opened = await page<{ state: string }>(win, "window.__vfGodviewModelWitness.open()");
-      say({ kind: "witness", arm, ...opened });
-    }
-
     // A WARM-UP, discarded: the first trial's first cell carried 4.4 s of
     // long-frame blocking (two LoAFs, the longest 2.3 s) that no later cell saw
     // — first-use costs of the stage, the views' chunks and the JIT. One short
@@ -219,7 +203,7 @@ export async function runGodviewPerfLab(opts: {
         }>(win, "window.__vfGodviewReplay.start()");
         if (source.kind === "model" && (replayStart.listeners?.model ?? 0) === 0) {
           throw new Error(
-            "VF_GODVIEW_PERF_SOURCE=model, but nothing in this build reads the model door (listeners.model = 0); a build whose window does not read the model yet needs VF_GODVIEW_PERF_WITNESS=1",
+            "VF_GODVIEW_PERF_SOURCE=model, but nothing in this build reads the model door (listeners.model = 0)",
           );
         }
         const cellStartedAt = Date.now();
@@ -234,9 +218,6 @@ export async function runGodviewPerfLab(opts: {
         const metricsAtEnd = await pageMetrics(win);
         const report = await page<Record<string, unknown>>(win, "window.__vfGodviewPerf.report()");
         const replay = await page<Record<string, unknown>>(win, "window.__vfGodviewReplay.state()");
-        const witnessed = witness
-          ? await page<unknown>(win, "window.__vfGodviewModelWitness.check()")
-          : undefined;
         const metrics = app.getAppMetrics();
         const renderer = metrics.find((metric) => metric.type === "Tab");
         const gpu = metrics.find((metric) => metric.type === "GPU");
@@ -255,7 +236,6 @@ export async function runGodviewPerfLab(opts: {
           loadavg: loadavg(),
           startedAt: cellStartedAt,
           swarmRenderer: view === "swarm" ? await swarmRenderer(win) : null,
-          ...(witnessed !== undefined ? { witness: witnessed } : {}),
           totals: metricTotals(metricsAtStart, metricsAtEnd),
         };
         cells.push(cell);
@@ -277,13 +257,10 @@ export async function runGodviewPerfLab(opts: {
           scriptMsPerS: cell.totals?.scriptMsPerS,
           reactCommits: react.commits,
           reactRenderMs: react.renderMs,
-          renders: (report["renders"] as Record<string, number> | undefined)?.[view] ?? 0,
-          posts: report["postsTotal"],
           delivered: (replay as { delivered?: number }).delivered,
           skipped: (replay as { skipped?: number }).skipped,
           listeners: replayStart.listeners,
           ...(cell.swarmRenderer !== null ? { swarmRenderer: cell.swarmRenderer } : {}),
-          ...(witnessed !== undefined ? { witness: witnessed } : {}),
         });
         await page(win, "window.__vfGodviewReplay.stop()");
       }
@@ -314,7 +291,6 @@ export async function runGodviewPerfLab(opts: {
         reactHook: lab?.reactHook ?? false,
         metered: lab?.metered ?? false,
         synthetic,
-        witness,
         warmupRecipe,
         electron: process.versions["electron"],
         platform: process.platform,

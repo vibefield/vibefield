@@ -1,11 +1,5 @@
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
-import type {
-  AgentMeshFrame,
-  AgentMeshOpen,
-  AgentProfileSet,
-  DeviceInfo,
-} from "@vibefield/contracts";
-import type { AgentSessionSummary } from "./facet-types";
+import type { AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
 
 export type MonitorFeedState =
   | { state: "no-door" | "loading" | "ready" }
@@ -43,19 +37,6 @@ export interface MonitorUsagePort extends AccountUsagePort {
  * came in beside it, so a row can say which desktop it lives on.
  */
 export interface MonitorDoor {
-  /**
-   * DS-3 — THE MESH BOARD (`agent.subscribe {projection: "desk", scope:
-   * "mesh"}`, DS-D4): every self desktop's agents through this window's ONE
-   * door, multiplexed by its own fieldd (DS-L4 — the window merges nothing).
-   * `onOpen` receives every WHOLE board — the open answer, and the client's
-   * own re-snapshot after a reconnect — and the reader REPLACES what it held;
-   * `onFrame` every per-device frame (a delta, a device's reset, a device's
-   * state); `onError` why the board could not be opened, why the client's
-   * replay of it was refused, or that a frame could not be read — said with
-   * whether asking again may be answered (`MeshBoardFailure`, S4 2026-10-01).
-   * Returns the dispose.
-   */
-  observeMesh(listener: MeshBoardListener): () => void;
   /** DS-3 — the roster (`device.subscribe`): names and platforms, so a row
    * can say which desktop it lives on. Optional, and deliberately: a door
    * without it names each desktop by its id and draws no OS. */
@@ -65,13 +46,6 @@ export interface MonitorDoor {
    * desktops (every remote row says `attachable: false` until then); the
    * verb stays for that slice to rewire. */
   attach(request: RemoteAttachRequest): Promise<RemoteAttachOutcome>;
-  /**
-   * AR-3 — fieldd's fold (`agent.subscribe`): a snapshot, then full frames.
-   * Returns the dispose. `onFrame` receives every frame the daemon sends
-   * (state transfer, never edges); `onError` the reason the subscription could
-   * not be opened or was lost — the field renders that as UNAVAILABLE.
-   */
-  observe(listener: LocalFieldListener): () => void;
   /** Create an empty shell through the workspace's normal birth path — under
    * an Agent Profile when the request names one (SB-3). A refusal is an
    * outcome (`failed`, in fieldd's own words), never a throw. */
@@ -124,16 +98,9 @@ export interface ProfileSetsPort {
   subscribe(listener: (sets: readonly AgentProfileSet[]) => void): () => void;
 }
 
-/** DS-3 — the mesh board's listener (`MonitorDoor.observeMesh`). */
-export interface MeshBoardListener {
-  onOpen(open: AgentMeshOpen): void;
-  onFrame(frame: AgentMeshFrame): void;
-  onError(failure: MeshBoardFailure): void;
-}
-
-/** S4 (2026-10-01) — why the mesh board could not be read, structured: the
+/** S4 (2026-10-01) — why the model board could not be read, structured: the
  * reader decides from what fieldd SAID, never from its words. */
-export interface MeshBoardFailure {
+export interface ModelBoardFailure {
   /** fieldd's own words, or the door's for a board or frame it could not read */
   reason: string;
   /** asking again may be answered: fieldd's refusal said so (the board not
@@ -174,11 +141,6 @@ export interface LocalMountOptions {
 /** The name GT-4 gave the two-verb door; kept for the call sites that only
  * ever asked it about the mesh. */
 export type RemoteSessionDoor = MonitorDoor;
-
-export interface LocalFieldListener {
-  onFrame(rows: readonly AgentSessionSummary[]): void;
-  onError(reason: string): void;
-}
 
 export type LocalMountOutcome =
   | {

@@ -172,8 +172,6 @@ function fakeDoor(
   board = held;
   return {
     model: held.port,
-    // the door still carries the mesh port; the window reads the model door (MV-D18)
-    observeMesh: () => () => undefined,
     devices: {
       subscribe: (deliver) => {
         deliver(ROSTER);
@@ -181,10 +179,6 @@ function fakeDoor(
       },
     },
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
-    observe: vi.fn(({ onFrame }) => {
-      onFrame(rows);
-      return () => undefined;
-    }),
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: unreachableHistory(),
@@ -384,6 +378,7 @@ describe("another desktop's agents as monitor citizens (DS-3)", () => {
       id: "cut-probe",
       label: "CUT",
       parameterGroups: [],
+      mark: recording.view.manifest.mark,
       view: recording.view,
     };
     await mountEntry(fakeDoor(null, LOCAL_ROWS, studio), entry);

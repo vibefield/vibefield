@@ -64,18 +64,7 @@ vi.mock("../src/godview/GodviewDeck", async () => {
   };
   const door = {
     model,
-    observeMesh: ({ onOpen }: { onOpen: (open: { devices: never[] }) => void }) => {
-      onOpen({ devices: [] });
-      return () => undefined;
-    },
     attach: async () => ({ state: "no-pane" as const }),
-    observe: ({ onFrame }: { onFrame: (rows: unknown[]) => void }) => {
-      doorFacts.observeCalls += 1;
-      onFrame(doorFacts.rows);
-      return () => {
-        doorFacts.observeDisposals += 1;
-      };
-    },
     createTerminal: async () => ({ state: "no-pane" as const }),
     mountLocal: async () => ({ state: "no-pane" as const }),
     // AR-5's two ports. The real deck builds them over its fieldd client

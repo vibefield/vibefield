@@ -10,7 +10,7 @@ import {
   type DeviceInfo,
 } from "@vibefield/contracts";
 import type { MonitorFloorRecord } from "../agents";
-import type { RecordedFrame } from "./frame-recorder";
+import type { RecordedFrame } from "./corpus-frames";
 
 // SYNTHETIC CORPORA (MV-0, `design-mv.md` §5: "generates n = 10, 20, 60 agents
 // at fixed change rates").

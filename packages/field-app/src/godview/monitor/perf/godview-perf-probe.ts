@@ -1,47 +1,17 @@
-// THE PROBE (MV-0, step 6): what a mounted view does, counted from inside the
-// renderer — the per-view counters `design-mv.md` §5 asks for, under the same
-// replay: renders and commits of the view subtree, the swarm's worker posts,
-// canvas repaints (2D draw calls and WebGPU submits), DOM mutations under the
-// stage, frame p50/p95 and long animation frames, change-to-pixel latency from
-// a corpus mark to the first render / commit / mutation / draw / frame after it,
-// and the JS heap.
-//
-// DORMANT. Nothing here runs unless `installGodviewPerfLab` was asked for by the
-// renderer's URL (`godviewPerf=1`, set only by the Electron lab); the product
-// hook that feeds it (`instrumentedMonitorView` in GodviewMonitor) reads
-// `activeProbe()` and does nothing on `null`. (MV-5: the swarm's worker is the
-// view's own now, MV-D7, so no host code posts to it and the post counter reads
-// 0 on a build past MV-5 — a context row, never a gate one.) When on, it adds
-// a rAF loop (the frame sampler, the same observer effect `frame-stats.ts`
-// makes and declares), prototype wrappers on the canvas contexts, and one
-// MutationObserver on the stage.
-//
-// React's production build never calls `Profiler.onRender`, so "renders" and
-// "commits" are counted by a wrapper component the host mounts around the view
-// ONLY while the probe is on (the view has no memo: the wrapper renders exactly
-// when the view does).
-//
-// MV-3c (M32) — RAF WORK. An offscreen window pins frame p50 at its frame rate,
-// so the frame intervals stop saying what a frame costs. The probe also times
-// every animation-frame callback the page asks for (the views' draw loops, a
-// replica's publication and the store render it queues — each callback with the
-// microtasks it queued), per frame and in total; its own sampler is not counted.
-//
-// MV-3c (M33) — EVERY ROOT. The counting wrapper sees only the view inside the
-// host's root; a view host that mounts a view in its own root hides it. The
-// report also carries every React root's commits and summed render time
-// (`react-roots.ts`, fed by the lab's DevTools hook), and the lab samples
-// Chromium's own task totals around the same window (`Performance.getMetrics`).
-// Two synthetic loads prove those totals see a view's renders and a separate
-// root's (`setSynthetic`): a busy wait inside each counted view render, and a
-// side root that commits once per frame with a busy wait in its render.
+// THE GODVIEW LAB PROBE. Installed only for `godviewPerf=1`: frame intervals,
+// animation-frame callback work, long animation frames, stage mutations,
+// canvas draws, heap usage and every React root's commits/render time.
+// The SDK view has its own root; react-roots.ts reads the lab's DevTools hook
+// so the gate includes it. Chromium task totals come from the lab's CDP samples.
+// The synthetic side root proves the totals include work outside the host root.
+// MV-8 retires the legacy view wrapper and its render/commit/worker counters.
+// Old report files remain readable by the paired harness; an absent counter is
+// unknown, never a manufactured zero.
 
 import { type ReactRootsReport, reactRootsBase, reactRootsSince } from "./react-roots";
 
 /** MV-3c (M33) — the negative controls; zero is off. */
 export interface GodviewPerfSynthetic {
-  /** busy wait, ms, inside every counted view render */
-  viewRenderMs?: number;
   /** a side React root that commits once per frame with this much render work */
   sideRootMs?: number;
 }
@@ -49,8 +19,6 @@ export interface GodviewPerfSynthetic {
 export interface GodviewPerfMark {
   name: string;
   at: number;
-  firstRenderAfter: number | null;
-  firstCommitAfter: number | null;
   firstMutationAfter: number | null;
   firstDraw2dAfter: number | null;
   firstGpuAfter: number | null;
@@ -65,10 +33,6 @@ export interface GodviewPerfReport {
    * time, and that time per frame */
   raf: { callbacks: number; totalMs: number; perFrame: { p50: number; p95: number; max: number } };
   loaf: { observable: boolean; count: number; blockingMs: number; longestMs: number };
-  renders: Record<string, number>;
-  commits: Record<string, number>;
-  posts: Record<string, number>;
-  postsTotal: number;
   canvas2d: { calls: number; framesWithCalls: number };
   gpu: { submits: number; framesWithSubmits: number };
   dom: { mutations: number; childList: number; attributes: number; characterData: number };
@@ -83,13 +47,8 @@ export interface GodviewPerfReport {
 export interface GodviewPerfProbe {
   reset(): void;
   report(): GodviewPerfReport;
-  /** the replay door delivered a corpus mark */
+  /** the model replay delivered a corpus mark */
   mark(name: string, at?: number): void;
-  /** the counting wrapper rendered / committed the view */
-  viewRender(viewId: string, at?: number): void;
-  viewCommit(viewId: string, at?: number): void;
-  /** the physics driver posted a command */
-  workerPost(type: string): void;
   /** watch the stage's subtree; retried on rAF until the element exists */
   observeStage(selector: string): void;
   /** MV-3c (M33) — set the negative controls (`{}` turns them off) */
@@ -125,7 +84,7 @@ const DRAW_METHODS = [
 
 let probe: GodviewPerfProbe | null = null;
 
-/** The side root (M33's second control): its own container and `createRoot`,
+/** The side root (M33's total-work control): its own container and `createRoot`,
  * so its commits are a root the view host's root does not contain. Reached by
  * dynamic import: the probe module stays free of react-dom until asked. */
 async function mountSideRoot(
@@ -168,9 +127,6 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
   let loafCount = 0;
   let loafBlockingMs = 0;
   let loafLongestMs = 0;
-  const renders = new Map<string, number>();
-  const commits = new Map<string, number>();
-  const posts = new Map<string, number>();
   let draw2dCalls = 0;
   let draw2dThisFrame = false;
   let framesWithDraw2d = 0;
@@ -327,10 +283,6 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
     attach();
   };
 
-  const bump = (map: Map<string, number>, key: string): void => {
-    map.set(key, (map.get(key) ?? 0) + 1);
-  };
-
   probe = {
     reset() {
       since = now();
@@ -340,9 +292,6 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
       loafCount = 0;
       loafBlockingMs = 0;
       loafLongestMs = 0;
-      renders.clear();
-      commits.clear();
-      posts.clear();
       draw2dCalls = 0;
       draw2dThisFrame = false;
       framesWithDraw2d = 0;
@@ -391,10 +340,6 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
           blockingMs: loafBlockingMs,
           longestMs: loafLongestMs,
         },
-        renders: Object.fromEntries(renders),
-        commits: Object.fromEntries(commits),
-        posts: Object.fromEntries(posts),
-        postsTotal: [...posts.values()].reduce((total, count) => total + count, 0),
         canvas2d: { calls: draw2dCalls, framesWithCalls: framesWithDraw2d },
         gpu: { submits: gpuSubmits, framesWithSubmits: framesWithGpu },
         dom: {
@@ -416,25 +361,11 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
       marks.push({
         name,
         at,
-        firstRenderAfter: null,
-        firstCommitAfter: null,
         firstMutationAfter: null,
         firstDraw2dAfter: null,
         firstGpuAfter: null,
         nextFrameAfter: null,
       });
-    },
-    viewRender(viewId, at = now()) {
-      if ((synthetic.viewRenderMs ?? 0) > 0) busyWait(synthetic.viewRenderMs ?? 0);
-      bump(renders, viewId);
-      settle("firstRenderAfter", at);
-    },
-    viewCommit(viewId, at = now()) {
-      bump(commits, viewId);
-      settle("firstCommitAfter", at);
-    },
-    workerPost(type) {
-      bump(posts, type);
     },
     observeStage,
     async setSynthetic(next) {

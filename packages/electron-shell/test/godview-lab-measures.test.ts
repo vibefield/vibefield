@@ -52,7 +52,7 @@ describe("the React commit hook", () => {
     expect(hook.inject({})).toBe(2);
     const app = { containerInfo: element("DIV", "root", ""), current: { actualDuration: 3 } };
     const view = {
-      containerInfo: element("DIV", "", "vf-view-slot legacy"),
+      containerInfo: element("DIV", "", "mv-slot"),
       current: { actualDuration: 1.5 },
     };
     hook.onCommitFiberRoot(1, app);
@@ -63,7 +63,7 @@ describe("the React commit hook", () => {
     expect(ledger?.timed()).toBe(true);
     expect(JSON.parse(JSON.stringify(ledger?.records))).toEqual([
       { id: 1, label: "div#root", commits: 2, renderMs: 5 },
-      { id: 2, label: "div.vf-view-slot", commits: 1, renderMs: 1.5 },
+      { id: 2, label: "div.mv-slot", commits: 1, renderMs: 1.5 },
     ]);
   });
 
@@ -104,11 +104,16 @@ describe("a window's totals", () => {
 });
 
 describe("the negative controls' spelling", () => {
-  it("reads view and root loads, and ignores the rest", () => {
+  it("reads the side root load", () => {
     expect(parseSynthetic(undefined)).toEqual({});
     expect(parseSynthetic("")).toEqual({});
-    expect(parseSynthetic("view:2")).toEqual({ viewRenderMs: 2 });
-    expect(parseSynthetic("view:2, root:0.5")).toEqual({ viewRenderMs: 2, sideRootMs: 0.5 });
-    expect(parseSynthetic("root:-1,view:x,disk:3")).toEqual({});
+    expect(parseSynthetic(" root:0.5 ")).toEqual({ sideRootMs: 0.5 });
+  });
+
+  it("rejects a retired or malformed control instead of measuring no load", () => {
+    expect(() => parseSynthetic("view:2")).toThrow("legacy view-render control is retired");
+    for (const text of ["root:-1", "root:0", "root:x", "root:Infinity", "disk:3", "root:1:2"]) {
+      expect(() => parseSynthetic(text)).toThrow("Invalid synthetic load");
+    }
   });
 });

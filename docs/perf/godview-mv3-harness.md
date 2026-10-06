@@ -6,31 +6,35 @@ product: it runs only in the `--godview-perf-lab` mode, whose renderer is loaded
 ([godview-mv0-baselines.md](godview-mv0-baselines.md)) with the B-side source, the corpus clock, the
 window mode, total-work metrics and a capture tool. Numbers stay **reference, never a bound** (L14).
 
+**MV-8 update:** current players accept model streams only, and both runners default every arm to
+`model`. Pre-MV comparisons use `--source-a fold` against the old checkout. The live recorder,
+fold replay door, differential oracle test and legacy view counters have retired. Offline corpus
+inputs and model generation, the model player, all-root/CDP/frame/DOM/canvas probes, and paired
+and capture readers remain. The dated results below remain evidence of their original SHAs.
+
 ## What A and B measure
 
-- **A** is today's renderer seam: it is fed each corpus's fold frames through the replay door.
-- **B** is the window after MV-3b: it is fed each corpus's **model stream**, which is what the
-  window's one door (`agent.subscribe {projection: "model"}`) answers for that corpus. The stream
-  is computed offline by B's own fieldd code (`perf:godview:model`) on a virtual clock.
-  - The lab's player feeds it to the window adapter (`createGodviewMonitorFeed` →
-    `instrumentModelClient`), so B measures the renderer only, as A does.
-  - With no stream pushed, a start plays the fold source, byte for byte.
-- **The corpus clock (M31)** is on by default for both arms while a replay plays: the page's
-  `Date.now` reads the corpus's wall time.
-  - Without it, today's seam classified every replayed row as stale against the machine's clock,
-    while the backend computed recency at the corpus's time.
-  - `godview-corpus-clock.test.ts` holds that the seam's recency and the backend's agree under
-    the clock and disagree without it.
+- **A and B** each receive their checkout's model stream: the answer to the window's one
+  `agent.subscribe {projection: "model"}` door. Each checkout's own fieldd backend computes that
+  stream offline (`perf:godview:model`), so the measurement covers the renderer only.
+- **A pre-MV-3b arm** receives fold frames through that checkout's own player when explicitly
+  selected. Current players refuse a missing/mismatched model stream or a start with no model
+  listener; they cannot silently measure the retired fold path.
+- **The corpus clock (M31)** defaults on for both arms: the page's `Date.now` reads the corpus's
+  wall time. Old A seams classify recency at that time; current model streams already contain
+  the backend's recency. `godview-corpus-clock.test.ts` proves timed model delivery, fixed-frame
+  capture cuts and restoring the real clock after playback.
 
 ## The window (M31, M32), proven
 
 - **One mode for every arm and both tools: offscreen.** It uses `webPreferences.offscreen` with its
   own `deviceScaleFactor`. The window is never shown, never focused and never on top, and the
   page's focus is emulated over CDP.
-- **The swarm renders with WebGPU there:** `data-swarm-renderer="webgpu"` in every swarm cell of
-  every run (the runner's summary prints it per arm).
-- **One window per process:** Electron 43 dies when an offscreen window is destroyed and the next
-  one opens.
+- **The swarm renderer is reported by the view** through SDK commands; the host mirrors that
+  report on its own slot. The runner prints `webgpu` for each swarm cell.
+- **One window per process in measurements:** MV-0 observed an Electron 43 crash after destroying
+  an offscreen window and opening another. The dedicated worker-window probe now exercises that
+  lifecycle separately; each slice's logs carry its result.
 - **Offscreen draws at 60 fps.** Asked for 120, `getFrameRate()` answered 120 and frames still
   landed every 16.7 ms, so 60 is the default.
   - Frame p50 is therefore pinned. Read rAF work, delivery work, LoAF and, above all, the totals.
@@ -56,30 +60,27 @@ frame scheduler moved into rAF. Every cell now carries two totals.
     B − A of at least 1 ms/s, besides z > 4 and T > 2 %.
   - A component that rises while its cell's task total falls reads `shifted`. It is named, never
     a failure.
-  - Per-view rows (renders, commits, posts, latencies) are context.
-- **Negative controls** (`VF_GODVIEW_PERF_SYNTHETIC`):
-  - `view:<ms>` busy-waits inside every counted view render.
-  - `root:<ms>` mounts a side React root of its own that commits once per frame with that much
-    render work.
-  - In single launches on this tree, both moved the totals by what they cost.
-    - `root:2` showed up as its own root (`div.vf-perf-side-root`, 269 commits, 541.6 ms) and
-      added +119 to +127 ms/s of task time.
-    - So the totals see a separate root's renders, which is the case B will have.
+  - Per-view rows in historical reports are context. Retired counters are unknown when absent,
+    never fabricated zeroes; all-root and CDP totals remain the gate.
+- **Negative control** (`VF_GODVIEW_PERF_SYNTHETIC=root:<ms>`): a separate React root commits
+  once per frame with that much render work. The totals include it. The retired `view:<ms>`
+  control now rejects clearly, as do invalid or zero loads.
+  - In the original single-launch proof, `root:2` appeared as `div.vf-perf-side-root`
+    (269 commits, 541.6 ms) and added +119 to +127 ms/s of task time.
 
 ## How to run
 
 ```sh
-# the paired gate, A/B: B replays its model stream, A the fold corpus; R = 7; builds both first
+# paired model gate, R = 7; builds both arms first
 pnpm perf:godview --a <A checkout> --b <B checkout> [--out <dir>]
-# an A that already reads the model (any base after MV-3b) replays ITS model stream too; with
-# the default `fold` source its stage would draw nothing (MV-3d's A/B, 2026-10-05)
-pnpm perf:godview --a <A checkout> --b <B checkout> --source-a model [--out <dir>]
-# A/A on one checkout (the null arm alone); a model-reading build: --source-a model
+# historical A before MV-3b, using its own fold player
+pnpm perf:godview --a <pre-MV checkout> --b <B checkout> --source-a fold [--out <dir>]
+# A/A on a current checkout (the null arm alone)
 pnpm perf:godview [--a <checkout>]
-# the gate's negative control: B = A's own build + a synthetic load, judged against A′
-pnpm perf:godview --synthetic-b view:2
-# before/after captures; one checkout = the A/A control (a model-reading A: --source-a model)
-pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--source-a model] [--out <dir>]
+# B = A's own build plus a separate root's work, judged against A′
+pnpm perf:godview --synthetic-b root:2
+# captures: one current checkout = A/A; choose --source-a fold only for an old A
+pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
 ```
 
 **The runner** works as follows.

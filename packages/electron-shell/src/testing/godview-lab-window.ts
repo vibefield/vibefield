@@ -405,7 +405,8 @@ export async function loadCorpus(
     win,
     `window.__vfGodviewReplay.load(${JSON.stringify(recipe)})`,
   );
-  if (source.kind !== "model") return { ...loaded, model: null };
+  if (source.kind !== "model")
+    throw new Error("fold replay retired in MV-8; run the pre-MV arm with its own checkout");
   if (source.modelDir === undefined)
     throw new Error("VF_GODVIEW_PERF_SOURCE=model needs VF_GODVIEW_PERF_MODEL_DIR");
   const model = await pushModelStream(win, source.modelDir, loaded.corpus);

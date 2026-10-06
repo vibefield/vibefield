@@ -1,14 +1,11 @@
-import type { MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
-import type { MonitorAgent as ViewsMonitorAgent } from "@vibecook/puppeteer-views";
-import { type LegacyShimOptions, toMonitorAgents } from "@vibecook/puppeteer-views/legacy";
+import type { AgentView, MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
 import type { RowsDeviceState } from "@vibefield/contracts";
 import { type HeldModelRow, isTerminalBoardRow } from "./model-board";
 import type { MonitorPaneFacts } from "./useMonitorAgents";
 
 /**
- * MV-3b (L9, M4, M9) — THE WINDOW'S ROWS: the legacy shim's rows for the
- * replica's model, in VibeField's words, with the facts the shim cannot know
- * because they are this WINDOW's and not the model's:
+ * THE WINDOW'S ROWS (MV-3b, MV-8): the replica's model rows, with this
+ * window's membership, order and standing. Business facts stay the backend's:
  *
  *   · a PEER's greying is its desktop's STANDING on the board (DS-L8), never
  *     the owner's evidence clock — no evidence clock crosses desktops, and the
@@ -34,15 +31,9 @@ import type { MonitorPaneFacts } from "./useMonitorAgents";
  * second copy of the rule.
  *
  * Identity is kept (MV-D21): the same model and the same facts give the same
- * list, a row nothing patched is the shim's own object, and a patched row is
+ * list, a row nothing patched is the replica's own object, and a patched row is
  * the same object while its patch is. Pure; nothing here dials.
  */
-
-/** VibeField's shim words (M4, M9): the reply-first line; peers carry no core facts. */
-export const VIBEFIELD_SHIM: LegacyShimOptions = Object.freeze({
-  detail: "reply-first",
-  peerMonitor: "omit",
-});
 
 export interface WindowRowFacts {
   /** each desktop's standing on the board (DS-L8), by device id */
@@ -57,70 +48,44 @@ export interface WindowRowFacts {
 
 export interface WindowRows {
   /** every row of the model, patched and ordered for this window; the same list while nothing moved */
-  rowsFor(model: MonitorModel, facts: WindowRowFacts): readonly ViewsMonitorAgent[];
+  rowsFor(model: MonitorModel, facts: WindowRowFacts): readonly AgentView[];
 }
 
 interface Patched {
-  readonly key: string;
-  readonly row: ViewsMonitorAgent;
+  readonly stale: boolean;
+  readonly visualId: string;
+  readonly row: AgentView;
 }
 
 function sameList<T>(left: readonly T[], right: readonly T[]): boolean {
   return left.length === right.length && left.every((item, index) => item === right[index]);
 }
 
-/** The patch a row needs, as a key: nothing (the shim's row stands), or what moved. */
-function patchKey(shim: ViewsMonitorAgent, facts: WindowRowFacts, visualId: string): string {
-  const parts: string[] = [];
-  if (shim.remote !== undefined) {
-    const live = facts.standing.get(shim.remote.deviceId) === "live";
-    parts.push(live ? "peer:live" : "peer:greyed");
-  }
-  if (visualId !== shim.id) parts.push(`visual:${visualId}`);
-  return parts.join("\u0001");
-}
-
-function patch(shim: ViewsMonitorAgent, key: string): ViewsMonitorAgent {
-  let row: ViewsMonitorAgent = shim;
-  for (const part of key.split("\u0001")) {
-    if (part === "peer:live" || part === "peer:greyed") {
-      const { profileSet: _owners, stale: _owner, ...rest } = row;
-      row = part === "peer:greyed" ? { ...rest, stale: true } : rest;
-    } else if (part.startsWith("visual:")) {
-      row = { ...row, visualId: part.slice("visual:".length) };
-    }
-  }
-  return Object.freeze(row);
-}
-
 export function createWindowRows(): WindowRows {
-  const patched = new WeakMap<ViewsMonitorAgent, Patched>();
+  const patched = new WeakMap<AgentView, Patched>();
   /** every row's visual id last time: the seam's carry-forward (`previousVisualIds`) */
   let previousVisual: ReadonlyMap<string, string> = new Map();
   let lastModel: MonitorModel | undefined;
   let lastFacts: WindowRowFacts | undefined;
-  let last: readonly ViewsMonitorAgent[] = Object.freeze([]);
+  let last: readonly AgentView[] = Object.freeze([]);
   return {
     rowsFor(model, facts) {
       if (model === lastModel && facts === lastFacts) return last;
-      const shim = toMonitorAgents(model, VIBEFIELD_SHIM);
-      const shimById = new Map<string, ViewsMonitorAgent>();
-      for (const row of shim) shimById.set(row.id, row);
       // the stage's order: the facts' ids first, then whatever the model holds beyond them
-      const ordered: ViewsMonitorAgent[] = [];
+      const ordered: AgentView[] = [];
       const placed = new Set<string>();
       for (const id of facts.order) {
-        const row = shimById.get(id);
+        const row = model.byId.get(id);
         if (row === undefined || placed.has(id)) continue;
         placed.add(id);
         ordered.push(row);
       }
-      for (const row of shim) if (!placed.has(row.id)) ordered.push(row);
-      const rows: ViewsMonitorAgent[] = [];
+      for (const row of model.agents) if (!placed.has(row.id)) ordered.push(row);
+      const rows: AgentView[] = [];
       const bodies = new Set<string>();
       const visuals = new Map<string, string>();
       for (const row of ordered) {
-        const session = row.remote === undefined ? facts.sessionByRow.get(row.id) : undefined;
+        const session = row.device.self ? facts.sessionByRow.get(row.id) : undefined;
         const visualId =
           (session === undefined ? undefined : facts.visualIds?.get(session)) ??
           previousVisual.get(row.id) ??
@@ -131,24 +96,38 @@ export function createWindowRows(): WindowRows {
         // row takes over the shell's body while the shell's row is still here
         if (bodies.has(visualId)) continue;
         bodies.add(visualId);
-        const key = patchKey(row, facts, visualId);
-        if (key === "") {
+        const stale = row.device.self ? row.stale : facts.standing.get(row.device.id) !== "live";
+        if (
+          row.stale === stale &&
+          (row.device.self || row.profileSet === undefined) &&
+          (row.visualId ?? row.id) === visualId
+        ) {
           rows.push(row);
           continue;
         }
         const held = patched.get(row);
-        if (held?.key === key) {
+        if (held?.stale === stale && held.visualId === visualId) {
           rows.push(held.row);
           continue;
         }
-        const made = patch(row, key);
-        patched.set(row, { key, row: made });
+        const { profileSet, visualId: _previous, ...rest } = row;
+        const made: AgentView = Object.freeze({
+          ...rest,
+          stale,
+          ...(row.device.self && profileSet !== undefined ? { profileSet } : {}),
+          ...(visualId !== row.id ? { visualId } : {}),
+        });
+        patched.set(row, { stale, visualId, row: made });
         rows.push(made);
       }
       // the seam carried forward only the rows it drew
       previousVisual = new Map(rows.map((row) => [row.id, visuals.get(row.id) ?? row.id]));
-      // the shim's own list while every row is its own; the last list while nothing moved
-      last = sameList(rows, shim) ? shim : sameList(rows, last) ? last : Object.freeze(rows);
+      // the replica's own list while every row is its own; the last list while nothing moved
+      last = sameList(rows, model.agents)
+        ? model.agents
+        : sameList(rows, last)
+          ? last
+          : Object.freeze(rows);
       lastModel = model;
       lastFacts = facts;
       return last;
@@ -161,7 +140,7 @@ export function createWindowRows(): WindowRows {
  * (`setLocal({ visualIds })`): the visual id the window rows gave a row, kept
  * only where it is not the row's own id, since a view reads `visualId ?? id`.
  */
-export function visualIdsOf(rows: readonly ViewsMonitorAgent[]): ReadonlyMap<string, string> {
+export function visualIdsOf(rows: readonly AgentView[]): ReadonlyMap<string, string> {
   const ids = new Map<string, string>();
   for (const row of rows) {
     if (row.visualId !== undefined && row.visualId !== row.id) ids.set(row.id, row.visualId);
@@ -234,8 +213,8 @@ export function rowOrder(
 }
 
 /** The desktop a row lives on: a peer's own, else this one (`here`). */
-export function deviceOfRow(row: ViewsMonitorAgent, here: string | undefined): string | undefined {
-  return row.remote?.deviceId ?? here;
+export function deviceOfRow(row: AgentView, here: string | undefined): string | undefined {
+  return row.device.self ? here : row.device.id;
 }
 
 /**
@@ -244,10 +223,10 @@ export function deviceOfRow(row: ViewsMonitorAgent, here: string | undefined): s
  * row. The same list when nothing is dropped.
  */
 export function narrowToDevice(
-  rows: readonly ViewsMonitorAgent[],
+  rows: readonly AgentView[],
   device: string | null,
   here: string | undefined,
-): readonly ViewsMonitorAgent[] {
+): readonly AgentView[] {
   if (device === null) return rows;
   const kept = rows.filter((row) => deviceOfRow(row, here) === device);
   return kept.length === rows.length ? rows : kept;

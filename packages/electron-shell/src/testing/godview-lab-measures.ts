@@ -37,18 +37,22 @@ export function metricTotals(
   };
 }
 
-/** `view:2,root:1` → the probe's synthetic load (M33's negative controls). */
-export function parseSynthetic(text: string | undefined): {
-  viewRenderMs?: number;
-  sideRootMs?: number;
-} {
-  const synthetic: { viewRenderMs?: number; sideRootMs?: number } = {};
+/** `root:2` → a side React root with 2 ms of render work per frame (M33). */
+export function parseSynthetic(text: string | undefined): { sideRootMs?: number } {
+  const synthetic: { sideRootMs?: number } = {};
   for (const part of (text ?? "").split(",")) {
-    const [kind, value] = part.split(":").map((piece) => piece.trim());
+    if (part.trim() === "") continue;
+    const [kind, value, extra] = part.split(":").map((piece) => piece.trim());
+    if (kind === "view") {
+      throw new Error("The legacy view-render control is retired; use root:<ms> with SDK views");
+    }
     const ms = Number(value);
-    if (!(Number.isFinite(ms) && ms > 0)) continue;
-    if (kind === "view") synthetic.viewRenderMs = ms;
-    if (kind === "root") synthetic.sideRootMs = ms;
+    if (kind !== "root" || extra !== undefined || !(Number.isFinite(ms) && ms > 0)) {
+      throw new Error(
+        `Invalid synthetic load ${JSON.stringify(part)}; expected root:<positive ms>`,
+      );
+    }
+    synthetic.sideRootMs = ms;
   }
   return synthetic;
 }

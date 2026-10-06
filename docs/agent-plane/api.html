@@ -1555,17 +1555,19 @@
                     <td><p><code>agent-runtime.test.ts</code></p></td>
                   </tr>
                   <tr>
-                    <td><span class="route">agent.history</span></td>
-                    <td><p><code>AgentHistoryParams {runtimeRunIds?}</code> → <code>AgentHistoryResult {horizonMs, runs}</code></p></td>
-                    <td><p><code>agent.observe</code></p></td>
+                    <td><span class="route">agent.reportShown</span></td>
+                    <td><p><code>AgentReportShownParams {ids: string[]}</code> → <code>{reported: true}</code></p></td>
+                    <td><p><code>agent.observe</code> · local only</p></td>
                     <td><p>yes</p></td>
-                    <td><p>the fold's status ledger (TL-D8, <code>agent-status-ledger.ts</code>) — the runs the fold holds, and runs whose verified record exited inside <code>AGENT_HISTORY.HORIZON_MS</code>, read from <code>agents/history/</code>; a run with no record or no ledger is left out, never guessed. Each run's changes are oldest first and trimmed to the horizon (the change straddling the cut starts at it, and <code>recordedFrom</code> moves up to it). <code>local</code>: asked once when Godview opens, never carried on a frame. A malformed ask is <code>PRECONDITION_FAILED</code></p></td>
+                    <td><p>The monitor backend's unread acknowledgement, by MODEL id. The screen is the connection's
+                      open model board, never an id supplied by the caller. No board: <code>PRECONDITION_FAILED
+                      {state: "no-screen"}</code>. An empty list clears the report; closing the board forgets its screen.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
-                    <td><p><code>agent-status-ledger.test.ts</code>, <code>agent-session.test.ts</code></p></td>
+                    <td><p><code>agent-model-daemon.test.ts</code></p></td>
                   </tr>
                   <tr>
                     <td><span class="route">agent.subscribe</span></td>
-                    <td><p><code>AgentSubscribeParams</code> → <code>AgentListResult</code> frames, or <code>AgentFieldSnapshot</code> + <code>AgentFieldDelta</code></p></td>
+                    <td><p><code>AgentSubscribeParams {projection?: "full" | "field" | "desk" | "model", scope?: "local" | "mesh", …}</code> → the projection's snapshot/deltas (full: whole <code>AgentListResult</code> frames)</p></td>
                     <td><p><code>agent.observe</code></p></td>
                     <td><p>yes</p></td>
                     <td><p><code>runtime.onMonitorState / onMonitorRemoved / onMonitorNotification</code></p></td>
@@ -1581,6 +1583,33 @@
               always the record's own, resolved through the record fieldd signed when it spawned that run.
               If agent cells ever adopt a PTY the record did not mint, the named upgrade is that resume
               also asks for <code>terminal.attach</code>.
+            </p>
+
+            <h3 id="monitor-model">The window's model board (MV)</h3>
+            <p class="section-note">
+              Godview asks <code>agent.subscribe {projection: "model", scope: "mesh"}</code> once. The open is
+              <code>AgentModelMeshOpen</code>; subsequent <code>AgentModelMeshFrame</code>s multiplex each desktop's
+              snapshot, delta or standing. Local scope is <code>AgentModelSnapshot</code> / <code>AgentModelDelta</code>.
+              Revisions and epochs belong to each chain; a gap reopens it. This desktop's cut contains the backend's
+              complete <code>monitorRow</code>, bare terminals, and the run's optional <code>local</code> facts at the
+              16 ms floor, with urgent changes ahead of it. Other desktops contribute their owner's <code>desk</code> cut.
+              The model projection is refused to peers and phones; the phone continues to read <code>field</code>.
+            </p>
+            <p>
+              <code>AgentModelLocalFacts</code> carries only what this window's chrome needs: <code>nativeSessionId</code>,
+              <code>cwd</code>, <code>spawnedBy</code>, <code>exited</code>, and optional mirror facts
+              <code>alive</code>, <code>startedAt</code>, <code>lastEvidenceAt</code>, <code>contextSource</code>.
+              These facts ride the same row/frame, eliminating the race with a second full-board subscription.
+              They never enter <code>monitorRow</code>, the peer's desk cut or the phone's field row. A missing fact
+              remains absent. The schemas live in <code>packages/contracts/src/agent-field.ts</code>.
+            </p>
+            <p>
+              <code>MonitorDoor</code> is the host's adapter, not a view capability: <code>model</code>, optional
+              <code>devices</code>/<code>profiles</code>, terminal create/attach/mount verbs, and the host chrome's
+              <code>history</code>/<code>usage</code> ports. MV-8 removes its unused <code>observe</code> and
+              <code>observeMesh</code> verbs. The view receives only SDK input and declared commands.
+              <strong><code>agent.history</code> was removed with MV-6.</strong> fieldd keeps no status ledger;
+              historical reads belong to rosetta. Existing history files on disk are left untouched.
             </p>
 
             <h3 id="cat-agents">agents.* — distribution, Agent Profiles and their sign-ins, extensions, account usage</h3>

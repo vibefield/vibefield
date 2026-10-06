@@ -48,7 +48,7 @@ beforeAll(async () => {
 function cell(
   task: number,
   options: { renderMs?: number; timed?: boolean; script?: number; layout?: number } = {},
-): unknown {
+) {
   return {
     view: "list",
     report: {
@@ -109,6 +109,33 @@ describe("a cell's metrics", () => {
     expect(Number.isNaN(stats.cellMetrics(cell(150, { timed: false }))["react render ms/s"])).toBe(
       true,
     );
+  });
+
+  it("reads legacy counters when present and leaves retired counters unknown", () => {
+    const legacy = cell(150);
+    const old = stats.cellMetrics(legacy);
+    expect(old["view renders"]).toBe(480);
+    expect(old["worker posts"]).toBe(0);
+    const {
+      renders: _renders,
+      commits: _commits,
+      posts: _posts,
+      postsTotal: _total,
+      ...report
+    } = legacy.report;
+    const current = stats.cellMetrics({ ...legacy, report });
+    for (const name of [
+      "view renders",
+      "view commits",
+      "worker posts",
+      "updateAgents posts",
+      "mark→render ms",
+      "mark→commit ms",
+    ]) {
+      expect(Number.isNaN(current[name]), name).toBe(true);
+    }
+    expect(current["task ms/s"]).toBe(old["task ms/s"]);
+    expect(current["react render ms/s"]).toBe(old["react render ms/s"]);
   });
 
   it("the gate rows are the totals, frame p50, the LoAF rows and the total's components (M33, M40)", () => {

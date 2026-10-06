@@ -16,13 +16,21 @@ Stated at `draft/thinking-ar-agent-plane.md` §1. Read the middle column as hard
 
 | Repo | Owns | Must never know |
 |---|---|---|
-| **puppeteer** (TS, in fieldd) | one `Agent` per managed run: lifecycle, adapter-owned live semantics, guarded control, workspaces, own-action records, the monitor projection, the launch recipe | PTYs (it borrows a host) · the desktop · other devices · history search |
+| **puppeteer** (TS, in fieldd) | one `Agent` per managed run: lifecycle, adapter-owned live semantics, guarded control, workspaces, own-action records, one live monitor backend per desktop and its model, the launch recipe | PTYs (it borrows a host) · the desktop · other devices · transcript ingestion and history search |
 | **rosetta** (Rust, `rosettad`) | every agent's on-disk history on this device as a raw ledger plus a disposable canonical projection; full-text search; the live transcript tail; consent over which runtimes enroll | process liveness · control · VibeField · puppeteer |
 | **vibe-field** | custody (PTYs + mesh in field-native), composition and policy in fieldd, presentation (Godview, canvas, History, the phone) | any vendor's format, grammar or protocol — **AR-L1: VibeField knows no vendor** |
 
 Enforced by walls R20/R21/R22 in `scripts/check-import-boundaries.mjs`, which `scripts/preflight.mjs`
 runs twice (`--self-test`, then `--enforce`). `pnpm verify` gets them through `pnpm preflight`, its
 first step — **not** through `pnpm check:deps`, which is a different script.
+
+MV's monitor ownership is written in [architecture](agent-plane/architecture.html#monitor-ownership),
+its backend/window composition in [system](agent-plane/system.html#monitor-backend), and its one model
+subscription plus `agent.reportShown` in [api](agent-plane/api.html#monitor-model). Only the model syncs;
+one SDK view mounts per window. Godview is runtime only: it records no history. The ownership law assigns
+transcript ingestion solely to rosetta; architecture names the pre-existing runtime adapter readers that
+still need migration. MV adds no reader and does not claim that separate gap is closed. Find and usage
+are host chrome with injected ports, outside the sandboxed views.
 
 ## The five family pages
 
@@ -32,8 +40,8 @@ URLs, because a relative path cannot resolve between checkouts.
 | Page | Path | Governs |
 |---|---|---|
 | **The agent plane across three repositories** | [`docs/agent-plane/architecture.html`](agent-plane/architecture.html) | The umbrella: the ownership law, the system diagram across three repositories, the seams, the walls, the data domains, the identity spine, the laws, lifetimes, performance, status, and the map of every document. |
-| **Aggregation and integration in VibeField** | [`docs/agent-plane/system.html`](agent-plane/system.html) | Aggregation and integration in VibeField: fieldd's agent services and their graph, the floor's agent cell, the mirror and the fold, the field projection to the phone, history and enrollment, the data domains and layout, the walls as enforced, and the sequences. |
-| **The doors** | [`docs/agent-plane/api.html`](agent-plane/api.html) | The doors: the conventions (contracts, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of agent.*, agents.*, index.* and the agent-relevant terminal.*, the mesh store, each door mapped to the upstream API it wraps, and versioning. |
+| **Aggregation and integration in VibeField** | [`docs/agent-plane/system.html`](agent-plane/system.html) | Aggregation and integration in VibeField: fieldd's agent services and their graph, the floor's agent cell, the mirror and the fold, the live monitor backend and replicas, the audience cuts to windows/peers/phones, history and enrollment, the data domains and layout, the walls as enforced, and the sequences. |
+| **The doors** | [`docs/agent-plane/api.html`](agent-plane/api.html) | The doors: the conventions (contracts, scopes, locality, errors, subscriptions, tickets, audit), the catalogue of agent.*, agents.*, index.* and the agent-relevant terminal.*, the model board and window-only facts, `agent.reportShown`, the mesh store, each door mapped to the upstream API it wraps, and versioning. |
 | **Hosting puppeteer — the embedding seam** | puppeteer [`docs/host-integration.html`](https://github.com/vibefield/puppeteer/blob/main/docs/host-integration.html) | Hosting puppeteer: the embedding seam for any host — the AgentHost contract and its ingress half, constructing the runtime, what a host may import, the monitor contract and its versioning, the views' ports, distribution and profiles from the host's seat, continuity across host restarts, and the two reference hosts. |
 | **rosettad — the daemon protocol and embedding seam** | rosetta [`docs/daemon-api.html`](https://github.com/vibefield/rosetta/blob/main/docs/daemon-api.html) | rosettad for a host: the process model and supervision, enrollment and consent, the readiness vocabulary, the wire, the TypeScript client, identity across the seam, access control today and RO-1, versioning, and the two reference hosts. |
 

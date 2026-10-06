@@ -1,21 +1,21 @@
 import type { MonitorTheme, StageGeometry, ViewReport } from "@vibecook/puppeteer-view-sdk";
 import { frameScheduler, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
+import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
 import {
   type AccountUsagePort,
   BarControl,
+  ChromeBoundary,
+  type FindAgent,
   FindSheet,
   type HistoryPort,
   InstrumentBar,
-  isPortedMonitorView,
   MONITOR_CHROME_ATTRIBUTE,
   MONITOR_STAGE_CLASS,
   MONITOR_VIEWS,
   type MonitorParameters,
-  ProfileGlyph,
   ProfileTabs,
   UsageColumn,
   useMonitorPalette,
-  type MonitorAgent as ViewsMonitorAgent,
 } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
 import {
@@ -38,7 +38,7 @@ import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
 import { launcherOwnsKeyEvent, setMonitorHoldsKeys } from "./monitor/launcher-keys";
 import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
-import type { MonitorAgent, MonitorViewEntry } from "./monitor/types";
+import type { MonitorViewEntry } from "./monitor/types";
 import {
   type MonitorPaneFacts,
   type MonitorSourceCounts,
@@ -314,18 +314,15 @@ export function GodviewMonitor({
   // MV-3b — THE WINDOW on the replica (`useMonitorAgents`): the backend's rows
   // through this window's one door, joined with the deck's panes, the chosen
   // tab and the chosen desktop; list and rain as SDK views on the window's cut
-  // of it (MV-4), the swarm and the timeline through the view host's legacy bridge.
+  // of it (MV-4…MV-6); Find alone adapts its local chrome facts (M19).
   const {
-    replica,
     viewReplica,
-    viewFor,
     commands,
     capabilities,
     agents,
     shown,
     findAgents,
     runByRow,
-    actions,
     sources,
     acknowledgement,
     clearAcknowledgement,
@@ -365,6 +362,9 @@ export function GodviewMonitor({
       subscribe: (listener) => source.subscribe(listener),
     };
   }, [usagePort, usageAttempt]);
+  // A failed column changes the observed tile count. Retry only for new source facts,
+  // not that observer's own host update, or a persistent bad batch remounts forever.
+  const usageRetryKey = useMemo(() => ({ agents, columnUsagePort }), [agents, columnUsagePort]);
   useEffect(() => {
     setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
     return usagePort?.subscribeState?.(setUsageState);
@@ -412,7 +412,7 @@ export function GodviewMonitor({
     () =>
       new Set(
         shown.flatMap((row) => {
-          const run = row.agent === undefined ? undefined : runByRow.get(row.id);
+          const run = row.kind !== "agent" ? undefined : runByRow.get(row.id);
           return run === undefined ? [] : [run];
         }),
       ),
@@ -550,7 +550,7 @@ export function GodviewMonitor({
     emitGodviewMonitorMarker({
       viewId: view.id,
       agents: agents.length,
-      agentBacked: agents.filter((agent) => agent.agent !== undefined).length,
+      agentBacked: agents.filter((agent) => agent.kind === "agent").length,
       localClaim: localClaim(sources),
       localAgents: sources.local,
       terminals: sources.terminals,
@@ -632,87 +632,87 @@ export function GodviewMonitor({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [showTabs, tabKey]);
 
-  /** The chosen view: a ported one as itself (MV-4), a legacy one through the
-   * bridge — whatever view the host hands the stage. */
-  const hostedView = viewFor(view);
-  const ported = isPortedMonitorView(view);
   return (
     <>
-      <InstrumentBar
-        counts={counts}
-        onSelectStatus={noStatusCycle}
-        views={MONITOR_VIEWS}
-        viewId={view.id}
-        onSelectView={(viewId) => onSelectView?.(viewId)}
-        theme={theme}
-        onThemeChange={noThemeSwitch}
-        leading={
-          <>
-            {reserveWindowControls ? (
-              <span className="vf-godview-native-controls-space" aria-hidden="true" />
-            ) : null}
-            <span className="vf-godview-header-notice" aria-live="polite">
-              {notice ?? ""}
-            </span>
-          </>
-        }
-        {...(showTabs || devices.length > 1
-          ? {
-              centre: (
-                <>
-                  {devices.length > 1 ? (
-                    <DeviceFilterChip
-                      devices={devices}
-                      selected={deviceChosen}
-                      onSelect={setDeviceChoice}
-                      onOpenChange={setDeviceMenuOpen}
-                    />
-                  ) : null}
-                  {showTabs ? (
-                    <ProfileTabs
-                      tabs={tabs}
-                      selected={chosenId ?? null}
-                      onSelect={setProfileTab}
-                      shortcuts
-                    />
-                  ) : null}
-                </>
-              ),
-            }
-          : {})}
-        trailing={
-          <>
-            <BarControl
-              mark="find"
-              label="FIND"
-              shortcut="⌘F"
-              ariaLabel="Find an agent by what was said"
-              {...(findOpen ? { controls: "vf-find-sheet" } : {})}
-              on={findOpen}
-              onClick={() => setFindOpen((current) => !current)}
-            />
-            <BarControl
-              mark="tune"
-              label="SYSTEM CONTROL"
-              ariaLabel="System control"
-              controls="vf-godview-tweak-panel"
-              on={tuningOpen}
-              onClick={() => onToggleTuning?.()}
-            />
-          </>
-        }
-      />
+      <ChromeBoundary name="Monitor controls">
+        <InstrumentBar
+          counts={counts}
+          onSelectStatus={noStatusCycle}
+          views={MONITOR_VIEWS}
+          viewId={view.id}
+          onSelectView={(viewId) => onSelectView?.(viewId)}
+          theme={theme}
+          onThemeChange={noThemeSwitch}
+          leading={
+            <>
+              {reserveWindowControls ? (
+                <span className="vf-godview-native-controls-space" aria-hidden="true" />
+              ) : null}
+              <span className="vf-godview-header-notice" aria-live="polite">
+                {notice ?? ""}
+              </span>
+            </>
+          }
+          {...(showTabs || devices.length > 1
+            ? {
+                centre: (
+                  <>
+                    {devices.length > 1 ? (
+                      <DeviceFilterChip
+                        devices={devices}
+                        selected={deviceChosen}
+                        onSelect={setDeviceChoice}
+                        onOpenChange={setDeviceMenuOpen}
+                      />
+                    ) : null}
+                    {showTabs ? (
+                      <ProfileTabs
+                        tabs={tabs}
+                        selected={chosenId ?? null}
+                        onSelect={setProfileTab}
+                        shortcuts
+                      />
+                    ) : null}
+                  </>
+                ),
+              }
+            : {})}
+          trailing={
+            <>
+              <BarControl
+                mark="find"
+                label="FIND"
+                shortcut="⌘F"
+                ariaLabel="Find an agent by what was said"
+                {...(findOpen ? { controls: "vf-find-sheet" } : {})}
+                on={findOpen}
+                onClick={() => setFindOpen((current) => !current)}
+              />
+              <BarControl
+                mark="tune"
+                label="SYSTEM CONTROL"
+                ariaLabel="System control"
+                controls="vf-godview-tweak-panel"
+                on={tuningOpen}
+                onClick={() => onToggleTuning?.()}
+              />
+            </>
+          }
+        />
+      </ChromeBoundary>
 
-      <FindSheet
-        open={findOpen}
-        agents={findAgents}
-        history={door?.history ?? NO_HISTORY}
-        onClose={closeFind}
-        onSelect={(agent: ViewsMonitorAgent) => {
-          actions.select(agent as MonitorAgent);
-          setFindOpen(false);
-        }}
-      />
+      <ChromeBoundary name="Find">
+        <FindSheet
+          open={findOpen}
+          agents={findAgents}
+          history={door?.history ?? NO_HISTORY}
+          onClose={closeFind}
+          onSelect={(agent: FindAgent) => {
+            commands.select(agent.id);
+            setFindOpen(false);
+          }}
+        />
+      </ChromeBoundary>
 
       <section
         ref={stageRef}
@@ -721,17 +721,11 @@ export function GodviewMonitor({
           sources.remote === 0 ? "Agent monitor" : "Agent monitor — local and remote sessions"
         }
       >
-        {/* One view, drawn from this window's replica (MV-3b): one update per
-            frame, on the host's ONE frame scheduler (M7). All four views are SDK
-            views (MV-4…MV-6) and read the window's cut of the model from their
-            first frame — a switch between a ported view and a legacy one a host
-            hands the stage mounts a fresh slot (the key) rather than handing the
-            new view the other kind's model for a frame. The swarm brings its own
-            physics worker (MV-D7) and says what it runs and paints (`onReport`). */}
+        {/* One SDK view reads this window's model, on the host's one frame
+            scheduler. Each view owns its styles, effects and resources. */}
         <MonitorViewHost
-          key={ported ? "view" : "legacy"}
-          replica={ported ? viewReplica : replica}
-          view={hostedView}
+          replica={viewReplica}
+          view={view.view}
           stage={stageGeometry}
           theme={monitorTheme}
           parameters={parameters}
@@ -742,23 +736,27 @@ export function GodviewMonitor({
           className="vf-monitor-view-slot"
         />
         {emptyUnder !== undefined ? (
-          <div className="vf-monitor-profile-empty" role="status">
-            <span className="vf-monitor-profile-empty-ring" aria-hidden="true">
-              <ProfileGlyph
-                glyph={emptyUnder.glyph}
-                kind={emptyUnder.kind}
-                filled={emptyUnder.default}
-                size={16}
-              />
-            </span>
-            <b>No sessions under {emptyUnder.label}</b>
-            <span>This tab shows sessions using this profile.</span>
-          </div>
+          <ChromeBoundary name="Profile">
+            <div className="vf-monitor-profile-empty" role="status">
+              <span className="vf-monitor-profile-empty-ring" aria-hidden="true">
+                <ProfileGlyph
+                  glyph={emptyUnder.glyph}
+                  kind={emptyUnder.kind}
+                  filled={emptyUnder.default}
+                  size={16}
+                />
+              </span>
+              <b>No sessions under {emptyUnder.label}</b>
+              <span>This tab shows sessions using this profile.</span>
+            </div>
+          </ChromeBoundary>
         ) : null}
         {/* The chrome slot: the usage column down the stage's left edge (record
             §05), the package's own; the swarm steers around it. */}
         <div ref={chromeRef} className="vf-monitor-chrome" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
-          <UsageColumn port={columnUsagePort} />
+          <ChromeBoundary name="Usage" retryKey={usageRetryKey}>
+            <UsageColumn port={columnUsagePort} />
+          </ChromeBoundary>
         </div>
         {/* The claims: VibeField's, on their own strip — also solid to the swarm. */}
         <div ref={claimsRef} className="vf-monitor-claims" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>

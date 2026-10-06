@@ -36,7 +36,7 @@ import {
   recipeName,
   resolveRecipe,
 } from "../../src/godview/monitor/perf/corpus";
-import type { RecordedFrame } from "../../src/godview/monitor/perf/frame-recorder";
+import type { RecordedFrame } from "../../src/godview/monitor/perf/corpus-frames";
 import {
   MODEL_STREAM_GENERATOR,
   MODEL_STREAM_VERSION,

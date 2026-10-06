@@ -6,9 +6,8 @@
  * behind the same `godviewReplay=1` switch — and with nothing asked, the
  * feed's client is the client.
  *
- * The proof runs on the tree as it stands (the window does not read the model
- * yet, mv3b wires it): the replayed stream reaches a replica built by the
- * window adapter's own code, and the replica's rows ARE the stream's rows —
+ * The replayed stream reaches the shipping window adapter's replica, and the
+ * replica's rows ARE the stream's rows —
  * checked against a fold of the stream written here, independently of the
  * adapter's.
  */
@@ -27,12 +26,10 @@ import { modelBoardOver } from "../src/godview/monitor/doors";
 import { createGodviewMonitorFeed } from "../src/godview/monitor/model-replica";
 import {
   instrumentModelClient,
-  instrumentMonitorDoor,
   resetGodviewDoorInstrumentsForTest,
 } from "../src/godview/monitor/perf/door-instruments";
 import { godviewPerfLab, resetGodviewPerfLabForTest } from "../src/godview/monitor/perf/lab-bridge";
 import { decodeModelStreamJsonl } from "../src/godview/monitor/perf/model-stream";
-import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 
 const STREAM = gunzipSync(
   readFileSync(
@@ -52,34 +49,6 @@ function refusingClient(): DoorClient & { calls: string[] } {
     subscribe: async (method) => {
       calls.push(`subscribe ${method}`);
       throw new Error(`no daemon: ${method}`);
-    },
-  };
-}
-
-function quietDoor(): MonitorDoor {
-  return {
-    observe: () => () => undefined,
-    observeMesh: () => () => undefined,
-    attach: async () => ({ state: "no-pane" as const }),
-    createTerminal: async () => ({ state: "no-pane" as const }),
-    mountLocal: async (sessionId: string) => ({ state: "mounted" as const, sessionId }),
-    history: {
-      status: async () => ({
-        reachable: false,
-        detail: "fixture",
-        checkedAt: "2026-10-03T00:00:00Z",
-      }),
-      facts: async () => [],
-      search: async () => ({
-        status: { reachable: false, detail: "fixture", checkedAt: "2026-10-03T00:00:00Z" },
-        answered: false,
-        hits: [],
-        clipped: false,
-      }),
-    },
-    usage: {
-      snapshot: async () => ({ refreshedAt: "2026-10-03T00:00:00Z", entries: [] }),
-      subscribe: () => () => undefined,
     },
   };
 }
@@ -162,7 +131,6 @@ describe("the model door's instrument", () => {
   it("with nothing asked, the feed's client is the client", () => {
     const real = refusingClient();
     expect(instrumentModelClient(real, "")).toBe(real);
-    expect(instrumentModelClient(real, "?godviewRecord=1")).toBe(real);
     expect(instrumentModelClient(real, "?godviewMarkers=1&godviewPerf=1")).toBe(real);
     expect(godviewPerfLab()).toBeNull();
   });
@@ -198,13 +166,12 @@ describe("the model door's instrument", () => {
   });
 });
 
-describe("the B-side replay — on the tree as it stands", () => {
+describe("the model replay through the shipping window adapter", () => {
   it("the replayed model stream reaches the window adapter's replica, whose rows are the stream's rows", async () => {
     window.history.replaceState(null, "", "/?godviewPerf=1&godviewReplay=1");
     const real = refusingClient();
     // the window adapter, built as a window builds it: the board over the client, which goes through the switch
     const feed = createGodviewMonitorFeed({ board: modelBoardOver(real) });
-    instrumentMonitorDoor(quietDoor());
     await vi.advanceTimersByTimeAsync(0);
     expect(feed.state()).toEqual({ state: "live", here: undefined });
     const lab = godviewPerfLab();
@@ -267,47 +234,26 @@ describe("the B-side replay — on the tree as it stands", () => {
     feed.dispose();
   });
 
-  it("the lab's witness — a second adapter in the page — reads the same verdict, and can say no", async () => {
-    window.history.replaceState(null, "", "/?godviewPerf=1&godviewReplay=1");
-    instrumentMonitorDoor(quietDoor());
-    const lab = godviewPerfLab();
-    const witness = window.__vfGodviewModelWitness;
-    if (lab === null || witness === undefined) throw new Error("the switch installed no lab");
-    const opened = witness.open();
-    await vi.advanceTimersByTimeAsync(0);
-    expect(await opened).toEqual({ state: "live" });
-    lab.player.load(RECIPE);
-    lab.player.pushModel(STREAM);
-    lab.player.start();
-    // the open is delivered in the start's own task; the replica publishes on its frame
-    const early = witness.check();
-    expect(early.equal).toBe(false);
-    expect(early.expected).toBe(15);
-    expect(early.rows).toBe(0);
-    await vi.advanceTimersByTimeAsync(3_000);
-    expect(lab.player.state().phase).toBe("ended");
-    const late = witness.check();
-    expect(late).toMatchObject({ open: true, state: "live", rows: 15, expected: 15, equal: true });
-    expect(late.mismatched).toEqual([]);
-    witness.close();
-  });
-
-  it("refuses a stream for another corpus, and plays the fold source untouched without one", async () => {
+  it("refuses a mismatched stream and cannot replay the retired fold source", async () => {
     window.history.replaceState(null, "", "/?godviewPerf=1&godviewReplay=1");
     const feed = createGodviewMonitorFeed({ board: modelBoardOver(refusingClient()) });
-    const replayDoor = instrumentMonitorDoor(quietDoor());
+    await vi.advanceTimersByTimeAsync(0);
     const lab = godviewPerfLab();
     if (lab === null) throw new Error("the switch installed no lab");
     lab.player.load("n=20,duration=2000,seed=1");
     expect(() => lab.player.pushModel(STREAM)).toThrow(/does not belong/);
-    expect(lab.player.source()).toBe("fold");
-    const started = lab.player.start();
-    expect(started.source).toBe("fold");
-    expect(started.model).toBeNull();
-    await vi.advanceTimersByTimeAsync(3_000);
-    expect(lab.player.state().phase).toBe("ended");
-    expect(lab.player.state().skipped).toBe(0);
-    expect(replayDoor).not.toBeNull();
+    expect(() => lab.player.start()).toThrow(/model stream/);
+    expect(lab.player.state().delivered).toBe(0);
     feed.dispose();
+  });
+
+  it("refuses to measure a model stream with no window listening", async () => {
+    instrumentModelClient(refusingClient(), "?godviewReplay=1");
+    const lab = godviewPerfLab();
+    if (lab === null) throw new Error("the switch installed no lab");
+    lab.player.load(RECIPE);
+    lab.player.pushModel(STREAM);
+    expect(() => lab.player.start()).toThrow(/no window listening/);
+    expect(lab.player.state().delivered).toBe(0);
   });
 });
