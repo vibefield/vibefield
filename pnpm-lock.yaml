@@ -42,7 +42,7 @@ catalogs:
 
 overrides:
   loro-crdt: ^1.13.8
-  '@vibecook/ice': 0.15.0-desk.3
+  '@vibecook/ice': 0.15.0-desk.4
   '@vibecook/ghosttea-client': 0.12.0
   '@vibecook/ghosttea-electron': 0.12.0
   '@vibecook/ghosttea-protocol': 0.12.0
@@ -107,8 +107,8 @@ importers:
   apps/plugin-playground:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.15.0-desk.3
-        version: 0.15.0-desk.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.15.0-desk.4
+        version: 0.15.0-desk.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../../packages/contracts
@@ -284,8 +284,8 @@ importers:
   packages/design-kit:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.15.0-desk.3
-        version: 0.15.0-desk.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.15.0-desk.4
+        version: 0.15.0-desk.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
     devDependencies:
       '@react-three/fiber':
         specifier: ^9.6.1
@@ -397,8 +397,8 @@ importers:
         specifier: link:../../../ghosttea-0.11.2/packages/ghosttea-react
         version: link:../../../ghosttea-0.11.2/packages/ghosttea-react
       '@vibecook/ice':
-        specifier: 0.15.0-desk.3
-        version: 0.15.0-desk.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.15.0-desk.4
+        version: 0.15.0-desk.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibecook/puppeteer-core':
         specifier: link:../../../puppeteer/packages/core
         version: link:../../../puppeteer/packages/core
@@ -665,8 +665,8 @@ importers:
   packages/plugin-sdk:
     dependencies:
       '@vibecook/ice':
-        specifier: 0.15.0-desk.3
-        version: 0.15.0-desk.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+        specifier: 0.15.0-desk.4
+        version: 0.15.0-desk.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
       '@vibefield/contracts':
         specifier: workspace:*
         version: link:../contracts
@@ -1875,8 +1875,8 @@ packages:
   '@vibecook/ghosttea-protocol@0.12.0':
     resolution: {integrity: sha512-RNAnE0vMmPFT3Nax4qMF9q1k+VhJDm9vhhk4b+bJVTM6ayVPIhFeaItCIKwK3ulnHLM/IDFl36NsSuI5FJu7iw==}
 
-  '@vibecook/ice@0.15.0-desk.3':
-    resolution: {integrity: sha512-fFvaop52NsHvIDg06BG+SBabtKy6ZBoRbzJ0QAH4Wa0cr8f3Lj7gOCcOHpN+WOEatGZ2YFp6H2ERZGU5XFjhfg==}
+  '@vibecook/ice@0.15.0-desk.4':
+    resolution: {integrity: sha512-KiakAHFqq8CqSGy9ZxNj75ja1GrghIko1tzd74fhtZVgSOp3BUPZgdpwHm0peb8mayiqCYEXK7sa+jlwvANAog==}
     engines: {node: '>=20'}
     peerDependencies:
       react: '>=19'
@@ -4326,7 +4326,7 @@ snapshots:
 
   '@vibecook/ghosttea-protocol@0.12.0': {}
 
-  '@vibecook/ice@0.15.0-desk.3(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
+  '@vibecook/ice@0.15.0-desk.4(react-dom@19.2.7(react@19.2.7))(react@19.2.7)':
     dependencies:
       '@vibecook/strata-ecs': 0.13.0(loro-crdt@1.13.8)(react@19.2.7)
       '@webgpu/types': 0.1.74

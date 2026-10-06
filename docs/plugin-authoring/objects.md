@@ -611,9 +611,15 @@ export type RGB = readonly [number, number, number];
  * Parse the CSS colour syntaxes tokens.css uses — `#rrggbb`, `rgb(r g b / p%)`,
  * `rgba(r, g, b, a)` — into sRGB 0..1 + alpha. The swap chain is a plain
  * 8-bit format, so what CSS shows is what the shader writes.
+ *
+ * A string it cannot parse — another syntax (a name, `#rgb`, `hsl(…)`), a typo, or no string at all — answers `MISSING_INK` (the
+ * desk's ink, opaque) and is SAID ONCE: a `console.warn` naming it, the first time a page meets that string — never a throw, so a
+ * kind whose `record` or `resolve` feeds a user's colour through here draws in the missing ink instead of being struck for it
+ * (petition I32; I24's ladder). `{ strict: true }` throws instead.
  */
-export declare function cssColor(css: string): RGBA;
-export declare const rgb: (css: string) => RGB;
+export declare function cssColor(css: string, opts?: ColourParse): RGBA;
+/** `cssColor` without its alpha: sRGB 0..1. An unparsed string answers `MISSING_INK`'s three channels, said once (`{ strict: true }` throws). */
+export declare const rgb: (css: string, opts?: ColourParse) => RGB;
 ```
 
 A boolean is `typeof v === "boolean" ? v : fallback` — the worked example's own `flagProp`
@@ -662,7 +668,19 @@ does) — a `vec2f` first, scalars filling to 16 bytes, then each `vec4f`, as th
 record does, wastes nothing:
 
 ```ts
-/** The scalar and vector types, and a fixed array of vec4f (`array<vec4f, N>`: stride 16, legal in a uniform block) — the portal chain's. */
+/**
+ * A field's WGSL type — the scalars, the float vectors and the matrix, and a fixed array of vec4f (the portal chain's) — and how
+ * it PACKS, by the WGSL host-shareable layout rules (`typeInfo` answers them; petition I31):
+ *
+ * - `f32` · `i32` · `u32` — align 4, size 4: one number (`i32` written `| 0`, `u32` `>>> 0`, a boolean as 1 or 0);
+ * - `vec2f` — align 8, size 8: two numbers;
+ * - `vec3f` — align 16, size 12: three numbers — a scalar declared after it rides in its tail (bytes 12–15);
+ * - `vec4f` — align 16, size 16: four numbers;
+ * - `mat4x4f` — align 16, size 64: sixteen numbers, column-major (four vec4f columns — what a projector matrix is uploaded as);
+ * - `array<vec4f, N>` — align 16, size 16·N, N ≥ 1: 4·N numbers as one flat list (stride 16 — legal in a uniform block).
+ *
+ * The vectors and the matrix are f32 alone (no `vec4i`, no `vec4u`).
+ */
 export type FieldType = "f32" | "i32" | "u32" | "vec2f" | "vec3f" | "vec4f" | "mat4x4f" | `array<vec4f, ${number}>`;
 ```
 

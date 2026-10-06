@@ -124,7 +124,14 @@ overrides:
   # the caller's device for a plugin's still — the playground's `--still`, the
   # template's still test and the plugins' Dawn stills, DK-9 §7(d)). ADDITIVE:
   # nothing else moves; strata 0.13.0 and loro ^1.13.8 unchanged.
-  "@vibecook/ice": 0.15.0-desk.3
+  # 2026-10-06 bumped 0.15.0-desk.3 → 0.15.0-desk.4 (DK-12) — desk.3 and I31–I33
+  # (ICE CHANGELOG: I31 the kit's WGSL says what it means — docs and their
+  # checks, no behaviour; I32 an unparsed colour answers `MISSING_INK` and is
+  # said once, never a throw — the template's colour guard retires; I33 a
+  # resting pointer keeps no desk awake — a no-op move is dropped by the dom
+  # adapter). Nothing of the surface moves; strata 0.13.0 and loro ^1.13.8
+  # unchanged.
+  "@vibecook/ice": 0.15.0-desk.4
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -239,7 +246,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.15.0-desk.3'
+  - '@vibecook/ice@0.15.0-desk.4'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'
