@@ -373,9 +373,9 @@ describe("UI system ownership boundaries", () => {
       "SwitchSceneView",
       "FacePicker",
       "UserFaceView",
-      // One Frame FR-2 — the tray keeps its sheet only (its island, tool
-      // switcher and ⊕ retired into the line)
-      "WidgetTrayFrame",
+      // DK-13 — the scenes' board: the pegboard's chrome over the desk's drawer's stand-in (the old
+      // Objects sheet, `WidgetTrayFrame`, deleted with its island's state — R21)
+      "StageBoard",
       "EdgeTrayView",
       "OnboardingConnectPaneView",
       "OnboardingDerivingPaneView",
@@ -468,6 +468,9 @@ describe("UI system ownership boundaries", () => {
     // …and the selection bar's plates mounted (DK-11), and the pegboard's (DK-13).
     expect(page).toMatch(/<SelectionBarPlate\s/u);
     expect(page).toMatch(/<PegboardPlate\s/u);
+    // …and the board risen behind the line in both scenes that raise Objects (the playground, the view frame's stage)
+    expect(page).toMatch(/<StageBoard\s/u);
+    expect(viewFrame).toMatch(/<StageBoard\s/u);
     // …and History's plates mounted on the page in each state the host owns
     // (AR-8c): the room, a choice with Resume live, unavailable, consent.
     expect(page).toMatch(/<HistoryPreview state="room"/u);
@@ -525,7 +528,6 @@ describe("UI system ownership boundaries", () => {
       "hud/edge-tray/EdgeTray.tsx",
       "hud/edge-tray/EdgeTrayView.tsx",
       "hud/LoadingVeil.tsx",
-      "hud/WidgetTray.tsx",
       "boot/onboarding/wizard-ui.tsx",
       "godview/GodviewMonitor.tsx",
       "frame/ViewFrame.tsx",
@@ -560,7 +562,6 @@ describe("UI system ownership boundaries", () => {
       "hud/edge-tray/edge-tray.css",
       "hud/LoadingVeil.css",
       "hud/PluginSurfaceSlot.css",
-      "hud/WidgetTray.css",
       "panels/settings.css",
       "panels/terminal/terminal-settings.css",
       "godview/deck-zoom.css",
@@ -749,5 +750,33 @@ describe("UI system ownership boundaries", () => {
     expect(css).toMatch(
       /@media \(prefers-reduced-motion: reduce\) \{[^@]*\.vf-pegboard-ring \{\s*transition: opacity 60ms ease-out;/su,
     );
+  });
+  it("keeps the old Objects sheet and its tray island's state gone (DK-13, R21) — the pegboard replaced them", () => {
+    const exists = (relativePath: string): boolean => {
+      try {
+        source(relativePath);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    for (const gone of ["hud/WidgetTray.tsx", "hud/WidgetTray.css"])
+      expect(exists(gone), gone).toBe(false);
+    const walk = (dir: string): string[] =>
+      readdirSync(join(PACKAGE_ROOT, "src", dir), { withFileTypes: true }).flatMap((entry) =>
+        entry.isDirectory()
+          ? walk(join(dir, entry.name))
+          : /\.(?:css|tsx?)$/u.test(entry.name)
+            ? [join(dir, entry.name)]
+            : [],
+      );
+    for (const file of walk(".")) {
+      const text = source(file);
+      // no reader left: no import of the sheet, no mount of its frame, none of its selectors
+      expect(text, file).not.toMatch(/from "[./]*(?:hud\/)?WidgetTray"/u);
+      expect(text, file).not.toMatch(/<WidgetTray(?:Frame)?\s/u);
+      expect(text, file).not.toMatch(/\.vf-widget-tray[\w-]*[^\n{]*\{/u);
+      expect(text, file).not.toMatch(/className="[^"]*vf-widget-tray/u);
+    }
   });
 });

@@ -357,14 +357,22 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(container?.querySelector(".vf-command-palette")).not.toBeNull();
     expect(container?.querySelector(".vf-loading-veil")).not.toBeNull();
     expect(container?.querySelector(".vf-settings-dialog")).not.toBeNull();
-    expect(container?.querySelector(".vf-widget-tray")).not.toBeNull();
-    // The playground's tray has no island of its own (One Frame FR-2): the
-    // line's create raises its sheet, and its ⊕ is what turns to ✕.
+    // The old Objects sheet is gone (DK-13, R21): the playground's line raises the PEGBOARD behind it — the
+    // desk's drawer's stand-in with the shipping filters in its band — and its ⊕ is what turns to ✕; the stage
+    // neither recedes nor dims (no sheet, no backdrop).
+    expect(container?.querySelector(".vf-widget-tray")).toBeNull();
     const playground = container?.querySelector(".vf-ds-field-stage");
     expect(playground?.querySelector("[data-tray-toggle]")).toBeNull();
+    expect(playground?.querySelector(".vf-ds-stage-board .vf-pegboard")).toBeNull();
     await act(async () => playground?.querySelector<HTMLButtonElement>(".vf-line-create")?.click());
-    expect(playground?.querySelector('.vf-widget-tray[data-tray-open="true"]')).not.toBeNull();
     expect(playground?.querySelector('.vf-line-create[aria-expanded="true"]')).not.toBeNull();
+    expect(playground?.getAttribute("data-board-open")).toBe("true");
+    expect(playground?.querySelector(".vf-ds-stage-board .vf-ds-board-standin")).not.toBeNull();
+    expect(
+      playground?.querySelector(
+        '.vf-ds-stage-board .vf-pegboard-track > button[aria-pressed="true"]',
+      )?.textContent,
+    ).toBe("All");
     expect(container?.querySelectorAll("[data-onboarding-preview]")).toHaveLength(12);
     for (const state of [
       "welcome",

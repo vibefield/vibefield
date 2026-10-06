@@ -7,11 +7,11 @@ import type { FrameSurface } from "../frame/frame-surface";
 import { type CoverState, coverAfter, coverAt, ViewCoverView } from "../frame/ViewCover";
 import { type ViewKeyPress, ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
-import { WidgetTrayFrame } from "../hud/WidgetTray";
 import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
 import { GodviewPreview } from "./GodviewPreview";
 import { HistoryPreview } from "./HistoryPreview";
 import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
+import { StageBoard } from "./PegboardPreview";
 
 // The view frame's fixture ADAPTER (One Frame FR-1, FR-2; docs/UI_SYSTEM.md):
 // the shipping views — the line with the views track at its left end, the
@@ -160,16 +160,7 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
           godview={<GodviewPreview theme={dark ? "dark" : "light"} />}
           history={<HistoryPreview surface={surface} onSurfaceChange={setSurface} />}
         />
-        <WidgetTrayFrame
-          open={surface === "objects"}
-          onOpenChange={(open) => setSurface(open ? "objects" : null)}
-        >
-          <div className="vf-ds-widget-tiles">
-            <span className="vf-ds-line-tile">Note</span>
-            <span className="vf-ds-line-tile">Terminal</span>
-            <span className="vf-ds-line-tile">Folder</span>
-          </div>
-        </WidgetTrayFrame>
+        <StageBoard open={surface === "objects"} />
         <Composer
           view={view}
           keys={keys === "Mac" ? "mac" : "other"}

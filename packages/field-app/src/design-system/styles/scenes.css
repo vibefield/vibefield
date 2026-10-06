@@ -7,25 +7,6 @@
   color: var(--vf-ds-ink);
 }
 
-.vf-ds-field-stage::after {
-  position: absolute;
-  inset: 0;
-  z-index: 4;
-  background: rgba(0, 0, 0, 0.1);
-  content: "";
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 500ms ease;
-}
-
-.dark .vf-ds-field-stage::after {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.vf-ds-field-stage[data-tray-open="true"]::after {
-  opacity: 1;
-}
-
 .vf-ds-stage-ground {
   position: absolute;
   inset: 0;
@@ -63,8 +44,7 @@
   background: var(--vf-note-surface);
 }
 
-.vf-ds-field-stage[data-docs-open="true"] .vf-ds-stage-card,
-.vf-ds-field-stage[data-tray-open="true"] .vf-ds-stage-card {
+.vf-ds-field-stage[data-docs-open="true"] .vf-ds-stage-card {
   transform: scale(0.98);
 }
 
@@ -296,29 +276,6 @@
   left: 16px;
 }
 
-/* Objects out: the backdrop's dim over the ground (DESIGN.md §5). */
-.vf-ds-line-plate-dim {
-  position: absolute;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.1);
-}
-
-.dark .vf-ds-line-plate-dim {
-  background: rgba(0, 0, 0, 0.4);
-}
-
-.vf-ds-line-tile {
-  display: grid;
-  width: 132px;
-  height: 132px;
-  place-items: center;
-  border-radius: 22px;
-  color: var(--vf-text-secondary);
-  background: var(--vf-fill);
-  font-size: 12px;
-  font-weight: 500;
-}
-
 .vf-ds-me-stage {
   position: relative;
   height: 420px;
@@ -386,63 +343,6 @@
   gap: 12px;
   padding: 12px 18px;
   border-bottom: 1px solid var(--vf-hairline);
-}
-
-.vf-ds-widget-tiles {
-  display: grid;
-  grid-template-columns: 1fr 2fr 1fr;
-  gap: 18px;
-  margin-top: 22px;
-}
-
-.vf-ds-widget-tile {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
-  color: var(--vf-ds-muted);
-  font-size: 10px;
-  font-weight: 550;
-}
-
-.vf-ds-widget-sil {
-  display: flex;
-  width: min(100%, 118px);
-  aspect-ratio: 1;
-  align-items: center;
-  justify-content: center;
-  border-radius: 16px;
-  box-shadow: 0 10px 18px rgba(0, 0, 0, 0.16);
-  color: rgba(255, 255, 255, 0.78);
-  transition: transform 200ms ease;
-}
-
-.vf-ds-widget-tile[data-wide="true"] .vf-ds-widget-sil {
-  width: min(100%, 236px);
-  aspect-ratio: 2.08;
-}
-
-.vf-ds-widget-tile:hover .vf-ds-widget-sil {
-  transform: scale(1.03);
-}
-
-.vf-ds-widget-sil svg {
-  width: 24px;
-  height: 24px;
-}
-
-.vf-ds-widget-sil.is-note {
-  background: var(--vf-note-surface);
-  color: color-mix(in srgb, var(--vf-note-ink) 55%, transparent);
-}
-
-.vf-ds-widget-sil.is-terminal {
-  background: var(--vf-card);
-}
-
-.vf-ds-widget-sil.is-folder {
-  background: linear-gradient(135deg, var(--vf-accent-6), var(--vf-accent-1));
 }
 
 .vf-ds-stage-caption {
@@ -1509,10 +1409,6 @@
     width: 170px;
   }
 
-  .vf-ds-widget-tiles {
-    gap: 10px;
-  }
-
   .vf-ds-onboarding-catalog {
     gap: 56px;
     padding: 24px 16px;
@@ -1825,4 +1721,16 @@
   color: var(--vf-ds-muted);
   font-size: 10px;
   font-weight: 550;
+}
+
+/* the board in a scene (the playground, the view frame's stage): the desk's drawer's stand-in, behind the line */
+.vf-ds-stage-board {
+  position: absolute;
+  z-index: 3;
+  inset: 0;
+  pointer-events: none;
+}
+
+.vf-ds-stage-board .vf-pegboard {
+  pointer-events: none;
 }

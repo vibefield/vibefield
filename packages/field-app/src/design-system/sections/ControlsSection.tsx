@@ -124,7 +124,7 @@ export function ControlsSection(): ReactElement {
           </div>
         </Specimen>
 
-        <Specimen title="Selection controls" source="settings-ui.tsx · WidgetTray.tsx">
+        <Specimen title="Selection controls" source="settings-ui.tsx · design-kit/primitives.tsx">
           <div className="vf-ds-selection-stack">
             <div className="vf-ds-demo-setting">
               <div>

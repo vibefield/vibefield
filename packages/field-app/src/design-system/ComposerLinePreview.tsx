@@ -164,7 +164,6 @@ export function ComposerLinePlate({
   }, [state]);
   return (
     <div ref={plateRef} className="vf-ds-line-plate" data-state={state} data-keys={keys}>
-      {state === "objects" ? <div className="vf-ds-line-plate-dim" aria-hidden /> : null}
       <ComposerLineView
         view={view}
         keys={keys}

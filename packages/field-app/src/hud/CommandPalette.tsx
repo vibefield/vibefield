@@ -262,9 +262,10 @@ export function CommandPalette({
     if (visible) inputRef.current?.focus();
   }, [visible]);
 
-  // Esc closes, consuming the event before the tray/exit-container handlers see
-  // it (capture + stopImmediatePropagation — the WidgetTray Esc precedent, made
-  // absolute so no co-listener on window also fires).
+  // Esc closes, consuming the event before the desk's own Esc ladder sees it
+  // (capture + stopImmediatePropagation — the old Objects sheet's precedent,
+  // which the pegboard's Esc keeps since DK-13; made absolute so no co-listener
+  // on window also fires).
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent): void => {

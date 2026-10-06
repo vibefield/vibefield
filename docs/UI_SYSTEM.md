@@ -43,7 +43,6 @@ The catalog currently mounts these shipping views directly:
   since One Frame FR-4, where the side panel's contents now live
 - Godview stage, monitor registry, tuning panel, unavailable terminal deck, and the complete
   swarm-circle state matrix
-- WidgetTray's sheet
 - the command palette (re-cut by One Frame FR-3: the frame's acts and the plugins' commands, each
   key at its row's end), settings dialog and loading veil (the side-panel frame retired into the
   right edge's drawer, FR-4)

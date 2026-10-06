@@ -7,14 +7,13 @@ import { ComposerLineView } from "../../frame/ComposerLine";
 import type { FrameSurface } from "../../frame/frame-surface";
 import { ViewsTrackView } from "../../frame/ViewsTrack";
 import { EdgeTrayView } from "../../hud/edge-tray/EdgeTrayView";
-import { WidgetTrayFrame } from "../../hud/WidgetTray";
 import {
   FIXTURE_ME,
   FIXTURE_ME_OFFLINE,
   FIXTURE_OTHERS,
   FIXTURE_OTHERS_WAITING,
 } from "../account-fixtures";
-import { Icon, type IconName, Section, Specimen } from "../catalog-ui";
+import { Icon, Section, Specimen } from "../catalog-ui";
 
 const ME_STATES = ["Three users", "Waiting", "One user · offline"] as const;
 type MeState = (typeof ME_STATES)[number];
@@ -27,7 +26,7 @@ import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
-import { PEGBOARD_STATES, PegboardPlate } from "../PegboardPreview";
+import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
 import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
 import { SwitchPreview } from "../SwitchPreview";
 import { FRAME_STATES, ViewFramePreview, ViewsTrackSpecimen } from "../ViewFramePreview";
@@ -43,7 +42,6 @@ export function ChromeSection({
   // explorer and zoom menu and the line's Objects are one value here too.
   const [surface, setSurface] = useState<FrameSurface | null>(null);
   const trayOpen = surface === "objects";
-  const [trayCategory, setTrayCategory] = useState("All");
   const [meOpen, setMeOpen] = useState(false);
   const [meSpecimenOpen, setMeSpecimenOpen] = useState(true);
   const [trayState, setTrayState] = useState<TrayState>("Pinned");
@@ -85,7 +83,7 @@ export function ChromeSection({
         <div
           className="vf-ds-field-stage"
           data-docs-open={surface === "fields"}
-          data-tray-open={trayOpen}
+          data-board-open={trayOpen}
         >
           <InfiniteCanvasGroundPreview
             dark={dark}
@@ -101,36 +99,13 @@ export function ChromeSection({
               the Me menu, Artifacts behind the right notch). */}
           <HeadLive surface={surface} onSurfaceChange={changeSurface} />
 
-          <WidgetTrayFrame
-            open={trayOpen}
-            onOpenChange={(nextOpen) =>
-              changeSurface(nextOpen ? "objects" : surface === "objects" ? null : surface)
-            }
-          >
-            <div className="vf-no-scrollbar vf-mask-fade-right mb-3 flex w-full items-center gap-2 overflow-x-auto px-8">
-              {["All", "Writing", "Agents"].map((category) => (
-                <button
-                  key={category}
-                  type="button"
-                  onClick={() => setTrayCategory(category)}
-                  aria-pressed={trayCategory === category}
-                  className="vf-widget-tray__category whitespace-nowrap px-4 py-1.5 text-[13px] active:scale-95"
-                >
-                  {category}
-                </button>
-              ))}
-            </div>
-            <div className="vf-no-scrollbar vf-mask-fade-bottom flex-1 overflow-y-auto px-8">
-              <div className="vf-ds-widget-tiles">
-                <WidgetTile title="Note" tone="note" icon="document" />
-                <WidgetTile title="Terminal" tone="terminal" icon="command" wide />
-                <WidgetTile title="Folder" tone="folder" icon="folder" />
-              </div>
-            </div>
-          </WidgetTrayFrame>
+          {/* Objects: the board risen behind the line (DK-13) — the desk's own drawer in the
+              product, a plain board here, the shipping filters in its band; the stage
+              behind it neither recedes nor dims (R14). */}
+          <StageBoard open={trayOpen} />
 
-          {/* The line is the tray's door (One Frame FR-2): its create raises
-              the sheet behind it, and its ⊕ is what turns to ✕. */}
+          {/* The line is the board's door (One Frame FR-2, DK-13): its create
+              raises the pegboard behind it, and its ⊕ is what turns to ✕. */}
           <ComposerLineView
             view="canvas"
             keys="mac"
@@ -440,26 +415,5 @@ export function ChromeSection({
         </p>
       </Specimen>
     </Section>
-  );
-}
-
-function WidgetTile({
-  title,
-  tone,
-  icon,
-  wide = false,
-}: {
-  title: string;
-  tone: string;
-  icon: IconName;
-  wide?: boolean;
-}): ReactElement {
-  return (
-    <div className="vf-ds-widget-tile" data-wide={wide}>
-      <span className={`vf-ds-widget-sil is-${tone}`}>
-        <Icon name={icon} />
-      </span>
-      <small>{title}</small>
-    </div>
   );
 }
