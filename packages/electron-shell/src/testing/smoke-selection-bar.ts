@@ -201,7 +201,7 @@ const BOX_OF = (type: string): string => `(() => {
 })()`;
 
 /** A point of an object's box the desk's own element receives (no chrome over it), nearest its centre. */
-const POINT_IN = (type: string): string => `(() => {
+export const POINT_IN = (type: string): string => `(() => {
   const d = globalThis.__vfDesk;
   const el = document.querySelector("[data-desk]");
   if (d === undefined || el === null) return null;

@@ -119,6 +119,7 @@ import {
   STILLNESS_SAMPLE,
   type StillnessSample,
 } from "./smoke-stillness";
+import { toolsInHandRows } from "./smoke-tools-in-hand";
 import { TRY_FLAG, TRY_SEARCH_KEY, TRY_TYPES_ENV, tryBoardRows, tryTypes } from "./smoke-try";
 import {
   DRAWN_BUDGET_MS,
@@ -1066,6 +1067,15 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`DK-11: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // DK-12: the tools in hand — each specimen picked up, its tools used, put down; the travel's own timing
+        // (testing/smoke-tools-in-hand.ts) — still at the arrival fit, before the pad row moves the camera
+        try {
+          problems.push(
+            ...(await toolsInHandRows({ win, shotDir, say: (line) => console.log(line) })),
+          );
+        } catch (error) {
+          problems.push(`DK-12: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
         // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
