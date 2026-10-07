@@ -2592,6 +2592,24 @@ async function kindRuntimeRows(opts: {
       );
   }
 
+  // DK-16: the kinds' pixel rows below are judged BY THE SUN, whatever the machine's appearance. By the Moon the clock's
+  // dial reads as dark and as flat as the missing face — desk.5, window 2: OFF 53 colours over luma 39–143 against the
+  // clock's 59 over 21–92, I39 having put the face's outline inside the picked box — and by the Sun the clock is 347–525
+  // colours over 231–238 of luma against the face's 26–36 over 56–59.
+  for (const win of windows) {
+    await win.webContents.executeJavaScript(`globalThis.vibefield.theme.set("light")`, true);
+    const deadline = Date.now() + 10_000;
+    while (
+      (await win.webContents.executeJavaScript(`globalThis.__vfDesk?.theme?.() ?? null`, true)) !==
+      "light"
+    ) {
+      if (Date.now() > deadline)
+        throw new Error(`window ${at(win)}: the desk did not dress light within 10000ms`);
+      await sleep(100);
+    }
+  }
+  await sleep(400);
+
   // DISABLE the clock — the desk remounts WITHOUT its kind: the missing face, the bar's words
   await handle.client.request("plugins.disable", { id: clock });
   const off = await Promise.all(
