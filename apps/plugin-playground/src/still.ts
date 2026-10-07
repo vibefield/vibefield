@@ -16,11 +16,10 @@
 // Each still's PNG lands in `<dir>/.vibefield-still/` for a reader's eye (never a source; ignored in this repository).
 //
 // A still is ICE's facts and pins: no desk state (a kind is handed no `local` — a clock shows its shop time), no host services
-// (no text raster: the comment pad's writing is not in its still), no chrome. And one line every still prints under strata's
-// DEV build (vitest; `node --conditions=development`) is ICE CORE'S, not the kind's: core's `trayInput` and `trayLay` systems
-// both declare a write of `Tray` in its "react" phase (ICE `packages/core/src/systems/tray.ts`), and strata's access check says
-// so at every engine it schedules — and a still makes one. Each still names it on its own row (`said`, by `ice-core`), so a
-// kind's author is never sent looking for it; anything else said while a still is drawn is listed as said, unattributed.
+// (no text raster: the comment pad's writing is not in its still), no chrome. Whatever is said on the console while a still is
+// drawn is listed under its row (`said`, each line counted) — under strata's DEV build (vitest; `node
+// --conditions=development`) too, where ICE says nothing of its own since desk.5 (I34: core's `trayInput` and `trayLay` share
+// their `Tray` write in a stated order, and strata's access check said their line at every engine a still made until then).
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -56,10 +55,6 @@ export const STILL_THEMES: readonly { readonly name: StillTheme; readonly theme:
   { name: "day", theme: "light" },
   { name: "night", theme: "dark" },
 ];
-
-/** ICE CORE's line under strata's dev build — said at every engine a still makes (see the header). */
-export const CORE_TRAY_LINE =
-  /^strata: access: in phase "react", systems "trayInput", "trayLay" declare write of "Tray"/;
 
 // ---------------------------------------------------------------------------------------------------- the device
 
@@ -458,8 +453,8 @@ const fileSafe = (s: string): string => s.replaceAll(/[^A-Za-z0-9._-]+/g, "_");
 
 // ---------------------------------------------------------------------------------------------------- what is said
 
-/** Run `work` hearing what it says on the console's warn and error lines; each line attributed (`CORE_TRAY_LINE` is
- * ICE core's) and counted. The playground draws one still at a time, so nothing else speaks meanwhile. */
+/** Run `work` hearing what it says on the console's warn and error lines, each line counted. The playground draws one still
+ * at a time, so nothing else speaks meanwhile. */
 export async function hearing<T>(
   work: () => Promise<T>,
 ): Promise<{ readonly said: StillSaid[] } & ({ readonly value: T } | { readonly error: unknown })> {
@@ -471,12 +466,7 @@ export async function hearing<T>(
       const line = args.map((x) => (x instanceof Error ? x.message : String(x))).join(" ");
       heard.set(line, (heard.get(line) ?? 0) + 1);
     };
-  const said = (): StillSaid[] =>
-    [...heard].map(([line, times]) => ({
-      by: CORE_TRAY_LINE.test(line) ? ("ice-core" as const) : ("unattributed" as const),
-      line,
-      times,
-    }));
+  const said = (): StillSaid[] => [...heard].map(([line, times]) => ({ line, times }));
   try {
     const value = await work();
     return { said: said(), value };

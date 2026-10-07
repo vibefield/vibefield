@@ -11,7 +11,6 @@ import { parseArgs } from "../src/cli";
 import { toNdjson, toTable } from "../src/report";
 import {
   blessedGolden,
-  CORE_TRAY_LINE,
   type GoldenRead,
   goldenText,
   hearing,
@@ -29,9 +28,8 @@ import {
 } from "../src/still";
 import type { RunResult, StillVerdict } from "../src/verdict";
 
-/** ICE core's line, verbatim as strata's dev build says it at every engine (`node --conditions=development`). */
-const TRAY =
-  'strata: access: in phase "react", systems "trayInput", "trayLay" declare write of "Tray" in the same phase — potential order-dependence (array order is execution order; order them deliberately, split the phase, or — if the writes are row-disjoint or commutative — attest with access.orderIndependent on every co-writer).';
+/** A line a kind's own draw might say — ICE says none at a still's engine since desk.5 (I34). */
+const SAID = "vendor.demo.disc: a ring drawn past its reach";
 
 // A 10 × 10 world-unit object whose kind reaches 2 past it: the pad is 2 (its reach, rounded up) + 16 a side, so the view is
 // 46 × 46 CSS px and the still 92 × 92 device px at dpr 2; its box is device px [36, 56), its reach [32, 60).
@@ -274,28 +272,27 @@ describe("the PNG and what a still hears", () => {
     ]);
   });
 
-  it("names ICE core's Tray line as core's, counts each line, keeps what else is said — and gives the console back", async () => {
-    expect(CORE_TRAY_LINE.test(TRAY)).toBe(true);
+  it("counts each line said while a still is drawn, keeps them all — no line is ICE's to name since desk.5 — and gives the console back", async () => {
     const warn = console.warn;
     const heard = await hearing(async () => {
-      console.warn(TRAY);
-      console.warn(TRAY);
+      console.warn(SAID);
+      console.warn(SAID);
       console.error("a kind's own complaint");
       return 7;
     });
     expect(heard).toEqual({
       value: 7,
       said: [
-        { by: "ice-core", line: TRAY, times: 2 },
-        { by: "unattributed", line: "a kind's own complaint", times: 1 },
+        { line: SAID, times: 2 },
+        { line: "a kind's own complaint", times: 1 },
       ],
     });
     expect(console.warn).toBe(warn);
     const threw = await hearing(async () => {
-      console.warn(TRAY);
+      console.warn(SAID);
       throw new Error("createStill: the kind was refused");
     });
-    expect(threw).toMatchObject({ error: expect.any(Error), said: [{ by: "ice-core", times: 1 }] });
+    expect(threw).toEqual({ error: expect.any(Error), said: [{ line: SAID, times: 1 }] });
     expect(console.warn).toBe(warn);
   });
 });
@@ -313,7 +310,7 @@ describe("the flags and the rows", () => {
     );
   });
 
-  it("says a still's row with its state and light, its PNG and core's line named beneath it; the summary counts the stills", () => {
+  it("says a still's row with its state and light, its PNG and what was said beneath it; the summary counts the stills", () => {
     const still: StillVerdict = {
       kind: "still",
       plugin: "vendor.demo",
@@ -327,7 +324,7 @@ describe("the flags and the rows", () => {
       height: W,
       sha256: "c".repeat(64),
       png: "/tmp/p/.vibefield-still/vendor.demo.disc--coral--night.png",
-      said: [{ by: "ice-core", line: TRAY, times: 3 }],
+      said: [{ line: SAID, times: 3 }],
     };
     const result: RunResult = {
       verdicts: [still],
@@ -346,7 +343,8 @@ describe("the flags and the rows", () => {
     const table = toTable(result);
     expect(table).toContain("STILL  disc    coral · night  drawn on Dawn");
     expect(table).toContain("still: /tmp/p/.vibefield-still/vendor.demo.disc--coral--night.png");
-    expect(table).toContain("said ×3 by ICE CORE, not this kind");
+    expect(table).toContain(`said ×3: ${SAID}`);
+    expect(table).not.toContain("ICE CORE");
     expect(table).toContain("(0 states, 1 object, 1 still)");
     const lines = toNdjson(result)
       .trim()

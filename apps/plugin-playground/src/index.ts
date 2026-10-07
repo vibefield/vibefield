@@ -16,7 +16,6 @@ export {
 } from "./states";
 export {
   blessedGolden,
-  CORE_TRAY_LINE,
   type GoldenRow,
   goldenText,
   judgeStill,

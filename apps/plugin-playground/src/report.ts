@@ -33,12 +33,10 @@ interface Row {
   readonly under: readonly string[];
 }
 
-/** A line said while a still was drawn, as a reader meets it under the still's row: ICE core's named as core's. */
+/** A line said while a still was drawn, as a reader meets it under the still's row. */
 function saidLine(s: StillSaid): string {
   const times = s.times > 1 ? ` ×${s.times}` : "";
-  return s.by === "ice-core"
-    ? `said${times} by ICE CORE, not this kind (strata's dev check on core's own Tray systems, at every still's engine): ${s.line}`
-    : `said${times}: ${s.line}`;
+  return `said${times}: ${s.line}`;
 }
 
 function rowsOf(result: RunResult): Row[] {

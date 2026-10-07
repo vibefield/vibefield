@@ -153,10 +153,10 @@ export interface TypeVerdict {
 /** The two lights a still is drawn in (ICE's `light` and `dark`). */
 export type StillTheme = "day" | "night";
 
-/** A line said on the console while a still was drawn, and who said it: `ice-core` is strata's dev access check on ICE
- * core's own `Tray` systems, said at every engine a still makes — never the kind's. */
+/** A line said on the console while a still was drawn, and how often. ICE says nothing at a still's engine since desk.5
+ * (I34: core's two `Tray` writers ordered — strata's dev build said their line at every engine until then), so a line
+ * here is the kind's own, or its draw's. */
 export interface StillSaid {
-  readonly by: "ice-core" | "unattributed";
   readonly line: string;
   readonly times: number;
 }
@@ -183,7 +183,7 @@ export interface StillVerdict {
   readonly sha256?: string;
   /** where its PNG was written */
   readonly png?: string;
-  /** what was said on the console while it was drawn, each line attributed */
+  /** what was said on the console while it was drawn, each line counted */
   readonly said?: readonly StillSaid[];
 }
 

@@ -84,15 +84,14 @@ shop time), no host services (no text raster — the comment pad's writing is no
 in its still) and no chrome. Each still's PNG lands in `<plugin>/.vibefield-still/`
 (ignored here) for a reader's eye.
 
-**The strata `Tray` line is ICE core's, not yours.** Under strata's DEV build —
-vitest, or `node --conditions=development` — every still prints `strata: access:
-in phase "react", systems "trayInput", "trayLay" declare write of "Tray" …`: two
-of ICE core's own systems (`packages/core/src/systems/tray.ts`) share a phase,
-and strata's access check says so at every engine it schedules, and a still makes
-one. Each still names it on its own row (`said`, by `ice-core`) so no author goes
-looking for it; anything else said while a still is drawn is listed beneath its
-row as said. The bin, under Node's default conditions, loads strata's production
-build and says nothing.
+**What is said while a still is drawn is listed beneath its row** (`said`, each
+line counted). ICE itself says nothing there since `0.15.0-desk.5`: until then,
+under strata's DEV build (vitest, or `node --conditions=development`), every
+still printed strata's access warning about `"Tray"` — two of ICE core's own
+systems sharing a write in one phase, said at every engine a still made — and
+desk.5 orders them (ICE I34). So a line under a still's row is your kind's own,
+or its draw's. The bin, under Node's default conditions, loads strata's
+production build.
 
 Exit codes are law (P8-D8): **0** every row passed (a note is not a refusal) ·
 **1** at least one refusal · **2** the harness itself failed. Nothing prompts.

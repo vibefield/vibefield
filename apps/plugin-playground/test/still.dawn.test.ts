@@ -29,13 +29,7 @@ import type { ObjectContribution } from "@vibefield/contracts";
 import { buildObjectType } from "@vibefield/field-app/object-types";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import {
-  CORE_TRAY_LINE,
-  STILL_GOLDEN,
-  type StillGolden,
-  type StillGpu,
-  stillGpu,
-} from "../src/still";
+import { STILL_GOLDEN, type StillGolden, type StillGpu, stillGpu } from "../src/still";
 import type { RunSummary, StillVerdict, Verdict } from "../src/verdict";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -209,8 +203,8 @@ describe("the create-plugin template, scaffolded with nothing installed: blessed
   });
 });
 
-describe("under strata's dev build, every still names ICE core's line as core's", () => {
-  it("each still's row carries core's Tray line, by `ice-core` — said at every engine a still makes, never the kind's", async () => {
+describe("under strata's dev build, a still says nothing of ICE's (desk.5, I34)", () => {
+  it("each still's row says nothing — core's two Tray writers are ordered, so strata's access check is quiet at every engine a still makes", async () => {
     const ran = await still(
       scaffold,
       ["--state", "vendor.demo:default"],
@@ -218,13 +212,10 @@ describe("under strata's dev build, every still names ICE core's line as core's"
     );
     expect(ran.code).toBe(0);
     expect(ran.stills).toHaveLength(2);
-    for (const s of ran.stills) {
-      // three stills are drawn for each row — the state twice, the bare mat once — and each one's engine says it
-      expect(s.said).toEqual([
-        { by: "ice-core", line: expect.stringMatching(CORE_TRAY_LINE), times: 3 },
-      ]);
-    }
-    // the bin under Node's default conditions loads strata's production build: nothing is said
+    // three stills are drawn for each row — the state twice, the bare mat once — and not one engine says a line (until
+    // desk.5 each said strata's `Tray` warning: ICE core's `trayInput` and `trayLay` shared a write in one phase)
+    for (const s of ran.stills) expect(s.said).toBeUndefined();
+    // and the bin under Node's default conditions (strata's production build) is as quiet
     const quiet = await still(scaffold, ["--state", "vendor.demo:default"]);
     for (const s of quiet.stills) expect(s.said).toBeUndefined();
   });
