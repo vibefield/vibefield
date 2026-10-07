@@ -516,7 +516,10 @@ describe("the Canvas stage mounts the desk", () => {
       const door = () => (globalThis as { __vfDesk?: { gpuFault?(k: string): boolean } }).__vfDesk;
       expect(door()?.gpuFault?.("lose")).toBe(false); // the device has not arrived
       const destroyed: string[] = [];
-      const device = { destroy: () => destroyed.push("first") } as unknown as GPUDevice;
+      const device = {
+        destroy: () => destroyed.push("first"),
+        queue: { onSubmittedWorkDone: () => Promise.resolve() },
+      } as unknown as GPUDevice;
       current().opts.onDevice?.(device);
       expect(door()?.gpuFault?.("lose")).toBe(true);
       expect(destroyed).toEqual(["first"]);

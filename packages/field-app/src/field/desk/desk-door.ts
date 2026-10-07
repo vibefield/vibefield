@@ -520,10 +520,13 @@ function deskFaultsAsked(): boolean {
 }
 
 /** Fault the layer's own device: lose it (destroyed, as a reset loses it), or raise ONE uncaptured validation error (a
- * buffer of no usage, made outside any error scope). */
+ * buffer of no usage, made outside any error scope). Then ask its queue when its work is done: the browser hands a
+ * device's errors back as it polls the device, and a desk asleep submits nothing to poll for — unasked, the fault is told
+ * at the desk's next frame, whenever that is (a smoke's banner row once timed out at 10 s with the error logged after). */
 export function gpuFault(device: GPUDevice | null, kind: "lose" | "error"): boolean {
   if (device === null) return false;
   if (kind === "lose") device.destroy();
   else device.createBuffer({ size: 4, usage: 0 });
+  void device.queue.onSubmittedWorkDone().catch(() => undefined);
   return true;
 }

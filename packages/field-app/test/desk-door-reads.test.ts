@@ -153,6 +153,12 @@ describe("the desk door's reads (DK-8)", () => {
       destroy: () => calls.push("destroy"),
       createBuffer: (d: { size: number; usage: number }) =>
         calls.push(`createBuffer ${d.size}/${d.usage}`),
+      queue: {
+        onSubmittedWorkDone: () => {
+          calls.push("asked");
+          return Promise.resolve();
+        },
+      },
     } as unknown as GPUDevice;
     let lent: GPUDevice | null = null;
     const install = () => {
@@ -182,7 +188,8 @@ describe("the desk door's reads (DK-8)", () => {
       lent = device;
       expect(asked.door.gpuFault?.("error")).toBe(true);
       expect(asked.door.gpuFault?.("lose")).toBe(true);
-      expect(calls).toEqual(["createBuffer 4/0", "destroy"]);
+      // each fault then asks the queue — the browser tells a sleeping desk's fault as it polls for the answer
+      expect(calls).toEqual(["createBuffer 4/0", "asked", "destroy", "asked"]);
       asked.undo();
     } finally {
       if (before === undefined) delete g.location;
