@@ -963,8 +963,8 @@ export const PLUGIN_MODULE_SCHEME = "vibefield-plugin" as const;
  * are host-provided singletons; a plugin bundle that carries a second copy of
  * any of them refuses activation.
  *
- * DK-1 (2026-10-03, the ICE 0.14.0 pin): `three`, `@react-three/fiber` and
- * `@react-three/drei` LEFT this list with ICE's R3F islands — the desk draws
+ * DK-1 (2026-10-03, the ICE 0.14.0 pin): three.js and its two React binding
+ * packages (fiber and drei) LEFT this list with ICE's R3F islands — the desk draws
  * every object under the camera with one WebGPU renderer, so the host serves
  * no three at all (`bundle:assert` forbids it anywhere in the renderer). The
  * desk's entries took their place: the renderer and `defineObject`, its raw

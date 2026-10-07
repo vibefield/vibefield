@@ -86,7 +86,7 @@ export default defineConfig(({ mode }) => ({
   resolve: {
     alias: [...milleAliases(repoRoot), { find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],
     // one copy each of the stateful libs (ICE marks them external in its dist).
-    // DK-1 (2026-10-03, ICE 0.14.0): three, @react-three/fiber and drei LEFT
+    // DK-1 (2026-10-03, ICE 0.14.0): three.js and its React bindings (fiber, drei) LEFT
     // with ICE's R3F islands — the desk is one WebGPU renderer and the host
     // serves no three (`bundle:assert` forbids it anywhere). The desk's entries
     // need no row here: they are subpaths of the ONE pinned `@vibecook/ice`

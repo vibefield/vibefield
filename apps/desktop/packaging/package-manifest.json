@@ -51,10 +51,6 @@
           "count": 1,
           "bytes": [690664]
         },
-        "dist/renderer/assets/CardShell-[hash].js": {
-          "count": 1,
-          "bytes": [610]
-        },
         "dist/renderer/assets/Caveat-500-[hash].ttf": {
           "count": 1,
           "bytes": [251752]
@@ -69,7 +65,7 @@
         },
         "dist/renderer/assets/FieldGlyph-[hash].css": {
           "count": 1,
-          "bytes": [8671]
+          "bytes": [8559]
         },
         "dist/renderer/assets/FieldGlyph-[hash].js": {
           "count": 1,
@@ -157,15 +153,15 @@
         },
         "dist/renderer/assets/main-[hash].css": {
           "count": 1,
-          "bytes": [239072]
+          "bytes": [238667]
         },
         "dist/renderer/assets/main-[hash].js": {
           "count": 1,
-          "bytes": [226996]
+          "bytes": [226942]
         },
         "dist/renderer/assets/react-[hash].js": {
-          "count": 2,
-          "bytes": [18171, 7532]
+          "count": 1,
+          "bytes": [7532]
         },
         "dist/renderer/assets/react-dom-[hash].js": {
           "count": 1,
@@ -229,11 +225,11 @@
         },
         "dist/renderer/assets/singleton-vibefield-plugin-sdk-canvas.js": {
           "count": 1,
-          "bytes": [998]
+          "bytes": [567]
         },
         "dist/renderer/assets/singleton-vibefield-plugin-sdk-ui.js": {
           "count": 1,
-          "bytes": [1353]
+          "bytes": [1292]
         },
         "dist/renderer/assets/singleton-vibefield-plugin-sdk.js": {
           "count": 1,
@@ -257,11 +253,11 @@
         },
         "dist/renderer/assets/workspace-[hash].css": {
           "count": 1,
-          "bytes": [78916]
+          "bytes": [79085]
         },
         "dist/renderer/assets/workspace-[hash].js": {
           "count": 1,
-          "bytes": [1916798]
+          "bytes": [1929283]
         },
         "dist/renderer/index.html": {
           "count": 1,
@@ -269,12 +265,12 @@
         },
         "dist/testing/smoke.cjs": {
           "count": 1,
-          "bytes": [1578725],
+          "bytes": [1579237],
           "neverShip": ["testing-tree", "smoke-or-spike-entry"]
         }
       },
-      "bytes": 14892688,
-      "installedBytes": 15036416
+      "bytes": 14886010,
+      "installedBytes": 15028224
     },
     "packages/fieldd": {
       "name": "@vibefield/fieldd",
@@ -312,14 +308,14 @@
       "files": {
         "dist/renderer.css": {
           "count": 1,
-          "bytes": [18341]
+          "bytes": [18418]
         },
         "dist/renderer.js": {
           "count": 1,
           "bytes": [557949]
         }
       },
-      "bytes": 576290,
+      "bytes": 576367,
       "installedBytes": 581632
     },
     "plugins/comment-pad": {
@@ -335,8 +331,8 @@
     }
   },
   "totals": {
-    "files": 72,
-    "bytes": 33763458,
-    "installedBytes": 33927168
+    "files": 70,
+    "bytes": 33756857,
+    "installedBytes": 33918976
   }
 }

@@ -517,7 +517,95 @@ const RULES = [
       return true;
     },
   },
+  {
+    id: "R25",
+    // DK-17 (the desk migration's retire table, §6; the plan's §9 Phase 5 witnesses): what the desk
+    // replaced is GONE, and bringing it back fails here — three.js and its React bindings anywhere
+    // (the desk is one WebGPU renderer; ICE has no `/r3f` or `/ground` since 0.14.0), the retired
+    // plugins' packages, and every module the retirements deleted, by name, from any depth.
+    enforce: true,
+    description:
+      "the desk's retirements (DK-17): no three, @react-three/*, @vibecook/ice/r3f|ground or retired plugin package anywhere, and no import of a module the retire table deleted",
+    applies: (p) => SOURCE_EXT.test(p),
+    importTest: (s, p) => retiredImport(s, p),
+  },
 ];
+
+// DK-17 (R25) — the retire table's deletions as import specifiers.
+const RETIRED_PACKAGES = {
+  modules: [
+    "three",
+    "@vibecook/ice/r3f",
+    "@vibecook/ice/ground",
+    "@vibefield/design-kit/gl",
+    "@vibefield/design-kit/card-appearance",
+    "@vibefield/design-kit/visuals",
+    "@vibefield/plugin-note",
+    "@vibefield/plugin-field-tools",
+    "@vibefield/plugin-widgetlab",
+  ],
+  prefixes: ["@react-three/"],
+};
+// A deleted module by its own name — the specifier's last segment, its extension dropped — so a
+// re-import from any directory fails. Each name is distinct in the tree (a test of this file's
+// `--enforce` run holds the live tree clean).
+const RETIRED_MODULE_NAMES = new Set([
+  // the R3F ground and its catalog specimen's old name (row 1)
+  "InfiniteCanvasGround",
+  "InfiniteCanvasGroundPreview",
+  // the magnet grid's glyph (row 2)
+  "use-magnet-grid-glyph",
+  "MagnetGridSection",
+  // the tray island and its tile list (row 4)
+  "WidgetTray",
+  "tray-catalog",
+  // the field's `c` override and tool switcher (row 5)
+  "field-keymap",
+  // the design kit's card dressing (row 6)
+  "CardShell",
+  "GlCardChrome",
+  "GlLiftGroup",
+  "use-drag-lift",
+  "chrome-projection",
+  "card-appearance",
+  "CardsSection",
+  // the browser's page widget (row 9)
+  "BrowserPageView",
+  "BrowserPageWidget",
+  // the terminal widget and its mirror (row 11)
+  "TerminalMirrorSurface",
+  "TerminalMirrorPreview",
+  "TerminalMirrorWidget",
+  "SessionPickerView",
+  "watch-only-runtime",
+  // the explorer's silhouettes (row 12)
+  "doc-thumbnail-scene",
+  "doc-thumbnail-worker",
+]);
+// A deleted DIRECTORY or a generic name, held by its path where it lived.
+function retiredRelative(spec, rel) {
+  if (!spec.startsWith(".")) return false;
+  const segs = spec.split("/");
+  // field-app: the cursor halo (row 3), the widget faces' wrapper (row 8), the terminal widget and mirror (row 11)
+  if (under(rel, "packages/field-app")) {
+    if (segs.includes("cursor")) return true;
+    if (/(?:^|\/)plugin-host\/faces(?:\.tsx?)?$/.test(spec)) return true;
+    if (/(?:^|\/)terminal\/(?:mirror|widget)(?:\/|$)/.test(spec)) return true;
+    if (under(rel, "packages/field-app/src/plugin-host") && /^\.\/faces(?:\.tsx?)?$/.test(spec))
+      return true;
+  }
+  // design-kit: the `/gl` entry, the preview silhouettes and the card gradient (row 6)
+  if (under(rel, "packages/design-kit")) {
+    if (/^\.\/(?:gl|preview|visuals)(?:\.tsx?)?$/.test(spec)) return true;
+  }
+  return false;
+}
+function retiredImport(spec, rel) {
+  if (matchesForbid(spec, RETIRED_PACKAGES)) return true;
+  const last = spec.split("/").pop() ?? "";
+  if (RETIRED_MODULE_NAMES.has(last.replace(/\.(?:[cm]?[jt]sx?|css)$/, ""))) return true;
+  return retiredRelative(spec, rel);
+}
 
 // FS-1a (R24) — the files worker's directory: the one place mille's engine is
 // imported (packages/fieldd/src/workspace/host/main.ts is its entry).
@@ -929,6 +1017,69 @@ function runSelfTest() {
       file: "packages/plugin-sdk/src/uses-mille-ui.ts",
       body: 'import { FileTree } from "@vibecook/mille-ui";\n',
     },
+    // DK-17 (R25) — what the desk replaced, imported again: three and its React bindings from any
+    // package (a test or a plugin too), ICE's retired entries, a retired plugin, and the deleted
+    // modules by name from any depth.
+    {
+      id: "R25",
+      file: "packages/field-app/src/uses-three.ts",
+      body: 'import * as THREE from "three";\nexport const t = THREE;\n',
+    },
+    {
+      id: "R25",
+      file: "examples/plugins/desk-clock/test/uses-fiber.test.ts",
+      body: 'import { Canvas } from "@react-three/fiber";\nimport { Html } from "@react-three/drei";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/uses-r3f.ts",
+      body: 'const ground = () => import("@vibecook/ice/ground");\nimport { GLViews } from "@vibecook/ice/r3f";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/field/uses-card.tsx",
+      body: 'import { CardShell } from "../../../design-kit/src/CardShell";\nimport { GlLiftGroup } from "@vibefield/design-kit/gl";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/design-system/uses-ground.tsx",
+      body: 'import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/field/uses-keymap.ts",
+      body: 'import { useFieldKeymapOverrides } from "./field-keymap";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/hud/uses-tray.tsx",
+      body: 'import { WidgetTray } from "./WidgetTray.tsx";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/design-system/uses-mirror.tsx",
+      body: 'import { TerminalMirrorSurface } from "../terminal/mirror";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/field/uses-halo.ts",
+      body: 'import { installHalo } from "../cursor";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/plugin-host/uses-faces.ts",
+      body: 'import { withPluginFace } from "./faces";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/design-kit/src/uses-visuals.ts",
+      body: 'import { gradientCss } from "./visuals";\n',
+    },
+    {
+      id: "R25",
+      file: "packages/field-app/src/uses-note.ts",
+      body: 'import { notePlugin } from "@vibefield/plugin-note";\n',
+    },
   ];
   const cleans = [
     // react + a DECLARED entry import + plain code: proves R1/R2/R9 don't
@@ -1071,6 +1222,16 @@ function runSelfTest() {
       file: "packages/field-app/src/clean-mille-client.ts",
       body: 'import { connectFileExplorer } from "@vibecook/mille/port";\nimport { FileTree } from "@vibecook/mille-ui";\nimport { connectWebSocketChannel } from "@vibecook/mille/remote";\nexport const remote = connectWebSocketChannel;\nexport const c = connectFileExplorer;\nexport const t = FileTree;\n',
     },
+    // DK-17 (R25) — what stands beside the retired names: the desk's own entries, the kit's
+    // primitives and glyphs, the kept canvas palette, the account's faces, the renamed specimen.
+    {
+      file: "packages/field-app/src/design-system/clean-desk.tsx",
+      body: 'import { Desk } from "@vibecook/ice/react";\nimport { DESK_ENGINE } from "@vibecook/ice/desk/objects";\nimport { UiButton } from "@vibefield/design-kit/primitives";\nimport { FieldGlyph } from "@vibefield/design-kit/glyphs";\nimport { defaultCanvasAppearance } from "../field/canvas-appearance";\nimport { faceTilt } from "../account/faces";\nimport { DeskPreview } from "./DeskPreview";\nimport { useTerminalPool } from "../terminal/pool";\nexport const x = [Desk, DESK_ENGINE, UiButton, FieldGlyph, defaultCanvasAppearance, faceTilt, DeskPreview, useTerminalPool];\n',
+    },
+    {
+      file: "packages/design-kit/src/clean-kit.ts",
+      body: 'import { UiButton } from "./primitives";\nimport { glyphSvg } from "./glyphs";\nexport const y = [UiButton, glyphSvg];\n',
+    },
     {
       file: "packages/field-app/src/clean-view-door.ts",
       body: 'import type { AgentMonitorState } from "@vibecook/puppeteer-core";\nimport { createMonitorStore } from "@vibecook/puppeteer-monitor";\nimport type { SessionRow } from "@rosetta/protocol";\nexport type S = AgentMonitorState;\nexport const m = createMonitorStore;\nexport type Row = SessionRow;\n',
@@ -1148,6 +1309,9 @@ function runSelfTest() {
     const r24Gated = found.some((v) => v.id === "R24" && ENFORCE_BY_ID.get(v.id) === true);
     console.log(`  ${r24Gated ? "PASS" : "FAIL"}  R24 detected and GATED (FS-1a)`);
     if (!r24Gated) ok = false;
+    const r25Gated = found.some((v) => v.id === "R25" && ENFORCE_BY_ID.get(v.id) === true);
+    console.log(`  ${r25Gated ? "PASS" : "FAIL"}  R25 detected and GATED (DK-17)`);
+    if (!r25Gated) ok = false;
   } finally {
     rmSync(tmp, { recursive: true, force: true });
   }

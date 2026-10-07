@@ -101,7 +101,7 @@ overrides:
   # event meets all three cuts' breaks (ICE CHANGELOG `[0.14.0]` › "Breaking,
   # at a glance"): `/r3f` and `/ground` are gone, `defineWidget` refuses the
   # DOM/R3F faces, and an object under the camera is a desk KIND drawn by one
-  # WebGPU renderer. `three` and `@react-three/*` are no longer ICE peers, so
+  # WebGPU renderer. three.js and its React bindings are no longer ICE peers, so
   # they leave the host singleton lists in this same event; strata stays
   # 0.13.0 and loro ^1.13.8 (ICE declares both exactly as before).
   # 2026-10-03 bumped 0.14.0 → 0.15.0-desk.1 — the nine 0.15.0 asks (DK-3,
