@@ -23,6 +23,11 @@
 //             (`--vf-mat-ground` — #3D5A30 by day, #313C40 by night), "The desk lost its graphics device" said ONCE, a
 //             theme change under it taken again and said no more; the counters still; dk-15-lost-device.png;
 //   REDUCED — reduced motion emulated: no recede (the still at scale 1, no transition), the cover's fade 120 ms.
+//   RIM     — (DK-16; plan addendum (69)) the receded still's edges, ~1 % of the window a side, are the MAT'S GROUND: the
+//             still's own ring read back after every rise and every theme change, and the rim's pixels under History's
+//             cover — a plain tint — read off the window, by night (its rise) and by day (its theme change): the tint over
+//             the mat's ground, never over the canvas's own colour. Under Godview the pixels are printed, not judged: its
+//             CRT vignette darkens the window's edges by day (`.vf-godview-vignette`, black/15 at the corners).
 // THE PARK'S BUDGET (the brief's scope 3): the rise → the park, for every rise, held to `COVERS.parkBudgetMs`.
 
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -137,6 +142,73 @@ export function alphaOf(color: string): number {
 }
 
 const close = (a: number, b: number, eps: number): boolean => Math.abs(a - b) <= eps;
+
+/** The canvas's own colour by theme (DESIGN.md §2.1; `--vf-canvas-bg`) — what the rim showed before DK-16. */
+export const CANVAS_BG = { light: [250, 250, 250], dark: [23, 23, 23] } as const;
+
+/** A computed colour as sRGB 0–255 and its alpha: `rgb(…)`, `rgba(…)`, `color(srgb r g b / a)`; null when unread. */
+export function parseColor(css: string): { rgb: [number, number, number]; alpha: number } | null {
+  const srgb = /color\(srgb\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)(?:\s*\/\s*([\d.]+))?\s*\)/u.exec(css);
+  if (srgb !== null)
+    return {
+      rgb: [Number(srgb[1]) * 255, Number(srgb[2]) * 255, Number(srgb[3]) * 255],
+      alpha: srgb[4] === undefined ? 1 : Number(srgb[4]),
+    };
+  const rgb = /rgba?\(\s*([\d.]+)[,\s]+([\d.]+)[,\s]+([\d.]+)(?:[,\s/]+([\d.]+))?\s*\)/u.exec(css);
+  if (rgb !== null)
+    return {
+      rgb: [Number(rgb[1]), Number(rgb[2]), Number(rgb[3])],
+      alpha: rgb[4] === undefined ? 1 : Number(rgb[4]),
+    };
+  return null;
+}
+
+/** A tint of `alpha` over a ground, sRGB — what the compositor lays at the rim. */
+export function over(
+  tint: readonly [number, number, number],
+  alpha: number,
+  ground: readonly [number, number, number],
+): [number, number, number] {
+  return [0, 1, 2].map(
+    (c) => (tint[c] as number) * alpha + (ground[c] as number) * (1 - alpha),
+  ) as [number, number, number];
+}
+
+/** The rim as read: the still's ring and the mean of the window's pixels in a strip of the rim. */
+export interface RimSeen {
+  readonly ring: string;
+  readonly pixel: [number, number, number] | null;
+  /** the cover's ground (its computed background — the view's own, at the covers' 72 %) */
+  readonly tint: string | null;
+}
+
+/**
+ * THE RIM (DK-16; plan addendum (69)): the still's ring is the mat's ground as this theme lights it, and — where the cover
+ * is a plain tint (`pixels`) — the rim's pixels are the cover's tint over THAT: nearer it, within 8 a channel, than the
+ * tint over the canvas's own colour.
+ */
+export function judgeRim(rim: RimSeen, theme: "light" | "dark", pixels = true): string[] {
+  const problems: string[] = [];
+  const mat = COVERS.ground[theme];
+  if (!rim.ring.includes(mat))
+    problems.push(`the still's ring is ${JSON.stringify(rim.ring)}, not the mat's ground (${mat})`);
+  if (!pixels) return problems;
+  const tint = rim.tint === null ? null : parseColor(rim.tint);
+  const matRgb = parseColor(mat)?.rgb;
+  if (rim.pixel === null || tint === null || matRgb === undefined) {
+    problems.push(`the rim could not be read (${JSON.stringify(rim)})`);
+    return problems;
+  }
+  const want = over(tint.rgb, tint.alpha, matRgb);
+  const was = over(tint.rgb, tint.alpha, CANVAS_BG[theme]);
+  const off = (a: readonly number[], b: readonly number[]): number =>
+    Math.max(...[0, 1, 2].map((c) => Math.abs((a[c] as number) - (b[c] as number))));
+  if (off(rim.pixel, want) > 8 || off(rim.pixel, want) >= off(rim.pixel, was))
+    problems.push(
+      `the rim reads ${JSON.stringify(rim.pixel.map(Math.round))}, not the tint over the mat's ground ${JSON.stringify(want.map(Math.round))} (over the canvas's colour it would be ${JSON.stringify(was.map(Math.round))})`,
+    );
+  return problems;
+}
 
 /**
  * THE RISE by the ruled order: the capture answered with a still of the desk as it last presented — its drawn size, `drawn`
@@ -507,6 +579,43 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
       facts,
     };
   };
+  /** THE RIM (DK-16): the still receded — its ring, and a strip of the window's left rim (clear of the notch's sliver at
+   * mid-height) as the compositor laid it under the cover's tint; the pixels judged where the tint is plain (History). */
+  const rimRow = async (name: "godview" | "history", theme: "light" | "dark"): Promise<void> => {
+    await until(
+      "the still receded",
+      5_000,
+      `Math.abs(new DOMMatrixReadOnly(getComputedStyle(document.querySelector(".field-still")).transform).a - 0.98) < 0.001`,
+    );
+    const ring = await js<string>(
+      `getComputedStyle(document.querySelector(".field-still")).boxShadow`,
+    );
+    const strip = await win.capturePage({ x: 1, y: 150, width: 6, height: 24 });
+    const bgra = strip.toBitmap();
+    let sum: [number, number, number] = [0, 0, 0];
+    let n = 0;
+    for (let i = 0; i + 3 < bgra.length; i += 4) {
+      sum = [
+        sum[0] + (bgra[i + 2] as number),
+        sum[1] + (bgra[i + 1] as number),
+        sum[2] + (bgra[i] as number),
+      ];
+      n += 1;
+    }
+    const tint = (await view())[name]?.background ?? null;
+    const rim: RimSeen = {
+      ring,
+      pixel: n === 0 ? null : [sum[0] / n, sum[1] / n, sum[2] / n],
+      tint,
+    };
+    const judged = name === "history";
+    problems.push(
+      ...judgeRim(rim, theme, judged).map((p) => `COVER ${name.toUpperCase()}: rim ${theme}: ${p}`),
+    );
+    say(
+      `SMOKE_CANVAS_COVER_${name.toUpperCase()}_RIM ${JSON.stringify({ theme, ring, pixel: rim.pixel?.map(Math.round), tint, pixels: judged ? "judged" : "printed — under Godview's CRT vignette" })}`,
+    );
+  };
   const canvasFirst = async (): Promise<void> => {
     await setView("canvas");
     await until(
@@ -559,6 +668,7 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
       problems.push(row(`the room's fades still frost (${facts.frosts.join(", ")})`));
     if (rec?.passes[0]?.parked !== undefined)
       parks[name] = Math.round(rec.passes[0].parked - rec.rose);
+    await rimRow(name, first);
     const luma0 = await js<number | null>(STILL_LUMA);
     await shoot(`dk-15-${name}-${first}.png`);
     say(
@@ -618,6 +728,7 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
     else if (second === "dark" ? luma1 >= luma0 : luma1 <= luma0)
       problems.push(row(`the still was not lit ${second} again (${luma0} → ${luma1})`));
     await sleep(300);
+    await rimRow(name, second);
     await shoot(`dk-15-${name}-${second}.png`);
     say(
       `SMOKE_CANVAS_COVER_${ROW}_THEME ${JSON.stringify({ pass: again.pass, luma: { [first]: luma0, [second]: luma1 }, hold: heldTheme.facts })}`,

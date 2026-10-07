@@ -111,6 +111,7 @@ import {
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
 import { coverRows } from "./smoke-covers";
+import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
 import { selectionBarRows } from "./smoke-selection-bar";
 import { sendToRows } from "./smoke-send-to";
@@ -124,6 +125,7 @@ import {
 } from "./smoke-stillness";
 import { toolsInHandRows } from "./smoke-tools-in-hand";
 import { TRY_FLAG, TRY_SEARCH_KEY, TRY_TYPES_ENV, tryBoardRows, tryTypes } from "./smoke-try";
+import { NO_WEBGPU_FLAG, unavailableRows, withoutWebgpu } from "./smoke-unavailable";
 import {
   DRAWN_BUDGET_MS,
   hiddenDuring,
@@ -949,6 +951,10 @@ export async function runSmokeCanvas(opts: {
   onWindow?: (window: BrowserWindow) => void;
 }): Promise<void> {
   const gpu = !process.argv.includes("--disable-gpu");
+  // DK-16: the GPU kept and the page given no `navigator.gpu` (`--smoke-no-webgpu`, as a remote desktop has none —
+  // smoke-unavailable.ts `withoutWebgpu`): the desk's NO-WEBGPU card, never retried — a run of its own beside
+  // `--disable-gpu`'s no-adapter card
+  const noWebgpu = process.argv.includes(NO_WEBGPU_FLAG);
   const shotDir = process.env["VF_SMOKE_SHOT_DIR"];
   // DK-9: a run staged with the fault fixture (`smoke:kind-faults`) runs the kind-fault rows
   const faultRun = process.env["VF_SMOKE_KIND_FAULTS"] === "1";
@@ -1024,20 +1030,49 @@ export async function runSmokeCanvas(opts: {
   }
   try {
     const canvasReady = waitForConsole(win, "CANVAS_READY ", 45_000);
-    const deskVerdict = waitForConsole(win, gpu ? "DESK_READY " : "DESK_UNAVAILABLE ", 60_000);
-    // the first board lays the examples where the run asks (DK-8, ruling 1): the CLOCK row needs its clock
-    await loadRenderer(win, "smoke-canvas", opts.viteUrl, { [SEED_EXAMPLES]: "1" });
+    const drawing = gpu && !noWebgpu;
+    const deskVerdict = waitForConsole(win, drawing ? "DESK_READY " : "DESK_UNAVAILABLE ", 60_000);
+    // the first board lays the examples where the run asks (DK-8, ruling 1): the CLOCK row needs its clock. DK-16: the
+    // window is loaded with the smokes' two doors of its own — the presence relay (`presenceRelay`: the PEERS rows play the
+    // mesh between this window and a second) and the GPU faults (`deskFaults`: the BANNER and LOST rows)
+    if (noWebgpu) await withoutWebgpu(win);
+    await loadRenderer(win, "smoke-canvas", opts.viteUrl, {
+      [SEED_EXAMPLES]: "1",
+      presenceRelay: "1",
+      deskFaults: "1",
+    });
     // DK-11: the page's visibility recorder armed as the window loads — the occluded row asks whether it EVER went hidden
     await pageVisibility(win);
     const raw = await canvasReady;
     console.log(`SMOKE_CANVAS ${raw}`);
     const problems = [...smokeProfileFailures(), ...censusFailures(JSON.parse(raw) as CanvasFacts)];
     const verdict = await deskVerdict;
-    console.log(`SMOKE_CANVAS_DESK ${gpu ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
-    if (gpu) problems.push(...(await deskBootRow(win, [...deskSaid.said])));
+    console.log(`SMOKE_CANVAS_DESK ${drawing ? "DESK_READY" : "DESK_UNAVAILABLE"} ${verdict}`);
+    if (drawing) problems.push(...(await deskBootRow(win, [...deskSaid.said])));
     problems.push(...(await deskSeedFailures(win)));
-    problems.push(...(await exampleClockRow(win, gpu)));
-    if (gpu) {
+    problems.push(...(await exampleClockRow(win, drawing)));
+    if (noWebgpu) {
+      // DK-16 — NO WEBGPU AT ALL: the card said ONCE with no retry (a page with no WebGPU cannot grow one), in the canon's
+      // words with NO Reload; a cover over the desk that never drew; the card standing again (testing/smoke-unavailable.ts)
+      problems.push(...(await commentPadCensusRow(win)));
+      await expectDeskUnavailableCard(win);
+      console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
+      deskSaid.stop();
+      if (deskSaid.said.join(" ") !== "DESK_UNAVAILABLE")
+        problems.push(
+          `no WebGPU was said ${deskSaid.said.join(" → ")}, not the card once with no retry`,
+        );
+      problems.push(
+        ...(await unavailableRows({
+          win,
+          kind: "no-webgpu",
+          shot: "dk-16-card-nogpu.png",
+          shotDir,
+          say: (line) => console.log(line),
+        })),
+      );
+      if (win.webContents.isCrashed()) problems.push("the renderer crashed");
+    } else if (gpu) {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
@@ -1124,6 +1159,39 @@ export async function runSmokeCanvas(opts: {
         } catch (error) {
           problems.push(`DK-15: ${error instanceof Error ? error.message : String(error)}`);
         }
+        // DK-16: the peers on the mat — a second window's real pointer drawn in this one by face, at its place, hidden
+        // idle 8 s, under the board, under a cover and when it leaves its window, the smoke playing the mesh between them;
+        // then the desk's faults on its own device — a degraded desk's banner, a lost device's card, each Reload a remount
+        // that draws again (testing/smoke-peers.ts)
+        try {
+          problems.push(
+            ...(await peersRows({
+              win,
+              openPeer: async () => {
+                const peer = createMainWindow({
+                  mode: "smoke-canvas",
+                  preloadPath: opts.preloadPath,
+                  show: true,
+                });
+                opts.registry.adoptAuxiliary(peer);
+                const ready = waitForConsole(peer, "DESK_READY ", 60_000);
+                await loadRenderer(peer, "smoke-canvas", opts.viteUrl, { presenceRelay: "1" });
+                await ready;
+                await sleep(800);
+                return peer;
+              },
+              shotDir,
+              say: (line) => console.log(line),
+            })),
+          );
+        } catch (error) {
+          problems.push(`DK-16 PEERS: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        try {
+          problems.push(...(await faultRows({ win, shotDir, say: (line) => console.log(line) })));
+        } catch (error) {
+          problems.push(`DK-16 FAULTS: ${error instanceof Error ? error.message : String(error)}`);
+        }
         // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
         // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
         const pad = await commentPadRow(win, shotDir);
@@ -1165,6 +1233,16 @@ export async function runSmokeCanvas(opts: {
       if (card.detail === null || card.detail.length === 0) {
         problems.push("the unavailable card does not carry ICE's message");
       }
+      // DK-16: the card in the canon's words with no Reload; a cover over the desk that never drew; the card again
+      problems.push(
+        ...(await unavailableRows({
+          win,
+          kind: "no-adapter",
+          shot: null,
+          shotDir,
+          say: (line) => console.log(line),
+        })),
+      );
       if (win.webContents.isCrashed()) problems.push("the renderer crashed");
     }
     if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
