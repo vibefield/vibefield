@@ -30,6 +30,9 @@ import { type CoverRecord, coverCaptures, coverRecords } from "./cover-still";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 import type { ObjectWords } from "./desk-object-words";
+import { peersRenders } from "./peers/PeersOnTheMat";
+import { type PeerFacetSent, peerFacetSent } from "./peers/peer-facet";
+import { type PeersRecord, peersRecord } from "./peers/peers-reflector";
 import { type BoardStats, readBoardStats } from "./pegboard/board-stats";
 
 // THE DESK MOUNTED NOW, and its DOOR (DK-3). One desk draws in the Canvas stage at a time — one layer
@@ -257,6 +260,22 @@ export interface VfDeskDoor {
   /** DK-15 — what the cover's OWN capture answers: "nothing" stands in for a lost device (the fallback's row); "desk" the
    * desk's. Read, or set — a witness's switch, like `ambient`. */
   coverCaptures(answer?: "desk" | "nothing"): "desk" | "nothing";
+  /** DK-16 — the peers on the mat: whether the layer was mounted with ICE's remote cursors (`handle.cursors` — false: none
+   * of ICE's are drawn), the peers as this window last placed them (each one's pointer, facet, verdict and box; the layer's
+   * verdict; the canvas and camera they were placed by; the reflector's flushes, the element writes, the idle timers
+   * fired), how often the layer has rendered (never per frame), and what this window last said of its own pointer. A read. */
+  peers(): {
+    readonly cursors: boolean;
+    readonly record: PeersRecord | null;
+    readonly renders: number;
+    readonly facet: PeerFacetSent | null;
+  };
+  /** DK-16 — the smokes' presence relay, installed only on a page loaded with `?presenceRelay=1` (two windows of one shell
+   * share no presence room — fieldd's rooms are other desktops' — so the smoke plays the mesh): the presence payloads this
+   * window sent since the last ask (base64), and payloads handed in as its lane hands a room's (each through
+   * `presence().wire.apply`). */
+  presenceTap?(): readonly string[];
+  presenceApply?(payloads: readonly string[]): number;
   /** DK-11 — the selection's anchor as the desk last published it (`handle.selection.anchor()`) — what the bar is
    * placed from; null on a handle without the door. A read. */
   anchor(): SelectionAnchor | null;
@@ -269,8 +288,8 @@ export interface VfDeskDoor {
     readonly scroll: number;
     /** the board's foot inset as the desk drew it (I21 — the layer's `tray.foot`) */
     readonly foot: number | null;
-    /** the types core's tray lay HANGS now (the shown category's), in sibling order — the engine catalog's, so a kind
-     * the desk was mounted without is laid (a hang) though never drawn */
+    /** the types core's tray lay HANGS now (the shown category's), in sibling order — since desk.5 (ICE I38) only the
+     * kinds the desk was mounted with: a kind it cannot draw is never laid */
     readonly laid: readonly string[];
     readonly specimens: readonly {
       readonly type: string;
@@ -421,10 +440,64 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     sent: lastSend,
     covers: coverRecords,
     coverCaptures,
+    peers: () => ({
+      cursors: (handle as Partial<DeskLayerHandle>).cursors !== false,
+      record: peersRecord(),
+      renders: peersRenders(),
+      facet: peerFacetSent(),
+    }),
+    ...(presenceRelayAsked() ? presenceRelay(engine) : {}),
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;
   return () => {
     if (scope["__vfDesk"] === door) delete scope["__vfDesk"];
+  };
+}
+
+/** The smokes' URL door for the presence relay (`?presenceRelay=1`). */
+export const PRESENCE_RELAY = "presenceRelay";
+
+function presenceRelayAsked(): boolean {
+  return (
+    typeof location !== "undefined" &&
+    new URLSearchParams(location.search).get(PRESENCE_RELAY) === "1"
+  );
+}
+
+const toBase64 = (bytes: Uint8Array): string => {
+  let text = "";
+  for (const byte of bytes) text += String.fromCharCode(byte);
+  return btoa(text);
+};
+
+const fromBase64 = (text: string): Uint8Array =>
+  Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
+
+/** The relay's two doors over this engine's presence session — the session followed as it attaches and re-attaches. */
+function presenceRelay(engine: CanvasEngine): Pick<VfDeskDoor, "presenceTap" | "presenceApply"> {
+  let tapped: ReturnType<CanvasEngine["docs"]["presence"]>;
+  let off: (() => void) | null = null;
+  const sent: string[] = [];
+  const follow = (): void => {
+    const session = engine.docs.presence();
+    if (session === tapped) return;
+    off?.();
+    tapped = session;
+    off = session?.onOutbound((payload) => sent.push(toBase64(payload))) ?? null;
+  };
+  follow();
+  return {
+    presenceTap() {
+      follow();
+      return sent.splice(0, sent.length);
+    },
+    presenceApply(payloads) {
+      follow();
+      const session = engine.docs.presence();
+      if (session === undefined) return 0;
+      for (const payload of payloads) session.wire.apply(fromBase64(payload));
+      return payloads.length;
+    },
   };
 }

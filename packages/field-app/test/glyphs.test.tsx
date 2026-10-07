@@ -156,9 +156,11 @@ describe("the glyph set", () => {
     // marks are their owners' marks, kept exact like the vendor marks (§13).
     // The catalog (design-system/) is a harness and keeps its own fixtures.
     // DK-11 (R2): the desk bar's ONE path renderer for a kind's own drawing —
-    // one component, one <svg> — and no other file of the bar's.
+    // one component, one <svg> — and no other file of the bar's. DK-16 (R17):
+    // the peers' pointer arrow, the page's drawing — one view, one <svg>.
     const allow = new Map<string, number>([
       ["field/desk/bar/KindGlyph.tsx", 1],
+      ["field/desk/peers/PeersView.tsx", 1],
       ["godview/os-marks.tsx", 1],
       ["hud/edge-tray/EdgeTrayView.tsx", 2],
     ]);

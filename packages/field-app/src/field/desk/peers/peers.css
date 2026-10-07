@@ -1,0 +1,75 @@
+/* PEERS ON THE MAT (DK-16; DESIGN.md §8 "Peers on the mat", §2.8 I-1, §5 the line's glass; R17 as amended 13:40Z). Tokens
+   only. The layer lies in the desk's own box (`<Desk>`'s children — the desk's screen space, receding with it under a
+   sheet), above the mat and every piece of the desk's own DOM, below the bar (30), the frame and the line (62) — the
+   scene's stacking context keeps all of the chrome over it. It never takes a pointer. */
+
+.vf-peers {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+/* the whole layer away: the desk not drawing, a cover (the desk is a still), the board out (the desk is inert) */
+.vf-peers[data-hidden] {
+  visibility: hidden;
+}
+
+/* one peer: its box is the arrow's (18 × 22, the tip at 2,2), placed by its transform */
+.vf-peer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 18px;
+  height: 22px;
+  will-change: transform;
+}
+
+.vf-peer[data-hidden] {
+  visibility: hidden;
+}
+
+/* THE ARROW: the presence ink on a 1.4 paper-white edge, a 0 1px 2px black/25 drop */
+.vf-peer__arrow {
+  display: block;
+  overflow: visible;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 25%));
+}
+
+.vf-peer__arrow path {
+  fill: var(--vf-presence-ink);
+  stroke: var(--vf-presence-edge);
+  stroke-width: 1.4;
+  stroke-linejoin: round;
+}
+
+/* THE LABEL: a chip on the line's glass — 22 tall, full round, padded 0 9 0 7; the chrome's solid at 88 % (94 % by night)
+   with the line's 24px blur, its hairline (the strong one by night) and the island shadow, by night the 6 % top light;
+   11.5/500 in the chrome's primary text ink. Never a peer's own colour (I-1). */
+.vf-peer__chip {
+  position: absolute;
+  top: 18px;
+  left: 14px;
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
+  padding: 0 9px 0 7px;
+  border-radius: 999px;
+  white-space: nowrap;
+  color: var(--vf-text-primary);
+  font: 500 11.5px / 1 var(--vf-font-sans);
+  background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
+  backdrop-filter: blur(24px);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline),
+    var(--vf-shadow-island);
+}
+
+.dark .vf-peer__chip {
+  background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
+  box-shadow:
+    0 0 0 1px var(--vf-hairline-strong),
+    var(--vf-shadow-island),
+    inset 0 1px 0 rgb(255 255 255 / 6%);
+}

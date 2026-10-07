@@ -28,6 +28,7 @@ import { deskLook, fieldDeskLayer } from "./desk/desk-layer";
 import { announceMissing } from "./desk/desk-notices";
 import { objectWords } from "./desk/desk-object-words";
 import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./desk/desk-words";
+import { PeersOnTheMat } from "./desk/peers/PeersOnTheMat";
 
 // THE CANVAS STAGE (§5.4.3; DK-3, the host swap): the DESK drawn — ICE's `<Desk engine layer>` over
 // this generation's engine, mounted INSIDE the generation-keyed recede wrapper, so one stage lifetime
@@ -49,6 +50,8 @@ import { type DeskUnavailableWords, degradedNotice, unavailableWords } from "./d
 //   THE WORDS (DK-11, desk-object-words.ts) — the chrome's words for an object of a type on this mount, read
 //     against the kinds the layer was MOUNTED without — and the status line's notices (desk-notices.ts): each
 //     type on the board the desk draws as missing said once, at the first frame and whenever the faults move.
+// And as the desk's child, PEERS ON THE MAT (DK-16, desk/peers/): the room's other people drawn by VibeField — the layer
+// mounted with ICE's remote cursors off — while the desk draws.
 // THE KINDS (DK-9, plugin-host/window-kinds.ts; ICE I25 — the kind set is fixed for a layer's life): the
 // layer is mounted with the catalog's kinds LESS those of a plugin that is off (the structural `catalog`
 // a host hands its layer, read at the mount alone), so a disabled plugin's objects wear ICE's missing
@@ -318,9 +321,12 @@ export function CanvasStage({
     );
   }
   const words = retrying ? null : unavailableWords(status);
+  const drawing = !retrying && (status.state === "ready" || status.state === "degraded");
   return (
     <div className="field-canvas" data-desk={retrying ? "retrying" : status.state}>
-      <Desk engine={ce} layer={layer} keymapOverrides={keymapOverrides} onReady={onReady} />
+      <Desk engine={ce} layer={layer} keymapOverrides={keymapOverrides} onReady={onReady}>
+        <PeersOnTheMat drawing={drawing} />
+      </Desk>
       {words === null ? null : <DeskUnavailableView words={words} onReload={remount} />}
     </div>
   );

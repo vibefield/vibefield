@@ -105,8 +105,13 @@
      draws it as sent, whatever their theme — so one neutral that holds on
      both grounds and under ICE's white label text, never the theme's ink:
      3.2:1 on the dark ground, 3.1:1 on dark chrome, 5.3:1 on the light
-     ground, 5.5:1 under the white label. */
+     ground, 5.5:1 under the white label. On the desk (DK-16) VibeField draws
+     its peers itself: the ink fills each peer's ARROW, on a paper-white edge
+     (`--vf-presence-edge`, both themes), and the name rides a chip on the
+     line's glass in the chrome's own text ink — never this grey on the mat
+     (DESIGN.md §8 "Peers on the mat", §2.8's erratum). */
   --vf-presence-ink: #68686b;
+  --vf-presence-edge: #ffffff;
 
   /* Domain content colors. These are stable card identities, not app state. */
   --vf-note-surface: #f6e7a9;

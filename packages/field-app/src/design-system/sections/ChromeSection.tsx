@@ -26,6 +26,7 @@ import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
 import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
 import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
+import { PEERS_STATES, PeersPlate } from "../PeersPreview";
 import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
 import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
 import { SwitchPreview } from "../SwitchPreview";
@@ -228,6 +229,26 @@ export function ChromeSection({
           last 40 %. From the keyboard the board is a stop of Tab after them: the arrows ring the
           specimen in focus where the desk draws it, ⏎ lays it at the view's centre, Esc closes. The
           plates stand a plain board in for the desk's.
+        </p>
+      </Specimen>
+
+      <Specimen
+        title="Peers on the mat — the room's other people, by face"
+        source="field/desk/peers/* · DESIGN.md §8, §2.8, §13"
+        bleed
+      >
+        <div className="vf-ds-peers-plates">
+          {PEERS_STATES.map((state) => (
+            <PeersPlate key={`${state}-${dark ? "dark" : "light"}`} state={state} />
+          ))}
+        </div>
+        <p className="vf-ds-stage-caption">
+          Another person's pointer on the desk is VibeField's own cursor — ICE's are off, so nobody
+          is drawn twice (DK-16): the arrow, 18 × 22 with its tip on the pointer, in the presence
+          ink on a paper-white edge; the label a chip on the line's glass 14 right of and 18 below
+          it, the face first, then the name — never the person's colour. Placed every frame through
+          the camera; hidden after 8 s idle, when the pointer leaves its window or its canvas, under
+          a cover and while the board is out. The plates lay the lit mat where the desk draws it.
         </p>
       </Specimen>
 

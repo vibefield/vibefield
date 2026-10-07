@@ -5,12 +5,13 @@ import type { FieldUserProfile } from "../host";
 import { getRendererLogger } from "../logging";
 
 /** UA-D17 — a person has no colour, so a presence cursor is not tinted by who
- * it is: every peer's arrow and label are the one neutral `--vf-presence-ink`
- * (DESIGN.md §2.8), and the FACE in the label says whose it is. It must be a
- * real colour on the wire — ICE's remote-cursor reflector paints the SENDER'S
- * string at every receiver, whatever the receiver's theme, and draws white
- * label text on it — so the token is read at attach time, never sent as a
- * `var()`. A mid grey is what holds on both grounds and under white text. */
+ * it is: the FACE in its label says whose it is (DESIGN.md §2.8). ICE's
+ * presence still asks a real colour of every peer, so the one neutral
+ * `--vf-presence-ink` is sent, read at attach time, never as a `var()`. Since
+ * DK-16 nobody draws it as sent: ICE's remote cursors are off on the desk
+ * (`deskLayer({ cursors: false })`), and VibeField draws each peer itself —
+ * the arrow in this ink, the label a chip on the line's glass in the
+ * chrome's own text ink (§8 "Peers on the mat"). */
 export const PRESENCE_INK_FALLBACK = "#68686b";
 
 export function presenceColor(): string {

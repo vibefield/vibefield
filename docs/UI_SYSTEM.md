@@ -95,6 +95,11 @@ The catalog currently mounts these shipping views directly:
   face's type side by side; an aimed draft that took a chip with no @, send armed — and the chip IN
   FLIGHT, the shipping flier (`ChipFlierView`) frozen on its straight line to the caret
   (`SendFlightPlate`)
+- the peers on the mat (DK-16): `PeersLayerView` and `PeerCursorView` over fixture peers on a stand-in
+  for the lit mat (`--vf-mat-ground`, where the desk draws its own) — a peer, and two with one at the
+  mat's edge — each arrow placed by the product's own model through a fixture camera (`arrowBoxAt`)
+  and each chip's words its face, then its name (`peerLabel`); in the product the same views are
+  placed by a reflector, never re-rendered per frame (`PeersPlate`)
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their

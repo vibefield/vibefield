@@ -69,8 +69,9 @@ export interface FieldDeskLayerOptions {
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
  * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), the
  * pegboard's foot (`tray`, DK-13 — its lay clears the line), and no
- * further services yet (the kv service rides later). The room's other people stay ICE's cursors until DK-16 draws
- * VibeField's (`cursors` unset — ruling 3).
+ * further services yet (the kv service rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
+ * "Peers on the mat"; ICE I26): `cursors: false`, so the host mounts no remote cursors of ICE's and nobody is drawn twice —
+ * the desk's children draw each peer by face (`peers/PeersOnTheMat.tsx`), and their observers arm the world.
  */
 export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
   return deskLayer({
@@ -83,6 +84,7 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     grid: DESK_GRID,
     hold: DESK_HOLD,
     tray: DESK_TRAY,
+    cursors: false,
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
   });

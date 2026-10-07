@@ -1692,6 +1692,22 @@
   font-weight: 550;
 }
 
+/* DK-16 — the peers' plates: the shipping arrows and chips (`PeersLayerView`, `PeerCursorView`) over a stand-in for the
+   LIT MAT — the sage as the theme lights it — which the desk draws on the GPU. */
+.vf-ds-peers-plates {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(560px, 1fr));
+  gap: 12px;
+}
+
+.vf-ds-peers-plate {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--vf-mat-ground);
+}
+
 /* DK-13 — the pegboard's plates: the shipping chrome (`PegboardView`) over a stand-in for the desk's own drawer, which
    the desk draws on the GPU behind the line (its board, its specimens, their label tape) — a plain board where it lies,
    its specimens plain stand-ins, as the selection bar's plates stand an object in. */

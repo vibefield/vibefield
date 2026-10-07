@@ -263,7 +263,8 @@ describe("the Canvas stage mounts the desk", () => {
     expect(opts.blobs).toBeDefined();
     expect(opts.grid?.mat.ruler.on).toBe(true);
     expect(opts.grid?.mat.ruler.margin).toBe(60);
-    expect(opts.cursors).toBeUndefined(); // ICE's remote cursors stay until DK-16 (ruling 3)
+    // DK-16 (I26): VibeField draws the room's people itself, so the host mounts none of ICE's — nobody drawn twice
+    expect(opts.cursors).toBe(false);
     // DK-12 — the hand's reserves (I20): the reading fit keeps 116 under the top (the tools in hand stand at y 64, 40
     // tall, and 12) and 100 over the foot (the line's 88 and 12), the bar's travel 560 ms — ICE's 56 / 72 / 340 are its demo's
     expect(opts.hold).toEqual({ top: 116, band: 100, travelMs: 560 });

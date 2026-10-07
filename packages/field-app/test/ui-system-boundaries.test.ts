@@ -306,6 +306,25 @@ describe("UI system ownership boundaries", () => {
       expect(fixture).not.toMatch(door);
   });
 
+  it("keeps the peers' fixture an ADAPTER — the product's model over fixture peers, never their markup (DK-16)", () => {
+    // The arrows and chips are the shipping views; the catalog stands in what a host supplies — a camera and the room's
+    // names — and places them by the product's own model. Never the peers' own classes, never a stylesheet, never the
+    // desk's doors, the presence session or the controller.
+    const fixture = source("design-system/PeersPreview.tsx");
+    expect(fixture).toMatch(/<PeersLayerView\s/u);
+    expect(fixture).toMatch(/<PeerCursorView\s/u);
+    for (const model of ["arrowBoxAt(", "peerLabel("]) expect(fixture).toContain(model);
+    expect(fixture).not.toMatch(/className="vf-peer/u);
+    expect(fixture).not.toContain("<style");
+    for (const door of [
+      /\bgetHost\b/u,
+      /\bcurrentDesk\b/u,
+      /\busePresencePeers\b/u,
+      /<PeersOnTheMat\s/u,
+    ])
+      expect(fixture).not.toMatch(door);
+  });
+
   it("keeps the live-surface fixture an ADAPTER — a host, never a painter (DT-2b-2)", () => {
     // The temptation for a widget whose pixels need a privileged producer is to
     // draw convincing ones. The catalog is held to supplying what a HOST
@@ -384,7 +403,8 @@ describe("UI system ownership boundaries", () => {
     const history = source("design-system/HistoryPreview.tsx");
     const bar = source("design-system/SelectionBarPreview.tsx");
     const pegboard = source("design-system/PegboardPreview.tsx");
-    const catalog = `${pegboard}\n${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const peers = source("design-system/PeersPreview.tsx");
+    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -478,6 +498,12 @@ describe("UI system ownership boundaries", () => {
       "PegboardView",
       "placeFilters",
       "filterOptions",
+      // DK-16 — the peers on the mat over fixture peers, placed by the product's own model
+      "PeersPlate",
+      "PeersLayerView",
+      "PeerCursorView",
+      "arrowBoxAt",
+      "peerLabel",
     ]) {
       expect(catalog).toContain(productionView);
     }
@@ -494,6 +520,8 @@ describe("UI system ownership boundaries", () => {
     // …and the selection bar's plates mounted (DK-11), and the pegboard's (DK-13).
     expect(page).toMatch(/<SelectionBarPlate\s/u);
     expect(page).toMatch(/<PegboardPlate\s/u);
+    // …and the peers' plates (DK-16)
+    expect(page).toMatch(/<PeersPlate\s/u);
     // …and Send to…'s flight (DK-14)
     expect(page).toMatch(/<SendFlightPlate\s/u);
     // …and the board risen behind the line in both scenes that raise Objects (the playground, the view frame's stage)
@@ -544,6 +572,8 @@ describe("UI system ownership boundaries", () => {
     // 0.11 magnet projection the field once handed the ground has no consumer.
     expect(stage).toMatch(/<Desk\s+engine=\{ce\}\s+layer=\{layer\}/u);
     expect(stage).toContain("fieldDeskLayer(");
+    // DK-16: the room's other people are the desk's child — in its own box, under its engine — while it draws
+    expect(stage).toMatch(/<Desk[^>]*>\s*<PeersOnTheMat\s+drawing=\{drawing\}\s*\/>\s*<\/Desk>/u);
     expect(field).not.toContain("canvasGridConfig(");
     expect(workbench).toContain("ProductAppearance");
     expect(workbench).not.toContain("useState");
@@ -575,6 +605,8 @@ describe("UI system ownership boundaries", () => {
       "frame/StatusLine.tsx",
       "field/desk/pegboard/Pegboard.tsx",
       "field/desk/pegboard/PegboardView.tsx",
+      "field/desk/peers/PeersOnTheMat.tsx",
+      "field/desk/peers/PeersView.tsx",
     ]) {
       expect(source(component)).not.toContain("<style");
     }
@@ -603,6 +635,7 @@ describe("UI system ownership boundaries", () => {
       "frame/status-line.css",
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",
+      "field/desk/peers/peers.css",
       "terminal/mirror/mirror.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);

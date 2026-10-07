@@ -3,7 +3,7 @@
 // props — the cells of its groups, merged, never the pegboard's specimens — and the board's persistence row. Reads
 // only: the door still writes no document.
 
-import type { Entity } from "@vibecook/ice";
+import { defineQuery, type Entity, Local, Not, PresencePeer } from "@vibecook/ice";
 import { COMMENT_PAD_TYPE } from "@vibefield/plugin-comment-pad";
 import { afterEach, describe, expect, it } from "vitest";
 import { setBoardStatus } from "../src/board-status";
@@ -64,5 +64,84 @@ describe("the desk door's reads (DK-8)", () => {
     expect(door?.held()).toBeNull();
     undo();
     ce.dispose();
+  });
+
+  it("DK-16: says whether the layer was mounted with ICE's remote cursors — false: none of ICE's drawn — and the peers' record", () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const read = (handle: object) => {
+      const undo = installDeskDoor(
+        { engine: ce, handle: handle as never, generation: 1, mount: 0, theme: "light" },
+        () => false,
+      );
+      const peers = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk?.peers();
+      undo();
+      return peers;
+    };
+    expect(read({ cursors: false })?.cursors).toBe(false);
+    expect(read({})?.cursors).toBe(true); // absent, ICE's host draws them (I26)
+    expect(read({ cursors: false })).toMatchObject({ record: null, facet: null });
+    ce.dispose();
+  });
+
+  it("DK-16: installs the presence relay only on a page asked for it (`?presenceRelay=1`) — what this window sent out, and a peer's handed in", async () => {
+    const make = () => {
+      const ce = createFieldEngine(buildRegistry());
+      ce.docs.create();
+      ce.docs.attachPresence({ name: "🦊 Tab", color: "#68686b" });
+      return ce;
+    };
+    const a = make();
+    const b = make();
+    const install = (ce: ReturnType<typeof make>) => {
+      const undo = installDeskDoor(
+        { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+        () => false,
+      );
+      const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk as VfDeskDoor;
+      return { door, undo };
+    };
+    const g = globalThis as { location?: { search: string } };
+    const before = g.location;
+    try {
+      g.location = { search: "" };
+      const plain = install(a);
+      expect(plain.door.presenceTap).toBeUndefined();
+      expect(plain.door.presenceApply).toBeUndefined();
+      plain.undo();
+      g.location = { search: "?presenceRelay=1" };
+      const doorA = install(a);
+      const tapA = doorA.door.presenceTap;
+      doorA.undo();
+      const doorB = install(b);
+      const applyB = doorB.door.presenceApply;
+      doorB.undo();
+      if (tapA === undefined || applyB === undefined) throw new Error("no relay installed");
+      const remoteQ = defineQuery([PresencePeer, Not(Local)]);
+      const seenByB = (): number => {
+        let n = 0;
+        b.world.query(remoteQ).each((batch) => {
+          for (const _ of batch) n += 1;
+        });
+        return n;
+      };
+      const t0 = Date.now();
+      let clock = 0;
+      while (seenByB() === 0 && Date.now() - t0 < 3_000) {
+        const sent = tapA();
+        for (const payload of sent) expect(typeof payload).toBe("string"); // base64, a harness can carry it
+        expect(applyB(sent)).toBe(sent.length);
+        clock += 16;
+        a.step(clock);
+        b.step(clock);
+        await new Promise((r) => setTimeout(r, 5));
+      }
+      expect(seenByB()).toBe(1); // A's presence, relayed by the door as a mesh would, is a peer in B
+    } finally {
+      if (before === undefined) delete g.location;
+      else g.location = before;
+      a.dispose();
+      b.dispose();
+    }
   });
 });
