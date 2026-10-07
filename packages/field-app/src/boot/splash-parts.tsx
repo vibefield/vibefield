@@ -4,7 +4,10 @@ import type { ReactElement } from "react";
 // the veil's thin bar and the stage line under it. Shared by the splash and by
 // the switch, whose held frame IS the splash in another dress — so the two can
 // never draw a bar or a stage line differently, and the frame the leaving
-// window converges on is the frame the arriving one paints first.
+// window converges on is the frame the arriving one paints first. Since DK-16
+// they stand on the MAT in both themes (a ground darker than either theme's
+// canvas), so they are paper white at the splash's quiet presences — the
+// words `--vf-mat-ink`, the bar's track white/15 and its fill white/80.
 
 const EASE = "cubic-bezier(0.25, 1, 0.3, 1)"; // --vf-ease-island
 
@@ -38,10 +41,10 @@ export function SplashStatus({
         aria-valuemax={100}
         {...(progress !== null ? { "aria-valuenow": Math.round(progress * 100) } : {})}
         aria-label={label}
-        className="h-[3px] w-[220px] overflow-hidden rounded-full bg-black/10 dark:bg-white/15"
+        className="h-[3px] w-[220px] overflow-hidden rounded-full bg-white/15"
       >
         <div
-          className="h-full rounded-full bg-black/70 dark:bg-white/80"
+          className="h-full rounded-full bg-white/80"
           style={{
             width: `${Math.round((progress ?? 0.06) * 100)}%`,
             transition: `width 240ms ${EASE}`,
@@ -49,19 +52,15 @@ export function SplashStatus({
         />
       </div>
       {failed === null ? (
-        <div className="text-[11px] font-medium text-black/50 dark:text-white/50">
-          {status.stage}
-        </div>
+        <div className="text-[11px] font-medium text-[var(--vf-mat-ink)]">{status.stage}</div>
       ) : (
         <div className="flex flex-col items-center gap-2">
-          <div className="text-[11px] font-medium text-black/50 dark:text-white/50">
-            {failed.reason}
-          </div>
+          <div className="text-[11px] font-medium text-[var(--vf-mat-ink)]">{failed.reason}</div>
           {failed.retryable && onRetry !== undefined && (
             <button
               type="button"
               onClick={onRetry}
-              className="h-7 rounded-full bg-black/5 px-3 text-[12px] font-medium text-black/70 transition-colors hover:bg-black/10 active:scale-95 dark:bg-white/10 dark:text-white/70 dark:hover:bg-white/20"
+              className="h-7 rounded-full bg-white/10 px-3 text-[12px] font-medium text-white/70 transition-colors hover:bg-white/20 active:scale-95"
             >
               Retry
             </button>
@@ -82,7 +81,7 @@ export function SplashFace({
 }): ReactElement {
   return (
     <div className="flex flex-col items-center gap-3">
-      <div className="mb-1 text-[13px] font-medium text-black/50 dark:text-white/50">VibeField</div>
+      <div className="mb-1 text-[13px] font-medium text-[var(--vf-mat-ink)]">VibeField</div>
       <SplashStatus status={status} onRetry={onRetry} />
     </div>
   );

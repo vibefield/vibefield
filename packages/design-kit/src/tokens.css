@@ -12,6 +12,38 @@
   /* §2.1 the cutting mat's sage AS THE THEME LIGHTS IT — by day the Sun's (DK-15: what a cover
      stands over when the desk's still answers nothing — DESIGN.md §8, the covers over the desk) */
   --vf-mat-ground: #3d5a30;
+  /* THE MAT IN CSS (DK-16; DESIGN.md §2.1's erratum, §8): where nothing draws the desk yet — the boot
+     splash and the floor it shares, the loading veil, a field's tile before its still — the cutting mat
+     stands in: its sage as the theme lights it (above), its lattice in its cream as lit (MAT.md §4: the
+     lines at full cover, (206, 183, 131) by the Sun, #4C5254 in the Moon) at the line law's presences
+     (ICE `MAT_GRID`: thin 0.5 px at 0.14 of the ink, thick 0.75 px at 0.28 — one CSS px at 7 % and 21 %),
+     thin every 25 px and thick every 100; and the words on it paper white at the splash's quiet presence —
+     60 %: 4.0:1 on the Sun-lit sage, 5.2:1 in the Moon, where the old splash's black/50 read 3.9:1 on its
+     canvas. */
+  --vf-mat-line: #ceb783;
+  --vf-mat-lattice:
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--vf-mat-line) 21%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--vf-mat-line) 21%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to right,
+      color-mix(in srgb, var(--vf-mat-line) 7%, transparent) 1px,
+      transparent 1px
+    ),
+    linear-gradient(
+      to bottom,
+      color-mix(in srgb, var(--vf-mat-line) 7%, transparent) 1px,
+      transparent 1px
+    );
+  --vf-mat-lattice-size: 100px 100px, 100px 100px, 25px 25px, 25px 25px;
+  --vf-mat-ink: rgb(255 255 255 / 60%);
   /* widgetlab-compat aliases */
   --canvas-bg: var(--vf-canvas-bg);
   --canvas-dot: var(--vf-canvas-dot);
@@ -246,8 +278,9 @@
   /* §2.1 Ground */
   --vf-canvas-bg: #171717;
   --vf-canvas-dot: rgba(255, 255, 255, 0.08);
-  /* §2.1 the mat by night: the Moon's dapples */
+  /* §2.1 the mat by night: the Moon's dapples, and its lines as the Moon lights them */
   --vf-mat-ground: #313c40;
+  --vf-mat-line: #4c5254;
 
   /* §2.2 Surfaces */
   --vf-fill: #2c2c2e;

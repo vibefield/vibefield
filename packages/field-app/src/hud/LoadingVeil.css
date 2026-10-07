@@ -1,3 +1,6 @@
+/* The veil wears the MAT (DK-16; DESIGN.md §2.1's erratum, §8 "The loading veil"): the desk's cutting mat in CSS — its
+   sage as the theme lights it, its lattice in its lit cream — so a switch goes from desk to desk with the floor unchanged;
+   its bar and its stage line in the mat's paper-white ink (`LoadingVeil.tsx`). */
 .vf-loading-veil {
   position: absolute;
   z-index: 80;
@@ -5,11 +8,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: radial-gradient(
-    circle at 50% 42%,
-    color-mix(in srgb, var(--vf-canvas-bg), white 3%) 0%,
-    var(--vf-canvas-bg) 68%
-  );
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
   opacity: 0;
   pointer-events: none;
   transition: opacity 380ms var(--vf-ease-island);

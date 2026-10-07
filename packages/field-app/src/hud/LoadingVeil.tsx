@@ -1,8 +1,9 @@
 import { type ReactElement, useEffect, useRef, useState } from "react";
 import "./LoadingVeil.css";
 
-// The loading veil (thinking-b4 §2, DESIGN.md §8): a chrome-material frost over
-// the ENTIRE window while a doc loads. The cover itself is immediate and
+// The loading veil (thinking-b4 §2, DESIGN.md §8): a cover over the ENTIRE
+// window while a doc loads — since DK-16 the mat in CSS, its words the mat's
+// paper-white ink (LoadingVeil.css). The cover itself is immediate and
 // opaque: a keyed engine may never tear down in front of the user. Progress
 // details remain late (500ms), so a normal local switch reads as one soft
 // dissolve rather than a loading screen; slow I/O stays honest. Reveal waits
@@ -38,14 +39,14 @@ export function LoadingVeilView({
           aria-valuemax={100}
           aria-valuenow={Math.round(view.progress * 100)}
           aria-label="Loading the field"
-          className="h-[3px] w-[220px] overflow-hidden rounded-full bg-black/10 dark:bg-white/15"
+          className="h-[3px] w-[220px] overflow-hidden rounded-full bg-white/15"
         >
           <div
-            className="vf-loading-veil__progress h-full rounded-full bg-black/70 dark:bg-white/80"
+            className="vf-loading-veil__progress h-full rounded-full bg-white/80"
             style={{ width: `${Math.round(view.progress * 100)}%` }}
           />
         </div>
-        <div className="text-[11px] font-medium text-black/50 dark:text-white/50">{view.stage}</div>
+        <div className="text-[11px] font-medium text-[var(--vf-mat-ink)]">{view.stage}</div>
       </div>
     </div>
   );

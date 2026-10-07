@@ -284,10 +284,10 @@ export function SwitchSceneView({
               />
             </div>
             <div className="vf-switch-words" role="status">
-              <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-black/50 dark:text-white/50">
+              <span className="text-[10px] font-medium uppercase tracking-[0.08em] text-[var(--vf-mat-ink)]">
                 Switching to
               </span>
-              <span className="vf-switch-name text-[28px] font-light leading-[1.15] tracking-[-0.02em] text-black dark:text-white">
+              <span className="vf-switch-name text-[28px] font-light leading-[1.15] tracking-[-0.02em] text-white">
                 {persona.name}
               </span>
             </div>

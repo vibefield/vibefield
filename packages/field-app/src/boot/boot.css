@@ -1,8 +1,10 @@
-/* First-paint canvas ground shared by splash and onboarding. */
+/* First-paint ground shared by the splash, the Setup Assistant and the switch: since DK-16 the desk's cutting mat in CSS
+   (DESIGN.md §2.1's erratum, §8 "The boot splash") — its sage as the theme lights it and its lattice in its lit cream —
+   the ground the desk itself draws, so the reveal changes what stands on the floor and never the floor. */
 .vf-splash {
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px);
-  background-size: 24px 24px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 @media (prefers-reduced-motion: reduce) {
