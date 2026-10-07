@@ -29,6 +29,13 @@
   transform: scale(0.98);
 }
 
+/* THE RIM (DK-16; plan addendum (69)): the still at 0.98 leaves 1 % of the window bare at each edge (~12 px at 1180) —
+   painted with the mat's ground, never the canvas's own colour, so the cover lies over one surface. A spread ring outside
+   the still's box, scaled with it: 2vmax × 0.98 covers 1 % of either side at any window. Clipped by the window at scale 1. */
+.field-still[data-still="still"] {
+  box-shadow: 0 0 0 2vmax var(--vf-mat-ground);
+}
+
 .field-still[data-still="none"] {
   transition: none;
 }

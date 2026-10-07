@@ -7,6 +7,8 @@
  * once, the still dropped; a resize or a theme change re-captures (thaw → one frame → capture → freeze); a capture that
  * answers nothing covers the mat's ground and, on a desk that had drawn, says "The desk lost its graphics device" ONCE.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   blurStill,
@@ -505,5 +507,29 @@ describe("stillCanvasSurface — the still handed over whole, the recede started
     surface.show({ kind: "none" });
     expect(el.dataset.still).toBe("none");
     expect(transfers.at(-1)).toBeNull();
+  });
+});
+
+describe("the rim (DK-16; plan addendum (69)) — the receded still's edges are the mat's ground", () => {
+  const css = readFileSync(join(process.cwd(), "src/field/desk/cover-still.css"), "utf8").replace(
+    /\/\*[\s\S]*?\*\//g,
+    "",
+  );
+  /** Every declaration block whose selector list names exactly `selector`. */
+  const rules = (selector: string): string[] =>
+    [...css.matchAll(/([^{}]+)\{([^}]*)\}/g)]
+      .filter((m) => (m[1] ?? "").split(",").some((s) => s.trim() === selector))
+      .map((m) => m[2] ?? "");
+
+  it("rings a standing still with the mat's ground, wide enough for the recede at any window (2vmax × 0.98 ≥ 1 %)", () => {
+    const ring = rules('.field-still[data-still="still"]').join("\n");
+    expect(ring).toMatch(/box-shadow:\s*0 0 0 2vmax var\(--vf-mat-ground\);/);
+    // never the canvas's own colour: the rim reads as the mat, so the cover lies over one surface
+    expect(ring).not.toContain("--vf-canvas-bg");
+  });
+
+  it("leaves the ground's face and nothing at all un-ringed (neither recedes, so neither leaves a rim)", () => {
+    for (const face of ["ground", "none"])
+      expect(rules(`.field-still[data-still="${face}"]`).join("\n")).not.toContain("box-shadow");
   });
 });
