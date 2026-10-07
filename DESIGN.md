@@ -1402,6 +1402,18 @@ The hot-point glow and rim retire with CardShell (above).
   preview's middle layer — retires, as does rosetta's room glass in History: the cover is a tint at
   the covers' 72% over a still of the desk blurred once (§8, the covers over the desk), and their
   settings rows go.
+  *As built (DK-15, 2026-10-07):* the rows gone, by name — Settings → Terminal → Look → Glass's
+  middle layer, **"Godview's backdrop"**, with its **"Backdrop opacity"** and **"Background blur"**
+  rows (and their two search entries; the docked preview's foot no longer says "backdrop N%" or
+  "blur N px"); Godview's system controls' **"Stage opacity"** and **"Backdrop blur"**. The Glass
+  section is two layers: each terminal's ground, then Godview's cover over your canvas. The deck
+  record keeps no backdrop: a saved `backdropOpacity` / `backdropBlur` reads as nothing, and the
+  next write drops it. Godview's ground is the stylesheet's own — the stage colour at 72%
+  (`--vf-godview-stage-opacity`, which the sheet and the launcher read), with no backdrop filter.
+  History's room keeps its paper fades' masks but not their frost: on a host surface under a cover
+  the transcript's top fade and the sticky day heads are the cover's tint (`--vf-chrome-solid`,
+  feathered by the room's own masks), never a backdrop filter — the room's sheet is rosetta's, so
+  the override is VibeField's, scoped to the view and riding the room's own chunk.
   Over the monitor the card occludes the bodies exactly as much as Godview occludes the field. **The edge moves:** a
   grip in the lip (`role="separator"`, ↑/↓ 24px, ⇧ ×4, Home/End, double-click to rest) drags it.
   Downward the monitor grows and the swarm's field grows with it; upward the monitor does NOT
