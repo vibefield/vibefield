@@ -131,7 +131,15 @@ overrides:
   # resting pointer keeps no desk awake — a no-op move is dropped by the dom
   # adapter). Nothing of the surface moves; strata 0.13.0 and loro ^1.13.8
   # unchanged.
-  "@vibecook/ice": 0.15.0-desk.4
+  # 2026-10-07 bumped 0.15.0-desk.4 → 0.15.0-desk.5 (DK-16) — desk.4 and I34,
+  # I36, I38, I39 (ICE CHANGELOG: I36 the held anchor's types exported —
+  # `HeldAnchor`/`HeldSlot`, types only; I34 core's two `Tray` writers ordered,
+  # so strata's dev build says no Tray line; I38 the lay hangs only the kinds
+  # the desk was MOUNTED with; I39 the desk host measures its container's
+  # LAYOUT size — a desk mounted under a CSS transform draws at its size and a
+  # press lands where it is drawn). Nothing of the surface moves; strata
+  # 0.13.0 and loro ^1.13.8 unchanged.
+  "@vibecook/ice": 0.15.0-desk.5
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -246,7 +254,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.15.0-desk.4'
+  - '@vibecook/ice@0.15.0-desk.5'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'
