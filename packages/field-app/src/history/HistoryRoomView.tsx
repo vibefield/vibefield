@@ -33,7 +33,8 @@ import "./history-room-glass.css";
 // catalog mounts THIS composition over the package's fixture ports and the
 // product mounts it over fieldd's (`HistoryView.tsx`). What it owns is the
 // room's place in the frame: the glass (the room paints no ground of its own
-// on a host surface, and its paper fades frost over whatever is beneath), the
+// on a host surface, and its paper fades are the cover's tint, never frost —
+// `history-room-glass.css`, DK-15), the
 // edges (its columns end at the reserve, its top band is the head's, 8 px stay
 // clear at each side for the notches' slivers), where its dialogs land (a
 // layer that ends at the reserve, so a dialog never sits under the line, and

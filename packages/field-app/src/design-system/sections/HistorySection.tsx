@@ -22,7 +22,7 @@ export function HistorySection(): ReactElement {
       index="11a"
       eyebrow="History"
       title="rosetta's room, on the cover's glass"
-      description="History is rosetta's own room — the projects, the sessions, the panels and the transcript — mounted as a package behind VibeField's ports: lists and figures over fieldd's doors, one session's body over the direct plane with a grant of its own. It paints no ground of its own here; its fades frost over the cover's glass, its columns end at the reserve, and its states are said in the frame's words."
+      description="History is rosetta's own room — the projects, the sessions, the panels and the transcript — mounted as a package behind VibeField's ports: lists and figures over fieldd's doors, one session's body over the direct plane with a grant of its own. It paints no ground of its own here; on the desk its fades are the cover's tint, never frost (the cover is a tint over a still of the desk), its columns end at the reserve, and its states are said in the frame's words."
     >
       <Specimen title="The room on the cover's glass" source="history/HistoryRoomView.tsx" bleed>
         <div className="vf-ds-history-plate" data-state="room">
