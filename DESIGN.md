@@ -395,20 +395,14 @@ grows upward from your face's column and stands 8 above the line with the face b
 bar's own, and it is placed from its own row — the bar's row stays where the bar stood and the rows
 grow away from it — rather than grown from a control in the frame.
 
-**The composited profile draws the card's material on the ground (2026-09-07; ICE
-design-013 Q8, ratified 2026-09-06).** In ICE's composited profile the resting and lifted
-card shadows above, §7's lift, selection ring and buttons, and §2.3's hairline are rendered
-by the ground's card frame — one SDF fragment per card, at true z — and the DOM card carries
-none of them; the notched frame is the selection chrome. The recipes stay exactly as written
-here: the ground reads them by name (`draft/ground` `theme.ts`: `SHADOW`, `LINES`, `LIFT`,
-`HEAT`). The stratified profile keeps its CSS chrome. Nothing here changes for a widget
-author; the change is which layer paints the chrome.
-*Erratum 2026-10-03 (DK-0d, against the desk):* ICE deleted its presentation profiles — the
-composited and the stratified, with the ground — at design-015 D5b (2026-09-26), so the composited
-profile never reached VibeField (pinned at ICE 0.11, where the DOM card still carries this chrome)
-and never will. On the desk (DK-D2) each object kind draws its own face, shadow and lift on the GPU
-under the mat's one light, the selection is the mat's pencil brackets (§8, the desk's chrome), and
-the recipes above stay the chrome's; what the desk's materials mean is the material book's (§5.1).
+**On the desk each object draws its own material** (DK-D2; *rewritten 2026-10-07, DK-17* — this
+paragraph read "the composited profile draws the card's material on the ground", ICE design-013 Q8,
+2026-09-07: ICE deleted its presentation profiles, the composited and the stratified, with the ground
+at design-015 D5b, so that profile never reached VibeField). Each object kind draws its own face,
+shadow and lift on the GPU under the mat's one light; the selection is the mat's pencil brackets (§8,
+the desk's chrome); no DOM card exists to carry a shadow, so the two card rows of the table above
+are the record of the card that retired, and the rest are the chrome's — the islands, the sheets,
+the edges, the menus. What the desk's materials mean is the material book's (§5.1).
 
 ### 5.1 The material book — what the desk's materials mean (DK-D5; a stub)
 
@@ -483,19 +477,17 @@ arrives, and neither runs under reduced motion.
   pending forever; a transition worst-case snaps to its end state.
 - **M4 — Depart ≠ vanish.** Things put themselves back (glide home, spring pop) or shrink
   along their travel; only cancelled ghosts fade.
-- **M5 — The stage recedes.** When a sheet opens, the canvas eases to `scale(0.98)` and
-  discretionary per-frame work pauses (stage hold) — focus is physical.
-  *Correction, 2026-08-04:* "discretionary per-frame work" is narrower than it reads. A
-  stage hold freezes GL island repaints and parks the compositor's demand loop; the world
-  keeps stepping, which is what keeps undo and collab landing visibly behind a partial
-  overlay. Chrome that COVERS the window instead takes `useFrameFreeze` (ice 0.3.0), which
-  parks the engine outright. Sheets recede → hold. Godview covers → freeze.
-  *Erratum 2026-10-03 (DK-0d, against the desk — DK-D2, R22):* the desk has no GL islands and no
-  stage hold — ICE retired the islands with its planes at design-015 D5b, and `useStageHold`'s call
-  sites go inert at the pin and leave at DK-17. A sheet still recedes (the transform above); behind
-  it the desk keeps its own idle — zero submits while nothing moves (design-015 §2), its wind the
-  host's to quiet (`deskLayer({ ambient })`). A cover still freezes: `engine.frame.freeze("cover")`,
-  now over a still of the desk (§8, the covers over the desk).
+- **M5 — The stage recedes.** When a sheet opens, the canvas eases to `scale(0.98)` — focus is
+  physical — and the world keeps stepping behind it, so undo and collab land visibly behind a
+  partial overlay. *Rewritten 2026-10-07 (DK-17 — the policy as built):* two gates, no third. **A
+  sheet takes none**: the desk keeps its own idle — zero frames and zero submits while nothing moves
+  (ICE design-015 §2) — its ambient wind blowing for 20 s after the last touch and easing out over
+  2 s (`deskLayer({ ambient })`, its default `idle`); the stage hold the sheets and the loading veil took
+  until DK-17 wrote a resource the desk never reads, so it left. **A cover freezes**:
+  `engine.frame.freeze("cover")` over a still of the desk, zero frames and zero submits while it
+  stands (§8, the covers over the desk), and the user switch freezes the field it leaves the same
+  way. (Until 2026-09-26 a stage hold froze the GL islands' repaints and parked the compositor's
+  demand loop; ICE retired both with its planes at design-015 D5b.)
 - **M6 — Respect `prefers-reduced-motion`**: morphs become fades, springs become ease-out,
   durations halve. Non-negotiable quality floor.
 
@@ -504,7 +496,7 @@ ground floor (FV-D1); every other view is ONE cover over it (§10). From Canvas 
 over 240ms plain `ease` and settles `scale(1.012) → 1` over 560ms on the island curve — Godview's
 open as it shipped — over the LIVE desk while its last frame is captured; the desk's STILL, blurred
 once, then swaps in under the cover and the desk freezes (§8, the covers over the desk): a cover
-covers, so it takes M5's freeze, not the sheets' hold. The still recedes to `scale(0.98)` over 560ms
+covers, so it takes M5's freeze (a sheet takes no gate). The still recedes to `scale(0.98)` over 560ms
 on the island curve, transform only; the field itself never recedes under a cover. Between covered
 views the cover stays put and only its content changes, in place: a 180ms `ease` fade, no second
 settle. Back to Canvas the cover lowers — the rise reversed, 240ms out to 1.012 — and the desk thaws
@@ -559,18 +551,13 @@ fades in whole over 120ms.
 DOM card (DK-D2). They left `tokens.css` with the card itself, its `card-appearance` defaults and
 the appearance document's `overlapFeedback` (the document is v4 — the plain ground alone, §2.1).
 
-**In the composited profile (2026-09-07)** these states are the ground's frame terms, not
-CSS: lift is `Motion.lift` (the same `liftScale`), the selection ring rides the frame's edge,
-and the overlap glow and rim become the CAST LIGHT — the lifted card lights the card under
-it through its own distance field (`draft/ground/GLOW.md`); the hot-point anatomy above is
-the DOM chrome's and retires with it. The tier alphas, the rim width and the colours stay the
-`--ic-*` values listed here; the size, offset and radial knobs have no meaning for the light.
-*Erratum 2026-10-03 (DK-0d, against the desk — DK-D2, R22):* no composited profile ships (§5's
-erratum). On the desk the living card's states are the kinds' and the mat's (ICE design-015 §7–§8):
-hover is a rise, never an outline; a drag lifts and carries the object; a sole selection wears the
-pencil brackets 6 out and several one union, so the select ring stays the chrome's focus (MC-4); a
-picked-up object rises into the hand (§8, tools in hand) while the desk behind it goes out of focus.
-The hot-point glow and rim retire with CardShell (above).
+**On the desk the living states are the kinds' and the mat's** (ICE design-015 §7–§8; DK-D2, R22;
+*rewritten 2026-10-07, DK-17* — this paragraph read "in the composited profile", 2026-09-07, a
+profile that never shipped, §5): hover is a rise, never an outline; a drag lifts and carries the
+object; a sole selection wears the pencil brackets 6 out and several one union, so the select ring
+stays the chrome's focus (MC-4); a picked-up object rises into the hand (§8, tools in hand) while the
+desk behind it goes out of focus. The table above is the DOM card's, which the desk does not draw —
+its hot-point glow and rim left with the card (above); its last two rows are the chrome's.
 
 ---
 
@@ -837,7 +824,8 @@ The hot-point glow and rim retire with CardShell (above).
   - **The fields explorer** grows FROM the pill (M1): one element, 600ms on the island curve,
     still at `top-2`, to `min(56%, 34rem)` × `min(46vh, 420px)` (544 wide at the default window),
     corners 22 22 40 40, the sheet tier (§5) ringed by the strong hairline with the top sheet's
-    shadow; the backdrop dim, the field's recede and the stage hold behind it, as before. Its head
+    shadow; the backdrop dim and the field's recede behind it, as before (no stage hold since DK-17 —
+    M5: the desk keeps its own idle). Its head
     row is the pill's own: the field's name and the chevron turned up ("Close  Esc"). Below, the
     doc tiles (the file pill, above) in three columns, **New field** first, in words. Esc or the
     dim closes it.
@@ -1293,7 +1281,8 @@ The hot-point glow and rim retire with CardShell (above).
   fill: loading is not a §2.5 state) over an 11px/50% lowercase stage label
   ("drawing the board" — its last; DK-4 retired "preparing previews" with the
   R3F preview capture). **Late-veil rule:** invisible until 120ms of loading elapse
-  (a cached switch never flashes); 240ms fade-out. Loading is modal; the stage holds.
+  (a cached switch never flashes); 240ms fade-out. Loading is modal (it holds no stage since
+  DK-17 — M5).
   *Amended 2026-10-07 (DK-16; §2.1's erratum, measured):* the veil wears the mat — its lit sage and
   its lattice, opaque — and its bar and label are in the mat's ink (`--vf-mat-ink`, white at 60 %:
   4.0:1 by day, 5.2:1 by night), so a switch goes from desk to desk on one floor.

@@ -1,6 +1,6 @@
 import type { CanvasEngine } from "@vibecook/ice";
 import { attachDevtools } from "@vibecook/ice/devtools";
-import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
+import { useFrameFreeze } from "@vibecook/ice/react";
 import type { DesktopShellState } from "@vibefield/contracts";
 import {
   type Dispatch,
@@ -46,7 +46,7 @@ import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-pre
 // line — the board itself is the desk's), the edges, the corner, settings, and
 // overlays — WITHOUT owning document or engine lifetime. All the chrome-scoped
 // effects live here too: the two keyboard additions, the hud-flight dock
-// choreography, the devtools attach, and the sheet/loading stage holds. Sheet
+// choreography, the devtools attach, and the switch's freeze. Sheet
 // open/close STATE stays in FieldView (the canvas recede transform derives
 // from it in the same render — a callback-up would land the recede one frame
 // late; Objects never recedes it since DK-13). The theme is not here: it has
@@ -165,19 +165,16 @@ export function ChromeLayer({
     return onDesktopState(setDesktopState);
   }, []);
 
-  // The docs sheet + the loading veil quiesce the stage (Objects never does
-  // since DK-13: the pegboard is the desk's own, and the stage behind it neither
-  // recedes nor dims — R14).
-  useStageHold(ce, docsOpen, "docs-explorer");
-  useStageHold(ce, showSettings, "settings-panel");
-  useStageHold(ce, docState.phase === "loading", "loading-veil");
-  // A covered view gets the STRICTER gate (ice 0.3.0) — taken since DK-15 by
-  // the still under the covers (`desk/CoverStill.tsx`, mounted beside the
-  // scene in FieldView), in the ruled order: the capture, the still blurred
-  // once and swapped in, the canvas hidden, THEN `freeze("cover")` — zero
-  // frames and zero submits while the cover stands (DESIGN.md §8 "The covers
-  // over the desk"). A stage hold would not do: it is presentation policy over
-  // a world that keeps stepping (right for the sheets above).
+  // A sheet (the fields explorer, Settings) and the loading veil take NO gate
+  // (DK-17, the retire table's last row): their stage holds wrote ICE's
+  // `StageMode`, which nothing on the desk reads — inert since the pin. Behind a
+  // sheet the desk keeps its own idle, zero submits while nothing moves, its
+  // wind the ambient's (DESIGN.md §6 M5). A covered view gets the gate that
+  // parks the loop — taken since DK-15 by the still under the covers
+  // (`desk/CoverStill.tsx`, mounted beside the scene in FieldView), in the ruled
+  // order: the capture, the still blurred once and swapped in, the canvas
+  // hidden, THEN `freeze("cover")` — zero frames and zero submits while the
+  // cover stands (DESIGN.md §8 "The covers over the desk").
   // The switch covers the window too (DESIGN.md §8): the field it leaves is
   // frozen whole under the frost, and thaws if a refused switch hands it back.
   const switchCovering = isSwitchCovering(useSwitchState());

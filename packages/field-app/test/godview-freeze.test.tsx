@@ -3,13 +3,13 @@
  * GT-3f — which gate each surface takes, pinned against a REAL canvas engine
  * (the reactive-chrome grain: no widgets, no deck, no GPU).
  *
- * The distinction is easy to lose and expensive to lose: a stage hold is
- * presentation policy over a world that KEEPS STEPPING, so it is right for the
- * sheets, which recede a canvas that stays visible behind them. A cover — since
- * One Frame FR-1 the one layer every view but the canvas lives in, Godview and
- * History alike — is over the field, so it takes the stricter gate: a freeze
- * parks the loop itself. Before ice 0.3.0 Godview used a hold, and the engine
- * ticked at display rate for pixels nobody could see.
+ * A cover — since One Frame FR-1 the one layer every view but the canvas lives
+ * in, Godview and History alike — is over the field, so it takes the gate that
+ * parks the loop itself: a freeze. Before ice 0.3.0 Godview used a stage hold,
+ * and the engine ticked at display rate for pixels nobody could see. The sheets
+ * took a stage hold until DK-17: presentation policy over a world that keeps
+ * stepping, which on the desk wrote a resource nothing reads — so a sheet takes
+ * NO gate now, and the desk behind it keeps its own idle (DESIGN.md §6 M5).
  *
  * DK-15: the cover's freeze is taken by the still under the covers
  * (`field/desk/CoverStill.tsx`), after the still is swapped in — here no desk is
@@ -17,8 +17,10 @@
  * once; the ruled order with a desk is `cover-still.test.ts`'s.
  */
 
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { type CanvasEngine, createCanvasEngine } from "@vibecook/ice";
-import { useStageHold } from "@vibecook/ice/react";
 import type { FrameViewState } from "@vibefield/contracts";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
@@ -32,10 +34,10 @@ import { type FieldHost, setHost } from "../src/host";
 
 /** The field's wiring, at the grain that matters: which gate, which name —
  * reading the window's view through the same mirror FieldView reads, the cover
- * taken by the still under the covers, the sheet's hold by ChromeLayer's call. */
-function Chrome({ ce, sheet }: { ce: CanvasEngine; sheet: boolean }) {
+ * taken by the still under the covers; a sheet takes none (ChromeLayer's own
+ * source is held to that below). */
+function Chrome({ ce }: { ce: CanvasEngine; sheet: boolean }) {
   const view = useActiveView();
-  useStageHold(ce, sheet, "settings-panel");
   return createElement(CoverStill, { ce, covered: view !== "canvas", view, dark: false });
 }
 
@@ -89,7 +91,7 @@ function boot(): CanvasEngine {
   return ce;
 }
 
-describe("a cover freezes the engine; sheets only background it", () => {
+describe("a cover freezes the engine; a sheet takes no gate (DK-17)", () => {
   it("Godview's cover freezes, and back on the canvas it thaws", () => {
     const engine = boot();
     render(false, false);
@@ -119,15 +121,23 @@ describe("a cover freezes the engine; sheets only background it", () => {
     expect(engine.frame.isFrozen()).toBe(false);
   });
 
-  it("a sheet takes a stage hold and leaves the loop running", () => {
+  it("a sheet takes no gate: the loop runs, nothing holds the stage", () => {
     const engine = boot();
     render(false, true);
-    expect(engine.stage.isBackgrounded()).toBe(true);
-    expect(engine.stage.holds()).toEqual(["settings-panel"]);
-    // The world must stay live behind a partial overlay — undo and collab
-    // land visibly there. That is the whole reason the sheets did NOT move to
-    // a freeze.
+    // The world stays live behind a partial overlay — undo and collab land
+    // visibly there — and the desk's own idle is the only rest it needs.
+    expect(engine.stage.isBackgrounded()).toBe(false);
+    expect(engine.stage.holds()).toEqual([]);
     expect(engine.frame.isFrozen()).toBe(false);
+  });
+
+  it("ChromeLayer itself takes no stage hold — the call sites were inert on the desk (DK-17)", () => {
+    const chrome = readFileSync(
+      join(dirname(fileURLToPath(import.meta.url)), "../src/field/ChromeLayer.tsx"),
+      "utf8",
+    );
+    expect(chrome).not.toMatch(/\buseStageHold\b|\.stage\.background\(/);
+    expect(chrome).toMatch(/useFrameFreeze\(ce, switchCovering, "user-switch"\)/);
   });
 
   it("unmounting mid-Godview thaws — a crashed overlay cannot wedge the engine", () => {
@@ -140,11 +150,12 @@ describe("a cover freezes the engine; sheets only background it", () => {
     expect(engine.frame.isFrozen()).toBe(false);
   });
 
-  it("the two gates coexist: a sheet open under Godview holds and freezes independently", () => {
+  it("a sheet open under Godview changes nothing: the cover's freeze alone", () => {
     const engine = boot();
     render(true, true);
     expect(engine.frame.isFrozen()).toBe(true);
-    expect(engine.stage.isBackgrounded()).toBe(true);
+    expect(engine.frame.holds()).toEqual(["cover"]);
+    expect(engine.stage.isBackgrounded()).toBe(false);
 
     render(true, false); // sheet closes, Godview stays up
     expect(engine.frame.isFrozen()).toBe(true);
