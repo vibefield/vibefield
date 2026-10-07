@@ -1,0 +1,18 @@
+{
+  "snapshot": {
+    "epoch": "fieldd-2b9e",
+    "revision": 4,
+    "rows": [
+      {
+        "rootId": "r_9b2d5e8a1c4f7036ad52",
+        "name": "ada",
+        "path": "/Users/ada",
+        "device": "dev_7d3c9b",
+        "kind": "browse",
+        "browse": "home",
+        "missing": false,
+        "lastActiveAt": null
+      }
+    ]
+  }
+}

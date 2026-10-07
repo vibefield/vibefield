@@ -197,5 +197,12 @@
     "machine",
     "agents",
     "updates"
+  ],
+  "WORKSPACE_DIR": [
+    "workspace"
+  ],
+  "WORKSPACE_ROOTS_FILE": [
+    "workspace",
+    "roots.json"
   ]
 }

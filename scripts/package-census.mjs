@@ -1,9 +1,8 @@
 #!/usr/bin/env node
 // Package census (WP1 / EDP slice 0; distribution spec §7.3 ASAR allowlist + §13.2
 // stage-content checks): the inventory of what `pnpm build` actually produces, so a
-// later slice can prove a package holds exactly this and nothing else. No packaging
-// tool exists yet — this walks the build tree that will feed one, which is why the
-// baseline lives here rather than beside a stage.
+// later slice can prove a package holds exactly this and nothing else. This walks
+// the build inputs; stage-package.mjs separately checks the exact shipping allowlist.
 // Usage: node scripts/package-census.mjs [--json <path>] [--assert] [--strict] [--update]
 //
 // REPORT-FIRST, deliberately, matching .github/workflows/audit.yml's posture: that
@@ -12,7 +11,15 @@
 // manifest drift prints and exits 0. Only a §7.3 "must never ship" hit is fatal, because
 // that class is a leak rather than churn. HARDENING IS A ONE-LINE FLIP — pass `--strict`
 // (or default `strict` to true below) once WP4's staging allowlist makes drift meaningful.
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  lstatSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -78,9 +85,8 @@ packageDirs.sort();
 const isDelegating = (script) => script.split("&&").every((c) => /^\s*pnpm\b/.test(c));
 
 // ---- walking a build tree --------------------------------------------------
-// `dist` is the only output convention in this tree today; a package that declares a
-// real build and yields no dist is flagged rather than assumed, so a package that
-// starts emitting elsewhere surfaces as a finding instead of vanishing from the census.
+// `dist` is the generated-output convention. A plugin with existing handwritten
+// JS entries is inventoried explicitly below; other missing output stays a failure.
 const OUTPUT_DIR = "dist";
 
 const walk = (absDir, relBase, out) => {
@@ -250,6 +256,44 @@ const ACKNOWLEDGED = [
 ];
 const acknowledgementFor = (repoRel) => ACKNOWLEDGED.find(([prefix]) => repoRel.startsWith(prefix));
 
+// A plain-JS plugin can be source-complete: plugin-build validates its declared
+// service entry without producing dist/ (kv-service is the shipped example).
+// Count its manifest and entries explicitly. A declared dist/ entry that is
+// missing must still fail as an unbuilt package; never waive that by package name.
+function handWrittenPluginFiles(pkgRel, pkgJson) {
+  if (pkgJson.scripts?.build !== "plugin-build") return null;
+  const manifest = join(repoRoot, pkgRel, "vibefield.plugin.json");
+  if (!existsSync(manifest)) return null;
+  const entries = JSON.parse(readFileSync(manifest, "utf8")).entries ?? {};
+  const declared = [entries.renderer, entries.service].filter((entry) => entry !== undefined);
+  if (declared.length === 0) return null;
+  const paths = [];
+  for (const entry of declared) {
+    if (typeof entry !== "string") return null;
+    const rel = entry.replace(/^\.\//, "");
+    const parts = rel.split(/[\\/]/u);
+    if (
+      parts.some((part) => part === "" || part === "." || part === "..") ||
+      parts.includes("dist") ||
+      !/\.[cm]?js$/u.test(rel)
+    )
+      return null;
+    const abs = join(repoRoot, pkgRel, rel);
+    if (!existsSync(abs) || !lstatSync(abs).isFile()) return null;
+    if (
+      parts.some((_, index) =>
+        lstatSync(join(repoRoot, pkgRel, ...parts.slice(0, index + 1))).isSymbolicLink(),
+      )
+    )
+      return null;
+    paths.push(rel);
+  }
+  return ["vibefield.plugin.json", ...new Set(paths)].map((rel) => {
+    const abs = join(repoRoot, pkgRel, rel);
+    return { rel, name: rel.split(/[\\/]/u).at(-1), abs, bytes: statSync(abs).size };
+  });
+}
+
 // ---- census ----------------------------------------------------------------
 const census = [];
 const notBuilt = [];
@@ -261,16 +305,17 @@ for (const pkgRel of packageDirs) {
   const buildScript = pkgJson.scripts?.build;
   const distAbs = join(repoRoot, pkgRel, OUTPUT_DIR);
   const hasDist = existsSync(distAbs) && statSync(distAbs).isDirectory();
+  const handwritten = hasDist ? null : handWrittenPluginFiles(pkgRel, pkgJson);
 
-  if (!hasDist) {
+  if (!hasDist && handwritten === null) {
     if (buildScript && isDelegating(buildScript)) delegating.push({ pkgRel, name: pkgJson.name });
     else if (buildScript) notBuilt.push({ pkgRel, name: pkgJson.name, buildScript });
     continue;
   }
   if (!buildScript) strayOutput.push({ pkgRel, name: pkgJson.name });
 
-  const files = [];
-  walk(distAbs, OUTPUT_DIR, files);
+  const files = handwritten ?? [];
+  if (hasDist) walk(distAbs, OUTPUT_DIR, files);
   for (const f of files) {
     f.repoRel = `${pkgRel}/${f.rel}`;
     f.shape = shapeOf(f.rel);
@@ -441,7 +486,7 @@ if (args.includes("--assert")) {
   if (notBuilt.length > 0) {
     console.error(
       `\ncensus assert CANNOT RUN — ${notBuilt.map((p) => p.pkgRel).join(", ")} ` +
-        "declared a build but produced no output; run `pnpm build` first",
+        "declared a build but produced no output; run `pnpm exec nx run-many -t build` first",
     );
     process.exit(1);
   }

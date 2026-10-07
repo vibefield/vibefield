@@ -1,0 +1,14 @@
+{
+  "device": "dev_7d3c9b",
+  "rootId": "r_6f1c2a9e0b7d4c3a8e21",
+  "rootPath": "/Users/ada/Projects/vibe-field",
+  "endpoints": {
+    "treeUrl": "ws://127.0.0.1:43129/tree",
+    "gitUrl": "ws://127.0.0.1:43129/git"
+  },
+  "ticket": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "gitTicket": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "expiresAt": 1791216011000,
+  "generation": 1,
+  "access": "read-only"
+}

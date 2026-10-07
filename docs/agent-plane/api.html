@@ -2023,6 +2023,56 @@
             </div>
           </section>
 
+          <section id="workspace">
+            <h2>Files service — rows and attached worktrees</h2>
+            <p class="section-note">FS-1b / FS-2, 2026-10-05. A fieldd-owned files worker hosts
+              mille. Row reads share the product door; file bodies and diffs go directly between
+              that worker and a renderer Worker. Neither fieldd RPC nor Electron main relays them.</p>
+            <div class="table-wrap"><table>
+              <thead><tr><th>Door</th><th>Request and answer</th><th>Admission</th></tr></thead>
+              <tbody>
+                <tr><td><code>workspace.roots</code></td><td>Places newest first, then picked folders, home and
+                  mounted volumes. Absolute paths, missing places, and <code>clipped</code>.</td>
+                  <td rowspan="5">Renderer participant, self phone or self peer daemon;
+                    <code>workspace.read</code>. Plain local tokens, shell-main, plugins,
+                    MCP agents and guests are refused.</td></tr>
+                <tr><td><code>workspace.list</code></td><td><code>{rootId, path?, cursor?, kinds?}</code>:
+                  relative request paths; absolute answer paths, child counts, total and next cursor.</td></tr>
+                <tr><td><code>workspace.search</code></td><td><code>{rootId, path?, q, kinds?}</code>:
+                  bounded subtree walk; <code>complete: false</code> means partial coverage.</td></tr>
+                <tr><td><code>workspace.gitFacts</code></td><td><code>{rootId, path?}</code>:
+                  branch, dirty count and worktrees; null outside a repository.</td></tr>
+                <tr><td><code>workspace.subscribe</code></td><td><code>{scope: "roots"}</code>:
+                  the roots as a rows subscription.</td></tr>
+                <tr><td><code>workspace.pickFolder</code></td><td>Local attended folder selection:
+                  no input path; cancellation or a persisted <code>picked</code> root. The shell
+                  chooses, fieldd validates and records the canonical folder after required audit.
+                  Repeated picks keep one id; a missing picked folder stays in the registry.</td>
+                  <td>This desktop's renderer participant only, <code>workspace.read</code>.
+                    Plugins, agents, plain tokens and remote callers cannot open this picker.</td></tr>
+                <tr><td><code>workspace.openTicket</code></td><td><code>{rootId, path?}</code>:
+                  canonical confined subtree, ephemeral loopback tree/git endpoints, separate
+                  single-use credentials, expiry and worker generation.</td>
+                  <td rowspan="3">This desktop's renderer participant only, with
+                    <code>workspace.read</code>. Attached remote access remains FS-4/FS-5.</td></tr>
+                <tr><td><code>workspace.closeTicket</code></td><td>Releases the caller's pair,
+                  including unused grants. Expiry, socket loss, root loss and window revocation
+                  also close both legs.</td></tr>
+                <tr><td><code>workspace.fileAction</code></td><td>Confined path copy or shell
+                  reveal. No file contents.</td></tr>
+              </tbody>
+            </table></div>
+            <p>The phone's folder picker uses the existing product connection, including a
+              connection held by History; it adds no PHONE_BUDGET leg. Copy path uses the
+              answer verbatim. Start session sends <code>agent.spawn {provider, cwd}</code>
+              to that desktop, using its catalog's spawn offerings and default profile.
+              The self-tailnet preset already grants <code>agent.spawn</code>.</p>
+            <p>The unreleased mille channel is pinned at <code>baa0de8</code> in a dedicated
+              sibling checkout. R24 confines native imports to the files worker; field-app uses
+              the browser client/port/remote and UI entries. The read-only git port remains the
+              interim implementation pending the upstream GitService switch.</p>
+          </section>
+
           <section id="versioning">
             <h2>Versioning and compatibility</h2>
             <p class="section-note">

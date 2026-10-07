@@ -1,0 +1,9 @@
+{
+  "branch": "main",
+  "dirty": 3,
+  "worktrees": [
+    { "path": "/Users/ada/Projects/vibe-field", "branch": "main" },
+    { "path": "/Volumes/SamsungRed/lanes/fs1a/vibe-field", "branch": "fs/1a-service" },
+    { "path": "/tmp/bisect", "branch": null }
+  ]
+}

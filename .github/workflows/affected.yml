@@ -42,6 +42,7 @@ jobs:
 
       - uses: ./.github/actions/prepare-ghosttea
       - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/prepare-mille
 
       # No Nx Cloud connection or token: local deterministic caching only.
       # The full verify workflow still runs on every PR and on main.

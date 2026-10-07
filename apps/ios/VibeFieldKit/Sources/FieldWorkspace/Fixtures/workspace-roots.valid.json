@@ -1,0 +1,43 @@
+{
+  "roots": [
+    {
+      "rootId": "r_6f1c2a9e0b7d4c3a8e21",
+      "name": "vibe-field",
+      "path": "/Users/ada/Projects/vibe-field",
+      "device": "dev_7d3c9b",
+      "kind": "place",
+      "missing": false,
+      "lastActiveAt": "2026-10-05T16:20:11.402Z"
+    },
+    {
+      "rootId": "r_0a4e7f19c2b85d6e1f37",
+      "name": "old-spike",
+      "path": "/Users/ada/scratch/old-spike",
+      "device": "dev_7d3c9b",
+      "kind": "place",
+      "missing": true,
+      "lastActiveAt": "2026-09-12T08:01:55.000Z"
+    },
+    {
+      "rootId": "r_9b2d5e8a1c4f7036ad52",
+      "name": "ada",
+      "path": "/Users/ada",
+      "device": "dev_7d3c9b",
+      "kind": "browse",
+      "browse": "home",
+      "missing": false,
+      "lastActiveAt": null
+    },
+    {
+      "rootId": "r_3e8c1a6f9d2b5047be19",
+      "name": "SamsungRed",
+      "path": "/Volumes/SamsungRed",
+      "device": "dev_7d3c9b",
+      "kind": "browse",
+      "browse": "volume",
+      "missing": false,
+      "lastActiveAt": null
+    }
+  ],
+  "clipped": false
+}

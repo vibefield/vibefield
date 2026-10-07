@@ -118,6 +118,7 @@ jobs:
             ../rosetta-pin -> target
 
       - run: pnpm install --frozen-lockfile
+      - uses: ./.github/actions/prepare-mille
 
       # AR-2 — the puppeteer sibling's OWN dependencies (zod 4, the ACP SDK, node-pty for the
       # adapters), for exactly the packages fieldd's graph reaches: a FILTERED, frozen install.

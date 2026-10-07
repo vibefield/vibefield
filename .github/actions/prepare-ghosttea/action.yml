@@ -12,8 +12,8 @@ runs:
       run: node scripts/siblings.mjs fetch ghosttea
     - name: Install Ghosttea's renderer workspaces from its npm lockfile
       shell: bash
-      run: node scripts/siblings.mjs install-js
+      run: node scripts/siblings.mjs install-js ghosttea
     - name: Build Ghosttea's renderer and its dependencies
       if: inputs.build == 'true'
       shell: bash
-      run: node scripts/siblings.mjs build-js
+      run: node scripts/siblings.mjs build-js ghosttea

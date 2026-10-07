@@ -84,6 +84,7 @@ import { bootstrap, type FielddDaemon, SessionRecordStore } from "../src/index";
 import { RpcCallError } from "../src/native-link";
 import type { SecretStore } from "../src/plugin-settings";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
+import { RootsRegistry } from "../src/workspace/roots";
 import { catalogWith, SCRIPTED_CATALOG, SCRIPTED_ROW } from "./agent-catalog-fixture";
 import {
   killDaemonTree,
@@ -483,6 +484,8 @@ async function setup(config: SetupConfig): Promise<Box> {
       ];
     },
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
+    // FS-1a — every run's folder is a place; a test root on macOS lives under
+    // /private, which the files service never exports, so the rule is lifted
     // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget
     ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
   });
@@ -1156,6 +1159,24 @@ describe("managed sessions over the REAL floor (field-native)", () => {
     expect(sessions).toHaveLength(1);
     expect(sessions[0]?.runtimeSessionId).toBe(spawned.terminal.sessionId);
     expect(sessions[0]?.resume).toBeUndefined();
+    // FS-1a (L2) — the run's folder became a place of the files service, its
+    // lastActiveAt the moment the run entered the fold, on disk for the next boot
+    const place = daemon.workspace.registry
+      .roots()
+      .find((root) => root.kind === "place" && root.path === envOut);
+    expect(place).toMatchObject({ kind: "place", missing: false, name: "env-out" });
+    expect(Date.parse(place?.lastActiveAt ?? "")).toBeGreaterThan(Date.now() - 60_000);
+    expect(
+      readFileSync(join(dataDir, ...LAYOUT.WORKSPACE_ROOTS_FILE), "utf8").includes(envOut),
+    ).toBe(true);
+    // …and a boot that lost its registry seeds the place back from the
+    // VERIFIED session records (`recordedPlaces`)
+    const reseeded = new RootsRegistry({
+      file: join(dataDir, "reseeded-roots.json"),
+      deviceId: () => "dev_test",
+    });
+    expect(reseeded.seedPlaces(daemon.agents.recordedPlaces())).toBe(1);
+    expect(reseeded.roots().find((root) => root.kind === "place")?.path).toBe(envOut);
 
     // ── EL7: the environment the agent was born with ──
     const envFile = join(envOut, "session-1.env");

@@ -57,6 +57,17 @@ const MANIFEST_NAME = "fieldd.sea.manifest.json";
 // EXECUTABLE'S directory (F-11: __dirname in a SEA is the executable's dir, not the cwd),
 // so whatever stages the package must copy them beside the binary. The manifest below
 // re-states this so the stager reads it off the artifact instead of off this comment.
+// mille's napi triple (fieldd workspace/launch.ts `milleTriple`; mille's own loader names
+// its per-platform binaries the same way)
+function milleTriple() {
+  if (process.platform === "darwin") return `darwin-${process.arch}`;
+  if (process.platform === "win32") return `win32-${process.arch}-msvc`;
+  const musl = !process.report?.getReport()?.header?.glibcVersionRuntime;
+  return `linux-${process.arch}-${musl ? "musl" : "gnu"}`;
+}
+const MILLE_NATIVE = `mille.${milleTriple()}.node`;
+const FILES_HOST_ROLE_ARG = "--vibefield-role=files-host";
+
 const SIDECARS = [
   {
     name: "service-harness.mjs",
@@ -65,6 +76,19 @@ const SIDECARS = [
   {
     name: "loro_wasm_bg.wasm",
     why: "loro-crdt reads it with readFileSync(join(__dirname, …)); bundling the JS carries none of it",
+  },
+  // FS-1a (L1) — the files worker. The executable re-runs ITSELF with
+  // `--vibefield-role=files-host` and that role loads this bundle from beside it
+  // (bin.ts), so it must be a real file next to the executable, like the harness.
+  {
+    name: "files-host.cjs",
+    why: "the files worker's bundle — the executable's files-host role loads it from beside itself",
+  },
+  // mille's native engine: `process.dlopen` needs a real path, and fieldd hands
+  // the worker this one explicitly (workspace/launch.ts); never embeddable.
+  {
+    name: MILLE_NATIVE,
+    why: "mille's native file engine — the files worker dlopens it by the explicit path fieldd hands it",
   },
 ];
 
@@ -377,6 +401,74 @@ function bootProbe({ exe, cwd, env, deadlineMs = 30_000 }) {
   });
 }
 
+/** FS-1a — run the executable as fieldd runs its files worker: the role argument,
+ * an IPC pipe, the engine's explicit path, then one list and a shutdown. */
+function filesHostProbe({ exe, native, folder, deadlineMs = 30_000 }) {
+  return new Promise((done) => {
+    const started = Date.now();
+    const child = spawn(exe, [FILES_HOST_ROLE_ARG], {
+      cwd: "/",
+      env: { PATH: "/usr/bin:/bin" },
+      stdio: ["ignore", "ignore", "pipe", "ipc"],
+    });
+    let stderr = "";
+    let settled = false;
+    const result = {};
+    const finish = (outcome) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      try {
+        child.send({ t: "shutdown" });
+      } catch {
+        // already gone
+      }
+      let reported = false;
+      const report = () => {
+        if (reported) return;
+        reported = true;
+        clearTimeout(hard);
+        done({ ...result, ...outcome, stderr });
+      };
+      const hard = setTimeout(() => child.kill("SIGKILL"), 5_000);
+      child.once("exit", report);
+      if (child.exitCode !== null || child.signalCode !== null) report();
+    };
+    const timer = setTimeout(
+      () => finish({ ok: false, reason: `no answer within ${deadlineMs} ms` }),
+      deadlineMs,
+    );
+    child.stderr.on("data", (chunk) => {
+      stderr += chunk;
+    });
+    child.on("message", (m) => {
+      if (m?.t === "ready") {
+        result.readyMs = Date.now() - started;
+        result.mille = m.mille?.packageVersion;
+        child.send({
+          t: "req",
+          id: 1,
+          op: "list",
+          args: { rootPath: folder, segments: [], offset: 0, limit: 50, kinds: "all" },
+        });
+      } else if (m?.t === "res" && m.id === 1) {
+        if (!m.ok) return finish({ ok: false, reason: `list refused: ${m.error?.message}` });
+        result.listed = m.value.entries.length;
+        child.send({ t: "req", id: 2, op: "stats", args: {} });
+      } else if (m?.t === "res" && m.id === 2) {
+        finish({ ok: true, rss: m.value?.rss ?? 0 });
+      } else if (m?.t === "fatal") {
+        finish({ ok: false, reason: `fatal: ${m.reason}` });
+      }
+    });
+    child.once("error", (e) => finish({ ok: false, reason: `spawn failed: ${e.message}` }));
+    child.once("exit", (code, signal) => {
+      if (!settled) finish({ ok: false, reason: `exited early (${signal ?? code})` });
+    });
+    child.send({ t: "init", milleNative: native });
+  });
+}
+
 /** Everything fieldd is allowed to see: no NODE_*, no inherited FIELD_*, no ambient PATH. */
 function sandboxEnv(home, dataDir, nativeBin) {
   return {
@@ -510,7 +602,7 @@ async function verify({ exe, manifest }) {
     const cleanExe = stageSandbox(clean, exe);
     const entries = readdirSync(clean).sort();
     say(
-      entries.length === 3 && entries.includes(EXE_NAME),
+      entries.length === 1 + SIDECARS.length && entries.includes(EXE_NAME),
       `staged dir holds exactly the executable + ${SIDECARS.length} sidecars (${entries.join(", ")})`,
     );
     const home = join(sandbox, "home");
@@ -539,6 +631,21 @@ async function verify({ exe, manifest }) {
       );
     }
     if (a.ok) say(a.shutdownMs < 5_000, `SIGTERM shutdown in ${a.shutdownMs} ms (no SIGKILL)`);
+
+    // Probe C (FS-1a, L1) — the executable in its files-host ROLE: the worker loads
+    // the bundle and mille's engine staged beside it, says ready on its IPC pipe and
+    // lists a folder. This is the packaged half of the files service, exercised.
+    const c = await filesHostProbe({
+      exe: cleanExe,
+      native: join(clean, MILLE_NATIVE),
+      folder: sandbox,
+    });
+    say(
+      c.ok === true,
+      c.ok
+        ? `files-host role: ready in ${c.readyMs} ms (mille ${c.mille}), listed ${c.listed} entries of the sandbox, rss ${(c.rss / 1e6).toFixed(1)} MB`
+        : `files-host role: ${c.reason}${c.stderr ? ` — stderr: ${c.stderr.trim().split("\n").slice(-3).join(" / ")}` : ""}`,
+    );
 
     // Probe B — same three files, plus a node_modules that would break the daemon if it
     // were ever read, and cwd set to that directory so both resolution roots are hostile.

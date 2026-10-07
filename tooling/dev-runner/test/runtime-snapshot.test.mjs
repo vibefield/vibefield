@@ -24,6 +24,8 @@ async function fixture(t) {
     serviceHarnessOutput: join(source, "service-harness.mjs"),
     fielddWasm: join(source, "loro.wasm"),
     agentShimOutput: join(source, "agent-shim.cjs"),
+    filesHostOutput: join(source, "files-host.cjs"),
+    milleNativeOutput: join(source, "mille.test-triple.node"),
     nativeOutput: join(source, "field-native"),
   };
   await Promise.all([
@@ -34,6 +36,8 @@ async function fixture(t) {
     writeFile(paths.serviceHarnessOutput, "harness-one"),
     writeFile(paths.fielddWasm, "wasm-one"),
     writeFile(paths.agentShimOutput, "shim-one"),
+    writeFile(paths.filesHostOutput, "files-host-one"),
+    writeFile(paths.milleNativeOutput, "mille-one"),
     writeFile(paths.nativeOutput, "native-one"),
   ]);
   await chmod(paths.nativeOutput, 0o751);
@@ -70,13 +74,22 @@ test("publishes one immutable, executable runtime generation", async (t) => {
     "wasm-one",
   );
   assert.equal(await readFile(join(runtime.root, "fieldd", "agent-shim.cjs"), "utf8"), "shim-one");
+  // FS-1a — the files worker and mille's engine ride beside bin.cjs
+  assert.equal(
+    await readFile(join(runtime.root, "fieldd", "files-host.cjs"), "utf8"),
+    "files-host-one",
+  );
+  assert.equal(
+    await readFile(join(runtime.root, "fieldd", "mille.test-triple.node"), "utf8"),
+    "mille-one",
+  );
   assert.equal(await readFile(runtime.nativeOutput, "utf8"), "native-one");
 
   await writeFile(paths.mainOutput, "main-two");
   assert.equal(await readFile(join(runtime.appRoot, "main", "index.cjs"), "utf8"), "main-one");
 });
 
-test("hands the daemon fieldd's four files, the agent shim beside bin.cjs", async (t) => {
+test("hands the daemon fieldd's six files, the agent shim and the files worker beside bin.cjs", async (t) => {
   // The gateway looks for `agent-shim.cjs` beside the daemon's own bundle and
   // offers no launcher without it (AR-7b), so a shim left in dist/ reaches no
   // one: the daemon runs from this directory.
@@ -91,7 +104,9 @@ test("hands the daemon fieldd's four files, the agent shim beside bin.cjs", asyn
   assert.deepEqual((await readdir(join(runtime.root, "fieldd"))).sort(), [
     "agent-shim.cjs",
     "bin.cjs",
+    "files-host.cjs",
     "loro_wasm_bg.wasm",
+    "mille.test-triple.node",
     "service-harness.mjs",
   ]);
 });

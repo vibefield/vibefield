@@ -38,7 +38,7 @@ C mesh) toward the P0 exit criterion: real daily agent work, sessions surviving 
   system — puppeteer (the agent runtime, in fieldd) · rosetta (agent history, `rosettad` per user
   root) · this repo (custody, policy, presentation). Its umbrella page
   `docs/agent-plane/architecture.html` carries the ownership law (AR-L1: VibeField knows no vendor),
-  the seams, the walls R20–R23, the data domains and the status legend; `system.html` the
+  the seams, the walls R20–R23 (and R24, 2026-10-05: mille is imported only by fieldd's files worker and through field-app's allowed entries — FS-1a), the data domains and the status legend; `system.html` the
   aggregation and `api.html` the doors. Read it before touching a seam: a seam change updates the
   page that OWNS the seam first, then the umbrella's table.
 
@@ -153,6 +153,15 @@ the lock, supplying six Cargo patches and the React renderer. Run
 `pnpm siblings:build` builds its generated JavaScript exports in dependency order as well
 as rosettad; `node scripts/siblings.mjs build-js` rebuilds just those exports after edits.
 CI uses the same commands. Existing checkouts are never reset by `fetch`.
+
+**Files service sibling window (FS-1b, 2026-10-05):** `../mille-pin` is a dedicated
+checkout at `siblings.lock.json`'s revision, supplying mille and mille-ui together for the
+unreleased WebSocket channel. `node scripts/siblings.mjs fetch mille`, then named
+`install-js mille` / `build-js mille`, prepares it. Host React peers are linked only inside
+that dedicated checkout's generated node_modules; its source and lock stay unchanged.
+Renderer and test aliases share the lock's built exports, including rosetta's nested
+consumer. R24 permits native mille only in the files worker and browser client/port/remote
+entries plus mille-ui in field-app. Exit is an exact npm version after the release.
 
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version). Go is NO LONGER a prereq — truffle's mesh

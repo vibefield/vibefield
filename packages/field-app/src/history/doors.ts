@@ -41,6 +41,7 @@ import {
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import { WorkspaceClient, type WorkspaceClientOptions } from "../workspace/client";
 import { type AssetSourceOptions, assetSourceOver, type HistoryAssetSource } from "./asset-source";
 import { type HistorySessionPort, type SessionPortOptions, sessionPortOver } from "./session-port";
 
@@ -779,6 +780,7 @@ export interface HistoryPortsOptions {
   readonly catalog?: CatalogPortOptions;
   readonly sessions?: SessionPortOptions;
   readonly assets?: AssetSourceOptions;
+  readonly workspace?: WorkspaceClientOptions;
 }
 
 /** The room's ports over one fieldd client. */
@@ -789,12 +791,14 @@ export function historyPortsOver(
   const catalog = catalogPortOver(client, options.catalog);
   const sessions = sessionPortOver(client, options.sessions);
   const assets = assetSourceOver(sessions, options.assets);
+  const workspace = new WorkspaceClient(client, options.workspace);
   return {
     catalog,
     sessions,
     assets,
-    host: hostPortOver(options.platform),
+    host: { ...hostPortOver(options.platform), worktree: workspace },
     dispose() {
+      workspace.dispose();
       catalog.dispose();
       assets.dispose();
       sessions.dispose();

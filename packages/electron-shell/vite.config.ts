@@ -3,6 +3,7 @@ import { join, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, searchForWorkspaceRoot } from "vite";
+import { milleAliases } from "../../scripts/mille-aliases.mjs";
 import { readLock, siblingDir } from "../../scripts/siblings.mjs";
 import {
   hostSingletons,
@@ -83,7 +84,7 @@ export default defineConfig(({ mode }) => ({
     renderBlockingEntry(),
   ],
   resolve: {
-    alias: [{ find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],
+    alias: [...milleAliases(repoRoot), { find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],
     // one copy each of the stateful libs (ICE marks them external in its dist).
     // DK-1 (2026-10-03, ICE 0.14.0): three, @react-three/fiber and drei LEFT
     // with ICE's R3F islands — the desk is one WebGPU renderer and the host

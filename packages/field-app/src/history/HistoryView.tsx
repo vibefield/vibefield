@@ -61,7 +61,17 @@ export function HistoryView({
 }): ReactElement {
   const fieldd = useFielddClient();
   const ports = useMemo(
-    () => historyPortsOver(fieldd, { platform: getHost().platform ?? null }),
+    () =>
+      historyPortsOver(fieldd, {
+        platform: getHost().platform ?? null,
+        workspace: {
+          copyText: async (text) => {
+            const diagnostics = getHost().diagnostics;
+            if (diagnostics) await diagnostics.copyText(text);
+            else await navigator.clipboard.writeText(text);
+          },
+        },
+      }),
     [fieldd],
   );
   useEffect(() => () => ports.dispose(), [ports]);

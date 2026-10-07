@@ -254,6 +254,11 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
         shape: "rows",
         cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS,
       },
+      // FS-1a (L3) — the files service's roots, as rows at the stream floor
+      "workspace.subscribe": {
+        shape: "rows",
+        cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+      },
       "agent.subscribe": {
         // the bare ask is the full fold at its own tick — served to a phone
         // that asks it (refuseBoardAsk refuses it to a peer daemon only)

@@ -2,14 +2,18 @@
 // Spawned by the Electron shell (adopt-or-spawn) or run by hand:
 //   FIELDD_DATA_DIR=… FIELDD_NATIVE_BIN=…/field-native node dist/bin.cjs
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { resolvePlatformLogRoot, serializeError } from "@vibefield/logging";
 import { ensureUsersRoot, rootAboveUserRoot } from "@vibefield/users";
 import { defaultDataRoot, nativeAlive, nativeMgmtEndpoint, splitPathList } from "./boot-env";
-import { bootstrap } from "./daemon";
+import { FILES_HOST_BUNDLE, FILES_HOST_ROLE_ARG } from "./workspace/launch";
 
 async function main(): Promise<void> {
+  // FS-1a — the daemon's module graph loads HERE, never at the bundle's top:
+  // the same bundle runs as the files worker (below), which must not carry it
+  const { bootstrap } = await import("./daemon");
   // UA-1 — a supervisor-spawned fieldd receives the resolved USER root
   // explicitly; a standalone/headless run receives the VibeField ROOT (or the
   // platform default, mirroring config.rs default_data_dir() exactly — UA-0)
@@ -157,8 +161,19 @@ async function main(): Promise<void> {
   daemon.onShutdownRequest(shutdown);
 }
 
-main().catch((e: unknown) => {
-  const error = serializeError(e, { aliases: { home: homedir() } });
-  process.stderr.write(`fieldd failed to start: ${error.message}\n`);
-  process.exit(1);
-});
+if (process.argv.includes(FILES_HOST_ROLE_ARG)) {
+  // FS-1a (L1) — the files worker's ROLE. A packaged fieldd is a single
+  // executable that runs only its own blob, so fieldd starts its worker as
+  // ITSELF with this argument (workspace/launch.ts), and the role loads the
+  // worker's bundle staged beside the executable — the service harness's
+  // precedent. The worker speaks only on its IPC pipe; started without one it
+  // says so and leaves (host/main.ts).
+  const script = join(__dirname, FILES_HOST_BUNDLE);
+  createRequire(script)(script);
+} else {
+  main().catch((e: unknown) => {
+    const error = serializeError(e, { aliases: { home: homedir() } });
+    process.stderr.write(`fieldd failed to start: ${error.message}\n`);
+    process.exit(1);
+  });
+}

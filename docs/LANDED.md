@@ -8140,3 +8140,128 @@ verify end 2026-10-03 14:24:18 load { 48.42 78.91 52.99 } exit=0
 **What the records had wrong (corrected at the source; the lane's patch applied to the draft records):** H-D2's `index.subscribeSession` → `index.session.subscribe`; the family is not all `index.read` — the content reads ride `index.search` since SP-D13, the page door is `local`, the tail a stream; H-D6's "Live" needs a join the field rows cannot give (no provider-native session id) — activity within ten minutes meanwhile; five corrections in the sync-planes record's §7 "Rulings / as built 2026-10-04" (SP-D5 (a) is the door, the bodies are bounded pages, the tail's open is rosetta's socket snapshot cut to MAX_ROWS, each subscription its own chain, `index.timelineEntry` does not exist); api.html's first draft named the frames `index.session.delta`. Process findings, in memory: `local path=` in a zsh function clobbers PATH (a red-proof chain spun on `command not found`); chain scripts asleep in their gates survived a usage-limit cut (killed by PID).
 
 **Owed.** The live loopback (the simulator app → fieldd + rosettad on 127.0.0.1) and the over-the-air run on James's phone · H-D6's History chip · Sign out → `HistoryCache.clear()` · `index.projects` with a spend column (one read for the ledger) · the `{unchanged}` revalidation · SP-7's ticket swap for bodies (after truffle's egress release) · "Open in the field" · the lane's leftovers: the app installed on simulator 77B17220 (`com.jamesyong.vibefield.ios`) and its DerivedData under the default Xcode location.
+
+## FS-1a — the files service on one desktop: an always-on files worker under fieldd, a roots registry, five read doors, an interim read-only git port (2026-10-05; `a7c5dbed` — three commits `d67bc1cd` contracts + the mille pin + wall R24 · `3bde4dc3` the worker, the registry, the doors, the git port · `a7c5dbed` the lead's rulings; lane fs1a over main `3c5746f4`)
+
+James ruled the files service's fourteen marks on 2026-10-05 ("all ruled, now plan and start implement"; FS-D11 = (b), the rest (a)); this is its first slice. **What is real:** `@vibecook/mille` 0.3.4 as an exact override pin (FS-D10's exit applied at once — it is on npm); contracts `workspace.roots` · `workspace.list` · `workspace.search` · `workspace.gitFacts` · `workspace.subscribe {scope: "roots"}` with 26 fixtures (TS-only like the agent index; `LAYOUT.WORKSPACE_DIR` through `pnpm gen`), `WORKSPACE_LIMITS` in the registry; **the worker** is fieldd's own executable re-run in a `files-host` role (dev: `dist/files-host.cjs`; packaged: the single-executable app with `--vibefield-role=files-host`, because a packaged fieldd has no generic Node), mille's `.node` loaded by an explicit path, always on with fieldd (FS-D11 (b)), supervised with a ready message, generations, backoff and honest `UNAVAILABLE {service: "workspace"}` states; fieldd ↔ worker is a small JSON control pipe (`workspace/protocol.ts`), not mille's channel; **one mille engine per export** (mille refuses overlapping roots, and the home export holds every place), at most `HOSTS_MAX` 16, idle-disposed after `HOST_IDLE_MS` 5 min, `followSymlinks: false` everywhere; **the roots registry** (`users/<fuid>/workspace/roots.json`): places from every run entering the fold, the home directory and live-enumerated volumes as browse exports, `missing` kept; root ids match mille's export-id pattern; **the doors** gated by PRINCIPAL (renderer window, self phone, self peer; plugins, MCP agents, guests refused) — requests confined to an export + relative path, answers carrying absolute paths, pages with cursors, `clipped`, `total`, the tailnet cut at 100; **search** walks the asked subtree's NAMES on demand (`SEARCH_WALK_ENTRIES` 100 000 / `SEARCH_WALK_MS` 5 000, `complete: false` when cut — never a silent "no matches"), matches them smart-case fuzzy, and hands mille only the hits (walking into mille 0.3.4 hydrates super-linearly: 22 000 entries took 15 s, the real home 44 s at 494 MB); every folder read outside mille times out at 2 s (an iCloud-evicted folder blocks `readdir` in the kernel); **the interim git port** — rosetta's `git-service.mjs` ported under the worker, reads only (writes answer `read-only in v1`), hex-only commit ids plus `--no-ext-diff --no-textconv`, `core.fsmonitor=false`, `GIT_OPTIONAL_LOCKS=0` (rosetta's original passes the id unchecked before `--`, so `--output=<file>` writes: petition RO-15), pinned by a protocol fixture; **wall R24** — mille imported only in fieldd's worker and through field-app's allowed entries, proven red once.
+
+**Gate (the lane's logs, verbatim):** `pnpm verify` EXIT 0 at `a7c5dbed` (fieldd 1883 passed, 23 skipped; cargo 302) · `pnpm smoke` EXIT 0 · `pnpm smoke:godview` EXIT 0 · the SEA `--verify` incl. the files-host role EXIT 0. Two earlier verify runs at the same head were red on load flakes outside the lane (the design-system page's hosted-controls test; agent-session's AR-4 re-attach row, a pre-existing ledger race) — each passed alone and in run 5; every run started under a 1-minute load of 40, which spiked to 380 inside the runs.
+
+**Measured (this Mac, the dev runtime):** worker ready 98 ms median (n = 7); a cold 200-entry list 15 ms, warm 6 ms; idle 57–69 MB RSS and 0.07 % CPU over a quiet minute; the SEA role ready in 165 ms at 120 MB (it parses the 6.8 MB blob); a cold home search 1.35 s over 100 000 names (`complete: false`), warm 3–4 ms.
+
+**Owed.** An electron-builder `package:dir` run and signing of the staged `.node`; the package census refresh; FielddHealth projecting the worker's phase; two rulings that missed the lane and ride FS-1b — a place is exported wherever a session ran (the `/private` exclusion catches `/tmp` and `/var/folders` today), and a plain local token without a renderer participant is refused like RO-13's rule; a `list` INTO an iCloud-evicted folder still waits on mille's native read (up to the 20 s request timeout). Upstream asks for mille (petitions M8–M10): linear hydration, a pure matcher or a walk-and-search op that does not hydrate, time-bounded native directory reads.
+
+## FS-1b / FS-2 — History opens its worktree; the phone chooses a desktop folder and launches there (2026-10-05; `36f1168d` + `d9d85d49`)
+
+**What is real.** FS-1b completes AR-8d: `workspace.openTicket {rootId, path?}` registers two independent, single-use credentials for tree and git on the files worker’s loopback listener. A containing browse export is narrowed to the project’s canonical subtree. Engine leases keep attached hosts alive; expiry, explicit close, principal loss, root withdrawal or either socket closing revokes the pair. Attached roots are checked every ten seconds even without subsequent row reads. The renderer’s `WorkspaceClient` renews and reattaches through a real module Worker, relaying MessagePorts into rosetta’s shipping History room; file bodies and diffs do not pass through fieldd RPC. Copy/reveal resolve under the export. FielddHealth carries the worker’s phase. FS-1a’s two missed rulings are now closed: session places may live anywhere except a filesystem root, while plain local tokens and `shell-main` are refused by workspace doors. Self phones and self peers already read rows; remote attached transport remains FS-4.
+
+**The dependency window.** Mille and mille-ui come from a dedicated detached `../mille-pin` at `baa0de874d3a8449a63171080a59d8ae83f8ecd2`, including the unpublished WebSocket channel. The sibling commands prepare its generated exports and native addon, align its generated React peers to VibeField’s install, and share the same browser-safe resolution with Vite/Vitest and the nested room consumer. R24 names the actual browser/remote entries. James’s upstream working trees are untouched. The exit remains an exact npm version after release; the worker still uses the read-only interim git port until the planned mille-git adoption.
+
+**The phone.** `FieldWorkspace` and the tolerant `FieldProduct` shapes read the same six mirrored goldens as TypeScript. Hold empty ground opens a single medium-height launch sheet; folder choice opens a separate large sheet above it. Recent places precede home and volumes, with breadcrumbs, bounded search and paging, folder child counts, files behind a toggle, and a discoverable Copy path on every row. Paths are copied exactly as answered, including Windows paths. Offline cached roots carry their read time; missing roots, worker starting/restarting and partial search have explicit states. A desktop change clears the folder. Agent choices come from that desktop’s catalog; spawn sends `{provider, cwd}`, omits profile to use its existing default, waits for the real run receipt, and never retries an uncertain non-idempotent launch. The regular field fold supplies the resulting session. Reads borrow the home/History product door; no new PHONE_BUDGET leg. The sheet material modifier moved to FieldDesign for reuse.
+
+**Verification.** `pnpm verify` VERBATIM, `verify-5.log` EXIT 0 (start load 39.35, no concurrent verify, CI workers capped at four, Nx cache bypassed): fieldd 1,908 passed / six existing skips, field-app 1,551 passed, Rust 302 passed / nine existing ignores, generated-contract freshness clean. The real-rosettad rows were enabled with `FIELDD_ROSETTAD_BIN` (timeline 11, open-ticket 20), and all five real files-worker attachment tests passed. `pnpm smoke`, `smoke-final.log` EXIT 0 (start load 38.68), and `pnpm smoke:godview`, `smoke-godview-final.log` EXIT 0 (36.14), used the external offscreen harness; the shipping smoke source is unchanged. The README’s unsigned simulator build, `ios-build-4.log`, and full kit test command, `ios-tests-4.log`, both EXIT 0; all 1,027 iOS tests passed. Final screen capture: `ios-screenshots-final.log` EXIT 0. Logs are under `/Volumes/SamsungRed/lanes/fs1b/`. An earlier verify failed the unchanged gateway shell-exit row; the same focused row passed on baseline and lane (`gateway-{baseline,lane}.log` EXIT 0), and all 92 gateway tests passed in the final full gate. The earlier iOS terminal timeout passed in its 128-test main baseline and the final kit run. The new loopback’s initial assertion errors were corrected before its final successful run.
+
+**Live evidence and its limits.** `history-witness-5.log` EXIT 0 opens the shipping History room with real pinned rosettad, a real files worker and a real browser module Worker, reads a file by id, shows git facts, then kills the worker and observes a fresh attachment and changed file. `witness/proof.json` records two attachments and no file body over RPC; `witness/{tree,file,restarted}.png` are the rendered frames. That desktop harness mocks the native management floor. The simulator’s `WorkspaceLoopbackTests` instead drives a real fieldd, real files worker, audit/runtime and native PTY through roots → list → search → exact Copy path → spawn → agent.list. Its test-only loopback bridge substitutes a minted renderer-participant hello, and its scripted adapter runs `/bin/cat`: it proves the product path, not tailnet/WhoIs admission or a vendor CLI. `ios-tests-4.log` EXIT 0 contains `FS2_REAL_FIELDD_LOOPBACK_OK`; `ios-loopback-proof.json` records the server-side path and methods. Both-theme shipping-view screenshots live in `ios-shots/`; the new/selected/refused/spawning launch states in both themes all start at y=1245 in 1206×2622 frames (`layout-proof.json`). All paths in this paragraph are under `/Volumes/SamsungRed/lanes/fs1b/`.
+
+**Corrections at their sources.** The files-service record/build plan now describe canonical-root engines, subtree attachment, paired credentials, the actual doors and admission split; the project-places record marks its earlier “no paths” launch prose superseded by FS-D9 and the shipped system detents; the History record closes AR-8d. The phone had no production launch surface to extend — only a mock spawn gesture — and self-phone `agent.spawn` was already admitted, so no broader scope grant was added. The handover receives a dated completion note, and only this task’s five draft files are snapshotted onto dev-local’s parent tree.
+
+**Owed.** FS-3 with the desk track; FS-4 / DS-7 at truffle’s egress release; FS-5’s phone viewer; PJ-1 / AR-8e after the project-places rulings; the physical-phone run; mille’s release and the later git-service swap; electron-builder `package:dir`, signing the staged `.node`, and the package census. Per-attach lifecycle audit rows are not implemented (mint attempts are audited); the iCloud native directory-read bound remains upstream work. Nothing was pushed; James owns the pushes. Other sessions’ logo work and ghosttea pin edit remain uncommitted in main.
+
+
+## FS packaging closeout — the signed app carries a working files worker (2026-10-05)
+
+**What changed.** `package:verify:files --native-root <Resources/bin>` runs the existing worker,
+door and attachment suites against the packaged fieldd SEA, `files-host.cjs` and mille addon.
+An explicit test-only package path never falls back to a source-built worker. The existing
+CJS role row keeps its separate source fixture. `--require-signed` verifies the nested
+fieldd and mille signatures: the frozen Developer ID team, secure timestamp and hardened
+runtime. The macOS release command runs this check after signing. The signer's automatic
+binary discovery covers mille; a `${arch}` entry in `mac.binaries` would be wrong because
+this electron-builder removes that macro for a single-architecture build.
+
+**Census.** The baseline is refreshed: 79 files, 34,516,827 bytes across build inputs, including
+the Files bundle/addon and the existing handwritten KV service. The census had mistaken that
+valid plugin for an unbuilt package: plugin-build validates its declared service without
+emitting dist. The census now counts its manifest and declared JS entry points, still refusing
+missing generated output, path escapes/symlinks and never-ship material. Three regression tests
+prove the accepted handwritten shape and the missing-output/test-material refusals. This is
+the build inventory; the shipping stage remains its own exact allowlist.
+
+**Packaged proof.** The ordinary `package:dir` succeeded. The final stage includes the release
+native pair, 87 files / 217,792,973 bytes, with only the pre-existing bundled-plugin gap declared.
+A local macOS arm64 Developer ID bundle was built under `package signé/mac-arm64/VibeField.app`
+outside the checkout (spaces and an accent, no ancestor node_modules). Its deep strict signature
+check, all fuse checks, and all 24 Files tests passed: 23 rows use the packaged worker; the CJS
+role row is the existing source fixture. Reads, search, confinement, independent credentials,
+write/replay refusal, expiry, principal/root revocation and restart recovery run through the
+real worker. The fieldd control host remains source-based, and the door tests mock native
+management. This does not prove a full installed-app session or the phone over the tailnet.
+The signed cold READY row took 3.7 seconds. The first unsigned run had 23/24 passing and hit
+the source suite's five-second default on cold READY; the artifact command now gives tests
+30 seconds, leaving the helper's explicit 20-second readiness deadline intact.
+
+**Receipts.** All under `/Volumes/SamsungRed/lanes/fs-package/`: `package-dir-1.log`,
+`signed-package-1.log`, `signed-proof.json`, `signed-fuses.json`, `census-update.log`,
+`census-final.json`, `census-check.log`, and `unsigned-refusal.log` (the release check correctly
+rejects an unsigned preview). The signature check observes the actual nested files; the proof
+also records their hashes and equality of the staged JS/WASM resources.
+
+**Repository gates.** `pnpm verify` (`verify-2.log`) EXIT 0, started at load 12.86 with
+no other verify: fieldd 1,891 passed / 23 opt-in skips, field-app 1,550 passed / 1 skipped,
+Rust 302 passed / 9 ignored; generation is fresh. The first gate exposed an inherited
+`NO_COLOR`/`FORCE_COLOR` warning in a supervisor test's exact stderr assertion. With that
+conflict removed, the focused suite passed (17 / 4 opt-in skips, `rosettad-env-control.log`)
+and the full gate passed; no supervisor source was changed. `pnpm smoke` and
+`pnpm smoke:godview` both completed with their successful product markers and EXIT 0
+(`smoke-isolated.log`, `smoke-godview-isolated.log`), started at loads 16.99 and 16.91.
+The external harness hides windows, emulates focus and gives each run a fresh Electron
+profile; no OS input or live display was used. The first Godview attempt was stopped after
+it hit the running app's shared profile lock; its shutdown's EXIT 0 is not a passing witness.
+`census-final.log` reasserts the strict inventory after both smoke builds. The three census
+regressions and the unsigned-artifact refusal also pass. No iOS source changed or iOS gate
+was rerun in this packaging slice.
+
+**Still owed.** Notarization was deliberately disabled for this local validation; no release
+was published. The complete release still needs bundled plugins (WP8), packaged rosettad
+resolution and staging, and `agent-shim.cjs` beside fieldd (the current stager omits both agent
+artifacts; bin.ts only reads rosettad from its environment, and the gateway withholds launchers
+without the shim). These are recorded in ROADMAP's open debts. The physical-phone witness,
+mille's registry release/window exit, FS-3 with DK, FS-4/DS-7 after truffle egress, and FS-5
+remain. No DK/MV sources or upstream working checkouts were edited; nothing was pushed.
+
+
+## FS-3 service prerequisite — the native folder choice becomes a saved Files export (2026-10-05)
+
+A current desktop renderer can call `workspace.pickFolder {}` and receive cancellation or
+an exported picked root. Electron supplies the attended native choice; fieldd validates
+its canonical directory and requires the selection audit before publishing it. Caller
+paths are ignored, filesystem roots and unavailable folders are refused, and plain tokens,
+plugins, shell-main and remote callers cannot invoke this door. A late choice from a revoked
+window, audit failure or failed atomic save creates no export. The audit records the choice;
+a subsequent persistence refusal does not turn that selection into a registered root.
+
+Picked folders persist beside places in the existing version-1 roots file, deduplicate by
+canonical path, and remain visible as missing when absent or replaced by a symlink.
+`WorkspaceClient.pickFolder()` returns the root or null; `attach(root, path?)` keeps its
+exact export id and returns an independent recovering port lease even outside the bounded
+roots roster. Ticket confinement and the existing read-only direct worker plane still apply.
+The public artifact picker keeps its original purpose; Files uses its own principal-gated door.
+
+**Validation:** `pnpm verify` EXIT 0 (`verify-1.log`), started at load 37.54 with
+no other verify: fieldd 1,902 passed / 23 opt-in skips; field-app 1,552 passed / 1 skipped;
+electron-shell 805 passed / 2 skipped; contracts 817 passed; Rust 302 passed / 9 ignored.
+Generation is fresh. The focused checks passed all 380 rows, including 32 Files/service
+rows; the shell and renderer also parse the new picker contracts/fixtures. `pnpm smoke`
+and `pnpm smoke:godview` each produced their successful product marker and EXIT 0
+(`smoke-isolated.log`, `smoke-godview-isolated.log`, start loads 17.90 / 17.52).
+Each used a fresh isolated Electron profile and the external offscreen/focus-emulation
+harness; no live display or OS input. Godview's offscreen canvas2d fallback and existing
+swarm/timing limitations remain outside this Files claim. Receipts are retained at
+`/Volumes/SamsungRed/lanes/fs3-service`. No iOS source changed or iOS gate was rerun.
+
+**Scope:** this lands FS-3's service and lease prerequisite. The desk's `FileTree`, decorations,
+drag into the composer and pane integration remain DK's consumer work (§5.3 of the FS record).
+The native dialog is witnessed through the shell provider fixture, not by OS input on the live
+display. The integration test uses real fieldd RPC, a real Files worker, native mille and direct
+WebSocket bytes, with fixture native management and dialog responses. No new signed application
+was produced in this slice; the earlier packaging receipt remains tied to `e6d392e0`.

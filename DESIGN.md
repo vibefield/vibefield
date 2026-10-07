@@ -1675,6 +1675,18 @@ The hot-point glow and rim retire with CardShell (above).
     the fold, recent searches) keep under `vf.history.` in the window's storage, where a refusal
     costs only the memory. ⌘3 out and back keeps the room as it was: its scroll, its choice, its
     open stream.
+- **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
+  keeps one system medium detent through loading, selection, refusal and spawning. Folder
+  comes first, chosen in its own large sheet above the launch sheet. No task field: the
+  terminal takes the task. A single agent or desktop is a quiet fact, multiple choices a
+  dropdown. A desktop choice shows its platform mark and name in the chrome's neutral ink.
+  The picker lists recent places, then home and volumes; folder rows carry child counts
+  when known and the desktop's absolute path. Files and links stay muted behind Show files;
+  links are never traversed. Every row has a discoverable Copy path action. Breadcrumbs and
+  search stay within the chosen export. Offline rows keep their last-known paths and say
+  “studio is asleep · read 11:42”; starting/restarting and partial search coverage are
+  stated explicitly. Forms use the existing chrome palette, system prose and monospaced
+  paths; the sheet radius remains 40 pt, as the phone's other sheets.
 - **The file tree** (mille; 2026-08-09 — first consumer is the History room's files rail,
   `draft/four-views/design.md` §4): a tree is a **reader** surface, not chrome. It leans on
   the type ramp and hairlines, never on materials — no glass, no card, no shadow (four-views

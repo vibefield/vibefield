@@ -37,6 +37,12 @@ await run(process.execPath, [
 
 const outputDirectory = process.arch === "arm64" ? "mac-arm64" : "mac";
 await run(process.execPath, [
+  "packaging/verify-files-package.mjs",
+  "--native-root",
+  join("release", outputDirectory, "VibeField.app", "Contents", "Resources", "bin"),
+  "--require-signed",
+]);
+await run(process.execPath, [
   "packaging/verify-live-surface-release.mjs",
   "--app",
   join("release", outputDirectory, "VibeField.app"),

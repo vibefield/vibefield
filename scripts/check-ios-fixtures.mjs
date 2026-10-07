@@ -47,6 +47,27 @@ const LANE_AUTHORED = new Set(["trf1-frames.lane.json"]);
 const problems = [];
 let checked = 0;
 
+// FS-2: required mirrors are named as well as compared below. Deleting a
+// workspace golden must not silently reduce the third-side coverage count.
+const workspaceFixtures = [
+  "workspace-roots.valid.json",
+  "workspace-list.valid.json",
+  "workspace-search.valid.json",
+  "workspace-list-params.valid.json",
+  "workspace-search-params.valid.json",
+  "agent-catalog.valid.json",
+];
+for (const folder of ["Tests/FieldWorkspaceTests", "Sources/FieldWorkspace"]) {
+  for (const fixture of workspaceFixtures) {
+    const copy = join(root, "apps/ios/VibeFieldKit", folder, "Fixtures", fixture);
+    try {
+      statSync(copy);
+    } catch {
+      problems.push(`required workspace mirror is missing: ${relative(root, copy)}`);
+    }
+  }
+}
+
 for (const searchRoot of searchRoots) {
   for (const copy of jsonFiles(searchRoot)) {
     const name = copy.slice(copy.lastIndexOf("/") + 1);
