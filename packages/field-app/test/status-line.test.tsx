@@ -104,6 +104,40 @@ describe("the status line", () => {
     expect(statusLineSaid().map((n) => n.id)).toEqual(["a"]);
   });
 
+  it("DK-17: carries a detail on a row of its own under the words — the degraded desk's ICE message, verbatim", () => {
+    const host = document.createElement("div");
+    const root = createRoot(host);
+    const detail = "an uncaptured GPU error — GPUValidationError: Buffer usages must not be 0.";
+    act(() =>
+      root.render(
+        <StatusLineView
+          notice={{
+            id: "desk-degraded",
+            text: "The graphics device reported an error. The desk is still drawing — Reload restarts it.",
+            detail,
+            act: { label: "Reload", run: () => undefined },
+          }}
+        />,
+      ),
+    );
+    const line = host.querySelector(".vf-status-line");
+    expect(line?.hasAttribute("data-detail")).toBe(true);
+    // the words, then the act, then the detail — VibeField's sentence first, the renderer's after it
+    expect(Array.from(line?.children ?? []).map((el) => el.className)).toEqual([
+      "vf-status-line__text",
+      "vf-status-line__act",
+      "vf-status-line__detail",
+    ]);
+    expect(line?.querySelector(".vf-status-line__detail")?.textContent).toBe(detail);
+    // a notice with no detail draws no detail row
+    act(() =>
+      root.render(<StatusLineView notice={{ id: "missing", text: "Clock · plugin off" }} />),
+    );
+    expect(host.querySelector(".vf-status-line")?.hasAttribute("data-detail")).toBe(false);
+    expect(host.querySelector(".vf-status-line__detail")).toBeNull();
+    act(() => root.unmount());
+  });
+
   it("DK-11: stands under the tools in hand (y 112) while an object is held, under the head otherwise (R12)", () => {
     const host = document.createElement("div");
     const root = createRoot(host);

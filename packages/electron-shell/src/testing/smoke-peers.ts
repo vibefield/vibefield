@@ -601,6 +601,33 @@ export interface FaultRowsDriver {
   readonly say: (line: string) => void;
 }
 
+/** The degraded desk's sentence, the canon's words (DESIGN.md §8 "When the desk can't draw"; DK-17, plan (75)). */
+export const DEGRADED_SENTENCE =
+  "The graphics device reported an error. The desk is still drawing — Reload restarts it.";
+
+/** The status line under a degraded desk, as the page shows it. */
+export interface DegradedLineSeen {
+  readonly text: string | null;
+  readonly detail: string | null;
+  readonly act: string | null;
+}
+
+/** VibeField's sentence FIRST, ICE's message after it as the detail, verbatim, and ONE act: Reload. */
+export function judgeDegradedBanner(line: DegradedLineSeen, message: string | undefined): string[] {
+  const problems: string[] = [];
+  if (line.text !== DEGRADED_SENTENCE)
+    problems.push(
+      `FAULT BANNER: the line reads ${JSON.stringify(line.text)}, not VibeField's sentence ${JSON.stringify(DEGRADED_SENTENCE)}`,
+    );
+  if (line.detail !== (message ?? null))
+    problems.push(
+      `FAULT BANNER: the line's detail is ${JSON.stringify(line.detail)}, not ICE's message ${JSON.stringify(message)}`,
+    );
+  if (line.act !== "Reload")
+    problems.push(`FAULT BANNER: the line's act is ${JSON.stringify(line.act)}, not Reload`);
+  return problems;
+}
+
 /** DK-16's fault rows on window A (above). Returns the problems, each in words. */
 export async function faultRows(d: FaultRowsDriver): Promise<string[]> {
   const { win, say } = d;
@@ -627,7 +654,8 @@ export async function faultRows(d: FaultRowsDriver): Promise<string[]> {
   await js(`globalThis.vibefield.theme.set("light")`);
   await sleep(500);
 
-  // ── BANNER: one uncaptured error — degraded, the status line with ICE's message and Reload, the desk drawing on ──────
+  // ── BANNER: one uncaptured error — degraded, the status line with VibeField's sentence, ICE's message as its detail,
+  //    and Reload, the desk drawing on (DK-17, plan (75)) ───────────────────────────────────────────────────────────────
   // (each row on its own: one that cannot go on is said, and the next still runs)
   try {
     const mount0 = await mountOf();
@@ -639,25 +667,19 @@ export async function faultRows(d: FaultRowsDriver): Promise<string[]> {
     await sleep(300);
     const line = await js<{
       text: string | null;
+      detail: string | null;
       act: string | null;
       id: string | null;
     } | null>(`(() => {
       const el = document.querySelector(".vf-status-line");
-      return el === null ? null : { text: el.querySelector(".vf-status-line__text")?.textContent ?? null, act: el.querySelector(".vf-status-line__act")?.textContent ?? null, id: el.getAttribute("data-status-line") };
+      return el === null ? null : { text: el.querySelector(".vf-status-line__text")?.textContent ?? null, detail: el.querySelector(".vf-status-line__detail")?.textContent ?? null, act: el.querySelector(".vf-status-line__act")?.textContent ?? null, id: el.getAttribute("data-status-line") };
     })()`);
     const status = await js<{ state: string; message?: string }>("globalThis.__vfDesk.status()");
     if (line === null || line.id !== "desk-degraded")
       problems.push(
         `FAULT BANNER: the status line says ${JSON.stringify(line)}, not the degraded desk`,
       );
-    else {
-      if (line.text !== status.message)
-        problems.push(
-          `FAULT BANNER: the line reads ${JSON.stringify(line.text)}, not ICE's message ${JSON.stringify(status.message)}`,
-        );
-      if (line.act !== "Reload")
-        problems.push(`FAULT BANNER: the line's act is ${JSON.stringify(line.act)}, not Reload`);
-    }
+    else problems.push(...judgeDegradedBanner(line, status.message));
     if (await js<boolean>(`document.querySelector(".vf-desk-unavailable") !== null`))
       problems.push("FAULT BANNER: a degraded desk shows the card — it still draws");
     // the desk draws on beneath it

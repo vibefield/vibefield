@@ -33,6 +33,25 @@
   overflow-wrap: anywhere;
 }
 
+/* A notice with a detail (the degraded desk's ICE message, DK-17): the words and the act on the first
+   row, the detail on its own row under them — 11 mono, faint, verbatim, as the unavailable card's. */
+.vf-status-line[data-detail] {
+  flex-wrap: wrap;
+  row-gap: 3px;
+}
+
+.vf-status-line__detail {
+  flex-basis: 100%;
+  min-width: 0;
+  color: var(--vf-text-faint);
+  font-family: var(--vf-font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+
 .vf-status-line__act {
   flex: none;
   padding: 0;

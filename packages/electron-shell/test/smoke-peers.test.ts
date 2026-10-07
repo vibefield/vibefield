@@ -10,7 +10,9 @@ import { CANVAS_BG, COVERS, judgeRim, over, parseColor } from "../src/testing/sm
 import {
   type CardSeen,
   contrast,
+  DEGRADED_SENTENCE,
   expectedBox,
+  judgeDegradedBanner,
   judgeIdle,
   judgeLostCard,
   judgePeerPlace,
@@ -184,6 +186,30 @@ describe("the cards — in the canon's words, on the plain ground", () => {
         MAT_GROUND_DAY,
       )[0],
     ).toMatch(/mat's ground/);
+  });
+});
+
+describe("the degraded banner — VibeField's sentence first, ICE's message as its detail (DK-17, plan (75))", () => {
+  const message = "an uncaptured GPU error — GPUValidationError: Buffer usages must not be 0.";
+  const seen = { text: DEGRADED_SENTENCE, detail: message, act: "Reload" };
+
+  it("passes the sentence, ICE's message verbatim under it, and one Reload", () => {
+    expect(DEGRADED_SENTENCE).toBe(
+      "The graphics device reported an error. The desk is still drawing — Reload restarts it.",
+    );
+    expect(judgeDegradedBanner(seen, message)).toEqual([]);
+  });
+
+  it("refuses ICE's message as the words, a missing or altered detail, and a missing act", () => {
+    // DK-16's banner said ICE's message alone — the words the canon now puts second
+    expect(
+      judgeDegradedBanner({ text: message, detail: null, act: "Reload" }, message),
+    ).toHaveLength(2);
+    expect(judgeDegradedBanner({ ...seen, detail: null }, message)[0]).toMatch(/not ICE's message/);
+    expect(judgeDegradedBanner({ ...seen, detail: `${message} ` }, message)[0]).toMatch(
+      /not ICE's message/,
+    );
+    expect(judgeDegradedBanner({ ...seen, act: null }, message)[0]).toMatch(/not Reload/);
   });
 });
 

@@ -88,8 +88,24 @@ export function unavailableWords(status: DeskLayerStatus): DeskUnavailableWords 
   return status.state === "failed" ? failedWords(status.message) : null;
 }
 
-/** The status line's banner for a `degraded` desk (R18): ICE's message, with a Reload, the desk
- * drawing on beneath it. */
-export function degradedNotice(status: DeskLayerStatus): string | null {
-  return status.state === "degraded" ? (status.message ?? "The desk hit a graphics error") : null;
+/** The degraded desk's sentence (R18; the migration plan's (75), DK-17): what happened, that the
+ * desk keeps drawing, and that Reload — a desk remount — starts it again. VibeField's words FIRST;
+ * ICE's message rides after it as the detail, as the card carries its own. */
+export const DEGRADED_SENTENCE =
+  "The graphics device reported an error. The desk is still drawing — Reload restarts it.";
+
+export interface DegradedNotice {
+  /** VibeField's sentence — the line's words. */
+  readonly text: string;
+  /** ICE's message, verbatim — the line's detail; absent where ICE said none. */
+  readonly detail?: string;
+}
+
+/** The status line's banner for a `degraded` desk (R18): the sentence, then ICE's message as the
+ * detail, with a Reload, the desk drawing on beneath it. */
+export function degradedNotice(status: DeskLayerStatus): DegradedNotice | null {
+  if (status.state !== "degraded") return null;
+  return status.message === undefined || status.message === ""
+    ? { text: DEGRADED_SENTENCE }
+    : { text: DEGRADED_SENTENCE, detail: status.message };
 }

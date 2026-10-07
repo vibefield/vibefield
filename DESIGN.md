@@ -972,7 +972,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   hand (y 112) while an object is held — rising 4px as it fades in and gone after 2.4s. One notice
   at a time, each said once, never per frame. A notice that carries an act — the degraded desk's
   Reload (R18) — holds until the act is taken or the state clears, the act at its end as a text
-  button in primary ink. It stands with the frame, above the cover (§10).
+  button in primary ink. A notice may carry a detail — the renderer's own words after VibeField's,
+  verbatim, 11 mono and faint on a row of its own under them (the degraded desk's ICE message; DK-17,
+  2026-10-07). It stands with the frame, above the cover (§10).
 - **The selection bar** (Chrome on the Mat §3.1; MC-D2 the line's glass, ruled 2026-10-01; MC-D1;
   One Frame §7; R1, R2, R3, R7–R10, R23, R25; DK-11): one element over `handle.selection`'s anchor,
   placed imperatively each time the anchor publishes — never a render per frame.
@@ -1247,8 +1249,13 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   before it is up answers null), **a refused device** once (an adapter lost mid-request — a refusal
   is otherwise deterministic for the same adapter and limits); the card shows only when those run
   out, and a Reload the person asked for is never retried. **`degraded`** (an uncaptured GPU error;
-  the desk still draws) is a banner, not the card: the status line holding ICE's message and a
-  Reload until the state clears, the desk drawing on beneath it (R18). No Canvas2D fallback in v1
+  the desk still draws) is a banner, not the card: the status line saying VibeField's sentence first
+  — **"The graphics device reported an error. The desk is still drawing — Reload restarts it."** (what
+  happened, that the desk keeps drawing, that Reload remounts it) — with ICE's message after it as the
+  detail (11 mono, faint, verbatim, on a row of its own under the words, as the card carries its
+  detail) and a Reload until the state clears, the desk drawing on beneath it (R18). *Amended
+  2026-10-07 (DK-17; the migration plan's (75)):* until then the line held ICE's message alone, and a
+  person read "an uncaptured GPU error — GPUValidationError: …" as the whole of it. No Canvas2D fallback in v1
   (DK-D32): the state is the whole answer, and the frame around it still works.
 - **The users chooser** (Setup, second-user variant; 2026-09-22): Back from a new user's pane 2
   opens it, because that user already exists by then — the chooser is where you choose who to

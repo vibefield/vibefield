@@ -142,7 +142,7 @@ const { getStatusNotice, resetStatusLineForTest, STATUS_STAND_MS, statusLineSaid
   "../src/frame/status-line"
 );
 const { resetAppThemeForTest, setAppTheme } = await import("../src/theme");
-const { BEFORE_THE_DESK } = await import("../src/field/desk/desk-words");
+const { BEFORE_THE_DESK, DEGRADED_SENTENCE } = await import("../src/field/desk/desk-words");
 const { DEVICE_RETRY_MS, HEAL_DELAYS_MS, REFUSE_DEVICE, REFUSE_FIRST_DEVICE } = await import(
   "../src/field/desk/desk-gpu"
 );
@@ -558,7 +558,9 @@ describe("the Canvas stage mounts the desk", () => {
     const message = "an uncaptured GPU error — GPUOutOfMemoryError: out of memory";
     await act(async () => current().move({ state: "degraded", message }));
     expect(host.querySelector("[data-desk-unavailable]")).toBeNull(); // the desk draws on
-    expect(getStatusNotice()?.text).toBe(message);
+    // DK-17 (plan (75)): VibeField's sentence first, ICE's message after it as the detail
+    expect(getStatusNotice()?.text).toBe(DEGRADED_SENTENCE);
+    expect(getStatusNotice()?.detail).toBe(message);
     expect(getStatusNotice()?.act?.label).toBe("Reload");
     await act(async () => getStatusNotice()?.act?.run());
     expect(layers).toHaveLength(2);

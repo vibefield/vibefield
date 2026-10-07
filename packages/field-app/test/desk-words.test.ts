@@ -10,6 +10,7 @@
 import { describe, expect, it } from "vitest";
 import {
   BEFORE_THE_DESK,
+  DEGRADED_SENTENCE,
   degradedNotice,
   failedWords,
   unavailableWords,
@@ -76,9 +77,17 @@ describe("the unavailable card's words", () => {
     expect(unavailableWords({ state: "failed", message: NO_GPU })?.kind).toBe("no-webgpu");
   });
 
-  it("puts a degraded desk on the status line with ICE's message, and nothing else there", () => {
+  it("says VibeField's sentence first for a degraded desk — ICE's message after it, as the detail (plan (75))", () => {
     const message = "an uncaptured GPU error — GPUValidationError: bad bind group";
-    expect(degradedNotice({ state: "degraded", message })).toBe(message);
+    expect(DEGRADED_SENTENCE).toBe(
+      "The graphics device reported an error. The desk is still drawing — Reload restarts it.",
+    );
+    // what happened, that the desk keeps drawing, and that Reload starts it again — never ICE's words first
+    expect(degradedNotice({ state: "degraded", message })).toEqual({
+      text: DEGRADED_SENTENCE,
+      detail: message,
+    });
+    expect(degradedNotice({ state: "degraded" })).toEqual({ text: DEGRADED_SENTENCE });
     expect(degradedNotice({ state: "ready" })).toBeNull();
     expect(degradedNotice({ state: "failed", message: LOST })).toBeNull();
   });

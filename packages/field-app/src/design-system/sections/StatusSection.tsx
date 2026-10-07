@@ -1,7 +1,7 @@
 import { EmptyState, StatusDot, UnavailableState } from "@vibefield/design-kit";
 import type { ReactElement, ReactNode } from "react";
 import { DeskUnavailableView } from "../../field/desk/DeskUnavailableView";
-import { BEFORE_THE_DESK, failedWords } from "../../field/desk/desk-words";
+import { BEFORE_THE_DESK, DEGRADED_SENTENCE, failedWords } from "../../field/desk/desk-words";
 import { StatusLineView } from "../../frame/StatusLine";
 import { Icon, Section, Specimen } from "../catalog-ui";
 
@@ -130,7 +130,8 @@ export function StatusSection(): ReactElement {
             <StatusLineView
               notice={{
                 id: "desk-degraded",
-                text: DESK_DEGRADED,
+                text: DEGRADED_SENTENCE,
+                detail: DESK_DEGRADED,
                 act: { label: "Reload", run: reloadFixture },
               }}
             />

@@ -283,7 +283,7 @@ export function CanvasStage({
       }
       const notice = degradedNotice(next);
       if (notice === null) withdrawStatus("desk-degraded");
-      else sayStatus({ id: "desk-degraded", text: notice, act: { label: "Reload", run: remount } });
+      else sayStatus({ id: "desk-degraded", ...notice, act: { label: "Reload", run: remount } });
       const words = unavailableWords(next);
       if (words !== null) {
         log.warn("renderer.desk.unavailable", "The desk cannot draw", {

@@ -21,6 +21,9 @@ export interface StatusNotice {
   /** What makes it ONE notice: said again while it stands, it is not said twice. */
   readonly id: string;
   readonly text: string;
+  /** The renderer's own words after VibeField's, verbatim — small, on a row of its own, as the
+   * unavailable card carries its detail (the degraded desk's: ICE's message; DK-17). */
+  readonly detail?: string;
   /** The act at its end (a text button in primary ink); a notice with an act holds. */
   readonly act?: StatusAct;
   /** Stand until withdrawn rather than for the line's 2.4s (implied by `act`). */
