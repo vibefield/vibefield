@@ -1,6 +1,6 @@
 /* DT-2b — LiveSurfaceView composition (UI_SYSTEM layer 3: styling lives beside
  * the component, namespaced, token-fed). The canvas is content, not chrome:
- * no material, no shadow — the widget's CardShell owns chrome. */
+ * no material, no shadow — the chrome is its host's. */
 
 .vf-live-surface-view {
   position: relative;

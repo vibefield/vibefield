@@ -7,7 +7,6 @@ import { LEAVING_STATUS, type SwitchBox, SwitchSceneView } from "../boot/SwitchS
 import type { SplashStatusView } from "../boot/splash-parts";
 import type { SwitchOrigin, SwitchPersona } from "../boot/switch";
 import { FIXTURE_ME, FIXTURE_OTHERS } from "./account-fixtures";
-import { WidgetCard } from "./sections/CardsSection";
 
 // The switch (DESIGN.md §8), staged: the shipping `SwitchSceneView` and the
 // shipping `MeMenuView` over a small field, with the parts no catalog has — a
@@ -106,12 +105,6 @@ export function SwitchPreview(): ReactElement {
 
   return (
     <div ref={stageRef} className="vf-ds-switch-stage">
-      <div className="vf-ds-switch-cards" aria-hidden="true">
-        <WidgetCard kind="weather" />
-        <WidgetCard kind="terminal" />
-        <WidgetCard kind="note" />
-      </div>
-
       <div className="vf-ds-me-controls">
         <SegmentedControl
           options={OUTCOMES}

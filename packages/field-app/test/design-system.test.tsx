@@ -354,11 +354,6 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     );
     expect(place?.dataset.open).toBe("true");
 
-    await act(async () => button("Accept").click());
-    expect(container?.querySelector(".vf-ds-living-card")?.getAttribute("data-state")).toBe(
-      "accept",
-    );
-
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
     // The swarm's bodies (AR-5): the views package's own fixtures on the
     // SHIPPING view. A happy-dom window has no WebGPU, so the section says so

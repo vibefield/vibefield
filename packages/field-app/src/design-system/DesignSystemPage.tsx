@@ -3,7 +3,6 @@ import { defaultProductAppearance } from "../appearance/product-appearance";
 import { ThemeToggleButton } from "../ThemeToggleButton";
 import { BrandMark } from "./catalog-ui";
 import { CanvasGroundSection } from "./sections/CanvasGroundSection";
-import { CardsSection } from "./sections/CardsSection";
 import { ChromeSection } from "./sections/ChromeSection";
 import { ControlsSection } from "./sections/ControlsSection";
 import { FaceStickersSection } from "./sections/FaceStickersSection";
@@ -32,7 +31,6 @@ const NAV_ITEMS = [
   ["controls", "Controls", "04"],
   ["status", "Status & feedback", "05"],
   ["chrome", "Field chrome", "06"],
-  ["cards", "Living cards", "07"],
   ["surfaces", "Panels & overlays", "08"],
   ["live-surfaces", "Live surfaces", "09"],
   ["onboarding", "Onboarding", "10"],
@@ -132,7 +130,6 @@ export function DesignSystemPage({
         <ControlsSection />
         <StatusSection />
         <ChromeSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
-        <CardsSection />
         <SurfacesSection />
         <LiveSurfacesSection />
         <OnboardingSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />

@@ -1,6 +1,5 @@
 import { GHOSTTY_COLOR_THEMES } from "@vibecook/ghosttea-react/workspace";
 import type { MonitorParameterDefinition } from "@vibecook/puppeteer-views";
-import { CARD_BG } from "@vibefield/design-kit";
 import { type CSSProperties, type ReactElement, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { type DeckAppearance, deckThemeNameForMode, setDeckAppearance } from "./deck-appearance";
@@ -14,6 +13,10 @@ import type { MonitorTuningSection } from "./monitor/monitor-tuning";
 export type GodviewTheme = "light" | "dark";
 
 const DECK_DEFAULT_THEME_VALUE = "";
+
+/** The monitor's stage when its token cannot be read: `--vf-card`, DESIGN.md §2.2's default card
+ * surface (the value the DOM card's `CARD_BG` carried until DK-17 deleted the card). */
+const STAGE_FALLBACK = "#1C1C1E";
 
 /** The panel's MEMORY-ONLY knobs. The stage's opacity and blur are not here any
  * more: GT-7 moved them into the viewer's saved backdrop, and DK-15 retired that
@@ -41,7 +44,7 @@ function tokenColor(name: string, fallback: string): string {
 export function defaultGodviewTuning(theme: GodviewTheme = "light"): GodviewTuning {
   const light = theme === "light";
   return {
-    stageColor: tokenColor(`--vf-godview-${theme}-monitor-bg`, CARD_BG),
+    stageColor: tokenColor(`--vf-godview-${theme}-monitor-bg`, STAGE_FALLBACK),
     bubbleIdleColor: tokenColor(`--vf-godview-${theme}-idle-bg`, light ? "#e5e5e5" : "#2a2a2a"),
     bubbleWorkingColor: tokenColor(
       `--vf-godview-${theme}-working-bg`,

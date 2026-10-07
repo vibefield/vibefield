@@ -7,18 +7,14 @@
 // the widget rows' `preview` — left with the Objects sheet that read it; an
 // object's specimen is its kind's own drawing on the desk's pegboard.
 //
-// DK-2 (desk/landing, ICE 0.14.0): the CARD FACE half is CUT — `CardShell` and
-// `useDragLift` (they lifted a DOM card under the camera through ICE's removed
-// `WidgetHiddenContext`) and the GL card surface `GlLiftGroup`/`makeGlCardChrome`
-// (ICE's R3F islands — its `/r3f` entry — are gone). The desk draws every
-// object under the camera; a plugin's canvas face is an object KIND
-// (`contributes.objects`, the `/desk` door at DK-6). The primitives below are
-// screen-space chrome and stay.
+// DK-2 cut this door's card face half (the DOM card and the GL card surface it lifted), and DK-17
+// its last two card exports — the card's corner radius and its content gradient's stop type — with
+// the design kit's card dressing (the retire table's design-kit and SDK rows). The desk draws every
+// object under the camera; a plugin's canvas face is an object KIND (`contributes.objects`, the
+// `/desk` door). The primitives below are screen-space chrome — the HUD surface kit — and stay.
 
 export {
-  CARD_RADIUS,
   EmptyState,
-  type GradientStop,
   InlineNotice,
   PlaceholderFace,
   SegmentedControl,

@@ -554,15 +554,10 @@ fades in whole over 120ms.
 | **Hover / active** (tiles, buttons) | `scale(1.03)` hover · `scale(0.95)` active · fills step `black/5 → black/10` (dark `white/10 → white/20`) · `cursor-grab/-grabbing`. |
 | **Keyboard focus** | visible ring, always (quality floor); Esc = close/cancel, consistently. |
 
-Glow/rim knobs are live CSS vars (Studio adjustable, defaults in code):
-`--ic-glow-size-t/-c: 60px` · `--ic-glow-alpha-t: 0.5` / `-c: 0.25` · glow color
-light `#FFFFFF`, dark `#6E6E6E` · rim color light `#E0E0E0`, dark `#5C5C5C` ·
-`--ic-rim-width: 1.5px` · `--ic-rim-radius: 600px` · `--ic-rim-alpha-t: 0.85` /
-`-c: 0.55`.
-*Erratum 2026-10-03 (DK-0d, against the desk):* these knobs are CardShell's — the DOM card's
-overlap glow and rim — and the desk draws no DOM card (DK-D2): on the desk they have no consumer,
-and they leave `tokens.css` with CardShell, `card-appearance` and the appearance document's
-`overlapFeedback` at DK-17. Until the cutover they still dress the 0.11 canvas.
+*Retired 2026-10-07 (DK-17; DK-0d's erratum, executed):* the overlap glow and rim knobs — the
+`--ic-glow-*` and `--ic-rim-*` CSS vars Studio tuned — were the DOM card's, and the desk draws no
+DOM card (DK-D2). They left `tokens.css` with the card itself, its `card-appearance` defaults and
+the appearance document's `overlapFeedback` (the document is v4 — the plain ground alone, §2.1).
 
 **In the composited profile (2026-09-07)** these states are the ground's frame terms, not
 CSS: lift is `Motion.lift` (the same `liftScale`), the selection ring rides the frame's edge,

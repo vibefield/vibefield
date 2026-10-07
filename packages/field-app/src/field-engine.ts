@@ -351,8 +351,8 @@ export function createFieldEngine(
         });
     },
     // The desk preset's settings (its scale-free zoom, wheel and zoom-through)
-    // replace VibeField's 0.25–3 clamp and CardShell's 1.05 lift mirror — both
-    // were DOM-card tunings. VibeField keeps its snap threshold.
+    // replace VibeField's 0.25–3 clamp and the DOM card's 1.05 lift mirror —
+    // both were DOM-card tunings. VibeField keeps its snap threshold.
     settings: { ...DESK_ENGINE.settings, snap: { enabled: true, thresholdPx: 5 } },
   });
   return ce;

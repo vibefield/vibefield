@@ -20,13 +20,9 @@ const INVENTORY = [
   {
     group: "Canvas ground",
     items: [
-      "Adaptive three-level dot grid",
-      "WebGPU / WebGL2 ground layer",
+      "The desk (WebGPU)",
       "Pan and zoom response",
       "Light and dark canvas palette",
-      "Grid spacing and fades",
-      "Dot radius and opacity",
-      "Overlap feedback projection",
       "Visual preset import / export",
     ],
   },
@@ -72,16 +68,8 @@ const INVENTORY = [
     ],
   },
   {
-    group: "Cards & state",
+    group: "Status & state",
     items: [
-      "Default card",
-      "Content gradient",
-      "Sticky note",
-      "Terminal card",
-      "Sole-selection ring",
-      "Drag lift",
-      "Accept overlap",
-      "Reject overlap",
       "Status dot",
       "Status badge",
       "Source badge",

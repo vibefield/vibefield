@@ -7,9 +7,9 @@
 //
 // Ownership: the ACQUIRER owns the handle (03·A C-3). This view never acquires
 // and never releases; it presents the handle it is given and stops on unmount.
-// Faces are deliberately minimal here — the widget's CardShell owns real
-// chrome; the catalog and DT-3 both mount THIS component (UI_SYSTEM: the
-// catalog mounts the shipping view, never a replica).
+// Faces are deliberately minimal here — the chrome is its host's (a card's,
+// until DK-5 retired the browser page widget); the catalog mounts THIS component
+// (UI_SYSTEM: the catalog mounts the shipping view, never a replica).
 
 import type { LiveSurfaceGeometryV1, LiveSurfaceInputEventV1 } from "@vibefield/contracts";
 import { UiButton, UnavailableState } from "@vibefield/design-kit/primitives";

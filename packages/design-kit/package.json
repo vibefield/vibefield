@@ -5,13 +5,10 @@
   "type": "module",
   "exports": {
     ".": "./src/index.ts",
-    "./card-appearance": "./src/card-appearance.ts",
     "./face": "./src/face.tsx",
-    "./gl": "./src/gl.ts",
     "./logo": "./src/logo/index.ts",
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
-    "./visuals": "./src/visuals.ts",
     "./icons": "./src/icons/index.tsx",
     "./face-stickers": "./src/face-stickers/index.tsx",
     "./glyphs": "./src/glyphs/index.ts"
@@ -22,19 +19,13 @@
   "scripts": {
     "typecheck": "tsc --noEmit"
   },
-  "dependencies": {
-    "@vibecook/ice": "*"
-  },
   "peerDependencies": {
     "react": "^19.0.0"
   },
   "devDependencies": {
-    "@react-three/fiber": "^9.6.1",
     "@types/react": "catalog:",
-    "@types/three": "^0.185.0",
     "@webgpu/types": "^0.1.74",
     "react": "catalog:",
-    "three": "^0.185.0",
     "typescript": "catalog:"
   }
 }

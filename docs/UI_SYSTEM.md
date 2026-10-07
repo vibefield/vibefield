@@ -162,12 +162,11 @@ catalog stays the single composition root without ever owning foreign markup. (A
 - Show meaningful states, including empty, loading, unavailable, disabled, and failure states.
 - Verify light/dark, keyboard focus, reduced motion, and narrow layout before considering a
   component cataloged.
-- **Import kit leaves from boot-reachable code, never the barrel.** The kit's GL-card surface
-  (`GlLiftGroup` → `@vibecook/ice/r3f` → three) lives behind the dedicated `./gl` entry since
-  2026-08-28 — the root barrel is GL-free by construction, so one stray class-name import can no
-  longer pull the 3D world into the splash (the 2026-08-10 incident's class). The rule still
-  stands at a lower stake: the barrel's card chrome reaches `@vibecook/ice` core (→ loro), so
-  boot-reachable code imports the deep entries (`@vibefield/design-kit/primitives`, `/visuals`)
+- **Import kit leaves from boot-reachable code, never the barrel.** The kit's GL card once pulled
+  three and the 3D world into the splash through one class-name import (the 2026-08-10 incident),
+  and its DOM card reached `@vibecook/ice` core (→ loro). DK-17 deleted the kit's card dressing —
+  the kit imports no ICE at all now — but the rule stands as the cheap habit that keeps it so:
+  boot-reachable code imports the deep entries (`@vibefield/design-kit/primitives`, `/glyphs`)
   and leaves the rest of the kit to lazy chunks. The kit declares `"sideEffects": ["*.css"]` so
   the barrel is survivable — every JS module in it must stay pure for that to hold, and a module
   that needs real import-time side effects belongs outside the kit. `pnpm bundle:assert` (inside
