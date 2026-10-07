@@ -132,7 +132,7 @@ describe("the unavailable card's numbers (R18), in the kit's and the stage's sty
       expect(detail).toContain(decl);
   });
 
-  it("stands the card centred on the plain ground — the canvas's token and the CSS-fallback dots, never the mat", () => {
+  it("stands the card centred on the plain ground — the canvas's token, never the mat, and no dots (DK-17)", () => {
     const ground = desk(".vf-desk-unavailable");
     for (const decl of [
       "inset: 0;",
@@ -141,7 +141,7 @@ describe("the unavailable card's numbers (R18), in the kit's and the stage's sty
       "background-color: var(--vf-canvas-bg);",
     ])
       expect(ground).toContain(decl);
-    expect(ground).toMatch(/background-image: radial-gradient\(circle, var\(--vf-canvas-dot\)/);
+    expect(ground).not.toContain("background-image");
     expect(ground).not.toContain("--vf-mat-ground");
   });
 });

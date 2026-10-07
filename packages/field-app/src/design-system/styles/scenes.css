@@ -100,13 +100,9 @@
   height: 116px;
   overflow: hidden;
   border-radius: 14px;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-line-stage {
@@ -131,13 +127,9 @@
   height: 112px;
   overflow: hidden;
   border-radius: 14px;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-line-plate[data-state="at"],
@@ -179,13 +171,9 @@
   height: 72px;
   overflow: hidden;
   border-radius: 14px;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-head-plate[data-state="narrow"] {
@@ -221,13 +209,9 @@
   height: 560px;
   overflow: hidden;
   border-radius: 14px;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-edges-plate:is([data-state="canvas"], [data-state="godview"]) {
@@ -250,13 +234,9 @@
   height: 780px;
   overflow: hidden;
   border-radius: 14px;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-history-plate.is-short {
@@ -279,13 +259,9 @@
   height: 460px;
   overflow: hidden;
   border-radius: 14px;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-corner-face {
@@ -299,13 +275,9 @@
   position: relative;
   height: 420px;
   overflow: hidden;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 /* The switch's specimen (DESIGN.md §8): a small field to defocus — the ground,
@@ -314,13 +286,9 @@
   position: relative;
   height: 460px;
   overflow: hidden;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-me-controls {
@@ -336,13 +304,9 @@
   position: relative;
   height: 560px;
   overflow: hidden;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 22px 22px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-edge-controls {
@@ -642,9 +606,9 @@
   height: 568px;
   overflow: auto;
   place-items: center;
-  background:
-    radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px), var(--vf-canvas-bg);
-  background-size: 24px 24px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-onboarding-production .vf-wizard-shell {
@@ -1276,13 +1240,9 @@
   height: 400px;
   overflow: hidden;
   border-radius: 14px;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-bar-object {
@@ -1340,13 +1300,9 @@
   isolation: isolate;
   overflow: hidden;
   border-radius: 14px;
-  background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(
-    circle at center,
-    var(--vf-canvas-dot) 1.1px,
-    transparent 1.45px
-  );
-  background-size: 25px 25px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-board-standin {

@@ -66,41 +66,21 @@ Godview's mode (As the app · Light · Dark), saved with the rest of this viewer
 | Token | Light | Dark |
 |---|---|---|
 | `--vf-canvas-bg` | `#FAFAFA` | `#171717` |
-| `--vf-canvas-dot` (classic alternate build) | `#A6A6A6` | `#1C1C1C` |
-| `--vf-canvas-magnet-ink` (selected GL ground) | `#A6A6A6` | `#8A8A8A` |
-| `--vf-canvas-dot` (CSS fallback) | `rgba(0,0,0,0.16)` | `rgba(255,255,255,0.08)` |
 | the cutting mat (`glyph: "mat"`, `draft/ground/MAT.md`) — sage `#86A078`, cream lines `#E8DCBE`, a material carried across both themes | lit by the **Sun**: the tree-shadow reference's chain — the sage shows `#3D5A30` | lit by the **Moon**: 4100 K through the Purkinje shift — `#313C40` in the dapples, `#1C2027` in the palm's shadow, Eigengrau `#16161D` under all; half the sunlit luminance |
 
-The ICE ground projection uses `spacings: [25, 50, 100]`, `dotAlpha: 1`,
-`fadeIn: [20, 30]`, `fadeOut: [90, 100]`, `dotRadius: [1.5, 1.5]`, and
-`levelWeight: [1, 0]`.
-
-The selected magnet implementation is configured through ICE's complete
-`GridMagnetConfig` contract: `glyph: "dot"`, `reach: 60`, `polarity: 1`,
-`widgets: true`, `widgetStrength: 0.1`, `widgetRadius: 12`, `alwaysAlign: false`,
-`needleLength: 5`, `needleWidth: 0.55`, `maxSources: 256`, and `fadeZoom: 0`.
-These are appearance data, not renderer selection. Studio owns a control
-for every field and projects them into its live shared `InfiniteCanvasGround`
-specimen; Canvas Settings exposes only the user-facing Dot/Needle preference.
-
-**The magnet ink (decided 2026-08-25; ICE 0.11 amendment).** Renderer choice is
-build-time: Vibe Field consumes ICE's magnet build. There is no classic/magnet
-toggle. The selected field must be visible while it responds, so its dark ink
-is the experiment's `#8A8A8A`; light keeps `#A6A6A6`. The classic alternate's
-`#1C1C1C` whisper remains recorded for the build that wires that implementation,
-but it does not ride the current production path. Dot/needle is tuning inside
-the selected magnet implementation: Dot is the default, and Canvas Settings
-may persist either glyph as a device presentation preference.
-*Erratum 2026-10-03 (DK-0d, against the desk — DK-D2, R22):* ICE retired the magnet grid with the
-cards and the dot and needle grids on 2026-09-25 (`@ice/objects` `palette.ts`), so this default
-holds only while VibeField stays pinned at ICE 0.11. On the desk (DK-3) the ground is the cutting
-mat below — its sage and cream, its rulers at a margin of 60, its lattice's fade-in
-(`GridConfig { fadeIn, mat }`) — and the world grid's projection, the magnet's config and ink, the
-classic alternate's dot, Canvas Settings' Dot/Needle preference, Studio's grid controls and the
-appearance document's grid half have no consumer and retire with the old ground (DK-17). The
-CSS-fallback dots stay the splash's, the loading veil's and the explorer tiles' ground until DK-16,
-which dresses those three in the mat; after it they stay only where nothing can draw the mat (the
-unavailable state, §8).
+*Retired 2026-10-07 (DK-17; DK-0d's erratum of 2026-10-03, executed — DK-D2, R22):* the ground this
+section described until then was ICE 0.11's — a world grid (`spacings: [25, 50, 100]` and its fades)
+and the magnet grid tuned through ICE's `GridMagnetConfig` (a dot or needle glyph, `reach: 60`, …),
+inked `#A6A6A6` by day and `#8A8A8A` by night (a classic alternate's `#1C1C1C` recorded beside it).
+ICE retired the magnet grid with the cards and the dot and needle grids on 2026-09-25, and on the
+desk (DK-3) the ground is the cutting mat below — its sage and cream, its rulers at a margin of 60,
+its lattice's fade-in (`GridConfig { fadeIn, mat }`). So the grid's projection, the magnet's tuning
+and its inks, Canvas Settings' Dot/Needle preference, Studio's grid controls and the appearance
+document's grid half left with the old ground: the document is v4, the plain ground alone
+(`--vf-canvas-bg`), and its reader reads a v3 file past what retired. The CSS-fallback dots
+(`--vf-canvas-dot`: `rgba(0,0,0,0.16)` by day, `rgba(255,255,255,0.08)` by night, and widgetlab's
+`--canvas-dot` alias) left the tokens with it (the migration plan's (76)): where the desk stands in,
+the mat in CSS (below); everywhere else the plain ground.
 *Built 2026-10-07 (DK-16):* the mat in CSS is the kit's — `--vf-mat-ground` as the theme lights it,
 its lattice (`--vf-mat-lattice`) in its lit cream (`--vf-mat-line`: MAT.md §4's lines at full cover,
 (206, 183, 131) by the Sun and `#4C5254` in the Moon) at the line law's presences — one CSS px at 7 %
@@ -110,6 +90,11 @@ the old splash's black/50 read 3.9:1 on its canvas (55 % measured 3.6:1 and was 
 and the floor it shares (the Setup Assistant's, the switch's), the loading veil, the explorer's tiles
 before their still (a mini mat, the lattice at a quarter) and the terminal preview's miniature field
 (at half) wear it; the dots stand only under the unavailable card.
+*Amended 2026-10-07 (DK-17):* the dots left the product — the unavailable card stands on the plain
+ground alone (§8), and so does the kit's placeholder face, whose one consumer is the Artifacts panel
+(a page or an app not yet pictured is not a board, so not the mat). The design catalog's stand-ins
+for the field — the chrome's plates, the switch's and the Setup Assistant's floor — wear the mat in
+CSS, as the field they stand for does.
 *Erratum 2026-10-03 (DK-0d — DK-D2, R22) — the cursor's halo, which this file never described:* the
 field above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
 the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
@@ -1236,8 +1221,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or
   the device lost — shows the full **unavailable card** in the Canvas stage: the kit's
   `UnavailableState` **extended** — a detail slot, a Reload act and a 380-wide variant (R18; a kit
-  change, UI_SYSTEM) — on the plain ground (`--vf-canvas-bg` and §2.1's CSS-fallback dots — not the
-  mat, which nothing can draw), centred, the strong hairline dashed, corners 22, padded 26 26 22:
+  change, UI_SYSTEM) — on the plain ground (`--vf-canvas-bg` — not the mat, which nothing can draw;
+  the CSS-fallback dots left with the tokens, DK-17, 2026-10-07), centred, the strong hairline dashed, corners 22, padded 26 26 22:
   **what happened** (14/600, primary), **what to do** (12.5/400, tertiary), **one Reload** (the
   primary: inverted, 36 tall, padded 0 18, corners 18, 13/500) — a desk remount, not a window reload
   (R18) — and in the detail slot **ICE's message, verbatim**, last and small (11 mono, faint, 12

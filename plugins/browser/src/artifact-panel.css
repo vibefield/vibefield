@@ -120,14 +120,14 @@
   cursor: default;
 }
 
+/* An artifact is a page or an app, not a board: its preview and its placeholder stand on the plain
+   ground (the kit's PlaceholderFace, DESIGN.md §2.1) — the CSS-fallback dots left at DK-17. */
 .vf-artifact-preview,
 .vf-artifact-placeholder {
   position: relative;
   overflow: hidden;
   border-radius: 10px;
   background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(circle, var(--vf-canvas-dot) 0.8px, transparent 0.9px);
-  background-size: 12px 12px;
 }
 
 .vf-artifact-preview {

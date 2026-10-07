@@ -335,6 +335,9 @@
   margin-top: 18px;
 }
 
+/* A placeholder for something that is not a board (the Artifacts panel's: a page or an app not yet
+   pictured) stands on the plain ground — the mat is the desk's (DESIGN.md §2.1); the CSS-fallback dots
+   left the product at DK-17. */
 .vf-ui-placeholder-face {
   position: relative;
   overflow: hidden;
@@ -342,8 +345,6 @@
   aspect-ratio: 16 / 10;
   border-radius: 10px;
   background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(circle, var(--vf-canvas-dot) 0.8px, transparent 0.9px);
-  background-size: 12px 12px;
 }
 
 .vf-ui-placeholder-face::before {

@@ -288,9 +288,9 @@
   align-items: center;
   gap: 12px;
   border-radius: 18px;
-  background:
-    radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px), var(--vf-canvas-bg);
-  background-size: 20px 20px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
   padding: 24px;
 }
 
@@ -585,9 +585,9 @@
   justify-content: center;
   gap: 12px;
   border-radius: 16px;
-  background:
-    radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px), var(--vf-canvas-bg);
-  background-size: 20px 20px;
+  background-color: var(--vf-mat-ground);
+  background-image: var(--vf-mat-lattice);
+  background-size: var(--vf-mat-lattice-size);
 }
 
 .vf-ds-progress-track {

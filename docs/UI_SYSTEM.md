@@ -13,8 +13,10 @@ code and how the design catalog stays identical to the product.
    preview's miniature — the kit's tokens stand the cutting mat in: `--vf-mat-ground` (its sage as
    the theme lights it), `--vf-mat-lattice` with `--vf-mat-lattice-size` (its lines in the lit cream,
    `--vf-mat-line`, at the line law's presences — a smaller composition scales the sizes, never the
-   presences) and `--vf-mat-ink` for the words on it. The CSS-fallback dots (`--vf-canvas-dot`) stay
-   only where nothing can draw the mat — the unavailable card; `wearing-the-mat.test.tsx` holds both.
+   presences) and `--vf-mat-ink` for the words on it. The CSS-fallback dots (`--vf-canvas-dot`, and
+   widgetlab's `--canvas-dot` alias) left the tokens at DK-17: where nothing can draw the mat — the
+   unavailable card — and for what is not a board — the kit's placeholder face — the ground is the
+   plain one, `--vf-canvas-bg`; `wearing-the-mat.test.tsx` holds all of it.
 2. **Primitives — `packages/design-kit/src/primitives.tsx` and `primitives.css`**
    Owns reusable control and state anatomy: buttons, icon buttons, fields, switches, segmented
    controls, pills, empty/unavailable states, notices, placeholders, and status dots.
@@ -37,8 +39,8 @@ code and how the design catalog stays identical to the product.
    what to do at 12.5/400 in tertiary — and two slots: `action`, ONE act under the words (the primary
    `UiButton`, inverted, 36 tall, padded 0 18, corners 18, 13/500 — the desk's Reload, a remount),
    absent where it could not help; and `detail`, LAST and small (11 mono, faint, 12 below), the
-   renderer's own message verbatim. The composition lays the ground (the plain canvas ground and the
-   CSS-fallback dots, `field/desk/desk.css`) and chooses the words (`desk-words.ts`); the anatomy and
+   renderer's own message verbatim. The composition lays the ground (the plain canvas ground,
+   `field/desk/desk.css`) and chooses the words (`desk-words.ts`); the anatomy and
    its numbers are the kit's — `unavailable-card.test.tsx` holds them.
 3. **Product compositions — colocated component and CSS files**
    A domain component owns its structure and its namespaced stylesheet. Runtime-heavy components

@@ -80,7 +80,7 @@ describe("the mat in CSS — the kit's tokens", () => {
   });
 });
 
-describe("the splash, the veil and the explorer's tiles wear it — and the dots stay only under the card", () => {
+describe("the splash, the veil and the explorer's tiles wear it — and the dots are gone (DK-17)", () => {
   for (const [file, selector] of [
     ["src/boot/boot.css", ".vf-splash"],
     ["src/hud/LoadingVeil.css", ".vf-loading-veil"],
@@ -95,7 +95,11 @@ describe("the splash, the veil and the explorer's tiles wear it — and the dots
     });
   }
 
-  it("keeps the CSS-fallback dots only where nothing can draw the mat — the unavailable card's plain ground", () => {
+  it("names the CSS-fallback dots nowhere — they left the tokens and every product stylesheet (DK-17, plan (76))", () => {
+    // The tokens define neither the dots nor the widgetlab alias that read them.
+    expect(declared("--vf-canvas-dot")).toEqual([]);
+    expect(declared("--canvas-dot")).toEqual([]);
+    expect(declared("--canvas-bg")).toEqual([]);
     const product = [
       "src/boot/boot.css",
       "src/hud/LoadingVeil.css",
@@ -103,9 +107,26 @@ describe("the splash, the veil and the explorer's tiles wear it — and the dots
       "src/panels/terminal/terminal-settings.css",
       "src/field/desk/desk.css",
       "src/styles/base.css",
+      "../design-kit/src/primitives.css",
+      "../../plugins/browser/src/artifact-panel.css",
     ];
-    const using = product.filter((file) => read(file).includes("--vf-canvas-dot"));
-    expect(using).toEqual(["src/field/desk/desk.css"]);
+    const using = product.filter((file) => /--(?:vf-)?canvas-dot/u.test(read(file)));
+    expect(using).toEqual([]);
+  });
+
+  it("stands a placeholder that is not a board on the plain ground — the kit's and the Artifacts panel's", () => {
+    // PlaceholderFace's one consumer is the Artifacts panel (a page or an app not yet pictured): not a board, so
+    // not the mat (DESIGN.md §2.1 puts the mat where the desk stands in) — the plain ground, as the card's.
+    for (const [file, selector] of [
+      ["../design-kit/src/primitives.css", ".vf-ui-placeholder-face"],
+      ["../../plugins/browser/src/artifact-panel.css", ".vf-artifact-placeholder"],
+      ["../../plugins/browser/src/artifact-panel.css", ".vf-artifact-preview"],
+    ] as const) {
+      const rule = block(read(file), selector);
+      expect(rule, selector).toContain("background-color: var(--vf-canvas-bg);");
+      expect(rule, selector).not.toContain("background-image");
+      expect(rule, selector).not.toContain("--vf-mat-");
+    }
   });
 
   it("writes the splash's words in the mat's ink, never the light theme's black", () => {

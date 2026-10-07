@@ -1,8 +1,9 @@
 /* The desk in the Canvas stage (DK-3). Its canvas is the layer's own; this file dresses only what the
    field puts around it. */
 
-/* When the desk can't draw (DESIGN.md §8, R18): the plain ground — the canvas token and §2.1's
-   CSS-fallback dots, never the mat — with the card centred on it. */
+/* When the desk can't draw (DESIGN.md §8, R18): the plain ground — the canvas token, never the mat,
+   which nothing can draw here (the CSS-fallback dots left the product at DK-17) — with the card
+   centred on it. */
 .vf-desk-unavailable {
   position: absolute;
   z-index: 1;
@@ -11,6 +12,4 @@
   align-items: center;
   justify-content: center;
   background-color: var(--vf-canvas-bg);
-  background-image: radial-gradient(circle, var(--vf-canvas-dot) 1px, transparent 1px);
-  background-size: 24px 24px;
 }
