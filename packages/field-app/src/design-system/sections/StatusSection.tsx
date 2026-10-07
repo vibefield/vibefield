@@ -10,6 +10,10 @@ import { Icon, Section, Specimen } from "../catalog-ui";
 const DESK_LOST = "the device was lost: unknown: GPU process exited";
 const DESK_NO_GPU =
   "no desk — the adapter, the device or the pipelines were refused: WebGPU is unavailable here (no navigator.gpu)";
+const DESK_NO_ADAPTER =
+  "no desk — the adapter, the device or the pipelines were refused: WebGPU: requestAdapter() returned null";
+const DESK_REFUSED =
+  "no desk — the adapter, the device or the pipelines were refused: GPUPipelineError: invalid shader module";
 const DESK_DEGRADED = "an uncaptured GPU error — GPUOutOfMemoryError: out of memory";
 const reloadFixture = (): void => undefined;
 
@@ -82,6 +86,22 @@ export function StatusSection(): ReactElement {
         <Specimen title="No WebGPU here — no Reload" source="field/desk/DeskUnavailableView.tsx">
           <div className="vf-ds-desk-stage">
             <DeskUnavailableView words={failedWords(DESK_NO_GPU)} onReload={reloadFixture} />
+          </div>
+        </Specimen>
+        <Specimen
+          title="No adapter — hardware acceleration may be off; no Reload"
+          source="field/desk/DeskUnavailableView.tsx"
+        >
+          <div className="vf-ds-desk-stage">
+            <DeskUnavailableView words={failedWords(DESK_NO_ADAPTER)} onReload={reloadFixture} />
+          </div>
+        </Specimen>
+        <Specimen
+          title="Any other refusal — the desk couldn't start its graphics"
+          source="field/desk/DeskUnavailableView.tsx"
+        >
+          <div className="vf-ds-desk-stage">
+            <DeskUnavailableView words={failedWords(DESK_REFUSED)} onReload={reloadFixture} />
           </div>
         </Specimen>
         <Specimen title="A board from before the desk" source="field/desk/desk-words.ts">

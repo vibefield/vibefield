@@ -61,6 +61,8 @@ export interface FieldDeskLayerOptions {
   /** Where the layer acquires its device — `navigator.gpu` unless given (desk-gpu.ts's forced
    * first failure, the relaunch heal's smoke door). */
   readonly gpu?: GPU;
+  /** Told the layer's OWN device once it arrives (ICE's `onDevice`) — the smokes' GPU faults reach it (DK-16). */
+  readonly onDevice?: (device: GPUDevice) => void;
 }
 
 /**
@@ -87,5 +89,6 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     cursors: false,
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
+    ...(opts.onDevice === undefined ? {} : { onDevice: opts.onDevice }),
   });
 }

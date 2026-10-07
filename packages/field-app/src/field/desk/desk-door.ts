@@ -59,6 +59,8 @@ export interface MountedDesk {
   /** DK-13 — the types this mount was made WITHOUT (DK-9's off set, as read at its mount): their kinds are not drawn,
    * so the pegboard offers neither them nor a category of nothing else (P3c). */
   readonly off?: ReadonlySet<string>;
+  /** DK-16 — the layer's OWN device once it arrived (null before, and with none): what the smokes' GPU faults reach. */
+  readonly device?: () => GPUDevice | null;
 }
 
 /** What the chrome says of a type when the mount names no words: the type, drawn. */
@@ -276,6 +278,11 @@ export interface VfDeskDoor {
    * `presence().wire.apply`). */
   presenceTap?(): readonly string[];
   presenceApply?(payloads: readonly string[]): number;
+  /** DK-16 — the smokes' GPU faults, installed only on a page loaded with `?deskFaults=1`, on the layer's OWN device:
+   * "lose" destroys it, as a GPU reset loses it — the desk goes `failed` ("the device was lost: …") and the stage's card
+   * offers its Reload; "error" raises one uncaptured validation error — the desk goes `degraded` and draws on, the status
+   * line holding ICE's message and a Reload. Answers whether a device was there to fault. */
+  gpuFault?(kind: "lose" | "error"): boolean;
   /** DK-11 — the selection's anchor as the desk last published it (`handle.selection.anchor()`) — what the bar is
    * placed from; null on a handle without the door. A read. */
   anchor(): SelectionAnchor | null;
@@ -447,6 +454,7 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       facet: peerFacetSent(),
     }),
     ...(presenceRelayAsked() ? presenceRelay(engine) : {}),
+    ...(deskFaultsAsked() ? { gpuFault: (kind) => gpuFault(desk.device?.() ?? null, kind) } : {}),
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;
@@ -500,4 +508,22 @@ function presenceRelay(engine: CanvasEngine): Pick<VfDeskDoor, "presenceTap" | "
       return payloads.length;
     },
   };
+}
+
+/** The smokes' URL door for the GPU faults (`?deskFaults=1`). */
+export const DESK_FAULTS = "deskFaults";
+
+function deskFaultsAsked(): boolean {
+  return (
+    typeof location !== "undefined" && new URLSearchParams(location.search).get(DESK_FAULTS) === "1"
+  );
+}
+
+/** Fault the layer's own device: lose it (destroyed, as a reset loses it), or raise ONE uncaptured validation error (a
+ * buffer of no usage, made outside any error scope). */
+export function gpuFault(device: GPUDevice | null, kind: "lose" | "error"): boolean {
+  if (device === null) return false;
+  if (kind === "lose") device.destroy();
+  else device.createBuffer({ size: 4, usage: 0 });
+  return true;
 }

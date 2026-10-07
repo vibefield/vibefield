@@ -23,6 +23,16 @@ code and how the design catalog stays identical to the product.
    Me menu leaves Theme's arrows and Home End to the control. A composition may CUT the kit's
    anatomy (the pegboard's filters, cut for the wood, `field/desk/pegboard/pegboard.css`) but never
    grows a thumb of its own — `ui-system-boundaries.test.ts` holds it.
+   *The unavailable state, extended (R18, built at DK-3, recorded and held at DK-16 — a kit change):*
+   beside its compact and in-place shapes it has a CARD — `card`, the 380-wide variant a whole view
+   shows when it cannot draw (the desk in the Canvas stage, DESIGN.md §8 "When the desk can't draw"):
+   the strong hairline dashed, corners 22, padded 26 26 22, what happened at 14/600 in primary ink and
+   what to do at 12.5/400 in tertiary — and two slots: `action`, ONE act under the words (the primary
+   `UiButton`, inverted, 36 tall, padded 0 18, corners 18, 13/500 — the desk's Reload, a remount),
+   absent where it could not help; and `detail`, LAST and small (11 mono, faint, 12 below), the
+   renderer's own message verbatim. The composition lays the ground (the plain canvas ground and the
+   CSS-fallback dots, `field/desk/desk.css`) and chooses the words (`desk-words.ts`); the anatomy and
+   its numbers are the kit's — `unavailable-card.test.tsx` holds them.
 3. **Product compositions — colocated component and CSS files**
    A domain component owns its structure and its namespaced stylesheet. Runtime-heavy components
    split into a controller and a controller-free view/frame, so state adapters can mount the exact

@@ -508,6 +508,33 @@ describe("the Canvas stage mounts the desk", () => {
     }
   });
 
+  it("DK-16: lends the door the mount's OWN device as it arrives — the smokes' faults reach it, a new mount's its own", async () => {
+    const before = `${location.pathname}${location.search}`;
+    history.replaceState(null, "", `${location.pathname}?deskFaults=1`);
+    try {
+      await mountStage();
+      const door = () => (globalThis as { __vfDesk?: { gpuFault?(k: string): boolean } }).__vfDesk;
+      expect(door()?.gpuFault?.("lose")).toBe(false); // the device has not arrived
+      const destroyed: string[] = [];
+      const device = { destroy: () => destroyed.push("first") } as unknown as GPUDevice;
+      current().opts.onDevice?.(device);
+      expect(door()?.gpuFault?.("lose")).toBe(true);
+      expect(destroyed).toEqual(["first"]);
+      // the card's Reload makes a new layer: its device is its own, the old one forgotten
+      await act(async () =>
+        current().move({ state: "failed", message: "the device was lost: destroyed: gone" }),
+      );
+      const reload = [...host.querySelectorAll("[data-desk-unavailable] button")].find(
+        (b) => b.textContent === "Reload",
+      ) as HTMLButtonElement | undefined;
+      await act(async () => reload?.click());
+      expect(layers).toHaveLength(2);
+      expect(door()?.gpuFault?.("lose")).toBe(false);
+    } finally {
+      history.replaceState(null, "", before);
+    }
+  });
+
   it("puts a degraded desk on the status line with its Reload, and withdraws it when it clears", async () => {
     await mountStage();
     const message = "an uncaptured GPU error — GPUOutOfMemoryError: out of memory";

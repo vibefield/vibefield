@@ -91,6 +91,8 @@ export function CanvasStage({
   /** The types the mounted layer was made WITHOUT (DK-9's off set, as read at its mount — DK-11's words). */
   const mountedOffRef = useRef<ReadonlySet<string>>(new Set());
   const deskRef = useRef<MountedDesk | null>(null);
+  /** The mounted layer's own device once it arrived (DK-16 — the smokes' GPU faults reach it through the door). */
+  const deviceRef = useRef<GPUDevice | null>(null);
   // The desk's own generation within the engine's: Reload remounts the layer (a new factory —
   // `<Desk>` disposes the mount and makes the next), the engine and its document untouched.
   const [mount, setMount] = useState(0);
@@ -136,11 +138,15 @@ export function CanvasStage({
       mount,
       gpuLedger: import.meta.env.DEV,
       ...(gpu === undefined ? {} : { gpu }),
+      onDevice: (device) => {
+        deviceRef.current = device;
+      },
     });
     // the kinds of what is ON (DK-9): a plugin that is off has its types left out of the catalog the
     // layer is mounted with — read once, at the mount, as ICE reads it
     const off = kinds?.off() ?? new Set<string>();
     return (ctx) => {
+      deviceRef.current = null; // the new layer's own device arrives with its boot
       const handle =
         off.size === 0
           ? factory(ctx)
@@ -202,6 +208,7 @@ export function CanvasStage({
       theme: themeRef.current,
       words,
       off: mountedOff,
+      device: () => deviceRef.current,
     };
     deskRef.current = desk;
     const unpublish = publishDesk(desk);

@@ -144,4 +144,50 @@ describe("the desk door's reads (DK-8)", () => {
       b.dispose();
     }
   });
+
+  it("DK-16: installs the GPU faults only on a page asked for them (`?deskFaults=1`), on the mount's OWN device — lost, or one uncaptured error", () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const calls: string[] = [];
+    const device = {
+      destroy: () => calls.push("destroy"),
+      createBuffer: (d: { size: number; usage: number }) =>
+        calls.push(`createBuffer ${d.size}/${d.usage}`),
+    } as unknown as GPUDevice;
+    let lent: GPUDevice | null = null;
+    const install = () => {
+      const undo = installDeskDoor(
+        {
+          engine: ce,
+          handle: {} as never,
+          generation: 1,
+          mount: 0,
+          theme: "light",
+          device: () => lent,
+        },
+        () => false,
+      );
+      return { door: (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk as VfDeskDoor, undo };
+    };
+    const g = globalThis as { location?: { search: string } };
+    const before = g.location;
+    try {
+      g.location = { search: "" };
+      const plain = install();
+      expect(plain.door.gpuFault).toBeUndefined();
+      plain.undo();
+      g.location = { search: "?deskFaults=1" };
+      const asked = install();
+      expect(asked.door.gpuFault?.("lose")).toBe(false); // no device yet: nothing to fault
+      lent = device;
+      expect(asked.door.gpuFault?.("error")).toBe(true);
+      expect(asked.door.gpuFault?.("lose")).toBe(true);
+      expect(calls).toEqual(["createBuffer 4/0", "destroy"]);
+      asked.undo();
+    } finally {
+      if (before === undefined) delete g.location;
+      else g.location = before;
+      ce.dispose();
+    }
+  });
 });
