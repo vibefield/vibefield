@@ -101,6 +101,15 @@ appearance document's grid half have no consumer and retire with the old ground 
 CSS-fallback dots stay the splash's, the loading veil's and the explorer tiles' ground until DK-16,
 which dresses those three in the mat; after it they stay only where nothing can draw the mat (the
 unavailable state, §8).
+*Built 2026-10-07 (DK-16):* the mat in CSS is the kit's — `--vf-mat-ground` as the theme lights it,
+its lattice (`--vf-mat-lattice`) in its lit cream (`--vf-mat-line`: MAT.md §4's lines at full cover,
+(206, 183, 131) by the Sun and `#4C5254` in the Moon) at the line law's presences — one CSS px at 7 %
+every 25 and at 21 % every 100, ICE `MAT_GRID`'s 0.14 and 0.28 — and the words on it in
+`--vf-mat-ink`, paper white at 60 %: **4.0:1** on the Sun-lit sage and **5.2:1** in the Moon, where
+the old splash's black/50 read 3.9:1 on its canvas (55 % measured 3.6:1 and was raised). The splash
+and the floor it shares (the Setup Assistant's, the switch's), the loading veil, the explorer's tiles
+before their still (a mini mat, the lattice at a quarter) and the terminal preview's miniature field
+(at half) wear it; the dots stand only under the unavailable card.
 *Erratum 2026-10-03 (DK-0d — DK-D2, R22) — the cursor's halo, which this file never described:* the
 field above answered a pointer VibeField drew itself (`cursor/`: a DOM halo over the canvas that hid
 the OS cursor, became a dot over a widget's controls and fed this field its poles — the `reach`
@@ -296,6 +305,9 @@ Sun-lit sage (`#3D5A30`) and 2.0:1 on the Moon's dapples (`#313C40`), so on the 
 chip on the line's glass in the chrome's text ink (R17, amended 13:40Z; §8, peers on the mat), and
 the arrow keeps the presence ink on its white edge. The contrasts above stand for the plain grounds
 and the chrome.
+*Measured 2026-10-07 (DK-16 — smoke:canvas's PEERS CONTRAST row, the chip's glyph cores against its
+glass in the window's own pixels over the lit mat):* the label reads **9.2:1** by day and **11.3:1**
+by night (three runs: 9.1–9.2 and 11.3). The arrow's white edge is `--vf-presence-edge`.
 
 ---
 
@@ -782,7 +794,8 @@ The hot-point glow and rim retire with CardShell (above).
   throws its shadow down); chevron rotates 180°; backdrop dim + recede + stage hold,
   one sheet at a time with the tray. Doc tiles: `aspect-[16/10] rounded-[10px]` faces
   painted as a **mini empty field** (canvas-bg + the §2.1 CSS-fallback dots — the
-  ground motif as the doc's face until real thumbnails); name 12px medium, relative
+  ground motif as the doc's face until real thumbnails — *a mini mat since DK-16, 2026-10-07,
+  §2.1's erratum: the lattice at a quarter, under the board's still as it lands*); name 12px medium, relative
   time caption in `tabular-nums`; the CURRENT doc wears the 1.5px inside `--vf-select`
   ring (it is the selection); hover 1.03 / active 0.95. **The sync dot (C6-4):** a 6px
   dot after the pill's doc name for STANDING sync states only — pending / peer-offline
@@ -1206,6 +1219,13 @@ The hot-point glow and rim retire with CardShell (above).
   absence falls back the same way. **Godview's live backdrop** (GT-7's viewer glass,
   `backdropOpacity` / `backdropBlur`) **and rosetta's room glass retire on the desk**: the cover is
   a tint over the still, and their settings rows go (R16; the deck's note, below).
+  *Amended 2026-10-07 (DK-16; plan addenda (68), (69)):* the rim the receded still leaves at the
+  window's edge (≈12 px at 0.98) is the mat's ground as the theme lights it under the cover's tint —
+  the still's own ring, `box-shadow: 0 0 0 2vmax var(--vf-mat-ground)`, never the canvas's colour
+  (measured under History: (201, 209, 198) by day and (33, 37, 39) by night — the tint over the sage
+  and over the Moon's dapples; Godview's CRT vignette darkens its edge, so there the ring alone is
+  held). A desk that never drew (no WebGPU, no adapter) is covered by the same ground and nothing is
+  said — the card is the Canvas stage's, and it stands again as the cover lowers.
 - **Peers on the mat** (DK-16; MC-D10 = DK-D23, R22; UA-D17, §2.8 I-1, I-4; R17): another person's
   pointer on the desk is VibeField's own cursor — ICE's are turned off,
   `deskLayer({ cursors: false })` (petition I26, being built), so nobody is drawn twice (R17).
@@ -1223,6 +1243,11 @@ The hot-point glow and rim retire with CardShell (above).
   erratum), so it reads on any mat; DK-16 measures it on the lit mat. Never the peer's own colour
   (I-1). Your own pointer on the desk is the OS's and the desk's own open hand; the halo is gone
   (§2.1).
+  *As built 2026-10-07 (DK-16):* the label measures 9.2:1 by day and 11.3:1 by night on the lit mat
+  (§2.8). A pointer that left its window and a peer inside another canvas ride VibeField's interim
+  presence facet, `vibefield.PeerWhere { away, canvas }`, written change-only beside ICE's cursor
+  until ICE carries both (ask I42); a peer whose own view is covered is sent away. Peers also hide
+  under the pegboard, under your cover, and while the desk does not draw.
 - **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3, DK-16):
   the layer's status (`onStatus`) is said in VibeField's words — never ICE's black monospace screen,
   never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or
@@ -1274,6 +1299,9 @@ The hot-point glow and rim retire with CardShell (above).
   ("drawing the board" — its last; DK-4 retired "preparing previews" with the
   R3F preview capture). **Late-veil rule:** invisible until 120ms of loading elapse
   (a cached switch never flashes); 240ms fade-out. Loading is modal; the stage holds.
+  *Amended 2026-10-07 (DK-16; §2.1's erratum, measured):* the veil wears the mat — its lit sage and
+  its lattice, opaque — and its bar and label are in the mat's ink (`--vf-mat-ink`, white at 60 %:
+  4.0:1 by day, 5.2:1 by night), so a switch goes from desk to desk on one floor.
 - **The boot splash** (ESR slice 4; design-03 §4.3 v0.3): the app's first face, painted
   before anything heavy loads — the canvas ground itself (`--vf-canvas-bg` + the §2.1
   CSS-fallback dots at rest; the field waking, not a logo card), the wordmark
@@ -1288,6 +1316,10 @@ The hot-point glow and rim retire with CardShell (above).
   theme stamped before it and the product entry render-blocking, so no bare or wrong-theme
   ground ever shows ahead of it. In the switch's dress (below) the wordmark gives way to the
   arriving user's face, the eyebrow "Switching to" and their name.
+  *Amended 2026-10-07 (DK-16; §2.1's erratum, measured):* the ground is the mat (`--vf-mat-ground`
+  and `--vf-mat-lattice`), not the canvas and its dots — the floor the Setup Assistant and the switch
+  share with it — and its words are in the mat's ink (white at 60 %: 4.0:1 by day, 5.2:1 by night,
+  where `/50` read 3.9:1 on the canvas), the bar white/15 under white/80, the ghost Retry white.
 - **The reveal** (boot-exclusive motion): the canvas composes and stabilizes BEHIND
   the splash (the frame-stability gate — never reveal mid-hitch), then the splash
   fades 240ms plain `ease` while the canvas settles `scale(0.99) → 1` over 560ms

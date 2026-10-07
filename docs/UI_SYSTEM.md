@@ -8,6 +8,13 @@ code and how the design catalog stays identical to the product.
 1. **Tokens — `packages/design-kit/src/tokens.css`**
    Owns palette, semantic text and chrome colors, radii, materials, shadows, and motion curves.
    Component styles consume tokens; they do not introduce a parallel palette or eyeballed shadow.
+   *The mat in CSS (DK-16 — DESIGN.md §2.1's erratum):* where nothing draws the desk yet — the splash
+   and the floor it shares, the loading veil, a field's tile before its still, the terminal
+   preview's miniature — the kit's tokens stand the cutting mat in: `--vf-mat-ground` (its sage as
+   the theme lights it), `--vf-mat-lattice` with `--vf-mat-lattice-size` (its lines in the lit cream,
+   `--vf-mat-line`, at the line law's presences — a smaller composition scales the sizes, never the
+   presences) and `--vf-mat-ink` for the words on it. The CSS-fallback dots (`--vf-canvas-dot`) stay
+   only where nothing can draw the mat — the unavailable card; `wearing-the-mat.test.tsx` holds both.
 2. **Primitives — `packages/design-kit/src/primitives.tsx` and `primitives.css`**
    Owns reusable control and state anatomy: buttons, icon buttons, fields, switches, segmented
    controls, pills, empty/unavailable states, notices, placeholders, and status dots.
