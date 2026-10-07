@@ -102,7 +102,7 @@ describe("UI system ownership boundaries", () => {
     ].join("\n");
 
     expect(catalogCss).not.toMatch(
-      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-mirror\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line)/m,
+      /^\.vf-(?:artifact|godview\b|widget-tray\b|command-palette\b|palette-|settings-dialog\b|loading-veil\b|terminal-picker\b|deck-zoom\b|me\b|me-|face\b|face-|face-picker|settings-account|edge-tray\b|views\b|views-|cover\b|cover-|history\b|history-|line\b|line-|at-|head\b|head-|menu\b|menu-|ah-|tr-|bar\b|bar-|status-line)/m,
     );
   });
 
@@ -129,22 +129,6 @@ describe("UI system ownership boundaries", () => {
     ]) {
       expect(source(module), module).not.toMatch(/from "@vibefield\/(?:contracts|design-kit)";/);
     }
-  });
-
-  it("keeps the terminal mirror's fixture an ADAPTER, never a replica (TP-S2)", () => {
-    // The rule that bites hardest on a widget whose live state needs a daemon:
-    // the catalog cannot show terminal pixels, and the tempting fix is to draw a
-    // convincing fake. So the fixture is held to supplying only what a HOST
-    // supplies — the cull answer and the camera — and to owning none of the
-    // widget's own classes.
-    const fixture = source("design-system/TerminalMirrorPreview.tsx");
-    expect(fixture).toContain("TerminalMirrorSurface");
-    expect(fixture).not.toMatch(/vf-terminal-mirror/);
-    expect(fixture).not.toContain("<style");
-    // And the widget's props are the whole seam: a fixture reaching for the
-    // pool or a runtime would be building a second host.
-    expect(fixture).not.toContain("terminalPool");
-    expect(fixture).not.toContain("watchOnlyRuntime");
   });
 
   it("keeps the view frame's fixture an ADAPTER — the owner's value, never the frame's markup (FR-1)", () => {
@@ -389,7 +373,6 @@ describe("UI system ownership boundaries", () => {
     const swarmBodies = source("design-system/SwarmBodiesPreview.tsx");
     const groundWorkbench = source("design-system/CanvasGroundWorkbench.tsx");
     const groundPreview = source("design-system/InfiniteCanvasGroundPreview.tsx");
-    const mirror = source("design-system/TerminalMirrorPreview.tsx");
     const paneFrame = source("design-system/PaneFramePreview.tsx");
     const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
@@ -404,7 +387,7 @@ describe("UI system ownership boundaries", () => {
     const bar = source("design-system/SelectionBarPreview.tsx");
     const pegboard = source("design-system/PegboardPreview.tsx");
     const peers = source("design-system/PeersPreview.tsx");
-    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${mirror}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -441,8 +424,6 @@ describe("UI system ownership boundaries", () => {
       "DeskUnavailableView",
       "StatusLineView",
       "LiveSurfaceView",
-      "TerminalMirrorPreview",
-      "TerminalMirrorSurface",
       "PaneFramePreview",
       "PaneFrameChrome",
       "PaneLauncherPreview",
@@ -636,7 +617,6 @@ describe("UI system ownership boundaries", () => {
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",
-      "terminal/mirror/mirror.css",
     ]) {
       expect(source(stylesheet), stylesheet).not.toMatch(/#[\da-f]{3,8}\b/i);
     }

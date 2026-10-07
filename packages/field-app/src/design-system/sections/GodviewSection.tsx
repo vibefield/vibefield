@@ -9,7 +9,6 @@ import { PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
 import { SpawnBloomPreview } from "../SpawnBloomPreview";
 import { SwarmBodiesPreview } from "../SwarmBodiesPreview";
-import { TerminalMirrorPreview } from "../TerminalMirrorPreview";
 
 export function GodviewSection({ dark = false }: { dark?: boolean } = {}): ReactElement {
   // Godview follows the app's theme (FC-D7): in the catalog, the page's.
@@ -100,12 +99,6 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         bleed
       >
         <SwarmBodiesPreview />
-      </Specimen>
-      <Specimen
-        title="Terminal mirror — a session watched from the canvas"
-        source="terminal/mirror/TerminalMirrorSurface.tsx"
-      >
-        <TerminalMirrorPreview />
       </Specimen>
     </Section>
   );
