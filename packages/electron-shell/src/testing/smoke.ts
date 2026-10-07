@@ -110,6 +110,7 @@ import {
   type PhysicalSoakOptions,
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
+import { coverRows } from "./smoke-covers";
 import { pegboardRows } from "./smoke-pegboard";
 import { selectionBarRows } from "./smoke-selection-bar";
 import { sendToRows } from "./smoke-send-to";
@@ -1113,6 +1114,15 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`DK-14: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // DK-15: the covers over the desk — Godview and History each rising over the LIVE desk, its still captured, blurred
+        // once and swapped in, the canvas hidden, THEN the freeze: zero frames and zero submits for ≥ 3 s; the recede; taken
+        // again on a theme change and a resize; thaw first on the way back; the lost device's ground; reduced motion
+        // (testing/smoke-covers.ts)
+        try {
+          problems.push(...(await coverRows({ win, shotDir, say: (line) => console.log(line) })));
+        } catch (error) {
+          problems.push(`DK-15: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-8: VibeField's own kind — drawn, picked, a line typed through the desk's one editor, the board
         // saved; then the retry row REPLACES the renderer (a reload) and the pad's line must come back with it
