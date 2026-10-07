@@ -188,10 +188,11 @@ export function ChromeLayer({
 
   // Keyboard shortcuts: the DESK's keymap is the one (DK-D24; ruling 4) — `<Desk>`
   // attaches it (⌫, ⌘Z/⇧⌘Z, ⌘D, ⌘A, ⇧⌘L, ⏎ open/enter, arrows, and the Esc
-  // ladder: close the drawer → put down → fly out of the frame), with the
-  // field's `c` override riding its override surface (field-keymap.ts). The
-  // Escape → `exitContainer` handler this layer carried is GONE: it fired a
-  // second exit beside the ladder's (r1 §3).
+  // ladder: close the drawer → put down → fly out of the frame), with no
+  // override of the field's: its keymap drops a tool letter the desk's canvas
+  // does not allow, so `c` connects nothing (DK-17 retired the field's `c`
+  // override). The Escape → `exitContainer` handler this layer carried is GONE:
+  // it fired a second exit beside the ladder's (r1 §3).
 
   // ⌘K / Ctrl+K toggles the command palette (§8.3; One Frame §7). ⌘K is free —
   // the ICE keymap, the line's B and the tray's Esc never claim it. The palette

@@ -101,17 +101,23 @@ vi.mock("@vibecook/ice/desk", async (importOriginal) => {
   };
 });
 
+/** Every keymap override the stage handed `<Desk>`, per render (DK-17: none — the desk's keymap is the one). */
+const deskOverrides: unknown[] = [];
+
 vi.mock("@vibecook/ice/react", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@vibecook/ice/react")>();
   function Desk({
     engine,
     layer,
     onReady,
+    keymapOverrides,
   }: {
     engine?: { catalog: unknown };
     layer: (ctx: unknown) => { dispose(): void };
     onReady?: (h: unknown) => (() => void) | undefined;
+    keymapOverrides?: unknown;
   }): ReactElement {
+    deskOverrides.push(keymapOverrides);
     useEffect(() => {
       const handle = layer({ catalog: engine?.catalog });
       const undo = onReady?.({ layer: handle });
@@ -190,7 +196,6 @@ async function mountStage(refused: boolean = false, kinds?: unknown, seeded = fa
     root.render(
       createElement(CanvasStage, {
         ce,
-        keymapOverrides: [],
         generation: 7,
         refused: refused ? BEFORE_THE_DESK : null,
         ...(kinds === undefined ? {} : { kinds: kinds as never }),
@@ -268,6 +273,16 @@ describe("the Canvas stage mounts the desk", () => {
     // DK-12 — the hand's reserves (I20): the reading fit keeps 116 under the top (the tools in hand stand at y 64, 40
     // tall, and 12) and 100 over the foot (the line's 88 and 12), the bar's travel 560 ms — ICE's 56 / 72 / 340 are its demo's
     expect(opts.hold).toEqual({ top: 116, band: 100, travelMs: 560 });
+  });
+
+  it("hands <Desk> no keymap override — the desk's keymap is the one, and `c` connects nothing (DK-D24)", async () => {
+    // DK-17 (the retire table's keymap row): the field's `c` override and its tool switcher left; ICE's keymap
+    // drops a tool letter the desk's canvas does not allow (`desk.select` and `pan` only) by itself.
+    deskOverrides.length = 0;
+    const ce = await mountStage();
+    expect(deskOverrides.length).toBeGreaterThan(0);
+    expect(deskOverrides.every((overrides) => overrides === undefined)).toBe(true);
+    expect(ce.canvas.tools().map((tool) => tool.id)).toEqual(["desk.select", "pan"]);
   });
 
   it("says DESK_READY once ready AND the first frame presented — and after CANVAS_READY", async () => {

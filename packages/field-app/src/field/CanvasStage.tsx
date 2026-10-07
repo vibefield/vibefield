@@ -1,6 +1,6 @@
 import type { CanvasEngine } from "@vibecook/ice";
 import { type DeskLayerHandle, type DeskLayerStatus, objectKindOf } from "@vibecook/ice/desk";
-import { Desk, type KeymapEntry, type LayerFactory } from "@vibecook/ice/react";
+import { Desk, type LayerFactory } from "@vibecook/ice/react";
 import {
   type ReactElement,
   useCallback,
@@ -63,8 +63,6 @@ import { PeersOnTheMat } from "./desk/peers/PeersOnTheMat";
 
 export interface CanvasStageProps {
   ce: CanvasEngine;
-  /** FieldView's stable override entries (I1, ice 0.4.0 — field-keymap.ts). */
-  keymapOverrides: readonly KeymapEntry[];
   /** The document generation this stage was keyed on (DESK_READY and the door say it). */
   generation: number;
   /** A board refused at open (ruling 7 — from before the desk): the card, and no desk at all. */
@@ -78,7 +76,6 @@ const KINDS_UNCHANGED = (): number => 0;
 
 export function CanvasStage({
   ce,
-  keymapOverrides,
   generation,
   refused = null,
   kinds,
@@ -331,7 +328,7 @@ export function CanvasStage({
   const drawing = !retrying && (status.state === "ready" || status.state === "degraded");
   return (
     <div className="field-canvas" data-desk={retrying ? "retrying" : status.state}>
-      <Desk engine={ce} layer={layer} keymapOverrides={keymapOverrides} onReady={onReady}>
+      <Desk engine={ce} layer={layer} onReady={onReady}>
         <PeersOnTheMat drawing={drawing} />
       </Desk>
       {words === null ? null : <DeskUnavailableView words={words} onReload={remount} />}

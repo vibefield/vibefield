@@ -5,8 +5,9 @@
  * module exports, and a type no kind draws FACELESS (DK-8: the legacy `widgets`
  * rows it also compiled faceless retired with `contributes.widgets`); the engine
  * is ICE's desk preset; the ghost-stub
- * filter reads the engine's full pack scope; an illegal tool is refused, never
- * thrown. All headless — a unit over the registry and the engine, no GPU.
+ * filter reads the engine's full pack scope. All headless — a unit over the
+ * registry and the engine, no GPU. (DK-17: the field's tool switcher left — the
+ * desk's keymap drops a tool its canvas does not allow, canvas-stage-desk.test.)
  */
 import {
   Camera,
@@ -20,12 +21,7 @@ import { objectKindOf } from "@vibecook/ice/desk";
 import type { PluginManifestV1 } from "@vibefield/contracts";
 import type { ObjectBinding, ObjectKind } from "@vibefield/plugin-sdk/desk";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import {
-  buildRegistry,
-  createFieldEngine,
-  fieldPackScope,
-  setFieldTool,
-} from "../src/field-engine";
+import { buildRegistry, createFieldEngine, fieldPackScope } from "../src/field-engine";
 import { getRendererLogger, type RendererLogger, setRendererLogger } from "../src/logging";
 import { buildFacelessType, buildObjectType } from "../src/plugin-host/build-widget";
 import { buildGhostWidgetTypes } from "../src/plugin-host/ghost-stubs";
@@ -268,17 +264,6 @@ describe("DK-2 — the engine is ICE's desk preset", () => {
     for (const kind of ["desk.note", "desk.minimat", "desk.board", "desk.photo"])
       expect(objectKindOf(ce.catalog.widget(kind))).toBeDefined();
     expect(ce.canvas.tools().map((tool) => tool.id)).toEqual(["desk.select", "pan"]);
-    ce.dispose();
-  });
-
-  it("refuses a tool the desk does not allow — never a throw out of the renderer", () => {
-    const ce = createFieldEngine(buildRegistry({ generation: -1, staged: [], bundled: [] }));
-    ce.docs.create();
-    expect(setFieldTool(ce, "connect")).toBe(false);
-    expect(setFieldTool(ce, "select")).toBe(false);
-    expect(logged.filter((line) => line.event === "renderer.canvas.tool_refused")).toHaveLength(2);
-    expect(setFieldTool(ce, "pan")).toBe(true);
-    expect(setFieldTool(ce, "desk.select")).toBe(true);
     ce.dispose();
   });
 });

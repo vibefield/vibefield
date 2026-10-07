@@ -24,7 +24,6 @@ import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
 import { CoverStill } from "./field/desk/CoverStill";
 import { BEFORE_THE_DESK } from "./field/desk/desk-words";
-import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import type { FrameSurface } from "./frame/frame-surface";
 import { useActiveView } from "./frame/view-state";
@@ -312,11 +311,6 @@ export function FieldView({
     [dark, effectiveAppearance],
   );
 
-  // I1 (ice 0.4.0): the field's overrides ride the engine keymap's own override
-  // surface — stable entries (field-keymap.ts; DK-8: `c` refuses the connect
-  // tool, the comment command left with field-tools).
-  const keymapOverrides = useFieldKeymapOverrides();
-
   return (
     <div
       className="field-wrap"
@@ -354,7 +348,6 @@ export function FieldView({
         {generation === 0 ? null : (
           <CanvasStage
             ce={ce}
-            keymapOverrides={keymapOverrides}
             generation={generation}
             refused={refused ? BEFORE_THE_DESK : null}
             {...(kinds === undefined ? {} : { kinds })}

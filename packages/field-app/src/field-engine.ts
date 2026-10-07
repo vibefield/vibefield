@@ -358,33 +358,6 @@ export function createFieldEngine(
   return ce;
 }
 
-/** The tools legal on the canvas in view (the desk's are `desk.select` and `pan`). */
-function legalTool(ce: CanvasEngine, id: string): boolean {
-  return ce.canvas.tools().some((tool) => tool.id === id);
-}
-
-/** `ops.setTool` for callers that name a tool the canvas may not allow (DK-D29: the
- * Select/Pan/Wire switcher and `c`→connect retire; ICE THROWS for a tool illegal in
- * the current canvas type). An illegal id is REFUSED — logged once per id, `false`
- * returned — never a throw out of the renderer. */
-const refusedTools = new Set<string>();
-export function setFieldTool(ce: CanvasEngine, id: string): boolean {
-  if (legalTool(ce, id)) {
-    ce.ops.setTool(id);
-    return true;
-  }
-  if (!refusedTools.has(id)) {
-    refusedTools.add(id);
-    getRendererLogger()
-      .child({ component: "canvas.tools" })
-      .warn("renderer.canvas.tool_refused", "A tool not legal on the desk was refused", {
-        tool: id,
-        legal: ce.canvas.tools().map((tool) => tool.id),
-      });
-  }
-  return false;
-}
-
 function pluginIdForBehavior(behaviorId: string): string | undefined {
   const separator = behaviorId.indexOf(":");
   return separator > 0 ? behaviorId.slice(0, separator) : undefined;
