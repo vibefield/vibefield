@@ -9,6 +9,9 @@
  * `attachPresence` on worlds of their own — whose bytes reach the host's session as a lane hands them (`wire.apply`), core's
  * recipe: Loro's throttle runs on the wasm clock, so a room converges by short real waits, deadline-polled.
  */
+
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import {
   attachPresence,
   Camera,
@@ -25,8 +28,6 @@ import {
 } from "@vibecook/ice";
 import { MINIMAT_TYPE } from "@vibecook/ice/desk/objects";
 import { EngineProvider } from "@vibecook/ice/react";
-import { readFileSync } from "node:fs";
-import { join } from "node:path";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -589,7 +590,9 @@ describe("the look — the canon's numbers, in the stylesheet (DESIGN.md §8 'Pe
     expect(chip).toMatch(/0 0 0 1px var\(--vf-hairline\)/);
     // by night 94 %, the strong hairline, the 6 % top light
     const night = rule(".dark .vf-peer__chip");
-    expect(night).toContain("background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);");
+    expect(night).toContain(
+      "background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);",
+    );
     expect(night).toMatch(/0 0 0 1px var\(--vf-hairline-strong\)/);
     expect(night).toContain("inset 0 1px 0 rgb(255 255 255 / 6%)");
     // never the peer's colour (I-1): the chip names no presence colour at all
@@ -604,7 +607,9 @@ describe("the look — the canon's numbers, in the stylesheet (DESIGN.md §8 'Pe
     expect(rule(".vf-peer__arrow")).toContain("filter: drop-shadow(0 1px 2px rgb(0 0 0 / 25%));");
     const tokens = readFileSync(join(process.cwd(), "../design-kit/src/tokens.css"), "utf8");
     // one edge in both themes: paper white
-    expect([...tokens.matchAll(/--vf-presence-edge:\s*([^;]+);/gu)].map((m) => m[1])).toEqual(["#ffffff"]);
+    expect([...tokens.matchAll(/--vf-presence-edge:\s*([^;]+);/gu)].map((m) => m[1])).toEqual([
+      "#ffffff",
+    ]);
   });
 
   it("never takes a pointer, and stands hidden whole or one by one by its verdict", () => {
