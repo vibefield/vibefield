@@ -36,7 +36,7 @@ describe("host singleton addresses", () => {
     // — the failure would look like a version mismatch, not like a name clash.
     expect(new Set(slugs).size).toBe(slugs.length);
     for (const slug of slugs) expect(slug).toMatch(/^[a-z0-9-]+$/);
-    expect(singletonSlug("@react-three/fiber")).toBe("react-three-fiber");
+    expect(singletonSlug("@vibecook/ice/desk/engine")).toBe("vibecook-ice-desk-engine");
     expect(singletonSlug("react/jsx-runtime")).toBe("react-jsx-runtime");
     expect(singletonChunkName("react")).toBe(`${SINGLETON_CHUNK_PREFIX}react`);
   });

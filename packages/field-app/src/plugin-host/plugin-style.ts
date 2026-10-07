@@ -4,8 +4,10 @@
  *
  * Stylesheet order is deliberately NOT part of the isolation contract. `plugin-build` scopes
  * every selector beneath the plugin's `data-vf-plugin` boundary and the host mounts that boundary
- * around each DOM widget and contributed surface (spec §11.5). Reordering links would only choose
- * which global rule wins and would regress as soon as another plugin or HMR node arrived. */
+ * around each contributed HUD surface (spec §11.5; the per-widget boundary left with the widget
+ * faces — DK-8, the retire table's plugin-host row — and a kind has no CSS). Reordering links would
+ * only choose which global rule wins and would regress as soon as another plugin or HMR node
+ * arrived. */
 export interface PluginStyleCandidate {
   commit(): void;
   dispose(): void;
