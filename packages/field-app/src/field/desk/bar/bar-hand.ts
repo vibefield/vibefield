@@ -1,12 +1,11 @@
 import type { HeldGlyph } from "@vibecook/ice";
-import type { SelectionAnchor } from "@vibecook/ice/desk";
+import type { HeldAnchor, HeldSlot } from "@vibecook/ice/desk";
 import { tipOf } from "./bar-model";
 
-/** The hand as the anchor carries it (ICE's `HeldAnchor` — named by its docs, reached through the anchor's `held`:
- * `@vibecook/ice/desk` exports `SelectionAnchor` and not the two names, so they are read off it here). */
-export type HeldAnchor = NonNullable<SelectionAnchor["held"]>;
-/** One of the hand's slots (ICE's `HeldSlot`): id, label, kind, hint, glyph, swatch — plain data. */
-export type HeldSlot = HeldAnchor["tools"][number];
+/** The hand as the anchor carries it (`SelectionAnchor["held"]`) and one of its slots — id, label, kind, hint, glyph,
+ * swatch, plain data: ICE's own `HeldAnchor` and `HeldSlot`, exported from `@vibecook/ice/desk` since desk.5 (I36), handed
+ * on here to the bar and the catalog's plates. */
+export type { HeldAnchor, HeldSlot };
 
 // THE TOOLS IN HAND (DK-12; DESIGN.md §8 "Tools in hand"; MC-D4, MC-D9; R2, R13; ICE I20, I22). Pure: what the bar
 // says while an object is IN HAND — the anchor's `held` (`HeldAnchor`: the kind's slots, the mode in hand, its word)
