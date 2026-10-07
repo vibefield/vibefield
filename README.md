@@ -21,7 +21,7 @@ a private mesh across machines, and an iPhone companion.
 | `packages/screenshot` | `@vibefield/screenshot` — Node-only host of the native screenshot helper (SNAP track): spawns one `--once` helper, reads its one-line protocol (`contracts/src/screenshot.ts`), owns the timers and the still ring; Electron main composes it, wall R19 keeps Electron out |
 | `packages/electron-shell` | Electron main + preload + the tiny renderer host, and the renderer's vite build — a composition root with no product logic |
 | `packages/field-app` | the browser-compatible renderer product: boot machine, DocManager, the FieldView units (session/canvas/persistence/chrome/previews), HUD |
-| `packages/design-kit` | the design kit — CardShell, tokens, GL card chrome (DESIGN.md made code) |
+| `packages/design-kit` | the design kit — tokens, primitives, glyphs, the face and the logo (DESIGN.md made code; its DOM and GL card dressing left with the desk, DK-17) |
 | `packages/plugin-runtime` | plugin manifest / registry / renderer context (P0 core of the design-03 plugin system) |
 | `plugins/*` | built-in plugins at the repo root (product actors beside the platform — plugin spec §5.1): `comment-pad` (the comment pad — VibeField's own object kind, DK-8), `browser` (the Artifact Hub panel) |
 

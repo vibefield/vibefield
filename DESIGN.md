@@ -322,7 +322,7 @@ everywhere except eyebrows.
 
 | Token | Value | Notes |
 |---|---|---|
-| `--vf-radius-card` | `22px` | THE card radius (CardShell `CARD_RADIUS`); scaled minis use `max(6, 22 × scale)` — silhouette is preserved, never re-styled |
+| `--vf-radius-card` | `22px` | THE card radius (the DOM card's `CARD_RADIUS` until DK-17 deleted it; the token stays the chrome's); scaled minis use `max(6, 22 × scale)` — silhouette is preserved, never re-styled |
 | `--vf-radius-island` | `32px` | the closed HUD pill |
 | `--vf-radius-sheet` | `40px` | sheet top corners (open island) |
 | `--vf-radius-control` | `6–10px` | inline controls, change badges (`rounded` ≈ 4–6 for tiny) |
@@ -557,8 +557,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   (DK-D2, ruled 2026-09-25; ICE design-015 §2): on the Canvas view no widget is a DOM tree in a
   DOM plane — an object kind draws its face, its compact form at a small zoom, its shadow and its
   lift on the GPU, the mat's marks are its selection (the desk's chrome, below), and the only DOM
-  over the desk is screen-space chrome and the one focused editor. This anatomy stays true of the
-  0.11 canvas until the cutover; CardShell retires at DK-17.
+  over the desk is screen-space chrome and the one focused editor. *Retired 2026-10-07 (DK-17):*
+  CardShell and this anatomy left the design kit with the 0.11 canvas — the record of the card that was.
 - **HUD island**: one morphing element (§6 M1), island material, centered-bottom;
   `64px` closed; opens to a sheet with pull bar (48×6 rounded-full, `black/20`),
   morphing ⊕→✕ (135° rotation), edge-fade scroll masks, no visible scrollbars.
