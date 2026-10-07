@@ -490,13 +490,22 @@ arrives, and neither runs under reduced motion.
 **The view switch (One Frame §12, FC-D13; ruled 2026-10-01, built 2026-10-03).** The canvas is the
 ground floor (FV-D1); every other view is ONE cover over it (§10). From Canvas the cover fades in
 over 240ms plain `ease` and settles `scale(1.012) → 1` over 560ms on the island curve — Godview's
-open as it shipped — while the field recedes to `scale(0.98)` (600ms, island) and freezes: a cover
-covers, so it takes M5's freeze, not the sheets' hold. Between covered views the cover stays put
-and only its content changes, in place: a 180ms `ease` fade, no second settle. Back to Canvas the
-cover lowers — the rise reversed, 240ms out to 1.012 — and the field comes forward and thaws.
-**The frame never moves**: only the views track's thumb travels (300ms, island; §8). Reduced
-motion (M6): fades only, halved — the cover 120ms, its content 90ms; no settle, no recede, the
-thumb lands without travelling or dipping.
+open as it shipped — over the LIVE desk while its last frame is captured; the desk's STILL, blurred
+once, then swaps in under the cover and the desk freezes (§8, the covers over the desk): a cover
+covers, so it takes M5's freeze, not the sheets' hold. The still recedes to `scale(0.98)` over 560ms
+on the island curve, transform only; the field itself never recedes under a cover. Between covered
+views the cover stays put and only its content changes, in place: a 180ms `ease` fade, no second
+settle. Back to Canvas the cover lowers — the rise reversed, 240ms out to 1.012 — and the desk thaws
+first and shows at once, at scale 1, under it, the still dropped. **The frame never moves**: only
+the views track's thumb travels (300ms, island; §8). Reduced motion (M6): fades only, halved — the
+cover 120ms, its content 90ms; no settle, no recede, the thumb lands without travelling or dipping.
+*Amended 2026-10-07 (DK-16, as DK-15 built it — `field/desk/cover-still.ts`; plan addendum (64)):*
+this said the field "recedes to `scale(0.98)` (600ms, island) and freezes" and, back to Canvas,
+"comes forward and thaws". On the desk the scene no longer recedes under a cover — the still does —
+so no transform reaches the desk's own box while a cover stands (a desk measured under a transform
+drew ~2% small: ICE I39, fixed at desk.5); and back to Canvas nothing comes forward: the live desk is
+shown at once under the lowering cover (DK-15's reading 1, ruled at (67)). The 600 here was the
+island curve's morph, never the recede's (§8).
 
 **The file pill's own curve retired (One Frame F14; 2026-10-03, FR-3).** The head's name pill grows
 into the fields explorer as every other morph does — 600ms on the island curve (M1), the pill's own
@@ -1501,11 +1510,18 @@ The hot-point glow and rim retire with CardShell (above).
   reads `New · Under Work`, an agent the profile has no sign-in for marked `no sign-in`. Reduced motion:
   no travel, overshoot or turning; 90ms fades; the body appears.
 - **The terminal preview is Godview in miniature** (GT-7): a preview of how terminals will
-  look mounts Godview's OWN parts over a depiction of the canvas — `GodviewStage` with the
-  saved backdrop, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
+  look mounts Godview's OWN parts over a depiction of the canvas — `GodviewStage` with its
+  ground, the scanlines and vignette, `PaneFrameChrome`'s bands — never a painted
   imitation of a terminal. Its glass is named in the order light passes through it: the
-  pane's opacity · Godview's backdrop (opacity and blur, `--vf-godview-stage-opacity/-blur`;
-  the covers' 72% and sharp by default — FC-D16, 2026-10-03; it was opaque) · your canvas.
+  pane's opacity · Godview's cover (the covers' 72%, `--vf-godview-stage-opacity`, with no
+  backdrop filter — FC-D16) · your canvas, on the desk a still of it blurred once (§8, the
+  covers over the desk). *Amended 2026-10-07 (DK-16, as DK-15 built it):* this named "the saved
+  backdrop" and a middle layer the viewer set — "Godview's backdrop (opacity and blur,
+  `--vf-godview-stage-opacity/-blur`; the covers' 72% and sharp by default — FC-D16, 2026-10-03; it
+  was opaque)". On the desk that backdrop retired (the deck's note, above): Settings → Terminal →
+  Look → Glass is two layers, each terminal's ground then Godview's cover over your canvas, and the
+  miniature's stage is the fixed 72% over its stand-in canvas, left unblurred, saying so ("over
+  Godview's cover: the covers' glass at 72% over a still of your desk").
   Variants: `window` (on the page), `deck` (the
   theme browser's stage), `thumb` (a 600px window scaled, docked in the corner once the big
   one scrolls away, and minimizable to a pill). It is `inert` inside a `role="img"` with a
