@@ -2,11 +2,9 @@ import type { ThemePreference } from "@vibefield/contracts";
 import { SegmentedControl as UiSegmentedControl, UnavailableState } from "@vibefield/design-kit";
 import type { ArtifactPanelPreviewState } from "@vibefield/plugin-browser/design-system";
 import { type ReactElement, useState } from "react";
-import type { MagnetGridGlyph } from "../../field/canvas-appearance";
 import { LoadingVeilView } from "../../hud/LoadingVeil";
 import { AppearanceSectionView } from "../../panels/AppearanceSection";
 import { ProfileMark } from "../../panels/agents/ProfilesView";
-import { MagnetGridSection } from "../../panels/MagnetGridSection";
 import {
   SettingsDialog,
   type SettingsPage,
@@ -28,13 +26,7 @@ import {
 import { TerminalSettingsPreview } from "../TerminalSettingsPreview";
 import { TERMINAL_FIXTURE_STATES, type TerminalFixtureState } from "../terminal-settings-fixtures";
 
-export function SurfacesSection({
-  magnetGridGlyph,
-  onMagnetGridGlyphChange,
-}: {
-  magnetGridGlyph: MagnetGridGlyph;
-  onMagnetGridGlyphChange: (glyph: MagnetGridGlyph) => void;
-}): ReactElement {
+export function SurfacesSection(): ReactElement {
   const [appearancePick, setAppearancePick] = useState<ThemePreference>("auto");
   const [settingsPage, setSettingsPage] = useState<SettingsPage>("appearance");
   // A press on a nav item returns to that page's top (the Agents shelf).
@@ -75,8 +67,6 @@ export function SurfacesSection({
             {settingsPage === "appearance" ? (
               // The shipping Appearance page (One Frame FC-D5), on fixture state.
               <AppearanceSectionView preference={appearancePick} onChange={setAppearancePick} />
-            ) : settingsPage === "canvas" ? (
-              <MagnetGridSection glyph={magnetGridGlyph} onGlyphChange={onMagnetGridGlyphChange} />
             ) : settingsPage === "agents" ? (
               <AgentsSettingsPreview
                 key={settingsVisit}

@@ -7,9 +7,8 @@ interface ProductProbe {
   appearanceRevision: string | null;
   /** The product's theme, so the canvas ground probed is the one it projects. */
   theme: "light" | "dark";
-  /** `.field-wrap`'s `--vf-canvas-bg` — the appearance a DESK build still consumes (DK-3): the
-   * body's ground, the unavailable card's. The magnet reach and the `--ic-rim-radius` these probes
-   * read until DK-3 drove the 0.11 magnet grid and the DOM card rim, neither of which exists. */
+  /** `.field-wrap`'s `--vf-canvas-bg` — the whole appearance a DESK build consumes (DK-3, DK-17's
+   * v4 document): the body's ground, the unavailable card's. */
   canvasBg: string;
   /** The product's own disclosure of the preview it shows (studio-product-indicator.ts). */
   indicatorRevision: string | null;

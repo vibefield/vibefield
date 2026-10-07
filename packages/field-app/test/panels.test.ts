@@ -72,7 +72,6 @@ function mount(node: ReactElement): void {
 describe("widgetlab panels", () => {
   it("SettingsPanel presents categorized pages and preserves the canvas tools", async () => {
     const engine = makeEngine();
-    const onMagnetGridGlyphChange = vi.fn();
     // SystemSection (diagnostics live inside Settings) reads the fieldd hooks —
     // a provider with a never-connected client renders the honest idle state.
     const client = new FielddClient({ url: "ws://127.0.0.1:1", token: "test" });
@@ -82,9 +81,6 @@ describe("widgetlab panels", () => {
         { client },
         createElement(SettingsPanel, {
           engine,
-          magnetGridGlyph: "dot",
-          onMagnetGridGlyphChange,
-          appearanceControlledByStudio: true,
           onClose: () => {},
         }),
       ),
@@ -122,17 +118,14 @@ describe("widgetlab panels", () => {
     act(() => category("Canvas")?.click());
     expect(container?.textContent).not.toContain("World grid");
     expect(container?.textContent).not.toContain("Magnetic dots");
-    expect(container?.textContent).toContain("Magnet glyph");
-    expect(container?.textContent).toContain("Controlled by Studio");
+    // DK-17: the magnet's glyph picker and "All card opacity" left with the 0.11 ground and the DOM card
+    // (the retire table's magnet/world-grid row) — the canvas page keeps navigation and snapping.
+    expect(container?.textContent).not.toContain("Magnet glyph");
+    expect(container?.querySelector('fieldset[aria-label="Magnet glyph"]')).toBeNull();
+    expect(container?.textContent).not.toContain("All card opacity");
     expect(container?.textContent).toContain("Zoom range");
     expect(container?.textContent).toContain("Card behavior");
-    const glyphControl = container?.querySelector('fieldset[aria-label="Magnet glyph"]');
-    const glyphButtons = Array.from(glyphControl?.querySelectorAll("button") ?? []);
-    expect(
-      glyphButtons.find((button) => button.textContent === "Dot")?.getAttribute("aria-pressed"),
-    ).toBe("true");
-    act(() => glyphButtons.find((button) => button.textContent === "Needle")?.click());
-    expect(onMagnetGridGlyphChange).toHaveBeenCalledWith("needle");
+    expect(container?.textContent).toContain("Snap range");
     const numberInputs = container?.querySelectorAll('input[type="number"]');
     expect(numberInputs?.length ?? 0).toBeGreaterThan(0);
 
@@ -173,8 +166,6 @@ describe("widgetlab panels", () => {
         { client },
         createElement(SettingsPanel, {
           engine,
-          magnetGridGlyph: "dot",
-          onMagnetGridGlyphChange: () => undefined,
           initialPage: "advanced",
           devtools: { open: false, onToggle },
           onClose: () => {},
@@ -215,8 +206,6 @@ describe("widgetlab panels", () => {
         { client },
         createElement(SettingsPanel, {
           engine,
-          magnetGridGlyph: "dot",
-          onMagnetGridGlyphChange: () => {},
           onClose: () => {},
         }),
       ),

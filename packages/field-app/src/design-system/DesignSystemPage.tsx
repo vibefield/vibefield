@@ -1,6 +1,5 @@
 import { type ReactElement, useEffect, useState, useSyncExternalStore } from "react";
 import { defaultProductAppearance } from "../appearance/product-appearance";
-import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { ThemeToggleButton } from "../ThemeToggleButton";
 import { BrandMark } from "./catalog-ui";
 import { CanvasGroundSection } from "./sections/CanvasGroundSection";
@@ -73,7 +72,6 @@ export function DesignSystemPage({
 }): ReactElement {
   const [dark, setDark] = useState(initialDark);
   const [activeSection, setActiveSection] = useState("overview");
-  const [magnetGridGlyph, setMagnetGridGlyph] = useState<MagnetGridGlyph>("dot");
   const [catalogAppearance, setCatalogAppearance] = useState(defaultProductAppearance);
   const studioSource = studio ?? CATALOG_STUDIO_CONTROLLER;
   const studioState = useSyncExternalStore(studioSource.subscribe, studioSource.snapshot);
@@ -135,10 +133,7 @@ export function DesignSystemPage({
         <StatusSection />
         <ChromeSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <CardsSection />
-        <SurfacesSection
-          magnetGridGlyph={magnetGridGlyph}
-          onMagnetGridGlyphChange={setMagnetGridGlyph}
-        />
+        <SurfacesSection />
         <LiveSurfacesSection />
         <OnboardingSection dark={dark} onToggleTheme={() => setDark((value) => !value)} />
         <GodviewSection dark={dark} />

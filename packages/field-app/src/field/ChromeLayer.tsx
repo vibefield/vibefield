@@ -35,14 +35,12 @@ import { ArtifactsTray, ClipboardTray } from "../hud/edge-tray/EdgeTray";
 import { LoadingVeil } from "../hud/LoadingVeil";
 import { PluginSurfaceHost } from "../hud/PluginSurfaceSlot";
 import { SettingsPanel } from "../panels";
-import type { MagnetGridGlyph } from "./canvas-appearance";
 import { SelectionBar } from "./desk/bar/SelectionBar";
 import { useBoardFacts } from "./desk/pegboard/board-door";
 import { Pegboard } from "./desk/pegboard/Pegboard";
 import { useSettingsChord } from "./me-menu-wiring";
 import { isCommandPaletteChord, listenForProductChord } from "./product-chords";
 import { INITIAL_SHELL_PRESENTATION, reduceShellPresentation } from "./shell-presentation";
-import { useMagnetGridGlyph } from "./use-magnet-grid-glyph";
 
 // ChromeLayer (§5.4.3): the head, the pegboard's chrome (Objects, behind the
 // line — the board itself is the desk's), the edges, the corner, settings, and
@@ -65,22 +63,12 @@ export interface ChromeState {
   setShowSettings: Dispatch<SetStateAction<boolean>>;
   showEcs: boolean;
   setShowEcs: Dispatch<SetStateAction<boolean>>;
-  magnetGridGlyph: MagnetGridGlyph;
-  setMagnetGridGlyph: (glyph: MagnetGridGlyph) => void;
 }
 
 export function useChromeState(): ChromeState {
   const [showSettings, setShowSettings] = useState(false);
   const [showEcs, setShowEcs] = useState(false);
-  const { magnetGridGlyph, setMagnetGridGlyph } = useMagnetGridGlyph();
-  return {
-    showSettings,
-    setShowSettings,
-    showEcs,
-    setShowEcs,
-    magnetGridGlyph,
-    setMagnetGridGlyph,
-  };
+  return { showSettings, setShowSettings, showEcs, setShowEcs };
 }
 
 export function ChromeLayer({
@@ -90,7 +78,6 @@ export function ChromeLayer({
   docState,
   surface,
   onSurfaceChange,
-  appearanceControlledByStudio,
   chrome,
 }: {
   ce: CanvasEngine;
@@ -101,7 +88,6 @@ export function ChromeLayer({
    * setter — FieldView's, where the explorer's recede is computed. */
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
-  appearanceControlledByStudio: boolean;
   chrome: ChromeState;
 }): ReactElement {
   const { showSettings, setShowSettings, showEcs } = chrome;
@@ -358,9 +344,6 @@ export function ChromeLayer({
           stressWidgetType="desk.note"
           platform={getHost().platform ?? "other"}
           desktopState={desktopState}
-          magnetGridGlyph={chrome.magnetGridGlyph}
-          onMagnetGridGlyphChange={chrome.setMagnetGridGlyph}
-          appearanceControlledByStudio={appearanceControlledByStudio}
           diagnosticsRequest={shellPresentation.diagnosticsRequest}
           diagnosticsInitiallyOpen={shellPresentation.target === "diagnostics"}
           initialPage={shellPresentation.target === "account" ? "account" : "general"}

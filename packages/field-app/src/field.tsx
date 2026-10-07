@@ -304,8 +304,8 @@ export function FieldView({
   const hudMotion = docState.phase === "loading" ? "out" : hudReturning ? "in" : "idle";
 
   const effectiveAppearance = useMemo(
-    () => effectiveProductAppearance(appearanceOverride.appearance, chrome.magnetGridGlyph),
-    [appearanceOverride.appearance, chrome.magnetGridGlyph],
+    () => effectiveProductAppearance(appearanceOverride.appearance),
+    [appearanceOverride.appearance],
   );
   const effectiveAppearanceStyle = useMemo(
     () => productAppearanceCssVariables(effectiveAppearance, dark) as CSSProperties,
@@ -372,7 +372,6 @@ export function FieldView({
         docState={docState}
         surface={surface}
         onSurfaceChange={setSurface}
-        appearanceControlledByStudio={appearanceOverride.appearance !== null}
         chrome={chrome}
       />
     </div>

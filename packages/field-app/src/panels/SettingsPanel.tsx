@@ -1,15 +1,4 @@
-import {
-  CameraLimits,
-  type CanvasEngine,
-  defineQuery,
-  type Entity,
-  guardedTransaction,
-  Opacity,
-  PrefabId,
-  SnapConfig,
-  widgets,
-  writeRuntimeResource,
-} from "@vibecook/ice";
+import { CameraLimits, type CanvasEngine, SnapConfig, writeRuntimeResource } from "@vibecook/ice";
 import {
   AgentsProfileSetsListResult,
   type DesktopShellState,
@@ -29,7 +18,6 @@ import {
 } from "react";
 import { refusalSentence, useAccountSnapshot } from "../account/use-account";
 import { leaveFor } from "../boot/switch";
-import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { getHost } from "../host";
 import { AccountSection } from "./AccountSection";
 import { AppearanceSection } from "./AppearanceSection";
@@ -39,7 +27,6 @@ import { ProfileMark } from "./agents/ProfilesView";
 import { profileNavItems } from "./agents/profiles-model";
 import { DeskReadout } from "./DeskReadout";
 import { DesktopSection } from "./DesktopSection";
-import { MagnetGridSection } from "./MagnetGridSection";
 import { MeshSection } from "./MeshSection";
 import { PluginsSection } from "./PluginsSection";
 import {
@@ -72,9 +59,6 @@ interface SettingsPanelProps {
   stressWidgetType?: string;
   platform?: ShellPlatform;
   desktopState?: DesktopShellState | null;
-  magnetGridGlyph: MagnetGridGlyph;
-  onMagnetGridGlyphChange: (glyph: MagnetGridGlyph) => void;
-  appearanceControlledByStudio?: boolean;
   diagnosticsRequest?: number;
   diagnosticsInitiallyOpen?: boolean;
   /** The page to open on when diagnostics was not asked for — the Me menu
@@ -86,8 +70,6 @@ interface SettingsPanelProps {
   devtools?: { open: boolean; onToggle: () => void };
   onClose: () => void;
 }
-
-const widgetQuery = defineQuery([PrefabId]);
 
 function NumberField({
   label,
@@ -176,9 +158,6 @@ export function SettingsPanel({
   stressWidgetType,
   platform = "other",
   desktopState = null,
-  magnetGridGlyph,
-  onMagnetGridGlyphChange,
-  appearanceControlledByStudio = false,
   diagnosticsRequest = 0,
   diagnosticsInitiallyOpen = false,
   initialPage = "general",
@@ -310,7 +289,6 @@ export function SettingsPanel({
   const snapConfig = engine.world.getResource(SnapConfig);
   const [snapEnabled, setSnapEnabled] = useState(snapConfig?.enabled ?? true);
   const [snapThreshold, setSnapThreshold] = useState(snapConfig?.thresholdPx ?? 5);
-  const [cardOpacity, setCardOpacity] = useState(1);
   const [breakpointMicro, setBreakpointMicro] = useState(80);
   const [breakpointCompact, setBreakpointCompact] = useState(160);
   const [breakpointNormal, setBreakpointNormal] = useState(320);
@@ -429,34 +407,6 @@ export function SettingsPanel({
     writeRuntimeResource(engine.world, SnapConfig, { enabled, thresholdPx });
   };
 
-  const applyCardOpacity = (opacity: number): void => {
-    setCardOpacity(opacity);
-    const session = engine.docs.current();
-    if (session === undefined || session.readOnly) return;
-    const targets: Entity[] = [];
-    engine.world.query(widgetQuery).each((batch) => {
-      for (const row of batch) {
-        const entity = batch.entity(row);
-        const type = engine.world.get(entity, PrefabId)?.id;
-        if (typeof type === "string" && widgets.get(type) !== undefined) targets.push(entity);
-      }
-    });
-    guardedTransaction(
-      session.store,
-      engine.world,
-      (transaction) => {
-        for (const entity of targets) {
-          if (engine.world.get(entity, Opacity) === undefined) {
-            transaction.addComponent(entity, Opacity, { a: opacity });
-          } else {
-            transaction.edit(entity).set(Opacity, { a: opacity });
-          }
-        }
-      },
-      { undoable: false },
-    );
-  };
-
   const spawnStressWidgets = (count: number): void => {
     if (stressWidgetType === undefined || engine.docs.current() === undefined) return;
     const columns = Math.ceil(Math.sqrt(count));
@@ -550,15 +500,9 @@ export function SettingsPanel({
           </SettingsRow>
         </SettingsSection>
 
-        <MagnetGridSection
-          glyph={magnetGridGlyph}
-          onGlyphChange={onMagnetGridGlyphChange}
-          controlledByStudio={appearanceControlledByStudio}
-        />
-
         <SettingsSection
           title="Card behavior"
-          description="Live controls for card alignment and visibility on the open document."
+          description="Live controls for card alignment on the open document."
         >
           <SettingsRow
             title="Snap cards"
@@ -573,6 +517,7 @@ export function SettingsPanel({
           <SettingsRow
             title="Snap range"
             description="Distance in screen pixels at which guides engage."
+            divider={false}
           >
             <SliderControl
               label="Snap range"
@@ -583,21 +528,6 @@ export function SettingsPanel({
               disabled={!snapEnabled}
               display={`${snapThreshold}px`}
               onChange={(value) => applySnap(snapEnabled, value)}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title="All card opacity"
-            description="Applies immediately to every widget in the current document. This live tuning change is not part of settings history."
-            divider={false}
-          >
-            <SliderControl
-              label="All card opacity"
-              value={cardOpacity}
-              min={0.1}
-              max={1}
-              step={0.05}
-              display={cardOpacity.toFixed(2)}
-              onChange={applyCardOpacity}
             />
           </SettingsRow>
         </SettingsSection>

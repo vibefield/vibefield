@@ -11,65 +11,28 @@ import {
   VisualTweakDocumentError,
 } from "../src/appearance/product-appearance-document";
 
-describe("visual tweak document", () => {
-  it("uses the reviewed exported preset as the complete product default", () => {
-    expect(defaultProductAppearance()).toEqual({
-      canvasPalette: {
-        dotLight: "#A6A6A6",
-        dotDark: "#1C1C1C",
-        magnetDotDark: "#8A8A8A",
-        bgLight: "#FAFAFA",
-        bgDark: "#171717",
-      },
-      worldGrid: {
-        spacings: [25, 50, 100],
-        dotAlpha: 1,
-        fadeIn: [20, 30],
-        fadeOut: [90, 100],
-        dotRadius: [1.5, 1.5],
-        levelWeight: [1, 0],
-      },
-      magnetGrid: {
-        glyph: "dot",
-        reach: 60,
-        polarity: 1,
-        widgets: true,
-        widgetStrength: 0.1,
-        widgetRadius: 12,
-        alwaysAlign: false,
-        needleLength: 5,
-        needleWidth: 0.55,
-        maxSources: 256,
-        fadeZoom: 0,
-      },
-      overlapFeedback: {
-        colors: {
-          glowLight: "#FFFFFF",
-          glowDark: "#6E6E6E",
-          rimLight: "#E0E0E0",
-          rimDark: "#5C5C5C",
-        },
-        glowAlpha: [0.25, 0.5],
-        glowSize: [60, 60],
-        rimAlpha: [0.55, 0.85],
-        rimWidth: 1.5,
-        rimRadius: 600,
-      },
-    });
-  });
-
-  it("round-trips every canvas, world-grid, magnet-grid, and overlap property", () => {
-    const values = defaultProductAppearance();
-    values.canvasPalette.bgLight = "#123456";
-    values.canvasPalette.dotDark = "#ABCDEF";
-    values.canvasPalette.magnetDotDark = "#FEDCBA";
-    values.worldGrid.spacings = [12, 96, 768];
-    values.worldGrid.dotAlpha = 0.72;
-    values.worldGrid.fadeIn = [5, 18];
-    values.worldGrid.fadeOut = [140, 360];
-    values.worldGrid.dotRadius = [0.5, 1.25];
-    values.worldGrid.levelWeight = [0.9, -0.1];
-    values.magnetGrid = {
+/** A version-3 export exactly as the v3 writer made it (DK-17's base, `c32ecf92`) — the shape James's
+ * machines hold: the plain ground beside the 0.11 ground's tuning and the DOM card's overlap feedback. */
+function v3Export(): Record<string, unknown> {
+  return {
+    kind: "vibefield.visual-tweaks",
+    version: 3,
+    canvasPalette: {
+      dotLight: "#A6A6A6",
+      dotDark: "#1C1C1C",
+      magnetDotDark: "#8A8A8A",
+      bgLight: "#F2EAD3",
+      bgDark: "#1E2A22",
+    },
+    worldGrid: {
+      spacings: [25, 50, 100],
+      dotAlpha: 1,
+      fadeIn: [20, 30],
+      fadeOut: [90, 100],
+      dotRadius: [1.5, 1.5],
+      levelWeight: [1, 0],
+    },
+    magnetGrid: {
       glyph: "needle",
       reach: 85,
       polarity: -1,
@@ -81,128 +44,118 @@ describe("visual tweak document", () => {
       needleWidth: 0.9,
       maxSources: 96,
       fadeZoom: 0.35,
-    };
-    values.overlapFeedback.colors.rimDark = "#102030";
-    values.overlapFeedback.glowAlpha = [0.12, 0.78];
-    values.overlapFeedback.glowSize = [42, 144];
-    values.overlapFeedback.rimAlpha = [0.34, 0.88];
-    values.overlapFeedback.rimWidth = 2.4;
-    values.overlapFeedback.rimRadius = 720;
+    },
+    overlapFeedback: {
+      colors: {
+        glowLight: "#FFFFFF",
+        glowDark: "#6E6E6E",
+        rimLight: "#E0E0E0",
+        rimDark: "#5C5C5C",
+      },
+      glowAlpha: [0.25, 0.5],
+      glowSize: [60, 60],
+      rimAlpha: [0.55, 0.85],
+      rimWidth: 1.5,
+      rimRadius: 600,
+    },
+  };
+}
+
+const V3_GROUND = { canvasPalette: { bgLight: "#F2EAD3", bgDark: "#1E2A22" } };
+
+describe("visual tweak document", () => {
+  it("is the plain ground alone — the reviewed product default (DK-17, v4)", () => {
+    expect(defaultProductAppearance()).toEqual({
+      canvasPalette: { bgLight: "#FAFAFA", bgDark: "#171717" },
+    });
+  });
+
+  it("writes version 4 with the ground and nothing that retired, and round-trips it", () => {
+    const values = defaultProductAppearance();
+    values.canvasPalette.bgLight = "#123456";
+    values.canvasPalette.bgDark = "#abcdef";
 
     const serialized = serializeVisualTweaks(values);
-    const raw = JSON.parse(serialized) as Record<string, unknown>;
-    expect(raw["kind"]).toBe(VISUAL_TWEAK_DOCUMENT_KIND);
-    expect(raw["version"]).toBe(VISUAL_TWEAK_DOCUMENT_VERSION);
-    expect(deserializeVisualTweaks(serialized)).toEqual(values);
-  });
-
-  it("defaults the magnet ink for documents saved before it existed", () => {
-    // Tolerant reader: the magnet ink joined the palette 2026-08-25 (DESIGN.md
-    // §2.1); an older saved document carries no key and must load with the
-    // reviewed default instead of being rejected.
-    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
-      canvasPalette: Record<string, unknown>;
-    };
-    delete document.canvasPalette["magnetDotDark"];
-    const loaded = deserializeVisualTweaks(JSON.stringify(document));
-    expect(loaded.canvasPalette.magnetDotDark).toBe("#8A8A8A");
-  });
-
-  it("rejects partial and out-of-range files instead of applying half a preset", () => {
-    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
-      canvasPalette: Record<string, unknown>;
-      worldGrid: Record<string, unknown>;
-      overlapFeedback: Record<string, unknown>;
-    };
-    delete document.canvasPalette["dotLight"];
-    expect(() => deserializeVisualTweaks(JSON.stringify(document))).toThrow(
-      VisualTweakDocumentError,
-    );
-
-    const missingGridValue = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
-      worldGrid: Record<string, unknown>;
-    };
-    delete missingGridValue.worldGrid["fadeOut"];
-    expect(() => deserializeVisualTweaks(JSON.stringify(missingGridValue))).toThrow(
-      VisualTweakDocumentError,
-    );
-
-    const missingMagnetValue = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
-      magnetGrid: Record<string, unknown>;
-    };
-    delete missingMagnetValue.magnetGrid["widgetStrength"];
-    expect(() => deserializeVisualTweaks(JSON.stringify(missingMagnetValue))).toThrow(
-      VisualTweakDocumentError,
-    );
-
-    const fractionalSourceCap = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
-      magnetGrid: Record<string, unknown>;
-    };
-    fractionalSourceCap.magnetGrid["maxSources"] = 63.5;
-    expect(() => deserializeVisualTweaks(JSON.stringify(fractionalSourceCap))).toThrow(
-      "magnetGrid.maxSources must be an integer",
-    );
-
-    const invalidRange = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
-      overlapFeedback: Record<string, unknown>;
-    };
-    invalidRange.overlapFeedback["rimAlpha"] = [0.2, 2];
-    expect(() => deserializeVisualTweaks(JSON.stringify(invalidRange))).toThrow(
-      "overlapFeedback.rimAlpha[1] must be between 0 and 1",
-    );
-  });
-
-  it("rejects unknown document versions", () => {
-    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as Record<
-      string,
-      unknown
-    >;
-    document["version"] = 4;
-    expect(() => deserializeVisualTweaks(JSON.stringify(document))).toThrow(
-      "Unsupported visual tweak version: 4",
-    );
-  });
-
-  it("migrates version 1 exports with reviewed World grid defaults", () => {
-    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as Record<
-      string,
-      unknown
-    >;
-    document["version"] = 1;
-    delete document["worldGrid"];
-    expect(deserializeVisualTweaks(JSON.stringify(document)).worldGrid).toEqual(
-      defaultProductAppearance().worldGrid,
-    );
-  });
-
-  it("migrates version 2 exports with the reviewed complete magnet block", () => {
-    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as Record<
-      string,
-      unknown
-    >;
-    document["version"] = 2;
-    delete document["magnetGrid"];
-    expect(deserializeVisualTweaks(JSON.stringify(document)).magnetGrid).toEqual(
-      defaultProductAppearance().magnetGrid,
-    );
-  });
-
-  it("projects every overlap control onto CardShell's live CSS variables", () => {
-    const values = defaultProductAppearance();
-    values.overlapFeedback.colors.rimDark = "#123456";
-    values.overlapFeedback.glowSize = [22, 44];
-    values.overlapFeedback.rimAlpha = [0.2, 0.8];
-    values.overlapFeedback.rimWidth = 2.5;
-    values.overlapFeedback.rimRadius = 640;
-
-    expect(productAppearanceCssVariables(values, true)).toMatchObject({
-      "--ic-rim-color": "18, 52, 86",
-      "--ic-glow-size-c": "22px",
-      "--ic-glow-size-t": "44px",
-      "--ic-rim-alpha-c": "0.2",
-      "--ic-rim-alpha-t": "0.8",
-      "--ic-rim-width": "2.5px",
-      "--ic-rim-radius": "640px",
+    expect(JSON.parse(serialized)).toEqual({
+      kind: VISUAL_TWEAK_DOCUMENT_KIND,
+      version: 4,
+      canvasPalette: { bgLight: "#123456", bgDark: "#abcdef" },
     });
+    expect(VISUAL_TWEAK_DOCUMENT_VERSION).toBe(4);
+    expect(deserializeVisualTweaks(serialized)).toEqual({
+      canvasPalette: { bgLight: "#123456", bgDark: "#ABCDEF" },
+    });
+  });
+
+  it("reads a version-3 export past what retired — exactly its ground", () => {
+    expect(deserializeVisualTweaks(JSON.stringify(v3Export()))).toEqual(V3_GROUND);
+  });
+
+  it("reads past the retired halves even where the v3 reader refused them", () => {
+    // The v3 reader refused a fractional source cap, an out-of-range rim and a partial grid; nothing
+    // on the desk draws any of them now.
+    const document = v3Export();
+    (document["magnetGrid"] as Record<string, unknown>)["maxSources"] = 63.5;
+    (document["overlapFeedback"] as Record<string, unknown>)["rimAlpha"] = [0.2, 2];
+    delete (document["worldGrid"] as Record<string, unknown>)["fadeOut"];
+    delete (document["canvasPalette"] as Record<string, unknown>)["magnetDotDark"];
+    expect(deserializeVisualTweaks(JSON.stringify(document))).toEqual(V3_GROUND);
+  });
+
+  it("reads versions 1 and 2 the same way (before the world grid, before the magnet block)", () => {
+    const v1 = v3Export();
+    v1["version"] = 1;
+    delete v1["worldGrid"];
+    delete v1["magnetGrid"];
+    expect(deserializeVisualTweaks(JSON.stringify(v1))).toEqual(V3_GROUND);
+
+    const v2 = v3Export();
+    v2["version"] = 2;
+    delete v2["magnetGrid"];
+    expect(deserializeVisualTweaks(JSON.stringify(v2))).toEqual(V3_GROUND);
+  });
+
+  it("stays strict about the ground: a missing or malformed colour rejects the whole file", () => {
+    const missing = v3Export();
+    delete (missing["canvasPalette"] as Record<string, unknown>)["bgDark"];
+    expect(() => deserializeVisualTweaks(JSON.stringify(missing))).toThrow(
+      "canvasPalette.bgDark must be a six-digit hex color.",
+    );
+
+    const malformed = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as {
+      canvasPalette: Record<string, unknown>;
+    };
+    malformed.canvasPalette["bgLight"] = "#FFF";
+    expect(() => deserializeVisualTweaks(JSON.stringify(malformed))).toThrow(
+      VisualTweakDocumentError,
+    );
+
+    const groundless = { kind: VISUAL_TWEAK_DOCUMENT_KIND, version: 4 };
+    expect(() => deserializeVisualTweaks(JSON.stringify(groundless))).toThrow(
+      "canvasPalette must be an object.",
+    );
+  });
+
+  it("rejects unknown document versions and kinds", () => {
+    const document = JSON.parse(serializeVisualTweaks(defaultProductAppearance())) as Record<
+      string,
+      unknown
+    >;
+    document["version"] = 5;
+    expect(() => deserializeVisualTweaks(JSON.stringify(document))).toThrow(
+      "Unsupported visual tweak version: 5",
+    );
+    document["version"] = 4;
+    document["kind"] = "vibefield.something-else";
+    expect(() => deserializeVisualTweaks(JSON.stringify(document))).toThrow(
+      `Expected kind "${VISUAL_TWEAK_DOCUMENT_KIND}".`,
+    );
+  });
+
+  it("projects the ground onto --vf-canvas-bg and nothing else", () => {
+    const values = defaultProductAppearance();
+    values.canvasPalette.bgDark = "#123456";
+    expect(productAppearanceCssVariables(values, true)).toEqual({ "--vf-canvas-bg": "#123456" });
+    expect(productAppearanceCssVariables(values, false)).toEqual({ "--vf-canvas-bg": "#FAFAFA" });
   });
 });

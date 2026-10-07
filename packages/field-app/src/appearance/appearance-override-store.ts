@@ -1,4 +1,3 @@
-import type { MagnetGridGlyph } from "../field/canvas-appearance";
 import { defaultProductAppearance, type ProductAppearance } from "./product-appearance";
 import { deserializeVisualTweaks, VisualTweakDocumentError } from "./product-appearance-document";
 
@@ -74,13 +73,8 @@ export function createAppearanceOverrideStore(): AppearanceOverrideStore {
   };
 }
 
-/** Product preference is effective only in the absence of a full Studio override. */
-export function effectiveProductAppearance(
-  override: ProductAppearance | null,
-  glyph: MagnetGridGlyph,
-): ProductAppearance {
-  if (override !== null) return override;
-  const defaults = defaultProductAppearance();
-  defaults.magnetGrid.glyph = glyph;
-  return defaults;
+/** The reviewed appearance, unless a full Studio override stands. DK-17: the device's magnet glyph
+ * preference that this once laid under the defaults left with the 0.11 ground. */
+export function effectiveProductAppearance(override: ProductAppearance | null): ProductAppearance {
+  return override ?? defaultProductAppearance();
 }

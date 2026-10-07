@@ -47,7 +47,7 @@ describe("ElectronStudioController", () => {
     const harness = fakeApi();
     const controller = new ElectronStudioController(harness.api);
     const changed = defaultProductAppearance();
-    changed.magnetGrid.reach = 477;
+    changed.canvasPalette.bgLight = "#F2EAD3";
 
     controller.setAppearance(changed);
     expect(controller.snapshot().appearance).toBe(changed);
@@ -59,7 +59,7 @@ describe("ElectronStudioController", () => {
 
     const changedAgain = {
       ...changed,
-      magnetGrid: { ...changed.magnetGrid, glyph: "needle" as const },
+      canvasPalette: { ...changed.canvasPalette, bgDark: "#1E2A22" },
     };
     controller.setAppearance(changedAgain);
     expect(harness.publish).toHaveBeenCalledTimes(2);
@@ -76,7 +76,7 @@ describe("ElectronStudioController", () => {
     const harness = fakeApi();
     const controller = new ElectronStudioController(harness.api);
     const restored = defaultProductAppearance();
-    restored.worldGrid.dotAlpha = 0.37;
+    restored.canvasPalette.bgDark = "#1E2A22";
     const listener = vi.fn();
     controller.subscribe(listener);
 

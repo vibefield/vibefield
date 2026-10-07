@@ -23,7 +23,7 @@ describe("Studio product appearance adapter", () => {
     };
     const adapter = createStudioProductAppearanceSource(api);
     const appearance = defaultProductAppearance();
-    appearance.magnetGrid.reach = 444;
+    appearance.canvasPalette.bgLight = "#F2EAD3";
     const commandHandler = commandHandlers[0];
     if (commandHandler === undefined) throw new Error("the adapter did not subscribe");
 

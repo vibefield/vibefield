@@ -1,18 +1,13 @@
-import type {
-  CanvasPalette,
-  MagnetGridAppearance,
-  OverlapFeedbackColors,
-  OverlapFeedbackTuning,
-  ProductAppearance,
-  WorldGridAppearance,
-} from "./product-appearance";
-import { defaultProductAppearance } from "./product-appearance";
+import type { CanvasPalette, ProductAppearance } from "./product-appearance";
 
 export const VISUAL_TWEAK_DOCUMENT_KIND = "vibefield.visual-tweaks";
-export const VISUAL_TWEAK_DOCUMENT_VERSION = 3;
+export const VISUAL_TWEAK_DOCUMENT_VERSION = 4;
 export const VISUAL_TWEAK_FILE_NAME = "vibefield-visual-tweaks.json";
 
-export interface VisualTweakDocumentV3 extends ProductAppearance {
+/** Every version this reader opens: 4 writes, and 1–3 are read past what retired (below). */
+const READABLE_VERSIONS: readonly unknown[] = [1, 2, 3, VISUAL_TWEAK_DOCUMENT_VERSION];
+
+export interface VisualTweakDocumentV4 extends ProductAppearance {
   kind: typeof VISUAL_TWEAK_DOCUMENT_KIND;
   version: typeof VISUAL_TWEAK_DOCUMENT_VERSION;
 }
@@ -24,28 +19,11 @@ export class VisualTweakDocumentError extends Error {
   }
 }
 
-export function visualTweakDocument(values: ProductAppearance): VisualTweakDocumentV3 {
+export function visualTweakDocument(values: ProductAppearance): VisualTweakDocumentV4 {
   return {
     kind: VISUAL_TWEAK_DOCUMENT_KIND,
     version: VISUAL_TWEAK_DOCUMENT_VERSION,
     canvasPalette: { ...values.canvasPalette },
-    worldGrid: {
-      spacings: [...values.worldGrid.spacings],
-      dotAlpha: values.worldGrid.dotAlpha,
-      fadeIn: [...values.worldGrid.fadeIn],
-      fadeOut: [...values.worldGrid.fadeOut],
-      dotRadius: [...values.worldGrid.dotRadius],
-      levelWeight: [...values.worldGrid.levelWeight],
-    },
-    magnetGrid: { ...values.magnetGrid },
-    overlapFeedback: {
-      colors: { ...values.overlapFeedback.colors },
-      glowAlpha: [...values.overlapFeedback.glowAlpha],
-      glowSize: [...values.overlapFeedback.glowSize],
-      rimAlpha: [...values.overlapFeedback.rimAlpha],
-      rimWidth: values.overlapFeedback.rimWidth,
-      rimRadius: values.overlapFeedback.rimRadius,
-    },
   };
 }
 
@@ -55,8 +33,14 @@ export function serializeVisualTweaks(values: ProductAppearance): string {
 }
 
 /**
- * Strict import: malformed or out-of-range values reject the whole file. A
- * partial import would make the resulting canvas impossible to reproduce.
+ * Strict import of what the desk still draws: a malformed or out-of-range ground rejects the whole
+ * file, because a partial import would make the resulting canvas impossible to reproduce.
+ *
+ * TOLERANT of what retired (DK-17, v3 → v4): versions 1–3 carry the 0.11 ground's tuning — `worldGrid`
+ * (v2, v3), `magnetGrid` (v3) and the grid's inks in the palette (`dotLight`, `dotDark`,
+ * `magnetDotDark`) — and the DOM card's `overlapFeedback`. Nothing on the desk draws any of them, so the
+ * reader reads past them, valid or not: a v3 export (James's machines hold them) still imports, and
+ * yields exactly its ground.
  */
 export function deserializeVisualTweaks(serialized: string): ProductAppearance {
   let raw: unknown;
@@ -70,89 +54,18 @@ export function deserializeVisualTweaks(serialized: string): ProductAppearance {
   if (document["kind"] !== VISUAL_TWEAK_DOCUMENT_KIND) {
     throw new VisualTweakDocumentError(`Expected kind "${VISUAL_TWEAK_DOCUMENT_KIND}".`);
   }
-  const version = document["version"];
-  if (version !== 1 && version !== 2 && version !== VISUAL_TWEAK_DOCUMENT_VERSION) {
+  if (!READABLE_VERSIONS.includes(document["version"])) {
     throw new VisualTweakDocumentError(
       `Unsupported visual tweak version: ${String(document["version"])}.`,
     );
   }
 
   const palette = record(document["canvasPalette"], "canvasPalette");
-  const overlap = record(document["overlapFeedback"], "overlapFeedback");
-  const colors = record(overlap["colors"], "overlapFeedback.colors");
-
   const canvasPalette: CanvasPalette = {
     bgLight: hex(palette["bgLight"], "canvasPalette.bgLight"),
     bgDark: hex(palette["bgDark"], "canvasPalette.bgDark"),
-    dotLight: hex(palette["dotLight"], "canvasPalette.dotLight"),
-    dotDark: hex(palette["dotDark"], "canvasPalette.dotDark"),
-    // Tolerant reader: documents saved before the magnet ink existed
-    // (DESIGN.md §2.1, 2026-08-25) carry no key — they get the reviewed default.
-    magnetDotDark:
-      palette["magnetDotDark"] === undefined
-        ? defaultProductAppearance().canvasPalette.magnetDotDark
-        : hex(palette["magnetDotDark"], "canvasPalette.magnetDotDark"),
   };
-  const overlapColors: OverlapFeedbackColors = {
-    glowLight: hex(colors["glowLight"], "overlapFeedback.colors.glowLight"),
-    glowDark: hex(colors["glowDark"], "overlapFeedback.colors.glowDark"),
-    rimLight: hex(colors["rimLight"], "overlapFeedback.colors.rimLight"),
-    rimDark: hex(colors["rimDark"], "overlapFeedback.colors.rimDark"),
-  };
-  const overlapFeedback: OverlapFeedbackTuning = {
-    colors: overlapColors,
-    glowAlpha: pair(overlap["glowAlpha"], "overlapFeedback.glowAlpha", 0, 1),
-    glowSize: pair(overlap["glowSize"], "overlapFeedback.glowSize", 0, 200),
-    rimAlpha: pair(overlap["rimAlpha"], "overlapFeedback.rimAlpha", 0, 1),
-    rimWidth: numberIn(overlap["rimWidth"], "overlapFeedback.rimWidth", 0, 6),
-    // The reviewed default is 40, so zero is the honest lower bound even though
-    // the old Settings field incorrectly declared a minimum of 50.
-    rimRadius: numberIn(overlap["rimRadius"], "overlapFeedback.rimRadius", 0, 2_000),
-  };
-
-  // Version 1 predates World grid. Its other fields remain complete and strict;
-  // migration supplies the reviewed grid defaults rather than inventing values.
-  const worldGrid =
-    version === 1
-      ? defaultProductAppearance().worldGrid
-      : parseWorldGrid(record(document["worldGrid"], "worldGrid"));
-
-  // Version 3 is the first complete magnet-grid preset. Older documents get
-  // the reviewed product block as one unit; inventing a partial field would
-  // make their live canvas irreproducible.
-  const magnetGrid =
-    version < 3
-      ? defaultProductAppearance().magnetGrid
-      : parseMagnetGrid(record(document["magnetGrid"], "magnetGrid"));
-
-  return { canvasPalette, worldGrid, magnetGrid, overlapFeedback };
-}
-
-function parseWorldGrid(grid: Record<string, unknown>): WorldGridAppearance {
-  return {
-    spacings: triple(grid["spacings"], "worldGrid.spacings", 1, 100_000),
-    dotAlpha: numberIn(grid["dotAlpha"], "worldGrid.dotAlpha", 0, 1),
-    fadeIn: pair(grid["fadeIn"], "worldGrid.fadeIn", 0, 100_000),
-    fadeOut: pair(grid["fadeOut"], "worldGrid.fadeOut", 0, 100_000),
-    dotRadius: pair(grid["dotRadius"], "worldGrid.dotRadius", 0, 50),
-    levelWeight: pair(grid["levelWeight"], "worldGrid.levelWeight", -10, 10),
-  };
-}
-
-function parseMagnetGrid(magnet: Record<string, unknown>): MagnetGridAppearance {
-  return {
-    glyph: oneOf(magnet["glyph"], "magnetGrid.glyph", ["dot", "needle"]),
-    reach: numberIn(magnet["reach"], "magnetGrid.reach", 0, 1_000),
-    polarity: oneOf(magnet["polarity"], "magnetGrid.polarity", [1, -1]),
-    widgets: booleanValue(magnet["widgets"], "magnetGrid.widgets"),
-    widgetStrength: numberIn(magnet["widgetStrength"], "magnetGrid.widgetStrength", 0, 100),
-    widgetRadius: numberIn(magnet["widgetRadius"], "magnetGrid.widgetRadius", 0, 1_000),
-    alwaysAlign: booleanValue(magnet["alwaysAlign"], "magnetGrid.alwaysAlign"),
-    needleLength: numberIn(magnet["needleLength"], "magnetGrid.needleLength", 0, 100),
-    needleWidth: numberIn(magnet["needleWidth"], "magnetGrid.needleWidth", 0, 50),
-    maxSources: integerIn(magnet["maxSources"], "magnetGrid.maxSources", 0, 256),
-    fadeZoom: numberIn(magnet["fadeZoom"], "magnetGrid.fadeZoom", 0, 1_000),
-  };
+  return { canvasPalette };
 }
 
 function record(value: unknown, path: string): Record<string, unknown> {
@@ -167,55 +80,4 @@ function hex(value: unknown, path: string): string {
     throw new VisualTweakDocumentError(`${path} must be a six-digit hex color.`);
   }
   return value.toUpperCase();
-}
-
-function numberIn(value: unknown, path: string, min: number, max: number): number {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < min || value > max) {
-    throw new VisualTweakDocumentError(`${path} must be between ${min} and ${max}.`);
-  }
-  return value;
-}
-
-function integerIn(value: unknown, path: string, min: number, max: number): number {
-  const next = numberIn(value, path, min, max);
-  if (!Number.isInteger(next)) {
-    throw new VisualTweakDocumentError(`${path} must be an integer.`);
-  }
-  return next;
-}
-
-function booleanValue(value: unknown, path: string): boolean {
-  if (typeof value !== "boolean") {
-    throw new VisualTweakDocumentError(`${path} must be true or false.`);
-  }
-  return value;
-}
-
-function oneOf<const T extends string | number>(
-  value: unknown,
-  path: string,
-  choices: readonly T[],
-): T {
-  if (!choices.includes(value as T)) {
-    throw new VisualTweakDocumentError(`${path} must be one of ${choices.join(", ")}.`);
-  }
-  return value as T;
-}
-
-function pair(value: unknown, path: string, min: number, max: number): [number, number] {
-  if (!Array.isArray(value) || value.length !== 2) {
-    throw new VisualTweakDocumentError(`${path} must contain candidate and target values.`);
-  }
-  return [numberIn(value[0], `${path}[0]`, min, max), numberIn(value[1], `${path}[1]`, min, max)];
-}
-
-function triple(value: unknown, path: string, min: number, max: number): [number, number, number] {
-  if (!Array.isArray(value) || value.length !== 3) {
-    throw new VisualTweakDocumentError(`${path} must contain fine, medium, and coarse values.`);
-  }
-  return [
-    numberIn(value[0], `${path}[0]`, min, max),
-    numberIn(value[1], `${path}[1]`, min, max),
-    numberIn(value[2], `${path}[2]`, min, max),
-  ];
 }

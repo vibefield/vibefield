@@ -43,21 +43,16 @@ describe("VisualTweakControls", () => {
     const controls = document.querySelector<HTMLElement>("[data-visual-tweak-controls]");
     expect(controls).not.toBeNull();
     expect(controls?.textContent).toContain("Canvas palette");
-    expect(controls?.textContent).toContain("World grid");
-    expect(controls?.textContent).toContain("Magnet grid");
-    expect(controls?.textContent).toContain("Field reach");
-    expect(controls?.textContent).toContain("Polarity");
-    expect(controls?.textContent).toContain("Widget silhouettes");
-    expect(controls?.textContent).toContain("Widget strength");
-    expect(controls?.textContent).toContain("Widget corner radius");
-    expect(controls?.textContent).toContain("Needle alignment");
-    expect(controls?.textContent).toContain("Needle half-length / dot swell");
-    expect(controls?.textContent).toContain("Needle half-width");
-    expect(controls?.textContent).toContain("Source buffer cap");
-    expect(controls?.textContent).toContain("Field fade below zoom");
-    expect(controls?.textContent).toContain("Overlap feedback");
+    expect(controls?.textContent).toContain("Background · light");
+    expect(controls?.textContent).toContain("Background · dark");
     expect(controls?.textContent).toContain("Import JSON");
     expect(controls?.textContent).toContain("Export JSON");
+    // DK-17: Studio's grid tweak controls and the overlap feedback's left with the 0.11 ground and the
+    // DOM card — the palette is the plain ground alone (its dot inks went with the grid).
+    for (const retired of ["World grid", "Magnet grid", "Field reach", "Overlap feedback", "Dots"])
+      expect(controls?.textContent).not.toContain(retired);
+    expect(controls?.querySelectorAll('input[type="color"]')).toHaveLength(2);
+    expect(controls?.querySelector('input[type="number"]')).toBeNull();
     expect(document.querySelector("[data-dev-tweak-toggle]")).toBeNull();
     expect(document.querySelector("[data-dev-tweak-panel]")).toBeNull();
   });
@@ -65,42 +60,20 @@ describe("VisualTweakControls", () => {
   it("edits live values and resets the whole document atomically", () => {
     mount();
 
-    const background = document.querySelector<HTMLInputElement>(
-      'input[type="color"][aria-label="Background · light"]',
-    );
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")?.set;
-    act(() => {
-      setter?.call(background, "#123456");
-      background?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    const pick = (label: string, color: string): void => {
+      const input = document.querySelector<HTMLInputElement>(
+        `input[type="color"][aria-label="${label}"]`,
+      );
+      act(() => {
+        setter?.call(input, color);
+        input?.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+    };
+    pick("Background · light", "#123456");
     expect(latest.canvasPalette.bgLight).toBe("#123456");
-
-    const fineSpacing = document.querySelector<HTMLInputElement>('input[aria-label="Fine"]');
-    act(() => {
-      setter?.call(fineSpacing, "24");
-      fineSpacing?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(latest.worldGrid.spacings[0]).toBe(24);
-
-    const reach = document.querySelector<HTMLInputElement>('input[aria-label="Reach"]');
-    act(() => {
-      setter?.call(reach, "90");
-      reach?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(latest.magnetGrid.reach).toBe(90);
-
-    const maxSources = document.querySelector<HTMLInputElement>('input[aria-label="Max sources"]');
-    act(() => {
-      setter?.call(maxSources, "63.5");
-      maxSources?.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(latest.magnetGrid.maxSources).toBe(64);
-
-    const repel = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
-      (button) => button.textContent === "Repel",
-    );
-    act(() => repel?.click());
-    expect(latest.magnetGrid.polarity).toBe(-1);
+    pick("Background · dark", "#abcdef");
+    expect(latest.canvasPalette.bgDark).toBe("#ABCDEF");
 
     const reset = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent === "Reset",
