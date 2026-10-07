@@ -5220,6 +5220,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           rosettad?.stop() ?? Promise.resolve(),
           workspace.stop(), // FS-1a — the files worker leaves with the daemon
         ]);
+        await docHolders?.stop(); // DS-5d — finish the holders ledger before fatal exit
         indexTail.dispose(); // SP-6 — the session sockets close with the daemon they follow
         indexCatalog.dispose();
         runtimeDiagnostics.dispose();
@@ -5657,7 +5658,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           endpoints.dispose();
           mcp.dispose();
           await settingsDoc.dispose(); // D29′ — the doc's writes are already durable
-          docHolders?.stop(); // DS-5 — the slice expires with its publisher
+          await docHolders?.stop(); // DS-5d — the slice closes and its ledger is settled
           for (const off of systemDocs?.unregister ?? []) off();
           await systemDocs?.library.dispose(); // DS-5 — every library write is durable
           api.close();

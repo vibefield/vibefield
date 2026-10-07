@@ -1,10 +1,16 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 
 let arms: {
+  withLabProfile<T>(run: (profile: { directory: string; id: string }) => Promise<T>): Promise<T>;
+  assertLabProfileProof(
+    state: unknown,
+    context: string,
+    options?: { expectedId?: string; seen?: Set<string> },
+  ): string;
   assertLabBuilt(root: string): void;
   assertLabDeckProof(state: unknown, context: string): void;
   assertLabMonitorProof(state: unknown, view: string, context: string): unknown;
@@ -150,5 +156,72 @@ describe("paired monitor workloads", () => {
     const sample = { ...one, monitor: { ...monitor, runs: ["unrelated"] } };
     expect(() => arms.assertLabMembershipMatches([one, two], [sample, two], "B")).not.toThrow();
     expect(arms.assertLabMonitorProof(sample.monitor, "list", "B")).toEqual(monitor);
+  });
+});
+
+describe("isolated profiles across lab launches", () => {
+  const proof = { kind: "isolated-chromium-v1", id: "a".repeat(64) };
+
+  it.each([undefined, null, {}, { ...proof, kind: "shared" }, { ...proof, id: "short" }])(
+    "rejects missing or malformed profile evidence: %j",
+    (state) => {
+      expect(() => arms.assertLabProfileProof(state, "A r1")).toThrow("profile proof");
+    },
+  );
+
+  it("rejects an effective profile that differs from the fresh launch directory", () => {
+    expect(() => arms.assertLabProfileProof(proof, "A r1", { expectedId: "b".repeat(64) })).toThrow(
+      "mismatched isolated Chromium profile proof",
+    );
+  });
+
+  it("rejects A′ reusing A's profile before accepting the second sample", () => {
+    const seen = new Set<string>();
+    expect(arms.assertLabProfileProof(proof, "A r1", { seen })).toBe(proof.id);
+    expect(() => arms.assertLabProfileProof(proof, "A′ r1", { seen })).toThrow(
+      "reused across launches",
+    );
+    expect(() =>
+      arms.assertLabProfileProof({ ...proof, id: "b".repeat(64) }, "B r1", { seen }),
+    ).not.toThrow();
+  });
+
+  it("keeps distinct owned profiles until each launch closes, then removes them", async () => {
+    let first = "";
+    let second = "";
+    const result = await arms.withLabProfile(async (a) => {
+      first = a.directory;
+      expect(existsSync(first)).toBe(true);
+      await arms.withLabProfile(async (b) => {
+        second = b.directory;
+        expect(second).not.toBe(first);
+        expect(b.id).not.toBe(a.id);
+        await Promise.resolve();
+        expect(existsSync(first)).toBe(true);
+        expect(existsSync(second)).toBe(true);
+        writeFileSync(join(second, "cache"), "owned fixture");
+      });
+      expect(existsSync(first)).toBe(true);
+      expect(existsSync(second)).toBe(false);
+      return 7;
+    });
+    expect(result).toBe(7);
+    expect(existsSync(first)).toBe(false);
+  });
+
+  it("cleans up a failed launch without touching unrelated files", async () => {
+    const { root } = fixture();
+    const unrelated = artifact(root, "unrelated");
+    let owned = "";
+    const failure = new Error("child failed");
+    await expect(
+      arms.withLabProfile(async ({ directory }) => {
+        owned = directory;
+        writeFileSync(join(directory, "cache"), "owned fixture");
+        throw failure;
+      }),
+    ).rejects.toBe(failure);
+    expect(existsSync(owned)).toBe(false);
+    expect(existsSync(unrelated)).toBe(true);
   });
 });

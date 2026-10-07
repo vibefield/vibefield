@@ -32,6 +32,7 @@ import {
   assertLabBuilt,
   assertLabDeckProof,
   assertLabMembershipMatches,
+  assertLabProfileProof,
   buildRoot,
   launchLab,
   log,
@@ -77,6 +78,7 @@ async function captureArm(arm, spec) {
   const dir = join(outDir, spec.dir);
   const code = await launchLab({
     root: spec.root,
+    reportPath: join(dir, "manifest.json"),
     env: {
       VF_GODVIEW_LAB: "capture",
       VF_GODVIEW_CAPTURE_OUT: dir,
@@ -94,9 +96,9 @@ async function captureArm(arm, spec) {
     echo: "GODVIEW_CAPTURE",
     prefix: arm,
   });
-  const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
   if (code !== 0)
     throw new Error(`arm ${arm} exited ${code} (log: ${join(outDir, `${spec.dir}.log`)})`);
+  const manifest = JSON.parse(readFileSync(join(dir, "manifest.json"), "utf8"));
   if (!Array.isArray(manifest?.captures) || manifest.captures.length === 0) {
     throw new Error(`arm ${arm}: no captures (${dir})`);
   }
@@ -139,9 +141,11 @@ async function main() {
 
   const held = {};
   let membership;
+  const profiles = new Set();
   for (const [arm, spec] of Object.entries(ARMS)) {
     log(`arm ${arm}`);
     held[arm] = await captureArm(arm, spec);
+    assertLabProfileProof(held[arm].manifest.profile, `arm ${arm}`, { seen: profiles });
     const proof = held[arm].manifest.captures.map((capture) => ({
       key: capture.name,
       view: capture.view,
@@ -223,6 +227,7 @@ async function main() {
   for (const row of rows) counts[row.verdict] = (counts[row.verdict] ?? 0) + 1;
   const blind = sanity.filter((row) => !row.seen);
   const summary = {
+    profiles: [...profiles],
     mode: paired ? "A/B" : "A/A",
     arms: Object.fromEntries(
       Object.entries(ARMS).map(([arm, { root, source }]) => [arm, { root, source }]),

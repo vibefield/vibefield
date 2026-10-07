@@ -69,6 +69,7 @@ import { LiveSurfaceWindowHost } from "../main/live-surfaces/window-host";
 import type { ElectronLogging } from "../main/logging";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
+import { labProfileProof } from "./godview-lab-profile";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
   LIVE_SURFACE_LAB_ALL_TICKETS,
@@ -2050,16 +2051,15 @@ function pressChord(win: BrowserWindow, key: string, shift = false): void {
  *
  * Separate from `pressChord` because it needs SHIFT and because Return carries
  * no character — sending a `char` event for it would be a keystroke into the
- * shell, which is exactly what this row must not do. The deck claims this chord
- * from ghosttea in a window-level capture listener, so it does not depend on
- * the workspace's `workspaceOwnsHotkey` gate; the row focuses the deck anyway,
- * because that is the state a user is in.
+ * shell, which is exactly what this row must not do. Ghosttea routes this
+ * chord through its window capture listener and `workspaceOwnsHotkey` gate;
+ * the row first focuses a terminal inside the workspace.
  *
  * DELIVERY IS NOT ASSUMED. `sendInputEvent` injects below AppKit's
  * key-equivalent dispatch (see `closeWindowAccelerator` for the ⌘W version of
  * this caveat), so the row treats a chord that produces no phase change as an
- * unproven DELIVERY rather than a broken zoom, and falls back to the chip —
- * recording which path it took. */
+ * unproven DELIVERY rather than a broken zoom, and tries the pane frame's
+ * fullscreen verb — recording which path it took. */
 function pressZoomChord(win: BrowserWindow): void {
   const modifiers: ("meta" | "control" | "shift")[] = [
     process.platform === "darwin" ? "meta" : "control",
@@ -2158,14 +2158,12 @@ const SPLIT_CHORD: { key: string; shift: boolean; label: string } =
     ? { key: "d", shift: false, label: "⌘D" }
     : { key: "o", shift: true, label: "Ctrl+Shift+O" };
 
-/** Put the caret in a terminal, by clicking one — which is how a user does it.
+/** Put keyboard focus in the workspace's active terminal.
  *
- * The workspace answers a hotkey only when focus is inside it
- * (`workspaceOwnsHotkey` checks `event.target` and `document.activeElement`
- * against its own root), and ghosttea's surface takes focus by itself only when
- * `document.hasFocus()` happened to be true at mount. A click needs neither: a
- * real pointer-down on the surface's input lands focus there the way Chromium
- * lands it anywhere. */
+ * Workspace shortcuts act on its active pane. Focusing a different textarea
+ * relies on a focus event to activate that pane, which a background document
+ * may not dispatch. Keep DOM focus on the already-active pane so zoom does not
+ * hide the input that must receive the return gesture. */
 async function focusDeck(win: BrowserWindow): Promise<void> {
   win.focus();
   win.webContents.focus();
@@ -2179,7 +2177,7 @@ async function focusDeck(win: BrowserWindow): Promise<void> {
   // everything they reach — ghosttea's binding table, the workspace's command
   // routing, `createSplitSession`, fieldd — runs exactly as it does for a user.
   const focused = (await win.webContents.executeJavaScript(
-    `(() => { const t = document.querySelector(".terminal-input"); if (!t) return "no surface";
+    `(() => { const t = document.querySelector(".ghostty-pane.is-active .terminal-input"); if (!t) return "no active surface";
       const r = t.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return "surface has no size";
       t.focus();
@@ -4109,12 +4107,22 @@ export async function runSmokeGodview(opts: {
     app.exit(verdict["ok"] === true ? 0 : 2);
   };
   try {
+    const requestedProfile = app.commandLine.getSwitchValue("user-data-dir");
+    const profilePaths = {
+      userData: app.getPath("userData"),
+      sessionData: app.getPath("sessionData"),
+    };
+    labProfileProof(requestedProfile, profilePaths);
     const win = createMainWindow({
       mode: "smoke-godview",
       preloadPath: opts.preloadPath,
       show: true,
     });
     opts.registry.adopt(win);
+    verdict["profile"] = labProfileProof(requestedProfile, {
+      ...profilePaths,
+      storagePath: win.webContents.session.getStoragePath(),
+    });
     opts.onWindow?.(win);
     if (process.env["VF_SMOKE_DEBUG"]) {
       win.webContents.on("console-message", (...args: unknown[]) => {
@@ -4140,13 +4148,9 @@ export async function runSmokeGodview(opts: {
         `the init-door row needs an EMPTY floor; found ${before.length} session(s) already`,
       );
     }
-    // …and an empty DECK. Row 1 is about a first open, and both planes have to
-    // be first: the renderer origin's localStorage outlives this process, so a
-    // previous run's saved layout is still sitting there — and since GT-3 that
-    // layout is not silently dropped, it is a QUESTION (every session it names
-    // died with the last run's floor). Clearing here rather than reloading
-    // because nothing has mounted yet: the deck is not built until ⌘2.
-    await win.webContents.executeJavaScript("localStorage.clear()");
+    // Row 1 needs a first open in BOTH planes. The runner gives this process
+    // a fresh Chromium profile, verified before navigation above: clearing
+    // localStorage here would be too late for preferences read at module init.
 
     // GT-3m: armed BEFORE the toggle, because the monitor stage mounts WITH the
     // overlay and its field is already populated at tick 0 — a wait placed after
@@ -4585,6 +4589,9 @@ export async function runSmokeGodview(opts: {
     //     exactly as before. Keys are DOM events dispatched in the page at the
     //     pane's own textarea — the launcher's window capture listener is what
     //     is under test, not the OS's delivery (and nothing reaches the OS).
+    //     Every press includes its release: the launcher keeps consumed codes
+    //     until keyup, so an unmatched keydown can swallow a later gesture's
+    //     release after the launcher has already disappeared.
     {
       const launcher = `document.querySelector('[data-vf-pane-launcher="${splitSession}"]')`;
       const press = (code: string, key: string, altKey: boolean): Promise<unknown> =>
@@ -4593,10 +4600,12 @@ export async function runSmokeGodview(opts: {
             const pane = ${launcher}?.closest('.ghostty-pane');
             const target = pane?.querySelector('textarea') ?? pane;
             if (!target) return false;
-            target.dispatchEvent(new KeyboardEvent('keydown', {
-              code: ${JSON.stringify(code)}, key: ${JSON.stringify(key)}, altKey: ${altKey},
-              bubbles: true, cancelable: true,
-            }));
+            for (const type of ['keydown', 'keyup']) {
+              target.dispatchEvent(new KeyboardEvent(type, {
+                code: ${JSON.stringify(code)}, key: ${JSON.stringify(key)}, altKey: ${altKey},
+                bubbles: true, cancelable: true,
+              }));
+            }
             return true;
           })()`,
           true,

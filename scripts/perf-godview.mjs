@@ -57,6 +57,7 @@ import {
   assertLabBuilt,
   assertLabDeckProof,
   assertLabMembershipMatches,
+  assertLabProfileProof,
   buildRoot,
   launchLab,
   log,
@@ -126,6 +127,7 @@ async function launch(arm, { root, source, modelDir, synthetic }, round) {
   const out = join(outDir, `${file}-r${round}.json`);
   const code = await launchLab({
     root,
+    reportPath: out,
     env: {
       VF_GODVIEW_PERF_OUT: out,
       VF_GODVIEW_PERF_RECIPES: recipes,
@@ -227,6 +229,7 @@ async function main() {
   const runs = Object.fromEntries(Object.keys(ARMS).map((arm) => [arm, []]));
   const loads = [];
   let membership;
+  const profiles = new Set();
   for (let round = 1; round <= rounds; round += 1) {
     const order = !paired ? ["A", "B"] : round % 2 === 1 ? ["A", "B", "A′"] : ["A′", "B", "A"];
     for (const arm of order) {
@@ -235,6 +238,7 @@ async function main() {
       loads.push({ round, arm, load });
       log(`round ${round} arm ${arm} (load ${load.toFixed(1)})`);
       const sample = await launch(arm, ARMS[arm], round);
+      assertLabProfileProof(sample.profile, `arm ${arm} round ${round}`, { seen: profiles });
       const proof = sample.cells.map((cell) => ({
         key: `${cell.view} × ${cell.corpus}`,
         view: cell.view,
@@ -263,6 +267,7 @@ async function main() {
     ]),
   );
   const summary = {
+    profiles: [...profiles],
     label,
     arms: Object.fromEntries(
       Object.entries(ARMS).map(([arm, { root, source, synthetic }]) => [

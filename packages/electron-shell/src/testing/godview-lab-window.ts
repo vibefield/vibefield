@@ -5,6 +5,7 @@ import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import type { PageMetrics } from "./godview-lab-measures";
+import { type LabProfile, labProfileProof } from "./godview-lab-profile";
 import { type LabDeckState, labDeckReady } from "./godview-lab-readiness";
 import { REACT_COMMIT_HOOK_SOURCE } from "./react-commit-hook";
 
@@ -238,6 +239,7 @@ export async function pageMetrics(win: BrowserWindow): Promise<PageMetrics | nul
 }
 
 export interface LabWindow {
+  profile: LabProfile;
   win: BrowserWindow;
   monitor: MarkerTail<MonitorFacts>;
   deck: MarkerTail<LabDeckState>;
@@ -265,6 +267,12 @@ export async function openLabWindow(opts: {
   options: LabWindowOptions;
   onWindow?: ((window: BrowserWindow) => void) | undefined;
 }): Promise<LabWindow> {
+  const requestedProfile = app.commandLine.getSwitchValue("user-data-dir");
+  const profilePaths = {
+    userData: app.getPath("userData"),
+    sessionData: app.getPath("sessionData"),
+  };
+  labProfileProof(requestedProfile, profilePaths);
   const { options } = opts;
   const offscreen = options.mode === "offscreen";
   const win = createMainWindow({
@@ -286,6 +294,10 @@ export async function openLabWindow(opts: {
   };
   win.webContents.on("console-message", consoleMessage);
   try {
+    const profile = labProfileProof(requestedProfile, {
+      ...profilePaths,
+      storagePath: win.webContents.session.getStoragePath(),
+    });
     if (opts.role === "auxiliary") opts.registry.adoptAuxiliary(win);
     else opts.registry.adopt(win);
     win.webContents.setBackgroundThrottling(false);
@@ -330,6 +342,7 @@ export async function openLabWindow(opts: {
     await monitor.until(() => true, "the monitor stage to mount", 60_000);
     await page(win, `window.__vfGodviewPerf.observeStage(".vf-godview-monitor-stage")`);
     return {
+      profile,
       win,
       monitor,
       deck,

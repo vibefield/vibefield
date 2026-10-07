@@ -18,6 +18,7 @@ import { spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
+import { assertLabProfileProof, withLabProfile } from "./godview-lab-arms.mjs";
 
 const argv = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -69,30 +70,51 @@ async function startDevServer(lines) {
 }
 
 function runLab(env, lines) {
-  return new Promise((done, fail) => {
-    const child = spawn(
-      "pnpm",
-      [
-        "exec",
-        "electron",
-        ".",
-        "--godview-perf-lab",
-        "--disable-renderer-backgrounding",
-        "--disable-backgrounding-occluded-windows",
-      ],
-      {
-        cwd: join(repoRoot, "apps", "desktop"),
-        env: { ...process.env, TMPDIR: "/tmp", VF_GODVIEW_LAB: "worker-windows", ...env },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    createInterface({ input: child.stdout }).on("line", (line) => {
-      if (line.startsWith("GODVIEW_WORKER_WINDOWS")) log(`  ${line.slice(0, 240)}`);
-      lines.push(line);
+  return withLabProfile(async ({ directory, id }) => {
+    const result = await new Promise((done, fail) => {
+      const child = spawn(
+        "pnpm",
+        [
+          "exec",
+          "electron",
+          ".",
+          "--godview-perf-lab",
+          `--user-data-dir=${directory}`,
+          "--disable-renderer-backgrounding",
+          "--disable-backgrounding-occluded-windows",
+        ],
+        {
+          cwd: join(repoRoot, "apps", "desktop"),
+          env: { ...process.env, TMPDIR: "/tmp", VF_GODVIEW_LAB: "worker-windows", ...env },
+          stdio: ["ignore", "pipe", "pipe"],
+        },
+      );
+      createInterface({ input: child.stdout }).on("line", (line) => {
+        if (line.startsWith("GODVIEW_WORKER_WINDOWS")) log(`  ${line.slice(0, 240)}`);
+        lines.push(line);
+      });
+      child.stderr.on("data", (chunk) => lines.push(String(chunk)));
+      let spawnError;
+      child.once("error", (error) => {
+        spawnError = error;
+      });
+      child.once("close", (code, signal) => {
+        if (spawnError) fail(spawnError);
+        else done({ code, signal });
+      });
     });
-    child.stderr.on("data", (chunk) => lines.push(String(chunk)));
-    child.on("error", fail);
-    child.on("close", (code, signal) => done({ code, signal }));
+    if (result.code === 0 && result.signal === null) {
+      const marker = "GODVIEW_WORKER_WINDOWS ";
+      const windows = lines
+        .filter((line) => line.startsWith(marker))
+        .map((line) => JSON.parse(line.slice(marker.length)))
+        .filter((record) => record.kind === "window");
+      if (windows.length === 0) throw new Error("Missing worker-window profile proof");
+      for (const record of windows) {
+        assertLabProfileProof(record.profile, `window ${record.n}`, { expectedId: id });
+      }
+    }
+    return result;
   });
 }
 

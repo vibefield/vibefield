@@ -115,7 +115,7 @@ export async function runGodviewWorkerWindows(opts: {
     const first = await swarmWorker(lab.win, label);
     await sleep(PAST_THE_WATCHDOG_MS);
     const settled = await swarmWorker(lab.win, label);
-    say({ kind: "window", n: opened, renderer, first, settled });
+    say({ kind: "window", n: opened, renderer, profile: lab.profile, first, settled });
     return lab;
   };
   const destroy = async (lab: LabWindow, n: number): Promise<void> => {

@@ -38,6 +38,28 @@ fixture and readout adaptation, with source patches and generated artifacts arch
 restored; product views and backend logic stay at their pins. Corrected and old-input runs
 are separate protocols and must not be pooled.
 
+**Chromium-profile erratum (2026-10-06, build-mv M155):** fresh Electron processes
+previously shared Chromium's `userData` and `sessionData`, including persistent caches.
+Isolated daemon roots and clearing localStorage did not isolate these paths. Each launcher
+now owns a fresh temporary `--user-data-dir`, verifies the effective app and window-session
+paths, and removes only its own profile after the process and output pipes close, including
+failed launches. Reports carry `profile: {kind: "isolated-chromium-v1", id}`; the ID is an
+opaque hash of the canonical path. Runners reject missing/mismatched proof and reused IDs
+before grading. Historical testing bundles need the same proof instrumentation. The worker
+lifecycle probe uses one profile per process, shared by its intentionally concurrent windows.
+The ordinary `pnpm smoke:godview` and `pnpm smoke:terminal-direct` runners also own fresh
+profiles and verify the app and window paths before navigation. After building, use
+`node scripts/smoke-godview.mjs` for the same smoke without rebuilding; direct Electron
+invocations must supply an isolated `--user-data-dir`. The runner removes its directory
+only after the Electron child and its output pipes close.
+Direct lab invocations must supply their own fresh absolute directory and clean it up after
+Electron closes; prefer the launchers, which own that lifecycle.
+
+A shared profile is a confirmed isolation gap, **not a demonstrated cause** of the recorded
+control offset. Earlier cohorts remain archived with their original verdicts. Fresh-profile
+measurements form a separate protocol; do not pool them with shared-profile runs or change
+the workload, warm-up, ordering, estimator or acceptance thresholds.
+
 ## What A and B measure
 
 - **A and B** each receive their checkout's model stream: the answer to the window's one
@@ -128,7 +150,8 @@ pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
   60; the final quiet qualification uses 8) and records launch load (L17, M107).
 - It rejects any arm report lacking healthy one-pane proof at either end of any cell. This
   includes historical testing bundles that have not received equivalent readiness checks.
-- Each round launches A, B and A′ in alternating order, one fresh Electron process per launch.
+- Each round launches A, B and A′ in alternating order, one fresh Electron process and
+  Chromium profile per launch, with effective-path proof and no profile reuse.
 - Every view × n ∈ {10, 20, 60} gets an 8 s cell.
 - It reads paired T, MAD and z with A′ − A as the null arm, read the same way.
 - The gate verdict is one of: worse, noisy (the null moved), missing (a gate row unreadable) or

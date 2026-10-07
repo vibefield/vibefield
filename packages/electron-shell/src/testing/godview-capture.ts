@@ -254,6 +254,7 @@ export async function runGodviewCapture(opts: {
           motion,
           source: source.kind,
           window: windowOptions,
+          profile: lab?.profile ?? null,
           pinned,
           electron: process.versions["electron"],
           platform: process.platform,

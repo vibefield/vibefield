@@ -4,8 +4,18 @@
 // in the lab's mode with an environment, one fresh Electron process per launch.
 
 import { spawn } from "node:child_process";
-import { accessSync, constants, statSync, writeFileSync } from "node:fs";
-import { loadavg } from "node:os";
+import { createHash } from "node:crypto";
+import {
+  accessSync,
+  constants,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
+import { loadavg, tmpdir } from "node:os";
 import { join } from "node:path";
 
 /** Keep in step with `DEFAULT_WARMUP_RECIPE` in electron-shell's godview-perf-lab.ts. */
@@ -130,54 +140,96 @@ export async function modelStreams(root, dir, recipes, logPath) {
   return dir;
 }
 
+/** Every process owns a fresh Chromium profile, removed only after it closes.
+ * Daemon-root isolation alone does not isolate Chromium's persistent caches. */
+export async function withLabProfile(run) {
+  const directory = mkdtempSync(join(tmpdir(), "vf-godview-profile-"));
+  try {
+    const id = createHash("sha256").update(realpathSync(directory)).digest("hex");
+    return await run({ directory, id });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+}
+
+/** Refuse old reports, wrong effective paths and reuse before reading grades. */
+export function assertLabProfileProof(state, context, { expectedId, seen } = {}) {
+  if (
+    state?.kind !== "isolated-chromium-v1" ||
+    typeof state.id !== "string" ||
+    !/^[a-f0-9]{64}$/.test(state.id) ||
+    (expectedId !== undefined && state.id !== expectedId)
+  ) {
+    throw new Error(`${context}: missing or mismatched isolated Chromium profile proof`);
+  }
+  if (seen?.has(state.id)) throw new Error(`${context}: Chromium profile reused across launches`);
+  seen?.add(state.id);
+  return state.id;
+}
+
 /**
- * One launch of the product in the lab's mode (`--godview-perf-lab`, with the
- * two Chromium switches that keep an occluded window awake) from `root`, with
- * `env` on top of this process's. Lines starting with `echo` are relayed with
- * `prefix`; the whole output lands at `logPath`. Resolves with the exit code.
+ * One launch of the product in the lab's mode, with a fresh Chromium profile
+ * and the switches that keep an occluded window awake. Wait for output pipes
+ * to close before reading proof or removing the profile. Resolves with the exit
+ * code; a successful process with missing or incorrect proof is still a failure.
  */
-export function launchLab({ root, env, logPath, echo, prefix }) {
+export async function launchLab({ root, env, reportPath, logPath, echo, prefix }) {
   assertLabBuilt(root);
   const binaries = nativeBinaries(root);
-  return new Promise((done, fail) => {
-    const child = spawn(
-      "pnpm",
-      [
-        "exec",
-        "electron",
-        ".",
-        "--godview-perf-lab",
-        "--disable-renderer-backgrounding",
-        "--disable-backgrounding-occluded-windows",
-      ],
-      {
-        cwd: join(root, "apps", "desktop"),
-        env: {
-          ...process.env,
-          TMPDIR: "/tmp",
-          ...env,
-          // Every arm runs its own built hosts, even when the invoking shell
-          // has a development override aimed at another checkout.
-          FIELDD_BIN: join(root, "packages", "fieldd", "dist", "bin.cjs"),
-          FIELDD_NATIVE_BIN: binaries.native,
-          FIELD_NATIVE_CELL_BIN: binaries.cell,
+  return withLabProfile(async ({ directory, id }) => {
+    const code = await new Promise((done, fail) => {
+      const child = spawn(
+        "pnpm",
+        [
+          "exec",
+          "electron",
+          ".",
+          "--godview-perf-lab",
+          `--user-data-dir=${directory}`,
+          "--disable-renderer-backgrounding",
+          "--disable-backgrounding-occluded-windows",
+        ],
+        {
+          cwd: join(root, "apps", "desktop"),
+          env: {
+            ...process.env,
+            TMPDIR: "/tmp",
+            ...env,
+            // Every arm runs its own built hosts, even with parent overrides.
+            FIELDD_BIN: join(root, "packages", "fieldd", "dist", "bin.cjs"),
+            FIELDD_NATIVE_BIN: binaries.native,
+            FIELD_NATIVE_CELL_BIN: binaries.cell,
+          },
+          stdio: ["ignore", "pipe", "pipe"],
         },
-        stdio: ["ignore", "pipe", "pipe"],
-      },
-    );
-    const lines = [];
-    child.stdout.on("data", (chunk) => {
-      for (const line of String(chunk).split("\n")) {
-        if (line.startsWith(echo)) log(`  ${prefix}: ${line.slice(0, 160)}`);
-        lines.push(line);
-      }
+      );
+      const lines = [];
+      let spawnError;
+      child.stdout.on("data", (chunk) => {
+        for (const line of String(chunk).split("\n")) {
+          if (line.startsWith(echo)) log(`  ${prefix}: ${line.slice(0, 160)}`);
+        }
+        lines.push(String(chunk));
+      });
+      child.stderr.on("data", (chunk) => lines.push(String(chunk)));
+      child.once("error", (error) => {
+        spawnError = error;
+      });
+      child.once("close", (code) => {
+        try {
+          writeFileSync(logPath, lines.join(""));
+          if (spawnError) fail(spawnError);
+          else done(code ?? 1);
+        } catch (error) {
+          fail(error);
+        }
+      });
     });
-    child.stderr.on("data", (chunk) => lines.push(String(chunk)));
-    child.on("error", fail);
-    child.on("exit", (code) => {
-      writeFileSync(logPath, lines.join("\n"));
-      done(code ?? 1);
-    });
+    if (code === 0) {
+      const report = JSON.parse(readFileSync(reportPath, "utf8"));
+      assertLabProfileProof(report.profile, prefix, { expectedId: id });
+    }
+    return code;
   });
 }
 

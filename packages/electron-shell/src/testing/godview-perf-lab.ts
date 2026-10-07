@@ -302,6 +302,7 @@ export async function runGodviewPerfLab(opts: {
         source: source.kind,
         clock,
         window: windowOptions,
+        profile: lab?.profile ?? null,
         frameRate: lab?.frameRate ?? null,
         focusEmulated: lab?.focusEmulated ?? false,
         reactHook: lab?.reactHook ?? false,
