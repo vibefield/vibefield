@@ -102,6 +102,8 @@ export interface CoverSample {
   readonly transform: string;
   readonly frames: number;
   readonly submits: number;
+  /** the frame gate parked (`__vfDesk.rest().parked`) — a freeze taken before the still stood parks under the fade */
+  readonly parked: boolean;
 }
 
 /** What the recorder saw from its arming on. */
@@ -224,6 +226,12 @@ export function judgeFade(recorded: CoverRecorded, swappedAt: number | undefined
   if (!(first.opacity < 1))
     problems.push(`the cover's first frame was already opaque (${first.opacity})`);
   const before = up.filter((s) => swappedAt === undefined || s.t < swappedAt);
+  // the freeze comes AFTER the still stands: nothing parks the desk under the cover's fade before the swap
+  const early = before.filter((s) => s.parked);
+  if (early.length > 0)
+    problems.push(
+      `the desk parked under the fade before its still stood (first at ${Math.round((early[0]?.t ?? 0) - recorded.t0)} ms)`,
+    );
   if (before.length > 1) {
     const moved = (before.at(-1)?.frames ?? 0) - (before[0]?.frames ?? 0);
     if (moved <= 0) problems.push("the desk drew nothing under the cover's fade — not live");
@@ -370,6 +378,7 @@ const ARM_RECORDER = (ms: number): string => `(() => {
       transform: ss === null ? "none" : ss.transform,
       frames: d?.perf().frames ?? -1,
       submits: d?.submits()?.total ?? -1,
+      parked: d?.rest().parked === true,
     });
     if (ss !== null) rec.transition = ss.transitionProperty + " " + ss.transitionDuration + " " + ss.transitionTimingFunction;
     if (now - rec.t0 < ${ms}) requestAnimationFrame(step);

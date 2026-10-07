@@ -63,6 +63,7 @@ const sample = (over: Partial<CoverSample>): CoverSample => ({
   transform: "matrix(1, 0, 0, 1, 0, 0)",
   frames: 100,
   submits: 110,
+  parked: false,
   ...over,
 });
 
@@ -187,6 +188,13 @@ describe("judgeFade — over the LIVE desk, and never a blank frame", () => {
     expect(judgeFade({ ...RISEN, samples }, 37_363)).toEqual([
       'the cover\'s first frame showed {"canvas":"visible","still":"still"}, not the live desk',
       "the cover's first frame was already opaque (1)",
+    ]);
+  });
+
+  it("refuses a desk parked under the fade before its still stood — the old order, the freeze as the cover rose", () => {
+    const samples = RISEN.samples.map((s, i) => (i === 3 ? { ...s, parked: true } : s));
+    expect(judgeFade({ ...RISEN, samples }, 37_363)).toEqual([
+      "the desk parked under the fade before its still stood (first at 61 ms)",
     ]);
   });
 
