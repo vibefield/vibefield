@@ -5,8 +5,16 @@
 // The door's whole render contract is "the plugin gets the SHIPPING view, or an
 // honest reason it cannot" — and that is exactly the pair a reader cannot
 // verify from the types. A plugin holding a handle from a window with no live
-// surfaces must still be able to lay out its card.
+// surfaces must still be able to lay out its panel.
+//
+// DK-17 (r6c's A test, re-aimed at the desk): the view is a PANEL's — screen
+// space, a DOM box the plugin owns (DK-7 kept it on the door; the mock's is
+// inert). On the desk a plugin's face is an object kind, never this view, and
+// the last row holds that: nothing the desk is built from reaches for it.
 
+import { readdirSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { act, type ReactElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
@@ -144,5 +152,28 @@ describe("ctx.pool.SurfaceView", () => {
     ).toBe("attaching");
     expect(view.querySelector("canvas")).not.toBeNull();
     expect(view.textContent).toContain("connecting surface");
+  });
+});
+
+describe("the desk never mounts the pool's view (DK-17)", () => {
+  it("no module under field/desk/, the canvas stage or the face builder imports the door or LiveSurfaceView", () => {
+    const src = join(dirname(fileURLToPath(import.meta.url)), "..", "src");
+    const offenders: string[] = [];
+    const scan = (relativePath: string): void => {
+      const text = readFileSync(join(src, relativePath), "utf8");
+      if (/(?:from\s+|import\s*\(\s*)"[^"]*\/(?:surface-door|LiveSurfaceView)"/u.test(text))
+        offenders.push(relativePath);
+    };
+    const walk = (relativeDir: string): void => {
+      for (const entry of readdirSync(join(src, relativeDir), { withFileTypes: true })) {
+        const relativePath = `${relativeDir}/${entry.name}`;
+        if (entry.isDirectory()) walk(relativePath);
+        else if (/\.tsx?$/u.test(entry.name)) scan(relativePath);
+      }
+    };
+    walk("field/desk");
+    scan("field/CanvasStage.tsx");
+    scan("plugin-host/build-widget.ts");
+    expect(offenders).toEqual([]);
   });
 });
