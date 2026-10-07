@@ -10,31 +10,40 @@
  * History alike — is over the field, so it takes the stricter gate: a freeze
  * parks the loop itself. Before ice 0.3.0 Godview used a hold, and the engine
  * ticked at display rate for pixels nobody could see.
+ *
+ * DK-15: the cover's freeze is taken by the still under the covers
+ * (`field/desk/CoverStill.tsx`), after the still is swapped in — here no desk is
+ * mounted, so the mat's ground stands under the cover and the freeze is taken at
+ * once; the ruled order with a desk is `cover-still.test.ts`'s.
  */
 
 import { type CanvasEngine, createCanvasEngine } from "@vibecook/ice";
-import { useFrameFreeze, useStageHold } from "@vibecook/ice/react";
+import { useStageHold } from "@vibecook/ice/react";
 import type { FrameViewState } from "@vibefield/contracts";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { resetActiveViewForTest, useCovered } from "../src/frame/view-state";
+import { CoverStill } from "../src/field/desk/CoverStill";
+import { resetCoverRecordsForTest } from "../src/field/desk/cover-still";
+import { resetActiveViewForTest, useActiveView } from "../src/frame/view-state";
 import { type FieldHost, setHost } from "../src/host";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-/** The ChromeLayer wiring, at the grain that matters: which gate, which name —
- * reading the window's view through the same mirror ChromeLayer reads. */
+/** The field's wiring, at the grain that matters: which gate, which name —
+ * reading the window's view through the same mirror FieldView reads, the cover
+ * taken by the still under the covers, the sheet's hold by ChromeLayer's call. */
 function Chrome({ ce, sheet }: { ce: CanvasEngine; sheet: boolean }) {
-  useFrameFreeze(ce, useCovered(), "cover");
+  const view = useActiveView();
   useStageHold(ce, sheet, "settings-panel");
-  return null;
+  return createElement(CoverStill, { ce, covered: view !== "canvas", view, dark: false });
 }
 
 let publish: ((state: FrameViewState) => void) | null = null;
 
 beforeEach(() => {
   resetActiveViewForTest();
+  resetCoverRecordsForTest();
   publish = null;
   setHost({
     view: {

@@ -22,11 +22,12 @@ import type { DocManager } from "./doc-manager";
 import { useDocSyncFeed } from "./doc-sync-store";
 import { CanvasStage } from "./field/CanvasStage";
 import { ChromeLayer, useChromeState } from "./field/ChromeLayer";
+import { CoverStill } from "./field/desk/CoverStill";
 import { BEFORE_THE_DESK } from "./field/desk/desk-words";
 import { useFieldKeymapOverrides } from "./field/field-keymap";
 import { useWorkspaceSession } from "./field/use-workspace-session";
 import type { FrameSurface } from "./frame/frame-surface";
-import { useCovered } from "./frame/view-state";
+import { useActiveView } from "./frame/view-state";
 import { type FieldUserProfile, peekHost } from "./host";
 import { useReactiveResource } from "./hud/use-reactive";
 import { getRendererLogger } from "./logging";
@@ -277,9 +278,11 @@ export function FieldView({
     [chrome.setShowSettings],
   );
   const sheetOpen = docsOpen || chrome.showSettings;
-  // A covered view (One Frame FR-1) recedes the field too — and ChromeLayer
-  // freezes it, since a cover covers (DESIGN.md §6).
-  const covered = useCovered();
+  // A covered view (One Frame FR-1): the field goes out of reach under it, and
+  // the desk becomes a STILL that costs nothing (DK-15, `CoverStill` below —
+  // the still recedes, the desk never does).
+  const view = useActiveView();
+  const covered = view !== "canvas";
 
   const [hudReturning, setHudReturning] = useState(false);
   const hudWasLoading = useRef(docState.phase === "loading");
@@ -329,7 +332,9 @@ export function FieldView({
       {/* The recede (reference design): the canvas eases to 0.98 while a
           sheet is up (the explorer, Settings — never the pegboard, DK-13).
           Only the wrapper transforms, so the transient scale never skews
-          engine picks.
+          engine picks. Under a cover the wrapper does NOT recede (DK-15): the
+          desk's still does, so nothing transforms the desk's own box while a
+          cover stands (ICE I39 — a desk resized under a transform measured it).
           KEYED by doc generation: a switch remounts the whole canvas stack
           (engine + the desk's layer and its device) — see the session.
           DK-9 (the plan's Phase 3 input (1)): the stage WAITS for the board —
@@ -356,6 +361,10 @@ export function FieldView({
           />
         )}
       </div>
+      {/* THE STILL UNDER THE COVERS (DK-15; DESIGN.md §8): over the desk and
+          under every piece of chrome; outside the keyed scene, so a remount
+          under a standing cover keeps it. */}
+      <CoverStill ce={ce} covered={covered} view={view} dark={dark} />
       <ChromeLayer
         ce={ce}
         manager={manager}

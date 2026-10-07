@@ -185,17 +185,13 @@ export function ChromeLayer({
   useStageHold(ce, docsOpen, "docs-explorer");
   useStageHold(ce, showSettings, "settings-panel");
   useStageHold(ce, docState.phase === "loading", "loading-veil");
-  // A covered view gets the STRICTER gate (ice 0.3.0). A stage hold is
-  // presentation policy over a world that keeps stepping — right for the
-  // sheets above, which recede a canvas that stays visible behind them. But
-  // the cover (One Frame FR-1 — Godview, History) is over the field, so the
-  // engine would still tick at display rate for pixels only its glass lets
-  // through: the hold quiets the GL compositor and nothing else. A freeze parks
-  // the loop outright — no step, no systems, no notify, no reflectors, no rAF —
-  // after walking a settle so the frozen image is whole (DESIGN.md §6: the
-  // field recedes and freezes). Thaw drops the input banked behind the cover
-  // and resumes on a clamped dt, so nothing teleports.
-  useFrameFreeze(ce, covered, "cover");
+  // A covered view gets the STRICTER gate (ice 0.3.0) — taken since DK-15 by
+  // the still under the covers (`desk/CoverStill.tsx`, mounted beside the
+  // scene in FieldView), in the ruled order: the capture, the still blurred
+  // once and swapped in, the canvas hidden, THEN `freeze("cover")` — zero
+  // frames and zero submits while the cover stands (DESIGN.md §8 "The covers
+  // over the desk"). A stage hold would not do: it is presentation policy over
+  // a world that keeps stepping (right for the sheets above).
   // The switch covers the window too (DESIGN.md §8): the field it leaves is
   // frozen whole under the frost, and thaws if a refused switch hands it back.
   const switchCovering = isSwitchCovering(useSwitchState());

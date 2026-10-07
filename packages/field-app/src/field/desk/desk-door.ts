@@ -26,6 +26,7 @@ import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
 import { lastSend, type SendRecord } from "../../frame/line-send";
 import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
 import { type BarStats, readBarStats } from "./bar/bar-stats";
+import { type CoverRecord, coverCaptures, coverRecords } from "./cover-still";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 import type { ObjectWords } from "./desk-object-words";
@@ -249,6 +250,13 @@ export interface VfDeskDoor {
    * carries, the capture's rect and the still's size, the marks hidden and put back, whether the draft was aimed, and
    * each step's time; null before any. A read. */
   sent(): SendRecord | null;
+  /** DK-15 — the covers this renderer has stood, oldest first (the last 8; `cover-still.ts`): each step in the order taken —
+   * capture, blur, swap, hide, freeze, park; a re-capture's thaw and one frame; the lowering's thaw, show, drop — with its
+   * time, the still's size and px per CSS px, the blur's px, the face (a still or the mat's ground) and what was said. A read. */
+  covers(): readonly CoverRecord[];
+  /** DK-15 — what the cover's OWN capture answers: "nothing" stands in for a lost device (the fallback's row); "desk" the
+   * desk's. Read, or set — a witness's switch, like `ambient`. */
+  coverCaptures(answer?: "desk" | "nothing"): "desk" | "nothing";
   /** DK-11 — the selection's anchor as the desk last published it (`handle.selection.anchor()`) — what the bar is
    * placed from; null on a handle without the door. A read. */
   anchor(): SelectionAnchor | null;
@@ -411,6 +419,8 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     },
     held: () => heldNow(engine),
     sent: lastSend,
+    covers: coverRecords,
+    coverCaptures,
   };
   const scope = globalThis as Record<string, unknown>;
   scope["__vfDesk"] = door;

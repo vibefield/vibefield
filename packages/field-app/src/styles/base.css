@@ -54,18 +54,13 @@ body {
     opacity 420ms var(--vf-ease-island);
 }
 
-.field-scene[data-sheet-open="true"],
-.field-scene[data-covered="true"] {
+.field-scene[data-sheet-open="true"] {
   transform: scale(0.98);
 }
 
-/* The view switch's recede (DESIGN.md §6): M6 keeps the cover's fade and drops
-   the travel under it. */
-@media (prefers-reduced-motion: reduce) {
-  .field-scene[data-covered="true"] {
-    transform: scale(1);
-  }
-}
+/* Under a cover the scene does NOT recede (DK-15): the desk's STILL does
+   (`field/desk/cover-still.css` — 0.98 over 560, transform only), so no
+   transform reaches the desk's own box while a cover stands. */
 
 .field-scene[data-doc-loading="true"] {
   opacity: 0.72;

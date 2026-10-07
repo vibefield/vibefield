@@ -9,6 +9,9 @@
   /* §2.1 Ground (the canvas) */
   --vf-canvas-bg: #fafafa;
   --vf-canvas-dot: rgba(0, 0, 0, 0.16);
+  /* §2.1 the cutting mat's sage AS THE THEME LIGHTS IT — by day the Sun's (DK-15: what a cover
+     stands over when the desk's still answers nothing — DESIGN.md §8, the covers over the desk) */
+  --vf-mat-ground: #3d5a30;
   /* widgetlab-compat aliases */
   --canvas-bg: var(--vf-canvas-bg);
   --canvas-dot: var(--vf-canvas-dot);
@@ -238,6 +241,8 @@
   /* §2.1 Ground */
   --vf-canvas-bg: #171717;
   --vf-canvas-dot: rgba(255, 255, 255, 0.08);
+  /* §2.1 the mat by night: the Moon's dapples */
+  --vf-mat-ground: #313c40;
 
   /* §2.2 Surfaces */
   --vf-fill: #2c2c2e;
