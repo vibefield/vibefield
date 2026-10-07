@@ -25,9 +25,13 @@ describe("the W1 wire door", () => {
   });
 });
 
-describe("the S3 undo door", () => {
-  it("useUndo is exported — claiming widgets must be able to forward mod-Z", async () => {
-    const { useUndo } = await import("../src/canvas");
-    expect(typeof useUndo).toBe("function");
+describe("the React face hooks (retired, DK-17)", () => {
+  it("are gone from the door — the face reads, its commit and the claiming face's undo", async () => {
+    // The retire table's SDK row: a canvas face is an object KIND (the `/desk` door), so the React
+    // face's hooks — and S3's `useUndo` for a keyboard-claiming widget — left with the faces.
+    const door: Record<string, unknown> = await import("../src/canvas");
+    for (const hook of ["useWidgetProps", "useWorldComponent", "useCommit", "useOps", "useUndo"])
+      expect(door[hook], `${hook} must not be on the /canvas door`).toBeUndefined();
+    expect(typeof door["getWidgetType"]).toBe("function");
   });
 });

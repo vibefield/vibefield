@@ -11,8 +11,11 @@
 // `useIslandInvalidate`: ICE's `/r3f` entry is gone), the React face's prop contract
 // (`WidgetComponentProps`: no widget mounts a React component under the camera) and
 // `MeasuredSize` (every effective size is `Size`). A canvas face is an OBJECT KIND the desk
-// draws (`contributes.objects`; the SDK's `/desk` door opens at DK-6). The hooks below stay:
-// they read the world and work in a screen-space DOM half.
+// draws (`contributes.objects`; the SDK's `/desk` door, DK-6). DK-17 (the retire table's SDK
+// row): the React face's hooks went too — `useWidgetProps`, `useWorldComponent`, `useCommit`,
+// `useOps` and the keyboard-claiming face's `useUndo`; no shipped plugin read them since the
+// faces left, and a kind's DOM half reads the world through the `/desk` door. What stays is the
+// core vocabulary a host-invoked command reads.
 
 export {
   CameraLimits,
@@ -45,42 +48,13 @@ export {
   type World,
   widgetSpawnInits,
 } from "@vibecook/ice";
-export { useCommit, useOps, useWidgetProps, useWorldComponent } from "@vibecook/ice/react";
 
 import type { WidgetType } from "@vibecook/ice";
 import { widgets } from "@vibecook/ice";
-import { useCanvasEngine, useUndoStatus } from "@vibecook/ice/react";
-import { useMemo } from "react";
 
 /** Read-only lookup into the engine's widget catalog (the ShapesCard/TodoList
  * runtime-groups idiom). A read HELPER instead of re-exporting the raw global
  * registry map — plugins never hold the mutable catalog itself. */
 export function getWidgetType(type: string): WidgetType | undefined {
   return widgets.get(type);
-}
-
-/** Engine undo for keyboard-claiming widgets (S3, the mind map pack,
- * 2026-08-13). Under an exclusive claim the engine keymap cedes EVERY chord —
- * ⌘Z/⇧⌘Z included (gate 2 of the widget input contract) — so the widget must
- * forward them itself. This is the sanctioned door: `docs.undo`/`docs.redo`,
- * the SAME stack every canvas edit rides. A curated wrapper, deliberately not
- * the raw CanvasEngine facade — plugins never hold the engine. Both triggers
- * return whether a step actually applied (the engine's own contract). */
-export function useUndo(): {
-  undo: () => boolean;
-  redo: () => boolean;
-  canUndo: boolean;
-  canRedo: boolean;
-} {
-  const engine = useCanvasEngine();
-  const { canUndo, canRedo } = useUndoStatus();
-  return useMemo(
-    () => ({
-      undo: () => engine.docs.undo(),
-      redo: () => engine.docs.redo(),
-      canUndo,
-      canRedo,
-    }),
-    [engine, canUndo, canRedo],
-  );
 }
