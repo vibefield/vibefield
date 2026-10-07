@@ -151,20 +151,6 @@ export function godviewTerminalEffects(appearance: DeckAppearance): TerminalEffe
   return { postProcess: "none", shaderEffects: stack, animate: appearance.shaderAnimate };
 }
 
-/** The stage's backdrop as the two variables `godview.css` reads on
- * `.vf-godview` (GT-7, GT-D19): the ground's opacity as a percentage for its
- * `color-mix`, and the blur for its `backdrop-filter`. One projection, three
- * readers — the overlay, the catalog's stage, and Settings' Godview in
- * miniature — so the three can never draw different glass from one value. */
-export function godviewBackdropStyle(
-  appearance: Pick<DeckAppearance, "backdropOpacity" | "backdropBlur">,
-): Record<"--vf-godview-stage-opacity" | "--vf-godview-stage-blur", string> {
-  return {
-    "--vf-godview-stage-opacity": `${Math.round(appearance.backdropOpacity * 100)}%`,
-    "--vf-godview-stage-blur": `${appearance.backdropBlur}px`,
-  };
-}
-
 /** The deck sheet's ground (DESIGN.md §8, 2026-09-28 — James: the deck is
  * always the terminal's own colour). The background of the SAME projection the
  * workspace is handed, so a catalog theme, the per-mode choice and the reference

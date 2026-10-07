@@ -6,7 +6,7 @@ import {
 } from "@vibecook/ghosttea-react/workspace";
 import { SegmentedControl, UiButton, UiIconButton, UnavailableState } from "@vibefield/design-kit";
 import type { ReactElement } from "react";
-import { DECK_BACKDROP_BLUR_MAX, deckThemeNameForMode } from "../../godview/deck-appearance";
+import { deckThemeNameForMode } from "../../godview/deck-appearance";
 import { labelCls, SettingsRow, SettingsSwitch } from "../settings-ui";
 import { GodviewMiniature } from "./GodviewMiniature";
 import type { TerminalPageModel } from "./page-model";
@@ -217,7 +217,7 @@ export function LookTab({
         id="look-glass"
         title="Glass"
         scope="window"
-        description="Three layers, top to bottom: each terminal's ground, Godview's backdrop, then your canvas. Thin one to see the next through it. The blur only reaches what's behind, never the text."
+        description="Two layers, top to bottom: each terminal's ground, then Godview's cover over your canvas. Thin the ground to see the cover through it."
       >
         <div className="vf-ts-glass">
           <LayerHead at={0} name="Terminal" line="each pane's ground, drawn by the renderer" />
@@ -225,8 +225,8 @@ export function LookTab({
             title="Background opacity"
             description={
               appearance.opacity >= 1
-                ? "Solid: Godview's backdrop stays behind the pane."
-                : "Godview's backdrop shows through each pane."
+                ? "Solid: Godview's cover stays behind the pane."
+                : "Godview's cover shows through each pane."
             }
           >
             <RangeControl
@@ -249,56 +249,14 @@ export function LookTab({
               label="Dim program backgrounds too"
             />
           </SettingsRow>
+          {/* DK-15: Godview's backdrop is not a layer to set any more — on the desk
+              the cover is a tint at the covers' 72% over a still of the desk,
+              blurred once (DESIGN.md §8 "The covers over the desk"); its opacity
+              and blur rows retired with GT-7's saved backdrop. */}
           <LayerHead
             at={1}
-            name="Godview's backdrop"
-            line="the stage behind the bodies and the panes"
-          />
-          <SettingsRow
-            title="Backdrop opacity"
-            description={
-              <>
-                {appearance.backdropOpacity >= 1
-                  ? "Solid, as Godview ships: your canvas stays hidden."
-                  : "Your canvas shows through Godview, behind the bodies and the panes."}
-                <span className="vf-ts-was">
-                  Godview's system controls edit this same setting; it's saved with this window.
-                </span>
-              </>
-            }
-          >
-            <RangeControl
-              id="vf-ts-backdrop"
-              label="Godview backdrop opacity"
-              min={0}
-              max={100}
-              value={Math.round(appearance.backdropOpacity * 100)}
-              format={(value) => `${value}%`}
-              onChange={(value) => set({ backdropOpacity: value / 100 })}
-            />
-          </SettingsRow>
-          <SettingsRow
-            title="Background blur"
-            description={
-              appearance.backdropOpacity >= 1
-                ? "Softens your canvas where it shows through. Godview's backdrop is solid, so there's nothing to soften yet: lower Backdrop opacity first."
-                : "Softens your canvas where it shows through, so the bodies and the text stay the sharpest things on screen."
-            }
-          >
-            <RangeControl
-              id="vf-ts-blur"
-              label="Background blur"
-              min={0}
-              max={DECK_BACKDROP_BLUR_MAX}
-              value={appearance.backdropBlur}
-              format={(value) => (value === 0 ? "Off" : `${value} px`)}
-              onChange={(backdropBlur) => set({ backdropBlur })}
-            />
-          </SettingsRow>
-          <LayerHead
-            at={2}
             name="Your canvas"
-            line="the field, held still while Godview covers it"
+            line="a still of your desk under Godview's cover — the covers' glass at 72%, blurred once"
           />
         </div>
       </PageSection>

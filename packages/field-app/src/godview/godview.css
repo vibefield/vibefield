@@ -79,12 +79,17 @@
   flex-direction: column;
   overflow: hidden;
   color: var(--text-main);
+  /* The view's ground is the cover's TINT at the covers' glass, 72% (FC-D16),
+     over the desk's still blurred once (DK-15; DESIGN.md §8 "The covers over the
+     desk"): not the viewer's any more, and never a backdrop filter — the still
+     is blurred once, and a backdrop filter is re-blurred by the compositor every
+     frame the swarm moves. The deck sheet and the launcher read the same value. */
+  --vf-godview-stage-opacity: 72%;
   background: color-mix(
     in srgb,
-    var(--vf-godview-stage-color, var(--monitor-bg)) var(--vf-godview-stage-opacity, 100%),
+    var(--vf-godview-stage-color, var(--monitor-bg)) var(--vf-godview-stage-opacity),
     transparent
   );
-  backdrop-filter: blur(var(--vf-godview-stage-blur, 0));
   font-family: ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Monaco, Consolas, monospace;
   font-synthesis: none;
   opacity: 0;

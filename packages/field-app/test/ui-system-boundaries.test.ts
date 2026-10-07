@@ -180,6 +180,29 @@ describe("UI system ownership boundaries", () => {
     expect(view).toContain("portalContainer={layers}");
   });
 
+  it("retires rosetta's room glass on the desk — the room's fades are the cover's tint, never a backdrop filter (DK-15, R16)", () => {
+    // DESIGN.md §8 "The covers over the desk": under a cover the desk is a still
+    // blurred once, and the room's host-surface frost (a 14px backdrop filter on
+    // the transcript's top fade and the sticky day heads) would re-blur it every
+    // frame anything beneath moved. vitest loads no CSS; the rule is held here and
+    // the computed style by smoke:canvas's COVER HISTORY row.
+    const css = source("history/history-room-glass.css");
+    const block =
+      /\.vf-history \.ah-frame\[data-ah-surface="host"\] \.tr-frost::before,\s*\.vf-history \.ah-frame\[data-ah-surface="host"\] \.ah-day::before \{([^}]*)\}/u.exec(
+        css,
+      )?.[1] ?? "";
+    expect(block).toContain("backdrop-filter: none;");
+    expect(block).toContain("-webkit-backdrop-filter: none;");
+    expect(block).toContain("background: var(--vf-chrome-solid);");
+    expect(css).not.toMatch(/backdrop-filter:\s*blur/);
+    // in the room's own chunk: only the room's view imports it, after the room's sheet
+    const view = source("history/HistoryRoomView.tsx");
+    expect(view.indexOf('import "./history-room-glass.css";')).toBeGreaterThan(
+      view.indexOf('import "@rosetta/room/styles/room.css";'),
+    );
+    expect(source("history/HistoryOpening.tsx")).not.toContain("history-room-glass.css");
+  });
+
   it("keeps History's fixture an ADAPTER — the package's fixture ports, never the room's markup (AR-8c)", () => {
     // The catalog stands in for what a host supplies — the room's four ports —
     // and takes them from the room package's own fixture entry; the view it
@@ -572,6 +595,8 @@ describe("UI system ownership boundaries", () => {
       "godview/deck-zoom.css",
       "frame/view-frame.css",
       "history/history-room-view.css",
+      "history/history-room-glass.css",
+      "field/desk/cover-still.css",
       "frame/composer.css",
       "frame/head.css",
       "frame/menu.css",

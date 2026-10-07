@@ -9,6 +9,8 @@
  * that replaced GT-3's screen-composite interim — if that alpha stops arriving,
  * the panes go opaque and no test that only counts renders would notice.
  */
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { GHOSTTEA_SHADER_OPTIONS } from "@vibecook/ghosttea-react/workspace";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -20,7 +22,7 @@ import {
   setDeckAppearance,
   subscribeDeckAppearance,
 } from "../src/godview/deck-appearance";
-import { godviewBackdropStyle, godviewTerminalEffects } from "../src/godview/deck-theme";
+import { godviewTerminalEffects } from "../src/godview/deck-theme";
 
 beforeEach(() => resetDeckAppearanceForTest());
 afterEach(() => resetDeckAppearanceForTest());
@@ -36,8 +38,6 @@ describe("the deck appearance store", () => {
           opacityCells: true,
           shaderEffects: ["ghosttea:vhs", "ghosttea:crt"],
           shaderAnimate: true,
-          backdropOpacity: 0.6,
-          backdropBlur: 18,
           modeOverride: "light",
         }),
       ),
@@ -48,8 +48,6 @@ describe("the deck appearance store", () => {
       opacityCells: true,
       shaderEffects: ["ghosttea:vhs", "ghosttea:crt"],
       shaderAnimate: true,
-      backdropOpacity: 0.6,
-      backdropBlur: 18,
       modeOverride: "light",
     });
   });
@@ -85,17 +83,21 @@ describe("the deck appearance store", () => {
     expect(stack.length).toBeLessThanOrEqual(8);
   });
 
-  it("clamps the backdrop into its ranges and defaults it to the covers' glass (FC-D16)", () => {
-    expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: 3 })).backdropOpacity).toBe(1);
-    expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: -1 })).backdropOpacity).toBe(0);
-    expect(parseDeckAppearance(JSON.stringify({ backdropBlur: 500 })).backdropBlur).toBe(80);
-    expect(parseDeckAppearance(JSON.stringify({ backdropBlur: "soft" })).backdropBlur).toBe(0);
-    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(0.72);
-    expect(DEFAULT_DECK_APPEARANCE.backdropBlur).toBe(0);
-    // A record that never named a backdrop takes the new default; one that did
-    // keeps its own, opaque included.
-    expect(parseDeckAppearance(JSON.stringify({ opacity: 0.5 })).backdropOpacity).toBe(0.72);
-    expect(parseDeckAppearance(JSON.stringify({ backdropOpacity: 1 })).backdropOpacity).toBe(1);
+  it("reads a saved backdrop as nothing — Godview's live backdrop retired on the desk (DK-15, R16)", () => {
+    // GT-7 saved `backdropOpacity` / `backdropBlur` beside the pane glass. On
+    // the desk the cover is a tint at the covers' 72% over the desk's still,
+    // blurred once — not the viewer's — so a record that still names them reads
+    // without them, and the next write leaves them out.
+    const old = parseDeckAppearance(
+      JSON.stringify({ opacity: 0.5, backdropOpacity: 0.3, backdropBlur: 24 }),
+    );
+    expect(old).not.toHaveProperty("backdropOpacity");
+    expect(old).not.toHaveProperty("backdropBlur");
+    expect(old.opacity).toBe(0.5);
+    expect(DEFAULT_DECK_APPEARANCE).not.toHaveProperty("backdropOpacity");
+    expect(DEFAULT_DECK_APPEARANCE).not.toHaveProperty("backdropBlur");
+    setDeckAppearance(old);
+    expect(localStorage.getItem("vf-godview-appearance-v1")).not.toMatch(/backdrop/);
   });
 
   it("reads a record written before shaders existed as no shader", () => {
@@ -139,10 +141,7 @@ describe("the deck appearance store", () => {
       opacityCells: false,
       shaderEffects: [],
       shaderAnimate: false,
-      // a record that never named a backdrop takes the covers' glass (FC-D16)
-      backdropOpacity: 0.72,
-      backdropBlur: 0,
-      // …and one from before FR-4 follows the app's theme (FC-D7)
+      // one from before FR-4 follows the app's theme (FC-D7)
       modeOverride: null,
     });
   });
@@ -181,8 +180,6 @@ describe("the deck appearance store", () => {
       opacityCells: true,
       shaderEffects: ["ghosttea:crt"],
       shaderAnimate: false,
-      backdropOpacity: 0.5,
-      backdropBlur: 12,
       modeOverride: "dark",
     });
 
@@ -197,8 +194,6 @@ describe("the deck appearance store", () => {
       opacityCells: true,
       shaderEffects: ["ghosttea:crt"],
       shaderAnimate: false,
-      backdropOpacity: 0.5,
-      backdropBlur: 12,
       modeOverride: "dark",
     });
     stop();
@@ -314,24 +309,16 @@ describe("the viewer's shader, as the effects prop", () => {
 });
 
 /**
- * The stage's backdrop (GT-7, GT-D19) — the two variables godview.css reads,
- * from ONE projection the overlay, the catalog and Settings all use.
+ * The stage's backdrop (DK-15; DESIGN.md §8 "The covers over the desk"): the
+ * cover's TINT at the covers' 72% (FC-D16), godview.css's own — no projection
+ * from a saved value, and no backdrop filter (the desk's still is blurred once).
  */
-describe("the viewer's backdrop, as the stage's variables", () => {
-  it("projects the default as the covers' glass, sharp (FC-D16 — it was the flat, opaque stage)", () => {
-    expect(godviewBackdropStyle(DEFAULT_DECK_APPEARANCE)).toEqual({
-      "--vf-godview-stage-opacity": "72%",
-      "--vf-godview-stage-blur": "0px",
-    });
-  });
-
-  it("projects a see-through, blurred backdrop", () => {
-    expect(
-      godviewBackdropStyle({
-        ...DEFAULT_DECK_APPEARANCE,
-        backdropOpacity: 0.456,
-        backdropBlur: 24,
-      }),
-    ).toEqual({ "--vf-godview-stage-opacity": "46%", "--vf-godview-stage-blur": "24px" });
+describe("Godview's ground is the covers' tint, not a setting", () => {
+  it("sets 72% in the stylesheet and blurs nothing behind it", () => {
+    const css = readFileSync(join(process.cwd(), "src/godview/godview.css"), "utf8");
+    const rule = /\.vf-godview \{([^}]*)\}/u.exec(css)?.[1] ?? "";
+    expect(rule).toMatch(/--vf-godview-stage-opacity: 72%;/);
+    expect(rule).not.toMatch(/backdrop-filter/);
+    expect(css).not.toMatch(/--vf-godview-stage-blur/);
   });
 });

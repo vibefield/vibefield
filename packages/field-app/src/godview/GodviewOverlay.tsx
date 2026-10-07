@@ -5,7 +5,7 @@ import { getHost } from "../host";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
 import { godviewColdOpen } from "./cold-open";
 import { useDeckAppearance } from "./deck-appearance";
-import { godviewBackdropStyle, godviewTerminalGroundStyle } from "./deck-theme";
+import { godviewTerminalGroundStyle } from "./deck-theme";
 import { GodviewDeck } from "./GodviewDeck";
 import { GodviewMonitor } from "./GodviewMonitor";
 import { GodviewStage, GodviewUnavailableDeck } from "./GodviewStage";
@@ -180,8 +180,8 @@ export function GodviewOverlay(): ReactElement | null {
   const stage = monitor.stageParameters;
   const screenStyle = {
     ...godviewTuningStyle(tuning),
-    // GT-7: the backdrop is the viewer's own, read from the saved appearance.
-    ...godviewBackdropStyle(appearance),
+    // The backdrop is the cover's 72% tint over the desk's still (DK-15) —
+    // godview.css's own, no longer the viewer's (GT-7's setting retired).
     // The deck sheet wears the terminal's own ground (DESIGN.md §8).
     ...godviewTerminalGroundStyle(appearance, theme),
     "--vf-monitor-stage-height": `${monitor.stageHeight}%`,

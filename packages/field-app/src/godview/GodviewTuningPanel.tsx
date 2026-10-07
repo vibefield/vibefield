@@ -3,12 +3,7 @@ import type { MonitorParameterDefinition } from "@vibecook/puppeteer-views";
 import { CARD_BG } from "@vibefield/design-kit";
 import { type CSSProperties, type ReactElement, useMemo } from "react";
 import { createPortal } from "react-dom";
-import {
-  DECK_BACKDROP_BLUR_MAX,
-  type DeckAppearance,
-  deckThemeNameForMode,
-  setDeckAppearance,
-} from "./deck-appearance";
+import { type DeckAppearance, deckThemeNameForMode, setDeckAppearance } from "./deck-appearance";
 import { GodviewPerfReadout } from "./GodviewPerfReadout";
 import type { MonitorTuningSection } from "./monitor/monitor-tuning";
 
@@ -21,8 +16,9 @@ export type GodviewTheme = "light" | "dark";
 const DECK_DEFAULT_THEME_VALUE = "";
 
 /** The panel's MEMORY-ONLY knobs. The stage's opacity and blur are not here any
- * more (GT-7, GT-D19): they are the viewer's backdrop, saved in the deck
- * appearance beside the pane glass, and this panel edits that store. */
+ * more: GT-7 moved them into the viewer's saved backdrop, and DK-15 retired that
+ * backdrop on the desk — the cover is a tint at the covers' 72% over the desk's
+ * still, blurred once (DESIGN.md §8 "The covers over the desk"). */
 export interface GodviewTuning {
   stageColor: string;
   bubbleIdleColor: string;
@@ -212,26 +208,8 @@ export function GodviewTuningPanel({
           value={value.stageColor}
           onChange={(stageColor) => onChange({ stageColor })}
         />
-        {/* GT-7: these two edit the viewer's saved backdrop — the value Settings →
-            Terminal → Glass edits and the stage draws — not a copy of it. */}
-        <RangeControl
-          label="Stage opacity"
-          value={Math.round(appearance.backdropOpacity * 100)}
-          min={0}
-          max={100}
-          unit="%"
-          onChange={(percent) =>
-            setDeckAppearance({ ...appearance, backdropOpacity: percent / 100 })
-          }
-        />
-        <RangeControl
-          label="Backdrop blur"
-          value={appearance.backdropBlur}
-          min={0}
-          max={DECK_BACKDROP_BLUR_MAX}
-          unit="px"
-          onChange={(backdropBlur) => setDeckAppearance({ ...appearance, backdropBlur })}
-        />
+        {/* DK-15: the stage's opacity and blur retired on the desk — the cover is
+            a tint at the covers' 72% over the desk's still, blurred once. */}
       </fieldset>
 
       <fieldset className="vf-godview-tweak-group">

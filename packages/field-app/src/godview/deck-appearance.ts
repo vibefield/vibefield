@@ -72,18 +72,12 @@ export interface DeckAppearance {
    * adding and removing VHS does not silently forget the answer; upstream's
    * own gate ignores it for a stack with nothing that moves. */
   shaderAnimate: boolean;
-  /** Godview's BACKDROP — the stage's own ground behind the bodies and the
-   * panes (GT-7, GT-D19). `backdropOpacity` (0–1) is how much of that ground
-   * is drawn: below 1 the canvas under Godview shows through. `backdropBlur`
-   * (px, 0–{@link DECK_BACKDROP_BLUR_MAX}) softens what shows through — one
-   * backdrop filter on the overlay, over a field Godview holds still (DESIGN.md
-   * §6 M5), never one per pane. Until GT-7 these were the system panel's
-   * memory-only STAGE knobs; they are the viewer's now, saved with the rest of
-   * its glass. The default opacity is the covers' glass, 72% (One Frame
-   * FC-D16, 2026-10-03 — it was the reference's flat, opaque stage); the blur
-   * stays 0 until the field under a cover is a still worth blurring. */
-  backdropOpacity: number;
-  backdropBlur: number;
+  // Godview's BACKDROP is no longer the viewer's (DK-15; DESIGN.md §8 "The
+  // covers over the desk", the deck's note; R16): on the desk the cover is a
+  // TINT at the covers' 72% (FC-D16) over a still of the desk blurred once,
+  // and GT-7's saved `backdropOpacity` / `backdropBlur` retired with their
+  // settings rows. A record that still names them is read without them (the
+  // tolerant reader keeps only the fields below) and the next write drops them.
   /** Godview's mode, OVERRIDDEN (One Frame FC-D7, FR-4): null — the default,
    * and what every record from before FR-4 reads as — follows the app's one
    * theme; "light" or "dark" keeps Godview there whatever the app is. The one
@@ -92,9 +86,6 @@ export interface DeckAppearance {
    * gone, so nothing else writes it. */
   modeOverride: DeckAppearanceMode | null;
 }
-
-/** The backdrop blur's ceiling — the system panel's own range since GT-3v. */
-export const DECK_BACKDROP_BLUR_MAX = 80;
 
 /** A stack deeper than the four ports is a record this writer did not make. */
 const SHADER_STACK_MAX = 8;
@@ -109,13 +100,6 @@ export const DEFAULT_DECK_APPEARANCE: DeckAppearance = {
   // viewer's panes on its way in.
   shaderEffects: [],
   shaderAnimate: false,
-  // FC-D16 (ruled 2026-10-01): the covers' glass is 72%, the view's own ground
-  // over the frozen field (DESIGN.md §10). A viewer who saved a backdrop keeps
-  // it — the tolerant reader below only falls back to this for a record that
-  // never named one. No blur on this canvas: FC-D13's blur waits for the desk's
-  // still, which is a later slice on another branch.
-  backdropOpacity: 0.72,
-  backdropBlur: 0,
   // FC-D7: Godview follows the app until the viewer says otherwise.
   modeOverride: null,
 };
@@ -190,13 +174,6 @@ export function parseDeckAppearance(raw: string | null): DeckAppearance {
     opacityCells: record.opacityCells === true,
     shaderEffects: parsedShaderEffects(record),
     shaderAnimate: record.shaderAnimate === true,
-    backdropOpacity: clamped(record.backdropOpacity, 0, 1, DEFAULT_DECK_APPEARANCE.backdropOpacity),
-    backdropBlur: clamped(
-      record.backdropBlur,
-      0,
-      DECK_BACKDROP_BLUR_MAX,
-      DEFAULT_DECK_APPEARANCE.backdropBlur,
-    ),
     // Only the two modes override; anything else is no override at all.
     modeOverride:
       record.modeOverride === "light" || record.modeOverride === "dark"

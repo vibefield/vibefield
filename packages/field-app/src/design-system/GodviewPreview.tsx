@@ -1,7 +1,7 @@
 import { monitorParameterDefaults, monitorViewFor } from "@vibecook/puppeteer-views";
 import { type CSSProperties, type ReactElement, useMemo, useState } from "react";
 import { useDeckAppearance } from "../godview/deck-appearance";
-import { godviewBackdropStyle, godviewTerminalGroundStyle } from "../godview/deck-theme";
+import { godviewTerminalGroundStyle } from "../godview/deck-theme";
 import { GodviewMonitor } from "../godview/GodviewMonitor";
 import { GodviewStage, GodviewUnavailableDeck } from "../godview/GodviewStage";
 import {
@@ -51,7 +51,6 @@ export function GodviewPreview({
 
   const screenStyle = {
     ...godviewTuningStyle(tuning),
-    ...godviewBackdropStyle(appearance),
     ...godviewTerminalGroundStyle(appearance, theme),
     "--vf-monitor-stage-height": "35%",
     "--vf-scanline-density": "2px",

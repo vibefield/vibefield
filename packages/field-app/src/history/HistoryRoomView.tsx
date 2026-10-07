@@ -24,6 +24,8 @@ import type { HistorySearchSheet } from "./search";
 // lands after the kit's tokens by load order (its README's one ordering rule).
 import "@rosetta/room/styles/room.css";
 import "./history-room-view.css";
+// DK-15: on the desk the room's fades are the cover's tint, never frost — in the room's own chunk, after its sheet
+import "./history-room-glass.css";
 
 // THE HISTORY VIEW (AR-8c; DESIGN.md §8 "History", §10; One Frame §9 "History,
 // joined" — FC-D6, FC-D15, FC-D16): rosetta's room, the package, on the cover's

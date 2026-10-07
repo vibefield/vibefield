@@ -354,6 +354,26 @@ describe("Settings → Terminal against fieldd (GT-7)", () => {
     expect(host?.textContent).toContain("saved line 3");
   });
 
+  it("retires Godview's backdrop rows on the desk — Backdrop opacity and Background blur gone (DK-15, R16)", async () => {
+    // DESIGN.md §8 "The covers over the desk" and the deck's note: the cover is a
+    // tint at the covers' 72% over a still of the desk blurred once, so the Glass
+    // section's middle layer — "Godview's backdrop" and its two rows — goes.
+    await mount();
+    const text = host?.textContent ?? "";
+    for (const gone of [
+      "Backdrop opacity",
+      "Background blur",
+      "Godview's backdrop",
+      "Three layers",
+    ]) {
+      expect(text).not.toContain(gone);
+    }
+    expect(host?.querySelector("#vf-ts-backdrop")).toBeNull();
+    expect(host?.querySelector("#vf-ts-blur")).toBeNull();
+    expect(text).toContain("Two layers, top to bottom");
+    expect(text).toContain("a still of your desk under Godview's cover");
+  });
+
   it("keeps Godview's one override — As the app, or a mode of its own (FC-D7)", async () => {
     resetDeckAppearanceForTest();
     await mount();

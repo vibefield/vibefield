@@ -10,8 +10,7 @@
    the motion floor below by weight or say the same thing. */
 
 /* The view's own ground: the covers' glass, 72% (FC-D16). The room is mounted
-   as a HOST surface, so it paints no ground and no plate of its own, and its
-   paper fades frost over this glass instead (the package's `surface="host"`). */
+   as a HOST surface, so it paints no ground and no plate of its own. */
 .vf-history {
   position: absolute;
   inset: 0;

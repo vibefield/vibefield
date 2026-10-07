@@ -8,7 +8,6 @@ import {
   useState,
 } from "react";
 import type { DeckAppearance } from "../../godview/deck-appearance";
-import { godviewBackdropStyle } from "../../godview/deck-theme";
 import { GodviewStage } from "../../godview/GodviewStage";
 import { storedStageParameters } from "../../godview/monitor/monitor-tuning";
 import {
@@ -21,7 +20,7 @@ import { type PreviewMode, type PreviewTheme, withAlpha } from "./theme-view";
 // Settings → Terminal's preview: Godview in miniature (GT-7).
 //
 // What ships is mounted, not redrawn: the stage is `GodviewStage` itself — its
-// backdrop (`godviewBackdropStyle`, the one projection the overlay reads), its
+// backdrop (the covers' 72% tint, godview.css's own since DK-15), its
 // CRT lines and vignette at the values the user tuned — and each pane wears the
 // views package's `PaneFrameChrome`, the frame the deck portals into every pane
 // (record §07). Three things are stand-ins, said so here: the CANVAS behind
@@ -167,15 +166,7 @@ export interface GodviewMiniatureProps {
   theme: PreviewTheme;
   /** the sixteen program colours this Mac's sessions paint with */
   palette: readonly string[];
-  appearance: Pick<
-    DeckAppearance,
-    | "opacity"
-    | "opacityCells"
-    | "shaderEffects"
-    | "shaderAnimate"
-    | "backdropOpacity"
-    | "backdropBlur"
-  >;
+  appearance: Pick<DeckAppearance, "opacity" | "opacityCells" | "shaderEffects" | "shaderAnimate">;
   /** a line under the picture */
   caption?: ReactNode;
 }
@@ -393,13 +384,7 @@ export function GodviewMiniature({
         ...(thumb ? { width: SIZES.thumb.width, transform: `scale(${scale})` } : {}),
       }}
       role="img"
-      aria-label={`Godview in ${mode} mode: a terminal in ${theme.name} at ${Math.round(appearance.opacity * 100)}% opacity${
-        appearance.backdropOpacity < 1
-          ? `, your canvas showing through the backdrop at ${Math.round(appearance.backdropOpacity * 100)}%${
-              appearance.backdropBlur > 0 ? `, blurred ${appearance.backdropBlur} px` : ""
-            }`
-          : ""
-      }`}
+      aria-label={`Godview in ${mode} mode: a terminal in ${theme.name} at ${Math.round(appearance.opacity * 100)}% opacity, over Godview's cover: the covers' glass at 72% over a still of your desk`}
     >
       <div className="vf-ts-mini-inert" aria-hidden="true" inert>
         <Field />
@@ -411,7 +396,6 @@ export function GodviewMiniature({
           className="vf-ts-mini-stage"
           style={
             {
-              ...godviewBackdropStyle(appearance),
               "--vf-scanline-density": `${stage[SCANLINE_DENSITY_KEY] ?? 2}px`,
               "--vf-scanline-opacity": stage[SCANLINE_OPACITY_KEY] ?? 0.4,
               "--vf-vignette-opacity": stage[VIGNETTE_OPACITY_KEY] ?? 1,

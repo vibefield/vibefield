@@ -85,9 +85,9 @@ describe("the temporary Godview surface lab", () => {
 
     expect(style["--vf-godview-stage-color"]).toBe("#101010");
     expect(style["--vf-godview-bubble-working"]).toBe("#222222");
-    // GT-7: the backdrop's opacity and blur are the VIEWER's saved appearance
-    // now (godviewBackdropStyle), so a lab that still published them from its
-    // memory would be a second authority over one value.
+    // The backdrop's opacity is the cover's 72% tint, godview.css's own since
+    // DK-15 (GT-7's saved backdrop retired), so a lab that still published it
+    // from its memory would be a second authority over one value.
     expect(Object.keys(style)).not.toContain("--vf-godview-stage-opacity");
     expect(Object.keys(style)).not.toContain("--vf-godview-stage-blur");
     // The compositing variables retired with the mechanism they drove: pane
@@ -97,32 +97,21 @@ describe("the temporary Godview surface lab", () => {
     expect(Object.keys(style)).not.toContain("--vf-godview-pane-opacity");
   });
 
-  it("defaults the stage to the covers' glass, sharp (FC-D16)", () => {
-    expect(DEFAULT_DECK_APPEARANCE.backdropOpacity).toBe(0.72);
-    expect(DEFAULT_DECK_APPEARANCE.backdropBlur).toBe(0);
+  it("offers no backdrop knob — the stage's opacity and blur retired on the desk (DK-15, R16)", () => {
+    const element = mountPanel(vi.fn());
+    const stage = fieldsetNamed(element, "STAGE SURFACE");
+    expect(stage.querySelectorAll('input[type="range"]')).toHaveLength(0);
+    expect(stage.textContent).not.toMatch(/Stage opacity|Backdrop blur/);
+    expect(DEFAULT_DECK_APPEARANCE).not.toHaveProperty("backdropOpacity");
   });
 
-  it("publishes the stage colour to the lab and the backdrop to the SAVED appearance", () => {
+  it("publishes the stage colour to the lab", () => {
     const onChange = vi.fn();
     const element = mountPanel(onChange);
 
     const stage = fieldsetNamed(element, "STAGE SURFACE");
-    const [stageOpacity, backdropBlur] = [
-      ...stage.querySelectorAll<HTMLInputElement>('input[type="range"]'),
-    ];
     const stageColor = stage.querySelector<HTMLInputElement>('input[type="color"]');
-    if (stageOpacity === undefined || backdropBlur === undefined || stageColor === null) {
-      throw new Error("the tuning controls did not render");
-    }
-
-    // GT-7: the two backdrop knobs write the store Settings edits and the
-    // overlay reads — not the panel's memory. (The panel here holds a FIXED
-    // appearance prop, so each write is read before the next; the overlay
-    // hands it the live store.)
-    act(() => setControlValue(stageOpacity, "64"));
-    expect(getDeckAppearance().backdropOpacity).toBeCloseTo(0.64);
-    act(() => setControlValue(backdropBlur, "22"));
-    expect(getDeckAppearance().backdropBlur).toBe(22);
+    if (stageColor === null) throw new Error("the tuning controls did not render");
     act(() => setControlValue(stageColor, "#123456"));
     expect(onChange).toHaveBeenCalledWith({ stageColor: "#123456" });
     expect(onChange).not.toHaveBeenCalledWith(expect.objectContaining({ stageOpacity: 64 }));

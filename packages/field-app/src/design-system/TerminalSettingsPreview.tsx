@@ -45,9 +45,7 @@ export function TerminalSettingsPreview({
   const opening = useMemo(() => fixtureDraft(state), [state]);
   const [appearance, setAppearance] = useState<DeckAppearance>({
     ...DEFAULT_DECK_APPEARANCE,
-    ...(state === "pending"
-      ? { shaderEffects: ["ghosttea:crt"], backdropOpacity: 0.6, backdropBlur: 18 }
-      : {}),
+    ...(state === "pending" ? { shaderEffects: ["ghosttea:crt"] } : {}),
   });
   const [previewMode, setPreviewMode] = useState<PreviewMode>("light");
   const [tab, setTab] = useState<TerminalTab>(

@@ -126,20 +126,6 @@ const SETTINGS_INDEX: readonly {
     terms: "cell cells dim program background opacity",
   },
   {
-    anchor: "look-glass",
-    tab: "look",
-    title: "Backdrop opacity",
-    where: "Look · Glass · Godview's backdrop",
-    terms: "backdrop stage godview canvas behind see through glass",
-  },
-  {
-    anchor: "look-glass",
-    tab: "look",
-    title: "Background blur",
-    where: "Look · Glass · Godview's backdrop",
-    terms: "blur background frosted vibrancy soften backdrop canvas",
-  },
-  {
     anchor: "look-effects",
     tab: "look",
     title: "Effects",
@@ -473,12 +459,6 @@ function DockedPreview({
         )}
         <div className={`vf-ts-dock-foot ${labelCls}`}>
           <b>{theme.name}</b> · {Math.round(model.appearance.opacity * 100)}%
-          {model.appearance.backdropOpacity < 1
-            ? ` · backdrop ${Math.round(model.appearance.backdropOpacity * 100)}%`
-            : ""}
-          {model.appearance.backdropBlur > 0 && model.appearance.backdropOpacity < 1
-            ? ` · blur ${model.appearance.backdropBlur} px`
-            : ""}
           {model.appearance.shaderEffects.length > 0
             ? ` · ${model.appearance.shaderEffects.length} ${model.appearance.shaderEffects.length === 1 ? "effect" : "effects"}`
             : ""}
