@@ -372,7 +372,7 @@ describe("UI system ownership boundaries", () => {
     const onboarding = source("design-system/OnboardingPreview.tsx");
     const swarmBodies = source("design-system/SwarmBodiesPreview.tsx");
     const groundWorkbench = source("design-system/CanvasGroundWorkbench.tsx");
-    const groundPreview = source("design-system/InfiniteCanvasGroundPreview.tsx");
+    const groundPreview = source("design-system/DeskPreview.tsx");
     const paneFrame = source("design-system/PaneFramePreview.tsx");
     const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
@@ -418,7 +418,7 @@ describe("UI system ownership boundaries", () => {
       "swarmMonitorView",
       "CanvasGroundWorkbench",
       // the ground specimen mounts the desk through the field's own layer (DK-3)
-      "InfiniteCanvasGroundPreview",
+      "DeskPreview",
       "fieldDeskLayer",
       // DK-3 — when the desk can't draw: the stage's card and the status line's banner
       "DeskUnavailableView",

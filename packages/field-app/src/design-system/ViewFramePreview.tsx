@@ -8,9 +8,9 @@ import { type CoverState, coverAfter, coverAt, ViewCoverView } from "../frame/Vi
 import { type ViewKeyPress, ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
 import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
+import { DeskPreview } from "./DeskPreview";
 import { GodviewPreview } from "./GodviewPreview";
 import { HistoryPreview } from "./HistoryPreview";
-import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
 import { StageBoard } from "./PegboardPreview";
 
 // The view frame's fixture ADAPTER (One Frame FR-1, FR-2; docs/UI_SYSTEM.md):
@@ -144,7 +144,7 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
         data-state={state}
         data-covered={view === "canvas" ? "false" : "true"}
       >
-        <InfiniteCanvasGroundPreview
+        <DeskPreview
           dark={dark}
           background="var(--vf-canvas-bg)"
           className="vf-ds-stage-ground"

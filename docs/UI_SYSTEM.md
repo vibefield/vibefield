@@ -117,6 +117,16 @@ The catalog currently mounts these shipping views directly:
   mat's edge — each arrow placed by the product's own model through a fixture camera (`arrowBoxAt`)
   and each chip's words its face, then its name (`peerLabel`); in the product the same views are
   placed by a reflector, never re-rendered per frame (`PeersPlate`)
+- the desk itself (`DeskPreview`, DK-3; named so at DK-17): the field's own layer (`fieldDeskLayer`)
+  on a disposable engine with an empty board, under the canvas-ground workbench, the field chrome's
+  playground and the view frame — and where a page has no WebGPU, the specimen says so
+
+The pre-desk plates retired with their subjects at DK-17 (the migration's retire table, §6): the
+"Living cards" plate (the DOM card's content surfaces and its resting, selected, lifted, accept and
+reject projection — `CardShell` and its overlap knobs are gone), the terminal mirror's fixture (the
+mirror surface is gone; the deck owns terminals), and the workbench's World grid, Magnet grid and
+Overlap feedback controls (the 0.11 ground and the DOM card's glow and rim) — the workbench tunes the
+plain ground alone, the appearance document's v4.
 
 Runtime-free adapters replace only data or controllers. For example, Artifact Hub receives a
 fixture product client and the head receives a fixture document manager and canvas door; their

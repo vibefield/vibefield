@@ -3,7 +3,7 @@ import {
   type ProductAppearance,
   productAppearanceCssVariables,
 } from "../appearance/product-appearance";
-import { InfiniteCanvasGroundPreview } from "./InfiniteCanvasGroundPreview";
+import { DeskPreview } from "./DeskPreview";
 import { VisualTweakControls } from "./tweaks/VisualTweakControls";
 
 export function CanvasGroundWorkbench({
@@ -24,14 +24,10 @@ export function CanvasGroundWorkbench({
     <div className="vf-ds-ground-workbench" style={scopedVariables} data-ground-workbench>
       <div className="vf-ds-ground-workbench__previews">
         <div className="vf-ds-ground-lab">
-          <InfiniteCanvasGroundPreview
-            dark={dark}
-            background="var(--vf-canvas-bg)"
-            label="The live desk"
-          />
+          <DeskPreview dark={dark} background="var(--vf-canvas-bg)" label="The live desk" />
           <div className="vf-ds-ground-lab__badge">
             <span aria-hidden="true" />
-            ICE P0 · live GPU
+            Live desk · WebGPU
           </div>
           <div className="vf-ds-ground-lab__hint">Drag to pan · ⌘/ctrl + wheel to zoom</div>
         </div>

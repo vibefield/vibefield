@@ -56,10 +56,10 @@ import { PeersOnTheMat } from "./desk/peers/PeersOnTheMat";
 // layer is mounted with the catalog's kinds LESS those of a plugin that is off (the structural `catalog`
 // a host hands its layer, read at the mount alone), so a disabled plugin's objects wear ICE's missing
 // face; and when the window's kinds change, the desk REMOUNTS (a new mount, a new layer on this engine).
-// The old composition — `<InfiniteCanvas>`, the GL bridge and router, the R3F portal, the GL lanes,
-// the cursor halo — left with ICE 0.14.0; `InfiniteCanvasGround` (DK-2's stub) folded in here: the
-// catalog's specimen mounts the same layer (`fieldDeskLayer`) on an engine of its own, and nothing
-// else distinguished the two.
+// The old composition — the R3F ground and its portal, the GL bridge and router, the GL lanes, the
+// cursor halo — left with ICE 0.14.0; DK-2's stub of the ground folded in here: the catalog's
+// specimen (`design-system/DeskPreview.tsx`) mounts the same layer (`fieldDeskLayer`) on an engine
+// of its own, and nothing else distinguished the two.
 
 export interface CanvasStageProps {
   ce: CanvasEngine;

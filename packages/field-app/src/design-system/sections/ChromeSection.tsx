@@ -23,9 +23,9 @@ type TrayState = (typeof TRAY_STATES)[number];
 
 import { ComposerLinePlate, LINE_STATES, SendFlightPlate } from "../ComposerLinePreview";
 import { AppearancePlate, CORNER_PICKS, CornerPlate } from "../CornerPreview";
+import { DeskPreview } from "../DeskPreview";
 import { ArtifactsDrawer, EDGE_STATES, EdgesPlate, TRAY_TILES } from "../EdgesPreview";
 import { HEAD_STATES, HeadLive, HeadPlate } from "../HeadPreview";
-import { InfiniteCanvasGroundPreview } from "../InfiniteCanvasGroundPreview";
 import { PEERS_STATES, PeersPlate } from "../PeersPreview";
 import { PEGBOARD_STATES, PegboardPlate, StageBoard } from "../PegboardPreview";
 import { BAR_STATES, HAND_STATES, HandPlate, SelectionBarPlate } from "../SelectionBarPreview";
@@ -86,7 +86,7 @@ export function ChromeSection({
           data-docs-open={surface === "fields"}
           data-board-open={trayOpen}
         >
-          <InfiniteCanvasGroundPreview
+          <DeskPreview
             dark={dark}
             background="var(--vf-canvas-bg)"
             className="vf-ds-stage-ground"

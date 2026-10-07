@@ -18,11 +18,11 @@ export function CanvasGroundSection({
       index="03"
       eyebrow="Canvas ground"
       title="The actual field, under glass"
-      description="This is the production ICE ground—not a radial-gradient stand-in. Pan and zoom the adaptive three-level grid, then tune every former developer control in a specimen-scoped workbench."
+      description="This is the production desk—not a stand-in: the field's own layer, the mat and its rulers. Pan and zoom it, then tune the plain ground under it in a specimen-scoped workbench."
     >
       <Specimen
         title="Infinite canvas and visual tuning workbench"
-        source="field/InfiniteCanvasGround.tsx · design-system/tweaks/*"
+        source="field/desk/desk-layer.ts · design-system/tweaks/*"
       >
         <CanvasGroundWorkbench dark={dark} value={appearance} onChange={onAppearanceChange} />
       </Specimen>

@@ -6,7 +6,7 @@ import { type CSSProperties, type ReactElement, useEffect, useMemo, useRef, useS
 import { feedDesk } from "../field/desk/desk-feed";
 import { deskLook, fieldDeskLayer } from "../field/desk/desk-layer";
 
-export interface InfiniteCanvasGroundPreviewProps {
+export interface DeskPreviewProps {
   /** The catalog page's theme: the desk is dressed in it, as the field's stage is in the app's. */
   dark: boolean;
   background: string;
@@ -16,19 +16,20 @@ export interface InfiniteCanvasGroundPreviewProps {
 }
 
 /**
- * A controller-free mount of the production GROUND — since DK-3 the desk itself: the field's own
- * layer (`fieldDeskLayer` — the mat, its rulers at 60, the plates, the hand) on a disposable engine
- * of the desk's preset with an empty board. ICE owns the camera and the drawing; the catalog supplies
- * only the engine and the page's theme. Where the page has no WebGPU (a test's DOM) the specimen says
- * so instead of mounting a desk that cannot draw.
+ * A controller-free mount of the production GROUND — the desk itself (DK-3; DK-17 retired this
+ * specimen's pre-desk name with the R3F ground it once drew): the field's own layer (`fieldDeskLayer`
+ * — the mat, its rulers at 60, the plates, the hand) on a disposable engine of the desk's preset with
+ * an empty board. ICE owns the camera and the drawing; the catalog supplies only the engine and the
+ * page's theme. Where the page has no WebGPU (a test's DOM) the specimen says so instead of mounting a
+ * desk that cannot draw.
  */
-export function InfiniteCanvasGroundPreview({
+export function DeskPreview({
   dark,
   background,
   className = "",
   interactive = true,
-  label = "Interactive infinite-canvas ground",
-}: InfiniteCanvasGroundPreviewProps): ReactElement {
+  label = "The live desk",
+}: DeskPreviewProps): ReactElement {
   const supported = supportsDesk();
   return (
     <section
