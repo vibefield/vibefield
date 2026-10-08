@@ -8424,3 +8424,44 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 - `recede.ts` is dead code.
 - The replica's per-frame `safeParse` costs about 11 MiB/s at n20, in every view.
 - PJ-2's `project-records.test.ts` cleanup races the service's last write under load.
+
+## AR-8 History gaps — recorded images draw, paths read `~/…`, delegated threads under their parent (2026-10-08; `2809254c` — three commits `1153bcb6` attachments · `a7426a10` the home door · `2809254c` threads; lane hist over main `34fce7c4`, fast-forward)
+
+**Why:** James's "go" on finishing History (2026-10-08). AR-8c's owed list named attachments, the home door and delegated threads. Plan `draft/history-finish/build-hf.md` (§2 the defects, §3 L1, L2 and L4).
+
+**Defects this fixes (found by the read-only survey):**
+- **D1.** Every recorded image in History read "Image data was not recorded". The room asks `imageAssetUrl` only when `attachmentAssetUrl` is non-null, and ours answered null.
+- **D2.** A search hit inside a subagent's thread was dropped silently. fieldd kept children out of the room's meta, and the room drops a hit whose session it cannot see.
+
+**What landed:**
+- **Attachments.** `attachmentAssetUrl` answers the asset's stable rosettad path (`/api/assets/<digest>.webp`) when the ref names rosettad's own route, and null otherwise. Recorded images now draw from grant-read bytes as bounded object URLs. Non-image attachments still say "Attachment preview unavailable", as in rosetta's own app.
+- **The home door (L2).** History's host port answers `homeDir` from the window's bootstrap home (`WindowConnection.terminal.home`, the same OS user rosettad indexes), through a plain getter. A browser or catalog harness answers null.
+- **Delegated threads (L1).**
+  - Storage: children of a root session live in a local-only, never-replicated `threads` table in IndexCatalog. A thread is held while its root is listed and leaves with it. A child that arrives before its root waits for the next snapshot.
+  - The door: `index.threads {cursor?, limit? 1..500}` is window-only (`local-token`, `shell-main`; FORBIDDEN_SCOPE to plugins, MCP agents, the phone and guests), scope `index.search`, locality `local`, keyset-paged by root then id.
+  - Row shape: `parentSessionId`, `rootSessionId`, an open `role`, and `delegation` as a camelCase passthrough projection that the renderer maps back to rosetta's `SessionDelegation`.
+  - Pings: `INDEX_CATALOG_TABLES` names `threads`. A new `INDEX_REPLICATED_TABLES` (projects, sessions) types `index.catalog.subscribe` and the mesh replica, so `table: "threads"` is refused. Local pings now name their table, and the renderer re-reads only the table that moved.
+  - Unchanged: the `sessions` table, `sessionCount`, `index.sessions`, `project.*`, the mesh and the phone stay roots-only.
+- **Errata at source:** `doors.ts`'s claims that fieldd sends only home-abbreviated paths, and that there is no worktree guest until AR-8d; `system.html`'s "no worktree port", corrected with the home door and the attachment address.
+
+**Witnesses** (real rosettad at `856bd80`, synthesized homes per L4; logs in `/Volumes/SamsungRed/lanes/hist/logs/`):
+- **D1, render:** the shipping `HistoryRoomView` draws both demo images as `blob:` URLs with no "not recorded" words. Red with `() => null` restored.
+- **D1, real:** a 1×1 PNG in a Claude prompt becomes an optimized WebP with four renditions. The tile and full renditions arrive as RIFF/WEBP bytes under the grant, a bare fetch gets 401, and fieldd is asked only `index.openTicket`. Red without the fix.
+- **L2:** `~/Projects/vibe-field` shows for a root under home, and `/opt/build/tools` stays in full. Red with `homeDir: null`.
+- **L1/D2, fieldd:** catalog, door and mesh rows.
+  - Red-proof: with the table split reverted, the 4 thread rows go red while the 16 root rows stay green.
+- **L1/D2, real history witness:** a synthesized `subagents/agent-<id>.jsonl` under its parent reaches meta with role `subagent` and the Agent tool's id. It opens on its own ticket with no fieldd frame carrying it, and a hit inside it resolves to its root. The EL2 door-call checks admit `index.threads`.
+  - Red-proof: the witness goes red with the split reverted, and the search row goes red with the hit mapping reverted.
+
+**Validation:** the lane's `gate.sh` on `2809254c`, the landed tree (main had not moved), Nx cache skipped. `verify.log` **EXIT 0** (typecheck and test for 25 projects; field-app 1,587, fieldd 2,157 passed with 6 skipped, contracts 884). `smoke.log` EXIT 0, `smoke-godview.log` EXIT 0. The first gate's verify was red only on load timeouts at 1-minute load 254, in files outside the diff (fieldd AR-S4c sign-in, `design-system.test.tsx`, `godview-model-stream.test.ts`); each was green on a rerun.
+
+**Found on the way:**
+- James's `../puppeteer` install predates view-sdk, so field-app's `tsc` fails with TS2307 in any tree linking it. Lanes now use their own installed worktree at the lock's pin.
+- The lanes' offscreen preload broke `smoke:godview` after MV's `labProfileProof`; it now leaves a runner's `--user-data-dir` alone (found by lane pkg).
+- rosetta's Claude reader drops a record whose `usage` has fewer fields than the ground truth, counting it as a hard error.
+
+**Upstream asks (petitions):**
+- `tildePath` needs a segment boundary: home `/Users/me` turns `/Users/meg/notes` into `~g/notes`.
+- The room's fixtures carry no delegated thread.
+- A narrower `usage` should be drift, not a lost record.
+- Export the room's search grouping for a DOM-free host test.
