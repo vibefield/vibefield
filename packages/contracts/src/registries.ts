@@ -542,7 +542,11 @@ export const WORKSPACE_SERVICE = {
  * (the mille-git spec's PR 8) replaces the interim. READ_OPS answer; WRITE_OPS
  * are refused with READ_ONLY_ERROR whatever the caller holds; any other op
  * answers `unknown op: <op>`. DIFF_BYTES and LOG_LIMIT are rosetta's own
- * bounds, kept. TS-only: no native reader. */
+ * bounds, kept. TIMEOUT_MS is one invocation's default budget. CONCURRENCY
+ * (PJ-1, L3, 2026-10-08): the most git (and `ssh -G`) processes the files
+ * worker runs at once, across EVERY caller — the git port, `gitFacts` and the
+ * place facts; the rest wait their turn, first come first served. TS-only: no
+ * native reader. */
 export const WORKSPACE_GIT = {
   READ_OPS: ["branch", "status", "log", "diff", "commitFiles"],
   WRITE_OPS: ["stage", "unstage", "discard", "commit", "commitAll", "amend"],
@@ -550,6 +554,7 @@ export const WORKSPACE_GIT = {
   DIFF_BYTES: 8 * 1024 * 1024,
   LOG_LIMIT: 200,
   TIMEOUT_MS: 10_000,
+  CONCURRENCY: 6,
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals

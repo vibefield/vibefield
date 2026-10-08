@@ -32,45 +32,210 @@ import { parseRelativePath } from "../paths";
 //    still runs when status or diff re-reads a file whose stat changed, and git
 //    has no switch for filters. It leaks nothing the repository's author lacks:
 //    the worker runs with fieldd's environment less the daemon's own prefixes
-//    (`workerEnvironment`, `../supervisor.ts`).
+//    (`workerEnvironment`, `../supervisor.ts`), and git with less still (below).
+//
+// PJ-1 (L3, 2026-10-08) — ONE hardened runner, for every caller (the port,
+// `gitFacts`, the place facts in `places.ts`): a folder's path can come from a
+// session's cwd, which an agent can forge (the project-places model review's
+// EL7 finding), so every invocation carries
+//  · an ALLOWLISTED environment (`gitEnvironment`): PATH, HOME, USER, LANG,
+//    `LC_*`, TMPDIR (and on Windows the few variables a process needs to
+//    start) — never a `GIT_*` from the shell that launched the app, so an
+//    inherited `GIT_DIR`, `GIT_WORK_TREE` or `GIT_CONFIG_*` cannot redirect a
+//    read into another repository or another config;
+//  · `core.hooksPath=/dev/null` (no hook a repository names runs) and
+//    `protocol.allow=never`, each transport also refused by name, and no lazy
+//    fetch (a read never reaches the network or another repository, so a
+//    repository's `core.sshCommand` never runs) beside `core.fsmonitor=false`;
+//  · its timeout, and a turn under the worker-wide cap
+//    (`WORKSPACE_GIT.CONCURRENCY`, `GitGate`).
+// `safe.directory` is never set: a repository git refuses as owned by someone
+// else stays refused, and the place facts say so (`dubious-ownership`).
 
 /** What a git answer is made of. */
-interface GitRun {
+export interface GitRun {
   ok: boolean;
   stdout: string;
   stderr: string;
+  /** the exit code (null when git never ran, or was killed by its timeout) */
+  code: number | null;
 }
 
-/** The hardening every invocation carries (header). */
-const GIT_FLAGS = ["-c", "core.fsmonitor=false"] as const;
+/** The hardening every invocation carries (header). `protocol.allow=never`
+ * alone is not the wall: a `protocol.<name>.allow` outranks it, and a
+ * repository's own config may set one — so each transport git knows is
+ * refused by name too, on the command line, which outranks every file. And a
+ * repository's `log.showSignature` would run its `gpg.program` on a log. */
+const GIT_FLAGS = [
+  "-c",
+  "core.fsmonitor=false",
+  "-c",
+  "core.hooksPath=/dev/null",
+  "-c",
+  "protocol.allow=never",
+  ...["file", "git", "ssh", "http", "https", "ext"].flatMap((name) => [
+    "-c",
+    `protocol.${name}.allow=never`,
+  ]),
+  "-c",
+  "log.showSignature=false",
+] as const;
 
-function git(
+/** What git and `ssh -G` may read of the worker's environment (header). */
+const ENV_ALLOWED = new Set(["PATH", "HOME", "USER", "LANG", "TMPDIR"]);
+/** What a Windows process needs to start and find its home and temp. */
+const ENV_ALLOWED_WINDOWS = new Set([
+  "SYSTEMROOT",
+  "WINDIR",
+  "USERPROFILE",
+  "HOMEDRIVE",
+  "HOMEPATH",
+  "TEMP",
+  "TMP",
+  "PATHEXT",
+]);
+
+/** The allowlist alone: every other variable of `source` is dropped. */
+export function scrubbedEnvironment(
+  source: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  const windows = platform === "win32";
+  const out: NodeJS.ProcessEnv = {};
+  for (const [key, value] of Object.entries(source)) {
+    if (value === undefined) continue;
+    // Windows names its variables without regard to case (`Path`)
+    const name = windows ? key.toUpperCase() : key;
+    if (
+      ENV_ALLOWED.has(name) ||
+      name.startsWith("LC_") ||
+      (windows && ENV_ALLOWED_WINDOWS.has(name))
+    )
+      out[key] = value;
+  }
+  return out;
+}
+
+/** git's environment: the allowlist, then the runner's own — optional locks
+ * off (a read never takes `index.lock` from under an agent's commit), no
+ * terminal prompt, no lazy fetch. */
+export function gitEnvironment(
+  source: NodeJS.ProcessEnv,
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  return {
+    ...scrubbedEnvironment(source, platform),
+    GIT_OPTIONAL_LOCKS: "0",
+    GIT_TERMINAL_PROMPT: "0",
+    // a partial clone would otherwise FETCH an object a read finds missing
+    // (`cat-file -e`) from its promisor remote — git ≥ 2.45; older gits are
+    // held by the refused transports instead
+    GIT_NO_LAZY_FETCH: "1",
+  };
+}
+
+/** The worker-wide cap: at most `limit` tasks run at once, the rest in
+ * arrival order. `peak` is the most that ever ran together (a witness). */
+export class GitGate {
+  readonly #limit: number;
+  readonly #waiting: Array<() => void> = [];
+  #active = 0;
+  #peak = 0;
+
+  constructor(limit: number) {
+    this.#limit = Math.max(1, limit);
+  }
+
+  get active(): number {
+    return this.#active;
+  }
+
+  get waiting(): number {
+    return this.#waiting.length;
+  }
+
+  get peak(): number {
+    return this.#peak;
+  }
+
+  async run<T>(task: () => Promise<T>): Promise<T> {
+    if (this.#active >= this.#limit)
+      await new Promise<void>((resume) => this.#waiting.push(resume));
+    else this.#active += 1;
+    if (this.#active > this.#peak) this.#peak = this.#active;
+    try {
+      return await task();
+    } finally {
+      const next = this.#waiting.shift();
+      // the slot passes straight to the next in line, or is freed
+      if (next !== undefined) next();
+      else this.#active -= 1;
+    }
+  }
+}
+
+/** THE worker's gate: every git and `ssh -G` process takes a turn here. */
+export const gitGate = new GitGate(WORKSPACE_GIT.CONCURRENCY);
+
+export interface RunOptions {
+  maxBuffer?: number;
+  timeoutMs?: number;
+  /** written to the process's stdin, which is then closed */
+  input?: string;
+}
+
+/** Run one process under the gate with the scrubbed environment: every
+ * failure (a spawn that cannot happen, a timeout, a non-zero exit) is a
+ * value, never a throw. */
+export function runScrubbed(
+  command: string,
+  argv: readonly string[],
+  options: RunOptions & { env: NodeJS.ProcessEnv },
+): Promise<GitRun> {
+  return gitGate.run(
+    () =>
+      new Promise<GitRun>((resolve) => {
+        const child = execFile(
+          command,
+          [...argv],
+          {
+            timeout: options.timeoutMs ?? WORKSPACE_GIT.TIMEOUT_MS,
+            maxBuffer: options.maxBuffer ?? WORKSPACE_GIT.DIFF_BYTES,
+            windowsHide: true,
+            env: options.env,
+          },
+          (error, stdout, stderr) => {
+            const code = (error as { code?: unknown } | null)?.code;
+            resolve({
+              ok: !error,
+              stdout: typeof stdout === "string" ? stdout : "",
+              stderr:
+                (typeof stderr === "string" ? stderr : "").trim() ||
+                (error ? String(error.message) : ""),
+              code: error === null ? 0 : typeof code === "number" ? code : null,
+            });
+          },
+        );
+        // a closed stdin: git never waits on a reader that is not there
+        child.stdin?.on("error", () => undefined);
+        child.stdin?.end(options.input ?? "");
+      }),
+  );
+}
+
+/** THE runner: `git -C <root>` with the hardening (header). */
+export function runGit(
   root: string,
   args: readonly string[],
-  options: { maxBuffer?: number; timeoutMs?: number } = {},
+  options: RunOptions = {},
 ): Promise<GitRun> {
-  return new Promise((resolve) => {
-    execFile(
-      "git",
-      [...GIT_FLAGS, "-C", root, ...args],
-      {
-        timeout: options.timeoutMs ?? WORKSPACE_GIT.TIMEOUT_MS,
-        maxBuffer: options.maxBuffer ?? WORKSPACE_GIT.DIFF_BYTES,
-        windowsHide: true,
-        env: { ...process.env, GIT_OPTIONAL_LOCKS: "0", GIT_TERMINAL_PROMPT: "0" },
-      },
-      (error, stdout, stderr) => {
-        resolve({
-          ok: !error,
-          stdout: typeof stdout === "string" ? stdout : "",
-          stderr:
-            (typeof stderr === "string" ? stderr : "").trim() ||
-            (error ? String(error.message) : ""),
-        });
-      },
-    );
+  return runScrubbed("git", [...GIT_FLAGS, "-C", root, ...args], {
+    ...options,
+    env: gitEnvironment(process.env),
   });
 }
+
+const git = runGit;
 
 /** `.` means "unchanged in this slot" — every other character is a state. */
 function slot(letter: string | undefined): string | null {
