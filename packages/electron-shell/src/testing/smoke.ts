@@ -112,6 +112,7 @@ import {
 } from "./plugin-runtime-soak";
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
+import { deskRigRows } from "./smoke-desk-rig";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
 import { selectionBarRows } from "./smoke-selection-bar";
@@ -1143,6 +1144,14 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`DK-13: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // DK-18: the product desk rig's missing acts — every kind the board hangs taken off it by the pointer and dropped where
+        // nothing picks, its face drawn there, one undo step back; the take's landing timed by the K-H discipline
+        // (testing/smoke-desk-rig.ts)
+        try {
+          problems.push(...(await deskRigRows({ win, shotDir, say: (line) => console.log(line) })));
+        } catch (error) {
+          problems.push(`DK-18 TAKE: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-14: Send to… — the bar's pill, the grown menu's row and the tools in hand's pill each drafting ONE chip into
         // the line: its face by kind, the flight, the @ typed, the still, the bar aside, reduced motion
