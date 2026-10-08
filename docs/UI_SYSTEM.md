@@ -119,9 +119,19 @@ The catalog currently mounts these shipping views directly:
   mat's edge — each arrow placed by the product's own model through a fixture camera (`arrowBoxAt`)
   and each chip's words its face, then its name (`peerLabel`); in the product the same views are
   placed by a reflector, never re-rendered per frame (`PeersPlate`)
+- when the desk can't draw (DK-3, DK-4, DK-16): the shipping `DeskUnavailableView` in the Status
+  section, a plate per shape — the lost device and any other refusal (each with its Reload), no
+  WebGPU and no adapter (no Reload: a reload cannot help), and a board from before the desk — the
+  kit's card (the primitives layer, above) on the plain ground, in the product's own words
+  (`desk-words.ts`); and the status line's notices (`StatusLineView`): a missing face's word said
+  once, its place under the tools in hand, and a degraded desk holding ICE's message and its Reload
 - the desk itself (`DeskPreview`, DK-3; named so at DK-17): the field's own layer (`fieldDeskLayer`)
   on a disposable engine with an empty board, under the canvas-ground workbench, the field chrome's
   playground and the view frame — and where a page has no WebGPU, the specimen says so
+
+*Checked against the catalog as it stands, 2026-10-08 (DK-19, the desk landing):* every desk plate
+named above is mounted by the catalog's sections; the Status section's desk plates were missing
+from this list and are added above.
 
 The pre-desk plates retired with their subjects at DK-17 (the migration's retire table, §6): the
 "Living cards" plate (the DOM card's content surfaces and its resting, selected, lifted, accept and
