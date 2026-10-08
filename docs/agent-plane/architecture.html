@@ -1637,8 +1637,11 @@
               when that root falls outside the bounded roots list. DK still owns the tree widget,
               decorations and composer drag integration.</p>
             <p><strong>R24:</strong> native mille imports are confined to the files worker;
-              field-app may import browser client/port/remote and mille-ui entries. Native-free
-              channel imports in tests witness the wire. The sibling window pins mille and
+              field-app may import the <code>/port</code> and <code>/remote</code> clients and
+              mille-ui. Native-free channel imports in tests witness the wire.
+              <strong>Erratum (2026-10-07):</strong> this paragraph said field-app may import a
+              "browser client" entry; the wall never admitted <code>/browser</code>, nothing
+              imports it, and mille at the pin exports none. The sibling window pins mille and
               mille-ui together at <code>baa0de8</code>; release publication closes the window.</p>
           </section>
 

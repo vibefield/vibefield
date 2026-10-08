@@ -160,8 +160,14 @@ unreleased WebSocket channel. `node scripts/siblings.mjs fetch mille`, then name
 `install-js mille` / `build-js mille`, prepares it. Host React peers are linked only inside
 that dedicated checkout's generated node_modules; its source and lock stay unchanged.
 Renderer and test aliases share the lock's built exports, including rosetta's nested
-consumer. R24 permits native mille only in the files worker and browser client/port/remote
-entries plus mille-ui in field-app. Exit is an exact npm version after the release.
+consumer. R24 permits mille's engine (the root entry, `/node`) only in the files worker;
+field-app may import `/port`, `/remote` and mille-ui, and fieldd's and field-app's tests the
+same two clients. Exit is an exact npm version after the release.
+
+> **Errata (2026-10-07):** this paragraph said R24 admits "browser client/port/remote
+> entries". It never admitted a `/browser` entry: the wall (`scripts/check-import-boundaries.mjs`)
+> names `/port`, `/remote` and mille-ui, nothing imports `@vibecook/mille/browser`, and mille at
+> the pin (`baa0de8`) exports no `./browser`.
 
 Tools: node per `.nvmrc` (corepack for pnpm) · Rust stable · `cargo install cargo-typify`
 (contracts codegen; preflight checks the version). Go is NO LONGER a prereq — truffle's mesh

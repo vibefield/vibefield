@@ -2068,8 +2068,11 @@
               to that desktop, using its catalog's spawn offerings and default profile.
               The self-tailnet preset already grants <code>agent.spawn</code>.</p>
             <p>The unreleased mille channel is pinned at <code>baa0de8</code> in a dedicated
-              sibling checkout. R24 confines native imports to the files worker; field-app uses
-              the browser client/port/remote and UI entries. The read-only git port remains the
+              sibling checkout. R24 confines native imports to the files worker; field-app may use
+              the <code>/port</code> and <code>/remote</code> clients and the UI entry
+              (<code>/remote</code> today). <strong>Erratum (2026-10-07):</strong> this said
+              "browser client/port/remote"; there is no <code>/browser</code> entry, at the
+              wall or at the pin. The read-only git port remains the
               interim implementation pending the upstream GitService switch.</p>
           </section>
 

@@ -484,8 +484,11 @@ async function setup(config: SetupConfig): Promise<Box> {
       ];
     },
     ...(config.resumeWhenIdle !== undefined ? { agentResumeWhenIdle: config.resumeWhenIdle } : {}),
-    // FS-1a — every run's folder is a place; a test root on macOS lives under
-    // /private, which the files service never exports, so the rule is lifted
+    // FS-1a — every run's folder becomes a place, a test root under /tmp or
+    // /var/folders included: a place refuses only a filesystem root. The
+    // /System, /Library and /private exclusion is the browse exports' (and
+    // `/` everyone's), so no rule needs lifting here (2026-10-07: this note
+    // said one was).
     // no floor: a spawn must refuse quickly, not wait a cell's whole birth budget
     ...(config.floor === "mock" ? { terminalBirthWaitMs: 300 } : {}),
   });

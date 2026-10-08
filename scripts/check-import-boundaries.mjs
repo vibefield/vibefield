@@ -482,14 +482,20 @@ const RULES = [
   {
     id: "R24",
     // FS-1a (L5; thinking-files-service.md §4): mille's engine — the native
-    // walker, watcher and ignore parser behind its root entry — runs in ONE
-    // process, fieldd's files worker, and never in the daemon, Electron main or
-    // the renderer. So the root entry and every other entry of
+    // walker, watcher and ignore parser behind its root entry and `/node` —
+    // runs in ONE process, fieldd's files worker, and never in the daemon,
+    // Electron main or the renderer. So the root entry and every other entry of
     // `@vibecook/mille` are imported only under the worker's own directory;
-    // the renderer (field-app) may take the client half that loads nothing
-    // native — `@vibecook/mille/port` — and `@vibecook/mille-ui` (FS-1b's
-    // tree), nothing else; no other package imports any mille package (the
+    // the renderer (field-app) may take the client halves that load nothing
+    // native — `@vibecook/mille/port` and `@vibecook/mille/remote` (FS-1b's
+    // WebSocket channel) — and `@vibecook/mille-ui` (FS-1b's tree), nothing
+    // else; fieldd's and field-app's tests may dial the worker with the same
+    // two clients; no other package imports any mille package (the
     // per-platform binaries are loaded by an explicit path, never imported).
+    // There is no `/browser` entry to admit: mille at the pin exports none and
+    // nothing imports one (2026-10-07: this comment named `/port` alone, and
+    // CLAUDE.md and the agent-plane pages named a "browser client" — each
+    // corrected at its source).
     enforce: true,
     description:
       "@vibecook/mille only under packages/fieldd/src/workspace/host (the files worker); field-app only @vibecook/mille/port + @vibecook/mille/remote + @vibecook/mille-ui; nothing else imports mille",
