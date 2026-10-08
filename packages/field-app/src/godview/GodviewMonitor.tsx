@@ -9,7 +9,6 @@ import {
   FindSheet,
   type HistoryPort,
   InstrumentBar,
-  MONITOR_CHROME_ATTRIBUTE,
   MONITOR_STAGE_CLASS,
   MONITOR_VIEWS,
   type MonitorParameters,
@@ -367,6 +366,7 @@ export function GodviewMonitor({
   // or the viewer's Retry. Never the model's rows (keyed on them, a persistent
   // failure remounted on every publish, M176), and never the host update that
   // follows the failure itself (the tile count it observes changes with it).
+  // A new port inside the boundary's window waits for its end (the backoff).
   const usageRetryKey = columnUsagePort;
   useEffect(() => {
     setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
@@ -709,7 +709,10 @@ export function GodviewMonitor({
         />
       </ChromeBoundary>
 
-      <ChromeBoundary name="Find">
+      {/* Find tries again for the agents it searches, as Godview's does (M192);
+          the bar above and the profile notice read only the window's own
+          state, so they stay unavailable until the monitor mounts again. */}
+      <ChromeBoundary name="Find" retryKey={findAgents}>
         <FindSheet
           open={findOpen}
           agents={findAgents}
@@ -761,13 +764,13 @@ export function GodviewMonitor({
         ) : null}
         {/* The chrome slot: the usage column down the stage's left edge (record
             §05), the package's own; the swarm steers around it. */}
-        <div ref={chromeRef} className="vf-monitor-chrome" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
+        <div ref={chromeRef} className="vf-monitor-chrome">
           <ChromeBoundary name="Usage" retryKey={usageRetryKey}>
             <UsageColumn port={columnUsagePort} />
           </ChromeBoundary>
         </div>
         {/* The claims: VibeField's, on their own strip — also solid to the swarm. */}
-        <div ref={claimsRef} className="vf-monitor-claims" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
+        <div ref={claimsRef} className="vf-monitor-claims">
           <ChromeBoundary name="Agent counts" retryKey={claimsRetryKey}>
             {localClaim(sources) !== null ? (
               <span className="vf-monitor-local-chip">{localClaim(sources)}</span>

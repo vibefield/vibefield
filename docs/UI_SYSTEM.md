@@ -77,9 +77,13 @@ from manifests. Every host chrome piece has its own `ChromeBoundary` — the bar
 profile notice and the claims in `GodviewMonitor`; System control and the deck in `GodviewOverlay`;
 the deck's edge in `GodviewStage`; each pane's frame, the frames and the launchers in `GodviewDeck` —
 so a throw names that piece unavailable where it stood without unmounting the monitor or its view,
-and each is tried again only for a fact it reads (its `retryKey`). The `godview-monitor`,
-`godview-overlay-boundaries` and `godview-deck-frames` tests hold each piece. *(Made true
-2026-10-07, MV-8b: the deck, System control and the claims had no boundary before.)*
+and each is tried again only for a fact it reads (its `retryKey`), at most once per window: 1 s,
+doubling to 30 s while it keeps failing (Find's key is the agents it searches). The bar and the
+profile notice have no `retryKey`, as they read only the window's own state: they are not tried
+again until the monitor remounts (M192). The `godview-monitor`,
+`godview-overlay-boundaries` and `godview-deck-frames` tests hold each piece, on a held clock
+(`chrome-clock-fixture.ts`). *(Made true 2026-10-07, MV-8b: the deck, System control and the
+claims had no boundary before. The window: 2026-10-08, the package's boundary since M179.)*
 Agent/profile glyphs and shared mark data come from the SDK's `/react` and `/toolkit`.
 
 When a staged view or content token lives in another workspace package, the catalog composes it

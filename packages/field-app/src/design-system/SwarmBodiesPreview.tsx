@@ -8,7 +8,7 @@ import {
 } from "@vibecook/puppeteer-view-sdk/host";
 import type { AgentView, MonitorDeviceRef, MonitorModel } from "@vibecook/puppeteer-view-sdk/model";
 import {
-  type MonitorAgent,
+  type LabAgent,
   monitorParameterDefaults,
   stateStages,
   swarmMonitorView,
@@ -45,8 +45,11 @@ const parsed = (iso: string | undefined): number | undefined => {
   return Number.isFinite(ms) ? ms : undefined;
 };
 
-/** One stage's row as the view reads it: each fact the row says, in the model's words. */
-function bodyOf(agent: MonitorAgent, active: boolean): AgentView {
+/**
+ * One stage's row as the view reads it: each fact the row says, in the model's words. The held
+ * total is the fixture's (`LabAgent`): no window keeps a usage ledger (L11), the backend does.
+ */
+function bodyOf(agent: LabAgent, active: boolean): AgentView {
   const facet = agent.agent;
   const monitor = facet?.monitor;
   const blocker = monitor?.blockers[0];

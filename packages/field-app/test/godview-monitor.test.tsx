@@ -41,6 +41,7 @@ import {
 import { createRecordingView, type RecordingView } from "@vibecook/puppeteer-view-sdk/testing";
 import {
   type AccountUsagePort,
+  CHROME_RETRY_FIRST_MS,
   DEFAULT_MONITOR_VIEW_ID,
   type HistoryPort,
   MONITOR_VIEWS,
@@ -64,6 +65,7 @@ import { monitorHoldsKeys, takeLauncherKeys } from "../src/godview/monitor/launc
 import type { MonitorDoor, ProfileSetsPort } from "../src/godview/monitor/remote-door";
 import { HERE_DEVICE_ID } from "../src/godview/monitor/spawn-menu";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
+import { advanceChromeClock, holdChromeClock, nextTask } from "./chrome-clock-fixture";
 import { managedSummary } from "./managed-session-fixture";
 import { type ScriptedModelBoard, scriptedModelBoard, terminalInfoOf } from "./model-board-fixture";
 
@@ -218,7 +220,7 @@ function syncBoard(panes: MonitorPaneFacts): void {
 async function settle(): Promise<void> {
   for (let round = 0; round < 3; round += 1) {
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTask();
     });
     await act(async () => {
       await Promise.resolve();
@@ -794,7 +796,7 @@ describe("the monitor stage", () => {
     const chip = host.querySelector(".vf-monitor-local-chip");
     expect(chip?.textContent).toBe("3 managed agents");
     expect(latest().localClaim).toBe("3 managed agents");
-    expect(chip?.closest("[data-monitor-chrome]")).not.toBeNull();
+    expect(chip?.closest(".vf-monitor-claims")).not.toBeNull();
     expect(host.textContent?.toLowerCase()).not.toContain("mock");
     expect(JSON.stringify(latest()).toLowerCase()).not.toContain("mock");
   });
@@ -1133,12 +1135,14 @@ describe("the monitor stage", () => {
     // null while closed, so the control names it only while it is open
     expect(bar?.querySelector('button[aria-controls="vf-find-sheet"]')).toBeNull();
     expect(bar?.querySelector('button[aria-controls="vf-godview-tweak-panel"]')).not.toBeNull();
-    // The bar owns the view marks and the theme switch, in that order.
+    // The bar owns the view marks and the theme switch, in that order: the
+    // registry's five, spend after the timeline since MV-7.
     expect(viewButtons(host).map((button) => button.getAttribute("aria-label"))).toEqual([
       "SWARM view",
       "LIST view",
       "RAIN view",
       "TIMELINE view",
+      "SPEND view",
     ]);
     expect(pressedView(host)).toBe("LIST view");
     expect(bar?.querySelector('[role="switch"]')?.getAttribute("aria-checked")).toBe("false");
@@ -2445,8 +2449,14 @@ describe("M59 — the body a row continues, and a create that answers", () => {
 });
 
 // M49 / MV-8: the shipping chrome boundaries, with a real usage reader that
-// throws in render. The model feed and mounted SDK view must survive it.
+// throws in render. The model feed and mounted SDK view must survive it. A piece
+// that heals waits for its boundary's window (the backoff): those rows hold the
+// clock (`chrome-clock-fixture.ts`).
 describe("a chrome read cannot take down the monitor", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   it("names the failed piece, keeps delivering the model, and heals on new facts", async () => {
     let broken = true;
     const failure = new Error("usage fixture lost its entries");
@@ -2511,7 +2521,9 @@ describe("a chrome read cannot take down the monitor", () => {
     await act(async () => door.push(ROWS));
     await settle();
     expect(container.textContent).toContain("Usage unavailable");
-    // …until the door hands it a new port, which is one.
+    // …until the door hands it a new port, which is one: tried at the end of the
+    // boundary's first window at the latest.
+    holdChromeClock();
     const healed: FakeDoor = { ...door, usage: { ...door.usage } };
     await act(async () => {
       root?.render(
@@ -2521,6 +2533,8 @@ describe("a chrome read cannot take down the monitor", () => {
       );
     });
     await settle();
+    await advanceChromeClock();
+    await settle();
     expect(container.textContent).not.toContain("Usage unavailable");
     expect(container.querySelector(".vf-usage-column")).not.toBeNull();
     expect(recording.mounts).toBe(1);
@@ -2528,7 +2542,10 @@ describe("a chrome read cannot take down the monitor", () => {
     expect(uncaught).not.toHaveBeenCalled();
   });
 
-  it("keeps a failed column down through 50 model publishes, and tries it once per new port (M176)", async () => {
+  it("keeps a failed column down through 50 model publishes; new ports try it again at most once per window (M176, the backoff)", async () => {
+    // The whole row on the held clock: the failure, the publishes and every new
+    // port fall where the row puts them, never where the host's speed does.
+    holdChromeClock();
     const failure = new Error("usage fixture lost its entries");
     // Each mount of the column asks its port for one snapshot: the count of
     // asks is the count of tries, and each try that reads the entries throws.
@@ -2595,11 +2612,34 @@ describe("a chrome read cannot take down the monitor", () => {
     expect([throws(), asked]).toEqual([1, 1]);
     expect(container.textContent).toContain("Usage unavailable");
 
-    // A new port is a new key: exactly one more try, which fails the same way.
-    const next: FakeDoor = { ...door, usage: brokenUsage() };
-    await renderWith(next);
+    // A new port is a new key, but inside the first window it waits…
+    await renderWith({ ...door, usage: brokenUsage() });
+    await settle();
+    expect([throws(), asked]).toEqual([1, 1]);
+    // …and the window's end tries it once, which fails the same way.
+    await advanceChromeClock(CHROME_RETRY_FIRST_MS);
     await settle();
     expect([throws(), asked]).toEqual([2, 2]);
+
+    // Three new ports inside the next window are one try, at its end, with the
+    // port standing then. The column fails only after its first render (its
+    // snapshot answers later), so each try renders, and a try that renders ends
+    // the boundary's episode: the next window starts again at the first, 1 s,
+    // where a piece that threw in the try's own render would double it.
+    for (let port = 0; port < 3; port += 1) {
+      await renderWith({ ...door, usage: brokenUsage() });
+      await settle();
+    }
+    expect([throws(), asked]).toEqual([2, 2]);
+    await advanceChromeClock(CHROME_RETRY_FIRST_MS / 2);
+    await settle();
+    expect([throws(), asked]).toEqual([2, 2]);
+    await advanceChromeClock(CHROME_RETRY_FIRST_MS / 2);
+    await settle();
+    expect([throws(), asked]).toEqual([3, 3]);
+
+    // One failure the whole time: one "unavailable", and the view never remounted.
+    expect(container.querySelectorAll('.vf-monitor-chrome > span[role="status"]')).toHaveLength(1);
     expect(container.textContent).toContain("Usage unavailable");
     expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
   });
@@ -2679,8 +2719,10 @@ describe("a chrome read cannot take down the monitor", () => {
     expect(stripMark.tries).toBe(tries);
     expect(container.querySelector('.vf-monitor-claims > span[role="status"]')).toBe(status);
 
-    // a fact they state is: the claims come back
+    // a fact they state is: the claims come back, at the end of the boundary's
+    // first window at the latest
     stripMark.throws = false;
+    holdChromeClock();
     await act(async () =>
       board?.peer({
         device: "studio",
@@ -2689,6 +2731,8 @@ describe("a chrome read cannot take down the monitor", () => {
         rows: peerRows("Codex"),
       }),
     );
+    await settle();
+    await advanceChromeClock();
     await settle();
     expect(container.querySelector('.vf-monitor-claims > span[role="status"]')).toBeNull();
     expect(strip?.querySelector(".vf-monitor-remote-chip")?.textContent).toContain("1 agent on");

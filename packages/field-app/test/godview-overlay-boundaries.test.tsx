@@ -28,6 +28,7 @@ import { type FieldHost, setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
 import { configureTerminalPool, disposeTerminalPool } from "../src/terminal/pool";
+import { advanceChromeClock, holdChromeClock, nextTask } from "./chrome-clock-fixture";
 import { managedSummary } from "./managed-session-fixture";
 import { type ScriptedModelBoard, scriptedModelBoard } from "./model-board-fixture";
 
@@ -44,6 +45,9 @@ const stand = vi.hoisted(() => ({
   door: null as unknown,
   tick: 0,
   ticked: new Set<() => void>(),
+  /** M192: Find throws in render while told to; every render it was asked for */
+  findThrows: false,
+  findRenders: 0,
 }));
 
 /** The deck, stood in: it builds its door on mount and withdraws it on unmount,
@@ -91,6 +95,18 @@ vi.mock("../src/godview/GodviewDeckEdge", async (importOriginal) => {
   };
 });
 
+vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views")>();
+  return {
+    ...actual,
+    FindSheet: (props: Parameters<typeof actual.FindSheet>[0]) => {
+      stand.findRenders += 1;
+      if (stand.findThrows) throw new Error("Find lost the agents it searches");
+      return <actual.FindSheet {...props} />;
+    },
+  };
+});
+
 vi.mock("@vibefield/fieldd-client/react", () => ({
   useFielddClient: () => ({ request: vi.fn(async () => ({})) }),
 }));
@@ -131,7 +147,7 @@ function fakeDoor(): MonitorDoor {
 async function settle(): Promise<void> {
   for (let round = 0; round < 4; round += 1) {
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await nextTask();
     });
   }
 }
@@ -192,6 +208,8 @@ beforeEach(() => {
   stand.deckRenders = 0;
   stand.tick = 0;
   stand.ticked.clear();
+  stand.findThrows = false;
+  stand.findRenders = 0;
   stand.door = fakeDoor();
   markers = [];
   localStorage.clear();
@@ -233,6 +251,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root?.unmount());
   container?.remove();
   root = null;
@@ -269,10 +288,14 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     expect(document.getElementById("vf-godview-tweak-panel")).not.toBeNull();
     expect(stand.deckRenders).toBe(renders);
     expect(stand.deckMounts).toBe(1);
-    // Godview closing and opening again is: the deck comes back with its door
+    // Godview closing and opening again is: the deck comes back with its door,
+    // once, at the end of the boundary's first window at the latest
     stand.deckThrows = false;
+    holdChromeClock();
     await setView("canvas");
     await setView("godview");
+    await advanceChromeClock();
+    await settle();
     expect(stand.deckMounts).toBe(2);
     expect(statusIn(host, ".vf-godview-terminal-deck-body")).toBeUndefined();
     expect(host.querySelector(".deck-stand-in")).not.toBeNull();
@@ -293,15 +316,61 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     expect(host.querySelector(".deck-stand-in")).not.toBeNull();
     expect(latest()?.localState).toBe("live");
 
-    // closing the panel is a fact it is handed: it tries again, and a closed
-    // panel draws nothing
+    // closing the panel is a fact it is handed: it tries again (at the end of
+    // the boundary's first window at the latest), and a closed panel draws nothing
     stand.panelThrows = false;
+    holdChromeClock();
     await act(async () => toggle?.click());
+    await settle();
+    await advanceChromeClock();
     await settle();
     expect(statusIn(host, ".vf-godview")).toBeUndefined();
     await act(async () => toggle?.click());
     await settle();
     expect(document.getElementById("vf-godview-tweak-panel")).not.toBeNull();
+  });
+
+  it("a throwing Find says so; the monitor, its view and the deck stay, and a change in the agents it searches tries it again (M192)", async () => {
+    const said = (host: HTMLElement): string[] =>
+      [...host.querySelectorAll('span[role="status"]')].map((span) => span.textContent ?? "");
+    const host = await mountOverlay();
+    const before = monitorParts(host);
+    expect(said(host)).not.toContain("Find unavailable");
+    // from here on the row's own clock: a model change can reach the sheet in
+    // more than one frame, and each new agents list is a new key whose wait for
+    // the window must be a timer this row moves
+    holdChromeClock();
+    // the agents it searches change, and its read throws
+    stand.findThrows = true;
+    await act(async () =>
+      board?.publish([
+        managedSummary({ runtimeRunId: "run-claude", kind: "claude", label: "Claude" }),
+        managedSummary({ runtimeRunId: "run-second", kind: "claude", label: "Claude" }),
+      ]),
+    );
+    await settle();
+    expect(said(host)).toContain("Find unavailable");
+    expectSameMonitor(host, before);
+    expect(host.querySelector(".deck-stand-in")).not.toBeNull();
+    // an overlay render that hands it the same agents is no reason to try it
+    const renders = stand.findRenders;
+    const toggle = host.querySelector<HTMLButtonElement>('button[aria-label="System control"]');
+    await act(async () => toggle?.click());
+    await settle();
+    expect(stand.findRenders).toBe(renders);
+    // new agents are, at the end of its window at the latest
+    stand.findThrows = false;
+    await act(async () =>
+      board?.publish([
+        managedSummary({ runtimeRunId: "run-claude", kind: "claude", label: "Claude" }),
+      ]),
+    );
+    await settle();
+    await advanceChromeClock();
+    await settle();
+    expect(said(host)).not.toContain("Find unavailable");
+    expect(stand.findRenders).toBeGreaterThan(renders);
+    expectSameMonitor(host, before);
   });
 
   it("a throwing deck edge says so in the lip's place; the monitor, its view and the deck stay", async () => {

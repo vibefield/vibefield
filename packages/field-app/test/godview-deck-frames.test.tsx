@@ -40,6 +40,7 @@ import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
+import { advanceChromeClock, holdChromeClock, nextTask } from "./chrome-clock-fixture";
 import { managedSummary } from "./managed-session-fixture";
 import { type ScriptedModelBoard, scriptedModelBoard, terminalInfoOf } from "./model-board-fixture";
 import { bornSummary, routedTicket } from "./routed-terminal-fixture";
@@ -518,7 +519,7 @@ function installHost(): void {
 async function settle(): Promise<void> {
   // Theme facts follow DOM mutations through a MutationObserver task.
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTask();
   });
   for (let i = 0; i < 6; i++) {
     await act(async () => {
@@ -2060,6 +2061,7 @@ describe("births under an Agent Profile (SB-3)", () => {
 // take the monitor's rows with it (GT-D17).
 describe("the deck's chrome behind its boundaries (M49)", () => {
   afterEach(() => {
+    vi.useRealTimers();
     chromeFaults.frameFor.clear();
     chromeFaults.frames = false;
     chromeFaults.launchers = false;
@@ -2158,13 +2160,17 @@ describe("the deck's chrome behind its boundaries (M49)", () => {
     expect(said(host)).toEqual(["Pane frame unavailable"]);
     expectStillStanding(host, before);
 
-    // the next fact for that pane is a reason to try again
+    // the next fact for that pane is a reason to try again, at the end of the
+    // boundary's first window at the latest
     chromeFaults.frameFor.clear();
+    holdChromeClock();
     await act(async () => {
       const [first] = workspace.panes;
       if (first !== undefined) first.session = stubSession("pty-1", { cwd: "/home/tester/b" });
       workspace.refresh();
     });
+    await settle();
+    await advanceChromeClock();
     await settle();
     expect(frameFor(host, "pty-1")).not.toBeNull();
     expect(said(host)).toEqual([]);
