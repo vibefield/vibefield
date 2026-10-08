@@ -5435,7 +5435,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docLane.close();
       const reason = fatalReason;
       placeScanner.dispose(); // PJ-1 — no scan asks a worker that is leaving
-      projectRecords.dispose();
+      void projectRecords.dispose();
       projectGroups.dispose();
       offActed();
       void (async () => {
@@ -5519,7 +5519,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       board.dispose();
       indexTail.dispose();
       placeScanner.dispose();
-      projectRecords.dispose();
+      void projectRecords.dispose();
       projectGroups.dispose();
       offActed();
       indexCatalog.dispose();
@@ -5897,7 +5897,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           placeScanner.dispose(); // PJ-1 — no scan asks a worker that is stopping
-          projectRecords.dispose();
+          await projectRecords.dispose(); // PJ-2 — an act already running lands before the library closes
           projectGroups.dispose();
           offActed();
           await workspace.stop(); // FS-1a — the files worker stops with the daemon (FS-D11 (b))
@@ -6016,7 +6016,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     await agents.dispose();
     await rosettad?.stop();
     placeScanner.dispose(); // PJ-1 — likewise never started before ready
-    projectRecords.dispose();
+    void projectRecords.dispose();
     projectGroups.dispose();
     offActed();
     await workspace.stop(); // FS-1a — started only after ready; the guard is stated

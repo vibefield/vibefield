@@ -146,10 +146,15 @@ export class ProjectRecords {
     });
   }
 
-  dispose(): void {
+  /** Stop hearing the grouping and drop the launches still waiting for a
+   * place. The act already running finishes: the promise settles once it has
+   * (its library write landed or failed), so the owner closes the library —
+   * or removes its folder — only after it. */
+  dispose(): Promise<void> {
     this.#disposed = true;
     this.#offComputed();
     this.#pending = [];
+    return this.#chain.then(() => undefined);
   }
 
   /** One act of the person's on the project `key` (PJ-3's `project.intent`). */
