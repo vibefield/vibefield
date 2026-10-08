@@ -5,6 +5,7 @@
  * the size of the negative control must read worse, a copy of A must pass, a
  * moving null arm must make the run unreadable rather than a verdict.
  */
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -13,6 +14,7 @@ type Metrics = Record<string, number>;
 interface Row {
   metric: string;
   gate: boolean;
+  role: string | null;
   T: number;
   z: number;
   reading: string;
@@ -232,4 +234,139 @@ describe("the gate", () => {
       stats.gateVerdict([{ cell: "c", rows: moved }], { paired: false, rounds: 7 }).verdict,
     ).toBe("null-moved");
   });
+});
+
+// MV-8b (M177, ruling the M176 audit): `worse` is M40's text, z > 4 and T > 2 %
+// (components also ≥ 1 ms/s). The reader used to ask an effect to clear the null
+// arm's |T₀| + 2·MAD₀ as well, an envelope looser than M40; two recorded reds
+// (M107) passed inside it.
+describe("M40, literally: no null envelope in worse (MV-8b)", () => {
+  const table = () => stats.metricTable(16.7);
+  const rounds = (name: string, values: readonly number[]): Metrics[] =>
+    values.map((value) => ({ [name]: value }));
+  const rowOf = (rows: Row[], name: string): Row => {
+    const row = rows.find((candidate) => candidate.metric === name);
+    if (row === undefined) throw new Error(`no ${name} row`);
+    return row;
+  };
+
+  it("an effect past z > 4 and 2 % of A is worse even inside the null arm's |T₀| + 2·MAD₀", () => {
+    // B − A ≈ +3 with a small wobble: T = 3, MAD = 0.1, z ≈ 42.7
+    const a = [100, 101, 99, 100, 102, 98, 100];
+    const b = [103, 104.2, 101.8, 103, 105.1, 100.9, 103];
+    // the null arm: T₀ = 1.5 and MAD₀ = 1.5 (z₀ ≈ 1.4, quiet), so the old envelope
+    // |T₀| + 2·MAD₀ sat at 4.5, past T
+    const a2 = [101.5, 104, 97, 101.5, 105, 96.5, 101.5];
+    const rows = stats.judgeCell(
+      rounds("task ms/s", a),
+      rounds("task ms/s", b),
+      rounds("task ms/s", a2),
+      table(),
+    );
+    const task = rowOf(rows, "task ms/s");
+    expect(task.z).toBeGreaterThan(4);
+    expect(task.T).toBe(3);
+    expect(task.reading).toBe("worse");
+  });
+
+  it("a total has no 0.5 ms/s minimum: 2 % of a 15 ms/s base is 0.3", () => {
+    const a = [15, 15.2, 14.8, 15, 15.1, 14.9, 15];
+    const b = a.map((value) => value + 0.4);
+    const rows = stats.judgeCell(
+      rounds("react render ms/s", a),
+      rounds("react render ms/s", b),
+      rounds("react render ms/s", a),
+      table(),
+    );
+    expect(rowOf(rows, "react render ms/s").reading).toBe("worse");
+  });
+
+  it("a component is material from 1 ms/s, inclusive, and past 2 % of A", () => {
+    const a = [40, 40.5, 39.5, 40, 40.25, 39.75, 40];
+    const read = (shift: number) =>
+      rowOf(
+        stats.judgeCell(
+          rounds("script ms/s", a),
+          rounds(
+            "script ms/s",
+            a.map((value) => value + shift),
+          ),
+          rounds("script ms/s", a),
+          table(),
+        ),
+        "script ms/s",
+      ).reading;
+    expect(read(0.99)).toBe("");
+    expect(read(1)).toBe("worse");
+  });
+
+  // ── the recorded runs (fixtures/godview-perf-m40.json: each arm's per-round
+  // values, as the shipping cellMetrics read them from the named reports) ──
+  interface RecordedRow {
+    cell: string;
+    metric: string;
+    recorded: { reading: string; T: number; z: number };
+    A: string;
+    B: string;
+    "A′": string;
+  }
+  interface RecordedRun {
+    recordedVerdict: string;
+    rounds: number;
+    rows: RecordedRow[];
+  }
+  const recorded = JSON.parse(
+    readFileSync(join(import.meta.dirname, "fixtures", "godview-perf-m40.json"), "utf8"),
+  ) as Record<"m107" | "perf03" | "m142", RecordedRun>;
+  const values = (text: string): number[] => text.split(" ").map(Number);
+  /** Each recorded row judged by today's reader, after proving the fixture IS the
+   * recorded data: it reproduces the run's own T and z. */
+  function judged(run: RecordedRun): { cell: string; row: Row; was: string }[] {
+    return run.rows.map((held) => {
+      const arm = (name: "A" | "B" | "A′") => rounds(held.metric, values(held[name]));
+      const row = rowOf(stats.judgeCell(arm("A"), arm("B"), arm("A′"), table()), held.metric);
+      expect(row.T, `${held.cell} · ${held.metric} T`).toBe(held.recorded.T);
+      expect(row.z, `${held.cell} · ${held.metric} z`).toBe(held.recorded.z);
+      return { cell: held.cell, row, was: held.recorded.reading };
+    });
+  }
+
+  it("M107's two M40-literal reds (rain and timeline n60 render) now read worse", () => {
+    const rows = judged(recorded.m107);
+    expect(recorded.m107.recordedVerdict).toBe("pass");
+    expect(rows.map(({ cell, row, was }) => [cell, row.metric, was, row.reading])).toEqual([
+      ["rain × n60-8s-s1", "react render ms/s", "", "worse"],
+      ["timeline × n60-8s-s1", "react render ms/s", "", "worse"],
+    ]);
+    const gate = stats.gateVerdict(
+      rows.map(({ cell, row }) => ({ cell, rows: [row] })),
+      { paired: true, rounds: recorded.m107.rounds },
+    );
+    expect(gate.verdict).toBe("worse");
+  });
+
+  it.each(["perf03", "m142"] as const)(
+    "the final qualification's 24 gated totals (%s) still pass: every delta favours B, none is worse or noisy, every total that read better still does",
+    (name) => {
+      const run = recorded[name];
+      const rows = judged(run);
+      expect(rows).toHaveLength(24);
+      expect(rows.every(({ row }) => row.T < 0)).toBe(true);
+      expect(rows.filter(({ row }) => row.reading === "worse" || row.reading === "noisy")).toEqual(
+        [],
+      );
+      for (const { cell, row, was } of rows) {
+        if (was === "better") expect(row.reading, `${cell} · ${row.metric}`).toBe("better");
+      }
+      // M40 reads a delta level below z > 4, whatever its sign: one such total in each
+      const level = rows.filter(({ row }) => row.reading !== "better");
+      expect(level).toHaveLength(1);
+      expect(level[0]?.row.z).toBeLessThan(4);
+      const gate = stats.gateVerdict(
+        rows.map(({ cell, row }) => ({ cell, rows: [row] })),
+        { paired: true, rounds: run.rounds },
+      );
+      expect(gate.verdict).toBe("pass");
+    },
+  );
 });

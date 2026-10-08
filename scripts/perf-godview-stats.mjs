@@ -16,6 +16,13 @@
 // at least 1 ms/s besides z > 4 and T > 2 % — and a component that rises while
 // its cell's task total falls reads `shifted`: named, never a failure. The
 // per-view rows stay as context.
+//
+// MV-8b (M177, ruling the M176 audit): `worse` and `better` are M40's LITERAL
+// rule — z > 4 and |T| past the row's floor (2 % of A's median for the totals
+// and the components; the components also ≥ 1 ms/s). Until here a row also had
+// to clear the null arm's |T₀| + 2·MAD₀, a looser envelope than M40's text: it
+// passed M107's two M40-literal reds (rain and timeline n60 render). The null
+// arm still makes a row `noisy` when it itself clears z > 4 and the floor.
 
 export const median = (values) => {
   const sorted = [...values].filter((value) => Number.isFinite(value)).sort((a, b) => a - b);
@@ -46,26 +53,38 @@ const relative =
   (a) =>
     Math.max(least, Math.abs(a) * share);
 
+/** M40's "T > 2 %": the share of A's median, with no absolute minimum. */
+const share = (fraction) => (a) => Math.abs(a) * fraction;
+
 /**
- * Each metric: its name, which way is worse, its materiality floor (from A's
- * median where it is relative), and its role in the GATE (M33, M40): `total`
- * and `decisive` rows gate, `component` rows gate only when material and not
- * shifted; rows with no role are context. A frame is the window mode's
- * (`frameMs`).
+ * Each metric: its name, which way is worse, its floor (from A's median where it
+ * is relative), and its role in the GATE (M33, M40): `total` and `decisive` rows
+ * gate, `component` rows gate only when material and not shifted; rows with no
+ * role are context. The totals and the components read M40's own "T > 2 %"; a
+ * component is also `material` only from 1 ms/s (B − A ≥ 1, inclusive). The
+ * decisive frame and LoAF rows keep the instrument floors they had (2 % of a
+ * frame, one long frame, 50 ms of blocking), which M40 leaves as they were. A
+ * frame is the window mode's (`frameMs`).
  */
 export function metricTable(frameMs) {
   const gate = (role) => ({ gate: true, role });
   return [
     // ── the decisive rows: the totals, frame p50, the LoAF rows (M33, M40) ──
-    { name: "task ms/s", direction: "up", floor: relative(0.02, 0.5), ...gate("total") },
-    { name: "react render ms/s", direction: "up", floor: relative(0.02, 0.5), ...gate("total") },
+    { name: "task ms/s", direction: "up", floor: share(0.02), ...gate("total") },
+    { name: "react render ms/s", direction: "up", floor: share(0.02), ...gate("total") },
     { name: "frame p50 ms", direction: "up", floor: () => 0.02 * frameMs, ...gate("decisive") },
     { name: "loaf count", direction: "up", floor: () => 1, ...gate("decisive") },
     { name: "loaf blocking ms", direction: "up", floor: () => 50, ...gate("decisive") },
     // ── the task total's components: material at ≥ 1 ms/s and > 2 % (M40) ──
-    { name: "script ms/s", direction: "up", floor: relative(0.02, 1), ...gate("component") },
-    { name: "layout ms/s", direction: "up", floor: relative(0.02, 1), ...gate("component") },
-    { name: "recalc style ms/s", direction: "up", floor: relative(0.02, 1), ...gate("component") },
+    { name: "script ms/s", direction: "up", floor: share(0.02), material: 1, ...gate("component") },
+    { name: "layout ms/s", direction: "up", floor: share(0.02), material: 1, ...gate("component") },
+    {
+      name: "recalc style ms/s",
+      direction: "up",
+      floor: share(0.02),
+      material: 1,
+      ...gate("component"),
+    },
     // ── context ──
     { name: "react commits/s", direction: "up", floor: relative(0.02) },
     { name: "react roots", direction: "up", floor: () => 0.5 },
@@ -144,23 +163,27 @@ export function cellMetrics(cell) {
   };
 }
 
+/** Whether a paired effect clears M40's rule: z > 4, past its floor, and, for a
+ * row with a materiality minimum, at least that far (inclusive). */
+export function clears(effect, floor, material = 0) {
+  return (
+    Number.isFinite(effect.T) &&
+    effect.z > 4 &&
+    Math.abs(effect.T) > floor &&
+    Math.abs(effect.T) >= material
+  );
+}
+
 /**
- * A reading aid per row: `worse` / `better` when the paired effect clears
- * z > 4, its materiality floor, AND the null arm's own offset by two of its
- * spreads; `noisy` when the null arm itself clears z > 4 and the floor (that
- * metric cannot be read this run).
+ * A reading aid per row, M40 literally: `worse` / `better` when the paired
+ * effect clears the rule; `noisy` when the null arm itself clears it (that
+ * metric cannot be read this run). There is no null envelope: an effect inside
+ * |T₀| + 2·MAD₀ that clears the rule is an effect (M177).
  */
-export function reading(direction, floor, effect, nullArm) {
+export function reading(direction, floor, effect, nullArm, material = 0) {
   if (!Number.isFinite(effect.T)) return "";
-  if (
-    nullArm !== null &&
-    Number.isFinite(nullArm.T) &&
-    nullArm.z > 4 &&
-    Math.abs(nullArm.T) > floor
-  )
-    return "noisy";
-  const noise = nullArm === null ? 0 : Math.abs(nullArm.T) + 2 * (nullArm.mad || 0);
-  if (effect.z <= 4 || Math.abs(effect.T) <= floor || Math.abs(effect.T) <= noise) return "";
+  if (nullArm !== null && clears(nullArm, floor, material)) return "noisy";
+  if (!clears(effect, floor, material)) return "";
   const worse = direction === "up" ? effect.T > 0 : effect.T < 0;
   return worse ? "worse" : "better";
 }
@@ -170,7 +193,7 @@ export function reading(direction, floor, effect, nullArm) {
  * `moved` (the instrument's own noise), never worse or better. A component
  * that reads worse while the cell's task total fell reads `shifted` (M40). */
 export function judgeCell(a, b, a2, table) {
-  const rows = table.map(({ name, direction, floor: floorOf, gate, role }) => {
+  const rows = table.map(({ name, direction, floor: floorOf, material = 0, gate, role }) => {
     const av = a.map((m) => m[name]);
     const bv = b.map((m) => m[name]);
     const effect = pairedDiff(av, bv);
@@ -191,12 +214,13 @@ export function judgeCell(a, b, a2, table) {
       ...effect,
       ...(nullArm !== null ? { T0: nullArm.T, mad0: nullArm.mad, z0: nullArm.z } : {}),
       floor,
+      ...(material > 0 ? { material } : {}),
       reading:
         a2 === null
-          ? Number.isFinite(effect.T) && effect.z > 4 && Math.abs(effect.T) > floor
+          ? clears(effect, floor, material)
             ? "moved"
             : ""
-          : reading(direction, floor, effect, nullArm),
+          : reading(direction, floor, effect, nullArm, material),
     };
   });
   const total = rows.find((row) => row.role === "total" && row.metric === "task ms/s");

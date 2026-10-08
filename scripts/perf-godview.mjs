@@ -302,7 +302,7 @@ async function main() {
     `- load average at launches: ${loads.map((l) => `${l.arm}${l.round} ${l.load.toFixed(0)}`).join(" · ")}`,
     "- estimator: medians; paired diff T = median(B−A), z = |T| / (1.858·MAD/√R); tails are weather",
     paired
-      ? "- null arm: T₀ = median(A′−A), the same build twice in the same session; `reading` names an effect only past z > 4, the metric's floor and |T₀| + 2·MAD₀ (a reading aid — the verdict is the lead's, L14)"
+      ? "- null arm: T₀ = median(A′−A), the same build twice in the same session; `reading` names an effect past z > 4 and the metric's floor (M40, literally: 2 % of A for the totals and components, components also ≥ 1 ms/s), and `noisy` when the null arm itself clears that (a reading aid — the verdict is the lead's, L14)"
       : "- this run IS the null arm: T reads the instrument's own noise",
     "",
   ];
@@ -324,7 +324,7 @@ async function main() {
         ]
       : []),
     paired
-      ? "Decisive rows (M33, M40): main-thread task ms/s (CDP) and every React root's render ms/s — the totals — plus frame p50 and the LoAF rows. The task total's components (script, layout, style) gate only when material (≥ 1 ms/s and > 2 %), and read `shifted` when they rose while the total fell. `worse` = past z > 4, the floor and the null arm's |T₀| + 2·MAD₀; `noisy` = the null arm itself moved. A reading aid — the verdict is the lead's (L14)."
+      ? "Decisive rows (M33, M40): main-thread task ms/s (CDP) and every React root's render ms/s — the totals — plus frame p50 and the LoAF rows. The task total's components (script, layout, style) gate only when material (≥ 1 ms/s and > 2 %), and read `shifted` when they rose while the total fell. `worse` = M40 literally: z > 4 and T > 2 % of A (no null envelope, M177); `noisy` = the null arm itself clears that. A reading aid — the verdict is the lead's (L14)."
       : "An A/A run: no gate row should clear z > 4 and its floor (`null-ok`); one that does is the instrument's own noise (`null-moved`).",
     "",
     `| cell | ${GATE_COLUMNS.map((name) => `${name} A→B (z${paired ? ", z₀" : ""})`).join(" | ")} | reading |`,
