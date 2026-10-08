@@ -903,6 +903,16 @@ describe.skipIf(
     const peekHit = everything.hits.find((hit) => hit.nativeSessionId === FIXTURE_NATIVE_ID);
     expect(peekHit?.provider).toBe("claude");
     expect(peekHit?.cwd).toMatch(/\S/);
+    // …and the Peek's empty sentence may promise "a phrase in quotes": rosetta
+    // matches a quoted phrase WHOLE — the reply's own order finds it, the
+    // same words reversed do not (both words alone are in the reply).
+    const phrase = async (q: string) =>
+      ((await win.call("index.search", { q, scope: "local" })) as IndexSearchResult).hits.filter(
+        (hit) => hit.nativeSessionId === FIXTURE_NATIVE_ID,
+      ).length;
+    expect(await phrase('"rosetta mockmodel"')).toBeGreaterThan(0);
+    expect(await phrase('"mockmodel rosetta"')).toBe(0);
+    expect(await phrase("mockmodel rosetta")).toBeGreaterThan(0);
 
     const status = (await win.call("index.status", {})) as IndexStatus;
     expect(status.search).toMatchObject({
