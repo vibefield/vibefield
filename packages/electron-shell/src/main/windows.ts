@@ -14,6 +14,9 @@ export function createMainWindow(opts: {
   mode: ShellMode;
   preloadPath: string;
   show: boolean;
+  /** MV-3c — offscreen rendering, for a lab window that is never shown (the
+   * Godview perf lab and capture, M31/M32); every other window leaves it unset */
+  offscreen?: { deviceScaleFactor: number } | undefined;
 }): BrowserWindow {
   const fillWorkArea = process.platform === "darwin" && !isSmokeLike(opts.mode);
   const win = new BrowserWindow({
@@ -25,10 +28,12 @@ export function createMainWindow(opts: {
     show: opts.show,
     title: "VibeField",
     backgroundColor: "#171717", // pre-paint = the dark canvas token (--vf-canvas-bg)
-    // DK-11: a mode that counts a covered window's frames keeps its page visible when covered (window-policy.ts)
-    webPreferences: assertSecurePreferences(
-      mainWindowPreferences(opts.preloadPath, keepsFramesWhenCovered(opts.mode, process.argv)),
-    ),
+    // DK-11: a mode that counts a covered window's frames keeps its page visible when covered (window-policy.ts);
+    // MV-3c: a lab window that is never shown renders offscreen
+    webPreferences: assertSecurePreferences({
+      ...mainWindowPreferences(opts.preloadPath, keepsFramesWhenCovered(opts.mode, process.argv)),
+      ...(opts.offscreen !== undefined ? { offscreen: opts.offscreen } : {}),
+    }),
   });
   if (fillWorkArea) win.setBounds(screen.getPrimaryDisplay().workArea);
   // Dev opens the tools by default (James, 2026-08-02) — detached, so the
@@ -84,16 +89,31 @@ export async function loadRenderer(
 ): Promise<void> {
   if (mode !== "dev") {
     const url = new URL(APP_ENTRY_URL);
-    if (mode === "smoke-godview" || mode === "terminal-perf-lab") {
+    if (mode === "smoke-godview" || mode === "terminal-perf-lab" || mode === "godview-perf-lab") {
       url.searchParams.set("godviewMarkers", "1");
     }
     for (const [key, value] of Object.entries(search)) url.searchParams.set(key, value);
+    // MV-0 — the Godview perf lab: the probe + player bridges (`lab-bridge.ts`)
+    // and the replay door in place of the live subscriptions (`door-instruments.ts`)
+    if (mode === "godview-perf-lab") {
+      url.searchParams.set("godviewPerf", "1");
+      url.searchParams.set("godviewReplay", "1");
+      // MV-5 — a lab launch asked for the dev server's renderer (the SIGTRAP
+      // probe's dev run: the swarm's worker served by Vite), with the same switches
+      if (process.env["VF_GODVIEW_LAB_RENDERER"] === "dev") {
+        const dev = new URL(viteUrl);
+        for (const [key, value] of url.searchParams) dev.searchParams.set(key, value);
+        await win.loadURL(dev.href);
+        return;
+      }
+    }
     await win.loadURL(url.href);
     return;
   }
+  const devUrl = new URL(viteUrl).href;
   for (let i = 0; i < 40; i++) {
     try {
-      await win.loadURL(viteUrl);
+      await win.loadURL(devUrl);
       return;
     } catch {
       await sleep(500); // vite still booting

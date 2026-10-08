@@ -3,14 +3,15 @@
   "siblings": {
     "puppeteer": {
       "path": "../puppeteer",
-      "sha": "6392865826163f3ef20c8d202dc9f89e18150d22",
+      "sha": "594d222b117b433849e72d96e17ea5b8e02b0f04",
       "packages": {
         "@vibecook/puppeteer-runtime": "packages/runtime",
         "@vibecook/puppeteer-builtin-providers": "packages/builtin-providers",
         "@vibecook/puppeteer-core": "packages/core",
         "@vibecook/puppeteer-record": "packages/record",
         "@vibecook/puppeteer-monitor": "packages/monitor",
-        "@vibecook/puppeteer-views": "packages/views"
+        "@vibecook/puppeteer-views": "packages/views",
+        "@vibecook/puppeteer-view-sdk": "packages/view-sdk"
       }
     },
     "rosetta": {
@@ -37,7 +38,7 @@
     "ghosttea": {
       "path": "../ghosttea-0.11.2",
       "repository": "https://github.com/vibecook-dev/ghosttea.git",
-      "sha": "8a0930e86fc7264b1a353d5dba7aeeb9567dd6fd",
+      "sha": "10d0b17bbc14e06d0bae8a752ac444cbb5aee286",
       "javascript": {
         "workspaces": [
           "@vibecook/ghosttea-protocol",

@@ -8,7 +8,7 @@ import {
 import { type CSSProperties, type ReactElement, useState } from "react";
 import { DEFAULT_DECK_APPEARANCE } from "../godview/deck-appearance";
 import { godviewTerminalTheme, terminalGround } from "../godview/deck-theme";
-import type { AgentSessionSummary } from "../godview/monitor/facet-types";
+import type { ChromeRun } from "../godview/monitor/chrome-facts";
 import { paneFrameAgentFacts } from "../godview/monitor/pane-frame-facts";
 
 /**
@@ -20,7 +20,9 @@ import { paneFrameAgentFacts } from "../godview/monitor/pane-frame-facts";
  * `paneFrameAgentFacts` the shipping projection VibeField feeds it with. What
  * the catalog supplies is exactly what a HOST supplies (docs/UI_SYSTEM.md's
  * fixture-adapter rule): a pane element to draw in, a pane colour, the terminal
- * ground the frame mixes its ink from, and fold rows that never existed.
+ * ground the frame mixes its ink from, and runs that never existed — each a run's
+ * row of the model board, with the chrome's facts beside it (MV-3d), as the
+ * window receives one.
  *
  * The pane wrapper carries ghosttea's own class and the deck's
  * `vf-deck-framed` scope because the package's stylesheet keys the safe areas,
@@ -39,10 +41,10 @@ const VERBS: PaneFrameVerbs = {
   zoomShortcut: "⌘⇧↵",
 };
 
-interface FoldRowOptions {
+interface RunRowOptions {
   kind: string;
   label: string;
-  status: AgentSessionSummary["status"];
+  status: ChromeRun["status"];
   cwd: string;
   alive?: boolean;
   statusSinceMs?: number;
@@ -54,52 +56,46 @@ interface FoldRowOptions {
   monitor?: false;
 }
 
-/** One fold row, shaped as fieldd's `agent.subscribe` reports it. */
-function foldRow(options: FoldRowOptions): AgentSessionSummary {
+/** One run of this desktop, shaped as its row of the model board reaches the
+ * window (`agent.subscribe {projection: "model"}`): the desk row, and the
+ * chrome's facts fieldd writes beside it (`local` — the working directory, and
+ * the mirror's own words once the provider has spoken). */
+function runRow(options: RunRowOptions): ChromeRun {
   const statusSince = new Date(options.statusSinceMs ?? NOW).toISOString();
+  const spoken = options.monitor !== false;
   return {
-    sessionId: "native-1",
+    runtimeRunId: "run-1",
+    revision: 1,
     kind: options.kind,
     label: options.label,
-    device: "this-device",
     tier: "managed",
-    runtimeRunId: "run-1",
-    runtimeEpoch: 1,
-    terminal: { hosted: "local", runtimeSessionId: "pty-1" },
-    workspace: { mode: "direct", root: options.cwd },
-    ...(options.monitor === false
-      ? {}
-      : {
-          monitor: {
-            schemaVersion: 3,
-            runtimeEpoch: 1,
-            revision: 4,
-            runtimeRunId: "run-1",
-            status: options.status === "unknown" ? "idle" : options.status,
-            statusSince,
-            blockers: [],
-            alive: options.alive ?? true,
-            environment: { cwd: options.cwd },
-            ...(options.model !== undefined ? { model: options.model } : {}),
-            ...(options.effort !== undefined ? { effort: options.effort } : {}),
-            ...(options.contextPercent !== undefined
-              ? {
-                  context: {
-                    usedTokens: options.contextPercent * 2_000,
-                    capacityTokens: 200_000,
-                    usedPercent: options.contextPercent,
-                    ...(options.percentageSource !== undefined
-                      ? { percentageSource: options.percentageSource }
-                      : {}),
-                  },
-                }
-              : {}),
-          },
-        }),
+    device: "this-device",
     status: options.status,
-    observationLevel: "native-hooks",
-    createdAt: statusSince,
+    statusSince,
     stateChangedAt: statusSince,
+    createdAt: statusSince,
+    alive: options.alive ?? true,
+    blockers: [],
+    ...(spoken && options.model !== undefined ? { model: options.model } : {}),
+    ...(spoken && options.effort !== undefined ? { effort: options.effort } : {}),
+    ...(spoken && options.contextPercent !== undefined
+      ? { context: { usedPercent: options.contextPercent } }
+      : {}),
+    terminal: { hosted: "local", runtimeSessionId: "pty-1" },
+    local: {
+      nativeSessionId: "native-1",
+      cwd: options.cwd,
+      ...(spoken
+        ? {
+            mirror: {
+              alive: options.alive ?? true,
+              ...(options.percentageSource !== undefined
+                ? { contextSource: options.percentageSource }
+                : {}),
+            },
+          }
+        : {}),
+    },
   };
 }
 
@@ -107,7 +103,7 @@ interface FrameSpecimen {
   id: string;
   caption: string;
   session: PaneFrameSession;
-  row?: AgentSessionSummary;
+  row?: ChromeRun;
   remote?: string;
   color?: string;
   zoomed?: boolean;
@@ -127,7 +123,7 @@ const SPECIMENS: readonly FrameSpecimen[] = [
     id: "starting",
     caption: "a run before its first state — still the bare badge, never an invented readout",
     session: SHELL,
-    row: foldRow({
+    row: runRow({
       kind: "claude",
       label: "Claude",
       status: "unknown",
@@ -141,7 +137,7 @@ const SPECIMENS: readonly FrameSpecimen[] = [
     caption: "working — the turn's time on the stop verb, the context meter past 80%",
     session: SHELL,
     color: "oklch(0.62 0.15 250)",
-    row: foldRow({
+    row: runRow({
       kind: "claude",
       label: "Claude",
       status: "working",
@@ -158,7 +154,7 @@ const SPECIMENS: readonly FrameSpecimen[] = [
     session: SHELL,
     color: "oklch(0.62 0.15 250)",
     stopping: true,
-    row: foldRow({
+    row: runRow({
       kind: "claude",
       label: "Claude",
       status: "working",
@@ -173,7 +169,7 @@ const SPECIMENS: readonly FrameSpecimen[] = [
     caption: "the process has ended — one verb, resume",
     session: { id: "pty-2", exited: true, cwd: "/Users/j/src/rosetta" },
     color: "oklch(0.7 0.14 150)",
-    row: foldRow({
+    row: runRow({
       kind: "codex",
       label: "Codex",
       status: "idle",
@@ -189,7 +185,7 @@ const SPECIMENS: readonly FrameSpecimen[] = [
     session: { id: "replica-1", exited: false, cwd: "/Users/j/src/truffle" },
     remote: "mini",
     color: "oklch(0.66 0.13 60)",
-    row: foldRow({
+    row: runRow({
       kind: "claude",
       label: "Claude",
       status: "idle",
@@ -206,7 +202,7 @@ const SPECIMENS: readonly FrameSpecimen[] = [
     session: SHELL,
     narrow: true,
     color: "oklch(0.62 0.15 250)",
-    row: foldRow({
+    row: runRow({
       kind: "claude",
       label: "Claude",
       status: "working",
@@ -221,7 +217,7 @@ const SPECIMENS: readonly FrameSpecimen[] = [
     caption: "a provider that cannot say how full its window is — no meter, no invented figure",
     session: SHELL,
     color: "oklch(0.62 0.15 250)",
-    row: foldRow({
+    row: runRow({
       kind: "gemini",
       label: "Gemini",
       status: "idle",

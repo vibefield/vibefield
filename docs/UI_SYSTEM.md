@@ -146,12 +146,25 @@ DOM, interaction state, accessibility, and CSS are production code. Engine-rende
 is represented by deterministic card fixtures, while its stable visual identities come from shared
 content tokens and the plugin-owned stylesheets.
 
-Godview's swarm follows the same boundary at a smaller scale. `AgentSwarm.tsx` owns physics,
-placement, drag gestures, and field-level creation; `AgentBubble.tsx` owns the exact circle state
-projection, DOM, accessibility, identity layers, and arrival motion. Field composition lives in
-`swarm.css`, while circle styling lives in `agent-bubble.css`. The catalog mounts that production
-circle without starting the physics engine and inventories every valid source/status combination,
-access and pane modifier, provider glyph, and context boundary.
+Godview mounts the shipping SDK views through `MonitorViewHost`, one at a time. `GodviewPreview`
+mounts the product `GodviewMonitor` with `godview-model-fixture.ts` supplying the model board; it
+replaces the data source, never the view or host markup. `SwarmBodiesPreview` mounts the same
+`swarmMonitorView` over SDK fixtures to show the state matrix. The view owns its physics worker,
+canvas, accessibility and lifecycle; field-app no longer supplies a physics context or circle CSS.
+Each view's sheet is scoped to `.mv-<id>` and reads only its own custom properties and the finite
+SDK `MONITOR_SKIN` (DESIGN §8). Host CSS names no view class. The bar reads marks and focus keys
+from manifests. Every host chrome piece has its own `ChromeBoundary` — the bar, Find, usage, the
+profile notice and the claims in `GodviewMonitor`; System control and the deck in `GodviewOverlay`;
+the deck's edge in `GodviewStage`; each pane's frame, the frames and the launchers in `GodviewDeck` —
+so a throw names that piece unavailable where it stood without unmounting the monitor or its view,
+and each is tried again only for a fact it reads (its `retryKey`), at most once per window: 1 s,
+doubling to 30 s while it keeps failing (Find's key is the agents it searches). The bar and the
+profile notice have no `retryKey`, as they read only the window's own state: they are not tried
+again until the monitor remounts (M192). The `godview-monitor`,
+`godview-overlay-boundaries` and `godview-deck-frames` tests hold each piece, on a held clock
+(`chrome-clock-fixture.ts`). *(Made true 2026-10-07, MV-8b: the deck, System control and the
+claims had no boundary before. The window: 2026-10-08, the package's boundary since M179.)*
+Agent/profile glyphs and shared mark data come from the SDK's `/react` and `/toolkit`.
 
 When a staged view or content token lives in another workspace package, the catalog composes it
 through that package's `./design-system` export — a fixture-adapter door beside the shipping code

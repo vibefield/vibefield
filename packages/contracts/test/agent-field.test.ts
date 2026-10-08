@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import {
   AgentDeskRow,
+  AgentDeskTerminalRow,
   AgentFieldDelta,
   AgentFieldRow,
   AgentFieldSlice,
@@ -11,7 +12,15 @@ import {
   AgentInterruptResult,
   AgentMeshFrame,
   AgentMeshOpen,
+  AgentModelBoardRow,
+  AgentModelDeskRow,
+  AgentModelLocalFacts,
+  AgentModelMeshFrame,
+  AgentModelMeshOpen,
+  AgentProjection,
+  AgentReportShownParams,
   AgentSubscribeParams,
+  MonitorAgentRow,
 } from "../src/agent-field";
 import { AGENT_FIELD } from "../src/registries";
 
@@ -315,5 +324,203 @@ describe("AR-6-0 — the interrupt's answer", () => {
     expect(
       AgentInterruptResult.parse({ accepted: false, reason: "no-terminal-host" }),
     ).toMatchObject({ accepted: false, reason: "no-terminal-host" });
+  });
+});
+
+describe("MV-3a — the model's row on the wire (MV-D22, MV-D18)", () => {
+  const row = MonitorAgentRow.parse(golden("monitor-agent-row.valid.json"));
+  const desk = AgentDeskRow.parse(golden("agent-desk-row.model.json"));
+  const terminal = AgentDeskTerminalRow.parse(golden("agent-desk-terminal-row.valid.json"));
+
+  it("carries every fact a screen draws, with epoch-millisecond clocks and the parts of a wait apart (M2)", () => {
+    expect(row).toMatchObject({
+      id: "run-studio-q",
+      kind: "agent",
+      status: "blocked",
+      observed: true,
+      wait: { kind: "question", header: "Sleeping desktops" },
+      cost: { usd: 4.04, coverage: "complete" },
+      project: { name: "vibe-field", branch: "ds/c", seq: 2 },
+      device: { id: "dev-01HQ9S7UD1", name: "Studio", os: "mac" },
+    });
+    expect(Number.isInteger(row.createdAt)).toBe(true);
+    expect(Number.isInteger(row.statusSince)).toBe(true);
+    expect(row.cost?.series?.steps).toHaveLength(20);
+    // reader-relative, never on the wire
+    expect("self" in row.device).toBe(false);
+  });
+
+  it("the desk row carries the model's row for a PEER without its colour sequence (M16), and still IS a field row", () => {
+    expect(desk.monitorRow?.id).toBe(desk.runtimeRunId);
+    expect(desk.monitorRow?.project.seq).toBeUndefined();
+    const asField = AgentFieldRow.parse(golden("agent-desk-row.model.json"));
+    expect(asField.runtimeRunId).toBe(desk.runtimeRunId);
+    expect((asField as Record<string, unknown>)["monitorRow"]).toEqual(desk.monitorRow);
+    // a desk row from an older daemon carries none, and parses
+    const { monitorRow: _omitted, ...older } = golden("agent-desk-row.model.json") as Record<
+      string,
+      unknown
+    >;
+    expect(AgentDeskRow.parse(older).monitorRow).toBeUndefined();
+  });
+
+  it("a bare terminal is a row of its own kind, keyed by the model's id, and never a field row", () => {
+    expect(terminal).toMatchObject({
+      runtimeRunId: "pty-s4",
+      kind: "terminal",
+      terminal: { hosted: "local", runtimeSessionId: "pty-s4" },
+      monitorRow: { id: "pty-s4", kind: "terminal", attachable: true },
+    });
+    expect(AgentFieldRow.safeParse(golden("agent-desk-terminal-row.valid.json")).success).toBe(
+      false,
+    );
+    const asBoard = AgentModelBoardRow.parse(golden("agent-desk-terminal-row.valid.json"));
+    expect(asBoard.kind).toBe("terminal");
+  });
+
+  it("the window's one door: this desktop's model board first (its terminal among its rows), peers' desk boards beside it", () => {
+    const open: AgentModelMeshOpen = AgentModelMeshOpen.parse(
+      golden("agent-model-mesh-open.valid.json"),
+    );
+    expect(open.devices.map((entry) => entry.state)).toEqual(["live", "live", "asleep"]);
+    const own = open.devices[0]?.snapshot?.rows ?? [];
+    expect(own.map((entry) => entry.kind)).toEqual(["claude", "terminal"]);
+    const ownAgent = own[0];
+    expect(
+      ownAgent !== undefined && "monitorRow" in ownAgent && ownAgent.monitorRow?.project.seq,
+    ).toBe(2);
+    const peer = open.devices[1]?.snapshot?.rows[0];
+    expect(peer !== undefined && peer.kind !== "terminal" ? peer.monitorRow?.project.seq : -1).toBe(
+      undefined,
+    );
+    // the field board's reader does not take a terminal row: the field stays the field
+    expect(AgentMeshOpen.safeParse(golden("agent-model-mesh-open.valid.json")).success).toBe(false);
+    const frames: AgentModelMeshFrame[] = (
+      golden("agent-model-mesh-frames.valid.json") as unknown[]
+    ).map((frame) => AgentModelMeshFrame.parse(frame));
+    expect(frames.map((frame) => ("delta" in frame ? "delta" : "state"))).toEqual([
+      "delta",
+      "state",
+      "delta",
+    ]);
+    const first = frames[0];
+    if (first === undefined || !("delta" in first)) throw new Error("the first frame is a delta");
+    expect(first.delta.removed).toEqual(["run-studio-q"]);
+    expect(first.delta.upserts[0]?.kind).toBe("terminal");
+  });
+
+  it("`model` is a projection; the report names rows by model id and nothing else", () => {
+    expect(AgentProjection.options).toContain("model");
+    expect(AgentSubscribeParams.parse({ projection: "model", scope: "mesh" })).toMatchObject({
+      projection: "model",
+      scope: "mesh",
+    });
+    expect(AgentReportShownParams.parse(golden("agent-report-shown.valid.json")).ids).toEqual([
+      "run-studio-q",
+      "pty-s4",
+    ]);
+    expect(AgentReportShownParams.safeParse({ ids: [""] }).success).toBe(false);
+    expect(AgentReportShownParams.safeParse({}).success).toBe(false);
+  });
+
+  it("the model's texts name folders, never paths, on the agent row; a terminal's detail is its directory and stays home (L8)", () => {
+    expect(JSON.stringify(row)).not.toMatch(/"\/Users\/|"\/home\/|"[A-Za-z]:\\\\/);
+    // a terminal row is this desktop's windows' only: the path never leaves the device
+    expect(terminal.monitorRow.detail).toBe("/Users/james/Projects/notes");
+  });
+
+  it("M41 — the row says its home desktop's write policy, and a row from an older daemon without it still parses", () => {
+    // a declared fact, not passthrough: the home backend computed it (today it IS attachable's rule)
+    expect(MonitorAgentRow.shape.writable).toBeDefined();
+    expect(row).toMatchObject({ attachable: true, writable: true });
+    expect(desk.monitorRow).toMatchObject({ attachable: true, writable: true });
+    expect(terminal.monitorRow).toMatchObject({ attachable: true, writable: true });
+    // the home desktop's own word, never re-derived on the way: the two may part
+    expect(
+      MonitorAgentRow.parse({
+        ...(golden("monitor-agent-row.valid.json") as object),
+        writable: false,
+      }),
+    ).toMatchObject({ attachable: true, writable: false });
+    // the tolerant reader (an older peer's row has none): it parses, and stays absent here — the
+    // window adapter fills it from `attachable`, the rule that daemon applied
+    const { writable: _absent, ...older } = golden("monitor-agent-row.valid.json") as Record<
+      string,
+      unknown
+    >;
+    const parsed = MonitorAgentRow.parse(older);
+    expect(parsed.writable).toBeUndefined();
+    expect(parsed.attachable).toBe(true);
+    expect(MonitorAgentRow.safeParse({ ...older, writable: "yes" }).success).toBe(false);
+  });
+});
+
+describe("MV-3d — the chrome's facts ride this desktop's own rows of the model board (M35, M42)", () => {
+  const own = AgentModelDeskRow.parse(golden("agent-model-desk-row.valid.json"));
+
+  it("the window's run row carries the model's row whole and the chrome's facts beside it", () => {
+    expect(own.monitorRow?.project.seq).toBe(2);
+    expect(own.local).toEqual({
+      nativeSessionId: "5f0d2c4e-8a1b-4e6f-9c3d-2b7a1e0f4d68",
+      cwd: "/Users/james/Projects/project100/vibe-field",
+      spawnedBy: "user-shell",
+      mirror: {
+        alive: true,
+        startedAt: "2026-09-30T20:51:42.000Z",
+        lastEvidenceAt: "2026-09-30T21:14:02.000Z",
+        contextSource: "provider",
+      },
+    });
+    // the path rides beside the model, never in it (EL7 B1): the model's row names a folder
+    expect(JSON.stringify(own.monitorRow)).not.toMatch(/"\/Users\//);
+    // a model-board row is still a desk row and a field row to a reader that knows only those
+    expect(AgentDeskRow.parse(golden("agent-model-desk-row.valid.json")).runtimeRunId).toBe(
+      own.runtimeRunId,
+    );
+    expect(AgentFieldRow.safeParse(golden("agent-model-desk-row.valid.json")).success).toBe(true);
+  });
+
+  it("only this desktop's rows carry them: the peer cut and the peers' boards on the window's door carry none", () => {
+    expect("local" in AgentDeskRow.parse(golden("agent-desk-row.model.json"))).toBe(false);
+    const open: AgentModelMeshOpen = AgentModelMeshOpen.parse(
+      golden("agent-model-mesh-open.valid.json"),
+    );
+    const [here, ...others] = open.devices;
+    expect(AgentModelDeskRow.parse(here?.snapshot?.rows[0]).local?.cwd).toBe(
+      "/Users/james/Projects/project100/vibe-field",
+    );
+    // a bare terminal's row carries none: no reader asks it anything beyond its row
+    expect(here?.snapshot?.rows.filter((row) => "local" in row)).toHaveLength(1);
+    for (const device of others) {
+      for (const row of device.snapshot?.rows ?? []) expect("local" in row).toBe(false);
+    }
+  });
+
+  it("the union keeps the facts through the board's reader, and the tolerant reader takes any part of them", () => {
+    const asBoard = AgentModelBoardRow.parse(golden("agent-model-desk-row.valid.json"));
+    expect(AgentModelDeskRow.parse(asBoard).local?.spawnedBy).toBe("user-shell");
+    // every part optional: a run before its first state (no mirror), a fieldd
+    // that says less, and a word this build never heard all parse
+    expect(AgentModelLocalFacts.parse({})).toEqual({});
+    expect(AgentModelLocalFacts.parse({ nativeSessionId: "n-1", exited: true })).toEqual({
+      nativeSessionId: "n-1",
+      exited: true,
+    });
+    const newer = AgentModelLocalFacts.parse({
+      nativeSessionId: "n-1",
+      laterFact: 3,
+      mirror: { alive: false, laterWord: "x" },
+    });
+    expect(newer).toMatchObject({ laterFact: 3, mirror: { alive: false, laterWord: "x" } });
+    // what it does refuse is a fact of the wrong kind, never a missing one
+    expect(AgentModelLocalFacts.safeParse({ nativeSessionId: "" }).success).toBe(false);
+    expect(AgentModelLocalFacts.safeParse({ exited: "yes" }).success).toBe(false);
+    expect(AgentModelLocalFacts.safeParse({ mirror: { alive: "true" } }).success).toBe(false);
+    // and a row with no facts at all is a row fieldd said nothing more about
+    const { local: _none, ...bare } = golden("agent-model-desk-row.valid.json") as Record<
+      string,
+      unknown
+    >;
+    expect(AgentModelDeskRow.parse(bare).local).toBeUndefined();
   });
 });

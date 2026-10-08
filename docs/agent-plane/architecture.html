@@ -1003,7 +1003,8 @@
               its design document and decision id. An <span class="badge tone-owed">Owed</span> claim is named on the
               roadmap and not designed in detail. Nothing here states an intention in the present tense.
               <em>Update 2026-09-22:</em> the AC notes on this page (LANDED §AC) were read in the code at the
-              AC chain's tip; every other Built claim at <code>b7ebb444</code> as stated.
+              AC chain's tip. The MV ownership, backend/view seams and runtime-only corrections below describe the
+              monitor-view implementation; older revision-specific diagrams remain explicitly dated snapshots.
             </div>
             <div class="callout warning">
               <strong>Two of the three repositories are machine-coupled checkouts, not registry packages.</strong>
@@ -1048,13 +1049,13 @@
                     <td>
                       <p>
                         One <code>Agent</code> per managed run: lifecycle, adapter-owned live semantics (hooks, OTLP,
-                        transcript tail, app-server and ACP protocols), guarded control, workspaces, own-action records,
-                        the monitor projection, and the split-phase launch recipe.
+                        app-server and ACP protocols), guarded control, workspaces, own-action records,
+                        the monitor backend and its live model, and the split-phase launch recipe.
                       </p>
                     </td>
                     <td>
                       <p>
-                        PTYs — it borrows a host. The desktop. Other devices. History search.
+                        PTYs — it borrows a host. The desktop. Other devices. Transcript ingestion and history search.
                       </p>
                     </td>
                     <td>
@@ -1104,8 +1105,8 @@
                     </td>
                     <td>
                       <p>
-                        Any vendor's file format, argv grammar or hook protocol — <strong>AR-L1 (a law
-                        CANDIDATE): VibeField knows no vendor.</strong> Defined in
+                        Any vendor's file format, argv grammar or hook protocol — <strong>AR-L1:
+                        VibeField knows no vendor.</strong> Defined in
                         <code>draft/thinking-ar-agent-plane.md</code> §1 and carried here; see the Laws section for
                         what is actually enforced.
                       </p>
@@ -1121,23 +1122,35 @@
                 </tbody>
               </table>
             </div>
-            <h3>The two deliberate overlaps</h3>
-            <p class="section-note">
-              An ownership law with no overlap would be a lie about this system. Two exist, both on purpose.
-            </p>
+            <div class="callout boundary" id="monitor-ownership">
+              <strong>Monitor ownership (MV, ruled 2026-10-03).</strong> ONE
+              <code>createMonitorBackend</code> per desktop lives beside the runtime: in fieldd here,
+              in Electron main in puppeteer's Godview. It computes business facts once; only its model
+              synchronizes to replicas. A window adds presentation facts (pane activity, visual identity,
+              desktop and profile choice) and mounts exactly one SDK view. A view consumes its input,
+              owns its DOM, CSS and resources, and sends only declared commands to the host; it never
+              reads another view, a runtime, a store, or the host's DOM.
+              <p><strong>Godview is runtime only.</strong> Neither the backend nor a view records a status
+                history. The timeline draws birth and current state; removed runs leave it. The former
+                <code>agent.history</code> door and fieldd status ledger are removed. Future historical
+                spans must be read from rosettad through a declared capability.</p>
+              <p><strong>Ownership law: only rosetta may ingest transcripts.</strong> puppeteer and fieldd
+                must not add transcript readers; history-derived facts go through rosetta. The MV backend
+                consumes the runtime's published live state and adds no reader. This supersedes the earlier
+                "Both tail transcripts" allowance; duplicate ingestion is not an accepted architecture.</p>
+              <p><strong>Existing gap, flagged 2026-10-03:</strong> the runtime still admits
+                <code>native-transcript</code> observations, and Claude's default semantic provider still reads
+                its transcript (<code>packages/adapter-claude/src/driver.ts</code> and
+                <code>observation/transcript/provider.ts</code> in puppeteer). MV does not remove or redesign
+                those provider readers. Their migration to the declared ownership remains owed; the ownership
+                table is a law, not a claim that this pre-existing gap has been closed.</p>
+              <p>Code: <code>packages/fieldd/src/agent-monitor.ts</code>,
+                <code>agent-model-board.ts</code>, <code>packages/field-app/src/godview/monitor/model-replica.ts</code>,
+                and puppeteer's <code>packages/view-sdk/src/{model,view,skin}.ts</code>.
+                Contract: <code>draft/monitor-view-sdk/design-mv.md</code> §3; MV-W1…W5.</p>
+            </div>
+            <h3>Different names, one session join</h3>
             <div class="cards">
-              <div class="card">
-                <h3>Both tail transcripts</h3>
-                <p>
-                  puppeteer's live runtime is independent of any semantic database by design (its RFC 003: hooks remain
-                  lifecycle truth, and transcript failure cannot end a live process). rosetta ingests the same files for
-                  history. The cost is two bounded readers per file; the dividend is that the control room never waits
-                  on the index.
-                </p>
-                <div class="ownership-row">
-                  <span class="badge tone-built">Built</span><span class="chip">thinking-ar-agent-plane §1</span>
-                </div>
-              </div>
               <div class="card">
                 <h3>Both name agent kinds</h3>
                 <p>
@@ -1314,7 +1327,7 @@
           <section id="seams">
             <h2>Seams</h2>
             <p class="section-note">
-              A seam is a place where one repository's code meets another's under a named interface. There are ten.
+              A seam is a place where one repository's code meets another's under a named interface.
               For each: who owns the interface, who implements it, the file on each side, what crosses, and whether it
               is built. The rule that makes the triad replaceable is that every joint below is a contract, never an
               import of internals — puppeteer sits behind <code>AgentHost</code> and the monitor schema, rosetta behind
@@ -1408,24 +1421,36 @@
                     <td><span class="badge tone-built">Built</span><p>AR-3; schema version 3</p></td>
                   </tr>
                   <tr>
-                    <td><span class="route">the views ports</span></td>
+                    <td><span class="route">monitor backend → replica → view</span></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span></td>
+                    <td><p>fieldd · field-app</p></td>
+                    <td><p><code>@vibecook/puppeteer-monitor</code> · <code>/replica</code><br />
+                      <code>@vibecook/puppeteer-view-sdk</code> · <code>/host</code><br />
+                      <code>packages/fieldd/src/agent-monitor.ts</code> · <code>agent-model-board.ts</code><br />
+                      <code>packages/field-app/src/godview/monitor/model-replica.ts</code> · <code>window-view.ts</code></p></td>
+                    <td><p>The backend publishes model rows. <code>agent.subscribe {projection: "model", scope: "mesh"}</code>
+                      is the window's one board; its own run rows also carry window-only <code>local</code> facts for chrome.
+                      A replica joins local presentation facts and <code>MonitorViewHost</code> mounts one SDK view.
+                      The host supplies stage geometry, palette, the finite <code>MONITOR_SKIN</code>, capabilities
+                      and commands. Views own scoped styles and cannot name host classes. The bar reads each manifest's
+                      mark and declared keys. Every chrome piece of VibeField's window (the bar, Find, usage, the profile
+                      notice, the claims, System control, the deck, its edge, its frames and its launchers) has its own named
+                      boundary: an error there names the piece unavailable and cannot unmount the monitor or its view; a deck
+                      that fails whole takes its door with it (GT-D17). <em>Made true 2026-10-07 (MV-8b): the deck, System
+                      control and the claims stood outside any boundary until then.</em></p></td>
+                    <td><span class="badge tone-built">Built</span><p>MV-1…MV-8; integration gates precede main landing</p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">host chrome ports</span></td>
                     <td><span class="badge tone-puppeteer">puppeteer</span></td>
                     <td><span class="badge tone-vibefield">field-app</span></td>
-                    <td>
-                      <p>
-                        <code>@vibecook/puppeteer-views</code> (<code>HistoryPort</code>, <code>AccountUsagePort</code>)<br />
-                        <code>packages/field-app/src/godview/monitor/remote-door.ts</code>
-                      </p>
-                    </td>
-                    <td>
-                      <p>
-                        A view is a pure function of monitor state, palette and parameters. Every rosetta-dependent
-                        feature goes through an injected port, so the views dial nothing: puppeteer's own Godview
-                        supplies an announce-file reader, VibeField supplies adapters over fieldd's doors. No ticket was
-                        needed for either — the daemon's origin never leaves fieldd.
-                      </p>
-                    </td>
-                    <td><span class="badge tone-built">Built</span><p>AR-5 <code>fe6b3d0a</code></p></td>
+                    <td><p><code>@vibecook/puppeteer-views</code> (<code>HistoryPort</code>, <code>AccountUsagePort</code>)<br />
+                      <code>packages/field-app/src/godview/monitor/remote-door.ts</code> · <code>doors.ts</code></p></td>
+                    <td><p>Find and the usage column are host chrome beside the SDK view. Their injected ports adapt
+                      fieldd's index and usage doors. No SDK view receives those ports or dials rosettad. Find joins
+                      native session ids and mirror clocks from <code>local</code> on the same model board;
+                      it fabricates no terminal or full monitor state.</p></td>
+                    <td><span class="badge tone-built">Built</span><p>AR-5; model-only join MV-3d, bridge retired MV-8</p></td>
                   </tr>
                   <tr>
                     <td><span class="route">generated wire types, a version constant, six REST routes</span></td>
@@ -1697,8 +1722,8 @@
                 <p>
                   In <code>pnpm-workspace.yaml</code>'s fenced sibling block, a package gets a <code>link:</code> row
                   only if VibeField imports it directly; transitive edges resolve inside the sibling's own tree.
-                  Adapters are never rows and never imports. The lock names six puppeteer packages and one rosetta
-                  client.
+                  Adapters are never rows and never imports. The lock is the authority for the current package list,
+                  including the monitor-view SDK and the browser-safe rosetta clients.
                 </p>
               </div>
             </div>
@@ -1748,7 +1773,7 @@
       roots/&lt;provider&gt;/&lt;uuid&gt;/              <span class="comment">AGENT_ROOTS_DIR — AR-1…S1 roots, adopted in place; none made now</span>
       sessions/ · sessions.key              <span class="comment">AGENT_SESSIONS_DIR — signed records; never a transcript, never a credential</span>
       runs/                                 <span class="comment">AGENT_RUNS_DIR — puppeteer's durable claims, in fieldd's custody</span>
-      history/                              <span class="comment">AGENT_HISTORY_DIR — the status ledger, one .jsonl per run (TL-D8)</span>
+      history/                              <span class="comment">retired at MV-6 — prior files remain; no current writer (corrected 2026-10-06)</span>
     index/                                  <span class="comment">INDEX_DIR — rosetta, one daemon per user</span>
       rosetta.db (+ ledger · assets · search)
       daemons/                              <span class="comment">INDEX_DAEMONS_DIR — fieldd's PRIVATE announce dir, not rosetta's shared one</span>
@@ -2259,8 +2284,10 @@
                     <td>descriptors per managed session</td>
                     <td>
                       <p>
-                        Roughly a hook listener, a telemetry route and a transcript reader inside fieldd, against a
-                        256-descriptor soft limit on macOS and the floor's measured 24 + 5N.
+                        Live hook and telemetry routes inside fieldd, against a 256-descriptor soft limit on macOS.
+                        Transcript readers belong to rosettad alone by law; the legacy adapter gap is named above.
+                        The floor's historical measurement was 24 + 5N;
+                        it is not a current monitor-backend budget.
                       </p>
                     </td>
                     <td><p>thinking-ar-agent-plane §11</p></td>
@@ -2269,11 +2296,10 @@
               </table>
             </div>
             <div class="callout">
-              <strong>Two costs accepted on purpose.</strong> Duplicate tailing — puppeteer and rosetta each read the
-              same transcript file — is bounded and accepted, because the dividend is that the control room never blocks
-              on the index. Per-user duplication of native ingest is accepted for the same kind of reason: isolation
-              over de-duplication, and a one-user machine pays nothing. A de-duplication lever exists for later, but
-              never for lifecycle truth.
+              <strong>Corrected for MV.</strong> Only rosetta may ingest transcripts; the earlier duplicate-tailing
+              allowance is superseded, with the existing adapter gap explicitly still owed above.
+              Godview's live backend does not wait for history indexing and keeps no history
+              ledger. Per-user rosettad isolation remains: one user's consent never enrolls another user's history.
             </div>
           </section>
 

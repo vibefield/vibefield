@@ -44,6 +44,16 @@ const linkedRoots = siblingEntries.flatMap((entry) =>
       .map((target) => realpathSync(target));
   }),
 );
+// MV-3c (build-mv M33): the Godview perf lab sums every React root's render
+// time from the committed roots' `actualDuration`, which only React's profiling
+// build keeps. `VF_REACT_PROFILING=1` at build time swaps the client for it
+// (React's documented alias); unset, the renderer is exactly the production one.
+// nx.json hashes the variable into `build:renderer`, so a cached build of one
+// kind never answers for the other.
+const reactProfiling =
+  process.env["VF_REACT_PROFILING"] === "1"
+    ? [{ find: /^react-dom\/client$/, replacement: "react-dom/profiling" }]
+    : [];
 const mainEntry = join(rendererRoot, "index.html");
 const designSystemEntry = join(rendererRoot, "design-system.html");
 
@@ -84,7 +94,11 @@ export default defineConfig(({ mode }) => ({
     renderBlockingEntry(),
   ],
   resolve: {
-    alias: [...milleAliases(repoRoot), { find: /^loro-crdt$/, replacement: "loro-crdt/base64" }],
+    alias: [
+      ...milleAliases(repoRoot),
+      { find: /^loro-crdt$/, replacement: "loro-crdt/base64" },
+      ...reactProfiling,
+    ],
     // one copy each of the stateful libs (ICE marks them external in its dist).
     // DK-1 (2026-10-03, ICE 0.14.0): three.js and its React bindings (fiber, drei) LEFT
     // with ICE's R3F islands — the desk is one WebGPU renderer and the host

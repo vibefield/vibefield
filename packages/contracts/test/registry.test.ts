@@ -319,6 +319,16 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
             shape: "rows",
             cadenceFloorMs: AGENT_FIELD.DESK_MIN_INTERVAL_MS,
           },
+          // MV-3a (MV-D18, L12) — this desktop's own windows' board, at the
+          // fold's tick; peers ride beside it as desk cuts at the desk floor
+          '{projection: "model"}': {
+            shape: "snapshot-delta",
+            cadenceFloorMs: AGENT_FIELD.FULL_TICK_MS,
+          },
+          '{scope: "mesh", projection: "model"}': {
+            shape: "rows",
+            cadenceFloorMs: AGENT_FIELD.FULL_TICK_MS,
+          },
         },
       },
     });

@@ -1,8 +1,11 @@
 import {
-  listMonitorView,
-  monitorParameterDefaults,
-  readMonitorPalette,
-} from "@vibecook/puppeteer-views";
+  agentViewFixture,
+  countingCommands,
+  fixtureInput,
+  fixtureTheme,
+  parameterDefaults,
+} from "@vibecook/puppeteer-view-sdk/testing";
+import { listMonitorView, readMonitorPalette } from "@vibecook/puppeteer-views";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
@@ -15,27 +18,21 @@ import { describe, expect, it } from "vitest";
 // "Invalid hook call" the moment `useMemo` runs.
 //
 // The list view is the one chosen because it is pure DOM and hooks: no
-// canvas, no worker, no physics — the smallest thing that would break.
+// canvas, no worker, no physics — the smallest thing that would break. Since
+// MV-4 it is an SDK view (`reactMonitorView`): its component takes the view's
+// input and the three commands, and reads the model's `AgentView` alone.
 
 describe("the views package under this tree's React", () => {
   it("renders a package component that calls hooks, so there is one React (dedupe holds)", () => {
     const AgentList = listMonitorView.Component;
     const markup = renderToStaticMarkup(
       <AgentList
-        agents={[
-          {
-            id: "row-1",
-            createdAtMs: 1_000,
-            status: "idle",
-            project: "vibe-field",
-            detail: "idle",
-            color: "#123456",
-            active: false,
-          },
-        ]}
-        parameters={monitorParameterDefaults(listMonitorView.parameterGroups)}
-        actions={{ select: () => undefined, createAt: () => undefined }}
-        palette={readMonitorPalette()}
+        input={fixtureInput({
+          agents: [agentViewFixture({ id: "row-1", project: { name: "vibe-field" } })],
+          parameters: parameterDefaults(listMonitorView.manifest),
+          theme: fixtureTheme("light", { tokens: readMonitorPalette() }),
+        })}
+        commands={countingCommands().commands}
       />,
     );
     expect(markup).toContain("vibe-field");

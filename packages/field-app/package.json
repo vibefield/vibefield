@@ -22,11 +22,14 @@
     "./logging": "./src/logging.ts",
     "./object-types": "./src/plugin-host/build-widget.ts",
     "./terminal-perf-lab": "./src/perf/terminal-perf-lab.ts",
+    "./godview-perf-lab": "./src/godview/monitor/perf/lab-bridge.ts",
     "./spike": "./src/spike/spike-loro.ts"
   },
   "scripts": {
     "test": "vitest run",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "perf:godview:corpora": "vitest run --config vitest.perf.config.ts perf/corpora.generate.perf.ts",
+    "perf:godview:model": "vitest run --config vitest.perf.config.ts perf/model-streams.generate.perf.ts"
   },
   "dependencies": {
     "@rosetta/protocol": "*",
@@ -36,6 +39,7 @@
     "@vibecook/ice": "*",
     "@vibecook/puppeteer-core": "*",
     "@vibecook/puppeteer-monitor": "*",
+    "@vibecook/puppeteer-view-sdk": "*",
     "@vibecook/puppeteer-views": "*",
     "@vibefield/contracts": "workspace:*",
     "@vibefield/design-kit": "workspace:*",

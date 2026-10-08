@@ -1,3 +1,4 @@
+import { ChromeBoundary } from "@vibecook/puppeteer-views";
 import type { CSSProperties, ReactElement, ReactNode } from "react";
 import { GodviewDeckEdge } from "./GodviewDeckEdge";
 import type { GodviewTheme } from "./GodviewTuningPanel";
@@ -32,6 +33,7 @@ export function GodviewStage({
   deckEdge,
   className = "",
 }: GodviewStageProps): ReactElement {
+  const monitorPresent = monitor !== undefined && monitor !== null && monitor !== false;
   return (
     <div
       aria-hidden={!open}
@@ -53,10 +55,11 @@ export function GodviewStage({
         aria-label="Terminal panes"
       >
         {deckEdge ? (
-          <GodviewDeckEdge
-            persist={deckEdge.persist}
-            monitorPresent={monitor !== undefined && monitor !== null && monitor !== false}
-          />
+          // M49 — the edge is chrome too: a throw in it says so in the lip's
+          // place, and it tries again only when what it is handed changes
+          <ChromeBoundary name="Deck edge" retryKey={`${deckEdge.persist}:${monitorPresent}`}>
+            <GodviewDeckEdge persist={deckEdge.persist} monitorPresent={monitorPresent} />
+          </ChromeBoundary>
         ) : (
           <div className="vf-godview-deck-lip" aria-hidden="true" />
         )}

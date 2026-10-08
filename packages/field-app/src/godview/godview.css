@@ -133,10 +133,11 @@
    `.vf-deck-framed .ghostty-pane` transition has the same specificity and is
    imported later, so this selector was a deletion-by-override — and it was
    crossfading nothing anyway, since the pane is transparent and ghosttea paints
-   its ground on a canvas. Deleted rather than left to be quietly outranked. */
+   its ground on a canvas. Deleted rather than left to be quietly outranked.
+   MV-5 (M59, W5): minus the SWARM too — its crossfade is the view's own now
+   (`swarm.css`, under its root class), and no host rule names a view's class. */
 .vf-godview-header,
 .vf-godview-monitor-stage,
-.vf-monitor-swarm,
 .vf-godview-terminal-deck,
 .vf-godview-terminal-deck .ghostty-window,
 .vf-godview-terminal-deck .ghosttea-workspace-body,
@@ -460,24 +461,23 @@
    them printing over each other — "1 MANAGED AGENT · MESH UNAVAILABLE…" under
    "1 SESSIONS" in the same corner.
 
-   No new spacing number is invented: the band under the strip is the package's
-   OWN top band, applied again from the strip's measured bottom (published by
-   `GodviewMonitor`, 0 when the strip is empty — which reproduces the package's
-   rule exactly). The rain and the swarm keep their full bleed: the swarm steers
-   its bodies around chrome by rect, and the rain is a canvas the column already
-   crosses. DESIGN.md §9: two claims that overlap are one unreadable claim.
+   No new spacing number is invented: the strip's measured bottom is the one
+   number this host hands over (0 when the strip is empty — which reproduces the
+   package's rule exactly), and a view's own band stands past it. The rain and
+   the swarm keep their full bleed: the swarm steers its bodies around the
+   chrome's rectangles (the stage's obstacles), and the rain is a canvas the
+   column already crosses. DESIGN.md §9: two claims that overlap are one
+   unreadable claim.
    TL (2026-10-02): the timeline lays out in flow (its map strip is a row at
-   its top), so it starts below the strip as the list does. */
-.vf-godview-monitor-stage {
-  /* `@vibecook/puppeteer-views/styles/list.css` — a flow view's own top band. */
-  --vf-monitor-flow-band: 11px;
-}
+   its top), so it starts below the strip as the list does.
 
-.vf-godview-monitor-stage .vf-monitor-list,
-.vf-godview-monitor-stage .vf-monitor-timeline {
-  padding-top: calc(var(--vf-monitor-claims-bottom, 0px) + var(--vf-monitor-flow-band));
-}
-
+   MV-4 / MV-6 (M58, M63, W5): both flow views — the list and the timeline —
+   are SDK views and clear the strip THEMSELVES: the view host hands them the
+   strip's measured bottom as `stage.insets.top` (`GodviewMonitor`, 0 for a
+   silent strip), and no host rule names them. The list starts its own 11px
+   band past it; the timeline starts AT it, as puppeteer's Godview draws it —
+   11px higher than the host rule that stood here put it, since that rule added
+   the list's band to the timeline too (named in MV-6). */
 .vf-monitor-claims {
   position: absolute;
   z-index: 7;
@@ -665,28 +665,6 @@
   font-weight: 500;
   letter-spacing: 0.02em;
   text-transform: lowercase;
-}
-
-.vf-monitor-empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  gap: 7px;
-  color: var(--text-muted);
-  text-align: center;
-  pointer-events: none;
-}
-
-.vf-monitor-empty span {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-}
-
-.vf-monitor-empty small {
-  color: var(--text-faint);
-  font-size: 9px;
 }
 
 /* ── THE DECK SHEET (DESIGN.md §8, 2026-09-28) ────────────────────────────
@@ -949,8 +927,17 @@
   }
 }
 
+/* M49 — a deck piece behind its own boundary (the views package's
+   ChromeBoundary) says "<name> unavailable" in a status span where the piece
+   stood, and wears the deck's own unavailable face. The frames and launchers
+   stand in the zoom host, whose workspace fills it in flow: unlifted, their
+   span sat below it, out of sight. Only a boundary's span matches — every
+   healthy child of these two is a div (the workspace, the deck's faces; the
+   frames and launchers portal into their panes). */
 .vf-godview-unavailable,
-.vf-godview-deck-fault {
+.vf-godview-deck-fault,
+.vf-godview-terminal-deck-body > span[role="status"],
+.vf-deck-zoom > span[role="status"] {
   position: absolute;
   inset: 0;
   display: grid;
@@ -963,6 +950,12 @@
   font-size: 10px;
   letter-spacing: 0.08em;
   text-align: center;
+}
+
+/* …and never takes a click: the terminals under it are still the person's. */
+.vf-godview-terminal-deck-body > span[role="status"],
+.vf-deck-zoom > span[role="status"] {
+  pointer-events: none;
 }
 
 .vf-godview-deck-fault-message {

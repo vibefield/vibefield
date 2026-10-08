@@ -1,6 +1,6 @@
 // @vitest-environment node
 
-import { readdirSync, readFileSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
@@ -129,6 +129,22 @@ describe("UI system ownership boundaries", () => {
     ]) {
       expect(source(module), module).not.toMatch(/from "@vibefield\/(?:contracts|design-kit)";/);
     }
+  });
+
+  it("keeps the spend specimen's fixture an ADAPTER: the package's own afternoon on a door, never the view's markup (MV-7)", () => {
+    // The specimen is the shipping spend view through the shipping Godview
+    // (`GodviewPreview`), and its fixture supplies only what a desktop's model
+    // board supplies — rows, from the views package's own afternoon — never a
+    // drawing, a class of the view's or a cost of its own making.
+    const section = source("design-system/sections/GodviewSection.tsx");
+    expect(section).toMatch(/<GodviewPreview door=\{moneyDoor\} initialView="spend"/);
+    const fixture = source("design-system/godview-spend-fixtures.ts");
+    expect(fixture).toMatch(
+      /import \{[^}]*spendAfternoon[^}]*spendRows[^}]*\} from "@vibecook\/puppeteer-views"/,
+    );
+    expect(fixture).not.toMatch(/vf-monitor-spend|mv-spend/);
+    expect(fixture).not.toMatch(/<[a-z]+[\s/>]/);
+    expect(fixture).not.toMatch(/\b(usd|series|steps):/);
   });
 
   it("keeps the view frame's fixture an ADAPTER — the owner's value, never the frame's markup (FR-1)", () => {
@@ -717,17 +733,17 @@ describe("UI system ownership boundaries", () => {
     expect(preview).not.toMatch(/className="vf-pane-launcher/);
   });
 
-  it("keeps the swarm's own styling in the views package, never in godview.css (AR-5)", () => {
+  it("keeps the swarm's own styling and its physics in the views package, never in godview.css (AR-5, MV-5)", () => {
     // The swarm, its bodies and its type are the package's (RFC 005, drawn by
-    // WebGPU); what VibeField keeps beside the view is its physics THREAD — a
-    // timer and a mailbox — and the driver that owns it. No swarm stylesheet
-    // is colocated here any more, and godview.css owns none of the swarm's
-    // selectors: a rule for a body drawn upstream would be a replica.
+    // WebGPU), and since MV-5 so is its physics THREAD: the view brings its own
+    // worker through the SDK's helper (MV-D7) and reports where it runs. No
+    // swarm stylesheet or driver is colocated here any more, and godview.css
+    // owns none of the swarm's selectors: a rule for a body drawn upstream
+    // would be a replica.
     const godview = source("godview/godview.css");
     expect(godview).not.toMatch(/^\.vf-monitor-bubble/m);
-    expect(godview).not.toMatch(/^\.vf-monitor-swarm(?:\s|\{)/m);
-    const swarmDir = readdirSync(join(PACKAGE_ROOT, "src", "godview", "views", "swarm")).sort();
-    expect(swarmDir).toEqual(["swarm-physics-driver.ts", "swarm-physics.worker.ts"]);
+    expect(godview).not.toMatch(/vf-monitor-swarm/);
+    expect(existsSync(join(PACKAGE_ROOT, "src", "godview", "views"))).toBe(false);
   });
   it("keeps the segmented control's thumb and keys the kit's (R19, DK-13)", () => {
     // The primitive owns the anatomy — the thumb element, ids distinct from labels, ← → Home End — so no

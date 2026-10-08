@@ -6,6 +6,7 @@ import {
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
 import {
+  ChromeBoundary,
   DECK_FRAMED_CLASS,
   type DeckFrameSlotProps,
   DeckFrames,
@@ -20,12 +21,7 @@ import {
   useMonitorPalette,
   zoomLayoutApplied,
 } from "@vibecook/puppeteer-views";
-import {
-  AgentInterruptResult,
-  AgentListResult,
-  AgentSpawnResult,
-  type DeviceInfo,
-} from "@vibefield/contracts";
+import { AgentInterruptResult, AgentSpawnResult, type DeviceInfo } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type ComponentProps,
@@ -88,12 +84,13 @@ import { RosterFlips, teeDevicesPort } from "./monitor/devices";
 import {
   devicesPortOver,
   historyPortOver,
-  meshBoardOver,
+  modelBoardOver,
   profileSetsPortOver,
-  statusHistoryPortOver,
   usagePortOver,
 } from "./monitor/doors";
 import { useDeckAgentFacts } from "./monitor/GodviewAgentsProvider";
+import { instrumentDevicesPort } from "./monitor/perf/door-instruments";
+
 import type {
   LocalMountOptions,
   LocalMountOutcome,
@@ -1122,32 +1119,21 @@ export function GodviewDeck({
         opts?: { onReplayFailed?: (error: unknown) => void },
       ) => fieldd.subscribe(method, params, onFrame, opts),
     };
-    return {
-      // DS-3 (2026-09-30, DS-D4) — THE MESH HALF IS THE MESH BOARD. Other
-      // desktops' agents arrive through this window's one door to its own
-      // fieldd (`agent.subscribe {projection: "desk", scope: "mesh"}`), which
-      // multiplexes every self desktop's board (`monitor/mesh-field.ts`). It
-      // replaced `listHosts: () => runtime.listRemoteHosts()` — ghosttea's
-      // mesh-runtime ask, which had no answerer since TM-1 deleted VibeField's
-      // in-process serve, and which under the routed runtime THREW on every
-      // two-second poll ("Remote-host discovery is not part of the routed host
-      // contract"): the SB §9 correction that stood here. Its poll
-      // (`remote-session-field.ts`) retired with it. DS-4e rewired `attach`
-      // below off ghosttea's remote palette onto the routed host.
-      observeMesh: meshBoardOver(doorClient),
+    const built: MonitorDoor = {
       // DS-4e — the monitor's ONE roster subscription, teed: the deck reads the
       // same lists for the names a remote pane says and the flips it asks
       // again on, and opens no second `device.subscribe` of its own
-      devices: teeDevicesPort(devicesPortOver(doorClient), observeRoster),
+      devices: instrumentDevicesPort(teeDevicesPort(devicesPortOver(doorClient), observeRoster)),
       // AR-5 — the find sheet's daemon questions and the usage column's feed,
       // adapted from fieldd's doors to the views' ports (`monitor/doors.ts`).
       // The views never dial rosettad; the daemon's origin stays in fieldd.
       history: historyPortOver(doorClient),
       usage: usagePortOver(doorClient),
-      // TL — fieldd's status ledger, for the timeline's past (TL-D8).
-      statusHistory: statusHistoryPortOver(doorClient),
       // The profile tabs filter existing sessions; terminal birth is independent.
       profiles: profileSetsPortOver(doorClient),
+      // MV-3 (MV-D18) — the model board and the screen's report: the monitor's
+      // rows are the backend's, through this window's one door (`model-replica.ts`).
+      model: modelBoardOver(doorClient),
       // DS-4e (2026-10-01; `thinking-desktop-sync-plane.md` §6.3) — ANOTHER
       // desktop's session, mounted in the pane the user is in through the
       // SAME routed host a local pane rides: never ghosttea's remote palette,
@@ -1160,39 +1146,6 @@ export function GodviewDeck({
           () => undefined,
         );
         return run;
-      },
-      // ── AR-3: the local half — fieldd's fold, and the births into this deck ──
-      observe: ({ onFrame, onError }) => {
-        let cancelled = false;
-        let unsubscribe: (() => void) | null = null;
-        const deliver = (payload: unknown): void => {
-          // the tolerant reader: an unreadable frame is a reason, never a blank
-          const parsed = AgentListResult.safeParse(payload);
-          if (parsed.success) onFrame(parsed.data.sessions);
-          else
-            onError(
-              `agent.subscribe answered an unreadable frame: ${parsed.error.issues[0]?.message ?? "invalid"}`,
-            );
-        };
-        void fieldd
-          .subscribe("agent.subscribe", {}, (payload) => {
-            if (!cancelled) deliver(payload);
-          })
-          .then((subscription) => {
-            if (cancelled) {
-              subscription.unsubscribe();
-              return;
-            }
-            unsubscribe = subscription.unsubscribe;
-            deliver(subscription.snapshot);
-          })
-          .catch((cause: unknown) => {
-            if (!cancelled) onError(cause instanceof Error ? cause.message : String(cause));
-          });
-        return () => {
-          cancelled = true;
-          unsubscribe?.();
-        };
       },
       createTerminal: async (request) => {
         const context = workspaceRef.current;
@@ -1242,6 +1195,7 @@ export function GodviewDeck({
         return run;
       },
     };
+    return built;
     /**
      * DS-4e — the remote attach, in three steps, each the answer of its owner:
      *
@@ -1333,7 +1287,8 @@ export function GodviewDeck({
   // (`@vibecook/puppeteer-views`, PU-14): the badge growing out of the top
   // edge, the `model · effort` readout, the context meter along the bottom,
   // and the ghost verbs under the pointer. VibeField supplies what only a host
-  // can — the agent facts behind each pane (the window's one fold), the pane's
+  // can — the agent facts behind each pane (the chrome's facts on the window's
+  // one board, MV-3d), the pane's
   // own colour, the device a remote replica came from, the terminal ink the
   // frame mixes with, and the three verbs — and reinterprets none of it
   // (DESIGN.md §1.1).
@@ -1652,11 +1607,20 @@ export function GodviewDeck({
         const nameOf = (device: string): string | undefined =>
           rosterNames.current.get(device) ??
           (remote !== undefined && remote !== device ? remote : undefined);
+        // M49 — each pane's frame behind its own boundary: a throw in one
+        // pane's frame takes that frame alone, and the other panes keep theirs.
+        // It tries again for a fact the frame is handed, never for the clock it
+        // ticks on (`nowMs`, every second while an agent works).
+        const { agent, color, fallbackCwd, pane, verbs, zoomed } = props;
+        const retryKey = useMemo(
+          () => ({ session, agent, color, fallbackCwd, pane, verbs, zoomed, remote }),
+          [session, agent, color, fallbackCwd, pane, verbs, zoomed, remote],
+        );
         return (
-          <>
+          <ChromeBoundary name="Pane frame" retryKey={retryKey}>
             <PaneFrame session={session} {...props} {...(remote !== undefined ? { remote } : {})} />
             <RemotePaneState pane={props.pane} sessionId={session.id} nameOf={nameOf} />
-          </>
+          </ChromeBoundary>
         );
       },
     [],
@@ -1861,6 +1825,33 @@ export function GodviewDeck({
       return { ...face, color: face?.color ?? color };
     },
     [framePaneColors],
+  );
+
+  // M49 — the frames and the launchers are chrome over the terminals, each
+  // behind its own boundary (and every pane's frame behind one of its own, in
+  // `Frame` above): a throw there leaves the terminals, the deck and its door
+  // standing. Each tries again for the facts it is handed, never for its own
+  // failure's echo (M176).
+  const framesRetryKey = useMemo(
+    () => ({
+      panes: workspace?.panes,
+      agents: paneAgents.agents,
+      colors: framePaneColors,
+      cwds: frameFallbackCwds,
+      verbs: frameVerbs,
+      zoomedPaneId,
+    }),
+    [workspace, paneAgents.agents, framePaneColors, frameFallbackCwds, frameVerbs, zoomedPaneId],
+  );
+  const launchersRetryKey = useMemo(
+    () => ({
+      workspace,
+      runs: paneAgents.runs,
+      colors: framePaneColors,
+      cwds: frameFallbackCwds,
+      door,
+    }),
+    [workspace, paneAgents.runs, framePaneColors, frameFallbackCwds, door],
   );
 
   // Whatever the deck currently is, said out loud once per change. The canvas
@@ -2093,26 +2084,30 @@ export function GodviewDeck({
             inside the zoom host so a zoomed pane keeps its frame through the
             morph, and so the stylesheet's `.vf-deck-framed` scope covers every
             pane element under it. */}
-        <DeckFrames
-          deckRef={zoomHostRef}
-          panes={workspace?.panes ?? []}
-          agentsBySession={paneAgents.agents}
-          paneColors={framePaneColors}
-          fallbackCwdBySession={frameFallbackCwds}
-          verbs={frameVerbs}
-          frame={Frame}
-          zoomedPaneId={zoomedPaneId}
-        />
+        <ChromeBoundary name="Pane frames" retryKey={framesRetryKey}>
+          <DeckFrames
+            deckRef={zoomHostRef}
+            panes={workspace?.panes ?? []}
+            agentsBySession={paneAgents.agents}
+            paneColors={framePaneColors}
+            fallbackCwdBySession={frameFallbackCwds}
+            verbs={frameVerbs}
+            frame={Frame}
+            zoomedPaneId={zoomedPaneId}
+          />
+        </ChromeBoundary>
         {/* QL-1: a fresh shell's launcher, beside its frame (`deck-launchers.tsx`). */}
-        <GodviewDeckLaunchers
-          onReplaced={onLauncherReplaced}
-          prepareReplacement={prepareLauncherReplacement}
-          deckRef={zoomHostRef}
-          workspace={workspace}
-          paneColors={framePaneColors}
-          fallbackCwdBySession={frameFallbackCwds}
-          door={door}
-        />
+        <ChromeBoundary name="Launchers" retryKey={launchersRetryKey}>
+          <GodviewDeckLaunchers
+            onReplaced={onLauncherReplaced}
+            prepareReplacement={prepareLauncherReplacement}
+            deckRef={zoomHostRef}
+            workspace={workspace}
+            paneColors={framePaneColors}
+            fallbackCwdBySession={frameFallbackCwds}
+            door={door}
+          />
+        </ChromeBoundary>
       </div>
     </GhostteaProvider>
   );

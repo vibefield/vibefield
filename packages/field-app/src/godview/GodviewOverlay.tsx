@@ -1,5 +1,13 @@
+import { ChromeBoundary } from "@vibecook/puppeteer-views";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
-import { type CSSProperties, type ReactElement, useCallback, useEffect, useState } from "react";
+import {
+  type CSSProperties,
+  type ReactElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 import { useActiveView } from "../frame/view-state";
 import { getHost } from "../host";
 import { prewarmTerminalPool, terminalPoolConfigured } from "../terminal/pool";
@@ -19,6 +27,7 @@ import { useGodviewTheme } from "./godview-theme";
 import { useLabSwitches } from "./lab-switches";
 import { GodviewAgentsProvider } from "./monitor/GodviewAgentsProvider";
 import { monitorTuningSections, useMonitorTuning } from "./monitor/monitor-tuning";
+import { useGodviewReplayPanes } from "./monitor/perf/replay-panes";
 import type { RemoteSessionDoor } from "./monitor/remote-door";
 import {
   SCANLINE_DENSITY_KEY,
@@ -105,6 +114,7 @@ export function GodviewOverlay(): ReactElement | null {
    * meet — nothing about a runtime or a workspace passes through here. */
   const [remoteDoor, setRemoteDoor] = useState<RemoteSessionDoor | null>(null);
   const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
+  const monitorPanes = useGodviewReplayPanes(panes);
 
   const changeTuning = useCallback((patch: Partial<GodviewTuning>) => {
     setTuning((current) => ({ ...current, ...patch }));
@@ -173,6 +183,38 @@ export function GodviewOverlay(): ReactElement | null {
   // chip is retired with the rest of the deck's overlay chrome, so no listener
   // on this page competes for Escape at all now.)
 
+  // M49 — the deck and System control are chrome beside the monitor, each
+  // behind its own boundary: a throw in either says so where it stood, and the
+  // monitor and its view stay mounted. Each tries again only for a fact it is
+  // handed (M176). For the deck that is Godview opening or closing, or a new
+  // theme — never the render its own failure causes here (a failed deck takes
+  // its door with it, GT-D17, and this overlay re-renders with the null). The
+  // panel tries again for its own values.
+  const deckRetryKey = useMemo(() => ({ open, theme }), [open, theme]);
+  const tuningRetryKey = useMemo(
+    () => ({
+      open: open && tuningOpen,
+      theme,
+      tuning,
+      appearance,
+      view: monitor.view,
+      parameters: monitor.parameters,
+      stage: monitor.stageParameters,
+      rendererBackend,
+    }),
+    [
+      open,
+      tuningOpen,
+      theme,
+      tuning,
+      appearance,
+      monitor.view,
+      monitor.parameters,
+      monitor.stageParameters,
+      rendererBackend,
+    ],
+  );
+
   if (!everOpened) return null;
 
   const notice = bridgeNotice();
@@ -215,38 +257,44 @@ export function GodviewOverlay(): ReactElement | null {
               notice={notice}
               tuningOpen={tuningOpen}
               door={remoteDoor}
-              panes={panes}
+              panes={monitorPanes}
               reserveWindowControls={getHost().platform === "darwin"}
+              // MV-W4: the same switch, for a ported view's own loop
+              animations={labSwitches.animations}
               onSelectView={monitor.selectView}
               onToggleTuning={() => setTuningOpen((current) => !current)}
             />
           ) : undefined
         }
         tuningPanel={
-          <GodviewTuningPanel
-            open={open && tuningOpen}
-            theme={theme}
-            value={tuning}
-            appearance={appearance}
-            monitorSections={monitorTuningSections(monitor)}
-            rendererBackend={rendererBackend}
-            onClose={() => setTuningOpen(false)}
-            onChange={changeTuning}
-            onReset={resetTuning}
-            onResetMonitor={monitor.resetParameters}
-          />
+          <ChromeBoundary name="System control" retryKey={tuningRetryKey}>
+            <GodviewTuningPanel
+              open={open && tuningOpen}
+              theme={theme}
+              value={tuning}
+              appearance={appearance}
+              monitorSections={monitorTuningSections(monitor)}
+              rendererBackend={rendererBackend}
+              onClose={() => setTuningOpen(false)}
+              onChange={changeTuning}
+              onReset={resetTuning}
+              onResetMonitor={monitor.resetParameters}
+            />
+          </ChromeBoundary>
         }
         // The sheet's edge is this viewer's, remembered (DESIGN.md §8).
         deckEdge={DECK_EDGE_PERSISTED}
         deck={
           terminalAvailable ? (
-            <GodviewDeck
-              active={open}
-              theme={theme}
-              onRendererBackend={setRendererBackend}
-              onRemoteDoor={setRemoteDoor}
-              onPanes={setPanes}
-            />
+            <ChromeBoundary name="Deck" retryKey={deckRetryKey}>
+              <GodviewDeck
+                active={open}
+                theme={theme}
+                onRendererBackend={setRendererBackend}
+                onRemoteDoor={setRemoteDoor}
+                onPanes={setPanes}
+              />
+            </ChromeBoundary>
           ) : (
             <GodviewUnavailableDeck />
           )

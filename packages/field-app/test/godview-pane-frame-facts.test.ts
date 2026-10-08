@@ -1,14 +1,21 @@
 // @vitest-environment node
 /**
- * THE FRAME'S FACTS (GT-6) — the fold's row projected into what the views
- * package's pane frame reads (record §07, PU-14).
+ * THE FRAME'S FACTS (GT-6) — a run of this desktop projected into what the
+ * views package's pane frame reads (record §07, PU-14).
  *
  * A pure seam deserves a pure fixture: no pane, no GPU, no daemon. What is
  * asserted here is every rule the projection makes on VibeField's side — which
- * row yields facts at all, which word each status becomes, which number the
+ * run yields facts at all, which word each status becomes, which number the
  * meter is allowed to draw — because the frame itself is upstream's and tested
  * there, and a wrong projection would be a frame lying in the reference's
  * handwriting.
+ *
+ * MV-3d (M35) — the projection reads the run's row of the model board now, not
+ * the fold's `full` row. Every case below builds the SAME fold row it always
+ * did and hands the reader what fieldd's own cut makes of it for this desktop's
+ * window (`chromeRunOf`: `projectDeskRow(…, "window")`, read back through the
+ * contract) — so each expectation, unchanged from the fold's reading, is held
+ * through the path the facts take now.
  */
 
 import { describe, expect, it } from "vitest";
@@ -19,7 +26,9 @@ import {
   paneFrameFactsKey,
   paneFrameStatus,
   runIdsBySession,
+  runsByTerminal,
 } from "../src/godview/monitor/pane-frame-facts";
+import { chromeRunOf } from "./chrome-run-fixture";
 import { managedSummary } from "./managed-session-fixture";
 
 /** The mirror is `.passthrough()`, so `effort` and `percentageSource` ride
@@ -28,8 +37,11 @@ function withMirror(row: AgentSessionSummary, patch: Record<string, unknown>): A
   return { ...row, monitor: { ...(row.monitor as object), ...patch } } as AgentSessionSummary;
 }
 
+/** The frame's facts for a fold row, through fieldd's cut. */
+const factsOf = (row: AgentSessionSummary) => paneFrameAgentFacts(chromeRunOf(row));
+
 describe("the pane frame's facts", () => {
-  it("reads every field the frame draws off one managed row", () => {
+  it("reads every field the frame draws off one managed run", () => {
     const row = withMirror(
       managedSummary({
         runtimeRunId: "run-a",
@@ -43,7 +55,7 @@ describe("the pane frame's facts", () => {
       { statusSince: "2026-09-13T20:58:18.000Z", effort: { value: "high", intent: "configured" } },
     );
 
-    expect(paneFrameAgentFacts(row)).toEqual({
+    expect(factsOf(row)).toEqual({
       providerId: "claude",
       providerLabel: "Claude",
       status: "working",
@@ -60,12 +72,27 @@ describe("the pane frame's facts", () => {
   it("gives a run that has said nothing NO facts at all — the bare badge, never an invented readout", () => {
     const starting = managedSummary({ runtimeRunId: "run-b", monitor: false });
     expect(starting.monitor).toBeUndefined();
-    expect(paneFrameAgentFacts(starting)).toBeUndefined();
+    // the run's row still carries the chrome's facts — its directory, its
+    // session — but no mirror, which is what "has said nothing" is
+    expect(chromeRunOf(starting).local?.mirror).toBeUndefined();
+    expect(factsOf(starting)).toBeUndefined();
   });
 
   it("keeps a run the monitor would drop, because an ended run is what the resume verb is for", () => {
     const ended = managedSummary({ runtimeRunId: "run-c", alive: false, status: "idle" });
-    expect(paneFrameAgentFacts(ended)?.alive).toBe(false);
+    expect(factsOf(ended)?.alive).toBe(false);
+  });
+
+  it("carries the MIRROR's liveness, which fieldd's own reading of an exit does not rewrite", () => {
+    // MF-1f: fieldd witnessed the exit, so the row says not alive; the mirror
+    // has not caught up and still says alive — and the frame drew the mirror's
+    // word from the fold, so it draws it from the chrome's facts too
+    const exited: AgentSessionSummary = {
+      ...managedSummary({ runtimeRunId: "run-x", terminalSessionId: "pty-x" }),
+      continuation: { persisted: true, resumable: true, exited: true },
+    };
+    expect(chromeRunOf(exited).alive).toBe(false);
+    expect(factsOf(exited)?.alive).toBe(true);
   });
 
   it("reads `unknown` as idle rather than as the monitor's working·starting", () => {
@@ -76,7 +103,7 @@ describe("the pane frame's facts", () => {
     // A pending row carries `unknown` with a mirror from before (AR-4).
     const pending = managedSummary({ runtimeRunId: "run-d", pending: "no adapter", alive: true });
     expect(pending.status).toBe("unknown");
-    expect(paneFrameAgentFacts(pending)?.status).toBe("idle");
+    expect(factsOf(pending)?.status).toBe("idle");
   });
 
   it("draws no meter when the provider cannot say how full its window is", () => {
@@ -88,7 +115,7 @@ describe("the pane frame's facts", () => {
         percentageSource: "derived",
       },
     });
-    expect(paneFrameAgentFacts(derived)?.contextPercent).toBe(44);
+    expect(factsOf(derived)?.contextPercent).toBe(44);
 
     const unavailable = withMirror(managedSummary({ contextPercent: 44 }), {
       context: {
@@ -98,65 +125,69 @@ describe("the pane frame's facts", () => {
         percentageSource: "unavailable",
       },
     });
-    expect(paneFrameAgentFacts(unavailable)?.contextPercent).toBeUndefined();
+    expect(factsOf(unavailable)?.contextPercent).toBeUndefined();
   });
 
   it("says whether the effort is the user's intent or the provider's evidence", () => {
     const configured = withMirror(managedSummary({}), {
       effort: { value: "high", intent: "configured" },
     });
-    expect(paneFrameAgentFacts(configured)?.effort).toEqual({ value: "high", configured: true });
+    expect(factsOf(configured)?.effort).toEqual({ value: "high", configured: true });
 
     const observed = withMirror(managedSummary({}), {
       effort: { value: "medium", intent: "observed" },
     });
-    expect(paneFrameAgentFacts(observed)?.effort).toEqual({ value: "medium", configured: false });
+    expect(factsOf(observed)?.effort).toEqual({ value: "medium", configured: false });
 
     // Read tolerantly: a shape this cannot make sense of is no effort at all,
     // never a readout saying "[object Object]".
+    expect(factsOf(withMirror(managedSummary({}), { effort: "high" }))?.effort).toBeUndefined();
     expect(
-      paneFrameAgentFacts(withMirror(managedSummary({}), { effort: "high" }))?.effort,
-    ).toBeUndefined();
-    expect(
-      paneFrameAgentFacts(withMirror(managedSummary({}), { effort: { intent: "configured" } }))
-        ?.effort,
+      factsOf(withMirror(managedSummary({}), { effort: { intent: "configured" } }))?.effort,
     ).toBeUndefined();
   });
 
   it("names the model by its display name, and by its id when that is all there is", () => {
     const named = managedSummary({ model: { id: "claude-opus-5", displayName: "Opus 5" } });
-    expect(paneFrameAgentFacts(named)?.model).toBe("Opus 5");
+    expect(factsOf(named)?.model).toBe("Opus 5");
     const bare = managedSummary({ model: { id: "gpt-5-codex" } });
-    expect(paneFrameAgentFacts(bare)?.model).toBe("gpt-5-codex");
+    expect(factsOf(bare)?.model).toBe("gpt-5-codex");
     // No model at all: the frame falls back to the provider's own label, which
     // is why the label crosses the seam even when a model does not.
-    expect(paneFrameAgentFacts(managedSummary({}))?.model).toBeUndefined();
+    expect(factsOf(managedSummary({}))?.model).toBeUndefined();
   });
 
   it("names the project from the monitor's cwd, and leaves the badge to the pane when nothing does", () => {
     const observed = managedSummary({ cwd: "/Users/j/src/rosetta" });
-    expect(paneFrameAgentFacts(observed)?.project).toBe("rosetta");
+    expect(factsOf(observed)?.project).toBe("rosetta");
+
+    // the mirror names no directory: the workspace's, as the fold's chain read it
+    const workspaceOnly: AgentSessionSummary = {
+      ...withMirror(managedSummary({}), { environment: { worktrees: [] } }),
+      workspace: { mode: "direct", sourcePath: "/Users/j/src/truffle" },
+    };
+    expect(factsOf(workspaceOnly)).toMatchObject({
+      project: "truffle",
+      cwd: "/Users/j/src/truffle",
+    });
 
     const nowhere: AgentSessionSummary = {
       ...withMirror(managedSummary({}), { environment: { worktrees: [] } }),
       workspace: { mode: "direct" },
     };
-    const facts = paneFrameAgentFacts(nowhere);
+    const facts = factsOf(nowhere);
     expect(facts?.project).toBeUndefined();
     expect(facts?.cwd).toBeUndefined();
   });
 
-  it("keys the frames by the floor session a pane shows, and leaves out a row with nothing to give", () => {
+  it("keys the frames by the floor session a pane shows, and leaves out a run with nothing to give", () => {
     const speaking = managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" });
     const silent = managedSummary({
       runtimeRunId: "run-b",
       terminalSessionId: "pty-b",
       monitor: false,
     });
-    const byTerminal = new Map([
-      ["pty-a", speaking],
-      ["pty-b", silent],
-    ]);
+    const byTerminal = runsByTerminal([chromeRunOf(speaking), chromeRunOf(silent)]);
     const agents = paneFrameAgents(byTerminal);
     expect([...agents.keys()]).toEqual(["pty-a"]);
     // The run map keeps BOTH: a starting run's pane can still be stopped.
@@ -166,14 +197,14 @@ describe("the pane frame's facts", () => {
     ]);
   });
 
-  it("changes its key only for facts a frame draws — a busier mirror is not news", () => {
+  it("changes its key only for facts a frame draws — a busier row is not news", () => {
     const row = managedSummary({
       runtimeRunId: "run-a",
       terminalSessionId: "pty-a",
       status: "working",
     });
     const key = (summary: AgentSessionSummary): string => {
-      const byTerminal = new Map([["pty-a", summary]]);
+      const byTerminal = runsByTerminal([chromeRunOf(summary)]);
       return paneFrameFactsKey(paneFrameAgents(byTerminal), runIdsBySession(byTerminal));
     };
 
@@ -183,6 +214,9 @@ describe("the pane frame's facts", () => {
       lastAssistantMessage: { text: "still going" },
       freshness: { lastEvidenceAt: "2026-09-13T21:04:00.000Z", level: "native-hooks" },
     });
+    // the run's row does move (the reply, the tokens, the newest evidence ride it)…
+    expect(chromeRunOf(busier)).not.toEqual(chromeRunOf(row));
+    // …and nothing the frame draws did
     expect(key(busier)).toBe(key(row));
 
     // A fraction of a percent does not move a meter drawn to the whole.
@@ -202,5 +236,37 @@ describe("the pane frame's facts", () => {
     expect(
       key(managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a", monitor: false })),
     ).not.toBe(key(row));
+  });
+});
+
+describe("the pane join", () => {
+  it("takes the floor sessions a pane can actually show, and nothing else", () => {
+    const local = chromeRunOf(
+      managedSummary({ runtimeRunId: "run-a", terminalSessionId: "pty-a" }),
+    );
+    const noTerminal = chromeRunOf(
+      managedSummary({ runtimeRunId: "run-b", terminalSessionId: null }),
+    );
+    const peers = chromeRunOf({
+      ...managedSummary({ runtimeRunId: "run-c" }),
+      tier: "remote",
+      terminal: { hosted: "remote", runtimeSessionId: "peer-pty" },
+    });
+    const joined = runsByTerminal([local, noTerminal, peers]);
+    // A peer's `runtimeSessionId` names a session on ANOTHER floor; the pane in
+    // this deck shows a replica with an id of its own (GT-5c).
+    expect([...joined.keys()]).toEqual(["pty-a"]);
+    expect(joined.get("pty-a")).toBe(local);
+  });
+
+  it("prefers the run that has spoken when two rows name one PTY mid-replacement", () => {
+    const speaking = chromeRunOf(
+      managedSummary({ runtimeRunId: "run-new", terminalSessionId: "pty-a" }),
+    );
+    const silent = chromeRunOf(
+      managedSummary({ runtimeRunId: "run-old", terminalSessionId: "pty-a", monitor: false }),
+    );
+    expect(runsByTerminal([speaking, silent]).get("pty-a")).toBe(speaking);
+    expect(runsByTerminal([silent, speaking]).get("pty-a")).toBe(speaking);
   });
 });

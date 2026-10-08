@@ -10,6 +10,7 @@ export type ShellMode =
   | "smoke-godview"
   | "live-surfaces-lab"
   | "terminal-perf-lab"
+  | "godview-perf-lab"
   | "terminal-door-probe"
   | "spike-loro";
 
@@ -17,6 +18,7 @@ export type ShellMode =
 export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--live-surfaces-lab")) return "live-surfaces-lab";
   if (argv.includes("--terminal-perf-lab")) return "terminal-perf-lab";
+  if (argv.includes("--godview-perf-lab")) return "godview-perf-lab";
   if (argv.includes("--terminal-door-probe")) return "terminal-door-probe";
   if (argv.includes("--spike-loro")) return "spike-loro";
   if (argv.includes("--smoke-plugin-restart")) return "smoke-plugin-restart";
@@ -25,6 +27,17 @@ export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--smoke-canvas")) return "smoke-canvas";
   if (argv.includes("--dev")) return "dev";
   return "production";
+}
+
+/** The Godview worker probe can serve the renderer from Vite while keeping
+ * its isolated data root and stop-owned pair. Only RENDERER policies use this
+ * answer; daemon lifetime, resources and test dispatch always use ShellMode.
+ * The flag has no effect outside that lab, especially in production. */
+export function rendererPolicyMode(
+  mode: ShellMode,
+  godviewLabRenderer: string | undefined,
+): ShellMode {
+  return mode === "godview-perf-lab" && godviewLabRenderer === "dev" ? "dev" : mode;
 }
 
 /** Test-harness modes: transient, port-isolated runs that never present UI.
@@ -38,6 +51,7 @@ export function isSmokeLike(mode: ShellMode): boolean {
     mode === "smoke-godview" ||
     mode === "live-surfaces-lab" ||
     mode === "terminal-perf-lab" ||
+    mode === "godview-perf-lab" ||
     mode === "terminal-door-probe" ||
     mode === "spike-loro"
   );
@@ -45,14 +59,17 @@ export function isSmokeLike(mode: ShellMode): boolean {
 
 /** Whether the mode keeps hardware acceleration. Main disables it for every other
  * smoke-like mode: a smoke must run over ssh and on a GPU-less runner, where Chromium's
- * GPU init fails outright. The two labs measure the GPU path itself. The canvas and
+ * GPU init fails outright. The labs measure the GPU path itself (MV-0: the Godview perf lab
+ * too — the swarm's WebGPU canvas is one of the four views it measures). The canvas and
  * plugin-restart smokes draw the DESK — WebGPU alone, no Canvas2D fallback (DK-D32) —
  * so a software run would prove only that the registry loaded (r6b risk 1); each keeps
  * the GPU unless run with `--disable-gpu`, the smokes' GPU-less mode, where the desk's
  * unavailable card is what it asserts instead (DK-3 canvas, DK-5 plugin-restart). */
 export function keepsGpu(mode: ShellMode, argv: readonly string[]): boolean {
   if (!isSmokeLike(mode)) return true;
-  if (mode === "live-surfaces-lab" || mode === "terminal-perf-lab") return true;
+  if (mode === "live-surfaces-lab" || mode === "terminal-perf-lab" || mode === "godview-perf-lab") {
+    return true;
+  }
   return (
     (mode === "smoke-canvas" || mode === "smoke-plugin-restart") && !argv.includes("--disable-gpu")
   );
@@ -103,6 +120,8 @@ export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" 
     mode === "smoke-plugin-restart" ||
     mode === "smoke-godview" ||
     mode === "terminal-perf-lab" ||
+    // MV-0: the Godview perf lab is the perf lab's shape — its own pair, stop-owned
+    mode === "godview-perf-lab" ||
     mode === "terminal-door-probe"
     ? "stop-owned"
     : "leave-running";

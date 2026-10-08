@@ -71,6 +71,7 @@ import type { ElectronLogging } from "../main/logging";
 import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
+import { labProfileProof } from "./godview-lab-profile";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
   LIVE_SURFACE_LAB_ALL_TICKETS,
@@ -150,6 +151,8 @@ import {
   type TypedAgentCall,
 } from "./typed-agent";
 
+// MV-0 — the Godview perf lab rides the same bundle, for the same reason.
+export { runGodviewPerfLab } from "./godview-perf-lab";
 export { runTerminalDoorProbe } from "./terminal-door-probe";
 // TP-S0c — the perf lab rides the SAME test-only bundle every smoke does, so
 // main reaches it through the one runtime-external import it already has and no
@@ -3966,16 +3969,15 @@ function pressChord(win: BrowserWindow, key: string, shift = false): void {
  *
  * Separate from `pressChord` because it needs SHIFT and because Return carries
  * no character — sending a `char` event for it would be a keystroke into the
- * shell, which is exactly what this row must not do. The deck claims this chord
- * from ghosttea in a window-level capture listener, so it does not depend on
- * the workspace's `workspaceOwnsHotkey` gate; the row focuses the deck anyway,
- * because that is the state a user is in.
+ * shell, which is exactly what this row must not do. Ghosttea routes this
+ * chord through its window capture listener and `workspaceOwnsHotkey` gate;
+ * the row first focuses a terminal inside the workspace.
  *
  * DELIVERY IS NOT ASSUMED. `sendInputEvent` injects below AppKit's
  * key-equivalent dispatch (see `closeWindowAccelerator` for the ⌘W version of
  * this caveat), so the row treats a chord that produces no phase change as an
- * unproven DELIVERY rather than a broken zoom, and falls back to the chip —
- * recording which path it took. */
+ * unproven DELIVERY rather than a broken zoom, and tries the pane frame's
+ * fullscreen verb — recording which path it took. */
 function pressZoomChord(win: BrowserWindow): void {
   const modifiers: ("meta" | "control" | "shift")[] = [
     process.platform === "darwin" ? "meta" : "control",
@@ -4074,14 +4076,12 @@ const SPLIT_CHORD: { key: string; shift: boolean; label: string } =
     ? { key: "d", shift: false, label: "⌘D" }
     : { key: "o", shift: true, label: "Ctrl+Shift+O" };
 
-/** Put the caret in a terminal, by clicking one — which is how a user does it.
+/** Put keyboard focus in the workspace's active terminal.
  *
- * The workspace answers a hotkey only when focus is inside it
- * (`workspaceOwnsHotkey` checks `event.target` and `document.activeElement`
- * against its own root), and ghosttea's surface takes focus by itself only when
- * `document.hasFocus()` happened to be true at mount. A click needs neither: a
- * real pointer-down on the surface's input lands focus there the way Chromium
- * lands it anywhere. */
+ * Workspace shortcuts act on its active pane. Focusing a different textarea
+ * relies on a focus event to activate that pane, which a background document
+ * may not dispatch. Keep DOM focus on the already-active pane so zoom does not
+ * hide the input that must receive the return gesture. */
 async function focusDeck(win: BrowserWindow): Promise<void> {
   win.focus();
   win.webContents.focus();
@@ -4095,7 +4095,7 @@ async function focusDeck(win: BrowserWindow): Promise<void> {
   // everything they reach — ghosttea's binding table, the workspace's command
   // routing, `createSplitSession`, fieldd — runs exactly as it does for a user.
   const focused = (await win.webContents.executeJavaScript(
-    `(() => { const t = document.querySelector(".terminal-input"); if (!t) return "no surface";
+    `(() => { const t = document.querySelector(".ghostty-pane.is-active .terminal-input"); if (!t) return "no active surface";
       const r = t.getBoundingClientRect();
       if (r.width < 1 || r.height < 1) return "surface has no size";
       t.focus();
@@ -5984,6 +5984,149 @@ async function spawnBloomRows(ctx: {
   });
 }
 
+/**
+ * MV-7 — THE SPEND VIEW in VibeField's host, the fifth view of the registry.
+ * Chosen on the bar it MOUNTS (the monitor's marker names it, and its element
+ * sits in the slot that wears `mv-spend`), it PAINTS (its canvas holds a
+ * picture, read back from its 2D context), and its KEYS STAY ON ITS ROOT
+ * (MV-D8): with the root focused, ↓ and End are the view's — ↓ focuses a row of
+ * its list when it lists one, and neither reaches a pane (the pane ear hears
+ * nothing) or moves the window's or the monitor's view; with the focus outside
+ * the view, ↓ moves nothing in it. The smoke's world may hold no row the view
+ * lists (its typed runs have ended by here): `rows` says so, and the leak check
+ * stands either way. The swarm is chosen again after, so the rows below see the
+ * stage they always saw.
+ */
+async function spendViewRow(ctx: {
+  win: BrowserWindow;
+  monitorWatch: MarkerWatch<MonitorFacts>;
+  verdict: Record<string, unknown>;
+}): Promise<void> {
+  const { win, monitorWatch, verdict } = ctx;
+  const evaluate = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const choose = async (label: string, id: string): Promise<void> => {
+    const pressed = await evaluate<boolean>(
+      `(() => {
+        const control = document.querySelector('[role="group"][aria-label="Monitor view"] button[aria-label=${JSON.stringify(`${label} view`)}]');
+        if (!(control instanceof HTMLButtonElement)) return false;
+        control.click();
+        return true;
+      })()`,
+    );
+    if (!pressed) throw new Error(`the bar offers no ${label} view`);
+    await monitorWatch.until((facts) => facts.viewId === id, `the monitor to show ${id}`, 20_000);
+  };
+  const ROOT = `document.querySelector(".mv-spend .vf-monitor-spend")`;
+  const FOCUSED = `(${ROOT}?.querySelector(".vf-monitor-spend-row.is-focus")?.getAttribute("data-id") ?? null)`;
+  const press = (keyCode: string): void => {
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode });
+  };
+  // the swarm is chosen again whatever happens, and the row's own failure is the one said
+  let failure: unknown;
+  try {
+    await choose("SPEND", "spend");
+    await waitForRendererFact(
+      win,
+      "the spend view to mount in its slot",
+      20_000,
+      `${ROOT} !== null`,
+    );
+    // painted: the canvas's bytes spread (one ground everywhere would read 0)
+    const SPREAD = `(() => {
+      const canvas = ${ROOT}?.querySelector("canvas.vf-monitor-spend-canvas");
+      if (!(canvas instanceof HTMLCanvasElement) || canvas.width === 0) return -1;
+      const context = canvas.getContext("2d");
+      if (context === null) return -2;
+      const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let min = 255, max = 0;
+      for (let index = 0; index < data.length; index += 97) {
+        const value = data[index];
+        if (value < min) min = value;
+        if (value > max) max = value;
+      }
+      return max - min;
+    })()`;
+    await waitForRendererFact(
+      win,
+      "the spend view to paint its canvas",
+      20_000,
+      `${SPREAD} > 0`,
+      SPREAD,
+    );
+    const spread = await evaluate<number>(SPREAD);
+    const rows = await evaluate<number>(
+      `${ROOT}?.querySelectorAll(".vf-monitor-spend-row:not([hidden])").length ?? 0`,
+    );
+    // its keys, on its root: focused there, ↓ focuses a row (when it lists one),
+    // and neither ↓ nor End reaches a pane or moves a view of the product's
+    const ear = await evaluate<string>(CHORD_PROBE);
+    const windowView = await evaluate<string>(VIEW_NOW);
+    await evaluate<void>(`${ROOT}?.focus()`);
+    const onRoot = await evaluate<boolean>(`document.activeElement === ${ROOT}`);
+    if (!onRoot) throw new Error("the spend view's root would not take the focus");
+    press("Down");
+    const focused =
+      rows === 0
+        ? null
+        : await untilRead("↓ on the spend view's root to focus a row", 10_000, async () => {
+            const id = await evaluate<string | null>(FOCUSED);
+            return id === null ? undefined : id;
+          });
+    press("End");
+    await sleep(300);
+    const heard = ear === "ok" ? await chordProbeHeard(win) : [];
+    if (heard.length > 0) {
+      throw new Error(`a key on the spend view's root reached a pane: ${heard.join(", ")}`);
+    }
+    const viewAfter = await evaluate<string>(VIEW_NOW);
+    if (viewAfter !== windowView) {
+      throw new Error(
+        `a key on the spend view's root moved the window's view (${windowView} → ${viewAfter})`,
+      );
+    }
+    if (monitorWatch.current()?.viewId !== "spend") {
+      throw new Error(
+        `a key on the spend view's root moved the monitor to ${monitorWatch.current()?.viewId}`,
+      );
+    }
+    // …and outside it, ↓ is not the view's: nothing in it moves
+    await evaluate<void>(`${ROOT}?.blur()`);
+    const away = await evaluate<boolean>(
+      `document.activeElement === null || !${ROOT}?.contains(document.activeElement)`,
+    );
+    if (!away) throw new Error("the focus would not leave the spend view");
+    const before = await evaluate<string | null>(FOCUSED);
+    press("Down");
+    await sleep(300);
+    const after = await evaluate<string | null>(FOCUSED);
+    if (after !== before) {
+      throw new Error(`↓ outside the spend view moved its focus (${before} → ${after})`);
+    }
+    const line = {
+      mounted: true,
+      painted: spread,
+      rows,
+      focusedOnRoot: focused,
+      paneEar: ear,
+      paneHeard: heard,
+      windowView,
+      outsideMoved: false,
+    };
+    console.log(`SMOKE_GODVIEW_SPEND ${JSON.stringify(line)}`);
+    verdict["spendView"] = line;
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    await choose("SWARM", "swarm");
+  } catch (error) {
+    failure ??= error;
+  }
+  if (failure !== undefined) throw failure;
+}
+
 /** GT-2/GT-2e: the product Godview, end to end, against the real pair.
  *
  * Everything the deck does here it does because a user asked: the overlay opens
@@ -6029,6 +6172,13 @@ export async function runSmokeGodview(opts: {
     // never the owner's app's (they cleared the shared profile's until DK-5).
     const profileProblems = smokeProfileFailures();
     if (profileProblems.length > 0) throw new Error(profileProblems.join(" · "));
+    // MV: the isolated Chromium profile's proof — Electron's effective paths are the launcher's own
+    const requestedProfile = app.commandLine.getSwitchValue("user-data-dir");
+    const profilePaths = {
+      userData: app.getPath("userData"),
+      sessionData: app.getPath("sessionData"),
+    };
+    labProfileProof(requestedProfile, profilePaths);
     const win = createMainWindow({
       mode: "smoke-godview",
       preloadPath: opts.preloadPath,
@@ -6037,6 +6187,10 @@ export async function runSmokeGodview(opts: {
     // DK-18 (36): click-through — a real pointer passes beneath; its typed rows keep the window's focus (smoke-window.ts)
     keepFromPerson(win);
     opts.registry.adopt(win);
+    verdict["profile"] = labProfileProof(requestedProfile, {
+      ...profilePaths,
+      storagePath: win.webContents.session.getStoragePath(),
+    });
     opts.onWindow?.(win);
     if (process.env["VF_SMOKE_DEBUG"]) {
       win.webContents.on("console-message", (...args: unknown[]) => {
@@ -6066,13 +6220,9 @@ export async function runSmokeGodview(opts: {
         `the init-door row needs an EMPTY floor; found ${before.length} session(s) already`,
       );
     }
-    // …and an empty DECK. Row 1 is about a first open, and both planes have to
-    // be first: the renderer origin's localStorage outlives this process, so a
-    // previous run's saved layout is still sitting there — and since GT-3 that
-    // layout is not silently dropped, it is a QUESTION (every session it names
-    // died with the last run's floor). Clearing here rather than reloading
-    // because nothing has mounted yet: the deck is not built until ⌘2.
-    await win.webContents.executeJavaScript("localStorage.clear()");
+    // Row 1 needs a first open in BOTH planes. The runner gives this process
+    // a fresh Chromium profile, verified before navigation above: clearing
+    // localStorage here would be too late for preferences read at module init.
 
     // GT-3m: armed BEFORE the toggle, because the monitor stage mounts WITH the
     // overlay and its field is already populated at tick 0 — a wait placed after
@@ -6191,7 +6341,6 @@ export async function runSmokeGodview(opts: {
       .catch(() => monitorWatch.current() ?? firstMonitor);
     verdict["monitorView"] = monitor.viewId;
     verdict["monitorAgents"] = monitor.agents;
-    verdict["swarmPhysics"] = monitor.swarmPhysics;
     if (monitor.viewId !== "swarm") {
       throw new Error(`the monitor opened on "${monitor.viewId}", not the default swarm`);
     }
@@ -6240,10 +6389,20 @@ export async function runSmokeGodview(opts: {
     // for a renderer that cannot start a worker (a fixture under happy-dom is
     // one), and a fallback that shipped would look EXACTLY like the slice
     // working while undoing it. This row is the only thing standing between
-    // those two states, so it asserts rather than reports.
-    if (monitor.swarmPhysics !== "worker") {
+    // those two states, so it asserts rather than reports. MV-5: the worker is
+    // the view's own (MV-D7) and the word is its report, which can land a frame
+    // after the field settles — so the row waits for the word, then judges it.
+    const simulated = await monitorWatch
+      .until(
+        (facts) => facts.swarmPhysics !== "none",
+        "the swarm to say where its physics run (its report)",
+        10_000,
+      )
+      .catch(() => monitorWatch.current() ?? monitor);
+    verdict["swarmPhysics"] = simulated.swarmPhysics;
+    if (simulated.swarmPhysics !== "worker") {
       throw new Error(
-        `the swarm is simulating "${monitor.swarmPhysics}", not in its worker — GT-D16's whole point is that this runs off the main thread`,
+        `the swarm is simulating "${simulated.swarmPhysics}", not in its worker — GT-D16's whole point is that this runs off the main thread`,
       );
     }
     // AR-5: what the swarm PAINTED with. WebGPU is a fact of this host's GPU,
@@ -6264,8 +6423,10 @@ export async function runSmokeGodview(opts: {
       );
     }
     if (painted.swarmRenderer === "unavailable") {
+      // MV-5: the word is the view's report (the marker above); what the stage
+      // SAYS is the view's own honest line, its status notice on the field
       const said = (await win.webContents.executeJavaScript(
-        `(document.querySelector(".vf-monitor-swarm [data-swarm-renderer='unavailable']")?.textContent ?? "").toUpperCase()`,
+        `(document.querySelector('.vf-monitor-swarm .vf-monitor-swarm-empty[role="status"]')?.textContent ?? "").toUpperCase()`,
       )) as string;
       if (!said.includes("WEBGPU")) {
         throw new Error("the swarm has no WebGPU here and the stage does not say so");
@@ -6500,6 +6661,9 @@ export async function runSmokeGodview(opts: {
     //     exactly as before. Keys are DOM events dispatched in the page at the
     //     pane's own textarea — the launcher's window capture listener is what
     //     is under test, not the OS's delivery (and nothing reaches the OS).
+    //     Every press includes its release: the launcher keeps consumed codes
+    //     until keyup, so an unmatched keydown can swallow a later gesture's
+    //     release after the launcher has already disappeared.
     {
       const launcher = `document.querySelector('[data-vf-pane-launcher="${splitSession}"]')`;
       const press = (code: string, key: string, altKey: boolean): Promise<unknown> =>
@@ -6508,10 +6672,12 @@ export async function runSmokeGodview(opts: {
             const pane = ${launcher}?.closest('.ghostty-pane');
             const target = pane?.querySelector('textarea') ?? pane;
             if (!target) return false;
-            target.dispatchEvent(new KeyboardEvent('keydown', {
-              code: ${JSON.stringify(code)}, key: ${JSON.stringify(key)}, altKey: ${altKey},
-              bubbles: true, cancelable: true,
-            }));
+            for (const type of ['keydown', 'keyup']) {
+              target.dispatchEvent(new KeyboardEvent(type, {
+                code: ${JSON.stringify(code)}, key: ${JSON.stringify(key)}, altKey: ${altKey},
+                bubbles: true, cancelable: true,
+              }));
+            }
             return true;
           })()`,
           true,
@@ -8016,6 +8182,11 @@ export async function runSmokeGodview(opts: {
       deck,
       verdict,
     });
+
+    // ── 15b. THE SPEND VIEW (MV-7) — the registry's fifth view mounts, paints
+    // and keeps its keys on its root. After the bloom, so the rows the typed
+    // agents and the birth left are on its list; the swarm is chosen again after.
+    await spendViewRow({ win, monitorWatch, verdict });
 
     // ── GT-3p, REPORT-ONLY ────────────────────────────────────────────────
     // Everything below records numbers and asserts nothing. A performance row

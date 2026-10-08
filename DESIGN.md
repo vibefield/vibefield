@@ -163,7 +163,7 @@ Curated set, assigned per object, used as *tint*: `#6366F1 · #EC4899 · #22C55E
 #06B6D4 · #8B5CF6 · #EF4444 · #3B82F6`. Tint recipe: body fill at 12% (`{hex}1F`),
 hairline at ~35%, label at full. These group and label; they never signal state.
 **One exception, carried by shape (TL-D2, TL-D14, 2026-10-02):** in Godview's timeline (§8) a
-working span wears its PROJECT's colour (`MonitorAgent.color`, the host's `projectTint`), because
+working span wears its PROJECT's colour (`AgentView.colour`, the backend's project identity), because
 across an afternoon colour has to say whose a lane is, and the swarm's one ink made every lane look
 alike. There the shape says what: work is a wide wake, a wait a thin thread, rest a hairline. So a
 project hue that lands near orange (the wheel withholds only the band around `--vf-select`) never
@@ -1567,44 +1567,92 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   theme browser's stage), `thumb` (a 600px window scaled, docked in the corner once the big
   one scrolls away, and minimizable to a pill). It is `inert` inside a `role="img"` with a
   description — a picture, never a second UI.
+- **The monitor view owns its drawing** (MV, ruled 2026-10-03). List, rain, swarm, timeline and
+  spend are SDK modules. The host mounts one at a time, supplies geometry and a finite skin, and
+  never styles a view's classes. Each view's sheet is rooted at `.mv-<id>`; its local variables and
+  keyframes use `--mv-<id>-` and `mv-<id>-`. No host DOM, theme class or stylesheet is a view
+  dependency. **The skin** is the SDK's `MONITOR_SKIN`: `--text-main`, `--text-muted`,
+  `--text-faint`, `--panel-bg`, `--panel-border`, `--control-hover-bg`, `--control-hover-border`,
+  `--idle-bg`, `--monitor-bg`, §6's named `--vf-ease-pop`, `--vf-ease-lift` and
+  `--vf-ease-island`, and the sans, `--vf-font-sans` (M178: the stage is monospace, so a view set
+  in the sans reads the token, never a copied stack). Both host themes define the colours; the
+  shared token sheet defines the easings and the sans. A new shared name changes the contract
+  first; a view never copies a curve or reads an undeclared host token.
+  Stage insets replace host padding rules, including the timeline's former extra 11px (MV-6).
+  **The bar reads the manifest:** each view supplies its filled mark and its focus keys; the host
+  has no view mark table. The declared keys print in the control's tooltip — ruled 2026-10-07
+  (James, M177): the bar's tooltip is where a view's focus keys are said. Where a declared key
+  presses a control the view shows, its legend is printed on that control, under the glyph in
+  readable ink (never an outlined box or a corner digit), as the views track prints ⌘1–⌘4 (§8).
+  View loops stop under reduced motion or the stage's animations switch. Each piece of host
+  chrome has its own boundary — the bar, Find, the usage column, the profile notice, the claims,
+  System control, the deck and its edge, each pane's frame, the frames and the launchers: one that
+  throws says "‹name› unavailable" where it stood (a deck piece in the deck's unavailable face),
+  the monitor and its view stay mounted, and it is tried again only for a fact it is handed, at
+  most once a window (1 s, doubling to 30 s while it keeps failing); Find's fact is the agents it
+  searches. The bar and the profile notice read only the window's own state, so they stay
+  unavailable until the monitor mounts again (M192). It never
+  leaves a silent blank. The deck builds the monitor's door, so a deck that fails whole leaves the
+  monitor on no door (GT-D17). *(Made true 2026-10-07, MV-8b: the deck, System control and the
+  claims stood outside any boundary until then. The window since 2026-10-08, MV-8b phase 2: the
+  package's boundary, M179.)*
 - **Godview's timeline is the swarm through time** (TL, 2026-10-02 — James ruled design F,
   Wakes, with its map of the day; `draft/godview-timeline/`). A fourth monitor view (`TIMELINE`,
   after swarm, list and rain). It is painted into a canvas, like the swarm and the rain. Lanes run
   in birth order and never move (TL-D4). A lane is 24–36px (18px for a bare terminal, kept in a
   quiet group under the agents, TL-D7). It opens on the last hour, following now (TL-D5), with
   presets 15M · 1H · 4H · 12H. Pinch or ⌘-scroll zooms at the pointer (240ms, island) and a drag pans.
-  **Each lane is one wake:** a single variable-width outline that swells into work and narrows
-  through a short S-curve into a wait.
+  **Runtime only (MV-6, MV-D13, 2026-10-03):** a lane begins at its row's birth, claims no state
+  before `statusSince`, and draws its current state from there to now. It keeps no previous spans.
+  A row leaving the model leaves the timeline. **Each lane is one wake**, drawn in the current
+  state's width; earlier time is an unrecorded thread, never a guessed state.
   - Work: 2 × 22% of the lane height, clamped 8–15px, in the project's colour (§2.6's
     exception), with a soft glow (the outline's own blur, 5px light at 24% · 6px dark at 62%) and a
     1px sheen along it.
   - Blocked and unseen: a 4.4–7.6px thread in `--vf-orange` and the swarm's blue.
   - Idle: a 1.7px hairline in text-faint.
   - Time the record does not hold: a dotted text-faint thread, never a state.
-  - An ended agent's lane stays at 45% with a 2px end tick until it scrolls out (TL-D6).
   **At the head** sit the swarm's bodies, lit as the swarm lights them, the swarm's wave ringing out of
   one you owe (1.1s, island, the view's only loop). Beside each body is a readout: the current
   state's length, then its word. Names float over the wakes' far end; there is no rail. **Pointing
-  at a lane (or ↑ ↓) lights it and quiets the rest to 30%.** The lit lane prints each closed span's
-  length: inside the work, or above a wait in that state's ink, haloed in the ground. **Looking back
-  relights the bodies to that moment** (TL-D13). Each readout then says how far into that state it
-  was and of how long ("4:39 idle · of 7m"). The clock chip turns to the outlined head time,
-  and NOW glides back (600ms, island).
+  at a lane (or ↑ ↓) lights it and quiets the rest to 30%.** Looking back can show only the
+  current span where it covers that moment; before it the body claims no recorded state. The clock
+  chip turns to the outlined head time, and NOW glides back (600ms, island). Closed-span readouts
+  and retained ended lanes are retired with the history book; these controls do not record a day.
   **The map of the day** is its own 46px strip above the axis (TL-D17). Its right end lines up with
   the head while following now.
-  - It is drawn as Pulse (TL-D15): the whole field summed into one ridge, smoothed by an ~8px
+  - It is drawn as Pulse (TL-D15): only the current spans summed into one ridge, smoothed by an ~8px
     gaussian. Work stacks above a line in each project's colour, its height the number of agents
     working, drawn and never printed (FC-D18). Waits hang below in orange, then blue.
   - Only the window in view keeps its colour; the rest of the day is grayed.
   - The head is a 2px line with a knob, filled while following now and hollow while looking back.
-  - **Pressing the map puts the head there, and dragging plays the day back** on the bodies
-    (TL-D16). It is a `role="slider"`: ← → 5 min, ⇧ 30, Home the day's start, End now.
+  - **Pressing the map puts the head there, and dragging moves the head** across the known spans
+    (TL-D16). It is a `role="slider"`: ← → 5 min, ⇧ 30, Home the day's start, End now. The now
+    button prints End's legend `↘` under its mark, in `--text-main` (ruling 4, M179).
   **Colours:** project for work, §2.5's orange for blocked, the swarm's blue for a reply not yet
   opened (TL-D3), text-faint for idle. Never red; now is ink. One click opens the agent in the pane
   you are in (the views' `select`).
   **Reduced motion:** no wave, no glide, no zoom tween; positions jump.
-  **The record** is fieldd's status ledger (`agent.history`, TL-D8). Without it the view still draws
-  each agent's birth and its current state (TL-D9).
+  **There is no history book.** MV-D13 superseded TL-D8's status ledger: `agent.history` and
+  fieldd's status recorder are removed. A future history capability must READ
+  rosettad's record; neither a view nor its backend may begin recording one.
+- **Godview's spend view is where the money went** (SV · MV-7 — James ruled 2026-10-07, M177: the
+  runtime-only view as built, puppeteer `feat/sv-live` `d1890e0`; SV-D15…D19 are ruled later).
+  A fifth monitor view (`SPEND`, after the timeline), painted into a canvas like the timeline:
+  what each agent spent in the last ten minutes, a line each from $0, an estimate of
+  API-equivalent USD and never an invoice. **A line is the backend's ten-minute series**
+  (`cost.series`, twenty 30 s steps, kept in its memory: runtime only). A row without a series
+  draws no line, and a peer's row never draws one (the view reads a series only on its own
+  desktop's rows). The burn is the five-minute rate off that series, the same definition now and
+  at a set moment, so the hero sums the printed rates (SV-D7's lean, M178).
+  - The list beside the chart names each run. **The line under a name is the toolkit's
+    `detailLine`** (M178, M4's one rule): the wait while blocked, else the reply, else the status;
+    a peer's leads with its desktop. The task as a model fact goes to the SV refinement round.
+  - Its words are set in the sans (`--vf-font-sans`); the stage around it stays monospace.
+  - ↑ ↓ move the keyboard's focus between rows and Return opens the focused one, said in the
+    bar's tooltip (ruling 4). **End lets go of a set moment, and its legend `↘` is printed on the
+    Now pill** (M181: every printed legend comes from the toolkit's `keyLegend` table), in the
+    view's secondary ink (6.5:1 light, 9.0:1 dark).
 - **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
   "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
   projects, the sessions, the panels and charts, the transcript and its folds — mounted from the

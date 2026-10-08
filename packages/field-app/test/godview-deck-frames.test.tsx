@@ -15,6 +15,7 @@
  * provider the overlay mounts in production.
  */
 
+import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import {
   monitorParameterDefaults,
   monitorViewFor,
@@ -26,6 +27,7 @@ import {
   type ComponentType,
   type CSSProperties,
   type ReactElement,
+  useEffect,
   useMemo,
   useState,
 } from "react";
@@ -38,7 +40,9 @@ import type { FieldHost } from "../src/host";
 import { setHost } from "../src/host";
 import type { RendererLogger } from "../src/logging";
 import { setRendererLogger } from "../src/logging";
+import { advanceChromeClock, holdChromeClock, nextTask } from "./chrome-clock-fixture";
 import { managedSummary } from "./managed-session-fixture";
+import { type ScriptedModelBoard, scriptedModelBoard, terminalInfoOf } from "./model-board-fixture";
 import { bornSummary, routedTicket } from "./routed-terminal-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -194,6 +198,42 @@ function WorkspaceStub({
   );
 }
 
+/** M49 — the package's deck pieces, passed through unchanged unless a row of
+ * "the deck's chrome behind its boundaries" makes one throw. */
+const chromeFaults = vi.hoisted(() => ({
+  frameFor: new Set<string>(),
+  frames: false,
+  launchers: false,
+}));
+
+vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views")>();
+  return {
+    ...actual,
+    PaneFrame: (props: Parameters<typeof actual.PaneFrame>[0]) => {
+      if (chromeFaults.frameFor.has(props.session.id)) {
+        throw new Error("the frame's agent fact lost its model");
+      }
+      return <actual.PaneFrame {...props} />;
+    },
+    DeckFrames: (props: Parameters<typeof actual.DeckFrames>[0]) => {
+      if (chromeFaults.frames) throw new Error("the frames lost their panes");
+      return <actual.DeckFrames {...props} />;
+    },
+  };
+});
+
+vi.mock("@vibecook/puppeteer-views/launcher", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views/launcher")>();
+  return {
+    ...actual,
+    DeckLaunchers: (props: Parameters<typeof actual.DeckLaunchers>[0]) => {
+      if (chromeFaults.launchers) throw new Error("the launchers lost their agents");
+      return <actual.DeckLaunchers {...props} />;
+    },
+  };
+});
+
 vi.mock("@vibecook/ghosttea-react", () => ({
   // QL-2: the deck hands the launch ghosttea's fixed cell metrics.
   CELL_WIDTH: 7.83,
@@ -303,8 +343,9 @@ const runtimeEvents = new EventTarget();
 const usedSessions = new Set<string>();
 const remoteSessions = new Set<string>();
 let deckDoor: RemoteSessionDoor | null = null;
-/** What the fold's `observe` is currently answering with. */
+/** The fold rows fieldd's scripted board starts from (the window reads them off the model board). */
 let foldRows: readonly AgentSessionSummary[] = [];
+/** The fold's next publish, through the board (set by `foldDoor`). */
 let foldFrame: ((rows: readonly AgentSessionSummary[]) => void) | null = null;
 /** The props the deck handed the workspace — its birth doors live there. */
 let workspaceProps: Record<string, unknown> = {};
@@ -416,20 +457,19 @@ vi.mock("@vibefield/fieldd-client/react", () => ({
 /** The fold, as the overlay feeds it: the deck's own door would carry it in
  * production, and a fake one carries it here — the routing is ours, the
  * transport is not this fixture's subject. */
+/** MV-3b — the model board the window's rows come from (`model-board-fixture.ts`):
+ * fieldd's real backend on this fixture's fold rows, the deck's pane sessions
+ * as the floor's PTYs. Built per test, disposed after it. */
+let board: ScriptedModelBoard | null = null;
+
 function foldDoor(): MonitorDoor {
+  board ??= scriptedModelBoard({ rows: foldRows });
+  // MV-3d — the frames read the window's one subscription, the model board: a
+  // fold frame reaches them as fieldd's next publish, its rows cut by fieldd
+  foldFrame = (rows) => board?.publish(rows);
   return {
-    observeMesh: vi.fn(({ onOpen }) => {
-      onOpen({ devices: [] });
-      return () => undefined;
-    }),
+    model: board.port,
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
-    observe: ({ onFrame }) => {
-      foldFrame = onFrame;
-      onFrame(foldRows);
-      return () => {
-        foldFrame = null;
-      };
-    },
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: {
@@ -479,7 +519,7 @@ function installHost(): void {
 async function settle(): Promise<void> {
   // Theme facts follow DOM mutations through a MutationObserver task.
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
+    await nextTask();
   });
   for (let i = 0; i < 6; i++) {
     await act(async () => {
@@ -488,17 +528,43 @@ async function settle(): Promise<void> {
   }
 }
 
+/** The monitor's rows beside the deck, as the swarm would read them: the model
+ * board's rows (the deck's pane sessions are the floor's PTYs, so each pane is
+ * a terminal row) joined with the deck's panes by the window. A bare terminal's
+ * row id is its floor session. */
 function PaneLinks({ panes }: { panes: MonitorPaneFacts }): ReactElement {
   const palette = useMonitorPalette();
   const { agents } = useMonitorAgents({ palette, panes });
+  // fieldd's inventory lists every live PTY: the panes' sessions and the
+  // roster's (a shell detached from its pane and kept, GT-6b)
+  const floorKey = [
+    ...(panes.sessions ?? []).map((session) => `${session.id}:${session.cwd ?? ""}`),
+    ...(panes.floor ?? []).map((row) => `${row.sessionId}:${row.workloadClass}`),
+  ].join("\n");
+  useEffect(() => {
+    const listed = new Set((panes.sessions ?? []).map((session) => session.id));
+    board?.floor([
+      ...(panes.sessions ?? []).map((session) => terminalInfoOf(session)),
+      ...(panes.floor ?? [])
+        .filter((row) => !listed.has(row.sessionId))
+        .map((row) =>
+          terminalInfoOf(
+            { id: row.sessionId, createdAtMs: 0, title: row.title } as unknown as SessionSummary,
+            row.workloadClass,
+          ),
+        ),
+    ]);
+    // keyed by the sessions' facts, not the array the deck republishes
+  }, [floorKey]);
   return (
     <div>
       {agents.map((agent) => (
         <output
           key={agent.id}
-          data-session={agent.session?.id ?? agent.floorSessionId}
-          data-visual-id={agent.visualId}
-          data-pane-color={agent.attachment?.color}
+          data-session={agent.id}
+          // The SDK view's spatial identity falls back to its row id.
+          data-visual-id={agent.visualId ?? agent.id}
+          data-pane-color={agent.attachment?.colour}
           data-palette-lightness={palette.tint.l}
         />
       ))}
@@ -582,6 +648,8 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
+  board?.dispose();
+  board = null;
   document.documentElement.style.removeProperty("--tint-l");
   document.documentElement.style.removeProperty("--tint-c");
   document.documentElement.classList.remove("godview-test-dark");
@@ -1964,10 +2032,11 @@ describe("births under an Agent Profile (SB-3)", () => {
       '[data-bloom-bud-kind="profile"][data-bloom-bud-id="work"]',
     );
     if (bud === null) throw new Error("the hold bloomed no Work bud");
+    // the bud's geometry is the view's own properties (L18: `--mv-swarm-bloom-*` since MV-5)
     const px = (name: string): number => Number.parseFloat(bud.style.getPropertyValue(name));
     const work = {
-      x: px("--vf-bloom-tx") + px("--vf-bloom-d") / 2,
-      y: px("--vf-bloom-ty") + px("--vf-bloom-d") / 2,
+      x: px("--mv-swarm-bloom-tx") + px("--mv-swarm-bloom-d") / 2,
+      y: px("--mv-swarm-bloom-ty") + px("--mv-swarm-bloom-d") / 2,
     };
     await act(async () => {
       pointer("pointermove", work.x, work.y);
@@ -1982,5 +2051,166 @@ describe("births under an Agent Profile (SB-3)", () => {
     expect(container.querySelector(".vf-monitor-ack")?.textContent).toBe(
       "terminal opened under Work in the active pane",
     );
+  });
+});
+
+// M49 / MV-8b — the deck's chrome behind its boundaries: each pane's frame, the
+// frames as a whole and the launchers. A throw in any of them says so where it
+// stood, and the terminals, the deck, its door and the monitor beside it stay
+// standing: the deck builds the door, so a piece that took the deck down would
+// take the monitor's rows with it (GT-D17).
+describe("the deck's chrome behind its boundaries (M49)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    chromeFaults.frameFor.clear();
+    chromeFaults.frames = false;
+    chromeFaults.launchers = false;
+  });
+
+  /** The overlay's composition: the deck hands its door to the monitor. */
+  function Scene(): ReactElement {
+    const [door, setDoor] = useState<MonitorDoor | null>(null);
+    const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
+    const view = monitorViewFor("list");
+    return (
+      <>
+        <GodviewDeck
+          active
+          theme="light"
+          onPanes={setPanes}
+          onRemoteDoor={(next) => {
+            deckDoor = next;
+            setDoor(next);
+          }}
+        />
+        <GodviewMonitor
+          view={view}
+          parameters={monitorParameterDefaults(view.parameterGroups)}
+          door={door}
+          panes={panes}
+        />
+      </>
+    );
+  }
+
+  async function mountScene(): Promise<HTMLElement> {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container, { onCaughtError: () => undefined });
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={foldDoor()}>
+          <Scene />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    return container;
+  }
+
+  /** What the boundaries say, where the deck's pieces stood. */
+  const said = (host: HTMLElement): string[] =>
+    [...host.querySelectorAll('.vf-deck-zoom > span[role="status"]')].map(
+      (status) => status.textContent ?? "",
+    );
+  const launcherFor = (host: HTMLElement, sessionId: string): HTMLElement | null =>
+    host.querySelector<HTMLElement>(`[data-vf-pane-launcher="${sessionId}"]`);
+  /** The deck and the monitor as mounted: the same elements after a failure
+   * prove that nothing above the failed piece remounted. */
+  const standing = (host: HTMLElement) => ({
+    zoom: host.querySelector(".vf-deck-zoom"),
+    pane1: paneOf(host, "pane-1"),
+    pane2: paneOf(host, "pane-2"),
+    stage: host.querySelector(".vf-godview-monitor-stage"),
+    view: host.querySelector("[data-monitor-view-root]"),
+  });
+  function expectStillStanding(host: HTMLElement, before: ReturnType<typeof standing>): void {
+    const after = standing(host);
+    for (const part of ["zoom", "pane1", "pane2", "stage", "view"] as const) {
+      expect(before[part], part).not.toBeNull();
+      expect(after[part], part).toBe(before[part]);
+      expect(after[part]?.isConnected, part).toBe(true);
+    }
+    expect(deckDoor).not.toBeNull();
+  }
+
+  beforeEach(() => {
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-2") },
+    ];
+  });
+
+  it("one pane's frame failing takes that frame alone: the other pane's, the terminals, the door and the monitor stand, and a new fact for it tries again", async () => {
+    const host = await mountScene();
+    expect(frameFor(host, "pty-1")).not.toBeNull();
+    expect(frameFor(host, "pty-2")).not.toBeNull();
+    const before = standing(host);
+
+    // the pane's summary moves (a fact its frame is handed), and its read throws
+    chromeFaults.frameFor.add("pty-1");
+    await act(async () => {
+      const [first] = workspace.panes;
+      if (first !== undefined) first.session = stubSession("pty-1", { cwd: "/home/tester/a" });
+      workspace.refresh();
+    });
+    await settle();
+    expect(frameFor(host, "pty-1")).toBeNull();
+    expect(frameFor(host, "pty-2")).not.toBeNull();
+    expect(said(host)).toEqual(["Pane frame unavailable"]);
+    expectStillStanding(host, before);
+
+    // the next fact for that pane is a reason to try again, at the end of the
+    // boundary's first window at the latest
+    chromeFaults.frameFor.clear();
+    holdChromeClock();
+    await act(async () => {
+      const [first] = workspace.panes;
+      if (first !== undefined) first.session = stubSession("pty-1", { cwd: "/home/tester/b" });
+      workspace.refresh();
+    });
+    await settle();
+    await advanceChromeClock();
+    await settle();
+    expect(frameFor(host, "pty-1")).not.toBeNull();
+    expect(said(host)).toEqual([]);
+    expectStillStanding(host, before);
+  });
+
+  it("the frames failing whole leave the launchers, the terminals, the door and the monitor", async () => {
+    const host = await mountScene();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    expect(launcherFor(host, "born-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
+    const before = standing(host);
+
+    chromeFaults.frames = true;
+    await act(async () => workspace.refresh());
+    await settle();
+    expect(said(host)).toEqual(["Pane frames unavailable"]);
+    expect(host.querySelector("[data-vf-pane-frame]")).toBeNull();
+    expect(launcherFor(host, "born-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
+    expectStillStanding(host, before);
+  });
+
+  it("the launchers failing leave every frame, the terminals, the door and the monitor", async () => {
+    const host = await mountScene();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    expect(launcherFor(host, "born-1")).not.toBeNull();
+    const before = standing(host);
+
+    chromeFaults.launchers = true;
+    await act(async () => workspace.refresh());
+    await settle();
+    expect(said(host)).toEqual(["Launchers unavailable"]);
+    expect(launcherFor(host, "born-1")).toBeNull();
+    expect(frameFor(host, "born-1")).not.toBeNull();
+    expect(frameFor(host, "pty-2")).not.toBeNull();
+    expectStillStanding(host, before);
   });
 });

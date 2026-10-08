@@ -23,6 +23,14 @@ export function mountProductHost(
       lab.installTerminalPerfLab();
     });
   }
+  // MV-0 — the Godview perf lab's bridges, only when the URL main built asks
+  // (`godviewPerf=1`, set by `loadRenderer` for `--godview-perf-lab`); the
+  // module is not even imported otherwise.
+  if (new URLSearchParams(location.search).get("godviewPerf") === "1") {
+    void import("@vibefield/field-app/godview-perf-lab").then((lab) => {
+      lab.installGodviewPerfLab();
+    });
+  }
 
   const root = document.getElementById("root");
   if (root === null) throw new Error("renderer host: #root missing from product document");

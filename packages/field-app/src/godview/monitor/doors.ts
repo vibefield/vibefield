@@ -16,23 +16,20 @@ import type {
 import {
   AgentAccountUsageBatch,
   type AgentAccountUsageEntry,
-  AgentMeshFrame,
-  AgentMeshOpen,
-  AgentRunHistory,
   AgentsProfileSetsListResult,
   DeviceInfo,
   IndexSearchResult,
   IndexSessionsResult,
   IndexStatus,
 } from "@vibefield/contracts";
+import { instrumentModelClient } from "./perf/door-instruments";
 import type {
   DevicesPort,
-  MeshBoardFailure,
-  MeshBoardListener,
+  ModelBoardFailure,
+  ModelBoardPort,
   MonitorFeedState,
   MonitorUsagePort,
   ProfileSetsPort,
-  StatusHistoryPort,
 } from "./remote-door";
 
 // THE TWO PORTS (AR-5, D14): the find sheet and the usage column reach fieldd
@@ -367,7 +364,7 @@ export function usagePortOver(client: DoorClient): MonitorUsagePort {
 
 /** The refusals no second ask can change: the same request gets the same
  * answer until something else moves (a grant, a build, the request itself). */
-const MESH_TERMINAL_KINDS = new Set([
+const BOARD_TERMINAL_KINDS = new Set([
   "FORBIDDEN_SCOPE",
   "INCOMPATIBLE",
   "PRECONDITION_FAILED",
@@ -377,81 +374,35 @@ const MESH_TERMINAL_KINDS = new Set([
 /** A refusal or a lost ask, as the reader needs it (S4, 2026-10-01): fieldd's
  * words, and whether asking again may be answered — read from the error's own
  * `kind` and `retryable` (a FielddRpcError's), never from its message. */
-export function meshBoardFailure(cause: unknown): MeshBoardFailure {
+export function modelBoardFailure(cause: unknown): ModelBoardFailure {
   const { kind, retryable } = (typeof cause === "object" && cause !== null ? cause : {}) as {
     kind?: unknown;
     retryable?: unknown;
   };
   return {
     reason: cause instanceof Error ? cause.message : String(cause),
-    retryable: retryable === true && !(typeof kind === "string" && MESH_TERMINAL_KINDS.has(kind)),
-  };
-}
-
-/** The board every self desktop's agents arrive on (`agent.subscribe
- * {projection: "desk", scope: "mesh"}`, DS-D4), read through the deck's own
- * client: a `.snapshot` is a whole board (the open, and the client's replay
- * after a reconnect), a `.delta` one device's frame. The tolerant reader: a
- * frame that does not parse is a reason (`onError`), never a blank. S4: every
- * failure says whether asking again may be answered, and a replay the daemon
- * refused after a reconnect is a failure too — the client let it go. */
-export function meshBoardOver(client: DoorClient): (listener: MeshBoardListener) => () => void {
-  return ({ onOpen, onFrame, onError }) => {
-    let cancelled = false;
-    let unsubscribe: (() => void) | null = null;
-    const deliverOpen = (payload: unknown): void => {
-      const parsed = AgentMeshOpen.safeParse(payload);
-      if (parsed.success) onOpen(parsed.data);
-      else
-        onError({
-          reason: `the mesh board answered an unreadable board: ${parsed.error.issues[0]?.message ?? "invalid"}`,
-          retryable: false, // another build's board: asking again reads the same
-        });
-    };
-    const deliverFrame = (payload: unknown): void => {
-      const parsed = AgentMeshFrame.safeParse(payload);
-      if (parsed.success) onFrame(parsed.data);
-      else
-        onError({
-          reason: `the mesh board sent an unreadable frame: ${parsed.error.issues[0]?.message ?? "invalid"}`,
-          retryable: true,
-          frame: true,
-        });
-    };
-    void client
-      .subscribe(
-        "agent.subscribe",
-        { projection: "desk", scope: "mesh" },
-        (payload, kind) => {
-          if (cancelled) return;
-          if (kind === "snapshot") deliverOpen(payload);
-          else deliverFrame(payload);
-        },
-        {
-          onReplayFailed: (cause) => {
-            if (!cancelled) onError(meshBoardFailure(cause));
-          },
-        },
-      )
-      .then((subscription) => {
-        if (cancelled) {
-          subscription.unsubscribe();
-          return;
-        }
-        unsubscribe = subscription.unsubscribe;
-        deliverOpen(subscription.snapshot);
-      })
-      .catch((cause: unknown) => {
-        if (!cancelled) onError(meshBoardFailure(cause));
-      });
-    return () => {
-      cancelled = true;
-      unsubscribe?.();
-    };
+    retryable: retryable === true && !(typeof kind === "string" && BOARD_TERMINAL_KINDS.has(kind)),
   };
 }
 
 const RosterList = DeviceInfo.array();
+
+/** MV-3 (MV-D18) — the model board's ask, in one place: the window's one
+ * subscription (`projection: "model", scope: "mesh"`) and the screen's report.
+ * The frames reach the feed (`model-replica.ts`) unparsed — the fold is the
+ * tolerant reader — and a refused replay reaches it too (S4). */
+const MODEL_BOARD_ASK = { projection: "model", scope: "mesh" } as const;
+
+export function modelBoardOver(client: DoorClient): ModelBoardPort {
+  // MV-3c's B-side replay (`godviewReplay=1`) stands in for the client here, where the board is
+  // built; dormant otherwise — `instrumentModelClient` hands back the same client.
+  const door = instrumentModelClient(client);
+  return {
+    subscribe: (onFrame, opts) =>
+      door.subscribe("agent.subscribe", { ...MODEL_BOARD_ASK }, onFrame, opts),
+    reportShown: (ids) => door.request("agent.reportShown", { ids: [...ids] }),
+  };
+}
 
 /** The roster (`device.subscribe`): whole lists, the newest one standing. An
  * unreadable list is dropped and the last good one stays. */
@@ -511,30 +462,6 @@ export function profileSetsPortOver(client: DoorClient): ProfileSetsPort {
         cancelled = true;
         unsubscribe?.();
       };
-    },
-  };
-}
-
-/* ── the status ledger: agent.history (TL, TL-D8) ───────────────────────── */
-
-/** fieldd's record of what each run did, read run by run (the tolerant reader):
- * an answer that is not a list of runs is no record, and a run that does not
- * parse is dropped while the rest stand. A refusal — a fieldd from before the
- * door — rejects, and the caller draws what it watched. */
-export function statusHistoryPortOver(client: DoorClient): StatusHistoryPort {
-  return {
-    async load(runtimeRunIds) {
-      const answer = await client.request(
-        "agent.history",
-        runtimeRunIds === undefined ? {} : { runtimeRunIds: [...runtimeRunIds] },
-      );
-      const runs =
-        typeof answer === "object" && answer !== null && "runs" in answer ? answer.runs : undefined;
-      if (!Array.isArray(runs)) return [];
-      return runs.flatMap((run: unknown) => {
-        const parsed = AgentRunHistory.safeParse(run);
-        return parsed.success ? [parsed.data] : [];
-      });
     },
   };
 }

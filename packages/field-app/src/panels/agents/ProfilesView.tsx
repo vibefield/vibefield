@@ -1,11 +1,6 @@
-import {
-  AgentIcon,
-  PROFILE_GLYPHS,
-  ProfileGlyph,
-  profileGlyphName,
-  ServiceMark,
-  suggestProfileGlyph,
-} from "@vibecook/puppeteer-views";
+import { AgentIcon, ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
+import { PROFILE_GLYPHS, profileGlyphName } from "@vibecook/puppeteer-view-sdk/toolkit";
+import { ServiceMark, suggestProfileGlyph } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet, AgentSignInRoute, AgentSignInService } from "@vibefield/contracts";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { EmptyState, InlineNotice, UiButton, UiSwitch } from "@vibefield/design-kit/primitives";

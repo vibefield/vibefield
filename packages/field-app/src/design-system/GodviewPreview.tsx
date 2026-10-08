@@ -74,6 +74,8 @@ export function GodviewPreview({
             <GodviewMonitor
               view={view}
               parameters={parameters}
+              // the stage's switch above (MV-W4): a ported view's loop holds still too
+              animations={false}
               door={door}
               {...(panes !== undefined ? { panes } : {})}
               theme={theme}

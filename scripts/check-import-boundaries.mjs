@@ -450,9 +450,15 @@ const RULES = [
     // import is a product branching on a provider, and native-observation is
     // the adapters' private half. Tests may reach further (puppeteer-testing);
     // production may not.
+    // MV-3a (2026-10-03, MV-D22): the monitor BACKEND runs beside the runtime in
+    // fieldd (`@vibecook/puppeteer-monitor`), and the model it emits is the
+    // monitor-view contract's (`@vibecook/puppeteer-view-sdk/model`, types
+    // only); both join the door. The view-sdk's other subpaths (`/host`,
+    // `/react`, `/toolkit`) are a window's, never a daemon's — the subpath law
+    // is the SDK's own wall checker's (L16), not this one's.
     enforce: true,
     description:
-      "fieldd imports puppeteer only through its runtime door (runtime · builtin-providers · core · record) + @rosetta/protocol — never an adapter or native-observation",
+      "fieldd imports puppeteer only through its runtime door (runtime · builtin-providers · core · record · monitor · view-sdk) + @rosetta/protocol — never an adapter or native-observation",
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/fieldd/src"),
     importTest: (s) =>
       s.startsWith("@vibecook/puppeteer-") &&
@@ -465,9 +471,12 @@ const RULES = [
     // recording are fieldd's (D2/A4). puppeteer-react is admitted by the wall
     // ahead of its link: row — the row waits on the react-peer answer in
     // pnpm-workspace.yaml's sibling block.
+    // MV-3a (2026-10-03, MV-D18): the monitor-view contract and its host
+    // (`@vibecook/puppeteer-view-sdk`) join the door — the window's replica
+    // reads the model, the view host mounts one view.
     enforce: true,
     description:
-      "field-app imports puppeteer only through its view door (core · monitor · react · views) + @rosetta/protocol — never runtime, providers, record, an adapter, or native-observation",
+      "field-app imports puppeteer only through its view door (core · monitor · react · views · view-sdk) + @rosetta/protocol — never runtime, providers, record, an adapter, or native-observation",
     applies: (p) => SOURCE_EXT.test(p) && under(p, "packages/field-app/src"),
     importTest: (s) =>
       s.startsWith("@vibecook/puppeteer-") &&
@@ -624,6 +633,10 @@ const PUPPETEER_FIELDD_DOOR = [
   "@vibecook/puppeteer-builtin-providers",
   "@vibecook/puppeteer-core",
   "@vibecook/puppeteer-record",
+  // MV-3a (2026-10-03): the monitor backend beside the runtime, and the model
+  // it emits (the monitor-view contract's `/model`).
+  "@vibecook/puppeteer-monitor",
+  "@vibecook/puppeteer-view-sdk",
 ];
 const PUPPETEER_FIELD_APP_DOOR = [
   "@vibecook/puppeteer-core",
@@ -632,6 +645,8 @@ const PUPPETEER_FIELD_APP_DOOR = [
   // AR-5 (2026-09-13): the Godview views as a package (PU-5) — the swarm on
   // WebGPU, list, rain, the bar, the usage column, the find sheet, behind ports.
   "@vibecook/puppeteer-views",
+  // MV-3a (2026-10-03): the monitor-view contract, its React adapter and host.
+  "@vibecook/puppeteer-view-sdk",
 ];
 
 // Enforce map (spec §8.3 slice 2): --enforce gates ONLY on enforce-true rules.
@@ -1241,6 +1256,16 @@ function runSelfTest() {
     {
       file: "packages/field-app/src/clean-view-door.ts",
       body: 'import type { AgentMonitorState } from "@vibecook/puppeteer-core";\nimport { createMonitorStore } from "@vibecook/puppeteer-monitor";\nimport type { SessionRow } from "@rosetta/protocol";\nexport type S = AgentMonitorState;\nexport const m = createMonitorStore;\nexport type Row = SessionRow;\n',
+    },
+    // MV-3a doors: the backend and the model's types in fieldd; the replica and
+    // the monitor-view contract in the renderer — clean under R20/R21.
+    {
+      file: "packages/fieldd/src/clean-monitor-door.ts",
+      body: 'import { createMonitorBackend } from "@vibecook/puppeteer-monitor";\nimport type { MonitorAgentRow } from "@vibecook/puppeteer-view-sdk/model";\nexport const b = createMonitorBackend;\nexport type Row = MonitorAgentRow;\n',
+    },
+    {
+      file: "packages/field-app/src/clean-model-door.ts",
+      body: 'import { createMonitorReplica } from "@vibecook/puppeteer-monitor/replica";\nimport type { FrameScheduler } from "@vibecook/puppeteer-view-sdk/model";\nimport { frameScheduler } from "@vibecook/puppeteer-view-sdk/host";\nexport const r = createMonitorReplica;\nexport type F = FrameScheduler;\nexport const f = frameScheduler;\n',
     },
   ];
 
