@@ -1,5 +1,5 @@
 import type { MonitorTheme, StageGeometry, ViewReport } from "@vibecook/puppeteer-view-sdk";
-import { frameScheduler, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
+import { frameScheduler, keepStage, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
 import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
 import {
   type AccountUsagePort,
@@ -504,12 +504,15 @@ export function GodviewMonitor({
         width: box.width,
         height: box.height,
       });
-      setStageGeometry({
+      const measured: StageGeometry = {
         width: Math.round(stageRect.width),
         height: Math.round(stageRect.height),
         insets: { top: bottom, right: 0, bottom: 0, left: chromeRight },
         obstacles: [rect(chromeRect), ...(claimsRect.height === 0 ? [] : [rect(claimsRect)])],
-      });
+      };
+      // M176 item 1: every tick measures a fresh object; one that measures the
+      // same keeps the stage held (the SDK's own rule), so it renders nothing
+      setStageGeometry((current) => keepStage(current, measured));
     };
     const observer = new ResizeObserver(publish);
     observer.observe(chrome);

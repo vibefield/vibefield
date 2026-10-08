@@ -50,7 +50,7 @@ import {
   monitorViewFor,
 } from "@vibecook/puppeteer-views";
 import type { AgentPersona, AgentProfileSet, TerminalInfo } from "@vibefield/contracts";
-import { act } from "react";
+import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
@@ -505,6 +505,75 @@ describe("the monitor stage", () => {
         { x: 72, y: 11, width: 300, height: 9.5 },
       ],
     });
+  });
+
+  it("keeps the stage it holds when a tick measures the same: the monitor renders nothing, and a real resize still reaches the view (M176 item 1)", async () => {
+    // The column, the strip and the stage are each observed, and every tick
+    // measured a fresh stage object: the monitor rendered again for each one,
+    // though the view host's slot already kept the view's stage. The SDK's own
+    // rule (`keepStage`) keeps the held stage when the size, the insets and the
+    // obstacles measure the same, so an equal tick renders nothing at all.
+    const fire = driveObservers();
+    const recording = createRecordingView("stage-keeper");
+    const entry: MonitorViewEntry = {
+      id: "stage-keeper",
+      label: "KEEPER",
+      parameterGroups: [],
+      mark: recording.view.manifest.mark,
+      view: recording.view,
+    };
+    const door = fakeDoor();
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    let renders = 0;
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <Profiler id="godview-monitor" onRender={() => (renders += 1)}>
+            <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
+          </Profiler>
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    const host = container;
+    let width = 900;
+    const box = (left: number, top: number, w: number, height: number): DOMRect =>
+      ({ left, top, width: w, height, right: left + w, bottom: top + height }) as DOMRect;
+    host.querySelector<HTMLElement>(".vf-godview-monitor-stage")!.getBoundingClientRect = () =>
+      box(10, 44, width, 356);
+    host.querySelector<HTMLElement>(".vf-monitor-chrome")!.getBoundingClientRect = () =>
+      box(18, 52, 54, 340);
+    host.querySelector<HTMLElement>(".vf-monitor-claims")!.getBoundingClientRect = () =>
+      box(82, 55, 300, 9);
+    const tick = async (): Promise<void> => {
+      act(() => {
+        for (const publish of fire) publish();
+      });
+      await settle();
+    };
+    // the measured stage arrives, and what it sets off (the view's report) lands
+    await tick();
+    await settle();
+    const held = recording.lastInput?.stage;
+    expect(held?.width).toBe(900);
+    const updates = recording.updates;
+    const rendered = renders;
+    // ten ticks that measure the same: the stage it holds. React may call the
+    // monitor once more to confirm an unchanged state (its two fibers) and then
+    // skips everything under it; a fresh object every tick rendered ten times.
+    for (let n = 0; n < 10; n += 1) await tick();
+    expect(renders - rendered).toBeLessThanOrEqual(1);
+    expect(recording.lastInput?.stage).toBe(held);
+    expect(recording.updates).toBe(updates);
+    // a stage that grows is a new stage: the monitor renders, and the view hears it
+    width = 960;
+    await tick();
+    expect(renders).toBeGreaterThan(rendered);
+    expect(recording.lastInput?.stage?.width).toBe(960);
+    expect(recording.updates).toBeGreaterThan(updates);
   });
 
   it("gives a silent strip no room at all, so the package's own band stands", async () => {
