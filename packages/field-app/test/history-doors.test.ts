@@ -720,6 +720,26 @@ describe("the asset source (AR-8c, AR-D40 (a))", () => {
     fail = false;
     expect(await assets.imageAssetUrl(asset("x"), "full")).toBe("blob:ok");
     expect(assetSourceOver({ anyClient: () => null }).imageAssetUrl(asset("y"), "full")).toBeNull();
-    expect(assets.attachmentAssetUrl(asset("x"))).toBeNull();
+  });
+
+  it("addresses an attachment by rosettad's own route — a path that outlives the port — and nothing else", () => {
+    const assets = assetSourceOver({ anyClient: () => null });
+    // the room's gate: with an address it asks for the renditions; without
+    // one every recorded image read "Image data was not recorded" (D1)
+    expect(assets.attachmentAssetUrl(asset("ab12"))).toBe("/api/assets/ab12.webp");
+    expect(assets.attachmentAssetUrl({ ...asset("ab12"), url: "/api/assets/ab12.png" })).toBe(
+      "/api/assets/ab12.png",
+    );
+    // a member the route does not name by its digest, an origin, a nested or
+    // queried path: no address, so the room offers no open
+    for (const url of [
+      "/api/assets/cd34.webp",
+      "http://127.0.0.1:45000/api/assets/ab12.webp",
+      "/api/assets/x/ab12.webp",
+      "/api/assets/ab12.webp?image=tile",
+      "/api/sessions/s1/timeline/t1/read/0",
+    ]) {
+      expect(assets.attachmentAssetUrl({ ...asset("ab12"), url }), url).toBeNull();
+    }
   });
 });

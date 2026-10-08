@@ -25,13 +25,29 @@
  *    read through the room's port — rosettad answers past its credential check
  *    with its own not_found (the ground truth's first row is a prompt, which
  *    names no file), never `wrong-scope`, and never the room's refusal words.
+ *
+ * The second desktop's home is SYNTHESIZED (build-hf.md L4, 2026-10-08): a
+ * Claude-format transcript VibeField writes for its own test, its shape cribbed
+ * from rosetta's tests (`crates/pipeline/tests/recorded_tool_images.rs`), so
+ * the rows can witness what no ground truth records:
+ *  - D1: a prompt's image reaches the room as an optimized member the asset
+ *    source ADDRESSES by rosettad's own route, and its renditions' bytes are
+ *    read under the window's grant — the route that refuses a bare fetch.
  */
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type MetaState, type TimelineEntry, UnauthorizedError } from "@rosetta/protocol";
 import {
+  type AssetRef,
+  type AttachmentRef,
+  type MetaState,
+  type TimelineEntry,
+  UnauthorizedError,
+} from "@rosetta/protocol";
+import {
+  IndexEndpointSet,
+  IndexOpenTicket,
   IndexSessionsResult,
   IndexStatus,
   LAYOUT,
@@ -117,7 +133,17 @@ class RecordingSocket implements WsLike {
   }
 }
 
-async function realDesktop(): Promise<{ daemon: FielddDaemon; window: FielddClient }> {
+/** The home rosettad indexes: rosetta's ground truth, or a seed of this
+ * file's own (`seed(home, dataDir)`). */
+type HomeSeed = (home: string, dataDir: string) => void;
+
+const groundTruth: HomeSeed = (home) => {
+  cpSync(GROUNDTRUTH, join(home, ".claude"), { recursive: true });
+};
+
+async function realDesktop(
+  seed: HomeSeed = groundTruth,
+): Promise<{ daemon: FielddDaemon; window: FielddClient }> {
   // a SHORT root: the mock floor's socket must fit macOS's 104-byte sun_path
   const dataDir = mkdtempSync(join(tmpdir(), "vf-hxw-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -125,7 +151,7 @@ async function realDesktop(): Promise<{ daemon: FielddDaemon; window: FielddClie
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   const home = join(dataDir, "home");
   mkdirSync(home, { recursive: true });
-  cpSync(GROUNDTRUTH, join(home, ".claude"), { recursive: true });
+  seed(home, dataDir);
   const mock = new MockMgmtServer(
     process.platform === "win32"
       ? pipeEndpointFor(dataDir, SOCKETS.MGMT)
@@ -180,6 +206,24 @@ async function realDesktop(): Promise<{ daemon: FielddDaemon; window: FielddClie
   return { daemon, window };
 }
 
+/** The adapters' door over the window's client, every call logged. */
+function loggedDoor(window: FielddClient, calls: string[]): HistoryDoorClient {
+  return {
+    request: (method, params) => {
+      calls.push(method);
+      return window.request(method, params);
+    },
+    subscribe: (method, params, onFrame, opts) => {
+      calls.push(method);
+      return window.subscribe(method, params, (payload, kind) => onFrame(payload, kind), opts);
+    },
+    get status() {
+      return window.status;
+    },
+    onStatusChange: (listener) => window.onStatusChange(listener),
+  };
+}
+
 describe.skipIf(
   REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BIN) || !existsSync(GROUNDTRUTH),
 )("AR-8c — a real session streams in the room's ports; fieldd's door carries none of it", () => {
@@ -196,21 +240,7 @@ describe.skipIf(
 
     // The adapters, over the window's client, every call logged.
     const doorCalls: string[] = [];
-    const door: HistoryDoorClient = {
-      request: (method, params) => {
-        doorCalls.push(method);
-        return window.request(method, params);
-      },
-      subscribe: (method, params, onFrame, opts) => {
-        doorCalls.push(method);
-        return window.subscribe(method, params, (payload, kind) => onFrame(payload, kind), opts);
-      },
-      get status() {
-        return window.status;
-      },
-      onStatusChange: (listener) => window.onStatusChange(listener),
-    };
-    const ports = historyPortsOver(door, { platform: process.platform });
+    const ports = historyPortsOver(loggedDoor(window, doorCalls), { platform: process.platform });
     cleanup.push(() => ports.dispose());
 
     // the catalog lane: the session reaches the room's meta, as rosetta's row
@@ -296,3 +326,179 @@ describe.skipIf(
     ports.sessions.close(sid);
   }, 180_000);
 });
+
+/* ── a synthesized home (build-hf.md L4) ──────────────────────────────────── */
+
+/** A 1×1 PNG — rosetta's own tool-image fixture (`recorded_tool_images.rs`). */
+const PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+/** the synthesized session's native id */
+const SYNTH_NATIVE_ID = "5c0f9a1e-0b7d-4c1a-9e2f-7a3b8c9d0e1f";
+
+/** One record of the synthesized session in Claude's transcript envelope (the
+ * keys rosetta's ground truth writes, `tool-use/…/13f3a252….jsonl`). */
+function claudeRecord(cwd: string, at: number, record: Record<string, unknown>): string {
+  return JSON.stringify({
+    isSidechain: false,
+    userType: "external",
+    entrypoint: "sdk-cli",
+    cwd,
+    sessionId: SYNTH_NATIVE_ID,
+    version: "2.1.241",
+    gitBranch: "HEAD",
+    timestamp: new Date(at).toISOString(),
+    ...record,
+  });
+}
+
+/** An assistant turn's message, as the ground truth's mock model writes one. */
+function assistantMessage(id: string, content: unknown[]): Record<string, unknown> {
+  return {
+    id,
+    type: "message",
+    role: "assistant",
+    model: "claude-opus-5",
+    content,
+    stop_reason: "end_turn",
+    stop_sequence: null,
+    usage: {
+      input_tokens: 16,
+      output_tokens: 8,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+    },
+  };
+}
+
+/** A prompt that carries an image, and its reply — NOW-relative, so no
+ * horizon ever ages it out. */
+const synthesized: HomeSeed = (home, dataDir) => {
+  const cwd = join(dataDir, "project");
+  mkdirSync(cwd, { recursive: true });
+  const dir = join(home, ".claude", "projects", cwd.replace(/[^A-Za-z0-9]/g, "-"));
+  mkdirSync(dir, { recursive: true });
+  const at = Date.now() - 120_000;
+  const rows = [
+    claudeRecord(cwd, at, {
+      parentUuid: null,
+      type: "user",
+      uuid: "6b1c2d3e-0000-4000-8000-000000000001",
+      message: {
+        role: "user",
+        content: [
+          { type: "text", text: "What is in this picture?" },
+          { type: "image", source: { type: "base64", media_type: "image/png", data: PNG } },
+        ],
+      },
+    }),
+    claudeRecord(cwd, at + 1_000, {
+      parentUuid: "6b1c2d3e-0000-4000-8000-000000000001",
+      type: "assistant",
+      uuid: "6b1c2d3e-0000-4000-8000-000000000002",
+      message: assistantMessage("msg_hxs_0001", [
+        { type: "text", text: "One pixel, and nothing else." },
+      ]),
+    }),
+  ];
+  writeFileSync(join(dir, `${SYNTH_NATIVE_ID}.jsonl`), `${rows.join("\n")}\n`);
+};
+
+/** The first stored image a session's rows carry. */
+function storedImageOf(entries: readonly TimelineEntry[]): AssetRef | null {
+  for (const entry of entries) {
+    const attachments = (entry.body as { attachments?: AttachmentRef[] }).attachments ?? [];
+    for (const attachment of attachments) {
+      if (attachment.kind === "image" && attachment.source.type === "asset")
+        return attachment.source.asset;
+    }
+  }
+  return null;
+}
+
+describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BIN))(
+  "AR-8 — a synthesized history through the room's ports (L4)",
+  () => {
+    it("D1: a prompt's image is addressed by rosettad's own route, and its renditions' bytes are read under the window's grant", async () => {
+      const { window } = await realDesktop(synthesized);
+      const sid = await until(
+        async () =>
+          IndexSessionsResult.parse(
+            await window.request("index.sessions", { nativeSessionIds: [SYNTH_NATIVE_ID] }),
+          ).rows[0]?.sessionId ?? null,
+        "the synthesized session indexed",
+        90_000,
+      );
+      const doorCalls: string[] = [];
+      const blobs: Blob[] = [];
+      const ports = historyPortsOver(loggedDoor(window, doorCalls), {
+        platform: process.platform,
+        assets: {
+          createObjectURL: (blob) => {
+            blobs.push(blob);
+            return `blob:hxs/${blobs.length}`;
+          },
+          revokeObjectURL: () => undefined,
+        },
+      });
+      cleanup.push(() => ports.dispose());
+      const client = await ports.sessions.open(sid);
+      let entries: TimelineEntry[] = [];
+      const stream = client.subscribeSession(sid, {
+        onChange: (rows) => {
+          entries = rows;
+        },
+      });
+      cleanup.push(() => stream.close());
+      const asset = await until(
+        () => storedImageOf(entries),
+        "the prompt's image in the session's rows",
+        30_000,
+      );
+
+      // the member rosetta's room opens: an optimized WebP and its four
+      // renditions, on rosettad's own content-addressed route
+      expect(asset.media_type).toBe("image/webp");
+      expect(asset.url).toBe(`/api/assets/${asset.digest}.webp`);
+      expect(Object.keys(asset.image_variants ?? {}).sort()).toEqual([
+        "preview",
+        "rail",
+        "tile",
+        "tile2x",
+      ]);
+      // D1: the room's gate is answered — it was null, so the room asked for no
+      // rendition and said "Image data was not recorded"
+      expect(ports.assets.attachmentAssetUrl(asset)).toBe(asset.url);
+      for (const variant of ["tile", "full"] as const) {
+        expect(await ports.assets.imageAssetUrl(asset, variant)).toMatch(/^blob:hxs\/\d+$/);
+      }
+      expect(blobs).toHaveLength(2);
+      for (const blob of blobs) {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        expect(blob.type).toBe("image/webp");
+        expect(new TextDecoder().decode(bytes.subarray(0, 4))).toBe("RIFF");
+        expect(new TextDecoder().decode(bytes.subarray(8, 12))).toBe("WEBP");
+      }
+      // the route refuses a read that carries no credential: those bytes rode
+      // the grant
+      const ticket = IndexOpenTicket.parse(
+        await window.request("index.openTicket", { sessionId: sid }),
+      );
+      // a window's ticket names the loopback pair
+      const { restUrl } = IndexEndpointSet.parse(ticket.endpoints);
+      const bare = await fetch(new URL(asset.url, restUrl));
+      expect(bare.status).toBe(401);
+      // EL2: fieldd answered the ticket — no asset byte was asked of it
+      expect([...new Set(doorCalls)]).toEqual(["index.openTicket"]);
+      console.log(
+        `D1_WITNESS ${JSON.stringify({
+          sessionId: sid,
+          digest: asset.digest,
+          renditionBytes: blobs.map((blob) => blob.size),
+          bareRead: bare.status,
+          doorCalls: [...new Set(doorCalls)],
+        })}`,
+      );
+      ports.sessions.close(sid);
+    }, 180_000);
+  },
+);
