@@ -178,11 +178,12 @@ interface MergedSession {
   members: Array<{ device: string; projectId: string | undefined }>;
 }
 
-type SortKey = [at: number | null, device: string, key: string];
+/** A keyset page's sort key (PJ-3's doors page by the same rule). */
+export type SortKey = [at: number | null, device: string, key: string];
 
 /** Sort: newest `at` first (absent last), then device, then key — the
  * owner's clock decides inside a device, the device breaks every tie. */
-function compareKeys(a: SortKey, b: SortKey): number {
+export function compareKeys(a: SortKey, b: SortKey): number {
   const left = a[0] ?? Number.NEGATIVE_INFINITY;
   const right = b[0] ?? Number.NEGATIVE_INFINITY;
   if (left !== right) return left > right ? -1 : 1;
@@ -195,7 +196,7 @@ function encodeCursor(key: SortKey): string {
   return Buffer.from(JSON.stringify(key), "utf8").toString("base64url");
 }
 
-function decodeCursor(cursor: string | undefined): SortKey | undefined {
+export function decodeCursor(cursor: string | undefined): SortKey | undefined {
   if (cursor === undefined) return undefined;
   try {
     const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
@@ -216,7 +217,7 @@ function decodeCursor(cursor: string | undefined): SortKey | undefined {
 
 /** One page by keyset over a sorted list: the first `limit` accepted rows
  * strictly after `cursor`, and the next cursor when an accepted row remains. */
-function pageOf<T>(
+export function pageOf<T>(
   sorted: readonly T[],
   keyOf: (item: T) => SortKey,
   cursor: SortKey | undefined,

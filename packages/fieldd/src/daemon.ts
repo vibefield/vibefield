@@ -101,9 +101,16 @@ import {
   PluginsResolveModuleParams,
   PluginsUninstallParams,
   PORTS,
+  PROJECT_DOORS,
+  type Principal,
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
+  ProjectGetParams,
+  ProjectIntentParams,
+  ProjectListParams,
+  ProjectSessionsParams,
+  ProjectSubscribeParams,
   RendererParticipantIdentity,
   ROWS,
   SCOPES,
@@ -211,7 +218,14 @@ import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { atFloor, wholeValueDoor } from "./projection";
+import { KeyJournal } from "./projects/key-journal";
 import { PlaceScanner } from "./projects/place-scanner";
+import {
+  admitProjectReader,
+  admitProjectWriter,
+  ProjectDoors,
+  parseProjectAsk,
+} from "./projects/project-doors";
 import { ProjectGroups } from "./projects/project-groups";
 import { NO_EGRESS, type RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
@@ -564,6 +578,9 @@ export interface FielddDaemon {
   /** DS-6 — the aggregator: every self peer's catalog replicated (persisted
    * under `mesh/catalog`), the merged doors and search by asking. */
   indexMesh: IndexMesh;
+  /** PJ-1/PJ-3 — the projects this desktop groups (the `project.*` doors'
+   * source); tests regroup it directly rather than wait out the settle. */
+  projects: ProjectGroups;
   /** SP-6 — the session tails (`index.session.subscribe`): one rosetta socket
    * per tailed session, shared by its subscribers; tests count them. */
   indexTail: IndexTailService;
@@ -857,6 +874,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     local: indexCatalog,
     peers: () => indexMesh?.peerRows() ?? [],
     acted: () => placeScanner.acted(),
+    // PJ-3 (D9) — the key memory: a key that regrouped answers `movedTo`,
+    // across a restart
+    journal: new KeyJournal({ file: join(config.dataDir, ...LAYOUT.PROJECT_KEYS_FILE), logger }),
     logger,
   });
   const offActed = workspace.registry.onChange(() => projectGroups.regroupSoon());
@@ -1970,6 +1990,75 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         emit,
       );
       return { snapshot: opened.open, dispose: opened.dispose, start: opened.start };
+    });
+    // PJ-3 — the projects' doors (projects/project-doors.ts; PJ-D15 (a);
+    // build-pj23.md D8–D10; P1/P2 (a) 2026-10-08): what `projectGroups`
+    // groups over every self desktop's places, served from this desktop's
+    // merged view. In the order a caller hears its refusals: WHO (a peer
+    // daemon, a guest, a plugin, an MCP agent are refused FORBIDDEN_SCOPE —
+    // DS-L4 for the peer, whatever its derived preset holds; the act is a
+    // desktop window's, P2), WHAT (a path anywhere in the ask is
+    // `path-in-request`, P1; then the params), WHICH (a moved key follows the
+    // key memory on a read and is refused `key-moved` on an act), WHETHER
+    // (UNAVAILABLE {service: "projects"} before this boot's first grouping, and
+    // from the act until PJ-2's records are wired). A tailnet caller's pages
+    // are cut at INDEX_TAILNET_LIMITS.MAX_ROWS (`tailnetRowLimit`), and its
+    // answers carry what D10 and P1 let them.
+    const projectDoors = new ProjectDoors({
+      groups: projectGroups,
+      deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+      localSessions: () => indexCatalog.sessions.rows(),
+      peerSessions: () => indexMesh?.peerRows() ?? [],
+      sources: () => indexMesh?.sourcesFor("projects") ?? [],
+    });
+    const projectPage = (ctx: { principal: Principal }, asked: number | undefined): number =>
+      tailnetRowLimit(ctx.principal, asked, PROJECT_DOORS.PAGE_DEFAULT_LIMIT) ??
+      PROJECT_DOORS.PAGE_DEFAULT_LIMIT;
+    api.register("project.list", (ctx, params) => {
+      const view = admitProjectReader(ctx, "project.list");
+      const ask = parseProjectAsk(
+        ProjectListParams,
+        params,
+        "expected { cursor?, limit? (1..500), devices?, q? }",
+      );
+      return projectDoors.list(ask, view, projectPage(ctx, ask.limit));
+    });
+    api.register("project.get", (ctx, params) => {
+      const view = admitProjectReader(ctx, "project.get");
+      const ask = parseProjectAsk(
+        ProjectGetParams,
+        params,
+        "expected { key } or { anchor: root:<sha> | remote:<key> | place:<placeId> }",
+      );
+      return projectDoors.get(ask, view);
+    });
+    api.register("project.sessions", (ctx, params) => {
+      const view = admitProjectReader(ctx, "project.sessions");
+      const ask = parseProjectAsk(
+        ProjectSessionsParams,
+        params,
+        "expected { key, places?: {device, placeId}[], devices?, agents?, cursor?, limit? (1..500) }",
+      );
+      return projectDoors.sessions(ask, view, projectPage(ctx, ask.limit));
+    });
+    api.registerSubscription("project.subscribe", (ctx, params, emit) => {
+      admitProjectReader(ctx, "project.subscribe");
+      const ask = parseProjectAsk(
+        ProjectSubscribeParams,
+        params,
+        "expected { since?: {epoch, revision}, minIntervalMs? }",
+      );
+      const pings = projectDoors.subscribe(ask, emit);
+      return { snapshot: pings.open, dispose: pings.dispose, start: pings.start };
+    });
+    api.register("project.intent", async (ctx, params) => {
+      admitProjectWriter(ctx, "project.intent");
+      const ask = parseProjectAsk(
+        ProjectIntentParams,
+        params,
+        "expected { key, op: rename {name} | pin {pinned} | hide {hidden} | link {place} | split {place} | dismiss {with} }",
+      );
+      return await projectDoors.intent(ask);
     });
     // SP-3 — the direct plane's door (methods.ts; index-serve.ts). AR-8b: it
     // mints for a window on this desktop — every refusal said first, then the
@@ -4827,7 +4916,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     // PJ-1 — a peer's project rows moved: its places' samples may have, and
     // the projects regroup over its places and sessions
-    indexMesh.on("change", (event: { scope: string; table?: string }) => {
+    indexMesh.on("change", (event: { scope: string; table?: string; device?: string }) => {
+      // PJ-3 — a visible projects page re-asks on any catalog's move (its
+      // sessions, its standing), as the History page's pings do
+      projectDoors.catalogChanged(event.device);
       if (event.scope !== "mesh") return;
       if (event.table === "projects") placeScanner.peersChanged();
       projectGroups.regroupSoon();
@@ -5635,6 +5727,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       indexCatalog,
       indexTail,
       indexMesh: indexMesh as IndexMesh,
+      projects: projectGroups,
       agents,
       agentUsage,
       agentGateway: gateway,
