@@ -11,9 +11,10 @@
 > (`contributes.objects`, the SDK's `/desk` door, the kind-conformance harness, `vibefield-plugin try`; the ten-minute bar met
 > in 5 min 34 s). The pre-desk boards are refused, never converted (DK-D13…D16), and everything that drew a widget as DOM or GL
 > is retired (DK-17: every row of the retire table gone). ICE `0.14.0` → `0.15.0-desk.1`…`desk.7` → `0.15.0` on `latest`
-> (petitions I20–I45). The gates on DK-19's merge: every landing gate green — `pnpm still` and eleven smokes, the product desk
-> rig's TAKE rows among them — red only by main's three known rows (preflight's ghosttea sibling, check:deps' mille links,
-> fieldd's AR-7b row 1). Next: the cutover (`docs/desk-gates.md` "The cutover": the fast-forward, then both Macs upgraded
+> (petitions I20–I45). The gates at DK-19, run whole on the merge and again on the ledger's tip: every landing gate green —
+> `pnpm still` and eleven smokes, the product desk rig's TAKE rows among them — red only by main's three known rows
+> (preflight's ghosttea sibling, check:deps' mille links, fieldd's AR-7b row 1) and, each run, one fieldd row under the test
+> stage's load that passed alone twice (`docs/desk-gates.md`). Next: the cutover (`docs/desk-gates.md` "The cutover": the fast-forward, then both Macs upgraded
 > TOGETHER and James's eleven two-Mac steps, which decide (20)'s stamp wait and (95)'s drag strip); the follow-on programs
 > PORTALS · STRING · the OBJECT KIT · the AGENT'S EYES · the UPLOAD PLANE (each a thinking doc of its own); FS-3's desk tree;
 > James's parked calls (DECISIONS, "DK — the build's rulings"). **Every push is still HELD.**

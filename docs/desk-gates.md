@@ -73,6 +73,11 @@ line / head / drag strip 46 / 22 / 67 ms, COVER_BUDGET 34 / 26 / 26 ms against 2
 both GPU-less modes; kind-faults; plugin-restart; plugin; godview; terminal-door; terminal-direct; studio. Main's three rows
 were proven ON MAIN at `fc928566` (a throwaway worktree on a cargo target of its own, removed): the same preflight row, the
 same three check:deps rows, AR-7b row 1's same assertion ("1 failed | 91 passed (92)").
+**And on the ledger's tip** (`a4d8c6d5`, the merge plus the DK-19 ledger's docs; 10:10→10:25Z, load 11–82): the same
+verdicts — test red by AR-7b row 1 and, at load 82, `doc-sync-service.test.ts`'s DS-5c row, whose `afterEach` met ENOTEMPTY
+removing its temp directory (alone twice: 44 passed); smoke:canvas 291 s — TAKE 8/8, LANDED min 3.4 ms, REST still 316 /
+wind 22,046 / cover 102 ms, PEERS IDLE 8,046 ms, PEERS EXIT 45 / 23 / 22 ms, COVER_BUDGET 37 / 29 / 27 ms; every other
+landing gate ok, no smoke's daemon left.
 
 ## The hygiene every smoke keeps
 
