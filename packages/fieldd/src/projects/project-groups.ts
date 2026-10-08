@@ -38,7 +38,11 @@ export interface GroupingTable<Row> {
 }
 
 export interface ProjectGroupsOptions {
-  /** this desktop's id, read at every regroup (it moves at most once, D30) */
+  /** this desktop's roster id, read at every regroup. Errata (PJ-2 §0,
+   * 2026-10-08): it does not move "at most once" — the mesh ULID supersedes
+   * the local fallback at every link and is minted anew at a relink — so a
+   * place is never keyed by it (place-scanner.ts `deviceId`); here it only
+   * names which device's places are this desktop's. */
   deviceId: () => string;
   /** this desktop's catalog: its project rows carry its places */
   local: {

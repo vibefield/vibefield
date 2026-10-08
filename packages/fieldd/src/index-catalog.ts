@@ -90,8 +90,11 @@ export interface IndexCatalogOptions {
   supervisor: RosettadSupervisor | null;
   /** the rosetta wire version fieldd speaks (`@rosetta/protocol` PROTOCOL_VERSION) */
   expectedProtocolVersion: number;
-  /** this desktop's id, read at every stamp: it moves at most once, from the
-   * persisted local fallback to the mesh identity (D30) */
+  /** this desktop's id, read at every stamp: it moves from the persisted
+   * local fallback to the mesh identity (D30). Errata (PJ-2 §0, 2026-10-08):
+   * this said "at most once" — a relink mints a new mesh ULID (unlink archives
+   * the mesh state), and a linked desktop starts every boot on the fallback
+   * until its mesh answers */
   deviceId: () => string;
   /** AC-3 test seam: the catalog (default: THE table) — kind → catalog id */
   catalog?: readonly AgentCatalogEntry[];

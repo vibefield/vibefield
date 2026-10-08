@@ -75,7 +75,15 @@ export interface ActedRoot {
 export interface PlaceScannerOptions {
   catalog: PlaceCatalog;
   worker: PlaceFactsAsker;
-  /** this desktop's id, read at every pass (it moves at most once, D30) */
+  /** the id this desktop's placeIds hash — its PERSISTED LOCAL id
+   * (`DeviceService.localDeviceId`), never the roster id.
+   * Errata (PJ-2 §0, 2026-10-08): this read "this desktop's id … (it moves at
+   * most once, D30)", and the daemon passed the roster id. That id moves at
+   * every link (the local fallback → the mesh ULID), at a relink (unlink
+   * archives the mesh state, so the next link mints a new ULID), and at every
+   * boot of a linked desktop whose mesh answers after the first pass — and
+   * each move re-keyed every place, orphaning the anchors, links and splits a
+   * record persists by placeId. */
   deviceId: () => string;
   /** the agent catalog's task roots (PJ-D21) */
   taskRoots: () => readonly string[];

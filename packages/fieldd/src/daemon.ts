@@ -180,7 +180,7 @@ import {
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
-import { DeviceService } from "./device-service";
+import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
@@ -856,10 +856,14 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // with what the files worker reads of each root and its worktrees; a peer's
   // places (the replica, bound below) are the samples its hits look for.
   // Started with the files worker; idle while either has nothing to say.
+  // PJ-2 §0 — a placeId hashes this user root's PERSISTED local id, which no
+  // link or relink moves (the roster id does: device-service.ts), so the
+  // anchors, links and splits a record keeps by placeId never orphan.
+  const placeDeviceId = localDeviceIdAt(config.dataDir);
   const placeScanner = new PlaceScanner({
     catalog: indexCatalog,
     worker: workspace.supervisor,
-    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    deviceId: () => placeDeviceId,
     taskRoots: () => createAgentCatalogReaders(config.agentCatalog ?? AGENT_CATALOG).taskRoots(),
     peerPlaces: () => indexMesh?.peerPlaces() ?? [],
     actedRoots: () => workspace.registry.roots(),
