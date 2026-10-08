@@ -24,6 +24,15 @@ describe("PJ-1 — place facts on the catalog row", () => {
     expect(parsed.sessionCount).toBe(12);
   });
 
+  it("keeps the row when its `places` is not a list at all (a newer peer's reshape)", () => {
+    const row = fixture("index-catalog-project.places.json");
+    for (const places of ["not a list", 42, { placeId: "p" }, null]) {
+      const parsed = IndexCatalogProject.safeParse({ ...row, places });
+      expect(parsed.success, JSON.stringify(places)).toBe(true);
+      expect(parsed.data?.places ?? []).toEqual([]);
+    }
+  });
+
   it("reads an older peer's row, which has no places, as it always did", () => {
     const row = fixture("index-catalog-project.valid.json");
     expect(IndexCatalogProject.parse(row).places).toBeUndefined();

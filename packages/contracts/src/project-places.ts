@@ -125,10 +125,15 @@ export type PlaceFacts = z.infer<typeof PlaceFacts>;
 
 /** A row's places as a reader takes them: a place it cannot read is dropped
  * and the rest kept, so a malformed place (a SHA that is not hex, a newer
- * peer's shape) never costs the row the session history it carries. */
-export const PlaceFactsList = z.array(z.unknown()).transform((raw) =>
-  raw.flatMap((place) => {
-    const parsed = PlaceFacts.safeParse(place);
-    return parsed.success ? [parsed.data] : [];
-  }),
+ * peer's shape) never costs the row the session history it carries — nor
+ * does a `places` that is not a list at all (pj1b, 2026-10-08: it refused the
+ * whole row, so a newer peer that reshaped the field would have emptied its
+ * projects from an older desktop's History). */
+export const PlaceFactsList = z.unknown().transform((raw): PlaceFacts[] =>
+  Array.isArray(raw)
+    ? raw.flatMap((place) => {
+        const parsed = PlaceFacts.safeParse(place);
+        return parsed.success ? [parsed.data] : [];
+      })
+    : [],
 );
