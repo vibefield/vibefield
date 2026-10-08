@@ -6,11 +6,14 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { inflateSync } from "node:zlib";
+import type { TextRaster } from "@vibecook/ice/desk";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseArgs } from "../src/cli";
 import { toNdjson, toTable } from "../src/report";
 import {
   blessedGolden,
+  countReads,
+  drawWhereRead,
   type GoldenRead,
   goldenText,
   hearing,
@@ -179,6 +182,79 @@ describe("the judge — steady, drawn, inside its reach, held to its golden", ()
     expect(blessed.verdict.detail).toContain("BLESSED");
     expect(blessed.bless).toEqual({ width: W, height: W, sha256: stillSha(drawn()) });
     expect(judge({ bless: true, a: mat() }).bless).toBeUndefined();
+  });
+});
+
+describe("the desk's hand, lent where it is read (DK-17b; ICE I35, `createStill({ services })`)", () => {
+  /** A raster that answers like a face with nothing to lay. */
+  const fake: TextRaster = {
+    metrics: () => ({ ascent: 0.9, descent: 0.3, advance: () => 0.5 }),
+    version: () => 1,
+    raster: () => ({ bytes: new Uint8Array(1), w: 1, h: 1 }),
+  };
+  /** A still a draw made: which way it was drawn, and whether it was disposed. */
+  const made = (lent: boolean) => {
+    const still = { lent, disposed: false, dispose: () => (still.disposed = true) };
+    return still;
+  };
+
+  it("counts what a kind asks of the lent raster — a face's metrics, the version, a raster — and starts again on a reset", () => {
+    const hand = countReads(fake);
+    expect(hand.count()).toBe(0);
+    hand.raster.metrics("caveat");
+    hand.raster.version();
+    hand.raster.raster({} as never, "caveat", { w: 1, h: 1 }, 1, 0);
+    expect(hand.count()).toBe(3);
+    hand.reset();
+    expect(hand.count()).toBe(0);
+  });
+
+  it("keeps a still drawn WITH the hand when its kind read it — one draw, its desk state kept", async () => {
+    const hand = countReads(fake);
+    const draws: boolean[] = [];
+    const kept = await drawWhereRead(async (lent) => {
+      draws.push(lent);
+      if (lent) hand.raster.metrics("caveat"); // the pad's writing lays its layout through the hand
+      return made(lent);
+    }, hand);
+    expect(draws).toEqual([true]);
+    expect(kept.lent).toBe(true);
+    expect(kept.still).toMatchObject({ lent: true, disposed: false });
+  });
+
+  it("draws a kind that read NO lent service again without it — as a still always was — and lets the lent one go", async () => {
+    const hand = countReads(fake);
+    hand.raster.version(); // a read left from an earlier still is not this one's
+    const stills: ReturnType<typeof made>[] = [];
+    const kept = await drawWhereRead(async (lent) => {
+      const still = made(lent); // the desk clock: its desk state reads the wall clock, never the hand
+      stills.push(still);
+      return still;
+    }, hand);
+    expect(stills.map((x) => x.lent)).toEqual([true, false]);
+    expect(stills[0]?.disposed).toBe(true);
+    expect(kept.lent).toBe(false);
+    expect(kept.still).toBe(stills[1]);
+  });
+
+  it("says on the row what the kind read — and nothing for a kind that read none", () => {
+    const row = (lent: readonly string[]) =>
+      judgeStill({
+        plugin: "vendor.demo",
+        type: "vendor.demo.disc",
+        state: "default",
+        theme: "day",
+        lent,
+        frame: FRAME,
+        a: drawn(),
+        b: drawn(),
+        bare: mat(),
+        golden: NO_GOLDEN,
+        bless: false,
+        host: "Test GPU (test arch) · test-host · webgpu 0.4.0",
+      }).verdict;
+    expect(row(["text"]).lent).toEqual(["text"]);
+    expect(row([])).not.toHaveProperty("lent");
   });
 });
 

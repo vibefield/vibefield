@@ -79,9 +79,19 @@ stills never run in `pnpm test` (CI's hosts carry no such GPU); `pnpm still` run
 this package's Dawn suite (`test/still.dawn.test.ts`). No adapter is a harness
 error (exit 2), never a refusal.
 
-A still is ICE's facts and pins: a kind is handed no `local` (a clock shows its
-shop time), no host services (no text raster — the comment pad's writing is not
-in its still) and no chrome. Each still's PNG lands in `<plugin>/.vibefield-still/`
+A still lends the kinds **the desk's hand** (DK-17b; ICE `0.15.0-desk.6`, I35 —
+`createStill({ services })`): the product's text raster under `TEXT_RASTER` — the
+same three shipped faces the desk lends (field-app's `desk-faces` table: Caveat
+500 and 600, Kalam 400) drawn by a Node canvas (`@napi-rs/canvas`, Skia,
+prebuilt with no install script — a devDependency of this CLI alone, loaded only
+under `--still`) by ICE's own `inkRaster` recipe. A kind that READS it is drawn
+with its desk state, its `local` — its writing, as the product draws it (the
+comment pad's comments, and its rules at the hand's pitch); the row says so
+(`lent: ["text"]`). A kind that reads no lent service is drawn again without it,
+as a still always was — ICE's facts and pins alone (a clock shows its shop time):
+a `local` that reads the wall clock, as the desk clock's does, would otherwise put
+the hour the still was taken into its golden — pin a time through an asset
+instead. No chrome. Each still's PNG lands in `<plugin>/.vibefield-still/`
 (ignored here) for a reader's eye.
 
 **What is said while a still is drawn is listed beneath its row** (`said`, each

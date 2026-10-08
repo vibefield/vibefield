@@ -10,8 +10,11 @@
  * `new FontFace(family, "url(…)")` into the document's font set. The Electron half — the same
  * loads under the real packaged policy, with no violation said — is `smoke:canvas`'s.
  */
+import { existsSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { DESK_FACE_URLS, deskPlates, deskText, samplePrint } from "../src/field/desk/desk-assets";
+import { DESK_FACE_FILES, DESK_FACES_FOLDER } from "../src/field/desk/desk-faces";
 import { PLATE_BYTES, PLATE_SHA256 } from "../src/field/desk/desk-plates";
 
 const sha256 = async (bytes: Uint8Array<ArrayBuffer>): Promise<string> =>
@@ -98,6 +101,17 @@ describe("the desk's assets under a policy that forbids connect-src", () => {
     expect(added).toHaveLength(3);
     expect(names.every((name) => text.ready(name))).toBe(true);
     expect(refused).toEqual([]);
+  });
+
+  it("DK-17b: imports exactly the face table's files — the one table a Node caller registers from disk (the playground's still raster)", () => {
+    expect(Object.keys(DESK_FACE_URLS)).toEqual(Object.keys(DESK_FACE_FILES));
+    for (const [name, url] of Object.entries(DESK_FACE_URLS)) {
+      const file = DESK_FACE_FILES[name] ?? "";
+      expect(url.endsWith(`/${file}`), `${name}: ${url} is not ${file}`).toBe(true);
+      // where a Node caller finds it: the folder beside the table's own module (this package's root is the cwd)
+      const onDisk = resolve(process.cwd(), "src/field/desk", DESK_FACES_FOLDER, file);
+      expect(existsSync(onDisk), onDisk).toBe(true);
+    }
   });
 
   it("decodes the seed's print from its bundled module — the named bytes, no request", async () => {

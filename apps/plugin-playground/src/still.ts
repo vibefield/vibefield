@@ -15,11 +15,15 @@
 //     there locally, and never commit a second host's golden over the first.
 // Each still's PNG lands in `<dir>/.vibefield-still/` for a reader's eye (never a source; ignored in this repository).
 //
-// A still is ICE's facts and pins: no desk state (a kind is handed no `local` — a clock shows its shop time), no host services
-// (no text raster: the comment pad's writing is not in its still), no chrome. Whatever is said on the console while a still is
-// drawn is listed under its row (`said`, each line counted) — under strata's DEV build (vitest; `node
-// --conditions=development`) too, where ICE says nothing of its own since desk.5 (I34: core's `trayInput` and `trayLay` share
-// their `Tray` write in a stated order, and strata's access check said their line at every engine a still made until then).
+// A still lends the kinds the DESK'S HAND (DK-17b; ICE I35, `createStill({ services })`): the product's text raster under
+// `TEXT_RASTER` (text-raster.ts — the shipped faces on a Node canvas), and a kind that READS it is drawn with its desk state,
+// its `local` — its writing, as the product draws it (the comment pad's comments). A kind that reads no lent service is drawn
+// again without it, as a still always was — ICE's facts and pins alone (a clock shows its shop time): a desk state that reads
+// the wall clock (the desk clock's) would otherwise put the hour the still was taken into its golden. The row says what a kind
+// read (`lent`). No chrome. Whatever is said on the console while a still is drawn is listed under its row (`said`, each line
+// counted) — under strata's DEV build (vitest; `node --conditions=development`) too, where ICE says nothing of its own since
+// desk.5 (I34: core's `trayInput` and `trayLay` share their `Tray` write in a stated order, and strata's access check said
+// their line at every engine a still made until then).
 
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
@@ -27,7 +31,13 @@ import { createRequire } from "node:module";
 import { join } from "node:path";
 import { crc32, deflateSync } from "node:zlib";
 import type { WidgetType } from "@vibecook/ice";
-import { createStill, type ThemeName } from "@vibecook/ice/desk";
+import {
+  createStill,
+  service,
+  TEXT_RASTER,
+  type TextRaster,
+  type ThemeName,
+} from "@vibecook/ice/desk";
 import type { ObjectContribution } from "@vibefield/contracts";
 import { buildObjectType } from "@vibefield/field-app/object-types";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
@@ -316,6 +326,8 @@ export interface StillJudged {
   readonly type: string;
   readonly state: string;
   readonly theme: StillTheme;
+  /** the host services the kind READ, drawn with its desk state (ICE I35) — none: drawn with its facts and pins alone */
+  readonly lent?: readonly string[] | undefined;
   readonly frame: StillFrame;
   readonly a: StillPixels;
   readonly b: StillPixels;
@@ -349,6 +361,7 @@ export function judgeStill(input: StillJudged): {
     width: a.width,
     height: a.height,
     sha256,
+    ...(input.lent !== undefined && input.lent.length > 0 ? { lent: input.lent } : {}),
     ...(input.png !== undefined ? { png: input.png } : {}),
     ...(input.said !== undefined && input.said.length > 0 ? { said: input.said } : {}),
   };
@@ -479,12 +492,64 @@ export async function hearing<T>(
   }
 }
 
+// ---------------------------------------------------------------------------------------------------- the hand, lent
+
+/** A lent text raster that counts what is asked of it — whether a kind READ the desk's hand while a still was drawn. */
+export interface CountedRaster {
+  readonly raster: TextRaster;
+  /** asks since the last reset: a face's metrics, the version, a raster */
+  count(): number;
+  reset(): void;
+}
+
+export function countReads(raster: TextRaster): CountedRaster {
+  let asked = 0;
+  return {
+    raster: {
+      metrics(face) {
+        asked += 1;
+        return raster.metrics(face);
+      },
+      version() {
+        asked += 1;
+        return raster.version();
+      },
+      raster(layout, face, box, band, bleed) {
+        asked += 1;
+        return raster.raster(layout, face, box, band, bleed);
+      },
+    },
+    count: () => asked,
+    reset() {
+      asked = 0;
+    },
+  };
+}
+
+/**
+ * THE HAND LENT WHERE IT IS READ (ICE I35): a still drawn with the services lent (`draw(true)`) — and, when its kind read
+ * none of them, disposed and drawn again without (`draw(false)`), as a still always was. Answers the still kept and whether
+ * it was drawn with its desk state.
+ */
+export async function drawWhereRead<S extends { dispose(): void }>(
+  draw: (lent: boolean) => Promise<S>,
+  reads: Pick<CountedRaster, "count" | "reset">,
+): Promise<{ readonly still: S; readonly lent: boolean }> {
+  reads.reset();
+  const withHand = await draw(true);
+  if (reads.count() > 0) return { still: withHand, lent: true };
+  withHand.dispose();
+  return { still: await draw(false), lent: false };
+}
+
 // ---------------------------------------------------------------------------------------------------- the run
 
 export interface StillRunOptions {
   /** write the golden from this run's stills (`--bless`) */
   readonly bless: boolean;
   readonly gpu: StillGpu;
+  /** the desk's hand, lent to the kinds as the product's desk lends it (`TEXT_RASTER`; text-raster.ts) */
+  readonly text: TextRaster;
 }
 
 /** One object kind, as the run hands it over after the kind harness judged it. */
@@ -528,6 +593,8 @@ export function openStills(
   const blessed: Record<string, GoldenRow> = {};
   const shots = join(root, STILL_SHOTS);
   const { gpu } = options;
+  /** the desk's hand, lent to every still and counted: a kind that reads it keeps its desk state */
+  const hand = countReads(options.text);
 
   const notDrawn = (
     type: string,
@@ -573,7 +640,11 @@ export function openStills(
         ];
       }
       const frame = stillFrame(row.size, kind?.reach ?? 0);
-      const draw = (props: Readonly<Record<string, unknown>> | undefined, theme: ThemeName) =>
+      const draw = (
+        props: Readonly<Record<string, unknown>> | undefined,
+        theme: ThemeName,
+        lent: boolean,
+      ) =>
         createStill({
           device: gpu.device,
           format: "rgba8unorm",
@@ -582,6 +653,7 @@ export function openStills(
           objects: [type],
           theme,
           palette: productPalette[theme],
+          ...(lent ? { services: [service(TEXT_RASTER, hand.raster)] } : {}),
           stage: ({ engine }) => {
             if (props === undefined) return; // the bare mat
             engine.ops.spawnWidget(row.type, {
@@ -598,10 +670,10 @@ export function openStills(
       for (const { name: themeName, theme } of STILL_THEMES) {
         for (const [state, props] of Object.entries(fixtures)) {
           const heard = await hearing(async () => {
-            const a = await draw(props, theme);
-            const b = await draw(props, theme);
-            const bare = await draw(undefined, theme);
-            return { a, b, bare };
+            const { still: a, lent } = await drawWhereRead((l) => draw(props, theme, l), hand);
+            const b = await draw(props, theme, lent);
+            const bare = await draw(undefined, theme, lent);
+            return { a, b, bare, lent };
           });
           if ("error" in heard) {
             rows.push({
@@ -619,7 +691,7 @@ export function openStills(
             });
             continue;
           }
-          const { a, b, bare } = heard.value;
+          const { a, b, bare, lent } = heard.value;
           mkdirSync(shots, { recursive: true });
           const png = join(shots, `${fileSafe(row.type)}--${fileSafe(state)}--${themeName}.png`);
           writeFileSync(png, stillPng(a));
@@ -628,6 +700,7 @@ export function openStills(
             type: row.type,
             state,
             theme: themeName,
+            lent: lent ? [TEXT_RASTER.name] : [],
             frame,
             a,
             b,

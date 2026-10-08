@@ -2,9 +2,11 @@
 // path here ends in a written verdict and a number.
 import { existsSync } from "node:fs";
 import { resolve } from "node:path";
+import type { TextRaster } from "@vibecook/ice/desk";
 import { toNdjson, toTable } from "./report";
 import { type Loader, runPlayground } from "./run";
 import { STILL_GOLDEN, STILL_SHOTS, type StillGpu, stillGpu } from "./still";
+import { stillTextRaster } from "./text-raster";
 import { messageOf, type RunResult } from "./verdict";
 
 const USAGE = `plugin-playground <pluginDir> [--json] [--state <type>[:<name>]] [--still [--bless]]
@@ -120,6 +122,7 @@ export async function main(argv: readonly string[], loader: Loader): Promise<num
   // `--still`: Dawn's device, made once for the run and destroyed after it. No adapter is the HOST's fact — a harness error
   // (2), never a refusal that would read as "your plugin failed".
   let gpu: StillGpu | undefined;
+  let text: TextRaster | undefined;
   if (args.still) {
     try {
       gpu = await stillGpu();
@@ -129,13 +132,24 @@ export async function main(argv: readonly string[], loader: Loader): Promise<num
       );
       return 2;
     }
+    try {
+      text = await stillTextRaster();
+    } catch (error) {
+      gpu.destroy();
+      process.stderr.write(
+        `plugin-playground: --still lends the kinds the desk's hand, and this host's Node canvas could not draw it: ${messageOf(error)}\n`,
+      );
+      return 2;
+    }
   }
   try {
     const result = await runPlayground({
       pluginDir,
       loader,
       only: args.only,
-      ...(gpu !== undefined ? { still: { bless: args.bless, gpu } } : {}),
+      ...(gpu !== undefined && text !== undefined
+        ? { still: { bless: args.bless, gpu, text } }
+        : {}),
     });
     process.stdout.write(render(result, args.json));
     return result.summary.exit;

@@ -12,10 +12,13 @@
 //  - under strata's DEV build (`node --conditions=development`, as vitest loads it) every still names ICE core's `Tray`
 //    line as core's, on its own row;
 //  - the desk clock (examples/plugins/desk-clock — ICE's kind ported as a plugin): held to ITS golden, blessed once by the
-//    named flag; and, staged exactly as ICE stages its own clock still, it draws ICE's committed golden byte for byte —
+//    named flag — it reads none of the hand a still lends, so it is drawn as a still always was (its desk state would read
+//    the wall clock); and, staged exactly as ICE stages its own clock still, it draws ICE's committed golden byte for byte —
 //    the port, the product's type build and the still door all ICE's, pixel for pixel;
 //  - the comment pad (plugins/comment-pad — VibeField's own first kind): held to ITS golden over its four playground states,
-//    blessed once by the named flag — its dress drawn, its writing NOT: a still lends no host service, so no text raster.
+//    blessed once by the named flag — its dress AND its writing (DK-17b; ICE I35): a still lends the desk's hand
+//    (`TEXT_RASTER`, the product's faces on a Node canvas) and the pad reads it, so `written` and `long` carry their
+//    comments, each inside the pad's own box.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -24,12 +27,14 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import type { WidgetType } from "@vibecook/ice";
-import { createStill } from "@vibecook/ice/desk";
+import { createStill, service, TEXT_RASTER } from "@vibecook/ice/desk";
 import type { ObjectContribution } from "@vibefield/contracts";
 import { buildObjectType } from "@vibefield/field-app/object-types";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
+import { kindOfBinding, productPalette } from "@vibefield/plugin-sdk/testing";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { STILL_GOLDEN, type StillGolden, type StillGpu, stillGpu } from "../src/still";
+import { STILL_GOLDEN, type StillGolden, type StillGpu, stillFrame, stillGpu } from "../src/still";
+import { stillTextRaster } from "../src/text-raster";
 import type { RunSummary, StillVerdict, Verdict } from "../src/verdict";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -246,6 +251,8 @@ describe("the desk clock — ICE's kind as VibeField's plugin", () => {
       "default · night: ok",
     ]);
     for (const s of ran.stills) expect(s.detail).toContain("held to its golden");
+    // DK-17b: it reads none of the desk's hand, so it is drawn with no desk state — a clock's would read the wall clock
+    for (const s of ran.stills) expect(s.lent, `${s.state} · ${s.theme}`).toBeUndefined();
   });
 
   it("draws ICE's own clock still byte for byte, staged as ICE stages it — through the product's type build", async () => {
@@ -315,15 +322,85 @@ describe("the comment pad — VibeField's own first kind", () => {
     ]);
   });
 
-  it("draws its dress and not its writing: a still lends no text raster, so `written` and `long` are the blank pad's bytes", () => {
-    // ICE's `createStill` hands a kind no host service — the pad writes through the host's TEXT_RASTER — so its comments
-    // are not in its still; its accent is. When a still can carry a text raster this row turns, and the golden is re-blessed.
+  it("draws its dress AND its writing (DK-17b; ICE I35): it reads the desk's hand a still lends, so each state is its own", () => {
+    // the pad writes through the host's TEXT_RASTER, which a still now lends (the product's faces on a Node canvas) — so its
+    // comments are in its still: `written` and `long` differ from the blank pad and from each other, and its accent still does
     const sha = (state: string, theme: string) =>
       ran.stills.find((s) => s.state === state && s.theme === theme)?.sha256;
     for (const theme of ["day", "night"]) {
-      expect(sha("written", theme), theme).toBe(sha("default", theme));
-      expect(sha("long", theme), theme).toBe(sha("default", theme));
+      expect(sha("written", theme), theme).not.toBe(sha("default", theme));
+      expect(sha("long", theme), theme).not.toBe(sha("default", theme));
+      expect(sha("long", theme), theme).not.toBe(sha("written", theme));
       expect(sha("pink", theme), theme).not.toBe(sha("default", theme));
+    }
+    for (const s of ran.stills) expect(s.lent, `${s.state} · ${s.theme}`).toEqual(["text"]);
+  });
+
+  it("lays its writing INSIDE its box: every pixel the hand changes on the blank pad lies within the pad's own rect", async () => {
+    const gpu: StillGpu = await stillGpu();
+    try {
+      const text = await stillTextRaster();
+      const mod = (await import(/* @vite-ignore */ join(PAD, "src", "index.ts"))) as {
+        readonly commentPad: ObjectBinding;
+        readonly commentPadManifest: {
+          readonly contributes?: { readonly objects?: readonly ObjectContribution[] };
+        };
+      };
+      const states = (
+        (await import(/* @vite-ignore */ join(PAD, "playground", "states.ts"))) as {
+          readonly default: Record<string, Record<string, Readonly<Record<string, unknown>>>>;
+        }
+      ).default["vibefield.comment-pad"];
+      const row = mod.commentPadManifest.contributes?.objects?.[0] as ObjectContribution;
+      const type: WidgetType = buildObjectType({ ...row, behaviors: [] }, mod.commentPad);
+      const frame = stillFrame(row.size, kindOfBinding(mod.commentPad)?.reach ?? 0);
+      const draw = (props: Readonly<Record<string, unknown>>) =>
+        createStill({
+          device: gpu.device,
+          format: "rgba8unorm",
+          size: frame.size,
+          dpr: 2,
+          objects: [type],
+          theme: "light",
+          palette: productPalette.light,
+          services: [service(TEXT_RASTER, text)],
+          stage: ({ engine }) => {
+            engine.ops.spawnWidget(row.type, {
+              x: frame.at.x,
+              y: frame.at.y,
+              w: row.size.w,
+              h: row.size.h,
+              props: { ...props },
+              undoable: false,
+            });
+          },
+        });
+      const blank = await draw(states?.["default"] ?? {});
+      for (const state of ["written", "long"]) {
+        const written = await draw(states?.[state] ?? {});
+        let changed = 0;
+        let outside = 0;
+        for (let y = 0; y < written.height; y += 1)
+          for (let x = 0; x < written.width; x += 1) {
+            const i = (y * written.width + x) * 4;
+            if (
+              written.rgba[i] === blank.rgba[i] &&
+              written.rgba[i + 1] === blank.rgba[i + 1] &&
+              written.rgba[i + 2] === blank.rgba[i + 2]
+            )
+              continue;
+            changed += 1;
+            const inside =
+              x >= frame.box.x0 && x < frame.box.x1 && y >= frame.box.y0 && y < frame.box.y1;
+            if (!inside) outside += 1;
+          }
+        expect(changed, state).toBeGreaterThan(2_000);
+        expect(outside, state).toBe(0);
+        written.dispose();
+      }
+      blank.dispose();
+    } finally {
+      gpu.destroy();
     }
   });
 });

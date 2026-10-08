@@ -181,6 +181,9 @@ export interface StillVerdict {
   readonly width?: number;
   readonly height?: number;
   readonly sha256?: string;
+  /** DK-17b (ICE I35) — the host services the kind READ, so it was drawn with its desk state (`TEXT_RASTER`'s name: the desk's
+   * hand); absent: it read none, drawn with its facts and pins alone */
+  readonly lent?: readonly string[];
   /** where its PNG was written */
   readonly png?: string;
   /** what was said on the console while it was drawn, each line counted */

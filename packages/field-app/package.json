@@ -18,6 +18,7 @@
     "./design-system": "./src/design-system/mount.tsx",
     "./logo-studio": "./src/design-system/logo/mount.tsx",
     "./design-system/studio-controller": "./src/design-system/studio-controller.ts",
+    "./desk-faces": "./src/field/desk/desk-faces.ts",
     "./logging": "./src/logging.ts",
     "./object-types": "./src/plugin-host/build-widget.ts",
     "./terminal-perf-lab": "./src/perf/terminal-perf-lab.ts",
