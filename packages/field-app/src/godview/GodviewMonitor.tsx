@@ -362,9 +362,12 @@ export function GodviewMonitor({
       subscribe: (listener) => source.subscribe(listener),
     };
   }, [usagePort, usageAttempt]);
-  // A failed column changes the observed tile count. Retry only for new source facts,
-  // not that observer's own host update, or a persistent bad batch remounts forever.
-  const usageRetryKey = useMemo(() => ({ agents, columnUsagePort }), [agents, columnUsagePort]);
+  // A failed column is tried again only for a fact that can fix it. The column
+  // reads its port and nothing else, so the facts are a new port: a new door,
+  // or the viewer's Retry. Never the model's rows (keyed on them, a persistent
+  // failure remounted on every publish, M176), and never the host update that
+  // follows the failure itself (the tile count it observes changes with it).
+  const usageRetryKey = columnUsagePort;
   useEffect(() => {
     setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
     return usagePort?.subscribeState?.(setUsageState);

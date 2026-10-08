@@ -2491,12 +2491,100 @@ describe("a chrome read cannot take down the monitor", () => {
     expect(recording.unmounts).toBe(0);
     expect(container.textContent).toContain("Usage unavailable");
     broken = false;
+    // A model publish is not a fact the column reads: it stays down (M176)…
     await act(async () => door.push(ROWS));
+    await settle();
+    expect(container.textContent).toContain("Usage unavailable");
+    // …until the door hands it a new port, which is one.
+    const healed: FakeDoor = { ...door, usage: { ...door.usage } };
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={healed}>
+          <GodviewMonitor view={entry} parameters={{}} door={healed} panes={PANES} />
+        </GodviewAgentsProvider>,
+      );
+    });
     await settle();
     expect(container.textContent).not.toContain("Usage unavailable");
     expect(container.querySelector(".vf-usage-column")).not.toBeNull();
     expect(recording.mounts).toBe(1);
     expect(recording.unmounts).toBe(0);
     expect(uncaught).not.toHaveBeenCalled();
+  });
+
+  it("keeps a failed column down through 50 model publishes, and tries it once per new port (M176)", async () => {
+    const failure = new Error("usage fixture lost its entries");
+    // Each mount of the column asks its port for one snapshot: the count of
+    // asks is the count of tries, and each try that reads the entries throws.
+    let asked = 0;
+    const brokenUsage = (): AccountUsagePort => ({
+      subscribe: () => () => undefined,
+      snapshot: async () => {
+        asked += 1;
+        return {
+          refreshedAt: CHECKED_AT,
+          get entries(): never {
+            throw failure;
+          },
+        };
+      },
+    });
+    const door: FakeDoor = { ...fakeDoor(), usage: brokenUsage() };
+    const recording = createRecordingView("usage-under-publishes");
+    const entry: MonitorViewEntry = {
+      id: recording.view.manifest.id,
+      label: recording.view.manifest.label,
+      mark: recording.view.manifest.mark,
+      parameterGroups: [],
+      view: recording.view,
+    };
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const caught = vi.fn();
+    const throws = (): number => caught.mock.calls.filter(([error]) => error === failure).length;
+    root = createRoot(container, { onUncaughtError: vi.fn(), onCaughtError: caught });
+    const renderWith = (held: FakeDoor): Promise<void> =>
+      act(async () => {
+        root?.render(
+          <GodviewAgentsProvider door={held}>
+            <GodviewMonitor view={entry} parameters={{}} door={held} panes={PANES} />
+          </GodviewAgentsProvider>,
+        );
+      });
+    await renderWith(door);
+    await settle();
+    expect([throws(), asked]).toEqual([1, 1]);
+    expect(container.textContent).toContain("Usage unavailable");
+
+    // Fifty publishes, each moving a row the view is handed.
+    const updates = recording.updates;
+    for (let publish = 0; publish < 50; publish += 1) {
+      await act(async () =>
+        door.push([
+          managedSummary({
+            runtimeRunId: "run-claude",
+            kind: "claude",
+            label: "Claude",
+            status: publish % 2 === 0 ? "idle" : "working",
+            cwd: "/project/vibe-field",
+            createdAt: "2026-09-12T10:00:00.000Z",
+          }),
+          ...ROWS.slice(1),
+        ]),
+      );
+      await settle();
+    }
+    expect(recording.updates - updates).toBeGreaterThanOrEqual(50);
+    expect([throws(), asked]).toEqual([1, 1]);
+    expect(container.textContent).toContain("Usage unavailable");
+
+    // A new port is a new key: exactly one more try, which fails the same way.
+    const next: FakeDoor = { ...door, usage: brokenUsage() };
+    await renderWith(next);
+    await settle();
+    expect([throws(), asked]).toEqual([2, 2]);
+    expect(container.textContent).toContain("Usage unavailable");
+    expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
   });
 });
