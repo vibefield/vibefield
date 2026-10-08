@@ -885,7 +885,7 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
 });
 
 describe("IndexMesh — PJ-1 §4: the projects over the replica", () => {
-  it("three desktops' places cross the replica and group as the witness says: 143 rows, 8 across desktops", async () => {
+  it("three desktops' places cross the replica and group as the witness says: 145 rows, 8 across desktops", async () => {
     // the synthetic mesh (fixtures/projects/places-corpus.json): the Mac's 161
     // places and two synthetic desktops' 31, the seven traps among them, each
     // place's facts as its owner publishes them (project-places-corpus.ts)
@@ -948,11 +948,13 @@ describe("IndexMesh — PJ-1 §4: the projects over the replica", () => {
           .sort((a, b) => (a[0]! < b[0]! ? -1 : 1)),
       };
     };
-    // the witness's numbers (project-grouping-witness.test.ts), reached over the wire
+    // the witness's numbers (project-grouping-witness.test.ts), reached over the
+    // wire — PJ-2: J11 made each desktop's Home a project (PJ-1 counted 143 rows
+    // and one Home bucket of 4 places across the three)
     expect(shape(result)).toMatchObject({
-      rows: 143,
+      rows: 145,
       crossDevice: 8,
-      buckets: { home: 4, temp: 30 },
+      buckets: { temp: 30 },
       suggestions: { "related-history": 9, "same-folder": 1, "same-name": 4 },
     });
     // and the very partition and keys the engine gives the facts in hand
