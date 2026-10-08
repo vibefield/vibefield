@@ -51,6 +51,16 @@ import { parseRelativePath } from "../paths";
 //    (`WORKSPACE_GIT.CONCURRENCY`, `GitGate`).
 // `safe.directory` is never set: a repository git refuses as owned by someone
 // else stays refused, and the place facts say so (`dubious-ownership`).
+//
+// mille-git at c8160d5 (2026-10-08, the EL8 pin): its `GitService` rejects an
+// aborted call `ABORT_ERR` (G1) and caps `commitFiles` at 10 000 with
+// `{files, truncated}` (G2). Neither reaches this port: the room's protocol
+// carries no cancel, and its column reads `{files, error}` and has no words
+// for a cut list — so the interim does NOT cap (a silent 10 000 rows would be
+// worse than every row). Both arrive with the GitService swap, the column's
+// half as an upstream room change. What the interim owes now: an answer past
+// the runner's buffer (DIFF_BYTES) is refused in words, never Node's
+// "maxBuffer length exceeded".
 
 /** What a git answer is made of. */
 export interface GitRun {
@@ -206,12 +216,20 @@ export function runScrubbed(
           },
           (error, stdout, stderr) => {
             const code = (error as { code?: unknown } | null)?.code;
+            // an answer past the buffer is cut and git killed: say so in words
+            // (the room shows this as the column's receipt), never Node's
+            // "stdout maxBuffer length exceeded"
+            const overflowed = code === "ERR_CHILD_PROCESS_STDIO_MAXBUFFER";
+            const limit = options.maxBuffer ?? WORKSPACE_GIT.DIFF_BYTES;
+            const size =
+              limit >= 1024 * 1024 ? `${Math.round(limit / 1024 / 1024)} MB` : `${limit} bytes`;
             resolve({
               ok: !error,
               stdout: typeof stdout === "string" ? stdout : "",
-              stderr:
-                (typeof stderr === "string" ? stderr : "").trim() ||
-                (error ? String(error.message) : ""),
+              stderr: overflowed
+                ? `git's answer is larger than the ${size} VibeField reads at once, so it is not shown`
+                : (typeof stderr === "string" ? stderr : "").trim() ||
+                  (error ? String(error.message) : ""),
               code: error === null ? 0 : typeof code === "number" ? code : null,
             });
           },

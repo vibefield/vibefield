@@ -287,6 +287,29 @@ export const WorkspaceUnavailableDetails = z
   .passthrough();
 export type WorkspaceUnavailableDetails = z.infer<typeof WorkspaceUnavailableDetails>;
 
+/** M10 (mille c8160d5) — a folder read that did not answer, beside the error
+ * kind (a contract string a reader branches on, never a sentence; open on the
+ * wire). The error's MESSAGE is the sentence a reader shows as it is — the
+ * phone's folder browser draws it — naming the folder and what happened:
+ *  - `timed-out` (TIMEOUT, retryable): the folder made no progress within
+ *    `timeoutMs` (`WORKSPACE_LIMITS.READ_TIMEOUT_MS`) — an iCloud folder
+ *    downloading, a drive or share that stopped answering; a later ask
+ *    succeeds once the system answers;
+ *  - `dataless` (PRECONDITION_FAILED): the folder lives only in iCloud, and
+ *    VibeField does not download a folder to list it
+ *    (`WORKSPACE_LIMITS.MATERIALIZE_DATALESS`); it lists once the person
+ *    downloads it. */
+export const WORKSPACE_READ_REFUSALS = ["timed-out", "dataless"] as const;
+
+export const WorkspaceReadRefusalDetails = z
+  .object({
+    service: z.literal(WORKSPACE_SERVICE.SERVICE),
+    reason: z.string().min(1),
+    timeoutMs: z.number().int().positive().optional(),
+  })
+  .passthrough();
+export type WorkspaceReadRefusalDetails = z.infer<typeof WorkspaceReadRefusalDetails>;
+
 // ── the roots registry on disk (`LAYOUT.WORKSPACE_ROOTS_FILE`) ──
 //
 // fieldd's own file (TerminalBindingsFile's precedent): places and picked

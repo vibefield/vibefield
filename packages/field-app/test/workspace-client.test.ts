@@ -194,6 +194,27 @@ describe("workspace leases at the Worker boundary", () => {
       w.request.mock.calls.filter(([method]) => method === "workspace.openTicket"),
     ).toHaveLength(1);
   });
+  it("a folder that did not answer says so in the door's words, and is asked again (M10)", async () => {
+    vi.useFakeTimers();
+    const w = world();
+    const words =
+      "“app” did not answer within 2 s — macOS may still be downloading it from iCloud, or its drive stopped responding. Try again in a moment.";
+    w.request.mockImplementation(async (method) => {
+      if (method === "workspace.roots") return roots;
+      throw Object.assign(new Error(words), {
+        kind: "TIMEOUT",
+        retryable: true,
+        details: { service: "workspace", reason: "timed-out", timeoutMs: 2_000 },
+      });
+    });
+    await w.client.open(grant.rootPath);
+    await settle();
+    expect(w.events.at(-1)).toMatchObject({ type: "status", state: "error", message: words });
+    await vi.advanceTimersByTimeAsync(WORKSPACE_LIMITS.RETRY_MIN_MS);
+    expect(
+      w.request.mock.calls.filter(([method]) => method === "workspace.openTicket"),
+    ).toHaveLength(2);
+  });
 });
 
 it("a picked root can attach by id even beyond the bounded roots listing", async () => {

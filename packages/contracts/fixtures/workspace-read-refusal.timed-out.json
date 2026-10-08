@@ -1,0 +1,6 @@
+{
+  "//": "M10 (mille c8160d5) — a folder read made no progress within WORKSPACE_LIMITS.READ_TIMEOUT_MS (mille's ETIMEDOUT): refused TIMEOUT, retryable; the error's message names the folder and says what happened.",
+  "service": "workspace",
+  "reason": "timed-out",
+  "timeoutMs": 2000
+}

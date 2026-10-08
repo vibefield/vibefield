@@ -1,0 +1,9 @@
+{
+  "kind": "TIMEOUT",
+  "retryable": true,
+  "details": {
+    "service": "workspace",
+    "reason": "timed-out",
+    "timeoutMs": 2000
+  }
+}

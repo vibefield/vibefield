@@ -44,6 +44,14 @@ export type WorkerErrorCode =
   /** every engine is answering and the cap (`WORKSPACE_LIMITS.HOSTS_MAX`)
    * leaves no room for another: ask again shortly */
   | "busy"
+  /** a folder read made no progress within `WORKSPACE_LIMITS.READ_TIMEOUT_MS`
+   * (mille's `ETIMEDOUT`, M10: an iCloud folder downloading, a drive or share
+   * that stopped answering) — nothing is known about it; ask again shortly */
+  | "timed-out"
+  /** the folder lives only in iCloud (mille's `EDATALESS`, macOS): its
+   * contents are not on this machine, and the service does not download a
+   * folder to list it (`WORKSPACE_LIMITS.MATERIALIZE_DATALESS`) */
+  | "dataless"
   | "internal";
 
 export interface WorkerError {

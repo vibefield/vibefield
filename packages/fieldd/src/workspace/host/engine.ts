@@ -1,6 +1,6 @@
 import { lstat, realpath, stat } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { createFileExplorerHost, type Entry, type FileExplorerHost } from "@vibecook/mille";
 import type { WorkspaceEntry, WorkspaceEntryKind } from "@vibefield/contracts";
 import { WORKSPACE_LIMITS } from "@vibefield/contracts/registries";
@@ -37,6 +37,13 @@ import { ENTRY, HUNG_READS_MAX, matchName, type NameWalk, timedRead, walkNames }
 // no watcher: a folder listed once goes stale, so a folder listed AGAIN is
 // reconciled against the disk first (`resync`) — the door's answer is the
 // disk's, never a cache's.
+//
+// READS (M10, mille c8160d5): every engine hands mille the worker's one read
+// deadline (`WORKSPACE_LIMITS.READ_TIMEOUT_MS`) and never downloads a folder
+// that lives only in iCloud (`MATERIALIZE_DATALESS`). A folder mille could not
+// read answers its own refusal — `timed-out` (ETIMEDOUT) or `dataless`
+// (EDATALESS) — in words that name it (`readRefusal`), never the generic
+// failure an unmapped code would become.
 //
 // `followSymlinks: false` holds on EVERY engine (the lead's ruling, 2026-10-05:
 // mille's "smart" behaves like false today, and a followed link is recorded as
@@ -81,6 +88,50 @@ export class WorkerFailure extends Error {
   }
 }
 
+/** What a folder read that did not answer is refused with (M10). The door
+ * hands the sentence to the reader as it is — the phone's folder browser
+ * draws it — so it names the folder, says what happened and what to do. */
+export function readRefusal(
+  code: "timed-out" | "dataless",
+  path: string | undefined,
+  platform: NodeJS.Platform = process.platform,
+): WorkerFailure {
+  const leaf = path === undefined ? "" : basename(path);
+  const name = leaf === "" ? "That folder" : `“${leaf}”`;
+  if (code === "timed-out") {
+    const seconds = WORKSPACE_LIMITS.READ_TIMEOUT_MS / 1_000;
+    const why =
+      platform === "darwin"
+        ? "macOS may still be downloading it from iCloud, or its drive stopped responding"
+        : "its drive or network share may have stopped responding";
+    return new WorkerFailure(
+      "timed-out",
+      `${name} did not answer within ${seconds} s — ${why}. Try again in a moment.`,
+    );
+  }
+  return new WorkerFailure(
+    "dataless",
+    platform === "darwin"
+      ? `${name} is in iCloud only — it is not downloaded to this Mac, and VibeField does not download a folder to list it. Download it in Finder, then try again.`
+      : `${name} is a cloud placeholder whose contents are not on this computer, and VibeField does not download a folder to list it.`,
+  );
+}
+
+/** mille's two read codes (`FileSystemError.code`, duck-typed: the binding's
+ * error and the port's carry the same `code` and `path`) as the worker's
+ * refusal; null for anything else, which keeps its own way out. */
+export function milleRefusal(
+  error: unknown,
+  platform: NodeJS.Platform = process.platform,
+): WorkerFailure | null {
+  if (typeof error !== "object" || error === null) return null;
+  const { code, path } = error as { code?: unknown; path?: unknown };
+  const where = typeof path === "string" && path.length > 0 ? path : undefined;
+  if (code === "ETIMEDOUT") return readRefusal("timed-out", where, platform);
+  if (code === "EDATALESS") return readRefusal("dataless", where, platform);
+  return null;
+}
+
 /** One export's engine, as the worker holds it. `active` is counted from the
  * moment an ask names the export — before its engine exists — so an engine an
  * ask is waiting for is never the one evicted. */
@@ -108,7 +159,19 @@ export interface EnginesOptions {
   home?: string;
   now?: () => number;
   platform?: NodeJS.Platform;
+  /** test seam: each engine as it is made, before it answers anything */
+  onHost?: (host: FileExplorerHost) => void;
 }
+
+/** What every engine is made with, beside its root (header). */
+export const ENGINE_OPTIONS = {
+  initialWalk: "roots-only",
+  followSymlinks: false,
+  respectIgnore: true,
+  compactFolders: false,
+  readTimeoutMs: WORKSPACE_LIMITS.READ_TIMEOUT_MS,
+  materializeDataless: WORKSPACE_LIMITS.MATERIALIZE_DATALESS,
+} as const satisfies Omit<Parameters<typeof createFileExplorerHost>[0], "roots">;
 
 function kindOf(entry: Entry): WorkspaceEntryKind {
   switch (entry.kind) {
@@ -184,6 +247,7 @@ export class Engines {
   readonly #hung = new Set<string>();
   readonly #now: () => number;
   readonly #platform: NodeJS.Platform;
+  readonly #onHost: ((host: FileExplorerHost) => void) | undefined;
   readonly #sweeper: NodeJS.Timeout;
 
   constructor(opts: EnginesOptions = {}) {
@@ -194,6 +258,7 @@ export class Engines {
     this.#home = opts.home ?? homedir();
     this.#now = opts.now ?? Date.now;
     this.#platform = opts.platform ?? process.platform;
+    this.#onHost = opts.onHost;
     this.#sweeper = setInterval(() => void this.sweep(), Math.min(SWEEP_MS, this.#idleMs));
     this.#sweeper.unref();
   }
@@ -237,13 +302,12 @@ export class Engines {
     let slot = this.#slots.get(rootPath);
     if (slot === undefined) {
       if (this.#slots.size >= this.#hostsMax) this.#evictOne();
-      const pending = createFileExplorerHost({
-        roots: [rootPath],
-        initialWalk: "roots-only",
-        followSymlinks: false,
-        respectIgnore: true,
-        compactFolders: false,
-      });
+      const pending = createFileExplorerHost({ roots: [rootPath], ...ENGINE_OPTIONS }).then(
+        (host) => {
+          this.#onHost?.(host);
+          return host;
+        },
+      );
       const made: Slot = {
         rootPath,
         pending,
@@ -387,6 +451,8 @@ export class Engines {
         total: entries.length,
         nextOffset: end < entries.length ? end : null,
       };
+    } catch (error) {
+      throw milleRefusal(error, this.#platform) ?? error;
     } finally {
       this.#release(slot);
     }
@@ -462,6 +528,9 @@ export class Engines {
       );
       const hits: WorkerSearchHit[] = [];
       let more = false;
+      // a hit whose folder did not answer is left out, and the answer says it
+      // is not all the walk found
+      let unread = false;
       for (const { index } of scored) {
         if (hits.length === args.limit) {
           more = true;
@@ -476,7 +545,10 @@ export class Engines {
         } catch {
           continue;
         }
-        const id = await slot.host.local.resolvePath(absolute).catch(() => null);
+        const id = await slot.host.local.resolvePath(absolute).catch((error: unknown) => {
+          if (milleRefusal(error) !== null) unread = true;
+          return null;
+        });
         if (id === null || id === undefined) continue;
         hits.push({
           id,
@@ -487,7 +559,9 @@ export class Engines {
           kind: ENTRY_KIND_NAMES[walk.kinds[index] as number] ?? "other",
         });
       }
-      return { hits, clipped: more, complete: walk.complete, walked: walk.walked };
+      return { hits, clipped: more, complete: walk.complete && !unread, walked: walk.walked };
+    } catch (error) {
+      throw milleRefusal(error, this.#platform) ?? error;
     } finally {
       this.#release(slot);
     }

@@ -455,7 +455,8 @@ export const PROJECT_GROUPING = {
  * span — limit plus overscan on both sides — named in the policy the worker
  * hands mille (R6, 2026-10-07): mille clamps a larger request and warns
  * `VIEWPORT_CLAMPED`; 2 048 is mille's own `DEFAULT_REMOTE_MAX_VIEWPORT_ROWS`
- * at the pin (baa0de8), now OUR number rather than its silent default.
+ * at the pin (baa0de8, unchanged at c8160d5), now OUR number rather than its
+ * silent default.
  *
  * The rest bound what a door asks the worker to do: PATH_CHARS the longest
  * relative path a request may name, NAME_CHARS the longest entry name an
@@ -473,6 +474,16 @@ export const PROJECT_GROUPING = {
  * hydration grows super-linearly — 22 000 entries took 15 s), keeps them
  * beside the export's engine for SEARCH_CACHE_MS so a reader typing asks
  * again for free, and hands mille only the hits (their ids).
+ *
+ * READS (M10, mille c8160d5): READ_TIMEOUT_MS is also the deadline every
+ * engine hands mille (`readTimeoutMs`) — one deadline for every folder read
+ * the worker makes, its own or mille's — and a folder that does not answer
+ * within it is refused in words (`timed-out`, the door's TIMEOUT, retryable),
+ * never a blank or a generic failure. MATERIALIZE_DATALESS false: a folder
+ * that lives only in iCloud (macOS dataless) is NOT downloaded to list it —
+ * mille answers EDATALESS and the door says so (`dataless`,
+ * PRECONDITION_FAILED). mille's third read bound, `maxStuckReads`, keeps
+ * mille's own default (16).
  *
  * ENGINES: the worker holds one mille engine per export it was asked about
  * (mille refuses overlapping roots in one engine, and the home export holds
@@ -495,6 +506,7 @@ export const WORKSPACE_LIMITS = {
   SEARCH_WALK_ENTRIES: 100_000,
   SEARCH_WALK_MS: 5_000,
   READ_TIMEOUT_MS: 2_000,
+  MATERIALIZE_DATALESS: false,
   SEARCH_CACHE_MS: 60_000,
   HOST_IDLE_MS: 300_000,
   HOSTS_MAX: 16,

@@ -8,7 +8,7 @@ import {
   type WorkspaceRoot,
 } from "@vibefield/contracts";
 import { RpcCallError } from "../native-link";
-import { isWorkspaceWindow } from "./doors";
+import { isWorkspaceWindow, readRefused } from "./doors";
 import { parseRelativePath, relativePathRefusal } from "./paths";
 import type { RootsRegistry } from "./roots";
 import { FilesHostRefusal, type FilesHostSupervisor, FilesHostUnavailable } from "./supervisor";
@@ -20,16 +20,19 @@ export function workspaceError(error: unknown): never {
       state: error.state,
     });
   if (error instanceof FilesHostRefusal)
-    throw new RpcCallError(
-      error.error.code === "busy"
-        ? "RESOURCE_EXHAUSTED"
-        : error.error.code === "invalid" || error.error.code === "not-a-directory"
-          ? "PRECONDITION_FAILED"
-          : error.error.code === "internal"
-            ? "INTERNAL"
-            : "NOT_FOUND",
-      error.message,
-      error.error.code === "busy",
+    throw (
+      readRefused(error.error) ??
+      new RpcCallError(
+        error.error.code === "busy"
+          ? "RESOURCE_EXHAUSTED"
+          : error.error.code === "invalid" || error.error.code === "not-a-directory"
+            ? "PRECONDITION_FAILED"
+            : error.error.code === "internal"
+              ? "INTERNAL"
+              : "NOT_FOUND",
+        error.message,
+        error.error.code === "busy",
+      )
     );
   throw error;
 }

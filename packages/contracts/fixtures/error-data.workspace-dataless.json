@@ -1,0 +1,8 @@
+{
+  "kind": "PRECONDITION_FAILED",
+  "retryable": false,
+  "details": {
+    "service": "workspace",
+    "reason": "dataless"
+  }
+}
