@@ -38,7 +38,9 @@ beforeEach(async () => {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => root?.render(<DesignSystemPage />));
-});
+  // Rendering the whole catalog takes seconds alone and passes vitest's 10 s hook default
+  // under a loaded gate (2026-10-08: red in most loaded gates since 10-07).
+}, 60_000);
 
 afterEach(() => {
   if (root !== null) act(() => root?.unmount());
@@ -56,7 +58,7 @@ function button(label: string): HTMLButtonElement {
   return match;
 }
 
-describe("design system page", () => {
+describe("design system page", { timeout: 60_000 }, () => {
   it("exposes explicit Studio live and product-focus controls only when hosted", async () => {
     const state: DesignSystemStudioState = {
       appearance: defaultProductAppearance(),
