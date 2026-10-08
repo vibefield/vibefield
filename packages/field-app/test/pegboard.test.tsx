@@ -154,8 +154,11 @@ function trayDoor(engine: CanvasEngine): TestDoor {
         entries: trayEntryCount(w),
         category: trayCategory(w),
         categories: trayCategories(w),
+        focused: null,
       };
     },
+    focus: () => "",
+    lay: () => undefined,
     subscribe(fn) {
       listeners.add(fn);
       return () => {

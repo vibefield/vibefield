@@ -139,7 +139,15 @@ overrides:
   # LAYOUT size — a desk mounted under a CSS transform draws at its size and a
   # press lands where it is drawn). Nothing of the surface moves; strata
   # 0.13.0 and loro ^1.13.8 unchanged.
-  "@vibecook/ice": 0.15.0-desk.5
+  # 2026-10-07 bumped 0.15.0-desk.5 → 0.15.0-desk.6 (DK-17b) — desk.5 and I35,
+  # I37, I40, I41, I42, I43, the migration's last prerelease (ICE CHANGELOG:
+  # I43 an empty presence sweep wakes no lone desk; I41 `frame.onParked`, the
+  # park announced; I40 `capture({ marks: false })`; I42 presence's cursor
+  # says `away` and `canvas`, `presence().setAway`; I37 the tray's keyboard
+  # path, `tray.focus`/`tray.lay`; I35 `createStill({ services })`). One type
+  # widens — `PresenceCursor` gains two defaulted fields, so a cursor value
+  # written by hand names both. strata 0.13.0 and loro ^1.13.8 unchanged.
+  "@vibecook/ice": 0.15.0-desk.6
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -265,7 +273,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.15.0-desk.5'
+  - '@vibecook/ice@0.15.0-desk.6'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'

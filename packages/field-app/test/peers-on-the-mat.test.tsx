@@ -343,6 +343,8 @@ describe("the controller — each peer placed through the camera in a reflector,
       x: 300,
       y: 200,
       device: "mouse",
+      away: false,
+      canvas: "",
     });
     await converge(ce, [ada], () => remotes(ce).some((e) => cursorOf(ce, e) !== undefined));
     const { ctl } = controllerOn(ce);
@@ -371,7 +373,7 @@ describe("the controller — each peer placed through the camera in a reflector,
     // the peer moves: placed where it went
     ada.session.eph
       .edit(ada.session.localPeer)
-      .set(PresenceCursor, { x: 310, y: 205, device: "mouse" });
+      .set(PresenceCursor, { x: 310, y: 205, device: "mouse", away: false, canvas: "" });
     await converge(ce, [ada], () => cursorOf(ce, them as Entity)?.x === 310);
     expect(el.style.transform).toBe("translate(818px, 308px)");
   });
@@ -383,6 +385,8 @@ describe("the controller — each peer placed through the camera in a reflector,
       x: 40,
       y: 60,
       device: "mouse",
+      away: false,
+      canvas: "",
     });
     await converge(ce, [bo], () => remotes(ce).some((e) => cursorOf(ce, e) !== undefined));
     const { ctl, advance } = controllerOn(ce);
@@ -396,7 +400,7 @@ describe("the controller — each peer placed through the camera in a reflector,
     expect(ctl.record().idles).toBe(1);
     bo.session.eph
       .edit(bo.session.localPeer)
-      .set(PresenceCursor, { x: 41, y: 60, device: "mouse" });
+      .set(PresenceCursor, { x: 41, y: 60, device: "mouse", away: false, canvas: "" });
     await converge(ce, [bo], () => cursorOf(ce, them as Entity)?.x === 41);
     expect(el.dataset["hidden"]).toBeUndefined();
   });
@@ -408,6 +412,8 @@ describe("the controller — each peer placed through the camera in a reflector,
       x: 5,
       y: 5,
       device: "mouse",
+      away: false,
+      canvas: "",
     });
     cy.session.eph.addComponent(cy.session.localPeer, PeerWhere, { away: true, canvas: "" });
     await converge(ce, [cy], () =>
@@ -439,6 +445,8 @@ describe("the controller — each peer placed through the camera in a reflector,
       x: 9,
       y: 9,
       device: "mouse",
+      away: false,
+      canvas: "",
     });
     await converge(ce, [dee], () => cursorOf(ce, them as Entity) !== undefined);
     expect(first.dataset["hidden"]).toBeUndefined();
@@ -488,6 +496,8 @@ describe("<PeersOnTheMat> — the roster's names, placed by the reflector", () =
       x: 120,
       y: 80,
       device: "mouse",
+      away: false,
+      canvas: "",
     });
     await converge(ce, [ada], () => remotes(ce).some((e) => cursorOf(ce, e) !== undefined));
     await act(async () =>
@@ -516,6 +526,8 @@ describe("<PeersOnTheMat> — the roster's names, placed by the reflector", () =
         x: 120 + i,
         y: 80,
         device: "mouse",
+        away: false,
+        canvas: "",
       });
       await converge(ce, [ada], () => remotes(ce).some((e) => cursorOf(ce, e)?.x === 120 + i));
     }

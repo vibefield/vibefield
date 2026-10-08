@@ -215,6 +215,8 @@ describe("two tabs over fieldd — the peers on the mat, end to end (DK-16)", ()
       x: 420,
       y: 260,
       device: "mouse",
+      away: false,
+      canvas: "",
     });
 
     // the room converges: B's presence crosses fieldd B's room → the mesh → fieldd A's room → A's lane
@@ -249,7 +251,9 @@ describe("two tabs over fieldd — the peers on the mat, end to end (DK-16)", ()
     fire();
     expect(el.dataset["hidden"]).toBe("idle");
     // B moves: drawn again, where it went
-    bSession.eph.edit(bSession.localPeer).set(PresenceCursor, { x: 430, y: 260, device: "mouse" });
+    bSession.eph
+      .edit(bSession.localPeer)
+      .set(PresenceCursor, { x: 430, y: 260, device: "mouse", away: false, canvas: "" });
     await settle([a.ce, b.ce], () => a.ce.world.get(ada as Entity, PresenceCursor)?.x === 430);
     expect(el.dataset["hidden"]).toBeUndefined();
     expect(el.style.transform).toBe("translate(493px, 328px)");
