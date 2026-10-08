@@ -132,3 +132,36 @@ export function countersOf(s: StillnessSample): {
 } {
   return { frames: s.frames, submits: s.submits };
 }
+
+/**
+ * DK-17b (ICE I43) — A LONE DESK'S PRESENCE AT REST. Loro's ephemeral store sweeps its timeouts every ttl/2 while it holds a
+ * key — the window's own keepalive keeps one there — and until desk.6 ICE's presence kit heard every sweep, empty or not, as
+ * a peer's arrival and woke the loop for it (`presence`: DK-16 counted 2 in 6.2 s, every one drawing nothing). Since desk.6
+ * only an event that carries keys wakes it. The window: ≥ 6.2 s, the desk asleep, its presence session live (its keepalives
+ * going out — the store's timers running), no other window in its room yet.
+ */
+export const PRESENCE_REST = { windowMs: 6_200 } as const;
+
+export function judgePresenceRest(
+  moved: Moved,
+  windowMs: number,
+  live: { readonly session: boolean; readonly keepalives: number | null },
+): string[] {
+  const problems: string[] = [];
+  if (windowMs < PRESENCE_REST.windowMs)
+    problems.push(`the window was ${windowMs} ms, under its ${PRESENCE_REST.windowMs}`);
+  if (!live.session)
+    problems.push(
+      "no presence session was attached — a lone desk's rest says nothing of presence without one",
+    );
+  else if (live.keepalives === 0)
+    problems.push(
+      "the presence session sent nothing in the window — its store's timers were not running",
+    );
+  const woke = moved.wakes["presence"] ?? 0;
+  if (woke > 0)
+    problems.push(
+      `presence woke the lone desk ${woke} time(s) in ${(windowMs / 1000).toFixed(1)} s — an empty sweep heard as a peer's (ICE I43)`,
+    );
+  return problems;
+}

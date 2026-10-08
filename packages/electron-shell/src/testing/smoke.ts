@@ -117,9 +117,11 @@ import { selectionBarRows } from "./smoke-selection-bar";
 import { sendToRows } from "./smoke-send-to";
 import {
   countersOf,
+  judgePresenceRest,
   judgeWindow,
   type Moved,
   movedBy,
+  PRESENCE_REST,
   STILLNESS_SAMPLE,
   type StillnessSample,
 } from "./smoke-stillness";
@@ -1388,6 +1390,8 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   // (DK-10b) — and its capture submits GPU work, so the idle row waits until it has been taken
   problems.push(...(await explorerStillRow(win, shotDir)));
   problems.push(...(await deskIdleRow(win)));
+  // DK-17b (ICE I43): the lone desk at rest, ≥ 6.2 s — no presence wake (before the peers' rows open a second window)
+  problems.push(...(await presenceRestRow(win)));
   // the desk at rest: both captures below read the same last frame
   problems.push(...(await quarterStillRow(win)));
   // DK-11: last, with the wind — a window laid over ours, on purpose, and the desk still drawing
@@ -1690,6 +1694,40 @@ async function deskIdleRow(win: BrowserWindow): Promise<string[]> {
     );
   }
   return problems;
+}
+
+/**
+ * DK-17b (ICE I43) — THE LONE DESK'S PRESENCE AT REST (testing/smoke-stillness.ts `judgePresenceRest`): the desk asleep, its
+ * presence session live, no other window in its room — then ≥ 6.2 s with NO `presence` wake (DK-16 counted 2 in 6.2 s before
+ * desk.6: Loro's empty timeout sweep every ttl/2, heard as a peer's arrival). The store's keepalives in the window are counted
+ * off the smokes' relay door (`presenceTap`, its outbound payloads) — the proof its timers ran; the other wakes are printed.
+ */
+async function presenceRestRow(win: BrowserWindow): Promise<string[]> {
+  const js = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const TAP = "globalThis.__vfDesk?.presenceTap?.()?.length ?? null";
+  await waitForRendererFact(
+    win,
+    "the desk at rest",
+    45_000,
+    "globalThis.__vfDesk.rest().asleep === true",
+    "globalThis.__vfDesk.rest()",
+  );
+  await js<number | null>(TAP); // what went out before the window is not the window's
+  const session = await js<boolean>("globalThis.__vfDesk.peers().said !== null");
+  const a = await stillnessSample(win);
+  const t0 = Date.now();
+  await sleep(PRESENCE_REST.windowMs);
+  const b = await stillnessSample(win);
+  const windowMs = Date.now() - t0;
+  const keepalives = await js<number | null>(TAP);
+  const moved = movedBy(a, b);
+  console.log(
+    `SMOKE_CANVAS_PRESENCE_REST ${JSON.stringify({ windowMs, session, keepalives, wakes: moved.wakes, rest: [countersOf(a), countersOf(b)] })}`,
+  );
+  return judgePresenceRest(moved, windowMs, { session, keepalives }).map(
+    (p) => `PRESENCE REST: ${p}`,
+  );
 }
 
 /** The open board's tile in the fields explorer — its picture, when it has one. */

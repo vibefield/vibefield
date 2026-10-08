@@ -5,8 +5,10 @@
 import { afterEach, describe, expect, it } from "vitest";
 import {
   countersOf,
+  judgePresenceRest,
   judgeWindow,
   movedBy,
+  PRESENCE_REST,
   STILLNESS_SAMPLE,
   STILLNESS_TRIES,
   type StillnessSample,
@@ -120,6 +122,36 @@ describe("a stillness window — still, or moved, and by what", () => {
 // DK-12 — THE PAGE'S CENSUS, RUN: the expression evaluated over a stand-in page (its listeners captured, a stub desk), fed
 // the events a person and Chromium send. A resting pointer's repeated move — buttonless, at the last move's point, with the
 // same modifiers, no press or wheel between — is counted APART (`resting`), by ICE's I33 rule; everything else is `outside`.
+describe("a lone desk's presence at rest (DK-17b, ICE I43): ≥ 6.2 s, its session live, no presence wake", () => {
+  const live = { session: true, keepalives: 4 };
+  it("passes 6.2 s of rest whose only wakes are not presence's — the minute clock's, a resting pointer's", () => {
+    expect(PRESENCE_REST.windowMs).toBe(6_200);
+    const a = sample();
+    const b = sample({ wakes: { world: 56, doc: 8, presence: 9, "desk:clock": 1 } });
+    expect(judgePresenceRest(movedBy(a, b), 6_203, live)).toEqual([]);
+  });
+
+  it("names DK-16's count before desk.6 — the empty sweep heard as a peer's, twice in 6.2 s", () => {
+    const moved = movedBy(sample(), sample({ wakes: { world: 56, doc: 8, presence: 11 } }));
+    expect(judgePresenceRest(moved, 6_204, live)).toEqual([
+      "presence woke the lone desk 2 time(s) in 6.2 s — an empty sweep heard as a peer's (ICE I43)",
+    ]);
+  });
+
+  it("says nothing of presence without a live session, a short window, or a store whose timers never ran", () => {
+    const still = movedBy(sample(), sample());
+    expect(judgePresenceRest(still, 6_200, { session: false, keepalives: null })[0]).toMatch(
+      /no presence session/,
+    );
+    expect(judgePresenceRest(still, 6_200, { session: true, keepalives: 0 })[0]).toMatch(
+      /sent nothing in the window/,
+    );
+    expect(judgePresenceRest(still, 4_000, live)[0]).toMatch(/under its 6200/);
+    // the relay door absent (a page loaded without it): the keepalives are not counted, and nothing is said of them
+    expect(judgePresenceRest(still, 6_200, { session: true, keepalives: null })).toEqual([]);
+  });
+});
+
 describe("the page's outside-input census (DK-12, I33)", () => {
   const g = globalThis as unknown as Record<string, unknown>;
   const listeners = new Map<string, (e: Record<string, unknown>) => void>();
