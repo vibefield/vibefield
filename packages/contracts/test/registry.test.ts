@@ -2,7 +2,12 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { IndexOpenTicketParams } from "../src/agent-index";
+import {
+  INDEX_CATALOG_TABLES,
+  INDEX_REPLICATED_TABLES,
+  IndexCatalogSubscribeParams,
+  IndexOpenTicketParams,
+} from "../src/agent-index";
 import { ARTIFACT_LIMITS } from "../src/artifacts";
 import { DEVICE_LIMITS } from "../src/devices";
 import { RpcNotification } from "../src/envelope";
@@ -720,6 +725,33 @@ describe("DS-4 — the terminal doors routable to the owner", () => {
       idempotent: true,
       locality: "federate",
     });
+  });
+});
+
+// AR-8 (build-hf.md L1, 2026-10-08) — the delegated threads: a third catalog
+// table, local-only, read through a window's door.
+describe("AR-8 — index.threads, a window's door", () => {
+  it("is local and idempotent on index.search — the D36 wall refuses a peer daemon, a guest holds no scope, the handler refuses the rest", () => {
+    const def = METHODS.find((m) => m.method === "index.threads");
+    expect(def).toEqual({
+      surface: "product",
+      method: "index.threads",
+      scope: "index.search",
+      idempotent: true,
+      locality: "local",
+    });
+    expect(def?.subscription).toBeUndefined();
+    expect(def?.guestOk).toBeUndefined();
+    // the scope alone would admit the phone: the handler's kind gate is what
+    // keeps the threads a window's (fieldd's index-threads.test.ts)
+    expect(TAILNET_SCOPES).toContain("index.search");
+  });
+
+  it("names the threads in the pings' vocabulary, and keeps them out of the replication door", () => {
+    expect(INDEX_CATALOG_TABLES).toEqual(["projects", "sessions", "threads"]);
+    expect(INDEX_REPLICATED_TABLES).toEqual(["projects", "sessions"]);
+    expect(IndexCatalogSubscribeParams.safeParse({ table: "sessions" }).success).toBe(true);
+    expect(IndexCatalogSubscribeParams.safeParse({ table: "threads" }).success).toBe(false);
   });
 });
 

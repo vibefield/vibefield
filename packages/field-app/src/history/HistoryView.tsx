@@ -19,6 +19,7 @@ import { requestView } from "../frame/view-state";
 import { viewKeysOf } from "../frame/views";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import { terminalBootstrapHome } from "../terminal/pool";
 import { historyPortsOver } from "./doors";
 import { type ResumeReading, readResume, resumeNative } from "./resume";
 import { HistoryRoomMount } from "./room-chunk";
@@ -64,6 +65,7 @@ export function HistoryView({
     () =>
       historyPortsOver(fieldd, {
         platform: getHost().platform ?? null,
+        home: terminalBootstrapHome(),
         workspace: {
           copyText: async (text) => {
             const diagnostics = getHost().diagnostics;

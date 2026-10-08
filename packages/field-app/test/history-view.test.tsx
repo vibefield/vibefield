@@ -7,7 +7,9 @@
  * catalog nothing new; and the line's create in History is Resume — the
  * session the room has chosen, continued by `agent.resume`'s native form with
  * the launcher's own facts, placed through Godview's door, the window moved
- * there to show it; a refusal said on the line in the launcher's words.
+ * there to show it; a refusal said on the line in the launcher's words. And
+ * the room's host knows the window's home (AR-8 L2): a project rooted under it
+ * reads `~/…`, one outside it in full.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -30,6 +32,7 @@ import { resetActiveViewForTest } from "../src/frame/view-state";
 import { HistoryView } from "../src/history/HistoryView";
 import { type FieldHost, setHost } from "../src/host";
 import { type RendererLogger, setRendererLogger } from "../src/logging";
+import { configureTerminalPool } from "../src/terminal/pool";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -95,6 +98,7 @@ afterEach(() => {
   host?.remove();
   root = null;
   host = null;
+  configureTerminalPool(undefined);
 });
 
 /** fieldd, scripted: the index's doors as AR-8b answers them. */
@@ -111,6 +115,8 @@ function fieldd(resume: () => unknown) {
           return { rows: [PROJECTS.rows[0]], sources: PROJECTS.sources };
         case "index.sessions":
           return SESSIONS;
+        case "index.threads":
+          return { rows: [] };
         case "index.status":
           return fixture("index-status.valid.json");
         case "index.project":
@@ -301,5 +307,32 @@ describe("History in the frame (AR-8c)", () => {
     );
     expect(note).toBe("Could not resume — it is already running");
     expect(asked).not.toContain("godview");
+  });
+
+  it("writes a project rooted under the window's home as ~/…, and one outside it in full (AR-8 L2)", async () => {
+    // main's bootstrap names the OS user's home — the user rosettad indexes
+    configureTerminalPool({ transport: "routed", defaultShell: "/bin/zsh", home: "/Users/me" });
+    const client = fieldd(() => SPAWNED);
+    const ask = client.request.bind(client);
+    const outside = {
+      ...(PROJECTS.rows[0] as Record<string, unknown>),
+      projectId: "p-0b7e2c4d",
+      name: "tools",
+      rootPaths: ["/opt/build/tools"],
+    };
+    client.request = async (method: string, params: Record<string, unknown> = {}) =>
+      method === "index.projects"
+        ? { rows: [PROJECTS.rows[0], outside], sources: PROJECTS.sources }
+        : ask(method, params);
+    mount(client);
+    to("history");
+    const paths = await until(() => {
+      const shown = [
+        ...(historySlot()?.querySelectorAll(".ah-project-list-item__path small") ?? []),
+      ].map((path) => path.textContent);
+      return shown.length === 2 ? shown.sort() : null;
+    }, "both projects' paths");
+    // the catalog carries rosetta's absolute roots: the home is the room's to fold
+    expect(paths).toEqual(["/opt/build/tools", "~/Projects/vibe-field"]);
   });
 });

@@ -15,6 +15,7 @@ import {
   type IndexCatalogProject as IndexCatalogProjectRow,
   IndexCatalogSession,
   type IndexCatalogSession as IndexCatalogSessionRow,
+  IndexThread,
 } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { afterEach, describe, expect, it } from "vitest";
@@ -65,7 +66,7 @@ interface SessionFixture {
   activity: { first_at: number; last_at: number } | null;
   stream_state: string;
   role: string;
-  delegation: null;
+  delegation: unknown;
 }
 
 const session = (id: string, over: Partial<SessionFixture> = {}): SessionFixture => ({
@@ -573,6 +574,112 @@ describe("IndexCatalog — the bearer on /ws/meta (AR-8b)", () => {
     const bare = follower(world.origin);
     await until(() => bare.catalog.phase === "refused", 5_000, "refused");
     expect(bare.catalog.sessions.rows()).toEqual([]);
+  });
+});
+
+// AR-8 (build-hf.md L1, 2026-10-08) — the stream's children were dropped at
+// both of its doors (the snapshot and the mutations), by design: the replicated
+// table is roots-only. They are kept now, in a third, LOCAL-ONLY table: every
+// roots-only reader stays as it was, and the History room gets its threads.
+describe("IndexCatalog — the delegated threads (AR-8, L1)", () => {
+  const delegated = (
+    id: string,
+    parent: string,
+    root: string,
+    over: Partial<SessionFixture> = {},
+  ) => session(id, { parent_session_id: parent, root_session_id: root, role: "subagent", ...over });
+
+  it("a child in the snapshot lands in `threads`, never `sessions` — its parent, root, role and delegation projected; the roots' figures unchanged", async () => {
+    const world = await startFake({
+      sessions: [
+        session("s1"),
+        session("s2", { activity: { first_at: 1_000, last_at: 7_000 } }),
+        delegated("c1", "s1", "s1", {
+          title: "map the files",
+          delegation: {
+            parent_tool_native_id: "toolu_1",
+            workflow_run_id: null,
+            team: null,
+            color: "cyan",
+            configured_model: "claude-haiku-4-5",
+          },
+        }),
+        // a thread of a thread rolls up to the same root; an unknown role is carried
+        delegated("c2", "c1", "s1", { role: "swarm", runtime_id: "rt-codex" }),
+        // an orphan: its root is not listed, so nothing could hang it
+        delegated("c9", "gone", "gone"),
+      ],
+    });
+    const { catalog } = follower(world.origin);
+    const tables: string[][] = [];
+    catalog.on("changed", (change: { tables: string[] }) => tables.push(change.tables));
+    await until(() => catalog.ready, 5_000, "the first snapshot");
+
+    expect(ids(catalog.sessions.rows())).toEqual(["s1", "s2"]);
+    expect(ids(catalog.threads.rows())).toEqual(["c1", "c2"]);
+    expect(catalog.threads.get("c1")).toEqual({
+      sessionId: "c1",
+      nativeSessionId: "nat-c1",
+      parentSessionId: "s1",
+      rootSessionId: "s1",
+      role: "subagent",
+      delegation: {
+        parentToolNativeId: "toolu_1",
+        color: "cyan",
+        configuredModel: "claude-haiku-4-5",
+      },
+      kind: "claude-code",
+      provider: readers.idForKind("claude-code"),
+      projectId: "p-app",
+      title: "map the files",
+      cwd: "/work/app",
+      startedAt: 1_000,
+      updatedAt: 2_000,
+      activity: { firstAt: 1_000, lastAt: 5_000 },
+      streamState: "indexed",
+    });
+    expect(catalog.threads.get("c2")).toMatchObject({
+      parentSessionId: "c1",
+      rootSessionId: "s1",
+      role: "swarm",
+      delegation: null,
+      kind: "codex",
+    });
+    for (const row of catalog.threads.rows()) {
+      expect(IndexThread.safeParse(row).success).toBe(true);
+      expect(row).not.toHaveProperty("device"); // it never leaves this desktop
+    }
+    // the roots' readers are as they were: a project counts its roots alone
+    expect(catalog.projects.get("p-app")).toMatchObject({ sessionCount: 2, lastActivityAt: 7_000 });
+    expect(tables[0]).toEqual(["projects", "sessions", "threads"]);
+  });
+
+  it("a child the stream sends as a MUTATION lands in `threads`; a root that leaves takes its threads; each frame names its table", async () => {
+    const world = await startFake({ sessions: [session("s1"), session("s2")] });
+    const { catalog } = follower(world.origin);
+    await until(() => catalog.ready, 5_000, "the first snapshot");
+    const tables: string[][] = [];
+    catalog.on("changed", (change: { tables: string[] }) => tables.push(change.tables));
+    const sessionsAt = catalog.sessions.revision;
+
+    world.write("sessions", [
+      session("s1"),
+      session("s2"),
+      delegated("c1", "s1", "s1", { delegation: { parent_tool_native_id: "toolu_1" } }),
+    ]);
+    await until(() => catalog.threads.has("c1"), 5_000, "the child's mutation");
+    expect(catalog.sessions.has("c1")).toBe(false);
+    expect(catalog.sessions.revision).toBe(sessionsAt); // the roots did not move
+    expect(catalog.threads.get("c1")?.delegation).toEqual({ parentToolNativeId: "toolu_1" });
+    expect(tables).toContainEqual(["threads"]);
+
+    // s1 leaves without a word; the re-snapshot finds it — and its thread
+    // leaves with it, though the stream still names the child
+    world.write("sessions", [session("s2"), delegated("c1", "s1", "s1")]);
+    catalog.resnapshot();
+    await until(() => !catalog.sessions.has("s1"), 5_000, "the root's diffed removal");
+    expect(catalog.threads.has("c1")).toBe(false);
+    expect(catalog.projects.get("p-app")?.sessionCount).toBe(1);
   });
 });
 

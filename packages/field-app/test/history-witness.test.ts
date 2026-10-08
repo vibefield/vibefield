@@ -25,13 +25,34 @@
  *    read through the room's port — rosettad answers past its credential check
  *    with its own not_found (the ground truth's first row is a prompt, which
  *    names no file), never `wrong-scope`, and never the room's refusal words.
+ *
+ * The second desktop's home is SYNTHESIZED (build-hf.md L4, 2026-10-08): a
+ * Claude-format transcript VibeField writes for its own test, its shape cribbed
+ * from rosetta's tests (`crates/pipeline/tests/recorded_tool_images.rs`), so
+ * the rows can witness what no ground truth records:
+ *  - D1: a prompt's image reaches the room as an optimized member the asset
+ *    source ADDRESSES by rosettad's own route, and its renditions' bytes are
+ *    read under the window's grant — the route that refuses a bare fetch;
+ *  - L1 / D2: a subagent the session delegated to (its transcript under the
+ *    parent's `subagents/`, its sidecar naming the Agent tool's id — the
+ *    Claude adapter's own layout) reaches the room's meta as a THREAD beside
+ *    its root, opens on its own grant, and a search hit inside it keeps its
+ *    id and resolves to its root: the room's grouping keeps it.
  */
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type MetaState, type TimelineEntry, UnauthorizedError } from "@rosetta/protocol";
 import {
+  type AssetRef,
+  type AttachmentRef,
+  type MetaState,
+  type TimelineEntry,
+  UnauthorizedError,
+} from "@rosetta/protocol";
+import {
+  IndexEndpointSet,
+  IndexOpenTicket,
   IndexSessionsResult,
   IndexStatus,
   LAYOUT,
@@ -117,7 +138,17 @@ class RecordingSocket implements WsLike {
   }
 }
 
-async function realDesktop(): Promise<{ daemon: FielddDaemon; window: FielddClient }> {
+/** The home rosettad indexes: rosetta's ground truth, or a seed of this
+ * file's own (`seed(home, dataDir)`). */
+type HomeSeed = (home: string, dataDir: string) => void;
+
+const groundTruth: HomeSeed = (home) => {
+  cpSync(GROUNDTRUTH, join(home, ".claude"), { recursive: true });
+};
+
+async function realDesktop(
+  seed: HomeSeed = groundTruth,
+): Promise<{ daemon: FielddDaemon; window: FielddClient }> {
   // a SHORT root: the mock floor's socket must fit macOS's 104-byte sun_path
   const dataDir = mkdtempSync(join(tmpdir(), "vf-hxw-"));
   cleanup.push(() => rmSync(dataDir, { recursive: true, force: true }));
@@ -125,7 +156,7 @@ async function realDesktop(): Promise<{ daemon: FielddDaemon; window: FielddClie
   writeFileSync(join(dataDir, "native", "pairing"), "ab".repeat(32));
   const home = join(dataDir, "home");
   mkdirSync(home, { recursive: true });
-  cpSync(GROUNDTRUTH, join(home, ".claude"), { recursive: true });
+  seed(home, dataDir);
   const mock = new MockMgmtServer(
     process.platform === "win32"
       ? pipeEndpointFor(dataDir, SOCKETS.MGMT)
@@ -180,6 +211,24 @@ async function realDesktop(): Promise<{ daemon: FielddDaemon; window: FielddClie
   return { daemon, window };
 }
 
+/** The adapters' door over the window's client, every call logged. */
+function loggedDoor(window: FielddClient, calls: string[]): HistoryDoorClient {
+  return {
+    request: (method, params) => {
+      calls.push(method);
+      return window.request(method, params);
+    },
+    subscribe: (method, params, onFrame, opts) => {
+      calls.push(method);
+      return window.subscribe(method, params, (payload, kind) => onFrame(payload, kind), opts);
+    },
+    get status() {
+      return window.status;
+    },
+    onStatusChange: (listener) => window.onStatusChange(listener),
+  };
+}
+
 describe.skipIf(
   REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BIN) || !existsSync(GROUNDTRUTH),
 )("AR-8c — a real session streams in the room's ports; fieldd's door carries none of it", () => {
@@ -196,21 +245,7 @@ describe.skipIf(
 
     // The adapters, over the window's client, every call logged.
     const doorCalls: string[] = [];
-    const door: HistoryDoorClient = {
-      request: (method, params) => {
-        doorCalls.push(method);
-        return window.request(method, params);
-      },
-      subscribe: (method, params, onFrame, opts) => {
-        doorCalls.push(method);
-        return window.subscribe(method, params, (payload, kind) => onFrame(payload, kind), opts);
-      },
-      get status() {
-        return window.status;
-      },
-      onStatusChange: (listener) => window.onStatusChange(listener),
-    };
-    const ports = historyPortsOver(door, { platform: process.platform });
+    const ports = historyPortsOver(loggedDoor(window, doorCalls), { platform: process.platform });
     cleanup.push(() => ports.dispose());
 
     // the catalog lane: the session reaches the room's meta, as rosetta's row
@@ -272,7 +307,7 @@ describe.skipIf(
     );
     for (const method of asked) {
       expect(method).toMatch(
-        /^index\.(changes\.subscribe|projects|sessions|status|openTicket|project|projectDay)$/,
+        /^index\.(changes\.subscribe|projects|sessions|threads|status|openTicket|project|projectDay)$/,
       );
     }
     console.log(
@@ -296,3 +331,383 @@ describe.skipIf(
     ports.sessions.close(sid);
   }, 180_000);
 });
+
+/* ── a synthesized home (build-hf.md L4) ──────────────────────────────────── */
+
+/** A 1×1 PNG — rosetta's own tool-image fixture (`recorded_tool_images.rs`). */
+const PNG =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+ip1sAAAAASUVORK5CYII=";
+/** the synthesized session's native id */
+const SYNTH_NATIVE_ID = "5c0f9a1e-0b7d-4c1a-9e2f-7a3b8c9d0e1f";
+/** the subagent it delegated to: its agent id, and the Agent tool's id */
+const SYNTH_AGENT_ID = "a7c3e9f1b2d4";
+const SYNTH_AGENT_TOOL = "toolu_01HxsAgentTool";
+/** words only the subagent's BODY carries — what a search finds in it */
+const THREAD_WORDS = "the lighthouse keeper's log sits under the stairs";
+
+/** One record of the synthesized session in Claude's transcript envelope (the
+ * keys rosetta's ground truth writes, `tool-use/…/13f3a252….jsonl`). */
+function claudeRecord(cwd: string, at: number, record: Record<string, unknown>): string {
+  return JSON.stringify({
+    isSidechain: false,
+    userType: "external",
+    entrypoint: "sdk-cli",
+    cwd,
+    sessionId: SYNTH_NATIVE_ID,
+    version: "2.1.241",
+    gitBranch: "HEAD",
+    timestamp: new Date(at).toISOString(),
+    ...record,
+  });
+}
+
+/** An assistant turn's message, in the ground truth's own envelope (its mock
+ * model's, `basic-chat/…/665e3e71….jsonl`) — a narrower `usage` is a HARD
+ * error to rosetta's Claude reader, and the record is lost. */
+function assistantMessage(
+  id: string,
+  content: unknown[],
+  stopReason = "end_turn",
+): Record<string, unknown> {
+  return {
+    content,
+    id,
+    model: "claude-opus-5",
+    role: "assistant",
+    stop_reason: stopReason,
+    stop_sequence: null,
+    type: "message",
+    usage: {
+      input_tokens: 128,
+      cache_creation_input_tokens: 0,
+      cache_read_input_tokens: 0,
+      output_tokens: 32,
+      output_tokens_details: { thinking_tokens: 0 },
+      server_tool_use: { web_search_requests: 0, web_fetch_requests: 0 },
+      service_tier: "standard",
+      cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 },
+      inference_geo: "",
+      iterations: [],
+      speed: "standard",
+    },
+    stop_details: null,
+  };
+}
+
+/** A prompt that carries an image, and its reply; then a delegation — the
+ * Agent tool, its result naming the subagent, and the subagent's own
+ * transcript and sidecar under the parent's folder. NOW-relative, so no
+ * horizon ever ages it out. */
+const synthesized: HomeSeed = (home, dataDir) => {
+  const cwd = join(dataDir, "project");
+  mkdirSync(cwd, { recursive: true });
+  const dir = join(home, ".claude", "projects", cwd.replace(/[^A-Za-z0-9]/g, "-"));
+  mkdirSync(dir, { recursive: true });
+  const at = Date.now() - 120_000;
+  const uuid = (n: number) => `6b1c2d3e-0000-4000-8000-${String(n).padStart(12, "0")}`;
+  const rows = [
+    claudeRecord(cwd, at, {
+      parentUuid: null,
+      type: "user",
+      uuid: uuid(1),
+      message: {
+        role: "user",
+        content: [
+          { type: "text", text: "What is in this picture?" },
+          { type: "image", source: { type: "base64", media_type: "image/png", data: PNG } },
+        ],
+      },
+    }),
+    claudeRecord(cwd, at + 1_000, {
+      parentUuid: uuid(1),
+      type: "assistant",
+      effort: "high",
+      uuid: uuid(2),
+      message: assistantMessage("msg_hxs_0001", [
+        { type: "text", text: "One pixel, and nothing else." },
+      ]),
+    }),
+    claudeRecord(cwd, at + 2_000, {
+      parentUuid: uuid(2),
+      type: "user",
+      uuid: uuid(3),
+      message: { role: "user", content: "Find the keeper's log." },
+    }),
+    claudeRecord(cwd, at + 3_000, {
+      parentUuid: uuid(3),
+      type: "assistant",
+      effort: "high",
+      uuid: uuid(4),
+      message: assistantMessage(
+        "msg_hxs_0002",
+        [
+          {
+            type: "tool_use",
+            id: SYNTH_AGENT_TOOL,
+            name: "Agent",
+            input: {
+              description: "find the log",
+              prompt: "Find the keeper's log.",
+              subagent_type: "Explore",
+            },
+          },
+        ],
+        "tool_use",
+      ),
+    }),
+    claudeRecord(cwd, at + 8_000, {
+      parentUuid: uuid(4),
+      type: "user",
+      uuid: uuid(5),
+      message: {
+        role: "user",
+        content: [{ tool_use_id: SYNTH_AGENT_TOOL, type: "tool_result", content: "Found it." }],
+      },
+      toolUseResult: { agentId: SYNTH_AGENT_ID, status: "completed" },
+      sourceToolAssistantUUID: uuid(4),
+    }),
+  ];
+  writeFileSync(join(dir, `${SYNTH_NATIVE_ID}.jsonl`), `${rows.join("\n")}\n`);
+  // the subagent: its transcript and sidecar under the parent's folder
+  const subagents = join(dir, SYNTH_NATIVE_ID, "subagents");
+  mkdirSync(subagents, { recursive: true });
+  const child = [
+    claudeRecord(cwd, at + 4_000, {
+      parentUuid: null,
+      isSidechain: true,
+      agentId: SYNTH_AGENT_ID,
+      type: "user",
+      uuid: uuid(11),
+      message: { role: "user", content: "Find the keeper's log." },
+    }),
+    claudeRecord(cwd, at + 5_000, {
+      parentUuid: uuid(11),
+      isSidechain: true,
+      agentId: SYNTH_AGENT_ID,
+      type: "assistant",
+      effort: "high",
+      uuid: uuid(12),
+      message: assistantMessage("msg_hxs_0003", [
+        { type: "text", text: `Found: ${THREAD_WORDS}.` },
+      ]),
+    }),
+  ];
+  writeFileSync(join(subagents, `agent-${SYNTH_AGENT_ID}.jsonl`), `${child.join("\n")}\n`);
+  writeFileSync(
+    join(subagents, `agent-${SYNTH_AGENT_ID}.meta.json`),
+    JSON.stringify({
+      agentType: "Explore",
+      description: "find the log",
+      toolUseId: SYNTH_AGENT_TOOL,
+    }),
+  );
+};
+
+/** The first stored image a session's rows carry. */
+function storedImageOf(entries: readonly TimelineEntry[]): AssetRef | null {
+  for (const entry of entries) {
+    const attachments = (entry.body as { attachments?: AttachmentRef[] }).attachments ?? [];
+    for (const attachment of attachments) {
+      if (attachment.kind === "image" && attachment.source.type === "asset")
+        return attachment.source.asset;
+    }
+  }
+  return null;
+}
+
+describe.skipIf(REAL_BIN === undefined || REAL_BIN === "" || !existsSync(REAL_BIN))(
+  "AR-8 — a synthesized history through the room's ports (L4)",
+  () => {
+    it("D1: a prompt's image is addressed by rosettad's own route, and its renditions' bytes are read under the window's grant", async () => {
+      const { window } = await realDesktop(synthesized);
+      const sid = await until(
+        async () =>
+          IndexSessionsResult.parse(
+            await window.request("index.sessions", { nativeSessionIds: [SYNTH_NATIVE_ID] }),
+          ).rows[0]?.sessionId ?? null,
+        "the synthesized session indexed",
+        90_000,
+      );
+      const doorCalls: string[] = [];
+      const blobs: Blob[] = [];
+      const ports = historyPortsOver(loggedDoor(window, doorCalls), {
+        platform: process.platform,
+        assets: {
+          createObjectURL: (blob) => {
+            blobs.push(blob);
+            return `blob:hxs/${blobs.length}`;
+          },
+          revokeObjectURL: () => undefined,
+        },
+      });
+      cleanup.push(() => ports.dispose());
+      const client = await ports.sessions.open(sid);
+      let entries: TimelineEntry[] = [];
+      const stream = client.subscribeSession(sid, {
+        onChange: (rows) => {
+          entries = rows;
+        },
+      });
+      cleanup.push(() => stream.close());
+      const asset = await until(
+        () => storedImageOf(entries),
+        "the prompt's image in the session's rows",
+        30_000,
+      );
+
+      // the member rosetta's room opens: an optimized WebP and its four
+      // renditions, on rosettad's own content-addressed route
+      expect(asset.media_type).toBe("image/webp");
+      expect(asset.url).toBe(`/api/assets/${asset.digest}.webp`);
+      expect(Object.keys(asset.image_variants ?? {}).sort()).toEqual([
+        "preview",
+        "rail",
+        "tile",
+        "tile2x",
+      ]);
+      // D1: the room's gate is answered — it was null, so the room asked for no
+      // rendition and said "Image data was not recorded"
+      expect(ports.assets.attachmentAssetUrl(asset)).toBe(asset.url);
+      for (const variant of ["tile", "full"] as const) {
+        expect(await ports.assets.imageAssetUrl(asset, variant)).toMatch(/^blob:hxs\/\d+$/);
+      }
+      expect(blobs).toHaveLength(2);
+      for (const blob of blobs) {
+        const bytes = new Uint8Array(await blob.arrayBuffer());
+        expect(blob.type).toBe("image/webp");
+        expect(new TextDecoder().decode(bytes.subarray(0, 4))).toBe("RIFF");
+        expect(new TextDecoder().decode(bytes.subarray(8, 12))).toBe("WEBP");
+      }
+      // the route refuses a read that carries no credential: those bytes rode
+      // the grant
+      const ticket = IndexOpenTicket.parse(
+        await window.request("index.openTicket", { sessionId: sid }),
+      );
+      // a window's ticket names the loopback pair
+      const { restUrl } = IndexEndpointSet.parse(ticket.endpoints);
+      const bare = await fetch(new URL(asset.url, restUrl));
+      expect(bare.status).toBe(401);
+      // EL2: fieldd answered the ticket — no asset byte was asked of it
+      expect([...new Set(doorCalls)]).toEqual(["index.openTicket"]);
+      console.log(
+        `D1_WITNESS ${JSON.stringify({
+          sessionId: sid,
+          digest: asset.digest,
+          renditionBytes: blobs.map((blob) => blob.size),
+          bareRead: bare.status,
+          doorCalls: [...new Set(doorCalls)],
+        })}`,
+      );
+      ports.sessions.close(sid);
+    }, 180_000);
+
+    it("L1 / D2: the subagent reaches the room's meta as a thread under its root, opens on its own grant, and a search hit inside it keeps its id", async () => {
+      const { window } = await realDesktop(synthesized);
+      const sid = await until(
+        async () =>
+          IndexSessionsResult.parse(
+            await window.request("index.sessions", { nativeSessionIds: [SYNTH_NATIVE_ID] }),
+          ).rows[0]?.sessionId ?? null,
+        "the synthesized session indexed",
+        90_000,
+      );
+      const doorCalls: string[] = [];
+      const ports = historyPortsOver(loggedDoor(window, doorCalls), { platform: process.platform });
+      cleanup.push(() => ports.dispose());
+
+      // the catalog lane: the child reaches the room's meta beside its root
+      let meta: MetaState | null = null;
+      const feed = ports.catalog.subscribeMeta({ onChange: (state) => (meta = state) });
+      cleanup.push(() => feed.close());
+      const thread = await until(
+        () =>
+          (meta as MetaState | null)?.sessions.find(
+            (session) => session.parent_session_id === sid,
+          ) ?? null,
+        "the subagent in the room's meta, under its root",
+        60_000,
+      );
+      expect(thread.root_session_id).toBe(sid);
+      expect(thread.role).toBe("subagent");
+      expect(thread.delegation?.parent_tool_native_id).toBe(SYNTH_AGENT_TOOL);
+      // the room lists roots alone in its sessions column: the root is one
+      const roots = (meta as MetaState | null)?.sessions.filter(
+        (session) => session.parent_session_id === null,
+      );
+      expect(roots?.map((session) => session.id)).toEqual([sid]);
+
+      // the body lane: the subthread opens lazily, on its OWN grant
+      const bytesBefore = received.reduce((sum, frame) => sum + frame.length, 0);
+      const client = await ports.sessions.open(thread.id);
+      let entries: TimelineEntry[] = [];
+      let snapshot = false;
+      const stream = client.subscribeSession(thread.id, {
+        onSnapshot: () => {
+          snapshot = true;
+        },
+        onChange: (rows) => {
+          entries = rows;
+        },
+      });
+      cleanup.push(() => stream.close());
+      await until(
+        () => (snapshot && JSON.stringify(entries).includes(THREAD_WORDS) ? true : null),
+        "the subthread's snapshot over its own ticket",
+        30_000,
+      );
+      // EL2: fieldd carried none of the subthread's body
+      expect(received.some((frame) => frame.includes(THREAD_WORDS))).toBe(false);
+      const bytesAfter = received.reduce((sum, frame) => sum + frame.length, 0);
+
+      // D2: a hit inside the subthread keeps its own id — and resolves to its
+      // root through the meta, the room's grouping rule (rosetta
+      // `lib/search-results.ts`: a hit whose session is not in meta is dropped;
+      // one whose parent chain reaches a root is filed under it)
+      const hits = await until(
+        async () => {
+          const answer = await ports.catalog.search({
+            q: "keeper",
+            limit: 50,
+            project: null,
+            kind: null,
+            agent: null,
+          });
+          return answer.hits.length > 0 ? answer.hits : null;
+        },
+        "a search hit in the subthread",
+        60_000,
+      );
+      const inThread = hits.find((hit) => hit.session_id === thread.id);
+      expect(inThread).toBeDefined();
+      const listed = new Map(
+        ((meta as MetaState | null)?.sessions ?? []).map((session) => [session.id, session]),
+      );
+      expect(listed.get(inThread?.session_id ?? "")?.parent_session_id).toBe(sid);
+      expect(listed.get(sid)?.parent_session_id).toBeNull();
+
+      // EL2: the adapters asked fieldd for listings, the threads, a ticket and
+      // a search — never a transcript read
+      const asked = new Set(doorCalls);
+      expect([...asked]).toEqual(expect.arrayContaining(["index.threads", "index.openTicket"]));
+      for (const method of asked) {
+        expect(method).toMatch(
+          /^index\.(changes\.subscribe|projects|sessions|threads|status|openTicket|search)$/,
+        );
+      }
+      console.log(
+        `L1_WITNESS ${JSON.stringify({
+          root: sid,
+          thread: thread.id,
+          role: thread.role,
+          parentTool: thread.delegation?.parent_tool_native_id ?? null,
+          threadEntries: entries.length,
+          fielddBytesWhileStreaming: bytesAfter - bytesBefore,
+          hits: hits.length,
+          hitInThread: inThread?.session_id ?? null,
+          doorCalls: [...asked].sort(),
+        })}`,
+      );
+      ports.sessions.close(thread.id);
+    }, 240_000);
+  },
+);

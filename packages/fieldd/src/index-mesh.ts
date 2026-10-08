@@ -12,6 +12,7 @@ import {
   type IndexCatalogTable,
   type IndexProjectsParams,
   type IndexProjectsResult,
+  type IndexReplicatedTable,
   type IndexSearchHit,
   type IndexSearchParams,
   type IndexSearchResult,
@@ -125,17 +126,17 @@ export interface IndexMeshOptions {
 }
 
 const FILE_FORMAT = 1;
-const TABLES: readonly IndexCatalogTable[] = ["projects", "sessions"];
+const TABLES: readonly IndexReplicatedTable[] = ["projects", "sessions"];
 /** A kept replica's name, and the temporary one a write goes through. */
 const KEPT_FILE = /^(.+)\.(projects|sessions)\.json$/;
 const KEPT_TMP = /^.+\.(projects|sessions)\.json\.\d+\.tmp$/;
 const ASLEEP_DETAIL = "this desktop is asleep; wake it to search its history";
 
-type Row<T extends IndexCatalogTable> = T extends "projects"
+type Row<T extends IndexReplicatedTable> = T extends "projects"
   ? IndexCatalogProject
   : IndexCatalogSession;
 
-interface PeerTable<T extends IndexCatalogTable> {
+interface PeerTable<T extends IndexReplicatedTable> {
   copy: RowsCopy<Row<T>>;
   sub: { unsubscribe: () => void } | null;
   /** bumped per attach/detach: a superseded subscription's events are ignored */
@@ -330,10 +331,15 @@ export class IndexMesh extends EventEmitter {
     this.#loadPersisted();
     const onLocal = () => this.#changed("local");
     const local = this.#opts.local;
-    const offProjects = local.projects.onDelta(onLocal);
-    const offSessions = local.sessions.onDelta(onLocal);
+    // each table's own ping names it (`tables`, the reader's hint); a phase
+    // move names none — everything a page shows may have moved
+    const offProjects = local.projects.onDelta(() => this.#changed("local", "projects"));
+    const offSessions = local.sessions.onDelta(() => this.#changed("local", "sessions"));
+    // AR-8 (build-hf.md L1) — the delegated threads: this desktop's windows
+    // alone read them, so they move the LOCAL chain and nothing a mesh page reads
+    const offThreads = local.threads.onDelta(() => this.#changed("local", "threads"));
     local.on("phase", onLocal);
-    this.#localOff = [offProjects, offSessions, () => local.off("phase", onLocal)];
+    this.#localOff = [offProjects, offSessions, offThreads, () => local.off("phase", onLocal)];
     this.#opts.roster.on("changed", this.#onRoster);
     this.#reconcile();
     const tick = Math.max(250, Math.min(10_000, Math.floor(this.#staleAfterMs / 2)));
@@ -519,6 +525,8 @@ export class IndexMesh extends EventEmitter {
       device?: string;
     }) => {
       if (disposed || (scope === "local" && change.scope !== "local")) return;
+      // the threads are no mesh page's rows (AR-8 L1): their pings stay local
+      if (scope === "mesh" && change.table === "threads") return;
       if (change.table !== undefined) tables.add(change.table);
       if (change.device !== undefined) devices.add(change.device);
       if (timer !== null) return;
@@ -540,7 +548,7 @@ export class IndexMesh extends EventEmitter {
   }
 
   /** Every desktop's standing for a table (the listing's `sources`). */
-  sourcesFor(table: IndexCatalogTable, scope: "local" | "mesh" = "mesh"): IndexCatalogSource[] {
+  sourcesFor(table: IndexReplicatedTable, scope: "local" | "mesh" = "mesh"): IndexCatalogSource[] {
     return this.#sources(table, this.#devicesInScope(scope, undefined));
   }
 
@@ -757,7 +765,7 @@ export class IndexMesh extends EventEmitter {
     return true;
   }
 
-  #sources(table: IndexCatalogTable, devices: Set<string>): IndexCatalogSource[] {
+  #sources(table: IndexReplicatedTable, devices: Set<string>): IndexCatalogSource[] {
     const self = this.#opts.roster.currentDeviceId();
     const roster = new Map(this.#opts.roster.list().map((info) => [info.deviceId, info]));
     const out: IndexCatalogSource[] = [];
@@ -851,7 +859,7 @@ export class IndexMesh extends EventEmitter {
     return peer;
   }
 
-  #newTable<T extends IndexCatalogTable>(
+  #newTable<T extends IndexReplicatedTable>(
     parseRow: (raw: unknown) => Row<T> | undefined,
     rawKeyOf: (raw: unknown) => string | undefined,
     keyOf: (row: Row<T>) => string,
@@ -880,17 +888,17 @@ export class IndexMesh extends EventEmitter {
     };
   }
 
-  #table<T extends IndexCatalogTable>(peer: Peer, table: T): PeerTable<T> {
+  #table<T extends IndexReplicatedTable>(peer: Peer, table: T): PeerTable<T> {
     return (table === "projects" ? peer.projects : peer.sessions) as PeerTable<T>;
   }
 
-  #ensureAttached(peer: Peer, table: IndexCatalogTable): void {
+  #ensureAttached(peer: Peer, table: IndexReplicatedTable): void {
     const entry = this.#table(peer, table);
     if (entry.sub !== null || entry.attaching || entry.retry !== null) return;
     void this.#attach(peer, table);
   }
 
-  async #attach(peer: Peer, table: IndexCatalogTable): Promise<void> {
+  async #attach(peer: Peer, table: IndexReplicatedTable): Promise<void> {
     const entry = this.#table(peer, table);
     const generation = ++entry.generation;
     entry.attaching = true;
@@ -972,7 +980,7 @@ export class IndexMesh extends EventEmitter {
     }
   }
 
-  #apply(peer: Peer, table: IndexCatalogTable, payload: unknown): void {
+  #apply(peer: Peer, table: IndexReplicatedTable, payload: unknown): void {
     const entry = this.#table(peer, table);
     const outcome = entry.copy.apply(payload);
     peer.heardAt = this.#now();
@@ -995,7 +1003,7 @@ export class IndexMesh extends EventEmitter {
     }
   }
 
-  #detach(peer: Peer, table: IndexCatalogTable): void {
+  #detach(peer: Peer, table: IndexReplicatedTable): void {
     const entry = this.#table(peer, table);
     entry.generation += 1;
     entry.attaching = false;
@@ -1007,7 +1015,7 @@ export class IndexMesh extends EventEmitter {
     entry.copy.abandonSnapshot(); // DS-6b — its transfer ends with it
   }
 
-  #scheduleRetry(peer: Peer, table: IndexCatalogTable): void {
+  #scheduleRetry(peer: Peer, table: IndexReplicatedTable): void {
     const entry = this.#table(peer, table);
     if (this.#disposed || entry.retry !== null || !peer.online || peer.incompatible) return;
     const delay = entry.retryMs;
@@ -1043,9 +1051,11 @@ export class IndexMesh extends EventEmitter {
   }
 
   #changed(scope: "local" | "mesh", table?: IndexCatalogTable, device?: string): void {
-    this.#version += 1;
+    // AR-8 (L1) — a thread is in no merged view and on no mesh chain
+    const merged = table !== "threads";
+    if (merged) this.#version += 1;
     if (scope === "local") this.#changesRevision.local += 1;
-    this.#changesRevision.mesh += 1;
+    if (merged) this.#changesRevision.mesh += 1;
     this.emit("change", {
       scope,
       ...(table !== undefined ? { table } : {}),
@@ -1059,11 +1069,11 @@ export class IndexMesh extends EventEmitter {
 
   // ── persistence: users/<fuid>/mesh/catalog/<device>.<table>.json ──
 
-  #file(device: string, table: IndexCatalogTable): string {
+  #file(device: string, table: IndexReplicatedTable): string {
     return join(this.#opts.dir, `${encodeURIComponent(device)}.${table}.json`);
   }
 
-  #schedulePersist(peer: Peer, table: IndexCatalogTable): void {
+  #schedulePersist(peer: Peer, table: IndexReplicatedTable): void {
     const entry = this.#table(peer, table);
     if (entry.persist !== null || this.#disposed) return;
     // a THROTTLE, not a debounce: the first change after a write schedules
@@ -1075,7 +1085,7 @@ export class IndexMesh extends EventEmitter {
     entry.persist.unref?.();
   }
 
-  #persist(peer: Peer, table: IndexCatalogTable): void {
+  #persist(peer: Peer, table: IndexReplicatedTable): void {
     const state = this.#table(peer, table).copy.state();
     if (state === undefined) return;
     const target = this.#file(peer.device, table);
@@ -1130,7 +1140,7 @@ export class IndexMesh extends EventEmitter {
       }
       const match = KEPT_FILE.exec(name);
       if (match === null) continue;
-      const table = match[2] as IndexCatalogTable;
+      const table = match[2] as IndexReplicatedTable;
       let device: string;
       try {
         device = decodeURIComponent(match[1] ?? "");

@@ -197,6 +197,7 @@ import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
 import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } from "./index-serve";
 import { IndexTailService } from "./index-tail";
+import { checkThreadsCaller, createThreadsPager } from "./index-threads";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
 import {
@@ -1974,6 +1975,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         emit,
       );
       return { snapshot: pings.open, dispose: pings.dispose, start: pings.start };
+    });
+    // AR-8 (build-hf.md L1) — this desktop's DELEGATED threads, the catalog's
+    // local-only table: a window's door alone (index-threads.ts — every other
+    // principal is refused before a row is read). The History room hangs each
+    // thread under its parent; nothing that leaves the desktop reads them.
+    const threadsPage = createThreadsPager(indexCatalog);
+    api.register("index.threads", (ctx, params) => {
+      checkThreadsCaller(ctx);
+      return threadsPage(params);
     });
     // QL (QL-D9) — the empty pane launcher's list: a folder's past sessions
     // (its rosetta project) or every project's. A projection like the two

@@ -31,6 +31,19 @@ export interface HistoryAssetSource extends AssetSource {
   dispose(): void;
 }
 
+/** rosettad's own content-addressed route: ONE path segment under
+ * `/api/assets/`, named `<digest>.<extension>` (rosetta `auth.rs`
+ * `GRANT_ASSET_ROUTE`, which any live read grant opens). */
+const ASSET_ROUTE = /^\/api\/assets\/([^/?#]+)\.[a-z0-9]+$/i;
+
+/** The member's address when the timeline names rosettad's own route for it —
+ * a PATH, so it stays true when the daemon comes back on another port — else
+ * null. */
+export function storedAssetPath(asset: AssetRef): string | null {
+  const route = ASSET_ROUTE.exec(asset.url);
+  return route !== null && route[1] === asset.digest ? asset.url : null;
+}
+
 /** The path and query of one rendition under the client's origin — rosetta's
  * own spelling (`RosettaClient.imageAssetUrl`: the rendition's member when the
  * timeline names one, else the full member asked for that recipe). */
@@ -103,8 +116,14 @@ export function assetSourceOver(
       inFlight.set(key, read);
       return read;
     },
-    // Slice 1 offers no attachment: opening one is the file door's (AR-8d).
-    attachmentAssetUrl: () => null,
+    // The room never LOADS this address: it is the attachment's identity and
+    // its can-open gate, and only when it answers does the room ask for the
+    // image's renditions above — so while it answered null every recorded
+    // image read "Image data was not recorded" (fixed 2026-10-08). Full bytes
+    // ride the session's client (`readAsset`, the grant). The room opens only
+    // an optimized image; another kind stays "Attachment preview
+    // unavailable", as in rosetta's own app.
+    attachmentAssetUrl: storedAssetPath,
     dispose() {
       disposed = true;
       for (const url of urls.values()) revoke(url);
