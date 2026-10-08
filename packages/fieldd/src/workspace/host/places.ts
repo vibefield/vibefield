@@ -1,16 +1,15 @@
 import { createHash } from "node:crypto";
 import { existsSync, realpathSync, statSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
+import { homedir } from "node:os";
 import { posix, resolve, win32 } from "node:path";
-import { PLACE_FACTS } from "@vibefield/contracts/registries";
-import { isFilesystemRoot } from "../paths";
+import { PLACE_FACTS, PROJECT_GROUPING } from "@vibefield/contracts/registries";
+import { homeRelativeOf, placeKindOf } from "../../projects/place-kind";
 import type {
   PlaceFactsArgs,
   PlaceFactsValue,
   PlaceGitRead,
   PlaceGitRefusal,
   PlaceHit,
-  PlaceKind,
   PlaceRead,
   PlaceRemote,
   PlaceSample,
@@ -54,7 +53,7 @@ const EMPTY_TREES = new Set([
 ]);
 /** A host `ssh -G` may be asked about (C10): never an option, never a pattern. */
 const SSH_HOST = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
-const DEPTHS: readonly number[] = PLACE_FACTS.SAMPLE_DEPTHS;
+const DEPTHS: readonly number[] = PROJECT_GROUPING.SAMPLE_DEPTHS;
 const MAX_DEPTH = DEPTHS[DEPTHS.length - 1] ?? 0;
 
 class BudgetSpent extends Error {}
@@ -65,10 +64,10 @@ interface Reading {
   platform: NodeJS.Platform;
   /** this user's home folder, real */
   home: string;
-  /** the system's temporary folders, real and as spelled */
-  temps: string[];
-  /** the task roots, `~` expanded, as segments */
-  taskRoots: string[][];
+  /** a test's temporary roots (absent: the system's, place-kind.ts) */
+  temps?: string[];
+  /** the agent catalog's task roots, as `~/…` globs */
+  taskRoots: string[];
   peers: PlaceSampleSet[];
   /** ssh alias answers, this question's */
   ssh: Map<string, Promise<string | null>>;
@@ -94,70 +93,6 @@ function isDirectory(path: string): boolean {
   } catch {
     return false;
   }
-}
-
-/** Forward slashes, no trailing one (a root keeps its own). */
-function slashed(path: string, platform: NodeJS.Platform): string {
-  const forward = platform === "win32" ? path.replace(/\\/g, "/") : path;
-  return forward.length > 1 && !/^[A-Za-z]:\/$/.test(forward)
-    ? forward.replace(/\/+$/, "")
-    : forward;
-}
-
-function segmentsOf(path: string, platform: NodeJS.Platform): string[] {
-  return slashed(path, platform).split("/").filter(Boolean);
-}
-
-/** Does the place sit at or below `root`? Case folded on a caseless volume. */
-function within(path: string, root: string, platform: NodeJS.Platform, caseless: boolean): boolean {
-  const fold = (s: string) => (caseless ? s.toLowerCase() : s);
-  const a = fold(slashed(path, platform));
-  const b = fold(slashed(root, platform));
-  return a === b || a.startsWith(b.endsWith("/") ? b : `${b}/`);
-}
-
-/** A glob of `~/…` segments, `*` matching one whole segment, as segments. */
-export function taskRootSegments(glob: string, home: string, platform: NodeJS.Platform): string[] {
-  const expanded = glob === "~" || glob.startsWith("~/") ? `${home}${glob.slice(1)}` : glob;
-  return segmentsOf(expanded, platform);
-}
-
-/** L6 — what the owner says a place is. `home`: the home folder itself or a
- * filesystem root (`/`, a drive). `task`: at or below a folder an agent's
- * `taskRoots` glob names (AR-L1: the catalog declares it, never a pattern
- * here). `temp`: at or below a system temporary folder. Else `project`. */
-export function placeKind(
-  path: string,
-  context: { home: string; temps: readonly string[]; taskRoots: readonly string[][] },
-  platform: NodeJS.Platform,
-  caseless: boolean,
-): PlaceKind {
-  const fold = (s: string) => (caseless ? s.toLowerCase() : s);
-  if (fold(slashed(path, platform)) === fold(slashed(context.home, platform))) return "home";
-  if (isFilesystemRoot(path, platform)) return "home";
-  const segments = segmentsOf(path, platform).map(fold);
-  for (const glob of context.taskRoots) {
-    if (segments.length < glob.length) continue;
-    if (glob.every((part, i) => part === "*" || fold(part) === segments[i])) return "task";
-  }
-  if (context.temps.some((temp) => within(path, temp, platform, caseless))) return "temp";
-  return "project";
-}
-
-/** The path below `home`, `/`-separated, or null (not below it, or home). */
-export function homeRelativeOf(
-  path: string,
-  home: string,
-  platform: NodeJS.Platform,
-  caseless: boolean,
-): string | null {
-  const p = slashed(path, platform);
-  const h = slashed(home, platform);
-  const fold = (s: string) => (caseless ? s.toLowerCase() : s);
-  const prefix = h.endsWith("/") ? h : `${h}/`;
-  return fold(p).startsWith(fold(prefix)) && p.length > prefix.length
-    ? p.slice(prefix.length)
-    : null;
 }
 
 /** Is the volume the path lives on there? Only a removable volume's mount
@@ -584,8 +519,14 @@ async function readPlace(
   const caseless = exists
     ? caselessAt(canonical, reading.platform)
     : reading.platform === "darwin" || reading.platform === "win32";
-  const kind = placeKind(canonical, reading, reading.platform, caseless);
-  const homeRelative = homeRelativeOf(canonical, reading.home, reading.platform, caseless);
+  // M1 — the one kind rule (projects/place-kind.ts), on the real path
+  const kind = placeKindOf(canonical, {
+    home: reading.home,
+    taskRoots: reading.taskRoots,
+    caseless,
+    ...(reading.temps !== undefined ? { temps: reading.temps } : {}),
+  });
+  const homeRelative = homeRelativeOf(canonical, reading.home, caseless) ?? null;
   const base = {
     path: asked,
     skipped: false as const,
@@ -614,22 +555,6 @@ async function readPlace(
   return { ...base, git, gitRefused: null, key: cheap.key, hits, hitsKey };
 }
 
-/** The system's temporary folders, real and as spelled (`/tmp` is
- * `/private/tmp` on macOS; both are said). */
-function temporaryFolders(platform: NodeJS.Platform): string[] {
-  const spelled =
-    platform === "win32"
-      ? [tmpdir()]
-      : [tmpdir(), "/tmp", "/private/tmp", "/var/tmp", "/var/folders", "/private/var/folders"];
-  const out = new Set<string>();
-  for (const path of spelled) {
-    out.add(path);
-    const real = realOrNull(path);
-    if (real !== null) out.add(real);
-  }
-  return [...out];
-}
-
 /** The `placeFacts` op: each place read in its turn, PARALLEL_PLACES at once,
  * until the budget is spent. */
 export async function readPlaces(
@@ -637,7 +562,7 @@ export async function readPlaces(
   options: {
     platform?: NodeJS.Platform;
     home?: string;
-    /** a test's temporary folders (default: the system's) */
+    /** a test's temporary roots, in place of the system's (`PlaceOwner.temps`) */
     temps?: string[];
     budgetMs?: number;
   } = {},
@@ -649,10 +574,10 @@ export async function readPlaces(
     deadline: Date.now() + (options.budgetMs ?? PLACE_FACTS.OP_BUDGET_MS),
     platform,
     home,
-    temps: options.temps ?? temporaryFolders(platform),
-    taskRoots: (Array.isArray(args.taskRoots) ? args.taskRoots : [])
-      .filter((glob): glob is string => typeof glob === "string" && glob.length > 0)
-      .map((glob) => taskRootSegments(glob, home, platform)),
+    ...(options.temps !== undefined ? { temps: options.temps } : {}),
+    taskRoots: (Array.isArray(args.taskRoots) ? args.taskRoots : []).filter(
+      (glob): glob is string => typeof glob === "string" && glob.length > 0,
+    ),
     peers: Array.isArray(args.peers) ? args.peers : [],
     ssh: new Map(),
   };

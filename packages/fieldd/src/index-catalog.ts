@@ -12,12 +12,12 @@ import {
   type IndexCatalogTable,
   IndexProjectRow,
   IndexSessionRow,
+  type PlaceFacts,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import WebSocket from "ws";
 import { CatalogTable, createRowsPump, type RowsPump, type RowsPumpOptions } from "./catalog-rows";
 import { familyOf } from "./project-family";
-import type { PlaceFacts } from "./projects/place-facts-interim";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 
 // DS-6 — the history catalog's SOURCE on this desktop (design-06 §5

@@ -1,4 +1,5 @@
 import type {
+  PlaceKind,
   WorkspaceEntry,
   WorkspaceEntryKind,
   WorkspaceGitFacts,
@@ -134,11 +135,6 @@ export interface PlaceHit {
   sha: string;
   depth: number;
 }
-
-/** L6 — what the owner says a place is: its home folder itself (or a
- * filesystem root), a system temporary folder or below one, a folder below an
- * agent catalog's `taskRoots`, or anything else. */
-export type PlaceKind = "home" | "temp" | "task" | "project";
 
 /** Why git would not read a place (never overridden: `safe.directory` stays
  * the person's). */

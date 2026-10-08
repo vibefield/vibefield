@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { realpathSync } from "node:fs";
-import { PLACE_FACTS } from "@vibefield/contracts";
+import { PLACE_FACTS, type PlaceFacts } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type {
   PlaceFactsArgs,
@@ -14,12 +14,7 @@ import {
   FilesHostRefusal,
   FilesHostUnavailable,
 } from "../workspace/supervisor";
-import {
-  identityRemoteOf,
-  normalizeRemotes,
-  type PlaceFacts,
-  placeIdFor,
-} from "./place-facts-interim";
+import { identityRemoteOf, normalizeRemotes } from "./normalize";
 
 // PJ-1 (`thinking-project-places.md` §9; `build-pj.md` L1, L2, L3, L7) — the
 // PLACE SCANNER: this desktop's places, read through the files worker's
@@ -125,6 +120,13 @@ export interface PlaceScanSummary {
   /** places whose facts changed this pass (their `observedAt` moved) */
   changed: number;
   ms: number;
+}
+
+/** A place's id (pj1a's word: the producer owns the recipe): opaque, unique
+ * across the mesh — the device is in it — and one for every spelling of a
+ * folder, because it hashes the REAL path. */
+export function placeIdFor(device: string, realPath: string): string {
+  return `pl_${createHash("sha256").update(`${device}\u0000${realPath}`).digest("hex").slice(0, 24)}`;
 }
 
 function digest(value: unknown): string {
@@ -519,7 +521,7 @@ export class PlaceScanner {
       mounted: read.mounted,
       git: git !== null || read.gitRefused !== null,
       remotes: git === null ? [] : normalizeRemotes(remotes, aliases),
-      samples: git?.samples ?? [],
+      samples: (git?.samples ?? []).map((sample) => ({ sha: sample.sha, depth: sample.depth })),
       hits: entry.hits
         .filter((hit) => hit.placeId !== placeId)
         .map((hit) => ({ placeId: hit.placeId, sha: hit.sha, depth: hit.depth })),

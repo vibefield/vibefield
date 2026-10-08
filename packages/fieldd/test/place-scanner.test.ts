@@ -16,13 +16,14 @@ import { EventEmitter } from "node:events";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import type { PlaceFacts } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
-import { type PlaceFacts, placeIdFor } from "../src/projects/place-facts-interim";
 import {
   type ActedRoot,
   type PlaceCatalog,
   type PlaceFactsAsker,
   PlaceScanner,
+  placeIdFor,
 } from "../src/projects/place-scanner";
 import { readPlaces } from "../src/workspace/host/places";
 import type { FilesHostHealth } from "../src/workspace/supervisor";

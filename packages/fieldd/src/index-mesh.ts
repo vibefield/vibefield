@@ -19,6 +19,7 @@ import {
   type IndexSession,
   type IndexSessionsParams,
   type IndexSessionsResult,
+  type PlaceFacts,
   type RowsCursor,
   type RowsDeviceState,
 } from "@vibefield/contracts";
@@ -27,7 +28,6 @@ import { RowsCopy } from "./catalog-rows";
 import { type IndexCatalog, sessionActivityAt } from "./index-catalog";
 import { RpcCallError } from "./native-link";
 import type { PeerLinkState } from "./peer-link";
-import { type PlaceFacts, readPlaceFacts } from "./projects/place-facts-interim";
 
 // DS-6 — history across desktops, the AGGREGATOR half (design-06 §5 "History";
 // `thinking-desktop-sync-plane.md` §6.4; DS-D8/D9/D10 RULED 2026-09-30). The
@@ -538,18 +538,39 @@ export class IndexMesh extends EventEmitter {
     return this.#sources(table, this.#devicesInScope(scope, undefined));
   }
 
-  /** PJ-1 (L1) — every PEER's places as its project rows carry them, read
-   * tolerantly: an older peer's rows simply lack them, and a place this build
-   * cannot read is dropped, never the row (its history stays listed). */
+  /** PJ-1 (L1) — every PEER's places as its project rows carry them. The
+   * replica read them tolerantly (`IndexCatalogProject.places` is
+   * `PlaceFactsList`): an older peer's rows simply lack them, and a place this
+   * build cannot read was dropped, never the row (its history stays listed). */
   peerPlaces(): Array<{ device: string; projectId: string; places: PlaceFacts[] }> {
-    const self = this.#opts.roster.currentDeviceId();
     const out: Array<{ device: string; projectId: string; places: PlaceFacts[] }> = [];
+    for (const peer of this.peerRows())
+      for (const row of peer.projects)
+        if (row.places !== undefined && row.places.length > 0)
+          out.push({ device: peer.device, projectId: row.projectId, places: row.places });
+    return out;
+  }
+
+  /** PJ-1 (§4) — every PEER's replicated rows, both tables, each row stamped
+   * with its owner: what the project grouping reads beside this desktop's. */
+  peerRows(): Array<{
+    device: string;
+    projects: IndexCatalogProject[];
+    sessions: IndexCatalogSession[];
+  }> {
+    const self = this.#opts.roster.currentDeviceId();
+    const out: Array<{
+      device: string;
+      projects: IndexCatalogProject[];
+      sessions: IndexCatalogSession[];
+    }> = [];
     for (const peer of this.#peers.values()) {
       if (peer.device === self) continue;
-      for (const row of peer.projects.copy.rows()) {
-        const places = readPlaceFacts((row as Record<string, unknown>)["places"]);
-        if (places.length > 0) out.push({ device: peer.device, projectId: row.projectId, places });
-      }
+      out.push({
+        device: peer.device,
+        projects: peer.projects.copy.rows(),
+        sessions: peer.sessions.copy.rows(),
+      });
     }
     return out;
   }

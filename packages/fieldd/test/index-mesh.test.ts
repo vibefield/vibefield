@@ -463,7 +463,7 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
       placeId: "pl_good",
       path: "/work/pb-app",
       aliases: [],
-      kind: "project",
+      kind: "project" as const,
       caseless: true,
       exists: true,
       mounted: true,
@@ -478,10 +478,17 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
     };
     const forged = { ...good, placeId: "pl_forged", samples: [{ sha: "--output=/x", depth: 0 }] };
     b.projects.upsert([
-      { ...project("dev-b", "pb-app", "github.com/o/app", 950), places: [good, forged, 42] },
+      // raw rows as a peer's wire could carry them (the replica parses them)
+      {
+        ...project("dev-b", "pb-app", "github.com/o/app", 950),
+        places: [good, forged, 42] as unknown as IndexCatalogProject["places"],
+      },
       // an older peer's row: no places at all
       project("dev-b", "pb-old", undefined, 900),
-      { ...project("dev-b", "pb-junk", undefined, 800), places: "not a list" },
+      {
+        ...project("dev-b", "pb-junk", undefined, 800),
+        places: "not a list" as unknown as IndexCatalogProject["places"],
+      },
     ]);
     a.projects.upsert([
       {

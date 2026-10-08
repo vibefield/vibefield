@@ -561,9 +561,8 @@ export const WORKSPACE_GIT = {
  * facts: what this desktop reads of each folder its index names, through the
  * files worker's one git runner (`WORKSPACE_GIT`).
  *
- * SAMPLE_DEPTHS: the first-parent commits a place publishes for its peers to
- * look for — its tip, then 1, 2, 4 … 512 back (§4.1 E2; a shallow clone or an
- * unborn HEAD publishes none). GIT_TIMEOUT_MS: one place-facts invocation's
+ * Where a place samples its history is PROJECT_GROUPING.SAMPLE_DEPTHS (the
+ * engine's word, above). GIT_TIMEOUT_MS: one place-facts invocation's
  * budget (the first-parent root walks the whole first-parent chain; one that
  * runs out leaves the root unsaid); SSH_TIMEOUT_MS: one `ssh -G <host>` (an
  * alias read, C10), whose answer the worker keeps SSH_CACHE_MS.
@@ -584,7 +583,6 @@ export const WORKSPACE_GIT = {
  * worktrees `git worktree list` names); WORKTREES_MAX the worktrees one
  * checkout adds. TS-only: no native reader. */
 export const PLACE_FACTS = {
-  SAMPLE_DEPTHS: [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
   GIT_TIMEOUT_MS: 5_000,
   SSH_TIMEOUT_MS: 3_000,
   SSH_CACHE_MS: 5 * 60 * 1000,

@@ -27,11 +27,9 @@ import {
   mountPointOf,
   parseRemotes,
   pickPushRemote,
-  placeKind,
   readPlaces,
   samplesOf,
   sshHostOf,
-  taskRootSegments,
 } from "../src/workspace/host/places";
 import type { PlaceGitRead, PlaceRead, PlaceSampleSet } from "../src/workspace/protocol";
 
@@ -108,48 +106,9 @@ function gitOf(place: PlaceRead | undefined): PlaceGitRead {
   return facts.git;
 }
 
+// the kind rule itself is projects/place-kind.ts's (M1), pinned in
+// project-normalize.test.ts; the worker's own pure readings are here
 describe("what a place is (pure)", () => {
-  const home = "/Users/ada";
-  const context = {
-    home,
-    temps: ["/tmp", "/private/tmp", "/private/var/folders"],
-    taskRoots: [taskRootSegments("~/Documents/Codex/*/*", home, "darwin")],
-  };
-
-  it("home, task, temp, project — the owner's word (L6)", () => {
-    expect(placeKind("/Users/ada", context, "darwin", true)).toBe("home");
-    expect(placeKind("/users/ADA", context, "darwin", true)).toBe("home");
-    expect(placeKind("/users/ADA", context, "linux", false)).toBe("project");
-    expect(placeKind("/", context, "darwin", true)).toBe("home");
-    expect(placeKind("/Users/ada/Documents/Codex/2026-10-01/fix-it", context, "darwin", true)).toBe(
-      "task",
-    );
-    expect(
-      placeKind("/Users/ada/Documents/Codex/2026-10-01/fix-it/src", context, "darwin", true),
-    ).toBe("task");
-    // the glob names the task folder: its parent is not one
-    expect(placeKind("/Users/ada/Documents/Codex/2026-10-01", context, "darwin", true)).toBe(
-      "project",
-    );
-    expect(placeKind("/private/tmp/scratch/repo", context, "darwin", true)).toBe("temp");
-    expect(placeKind("/tmp", context, "darwin", true)).toBe("temp");
-    expect(placeKind("/tmpfoo/x", context, "darwin", true)).toBe("project");
-    expect(placeKind("/Users/ada/Projects/vibe-field", context, "darwin", true)).toBe("project");
-  });
-
-  it("a drive is Home on Windows; separators and case are the platform's", () => {
-    const win = {
-      home: "C:\\Users\\ada",
-      temps: ["C:\\Users\\ada\\AppData\\Local\\Temp"],
-      taskRoots: [taskRootSegments("~/Documents/Codex/*/*", "C:\\Users\\ada", "win32")],
-    };
-    expect(placeKind("D:\\", win, "win32", true)).toBe("home");
-    expect(placeKind("c:\\users\\ada", win, "win32", true)).toBe("home");
-    expect(placeKind("C:\\Users\\ada\\AppData\\Local\\Temp\\x", win, "win32", true)).toBe("temp");
-    expect(placeKind("C:\\Users\\ada\\Documents\\Codex\\a\\b", win, "win32", true)).toBe("task");
-    expect(placeKind("C:\\src\\VibeField", win, "win32", true)).toBe("project");
-  });
-
   it("only a removable volume's mount point can be absent", () => {
     expect(mountPointOf("/Volumes/SSD/lanes/x", "darwin")).toBe("/Volumes/SSD");
     expect(mountPointOf("/Users/ada/x", "darwin")).toBeNull();
