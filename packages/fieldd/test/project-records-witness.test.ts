@@ -31,6 +31,7 @@ import { CatalogTable } from "../src/catalog-rows";
 import { LibraryDocService, systemAccount, systemDocId } from "../src/library-doc";
 import { RpcCallError } from "../src/native-link";
 import type { GroupedProject } from "../src/projects/grouping";
+import { KeyJournal } from "../src/projects/key-journal";
 import { ProjectDoors } from "../src/projects/project-doors";
 import { ProjectGroups } from "../src/projects/project-groups";
 import { ProjectRecords, projectIntentWriter } from "../src/projects/project-records";
@@ -131,6 +132,8 @@ async function desk(mesh: Mesh, name: string, peer: () => Desk | undefined): Pro
         : [{ device: other.name, projects: [row(other.name, other.places)], sessions: [] }];
     },
     intents: () => library.projectIntents(),
+    // PJ-3's key memory, in memory: a first record's `p1:` → `r:` answers `movedTo`
+    journal: new KeyJournal(),
     settleMs: 5,
   });
   groups.followLibrary(library);
@@ -355,6 +358,8 @@ describe("PJ-2 × PJ-3 — a window's act through the real door reads on the oth
     );
     const [doorA, doorB] = [doorOf(a), doorOf(b)];
     const key = a.of("a").key;
+    // both desktops have grouped the project under its provisional key
+    expect(b.of("b").key).toBe(key);
     const renamed = await act(doorA, { key, op: "rename", name: "Field" });
     expect(renamed.key).toBe(`r:${renamed.recordId}`);
     await until(() => b.of("b").key === renamed.key, "the rename on B");
@@ -362,6 +367,12 @@ describe("PJ-2 × PJ-3 — a window's act through the real door reads on the oth
       name: "Field",
       nameFrom: "you",
     });
+    // the key that just moved (`p1:` → `r:`, journalled): a read follows it on
+    // B, and an act aimed at it on A is refused — never misdirected
+    expect(doorB.get(ProjectGetParams.parse({ key }), window).movedTo).toBe(renamed.key);
+    expect(await refusal(act(doorA, { key, op: "pin", pinned: true }))).toBe(
+      "PRECONDITION_FAILED:key-moved",
+    );
 
     // B's folder split out by A's window, named by its PlaceRef
     await act(doorA, { key: renamed.key, op: "split", place: { device: "B", placeId: "b" } });
