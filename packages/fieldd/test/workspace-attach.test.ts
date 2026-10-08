@@ -50,6 +50,7 @@ async function world() {
   await until(() => supervisor.health().phase === "ready", 20_000);
   async function ticket(overrides: Partial<AttachRegistration> = {}) {
     const registration: AttachRegistration = {
+      attachId: `att_${randomBytes(8).toString("hex")}`,
       rootId: "r_test",
       rootPath: root,
       clientId: "window-one",

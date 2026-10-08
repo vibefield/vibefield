@@ -23,6 +23,8 @@ import {
   parseRelativePath,
   rootIdFor,
 } from "../src/workspace/paths";
+import { ATTACH_END_REASONS, readFromWorker } from "../src/workspace/protocol";
+import { ATTACH_END_REASON_CODES, WorkspaceSessionAudit } from "../src/workspace/session-audit";
 
 const PACKAGE_ROOT = join(import.meta.dirname, "..");
 
@@ -283,5 +285,75 @@ describe("the worker's launch (L1: fieldd's own executable in a files-host role)
     cleanup.push(() => rmSync(empty, { recursive: true, force: true }));
     mkdirSync(join(empty, "node_modules"), { recursive: true });
     expect(installedMilleNative(empty)).toBeNull();
+  });
+});
+
+describe("an attachment's life on the control pipe and in the ledger (R6)", () => {
+  const ids = { attachId: "att_0123456789abcdef", rootId: "r_x", clientId: "tk_0123456789ab" };
+
+  it("reads a session message tolerantly: ids, a known event, a known cause", () => {
+    expect(readFromWorker({ t: "session", event: "established", ...ids })).not.toBeNull();
+    for (const reason of ATTACH_END_REASONS)
+      expect(
+        readFromWorker({ t: "session", event: "ended", reason, ...ids }),
+        reason,
+      ).not.toBeNull();
+    expect(readFromWorker({ t: "session", event: "ended", reason: "timer", ...ids })).toBeNull();
+    expect(readFromWorker({ t: "session", event: "ended", ...ids })).toBeNull();
+    expect(readFromWorker({ t: "session", event: "paused", ...ids })).toBeNull();
+    expect(readFromWorker({ t: "session", event: "established", ...ids, rootId: 7 })).toBeNull();
+  });
+
+  it("writes each event as one system row, its cause a reason code, and drains before close", async () => {
+    const written: Array<{ mutation: unknown; outcome: unknown }> = [];
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const sessions = new WorkspaceSessionAudit(
+      {
+        requiredSystem: async (mutation, effect, describe) => {
+          await gate;
+          const value = await effect();
+          written.push({ mutation, outcome: describe?.(value) });
+          return value;
+        },
+      } as ConstructorParameters<typeof WorkspaceSessionAudit>[0],
+      { warn: () => {} } as unknown as ConstructorParameters<typeof WorkspaceSessionAudit>[1],
+    );
+    sessions.record({ event: "established", ...ids, generation: 2 });
+    sessions.record({ event: "ended", reason: "root-lost", ...ids, generation: 2 });
+    const drained = sessions.drain();
+    expect(written).toHaveLength(0);
+    release();
+    await drained;
+    expect(written).toEqual([
+      {
+        mutation: {
+          action: "workspace.session.establish",
+          target: { kind: "workspace-root", id: "r_x" },
+          sessionId: ids.attachId,
+          attrs: { clientId: ids.clientId, generation: 2 },
+        },
+        outcome: { outcome: "succeeded", attrs: { clientId: ids.clientId, generation: 2 } },
+      },
+      {
+        mutation: {
+          action: "workspace.session.end",
+          target: { kind: "workspace-root", id: "r_x" },
+          sessionId: ids.attachId,
+          reasonCode: "ROOT_LOST",
+          attrs: { clientId: ids.clientId, generation: 2 },
+        },
+        outcome: {
+          outcome: "succeeded",
+          reasonCode: "ROOT_LOST",
+          attrs: { clientId: ids.clientId, generation: 2 },
+        },
+      },
+    ]);
+    // every cause has a code the ledger accepts
+    for (const reason of ATTACH_END_REASONS)
+      expect(ATTACH_END_REASON_CODES[reason]).toMatch(/^[A-Z][A-Z0-9_]*$/);
   });
 });

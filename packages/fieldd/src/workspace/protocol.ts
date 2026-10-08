@@ -22,6 +22,8 @@ import type {
 //                    {t: "fatal", reason}                  it cannot run (the addon did not load)
 //                    {t: "res", id, ok, value | error}     an answer
 //                    {t: "log", level, event, message, fields?}
+//                    {t: "session", event, attachId, rootId, clientId, reason?}
+//                                                          an attachment established or ended (R6)
 //
 // The worker exits when the pipe closes (`disconnect`): fieldd's death takes
 // it, so no orphan outlives the daemon that owned it (FS-D11 (b): it stops
@@ -122,6 +124,9 @@ export interface StatsValue {
  * `expiresAt` bounds REDEMPTION (R1, 2026-10-07): a pair not established by
  * then is dropped; an established session ends only on a real loss. */
 export interface AttachRegistration {
+  /** the session's audit id (R6): not a credential — the mint's rows and the
+   * session's own carry it as their `sessionId` */
+  attachId: string;
   rootId: string;
   rootPath: string;
   clientId: string;
@@ -129,6 +134,40 @@ export interface AttachRegistration {
   gitTicket: string;
   expiresAt: number;
 }
+
+/** R6 (2026-10-07) — why an ESTABLISHED attachment ended. The worker says the
+ * first six; fieldd says `worker-exited` for a session its generation took
+ * down without a word (a crash, a kill). A pair that was never established
+ * has no end to record: its mint row is its whole story. */
+export const ATTACH_END_REASONS = [
+  /** `workspace.closeTicket` */
+  "closed",
+  /** either leg's socket closed: the renderer's Worker went, or the link did */
+  "leg-closed",
+  /** the bounded root check (`ATTACHED_ROOT_CHECK_MS`) found the folder gone
+   * or its real path moved */
+  "root-lost",
+  /** the window's token was revoked */
+  "principal-revoked",
+  /** the root left the exported set (`retainRoots`) */
+  "root-withdrawn",
+  /** the worker's listener closed: fieldd's stop, or the listener failing */
+  "worker-stopped",
+  /** the generation exited with the session open */
+  "worker-exited",
+] as const;
+export type AttachEndReason = (typeof ATTACH_END_REASONS)[number];
+
+/** One attachment as its audit rows name it — ids only, never a path. */
+export interface AttachSession {
+  attachId: string;
+  rootId: string;
+  clientId: string;
+}
+
+export type AttachEvent =
+  | ({ event: "established" } & AttachSession)
+  | ({ event: "ended"; reason: AttachEndReason } & AttachSession);
 
 export interface WorkerOps {
   resolve: { args: { rootPath: string; segments: string[]; file?: boolean }; value: string };
@@ -179,7 +218,17 @@ export type FromWorker =
       event: string;
       message: string;
       fields?: Record<string, unknown>;
-    };
+    }
+  | ({ t: "session" } & AttachEvent);
+
+function attachEventOf(raw: Record<string, unknown>): boolean {
+  if (![raw["attachId"], raw["rootId"], raw["clientId"]].every((v) => typeof v === "string"))
+    return false;
+  if (raw["event"] === "established") return true;
+  return (
+    raw["event"] === "ended" && (ATTACH_END_REASONS as readonly unknown[]).includes(raw["reason"])
+  );
+}
 
 /** A message from the worker, read tolerantly: the shape or null. */
 export function readFromWorker(raw: unknown): FromWorker | null {
@@ -194,6 +243,8 @@ export function readFromWorker(raw: unknown): FromWorker | null {
       return typeof message.id === "number" && typeof message.ok === "boolean"
         ? (raw as FromWorker)
         : null;
+    case "session":
+      return attachEventOf(raw as Record<string, unknown>) ? (raw as FromWorker) : null;
     default:
       return null;
   }

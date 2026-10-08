@@ -5,7 +5,7 @@ import { serveWebSocketSession } from "@vibecook/mille/node";
 import { PORTS, WORKSPACE_LIMITS, WorkspaceGitOpen } from "@vibefield/contracts";
 import { type WebSocket, WebSocketServer } from "ws";
 import { isWithin } from "../paths";
-import type { AttachRegistration } from "../protocol";
+import type { AttachEndReason, AttachEvent, AttachRegistration } from "../protocol";
 import { type Engines, WorkerFailure } from "./engine";
 import { answerGitRequest, createGitService } from "./git";
 
@@ -71,26 +71,42 @@ type Pair = AttachRegistration & {
 };
 type Credential = { pair: Pair; leg: Leg };
 
+const sessionOf = (pair: Pair) => ({
+  attachId: pair.attachId,
+  rootId: pair.rootId,
+  clientId: pair.clientId,
+});
+
 /** Secrets remain in this process and its private control pipe, never URLs or logs. */
 export class WorkspaceListener {
   readonly #server: WebSocketServer;
   readonly #engines: Engines;
+  /** R6 — an attachment established or ended, for fieldd's ledger */
+  readonly #onSession: (event: AttachEvent) => void;
   readonly #credentials = new Map<string, Credential>();
   readonly #pairs = new Set<Pair>();
   #stopped = false;
   #rootTimer: NodeJS.Timeout | null = null;
   #checkingRoots = false;
 
-  private constructor(server: WebSocketServer, engines: Engines) {
+  private constructor(
+    server: WebSocketServer,
+    engines: Engines,
+    onSession: (event: AttachEvent) => void,
+  ) {
     this.#server = server;
     this.#engines = engines;
+    this.#onSession = onSession;
     server.on("connection", (socket, request) => this.#connect(socket, request.url));
     server.on("error", () => {
       void this.close();
     });
   }
 
-  static async start(engines: Engines): Promise<WorkspaceListener> {
+  static async start(
+    engines: Engines,
+    onSession: (event: AttachEvent) => void = () => {},
+  ): Promise<WorkspaceListener> {
     const server = new WebSocketServer({
       host: "127.0.0.1",
       port: PORTS.WORKSPACE_SERVE,
@@ -98,7 +114,7 @@ export class WorkspaceListener {
       maxPayload: WORKSPACE_LIMITS.GIT_REQUEST_BYTES,
       perMessageDeflate: false,
     });
-    const listener = new WorkspaceListener(server, engines);
+    const listener = new WorkspaceListener(server, engines, onSession);
     await once(server, "listening");
     return listener;
   }
@@ -132,7 +148,7 @@ export class WorkspaceListener {
       stopped: false,
       sockets: new Set(),
       live: new Set(),
-      timer: setTimeout(() => this.#revoke(pair), ask.expiresAt - Date.now()),
+      timer: setTimeout(() => this.#revoke(pair, "unredeemed"), ask.expiresAt - Date.now()),
     };
     pair.timer?.unref();
     this.#pairs.add(pair);
@@ -166,7 +182,7 @@ export class WorkspaceListener {
           } catch {
             /* a missing, replaced or unreadable root withdraws its grant */
           }
-          for (const pair of pairs) this.#revoke(pair);
+          for (const pair of pairs) this.#revoke(pair, "root-lost");
         }),
       );
     } finally {
@@ -177,7 +193,7 @@ export class WorkspaceListener {
   closeTicket(clientId: string, ticket: string): boolean {
     for (const pair of this.#pairs) {
       if (pair.clientId === clientId && pair.ticket === ticket) {
-        this.#revoke(pair);
+        this.#revoke(pair, "closed");
         return true;
       }
     }
@@ -185,12 +201,14 @@ export class WorkspaceListener {
   }
 
   revokeClient(clientId: string): void {
-    for (const pair of this.#pairs) if (pair.clientId === clientId) this.#revoke(pair);
+    for (const pair of this.#pairs)
+      if (pair.clientId === clientId) this.#revoke(pair, "principal-revoked");
   }
 
   retainRoots(ids: readonly string[]): void {
     const keep = new Set(ids);
-    for (const pair of this.#pairs) if (!keep.has(pair.rootId)) this.#revoke(pair);
+    for (const pair of this.#pairs)
+      if (!keep.has(pair.rootId)) this.#revoke(pair, "root-withdrawn");
   }
 
   /** A leg began serving; with both, the session is established and its
@@ -198,12 +216,15 @@ export class WorkspaceListener {
   #live(pair: Pair, leg: Leg): void {
     if (pair.stopped || pair.live.has(leg)) return;
     pair.live.add(leg);
-    if (pair.live.size < 2 || pair.timer === null) return;
-    clearTimeout(pair.timer);
+    if (pair.live.size < 2) return;
+    if (pair.timer !== null) clearTimeout(pair.timer);
     pair.timer = null;
+    this.#onSession({ event: "established", ...sessionOf(pair) });
   }
 
-  #revoke(pair: Pair): void {
+  /** End a pair, both legs together. The first cause is the one recorded; an
+   * established session's end is told to fieldd (R6). */
+  #revoke(pair: Pair, reason: AttachEndReason | "unredeemed"): void {
     if (pair.stopped) return;
     pair.stopped = true;
     if (pair.timer !== null) clearTimeout(pair.timer);
@@ -217,6 +238,8 @@ export class WorkspaceListener {
     }
     for (const socket of pair.sockets) socket.terminate();
     pair.sockets.clear();
+    if (pair.live.size === 2 && reason !== "unredeemed")
+      this.#onSession({ event: "ended", reason, ...sessionOf(pair) });
   }
 
   #take(
@@ -238,7 +261,7 @@ export class WorkspaceListener {
     // Consume before awaiting host acquisition; concurrent replays cannot win.
     this.#credentials.delete(credential);
     entry.pair.sockets.add(socket);
-    socket.once("close", () => this.#revoke(entry.pair));
+    socket.once("close", () => this.#revoke(entry.pair, "leg-closed"));
     return entry.pair;
   }
 
@@ -351,7 +374,7 @@ export class WorkspaceListener {
   async close(): Promise<void> {
     if (this.#stopped) return;
     this.#stopped = true;
-    for (const pair of this.#pairs) this.#revoke(pair);
+    for (const pair of this.#pairs) this.#revoke(pair, "worker-stopped");
     for (const socket of this.#server.clients) socket.terminate();
     await new Promise<void>((resolve) => this.#server.close(() => resolve()));
   }

@@ -4,6 +4,8 @@ import { ENV_PREFIXES, WORKSPACE_SERVICE } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import type { FilesHostLaunch } from "./launch";
 import {
+  type AttachEvent,
+  type AttachSession,
   type FromWorker,
   readFromWorker,
   type ToWorker,
@@ -78,6 +80,10 @@ export const FILES_HOST_SUPERVISION = {
 
 export type FilesHostTimings = { [K in keyof typeof FILES_HOST_SUPERVISION]: number };
 
+/** R6 — an attachment's life as the supervisor tells it: the worker's word,
+ * or fieldd's own for a session a dying generation took with it. */
+export type FilesHostSessionEvent = AttachEvent & { generation: number };
+
 /** What a door hears when the worker cannot answer: its phase. */
 export class FilesHostUnavailable extends Error {
   constructor(
@@ -134,6 +140,9 @@ interface Generation {
   killTimer: NodeJS.Timeout | null;
   exit: Promise<void>;
   pending: Map<number, Pending>;
+  /** R6 — the attachments this generation said were established and has not
+   * yet said ended: an exit ends them in fieldd's words */
+  sessions: Map<string, AttachSession>;
 }
 
 const STDERR_TAIL_LINES = 4;
@@ -149,7 +158,9 @@ export function workerEnvironment(source: NodeJS.ProcessEnv): NodeJS.ProcessEnv 
   return out;
 }
 
-/** Emits `"transition"` `(health: FilesHostHealth)` on every change. */
+/** Emits `"transition"` `(health: FilesHostHealth)` on every change, and
+ * `"session"` `(event: FilesHostSessionEvent)` when an attachment is
+ * established or ends (R6). */
 export class FilesHostSupervisor extends EventEmitter {
   readonly #opts: FilesHostSupervisorOptions;
   readonly #t: FilesHostTimings;
@@ -396,6 +407,7 @@ export class FilesHostSupervisor extends EventEmitter {
         resolveExit = resolve;
       }),
       pending: new Map(),
+      sessions: new Map(),
     };
     this.#current = generation;
     this.#publish({ pid: proc.pid ?? null });
@@ -421,6 +433,17 @@ export class FilesHostSupervisor extends EventEmitter {
         if (timer) clearTimeout(timer);
       const last = generation.stderrLine.trim();
       if (last.length > 0) generation.stderrTail.push(last.slice(0, 256));
+      // R6 — a session the worker did not live to end (a crash, a kill, or its
+      // last words lost with the pipe) ends here, in fieldd's words: stopped
+      // when fieldd asked it to go, exited when it went on its own
+      for (const session of generation.sessions.values())
+        this.emit("session", {
+          event: "ended",
+          ...session,
+          reason: generation.terminating ? "worker-stopped" : "worker-exited",
+          generation: generation.number,
+        } satisfies FilesHostSessionEvent);
+      generation.sessions.clear();
       resolveExit();
       if (this.#current !== generation) return;
       this.#current = null;
@@ -532,6 +555,29 @@ export class FilesHostSupervisor extends EventEmitter {
       case "fatal":
         fail(String(message.reason).slice(0, 1_024), true);
         return;
+      case "session": {
+        const session = {
+          attachId: message.attachId,
+          rootId: message.rootId,
+          clientId: message.clientId,
+        };
+        if (message.event === "established") {
+          if (generation.sessions.has(session.attachId)) return;
+          generation.sessions.set(session.attachId, session);
+          this.emit("session", {
+            event: "established",
+            ...session,
+            generation: generation.number,
+          } satisfies FilesHostSessionEvent);
+        } else if (generation.sessions.delete(session.attachId))
+          this.emit("session", {
+            event: "ended",
+            ...session,
+            reason: message.reason,
+            generation: generation.number,
+          } satisfies FilesHostSessionEvent);
+        return;
+      }
       case "log":
         (message.level === "warn" ? this.#logger.warn : this.#logger.info).call(
           this.#logger,

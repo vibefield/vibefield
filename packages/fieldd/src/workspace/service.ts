@@ -1,11 +1,18 @@
 import { join } from "node:path";
 import { LAYOUT } from "@vibefield/contracts";
 import type { Logger } from "@vibefield/logging";
+import type { AuditService } from "../audit-service";
 import type { BrowseFacts } from "./browse-exports";
 import { WorkspaceDoors } from "./doors";
 import { chooseFilesHostLaunch, type FilesHostLaunch, ownFilesHostFacts } from "./launch";
 import { RootsRegistry } from "./roots";
-import { type FilesHostLaunchSpec, FilesHostSupervisor, type FilesHostTimings } from "./supervisor";
+import { WorkspaceSessionAudit } from "./session-audit";
+import {
+  type FilesHostLaunchSpec,
+  type FilesHostSessionEvent,
+  FilesHostSupervisor,
+  type FilesHostTimings,
+} from "./supervisor";
 import { WorkspaceTickets } from "./tickets";
 
 // FS-1a — the files service as fieldd composes it: the roots registry, the
@@ -30,6 +37,9 @@ export interface WorkspaceServiceConfig {
   browse?: (() => BrowseFacts) | undefined;
   /** test seam: the roots subscription's re-read cadence */
   rootsPollMs?: number | undefined;
+  /** R6 — the ledger an attachment's life is written to (absent: unrecorded,
+   * a unit test's service) */
+  audit?: Pick<AuditService, "requiredSystem"> | undefined;
   logger: Logger;
 }
 
@@ -68,6 +78,15 @@ export function createWorkspaceService(config: WorkspaceServiceConfig): Workspac
     logger: config.logger.child({ component: "workspace_doors" }),
   });
   const tickets = new WorkspaceTickets(registry, supervisor);
+  const sessions =
+    config.audit !== undefined
+      ? new WorkspaceSessionAudit(
+          config.audit,
+          config.logger.child({ component: "workspace_sessions" }),
+        )
+      : null;
+  const onSession = (event: FilesHostSessionEvent) => sessions?.record(event);
+  supervisor.on("session", onSession);
   const unlisten = registry.onChange(() => {
     if (supervisor.health().phase !== "ready") return;
     void supervisor
@@ -89,6 +108,9 @@ export function createWorkspaceService(config: WorkspaceServiceConfig): Workspac
       unlisten();
       doors.dispose();
       await supervisor.stop();
+      // the sessions the stop ended are in the ledger before it closes
+      await sessions?.drain();
+      supervisor.off("session", onSession);
     },
   };
 }

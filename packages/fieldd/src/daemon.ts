@@ -829,6 +829,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     timings: config.filesHostTimings,
     browse: config.workspace?.browse,
     rootsPollMs: config.workspace?.rootsPollMs,
+    // R6 — each attachment's establish and end, beside its mint
+    audit,
     logger,
   });
   const agents = new AgentRuntimeService({
@@ -1977,6 +1979,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         {
           action: "workspace.ticket.mint",
           target: { kind: "workspace-root", id: ask.root.rootId },
+          // R6 — the session's own rows (establish, end) carry the same id
+          sessionId: ask.attachId,
         },
         () => workspace.tickets.mint(ask, () => windowTokenIds.has(ask.clientId)),
         (ticket) => ({

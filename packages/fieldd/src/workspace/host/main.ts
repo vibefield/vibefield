@@ -128,7 +128,10 @@ async function init(milleNative: string): Promise<void> {
     engines = new engine.Engines();
     const serving = await import("./listener");
     resolveConfined = serving.resolveConfined;
-    listener = await serving.WorkspaceListener.start(engines);
+    // R6 — an attachment's establish and end ride the control pipe to fieldd's ledger
+    listener = await serving.WorkspaceListener.start(engines, (event) =>
+      send({ t: "session", ...event }),
+    );
     const mille = await import("./mille-identity");
     send({ t: "ready", pid: process.pid, port: listener.port, mille: mille.milleIdentity() });
   } catch (error) {

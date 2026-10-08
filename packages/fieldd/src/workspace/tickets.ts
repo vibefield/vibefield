@@ -43,7 +43,7 @@ export class WorkspaceTickets {
   check(
     ctx: CallerContext,
     params: unknown,
-  ): { root: WorkspaceRoot; segments: string[]; clientId: string } {
+  ): { root: WorkspaceRoot; segments: string[]; clientId: string; attachId: string } {
     if (!isWorkspaceWindow(ctx) || ctx.principal.kind !== "local-token")
       throw new RpcCallError(
         "FORBIDDEN_SCOPE",
@@ -60,7 +60,14 @@ export class WorkspaceTickets {
     const root = this.registry.find(parsed.data.rootId);
     if (!root || root.missing)
       throw new RpcCallError("NOT_FOUND", "the exported folder is not available", false);
-    return { root, segments: path.segments, clientId: ctx.principal.tokenId };
+    return {
+      root,
+      segments: path.segments,
+      clientId: ctx.principal.tokenId,
+      // R6 — named before the mint's attempt row, so every row of the
+      // session it may become shares it; an id, never a credential
+      attachId: `att_${randomBytes(8).toString("hex")}`,
+    };
   }
 
   async mint(
@@ -85,6 +92,7 @@ export class WorkspaceTickets {
       const gitTicket = randomBytes(32).toString("base64url");
       const expiresAt = Date.now() + WORKSPACE_LIMITS.TICKET_TTL_MS;
       const { port } = await this.supervisor.request("registerTicket", {
+        attachId: ask.attachId,
         rootId: ask.root.rootId,
         rootPath,
         clientId: ask.clientId,
