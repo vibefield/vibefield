@@ -213,11 +213,17 @@ two-Mac check are James's hands. Nothing in step 1 writes.
    far from the lane's). Its owner commits it first — and then main has moved: 1.2.
 4. ICE's `latest` is `0.15.0`: `npm view @vibecook/ice dist-tags` (James moved it 2026-10-08 06:29Z; the pin is exact and does
    not wait on it).
-5. Every sibling is PREPARED at its pin, not only checked out at it: after a pin moves, its owner runs `node
-   scripts/siblings.mjs install-js <name>` and `build-js <name>` from the main checkout (the sibling's own install and
-   build — never the lane's to run). At DK-19's second merge the puppeteer sibling sat at MV's pin `594d222` without them:
-   `../puppeteer/packages/monitor` and `views` could not resolve their new `@vibecook/puppeteer-view-sdk`, and typecheck, the
-   renderer and fieldd builds, field-app's tests and every smoke that builds went red, on main as on the lane.
+5. Every sibling is PREPARED at its pin, not only checked out at it; preflight is green either way. Read the sibling's entry in
+   `siblings.lock.json` first. One with a `pnpm` or `javascript` section is prepared by
+   `node scripts/siblings.mjs install-js <name>` and `build-js <name>` from the main checkout. One with neither, puppeteer's
+   among them, is SKIPPED by both: they exit 0 at once having done nothing. Puppeteer is prepared by its own frozen install,
+   `pnpm install --frozen-lockfile` inside `../puppeteer` (the pnpm its `packageManager` names; offline first, online only for
+   a tarball the store lacks), its `git status` clean after; there is nothing to build, since its packages export `./src/*.ts`.
+   Either way it is the sibling owner's to run, never the lane's. At DK-19's second merge the puppeteer sibling sat at MV's pin
+   `594d222` unprepared: `../puppeteer/packages/monitor` and `views` could not resolve their new
+   `@vibecook/puppeteer-view-sdk`, and typecheck, the renderer and fieldd builds, field-app's tests and every smoke that builds
+   went red, on main as on the lane. Its frozen install (2026-10-08 21:28Z, James's go; online, for `happy-dom`) cleared them
+   all: the gates' re-run on `43b3b46f`.
 
 **2. The fast-forward** (the main checkout, on `main`):
 ```sh
