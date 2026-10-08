@@ -184,12 +184,8 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
     await d.records.intent(d.of("m").key, { op: "dismiss", with: d.of("n").key }, "test");
     expect(d.now().suggestions).toEqual([]);
     expect(d.of("m").provisional || d.of("n").provisional).toBe(false);
-    // link m and n: one project, its record holding both sides' anchors
-    const linked = await d.records.intent(
-      d.of("m").key,
-      { op: "link", with: d.of("n").key },
-      "test",
-    );
+    // link n's place into m's project: one project, its record holding both sides' anchors
+    const linked = await d.records.intent(d.of("m").key, { op: "link", place: "n" }, "test");
     expect(d.of("n").key).toBe(d.of("m").key);
     expect(d.of("m").places).toHaveLength(2);
     expect(linked.key).toBe(d.of("m").key);
@@ -260,17 +256,21 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
     );
     expect(
       await code(d.records.intent(d.of("solo").key, { op: "split", place: "solo" }, "t")),
-    ).toBe("not-in-project");
+    ).toBe("only-place");
     expect(await code(d.records.intent(app, { op: "rename", name: "  " }, "t"))).toBe("invalid");
     expect(await code(d.records.intent(app, { op: "rename", name: "x".repeat(201) }, "t"))).toBe(
       "invalid",
     );
-    expect(await code(d.records.intent(app, { op: "link", with: app }, "t"))).toBe("invalid");
+    expect(await code(d.records.intent(app, { op: "link", place: "b" }, "t"))).toBe("same-project");
+    expect(await code(d.records.intent(app, { op: "link", place: "nowhere" }, "t"))).toBe(
+      "no-such-place",
+    );
+    expect(await code(d.records.intent(app, { op: "link", place: "t" }, "t"))).toBe("bucket");
     expect(await code(d.records.intent(app, { op: "dismiss", with: d.of("t").key }, "t"))).toBe(
       "bucket",
     );
     // J11 — Home groups by its desktop alone
-    expect(await code(d.records.intent(app, { op: "link", with: home }, "t"))).toBe("home");
+    expect(await code(d.records.intent(app, { op: "link", place: "h" }, "t"))).toBe("home");
     expect(await code(d.records.intent(home, { op: "dismiss", with: app }, "t"))).toBe("home");
     expect(await code(d.records.intent(home, { op: "split", place: "root" }, "t"))).toBe("home");
     expect(d.library.projectIntents().records).toEqual([]);

@@ -611,7 +611,8 @@ export const PLACE_FACTS = {
  * SERVICE / STATE_*: the honest UNAVAILABLE a door answers —
  * STATE_GROUPING before the first grouping of this boot exists, and
  * STATE_RECORDS_UNBUILT from `project.intent` until PJ-2's records are wired
- * behind it. PAGE_DEFAULT_LIMIT / PAGE_MAX_LIMIT: `project.list`'s and
+ * behind it, and STATE_RECORDS_REMOUNTING (PJ-2, retryable) while a relink
+ * swaps the account's library under them — the act is refused, never lost. PAGE_DEFAULT_LIMIT / PAGE_MAX_LIMIT: `project.list`'s and
  * `project.sessions`' page when nothing is asked, and the most a window may
  * ask (a tailnet caller's page is cut at INDEX_TAILNET_LIMITS.MAX_ROWS at the
  * door). CHANGES_MIN_INTERVAL_MS: `project.subscribe`'s floor — the History
@@ -630,6 +631,7 @@ export const PROJECT_DOORS = {
   SERVICE: "projects",
   STATE_GROUPING: "grouping",
   STATE_RECORDS_UNBUILT: "records-unbuilt",
+  STATE_RECORDS_REMOUNTING: "records-remounting",
   PAGE_DEFAULT_LIMIT: 100,
   PAGE_MAX_LIMIT: 500,
   CHANGES_MIN_INTERVAL_MS: 500,

@@ -28,6 +28,7 @@ import {
   type PlaceFacts,
   ProjectChangesDelta,
   ProjectGetResult,
+  ProjectIntentResult,
   ProjectListResult,
   ProjectSessionsResult,
   SOCKETS,
@@ -441,19 +442,26 @@ describe("PJ-3 — the phone reads its desktop's projects (P1, D8, D10)", () => 
     expect(act.data?.kind).toBe("FORBIDDEN_SCOPE");
   }, 30_000);
 
-  it("only a desktop window acts (P2): the phone is refused; the window hears the records are not built yet", async () => {
+  it("only a desktop window acts (P2): the phone is refused; the window's act is a record the phone reads", async () => {
     const page = ProjectListResult.parse(await world.window.call("project.list", {}));
     const key = keyOf(page, "app");
     const fromPhone = await world.phone.callErr("project.intent", { key, op: "rename", name: "A" });
     expect(fromPhone.data?.kind).toBe("FORBIDDEN_SCOPE");
     expect(fromPhone.data?.details).toEqual({ required: "settings.manage" });
-    const fromWindow = await world.window.callErr("project.intent", {
-      key,
-      op: "rename",
-      name: "App",
+    // PJ-2 — the records are wired: the window's rename is the project's
+    // first act, so it makes the record and the key moves to it
+    const act = ProjectIntentResult.parse(
+      await world.window.call("project.intent", { key, op: "rename", name: "Field" }),
+    );
+    expect(act.key).toBe(`r:${act.recordId}`);
+    const read = ProjectListResult.parse(await world.phone.call("project.list", {}));
+    expect(read.rows.find((row) => row.key === act.key)).toMatchObject({
+      name: "Field",
+      nameFrom: "you",
     });
-    expect(fromWindow.data?.kind).toBe("UNAVAILABLE");
-    expect(fromWindow.data?.details).toEqual({ service: "projects", state: "records-unbuilt" });
+    // the old key moved (D9): an act aimed at it is refused, never misdirected
+    const stale = await world.window.callErr("project.intent", { key, op: "pin", pinned: true });
+    expect(stale.data?.details).toMatchObject({ reason: "key-moved", movedTo: act.key });
   }, 30_000);
 
   it("a plugin can never hold project.read — no source, no entry kind", () => {

@@ -1,6 +1,9 @@
 import { randomUUID } from "node:crypto";
+import { PROJECT_DOORS } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
+import { RpcCallError } from "../native-link";
 import type { GroupedProject, GroupingIntents } from "./grouping";
+import type { ProjectIntentWriter } from "./project-doors";
 import type { ProjectGroupsChange, ProjectGroupsSnapshot } from "./project-groups";
 import type { ProjectWrite } from "./records-doc";
 
@@ -21,8 +24,9 @@ import type { ProjectWrite } from "./records-doc";
 // group as places come and go. One act is one library commit.
 //
 //   rename · pin · hide     the record's own keys (last writer wins)
-//   link {with}             one place of each project, joined (E3), the act's
-//                           time carried; the record takes both sides' anchors
+//   link {place}            that place joins this project (E3; a suggestion's
+//                           accept too), the act's time carried; the record
+//                           takes both sides' anchors
 //   split {place}           `{place, notRecord}`: the place leaves the side
 //                           this record names (D2)
 //   dismiss {with}          bound to the PAIR OF RECORDS (D3), so both
@@ -41,7 +45,8 @@ export type ProjectIntentOp =
   | { readonly op: "rename"; readonly name: string }
   | { readonly op: "pin"; readonly pinned: boolean }
   | { readonly op: "hide"; readonly hidden: boolean }
-  | { readonly op: "link"; readonly with: string }
+  /** `place` (a placeId, any desktop's) joins this project */
+  | { readonly op: "link"; readonly place: string }
   | { readonly op: "split"; readonly place: string }
   | { readonly op: "dismiss"; readonly with: string };
 
@@ -51,14 +56,20 @@ export type ProjectRefusalCode =
   | "unavailable"
   /** no project answers to the key */
   | "not-found"
+  /** no project holds the place a link names */
+  | "no-such-place"
   /** Temporary (PJ-L4) */
   | "bucket"
   /** a link, split or dismissal with a desktop's Home (J11: it groups by its
    * desktop alone) */
   | "home"
-  /** the place is not one of the project's, or is its only one */
+  /** the place a split names is not one of the project's */
   | "not-in-project"
-  /** a name that is empty or too long; a link or dismissal of a project with itself */
+  /** a split of a project's only place */
+  | "only-place"
+  /** a link of a place already in the project; a dismissal of it with itself */
+  | "same-project"
+  /** a name that is empty or too long */
   | "invalid";
 
 export class ProjectRecordsRefusal extends Error {
@@ -198,14 +209,17 @@ export class ProjectRecords {
         return this.#write(library, key, recordId, writes, by);
       }
       case "link": {
-        const other = this.#other(snapshot, project, op.with);
+        const held = snapshot.result.projects.find((p) =>
+          p.places.some((pl) => pl.placeId === op.place || pl.aliasIds.includes(op.place)),
+        );
+        if (held === undefined)
+          throw new ProjectRecordsRefusal("no-such-place", "no project holds that place");
+        const other = this.#other(project, held);
+        const place = other.places.find(
+          (pl) => pl.placeId === op.place || pl.aliasIds.includes(op.place),
+        )!;
         const { recordId, writes } = this.#ensure(project, at, other.anchors);
-        writes.push({
-          kind: "link",
-          a: project.places[0]!.placeId,
-          b: other.places[0]!.placeId,
-          at,
-        });
+        writes.push({ kind: "link", a: project.places[0]!.placeId, b: place.placeId, at });
         return this.#write(library, key, recordId, writes, by);
       }
       case "split": {
@@ -214,19 +228,22 @@ export class ProjectRecords {
         const place = project.places.find(
           (pl) => pl.placeId === op.place || pl.aliasIds.includes(op.place),
         );
-        if (place === undefined || project.places.length < 2)
+        if (place === undefined)
           throw new ProjectRecordsRefusal(
             "not-in-project",
-            place === undefined
-              ? "the place is not one of this project's"
-              : "a project's only place cannot be split from it",
+            "the place is not one of this project's",
+          );
+        if (project.places.length < 2)
+          throw new ProjectRecordsRefusal(
+            "only-place",
+            "a project's only place cannot be split from it",
           );
         const { recordId, writes } = this.#ensure(project, at);
         writes.push({ kind: "split", place: place.placeId, notRecord: recordId, at });
         return this.#write(library, key, recordId, writes, by);
       }
       case "dismiss": {
-        const other = this.#other(snapshot, project, op.with);
+        const other = this.#other(project, this.#find(snapshot, op.with));
         const mine = this.#ensure(project, at);
         const theirs = this.#ensure(other, at);
         const writes = [
@@ -268,12 +285,12 @@ export class ProjectRecords {
     throw new ProjectRecordsRefusal("not-found", "no project answers to that key");
   }
 
-  #other(snapshot: ProjectGroupsSnapshot, project: GroupedProject, key: string): GroupedProject {
-    const other = this.#find(snapshot, key);
+  /** The other project a link or a dismissal names, if it may be named. */
+  #other(project: GroupedProject, other: GroupedProject): GroupedProject {
     if (other.bucket !== null)
       throw new ProjectRecordsRefusal("bucket", "Temporary is not a project");
     if (other === project)
-      throw new ProjectRecordsRefusal("invalid", "a project cannot be joined to itself");
+      throw new ProjectRecordsRefusal("same-project", "that is this project already");
     if (project.kind === "home" || other.kind === "home")
       throw new ProjectRecordsRefusal("home", "a desktop's Home joins and is suggested to nothing");
     return other;
@@ -359,5 +376,63 @@ export class ProjectRecords {
         error: error instanceof Error ? error.message.slice(0, 200) : String(error),
       });
     }
+  }
+}
+
+/** PJ-3's `project.intent` door, met (project-doors.ts `ProjectIntentWriter`):
+ * the door has resolved the key (a moved one is refused there, `key-moved`)
+ * and checked each `PlaceRef`; the act runs here, on the grouping as it stands
+ * after the last act, and a refusal becomes the door's typed answer. */
+export function projectIntentWriter(records: ProjectRecords): ProjectIntentWriter {
+  return {
+    act: async (project, intent, context) => {
+      const op: ProjectIntentOp =
+        intent.op === "rename"
+          ? { op: "rename", name: intent.name }
+          : intent.op === "pin"
+            ? { op: "pin", pinned: intent.pinned }
+            : intent.op === "hide"
+              ? { op: "hide", hidden: intent.hidden }
+              : intent.op === "link"
+                ? { op: "link", place: intent.place.placeId }
+                : intent.op === "split"
+                  ? { op: "split", place: intent.place.placeId }
+                  : { op: "dismiss", with: context.with?.key ?? intent.with };
+      try {
+        const { recordId } = await records.intent(project.key, op, "project.intent");
+        return { recordId };
+      } catch (error) {
+        throw error instanceof ProjectRecordsRefusal ? doorRefusal(error) : error;
+      }
+    },
+  };
+}
+
+/** A refusal as the doors answer one (`PROJECT_REFUSALS`). */
+function doorRefusal(refusal: ProjectRecordsRefusal): RpcCallError {
+  const refuse = (reason: string) =>
+    new RpcCallError("PRECONDITION_FAILED", refusal.message, false, { reason });
+  switch (refusal.code) {
+    case "unavailable":
+      // a relink is swapping the library: the act is refused, never lost
+      return new RpcCallError("UNAVAILABLE", refusal.message, true, {
+        service: PROJECT_DOORS.SERVICE,
+        state: PROJECT_DOORS.STATE_RECORDS_REMOUNTING,
+      });
+    case "not-found":
+      return new RpcCallError("NOT_FOUND", refusal.message, false, { reason: "no-such-project" });
+    case "no-such-place":
+    case "not-in-project":
+      return refuse("no-such-place");
+    case "bucket":
+      return refuse("not-a-project");
+    case "home":
+      return refuse("home");
+    case "only-place":
+      return refuse("only-place");
+    case "same-project":
+      return refuse("same-project");
+    case "invalid":
+      return new RpcCallError("PRECONDITION_FAILED", refusal.message, false);
   }
 }

@@ -233,7 +233,7 @@ import {
   parseProjectAsk,
 } from "./projects/project-doors";
 import { ProjectGroups } from "./projects/project-groups";
-import { ProjectRecords } from "./projects/project-records";
+import { ProjectRecords, projectIntentWriter } from "./projects/project-records";
 import { NO_EGRESS, type RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
   ROSETTAD_UNCONFIGURED,
@@ -907,6 +907,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     placeOf: (cwd) => placeScanner.placeOf(cwd),
     logger,
   });
+  const projectIntents = projectIntentWriter(projectRecords);
   const agents = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
@@ -2055,7 +2056,9 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // `path-in-request`, P1; then the params), WHICH (a moved key follows the
     // key memory on a read and is refused `key-moved` on an act), WHETHER
     // (UNAVAILABLE {service: "projects"} before this boot's first grouping, and
-    // from the act until PJ-2's records are wired). A tailnet caller's pages
+    // from the act while a relink swaps the library). PJ-2: the act writes the
+    // person's record through ProjectRecords (projectIntentWriter maps its
+    // refusals to the doors' own). A tailnet caller's pages
     // are cut at INDEX_TAILNET_LIMITS.MAX_ROWS (`tailnetRowLimit`), and its
     // answers carry what D10 and P1 let them.
     const projectDoors = new ProjectDoors({
@@ -2064,6 +2067,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       localSessions: () => indexCatalog.sessions.rows(),
       peerSessions: () => indexMesh?.peerRows() ?? [],
       sources: () => indexMesh?.sourcesFor("projects") ?? [],
+      records: () => projectIntents,
     });
     const projectPage = (ctx: { principal: Principal }, asked: number | undefined): number =>
       tailnetRowLimit(ctx.principal, asked, PROJECT_DOORS.PAGE_DEFAULT_LIMIT) ??

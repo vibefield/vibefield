@@ -10,22 +10,30 @@
 //   · a split made on A gives each record back its side on B;
 //   · concurrent renames converge to one name on both;
 //   · two desktops' first acts at once freeze the same ink (P3) and agree;
-//   · an OLDER desktop holding the library leaves the records intact.
+//   · an OLDER desktop holding the library leaves the records intact;
+//   · a window's act through PJ-3's real door (ProjectDoors.intent →
+//     projectIntentWriter → ProjectRecords) is a record the other desktop's
+//     door answers: a rename, a split and a link by PlaceRef, the refusals
+//     the door's own.
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type {
-  DocLibraryEntry,
-  IndexCatalogProject,
-  IndexCatalogSession,
-  PlaceFacts,
+import {
+  type DocLibraryEntry,
+  type IndexCatalogProject,
+  type IndexCatalogSession,
+  type PlaceFacts,
+  ProjectGetParams,
+  ProjectIntentParams,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { CatalogTable } from "../src/catalog-rows";
 import { LibraryDocService, systemAccount, systemDocId } from "../src/library-doc";
+import { RpcCallError } from "../src/native-link";
 import type { GroupedProject } from "../src/projects/grouping";
+import { ProjectDoors } from "../src/projects/project-doors";
 import { ProjectGroups } from "../src/projects/project-groups";
-import { ProjectRecords } from "../src/projects/project-records";
+import { ProjectRecords, projectIntentWriter } from "../src/projects/project-records";
 import { PROJECT_MAPS } from "../src/projects/records-doc";
 import { Device, Mesh } from "./doc-mesh-harness";
 
@@ -314,5 +322,73 @@ describe("PJ-2 — the two-desktop witness (D7)", () => {
       expect(d.of(d === a ? "a" : "b")).toMatchObject({ key: made.key, name: "Field" });
       expect(d.library.entries().map((e) => e.name)).toEqual([canvas.name]);
     }
+  });
+});
+
+describe("PJ-2 × PJ-3 — a window's act through the real door reads on the other desktop", () => {
+  const doorOf = (d: Desk) =>
+    new ProjectDoors({
+      groups: d.groups,
+      deviceId: () => d.name,
+      localSessions: () => [],
+      peerSessions: () => [],
+      sources: () => [],
+      records: () => projectIntentWriter(d.records),
+    });
+  const window = { paths: true, tailnet: false };
+  const act = (door: ProjectDoors, params: unknown) =>
+    door.intent(ProjectIntentParams.parse(params));
+  const refusal = async (work: Promise<unknown>) => {
+    try {
+      await work;
+      return "wrote";
+    } catch (error) {
+      if (!(error instanceof RpcCallError)) throw error;
+      return `${error.kind}:${(error.details as { reason?: string } | undefined)?.reason ?? ""}`;
+    }
+  };
+
+  it("a rename, a split and a link made through A's door are what B's door answers", async () => {
+    const [a, b] = await pair(
+      [repo("a", "/Users/ada/app"), repo("h", "/Users/ada", { kind: "home", git: false })],
+      [repo("b", "/Users/bo/app")],
+    );
+    const [doorA, doorB] = [doorOf(a), doorOf(b)];
+    const key = a.of("a").key;
+    const renamed = await act(doorA, { key, op: "rename", name: "Field" });
+    expect(renamed.key).toBe(`r:${renamed.recordId}`);
+    await until(() => b.of("b").key === renamed.key, "the rename on B");
+    expect(doorB.get(ProjectGetParams.parse({ key: renamed.key }), window).project).toMatchObject({
+      name: "Field",
+      nameFrom: "you",
+    });
+
+    // B's folder split out by A's window, named by its PlaceRef
+    await act(doorA, { key: renamed.key, op: "split", place: { device: "B", placeId: "b" } });
+    await until(() => b.of("b").key !== renamed.key, "the split on B");
+    expect(b.of("a").key).toBe(renamed.key);
+    // and linked back later: the later act wins (D2)
+    await act(doorA, { key: renamed.key, op: "link", place: { device: "B", placeId: "b" } });
+    await until(() => b.of("b").key === renamed.key, "the link on B");
+    expect(
+      doorB.get(ProjectGetParams.parse({ key: renamed.key }), window).project.places,
+    ).toHaveLength(2);
+
+    // the records' refusals are the door's own answers
+    expect(
+      await refusal(
+        act(doorA, { key: renamed.key, op: "link", place: { device: "A", placeId: "a" } }),
+      ),
+    ).toBe("PRECONDITION_FAILED:same-project");
+    expect(
+      await refusal(
+        act(doorA, { key: renamed.key, op: "link", place: { device: "A", placeId: "h" } }),
+      ),
+    ).toBe("PRECONDITION_FAILED:home");
+    expect(
+      await refusal(
+        act(doorA, { key: a.of("h").key, op: "split", place: { device: "A", placeId: "h" } }),
+      ),
+    ).toBe("PRECONDITION_FAILED:home");
   });
 });

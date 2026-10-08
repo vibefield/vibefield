@@ -381,7 +381,13 @@ export type ProjectIntentResult = z.infer<typeof ProjectIntentResult>;
  *    regrouped — an act is never aimed at a project the person did not see;
  *    `movedTo` names it, and the window re-reads before it acts again;
  *  - `no-such-place` (PRECONDITION_FAILED, `project.intent`): a `PlaceRef`
- *    no project holds.
+ *    no project holds (or, for `split`, not this project);
+ *  - PJ-2's records (PRECONDITION_FAILED, `project.intent`): `not-a-project`
+ *    — an act on Temporary, or a link of one of its places; `home` — a link,
+ *    split or dismissal with a desktop's Home (J11: it groups by its desktop
+ *    alone); `only-place` — a split of a project's only place;
+ *    `same-project` — a link of a place already in the project, a dismissal
+ *    of a project with itself.
  * Who may call is the error kind's (FORBIDDEN_SCOPE `{method, principal}`),
  * and a door that cannot answer yet is UNAVAILABLE {service:
  * PROJECT_DOORS.SERVICE, state}. */
@@ -390,6 +396,10 @@ export const PROJECT_REFUSALS = [
   "no-such-project",
   "key-moved",
   "no-such-place",
+  "not-a-project",
+  "home",
+  "only-place",
+  "same-project",
 ] as const;
 
 export const ProjectRefusal = z
