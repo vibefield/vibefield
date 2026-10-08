@@ -1246,6 +1246,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   ICE's `setAway("cover")`, said as the presence attaches and as the view moves, and published between
   frames, so a peer hears it under the cover's parked freeze too. A peer on a build that sends neither
   field reads as ICE's defaults: present, on the root.
+  *Amended 2026-10-08 (DK-17b, ICE `0.15.0-desk.7`, petition I44):* a pointer that leaves its window from the
+  chrome BESIDE the desk — the line, the head, the window's drag strip — is said away too (desk.6 heard only an
+  exit from the desk itself, and a peer stood on the mat until the 8 s idle), at its last point over the desk; back
+  in the window over the chrome it stays away until it is on the desk again. smoke:canvas's PEERS EXIT witnesses it.
 - **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3, DK-16):
   the layer's status (`onStatus`) is said in VibeField's words — never ICE's black monospace screen,
   never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or

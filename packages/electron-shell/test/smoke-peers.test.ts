@@ -11,10 +11,12 @@ import {
   type CardSeen,
   contrast,
   DEGRADED_SENTENCE,
+  type ExitSeen,
   expectedBox,
   judgeAwaySaid,
   judgeCoverSaid,
   judgeDegradedBanner,
+  judgeExit,
   judgeIdle,
   judgeLostCard,
   judgePeerPlace,
@@ -89,6 +91,60 @@ describe("what a window says of its own pointer — ICE's presence (I42, desk.6)
       /not away/,
     );
     expect(judgeAwaySaid(null)[0]).toMatch(/no presence/);
+  });
+});
+
+describe("the window exit from BESIDE the desk (ICE I44) — away within one publish, still away back over the chrome", () => {
+  const line = { x: 677, y: 702, hit: "vf-line-input", inDesk: false, region: "no-drag" };
+  const said = { reason: null, cursor: { away: true, canvas: "" } };
+  const exit = (over: Partial<ExitSeen> = {}): ExitSeen => ({
+    from: "line",
+    point: line,
+    hidden: "away",
+    ms: 120,
+    said,
+    reentered: "away",
+    ...over,
+  });
+  it("passes desk.7's exit: away in one publish, its own cursor away, still away over the chrome", () => {
+    expect(judgeExit(exit())).toEqual([]);
+    // the control: out from a desk point — inside the desk is where it leaves from
+    expect(
+      judgeExit(exit({ from: "desk", point: { ...line, hit: "[data-desk]", inDesk: true } })),
+    ).toEqual([]);
+  });
+  it("names desk.6's gap: never said away — hidden only by B's idle, its cursor never away, not away back over the chrome", () => {
+    const problems = judgeExit(
+      exit({
+        hidden: "idle",
+        ms: 7_404,
+        said: { reason: null, cursor: { away: false, canvas: "" } },
+        reentered: "idle",
+      }),
+    );
+    expect(problems).toHaveLength(3);
+    expect(problems[0]).toMatch(
+      /hid it only by "idle", 7404 ms after the leave — never said away \(ICE I44\)/,
+    );
+    expect(problems[1]).toMatch(/own cursor did not say away/);
+    expect(problems[2]).toMatch(/back in its window over the chrome.*"idle" — not away/);
+  });
+  it("fails an away later than one publish, a hide that never came, and a pointer back before it is on the desk", () => {
+    expect(judgeExit(exit({ ms: 1_500 }))[0]).toMatch(
+      /1500 ms after — not within one publish \(1000 ms\)/,
+    );
+    expect(judgeExit(exit({ hidden: null, ms: null }))[0]).toMatch(/A never hid it/);
+    expect(judgeExit(exit({ reentered: null }))[0]).toMatch(
+      /over the chrome, not on the desk.*null — not away/,
+    );
+  });
+  it("fails a chrome point that is the desk's own, and a page with no such chrome", () => {
+    expect(judgeExit(exit({ point: { ...line, inDesk: true } }))[0]).toMatch(
+      /inside the desk — not beside it/,
+    );
+    expect(judgeExit(exit({ from: "drag", point: null }))).toEqual([
+      "the head's drag strip is missing from B's page — nothing to leave from",
+    ]);
   });
 });
 

@@ -15,7 +15,13 @@
 //   COVER   — A covered by Godview: hidden; A's own presence says away (ICE's `setAway("cover")`, its cursor away); back
 //             to the canvas, shown;
 //   AWAY    — B's pointer leaves B's window: hidden in A at once, by ICE's own leave (B's cursor away, no host reason);
-//             back over B's page, shown;
+//             back in its window over B's line it stays away; back over B's page, shown;
+//   EXIT    — B's pointer leaves B's window from BESIDE the desk (ICE I44): through the line, a head control, the head's
+//             drag strip — each hidden in A as away within one publish, never by B's idle, and still away back in the
+//             window over the chrome until the pointer is on the desk. RED at desk.6 (I42's leave hangs on the desk's
+//             container alone: the pointer that crossed onto the chrome is never said away, and A hides it at 8 s by its
+//             idle rule) — I44's product red-proof; green at desk.7. Injected input skips the OS's own drag-region
+//             handling, so the drag row proves the page's path over the strip, not what a real pointer entering it does;
 //   GONE    — B closed: its peer leaves A's roster;
 //   COUNTERS — the layer placed every move and rendered only for the roster and its own verdicts.
 // And, on A again (`?deskFaults=1`), THE DESK'S FAULTS on its own device:
@@ -39,7 +45,78 @@ export const PEERS = {
   idleSlackMs: 700,
   /** the earliest a still pointer is looked at again: it must still be drawn */
   idleNotBeforeMs: 7_500,
+  /** EXIT (I44): a pointer out of its window is hidden within ONE PUBLISH — the leave a task later, B's throttle, the
+   * relay's turn, A's frame — far inside the 8 s idle that hides a pointer nobody said away */
+  exitMs: 1_000,
+  /** EXIT: how long a pointer back in its window over the chrome is watched for staying away */
+  reenterMs: 600,
 } as const;
+
+/** EXIT (I44): where B's pointer leaves its window from — beside the desk (the line, a head control, the head's drag
+ * strip), or a desk point (DK-16's AWAY, the control). */
+export type ExitFrom = "line" | "head" | "drag" | "desk";
+
+export const EXIT_FROM: Readonly<Record<ExitFrom, string>> = {
+  line: "the line",
+  head: "a head control",
+  drag: "the head's drag strip",
+  desk: "a desk point",
+};
+
+/** A point B's pointer leaves from, as B's page hit-tests it. */
+export interface ExitPoint {
+  readonly x: number;
+  readonly y: number;
+  /** the element `elementFromPoint` answers there (its class, or its tag) */
+  readonly hit: string | null;
+  /** that element is inside the desk's container (`[data-desk]`) */
+  readonly inDesk: boolean;
+  /** its computed `-webkit-app-region` ("drag", "no-drag", or what Chromium answers) */
+  readonly region: string | null;
+}
+
+/** What A saw after B's pointer left its window (the EXIT rows and AWAY's control). */
+export interface ExitSeen {
+  readonly from: ExitFrom;
+  readonly point: ExitPoint | null;
+  /** A's first verdict on B after the leave ("gone" — no record), or null if none came before B's idle was due */
+  readonly hidden: string | null;
+  /** ms from the leave to that verdict */
+  readonly ms: number | null;
+  /** B's own word after the leave: its host's reason and its published cursor */
+  readonly said: PeersDoor["said"];
+  /** A's verdict once B's pointer was back in its window over the chrome, not yet on the desk */
+  readonly reentered: string | null;
+}
+
+/** EXIT (I44): out of its window — from anywhere in its page — B's peer is hidden in A as AWAY within one publish, by its
+ * own cursor's word, and stays away while the pointer is back over the chrome, until it is back on the desk. */
+export function judgeExit(seen: ExitSeen): string[] {
+  const where = EXIT_FROM[seen.from];
+  const problems: string[] = [];
+  if (seen.point === null) return [`${where} is missing from B's page — nothing to leave from`];
+  if (seen.from !== "desk" && seen.point.inDesk)
+    problems.push(
+      `${where} at (${seen.point.x}, ${seen.point.y}) is inside the desk — not beside it`,
+    );
+  if (seen.hidden !== "away")
+    problems.push(
+      seen.hidden === null
+        ? `B's pointer left its window from ${where} and A never hid it`
+        : `B's pointer left its window from ${where} and A hid it only by ${JSON.stringify(seen.hidden)}${seen.ms === null ? "" : `, ${seen.ms} ms after the leave`} — never said away (ICE I44)`,
+    );
+  else if (seen.ms === null || seen.ms > PEERS.exitMs)
+    problems.push(
+      `B's pointer left its window from ${where} and A hid it away ${seen.ms} ms after — not within one publish (${PEERS.exitMs} ms)`,
+    );
+  if (seen.said?.cursor?.away !== true)
+    problems.push(`B's own cursor did not say away after leaving from ${where}`);
+  if (seen.reentered !== "away")
+    problems.push(
+      `back in its window over the chrome, not on the desk, A's verdict on B was ${JSON.stringify(seen.reentered)} — not away`,
+    );
+  return problems;
+}
 
 /** The card's words for a lost device (DESIGN.md §8). */
 export const LOST_CARD = {
@@ -275,6 +352,49 @@ const CANVAS_BG = `(() => {
 })()`;
 
 /** A peer's arrow and chip as A draws them. */
+/** B's page: where its pointer can leave from beside the desk — the line's centre, a head control's (no-drag), a point
+ * of the head's drag strip that no control covers — each as the page hit-tests it. */
+const READ_EXIT_POINTS = `(() => {
+  const desk = document.querySelector("[data-desk]");
+  const regionOf = (el) => {
+    const s = getComputedStyle(el);
+    return s.getPropertyValue("-webkit-app-region") || s.getPropertyValue("app-region") || null;
+  };
+  const nameOf = (el) => (typeof el.className === "string" && el.className !== "" ? el.className : el.tagName);
+  const at = (x, y) => {
+    const hit = document.elementFromPoint(x, y);
+    return {
+      x: Math.round(x),
+      y: Math.round(y),
+      hit: hit === null ? null : nameOf(hit),
+      inDesk: desk !== null && hit !== null && desk.contains(hit),
+      region: hit === null ? null : regionOf(hit),
+      el: hit,
+    };
+  };
+  const centre = (el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 0 && r.height > 0 ? at(r.left + r.width / 2, r.top + r.height / 2) : null;
+  };
+  const strip = (p) => (p === null ? null : { x: p.x, y: p.y, hit: p.hit, inDesk: p.inDesk, region: p.region });
+  const line = document.querySelector(".vf-line-input");
+  let head = null;
+  for (const el of document.querySelectorAll(".vf-head-place button, .vf-head-place [role='button'], .vf-head-tools button")) {
+    const c = centre(el);
+    if (c !== null && c.el !== null && (c.el === el || el.contains(c.el))) { head = c; break; }
+  }
+  let drag = null;
+  const app = document.querySelector(".app-drag");
+  if (app !== null) {
+    const r = app.getBoundingClientRect();
+    for (let x = r.right - 24; x > r.left + 96 && drag === null; x -= 24) {
+      const p = at(x, r.top + r.height / 2);
+      if (p.el === app) drag = p;
+    }
+  }
+  return { h: innerHeight, line: line === null ? null : strip(centre(line)), head: strip(head), drag: strip(drag) };
+})()`;
+
 const READ_PEER = `(() => {
   const els = [...document.querySelectorAll(".vf-peers .vf-peer")];
   const shown = els.filter((el) => getComputedStyle(el).visibility === "visible");
@@ -581,25 +701,90 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
       `SMOKE_CANVAS_PEERS_COVER ${JSON.stringify({ covered: covered.layer, said: saidCovered, back: saidBack })}`,
     );
 
-    // ── AWAY: B's pointer leaves B's window ────────────────────────────────────────────────────────────────────────────
+    // ── AWAY: B's pointer leaves B's window from a desk point (the EXIT rows' control) ─────────────────────────────────
+    const exitPoints = await js<{
+      readonly h: number;
+      readonly line: ExitPoint | null;
+      readonly head: ExitPoint | null;
+      readonly drag: ExitPoint | null;
+    }>(b, READ_EXIT_POINTS);
+    /** A's first verdict on B from `since`, polled until B's idle is due (its last move + 8 s and the slack) */
+    const firstVerdict = async (
+      since: number,
+    ): Promise<{ hidden: string | null; ms: number | null }> => {
+      const deadline = lastMove + PEERS.idleMs + PEERS.idleSlackMs + 1_000;
+      while (Date.now() < deadline) {
+        const p = await peerOf();
+        if (p === undefined || p.hidden !== null)
+          return { hidden: p === undefined ? "gone" : p.hidden, ms: Date.now() - since };
+        await sleep(20);
+      }
+      return { hidden: null, ms: null };
+    };
+    /** back in B's window over the chrome (`at`), not yet on the desk: A's verdict once it has had a publish */
+    const reenter = async (at: ExitPoint | null): Promise<string | null> => {
+      if (at === null) return null;
+      b.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+      await sleep(PEERS.reenterMs);
+      const p = await peerOf();
+      return p === undefined ? "gone" : p.hidden;
+    };
     b.webContents.sendInputEvent({ type: "mouseLeave", x: point.x, y: -4 });
-    let awayBy: "the OS's leave" | "none" = "none";
-    let saidAway: PeersDoor["said"] = null;
-    try {
-      await until("B said away in A", 3_000, async () => (await peerOf())?.hidden === "away");
-      awayBy = "the OS's leave";
-      saidAway = (await door(b)).said;
+    const awayAt = Date.now();
+    const awayVerdict = await firstVerdict(awayAt);
+    const saidAway = (await door(b)).said;
+    const awayBy = awayVerdict.hidden === "away" ? "the OS's leave" : "none";
+    if (awayVerdict.hidden !== "away")
+      problems.push(
+        `PEERS AWAY: B's pointer left its window and A still drew it (${JSON.stringify(awayVerdict)}; B said ${JSON.stringify(saidAway)})`,
+      );
+    else
       problems.push(
         ...judgeAwaySaid(saidAway).map((p) => `PEERS AWAY: ${p} (${JSON.stringify(saidAway)})`),
       );
-    } catch {
-      problems.push(
-        `PEERS AWAY: B's pointer left its window and A still drew it (${JSON.stringify(await peerOf())}; B said ${JSON.stringify((await door(b)).said)})`,
-      );
-    }
+    const away: ExitSeen = {
+      from: "desk",
+      point: { x: point.x, y: point.y, hit: "[data-desk]", inDesk: true, region: null },
+      ...awayVerdict,
+      said: saidAway,
+      reentered: await reenter(exitPoints.line),
+    };
+    problems.push(...judgeExit(away).map((p) => `PEERS AWAY: ${p}`));
     await moveB();
     await until("B drawn again over its page", 5_000, shownInA);
-    say(`SMOKE_CANVAS_PEERS_AWAY ${JSON.stringify({ by: awayBy, said: saidAway })}`);
+    say(
+      `SMOKE_CANVAS_PEERS_AWAY ${JSON.stringify({ by: awayBy, said: saidAway, ms: away.ms, reentered: away.reentered })}`,
+    );
+
+    // ── EXIT (ICE I44): B's pointer leaves B's window from BESIDE the desk — through the line, a head control, the
+    // head's drag strip — hidden in A as away within one publish; back over the chrome, still away. RED at desk.6 ──────
+    const exits: ExitSeen[] = [];
+    for (const from of ["line", "head", "drag"] as const) {
+      const at = exitPoints[from];
+      if (at === null) {
+        exits.push({ from, point: null, hidden: null, ms: null, said: null, reentered: null });
+        continue;
+      }
+      await moveB();
+      await until(`B drawn before its exit through ${EXIT_FROM[from]}`, 5_000, shownInA);
+      await sleep(300); // its two moves land as two, never coalesced with the next
+      b.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+      await sleep(300);
+      b.webContents.sendInputEvent({
+        type: "mouseLeave",
+        x: at.x,
+        y: at.y < exitPoints.h / 2 ? -4 : exitPoints.h + 4,
+      });
+      const left = Date.now();
+      const verdict = await firstVerdict(left);
+      const said = (await door(b)).said;
+      const seen: ExitSeen = { from, point: at, ...verdict, said, reentered: await reenter(at) };
+      exits.push(seen);
+      await moveB();
+      await until(`B drawn again after its exit through ${EXIT_FROM[from]}`, 5_000, shownInA);
+    }
+    for (const seen of exits) problems.push(...judgeExit(seen).map((p) => `PEERS EXIT: ${p}`));
+    say(`SMOKE_CANVAS_PEERS_EXIT ${JSON.stringify(exits)}`);
 
     // ── COUNTERS: placed every move, rendered only for the roster and the layer's verdicts ────────────────────────────
     const c0 = await door(a);
