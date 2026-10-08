@@ -103,6 +103,8 @@ function fieldd() {
           return { rows: [projects.rows[0]], sources: projects.sources };
         case "index.sessions":
           return fixture("index-sessions.mesh.json");
+        case "index.threads":
+          return { rows: [] };
         case "index.status":
           return fixture("index-status.valid.json");
         case "index.project":

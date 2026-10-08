@@ -7,7 +7,9 @@
  * pings into the room's meta shapes; the session lease renewed before its
  * grant expires and repointed when the ticket's origin moves; the asset
  * cache's bound and its revokes; a recorded file read with the window's grant
- * (RO-13), and the honest refusal when rosettad refuses the grant's reach.
+ * (RO-13), and the honest refusal when rosettad refuses the grant's reach. And
+ * (AR-8 L1) the delegated threads: `index.threads`' rows as rosetta's children
+ * in the room's meta, read again only when a ping names their table.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -24,6 +26,7 @@ import {
   IndexProjectsResult,
   IndexSessionsResult,
   IndexStatus,
+  IndexThreadsResult,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assetSourceOver } from "../src/history/asset-source";
@@ -32,8 +35,10 @@ import {
   catalogStatusOf,
   type HistoryDoorClient,
   metaStateOf,
+  pingParts,
   projectStatsOf,
   sessionRowOf,
+  threadRowOf,
   usageOf,
 } from "../src/history/doors";
 import {
@@ -48,6 +53,7 @@ const fixture = (name: string): unknown => JSON.parse(readFileSync(join(FIXTURES
 const PROJECTS = IndexProjectsResult.parse(fixture("index-projects.mesh.json"));
 const SESSIONS = IndexSessionsResult.parse(fixture("index-sessions.mesh.json"));
 const STATUS = IndexStatus.parse(fixture("index-status.valid.json"));
+const THREADS = IndexThreadsResult.parse(fixture("index-threads.valid.json"));
 const PROJECT = IndexProjectResult.parse(fixture("index-project.valid.json"));
 const TICKET = fixture("index-open-ticket.local.json") as {
   device: string;
@@ -84,10 +90,10 @@ function client(answers: Record<string, (params: Record<string, unknown>) => unk
   let onFrame: ((payload: unknown, kind?: "snapshot" | "delta") => void) | null = null;
   const door: HistoryDoorClient & {
     calls: typeof calls;
-    ping(kind?: "snapshot" | "delta"): void;
+    ping(kind?: "snapshot" | "delta", tables?: string[]): void;
   } = {
     calls,
-    ping: (kind = "delta") =>
+    ping: (kind = "delta", tables = ["sessions"]) =>
       onFrame?.(
         {
           epoch: "changes-local-1",
@@ -95,7 +101,7 @@ function client(answers: Record<string, (params: Record<string, unknown>) => unk
           revision: 1,
           upserts: [],
           removed: [],
-          tables: ["sessions"],
+          tables,
           devices: [],
         },
         kind,
@@ -163,6 +169,48 @@ describe("the catalog port's rows (AR-8c)", () => {
     });
   });
 
+  it("AR-8 (L1): maps a delegated thread into rosetta's child row — parent, root, role and delegation in rosetta's spelling again", () => {
+    const [subagent, member, unknown] = THREADS.rows;
+    if (subagent === undefined || member === undefined || unknown === undefined)
+      throw new Error("fixture has three threads");
+    expect(threadRowOf(subagent)).toEqual({
+      id: "ses-5d1e88a0",
+      native_session_id: "a3f0c2d9e1b7",
+      runtime_id: "claude-code",
+      project_id: "p-4f1c2a9e",
+      cwd: "/Users/me/Projects/vibe-field",
+      parent_session_id: "ses-9b2f0c7d",
+      delegation: {
+        parent_tool_native_id: "toolu_01Hx7Qd2",
+        workflow_run_id: null,
+        team: null,
+        color: null,
+        configured_model: "claude-haiku-4-5",
+      },
+      root_session_id: "ses-9b2f0c7d",
+      role: "subagent",
+      title: "map the catalog's readers",
+      summary: "Explore",
+      started_at: 1759270600000,
+      updated_at: 1759270900000,
+      activity: { first_at: 1759270600000, last_at: 1759270880000 },
+      stream_state: "indexed",
+    });
+    // a thread of a thread: its own parent, the same root; a team member's colour
+    expect(threadRowOf(member)).toMatchObject({
+      parent_session_id: "ses-5d1e88a0",
+      root_session_id: "ses-9b2f0c7d",
+      role: "team",
+      delegation: { team: "catalog-crew", color: "cyan" },
+      activity: null,
+      stream_state: "streaming",
+    });
+    // a role the room does not draw is a subagent — a child it is — and a
+    // colour outside rosetta's eight is no colour
+    expect(threadRowOf(unknown)).toMatchObject({ role: "subagent", delegation: null });
+    expect(threadRowOf({ ...member, delegation: { color: "teal" } }).delegation?.color).toBeNull();
+  });
+
   it("assembles the room's whole topology: one runtime per agent kind, projects with their remotes", () => {
     const meta = metaStateOf(PROJECTS.rows, [
       ...SESSIONS.rows,
@@ -179,6 +227,26 @@ describe("the catalog port's rows (AR-8c)", () => {
       git_repo: "github.com:jamesyong42/vibe-field",
     });
     expect(meta.sessions.map((row) => row.id)).toEqual(["ses-9b2f0c7d", "ses-unmapped"]);
+    // AR-8 (L1): the threads ride beside the roots — the room builds its
+    // subthreads and its search grouping from the one list
+    const withThreads = metaStateOf(PROJECTS.rows, SESSIONS.rows, THREADS.rows);
+    expect(
+      withThreads.sessions.map((row) => [row.id, row.parent_session_id, row.root_session_id]),
+    ).toEqual([
+      ["ses-9b2f0c7d", null, "ses-9b2f0c7d"],
+      ["ses-5d1e88a0", "ses-9b2f0c7d", "ses-9b2f0c7d"],
+      ["ses-7c40aa19", "ses-5d1e88a0", "ses-9b2f0c7d"],
+      ["ses-0e93b7c2", "ses-9b2f0c7d", "ses-9b2f0c7d"],
+    ]);
+  });
+
+  it("AR-8 (L1): reads a ping's `tables` — the parts it names; none, or a word it does not know, is both", () => {
+    expect(pingParts({ tables: ["threads"] })).toEqual({ roots: false, threads: true });
+    expect(pingParts({ tables: ["sessions"] })).toEqual({ roots: true, threads: false });
+    expect(pingParts({ tables: ["projects", "threads"] })).toEqual({ roots: true, threads: true });
+    for (const payload of [{ tables: [] }, {}, null, { tables: ["sessions", "graphs"] }]) {
+      expect(pingParts(payload), JSON.stringify(payload)).toEqual({ roots: true, threads: true });
+    }
   });
 
   it("folds index.status into the room's CatalogStatus, and an index that is not up into no status", () => {
@@ -235,12 +303,16 @@ describe("the catalog port's rows (AR-8c)", () => {
 });
 
 describe("the catalog port's meta feed (AR-8c)", () => {
-  function scripted(pages: { sessions: unknown[] }) {
+  function scripted(pages: { sessions: unknown[]; threads?: unknown[] }) {
     return client({
       "index.projects": () => PROJECTS_ONE_PAGE,
       "index.sessions": (params) => {
         const page = params["cursor"] === undefined ? 0 : Number(params["cursor"]);
         return pages.sessions[page];
+      },
+      "index.threads": (params) => {
+        const page = params["cursor"] === undefined ? 0 : Number(params["cursor"]);
+        return (pages.threads ?? [{ rows: [] }])[page];
       },
       "index.status": () => fixture("index-status.valid.json"),
       "index.project": () => fixture("index-project.valid.json"),
@@ -295,6 +367,61 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     feed.close();
   });
 
+  it("AR-8 (L1): the threads ride the first read; a ping that names only one part reads only that part again", async () => {
+    const pages: { sessions: unknown[]; threads: unknown[] } = {
+      sessions: [SESSIONS],
+      threads: [{ rows: THREADS.rows.slice(0, 2), cursor: "1" }, { rows: THREADS.rows.slice(2) }],
+    };
+    const door = scripted(pages);
+    const catalog = catalogPortOver(door);
+    const changes: MetaState[] = [];
+    const feed = catalog.subscribeMeta({ onChange: (meta) => changes.push(meta) });
+    await flush();
+    expect(changes).toHaveLength(1);
+    expect(changes[0]?.sessions.map((row) => row.id)).toEqual([
+      "ses-9b2f0c7d",
+      "ses-5d1e88a0",
+      "ses-7c40aa19",
+      "ses-0e93b7c2",
+    ]);
+    // every page of the threads, asked with no scope: they are this desktop's
+    const threadAsks = door.calls.filter((call) => call.method === "index.threads");
+    expect(threadAsks.map((call) => call.params)).toEqual([
+      { limit: 500 },
+      { limit: 500, cursor: "1" },
+    ]);
+    const asked = (): string[] => door.calls.map((call) => call.method);
+    const askedSince = (at: number): string[] =>
+      asked()
+        .slice(at)
+        .filter((method) => method !== "index.changes.subscribe");
+
+    // a thread moved: only the threads are read again — the roots are kept
+    let at = asked().length;
+    pages.threads = [{ rows: [{ ...THREADS.rows[0], title: "renamed thread" }] }];
+    door.ping("delta", ["threads"]);
+    await flush();
+    expect(askedSince(at)).toEqual(["index.threads"]);
+    expect(changes.at(-1)?.sessions.map((row) => row.title)).toEqual([
+      "the history catalog across desktops",
+      "renamed thread",
+    ]);
+
+    // a root moved: the two listings, and the threads are kept
+    at = asked().length;
+    door.ping("delta", ["sessions"]);
+    await flush();
+    expect(askedSince(at).sort()).toEqual(["index.projects", "index.sessions"]);
+    expect(changes.at(-1)?.sessions).toHaveLength(2);
+
+    // a ping that names nothing (a phase moved): all three
+    at = asked().length;
+    door.ping("delta", []);
+    await flush();
+    expect(askedSince(at).sort()).toEqual(["index.projects", "index.sessions", "index.threads"]);
+    feed.close();
+  });
+
   it("says the catalog's refusal in fieldd's words and asks again, never a blank", async () => {
     vi.useFakeTimers();
     let ready = false;
@@ -310,6 +437,7 @@ describe("the catalog port's meta feed (AR-8c)", () => {
         return { rows: PROJECTS.rows, sources: PROJECTS.sources };
       },
       "index.sessions": () => SESSIONS,
+      "index.threads": () => ({ rows: [] }),
     });
     const catalog = catalogPortOver(door);
     const changes: string[] = [];

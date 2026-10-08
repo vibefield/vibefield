@@ -115,6 +115,8 @@ function fieldd(resume: () => unknown) {
           return { rows: [PROJECTS.rows[0]], sources: PROJECTS.sources };
         case "index.sessions":
           return SESSIONS;
+        case "index.threads":
+          return { rows: [] };
         case "index.status":
           return fixture("index-status.valid.json");
         case "index.project":

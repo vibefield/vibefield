@@ -19,6 +19,7 @@ import {
   type IndexSearchResult,
   IndexSearchResult as IndexSearchResultSchema,
   IndexSessionsResult,
+  type IndexThread,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { CatalogTable, createRowsPump } from "../src/catalog-rows";
@@ -97,16 +98,23 @@ function desktop(device: string, epoch = `${device}-boot-1`, opts: { pageBytes?:
     keyOf: (row) => row.sessionId,
     ...opts,
   });
+  // AR-8 (L1) — the local-only delegated threads
+  const threads = new CatalogTable<IndexThread>({
+    epoch,
+    keyOf: (row) => row.sessionId,
+    ...opts,
+  });
   const events = new EventEmitter();
   const local = Object.assign(events, {
     projects,
     sessions,
+    threads,
     ready: true,
     phase: "live",
     heardAt: Date.now(),
     table: (name: string) => (name === "projects" ? projects : sessions),
   });
-  return { device, projects, sessions, local: local as unknown as IndexCatalog };
+  return { device, projects, sessions, threads, local: local as unknown as IndexCatalog };
 }
 
 type Desktop = ReturnType<typeof desktop>;
@@ -1155,5 +1163,42 @@ describe("IndexMesh — the change pings", () => {
     await until(() => localPings.length > 0, 3_000, "the local ping");
     const ping = localPings.at(-1) as { since: number; revision: number };
     expect(ping.revision).toBeGreaterThan(ping.since);
+  });
+
+  it("AR-8 (L1): a delegated thread's move pings a local page BY NAME, and never a mesh page; a root's names its own table", async () => {
+    const a = desktop("dev-a");
+    const { aggregator } = mesh({ self: a, desktops: [a], peers: [] });
+    const meshPings: unknown[] = [];
+    const localPings: unknown[] = [];
+    const meshSub = aggregator.changes({ scope: "mesh" }, (payload) => meshPings.push(payload));
+    const localSub = aggregator.changes({ scope: "local" }, (payload) => localPings.push(payload));
+    meshSub.start();
+    localSub.start();
+    cleanup.push(() => meshSub.dispose());
+    cleanup.push(() => localSub.dispose());
+
+    a.threads.upsert([
+      {
+        sessionId: "c1",
+        nativeSessionId: "nat-c1",
+        parentSessionId: "a1",
+        rootSessionId: "a1",
+        role: "subagent",
+        delegation: { parentToolNativeId: "toolu_1" },
+        activity: null,
+        streamState: "indexed",
+      },
+    ]);
+    await until(() => localPings.length > 0, 3_000, "the thread's local ping");
+    expect(localPings.at(-1)).toMatchObject({ tables: ["threads"], devices: ["dev-a"] });
+    // the mesh chain did not move: wait out a ping window and look again
+    await new Promise((resolve) => setTimeout(resolve, 120));
+    expect(meshPings).toHaveLength(0);
+
+    a.sessions.upsert([session("dev-a", "a1", 10)]);
+    await until(() => meshPings.length > 0, 3_000, "the root's mesh ping");
+    expect(meshPings.at(-1)).toMatchObject({ tables: ["sessions"] });
+    await until(() => localPings.length > 1, 3_000, "the root's local ping");
+    expect(localPings.at(-1)).toMatchObject({ tables: ["sessions"] });
   });
 });

@@ -422,6 +422,20 @@ export const IndexSessionActivity = z
   .passthrough();
 export type IndexSessionActivity = z.infer<typeof IndexSessionActivity>;
 
+/** rosetta `SessionDelegation`, read loosely: every column nullish (rosetta
+ * writes only what a native sidecar proves — the Agent tool's id, the workflow
+ * run, the team, its colour, the configured model). */
+export const IndexSessionDelegationRow = z
+  .object({
+    parent_tool_native_id: z.string().nullish(),
+    workflow_run_id: z.string().nullish(),
+    team: z.string().nullish(),
+    color: z.string().nullish(),
+    configured_model: z.string().nullish(),
+  })
+  .passthrough();
+export type IndexSessionDelegationRow = z.infer<typeof IndexSessionDelegationRow>;
+
 /** rosetta `SessionRow`, NARROWED to the columns fieldd joins on. An absent
  * `activity` reads as null — the same safe answer as an explicit null (no
  * evidence is never idle), so a serializer that ever skips the field cannot
@@ -458,6 +472,13 @@ export const IndexSessionRow = z
     runtime_id: z.string().nullish(),
     project_id: z.string().nullish(),
     started_at: z.number().finite().nullish(),
+    // AR-8 (build-hf.md L1, 2026-10-08) — the columns a DELEGATED THREAD
+    // carries: rosetta's `SessionRole` (`main` · `subagent` · `team`, an open
+    // vocabulary here) and its `SessionDelegation`, the native evidence that
+    // places a child under its parent's delegate line. Neither is identity, so
+    // a value this build cannot read is no value (`.catch`), never a row lost.
+    role: z.string().nullish().catch(null),
+    delegation: IndexSessionDelegationRow.nullish().catch(null),
   })
   .passthrough();
 export type IndexSessionRow = z.infer<typeof IndexSessionRow>;
@@ -852,9 +873,18 @@ export type IndexSearchResult = z.infer<typeof IndexSearchResult>;
 // pages the MERGED replica through `index.projects` / `index.sessions`
 // (DS-L4: the daemon aggregates, a client never merges).
 
-export const INDEX_CATALOG_TABLES = ["projects", "sessions"] as const;
+/** Every table a desktop's catalog holds — the vocabulary of the change pings'
+ * `tables` hint. AR-8 (build-hf.md L1, 2026-10-08) adds `threads`: this
+ * desktop's DELEGATED threads, held for its own windows and NEVER replicated
+ * (`INDEX_REPLICATED_TABLES` stays the two). */
+export const INDEX_CATALOG_TABLES = ["projects", "sessions", "threads"] as const;
 export const IndexCatalogTable = z.enum(INDEX_CATALOG_TABLES);
 export type IndexCatalogTable = (typeof INDEX_CATALOG_TABLES)[number];
+
+/** The two tables a self peer replicates (`index.catalog.subscribe`). */
+export const INDEX_REPLICATED_TABLES = ["projects", "sessions"] as const;
+export const IndexReplicatedTable = z.enum(INDEX_REPLICATED_TABLES);
+export type IndexReplicatedTable = (typeof INDEX_REPLICATED_TABLES)[number];
 
 /** One project as its OWNER republishes it: rosetta's project (the opaque id
  * is a hash of a LOCAL path — identity stays `{device, path}`, D30), plus the
@@ -924,7 +954,7 @@ export type IndexCatalogSession = z.infer<typeof IndexCatalogSession>;
  * other (titles, summaries and folders are the history's content —
  * `index.search` consent — and a window pages the merged replica instead). */
 export const IndexCatalogSubscribeParams = RowsSubscribeParams.extend({
-  table: IndexCatalogTable,
+  table: IndexReplicatedTable,
 }).passthrough();
 export type IndexCatalogSubscribeParams = z.infer<typeof IndexCatalogSubscribeParams>;
 
@@ -975,6 +1005,86 @@ export const IndexChangesSubscribeParams = RowsSubscribeParams.extend({
   scope: MeshScope.optional(),
 }).passthrough();
 export type IndexChangesSubscribeParams = z.infer<typeof IndexChangesSubscribeParams>;
+
+// ── AR-8 — delegated threads (build-hf.md L1, the lead's decision 2026-10-08) ──
+//
+// rosettad's meta stream sends every session, a subagent's or a team member's
+// included; the catalog keeps those children out of `sessions` (its rows are
+// top-level: the listing, `sessionCount`, PJ's grouping, the replica, the
+// phone). The History room needs them all the same: it draws a child as a
+// SUBTHREAD under its parent's delegate line, opens it lazily by its own grant,
+// and files a search hit inside one under its root. So the catalog holds them
+// in a third, LOCAL-ONLY table, `threads`, read by this desktop's own windows
+// through `index.threads` — never replicated, never federated, and named in
+// `INDEX_CATALOG_TABLES` so the change pings say when it moved. The phone gets
+// threads later, with SP-7's full transcripts.
+
+/** A thread's delegation, projected: rosetta's `SessionDelegation` in
+ * VibeField's spelling, each column absent when rosetta reported none. `color`
+ * is rosetta's participant colour, an open vocabulary here. */
+export const IndexThreadDelegation = z
+  .object({
+    parentToolNativeId: z.string().optional(),
+    workflowRunId: z.string().optional(),
+    team: z.string().optional(),
+    color: z.string().optional(),
+    configuredModel: z.string().optional(),
+  })
+  .passthrough();
+export type IndexThreadDelegation = z.infer<typeof IndexThreadDelegation>;
+
+/** One delegated thread: `IndexCatalogSession`'s columns without the device
+ * (it never leaves this desktop), plus where it hangs — its parent (a root or
+ * another thread) and the root it rolls up to — its `role` (rosetta's
+ * `subagent` · `team` today, an OPEN vocabulary: a word this build never heard
+ * of is carried; absent when rosetta reported none) and its `delegation`
+ * (null when no sidecar proved one). */
+export const IndexThread = z
+  .object({
+    sessionId: z.string().min(1),
+    nativeSessionId: z.string(),
+    parentSessionId: z.string().min(1),
+    rootSessionId: z.string().min(1),
+    role: z.string().min(1).optional(),
+    delegation: IndexThreadDelegation.nullable(),
+    kind: AgentKind.optional(),
+    provider: AgentProviderId.optional(),
+    projectId: z.string().min(1).optional(),
+    title: z.string().optional(),
+    summary: z.string().optional(),
+    cwd: z.string().optional(),
+    startedAt: z.number().finite().optional(),
+    updatedAt: z.number().finite().optional(),
+    activity: z
+      .object({ firstAt: z.number().finite(), lastAt: z.number().finite() })
+      .passthrough()
+      .nullable(),
+    streamState: z.string(),
+  })
+  .passthrough();
+export type IndexThread = z.infer<typeof IndexThread>;
+
+/** `index.threads` — a page of this desktop's delegated threads, by keyset
+ * (`cursor` is the previous answer's, opaque), in a stable order — by root,
+ * then by id — that no activity moves, so a walk never skips a thread. */
+export const IndexThreadsParams = z
+  .object({
+    cursor: z.string().min(1).max(1024).optional(),
+    limit: z.number().int().min(1).max(500).optional(),
+  })
+  .passthrough();
+export type IndexThreadsParams = z.infer<typeof IndexThreadsParams>;
+
+/** `index.threads`' answer: a page and the next page's `cursor` (absent on
+ * the last). A catalog that has not read the index yet is refused
+ * UNAVAILABLE, never answered as no threads. */
+export const IndexThreadsResult = z
+  .object({
+    rows: z.array(IndexThread),
+    cursor: z.string().min(1).optional(),
+  })
+  .passthrough();
+export type IndexThreadsResult = z.infer<typeof IndexThreadsResult>;
 
 // ── AR-8b — the History room's reads (thinking-ar-history-room.md §3) ──
 //

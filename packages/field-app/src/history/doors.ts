@@ -9,12 +9,15 @@ import type {
   MetaState,
   MetaSubscriptionHandlers,
   ModelDay,
+  ParticipantColor,
   ProjectRow,
   RuntimeBackfill,
   RuntimeRow,
   SearchHit,
   SearchReadiness,
   SearchResponse,
+  SessionDelegation,
+  SessionRole,
   SessionRow,
   StreamState,
   SubscriptionStatus,
@@ -40,6 +43,9 @@ import {
   type IndexSession,
   IndexSessionsResult,
   IndexStatus,
+  type IndexThread,
+  type IndexThreadDelegation,
+  IndexThreadsResult,
 } from "@vibefield/contracts";
 import { WorkspaceClient, type WorkspaceClientOptions } from "../workspace/client";
 import { type AssetSourceOptions, assetSourceOver, type HistoryAssetSource } from "./asset-source";
@@ -112,6 +118,17 @@ const STREAM_STATES: ReadonlySet<string> = new Set<StreamState>([
   "streaming",
   "indexed",
 ]);
+const SESSION_ROLES: ReadonlySet<string> = new Set<SessionRole>(["main", "subagent", "team"]);
+const PARTICIPANT_COLORS: ReadonlySet<string> = new Set<ParticipantColor>([
+  "blue",
+  "green",
+  "yellow",
+  "purple",
+  "orange",
+  "pink",
+  "cyan",
+  "red",
+]);
 const SEARCH_READINESS: ReadonlySet<string> = new Set<SearchReadiness>([
   "ready",
   "building",
@@ -141,13 +158,55 @@ export function projectRowOf(row: IndexCatalogProject): ProjectRow {
 }
 
 /** One top-level session of the catalog's listing as rosetta's `SessionRow`.
- * The catalog lists ROOTS only (a delegated child is transcript structure), so
- * every row is its own root, `main`, with no parent and no delegation; a
- * column the listing does not carry is the honest null (`summary`, `cwd`, …)
- * or, where rosetta's row requires a number, the nearest fact the catalog does
- * carry: a session's start is its first recorded activity when the catalog has
- * no start, and its freshness its last. */
+ * The listing holds ROOTS only — a delegated child arrives through
+ * `index.threads` (`threadRowOf`) — so every row is its own root, `main`, with
+ * no parent and no delegation; a column the listing does not carry is the
+ * honest null (`summary`, `cwd`, …) or, where rosetta's row requires a number,
+ * the nearest fact the catalog does carry: a session's start is its first
+ * recorded activity when the catalog has no start, and its freshness its last. */
 export function sessionRowOf(row: IndexSession): SessionRow {
+  return roomRowOf(row, {
+    parent_session_id: null,
+    delegation: null,
+    root_session_id: row.rootSessionId,
+    role: "main",
+  });
+}
+
+/** One delegated thread (`index.threads`, AR-8 L1) as rosetta's `SessionRow`:
+ * where it hangs — its parent and the root it rolls up to — its role (a word
+ * the room does not draw is a subagent: a child it is) and its delegation, in
+ * rosetta's spelling again, the native evidence the room places its subthread
+ * by. A colour outside rosetta's eight is no colour. */
+export function threadRowOf(row: IndexThread): SessionRow {
+  return roomRowOf(row, {
+    parent_session_id: row.parentSessionId,
+    delegation: row.delegation === null ? null : delegationOf(row.delegation),
+    root_session_id: row.rootSessionId,
+    role:
+      row.role !== undefined && SESSION_ROLES.has(row.role)
+        ? (row.role as SessionRole)
+        : "subagent",
+  });
+}
+
+function delegationOf(delegation: IndexThreadDelegation): SessionDelegation {
+  const color = delegation.color;
+  return {
+    parent_tool_native_id: delegation.parentToolNativeId ?? null,
+    workflow_run_id: delegation.workflowRunId ?? null,
+    team: delegation.team ?? null,
+    color:
+      color !== undefined && PARTICIPANT_COLORS.has(color) ? (color as ParticipantColor) : null,
+    configured_model: delegation.configuredModel ?? null,
+  };
+}
+
+/** The columns a root and a thread share, and where the row hangs. */
+function roomRowOf(
+  row: IndexSession | IndexThread,
+  place: Pick<SessionRow, "parent_session_id" | "delegation" | "root_session_id" | "role">,
+): SessionRow {
   const startedAt = row.startedAt ?? row.activity?.firstAt ?? row.updatedAt ?? 0;
   return {
     id: row.sessionId,
@@ -155,10 +214,7 @@ export function sessionRowOf(row: IndexSession): SessionRow {
     runtime_id: runtimeKindOf(row.provider),
     project_id: row.projectId ?? null,
     cwd: row.cwd ?? null,
-    parent_session_id: null,
-    delegation: null,
-    root_session_id: row.rootSessionId,
-    role: "main",
+    ...place,
     title: row.title ?? null,
     summary: row.summary ?? null,
     started_at: startedAt,
@@ -173,13 +229,16 @@ export function sessionRowOf(row: IndexSession): SessionRow {
   };
 }
 
-/** The room's whole topology from the catalog's two listings: the runtimes are
- * one per agent kind the sessions are filed under (see `runtimeKindOf`). */
+/** The room's whole topology from the catalog's listings — the roots and,
+ * since AR-8 (L1), the delegated threads beside them, which the room builds
+ * its subthreads and its search grouping from: the runtimes are one per agent
+ * kind the sessions are filed under (see `runtimeKindOf`). */
 export function metaStateOf(
   projects: readonly IndexCatalogProject[],
   sessions: readonly IndexSession[],
+  threads: readonly IndexThread[] = [],
 ): MetaState {
-  const sessionRows = sessions.map(sessionRowOf);
+  const sessionRows = [...sessions.map(sessionRowOf), ...threads.map(threadRowOf)];
   const kinds = [...new Set(sessionRows.map((row) => row.runtime_id))].sort();
   return {
     runtimes: kinds.map(
@@ -370,6 +429,34 @@ function withSignal<T>(answer: Promise<T>, signal: AbortSignal | undefined): Pro
 
 /* ── the catalog port ───────────────────────────────────────────────────── */
 
+/** The two parts of the room's meta a read fetches: the roots (`index.projects`
+ * + `index.sessions`) and the delegated threads (`index.threads`). */
+interface MetaParts {
+  readonly roots: boolean;
+  readonly threads: boolean;
+}
+const ALL_PARTS: MetaParts = { roots: true, threads: true };
+const NO_PARTS: MetaParts = { roots: false, threads: false };
+
+/** The parts a change ping says moved, read from its `tables` hint (AR-8 L1):
+ * a ping that names no table — a phase moved — or one this build does not know
+ * moves both. */
+export function pingParts(payload: unknown): MetaParts {
+  const tables =
+    typeof payload === "object" && payload !== null
+      ? (payload as { tables?: unknown }).tables
+      : undefined;
+  if (!Array.isArray(tables) || tables.length === 0) return ALL_PARTS;
+  let roots = false;
+  let threads = false;
+  for (const table of tables) {
+    if (table === "projects" || table === "sessions") roots = true;
+    else if (table === "threads") threads = true;
+    else return ALL_PARTS;
+  }
+  return { roots, threads };
+}
+
 export interface CatalogPortOptions {
   readonly now?: () => number;
 }
@@ -420,17 +507,19 @@ export function catalogPortOver(
 
   /** Page a whole listing (`index.projects` or `index.sessions`), this
    * desktop's own (`scope: "local"`, one desktop first — PJ's grouping is the
-   * second slice), at the door's own page ceiling. */
+   * second slice), at the door's own page ceiling. `index.threads` is this
+   * desktop's by construction and is asked with no scope. */
   async function listAll<T>(
     method: string,
     parse: (answer: unknown) => { rows: T[]; cursor?: string | undefined },
+    scope: { scope?: "local" } = { scope: "local" },
   ): Promise<T[]> {
     const rows: T[] = [];
     let cursor: string | undefined;
     for (let page = 0; page < HISTORY_LISTING_MAX_PAGES; page += 1) {
       const answer = parse(
         await client.request(method, {
-          scope: "local",
+          ...scope,
           limit: INDEX_MESH.PAGE_MAX_LIMIT,
           ...(cursor !== undefined ? { cursor } : {}),
         }),
@@ -442,12 +531,34 @@ export function catalogPortOver(
     throw new Error(`${method} answered more than ${HISTORY_LISTING_MAX_PAGES} pages`);
   }
 
-  async function readMeta(): Promise<MetaState> {
+  /** What the last read answered: the roots (both listings) and the threads,
+   * each read again only when a ping names its tables (AR-8 L1 — a root's
+   * rename does not re-page every subagent this desktop ever ran). */
+  let held: {
+    roots: { projects: IndexCatalogProject[]; sessions: IndexSession[] } | null;
+    threads: IndexThread[] | null;
+  } = { roots: null, threads: null };
+
+  async function readRoots(): Promise<{
+    projects: IndexCatalogProject[];
+    sessions: IndexSession[];
+  }> {
     const [projects, sessions] = await Promise.all([
       listAll("index.projects", (answer) => IndexProjectsResult.parse(answer)),
       listAll("index.sessions", (answer) => IndexSessionsResult.parse(answer)),
     ]);
-    return metaStateOf(projects, sessions);
+    return { projects, sessions };
+  }
+
+  async function readMeta(want: MetaParts): Promise<MetaState> {
+    const [roots, threads] = await Promise.all([
+      want.roots || held.roots === null ? readRoots() : held.roots,
+      want.threads || held.threads === null
+        ? listAll("index.threads", (answer) => IndexThreadsResult.parse(answer), {})
+        : held.threads,
+    ]);
+    held = { roots, threads };
+    return metaStateOf(roots.projects, roots.sessions, threads);
   }
 
   /** One `index.project` flight per project and window, shared by the panel's
@@ -477,6 +588,8 @@ export function catalogPortOver(
     let loaded = false;
     let status: SubscriptionStatus | null = null;
     let pending: "snapshot" | "mutation" | null = null;
+    /** what the pending read must fetch again */
+    let stale: MetaParts = NO_PARTS;
     let running = false;
     let noted = false;
     let retryTimer: ReturnType<typeof setTimeout> | null = null;
@@ -515,10 +628,13 @@ export function catalogPortOver(
     };
 
     /** Read the listing again: a `snapshot` (the first, and the replay after a
-     * reconnect — baseline data, no promotion) or a `mutation` (a ping). */
-    const request = (kind: "snapshot" | "mutation"): void => {
+     * reconnect — baseline data, no promotion: every part) or a `mutation` (a
+     * ping: the parts its tables name). */
+    const request = (kind: "snapshot" | "mutation", parts: MetaParts = ALL_PARTS): void => {
       if (closed) return;
       pending = pending === "snapshot" || kind === "snapshot" ? "snapshot" : "mutation";
+      const want = kind === "snapshot" ? ALL_PARTS : parts;
+      stale = { roots: stale.roots || want.roots, threads: stale.threads || want.threads };
       if (!active && loaded) {
         noted = true;
         return;
@@ -532,9 +648,11 @@ export function catalogPortOver(
       try {
         while (pending !== null && !closed) {
           const kind = pending;
+          const want = stale;
           pending = null;
+          stale = NO_PARTS;
           try {
-            const meta = await readMeta();
+            const meta = await readMeta(want);
             if (closed) return;
             lastMeta = meta;
             retryDelay = HISTORY_RETRY_MIN_MS;
@@ -545,7 +663,7 @@ export function catalogPortOver(
             setStatus("live");
           } catch (cause) {
             if (closed) return;
-            fail(cause, () => request(kind));
+            fail(cause, () => request(kind, want));
           }
         }
       } finally {
@@ -558,7 +676,8 @@ export function catalogPortOver(
         .subscribe(
           "index.changes.subscribe",
           { scope: "local" },
-          (_payload, kind) => request(kind === "snapshot" ? "snapshot" : "mutation"),
+          (payload, kind) =>
+            kind === "snapshot" ? request("snapshot") : request("mutation", pingParts(payload)),
           {
             onReplayFailed: (cause) => {
               if (closed) return;
@@ -595,7 +714,7 @@ export function catalogPortOver(
     const onActive = (): void => {
       if (active && noted) {
         noted = false;
-        request(pending ?? "mutation");
+        request(pending ?? "mutation", stale);
       }
     };
     activeListeners.add(onActive);

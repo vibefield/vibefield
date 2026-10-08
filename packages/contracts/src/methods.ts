@@ -1638,6 +1638,22 @@ export const METHODS: MethodDef[] = [
     locality: "stream",
     subscription: { shape: "rows", cadenceFloorMs: INDEX_MESH.CHANGES_MIN_INTERVAL_MS },
   }),
+  // AR-8 (build-hf.md L1, 2026-10-08) — this desktop's DELEGATED threads, the
+  // catalog's local-only third table (agent-index.ts `IndexThread`): a page by
+  // keyset, read by the History room to hang a subagent's or a team member's
+  // session under its parent and to keep a search hit inside one. The
+  // history's content, so `index.search`; `local`, and a WINDOW'S door alone —
+  // the handler refuses every principal but this desktop's window and shell (a
+  // plugin, an MCP agent, a guest, the phone, a peer daemon — the last at the
+  // D36 wall first). The phone reads threads later, with SP-7's transcripts;
+  // the change pings name `threads` when the table moves.
+  defineMethod({
+    surface: "product",
+    method: "index.threads",
+    scope: "index.search",
+    idempotent: true,
+    locality: "local",
+  }),
   // QL (thinking-ql-empty-pane-launcher.md, QL-D9) — the empty pane
   // launcher's list: a folder's past sessions (its rosetta project) or every
   // project's, newest first. The same consent as the two above — titles,

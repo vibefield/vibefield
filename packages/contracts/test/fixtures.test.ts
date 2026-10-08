@@ -70,6 +70,8 @@ import {
   IndexSessionTailDelta,
   IndexSessionTailOpen,
   IndexStatus,
+  IndexThreadsParams,
+  IndexThreadsResult,
   IndexTimelineFrameRow,
   IndexTimelinePageResponse,
   IndexTimelineParams,
@@ -337,6 +339,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "index-catalog-delta": IndexCatalogDelta,
   "index-projects": IndexProjectsResult,
   "index-changes-subscribe-params": IndexChangesSubscribeParams,
+  // AR-8 (build-hf.md L1) — the delegated threads' door: the ask and a page
+  // (a subagent, a team member under it, a role this build never heard of).
+  "index-threads-params": IndexThreadsParams,
+  "index-threads": IndexThreadsResult,
   // SP-3 — the direct plane's door, declared: the ask, and the ticket DS-7 will
   // answer (rosettad's endpoint set beside rosetta's own grant — the grant is
   // rosetta's first valid vector). Until DS-7 it answers

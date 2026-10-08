@@ -11,7 +11,11 @@ import {
   type IndexCatalogSession,
   type IndexCatalogTable,
   IndexProjectRow,
+  type IndexReplicatedTable,
+  type IndexSessionDelegationRow,
   IndexSessionRow,
+  type IndexThread,
+  type IndexThreadDelegation,
   type PlaceFacts,
 } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
@@ -48,7 +52,16 @@ import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 // 1,001st root falling off the window as a removal.
 //
 // Top-level sessions only (`parent_session_id` absent — the navigation fact
-// `/api/sessions` browses by): a delegated child is transcript structure. The
+// `/api/sessions` browses by): a delegated child is transcript structure.
+// *AR-8 (build-hf.md L1, 2026-10-08):* the children are KEPT all the same, in
+// a third table, `threads`, LOCAL-ONLY — no pump serves it to a peer, the
+// replica never holds it, no listing or figure counts it — for this desktop's
+// own windows (`index.threads`): the History room hangs each under its
+// parent's delegate line and keeps a search hit inside one. A thread is held
+// while its root is listed: a snapshot drops a child whose root it does not
+// list, and a root that leaves takes its threads with it; a child the stream
+// sends before its root is held (Claude writes either transcript first) until
+// the next snapshot says otherwise. The
 // runtime rows are read only to name each session's agent (rosetta's `kind`,
 // the seam column the duplicate rule joins on, DS-D10, and the catalog id it
 // maps to). The project rows gain the repository FAMILY (DS-D9) and two
@@ -135,6 +148,8 @@ export class IndexCatalog extends EventEmitter {
   readonly epoch: string;
   readonly projects: CatalogTable<IndexCatalogProject>;
   readonly sessions: CatalogTable<IndexCatalogSession>;
+  /** AR-8 (L1) — the delegated threads: local-only, never pumped to a peer */
+  readonly threads: CatalogTable<IndexThread>;
   readonly #opts: IndexCatalogOptions;
   readonly #logger: Logger;
   readonly #catalog: AgentCatalogReaders;
@@ -172,6 +187,8 @@ export class IndexCatalog extends EventEmitter {
   #sessionProject = new Map<string, string>();
   #projectSessions = new Map<string, Set<string>>();
   #sessionRuntime = new Map<string, string>();
+  /** thread id → its runtime id (a runtime's kind moving re-labels it) */
+  #threadRuntime = new Map<string, string>();
 
   /** mutations folded into one frame per table per batch window */
   #pendingSessions = new Map<string, IndexSessionRow | null>();
@@ -210,18 +227,23 @@ export class IndexCatalog extends EventEmitter {
       ...tableOpts,
       keyOf: (row) => row.sessionId,
     });
+    this.threads = new CatalogTable<IndexThread>({
+      ...tableOpts,
+      keyOf: (row) => row.sessionId,
+    });
   }
 
-  /** The table a subscribe names. */
+  /** The table a subscribe names — a REPLICATED one: the threads are never
+   * a peer's to read. */
   table(
-    name: IndexCatalogTable,
+    name: IndexReplicatedTable,
   ): CatalogTable<IndexCatalogProject> | CatalogTable<IndexCatalogSession> {
     return name === "projects" ? this.projects : this.sessions;
   }
 
   /** One subscriber of a table — the catalog door's body (the rows protocol's
    * open, then its frames; catalog-rows.ts). */
-  pump(name: IndexCatalogTable, opts: Omit<RowsPumpOptions<unknown>, "table">): RowsPump {
+  pump(name: IndexReplicatedTable, opts: Omit<RowsPumpOptions<unknown>, "table">): RowsPump {
     return name === "projects"
       ? createRowsPump({ ...opts, table: this.projects })
       : createRowsPump({ ...opts, table: this.sessions });
@@ -283,7 +305,7 @@ export class IndexCatalog extends EventEmitter {
     if (device !== this.#stamped) this.#restamp(device);
     const upserts = [...this.#rawProjects.values()].map((raw) => this.#projectRow(raw, device));
     const moved = this.projects.apply({ upserts }) !== null;
-    this.#changed(moved, false, false);
+    this.#changed(moved, false, false, false);
   }
 
   /** Take a fresh snapshot now (the cadence's own act, or a caller that has
@@ -514,16 +536,29 @@ export class IndexCatalog extends EventEmitter {
     this.#projectSessions = new Map();
     this.#sessionRuntime = new Map();
     const sessions: IndexCatalogSession[] = [];
+    const children: IndexSessionRow[] = [];
     for (const raw of asArray(record["sessions"])) {
       const parsed = IndexSessionRow.safeParse(raw);
       if (!parsed.success) {
         this.#sayUnreadable("session");
         continue;
       }
-      if (isChild(parsed.data)) continue;
+      if (isChild(parsed.data)) {
+        children.push(parsed.data);
+        continue;
+      }
       const row = this.#sessionRow(parsed.data, device);
       this.#index(row.sessionId, row.projectId, parsed.data.runtime_id ?? undefined);
       sessions.push(row);
+    }
+    // AR-8 (L1) — the children are threads, held while their root is listed
+    const roots = new Set(sessions.map((row) => row.sessionId));
+    this.#threadRuntime = new Map();
+    const threads: IndexThread[] = [];
+    for (const child of children) {
+      if (!roots.has(child.root_session_id)) continue;
+      threads.push(this.#threadRow(child));
+      if (child.runtime_id) this.#threadRuntime.set(child.id, child.runtime_id);
     }
     this.#rawProjects = new Map();
     for (const raw of asArray(record["projects"])) {
@@ -532,6 +567,7 @@ export class IndexCatalog extends EventEmitter {
       else this.#sayUnreadable("project");
     }
     const movedSessions = this.sessions.replaceAll(sessions) !== null;
+    const movedThreads = this.threads.replaceAll(threads) !== null;
     const projects = [...this.#rawProjects.values()].map((raw) => this.#projectRow(raw, device));
     const movedProjects = this.projects.replaceAll(projects) !== null;
     this.#stamped = device;
@@ -548,9 +584,10 @@ export class IndexCatalog extends EventEmitter {
         {
           sessions: this.sessions.size,
           projects: this.projects.size,
+          threads: this.threads.size,
         },
       );
-    this.#changed(movedProjects, movedSessions, first);
+    this.#changed(movedProjects, movedSessions, movedThreads, first);
   }
 
   #armResnapshot(): void {
@@ -618,6 +655,8 @@ export class IndexCatalog extends EventEmitter {
     const sessionUpserts = new Map<string, IndexCatalogSession>();
     const sessionRemoved: string[] = [];
     const touchedProjects = new Set<string>();
+    const threadUpserts = new Map<string, IndexThread>();
+    const threadRemoved = new Set<string>();
 
     for (const [id, kind] of this.#pendingRuntimes) {
       if (this.#runtimeKinds.get(id) === kind) continue;
@@ -627,6 +666,11 @@ export class IndexCatalog extends EventEmitter {
         if (runtimeId !== id || current === undefined) continue;
         sessionUpserts.set(sessionId, this.#withAgent(current, kind));
       }
+      for (const [threadId, runtimeId] of this.#threadRuntime) {
+        const current = this.threads.get(threadId);
+        if (runtimeId !== id || current === undefined) continue;
+        threadUpserts.set(threadId, this.#withAgent(current, kind));
+      }
     }
     for (const [id, raw] of this.#pendingSessions) {
       const before = this.#sessionProject.get(id);
@@ -635,7 +679,24 @@ export class IndexCatalog extends EventEmitter {
         sessionUpserts.delete(id);
         this.#unindex(id);
         if (before !== undefined) touchedProjects.add(before);
+        // AR-8 (L1) — a delegated child is a thread (its root may not be
+        // listed yet: Claude writes either transcript first)
+        this.#threadRuntime.delete(id);
+        if (raw === null) {
+          threadUpserts.delete(id);
+          threadRemoved.add(id);
+        } else {
+          threadRemoved.delete(id);
+          threadUpserts.set(id, this.#threadRow(raw));
+          if (raw.runtime_id) this.#threadRuntime.set(id, raw.runtime_id);
+        }
         continue;
+      }
+      // a root now: it is no thread
+      if (this.threads.has(id) || threadUpserts.has(id)) {
+        threadUpserts.delete(id);
+        threadRemoved.add(id);
+        this.#threadRuntime.delete(id);
       }
       const row = this.#sessionRow(raw, device);
       this.#unindex(id);
@@ -646,6 +707,21 @@ export class IndexCatalog extends EventEmitter {
     }
     const movedSessions =
       this.sessions.apply({ upserts: [...sessionUpserts.values()], removed: sessionRemoved }) !==
+      null;
+    // a root that left takes its threads with it
+    if (sessionRemoved.length > 0) {
+      const gone = new Set(sessionRemoved);
+      for (const id of new Set([...this.threads.keys(), ...threadUpserts.keys()])) {
+        const thread = threadUpserts.get(id) ?? this.threads.get(id);
+        if (threadRemoved.has(id) || thread === undefined || !gone.has(thread.rootSessionId))
+          continue;
+        threadUpserts.delete(id);
+        threadRemoved.add(id);
+        this.#threadRuntime.delete(id);
+      }
+    }
+    const movedThreads =
+      this.threads.apply({ upserts: [...threadUpserts.values()], removed: [...threadRemoved] }) !==
       null;
     for (const [id, raw] of this.#pendingProjects) {
       this.#rawProjects.set(id, raw);
@@ -660,7 +736,7 @@ export class IndexCatalog extends EventEmitter {
     this.#pendingSessions.clear();
     this.#pendingProjects.clear();
     this.#pendingRuntimes.clear();
-    this.#changed(movedProjects, movedSessions, false);
+    this.#changed(movedProjects, movedSessions, movedThreads, false);
   }
 
   /** The device id moved (the local fallback became the mesh identity): every
@@ -671,10 +747,11 @@ export class IndexCatalog extends EventEmitter {
     this.#stamped = device;
   }
 
-  #changed(projects: boolean, sessions: boolean, force: boolean): void {
+  #changed(projects: boolean, sessions: boolean, threads: boolean, force: boolean): void {
     const tables: IndexCatalogTable[] = [];
     if (projects) tables.push("projects");
     if (sessions) tables.push("sessions");
+    if (threads) tables.push("threads");
     if (tables.length > 0 || force) this.emit("changed", { tables });
   }
 
@@ -726,9 +803,41 @@ export class IndexCatalog extends EventEmitter {
     return kind === undefined ? base : this.#withAgent(base, kind);
   }
 
+  /** AR-8 (L1) — one delegated child as the threads table holds it: the
+   * session's columns (no device: it never leaves this desktop), where it
+   * hangs, its role and its delegation, projected. */
+  #threadRow(row: IndexSessionRow): IndexThread {
+    const bounds = row.activity;
+    const activity =
+      bounds !== null && bounds.first_at <= bounds.last_at
+        ? { firstAt: bounds.first_at, lastAt: bounds.last_at }
+        : null;
+    const kind =
+      row.runtime_id === null || row.runtime_id === undefined
+        ? undefined
+        : this.#runtimeKinds.get(row.runtime_id);
+    const base: IndexThread = {
+      sessionId: row.id,
+      nativeSessionId: row.native_session_id,
+      parentSessionId: row.parent_session_id ?? "",
+      rootSessionId: row.root_session_id,
+      ...(row.role ? { role: row.role } : {}),
+      delegation: row.delegation ? delegationOf(row.delegation) : null,
+      ...(row.project_id ? { projectId: row.project_id } : {}),
+      ...(row.title ? { title: row.title } : {}),
+      ...(row.summary ? { summary: row.summary } : {}),
+      ...(row.cwd ? { cwd: row.cwd } : {}),
+      ...(typeof row.started_at === "number" ? { startedAt: row.started_at } : {}),
+      ...(typeof row.updated_at === "number" ? { updatedAt: row.updated_at } : {}),
+      activity,
+      streamState: row.stream_state,
+    };
+    return kind === undefined ? base : this.#withAgent(base, kind);
+  }
+
   /** The row naming its agent: rosetta's kind (when it is a kind the contract
    * can carry) and the catalog id it maps to (when a row maps it). */
-  #withAgent(row: IndexCatalogSession, kind: string): IndexCatalogSession {
+  #withAgent<Row extends IndexCatalogSession | IndexThread>(row: Row, kind: string): Row {
     const { kind: _kind, provider: _provider, ...rest } = row;
     const wireKind = AgentKind.safeParse(kind).success ? kind : undefined;
     const provider = wireKind === undefined ? undefined : this.#catalog.idForKind(wireKind);
@@ -736,7 +845,7 @@ export class IndexCatalog extends EventEmitter {
       ...rest,
       ...(wireKind !== undefined ? { kind: wireKind } : {}),
       ...(provider !== undefined ? { provider } : {}),
-    };
+    } as Row;
   }
 
   #projectRow(raw: RawProject, device: string): IndexCatalogProject {
@@ -785,6 +894,18 @@ function refusedUpgradeStatus(error: Error): number | undefined {
   const match = /Unexpected server response: (\d{3})/.exec(error.message);
   const status = match === null ? undefined : Number(match[1]);
   return status === 401 || status === 403 ? status : undefined;
+}
+
+/** rosetta's `SessionDelegation` in VibeField's spelling: a column rosetta
+ * did not report is absent. */
+function delegationOf(raw: IndexSessionDelegationRow): IndexThreadDelegation {
+  return {
+    ...(raw.parent_tool_native_id ? { parentToolNativeId: raw.parent_tool_native_id } : {}),
+    ...(raw.workflow_run_id ? { workflowRunId: raw.workflow_run_id } : {}),
+    ...(raw.team ? { team: raw.team } : {}),
+    ...(raw.color ? { color: raw.color } : {}),
+    ...(raw.configured_model ? { configuredModel: raw.configured_model } : {}),
+  };
 }
 
 /** Parent absence is the navigation fact rosetta's own list browses by. */

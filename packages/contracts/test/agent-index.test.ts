@@ -79,6 +79,9 @@ describe("index.* and agents.* registry rows (AR-1)", () => {
         idempotent: true,
         locality: "stream",
       },
+      // AR-8 (build-hf.md L1) — the delegated threads: the same content, so the
+      // same consent; this desktop's own and a window's door alone, so `local`
+      { method: "index.threads", scope: "index.search", idempotent: true, locality: "local" },
       // QL — the launcher's list is the same content, so the same consent
       { method: "index.recent", scope: "index.search", idempotent: true, locality: "local" },
       // AR-8b — the History room's reads: a session's header, a project's
@@ -391,6 +394,9 @@ describe("SP-D13 — the phone's own history, bounded", () => {
       // SP-6 — the live tail and the page door
       "index.session.subscribe",
       "index.sessions",
+      // AR-8 (L1) — reachable by its scope like the catalog door above, and
+      // like it refused the phone by its handler: the threads are a window's
+      "index.threads",
       "index.timeline",
     ]);
     for (const m of doors) {

@@ -13,6 +13,8 @@
  * prints — and are left alone when there is nothing to walk, while the sheet
  * is open, or when History is not the view; the empty transcript says
  * VibeField's words. (Through the room's lazy chunk: `history-chunk.test.tsx`.)
+ * And D2 (AR-8, build-hf.md §2): a hit inside a delegated thread is listed
+ * under its root, where it was dropped while the catalog held roots alone.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -151,6 +153,8 @@ function fieldd() {
           return { rows: [PROJECTS.rows[0]], sources: PROJECTS.sources };
         case "index.sessions":
           return SESSIONS;
+        case "index.threads":
+          return { rows: [] };
         case "index.status":
           return fixture("index-status.valid.json");
         case "index.project":
@@ -483,6 +487,51 @@ describe("History's search until the Peek lands (the search interim)", () => {
     expect(slot()?.textContent).not.toContain("⌘K");
     expect(slot()?.textContent).not.toContain("front door");
   });
+});
+
+describe("AR-8 (D2) — a hit inside a delegated thread", () => {
+  it("is listed in the room's sheet under its root — the thread rides the meta (`index.threads`), so the room's grouping keeps it", async () => {
+    // a subagent of the scripted session, as `index.threads` answers it
+    const thread = (fixture("index-threads.valid.json").rows as Array<Record<string, unknown>>)[0];
+    const client = fieldd();
+    const ask = client.request.bind(client);
+    client.request = async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === "index.threads") return { rows: [thread] };
+      if (method === "index.search") {
+        await ask(method, params);
+        return {
+          ...SEARCH,
+          hits: [
+            ...SEARCH.hits,
+            {
+              ...MESH_HIT,
+              sessionId: thread?.["sessionId"],
+              rootSessionId: SESSION["sessionId"],
+              timelineId: "tl-c1",
+              kind: "agent",
+              at: SESSION.activity.lastAt - 300_000,
+              snippet: "the subagent read the [catalog] doors",
+            },
+          ],
+        };
+      }
+      return ask(method, params);
+    };
+    mount(client);
+    await openHistory();
+    const input = await openSheet();
+    typeInto(input, "catalog");
+    const listed = (): Element[] => [...(sheet()?.querySelectorAll('[role="option"]') ?? [])];
+    await until(() => listed().length >= 3, "the root's own three hits in the sheet");
+    const options = await until(
+      () => (listed().length === 4 ? listed() : null),
+      "the thread's hit beside them — a fourth, never dropped",
+      2_000,
+    );
+    expect(options.some((option) => option.textContent?.includes("the subagent read the"))).toBe(
+      true,
+    );
+  }, 15_000);
 });
 
 describe("off the Mac (the search interim)", () => {

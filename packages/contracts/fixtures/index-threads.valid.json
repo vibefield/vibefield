@@ -1,0 +1,50 @@
+{
+  "//": "AR-8 (build-hf.md L1) — `index.threads`: a page of this desktop's DELEGATED threads, the catalog's local-only table. A subagent under its root's Agent tool line (its sidecar proved the tool id and the model), a team member under that subagent with a colour, and a thread whose role is a word this build never heard of — carried, never refused. No `device`: a thread never leaves its desktop.",
+  "rows": [
+    {
+      "sessionId": "ses-5d1e88a0",
+      "nativeSessionId": "a3f0c2d9e1b7",
+      "parentSessionId": "ses-9b2f0c7d",
+      "rootSessionId": "ses-9b2f0c7d",
+      "role": "subagent",
+      "delegation": {
+        "parentToolNativeId": "toolu_01Hx7Qd2",
+        "configuredModel": "claude-haiku-4-5"
+      },
+      "kind": "claude-code",
+      "provider": "claude",
+      "projectId": "p-4f1c2a9e",
+      "title": "map the catalog's readers",
+      "summary": "Explore",
+      "cwd": "/Users/me/Projects/vibe-field",
+      "startedAt": 1759270600000,
+      "updatedAt": 1759270900000,
+      "activity": { "firstAt": 1759270600000, "lastAt": 1759270880000 },
+      "streamState": "indexed"
+    },
+    {
+      "sessionId": "ses-7c40aa19",
+      "nativeSessionId": "b81e5f02c6d4",
+      "parentSessionId": "ses-5d1e88a0",
+      "rootSessionId": "ses-9b2f0c7d",
+      "role": "team",
+      "delegation": { "team": "catalog-crew", "color": "cyan" },
+      "kind": "claude-code",
+      "provider": "claude",
+      "projectId": "p-4f1c2a9e",
+      "activity": null,
+      "streamState": "streaming"
+    },
+    {
+      "sessionId": "ses-0e93b7c2",
+      "nativeSessionId": "c05d9a7e3f11",
+      "parentSessionId": "ses-9b2f0c7d",
+      "rootSessionId": "ses-9b2f0c7d",
+      "role": "swarm",
+      "delegation": null,
+      "activity": { "firstAt": 1759271000000, "lastAt": 1759271200000 },
+      "streamState": "indexed"
+    }
+  ],
+  "cursor": "W251bGwsInNlcy05YjJmMGM3ZCIsInNlcy0wZTkzYjdjMiJd"
+}
