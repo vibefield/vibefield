@@ -11,13 +11,29 @@
 //   E2 confirmed RECENT shared history: one place's desktop found another
 //      place's sample from at most RECENT commits back in its own objects
 //      (`hits`), and the two share their first-parent root;
-//   E3 the person's links (and splits, which take a place out of the
-//      evidence).
+//   E3 the person's links (and splits, which keep a place apart from the
+//      project a record names — PJ-2).
 // Home and Temporary are buckets, not projects (PJ-L4). What evidence only
 // suggests — old shared history, another remote in common, the same folder on
 // two desktops, the same name — is a suggestion, one per pair of projects,
 // never a merge. Records (the person's acts, PJ-2) bind to the group they
 // share the most anchors with and keep its key, name and ink (PJ-L3).
+//
+// PJ-2 (build-pj23.md D2, D3; GROUPING_VERSION 2) — the person's intents as
+// the library keeps them (projects/records-doc.ts):
+//   - a SPLIT is bound to a record, `{place, notRecord}`: the place never
+//     joins the side that record names (the places its `place:` anchors name,
+//     less those split from it), and the record never binds to a group that
+//     holds the place. It no longer takes the place out of all evidence — it
+//     may still join another project, or be suggested to one;
+//   - every link and split carries its act time, and for a pair the LATER act
+//     wins: a link older than a split no longer re-joins the split place, and
+//     a link made after the split lifts it;
+//   - a dismissal binds to the PAIR OF RECORDS (§4.2), not to a suggestion id,
+//     so no other reason surfaces for the same two projects; nor does any
+//     suggestion between a split place and the record it was split from;
+//   - a record's places acted in (D6) make those places `acted` on every
+//     desktop, and its pinned and hidden ride the project it names.
 //
 // PURE: no I/O, no clock, no randomness — every daemon computes the same
 // projects from the same facts (PJ-L1, DS-L4), so a change here is a lockstep
@@ -67,25 +83,46 @@ export interface GroupingDevice {
   readonly places: readonly GroupingPlace[];
 }
 
-/** The person's record of a project (PJ-2 owns its wire shape): made only by
- * an act, holding the anchors its group had at every act. */
+/** The person's record of a project (PJ-2; the library holds it,
+ * projects/records-doc.ts): made only by an act, holding the anchors its
+ * group had at every act. */
 export interface GroupingRecord {
   readonly id: string;
+  /** OLDEST FIRST: a tie between two groups goes to the one holding the first */
   readonly anchors: readonly string[];
   readonly name?: string;
-  /** dealt once, at the record's first act, and kept */
+  /** dealt once, at the record's first act, and kept (P3: the project's
+   * provisional ink at that act, frozen) */
   readonly ink?: number;
   readonly recipe?: unknown;
+  readonly pinned?: boolean;
+  readonly hidden?: boolean;
+  /** D6 — the places the person acted in (a launch, a resume), with the
+   * latest act there, epoch ms */
+  readonly places?: ReadonlyArray<{ readonly placeId: string; readonly at: number }>;
   readonly createdAt: number;
 }
 
+/** E3: two places the person joined, and when (epoch ms). */
+export interface GroupingLink {
+  readonly a: string;
+  readonly b: string;
+  readonly at: number;
+}
+
+/** A place the person took out of the project a record names (§3:
+ * `{place, notRecord}`), and when (epoch ms). */
+export interface GroupingSplit {
+  readonly place: string;
+  readonly notRecord: string;
+  readonly at: number;
+}
+
 export interface GroupingIntents {
-  /** E3: pairs of placeIds the person joined */
-  readonly links?: ReadonlyArray<readonly [string, string]>;
-  /** placeIds the person took out of the evidence */
-  readonly splits?: readonly string[];
-  /** suggestion ids the person dismissed */
-  readonly dismissed?: readonly string[];
+  readonly links?: readonly GroupingLink[];
+  readonly splits?: readonly GroupingSplit[];
+  /** D3 — pairs of record ids whose projects' suggestions the person dismissed */
+  readonly dismissals?: ReadonlyArray<readonly [string, string]>;
   readonly records?: readonly GroupingRecord[];
 }
 
@@ -166,6 +203,9 @@ export interface GroupedProject {
   alsoCalled?: string[];
   recordId?: string;
   recipe?: unknown;
+  /** the naming record's (PJ-2) */
+  pinned?: boolean;
+  hidden?: boolean;
 }
 
 export interface GroupingResult {
@@ -195,6 +235,8 @@ interface Place {
   extraSessions: number;
   extraLast: number;
 }
+
+type EdgeWhy = Omit<GroupingEdge, "a" | "b">;
 
 const baseName = (path: string): string => slashPath(path).split("/").pop() ?? "";
 const repoBase = (key: string): string => key.split("/").pop() ?? key;
@@ -293,15 +335,63 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
 
   const uf = makeUnionFind(P.length);
   const edges: GroupingEdge[] = [];
-  const link = (a: Place, b: Place, why: Omit<GroupingEdge, "a" | "b">): void => {
+  const link = (a: Place, b: Place, why: EdgeWhy): void => {
     if (uf.union(a.i, b.i)) edges.push({ a: a.id, b: b.id, ...why });
   };
-  const splits = new Set(intents.splits ?? []);
   const bucketOf = (x: Place): ProjectBucket | null =>
     x.cls === "home" || x.cls === "temp" ? x.cls : null;
-  const out = (x: Place): boolean => bucketOf(x) !== null || splits.has(x.id);
+  const out = (x: Place): boolean => bucketOf(x) !== null;
 
-  // E1 the identity remote
+  // PJ-2 (D2) — the splits that bind: each keeps its place apart from the
+  // SIDE its record names, the places the record's `place:` anchors name
+  // less those split from it. A split whose place or record is unknown here
+  // keeps nothing apart (yet).
+  const records = intents.records ?? [];
+  const recordIds = new Set(records.map((r) => r.id));
+  const active = new Set(
+    (intents.splits ?? []).filter((s) => byId.has(s.place) && recordIds.has(s.notRecord)),
+  );
+  const splitFrom = new Map<string, Set<Place>>();
+  for (const s of active) {
+    const held = splitFrom.get(s.notRecord) ?? new Set<Place>();
+    held.add(byId.get(s.place)!);
+    splitFrom.set(s.notRecord, held);
+  }
+  const sides = new Map<string, Place[]>();
+  for (const r of records) {
+    const side = new Set<Place>();
+    for (const anchor of r.anchors) {
+      if (!anchor.startsWith("place:")) continue;
+      const x = byId.get(anchor.slice("place:".length));
+      if (x !== undefined && !splitFrom.get(r.id)?.has(x)) side.add(x);
+    }
+    sides.set(r.id, [...side]);
+  }
+  const splitPlaces = new Set([...active].map((s) => byId.get(s.place)!));
+  /** the active splits a union of a's and b's groups would break */
+  const breaks = (a: Place, b: Place): GroupingSplit[] => {
+    const ra = uf.find(a.i);
+    const rb = uf.find(b.i);
+    if (ra === rb) return [];
+    const broken: GroupingSplit[] = [];
+    for (const s of active) {
+      const rp = uf.find(byId.get(s.place)!.i);
+      if (rp !== ra && rp !== rb) continue;
+      const other = rp === ra ? rb : ra;
+      if (sides.get(s.notRecord)?.some((x) => uf.find(x.i) === other)) broken.push(s);
+    }
+    return broken;
+  };
+  // evidence never breaks a split; an edge touching a split place waits for
+  // every other, so the place is the one left out, not its neighbours
+  const first: Array<[Place, Place, EdgeWhy]> = [];
+  const deferred: Array<[Place, Place, EdgeWhy]> = [];
+  const evidence = (a: Place, b: Place, why: EdgeWhy): void => {
+    (splitPlaces.has(a) || splitPlaces.has(b) ? deferred : first).push([a, b, why]);
+  };
+
+  // E1 the identity remote (through a member no split names, so the rest
+  // still join one another when the split place cannot)
   const byRemote = new Map<string, Place[]>();
   for (const x of P) {
     if (out(x) || x.idRemote === null) continue;
@@ -310,7 +400,8 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
     else xs.push(x);
   }
   for (const [key, xs] of byRemote) {
-    for (let j = 1; j < xs.length; j++) link(xs[0]!, xs[j]!, { rule: "remote", via: key });
+    const hub = xs.find((x) => !splitPlaces.has(x)) ?? xs[0]!;
+    for (const x of xs) if (x !== hub) evidence(hub, x, { rule: "remote", via: key });
   }
 
   // E2 confirmed RECENT shared history: one place's desktop found another
@@ -320,8 +411,13 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
     for (const hit of x.hits) {
       const y = byId.get(hit.placeId);
       if (y === undefined || out(y) || x.root === null || x.root !== y.root) continue;
-      if (hit.depth <= RECENT) link(x, y, { rule: "history", via: x.root, depth: hit.depth });
+      if (hit.depth <= RECENT) evidence(x, y, { rule: "history", via: x.root, depth: hit.depth });
     }
+  }
+  const heldBack: Array<[Place, Place, EdgeWhy]> = [];
+  for (const edge of [...first, ...deferred]) {
+    if (breaks(edge[0], edge[1]).length > 0) heldBack.push(edge);
+    else link(...edge);
   }
 
   // what evidence only suggests: shared history far back or at the root
@@ -368,12 +464,24 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
     }
   }
 
-  // E3 the person's links
-  for (const [ia, ib] of intents.links ?? []) {
-    const A = byId.get(ia);
-    const B = byId.get(ib);
-    if (A !== undefined && B !== undefined) link(A, B, { rule: "linked", via: "you" });
+  // E3 the person's links, in the order they were made: one that would
+  // break a split made LATER is not taken (the split is the later word); one
+  // made after the split lifts it, and the evidence it held back is retried
+  const links = [...(intents.links ?? [])].sort(
+    (x, y) => x.at - y.at || byString(x.a, y.a) || byString(x.b, y.b),
+  );
+  let lifted = false;
+  for (const l of links) {
+    const A = byId.get(l.a);
+    const B = byId.get(l.b);
+    if (A === undefined || B === undefined) continue;
+    const broken = breaks(A, B);
+    if (broken.some((s) => s.at >= l.at)) continue;
+    for (const s of broken) active.delete(s);
+    lifted ||= broken.length > 0;
+    link(A, B, { rule: "linked", via: "you" });
   }
+  if (lifted) for (const edge of heldBack) if (breaks(edge[0], edge[1]).length === 0) link(...edge);
 
   // gather: the buckets, then each union
   const groups = new Map<string, Place[]>();
@@ -420,22 +528,18 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
     }
   }
 
-  // one suggestion per pair of projects; the person's dismissals hide theirs
-  const dismissed = new Set(intents.dismissed ?? []);
-  const seenPairs = new Set<string>();
-  const liveSuggestions: GroupingSuggestion[] = [];
-  for (const s of suggestions) {
-    const ga = groupOf.get(s.a);
-    const gb = groupOf.get(s.b);
-    if (ga === undefined || gb === undefined || ga === gb) continue;
-    const pair = pairId(ga, gb);
-    if (seenPairs.has(pair) || dismissed.has(s.id)) continue;
-    seenPairs.add(pair);
-    liveSuggestions.push(s);
+  // D6 — a place a record says the person acted in is acted everywhere
+  const actedByRecord = new Set<Place>();
+  for (const r of records) {
+    for (const at of r.places ?? []) {
+      const x = byId.get(at.placeId);
+      if (x !== undefined) actedByRecord.add(x);
+    }
   }
 
   // shape each project
   const projects: GroupedProject[] = [];
+  const projectOf = new Map<string, GroupedProject>();
   const identities: string[] = [];
   for (const [key, xs] of groups) {
     const bucket: ProjectBucket | null = key.startsWith("bucket:")
@@ -495,7 +599,7 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
           lastAt: Math.max(x.input.lastAt || 0, x.extraLast) || null,
           remote: x.idRemote,
           worktreeOf: x.facts.worktreeOf ?? null,
-          acted: x.input.acted === true,
+          acted: x.input.acted === true || actedByRecord.has(x),
         }),
       ),
       devices: [...new Set(xs.map((x) => x.deviceId))],
@@ -505,6 +609,7 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
       allGone: xs.every((x) => !x.facts.exists),
       edges: edges.filter((e) => xs.some((x) => x.id === e.a)),
     });
+    projectOf.set(key, projects.at(-1)!);
     identities.push(bucket !== null ? `bucket:${bucket}` : "");
   }
 
@@ -526,7 +631,44 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
     p.key = projectKey(identity);
     p.ink = provisionalInk(identity);
   });
-  bindRecords(projects, intents.records ?? []);
+  // a record never binds where a place still split from it stands
+  const excluded = new Map<string, Set<string>>();
+  for (const s of active) {
+    const ids = excluded.get(s.notRecord) ?? new Set<string>();
+    const x = byId.get(s.place)!;
+    for (const id of [x.id, ...x.aliasIds]) ids.add(id);
+    excluded.set(s.notRecord, ids);
+  }
+  const bound = bindRecords(projects, records, excluded);
+
+  // one suggestion per pair of projects; none where the person dismissed the
+  // pair (D3: bound to the pair of records, so no next reason surfaces) or
+  // split one from the other
+  const dismissed = new Set((intents.dismissals ?? []).map(([a, b]) => pairId(a, b)));
+  const apart = (a: GroupedProject, b: GroupedProject): boolean => {
+    const ra = bound.get(a) ?? [];
+    const rb = bound.get(b) ?? [];
+    if (ra.some((x) => rb.some((y) => dismissed.has(pairId(x, y))))) return true;
+    for (const s of active) {
+      const at = groupOf.get(byId.get(s.place)!.id);
+      const of = at === undefined ? undefined : projectOf.get(at);
+      if ((of === a && rb.includes(s.notRecord)) || (of === b && ra.includes(s.notRecord)))
+        return true;
+    }
+    return false;
+  };
+  const seenPairs = new Set<string>();
+  const liveSuggestions: GroupingSuggestion[] = [];
+  for (const s of suggestions) {
+    const ga = groupOf.get(s.a);
+    const gb = groupOf.get(s.b);
+    if (ga === undefined || gb === undefined || ga === gb) continue;
+    const pair = pairId(ga, gb);
+    if (seenPairs.has(pair)) continue;
+    seenPairs.add(pair);
+    if (apart(projectOf.get(ga)!, projectOf.get(gb)!)) continue;
+    liveSuggestions.push(s);
+  }
 
   projects.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
   const byShown = new Map<string, GroupedProject[]>();
@@ -548,19 +690,30 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
 /** A record is the person's: made only by an act (a launch, a name, a link, a
  * pin), it carries the anchors of its group at every act. Each record binds
  * to the group it shares the most anchors with (a first commit 4, a remote 2,
- * a place 1); on a tie, the group holding its oldest anchor. The oldest record
+ * a place 1); on a tie, the group holding its oldest anchor — but never to a
+ * group holding a place split from it (`excluded`, PJ-2). The oldest record
  * on a group names it; the others read "also called" and an unnamed one adds
- * no word. Nothing is deleted, so a split gives each record back its side. */
-export function bindRecords(projects: GroupedProject[], records: readonly GroupingRecord[]): void {
+ * no word. Nothing is deleted, so a split gives each record back its side.
+ * Answers the records each project took, its naming one first. */
+export function bindRecords(
+  projects: GroupedProject[],
+  records: readonly GroupingRecord[],
+  excluded: ReadonlyMap<string, ReadonlySet<string>> = new Map(),
+): Map<GroupedProject, string[]> {
   const weight = (a: string): number =>
     a.startsWith("root:") ? 4 : a.startsWith("remote:") ? 2 : 1;
-  const sorted = [...records].sort((a, b) => (a.createdAt || 0) - (b.createdAt || 0));
+  const sorted = [...records].sort(
+    (a, b) => (a.createdAt || 0) - (b.createdAt || 0) || byString(a.id, b.id),
+  );
+  const bound = new Map<GroupedProject, string[]>();
   for (const r of sorted) {
     let best: GroupedProject | null = null;
     let bestScore = 0;
     const oldest = r.anchors[0];
+    const apart = excluded.get(r.id);
     for (const p of projects) {
       if (p.bucket !== null) continue;
+      if (apart !== undefined && p.places.some((pl) => apart.has(pl.placeId))) continue;
       const has = new Set(p.anchors);
       const score = r.anchors.reduce((n, a) => n + (has.has(a) ? weight(a) : 0), 0);
       const tieOld =
@@ -575,6 +728,7 @@ export function bindRecords(projects: GroupedProject[], records: readonly Groupi
       }
     }
     if (best === null) continue;
+    bound.set(best, [...(bound.get(best) ?? []), r.id]);
     if (best.recordId !== undefined) {
       if (r.name) best.alsoCalled = [...(best.alsoCalled ?? []), r.name];
       continue;
@@ -585,5 +739,8 @@ export function bindRecords(projects: GroupedProject[], records: readonly Groupi
     if (r.name) [best.name, best.nameFrom] = [r.name, "you"];
     if (r.ink !== undefined) best.ink = r.ink;
     if (r.recipe !== undefined) best.recipe = r.recipe;
+    if (r.pinned === true) best.pinned = true;
+    if (r.hidden === true) best.hidden = true;
   }
+  return bound;
 }

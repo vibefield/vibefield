@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   type GroupingDevice,
   type GroupingPlace,
+  type GroupingRecord,
   type GroupingResult,
   groupPlaces,
   RECENT,
@@ -261,18 +262,10 @@ describe("the person's intents (E3) and records (PJ-L3)", () => {
     desk("studio", place("s", "/Users/b/research/player", { homeRelative: "research/player" })),
   ];
 
-  it("a link joins, a dismissal hides its suggestion, a split takes a place out of the evidence", () => {
-    expect(together(groupPlaces({ devices, intents: { links: [["m", "s"]] } }), "m", "s")).toBe(
-      true,
-    );
-    expect(groupPlaces({ devices, intents: { dismissed: ["rel:m|s"] } }).suggestions).toEqual([]);
-    const split = groupPlaces({
-      devices: [
-        desk("mac", repo("a", "/p/a", "github.com/o/app"), repo("b", "/p/b", "github.com/o/app")),
-      ],
-      intents: { splits: ["b"] },
-    });
-    expect(together(split, "a", "b")).toBe(false);
+  it("a link joins two projects", () => {
+    expect(
+      together(groupPlaces({ devices, intents: { links: [{ a: "m", b: "s", at: 1 }] } }), "m", "s"),
+    ).toBe(true);
   });
 
   it("binds the oldest record by its anchors: key, name and ink; a later one is also called", () => {
@@ -296,6 +289,153 @@ describe("the person's intents (E3) and records (PJ-L3)", () => {
       alsoCalled: ["Second"],
       recordId: "r1",
     });
+  });
+
+  it("a record's places acted in are acted on every desktop; its pin and hide ride the project", () => {
+    const result = groupPlaces({
+      devices: [
+        desk("mac", repo("a", "/p/a", "github.com/o/app")),
+        desk("studio", repo("b", "/q/a", "github.com/o/app")),
+      ],
+      intents: {
+        records: [
+          {
+            id: "r1",
+            anchors: ["remote:github.com/o/app", "place:b"],
+            places: [{ placeId: "b", at: 5 }],
+            pinned: true,
+            hidden: true,
+            createdAt: 1,
+          },
+        ],
+      },
+    });
+    const project = projectOf(result, "a")!;
+    expect(project).toMatchObject({ key: "r:r1", pinned: true, hidden: true });
+    expect(project.places.map((pl) => [pl.placeId, pl.acted])).toEqual(
+      expect.arrayContaining([
+        ["a", false],
+        ["b", true],
+      ]),
+    );
+  });
+});
+
+// PJ-2 (build-pj23.md D2, D3) — splits bound to a record, links and splits
+// ordered by their act, dismissals bound to the pair of records.
+describe("PJ-2 — splits, links and dismissals as the person made them", () => {
+  const app = "github.com/o/app";
+  const three = () => [
+    desk("mac", repo("a", "/p/a", app), repo("b", "/p/b", app), repo("c", "/p/c", app)),
+  ];
+  const record = (over: Partial<GroupingRecord> = {}): GroupingRecord => ({
+    id: "R",
+    anchors: [`root:${ROOT_A}`, `remote:${app}`, "place:a", "place:b", "place:c"],
+    name: "App",
+    createdAt: 1,
+    ...over,
+  });
+
+  it("a split keeps its place apart from its record's side, and nothing else", () => {
+    const d = repo("d", "/q/d", null, { hits: [{ placeId: "b", sha: sha(2), depth: 2 }] });
+    const result = groupPlaces({
+      devices: [...three(), desk("studio", d)],
+      intents: { records: [record()], splits: [{ place: "b", notRecord: "R", at: 2 }] },
+    });
+    expect(together(result, "a", "c")).toBe(true);
+    expect(projectOf(result, "a")).toMatchObject({ key: "r:R", name: "App" });
+    expect(together(result, "a", "b")).toBe(false);
+    // the split is bound to R, not global: b still joins d by recent history
+    expect(together(result, "b", "d")).toBe(true);
+    expect(projectOf(result, "b")!.provisional).toBe(true);
+    // and the person's own word is not argued with: no suggestion to re-join
+    expect(result.suggestions).toEqual([]);
+  });
+
+  it("the split place is the one left out, not its neighbours (a clone that joins through it)", () => {
+    // `a` sorts first among the remote's places: were it the hub, `c` could
+    // reach R's side only through the split place, and would follow it out
+    const result = groupPlaces({
+      devices: three(),
+      intents: {
+        records: [record({ anchors: ["place:b", "place:a"] })],
+        splits: [{ place: "a", notRecord: "R", at: 2 }],
+      },
+    });
+    expect(together(result, "b", "c")).toBe(true);
+    expect(together(result, "a", "c")).toBe(false);
+    expect(projectOf(result, "c")).toMatchObject({ key: "r:R" });
+  });
+
+  it("a split gives each record back its side", () => {
+    const records = [
+      record({ id: "R1", name: "Field", createdAt: 1 }),
+      record({ id: "R2", name: "Pocket", anchors: ["place:b"], createdAt: 2 }),
+    ];
+    const merged = groupPlaces({ devices: three(), intents: { records } });
+    expect(projectOf(merged, "b")).toMatchObject({ key: "r:R1", alsoCalled: ["Pocket"] });
+    const split = groupPlaces({
+      devices: three(),
+      intents: { records, splits: [{ place: "b", notRecord: "R1", at: 3 }] },
+    });
+    expect(projectOf(split, "a")).toMatchObject({ key: "r:R1", name: "Field" });
+    expect(projectOf(split, "b")).toMatchObject({ key: "r:R2", name: "Pocket", nameFrom: "you" });
+    expect(projectOf(split, "a")!.alsoCalled).toBeUndefined();
+  });
+
+  it("for a pair, the later act wins: an older link does not re-join a split place; a newer one lifts the split", () => {
+    const links = (at: number) => [{ a: "b", b: "a", at }];
+    const splits = [{ place: "b", notRecord: "R", at: 20 }];
+    const older = groupPlaces({
+      devices: three(),
+      intents: { records: [record()], splits, links: links(10) },
+    });
+    expect(together(older, "a", "b")).toBe(false);
+    const newer = groupPlaces({
+      devices: three(),
+      intents: { records: [record()], splits, links: links(30) },
+    });
+    expect(together(newer, "a", "b")).toBe(true);
+    expect(together(newer, "b", "c")).toBe(true);
+    // lifted, the split no longer keeps R from the group that holds b
+    expect(projectOf(newer, "b")).toMatchObject({ key: "r:R" });
+    // a tie is the split's: nothing joins without a clear later word
+    const tie = groupPlaces({
+      devices: three(),
+      intents: { records: [record()], splits, links: links(20) },
+    });
+    expect(together(tie, "a", "b")).toBe(false);
+  });
+
+  it("a dismissal binds to the pair of records: no second reason surfaces for the same two projects", () => {
+    // two reasons for one pair: an old shared first commit and the same folder
+    const pair = [
+      desk(
+        "mac",
+        repo("m", "/Users/a/research/player", null, {
+          root: ROOT_B,
+          homeRelative: "research/player",
+        }),
+      ),
+      desk(
+        "studio",
+        repo("s", "/Users/b/research/player", null, {
+          root: ROOT_B,
+          homeRelative: "research/player",
+        }),
+      ),
+    ];
+    const before = groupPlaces({ devices: pair });
+    expect(before.suggestions.map((x) => x.type)).toEqual(["related-history"]);
+    const records: GroupingRecord[] = [
+      { id: "Rm", anchors: ["place:m"], createdAt: 1 },
+      { id: "Rs", anchors: ["place:s"], createdAt: 2 },
+    ];
+    const after = groupPlaces({ devices: pair, intents: { records, dismissals: [["Rs", "Rm"]] } });
+    expect(after.suggestions).toEqual([]);
+    // a dismissal of other records says nothing about this pair
+    const other = groupPlaces({ devices: pair, intents: { records, dismissals: [["Rm", "Rx"]] } });
+    expect(other.suggestions).toHaveLength(1);
   });
 });
 
@@ -324,7 +464,7 @@ describe("keys and determinism (PJ-L1)", () => {
     expect(projectOf(result, "old")!.key).toBe(projectKey("place:old"));
     for (const p of result.projects) expect(p.key).toMatch(/^p1:[a-z2-7]{26}$/);
     expect(new Set(result.projects.map((p) => p.key)).size).toBe(result.projects.length);
-    expect(result.groupingVersion).toBe(1);
+    expect(result.groupingVersion).toBe(2);
   });
 
   it("gives two projects that read alike their parent folder as a second line", () => {

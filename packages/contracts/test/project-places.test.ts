@@ -56,8 +56,8 @@ describe("PJ-1 — place facts on the catalog row", () => {
     expect(PlaceFacts.parse({ ...place, kind: "mount" }).kind).toBe("project");
   });
 
-  it("names version 1 and the sample depths RECENT reads", () => {
-    expect(GROUPING_VERSION).toBe(1);
+  it("names version 2 (PJ-2: the person's intents) and the sample depths RECENT reads", () => {
+    expect(GROUPING_VERSION).toBe(2);
     expect(PROJECT_GROUPING.SAMPLE_DEPTHS).toContain(PROJECT_GROUPING.RECENT_DEPTH);
   });
 });

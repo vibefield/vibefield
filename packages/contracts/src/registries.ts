@@ -429,7 +429,11 @@ export const INDEX_TIMELINE = {
  * bumps GROUPING_VERSION. Version 1 is the evidence rule (the identity
  * remote, confirmed recent shared history, your links), the normalizer that
  * supersedes DS-D9's family (L4) and the UNKEYED project key (L5 — keying it
- * once a secret spans one person's desktops is a bump).
+ * once a secret spans one person's desktops is a bump). Version 2 (PJ-2,
+ * build-pj23.md D2/D3) reads the person's intents as the library keeps them:
+ * a split bound to a record (`{place, notRecord}`, no longer global), links
+ * and splits ordered by their act time (for a pair, the later act wins), a
+ * dismissal bound to the pair of records, a record's places acted in.
  *
  * SAMPLE_DEPTHS: where a place samples its first-parent history — its tip,
  * then 1, 2, 4 … 512 commits back — and RECENT_DEPTH: the deepest sample
@@ -437,7 +441,7 @@ export const INDEX_TIMELINE = {
  * or only the first commit, is the related-history suggestion). INK_DEALS:
  * the range a record-less project's ink is dealt from its provisional anchor
  * (§4.3; a record's ink is dealt once and kept). TS-only: no native reader. */
-export const GROUPING_VERSION = 1;
+export const GROUPING_VERSION = 2;
 export const PROJECT_GROUPING = {
   SAMPLE_DEPTHS: [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
   RECENT_DEPTH: 16,

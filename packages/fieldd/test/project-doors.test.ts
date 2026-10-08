@@ -330,7 +330,7 @@ describe("project.list", () => {
     // by its activity like any other (here it is simply the oldest)
     expect(page.rows[2]).toMatchObject({ kind: "home", bucket: null, devices: ["dev-a"] });
     expect(page.sources).toHaveLength(2);
-    expect(page.groupingVersion).toBe(1);
+    expect(page.groupingVersion).toBe(2);
     // no answer carries a place's other spellings
     expect(JSON.stringify(page)).not.toContain("/Users/me/App");
   });

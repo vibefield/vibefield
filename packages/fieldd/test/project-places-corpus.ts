@@ -188,7 +188,7 @@ export function witnessOf(corpus: PlacesCorpus) {
   const all = [...corpus.mac, ...corpus.synthetic];
   const index = new Map(all.map((p, i) => [placeIdOf(p), i]));
   const intents: GroupingIntents = {
-    links: [[corpus.roles.link[0]!, corpus.roles.link[1]!]],
+    links: [{ a: corpus.roles.link[0]!, b: corpus.roles.link[1]!, at: 1 }],
   };
 
   const run = (places: readonly CorpusPlace[], withIntents?: GroupingIntents) =>
@@ -282,7 +282,7 @@ function invariantsOf(
   run: (places: readonly CorpusPlace[], intents?: GroupingIntents) => GroupingResult,
 ) {
   const { project, clone, link } = corpus.roles;
-  const intents: GroupingIntents = { links: [[link[0]!, link[1]!]] };
+  const intents: GroupingIntents = { links: [{ a: link[0]!, b: link[1]!, at: 1 }] };
   const of = (r: GroupingResult) =>
     r.projects.find((p) => p.places.some((pl) => pl.placeId === project))!;
   const failures: string[] = [];
