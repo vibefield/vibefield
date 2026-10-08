@@ -125,6 +125,7 @@ import {
   STILLNESS_SAMPLE,
   type StillnessSample,
 } from "./smoke-stillness";
+import { thumbnailRows } from "./smoke-thumb";
 import { toolsInHandRows } from "./smoke-tools-in-hand";
 import { TRY_FLAG, TRY_SEARCH_KEY, TRY_TYPES_ENV, tryBoardRows, tryTypes } from "./smoke-try";
 import { NO_WEBGPU_FLAG, unavailableRows, withoutWebgpu } from "./smoke-unavailable";
@@ -1151,6 +1152,13 @@ export async function runSmokeCanvas(opts: {
           );
         } catch (error) {
           problems.push(`DK-14: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // DK-17b: the explorer's thumbnail taken while a selection stands is the desk without its marks (ICE I40's
+        // purpose; testing/smoke-thumb.ts) — an object moved, its still owed and taken, read back; the move undone
+        try {
+          problems.push(...(await thumbnailRows({ win, say: (line) => console.log(line) })));
+        } catch (error) {
+          problems.push(`DK-17b THUMB: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-15: the covers over the desk — Godview and History each rising over the LIVE desk, its still captured, blurred
         // once and swapped in, the canvas hidden, THEN the freeze: zero frames and zero submits for ≥ 3 s; the recede; taken
