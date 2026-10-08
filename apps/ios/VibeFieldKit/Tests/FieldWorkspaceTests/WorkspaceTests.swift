@@ -113,6 +113,53 @@ private let desktopID = "dev_7d3c9b"
     #expect(reader.state == .refused("This account cannot browse"))
   }
 
+  /// R6 — Files' own no-door refusal (FieldLink's `noFilesDoor`) reads as the
+  /// desktop asleep, exactly as the terminal-tagged one it replaced did.
+  @Test func aFilesAskWithNoDoorReadsAsTheDesktopAsleep() async throws {
+    let reader = WorkspaceReads(device: desktopID, name: "studio") { _, _ in
+      throw FieldProductError(kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
+        details: .object(["service": .string("workspace"), "state": .string("no_door")]))
+    }
+    await reader.refreshRoots()
+    #expect(reader.state == .offline)
+    #expect(reader.message == "studio is asleep")
+  }
+
+  /// FS-3 — a folder the desktop's picker saved arrives as a `picked` root,
+  /// after the places and before home: the phone lists it under Browse, never
+  /// among the recent places, and opens it like any root.
+  @Test func pickedRootsShowUnderBrowseAndOpen() async throws {
+    let roots = try workspaceFixture("workspace-roots.valid")
+    let pick = try workspaceFixture("workspace-pick-folder.valid")
+    let picked = changed(try #require(pick["root"]), ["device": .string(desktopID)])
+    var rows = try #require(roots["roots"]?.arrayValue)
+    rows.insert(picked, at: 2)
+    let answer = changed(roots, ["roots": .array(rows)])
+    let page = try workspaceFixture("workspace-list.valid")
+    var asks: [(String, JSONValue?)] = []
+    let reader = WorkspaceReads(device: desktopID, name: "studio") { method, params in
+      asks.append((method, params))
+      switch method {
+      case "workspace.roots": return answer
+      case "workspace.list":
+        return changed(page, ["rootId": picked["rootId"]!, "path": picked["path"]!])
+      default: throw FieldProductError(kind: "NOT_FOUND", message: method)
+      }
+    }
+    await reader.refreshRoots()
+    #expect(reader.recent.map(\.name) == ["vibe-field", "old-spike"])
+    #expect(reader.browse.map(\.kind) == ["picked", "browse", "browse"])
+    let chosen = try #require(reader.browse.first { $0.kind == "picked" })
+    #expect(chosen.name == "Chosen folder")
+    #expect(chosen.path == "/Users/ada/Chosen folder")
+    #expect(chosen.lastActiveAt == nil && !chosen.missing)
+    await reader.open(chosen)
+    #expect(asks.last?.0 == "workspace.list")
+    #expect(asks.last?.1?["rootId"] == picked["rootId"])
+    #expect(reader.state == .ready)
+    #expect(reader.choice?.path == "/Users/ada/Chosen folder")
+  }
+
   @Test func aLateFolderAnswerCannotReplaceNewNavigation() async throws {
     let roots = try WorkspaceRootsResult(json: workspaceFixture("workspace-roots.valid"))
     let page = try workspaceFixture("workspace-list.valid")

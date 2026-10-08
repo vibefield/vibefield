@@ -597,7 +597,7 @@ public final class FieldLink {
     guard ["workspace.roots", "workspace.list", "workspace.search", "agent.catalog", "agent.spawn"].contains(method) else {
       throw FieldProductError(kind: "FORBIDDEN_SCOPE", message: "not a workspace act", retryable: false)
     }
-    return try await ownerDoor(deviceId, refusal: Self.noTerminalDoor) { client in
+    return try await ownerDoor(deviceId, refusal: Self.noFilesDoor) { client in
       try await client.call(method, params: params)
     }
   }
@@ -670,6 +670,15 @@ public final class FieldLink {
     kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
     details: .object([
       "service": .string("terminal"), "state": .string("no_door"),
+    ]))
+
+  /// R6 (2026-10-07) — a Files ask with no door says so as FILES: the
+  /// desktop's own word for the service (`WORKSPACE_SERVICE.SERVICE`), never
+  /// the terminal's, which it borrowed until now.
+  private static let noFilesDoor = FieldProductError(
+    kind: "UNAVAILABLE", message: "no connection to this desktop", retryable: true,
+    details: .object([
+      "service": .string("workspace"), "state": .string("no_door"),
     ]))
 
   /// DS-8 (DS-L4) — a door to the desktop that OWNS something, for one ask: the

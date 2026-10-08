@@ -504,6 +504,28 @@ private func desktopLive(_ id: String, in link: FieldLink) -> Bool? {
       Issue.record("a ticket was minted for a desktop with no door")
     } catch let error as FieldProductError {
       #expect(error.unavailable?.state == "no_door")
+      #expect(error.unavailable?.service == "terminal")
+    }
+    #expect(await door.dials(to: laptopDoorHost) == 0)
+  }
+
+  /// R6 (2026-10-07) — a Files ask refused for want of a door says so as
+  /// FILES (`service: "workspace"`, the desktop's own word), never tagged as
+  /// the terminal's, and nothing is dialled.
+  @Test func aFilesAskWithNoAnsweringDoorIsTaggedFilesNotTerminal() async throws {
+    let probe = LinkProbe(answers: [laptopDoorHost: .unreachable("asleep")])
+    let door = LinkDoor(script: selfDoor)
+    await door.route(studioDoorHost, homeDoor(studioBoard))
+    let (link, _) = try await homedLink(probe: probe, door: door)
+    defer { link.stop() }
+    try await waitUntil("the field through the studio") { link.agents.count == 2 }
+
+    do {
+      _ = try await link.workspaceCall(on: "dev-laptop", method: "workspace.roots")
+      Issue.record("a Files ask reached a desktop with no door")
+    } catch let error as FieldProductError {
+      #expect(error.unavailable?.service == "workspace")
+      #expect(error.unavailable?.state == "no_door")
     }
     #expect(await door.dials(to: laptopDoorHost) == 0)
   }
