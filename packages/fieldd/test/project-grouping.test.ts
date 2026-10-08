@@ -340,6 +340,26 @@ describe("the person's intents (E3) and records (PJ-L3)", () => {
     });
   });
 
+  it("under an unnamed oldest record, the oldest NAMED one names the group (two first acts at once)", () => {
+    const result = groupPlaces({
+      devices: [desk("mac", repo("a", "/p/a", "github.com/o/app"))],
+      intents: {
+        records: [
+          { id: "r-pin", anchors: ["place:a"], ink: 4, createdAt: 1 },
+          { id: "r-name", anchors: ["place:a"], name: "Mine", ink: 4, createdAt: 2 },
+          { id: "r-late", anchors: ["place:a"], name: "Later", createdAt: 3 },
+        ],
+      },
+    });
+    expect(result.projects[0]).toMatchObject({
+      key: "r:r-pin",
+      ink: 4,
+      name: "Mine",
+      nameFrom: "you",
+      alsoCalled: ["Later"],
+    });
+  });
+
   it("a record's places acted in are acted on every desktop; its pin and hide ride the project", () => {
     const result = groupPlaces({
       devices: [
@@ -430,6 +450,29 @@ describe("PJ-2 — splits, links and dismissals as the person made them", () => 
     expect(projectOf(split, "a")).toMatchObject({ key: "r:R1", name: "Field" });
     expect(projectOf(split, "b")).toMatchObject({ key: "r:R2", name: "Pocket", nameFrom: "you" });
     expect(projectOf(split, "a")!.alsoCalled).toBeUndefined();
+  });
+
+  it("a split record never binds to the split place's side, however its anchors score there", () => {
+    // a folder and a repository the person linked, then split apart: the
+    // record holds the repository's first commit, which only b's side has
+    const result = groupPlaces({
+      devices: [desk("mac", place("a", "/p/notes"), repo("b", "/p/app", null, { root: ROOT_B }))],
+      intents: {
+        records: [
+          {
+            id: "R",
+            anchors: [`root:${ROOT_B}`, "place:a", "place:b"],
+            name: "Notes",
+            createdAt: 1,
+          },
+        ],
+        links: [{ a: "a", b: "b", at: 1 }],
+        splits: [{ place: "b", notRecord: "R", at: 2 }],
+      },
+    });
+    expect(together(result, "a", "b")).toBe(false);
+    expect(projectOf(result, "a")).toMatchObject({ key: "r:R", name: "Notes" });
+    expect(projectOf(result, "b")!.provisional).toBe(true);
   });
 
   it("for a pair, the later act wins: an older link does not re-join a split place; a newer one lifts the split", () => {

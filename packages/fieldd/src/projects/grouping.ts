@@ -719,8 +719,8 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
  * to the group it shares the most anchors with (a first commit 4, a remote 2,
  * a place 1); on a tie, the group holding its oldest anchor — but never to a
  * group holding a place split from it (`excluded`, PJ-2). The oldest record
- * on a group names it; the others read "also called" and an unnamed one adds
- * no word. Nothing is deleted, so a split gives each record back its side.
+ * on a group keys and inks it; the oldest NAMED one names it (PJ-2), the
+ * other names read "also called", and an unnamed record adds no word. Nothing is deleted, so a split gives each record back its side.
  * Answers the records each project took, its naming one first. */
 export function bindRecords(
   projects: GroupedProject[],
@@ -757,7 +757,11 @@ export function bindRecords(
     if (best === null) continue;
     bound.set(best, [...(bound.get(best) ?? []), r.id]);
     if (best.recordId !== undefined) {
-      if (r.name) best.alsoCalled = [...(best.alsoCalled ?? []), r.name];
+      // PJ-2: a name the person gave beats one the engine derived, so under
+      // an unnamed oldest record (two desktops' first acts at once) the
+      // oldest NAMED record names the group; any later name is also called
+      if (r.name && best.nameFrom !== "you") [best.name, best.nameFrom] = [r.name, "you"];
+      else if (r.name) best.alsoCalled = [...(best.alsoCalled ?? []), r.name];
       continue;
     }
     best.recordId = r.id;
