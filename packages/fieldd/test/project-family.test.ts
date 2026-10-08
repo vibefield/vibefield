@@ -3,8 +3,12 @@ import { familyOf } from "../src/project-family";
 
 // DS-D9 — the repository family (design-06 §5 "Grouping"). The table pins the
 // ruling's three words — host lowercased, `.git` dropped, scheme and userinfo
-// dropped — and every choice project-family.ts made where the words stop:
-// ports are transport, paths keep their case, a local path has no family.
+// dropped — and every choice made where the words stop: ports are transport,
+// a local path has no family. Since PJ-1 (L4) the family is the one
+// normalizer's key, and three choices changed with it: the path FOLDS its case
+// on every host (DS-D9's "a path is the server's business" is answered by
+// PJ-D1 — the evidence rule needs one spelling per repository), a `www.` host
+// prefix is dropped, and percent-escapes are decoded.
 
 describe("familyOf (DS-D9)", () => {
   it("the ruling's example: scp, https and ssh spellings of one repository agree", () => {
@@ -43,10 +47,14 @@ describe("familyOf (DS-D9)", () => {
     ["https://github.com//o//r", "github.com/o/r"],
     ["https://github.com/o/r.git?ref=main#readme", "github.com/o/r"],
     ["git@github.com:/o/r.git", "github.com/o/r"],
-    // the host folds, the path does not
-    ["https://GitHub.COM/O/R", "github.com/O/R"],
-    ["git@GITHUB.com:O/R.git", "github.com/O/R"],
+    // the host folds, and since PJ-1 (L4) the path folds too — these two
+    // rows read `github.com/O/R` under DS-D9's own normalizer
+    ["https://GitHub.COM/O/R", "github.com/o/r"],
+    ["git@GITHUB.com:O/R.git", "github.com/o/r"],
     ["https://github.com./o/r", "github.com/o/r"],
+    // PJ-1 (L4): `www.` is not part of the host, and an escape is its letter
+    ["https://www.github.com/o/r", "github.com/o/r"],
+    ["https://git.example.org/a/b%20c.git", "git.example.org/a/b c"],
     // nested groups and IPv6 literals
     ["https://gitlab.com/group/sub/app.git", "gitlab.com/group/sub/app"],
     ["ssh://git@[::1]:22/o/r.git", "[::1]/o/r"],
