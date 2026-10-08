@@ -68,11 +68,12 @@ const corpusDir = resolve(positional[0] ?? join(ROOT, "draft/project-places/test
 
 const real = JSON.parse(readFileSync(join(corpusDir, "real-mbp.json"), "utf8"));
 const syn = JSON.parse(readFileSync(join(corpusDir, "synthetic.json"), "utf8"));
-const judgmentsFile = judged?.value ?? join(corpusDir, "judgments.json");
-const judgments =
-  judged !== null || existsSync(judgmentsFile)
-    ? JSON.parse(readFileSync(resolve(judgmentsFile), "utf8"))
-    : {};
+const judgmentsFile = resolve(judged?.value ?? join(corpusDir, "judgments.json"));
+// since PJ-2 the judgments ARE truth: without them the fixture would quietly
+// lose J1–J11, so the script refuses rather than write a corpus without them
+if (!existsSync(judgmentsFile))
+  throw new Error(`no judgments file at ${judgmentsFile} (pass --judgments <file>)`);
+const judgments = JSON.parse(readFileSync(judgmentsFile, "utf8"));
 
 // ── the corpus, assembled as the witness reads it ───────────────────────────
 
