@@ -202,8 +202,9 @@ sidecar was built from source while the window's Go half was open, and comes fro
   moves the dev runner's whole state), never the checkout's `.vibefield/dev`.
 - `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` / `pnpm smoke:plugin-restart` /
   `pnpm smoke:kind-faults` — desktop smoke checks. Each runs Electron on its OWN profile, fresh
-  under the OS temp and removed after (`apps/desktop/packaging/run-smoke.mjs`; main mints one for a
-  hand-started smoke), never the app's shared one. `smoke:canvas`, `smoke:plugin-restart` and
+  under the OS temp and removed after (`apps/desktop/packaging/run-smoke.mjs`; `smoke:godview` and
+  `smoke:terminal-direct` through MV's `scripts/smoke-godview.mjs`, its isolated lab profile proven, with
+  the same run mark and daemon row; main mints one for a hand-started smoke), never the app's shared one. `smoke:canvas`, `smoke:plugin-restart` and
   `smoke:kind-faults` keep the GPU and draw the desk (`--disable-gpu` asserts its unavailable card
   instead). `smoke:plugin-restart` and `smoke:kind-faults` run on plugin fixtures staged for that
   ONE run (`apps/desktop/packaging/stage-kind-fixtures.mjs`: a temporary `FIELDD_PLUGIN_DEV_ROOTS`,
