@@ -140,6 +140,7 @@ import {
   PAGE_VISIBILITY,
   type PageVisibility,
 } from "./smoke-visibility";
+import { keepFromPerson, smokeWindow, smokeWindowsFocused } from "./smoke-window";
 import {
   leakedVariables,
   readTypedAgentCalls,
@@ -973,8 +974,9 @@ export async function runSmokeCanvas(opts: {
   // DK-9: a run staged with the fault fixture (`smoke:kind-faults`) runs the kind-fault rows
   const faultRun = process.env["VF_SMOKE_KIND_FAULTS"] === "1";
   // Shown with the GPU on: a still of the window (the desk under the frame) is the grader's, and
-  // a shown window is what the desk's frame loop and the capture door are made for.
-  const win = createMainWindow({
+  // a shown window is what the desk's frame loop and the capture door are made for. DK-18 (36): shown
+  // inactive and click-through — kept from the person's input (smoke-window.ts).
+  const win = smokeWindow({
     mode: "smoke-canvas",
     preloadPath: opts.preloadPath,
     show: gpu,
@@ -1205,7 +1207,7 @@ export async function runSmokeCanvas(opts: {
             ...(await peersRows({
               win,
               openPeer: async () => {
-                const peer = createMainWindow({
+                const peer = smokeWindow({
                   mode: "smoke-canvas",
                   preloadPath: opts.preloadPath,
                   show: true,
@@ -1282,6 +1284,14 @@ export async function runSmokeCanvas(opts: {
       );
       if (win.webContents.isCrashed()) problems.push("the renderer crashed");
     }
+    // DK-18 (36): how often a smoke window became the key window — said, never judged: no row focuses one (the source row in
+    // smoke-window.test.ts holds that), but the OS activates the app when another app quits, and a person may click it
+    const focused = smokeWindowsFocused();
+    console.log(`SMOKE_CANVAS_ISOLATION ${JSON.stringify(focused)}`);
+    if (focused.times > 0)
+      console.log(
+        `SMOKE_CANVAS_ISOLATION_NOTE a smoke window became the key window ${focused.times} time(s) — not by a row; keys typed then could have reached it`,
+      );
     if (cspViolations.length > 0) problems.push(`CSP refused: ${cspViolations.join(" | ")}`);
     if (problems.length > 0) throw new Error(problems.join(" · "));
     ok = true;
@@ -1468,6 +1478,8 @@ async function occludedRow(win: BrowserWindow): Promise<{ facts: object; problem
     backgroundColor: "#000000",
     webPreferences: { sandbox: true, contextIsolation: true, nodeIntegration: false },
   });
+  // DK-18 (36): the person's pointer passes through the black square too
+  keepFromPerson(occluder);
   try {
     await js(`globalThis.__vfDesk.ambient("live")`);
     occluder.showInactive();
@@ -3177,13 +3189,14 @@ export async function runSmokePluginRestart(opts: {
 }): Promise<void> {
   const config = pluginRuntimeSoakConfig();
   const gpu = !process.argv.includes("--disable-gpu");
-  // Shown with the GPU on: a hidden window presents no frames, and DESK_READY waits for one.
-  const primary = createMainWindow({
+  // Shown with the GPU on: a hidden window presents no frames, and DESK_READY waits for one. DK-18 (36):
+  // shown inactive and click-through — kept from the person's input (smoke-window.ts).
+  const primary = smokeWindow({
     mode: "smoke-plugin-restart",
     preloadPath: opts.preloadPath,
     show: gpu,
   });
-  const auxiliary = createMainWindow({
+  const auxiliary = smokeWindow({
     mode: "smoke-plugin-restart",
     preloadPath: opts.preloadPath,
     show: gpu,
@@ -6021,6 +6034,8 @@ export async function runSmokeGodview(opts: {
       preloadPath: opts.preloadPath,
       show: true,
     });
+    // DK-18 (36): click-through — a real pointer passes beneath; its typed rows keep the window's focus (smoke-window.ts)
+    keepFromPerson(win);
     opts.registry.adopt(win);
     opts.onWindow?.(win);
     if (process.env["VF_SMOKE_DEBUG"]) {

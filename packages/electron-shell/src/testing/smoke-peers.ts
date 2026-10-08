@@ -566,7 +566,6 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
   try {
     // ── ARRIVE: B's arrow in A, its tip on B's pointer ─────────────────────────────────────────────────────────────────
     await theme("light");
-    b.focus();
     await moveB(point);
     await until("B's peer drawn in A", 15_000, async () => {
       const p = await peerOf();
@@ -690,7 +689,6 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
     );
     if (createAt === null) problems.push("PEERS BOARD: no line create to raise the board");
     else {
-      a.focus();
       a.webContents.sendInputEvent({ type: "mouseMove", x: createAt.x, y: createAt.y });
       await sleep(40);
       a.webContents.sendInputEvent({
@@ -980,7 +978,6 @@ export async function faultRows(d: FaultRowsDriver): Promise<string[]> {
       `(() => { const el = document.querySelector(".vf-status-line__act"); if (el === null) return null; const r = el.getBoundingClientRect(); return { x: Math.round(r.left + r.width / 2), y: Math.round(r.top + r.height / 2) }; })()`,
     );
     if (actAt !== null) {
-      win.focus();
       win.webContents.sendInputEvent({ type: "mouseMove", x: actAt.x, y: actAt.y });
       await sleep(40);
       win.webContents.sendInputEvent({
