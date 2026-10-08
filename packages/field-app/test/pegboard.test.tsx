@@ -461,7 +461,7 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
     const to = drawnNow().find((d) => d.type === focusedType());
     expect(to?.row).toBeGreaterThan(from?.row ?? Number.POSITIVE_INFINITY);
     expect(door.scroll()).toBeGreaterThan(0);
-    // VibeField scrolled nothing itself (DK-13's `revealScroll` retired): every call a read
+    // VibeField scrolled nothing itself (DK-13's own scroll into view retired): every call a read
     expect(scrolls.mock.calls.every((c) => c[0] === undefined)).toBe(true);
     expect(ringRect()).toEqual(ringOnFocus());
     expect(ringRect()?.y0).toBeCloseTo((to?.rect.y0 ?? 0) - 2, 6);

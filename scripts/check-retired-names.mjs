@@ -63,6 +63,20 @@ export const RETIRED = [
   // the dots (the plan's addendum (76)) — and widgetlab's alias for them
   { name: "--vf-canvas-dot", pattern: /--vf-canvas-dot\b/u },
   { name: "--canvas-dot", pattern: /(?<![\w-])--canvas-dot\b/u },
+  // DK-17b — what ICE's last prerelease replaced (desk.6; the plan's addendum (72)): the interim presence facet (I42 — the
+  // cursor's own `away` and `canvas`), the park poll (I41 — `frame.onParked`), Send to…'s clear-and-restore wait (I40 —
+  // `capture({ marks: false })`), the pegboard's re-derived take, walk and scroll (I37 — `tray.lay`, `tray.focus`)
+  {
+    name: "the interim presence facet",
+    pattern: /\b(?:PeerWhere\w*|attachPeerFacet|peerFacetSent)\b|\bpeer-facet\b/u,
+  },
+  { name: "the park poll", pattern: /\b(?:parkWaitMs|watchPark)\b/u },
+  {
+    name: "Send to…'s clear-and-restore",
+    pattern: /\b(?:marksLeft|MARKS_LEAVE_MS|MARKS_PATIENCE_MS)\b/u,
+  },
+  { name: "the pegboard's re-derived take", pattern: /\blayAtViewCentre\b|\bpegboard-insert\b/u },
+  { name: "the pegboard's own walk and scroll", pattern: /\b(?:stepSpecimen|revealScroll)\b/u },
 ];
 
 /** Files that hold a retired thing ABSENT by naming it — each allowed exactly these names. */
@@ -86,6 +100,8 @@ export const ALLOWED = {
   "packages/field-app/test/wearing-the-mat.test.tsx": ["--vf-canvas-dot", "--canvas-dot"],
   // the SDK hands a plugin no terminal surface
   "packages/plugin-sdk/test/terminal-wall.test.ts": ["the terminal mirror"],
+  // the local peer carries ICE's cursor and no facet of VibeField's (DK-17b)
+  "packages/field-app/test/peers-on-the-mat.test.tsx": ["the interim presence facet"],
 };
 
 const CODE = /\.(?:[cm]?[jt]sx?|css|json|ya?ml|html)$/u;
