@@ -4071,9 +4071,13 @@ async function spawnBloomRows(ctx: {
  * Chosen on the bar it MOUNTS (the monitor's marker names it, and its element
  * sits in the slot that wears `mv-spend`), it PAINTS (its canvas holds a
  * picture, read back from its 2D context), and its KEYS STAY ON ITS ROOT
- * (MV-D8): with the root focused, ↓ focuses a row of its list; with the focus
- * outside the view, ↓ moves nothing in it. The swarm is chosen again after, so
- * the rows below see the stage they always saw.
+ * (MV-D8): with the root focused, ↓ and End are the view's — ↓ focuses a row of
+ * its list when it lists one, and neither reaches a pane (the pane ear hears
+ * nothing) or moves the window's or the monitor's view; with the focus outside
+ * the view, ↓ moves nothing in it. The smoke's world may hold no row the view
+ * lists (its typed runs have ended by here): `rows` says so, and the leak check
+ * stands either way. The swarm is chosen again after, so the rows below see the
+ * stage they always saw.
  */
 async function spendViewRow(ctx: {
   win: BrowserWindow;
@@ -4097,9 +4101,9 @@ async function spendViewRow(ctx: {
   };
   const ROOT = `document.querySelector(".mv-spend .vf-monitor-spend")`;
   const FOCUSED = `(${ROOT}?.querySelector(".vf-monitor-spend-row.is-focus")?.getAttribute("data-id") ?? null)`;
-  const pressDown = (): void => {
-    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Down" });
-    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Down" });
+  const press = (keyCode: string): void => {
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode });
   };
   // the swarm is chosen again whatever happens, and the row's own failure is the one said
   let failure: unknown;
@@ -4137,11 +4141,14 @@ async function spendViewRow(ctx: {
     const rows = await evaluate<number>(
       `${ROOT}?.querySelectorAll(".vf-monitor-spend-row:not([hidden])").length ?? 0`,
     );
-    // its keys, on its root: focused there, ↓ focuses a row (when it lists one)
+    // its keys, on its root: focused there, ↓ focuses a row (when it lists one),
+    // and neither ↓ nor End reaches a pane or moves a view of the product's
+    const ear = await evaluate<string>(CHORD_PROBE);
+    const windowView = await evaluate<string>(VIEW_NOW);
     await evaluate<void>(`${ROOT}?.focus()`);
     const onRoot = await evaluate<boolean>(`document.activeElement === ${ROOT}`);
     if (!onRoot) throw new Error("the spend view's root would not take the focus");
-    pressDown();
+    press("Down");
     const focused =
       rows === 0
         ? null
@@ -4149,6 +4156,23 @@ async function spendViewRow(ctx: {
             const id = await evaluate<string | null>(FOCUSED);
             return id === null ? undefined : id;
           });
+    press("End");
+    await sleep(300);
+    const heard = ear === "ok" ? await chordProbeHeard(win) : [];
+    if (heard.length > 0) {
+      throw new Error(`a key on the spend view's root reached a pane: ${heard.join(", ")}`);
+    }
+    const viewAfter = await evaluate<string>(VIEW_NOW);
+    if (viewAfter !== windowView) {
+      throw new Error(
+        `a key on the spend view's root moved the window's view (${windowView} → ${viewAfter})`,
+      );
+    }
+    if (monitorWatch.current()?.viewId !== "spend") {
+      throw new Error(
+        `a key on the spend view's root moved the monitor to ${monitorWatch.current()?.viewId}`,
+      );
+    }
     // …and outside it, ↓ is not the view's: nothing in it moves
     await evaluate<void>(`${ROOT}?.blur()`);
     const away = await evaluate<boolean>(
@@ -4156,7 +4180,7 @@ async function spendViewRow(ctx: {
     );
     if (!away) throw new Error("the focus would not leave the spend view");
     const before = await evaluate<string | null>(FOCUSED);
-    pressDown();
+    press("Down");
     await sleep(300);
     const after = await evaluate<string | null>(FOCUSED);
     if (after !== before) {
@@ -4167,6 +4191,9 @@ async function spendViewRow(ctx: {
       painted: spread,
       rows,
       focusedOnRoot: focused,
+      paneEar: ear,
+      paneHeard: heard,
+      windowView,
       outsideMoved: false,
     };
     console.log(`SMOKE_GODVIEW_SPEND ${JSON.stringify(line)}`);
