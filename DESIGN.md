@@ -760,12 +760,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   sheet material, the §5 sheet shadow **sign-flipped** (`0 20px 40px …` — a top sheet
   throws its shadow down); chevron rotates 180°; backdrop dim + recede + stage hold,
   one sheet at a time with the tray. Doc tiles: `aspect-[16/10] rounded-[10px]` faces
-  painted as a **mini empty field** (canvas-bg + the §2.1 CSS-fallback dots — the
-  ground motif as the doc's face until real thumbnails — *a mini mat since DK-16, 2026-10-07,
-  §2.1's erratum: the lattice at a quarter, under the board's still as it lands; that still is the
-  document's picture, never the person's selection — taken without the selection's marks (ICE I40's
-  `capture({ marks: false })`; DK-17b, 2026-10-08)*); name 12px medium, relative
-  time caption in `tabular-nums`; the CURRENT doc wears the 1.5px inside `--vf-select`
+  painted as a **mini mat** — the lattice at a quarter (§2.1) — under the board's **still** as it
+  lands: the document's picture through the capture door, never the person's selection, taken
+  without the selection's marks (ICE I23, I40 — `capture({ scale: 0.25, marks: false })`; DK-D27);
+  name 12px medium, relative time caption in `tabular-nums`; the CURRENT doc wears the 1.5px inside `--vf-select`
   ring (it is the selection); hover 1.03 / active 0.95. **The sync dot (C6-4):** a 6px
   dot after the pill's doc name for STANDING sync states only — pending / peer-offline
   (muted grey `rgba(128,128,128,0.45)`) · peer-declined / epoch-stale (`--vf-orange`);
@@ -782,6 +780,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   280 wide), its single-click rename, the separate breadcrumbs beside it and its own 560ms curve
   (F14 — this entry already said the island's 600ms) retired; the explorer, its tiles, New field
   and the sync dot stand, as written here.
+  *History of the tiles' face:* a mini empty field — canvas-bg and the §2.1 CSS-fallback dots, the
+  ground motif as the doc's face until real thumbnails (B4); the board's still since DK-4 (2026-10-03,
+  DK-D27); a mini mat under it since DK-16 (2026-10-07, §2.1's erratum); the still without the
+  selection's marks since DK-17b (2026-10-08, ICE I40).
 - **The head** (One Frame FR-2 "the head says where", FR-6, §4, §6, §7; FC-D8, FC-D9 ruled
   2026-10-01; built 2026-10-03, FR-3): the frame's top (§10) on the lights' axis — every control
   40 tall at `top-2`, centred on y 28. On Canvas the left slot (from 96, clear of the lights) is
@@ -1117,23 +1119,24 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   **no counts**. Past the band's width
   they scroll inside it, the far end fading under the tray's mask; a click, or ← → Home End,
   chooses (`tray.category(id)`). **Chrome does not dim by night**: the anchor's `night` is not read
-  here. **Inserting by keyboard** (R14): in the board the arrows move between the specimens, ⏎ lays
-  the focused one at the view's centre, Esc closes the board; the filters and the board are two
+  here. **Inserting by keyboard** (R14), on ICE's own doors (petition I37): in the board the arrows
+  move between the specimens — the focus is ICE's, `handle.tray.focus("first")` as the board takes
+  the keyboard, ← → its walk in the lay's order (`"prev"` / `"next"`, never wrapping), ↑ ↓ the
+  specimen nearest by centre in the row above or below, focused by its id and read back from
+  `anchor().focused`; the board scrolls the least that shows the focused specimen's HANG between the
+  header and the foot, and the **ring** stands 2 out from `focused.rect` — the object's fit in its
+  hang as the last frame drew it, what a press there grabs — never the hang box. ⏎ lays the focused
+  one at the view's centre — `handle.tray.lay()`, the tray's own take: one undo step, selected, the
+  board folding as a handed take's does; Esc closes the board; the filters and the board are two
   stops of Tab. **One surface at a time:** Objects is one of the frame's open surfaces (§10) — it
   folds @'s list, the explorer, the menus, the drawers and the palette, and they fold it; Esc
   closes it ("Close  Esc"); B toggles it, never while typing and never under a cover. **The tray
-  island and its state are deleted at DK-13** (R21) — the pegboard replaces them; DK-17 is the
-  sweep.
-  *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`):* the keyboard path runs on ICE's own doors
-  (petition I37). The focus is ICE's — `handle.tray.focus("first")` as the board takes the keyboard,
-  ← → its walk in the lay's order (`"prev"` / `"next"`, never wrapping), ↑ ↓ the specimen nearest
-  by centre in the row above or below, focused by its id — read back from `anchor().focused`; the
-  board scrolls the least that shows the focused specimen's HANG between the header and the foot
-  (ICE's, which does not keep it out of the content's fade under the header as DK-13's own scroll
-  did). The **ring** stands 2 out from `focused.rect` — the object's fit in its hang as the last
-  frame drew it, what a press there grabs — never the hang box: where DK-13 drew it. ⏎ is
-  `handle.tray.lay()`: the tray's own take at the view's centre, one undo step, selected, and the
-  board folding as a handed take's does.
+  island and its state are gone** (R21) — the pegboard replaced them.
+  *History:* DK-13 (2026-10-06) built the board and deleted the tray island and its state (R21); its
+  keyboard path ran on its own walk and scroll and ringed the hang box. *Amended 2026-10-07 (DK-17b,
+  ICE `0.15.0-desk.6`, petition I37):* the walk, the scroll and the lay moved onto ICE's doors and the
+  ring onto `focused.rect`; ICE's scroll does not keep the focused hang out of the content's fade under
+  the header, as DK-13's own did.
 - **Send to…** (Chrome on the Mat §3.6; MC-D5 ruled through One Frame's lock: hand off to the line;
   DK-D26; One Frame §7, FC-D1; R15, R25; DK-14): **it only drafts** — it never sends and never
   aims; VibeField aims in one place, the line. Pressed (on the bar, in hand or in the menu), the
@@ -1148,27 +1151,26 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   kind its NAME and no glyph ("Clock") — neither ICE's `TrayEntry` nor DK-0f's contribution carries
   one (R15, amended 13:40Z); several, `package` and "N objects"; a missing face, its type's name.
   **What it
-  carries** (DK-D26): the objects' names, their durable text and a still through the capture door,
-  `handle.capture({ rect })` (ICE I23), of the anchor's box WITHOUT the brackets' 6 / 10 outset,
-  the marks hidden first by the host's own doors (R15). The bar steps aside while the list is open
-  and comes back when it folds. Reduced motion (M6): no flight — the chip fades in at the caret.
-  The picker Marks on the Mat drew growing out of the bar was never built and is not; an agent
-  reading or rendering the desk itself is the AGENT'S EYES program, beyond a chip.
-  *Corrected 2026-10-06 (DK-14, measured):* the bar over a selection steps aside **from the press**,
-  not only once the list is open: hiding the marks for the still clears the selection for one fade of
-  the brackets and a capture (the act's record: the still taken 144–160ms after the press, the
-  selection put back then), and a bar left standing would fade out and back in under the flying chip
-  (R8's deselect). Measured in
-  smoke:canvas: the bar away 16ms after the press, back 208ms after the list folds — R8's 200;
-  aimed, 200 after the chip lands, there being no list. The tools in hand never step aside for it
-  (plan addendum (50)): in hand nothing is cleared — the hand is drawn out of the marks.
-  *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`):* the marks are hidden by ICE's capture itself —
-  `handle.capture({ rect, marks: false })` (petition I40) draws the still without the selection's
-  marks — so the selection is **never cleared or put back**: no selection write during Send to…,
-  and nothing a peer could see blink (smoke:canvas holds the selection's count on every frame from
-  the press). The still is taken at once, of the last presented frame. The bar still steps aside
-  from the press, as built — its first reason (the clear's fade) is gone; whether it should wait
-  for the list again, as this section's first words say, is open (DK-17b's note).
+  carries** (DK-D26): the objects' names, their durable text and a still through the capture door of
+  the anchor's box WITHOUT the brackets' 6 / 10 outset — `handle.capture({ rect, marks: false })`
+  (ICE I23, I40), drawn without the selection's marks and taken at once, of the last presented frame
+  (R15). The selection is **never cleared or put back**: no selection write during Send to…, and
+  nothing a peer could see blink (smoke:canvas holds the selection's count on every frame from the
+  press). **The bar steps aside from the press** and comes back 200ms after the list folds (R8's 200;
+  aimed, 200 after the chip lands, there being no list — DK-14 measured it away 16ms after the press
+  and back 208ms after the fold). The tools in hand never step aside for it (plan addendum (50)): the
+  hand is drawn out of the marks. Whether the bar should wait for the list again, now that nothing is
+  cleared, is James's call (plan addendum (95)); it stands as built until he rules. Reduced motion
+  (M6): no flight — the chip fades in at the caret. The picker Marks on the Mat drew growing out of the
+  bar was never built and is not; an agent reading or rendering the desk itself is the AGENT'S EYES
+  program, beyond a chip.
+  *History:* the canon's first words (DK-0d, 2026-10-03) hid the marks by the host's own doors and
+  stepped the bar aside only while the list was open. *Corrected 2026-10-06 (DK-14, measured):* hiding
+  the marks cleared the selection for one fade of the brackets and a capture (the act's record: the
+  still taken 144–160ms after the press, the selection put back then), and a bar left standing would
+  have faded out and back in under the flying chip (R8's deselect) — so the bar stepped aside from the
+  press. *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`, petition I40):* ICE's capture hides the marks
+  itself; the clear and the put-back are gone, and with them the step-aside's first reason.
 - **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24; R11, R12, R24):
   an object the desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a
   type this build never registered — ghost stubs register faceless types only — or one registered
@@ -1217,39 +1219,38 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   said — the card is the Canvas stage's, and it stands again as the cover lowers.
 - **Peers on the mat** (DK-16; MC-D10 = DK-D23, R22; UA-D17, §2.8 I-1, I-4; R17): another person's
   pointer on the desk is VibeField's own cursor — ICE's are turned off,
-  `deskLayer({ cursors: false })` (petition I26, being built), so nobody is drawn twice (R17).
+  `deskLayer({ cursors: false })` (petition I26), so nobody is drawn twice (R17).
   **Where:** each peer's `PresenceCursor` world x/y through the camera every frame, in a reflector;
-  `usePresencePeers` gives only the roster's names (R17). **When not:** an idle peer hides after
-  8s, a pointer that left its window hides, and a peer inside another canvas hides (R17). **Above**
-  the mat, **below** the bar and the line (R17). **The arrow** — the pointer's, 18 × 22, its tip at
-  2,2 in its box, drawn inline (its path joins §13's allow-list, R17) — with a 1.4 white edge and a
-  `0 1px 2px` black/25 drop; **the label** — its box's top-left 14 right of and 18 below the arrow
-  box's top-left corner (R17) — a **chip on the line's glass** (R17, amended 13:40Z): 22 tall, full
-  round, padded 0 9 0 7, `--vf-chrome-solid` at 88% (94% by night) with the line's blur and
-  hairline (§5), its words 11.5/500 in the chrome's primary text ink, reading **the face first, then
-  the name** ("🦊 James", §2.8) — never bare text or a bare ink on the mat, where `#68686B` measures
-  1.4:1 on the Sun-lit sage and 2.0:1 by night and even the desk's own ink only 2.5:1 by day (§2.8's
-  erratum), so it reads on any mat; DK-16 measures it on the lit mat. Never the peer's own colour
-  (I-1). Your own pointer on the desk is the OS's and the desk's own open hand; the halo is gone
-  (§2.1).
-  *As built 2026-10-07 (DK-16):* the label measures 9.2:1 by day and 11.3:1 by night on the lit mat
-  (§2.8). A pointer that left its window and a peer inside another canvas ride VibeField's interim
-  presence facet, `vibefield.PeerWhere { away, canvas }`, written change-only beside ICE's cursor
-  until ICE carries both (ask I42); a peer whose own view is covered is sent away. Peers also hide
-  under the pegboard, under your cover, and while the desk does not draw.
-  *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`):* ICE carries both now (petition I42) and the
-  interim facet is gone. Each peer's `PresenceCursor` says `away` — its pointer left its desk's host
-  with nowhere to go (ICE's pointer adapter's `leave`), or its host holds a reason — and `canvas` —
-  the entered container's durable key, "" at the root, a keyless one `~<peerId>/<entity>`
-  (`presenceCanvasOf`, which names this window's own canvas the same way, so the two compare). VibeField
-  says one thing of its own: a view that covers the canvas sends this window's pointer away through
-  ICE's `setAway("cover")`, said as the presence attaches and as the view moves, and published between
-  frames, so a peer hears it under the cover's parked freeze too. A peer on a build that sends neither
-  field reads as ICE's defaults: present, on the root.
-  *Amended 2026-10-08 (DK-17b, ICE `0.15.0-desk.7`, petition I44):* a pointer that leaves its window from the
-  chrome BESIDE the desk — the line, the head, the window's drag strip — is said away too (desk.6 heard only an
-  exit from the desk itself, and a peer stood on the mat until the 8 s idle), at its last point over the desk; back
-  in the window over the chrome it stays away until it is on the desk again. smoke:canvas's PEERS EXIT witnesses it.
+  `usePresencePeers` gives only the roster's names (R17). **When not** (R17): an idle peer hides after
+  8s; a peer whose pointer is **away** hides — its `PresenceCursor.away` (petition I42): its pointer
+  left its window with nowhere to go (ICE's pointer adapter's `leave`, heard from anywhere in the
+  host's document — from the desk or from the chrome BESIDE it, the line, the head, the window's drag
+  strip, petition I44 — at its last point over the desk; back in the window over the chrome it stays
+  away until it is on the desk again), or its host holds a reason; and a peer inside another canvas
+  hides — its `canvas`, the entered container's durable key ("" at the root, a keyless one
+  `~<peerId>/<entity>`), compared with this window's own, which `presenceCanvasOf` names the same way.
+  VibeField says one reason of its own: a view that covers the canvas sends this window's pointer away
+  through ICE's `setAway("cover")`, said as the presence attaches and as the view moves, and published
+  between frames, so a peer hears it under the cover's parked freeze too. Peers also hide under the
+  pegboard, under your cover, and while the desk does not draw. A peer on a build that sends neither
+  field reads as ICE's defaults: present, on the root. **Above** the mat, **below** the bar and the
+  line (R17). **The arrow** — the pointer's, 18 × 22, its tip at 2,2 in its box, drawn inline (its
+  path joins §13's allow-list, R17) — with a 1.4 white edge and a `0 1px 2px` black/25 drop; **the
+  label** — its box's top-left 14 right of and 18 below the arrow box's top-left corner (R17) — a
+  **chip on the line's glass** (R17, amended 13:40Z): 22 tall, full round, padded 0 9 0 7,
+  `--vf-chrome-solid` at 88% (94% by night) with the line's blur and hairline (§5), its words 11.5/500
+  in the chrome's primary text ink, reading **the face first, then the name** ("🦊 James", §2.8) —
+  never bare text or a bare ink on the mat, where `#68686B` measures 1.4:1 on the Sun-lit sage and
+  2.0:1 by night and even the desk's own ink only 2.5:1 by day (§2.8's erratum), so it reads on any
+  mat: on the lit mat it measures 9.2:1 by day and 11.3:1 by night (DK-16, §2.8). Never the peer's own
+  colour (I-1). Your own pointer on the desk is the OS's and the desk's own open hand; the halo is
+  gone (§2.1). smoke:canvas's PEERS EXIT witnesses the chrome's exits.
+  *History:* DK-16 (2026-10-07) built the peers and carried `away` and `canvas` in VibeField's interim
+  presence facet, `vibefield.PeerWhere { away, canvas }`, written change-only beside ICE's cursor until
+  ICE carried both (ask I42). *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`, petition I42):* ICE
+  carries both and the facet is gone. *Amended 2026-10-08 (DK-17b, ICE `0.15.0-desk.7`, petition I44):*
+  desk.6 heard only an exit from the desk itself, so a pointer that left through the chrome beside it
+  stood on the mat until the 8 s idle; the exit is heard from anywhere in the host's document since.
 - **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3, DK-16):
   the layer's status (`onStatus`) is said in VibeField's words — never ICE's black monospace screen,
   never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or
