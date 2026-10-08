@@ -456,13 +456,13 @@ export function GodviewMonitor({
   // the swarm instead steers its bodies around the chrome's rectangles, the
   // stage's `obstacles` (MV-D19).
   //
-  // The RIGHT inset is the package's own idea (`monitor/chrome.ts`): the usage
-  // column down the left edge is host chrome, and a view that cares finds it
-  // through the marker rather than by knowing what it is. The TOP inset is the
-  // same bargain for the strip above — and it is VibeField's to publish because
-  // the strip is VibeField's: AR-3's claims are not in the reference host at
-  // all, so the package's `list.css` reserves nothing for them and its toolbar
-  // laid out at y=11px, under a strip pinned at y=11px. James's 2026-09-13 pass
+  // The LEFT inset is the usage column's right edge: the column down the
+  // stage's left edge is host chrome, and a view learns it as geometry, never
+  // by finding the host's DOM. The TOP inset is the same for the strip above —
+  // and it is VibeField's to publish because the strip is VibeField's: AR-3's
+  // claims are not in the reference host at all, so the package's `list.css`
+  // reserved nothing for them and its toolbar laid out at y=11px, under a
+  // strip pinned at y=11px. James's 2026-09-13 pass
   // photographed the result: "1 MANAGED AGENT · MESH UNAVAILABLE…" and
   // "1 SESSIONS" printed over each other in the same corner. Two claims that
   // overlap are one unreadable claim, which is the failure GT-D17 names.

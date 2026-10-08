@@ -30,7 +30,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
         <GodviewPreview theme={theme} />
       </Specimen>
       <Specimen
-        title="Timeline — the swarm through time: an afternoon from fieldd's status ledger"
+        title="Timeline — the swarm through time: five runs from their births to now, runtime only"
         source="@vibecook/puppeteer-views/views/timeline"
         bleed
       >

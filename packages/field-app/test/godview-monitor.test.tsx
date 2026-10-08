@@ -416,10 +416,9 @@ describe("the monitor stage", () => {
     // list as `stage.insets.top` — no host rule names the list (W5).
     const list = host.querySelector<HTMLElement>(".vf-monitor-list");
     expect(list?.style.getPropertyValue("--mv-list-inset-top")).toBe("20px");
-    // no CSS variable on the stage any more: the timeline's host rule went with
-    // MV-6, and nothing reads the legacy pair
-    expect(stage?.style.getPropertyValue("--vf-monitor-claims-bottom")).toBe("");
-    expect(stage?.style.getPropertyValue("--vf-monitor-chrome-right")).toBe("");
+    // no host variable on the stage at all: a view reads geometry from its
+    // input, never a property the host writes (L18, MV-D19)
+    expect(stage?.getAttribute("style")).toBeNull();
   });
 
   it("starts the timeline AT the claims strip's bottom, through the stage alone — 11px higher than the old host rule (GT-6a, M63)", async () => {

@@ -662,28 +662,6 @@
   text-transform: lowercase;
 }
 
-.vf-monitor-empty {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-content: center;
-  gap: 7px;
-  color: var(--text-muted);
-  text-align: center;
-  pointer-events: none;
-}
-
-.vf-monitor-empty span {
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-}
-
-.vf-monitor-empty small {
-  color: var(--text-faint);
-  font-size: 9px;
-}
-
 /* ── THE DECK SHEET (DESIGN.md §8, 2026-09-28) ────────────────────────────
    One card over the monitor, its top edge a tab: rounded top corners, the
    hairline as a ring (the ring's sides and foot fall outside the stage and are

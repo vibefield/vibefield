@@ -1525,8 +1525,8 @@ The hot-point glow and rim retire with CardShell (above).
   opened (TL-D3), text-faint for idle. Never red; now is ink. One click opens the agent in the pane
   you are in (the views' `select`).
   **Reduced motion:** no wave, no glide, no zoom tween; positions jump.
-  **There is no history book.** MV-D13 supersedes the ledger described here under TL-D8:
-  `agent.history` and fieldd's status recorder are removed. A future history capability must READ
+  **There is no history book.** MV-D13 superseded TL-D8's status ledger: `agent.history` and
+  fieldd's status recorder are removed. A future history capability must READ
   rosettad's record; neither a view nor its backend may begin recording one.
 - **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
   "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
