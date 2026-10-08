@@ -1,5 +1,5 @@
 {
-  "//": "PJ-3 (D9) \u2014 `project.get` for a key that regrouped (its first record re-keyed it), answering a tailnet caller: the project it moved into, `movedTo` saying so, and no `via` anywhere (D10).",
+  "//": "PJ-3 (D9) — `project.get` for a key that regrouped (its first record re-keyed it), answering a tailnet caller: the project it moved into, `movedTo` saying so, and no `via` anywhere (D10).",
   "project": {
     "key": "r:01JA0B1C2D3E4F5G6H7J8K9M0N",
     "provisional": false,

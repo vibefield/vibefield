@@ -186,6 +186,17 @@ describe("the tolerant reader on an answer", () => {
     expect(parsed.pinned).toBe(true);
   });
 
+  it("J11 — a desktop's Home is a project on one device; Temporary is the only bucket", () => {
+    const { "//": _note, ...home } = fixture("project-summary.home.json");
+    const parsed = ProjectSummary.parse(home);
+    expect(parsed).toMatchObject({ kind: "home", bucket: null, nameFrom: "home" });
+    expect(parsed.devices).toHaveLength(1);
+    expect(parsed.places.every((place) => place.ref.device === parsed.devices[0])).toBe(true);
+    // the retired Home bucket reads as no bucket; Temporary stays one
+    expect(ProjectSummary.parse({ ...home, bucket: "home" }).bucket).toBeNull();
+    expect(ProjectSummary.parse({ ...home, kind: "temp", bucket: "temp" }).bucket).toBe("temp");
+  });
+
   it("the tailnet fixture is the window's with what D10 strips taken out", () => {
     const { "//": _a, ...window } = fixture("project-summary.valid.json");
     const { "//": _b, ...tailnet } = fixture("project-summary.tailnet.json");

@@ -1,5 +1,5 @@
 {
-  "//": "PJ-3 \u2014 `project.list` answering a window: newest activity first, the asleep laptop's places listed and its standing in `sources` (DS-L8); `cursor` pages on, keyed on (lastAt, the project's smallest place anchor).",
+  "//": "PJ-3 — `project.list` answering a window: newest activity first, the asleep laptop's places listed and its standing in `sources` (DS-L8); `cursor` pages on, keyed on (lastAt, the project's smallest place anchor).",
   "rows": [
     {
       "key": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
@@ -61,13 +61,13 @@
       "groupingVersion": 1
     },
     {
-      "key": "p1:h0m3b4ck3th0m3b4ck3th0m3b4c",
+      "key": "p1:h0m3pr0j3cth0m3pr0j3cth0m3",
       "provisional": true,
       "name": "Home",
-      "nameFrom": "bucket",
+      "nameFrom": "home",
       "ink": 17,
       "kind": "home",
-      "bucket": "home",
+      "bucket": null,
       "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
       "places": [
         {

@@ -1,16 +1,19 @@
 {
-  "//": "PJ-3 — the Home bucket (PJ-L4): a row like any other, named by the bucket, keyed by it, its places the home folders of each desktop. A record never binds a bucket.",
-  "key": "p1:h0m3b4ck3th0m3b4ck3th0m3b4c",
+  "//": "PJ-3 — a desktop's Home (J11, James 2026-10-08; PJ-D3 amended for Home): a PROJECT like any other, not a bucket — `kind: \"home\"`, `bucket: null`, on exactly ONE device (each desktop has its own Home, which is how a surface names it and tells them apart), its places that desktop's home folder (and `/` or a drive root). Listed by its activity like any project, and acted on like one (desktop windows only, P2).",
+  "key": "p1:h0m3pr0j3cth0m3pr0j3cth0m3",
   "provisional": true,
   "name": "Home",
-  "nameFrom": "bucket",
+  "nameFrom": "home",
   "ink": 17,
   "kind": "home",
-  "bucket": "home",
+  "bucket": null,
   "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
   "places": [
     {
-      "ref": { "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF", "placeId": "pl_9e8d7c6b5a4f3e2d1c0b9a8f" },
+      "ref": {
+        "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+        "placeId": "pl_9e8d7c6b5a4f3e2d1c0b9a8f"
+      },
       "name": "me",
       "path": "/Users/me",
       "class": "home",
@@ -24,6 +27,8 @@
   "lastAt": 1759100000000,
   "allGone": false,
   "anchors": ["place:pl_9e8d7c6b5a4f3e2d1c0b9a8f"],
-  "asOf": { "01J9ZK3M5Q8XR2V7N4B6C1D0EF": "2026-09-30T23:40:00.000Z" },
+  "asOf": {
+    "01J9ZK3M5Q8XR2V7N4B6C1D0EF": "2026-09-30T23:40:00.000Z"
+  },
   "groupingVersion": 1
 }

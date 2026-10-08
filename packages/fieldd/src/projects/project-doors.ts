@@ -640,7 +640,10 @@ export class ProjectDoors {
       ...(project.disambiguation ? { disambiguation: project.disambiguation } : {}),
       ink: project.ink,
       kind: project.kind,
-      bucket: project.bucket,
+      // J11 (2026-10-08): Temporary is the only bucket; a desktop's Home is a
+      // project (`kind: "home"`, one device) — pj2's engine emits it so, and an
+      // older grouping's Home bucket reads as one here too
+      bucket: project.bucket === "temp" ? "temp" : null,
       devices: [...project.devices],
       places: project.places.map((place): ProjectPlace => this.#place(place, view)),
       sessions: project.sessions,

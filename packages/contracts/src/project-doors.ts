@@ -137,8 +137,9 @@ export const ProjectPlace = z
 export type ProjectPlace = z.infer<typeof ProjectPlace>;
 
 /** Where a project's name came from (§4.3): the person (a record), the
- * repository, a folder, or the bucket it is (Home, Temporary). */
-export const PROJECT_NAME_SOURCES = ["you", "repository", "folder", "bucket"] as const;
+ * repository, a folder, a desktop's Home (J11), or the bucket it is
+ * (Temporary). */
+export const PROJECT_NAME_SOURCES = ["you", "repository", "folder", "home", "bucket"] as const;
 
 /** PJ-D15's `ProjectSummary` v2 — one project as a door answers it. */
 export const ProjectSummary = z
@@ -154,9 +155,15 @@ export const ProjectSummary = z
     disambiguation: z.string().min(1).optional(),
     /** the deal index of the project's ink (§4.3; PJ-L7) */
     ink: z.number().int().nonnegative(),
+    /** J11 (James, 2026-10-08; PJ-D3 amended for Home): a desktop's Home —
+     * its home folder, `/`, its drive roots — is a PROJECT of that desktop,
+     * `kind: "home"` on exactly one device, listed and acted on like any
+     * other; the kind and its one device are how a surface names it and tells
+     * the desktops' Homes apart */
     kind: ProjectPlaceClass,
-    /** Home and Temporary are buckets, rows like any other (PJ-L4) */
-    bucket: z.enum(["home", "temp"]).nullable().catch(null),
+    /** Temporary is the only bucket (PJ-L4), a row like any other; a project
+     * is `null`. A value this reader does not know reads `null` */
+    bucket: z.enum(["temp"]).nullable().catch(null),
     devices: z.array(z.string().min(1)),
     /** newest first */
     places: z.array(ProjectPlace),

@@ -326,6 +326,9 @@ describe("project.list", () => {
       branch: "feature",
       worktreeOf: { device: "dev-b", placeId: "pl-b-main" },
     });
+    // J11: a desktop's Home is a project on that desktop, not a bucket — ordered
+    // by its activity like any other (here it is simply the oldest)
+    expect(page.rows[2]).toMatchObject({ kind: "home", bucket: null, devices: ["dev-a"] });
     expect(page.sources).toHaveLength(2);
     expect(page.groupingVersion).toBe(1);
     // no answer carries a place's other spellings
