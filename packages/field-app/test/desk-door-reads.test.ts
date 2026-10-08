@@ -92,6 +92,40 @@ describe("the desk door's reads (DK-8)", () => {
     ce.dispose();
   });
 
+  it("DK-17b: waits for the PARK as the gate announces it (ICE I41) — at once when parked already, unparked at its time", async () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const undo = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+      () => false,
+    );
+    const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
+    if (door === undefined) throw new Error("no door");
+    // no freeze, no park: the wait ends at its time, unparked
+    expect(await door.whenParked(20)).toMatchObject({ parked: false, already: false });
+    const thaw = ce.frame.freeze("cover");
+    const waiting = door.whenParked(5_000);
+    let settled = false;
+    void waiting.then(() => {
+      settled = true;
+    });
+    // the settle walk, stepped as a frame host steps it: the park lands as its last step ENDS
+    let now = 0;
+    for (let i = 0; i < 10 && ce.frame.claimStep(); i += 1) {
+      await Promise.resolve();
+      expect(settled).toBe(false);
+      now += 16;
+      ce.step(now);
+    }
+    expect(ce.frame.isParked()).toBe(true);
+    expect(await waiting).toMatchObject({ parked: true, already: false });
+    // the announcement is not replayed: a later wait reads the gate once — parked already
+    expect(await door.whenParked(5_000)).toMatchObject({ parked: true, already: true });
+    thaw();
+    undo();
+    ce.dispose();
+  });
+
   it("DK-17b: says what this window says of its own pointer — ICE's presence (I42): the host's reason and its cursor", () => {
     const ce = createFieldEngine(buildRegistry());
     ce.docs.create();

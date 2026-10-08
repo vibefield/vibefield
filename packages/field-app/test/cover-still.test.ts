@@ -6,6 +6,8 @@
  * hidden by `visibility`, and only then `freeze("cover")`, the park seen; back to Canvas THAW FIRST, the canvas shown at
  * once, the still dropped; a resize or a theme change re-captures (thaw → one frame → capture → freeze); a capture that
  * answers nothing covers the mat's ground and, on a desk that had drawn, says "The desk lost its graphics device" ONCE.
+ * DK-17b (desk.6, ICE I41): the park is the gate's ANNOUNCEMENT (`frame.onParked`), never a poll — the fake gate below
+ * announces it as ICE's does (once, not replayed on subscribe; `false` as a thaw reopens a gate that announced it).
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -43,7 +45,17 @@ const flush = async (): Promise<void> => {
 function harness(opts: { frames?: number; viewWidth?: number; answer?: "still" | "nothing" } = {}) {
   const log: string[] = [];
   let t = 1000;
-  const gate = { holds: 0, parked: false, freezes: 0, thaws: 0 };
+  const gate = {
+    holds: 0,
+    parked: false,
+    freezes: 0,
+    thaws: 0,
+    /** how often the controller asked `isParked()`, and the park's listeners now */
+    reads: 0,
+    listeners: new Set<(parked: boolean) => void>(),
+  };
+  /** how often the controller asked for a page frame */
+  let frameAsks = 0;
   const canvas = document.createElement("canvas");
   const perf = { frames: opts.frames ?? 120 };
   let pending: ((b: ImageBitmap | undefined) => void) | null = null;
@@ -75,11 +87,22 @@ function harness(opts: { frames?: number; viewWidth?: number; answer?: "still" |
           done = true;
           gate.holds -= 1;
           gate.thaws += 1;
+          const announced = gate.parked;
           gate.parked = false;
           log.push("thaw");
+          if (announced && gate.holds === 0) for (const fn of [...gate.listeners]) fn(false);
         };
       },
-      isParked: () => gate.parked,
+      isParked: () => {
+        gate.reads += 1;
+        return gate.parked;
+      },
+      onParked: (fn) => {
+        gate.listeners.add(fn);
+        return () => {
+          gate.listeners.delete(fn);
+        };
+      },
     }),
     desk: () => mounted,
     surface: {
@@ -96,7 +119,10 @@ function harness(opts: { frames?: number; viewWidth?: number; answer?: "still" |
     viewWidth: () => opts.viewWidth ?? 1180,
     say: (id, text) => said.push({ id, text }),
     now: () => (t += 1),
-    nextFrame: () => Promise.resolve(),
+    nextFrame: () => {
+      frameAsks += 1;
+      return Promise.resolve();
+    },
     reduced: () => false,
   };
   const still = createCoverStill(seams);
@@ -129,9 +155,17 @@ function harness(opts: { frames?: number; viewWidth?: number; answer?: "still" |
     unmount() {
       mounted = null;
     },
+    /** The gate parks — its settle walk's last step ended — and ANNOUNCES it, once (ICE I41). */
     park() {
+      if (gate.parked) return;
+      gate.parked = true;
+      for (const fn of [...gate.listeners]) fn(true);
+    },
+    /** The gate parked by another holder's freeze, before this cover's — said by no announcement to a later listener. */
+    parkedAlready() {
       gate.parked = true;
     },
+    frameAsks: () => frameAsks,
   };
 }
 
@@ -194,6 +228,64 @@ describe("THE RISE — the cover over the live desk, then capture → blur once 
     expect(rec?.passes[0]?.parked).toBeGreaterThan(
       rec?.passes[0]?.frozen ?? Number.POSITIVE_INFINITY,
     );
+  });
+
+  it("DK-17b: hears the park as the gate ANNOUNCES it (ICE I41) — the gate read once at the freeze, no page frame awaited, no poll", async () => {
+    const h = harness();
+    h.still.cover(true, "godview");
+    await flush();
+    h.answer();
+    await flush();
+    // frozen, the park not yet come: ONE read of the gate's state, one listener, and nothing asked of the page since
+    expect(h.gate.reads).toBe(1);
+    expect(h.gate.listeners.size).toBe(1);
+    const asks = h.frameAsks();
+    for (let i = 0; i < 5; i += 1) await flush();
+    expect(h.gate.reads).toBe(1);
+    expect(h.frameAsks()).toBe(asks);
+    expect(coverRecords().at(-1)?.passes[0]?.parked).toBeUndefined();
+    // the announcement IS the park: recorded inside it, synchronously, and the listener let go
+    h.park();
+    expect(coverRecords().at(-1)?.steps.at(-1)).toBe("park");
+    expect(h.gate.listeners.size).toBe(0);
+  });
+
+  it("DK-17b: a gate another holder already parked is recorded at once — the state read once, nothing replayed", async () => {
+    const h = harness();
+    h.parkedAlready();
+    h.still.cover(true, "godview");
+    await flush();
+    h.answer();
+    await flush();
+    const rec = coverRecords().at(-1);
+    expect(rec?.steps).toEqual(["capture", "blur", "swap", "hide", "freeze", "park"]);
+    expect(h.gate.listeners.size).toBe(0);
+  });
+
+  it("DK-17b: a cover lowered before its park lets the listener go — a late announcement records nothing", async () => {
+    const h = harness();
+    h.still.cover(true, "godview");
+    await flush();
+    h.answer();
+    await flush();
+    expect(h.gate.listeners.size).toBe(1);
+    h.still.cover(false);
+    expect(h.gate.listeners.size).toBe(0);
+    h.park();
+    expect(coverRecords().at(-1)?.steps).not.toContain("park");
+  });
+
+  it("DK-17b: a new engine under a standing cover before the park — the NEW gate's announcement records it", async () => {
+    const h = harness();
+    h.still.cover(true, "godview");
+    await flush();
+    h.answer();
+    await flush();
+    h.still.engineChanged(); // the harness's one gate stands in for the new engine's
+    expect(h.gate.listeners.size).toBe(1);
+    h.park();
+    const rec = coverRecords().at(-1);
+    expect(rec?.steps.slice(-3)).toEqual(["freeze", "engine", "park"]);
   });
 
   it("between covered views nothing is taken again: one stand, one freeze", async () => {
@@ -318,7 +410,11 @@ describe("AGAIN — a resize or a theme change while covered: thaw → one frame
       const h = harness();
       let now = 0;
       const still = createCoverStill({
-        frame: () => ({ freeze: () => () => undefined, isParked: () => false }),
+        frame: () => ({
+          freeze: () => () => undefined,
+          isParked: () => false,
+          onParked: () => () => undefined,
+        }),
         desk: () => ({
           handle: {
             capture: async () => bitmap(2360, 1496),

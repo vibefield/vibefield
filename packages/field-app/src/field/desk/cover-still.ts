@@ -9,8 +9,10 @@ import type { DeskLayerHandle } from "@vibecook/ice/desk";
 //           an OffscreenCanvas `filter`, never a `backdrop-filter` (the compositor would re-blur it every frame the cover's
 //           own content moves; Godview's swarm moves every frame) — and SWAPPED in under the cover's 72 % tint; the desk's
 //           canvas is HIDDEN by `visibility` (never `display:none`, which the host's ResizeObserver reads as 0 × 0); then
-//           `engine.frame.freeze("cover")` parks the loop: zero frames, zero submits for as long as the cover stands. The
-//           still recedes to 0.98 over 560 ms, transform only (the surface's CSS — the cover's settle).
+//           `engine.frame.freeze("cover")` parks the loop: zero frames, zero submits for as long as the cover stands —
+//           the park as the gate ANNOUNCES it (`frame.onParked`, ICE I41; DK-17b retired DK-15's poll of `isParked()`
+//           each page frame). The still recedes to 0.98 over 560 ms, transform only (the surface's CSS — the cover's
+//           settle).
 //   AGAIN — a resize or a theme change while covered re-captures: thaw → one frame → capture → (blur → swap → hide) →
 //           freeze. Asked while a capture is in flight, it runs once that one has swapped.
 //   LOWER — back to Canvas: THAW FIRST, the live canvas shown at once under the lowering cover, the still dropped.
@@ -35,8 +37,6 @@ export const COVER = {
   tint: 0.72,
   /** A re-capture's ONE frame: how long the thawed desk is given to present it before the last presented frame is taken. */
   frameWaitMs: 1_000,
-  /** How long the park is looked for after the freeze (the gate parks after its settle step — one frame). */
-  parkWaitMs: 2_000,
   /** A resize while covered re-captures once the window has stood still this long (a drag resizes every frame). */
   resizeQuietMs: 150,
 } as const;
@@ -65,7 +65,7 @@ export interface CoverDesk {
 
 export interface CoverSeams {
   /** The window's frame gate — the engine's (`ce.frame`), read at each freeze (a new generation brings a new one). */
-  readonly frame: () => Pick<FrameControl, "freeze" | "isParked">;
+  readonly frame: () => Pick<FrameControl, "freeze" | "isParked" | "onParked">;
   /** The desk drawing now, or null. */
   readonly desk: () => CoverDesk | null;
   readonly surface: StillSurface;
@@ -178,6 +178,9 @@ export function createCoverStill(seams: CoverSeams): CoverStill {
   /** The stand now (null on the canvas). Each pass steps into ITS stand's record, never a later one's. */
   let record: CoverRecord | null = null;
   let disposed = false;
+  /** The pass waiting on its park, and its listener on the gate it froze — let go at the park, the lowering, a newer pass. */
+  let waiting: { token: number; rec: CoverRecord; pass: CoverPass } | null = null;
+  let unpark: (() => void) | null = null;
 
   const step = (rec: CoverRecord | null, name: string): number => {
     const at = seams.now();
@@ -192,24 +195,34 @@ export function createCoverStill(seams: CoverSeams): CoverStill {
     return step(rec, "thaw");
   };
 
-  /** The park, as the gate says it — looked for each page frame after the freeze (it parks after its settle step). */
-  const watchPark = async (token: number, rec: CoverRecord, pass: CoverPass): Promise<void> => {
-    const deadline = seams.now() + COVER.parkWaitMs;
-    while (token === epoch && thaw !== null && !disposed) {
-      if (seams.frame().isParked()) {
-        pass.parked = step(rec, "park");
-        return;
-      }
-      if (seams.now() > deadline) return;
-      await seams.nextFrame();
-    }
+  const letGoPark = (): void => {
+    unpark?.();
+    unpark = null;
+    waiting = null;
   };
 
-  /** freeze — then the park looked for. */
+  /** The park as the gate ANNOUNCES it (ICE I41, `frame.onParked`): `true` once, as the settle walk's last step ends — and
+   * never replayed on subscribe, so the gate is read ONCE for a park it already holds (another holder's freeze). */
+  const hearPark = (token: number, rec: CoverRecord, pass: CoverPass): void => {
+    letGoPark();
+    const gate = seams.frame();
+    const parked = (): void => {
+      letGoPark();
+      if (token !== epoch || thaw === null || disposed || pass.parked !== undefined) return;
+      pass.parked = step(rec, "park");
+    };
+    waiting = { token, rec, pass };
+    unpark = gate.onParked((now) => {
+      if (now) parked();
+    });
+    if (gate.isParked()) parked();
+  };
+
+  /** freeze — then the park listened for. */
   const freeze = (token: number, rec: CoverRecord, pass: CoverPass): void => {
     if (thaw === null) thaw = seams.frame().freeze("cover");
     pass.frozen = step(rec, "freeze");
-    void watchPark(token, rec, pass);
+    hearPark(token, rec, pass);
   };
 
   /** capture → blur once → swap → hide → freeze. False when a newer stand or a lowering overtook it. */
@@ -351,6 +364,7 @@ export function createCoverStill(seams: CoverSeams): CoverStill {
     const rec = record;
     record = null;
     if (rec !== null) rec.lowered = seams.now();
+    letGoPark();
     const thawed = thawNow(rec);
     if (hidden !== null) {
       hidden.style.visibility = "";
@@ -384,9 +398,13 @@ export function createCoverStill(seams: CoverSeams): CoverStill {
     },
     engineChanged() {
       if (disposed || !up || thaw === null) return;
+      const pending = waiting;
       thaw();
       thaw = seams.frame().freeze("cover");
       step(record, "engine");
+      // a park still owed is the NEW gate's to announce
+      if (pending !== null) hearPark(pending.token, pending.rec, pending.pass);
+      else letGoPark();
     },
     up: () => up,
     dispose() {

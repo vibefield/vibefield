@@ -211,6 +211,12 @@ export interface VfDeskDoor {
     readonly steps: number;
     readonly due: ReturnType<DeskLayerHandle["due"]>;
   };
+  /** DK-17b (ICE I41) — the PARK as the gate ANNOUNCES it (`frame.onParked`): resolves when the loop has parked (`at`, the
+   * page's clock), at once when it already is (`already` — the announcement is not replayed on subscribe), or not parked
+   * after `timeoutMs`. What the smokes' waits for a park ask — never a poll of `rest().parked`. */
+  whenParked(
+    timeoutMs: number,
+  ): Promise<{ readonly parked: boolean; readonly already: boolean; readonly at: number }>;
   pick(point: { readonly x: number; readonly y: number }): {
     readonly entity: number;
     readonly type: string;
@@ -386,6 +392,24 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
         due: handle.due(performance.now()),
       };
     },
+    whenParked: (timeoutMs) =>
+      new Promise((resolve) => {
+        const frame = engine.frame;
+        if (frame.isParked()) {
+          resolve({ parked: true, already: true, at: performance.now() });
+          return;
+        }
+        const off = frame.onParked((parked) => {
+          if (!parked) return;
+          off();
+          clearTimeout(timer);
+          resolve({ parked: true, already: false, at: performance.now() });
+        });
+        const timer = setTimeout(() => {
+          off();
+          resolve({ parked: false, already: false, at: performance.now() });
+        }, timeoutMs);
+      }),
     pick: (point) => pickOf(handle.pick(point)),
     capture: (opts) => handle.capture(opts),
     async sample(opts) {

@@ -1351,14 +1351,9 @@ async function deskWitnesses(win: BrowserWindow, shotDir: string | undefined): P
   );
   // the freeze walks its settle, then PARKS (ICE frame-control): the parked second starts AT the park — the gate's own
   // word, never a fixed delay after the cover shows, which a late freeze (its passive effect behind a slow paint) or a
-  // stalled frame outlasts (DK-10b, grade 2: the settle step landed inside the second — one frame, one submit)
-  await waitForRendererFact(
-    win,
-    "the desk parked under the cover",
-    10_000,
-    "globalThis.__vfDesk.rest().parked === true",
-    "globalThis.__vfDesk.rest()",
-  );
+  // stalled frame outlasts (DK-10b, grade 2: the settle step landed inside the second — one frame, one submit) — and
+  // since DK-17b the word as the gate ANNOUNCES it (ICE I41, `frame.onParked`: as the settle walk's last step ENDS)
+  await waitForPark(win, "the desk parked under the cover", 10_000);
   const parkedDrawn = await drawnWindow(win, "the freeze row's parked second");
   const parkedA = await stillnessSample(win);
   await sleep(1000);
@@ -1773,6 +1768,20 @@ async function waitForRendererFact(
       ? ""
       : ` — ${JSON.stringify(await win.webContents.executeJavaScript(diagnose, true))}`;
   throw new Error(`${label} did not happen within ${timeoutMs}ms${detail}`);
+}
+
+/** DK-17b (ICE I41) — wait for the PARK as the gate announces it (the door's `whenParked`, over `frame.onParked`), never a
+ * poll of the gate's state: resolved as the settle walk's last step ends, or at once when the gate already is parked. */
+async function waitForPark(win: BrowserWindow, label: string, timeoutMs: number): Promise<void> {
+  const park = (await win.webContents.executeJavaScript(
+    `globalThis.__vfDesk.whenParked(${timeoutMs})`,
+    true,
+  )) as { parked: boolean; already: boolean };
+  if (park.parked) return;
+  const detail = JSON.stringify(
+    await win.webContents.executeJavaScript("globalThis.__vfDesk.rest()", true),
+  );
+  throw new Error(`${label} did not happen within ${timeoutMs}ms — ${detail}`);
 }
 
 async function waitForCondition(
@@ -2423,14 +2432,9 @@ async function deskStillness(win: BrowserWindow): Promise<{ facts: object; probl
   );
   // the freeze walks its settle, then PARKS (ICE frame-control): the parked second starts AT the park — the gate's own
   // word, never a fixed delay after the cover shows, which a late freeze (its passive effect behind a slow paint) or a
-  // stalled frame outlasts (DK-10b, grade 2: the settle step landed inside the second — one frame, one submit)
-  await waitForRendererFact(
-    win,
-    "the desk parked under the cover",
-    10_000,
-    "globalThis.__vfDesk.rest().parked === true",
-    "globalThis.__vfDesk.rest()",
-  );
+  // stalled frame outlasts (DK-10b, grade 2: the settle step landed inside the second — one frame, one submit) — and
+  // since DK-17b the word as the gate ANNOUNCES it (ICE I41, `frame.onParked`: as the settle walk's last step ENDS)
+  await waitForPark(win, "the desk parked under the cover", 10_000);
   const parkedDrawn = await drawnWindow(win, "the stillness row's parked second");
   const parkedA = await stillnessSample(win);
   await sleep(1_000);
