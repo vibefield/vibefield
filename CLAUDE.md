@@ -181,7 +181,9 @@ sidecar was built from source while the window's Go half was open, and comes fro
   Studio has its own sandboxed window, ephemeral session, and narrow preload. Use
   `pnpm dev:design:web` for the catalog-only browser loop. Rules in `docs/UI_SYSTEM.md`.
 - `pnpm smoke:studio` — opt-in physical Electron gate for Studio/product session and preload
-  isolation, real UI edit/apply, product reload replay, Studio-close restoration, and fieldd.
+  isolation, real UI edit/apply, product reload replay, Studio-close restoration, and fieldd — on a
+  fresh dev root under /tmp (`apps/desktop/packaging/run-studio-smoke.mjs`; `VIBEFIELD_DEV_ROOT`
+  moves the dev runner's whole state), never the checkout's `.vibefield/dev`.
 - `pnpm smoke` / `pnpm smoke:canvas` / `pnpm smoke:godview` / `pnpm smoke:plugin-restart` /
   `pnpm smoke:kind-faults` — desktop smoke checks. Each runs Electron on its OWN profile, fresh
   under the OS temp and removed after (`apps/desktop/packaging/run-smoke.mjs`; main mints one for a
@@ -191,7 +193,13 @@ sidecar was built from source while the window's Go half was open, and comes fro
   ONE run (`apps/desktop/packaging/stage-kind-fixtures.mjs`: a temporary `FIELDD_PLUGIN_DEV_ROOTS`,
   never `examples/plugins`) — the restart smoke enables, disables, updates and regresses the clock
   before its restarts; the faults smoke boots the desk beside DK-7's broken clocks.
-  `smoke:browser-widget` RETIRED at DK-5 with the page widget it drove.
+  `smoke:canvas:no-gpu` / `smoke:canvas:no-webgpu` run the GPU-less modes on smoke:canvas's build.
+  Every smoke stops its own daemons and waits for them; its launcher then fails the run if any
+  process of it lives (`VF_SMOKE_RUN`, `SMOKE_DAEMONS`). `smoke:browser-widget` RETIRED at DK-5.
+- `pnpm gate:landing` — the landing-only gates (`pnpm still` and every smoke, this Mac's GPU),
+  each alone, one verdict line each; `--with-stages` runs `verify`'s stages first, each alone; a
+  gate past `--timeout-min` (30) is stopped whole and red. REQUIRED at every landing, out of CI.
+  The list, what each proves and its doors: `docs/desk-gates.md`.
 - `pnpm --filter @vibefield/desktop build:screenshot-helper` / `test:screenshot-helper` /
   `verify:screenshot-helper` — the native screenshot helper (Swift on macOS, Rust on Windows;
   `apps/desktop/native/*/screenshot-helper`). Outside `pnpm verify` like the SCK helper and the
@@ -200,8 +208,9 @@ sidecar was built from source while the window's Go half was open, and comes fro
   developer's live display from an agent — it is a full-screen overlay.
 - `pnpm build` / `pnpm typecheck` / `pnpm test` — Nx task graph with conservative local caching;
   use `pnpm exec nx graph` or `pnpm exec nx affected -t <target>` to inspect/select work
-- `pnpm verify` — THE gate; run before every commit: preflight → typecheck → biome →
-  rustfmt/clippy → TS + Rust tests → gen freshness
+- `pnpm verify` — THE gate; run before every commit: preflight → the import walls
+  (`check:walls`) → deps/retired/fixtures/icons → typecheck → biome → rustfmt/clippy →
+  bundle → TS + Rust tests → gen freshness
 - `pnpm format` — biome `--write` + cargo fmt
 - `pnpm gen` — regenerate contracts JSON Schema + typify'd `contracts.rs`; commit the output
 - `pnpm test` (TS) · `pnpm test:rust` (cargo)
