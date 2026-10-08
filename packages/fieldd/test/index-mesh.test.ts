@@ -25,6 +25,9 @@ import { CatalogTable, createRowsPump } from "../src/catalog-rows";
 import type { IndexCatalog } from "../src/index-catalog";
 import { IndexMesh, type MeshLink, type MeshRoster } from "../src/index-mesh";
 import { RpcCallError } from "../src/native-link";
+import { type GroupingResult, groupPlaces } from "../src/projects/grouping";
+import { ProjectGroups } from "../src/projects/project-groups";
+import { corpusInput, type PlacesCorpus } from "./project-places-corpus";
 
 // DS-6 — the aggregator (index-mesh.ts) over in-memory sources: each "desktop"
 // is a pair of CatalogTables served through the real rows pump, the link a
@@ -878,6 +881,82 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
     writeFileSync(join(dir, "notes.tmp"), "not ours");
     mesh({ self: a, desktops: [a], peers: [], dir });
     expect(readdirSync(dir).sort()).toEqual(["notes.tmp"]);
+  });
+});
+
+describe("IndexMesh — PJ-1 §4: the projects over the replica", () => {
+  it("three desktops' places cross the replica and group as the witness says: 143 rows, 8 across desktops", async () => {
+    // the synthetic mesh (fixtures/projects/places-corpus.json): the Mac's 161
+    // places and two synthetic desktops' 31, the seven traps among them, each
+    // place's facts as its owner publishes them (project-places-corpus.ts)
+    const corpus = JSON.parse(
+      readFileSync(join(import.meta.dirname, "fixtures", "projects", "places-corpus.json"), "utf8"),
+    ) as PlacesCorpus;
+    const input = corpusInput(corpus, [...corpus.mac, ...corpus.synthetic]);
+    const direct = groupPlaces(input);
+    // every desktop publishes each place on a project row of its own catalog
+    const desktops = input.devices.map((device) => {
+      const d = desktop(device.deviceId);
+      d.projects.upsert(
+        device.places.map((p, i) => ({
+          device: device.deviceId,
+          projectId: `p-${i}`,
+          name: `p-${i}`,
+          rootPaths: [p.facts.path],
+          sessionCount: 0,
+          places: [p.facts],
+        })),
+      );
+      return d;
+    });
+    const self = desktops.find((d) => d.device === "mbp");
+    if (self === undefined) throw new Error("no Mac in the corpus");
+    const others = desktops.filter((d) => d !== self);
+    const { aggregator } = mesh({
+      self,
+      desktops,
+      peers: others.map((d) => ({ deviceId: d.device, online: true })),
+    });
+    await until(
+      () =>
+        others.every(
+          (d) => aggregator.replica(d.device)?.projects.length === d.projects.rows().length,
+        ),
+      5_000,
+      "both peers' places",
+    );
+    const groups = new ProjectGroups({
+      deviceId: () => self.device,
+      local: { projects: self.projects, sessions: self.sessions },
+      peers: () => aggregator.peerRows(),
+    });
+    const result = groups.regroupNow()?.result;
+    if (result === undefined) throw new Error("no projects");
+    const shape = (r: GroupingResult) => {
+      const buckets: Record<string, number> = {};
+      for (const p of r.projects) if (p.bucket !== null) buckets[p.bucket] = p.places.length;
+      const suggestions: Record<string, number> = {};
+      for (const s of r.suggestions) suggestions[s.type] = (suggestions[s.type] ?? 0) + 1;
+      return {
+        rows: r.projects.length,
+        crossDevice: r.projects.filter((p) => p.bucket === null && p.devices.length > 1).length,
+        buckets,
+        suggestions,
+        keys: r.projects.map((p) => p.key).sort(),
+        partition: r.projects
+          .map((p) => p.places.map((pl) => pl.placeId).sort())
+          .sort((a, b) => (a[0]! < b[0]! ? -1 : 1)),
+      };
+    };
+    // the witness's numbers (project-grouping-witness.test.ts), reached over the wire
+    expect(shape(result)).toMatchObject({
+      rows: 143,
+      crossDevice: 8,
+      buckets: { home: 4, temp: 30 },
+      suggestions: { "related-history": 9, "same-folder": 1, "same-name": 4 },
+    });
+    // and the very partition and keys the engine gives the facts in hand
+    expect(shape(result)).toEqual(shape(direct));
   });
 });
 

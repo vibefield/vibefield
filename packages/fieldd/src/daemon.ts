@@ -212,6 +212,7 @@ import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { atFloor, wholeValueDoor } from "./projection";
 import { PlaceScanner } from "./projects/place-scanner";
+import { ProjectGroups } from "./projects/project-groups";
 import { NO_EGRESS, type RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
   ROSETTAD_UNCONFIGURED,
@@ -847,6 +848,18 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     actedRoots: () => workspace.registry.roots(),
     logger,
   });
+  // PJ-1 §4 (PJ-D20 (a)) — the projects: the grouping engine over this
+  // desktop's places and every peer's (the replica, bound below), held for
+  // PJ-3's doors; it follows this desktop's tables itself, and hears the
+  // peers' and the person's acts through the hooks below.
+  const projectGroups = new ProjectGroups({
+    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    local: indexCatalog,
+    peers: () => indexMesh?.peerRows() ?? [],
+    acted: () => placeScanner.acted(),
+    logger,
+  });
+  const offActed = workspace.registry.onChange(() => projectGroups.regroupSoon());
   const agents = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
@@ -4812,9 +4825,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.indexMesh ?? {}),
       logger,
     });
-    // PJ-1 — a peer's project rows moved: its places' samples may have
+    // PJ-1 — a peer's project rows moved: its places' samples may have, and
+    // the projects regroup over its places and sessions
     indexMesh.on("change", (event: { scope: string; table?: string }) => {
-      if (event.scope === "mesh" && event.table === "projects") placeScanner.peersChanged();
+      if (event.scope !== "mesh") return;
+      if (event.table === "projects") placeScanner.peersChanged();
+      projectGroups.regroupSoon();
     });
 
     // AH-1 — the artifact serving foundation. Constructed HERE (before the supersession
@@ -5071,6 +5087,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docLane.close();
       const reason = fatalReason;
       placeScanner.dispose(); // PJ-1 — no scan asks a worker that is leaving
+      projectGroups.dispose();
+      offActed();
       void (async () => {
         await Promise.allSettled([
           updateManager.dispose(),
@@ -5148,6 +5166,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       board.dispose();
       indexTail.dispose();
       placeScanner.dispose();
+      projectGroups.dispose();
+      offActed();
       indexCatalog.dispose();
       indexMesh?.dispose();
       federatedSubs.dispose();
@@ -5489,6 +5509,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // and the places this user's runs already recorded are seeded once.
     workspace.start();
     placeScanner.start(); // PJ-1 — scans once the catalog and the worker are both ready
+    projectGroups.start(); // PJ-1 §4 — regroups as the places and sessions move
     try {
       workspace.registry.seedPlaces(agents.recordedPlaces());
     } catch (error) {
@@ -5521,6 +5542,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           placeScanner.dispose(); // PJ-1 — no scan asks a worker that is stopping
+          projectGroups.dispose();
+          offActed();
           await workspace.stop(); // FS-1a — the files worker stops with the daemon (FS-D11 (b))
           detachHealthSources?.();
           endpoints.dispose();
@@ -5635,6 +5658,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     await agents.dispose();
     await rosettad?.stop();
     placeScanner.dispose(); // PJ-1 — likewise never started before ready
+    projectGroups.dispose();
+    offActed();
     await workspace.stop(); // FS-1a — started only after ready; the guard is stated
     // The earliest supersession window, which the `stopForSupersession` listener
     // is not yet in scope to see: a takeover that lands while the services are

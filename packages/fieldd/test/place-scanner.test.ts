@@ -16,8 +16,9 @@ import { EventEmitter } from "node:events";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { PlaceFacts } from "@vibefield/contracts";
+import type { IndexCatalogProject, IndexCatalogSession, PlaceFacts } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
+import { CatalogTable } from "../src/catalog-rows";
 import {
   type ActedRoot,
   type PlaceCatalog,
@@ -25,6 +26,7 @@ import {
   PlaceScanner,
   placeIdFor,
 } from "../src/projects/place-scanner";
+import { ProjectGroups } from "../src/projects/project-groups";
 import { readPlaces } from "../src/workspace/host/places";
 import type { FilesHostHealth } from "../src/workspace/supervisor";
 import { FilesHostRefusal, FilesHostUnavailable } from "../src/workspace/supervisor";
@@ -397,6 +399,69 @@ describe("the place scanner (PJ-1)", () => {
     expect(s.lastPass()).toMatchObject({ skipped: 2, places: 1 });
     await s.scanNow();
     expect([...last().keys()].sort()).toEqual(["p-0", "p-1", "p-2"]);
+  });
+
+  it("§4: a remote-less checkout, its worktree and a clone group as ONE project by history alone", async () => {
+    // worktreeOf is no join rule: only the hits this desktop finds between its
+    // own places (same root) join a repository that has no remote
+    const base = scratch();
+    const app = join(base, "app");
+    mkdirSync(app);
+    git(app, "init", "-q", "-b", "main");
+    for (const n of [1, 2, 3]) {
+      writeFileSync(join(app, "n.txt"), `${n}\n`);
+      git(app, "add", ".");
+      git(app, "commit", "-q", "-m", `c${n}`);
+    }
+    const side = join(base, "app-side");
+    git(app, "worktree", "add", "-q", "-b", "side", side);
+    writeFileSync(join(side, "n.txt"), "side\n");
+    git(side, "commit", "-q", "-am", "side");
+    const copy = join(base, "app-copy");
+    git(base, "clone", "-q", app, copy);
+    git(copy, "remote", "remove", "origin");
+    const other = join(base, "other");
+    mkdirSync(other);
+    git(other, "init", "-q", "-b", "main");
+    git(other, "commit", "-q", "--allow-empty", "-m", "other");
+    const { catalog, last } = catalogOf([
+      { projectId: "p-app", rootPaths: [app] },
+      { projectId: "p-copy", rootPaths: [copy] },
+      { projectId: "p-other", rootPaths: [other] },
+    ]);
+    const { worker } = workerOf();
+    const s = scanner(catalog, worker);
+    s.start();
+    await s.scanNow();
+    await s.scanNow(); // the hits among this desktop's own places
+    const projects = new CatalogTable<IndexCatalogProject>({
+      epoch: "e",
+      keyOf: (row) => row.projectId,
+    });
+    projects.upsert(
+      [...last()].map(([projectId, places]) => ({
+        device: "dev-a",
+        projectId,
+        name: projectId,
+        rootPaths: [],
+        sessionCount: 0,
+        places,
+      })),
+    );
+    const sessions = new CatalogTable<IndexCatalogSession>({
+      epoch: "e",
+      keyOf: (row) => row.sessionId,
+    });
+    const groups = new ProjectGroups({ deviceId: () => "dev-a", local: { projects, sessions } });
+    const result = groups.regroupNow()?.result;
+    const ids = (paths: string[]) => paths.map((path) => placeIdFor("dev-a", path)).sort();
+    const partition = (result?.projects ?? []).map((p) => p.places.map((pl) => pl.placeId).sort());
+    expect(partition).toContainEqual(ids([app, side, copy]));
+    expect(partition).toContainEqual(ids([other]));
+    expect(result?.projects).toHaveLength(2);
+    const joined = result?.projects.find((p) => p.places.length === 3);
+    expect(joined?.kind).toBe("local");
+    expect(joined?.edges.every((edge) => edge.rule === "history")).toBe(true);
   });
 
   it("a catalog whose roots did not move asks for no pass; one whose roots moved does", async () => {

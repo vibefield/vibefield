@@ -581,7 +581,10 @@ export const WORKSPACE_GIT = {
  * with an unchanged HEAD, config and worktree list costs one cheap read.
  * MAX_PLACES bounds the places one desktop scans (rosetta's roots plus the
  * worktrees `git worktree list` names); WORKTREES_MAX the worktrees one
- * checkout adds. TS-only: no native reader. */
+ * checkout adds. REGROUP_SETTLE_MS (§4): the quiet the projects grouping
+ * waits for after a change of its input — this desktop's rows, a peer's, an
+ * act — before it runs the engine again (an equal input runs nothing). TS-only:
+ * no native reader. */
 export const PLACE_FACTS = {
   GIT_TIMEOUT_MS: 5_000,
   SSH_TIMEOUT_MS: 3_000,
@@ -593,6 +596,7 @@ export const PLACE_FACTS = {
   CHANGE_SETTLE_MS: 2_000,
   MAX_PLACES: 2_000,
   WORKTREES_MAX: 256,
+  REGROUP_SETTLE_MS: 2_000,
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
