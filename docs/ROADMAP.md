@@ -15,12 +15,12 @@
 > `pnpm still` and eleven smokes, the product desk rig's TAKE rows among them — red only by main's three known rows
 > (preflight's ghosttea sibling, check:deps' mille links, fieldd's AR-7b row 1) and, each run, one fieldd row under the test
 > stage's load that passed alone twice (`docs/desk-gates.md`). After main was merged a third time (`7c7fea1c`, MV and the
-> ghosttea pin): preflight GREEN and AR-7b fixed by main, but the gates cannot run green — on main either — until the
-> puppeteer sibling is prepared at MV's pin `594d222` (`siblings.mjs install-js` / `build-js puppeteer`, its owner's), after
-> which they run whole again. Next: the cutover (`docs/desk-gates.md` "The cutover": the fast-forward, then both Macs upgraded
-> TOGETHER and James's eleven two-Mac steps, which decide (20)'s stamp wait and (95)'s drag strip); the follow-on programs
-> PORTALS · STRING · the OBJECT KIT · the AGENT'S EYES · the UPLOAD PLANE (each a thinking doc of its own); FS-3's desk tree;
-> James's parked calls (DECISIONS, "DK — the build's rulings"). **Every push is still HELD.**
+> ghosttea pin) and the puppeteer sibling prepared at MV's pin by its own frozen install, the gates ran whole on `43b3b46f`:
+> every gate green — preflight and AR-7b now too, by main — but check:deps' mille row (main's) and the test stage, red each run
+> by rows under load that passed alone twice. Next: the cutover (`docs/desk-gates.md` "The cutover": the fast-forward, then
+> both Macs upgraded TOGETHER and James's eleven two-Mac steps, which decide (20)'s stamp wait and (95)'s drag strip); the
+> follow-on programs PORTALS · STRING · the OBJECT KIT · the AGENT'S EYES · the UPLOAD PLANE (each a thinking doc of its own);
+> FS-3's desk tree; James's parked calls (DECISIONS, "DK — the build's rulings"). **Every push is still HELD.**
 > Previous rewrite, kept for continuity — **2026-10-08 (evening) — MV LANDED: GODVIEW'S FIVE VIEWS ARE SDK MODULES OVER ONE BACKEND (`2a434475`; puppeteer `594d222`).**
 > MV: Godview's list, rain, swarm, timeline and spend views are pure-presentation modules on `@vibecook/puppeteer-view-sdk`
 > over `@vibecook/puppeteer-monitor`, one backend per desktop beside the runtime. Windows and the phone hold replicas of its

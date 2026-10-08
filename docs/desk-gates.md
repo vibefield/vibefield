@@ -100,8 +100,23 @@ modes passed, but on the previous build (they reuse smoke:canvas's), so they pro
 vitest's worker channel closing at exit (`ERR_IPC_CHANNEL_CLOSED`) after its ten tests had passed. Alone after, 4 of 5 green
 (the fifth the same error); in one window, 3/3 on the merge and 3/3 on the lane's pre-merge tip. Main changes nothing `still`
 runs, and the same tinypool channel error ended a field-app run at DK-13 (2026-10-06): a teardown flake, not the merge's. AR-7b
-passed: MV made its test assert what AR-7b guards. **The gates run whole again once the sibling is prepared**; until then this
-merge has no green run.
+passed: MV made its test assert what AR-7b guards. Until the sibling was prepared this merge had no green run.
+
+**Re-run whole on `43b3b46f`, the sibling prepared** (its own frozen install, 21:28Z — the cutover's 1.5; field-native rebuilt
+from the lane first; 2026-10-08 21:32→21:51Z, load 34–402): 24 of the 26 gates ok — typecheck (the 165 lines gone),
+bundle:assert, `still` and all eleven smokes, each smoke's daemon row `left: []` (smoke:godview's and smoke:terminal-direct's
+through MV's runner — the merge fix's row; smoke:plugin's in its `try.log`; the two GPU-less modes on this run's own build) —
+red only by check:deps (MAIN's mille row) and the test stage. The test stage went red three times, each by a different row
+under load:
+- the whole run (load 35→195): fieldd's `agent-gateway` AR-7b row "the stop verb reaches a typed run unchanged", its
+  `agent-session` AR-4 re-attach row, and field-app, whose failing row the log cannot show — when field-app finishes last, nx
+  prints only the first 64 KiB of its output (so in every whole DK-19 run; the gate takes its exit from nx's failed list);
+- the stage alone (load 103→181): logging's 512-seed sanitizer fuzz timed out at 5 s (556 ms alone);
+- the stage again (load 49→234): fieldd's `terminal-kill-matrix` rows 3+6 ("the terminal floor is not available").
+
+Each named row passed alone twice, and field-app alone (179 files, 1,915 tests). Across the two stage runs every project's
+whole suite passed at least once — field-app 1,915 tests, fieldd 2,139 (AR-7b's rows among them), logging 50 — and the lane
+changes none of those four test files, nor logging.
 
 ## The hygiene every smoke keeps
 
