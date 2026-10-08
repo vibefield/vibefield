@@ -8511,3 +8511,40 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 - `project-records-witness.test.ts` has the same race class: a 60 ms sleep and undisposed libraries.
 - mille-ui's retry badge words a stall in upstream text.
 - James's `../puppeteer` install predates view-sdk, so typecheck is red in any tree that links it until `pnpm install` runs there.
+
+## AR-8 packaged History — rosettad and the agent shim ship in the app; the packaged origin witnessed end to end (2026-10-08; `d707f694` — five commits `f7630290`→`d707f694`; lane pkg over main `34fce7c4`, rebased by the lead onto `bbd30256`, fast-forward)
+
+**Why:** James's "go" on finishing History (2026-10-08). Plan `draft/history-finish/build-hf.md` L3: packaged rosettad is optional, like the screenshot helper. LANDED §FS packaging closeout's "Still owed" named packaged rosettad and `agent-shim.cjs` beside fieldd.
+
+**What landed:**
+- **Staged and resolved.**
+  - `stage-package.mjs` stages `bin/rosettad` from the lock's own build (`rosettadBinary()`), optional unless `--require-complete`. It warns, without refusing, when a Rust source is newer than the binary. It also stages `bin/agent-shim.cjs` beside the fieldd SEA.
+  - `electron-builder.yml` lists `Contents/Resources/bin/rosettad` under `mac.binaries`.
+  - `resources.ts` gains `rosettadPath` (packaged `Resources/bin/rosettad[.exe]`, dev null). It checks the arch only when the binary is present (`rosettad-arch-mismatch`).
+  - `main/fieldd.ts` sets `FIELDD_ROSETTAD_BIN` from the environment, otherwise from the packaged path when it exists.
+- **Words.** `rosettadUnconfigured(packaged)` changes what a SEA fieldd says. It is now "this copy of VibeField was built without agent history — install a build that includes it to read your agents' sessions here". A developer build keeps the variable's name.
+- **`package:verify:history`** (`verify-history-package.mjs`; the codesign check moved to a shared `release-signature.mjs`, also used by `verify-files-package.mjs`; run by `run-macos-release.mjs` after signing):
+  - It runs fieldd's new `packaged-history.test.ts`, which execs the real SEA behind the mock floor: with no rosettad (the packaged words), and with the packaged rosettad (ready, protocol 26).
+  - It runs `index-open-ticket` and `history-witness` against the packaged rosettad, failing on any skipped row.
+- **The origin.**
+  - `history-witness`'s transport sends `Origin: vibefield-app://shell`. It asserts `access-control-allow-origin` on every read, a 2xx preflight for the grant's header, and a 101 upgrade, and that a foreign origin gets neither.
+  - `smoke:godview`'s History rung now seeds one Claude transcript in the person's HOME, enrolls it, opens the session from the real page and waits for its words. It forces a preflighted grant read, with Chromium's Network domain recording the traffic (`testing/loopback-network.ts`).
+
+**Signed** (`/Volumes/SamsungRed/lanes/pkg/`, "package signé", `--dir`, notarize off, nothing installed or opened):
+- rosettad is signed Developer ID (team 9F79X9D26S), with a secure timestamp and the hardened runtime.
+- The signed SEA started the signed rosettad under the hardened runtime: `verify-history-signed.log` EXIT 0, 23 rows.
+- Deep verify, the fuses (9) and the Files verifier (34/34) are all EXIT 0.
+- `--require-signed` refuses an unsigned rosettad, as it should.
+
+**Chromium's local-network access (Electron 43.1.1 / Chromium 150):** it did not engage. No `access-control-request-*` or private/local-network headers were sent, no load was blocked and no permission was denied. In the smoke, the WebSocket GET answered 101, the fetch GET 200 and the OPTIONS preflight 200, each carrying the app origin and its allow-origin.
+
+**Validation:** the lead's gate on `d707f694`, the landed tree: `verify.log` **EXIT 0** (no Nx cache), `smoke.log` EXIT 0, `smoke-godview.log` EXIT 0. The rebase resolved `history-witness.test.ts` against lane hist's synthesized-home rows, keeping both: hist's `loggedDoor` with pkg's app-origin transport. The packaged receipts are from the pre-rebase build (rosetta `856bd80`, mille `baa0de8`).
+
+**Debts found (ROADMAP's open debts):**
+- Every shipped Rust daemon inherits `allow-jit`, rosettad included. electron-builder 26 has no per-file entitlements, so a custom sign step is needed.
+- `package-census --assert --strict` is red on MV's renderer chunks (lab-bridge, lab-switches, theme; client chunk count 2). The baseline needs an `--update`.
+- A smoke that dies early leaves rosettad orphaned (ppid 1).
+- Shipped Rust binaries embed `~/.cargo/registry` paths carrying the build user's name; `--remap-path-prefix` would fix it.
+- The staged shim is not yet a launcher under a SEA fieldd (AR-7j).
+- A signed build with no rosettad or screenshot helper fails codesign while release stages with `--require-complete`.
+- Petition: the room titles the unconfigured state "rosettad is not answering", which names a daemon to a person.
