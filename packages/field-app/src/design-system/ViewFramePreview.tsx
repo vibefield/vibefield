@@ -158,7 +158,7 @@ export function ViewFramePreview({ dark }: { dark: boolean }): ReactElement {
           content={cover.content}
           motion={cover.motion}
           godview={<GodviewPreview theme={dark ? "dark" : "light"} />}
-          history={<HistoryPreview surface={surface} onSurfaceChange={setSurface} />}
+          history={<HistoryPreview />}
         />
         <StageBoard open={surface === "objects"} />
         <Composer

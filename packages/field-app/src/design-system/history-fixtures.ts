@@ -23,11 +23,14 @@ export const FIXTURE_UNAVAILABLE_WORDS = "The agent index is starting";
  * web lines and a run still going. */
 export const FIXTURE_CHOSEN_SESSION = "s0";
 
-/** The search the search plate holds (the search interim): the demo
- * catalog's own `search` answers it from the transcripts' words — three
- * messages in that same conversation say "plus", so a landed hit leaves a
- * stepper with somewhere to walk. */
+/** The words the Peek's plate holds (`PeekPreview.tsx`): the demo catalog's
+ * own `search` answers them from the transcripts' words — three messages in
+ * the chosen conversation say "plus", so the row carries three lines and the
+ * peek beside it shows them. */
 export const FIXTURE_SEARCH_QUERY = "plus";
+
+/** Words nothing in the demo says: the Peek's honest empty answer. */
+export const FIXTURE_NO_MATCH_QUERY = "zeppelin";
 
 /** An index that does not answer: the topology stream closes without a row,
  * and the status door refuses in the frame's words. */

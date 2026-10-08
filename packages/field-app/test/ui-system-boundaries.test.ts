@@ -166,11 +166,11 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("getHost");
   });
 
-  it("starts History's layer at the head band's foot and ends it at the reserve, so the room's sheet and dialogs never cover the band (the search interim, 2026-10-04)", () => {
-    // The room's search sheet is top-attached to the layer it portals into, and
-    // its dialogs centre in it: the band 0–52 is the head's and keeps only the
-    // window's lights (DESIGN.md §8 "History"). vitest loads no CSS, so the rule
-    // is held here and its geometry by the catalog's photographs.
+  it("starts History's layer at the head band's foot and ends it at the reserve, so the room's dialogs never cover the band (2026-10-04; the Peek's button, 2026-10-08)", () => {
+    // The room's dialogs centre in the layer they portal into: the band 0–52 is
+    // the head's and keeps the window's lights and the frame's search button
+    // (DESIGN.md §8 "History"). vitest loads no CSS, so the rule is held here
+    // and its geometry by the catalog's photographs.
     const css = source("history/history-room-view.css");
     const rule = css.match(/^\.vf-history-layers \{([^}]*)\}/m)?.[1] ?? "";
     expect(rule).toContain("inset: var(--vf-history-head) 0 var(--vf-history-reserve) 0;");
@@ -226,6 +226,52 @@ describe("UI system ownership boundaries", () => {
     const view = source("history/HistoryRoomView.tsx");
     expect(view).toMatch(/<HistoryRoom\s/u);
     expect(view).not.toMatch(/className="(?:ah-|tr-)/);
+  });
+
+  it("keeps the Peek's fixture an ADAPTER — the shipping controller over a port drawn from the room's demo, never its markup (2026-10-08)", () => {
+    // The catalog stands in for what the frame supplies — the Peek's port, the
+    // open surface, the place a pick opens — and draws the plate's view by the
+    // product's own recede rule. Never the Peek's classes, never a stylesheet,
+    // never the product's doors or fieldd's client.
+    const preview = source("design-system/PeekPreview.tsx");
+    const fixtures = source("design-system/peek-fixtures.ts");
+    expect(preview).toMatch(/<Peek\s/u);
+    expect(preview).toMatch(/<HistoryRoomView\s/u);
+    expect(preview).toContain("peekFixturePort");
+    expect(preview).toContain("data-peek-recede");
+    expect(fixtures).toContain('from "@rosetta/room/fixtures"');
+    for (const file of [preview, fixtures]) {
+      expect(file).not.toMatch(/className="(?:vf-peek|ah-|tr-|vf-history)/);
+      expect(file).not.toContain("<style");
+      expect(file).not.toContain("getHost");
+      expect(file).not.toContain("useFielddClient");
+      expect(file).not.toContain("peekPortOver");
+      expect(file).not.toContain("openHistoryAt");
+    }
+  });
+
+  it("recedes the field under the Peek and holds it out of reach — at rest no transform, so no stacking context (2026-10-08)", () => {
+    // DESIGN.md §6: the view AND the frame recede to 0.98 about 50% 46% over
+    // 420ms on the island curve while the Peek stands; its scrim and popup are
+    // drawn on the document's body, outside the field. A resting transform
+    // would bury the head under the drag strip (BootRoot, 2026-07-22).
+    const field = source("field.tsx");
+    expect(field).toContain('data-peek-recede={searching ? "true" : "false"}');
+    expect(field).toContain("inert={searching}");
+    const css = source("frame/peek.css");
+    const resting = css.match(/^\[data-peek-recede\] \{([^}]*)\}/m)?.[1] ?? "";
+    expect(resting).toContain("transform-origin: 50% 46%;");
+    expect(resting).toContain("transition: transform 420ms var(--vf-ease-island);");
+    expect(resting).not.toMatch(/transform:/);
+    const receding = css.match(/^\[data-peek-recede="true"\] \{([^}]*)\}/m)?.[1] ?? "";
+    expect(receding).toContain("transform: scale(0.98);");
+    // the scrim and the popup: the search tokens, the popup's corners and ring
+    expect(css).toContain("background: var(--vf-search-scrim);");
+    expect(css).toContain("backdrop-filter: blur(18px) saturate(0.9);");
+    expect(css).toContain("var(--vf-shadow-search)");
+    expect(css).toContain("animation: vf-peek-pop 260ms var(--vf-ease-island);");
+    const peek = source("frame/Peek.tsx");
+    expect(peek).toContain("container === undefined ? document.body : container");
   });
 
   it("keeps the head's fixture an ADAPTER — the doors' facts, never the head's markup (FR-3)", () => {
@@ -403,7 +449,8 @@ describe("UI system ownership boundaries", () => {
     const bar = source("design-system/SelectionBarPreview.tsx");
     const pegboard = source("design-system/PegboardPreview.tsx");
     const peers = source("design-system/PeersPreview.tsx");
-    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const peek = source("design-system/PeekPreview.tsx");
+    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -456,9 +503,10 @@ describe("UI system ownership boundaries", () => {
       "HistoryPreview",
       "HistoryRoomView",
       "HistoryResumePlate",
-      // …and its search until the Peek lands — a search held, the room's own
-      // sheet a press on the pill away (the search interim, 2026-10-04)
-      "HistorySearchPlate",
+      // …and its search, the frame's Peek (2026-10-08): the shipping
+      // controller over a fixture port drawn from the same room demo
+      "PeekPlate",
+      "Peek",
       // …and the two faces before the room, as they ship (2026-10-04)
       "HistoryOpeningState",
       "HistoryOpenFailedState",
@@ -528,7 +576,9 @@ describe("UI system ownership boundaries", () => {
     // (AR-8c): the room, a choice with Resume live, unavailable, consent.
     expect(page).toMatch(/<HistoryPreview state="room"/u);
     expect(page).toMatch(/<HistoryResumePlate\s/u);
-    expect(page).toMatch(/<HistorySearchPlate\s/u);
+    expect(page).toMatch(/<PeekPlate state="closed"/u);
+    expect(page).toMatch(/<PeekPlate state="open"/u);
+    expect(page).toMatch(/<PeekPlate state="narrow"/u);
     expect(page).toMatch(/<HistoryPreview state="unavailable"/u);
     expect(page).toMatch(/<HistoryPreview state="consent"/u);
     // …and the faces before the room (2026-10-04): opening, could not open.
@@ -590,6 +640,8 @@ describe("UI system ownership boundaries", () => {
       "frame/ViewCover.tsx",
       "history/HistoryRoomView.tsx",
       "history/HistoryView.tsx",
+      "frame/Peek.tsx",
+      "frame/PeekView.tsx",
       "frame/Composer.tsx",
       "frame/ComposerLine.tsx",
       "frame/Head.tsx",
@@ -630,6 +682,7 @@ describe("UI system ownership boundaries", () => {
       "frame/head.css",
       "frame/menu.css",
       "frame/status-line.css",
+      "frame/peek.css",
       "field/desk/bar/selection-bar.css",
       "field/desk/pegboard/pegboard.css",
       "field/desk/peers/peers.css",

@@ -1990,6 +1990,14 @@
               (<code>history-search</code>), no key printed (<code>shortcut: null</code>), the empty
               transcript in VibeField's words, and ⌘G/⇧⌘G bound by the host to the stepper
               (<code>history/search.ts</code>).
+              <em>Corrected 2026-10-08 (the Peek, P1):</em> the interim retired — History's search is
+              the frame's Peek (<code>frame/Peek.tsx</code>, the <code>search</code> surface, ⌘F): it
+              asks <code>index.search</code> unscoped and local (each hit carrying its root's
+              <code>cwd</code>, <code>projectId</code> and <code>provider</code>), and a past row opens
+              the room at the line through the room's own <code>openAt</code>
+              (<code>history/open-at.ts</code>). <code>history/search.ts</code>, the
+              <code>history-search</code> surface and ⌘G/⇧⌘G are gone; the room is passed no
+              <code>search</code>.
             </p>
             <div class="contract-list">
               <div class="contract-row">

@@ -32,8 +32,8 @@ let container: HTMLDivElement | null = null;
 // or queries it whole. Alone that render takes 1.3–1.7 s and a test's body at most 0.9 s; inside the full `pnpm test` on a
 // shared machine (load 111–310, 2026-10-05) the render took up to 31.5 s (mean 7–8 s) and a body up to 5.0 s — past
 // vitest's 10 s hook and 5 s test defaults, so every gate failed here. 60 s gives the worst render measured about twice
-// its time; a render that hangs still fails. The suite's other page-scale files budget 30–60 s (doc-manager,
-// history-search).
+// its time; a render that hangs still fails. The suite's other page-scale files budget 30–60 s (doc-manager, and
+// history-search until the Peek retired it, 2026-10-08).
 const PAGE_BUDGET_MS = 60_000;
 
 beforeEach(async () => {
@@ -301,19 +301,29 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(plate("hx")?.querySelector(".vf-line-create")?.getAttribute("aria-disabled")).toBe(
       "true",
     );
-    // History's search until the Peek lands (the search interim, 2026-10-04):
-    // every History plate holds the room's search as the product does — the
-    // strip's pill, no key printed, the empty transcript in VibeField's words —
-    // and one plate holds a search, the room's sheet a press away.
+    // History's search is the frame's Peek (2026-10-08): no History plate
+    // draws the room's own search, the empty transcript names ⌘F (K2), and the
+    // Peek's plates mount the shipping controller — the button at rest, and
+    // the popup drawn open in the plate, never taking the page's focus.
     const history = (state: string): Element | null =>
       container?.querySelector(`.vf-ds-history-plate[data-state="${state}"]`) ?? null;
-    expect(history("room")?.querySelector(".ah-launcher__open")).not.toBeNull();
-    expect(container?.querySelector(".vf-ds-history-plate .ah-launcher kbd")).toBeNull();
+    expect(container?.querySelector(".vf-ds-history-plate .ah-launcher")).toBeNull();
     expect(history("room")?.querySelector(".ah-col--measure")?.textContent).toContain(
-      "Pick a session, or search above.",
+      "Pick a session, or search with ⌘F.",
     );
-    expect(history("search")?.querySelector(".ah-launcher__open")?.textContent).toBe("plus");
-    expect(history("search")?.querySelector('[role="dialog"]')).toBeNull();
+    expect(
+      [...(container?.querySelectorAll(".vf-ds-peek-plate") ?? [])].map((plate) =>
+        plate.getAttribute("data-state"),
+      ),
+    ).toEqual(["peek-closed", "peek-open", "peek-latest", "peek-none", "peek-narrow"]);
+    expect(history("peek-closed")?.querySelector(".vf-peek-button kbd")?.textContent).toBe("⌘F");
+    expect(history("peek-closed")?.querySelector(".vf-peek-pop")).toBeNull();
+    expect(
+      history("peek-open")?.querySelector<HTMLInputElement>(".vf-peek-pop .vf-peek-field input")
+        ?.value,
+    ).toBe("plus");
+    expect(history("peek-none")?.querySelector(".vf-peek-pop")).not.toBeNull();
+    expect(document.activeElement?.closest(".vf-peek-pop")).toBeFalsy();
     // DK-12 — the tools in hand: a plate per specimen, the shipping bar in its hand's role, its tools in their order
     const hands = [...(container?.querySelectorAll(".vf-ds-bar-plate") ?? [])].filter((p) =>
       p.getAttribute("data-state")?.startsWith("In hand"),

@@ -28,12 +28,11 @@
 
 /* Where the room's dialogs land (its `portalContainer`): a containing block
    for their fixed layers that ends at the reserve too, so a dialog is never
-   drawn under the line. Since the search interim (2026-10-04) it STARTS at the
-   head band's foot as well: the room's search sheet is top-attached to this
-   box, so it hangs from the band's foot over the room's strip, and neither it
-   nor a dialog (a file shown full screen included) ever covers the band, which
-   keeps only the window's lights. Empty, it takes no pointer; what lands in it
-   does. */
+   drawn under the line. It STARTS at the head band's foot as well (since the
+   search interim, 2026-10-04): no dialog — a file shown full screen included —
+   ever covers the band, which keeps the window's lights and, since the Peek
+   (2026-10-08), the frame's search button at its right end. Empty, it takes no
+   pointer; what lands in it does. */
 .vf-history-layers {
   position: absolute;
   inset: var(--vf-history-head) 0 var(--vf-history-reserve) 0;

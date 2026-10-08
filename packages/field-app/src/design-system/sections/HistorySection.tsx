@@ -1,16 +1,18 @@
 import type { ReactElement } from "react";
 import { HistoryOpenFailedState, HistoryOpeningState } from "../../history/HistoryOpening";
 import { Section, Specimen } from "../catalog-ui";
-import { HistoryPreview, HistoryResumePlate, HistorySearchPlate } from "../HistoryPreview";
+import { HistoryPreview, HistoryResumePlate } from "../HistoryPreview";
+import { PeekPlate } from "../PeekPreview";
 
 // History (AR-8c; DESIGN.md §8 "History"): rosetta's room as the frame holds
 // it, on the package's fixture ports — the shipping view in every state the
 // host owns: the room on the cover's glass, a session chosen with the line's
 // Resume live, the index not answering, and nothing enrolled yet — and the
 // two faces before the room (2026-10-04, the room's own chunk): opening, and
-// a room that could not open. Until the Peek lands each holds the room's own
-// search as the product does, and one plate holds a search (the search
-// interim, 2026-10-04).
+// a room that could not open. Its search is the frame's Peek (2026-10-08;
+// §8 "Search — the Peek"): the shipping controller over a fixture port drawn
+// from the same demo, at rest, holding words, before a word, with nothing
+// matching, and in a narrow window.
 
 /** A chunk refusal in the loader's own words, real-shaped. */
 const FIXTURE_OPEN_FAILURE =
@@ -39,13 +41,35 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
-        title="Search, until the Peek lands — a search held; press the pill for the room's sheet"
-        source="history/search.ts"
+        title="Search — the frame's button at the head's right end, ⌘F printed under it"
+        source="frame/Peek.tsx"
         bleed
       >
-        <div className="vf-ds-history-plate" data-state="search">
-          <HistorySearchPlate />
-        </div>
+        <PeekPlate state="closed" />
+      </Specimen>
+      <Specimen
+        title="The Peek — “plus” held: the list, and the peek beside it; a pick opens the room at the line"
+        source="frame/PeekView.tsx"
+        bleed
+      >
+        <PeekPlate state="open" />
+      </Specimen>
+      <Specimen title="Before a word is typed — your latest sessions" source="frame/Peek.tsx" bleed>
+        <PeekPlate state="latest" />
+      </Specimen>
+      <Specimen
+        title="Nothing matches — said in words, never a blank"
+        source="frame/peek-model.ts"
+        bleed
+      >
+        <PeekPlate state="none" />
+      </Specimen>
+      <Specimen
+        title="A narrow window (K6) — the popup clamps, the peek folds and the list fills"
+        source="frame/peek-model.ts"
+        bleed
+      >
+        <PeekPlate state="narrow" />
       </Specimen>
       <Specimen
         title="rosettad is not answering — the index's state, inside the frame"

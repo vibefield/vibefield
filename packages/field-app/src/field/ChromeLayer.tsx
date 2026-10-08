@@ -20,6 +20,7 @@ import type { LineActs } from "../frame/Composer";
 import { type FrameSurface, foldSurface } from "../frame/frame-surface";
 import { Head } from "../frame/Head";
 import { canvasHead } from "../frame/head-canvas";
+import { FramePeek } from "../frame/Peek";
 import type { FrameActRun } from "../frame/palette-acts";
 import { StatusLine } from "../frame/StatusLine";
 import { ViewFrame } from "../frame/ViewFrame";
@@ -116,15 +117,10 @@ export function ChromeLayer({
   const head = useMemo(() => canvasHead(ce), [ce]);
   const lineActs = useRef<LineActs | null>(null);
   // History's view in the frame's cover (AR-8c): rosetta's room over this
-  // window's fieldd client, told whether it is the view showing — and, until
-  // the Peek lands, handed the frame's one value, which holds the room's search
-  // sheet as one of the frame's surfaces (the search interim, 2026-10-04).
-  const historyView = useCallback(
-    (active: boolean) => (
-      <HistoryView active={active} surface={surface} onSurfaceChange={onSurfaceChange} />
-    ),
-    [surface, onSurfaceChange],
-  );
+  // window's fieldd client, told whether it is the view showing. Its search is
+  // the frame's Peek (below) since 2026-10-08, so the room is handed nothing of
+  // the frame's open surface any more.
+  const historyView = useCallback((active: boolean) => <HistoryView active={active} />, []);
   // The room is its own chunk (DESIGN.md §8 "History"): fetched when the window
   // is next idle after the chrome has mounted — after the canvas has drawn,
   // never on its path — so the first ⌘3 finds it here. Code only: the room
@@ -290,6 +286,14 @@ export function ChromeLayer({
         onSurfaceChange={onSurfaceChange}
         menuZoom={subscribeMenuZoom}
       />
+
+      {/* SEARCH — THE PEEK (GV-D8/D9/D10, 2026-10-08; DESIGN.md §8 "Search — the
+          Peek"): the frame's button at the head's right end, above the cover
+          in the views that search (History, in this build), ⌘F printed under
+          it; its scrim and popup are drawn on the document's body, outside
+          the field, so the view and the frame recede under them. One of the
+          frame's open surfaces (`search`). */}
+      <FramePeek view={view} keys={keys} surface={surface} onSurfaceChange={onSurfaceChange} />
 
       {/* THE EDGES (SNAP-3; One Frame FR-4, DESIGN.md §8 edge trays, §10): the
           clipboard's notch on the left and Artifacts' on the right — its

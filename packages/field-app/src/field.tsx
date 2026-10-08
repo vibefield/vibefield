@@ -311,10 +311,18 @@ export function FieldView({
     [dark, effectiveAppearance],
   );
 
+  // The Peek (search, the frame's; DESIGN.md §8 "Search — the Peek", §6): its
+  // scrim and popup are drawn outside this wrapper, which recedes under them —
+  // the cover, the frame and the canvas together — and is out of reach while
+  // they stand (a modal: nothing under the scrim may hold the keyboard).
+  const searching = surface === "search";
+
   return (
     <div
       className="field-wrap"
       data-doc-transition={hudMotion}
+      data-peek-recede={searching ? "true" : "false"}
+      inert={searching}
       {...(appearanceOverride.appearance === null
         ? {}
         : { "data-appearance-override-revision": appearanceOverride.revision })}

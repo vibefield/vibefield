@@ -159,17 +159,14 @@ function mount(client: ReturnType<typeof fieldd>): void {
   host = document.createElement("div");
   document.body.appendChild(host);
   root = createRoot(host);
-  // FieldView's place: the frame's one owner of the open surface, which holds
-  // History's search sheet too while the interim stands.
+  // FieldView's place: the frame's one owner of the open surface.
   function Owner(): ReactElement {
     const [surface, setSurface] = useState<FrameSurface | null>(null);
     return (
       <FielddProvider client={client as unknown as FielddClient}>
         <ViewFrame
           godview={<div data-testid="godview-content" />}
-          history={(active) => (
-            <HistoryView active={active} surface={surface} onSurfaceChange={setSurface} />
-          )}
+          history={(active) => <HistoryView active={active} />}
           surface={surface}
           onSurfaceChange={setSurface}
         />
