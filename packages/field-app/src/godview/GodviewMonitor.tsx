@@ -373,6 +373,14 @@ export function GodviewMonitor({
     return usagePort?.subscribeState?.(setUsageState);
   }, [usagePort]);
   const claimsRef = useRef<HTMLDivElement>(null);
+  // M49 — the claims behind their own boundary, INSIDE the strip: the strip
+  // stays measured (its rectangle is the stage's top inset and an obstacle),
+  // and the acknowledgement keeps its voice. They try again for the facts they
+  // state, never for the stage geometry a failure republishes (M176).
+  const claimsRetryKey = useMemo(
+    () => ({ sources, devices, usageState }),
+    [sources, devices, usageState],
+  );
   const [findOpen, setFindOpen] = useState(false);
   // QL-D2's other half: while the find sheet is up, its Escape is the sheet's,
   // not a fresh pane's launcher's (`launcher-keys.ts`).
@@ -760,43 +768,45 @@ export function GodviewMonitor({
         </div>
         {/* The claims: VibeField's, on their own strip — also solid to the swarm. */}
         <div ref={claimsRef} className="vf-monitor-claims" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
-          {localClaim(sources) !== null ? (
-            <span className="vf-monitor-local-chip">{localClaim(sources)}</span>
-          ) : null}
-          {localUnavailableClaim(sources) !== null ? (
-            <span
-              className="vf-monitor-remote-unavailable-chip"
-              title={sources.localReason ?? "the agent fold could not be read"}
-            >
-              {localUnavailableClaim(sources)}
-            </span>
-          ) : null}
-          {remoteClaim(sources, devices) !== null ? (
-            <span className="vf-monitor-remote-chip">
-              {otherDesktops(devices).map((device) => (
-                <OsMark key={device.id} os={device.os} size={8} />
-              ))}
-              {remoteClaim(sources, devices)}
-            </span>
-          ) : null}
-          {remoteUnavailableClaim(sources) !== null ? (
-            <span
-              className="vf-monitor-remote-unavailable-chip"
-              title={sources.remoteReason ?? "the mesh could not be asked"}
-            >
-              {remoteUnavailableClaim(sources)}
-            </span>
-          ) : null}
-          {usageState.state === "unavailable" ? (
-            <button
-              type="button"
-              className="vf-monitor-feed-retry"
-              title={usageState.reason}
-              onClick={() => setUsageAttempt((attempt) => attempt + 1)}
-            >
-              Usage unavailable · Retry
-            </button>
-          ) : null}
+          <ChromeBoundary name="Agent counts" retryKey={claimsRetryKey}>
+            {localClaim(sources) !== null ? (
+              <span className="vf-monitor-local-chip">{localClaim(sources)}</span>
+            ) : null}
+            {localUnavailableClaim(sources) !== null ? (
+              <span
+                className="vf-monitor-remote-unavailable-chip"
+                title={sources.localReason ?? "the agent fold could not be read"}
+              >
+                {localUnavailableClaim(sources)}
+              </span>
+            ) : null}
+            {remoteClaim(sources, devices) !== null ? (
+              <span className="vf-monitor-remote-chip">
+                {otherDesktops(devices).map((device) => (
+                  <OsMark key={device.id} os={device.os} size={8} />
+                ))}
+                {remoteClaim(sources, devices)}
+              </span>
+            ) : null}
+            {remoteUnavailableClaim(sources) !== null ? (
+              <span
+                className="vf-monitor-remote-unavailable-chip"
+                title={sources.remoteReason ?? "the mesh could not be asked"}
+              >
+                {remoteUnavailableClaim(sources)}
+              </span>
+            ) : null}
+            {usageState.state === "unavailable" ? (
+              <button
+                type="button"
+                className="vf-monitor-feed-retry"
+                title={usageState.reason}
+                onClick={() => setUsageAttempt((attempt) => attempt + 1)}
+              >
+                Usage unavailable · Retry
+              </button>
+            ) : null}
+          </ChromeBoundary>
           <span className="vf-monitor-ack" aria-live="polite">
             {acknowledgement?.message ?? ""}
           </span>

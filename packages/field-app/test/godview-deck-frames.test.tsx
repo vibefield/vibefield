@@ -197,6 +197,42 @@ function WorkspaceStub({
   );
 }
 
+/** M49 — the package's deck pieces, passed through unchanged unless a row of
+ * "the deck's chrome behind its boundaries" makes one throw. */
+const chromeFaults = vi.hoisted(() => ({
+  frameFor: new Set<string>(),
+  frames: false,
+  launchers: false,
+}));
+
+vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views")>();
+  return {
+    ...actual,
+    PaneFrame: (props: Parameters<typeof actual.PaneFrame>[0]) => {
+      if (chromeFaults.frameFor.has(props.session.id)) {
+        throw new Error("the frame's agent fact lost its model");
+      }
+      return <actual.PaneFrame {...props} />;
+    },
+    DeckFrames: (props: Parameters<typeof actual.DeckFrames>[0]) => {
+      if (chromeFaults.frames) throw new Error("the frames lost their panes");
+      return <actual.DeckFrames {...props} />;
+    },
+  };
+});
+
+vi.mock("@vibecook/puppeteer-views/launcher", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views/launcher")>();
+  return {
+    ...actual,
+    DeckLaunchers: (props: Parameters<typeof actual.DeckLaunchers>[0]) => {
+      if (chromeFaults.launchers) throw new Error("the launchers lost their agents");
+      return <actual.DeckLaunchers {...props} />;
+    },
+  };
+});
+
 vi.mock("@vibecook/ghosttea-react", () => ({
   // QL-2: the deck hands the launch ghosttea's fixed cell metrics.
   CELL_WIDTH: 7.83,
@@ -2014,5 +2050,161 @@ describe("births under an Agent Profile (SB-3)", () => {
     expect(container.querySelector(".vf-monitor-ack")?.textContent).toBe(
       "terminal opened under Work in the active pane",
     );
+  });
+});
+
+// M49 / MV-8b — the deck's chrome behind its boundaries: each pane's frame, the
+// frames as a whole and the launchers. A throw in any of them says so where it
+// stood, and the terminals, the deck, its door and the monitor beside it stay
+// standing: the deck builds the door, so a piece that took the deck down would
+// take the monitor's rows with it (GT-D17).
+describe("the deck's chrome behind its boundaries (M49)", () => {
+  afterEach(() => {
+    chromeFaults.frameFor.clear();
+    chromeFaults.frames = false;
+    chromeFaults.launchers = false;
+  });
+
+  /** The overlay's composition: the deck hands its door to the monitor. */
+  function Scene(): ReactElement {
+    const [door, setDoor] = useState<MonitorDoor | null>(null);
+    const [panes, setPanes] = useState<MonitorPaneFacts>({ sessionIds: [] });
+    const view = monitorViewFor("list");
+    return (
+      <>
+        <GodviewDeck
+          active
+          theme="light"
+          onPanes={setPanes}
+          onRemoteDoor={(next) => {
+            deckDoor = next;
+            setDoor(next);
+          }}
+        />
+        <GodviewMonitor
+          view={view}
+          parameters={monitorParameterDefaults(view.parameterGroups)}
+          door={door}
+          panes={panes}
+        />
+      </>
+    );
+  }
+
+  async function mountScene(): Promise<HTMLElement> {
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container, { onCaughtError: () => undefined });
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={foldDoor()}>
+          <Scene />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    return container;
+  }
+
+  /** What the boundaries say, where the deck's pieces stood. */
+  const said = (host: HTMLElement): string[] =>
+    [...host.querySelectorAll('.vf-deck-zoom > span[role="status"]')].map(
+      (status) => status.textContent ?? "",
+    );
+  const launcherFor = (host: HTMLElement, sessionId: string): HTMLElement | null =>
+    host.querySelector<HTMLElement>(`[data-vf-pane-launcher="${sessionId}"]`);
+  /** The deck and the monitor as mounted: the same elements after a failure
+   * prove that nothing above the failed piece remounted. */
+  const standing = (host: HTMLElement) => ({
+    zoom: host.querySelector(".vf-deck-zoom"),
+    pane1: paneOf(host, "pane-1"),
+    pane2: paneOf(host, "pane-2"),
+    stage: host.querySelector(".vf-godview-monitor-stage"),
+    view: host.querySelector("[data-monitor-view-root]"),
+  });
+  function expectStillStanding(host: HTMLElement, before: ReturnType<typeof standing>): void {
+    const after = standing(host);
+    for (const part of ["zoom", "pane1", "pane2", "stage", "view"] as const) {
+      expect(before[part], part).not.toBeNull();
+      expect(after[part], part).toBe(before[part]);
+      expect(after[part]?.isConnected, part).toBe(true);
+    }
+    expect(deckDoor).not.toBeNull();
+  }
+
+  beforeEach(() => {
+    workspace.panes = [
+      { id: "pane-1", session: stubSession("pty-1") },
+      { id: "pane-2", session: stubSession("pty-2") },
+    ];
+  });
+
+  it("one pane's frame failing takes that frame alone: the other pane's, the terminals, the door and the monitor stand, and a new fact for it tries again", async () => {
+    const host = await mountScene();
+    expect(frameFor(host, "pty-1")).not.toBeNull();
+    expect(frameFor(host, "pty-2")).not.toBeNull();
+    const before = standing(host);
+
+    // the pane's summary moves (a fact its frame is handed), and its read throws
+    chromeFaults.frameFor.add("pty-1");
+    await act(async () => {
+      const [first] = workspace.panes;
+      if (first !== undefined) first.session = stubSession("pty-1", { cwd: "/home/tester/a" });
+      workspace.refresh();
+    });
+    await settle();
+    expect(frameFor(host, "pty-1")).toBeNull();
+    expect(frameFor(host, "pty-2")).not.toBeNull();
+    expect(said(host)).toEqual(["Pane frame unavailable"]);
+    expectStillStanding(host, before);
+
+    // the next fact for that pane is a reason to try again
+    chromeFaults.frameFor.clear();
+    await act(async () => {
+      const [first] = workspace.panes;
+      if (first !== undefined) first.session = stubSession("pty-1", { cwd: "/home/tester/b" });
+      workspace.refresh();
+    });
+    await settle();
+    expect(frameFor(host, "pty-1")).not.toBeNull();
+    expect(said(host)).toEqual([]);
+    expectStillStanding(host, before);
+  });
+
+  it("the frames failing whole leave the launchers, the terminals, the door and the monitor", async () => {
+    const host = await mountScene();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    expect(launcherFor(host, "born-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
+    const before = standing(host);
+
+    chromeFaults.frames = true;
+    await act(async () => workspace.refresh());
+    await settle();
+    expect(said(host)).toEqual(["Pane frames unavailable"]);
+    expect(host.querySelector("[data-vf-pane-frame]")).toBeNull();
+    expect(launcherFor(host, "born-1")?.querySelector(".vf-pane-launcher")).not.toBeNull();
+    expectStillStanding(host, before);
+  });
+
+  it("the launchers failing leave every frame, the terminals, the door and the monitor", async () => {
+    const host = await mountScene();
+    await act(async () => {
+      await deckDoor?.createTerminal();
+    });
+    await settle();
+    expect(launcherFor(host, "born-1")).not.toBeNull();
+    const before = standing(host);
+
+    chromeFaults.launchers = true;
+    await act(async () => workspace.refresh());
+    await settle();
+    expect(said(host)).toEqual(["Launchers unavailable"]);
+    expect(launcherFor(host, "born-1")).toBeNull();
+    expect(frameFor(host, "born-1")).not.toBeNull();
+    expect(frameFor(host, "pty-2")).not.toBeNull();
+    expectStillStanding(host, before);
   });
 });

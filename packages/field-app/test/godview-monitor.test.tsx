@@ -69,6 +69,23 @@ import { type ScriptedModelBoard, scriptedModelBoard, terminalInfoOf } from "./m
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
+/** M49 — the claims strip's own mark (size 8; the bar's device chip draws at 10
+ * and 11), passed through unless a row makes it throw. Each try is counted. */
+const stripMark = vi.hoisted(() => ({ throws: false, tries: 0 }));
+vi.mock("../src/godview/os-marks", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../src/godview/os-marks")>();
+  return {
+    ...actual,
+    OsMark: (props: Parameters<typeof actual.OsMark>[0]) => {
+      if (props.size === 8) {
+        stripMark.tries += 1;
+        if (stripMark.throws) throw new Error("the strip's mark lost its glyph");
+      }
+      return <actual.OsMark {...props} />;
+    },
+  };
+});
+
 /**
  * §2.5 and record §02's tint, stamped onto the document — because the palette is
  * supposed to READ them, and a test with no tokens would prove only that the
@@ -2585,6 +2602,97 @@ describe("a chrome read cannot take down the monitor", () => {
     await settle();
     expect([throws(), asked]).toEqual([2, 2]);
     expect(container.textContent).toContain("Usage unavailable");
+    expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
+  });
+
+  it("a claim that throws says Agent counts unavailable inside the strip: the strip stays measured, the acknowledgement keeps its voice, and only a fact it states tries again", async () => {
+    // The stage's chrome is measured: drive its observer by hand (happy-dom lays nothing out).
+    const observed: Array<() => void> = [];
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(private readonly callback: ResizeObserverCallback) {
+          observed.push(() => this.callback([], this as unknown as ResizeObserver));
+        }
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    );
+    stripMark.throws = false;
+    stripMark.tries = 0;
+    const door = fakeDoor();
+    // a desktop beside this one: the remote claim draws its mark
+    const peerRows = (label: string) => [
+      managedSummary({ runtimeRunId: "run-studio", kind: "codex", label, cwd: "/studio/x" }),
+    ];
+    board?.peer({ device: "studio", name: "Studio", platform: "darwin", rows: peerRows("Codex") });
+    const recording = createRecordingView("claims-survivor");
+    const entry: MonitorViewEntry = {
+      id: recording.view.manifest.id,
+      label: recording.view.manifest.label,
+      mark: recording.view.manifest.mark,
+      parameterGroups: [],
+      view: recording.view,
+    };
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    const uncaught = vi.fn();
+    root = createRoot(container, { onUncaughtError: uncaught, onCaughtError: vi.fn() });
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    const strip = container.querySelector<HTMLElement>(".vf-monitor-claims");
+    expect(strip?.querySelector(".vf-monitor-remote-chip")?.textContent).toContain("1 agent on");
+
+    // the strip's facts move (the peer's row) and its mark throws
+    stripMark.throws = true;
+    await act(async () =>
+      board?.peer({
+        device: "studio",
+        name: "Studio",
+        platform: "darwin",
+        rows: peerRows("Codex·"),
+      }),
+    );
+    await settle();
+    expect(uncaught).not.toHaveBeenCalled();
+    const status = container.querySelector('.vf-monitor-claims > span[role="status"]');
+    expect(status?.textContent).toBe("Agent counts unavailable");
+    expect(container.querySelector(".vf-monitor-claims")).toBe(strip);
+    expect(strip?.querySelector(".vf-monitor-ack")).not.toBeNull();
+    expect(container.querySelector(".vf-godview-header")).not.toBeNull();
+    expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
+
+    // The failure changes the strip's size, and the stage republishes its
+    // geometry: that echo is no fact the claims state, so they are not tried.
+    const tries = stripMark.tries;
+    act(() => {
+      for (const publish of observed) publish();
+    });
+    await settle();
+    expect(stripMark.tries).toBe(tries);
+    expect(container.querySelector('.vf-monitor-claims > span[role="status"]')).toBe(status);
+
+    // a fact they state is: the claims come back
+    stripMark.throws = false;
+    await act(async () =>
+      board?.peer({
+        device: "studio",
+        name: "Studio",
+        platform: "darwin",
+        rows: peerRows("Codex"),
+      }),
+    );
+    await settle();
+    expect(container.querySelector('.vf-monitor-claims > span[role="status"]')).toBeNull();
+    expect(strip?.querySelector(".vf-monitor-remote-chip")?.textContent).toContain("1 agent on");
     expect([recording.mounts, recording.unmounts]).toEqual([1, 0]);
   });
 });

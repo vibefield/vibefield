@@ -1481,8 +1481,14 @@ The hot-point glow and rim retire with CardShell (above).
   Stage insets replace host padding rules, including the timeline's former extra 11px (MV-6).
   **The bar reads the manifest:** each view supplies its filled mark and its focus keys; the host
   has no view mark table. The declared keys print in the control's tooltip. View loops stop under
-  reduced motion or the stage's animations switch. A failed chrome reader names itself unavailable
-  while the monitor remains mounted; it never leaves a silent blank.
+  reduced motion or the stage's animations switch. Each piece of host chrome has its own boundary —
+  the bar, Find, the usage column, the profile notice, the claims, System control, the deck and its
+  edge, each pane's frame, the frames and the launchers: one that throws says "‹name› unavailable"
+  where it stood (a deck piece in the deck's unavailable face), the monitor and its view stay
+  mounted, and it is tried again only for a fact it is handed. It never leaves a silent blank. The
+  deck builds the monitor's door, so a deck that fails whole leaves the monitor on no door (GT-D17).
+  *(Made true 2026-10-07, MV-8b: the deck, System control and the claims stood outside any
+  boundary until then.)*
 - **Godview's timeline is the swarm through time** (TL, 2026-10-02 — James ruled design F,
   Wakes, with its map of the day; `draft/godview-timeline/`). A fourth monitor view (`TIMELINE`,
   after swarm, list and rain). It is painted into a canvas, like the swarm and the rain. Lanes run

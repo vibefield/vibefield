@@ -944,8 +944,17 @@
   }
 }
 
+/* M49 — a deck piece behind its own boundary (the views package's
+   ChromeBoundary) says "<name> unavailable" in a status span where the piece
+   stood, and wears the deck's own unavailable face. The frames and launchers
+   stand in the zoom host, whose workspace fills it in flow: unlifted, their
+   span sat below it, out of sight. Only a boundary's span matches — every
+   healthy child of these two is a div (the workspace, the deck's faces; the
+   frames and launchers portal into their panes). */
 .vf-godview-unavailable,
-.vf-godview-deck-fault {
+.vf-godview-deck-fault,
+.vf-godview-terminal-deck-body > span[role="status"],
+.vf-deck-zoom > span[role="status"] {
   position: absolute;
   inset: 0;
   display: grid;
@@ -958,6 +967,12 @@
   font-size: 10px;
   letter-spacing: 0.08em;
   text-align: center;
+}
+
+/* …and never takes a click: the terminals under it are still the person's. */
+.vf-godview-terminal-deck-body > span[role="status"],
+.vf-deck-zoom > span[role="status"] {
+  pointer-events: none;
 }
 
 .vf-godview-deck-fault-message {

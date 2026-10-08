@@ -6,6 +6,7 @@ import {
   type GhostteaWorkspacePlatform,
 } from "@vibecook/ghosttea-react/workspace";
 import {
+  ChromeBoundary,
   DECK_FRAMED_CLASS,
   type DeckFrameSlotProps,
   DeckFrames,
@@ -1606,11 +1607,20 @@ export function GodviewDeck({
         const nameOf = (device: string): string | undefined =>
           rosterNames.current.get(device) ??
           (remote !== undefined && remote !== device ? remote : undefined);
+        // M49 — each pane's frame behind its own boundary: a throw in one
+        // pane's frame takes that frame alone, and the other panes keep theirs.
+        // It tries again for a fact the frame is handed, never for the clock it
+        // ticks on (`nowMs`, every second while an agent works).
+        const { agent, color, fallbackCwd, pane, verbs, zoomed } = props;
+        const retryKey = useMemo(
+          () => ({ session, agent, color, fallbackCwd, pane, verbs, zoomed, remote }),
+          [session, agent, color, fallbackCwd, pane, verbs, zoomed, remote],
+        );
         return (
-          <>
+          <ChromeBoundary name="Pane frame" retryKey={retryKey}>
             <PaneFrame session={session} {...props} {...(remote !== undefined ? { remote } : {})} />
             <RemotePaneState pane={props.pane} sessionId={session.id} nameOf={nameOf} />
-          </>
+          </ChromeBoundary>
         );
       },
     [],
@@ -1815,6 +1825,33 @@ export function GodviewDeck({
       return { ...face, color: face?.color ?? color };
     },
     [framePaneColors],
+  );
+
+  // M49 — the frames and the launchers are chrome over the terminals, each
+  // behind its own boundary (and every pane's frame behind one of its own, in
+  // `Frame` above): a throw there leaves the terminals, the deck and its door
+  // standing. Each tries again for the facts it is handed, never for its own
+  // failure's echo (M176).
+  const framesRetryKey = useMemo(
+    () => ({
+      panes: workspace?.panes,
+      agents: paneAgents.agents,
+      colors: framePaneColors,
+      cwds: frameFallbackCwds,
+      verbs: frameVerbs,
+      zoomedPaneId,
+    }),
+    [workspace, paneAgents.agents, framePaneColors, frameFallbackCwds, frameVerbs, zoomedPaneId],
+  );
+  const launchersRetryKey = useMemo(
+    () => ({
+      workspace,
+      runs: paneAgents.runs,
+      colors: framePaneColors,
+      cwds: frameFallbackCwds,
+      door,
+    }),
+    [workspace, paneAgents.runs, framePaneColors, frameFallbackCwds, door],
   );
 
   // Whatever the deck currently is, said out loud once per change. The canvas
@@ -2047,26 +2084,30 @@ export function GodviewDeck({
             inside the zoom host so a zoomed pane keeps its frame through the
             morph, and so the stylesheet's `.vf-deck-framed` scope covers every
             pane element under it. */}
-        <DeckFrames
-          deckRef={zoomHostRef}
-          panes={workspace?.panes ?? []}
-          agentsBySession={paneAgents.agents}
-          paneColors={framePaneColors}
-          fallbackCwdBySession={frameFallbackCwds}
-          verbs={frameVerbs}
-          frame={Frame}
-          zoomedPaneId={zoomedPaneId}
-        />
+        <ChromeBoundary name="Pane frames" retryKey={framesRetryKey}>
+          <DeckFrames
+            deckRef={zoomHostRef}
+            panes={workspace?.panes ?? []}
+            agentsBySession={paneAgents.agents}
+            paneColors={framePaneColors}
+            fallbackCwdBySession={frameFallbackCwds}
+            verbs={frameVerbs}
+            frame={Frame}
+            zoomedPaneId={zoomedPaneId}
+          />
+        </ChromeBoundary>
         {/* QL-1: a fresh shell's launcher, beside its frame (`deck-launchers.tsx`). */}
-        <GodviewDeckLaunchers
-          onReplaced={onLauncherReplaced}
-          prepareReplacement={prepareLauncherReplacement}
-          deckRef={zoomHostRef}
-          workspace={workspace}
-          paneColors={framePaneColors}
-          fallbackCwdBySession={frameFallbackCwds}
-          door={door}
-        />
+        <ChromeBoundary name="Launchers" retryKey={launchersRetryKey}>
+          <GodviewDeckLaunchers
+            onReplaced={onLauncherReplaced}
+            prepareReplacement={prepareLauncherReplacement}
+            deckRef={zoomHostRef}
+            workspace={workspace}
+            paneColors={framePaneColors}
+            fallbackCwdBySession={frameFallbackCwds}
+            door={door}
+          />
+        </ChromeBoundary>
       </div>
     </GhostteaProvider>
   );
