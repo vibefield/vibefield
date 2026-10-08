@@ -115,6 +115,7 @@ import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons"
 import { deskRigRows } from "./smoke-desk-rig";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
+import { restRows } from "./smoke-rest";
 import { selectionBarRows } from "./smoke-selection-bar";
 import { sendToRows } from "./smoke-send-to";
 import {
@@ -1177,6 +1178,14 @@ export async function runSmokeCanvas(opts: {
           problems.push(...(await thumbnailRows({ win, say: (line) => console.log(line) })));
         } catch (error) {
           problems.push(`DK-17b THUMB: ${error instanceof Error ? error.message : String(error)}`);
+        }
+        // DK-18 (plan (24)): the desk's long wake after an act named — the ambient wind, the canon's 20 s and its 2 s ease,
+        // and nothing else (testing/smoke-rest.ts): with the wind stilled the desk rests at once after a move, with it by
+        // the canon; a cover lowered over a still wind rests at once
+        try {
+          problems.push(...(await restRows({ win, say: (line) => console.log(line) })));
+        } catch (error) {
+          problems.push(`DK-18 REST: ${error instanceof Error ? error.message : String(error)}`);
         }
         // DK-15: the covers over the desk — Godview and History each rising over the LIVE desk, its still captured, blurred
         // once and swapped in, the canvas hidden, THEN the freeze: zero frames and zero submits for ≥ 3 s; the recede; taken
