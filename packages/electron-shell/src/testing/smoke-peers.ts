@@ -858,6 +858,11 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
     );
 
     // ── GONE: B closed — its peer leaves A's roster ────────────────────────────────────────────────────────────────────
+    // the relay stopped FIRST, and waited for (DK-18): a call into B still in flight when B is destroyed never settles
+    // (Electron drops it unanswered), so a relay caught inside one waited for ever, and the smoke with it — the final
+    // gate's run hung here, after PEERS_COUNTERS. GONE needs no relay: B, destroyed, publishes nothing more.
+    relaying = false;
+    await relay;
     b.destroy();
     try {
       await until("B gone from A's roster", 10_000, async () => (await dom()).count === 0);
