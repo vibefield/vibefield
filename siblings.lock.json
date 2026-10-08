@@ -62,7 +62,7 @@
     "mille": {
       "path": "../mille-pin",
       "repository": "https://github.com/vibecook-dev/mille.git",
-      "sha": "baa0de874d3a8449a63171080a59d8ae83f8ecd2",
+      "sha": "c8160d585231e5c6877fefbeb1182d86aca45042",
       "packages": {
         "@vibecook/mille": "packages/mille",
         "@vibecook/mille-ui": "packages/mille-ui"
