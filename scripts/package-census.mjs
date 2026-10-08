@@ -411,7 +411,9 @@ console.log(
   `\nnot in this census, by design:\n` +
     `  packages/field-native — ships as separately built release binaries (field-native and\n` +
     `    its TC-S2 field-terminal-host cell) staged side by side into resources/bin (EDP-13);\n` +
-    `    Cargo \`target/\` is not a TS build product and is excluded.`,
+    `    Cargo \`target/\` is not a TS build product and is excluded.\n` +
+    `  rosettad (AR-8) — the rosetta sibling's release binary, built in ITS checkout by\n` +
+    `    \`pnpm siblings:build\` and staged into resources/bin when present; no build tree here.`,
 );
 
 if (acknowledged.length > 0) {
