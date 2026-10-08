@@ -15,6 +15,9 @@ __pycache__/
 .vibefield/
 # a plugin's stills as `plugin-playground --still` writes them (DK-11) — for eyes, never a source
 .vibefield-still/
+# what `vibefield-plugin try` leaves in the plugin it tried (DK-10): its log and its stills — the
+# landing gate tries the example clock (DK-18), so a checkout's example gains them
+.vibefield-try/
 
 # env & secrets (the committed template is the one exception)
 .env

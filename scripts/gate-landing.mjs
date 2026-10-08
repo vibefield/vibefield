@@ -53,7 +53,9 @@ export const LANDING = [
   { name: "smoke:canvas:no-webgpu", run: pnpm("smoke:canvas:no-webgpu") },
   { name: "smoke:kind-faults", run: pnpm("smoke:kind-faults") },
   { name: "smoke:plugin-restart", run: pnpm("smoke:plugin-restart") },
-  { name: "smoke:plugin", run: pnpm("smoke:plugin") },
+  // the try board as an author runs it: the kit stages the example clock ALONE in a dev root of its own, then
+  // `pnpm smoke:plugin` (a bare `pnpm smoke:plugin` stages nothing and says so)
+  { name: "smoke:plugin", run: pnpm("plugin", "try", "examples/plugins/desk-clock") },
   { name: "smoke:godview", run: pnpm("smoke:godview") },
   { name: "smoke:terminal-door", run: pnpm("smoke:terminal-door") },
   { name: "smoke:terminal-direct", run: pnpm("smoke:terminal-direct") },
@@ -119,6 +121,7 @@ const SAYS = [
   /^SMOKE_DAEMONS .*$/u,
   /^SMOKE_\w*failed.*$|^\w+ failed: .*$/u,
   /^STUDIO_PHYSICAL .*$/u,
+  /^(?:ok|fail)\s+try\s+.*$/u,
   /^icons current.*$|^ios (?:fixtures|pins): .*$/u,
 ];
 
