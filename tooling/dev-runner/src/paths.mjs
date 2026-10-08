@@ -4,7 +4,15 @@ import { fileURLToPath } from "node:url";
 
 export const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
 
-const devRoot = join(repoRoot, ".vibefield", "dev");
+// DK-18 (plan (88)) — `VIBEFIELD_DEV_ROOT` moves the runner's whole state (its daemon data, logs, Electron
+// profile, lock, command socket, builds and runtime snapshots) out of the checkout: `pnpm smoke:studio` runs
+// on a fresh one under /tmp (apps/desktop/packaging/run-studio-smoke.mjs), never the persistent `.vibefield/dev`.
+export function devRootFor(root, env = process.env) {
+  const given = env["VIBEFIELD_DEV_ROOT"];
+  return given !== undefined && given !== "" ? given : join(root, ".vibefield", "dev");
+}
+
+const devRoot = devRootFor(repoRoot);
 const devBuildRoot = join(devRoot, "build");
 const nativeName = process.platform === "win32" ? "field-native.exe" : "field-native";
 
