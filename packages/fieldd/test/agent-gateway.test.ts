@@ -2969,14 +2969,30 @@ describe("a name typed in a pane — the REAL floor (AR-7b)", () => {
       });
       expect(acts[0]?.outcome).toMatchObject({ outcome: "succeeded" });
       expect(auditActs(box.dataDir, "agent.session.adopt_refused")).toEqual([]);
-      // never the bearer, the ingress's bearer, the directory or the recipe
+      // never the bearer, the ingress's bearer or the recipe, anywhere in the ledger
       const ledger = auditText(box.dataDir);
       const bearer = (await readRendezvous(box.home))?.token ?? "";
       expect(bearer).toMatch(/^[0-9a-f]{64}$/u);
       expect(ledger).not.toContain(bearer);
       expect(ledger).not.toContain("typed-bearer");
-      expect(ledger).not.toContain(box.work);
       expect(ledger).not.toContain("exec /bin/cat");
+      // …and the name typed is audited without the directory it was typed in:
+      // the adoption says whose run, in which pane, by whose doing (AR-7b). The
+      // folder is the TERMINAL's, recorded on its creation by design (NF-6's
+      // `attrs.cwd`), and that act is the only one that may carry it. Read per
+      // act, so the answer does not depend on whether the audit writer has
+      // flushed that act yet (M61, ruled 2026-10-07).
+      for (const act of acts) expect(JSON.stringify(act), "the adoption").not.toContain(box.work);
+      const naming = auditEntries(box.dataDir).filter((entry) =>
+        JSON.stringify(entry).includes(box.work),
+      );
+      for (const entry of naming) {
+        expect(entry).toMatchObject({
+          phase: "attempt",
+          action: "terminal.session.create",
+          attrs: { cwd: box.work },
+        });
+      }
     },
     FLOOR_BUDGET_MS,
   );
