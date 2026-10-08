@@ -1,0 +1,117 @@
+{
+  "//": "PJ-3 \u2014 `project.list` answering a window: newest activity first, the asleep laptop's places listed and its standing in `sources` (DS-L8); `cursor` pages on, keyed on (lastAt, the project's smallest place anchor).",
+  "rows": [
+    {
+      "key": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+      "provisional": true,
+      "name": "vibe-field",
+      "nameFrom": "folder",
+      "ink": 412,
+      "kind": "repo",
+      "bucket": null,
+      "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF", "01J9ZM0PQ7W3E6R8T2Y4U1I5O9"],
+      "places": [
+        {
+          "ref": {
+            "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+            "placeId": "pl_4c1e9a0b7d2f6e8a1b3c5d7e"
+          },
+          "name": "vibe-field",
+          "path": "/Users/me/Projects/vibe-field",
+          "class": "repo",
+          "branch": "main",
+          "exists": true,
+          "mounted": true,
+          "sessions": 412,
+          "lastAt": 1759276800000
+        },
+        {
+          "ref": {
+            "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+            "placeId": "pl_77d3f2a1c9e0b4d6f8a2c4e6"
+          },
+          "name": "vf-docs",
+          "path": "/Users/me/code/vf-docs",
+          "class": "repo",
+          "branch": "docs",
+          "worktreeOf": {
+            "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+            "placeId": "pl_0a2b4c6d8e1f3a5b7c9d0e2f"
+          },
+          "exists": true,
+          "mounted": true,
+          "sessions": 37,
+          "lastAt": 1759190400000
+        }
+      ],
+      "sessions": 449,
+      "firstAt": 1751328000000,
+      "lastAt": 1759276800000,
+      "allGone": false,
+      "anchors": [
+        "place:pl_4c1e9a0b7d2f6e8a1b3c5d7e",
+        "place:pl_77d3f2a1c9e0b4d6f8a2c4e6",
+        "remote:github.com/acme/vibe-field",
+        "root:a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0"
+      ],
+      "asOf": {
+        "01J9ZK3M5Q8XR2V7N4B6C1D0EF": "2026-09-30T23:40:00.000Z",
+        "01J9ZM0PQ7W3E6R8T2Y4U1I5O9": "2026-09-30T02:12:44.000Z"
+      },
+      "groupingVersion": 1
+    },
+    {
+      "key": "p1:h0m3b4ck3th0m3b4ck3th0m3b4c",
+      "provisional": true,
+      "name": "Home",
+      "nameFrom": "bucket",
+      "ink": 17,
+      "kind": "home",
+      "bucket": "home",
+      "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF"],
+      "places": [
+        {
+          "ref": {
+            "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+            "placeId": "pl_9e8d7c6b5a4f3e2d1c0b9a8f"
+          },
+          "name": "me",
+          "path": "/Users/me",
+          "class": "home",
+          "exists": true,
+          "mounted": true,
+          "sessions": 3,
+          "lastAt": 1759100000000
+        }
+      ],
+      "sessions": 3,
+      "lastAt": 1759100000000,
+      "allGone": false,
+      "anchors": ["place:pl_9e8d7c6b5a4f3e2d1c0b9a8f"],
+      "asOf": {
+        "01J9ZK3M5Q8XR2V7N4B6C1D0EF": "2026-09-30T23:40:00.000Z"
+      },
+      "groupingVersion": 1
+    }
+  ],
+  "cursor": "WzE3NTkxMDAwMDAwMDAsInBsYWNlOnBsXzllOGQ3YzZiNWE0ZjNlMmQxYzBiOWE4ZiIsIiJd",
+  "sources": [
+    {
+      "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+      "name": "studio",
+      "self": true,
+      "state": "live",
+      "asOf": "2026-09-30T23:40:00.000Z",
+      "rows": 134
+    },
+    {
+      "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+      "name": "laptop",
+      "self": false,
+      "state": "asleep",
+      "asOf": "2026-09-30T02:12:44.000Z",
+      "rows": 58
+    }
+  ],
+  "groupingVersion": 1
+}

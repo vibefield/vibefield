@@ -1,0 +1,5 @@
+{
+  "//": "PJ-3 (P1 (a)) — a request named a folder by its path: refused PRECONDITION_FAILED, the field named. A place is named by `PlaceRef`.",
+  "reason": "path-in-request",
+  "field": "places.0.path"
+}

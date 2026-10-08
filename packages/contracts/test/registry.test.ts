@@ -16,6 +16,7 @@ import {
   SURFACES,
   SystemTick,
 } from "../src/methods";
+import { computeEffectiveGrants, PLUGIN_CAPABILITY_ELIGIBILITY } from "../src/plugins";
 import {
   AGENT_FIELD,
   DESKTOP_APP_ID,
@@ -28,6 +29,7 @@ import {
   PEER_FIELDD_SCOPES,
   PORTS,
   PRODUCT_API_LIMITS,
+  PROJECT_DOORS,
   ROWS,
   SCOPES,
   SOCKETS,
@@ -236,6 +238,15 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
     expect(TAILNET_SCOPES).toContain("index.search");
     expect(PEER_FIELDD_SCOPES).toContain("index.search");
     expect(row("index.search", "local")).toBe(true);
+    // PJ-3 (PJ-D15 (a)) — `project.read` joins the phone's preset, and so the
+    // peer's by derivation: the scope admits a peer daemon at the registry,
+    // and every `project.*` HANDLER refuses it (DS-L4), which the registry
+    // cannot see (fieldd's project-doors tests dial it as the peer). The
+    // acts are `settings.manage`'s, `sync`: no tailnet caller reaches them.
+    expect(TAILNET_SCOPES).toContain("project.read");
+    expect(PEER_FIELDD_SCOPES).toContain("project.read");
+    expect(row("project.read", "federate")).toBe(true);
+    expect(reachableFromTailnet(METHODS.find((m) => m.method === "project.intent")!)).toBe(false);
     expect(row("settings.manage", "stream")).toBe(true);
     expect(row("settings.manage", "federate")).toBe(true);
     expect(row("settings.manage", "sync")).toBe(false);
@@ -279,6 +290,12 @@ describe("SP-1 — the subscription descriptor (SP-L4)", () => {
       "workspace.subscribe": {
         shape: "rows",
         cadenceFloorMs: PRODUCT_API_LIMITS.STREAM_MIN_INTERVAL_MS,
+      },
+      // PJ-3 — the projects page's pings (empty rows; the key moves ride
+      // them as `regrouped`), at the History page's pace
+      "project.subscribe": {
+        shape: "rows",
+        cadenceFloorMs: PROJECT_DOORS.CHANGES_MIN_INTERVAL_MS,
       },
       "agent.subscribe": {
         // the bare ask is the full fold at its own tick — served to a phone
@@ -522,6 +539,25 @@ describe("logging registries (LOG-43/LOG-44)", () => {
     ] as const) {
       expect(SCOPES).toContain(scope);
       expect(TAILNET_SCOPES).not.toContain(scope);
+    }
+  });
+
+  it("keeps project.read out of every plugin's reach (PJ-3, PJ-D15 (a))", () => {
+    // the person's own devices read the projects — the window's token and the
+    // phone's preset — and a plugin never: absent from the eligibility table,
+    // so no source and no entry kind is ever granted it (AR-5b's precedent)
+    expect(SCOPES).toContain("project.read");
+    expect(TAILNET_SCOPES).toContain("project.read");
+    expect(PLUGIN_CAPABILITY_ELIGIBILITY).not.toHaveProperty(["project.read"]);
+    for (const source of ["bundled", "dev-linked", "registry", "sideload"] as const) {
+      const grants = computeEffectiveGrants({
+        requested: ["project.read", "index.read"],
+        hasRenderer: true,
+        hasService: true,
+        source,
+      });
+      expect(grants.granted, source).toEqual(["index.read"]);
+      expect(grants.denied, source).toEqual([{ capability: "project.read", reason: "entry-kind" }]);
     }
   });
 

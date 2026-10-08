@@ -4,6 +4,7 @@ import {
   INDEX_MESH,
   PEER_FIELDD_SCOPES,
   PRODUCT_API_LIMITS,
+  PROJECT_DOORS,
   ROWS,
   SCOPES,
   type Scope,
@@ -1752,6 +1753,65 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "stream",
     subscription: { shape: "rows", cadenceFloorMs: INDEX_MESH.SESSION_TAIL_MIN_INTERVAL_MS },
+  }),
+  // ── project.* — PJ-3, the projects' doors (thinking-project-places.md §9;
+  // PJ-D15 (a) RULED 2026-10-07; build-pj23.md D8–D10; P1/P2 (a) 2026-10-08;
+  // project-doors.ts) ──
+  // The projects this desktop groups over every self desktop's places (PJ-1's
+  // engine, `ProjectGroups`), where `index.*` stays this desktop's rosetta —
+  // DS §6.4's `index.projects/sessions {scope: "mesh"}` became these (an
+  // amendment to DS). The four READS ride `project.read` (the window's token
+  // and the phone's preset, never plugin-eligible) and are served from the
+  // local merged view: `federate`, the `index.projects` precedent (design-06
+  // §1's "fact · catalog → federate") — a foreign `device` forwards the call
+  // whole and the owner answers from ITS merged view. Every `project.*`
+  // handler refuses a `peer-fieldd` principal (DS-L4: a daemon never
+  // aggregates another's aggregate); the scope alone would not, because
+  // PEER_FIELDD_SCOPES is derived from the tailnet preset. A tailnet caller's
+  // `list` and `sessions` pages are cut at INDEX_TAILNET_LIMITS.MAX_ROWS at the
+  // door. The pings' floor is the History page's (`PROJECT_DOORS`).
+  // `project.intent` is an ACT on the library (PJ-2's records): `sync`, the
+  // `doc.rename` precedent, on `settings.manage` — a desktop window's scope,
+  // in no tailnet preset and no plugin eligibility table (§9: "link and split
+  // ride settings.manage's class — they steer launches"), and its handler
+  // admits a window or the shell only (P2 (a): the phone reads). NOT
+  // idempotent: every act carries its own act time and, for a pair, the later
+  // act wins (D2), so a blind repeat can reorder against a concurrent act.
+  defineMethod({
+    surface: "product",
+    method: "project.list",
+    scope: "project.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "project.get",
+    scope: "project.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "project.sessions",
+    scope: "project.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "project.subscribe",
+    scope: "project.read",
+    idempotent: true,
+    locality: "stream",
+    subscription: { shape: "rows", cadenceFloorMs: PROJECT_DOORS.CHANGES_MIN_INTERVAL_MS },
+  }),
+  defineMethod({
+    surface: "product",
+    method: "project.intent",
+    scope: "settings.manage",
+    idempotent: false,
+    locality: "sync",
   }),
   // ── workspace.* — FS-1a, the files service's DOOR TIER
   // (thinking-files-service.md §3, RULED 2026-10-05; workspace.ts) ──

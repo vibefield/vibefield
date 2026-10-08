@@ -1,0 +1,6 @@
+{
+  "//": "PJ-3 — `project.intent`: dismiss the suggestions between this project and another — bound to the pair (D3), so the next reason for the same pair stays dismissed.",
+  "key": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+  "op": "dismiss",
+  "with": "p1:s3c0ndpr0j3cts3c0ndpr0j3ct"
+}

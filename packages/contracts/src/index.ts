@@ -28,6 +28,7 @@ export * from "./plugin-registry";
 export * from "./plugin-runtime";
 export * from "./plugin-update";
 export * from "./plugins";
+export * from "./project-doors";
 export * from "./project-places";
 export * from "./registries";
 export * from "./remote-endpoints";

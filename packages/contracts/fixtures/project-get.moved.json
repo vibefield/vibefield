@@ -1,0 +1,83 @@
+{
+  "//": "PJ-3 (D9) \u2014 `project.get` for a key that regrouped (its first record re-keyed it), answering a tailnet caller: the project it moved into, `movedTo` saying so, and no `via` anywhere (D10).",
+  "project": {
+    "key": "r:01JA0B1C2D3E4F5G6H7J8K9M0N",
+    "provisional": false,
+    "name": "VibeField",
+    "nameFrom": "you",
+    "ink": 412,
+    "kind": "repo",
+    "bucket": null,
+    "devices": ["01J9ZK3M5Q8XR2V7N4B6C1D0EF", "01J9ZM0PQ7W3E6R8T2Y4U1I5O9"],
+    "places": [
+      {
+        "ref": {
+          "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+          "placeId": "pl_4c1e9a0b7d2f6e8a1b3c5d7e"
+        },
+        "name": "vibe-field",
+        "class": "repo",
+        "branch": "main",
+        "exists": true,
+        "mounted": true,
+        "sessions": 412,
+        "lastAt": 1759276800000
+      },
+      {
+        "ref": {
+          "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+          "placeId": "pl_77d3f2a1c9e0b4d6f8a2c4e6"
+        },
+        "name": "vf-docs",
+        "class": "repo",
+        "branch": "docs",
+        "worktreeOf": {
+          "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+          "placeId": "pl_0a2b4c6d8e1f3a5b7c9d0e2f"
+        },
+        "exists": true,
+        "mounted": true,
+        "sessions": 37,
+        "lastAt": 1759190400000
+      }
+    ],
+    "sessions": 449,
+    "firstAt": 1751328000000,
+    "lastAt": 1759276800000,
+    "allGone": false,
+    "anchors": ["place:pl_4c1e9a0b7d2f6e8a1b3c5d7e", "place:pl_77d3f2a1c9e0b4d6f8a2c4e6"],
+    "asOf": {
+      "01J9ZK3M5Q8XR2V7N4B6C1D0EF": "2026-09-30T23:40:00.000Z",
+      "01J9ZM0PQ7W3E6R8T2Y4U1I5O9": "2026-09-30T02:12:44.000Z"
+    },
+    "groupingVersion": 1
+  },
+  "movedTo": "r:01JA0B1C2D3E4F5G6H7J8K9M0N",
+  "suggestions": [
+    {
+      "type": "same-name",
+      "with": "p1:s3c0ndpr0j3cts3c0ndpr0j3ct",
+      "a": {
+        "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+        "placeId": "pl_4c1e9a0b7d2f6e8a1b3c5d7e"
+      },
+      "b": {
+        "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+        "placeId": "pl_5f6e7d8c9b0a1f2e3d4c5b6a"
+      }
+    }
+  ],
+  "edges": [
+    {
+      "a": {
+        "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+        "placeId": "pl_4c1e9a0b7d2f6e8a1b3c5d7e"
+      },
+      "b": {
+        "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9",
+        "placeId": "pl_77d3f2a1c9e0b4d6f8a2c4e6"
+      },
+      "rule": "remote"
+    }
+  ]
+}

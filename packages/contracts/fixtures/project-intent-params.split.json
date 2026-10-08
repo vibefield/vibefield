@@ -1,0 +1,6 @@
+{
+  "//": "PJ-3 — `project.intent`: take a place out of this project's record (`{place, notRecord}`, D2) — by `PlaceRef`, never a path (P1).",
+  "key": "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
+  "op": "split",
+  "place": { "device": "01J9ZM0PQ7W3E6R8T2Y4U1I5O9", "placeId": "pl_77d3f2a1c9e0b4d6f8a2c4e6" }
+}

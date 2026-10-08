@@ -599,6 +599,43 @@ export const PLACE_FACTS = {
   REGROUP_SETTLE_MS: 2_000,
 } as const;
 
+/** PJ-3 (`thinking-project-places.md` §9, PJ-D15 (a) RULED 2026-10-07;
+ * `build-pj23.md` D8–D10; P1/P2 RULED (a) 2026-10-08) — the `project.*`
+ * doors (`project-doors.ts`): this desktop's grouping, served to its own
+ * windows and the person's phone, never to a peer daemon (DS-L4).
+ *
+ * SERVICE / STATE_*: the honest UNAVAILABLE a door answers —
+ * STATE_GROUPING before the first grouping of this boot exists, and
+ * STATE_RECORDS_UNBUILT from `project.intent` until PJ-2's records are wired
+ * behind it. PAGE_DEFAULT_LIMIT / PAGE_MAX_LIMIT: `project.list`'s and
+ * `project.sessions`' page when nothing is asked, and the most a window may
+ * ask (a tailnet caller's page is cut at INDEX_TAILNET_LIMITS.MAX_ROWS at the
+ * door). CHANGES_MIN_INTERVAL_MS: `project.subscribe`'s floor — the History
+ * page's pace, `INDEX_MESH.CHANGES_MIN_INTERVAL_MS`'s twin. NAME_MAX: a
+ * rename's longest name; QUERY_MAX: `project.list`'s `q`.
+ *
+ * The KEY JOURNAL (D9): a project's key moves when an anchor stops being
+ * unique to its group, and at its first record (`p1:` → `r:`), so a reader
+ * holding the old key is answered `movedTo`. fieldd remembers the last key
+ * each place was seen in (at most JOURNAL_PLACES_MAX places, the least
+ * recently seen dropped first) and the moves it inferred (at most
+ * JOURNAL_MOVES_MAX, the oldest dropped first), persisted at
+ * `LAYOUT.PROJECT_KEYS_FILE`; a `movedTo` follows at most MOVE_HOPS_MAX moves.
+ * TS-only: no native reader. */
+export const PROJECT_DOORS = {
+  SERVICE: "projects",
+  STATE_GROUPING: "grouping",
+  STATE_RECORDS_UNBUILT: "records-unbuilt",
+  PAGE_DEFAULT_LIMIT: 100,
+  PAGE_MAX_LIMIT: 500,
+  CHANGES_MIN_INTERVAL_MS: 500,
+  NAME_MAX: 120,
+  QUERY_MAX: 256,
+  JOURNAL_PLACES_MAX: 4_096,
+  JOURNAL_MOVES_MAX: 1_024,
+  MOVE_HOPS_MAX: 16,
+} as const;
+
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded
@@ -918,6 +955,19 @@ export const SCOPES = [
   // table, and `agent.usage` stays local-only.*
   "index.search",
   "agent.usage",
+  // PJ-3 (PJ-D15 (a) RULED 2026-10-07; `build-pj23.md` D8, D10) — the
+  // `project.*` READS: the projects this desktop groups over every self
+  // desktop's places, with each place's sessions. The person's own devices
+  // read them — the window's token and the phone's preset (TAILNET_SCOPES) —
+  // and nothing else: NEVER plugin-eligible (AR-5b's precedent; `plugins.ts`
+  // names it nowhere), and a self peer DAEMON, which holds it only because
+  // PEER_FIELDD_SCOPES is DERIVED from the preset, is refused by every
+  // `project.*` handler (DS-L4: a daemon never aggregates another's
+  // aggregate). P1 (a), 2026-10-08: an answer to a self principal may carry a
+  // place's path; a guest never gets one (a guest holds no scope at all).
+  // The acts (`project.intent`) are not this scope's: they ride
+  // `settings.manage`, a desktop window's (P2 (a)).
+  "project.read",
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 
@@ -934,7 +984,13 @@ export type Scope = (typeof SCOPES)[number];
  * `index.changes.subscribe` pings), every answer bounded for a `tailnet`
  * caller at fieldd's doors (INDEX_TAILNET_LIMITS). `index.catalog.subscribe`
  * rides the scope but stays the peer daemon's: its handler admits no other
- * kind. */
+ * kind.
+ * PJ-3 (PJ-D15 (a); P1 (a), 2026-10-08) — `project.read` joins: the phone
+ * lists its desktop's projects (`project.list`, `.get`, `.sessions`,
+ * `.subscribe`), naming a place only by `PlaceRef`, never by a path; the
+ * answer to a self phone may carry a place's path. It reaches the peer
+ * preset by derivation, and every `project.*` handler refuses a peer
+ * daemon. */
 export const TAILNET_SCOPES: readonly Scope[] = [
   "canvas.read",
   "canvas.write",
@@ -947,6 +1003,7 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "approval.respond",
   "workspace.read",
   "mcp.consume",
+  "project.read",
 ] as const;
 
 /** UA-4 (spec §7.3, UA-D5): the guest preset — a WhoIs-verified tailnet peer
@@ -1284,6 +1341,13 @@ export const LAYOUT = {
    * home directory, the mounted volumes) are enumerated live, never kept. */
   WORKSPACE_DIR: ["workspace"],
   WORKSPACE_ROOTS_FILE: ["workspace", "roots.json"],
+  /** PJ-3 (D9) — the projects' key memory under this user: the last key each
+   * place was seen in and the key moves inferred from it (`PROJECT_DOORS`),
+   * fieldd-owned, written atomically, so a reader holding a key from before a
+   * regroup — or from before a restart — is answered `movedTo`. Opaque keys
+   * and placeIds only: no path, no remote. */
+  PROJECTS_DIR: ["projects"],
+  PROJECT_KEYS_FILE: ["projects", "keys.json"],
 } as const;
 
 /** The segments that live at the VibeField ROOT and never re-root under

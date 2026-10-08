@@ -50,5 +50,7 @@
   "MACHINE_DISTRIBUTION_FILE": ["machine", "agents", "distribution.json"],
   "MACHINE_UPDATES_DIR": ["machine", "agents", "updates"],
   "WORKSPACE_DIR": ["workspace"],
-  "WORKSPACE_ROOTS_FILE": ["workspace", "roots.json"]
+  "WORKSPACE_ROOTS_FILE": ["workspace", "roots.json"],
+  "PROJECTS_DIR": ["projects"],
+  "PROJECT_KEYS_FILE": ["projects", "keys.json"]
 }

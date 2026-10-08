@@ -136,6 +136,22 @@ import {
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
+import {
+  PlaceRef,
+  ProjectChangesDelta,
+  ProjectChangesOpen,
+  ProjectGetParams,
+  ProjectGetResult,
+  ProjectIntentParams,
+  ProjectIntentResult,
+  ProjectListParams,
+  ProjectListResult,
+  ProjectRefusal,
+  ProjectSessionsParams,
+  ProjectSessionsResult,
+  ProjectSubscribeParams,
+  ProjectSummary,
+} from "../src/project-doors";
 import { PlaceFacts } from "../src/project-places";
 import { RemoteEndpointSet } from "../src/remote-endpoints";
 import {
@@ -495,6 +511,26 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // with samples and a joining hit, a repository git refused (a fact, L3),
   // and a task folder with no git and an alias spelling.
   "place-facts": PlaceFacts,
+  // PJ-3 — the `project.*` doors (project-doors.ts): a place named by
+  // `PlaceRef`; a project as a window or a self phone is answered (paths) and
+  // as any other tailnet caller is (none, place anchors only — D10), and the
+  // Home bucket; each door's ask and answer (a key that regrouped answers
+  // `movedTo`); the pings with a key move; the acts' asks and answer; the
+  // refusals' details (and `error-data.projects-*`, the UNAVAILABLE pair).
+  "place-ref": PlaceRef,
+  "project-summary": ProjectSummary,
+  "project-list-params": ProjectListParams,
+  "project-list": ProjectListResult,
+  "project-get-params": ProjectGetParams,
+  "project-get": ProjectGetResult,
+  "project-sessions-params": ProjectSessionsParams,
+  "project-sessions": ProjectSessionsResult,
+  "project-subscribe-params": ProjectSubscribeParams,
+  "project-changes-open": ProjectChangesOpen,
+  "project-changes-delta": ProjectChangesDelta,
+  "project-intent-params": ProjectIntentParams,
+  "project-intent": ProjectIntentResult,
+  "project-refusal": ProjectRefusal,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.
