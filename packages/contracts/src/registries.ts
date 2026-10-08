@@ -557,6 +557,46 @@ export const WORKSPACE_GIT = {
   CONCURRENCY: 6,
 } as const;
 
+/** PJ-1 (`thinking-project-places.md` §4.1, §9; `build-pj.md` L1–L3) — place
+ * facts: what this desktop reads of each folder its index names, through the
+ * files worker's one git runner (`WORKSPACE_GIT`).
+ *
+ * SAMPLE_DEPTHS: the first-parent commits a place publishes for its peers to
+ * look for — its tip, then 1, 2, 4 … 512 back (§4.1 E2; a shallow clone or an
+ * unborn HEAD publishes none). GIT_TIMEOUT_MS: one place-facts invocation's
+ * budget (the first-parent root walks the whole first-parent chain; one that
+ * runs out leaves the root unsaid); SSH_TIMEOUT_MS: one `ssh -G <host>` (an
+ * alias read, C10), whose answer the worker keeps SSH_CACHE_MS.
+ * OP_BUDGET_MS: the most one `placeFacts` question works before it answers — a
+ * place it did not reach comes back `skipped` and is asked again next pass, so
+ * the answer lands inside the supervisor's own request budget. BATCH_PLACES:
+ * places per question; PARALLEL_PLACES: places one question reads at once
+ * (each reads its git calls in turn, so a scan holds at most this many of
+ * WORKSPACE_GIT.CONCURRENCY's turns and an interactive git port is never
+ * starved).
+ *
+ * The scanner (fieldd): SCAN_INTERVAL_MS is the throttled period that catches
+ * what no event announces (a commit, a remote added, a volume unplugged);
+ * CHANGE_SETTLE_MS the quiet a change (the catalog's project roots, a peer's
+ * places) waits for before it scans, so a burst is one pass. A place cached
+ * with an unchanged HEAD, config and worktree list costs one cheap read.
+ * MAX_PLACES bounds the places one desktop scans (rosetta's roots plus the
+ * worktrees `git worktree list` names); WORKTREES_MAX the worktrees one
+ * checkout adds. TS-only: no native reader. */
+export const PLACE_FACTS = {
+  SAMPLE_DEPTHS: [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
+  GIT_TIMEOUT_MS: 5_000,
+  SSH_TIMEOUT_MS: 3_000,
+  SSH_CACHE_MS: 5 * 60 * 1000,
+  OP_BUDGET_MS: 12_000,
+  BATCH_PLACES: 16,
+  PARALLEL_PLACES: 2,
+  SCAN_INTERVAL_MS: 5 * 60 * 1000,
+  CHANGE_SETTLE_MS: 2_000,
+  MAX_PLACES: 2_000,
+  WORKTREES_MAX: 256,
+} as const;
+
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
  * one receipt per idempotency key for RECEIPT_TTL_MS, at most
  * RECEIPT_JOURNAL_DEPTH of them; a forward cut mid-flight is recorded

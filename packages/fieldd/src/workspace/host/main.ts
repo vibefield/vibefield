@@ -20,9 +20,11 @@ import { setMilleNativePath } from "./native-path";
 
 type EngineModule = typeof import("./engine");
 type GitModule = typeof import("./git");
+type PlacesModule = typeof import("./places");
 
 let engines: InstanceType<EngineModule["Engines"]> | null = null;
 let gitModule: GitModule | null = null;
+let placesModule: PlacesModule | null = null;
 let failureClass: EngineModule["WorkerFailure"] | null = null;
 let stopping = false;
 let listener: import("./listener").WorkspaceListener | null = null;
@@ -54,7 +56,8 @@ async function assertRootOf(ask: Record<string, unknown>): Promise<void> {
 }
 
 async function answer(op: WorkerOp, args: unknown): Promise<unknown> {
-  if (engines === null || gitModule === null) throw new Error("the engine is not loaded");
+  if (engines === null || gitModule === null || placesModule === null)
+    throw new Error("the engine is not loaded");
   const ask = (args ?? {}) as Record<string, unknown>;
   switch (op) {
     case "resolve":
@@ -83,6 +86,10 @@ async function answer(op: WorkerOp, args: unknown): Promise<unknown> {
     case "gitFacts":
       await assertRootOf(ask);
       return await gitModule.gitFacts(String(ask["rootPath"]));
+    case "placeFacts":
+      // PJ-1 — the index's folders, not the exports: fieldd names them (one
+      // trust domain, FS-D7), and the reads are git's hardened read-only ones
+      return await placesModule.readPlaces(args as import("../protocol").PlaceFactsArgs);
     case "stats": {
       const memory = process.memoryUsage();
       const cpu = process.cpuUsage();
@@ -118,6 +125,7 @@ async function init(milleNative: string): Promise<void> {
     setMilleNativePath(milleNative);
     const engine: EngineModule = await import("./engine");
     gitModule = await import("./git");
+    placesModule = await import("./places");
     failureClass = engine.WorkerFailure;
     assertRoot = engine.assertRoot;
     engines = new engine.Engines();

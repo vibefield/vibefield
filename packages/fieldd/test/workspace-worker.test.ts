@@ -253,6 +253,28 @@ describe("the files worker (fieldd's supervisor over the real bundle)", () => {
     expect((behind as FilesHostRefusal).error.code).toBe("not-found");
   });
 
+  it("answers `placeFacts` for the index's folders (PJ-1): a plain folder and one that is gone", async () => {
+    const { root } = tree();
+    const supervisor = await ready();
+    const gone = join(root, "never-there");
+    const answer = await supervisor.request("placeFacts", {
+      places: [{ path: join(root, "wide") }, { path: gone }],
+      peers: [],
+      taskRoots: [],
+    });
+    expect(answer.places).toEqual([
+      expect.objectContaining({
+        path: join(root, "wide"),
+        skipped: false,
+        canonical: join(root, "wide"),
+        exists: true,
+        git: null,
+        gitRefused: null,
+      }),
+      expect.objectContaining({ path: gone, skipped: false, exists: false, git: null }),
+    ]);
+  });
+
   it("restarts a killed worker: questions in flight hear `restarting`, the generation moves", async () => {
     const { root } = tree();
     const supervisor = await ready();

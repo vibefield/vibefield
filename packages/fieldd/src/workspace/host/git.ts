@@ -595,18 +595,39 @@ export async function gitFacts(root: string): Promise<WorkspaceGitFacts | null> 
   const branch = headName.length > 0 ? headName : null;
   const status = await git(root, ["status", "--porcelain=v2", "-z", "--untracked-files=all"]);
   const dirty = status.ok ? parseStatus(status.stdout).length : null;
-  const worktrees: WorkspaceGitWorktree[] = [];
   const listed = await git(root, ["worktree", "list", "--porcelain"], { timeoutMs: 4_000 });
-  if (listed.ok) {
-    for (const block of listed.stdout.split("\n\n")) {
-      const lines = block.split("\n");
-      const path = lines.find((line) => line.startsWith("worktree "))?.slice(9);
-      const named = lines
-        .find((line) => line.startsWith("branch "))
-        ?.slice(7)
-        .replace("refs/heads/", "");
-      if (path) worktrees.push({ path, branch: named && named.length > 0 ? named : null });
-    }
-  }
+  const worktrees: WorkspaceGitWorktree[] = listed.ok
+    ? parseWorktreeList(listed.stdout).map(({ path, branch }) => ({ path, branch }))
+    : [];
   return { branch, dirty, worktrees };
+}
+
+/** One entry of `git worktree list --porcelain`. The first is the main
+ * worktree — `bare` in the bare-repository layout, where it is no working
+ * tree at all; `prunable` is one whose folder git found gone. */
+export interface WorktreeEntry {
+  path: string;
+  branch: string | null;
+  bare: boolean;
+  prunable: boolean;
+}
+
+export function parseWorktreeList(raw: string): WorktreeEntry[] {
+  const entries: WorktreeEntry[] = [];
+  for (const block of raw.split("\n\n")) {
+    const lines = block.split("\n");
+    const path = lines.find((line) => line.startsWith("worktree "))?.slice(9);
+    if (!path) continue;
+    const named = lines
+      .find((line) => line.startsWith("branch "))
+      ?.slice(7)
+      .replace("refs/heads/", "");
+    entries.push({
+      path,
+      branch: named && named.length > 0 ? named : null,
+      bare: lines.includes("bare"),
+      prunable: lines.some((line) => line === "prunable" || line.startsWith("prunable ")),
+    });
+  }
+  return entries;
 }

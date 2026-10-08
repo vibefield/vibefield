@@ -104,6 +104,124 @@ export interface GitFactsArgs {
 
 export type GitFactsValue = WorkspaceGitFacts | null;
 
+// PJ-1 (`thinking-project-places.md` §9; `build-pj.md` L3, L6) — PLACE FACTS:
+// what the worker reads of a batch of folders the index names, for fieldd's
+// scanner to publish on the catalog's project rows. Read-only git through the
+// one hardened runner, and NO `git status` (a `.gitattributes` clean filter
+// would run — build-fs M19). Remotes come back as git spells them (insteadOf
+// applied); fieldd normalizes them.
+
+/** One sample of a place's first-parent history: the commit `depth` first
+ * parents back from its tip (PLACE_FACTS.SAMPLE_DEPTHS). */
+export interface PlaceSample {
+  sha: string;
+  depth: number;
+}
+
+/** A place's samples, handed to the worker to look for in other places. */
+export interface PlaceSampleSet {
+  /** the place's id, as its owner publishes it (opaque here) */
+  place: string;
+  /** its first-parent root: only a place with the same root is searched */
+  root: string;
+  samples: PlaceSample[];
+}
+
+/** Another place's sample found in this place's history (`cat-file -e`, then
+ * `merge-base --is-ancestor`): the shallowest one held. */
+export interface PlaceHit {
+  place: string;
+  depth: number;
+}
+
+/** L6 — what the owner says a place is: its home folder itself (or a
+ * filesystem root), a system temporary folder or below one, a folder below an
+ * agent catalog's `taskRoots`, or anything else. */
+export type PlaceKind = "home" | "temp" | "task" | "project";
+
+/** Why git would not read a place (never overridden: `safe.directory` stays
+ * the person's). */
+export type PlaceGitRefusal = "dubious-ownership";
+
+export interface PlaceRemote {
+  name: string;
+  /** the fetch URL as git uses it (`url.<base>.insteadOf` applied) */
+  url: string;
+}
+
+/** What git says of a place in a repository. */
+export interface PlaceGitRead {
+  /** the tip, or null on an unborn branch */
+  head: string | null;
+  /** the branch HEAD names (an unborn one too), null when detached */
+  branch: string | null;
+  shallow: boolean;
+  /** the first-parent root commit, GUARDED: null when shallow (a boundary is
+   * no root), unborn, an empty-tree first commit, or a walk past its budget */
+  root: string | null;
+  remotes: PlaceRemote[];
+  /** the identity remote's NAME: `branch.<b>.pushRemote` › `remote.pushDefault`
+   * › `origin` › the only remote — null when none of them names one held */
+  pushRemote: string | null;
+  /** an ssh host a remote names → the HostName `ssh -G` resolves it to, where
+   * they differ (C10's alias) */
+  sshAliases: Record<string, string>;
+  /** the working tree's top (the place may be a folder below it) */
+  toplevel: string;
+  /** the main worktree's path when this place is a LINKED worktree */
+  worktreeOf: string | null;
+  /** the repository's other worktrees that are there (the scanner's discovery:
+   * real paths; never a bare main, never a prunable one) */
+  worktrees: Array<{ path: string; branch: string | null }>;
+  /** none when shallow or unborn */
+  samples: PlaceSample[];
+}
+
+export interface PlaceFactsArgs {
+  places: Array<{
+    /** an absolute path on this desktop, as the index spells it */
+    path: string;
+    /** what the scanner holds for it: a `key` that still matches answers
+     * `git: "unchanged"`, a `hitsKey` that still matches `hits: "unchanged"` */
+    known?: { key: string | null; root: string | null; hitsKey: string | null };
+  }>;
+  /** every place's samples the scanner knows — this desktop's and its peers' */
+  peers: PlaceSampleSet[];
+  /** the agent catalog's task roots (`~/…` globs, `*` one segment) */
+  taskRoots: string[];
+}
+
+export type PlaceRead =
+  | {
+      path: string;
+      /** the question's budget ran out before this place: ask again */
+      skipped: true;
+    }
+  | {
+      path: string;
+      skipped: false;
+      /** its real path (`realpathSync.native`: the letter case on disk), or
+       * the path as asked when it is not there */
+      canonical: string;
+      exists: boolean;
+      /** false when the volume it lives on is not mounted */
+      mounted: boolean;
+      /** the volume ignores letter case */
+      caseless: boolean;
+      kind: PlaceKind;
+      /** null: not in a repository, not there, or refused */
+      git: PlaceGitRead | null | "unchanged";
+      gitRefused: PlaceGitRefusal | null;
+      /** the cheap read's digest (HEAD, branch, config and worktree list) */
+      key: string | null;
+      hits: PlaceHit[] | "unchanged";
+      hitsKey: string | null;
+    };
+
+export interface PlaceFactsValue {
+  places: PlaceRead[];
+}
+
 /** What the worker measures of itself (FS-1a's witness: the idle cost). */
 export interface StatsValue {
   pid: number;
@@ -172,6 +290,7 @@ export interface WorkerOps {
   list: { args: ListArgs; value: ListValue };
   search: { args: SearchArgs; value: SearchValue };
   gitFacts: { args: GitFactsArgs; value: GitFactsValue };
+  placeFacts: { args: PlaceFactsArgs; value: PlaceFactsValue };
   stats: { args: Record<string, never>; value: StatsValue };
 }
 
@@ -181,6 +300,7 @@ export const WORKER_OPS: readonly WorkerOp[] = [
   "list",
   "search",
   "gitFacts",
+  "placeFacts",
   "stats",
   "resolve",
   "registerTicket",
