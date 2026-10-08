@@ -24,13 +24,14 @@ import { createHash } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   statSync,
   writeFileSync,
 } from "node:fs";
-import { cpus, hostname, loadavg, totalmem } from "node:os";
+import { cpus, hostname, loadavg, tmpdir, totalmem } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -419,9 +420,24 @@ if (!existsSync(electronBin)) {
   process.exit(2);
 }
 
+// DK-18 (plan (5)) — THE LAB'S PROFILE, ISOLATED LIKE THE SMOKES' (apps/desktop/packaging/run-smoke.mjs): ONE Electron
+// profile for this RUN, fresh under the OS temp, handed to every launch of it as `--user-data-dir` and removed when the run
+// ends. Never the app's shared profile, and never one kept between runs — until DK-18 main minted one per LAUNCH and left it
+// under the temp, so each run started cold and the profiles piled up. "Warm" is a second launch WITHIN the run (the native
+// control's VibeField arm reuses this run's profile), never a kept profile.
+const profileDir = mkdtempSync(join(tmpdir(), "vf-perf-profile-"));
+const profileArg = `--user-data-dir=${profileDir}`;
+process.stdout.write(`TERMINAL_PERF_PROFILE ${JSON.stringify({ userData: profileDir })}\n`);
+process.once("exit", () => {
+  rmSync(profileDir, { recursive: true, force: true });
+  process.stdout.write(
+    `TERMINAL_PERF_PROFILE_REMOVED ${JSON.stringify({ userData: profileDir, removed: !existsSync(profileDir) })}\n`,
+  );
+});
+
 const child = spawn(
   electronBin,
-  [".", "--terminal-perf-lab", "-ApplePersistenceIgnoreState", "YES"],
+  [".", profileArg, "--terminal-perf-lab", "-ApplePersistenceIgnoreState", "YES"],
   {
     cwd: desktopRoot,
     env: {
@@ -702,7 +718,7 @@ if (has("native-control")) {
     mkdirSync(vfDir, { recursive: true });
     const vf = spawn(
       electronBin,
-      [".", "--terminal-perf-lab", "-ApplePersistenceIgnoreState", "YES"],
+      [".", profileArg, "--terminal-perf-lab", "-ApplePersistenceIgnoreState", "YES"],
       {
         cwd: desktopRoot,
         env: {
