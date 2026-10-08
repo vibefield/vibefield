@@ -88,6 +88,20 @@ vi.mock("../src/godview/os-marks", async (importOriginal) => {
   };
 });
 
+/** M195 — every render of the instrument bar the monitor asks for, counted; the
+ * bar itself is the package's, passed through. */
+const bar = vi.hoisted(() => ({ renders: 0 }));
+vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views")>();
+  return {
+    ...actual,
+    InstrumentBar: (props: Parameters<typeof actual.InstrumentBar>[0]) => {
+      bar.renders += 1;
+      return <actual.InstrumentBar {...props} />;
+    },
+  };
+});
+
 /**
  * §2.5 and record §02's tint, stamped onto the document — because the palette is
  * supposed to READ them, and a test with no tokens would prove only that the
@@ -599,6 +613,60 @@ describe("the monitor stage", () => {
         .querySelector<HTMLElement>(".vf-monitor-list")
         ?.style.getPropertyValue("--mv-list-inset-top"),
     ).toBe("0px");
+  });
+
+  it("renders the bar only when one of its own inputs moves: twenty publishes that move none render it not once, and a count that moves does (M195)", async () => {
+    // The monitor renders on every model publish (about once a frame while
+    // agents work). The bar is a row of tips, each with its own handlers, so
+    // rendered inline it was rebuilt with every publish, and each view the
+    // registry gained cost one more tip per frame (spend: ab2's timeline n10
+    // React render, +0.71 ms/s).
+    const recording = createRecordingView("bar-quiet");
+    const entry: MonitorViewEntry = {
+      id: "bar-quiet",
+      label: "QUIET",
+      parameterGroups: [],
+      mark: recording.view.manifest.mark,
+      view: recording.view,
+    };
+    const door = fakeDoor();
+    syncBoard(PANES);
+    container = document.createElement("div");
+    document.body.appendChild(container);
+    root = createRoot(container);
+    await act(async () => {
+      root?.render(
+        <GodviewAgentsProvider door={door}>
+          <GodviewMonitor view={entry} parameters={{}} door={door} panes={PANES} />
+        </GodviewAgentsProvider>,
+      );
+    });
+    await settle();
+    const claude = (overrides: Partial<Parameters<typeof managedSummary>[0]>) =>
+      managedSummary({
+        runtimeRunId: "run-claude",
+        kind: "claude",
+        label: "Claude",
+        status: "working",
+        cwd: "/project/vibe-field",
+        createdAt: "2026-09-12T10:00:00.000Z",
+        ...overrides,
+      });
+    const renders = bar.renders;
+    const updates = recording.updates;
+    // twenty publishes that move a reply: the window's rows move, the bar's inputs do not
+    for (let n = 0; n < 20; n += 1) {
+      await act(async () =>
+        door.push([claude({ lastAssistantText: `reply ${n}` }), ...ROWS.slice(1)]),
+      );
+      await settle();
+    }
+    expect(recording.updates - updates).toBeGreaterThanOrEqual(20);
+    expect(bar.renders - renders).toBe(0);
+    // a count that moves is the bar's: it renders
+    await act(async () => door.push([claude({ status: "idle" }), ...ROWS.slice(1)]));
+    await settle();
+    expect(bar.renders).toBeGreaterThan(renders);
   });
 
   it("names no ported view in a host stylesheet (W5), and defines every skin name the views read (L18)", () => {

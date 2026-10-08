@@ -18,6 +18,7 @@ import {
 } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
 import {
+  memo,
   type ReactElement,
   useCallback,
   useEffect,
@@ -205,6 +206,22 @@ const noStatusCycle = (): void => undefined;
  * (godview.css) until the package draws it only for a host that hands it a
  * handler — the ask on record, beside the counters'. */
 const noThemeSwitch = (): void => undefined;
+
+/** M195 — the bar renders only when one of its own inputs moves. The monitor
+ * renders on every model publish (about once a frame while agents work), and
+ * every control on the bar is a tip with its own handlers: rendered inline it
+ * was rebuilt with each publish, and each view the registry adds (spend) cost
+ * one more tip per frame. Its inputs below keep their identity while what they
+ * say is the same, so the memo holds. */
+const MonitorBar = memo(InstrumentBar);
+
+/** `value`, or the one held while `key` says nothing in it changed: a stable
+ * identity for a value the window rebuilds on every publish. */
+function useHeldWhileSame<T>(value: T, key: string): T {
+  const held = useRef({ key, value });
+  if (held.current.key !== key) held.current = { key, value };
+  return held.current.value;
+}
 
 const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
 
@@ -643,72 +660,92 @@ export function GodviewMonitor({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [showTabs, tabKey]);
 
+  // M195 — the bar's inputs, each the same object while what it says is the
+  // same, so `MonitorBar` renders for a count, a desktop, a tab, the view, the
+  // theme, Find or System control — never for a publish that moved none.
+  const { idle, working, blocked } = counts;
+  const barCounts = useMemo(() => ({ idle, working, blocked }), [idle, working, blocked]);
+  const barDevices = useHeldWhileSame(devices, JSON.stringify(devices));
+  const barTabs = useHeldWhileSame(tabs, JSON.stringify(tabs));
+  const selectView = useCallback((viewId: string) => onSelectView?.(viewId), [onSelectView]);
+  const toggleFind = useCallback(() => setFindOpen((current) => !current), []);
+  const toggleTuning = useCallback(() => onToggleTuning?.(), [onToggleTuning]);
+  const barLeading = useMemo(
+    () => (
+      <>
+        {reserveWindowControls ? (
+          <span className="vf-godview-native-controls-space" aria-hidden="true" />
+        ) : null}
+        <span className="vf-godview-header-notice" aria-live="polite">
+          {notice ?? ""}
+        </span>
+      </>
+    ),
+    [reserveWindowControls, notice],
+  );
+  const barCentre = useMemo(
+    () =>
+      showTabs || barDevices.length > 1 ? (
+        <>
+          {barDevices.length > 1 ? (
+            <DeviceFilterChip
+              devices={barDevices}
+              selected={deviceChosen}
+              onSelect={setDeviceChoice}
+              onOpenChange={setDeviceMenuOpen}
+            />
+          ) : null}
+          {showTabs ? (
+            <ProfileTabs
+              tabs={barTabs}
+              selected={chosenId ?? null}
+              onSelect={setProfileTab}
+              shortcuts
+            />
+          ) : null}
+        </>
+      ) : undefined,
+    [showTabs, barDevices, deviceChosen, barTabs, chosenId],
+  );
+  const barTrailing = useMemo(
+    () => (
+      <>
+        <BarControl
+          mark="find"
+          label="FIND"
+          shortcut="⌘F"
+          ariaLabel="Find an agent by what was said"
+          {...(findOpen ? { controls: "vf-find-sheet" } : {})}
+          on={findOpen}
+          onClick={toggleFind}
+        />
+        <BarControl
+          mark="tune"
+          label="SYSTEM CONTROL"
+          ariaLabel="System control"
+          controls="vf-godview-tweak-panel"
+          on={tuningOpen}
+          onClick={toggleTuning}
+        />
+      </>
+    ),
+    [findOpen, tuningOpen, toggleFind, toggleTuning],
+  );
+
   return (
     <>
       <ChromeBoundary name="Monitor controls">
-        <InstrumentBar
-          counts={counts}
+        <MonitorBar
+          counts={barCounts}
           onSelectStatus={noStatusCycle}
           views={MONITOR_VIEWS}
           viewId={view.id}
-          onSelectView={(viewId) => onSelectView?.(viewId)}
+          onSelectView={selectView}
           theme={theme}
           onThemeChange={noThemeSwitch}
-          leading={
-            <>
-              {reserveWindowControls ? (
-                <span className="vf-godview-native-controls-space" aria-hidden="true" />
-              ) : null}
-              <span className="vf-godview-header-notice" aria-live="polite">
-                {notice ?? ""}
-              </span>
-            </>
-          }
-          {...(showTabs || devices.length > 1
-            ? {
-                centre: (
-                  <>
-                    {devices.length > 1 ? (
-                      <DeviceFilterChip
-                        devices={devices}
-                        selected={deviceChosen}
-                        onSelect={setDeviceChoice}
-                        onOpenChange={setDeviceMenuOpen}
-                      />
-                    ) : null}
-                    {showTabs ? (
-                      <ProfileTabs
-                        tabs={tabs}
-                        selected={chosenId ?? null}
-                        onSelect={setProfileTab}
-                        shortcuts
-                      />
-                    ) : null}
-                  </>
-                ),
-              }
-            : {})}
-          trailing={
-            <>
-              <BarControl
-                mark="find"
-                label="FIND"
-                shortcut="⌘F"
-                ariaLabel="Find an agent by what was said"
-                {...(findOpen ? { controls: "vf-find-sheet" } : {})}
-                on={findOpen}
-                onClick={() => setFindOpen((current) => !current)}
-              />
-              <BarControl
-                mark="tune"
-                label="SYSTEM CONTROL"
-                ariaLabel="System control"
-                controls="vf-godview-tweak-panel"
-                on={tuningOpen}
-                onClick={() => onToggleTuning?.()}
-              />
-            </>
-          }
+          leading={barLeading}
+          {...(barCentre !== undefined ? { centre: barCentre } : {})}
+          trailing={barTrailing}
         />
       </ChromeBoundary>
 
