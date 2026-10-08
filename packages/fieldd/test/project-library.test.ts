@@ -12,7 +12,12 @@ import { join } from "node:path";
 import type { DocLibraryEntry } from "@vibefield/contracts";
 import { LoroDoc } from "loro-crdt";
 import { afterEach, describe, expect, it } from "vitest";
-import { LibraryDocService, systemAccount, systemDocId } from "../src/library-doc";
+import {
+  carryLocalProjects,
+  LibraryDocService,
+  systemAccount,
+  systemDocId,
+} from "../src/library-doc";
 import { PROJECT_MAPS, type ProjectWrite } from "../src/projects/records-doc";
 
 let dirs: string[] = [];
@@ -202,5 +207,30 @@ describe("PJ-2 — project records in the library", () => {
     expect(linked.projectIntents().splits).toEqual([
       { place: "pl_b", notRecord: "rec-local", at: 3 },
     ]);
+  });
+
+  it("D5 — mounting a linked account carries the unlinked records; never one login's into another's", async () => {
+    const dataDir = tmp("carry");
+    const userId = "fuid-a";
+    const local = library(dataDir, systemDocId("library", systemAccount(null, userId)));
+    await local.writeProjects(born("rec-unlinked", 1, ["root:aaaa"]), "test");
+    const mount = async (login: string | null) => {
+      const account = systemAccount(login, userId);
+      const into = library(dataDir, systemDocId("library", account));
+      const carried = await carryLocalProjects({ dataDir, userId, account, into });
+      return { into, carried };
+    };
+    // the local account itself: nothing to carry
+    expect((await mount(null)).carried).toBe(0);
+    // linked to A: the unlinked record arrives; a second mount carries nothing
+    const a = await mount("ada@example.com");
+    expect(a.carried).toBe(1);
+    await a.into.writeProjects(born("rec-made-under-a", 2, ["root:bbbb"]), "test");
+    await a.into.dispose();
+    expect((await mount("ada@example.com")).carried).toBe(0);
+    // relinked to B: the unlinked record again, never A's
+    const b = await mount("bea@example.com");
+    expect(b.carried).toBe(1);
+    expect(b.into.projectIntents().records.map((r) => r.id)).toEqual(["rec-unlinked"]);
   });
 });

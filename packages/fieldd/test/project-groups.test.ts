@@ -4,10 +4,12 @@
 // nothing, and ONE summary line per change of the grouping itself. The
 // replica path across three desktops is index-mesh.test.ts's; real git
 // through the scanner into the grouping is place-scanner.test.ts's.
+import { EventEmitter } from "node:events";
 import type { IndexCatalogProject, IndexCatalogSession, PlaceFacts } from "@vibefield/contracts";
 import type { LogFields, Logger } from "@vibefield/logging";
 import { describe, expect, it } from "vitest";
 import { CatalogTable } from "../src/catalog-rows";
+import type { GroupingIntents } from "../src/projects/grouping";
 import { ProjectGroups, sessionsByPlace } from "../src/projects/project-groups";
 
 const sha = (n: number) => n.toString(16).padStart(40, "0");
@@ -180,5 +182,56 @@ describe("the projects this desktop computes (PJ-1 §4)", () => {
     local.projects.upsert([row("dev-a", "q", [place("pl-y", "/Users/ada/y")])]);
     await new Promise((r) => setTimeout(r, 50));
     expect(groups.current()?.result.projects).toHaveLength(1);
+  });
+
+  it("PJ-2 (D4) — the library's records reach the engine, a re-mounted library is followed and the old one no longer heard", async () => {
+    const local = tables();
+    local.projects.upsert([row("dev-a", "p", [place("pl-x", "/Users/ada/x")])]);
+    let intents: GroupingIntents | null = null;
+    const groups = new ProjectGroups({
+      deviceId: () => "dev-a",
+      local,
+      intents: () => intents,
+      settleMs: 5,
+    });
+    groups.start();
+    const computed: number[] = [];
+    groups.onChange(() => computed.push(groups.computed));
+    const first = groups.regroupNow()!;
+    expect(first.result.projects[0]?.provisional).toBe(true);
+    // a record arrives: the input moved, the record names the project
+    intents = { records: [{ id: "rec-1", anchors: ["place:pl-x"], name: "Mine", createdAt: 1 }] };
+    expect(groups.regroupNow()!.result.projects[0]).toMatchObject({ key: "r:rec-1", name: "Mine" });
+    // equal intents compute nothing
+    groups.regroupNow();
+    expect(computed).toHaveLength(2);
+
+    // the library's `changed` regroups after the settle — the mounted one only
+    const before = new EventEmitter();
+    const after = new EventEmitter();
+    groups.followLibrary(before);
+    groups.followLibrary(after);
+    // the swap itself regroups — over equal intents, so nothing is computed
+    await new Promise((r) => setTimeout(r, 40));
+    expect(computed).toHaveLength(2);
+    const wait = async (n: number) => {
+      const deadline = Date.now() + 3_000;
+      while (computed.length < n) {
+        if (Date.now() > deadline) throw new Error(`no regroup #${n}`);
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    };
+    intents = {
+      records: [{ id: "rec-1", anchors: ["place:pl-x"], name: "Renamed", createdAt: 1 }],
+    };
+    before.emit("changed", { origin: "remote" });
+    await new Promise((r) => setTimeout(r, 40));
+    expect(computed).toHaveLength(2);
+    after.emit("changed", { origin: "remote" });
+    await wait(3);
+    expect(groups.current()!.result.projects[0]?.name).toBe("Renamed");
+    expect(before.listenerCount("changed")).toBe(0);
+    groups.dispose();
+    expect(after.listenerCount("changed")).toBe(0);
   });
 });

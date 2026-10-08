@@ -402,8 +402,10 @@ export interface AgentRuntimeServiceOptions {
   /** FS-1a (L2) — a run entered the fold in this folder at this moment
    * (spawned, resumed, re-attached or adopted): the files service makes the
    * folder a PLACE, or moves its `lastActiveAt`. Called after the record is
-   * written; a listener that throws is logged and the run goes on. */
-  onPlace?: (cwd: string, at: string) => void;
+   * written; a listener that throws is logged and the run goes on. PJ-2 (D6)
+   * — `system` when the daemon itself brought the run back (AR-4's re-attach
+   * at boot): no act of the person's. */
+  onPlace?: (cwd: string, at: string, how?: { system: boolean }) => void;
   now?: () => Date;
   logger?: Logger;
 }
@@ -2104,7 +2106,7 @@ export class AgentRuntimeService implements PersonaSessions, AgentAdoption {
     }
     // FS-1a — the folder this run works in is a place of the files service
     try {
-      this.opts.onPlace?.(launch.cwd, now);
+      this.opts.onPlace?.(launch.cwd, now, { system: launch.reattached !== undefined });
     } catch (error) {
       this.logger.warn("fieldd.agents.place_failed", "A run's folder could not be made a place", {
         error: error instanceof Error ? error.message : String(error),

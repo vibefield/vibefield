@@ -195,7 +195,13 @@ import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } f
 import { IndexTailService } from "./index-tail";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
-import { DocHoldersService, LibraryDocService, systemAccount, systemDocId } from "./library-doc";
+import {
+  carryLocalProjects,
+  DocHoldersService,
+  LibraryDocService,
+  systemAccount,
+  systemDocId,
+} from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
 import { type BoardProjection, MeshBoard } from "./mesh-board";
@@ -227,6 +233,7 @@ import {
   parseProjectAsk,
 } from "./projects/project-doors";
 import { ProjectGroups } from "./projects/project-groups";
+import { ProjectRecords } from "./projects/project-records";
 import { NO_EGRESS, type RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
   ROSETTAD_UNCONFIGURED,
@@ -873,6 +880,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // desktop's places and every peer's (the replica, bound below), held for
   // PJ-3's doors; it follows this desktop's tables itself, and hears the
   // peers' and the person's acts through the hooks below.
+  // PJ-2 (D4) — the library is mounted further down (and re-mounted on a
+  // relink, mountSystemDocs): the person's records reach the grouping through
+  // this ref, and the grouping follows each library mounted.
+  let projectLibrary: LibraryDocService | null = null;
+  /** false while a relink swaps the library: an act then is refused, not lost */
+  let projectsWritable = false;
   const projectGroups = new ProjectGroups({
     deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
     local: indexCatalog,
@@ -881,9 +894,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // PJ-3 (D9) — the key memory: a key that regrouped answers `movedTo`,
     // across a restart
     journal: new KeyJournal({ file: join(config.dataDir, ...LAYOUT.PROJECT_KEYS_FILE), logger }),
+    intents: () => projectLibrary?.projectIntents() ?? null,
     logger,
   });
   const offActed = workspace.registry.onChange(() => projectGroups.regroupSoon());
+  // PJ-2 (D7) — the person's acts on projects, written as records in the
+  // library: PJ-3's `project.intent` door writes through it, and a launch or
+  // a resume the person made records its place (D6, `onPlace` below).
+  const projectRecords = new ProjectRecords({
+    library: () => (projectsWritable ? projectLibrary : null),
+    groups: projectGroups,
+    placeOf: (cwd) => placeScanner.placeOf(cwd),
+    logger,
+  });
   const agents = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
@@ -916,9 +939,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AR-7 — `invoke` is answered from the launchers that stand; a typed run
     // is proven and watched against the same seams the gateway places it by
     launchers: () => gatewayRef?.launchers() ?? null,
-    // FS-1a (L2) — every run's folder is a place of the files service
-    onPlace: (cwd, at) => {
+    // FS-1a (L2) — every run's folder is a place of the files service; PJ-2
+    // (D6) — and a run started there (not one the daemon re-attached at
+    // boot) is an act in its place
+    onPlace: (cwd, at, how) => {
       workspace.registry.touchPlace(cwd, at);
+      if (how?.system !== true) projectRecords.actedIn(cwd, Date.parse(at));
     },
     ...(config.agentGateway?.processTable !== undefined
       ? { processTable: config.agentGateway.processTable }
@@ -1251,6 +1277,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const account = systemAccount(links.status().link?.login ?? null, config.userId);
       if (systemDocs?.account === account) return;
       if (systemDocs !== null) {
+        projectsWritable = false; // PJ-2 — no act lands on the library leaving
         for (const off of systemDocs.unregister) off();
         await systemDocs.library.dispose();
       }
@@ -1260,6 +1287,21 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger: logger.child({ component: "docs.library" }),
       });
       await library.ready();
+      // PJ-2 (D5) — a link keeps the records this desktop made unlinked
+      const carried = await carryLocalProjects({
+        dataDir: config.dataDir,
+        userId: config.userId,
+        account,
+        into: library,
+        logger: logger.child({ component: "docs.library" }),
+      });
+      if (carried > 0)
+        logger.info("fieldd.projects.records_carried", "Project records carried into the link", {
+          records: carried,
+        });
+      projectLibrary = library;
+      projectGroups.followLibrary(library);
+      projectsWritable = true;
       // Registered only once loaded: its P7 install-set migrates in `ready()`,
       // and no whole entry may cross before it has (`settings-doc.ts`).
       await settingsDoc.ready();
@@ -5183,6 +5225,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       docLane.close();
       const reason = fatalReason;
       placeScanner.dispose(); // PJ-1 — no scan asks a worker that is leaving
+      projectRecords.dispose();
       projectGroups.dispose();
       offActed();
       void (async () => {
@@ -5262,6 +5305,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       board.dispose();
       indexTail.dispose();
       placeScanner.dispose();
+      projectRecords.dispose();
       projectGroups.dispose();
       offActed();
       indexCatalog.dispose();
@@ -5638,6 +5682,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
           placeScanner.dispose(); // PJ-1 — no scan asks a worker that is stopping
+          projectRecords.dispose();
           projectGroups.dispose();
           offActed();
           await workspace.stop(); // FS-1a — the files worker stops with the daemon (FS-D11 (b))
@@ -5755,6 +5800,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     await agents.dispose();
     await rosettad?.stop();
     placeScanner.dispose(); // PJ-1 — likewise never started before ready
+    projectRecords.dispose();
     projectGroups.dispose();
     offActed();
     await workspace.stop(); // FS-1a — started only after ready; the guard is stated

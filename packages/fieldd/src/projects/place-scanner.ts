@@ -141,6 +141,27 @@ function digest(value: unknown): string {
   return createHash("sha256").update(JSON.stringify(value)).digest("hex").slice(0, 32);
 }
 
+interface Spelling {
+  prefix: string;
+  placeId: string;
+  caseless: boolean;
+}
+
+/** The place whose spelling is the longest prefix of any candidate path. */
+function holderOf(spellings: readonly Spelling[], candidates: readonly string[]): string | null {
+  let best: { length: number; placeId: string } | null = null;
+  for (const { prefix, placeId, caseless } of spellings) {
+    const fold = (s: string) => (caseless ? s.toLowerCase() : s);
+    const p = fold(prefix.replace(/[\\/]+$/, ""));
+    const hit = candidates.some((candidate) => {
+      const c = fold(candidate);
+      return c === p || c.startsWith(`${p}/`) || c.startsWith(`${p}\\`);
+    });
+    if (hit && (best === null || p.length > best.length)) best = { length: p.length, placeId };
+  }
+  return best?.placeId ?? null;
+}
+
 function realOr(path: string): string {
   try {
     return realpathSync.native(path);
@@ -224,31 +245,33 @@ export class PlaceScanner {
     const out = new Map<string, string | null>();
     const roots = this.#opts.actedRoots?.() ?? [];
     if (roots.length === 0) return out;
-    const spellings: Array<{ prefix: string; placeId: string; caseless: boolean }> = [];
+    const spellings = this.#spellings();
+    for (const root of roots) {
+      if (root.kind !== "place" && root.kind !== "picked") continue;
+      const placeId = holderOf(spellings, [root.path, realOr(root.path)]);
+      if (placeId === null) continue;
+      const before = out.get(placeId);
+      const at = root.lastActiveAt;
+      if (before === undefined || (at !== null && (before === null || at > before)))
+        out.set(placeId, at);
+    }
+    return out;
+  }
+
+  /** PJ-2 (D6) — the published place of this desktop that holds a folder (a
+   * run's cwd) by the longest path prefix, as `acted` matches a root; null
+   * while no place holds it (a folder the catalog has not indexed yet). */
+  placeOf(path: string): string | null {
+    return holderOf(this.#spellings(), [path, realOr(path)]);
+  }
+
+  #spellings(): Spelling[] {
+    const spellings: Spelling[] = [];
     for (const places of this.#published.values())
       for (const place of places)
         for (const path of [place.path, ...place.aliases])
           spellings.push({ prefix: path, placeId: place.placeId, caseless: place.caseless });
-    for (const root of roots) {
-      if (root.kind !== "place" && root.kind !== "picked") continue;
-      const candidates = [root.path, realOr(root.path)];
-      let best: { length: number; placeId: string } | null = null;
-      for (const { prefix, placeId, caseless } of spellings) {
-        const fold = (s: string) => (caseless ? s.toLowerCase() : s);
-        const p = fold(prefix.replace(/[\\/]+$/, ""));
-        const hit = candidates.some((candidate) => {
-          const c = fold(candidate);
-          return c === p || c.startsWith(`${p}/`) || c.startsWith(`${p}\\`);
-        });
-        if (hit && (best === null || p.length > best.length)) best = { length: p.length, placeId };
-      }
-      if (best === null) continue;
-      const before = out.get(best.placeId);
-      const at = root.lastActiveAt;
-      if (before === undefined || (at !== null && (before === null || at > before)))
-        out.set(best.placeId, at);
-    }
-    return out;
+    return spellings;
   }
 
   /** A peer's places may have moved: scan when their samples did. */

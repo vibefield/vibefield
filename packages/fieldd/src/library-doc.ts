@@ -78,6 +78,33 @@ export function systemAccount(linkedLogin: string | null, userId: string | undef
   return linkedLogin !== null ? `login:${linkedLogin}` : `local:${userId ?? "default"}`;
 }
 
+/** PJ-2 (D5) — a link keeps the person's project records. Mounting a LINKED
+ * account's library copies in the records this user root made while unlinked
+ * (its local account's library, read and left as it is), idempotent by record
+ * id: canvases re-seed from this device, but records have no seed path. Never
+ * from one login's library into another's — that would leak it — and nothing
+ * for the local account itself. Answers how many records were copied. */
+export async function carryLocalProjects(opts: {
+  dataDir: string;
+  userId: string | undefined;
+  account: string;
+  into: LibraryDocService;
+  logger?: Logger;
+}): Promise<number> {
+  const local = systemAccount(null, opts.userId);
+  if (opts.account === local) return 0;
+  const unlinked = new LibraryDocService({
+    dataDir: opts.dataDir,
+    docId: systemDocId("library", local),
+    ...(opts.logger !== undefined ? { logger: opts.logger } : {}),
+  });
+  try {
+    return await opts.into.adoptProjects(unlinked, "relink");
+  } finally {
+    await unlinked.dispose();
+  }
+}
+
 export interface LibraryDocConfig {
   dataDir: string;
   /** systemDocId("library", account) — names the file too, so a relink to
@@ -230,6 +257,9 @@ export class LibraryDocService extends EventEmitter {
    * local change. False (and no commit) when every write was already so. */
   async writeProjects(writes: readonly ProjectWrite[], by: string): Promise<boolean> {
     await this.ready();
+    // an act must never be answered as written into a library that will not
+    // persist it (a relink disposed this one)
+    if (this.disposed) throw new Error("the library was re-mounted; the act was not written");
     if (applyProjectWrites(this.doc, writes) === 0) return false;
     await this.commit(by);
     return true;

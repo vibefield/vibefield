@@ -4,6 +4,7 @@ import { PLACE_FACTS } from "@vibefield/contracts";
 import { createNoopLogger, type Logger } from "@vibefield/logging";
 import {
   type GroupingDevice,
+  type GroupingIntents,
   type GroupingPlace,
   type GroupingResult,
   groupPlaces,
@@ -30,6 +31,13 @@ import { slashPath } from "./place-kind";
 // is diffed into the key memory (key-journal.ts), so a key that moved answers
 // `movedTo`, and every new grouping is heard by the doors' pings
 // (`onChange`), with the moves it made.
+//
+// PJ-2 (build-pj23.md D4) — the person's records and intents reach the engine:
+// read through a late-bound getter (this is built before the daemon mounts
+// the library, which re-mounts on a relink), folded into the input digest, and
+// followed — the library's `changed`, local or merged from a peer, regroups.
+// A project's first record re-keys it (`p1:` → `r:`), a change of the
+// grouping like any, so the key memory journals it.
 
 /** A table as the grouping reads it (CatalogTable's surface). */
 export interface GroupingTable<Row> {
@@ -60,10 +68,18 @@ export interface ProjectGroupsOptions {
   /** PJ-3 (D9) — the key memory each change of the grouping is diffed into,
    * so a key that moved answers `movedTo` (persisted by the daemon) */
   journal?: KeyJournal;
+  /** PJ-2 (D4) — the library's records and intents; null while none is mounted */
+  intents?: () => GroupingIntents | null;
   /** test seam (default PLACE_FACTS.REGROUP_SETTLE_MS) */
   settleMs?: number;
   now?: () => number;
   logger?: Logger;
+}
+
+/** What follows the library's changes (LibraryDocService's surface). */
+export interface IntentsSource {
+  on(event: "changed", listener: () => void): unknown;
+  off(event: "changed", listener: () => void): unknown;
 }
 
 /** What the grouping holds: the result, when, and of which input. */
@@ -202,6 +218,7 @@ export class ProjectGroups {
   #current: ProjectGroupsSnapshot | null = null;
   #timer: ReturnType<typeof setTimeout> | null = null;
   #off: Array<() => void> = [];
+  #offLibrary: (() => void) | null = null;
   #started = false;
   #disposed = false;
   #computed = 0;
@@ -228,8 +245,23 @@ export class ProjectGroups {
     this.#disposed = true;
     for (const off of this.#off) off();
     this.#off = [];
+    this.#offLibrary?.();
+    this.#offLibrary = null;
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#timer = null;
+  }
+
+  /** D4 — follow this library's changes (both origins); a relink hands the
+   * re-mounted library here and the old one is no longer heard. */
+  followLibrary(library: IntentsSource | null): void {
+    this.#offLibrary?.();
+    this.#offLibrary = null;
+    if (library !== null && !this.#disposed) {
+      const soon = () => this.regroupSoon();
+      library.on("changed", soon);
+      this.#offLibrary = () => library.off("changed", soon);
+    }
+    this.regroupSoon();
   }
 
   /** What PJ-3's doors will answer from (null before the first regroup). */
@@ -282,7 +314,11 @@ export class ProjectGroups {
       if (peer.device !== self)
         devices.push(deviceInput(peer.device, peer.projects, peer.sessions, null));
     devices.sort((a, b) => byString(a.deviceId, b.deviceId));
-    const input = { devices: devices.filter((device) => device.places.length > 0) };
+    const intents = this.#opts.intents?.() ?? null;
+    const input = {
+      devices: devices.filter((device) => device.places.length > 0),
+      ...(intents !== null ? { intents } : {}),
+    };
     const inputDigest = digest(input);
     if (this.#current?.inputDigest === inputDigest) return this.#current;
     const started = this.#now();
@@ -316,6 +352,7 @@ export class ProjectGroups {
         tempPlaces: buckets["temp"] ?? 0,
         suggestions: result.suggestions.length,
         moved: moves.length,
+        records: intents?.records?.length ?? 0,
         ms: this.#now() - started,
       });
     }
