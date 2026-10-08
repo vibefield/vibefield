@@ -8,6 +8,7 @@ import {
   type GroupingResult,
   groupPlaces,
 } from "./grouping";
+import type { KeyJournal, KeyMove } from "./key-journal";
 import { slashPath } from "./place-kind";
 
 // PJ-1 §4 (`thinking-project-places.md` §9; PJ-D20 (a): the engine runs in
@@ -21,11 +22,14 @@ import { slashPath } from "./place-kind";
 //
 // Every daemon computes the same projects from the same facts (PJ-L1, DS-L4):
 // a peer's place rides its row as its owner published it, and nothing here
-// edits one. The result is HELD for PJ-3's `project.*` doors — there is no
-// door yet — and a change of the grouping itself (which places form which
-// project, the suggestions) says ONE summary line; a recompute that changes
-// only a figure (a session's activity) is silent. No path, no remote and no
-// name reaches the line (EL7).
+// edits one. The result is HELD for PJ-3's `project.*` doors (`current()`,
+// project-doors.ts), and a change of the grouping itself (which places form
+// which project, the suggestions) says ONE summary line; a recompute that
+// changes only a figure (a session's activity) is silent. No path, no remote
+// and no name reaches the line (EL7). PJ-3 (D9): each change of the grouping
+// is diffed into the key memory (key-journal.ts), so a key that moved answers
+// `movedTo`, and every new grouping is heard by the doors' pings
+// (`onChange`), with the moves it made.
 
 /** A table as the grouping reads it (CatalogTable's surface). */
 export interface GroupingTable<Row> {
@@ -49,6 +53,9 @@ export interface ProjectGroupsOptions {
   }>;
   /** the local places the person acted in (PlaceScanner.acted): by placeId */
   acted?: () => ReadonlyMap<string, unknown>;
+  /** PJ-3 (D9) — the key memory each change of the grouping is diffed into,
+   * so a key that moved answers `movedTo` (persisted by the daemon) */
+  journal?: KeyJournal;
   /** test seam (default PLACE_FACTS.REGROUP_SETTLE_MS) */
   settleMs?: number;
   now?: () => number;
@@ -64,6 +71,16 @@ export interface ProjectGroupsSnapshot {
   readonly inputDigest: string;
   /** the grouping itself: which places form each project, the suggestions */
   readonly shapeDigest: string;
+  /** PJ-3 — the places it grouped, per device (a session's place is read
+   * against these by the same longest-path rule, `placeResolver`) */
+  readonly devices: readonly GroupingDevice[];
+}
+
+/** PJ-3 — what a new grouping tells a listener: the snapshot, and the key
+ * moves the journal inferred from it (empty when nothing moved). */
+export interface ProjectGroupsChange {
+  readonly snapshot: ProjectGroupsSnapshot;
+  readonly moves: readonly KeyMove[];
 }
 
 interface Activity {
@@ -95,28 +112,11 @@ export function sessionsByPlace(
   places: readonly PlaceFacts[],
   sessions: readonly IndexCatalogSession[],
 ): Map<string, Activity> {
-  const exact = new Map<string, string>();
-  const folded = new Map<string, string>();
-  for (const place of places) {
-    for (const spelling of [place.path, ...place.aliases]) {
-      const key = slashPath(spelling);
-      if (place.caseless) {
-        if (!folded.has(key.toLowerCase())) folded.set(key.toLowerCase(), place.placeId);
-      } else if (!exact.has(key)) exact.set(key, place.placeId);
-    }
-  }
+  const placeOf = placeResolver(places);
   const out = new Map<string, Activity>();
   for (const session of sessions) {
     if (typeof session.cwd !== "string" || session.cwd.length === 0) continue;
-    let at = slashPath(session.cwd);
-    let placeId: string | undefined;
-    for (;;) {
-      placeId = exact.get(at) ?? folded.get(at.toLowerCase());
-      if (placeId !== undefined || at === "/" || /^[A-Za-z]:$/.test(at)) break;
-      const cut = at.lastIndexOf("/");
-      if (cut < 0) break;
-      at = cut === 0 ? "/" : at.slice(0, cut);
-    }
+    const placeId = placeOf(session.cwd);
     if (placeId === undefined) continue;
     const first = session.activity?.firstAt ?? session.startedAt;
     const last = session.activity?.lastAt ?? session.updatedAt;
@@ -128,6 +128,32 @@ export function sessionsByPlace(
     out.set(placeId, held);
   }
   return out;
+}
+
+/** The longest-path rule as a lookup over one device's places: a cwd → the
+ * placeId of the place that holds it, or undefined (PJ-3's `project.sessions`
+ * reads a session's place with it). */
+export function placeResolver(places: readonly PlaceFacts[]): (cwd: string) => string | undefined {
+  const exact = new Map<string, string>();
+  const folded = new Map<string, string>();
+  for (const place of places) {
+    for (const spelling of [place.path, ...place.aliases]) {
+      const key = slashPath(spelling);
+      if (place.caseless) {
+        if (!folded.has(key.toLowerCase())) folded.set(key.toLowerCase(), place.placeId);
+      } else if (!exact.has(key)) exact.set(key, place.placeId);
+    }
+  }
+  return (cwd: string): string | undefined => {
+    let at = slashPath(cwd);
+    for (;;) {
+      const placeId = exact.get(at) ?? folded.get(at.toLowerCase());
+      if (placeId !== undefined || at === "/" || /^[A-Za-z]:$/.test(at)) return placeId;
+      const cut = at.lastIndexOf("/");
+      if (cut < 0) return undefined;
+      at = cut === 0 ? "/" : at.slice(0, cut);
+    }
+  };
 }
 
 /** One device's grouping input, in an order every reader agrees on. */
@@ -175,6 +201,7 @@ export class ProjectGroups {
   #started = false;
   #disposed = false;
   #computed = 0;
+  readonly #listeners = new Set<(change: ProjectGroupsChange) => void>();
 
   constructor(opts: ProjectGroupsOptions) {
     this.#opts = opts;
@@ -204,6 +231,19 @@ export class ProjectGroups {
   /** What PJ-3's doors will answer from (null before the first regroup). */
   current(): ProjectGroupsSnapshot | null {
     return this.#current;
+  }
+
+  /** PJ-3 — hear every new grouping (a figure moving included) and the key
+   * moves it made; the doors' pings ride it. */
+  onChange(listener: (change: ProjectGroupsChange) => void): () => void {
+    this.#listeners.add(listener);
+    return () => this.#listeners.delete(listener);
+  }
+
+  /** PJ-3 (D9) — where a key no project holds went, or undefined. */
+  movedTo(key: string): string | undefined {
+    const projects = this.#current?.result.projects ?? [];
+    return this.#opts.journal?.movedTo(key, (to) => projects.some((p) => p.key === to));
   }
 
   /** Computations so far (a witness: an unchanged input computes nothing). */
@@ -246,7 +286,17 @@ export class ProjectGroups {
     this.#computed += 1;
     const shapeDigest = digest(shapeOf(result));
     const before = this.#current;
-    this.#current = { result, at: started, inputDigest, shapeDigest };
+    this.#current = { result, at: started, inputDigest, shapeDigest, devices: input.devices };
+    // D9 — a change of the grouping is diffed into the key memory
+    const moves =
+      before?.shapeDigest !== shapeDigest
+        ? (this.#opts.journal?.observe(
+            result.projects.map((project) => ({
+              key: project.key,
+              placeIds: project.places.flatMap((place) => [place.placeId, ...place.aliasIds]),
+            })),
+          ) ?? [])
+        : [];
     if (before?.shapeDigest !== shapeDigest) {
       const buckets: Record<string, number> = {};
       for (const project of result.projects)
@@ -261,8 +311,19 @@ export class ProjectGroups {
         homePlaces: buckets["home"] ?? 0,
         tempPlaces: buckets["temp"] ?? 0,
         suggestions: result.suggestions.length,
+        moved: moves.length,
         ms: this.#now() - started,
       });
+    }
+    const change: ProjectGroupsChange = { snapshot: this.#current, moves };
+    for (const listener of this.#listeners) {
+      try {
+        listener(change);
+      } catch (error) {
+        this.#logger.warn("fieldd.projects.listener_failed", "A projects listener failed", {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
     return this.#current;
   }
