@@ -14,6 +14,13 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import { LoroDoc, type LoroMap } from "loro-crdt";
 import type { SystemDocOwner } from "./doc-service";
 import { type HolderAck, versionFromBase64 } from "./loro-host";
+import type { GroupingIntents } from "./projects/grouping";
+import {
+  applyProjectWrites,
+  type ProjectWrite,
+  projectCopyWrites,
+  readProjectIntents,
+} from "./projects/records-doc";
 import { SystemDocFile } from "./system-doc-file";
 
 // The LIBRARY (DS-5, DS-D6 RULED (a); thinking-desktop-sync-plane §5.2) — a
@@ -30,6 +37,10 @@ import { SystemDocFile } from "./system-doc-file";
 // and concurrent edits merge per field (last writer wins per key). A nested map
 // created on two desktops at once would be two containers, and one side's
 // fields would be lost to the other's.
+//
+// PJ-2 (build-pj23.md D1) — the person's PROJECT RECORDS live here too, in
+// root maps of their own (`projects.*`, projects/records-doc.ts): the same
+// account-wide reach, the same no-undo rule, and nothing `entries()` reads.
 //
 // Beside it, the HOLDERS slice (`field.docs.v1`, device-owned — DS-L2): who
 // holds what is a fact, published by its holder, expiring with it. The library
@@ -206,6 +217,34 @@ export class LibraryDocService extends EventEmitter {
     schemas.set(docId, columns.engineSchema as never);
     epochs.set(docId, columns.baseEpoch);
     await this.commit(by);
+  }
+
+  // ---- PJ-2: the person's project records (projects/records-doc.ts) ----
+
+  /** Every project record and intent this library holds. */
+  projectIntents(): Required<GroupingIntents> {
+    return readProjectIntents(this.doc);
+  }
+
+  /** One act's writes: one commit, durable before it returns, heard as a
+   * local change. False (and no commit) when every write was already so. */
+  async writeProjects(writes: readonly ProjectWrite[], by: string): Promise<boolean> {
+    await this.ready();
+    if (applyProjectWrites(this.doc, writes) === 0) return false;
+    await this.commit(by);
+    return true;
+  }
+
+  /** D5 — a relink keeps the person's records: every record `from` (this
+   * desktop's local-account library) holds and this one lacks, copied by
+   * record id, with the links, splits and dismissals. Idempotent. */
+  async adoptProjects(from: LibraryDocService, by: string): Promise<number> {
+    await this.ready();
+    await from.ready();
+    const writes = projectCopyWrites(from.doc, this.doc);
+    if (writes.length === 0) return 0;
+    await this.writeProjects(writes, by);
+    return writes.filter((w) => w.kind === "create").length;
   }
 
   async dispose(): Promise<void> {
