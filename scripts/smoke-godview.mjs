@@ -1,8 +1,11 @@
 #!/usr/bin/env node
 // The real Godview smoke, with a Chromium profile owned by this process.
 // Build the desktop first, or use pnpm smoke:godview to build and run together.
+// This is the way to run it: the bare `electron . --smoke-godview` refuses
+// without the `--user-data-dir` this runner creates and removes.
 
 import { spawn } from "node:child_process";
+import { createRequire } from "node:module";
 import { join } from "node:path";
 import { createInterface } from "node:readline";
 import { fileURLToPath } from "node:url";
@@ -13,17 +16,21 @@ if (args.some((arg) => arg !== "--terminal-direct-proof")) {
   throw new Error("Usage: node scripts/smoke-godview.mjs [--terminal-direct-proof]");
 }
 const root = fileURLToPath(new URL("..", import.meta.url));
+const desktop = join(root, "apps", "desktop");
 const marker = "SMOKE_GODVIEW ";
+// The desktop's own Electron binary — what `pnpm exec electron` runs, through
+// the package's path export — spawned directly, with no shell: Windows cannot
+// spawn pnpm (a .cmd) without one, and a shell would split a profile path that
+// has a space in it.
+const electron = createRequire(join(desktop, "package.json"))("electron");
 
 try {
   process.exitCode = await withLabProfile(async ({ directory, id }) => {
     const verdicts = [];
     const result = await new Promise((done, fail) => {
       const child = spawn(
-        "pnpm",
+        electron,
         [
-          "exec",
-          "electron",
           ".",
           "--smoke-godview",
           ...args,
@@ -32,7 +39,7 @@ try {
           "--disable-backgrounding-occluded-windows",
         ],
         {
-          cwd: join(root, "apps", "desktop"),
+          cwd: desktop,
           env: process.env,
           stdio: ["ignore", "pipe", "pipe"],
         },
