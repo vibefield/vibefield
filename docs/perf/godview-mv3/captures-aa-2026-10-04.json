@@ -1,0 +1,563 @@
+{
+  "mode": "A/A",
+  "arms": {
+    "A": {
+      "root": "/Volumes/SamsungRed/lanes/mv/mv3c/vibe-field",
+      "source": "fold"
+    },
+    "A′": {
+      "root": "/Volumes/SamsungRed/lanes/mv/mv3c/vibe-field",
+      "source": "fold"
+    }
+  },
+  "recipe": "n=20,duration=8000,seed=1",
+  "frames": "2500,7900",
+  "views": "swarm,list,rain,timeline",
+  "themes": "dark,light",
+  "threshold": 0.001,
+  "tolerance": 24,
+  "scale": "2",
+  "window": "offscreen",
+  "motion": "reduce",
+  "pinned": {
+    "timezone": true,
+    "locale": true,
+    "motion": true
+  },
+  "counts": {
+    "unstable": 8,
+    "stable": 8
+  },
+  "sanity": [
+    {
+      "pair": "swarm-dark-t2500 vs swarm-light-t2500",
+      "fraction": 0.9872664753343803,
+      "seen": true
+    },
+    {
+      "pair": "swarm-dark-t7900 vs swarm-light-t7900",
+      "fraction": 0.988250663345427,
+      "seen": true
+    },
+    {
+      "pair": "list-dark-t2500 vs list-light-t2500",
+      "fraction": 0.998772810960091,
+      "seen": true
+    },
+    {
+      "pair": "list-dark-t7900 vs list-light-t7900",
+      "fraction": 0.9987362592732983,
+      "seen": true
+    },
+    {
+      "pair": "rain-dark-t2500 vs rain-light-t2500",
+      "fraction": 0.18905615422104294,
+      "seen": true
+    },
+    {
+      "pair": "rain-dark-t7900 vs rain-light-t7900",
+      "fraction": 0.18988736665403153,
+      "seen": true
+    },
+    {
+      "pair": "timeline-dark-t2500 vs timeline-light-t2500",
+      "fraction": 0.9984133860399632,
+      "seen": true
+    },
+    {
+      "pair": "timeline-dark-t7900 vs timeline-light-t7900",
+      "fraction": 0.9980586993014566,
+      "seen": true
+    }
+  ],
+  "rows": [
+    {
+      "name": "swarm-dark-t2500",
+      "view": "swarm",
+      "theme": "dark",
+      "t": 2500,
+      "size": "2360×626",
+      "aa": {
+        "differing": 406704,
+        "total": 1477360,
+        "fraction": 0.27529105972816376,
+        "maxDelta": 255,
+        "box": {
+          "x0": 126,
+          "y0": 80,
+          "x1": 2343,
+          "y1": 623
+        },
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 6836,
+          "offModal": 0.941379960239052
+        },
+        {
+          "colours": 6514,
+          "offModal": 0.9410942164235818
+        }
+      ],
+      "swarmRenderer": "webgpu",
+      "verdict": "unstable",
+      "stable": false
+    },
+    {
+      "name": "swarm-dark-t7900",
+      "view": "swarm",
+      "theme": "dark",
+      "t": 7900,
+      "size": "2360×626",
+      "aa": {
+        "differing": 555461,
+        "total": 1477360,
+        "fraction": 0.3759821573617805,
+        "maxDelta": 255,
+        "box": {
+          "x0": 131,
+          "y0": 80,
+          "x1": 2343,
+          "y1": 623
+        },
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 9846,
+          "offModal": 0.9341269310506253
+        },
+        {
+          "colours": 9872,
+          "offModal": 0.9277615315868509
+        }
+      ],
+      "swarmRenderer": "webgpu",
+      "verdict": "unstable",
+      "stable": false
+    },
+    {
+      "name": "list-dark-t2500",
+      "view": "list",
+      "theme": "dark",
+      "t": 2500,
+      "size": "2360×626",
+      "aa": {
+        "differing": 0,
+        "total": 1477360,
+        "fraction": 0,
+        "maxDelta": 0,
+        "box": null,
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 373,
+          "offModal": 0.7878017789072427
+        },
+        {
+          "colours": 373,
+          "offModal": 0.7878017789072427
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "stable",
+      "stable": true
+    },
+    {
+      "name": "list-dark-t7900",
+      "view": "list",
+      "theme": "dark",
+      "t": 7900,
+      "size": "2360×626",
+      "aa": {
+        "differing": 0,
+        "total": 1477360,
+        "fraction": 0,
+        "maxDelta": 0,
+        "box": null,
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 396,
+          "offModal": 0.7873822826675096
+        },
+        {
+          "colours": 396,
+          "offModal": 0.7873822826675096
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "stable",
+      "stable": true
+    },
+    {
+      "name": "rain-dark-t2500",
+      "view": "rain",
+      "theme": "dark",
+      "t": 2500,
+      "size": "2360×626",
+      "aa": {
+        "differing": 55529,
+        "total": 1477360,
+        "fraction": 0.03758664103536037,
+        "maxDelta": 255,
+        "box": {
+          "x0": 41,
+          "y0": 80,
+          "x1": 2343,
+          "y1": 589
+        },
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 1456,
+          "offModal": 0.22806004267918267
+        },
+        {
+          "colours": 1472,
+          "offModal": 0.22417514271991634
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "unstable",
+      "stable": false
+    },
+    {
+      "name": "rain-dark-t7900",
+      "view": "rain",
+      "theme": "dark",
+      "t": 7900,
+      "size": "2360×626",
+      "aa": {
+        "differing": 56381,
+        "total": 1477360,
+        "fraction": 0.03816334542697785,
+        "maxDelta": 255,
+        "box": {
+          "x0": 70,
+          "y0": 80,
+          "x1": 2338,
+          "y1": 589
+        },
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 1445,
+          "offModal": 0.2191594268100655
+        },
+        {
+          "colours": 1429,
+          "offModal": 0.2212204300748406
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "unstable",
+      "stable": false
+    },
+    {
+      "name": "timeline-dark-t2500",
+      "view": "timeline",
+      "theme": "dark",
+      "t": 2500,
+      "size": "2360×626",
+      "aa": {
+        "differing": 0,
+        "total": 1477360,
+        "fraction": 0,
+        "maxDelta": 0,
+        "box": null,
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 1782,
+          "offModal": 0.8207656718323474
+        },
+        {
+          "colours": 1782,
+          "offModal": 0.8207656718323474
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "stable",
+      "stable": true
+    },
+    {
+      "name": "timeline-dark-t7900",
+      "view": "timeline",
+      "theme": "dark",
+      "t": 7900,
+      "size": "2360×626",
+      "aa": {
+        "differing": 0,
+        "total": 1477360,
+        "fraction": 0,
+        "maxDelta": 0,
+        "box": null,
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 2105,
+          "offModal": 0.820279299380483
+        },
+        {
+          "colours": 2105,
+          "offModal": 0.820279299380483
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "stable",
+      "stable": true
+    },
+    {
+      "name": "swarm-light-t2500",
+      "view": "swarm",
+      "theme": "light",
+      "t": 2500,
+      "size": "2360×626",
+      "aa": {
+        "differing": 481708,
+        "total": 1477360,
+        "fraction": 0.32605999891698706,
+        "maxDelta": 237,
+        "box": {
+          "x0": 127,
+          "y0": 80,
+          "x1": 2331,
+          "y1": 623
+        },
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 5603,
+          "offModal": 0.9605187162199134
+        },
+        {
+          "colours": 4777,
+          "offModal": 0.9618744794294851
+        }
+      ],
+      "swarmRenderer": "webgpu",
+      "verdict": "unstable",
+      "stable": false
+    },
+    {
+      "name": "swarm-light-t7900",
+      "view": "swarm",
+      "theme": "light",
+      "t": 7900,
+      "size": "2360×626",
+      "aa": {
+        "differing": 618533,
+        "total": 1477360,
+        "fraction": 0.418674527535604,
+        "maxDelta": 243,
+        "box": {
+          "x0": 132,
+          "y0": 80,
+          "x1": 2343,
+          "y1": 623
+        },
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 7905,
+          "offModal": 0.9637652523361077
+        },
+        {
+          "colours": 7475,
+          "offModal": 0.9634004729972094
+        }
+      ],
+      "swarmRenderer": "webgpu",
+      "verdict": "unstable",
+      "stable": false
+    },
+    {
+      "name": "list-light-t2500",
+      "view": "list",
+      "theme": "light",
+      "t": 2500,
+      "size": "2360×626",
+      "aa": {
+        "differing": 0,
+        "total": 1477360,
+        "fraction": 0,
+        "maxDelta": 0,
+        "box": null,
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 334,
+          "offModal": 0.8390897539563359
+        },
+        {
+          "colours": 334,
+          "offModal": 0.8390897539563359
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "stable",
+      "stable": true
+    },
+    {
+      "name": "list-light-t7900",
+      "view": "list",
+      "theme": "light",
+      "t": 7900,
+      "size": "2360×626",
+      "aa": {
+        "differing": 0,
+        "total": 1477360,
+        "fraction": 0,
+        "maxDelta": 0,
+        "box": null,
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 346,
+          "offModal": 0.839132311545874
+        },
+        {
+          "colours": 346,
+          "offModal": 0.839132311545874
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "stable",
+      "stable": true
+    },
+    {
+      "name": "rain-light-t2500",
+      "view": "rain",
+      "theme": "light",
+      "t": 2500,
+      "size": "2360×626",
+      "aa": {
+        "differing": 55893,
+        "total": 1477360,
+        "fraction": 0.03783302647966643,
+        "maxDelta": 255,
+        "box": {
+          "x0": 41,
+          "y0": 80,
+          "x1": 2343,
+          "y1": 588
+        },
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 1508,
+          "offModal": 0.21830827501930294
+        },
+        {
+          "colours": 1678,
+          "offModal": 0.22699610294072947
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "unstable",
+      "stable": false
+    },
+    {
+      "name": "rain-light-t7900",
+      "view": "rain",
+      "theme": "light",
+      "t": 7900,
+      "size": "2360×626",
+      "aa": {
+        "differing": 65358,
+        "total": 1477360,
+        "fraction": 0.04423972491471273,
+        "maxDelta": 255,
+        "box": {
+          "x0": 45,
+          "y0": 80,
+          "x1": 2339,
+          "y1": 588
+        },
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 1565,
+          "offModal": 0.2181623632837436
+        },
+        {
+          "colours": 1557,
+          "offModal": 0.21673364420639218
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "unstable",
+      "stable": false
+    },
+    {
+      "name": "timeline-light-t2500",
+      "view": "timeline",
+      "theme": "light",
+      "t": 2500,
+      "size": "2360×626",
+      "aa": {
+        "differing": 0,
+        "total": 1477360,
+        "fraction": 0,
+        "maxDelta": 0,
+        "box": null,
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 1674,
+          "offModal": 0.867202081674094
+        },
+        {
+          "colours": 1674,
+          "offModal": 0.867202081674094
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "stable",
+      "stable": true
+    },
+    {
+      "name": "timeline-light-t7900",
+      "view": "timeline",
+      "theme": "light",
+      "t": 7900,
+      "size": "2360×626",
+      "aa": {
+        "differing": 0,
+        "total": 1477360,
+        "fraction": 0,
+        "maxDelta": 0,
+        "box": null,
+        "sizeMismatch": false
+      },
+      "contents": [
+        {
+          "colours": 2011,
+          "offModal": 0.8664725229962975
+        },
+        {
+          "colours": 2011,
+          "offModal": 0.8664725229962975
+        }
+      ],
+      "swarmRenderer": null,
+      "verdict": "stable",
+      "stable": true
+    }
+  ]
+}

@@ -1,12 +1,8 @@
-import {
-  AGENT_CATALOG,
-  type AgentFieldRow,
-  type AgentMeshOpen,
-  type DeviceInfo,
-} from "@vibefield/contracts";
+import { AGENT_CATALOG, type AgentSessionSummary, type DeviceInfo } from "@vibefield/contracts";
 import type { DeviceChoice } from "../godview/monitor/device-filter";
 import type { MonitorDoor } from "../godview/monitor/remote-door";
-import { profileTabRows } from "./godview-profiles-fixtures";
+import { type CatalogPeer, catalogModelBoard } from "./godview-model-fixture";
+import { profileTabRows, THIS_MAC } from "./godview-profiles-fixtures";
 
 // DS-3 — the catalog's Godview on the MESH BOARD, on a fixture door: this
 // desktop (a Mac, with the profile tabs' fold), a Linux desktop answering with
@@ -69,7 +65,13 @@ export function meshRoster(nowMs: number): DeviceInfo[] {
   ];
 }
 
-function deskRow(
+/**
+ * Another desktop's run as ITS fold holds it: the peer's own backend
+ * (`godview-model-fixture.ts`) cuts it for the board, so the window reads what a
+ * peer sends — its reply line, its blocker's question, its cost (the desk row's
+ * content facts, DS-D4) — and never a row this file worded itself.
+ */
+function peerRow(
   device: string,
   run: string,
   agent: (typeof AGENT_CATALOG)[number],
@@ -77,94 +79,91 @@ function deskRow(
   status: "working" | "blocked" | "idle",
   nowIso: string,
   content: { reply?: string; question?: string } = {},
-): AgentFieldRow {
+): AgentSessionSummary {
+  const cwd = `/Users/peer/src/${folder}`;
   return {
-    runtimeRunId: run,
-    revision: 3,
+    sessionId: `${run}-native`,
+    sessionIdBasis: "observed",
     kind: agent.id,
     label: agent.label,
-    tier: "managed",
     device,
+    tier: "managed",
+    runtimeRunId: run,
+    runtimeEpoch: 1,
+    terminal: { hosted: "none" },
+    workspace: { mode: "direct", root: cwd, sourcePath: cwd, branch: "main" },
+    monitor: {
+      schemaVersion: 3,
+      runtimeEpoch: 1,
+      revision: 3,
+      runtimeRunId: run,
+      status,
+      statusSince: nowIso,
+      blockers:
+        status === "blocked"
+          ? [
+              {
+                id: `${run}-q`,
+                kind: "question",
+                since: nowIso,
+                questions: content.question !== undefined ? [{ prompt: content.question }] : [],
+              },
+            ]
+          : [],
+      ...(content.reply !== undefined
+        ? { lastAssistantMessage: { text: content.reply, at: nowIso, final: false } }
+        : {}),
+      usage: { cumulativeTokens: 182_400, costUsd: 3.1, costCoverage: "complete" },
+      environment: { cwd, git: { branch: "main" }, worktrees: [] },
+      session: { nativeSessionId: `${run}-native` },
+      freshness: { lastEvidenceAt: nowIso, level: "native-hooks" },
+      alive: true,
+    },
     status,
-    statusSince: nowIso,
-    stateChangedAt: nowIso,
+    observationLevel: "native-hooks",
     createdAt: nowIso,
-    alive: true,
-    blockers:
-      status === "blocked"
-        ? [
-            {
-              id: `${run}-q`,
-              kind: "question",
-              since: nowIso,
-              ...(content.question !== undefined ? { question: content.question } : {}),
-            },
-          ]
-        : [],
-    usage: { cumulativeTokens: 182_400, costUsd: 3.1, costCoverage: "complete" },
-    project: { name: folder, branch: "main" },
-    ...(content.reply !== undefined
-      ? { lastAssistantMessage: { text: content.reply, at: nowIso, final: false } }
-      : {}),
-  } as AgentFieldRow;
-}
-
-/** The board as fieldd's mesh open answers it: this desktop first. */
-export function meshOpen(nowIso: string): AgentMeshOpen {
-  return {
-    devices: [
-      {
-        device: HERE,
-        state: "live",
-        asOf: nowIso,
-        snapshot: { epoch: "here.1", revision: 1, rows: [] },
-      },
-      {
-        device: STUDIO,
-        state: "live",
-        asOf: nowIso,
-        snapshot: {
-          epoch: "studio.4",
-          revision: 18,
-          rows: [
-            deskRow(STUDIO, "run-studio-index", FIRST_AGENT, "rosetta", "working", nowIso, {
-              reply: "Rebuilding the session index; 1,204 of 3,310 transcripts read.",
-            }),
-            deskRow(STUDIO, "run-studio-grant", SECOND_AGENT, "rosetta", "blocked", nowIso, {
-              question: "Should the grant expire with the session, or after an hour?",
-            }),
-          ],
-        },
-      },
-      {
-        device: AIR,
-        state: "asleep",
-        asOf: nowIso,
-        snapshot: {
-          epoch: "air.2",
-          revision: 7,
-          rows: [
-            deskRow(AIR, "run-air-notes", FIRST_AGENT, "notes", "idle", nowIso, {
-              reply: "Done — the outline is in notes/sync.md.",
-            }),
-          ],
-        },
-      },
-      { device: TOWER, state: "stale", asOf: nowIso },
-    ],
+    stateChangedAt: nowIso,
+    continuation: { persisted: true, resumable: false },
   };
 }
 
-/** A door with this desktop's fold and three other desktops on its board. */
+/** The other desktops on the board: a Linux desktop live with two agents, a
+ * MacBook Air asleep with its last board kept, a Windows tower stale with none. */
+export function meshPeers(nowIso: string): CatalogPeer[] {
+  return [
+    {
+      device: { id: STUDIO, name: "studio", platform: "linux" },
+      state: "live",
+      rows: [
+        peerRow(STUDIO, "run-studio-index", FIRST_AGENT, "rosetta", "working", nowIso, {
+          reply: "Rebuilding the session index; 1,204 of 3,310 transcripts read.",
+        }),
+        peerRow(STUDIO, "run-studio-grant", SECOND_AGENT, "rosetta", "blocked", nowIso, {
+          question: "Should the grant expire with the session, or after an hour?",
+        }),
+      ],
+    },
+    {
+      device: { id: AIR, name: "air", platform: "darwin" },
+      state: "asleep",
+      rows: [
+        peerRow(AIR, "run-air-notes", FIRST_AGENT, "notes", "idle", nowIso, {
+          reply: "Done — the outline is in notes/sync.md.",
+        }),
+      ],
+    },
+    { device: { id: TOWER, name: "tower", platform: "win32" }, state: "stale", rows: [] },
+  ];
+}
+
+/** A door with this desktop's fold and three other desktops on its model board. */
 export function meshBoardDoor(): MonitorDoor {
   const now = Date.now();
   const nowIso = new Date(now).toISOString();
   const rows = profileTabRows(nowIso);
+  const board = catalogModelBoard({ device: THIS_MAC, rows, peers: meshPeers(nowIso) });
   return {
-    observeMesh: ({ onOpen }) => {
-      onOpen(meshOpen(nowIso));
-      return () => undefined;
-    },
+    model: board.port,
     devices: {
       subscribe: (listener) => {
         listener(meshRoster(now));
@@ -172,10 +171,6 @@ export function meshBoardDoor(): MonitorDoor {
       },
     },
     attach: async () => ({ state: "no-pane" }),
-    observe: ({ onFrame }) => {
-      onFrame(rows);
-      return () => undefined;
-    },
     createTerminal: async () => ({ state: "no-pane" }),
     mountLocal: async () => ({ state: "no-pane" }),
     history: {

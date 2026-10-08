@@ -140,6 +140,9 @@ describe("design system page", () => {
     expect(container?.textContent).toContain(
       "Swarm bodies — every drawn state, on the package's own fixtures",
     );
+    // MV-7: spend's specimen, on the shipping view through GodviewPreview and its fixture door
+    expect(container?.textContent).toContain("Spend — where the money went");
+    expect(container?.querySelector("[data-godview-spend-catalog] .vf-godview")).not.toBeNull();
     expect(container?.textContent).toContain("The interface, accounted for");
     // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 60.
     expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(60);
@@ -271,14 +274,15 @@ describe("design system page", () => {
 
     expect(container?.querySelector(".vf-godview .vf-monitor-list")).not.toBeNull();
     // The swarm's bodies (AR-5): the views package's own fixtures on the
-    // SHIPPING view. A happy-dom window has no WebGPU, so the section says so
-    // — the same honest line the product draws — while every body stays
-    // reachable as a button, and the buttons between them name every drawn
-    // state the design record has.
+    // SHIPPING view, through the view host since MV-5. A happy-dom window has
+    // no WebGPU, so the view says so — the same honest line the product draws,
+    // and its report, which the slot mirrors on its own element — while every
+    // body stays reachable as a button, and the buttons between them name
+    // every drawn state the design record has.
     const bodies = container?.querySelector<HTMLElement>("[data-swarm-bodies-catalog]");
-    expect(bodies?.querySelector(".vf-monitor-swarm")?.getAttribute("data-swarm-renderer")).toBe(
-      "unavailable",
-    );
+    expect(
+      bodies?.querySelector("[data-monitor-view-slot]")?.getAttribute("data-monitor-view-renderer"),
+    ).toBe("unavailable");
     expect(bodies?.textContent).toContain("WEBGPU UNAVAILABLE");
     const bodyButtons = Array.from(bodies?.querySelectorAll(".vf-monitor-swarm-list button") ?? []);
     expect(bodyButtons).toHaveLength(stateStages(0).length);
@@ -372,9 +376,10 @@ describe("design system page", () => {
     // The SHIPPING swarm view: happy-dom has no WebGPU, so it draws its honest
     // line and its keyboard list — the fixture's three agents — and the profile
     // tabs the fixture's managed profiles call for.
-    expect(bloom.querySelector(".vf-monitor-swarm")?.getAttribute("data-swarm-renderer")).toBe(
-      "unavailable",
-    );
+    expect(bloom.querySelector(".vf-monitor-swarm")?.textContent).toContain("WEBGPU UNAVAILABLE");
+    expect(
+      bloom.querySelector("[data-monitor-view-slot]")?.getAttribute("data-monitor-view-renderer"),
+    ).toBe("unavailable");
     expect(
       bloom.querySelectorAll(".vf-monitor-swarm-list li button:not([data-swarm-new-terminal])"),
     ).toHaveLength(3);
@@ -430,15 +435,22 @@ describe("design system page", () => {
     expect(catalog.getAttribute("data-swarm-bodies-theme")).toBe("dark");
     expect(catalog.classList.contains("theme-dark")).toBe(true);
 
+    // The motion switch is the host's theme (MV-W4): off, the view holds still
     await act(async () => button("PAUSE MOTION").click());
     expect(catalog.getAttribute("data-godview-animations")).toBe("off");
     expect(button("REPLAY ARRIVALS").disabled).toBe(true);
+    await act(async () => new Promise((resolve) => setTimeout(resolve, 32)));
+    expect(catalog.querySelector(".vf-monitor-swarm")?.classList.contains("is-still")).toBe(true);
 
-    // Selecting a body is the host's verb (`actions.select`); the catalog's
+    // Selecting a body is the host's verb (`commands.select`); the catalog's
     // adapter answers it the way a deck would, by making the row current.
     const first = catalog.querySelector<HTMLButtonElement>(".vf-monitor-swarm-list button");
     expect(first?.getAttribute("aria-current")).toBeNull();
-    await act(async () => first?.click());
+    await act(async () => {
+      first?.click();
+      // the view host hands the view its next input on the next frame
+      await new Promise((resolve) => setTimeout(resolve, 32));
+    });
     expect(first?.getAttribute("aria-current")).toBe("true");
   });
 });

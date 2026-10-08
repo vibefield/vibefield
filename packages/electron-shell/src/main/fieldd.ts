@@ -32,6 +32,7 @@ export function dataRoot(mode: ShellMode): string {
 
 export function buildSupervisor(opts: {
   mode: ShellMode;
+  rendererPolicyMode: ShellMode;
   root: string;
   resources: DesktopResources;
   viteUrl: string;
@@ -112,7 +113,12 @@ export function buildSupervisor(opts: {
     // has been reconnect-looping against its own daemon since the app scheme
     // landed; smoke-canvas could not see it because CANVAS_READY fires at
     // canvas mount, before the first fieldd round trip (GT-1 finding).
-    allowedOrigins: [APP_ORIGIN, ...(opts.mode === "dev" ? [new URL(opts.viteUrl).origin] : [])],
+    // The worker lab can serve Vite too; its renderer policy admits that origin
+    // while its shell mode still isolates and stops its own daemon pair.
+    allowedOrigins: [
+      APP_ORIGIN,
+      ...(opts.rendererPolicyMode === "dev" ? [new URL(opts.viteUrl).origin] : []),
+    ],
     controlPort: 0,
     dataPort: 0,
     ...(expectedBuildId ? { expectedBuildId } : {}),

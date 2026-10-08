@@ -320,17 +320,6 @@ export const AGENT_FIELD = {
   FULL_TICK_MS: 16,
 } as const;
 
-/** TL (2026-10-02, TL-D8) — the status ledger fieldd's fold keeps per run
- * (`agent-history.ts`). HORIZON_MS is how far back a run's record reaches and
- * how long an exited run's record is kept; MAX_CHANGES bounds a run that flips
- * often (its oldest changes go first); TEXT_CHARS bounds the two texts a change
- * carries, a blocker's words and a working span's last activity line. */
-export const AGENT_HISTORY = {
-  HORIZON_MS: 24 * 60 * 60 * 1000,
-  MAX_CHANGES: 2000,
-  TEXT_CHARS: 160,
-} as const;
-
 /** DS-L3 — the rows protocol's numbers (`rows.ts`; design-06 §8). A snapshot
  * above SNAPSHOT_PAGE_BYTES is paged with `more: true`; a source keeps a
  * journal of JOURNAL_DEPTH changed-key frames per table, below which a kept
@@ -1206,6 +1195,15 @@ export const LAYOUT = {
    * disk because the floor outlives fieldd — a restarted fieldd still says
    * which profile a surviving shell was born under. */
   TERMINAL_BINDINGS_FILE: ["fieldd", "terminal-bindings.json"],
+  /** MV-3a (L4) — the project colour's IDENTITY (`ProjectIdentityFile`,
+   * 0600): which project key was dealt which colour sequence, and the next
+   * sequence to deal. fieldd's, because the monitor backend runs beside the
+   * runtime now and every window reads the same colour from it; on disk
+   * because a daemon restart that reshuffled every project's colour would be
+   * a regression. Identity, never history (MV-D22): no clock, no row of what a
+   * project did. Desktop-local — a sequence never crosses the sync plane
+   * (M16), so this is a LAYOUT file and not a STORES slice. */
+  PROJECT_IDENTITY_FILE: ["fieldd", "project-identity.json"],
   TERMINAL_CONFIG_FILE: ["native", FILES.TERMINAL_CONFIG],
   // RETIRED 2026-09-14 (TM-3, `thinking-terminal-mesh-cells.md` §7 / TM-D3):
   // `TERMINAL_MIRROR_WRITE_FILE` = `native/terminal-mirror-write.key`, MF-2a's
@@ -1305,13 +1303,6 @@ export const LAYOUT = {
    * it wrote itself — a same-uid file dropped into `agents/sessions/` is set
    * aside, never acted on (EL7). */
   AGENT_SESSIONS_KEY_FILE: ["agents", "sessions.key"],
-  /** TL (2026-10-02, TL-D8) — the status ledger: one `<runtimeRunId>.jsonl`
-   * (0600, the directory 0700) per managed run the fold watched, appended a
-   * line per status change while the run lives (`agent-status-ledger.ts`).
-   * What `agent.history` answers from; content-free by the fold's standard (a
-   * status, its moment, a blocker's words, a working span's last activity
-   * line), kept for `AGENT_HISTORY.HORIZON_MS` after the run exits. */
-  AGENT_HISTORY_DIR: ["agents", "history"],
   /** AR-7 — the spawn-through shim's home under this user (0700): the
    * rendezvous files, one launcher per offered agent's command, the bundled
    * shim and the shell integration. puppeteer's spawn-through kit writes every

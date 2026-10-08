@@ -1,0 +1,254 @@
+{
+  "oracle-n10-8s-s1-seeded": {
+    "corpus": "n10-8s-s1",
+    "source": "recipe n=10,duration=8000,seed=1",
+    "seededCache": true,
+    "frames": {
+      "total": 572,
+      "fold": 465,
+      "mesh": 106
+    },
+    "durationS": 8,
+    "rebuilds": {
+      "total": 575,
+      "onFoldFrames": 465,
+      "perFoldFrame": 1
+    },
+    "renders": {
+      "total": 575,
+      "perFrame": 1.0052447552447552
+    },
+    "ledgers": {
+      "assemble": 573,
+      "reconcileUsage": 573,
+      "reconcileUnread": 573,
+      "observeStatuses": 573,
+      "exportUsage": 465,
+      "dealProjectSeqs": 2
+    },
+    "localStorage": {
+      "usageWrites": 464,
+      "usageWritesPerFoldFrame": 0.9978494623655914,
+      "usageWritesPerSecond": 58,
+      "projectWrites": 1,
+      "reads": 474
+    },
+    "marks": [277],
+    "agentsOut": 15,
+    "elapsedMs": 518,
+    "loadavg": {
+      "before": [131.294921875, 83.6845703125, 63.47119140625],
+      "after": [131.294921875, 83.6845703125, 63.47119140625]
+    }
+  },
+  "oracle-n10-8s-s1": {
+    "corpus": "n10-8s-s1",
+    "source": "recipe n=10,duration=8000,seed=1",
+    "seededCache": false,
+    "frames": {
+      "total": 572,
+      "fold": 465,
+      "mesh": 106
+    },
+    "durationS": 8,
+    "rebuilds": {
+      "total": 575,
+      "onFoldFrames": 465,
+      "perFoldFrame": 1
+    },
+    "renders": {
+      "total": 575,
+      "perFrame": 1.0052447552447552
+    },
+    "ledgers": {
+      "assemble": 573,
+      "reconcileUsage": 573,
+      "reconcileUnread": 573,
+      "observeStatuses": 573,
+      "exportUsage": 465,
+      "dealProjectSeqs": 2
+    },
+    "localStorage": {
+      "usageWrites": 0,
+      "usageWritesPerFoldFrame": 0,
+      "usageWritesPerSecond": 0,
+      "projectWrites": 1,
+      "reads": 10
+    },
+    "marks": [277],
+    "agentsOut": 15,
+    "elapsedMs": 524,
+    "loadavg": {
+      "before": [131.294921875, 83.6845703125, 63.47119140625],
+      "after": [131.294921875, 83.6845703125, 63.47119140625]
+    }
+  },
+  "oracle-n20-8s-s1-seeded": {
+    "corpus": "n20-8s-s1",
+    "source": "recipe n=20,duration=8000,seed=1",
+    "seededCache": true,
+    "frames": {
+      "total": 601,
+      "fold": 465,
+      "mesh": 135
+    },
+    "durationS": 8,
+    "rebuilds": {
+      "total": 604,
+      "onFoldFrames": 465,
+      "perFoldFrame": 1
+    },
+    "renders": {
+      "total": 604,
+      "perFrame": 1.004991680532446
+    },
+    "ledgers": {
+      "assemble": 602,
+      "reconcileUsage": 602,
+      "reconcileUnread": 602,
+      "observeStatuses": 602,
+      "exportUsage": 465,
+      "dealProjectSeqs": 2
+    },
+    "localStorage": {
+      "usageWrites": 464,
+      "usageWritesPerFoldFrame": 0.9978494623655914,
+      "usageWritesPerSecond": 58,
+      "projectWrites": 1,
+      "reads": 484
+    },
+    "marks": [300],
+    "agentsOut": 27,
+    "elapsedMs": 1572,
+    "loadavg": {
+      "before": [124.06396484375, 82.9755859375, 63.33935546875],
+      "after": [124.06396484375, 82.9755859375, 63.33935546875]
+    }
+  },
+  "oracle-n20-8s-s1": {
+    "corpus": "n20-8s-s1",
+    "source": "recipe n=20,duration=8000,seed=1",
+    "seededCache": false,
+    "frames": {
+      "total": 601,
+      "fold": 465,
+      "mesh": 135
+    },
+    "durationS": 8,
+    "rebuilds": {
+      "total": 604,
+      "onFoldFrames": 465,
+      "perFoldFrame": 1
+    },
+    "renders": {
+      "total": 604,
+      "perFrame": 1.004991680532446
+    },
+    "ledgers": {
+      "assemble": 602,
+      "reconcileUsage": 602,
+      "reconcileUnread": 602,
+      "observeStatuses": 602,
+      "exportUsage": 465,
+      "dealProjectSeqs": 2
+    },
+    "localStorage": {
+      "usageWrites": 0,
+      "usageWritesPerFoldFrame": 0,
+      "usageWritesPerSecond": 0,
+      "projectWrites": 1,
+      "reads": 20
+    },
+    "marks": [300],
+    "agentsOut": 27,
+    "elapsedMs": 1077,
+    "loadavg": {
+      "before": [124.06396484375, 82.9755859375, 63.33935546875],
+      "after": [124.06396484375, 82.9755859375, 63.33935546875]
+    }
+  },
+  "oracle-n60-8s-s1-seeded": {
+    "corpus": "n60-8s-s1",
+    "source": "recipe n=60,duration=8000,seed=1",
+    "seededCache": true,
+    "frames": {
+      "total": 601,
+      "fold": 465,
+      "mesh": 135
+    },
+    "durationS": 8,
+    "rebuilds": {
+      "total": 604,
+      "onFoldFrames": 465,
+      "perFoldFrame": 1
+    },
+    "renders": {
+      "total": 604,
+      "perFrame": 1.004991680532446
+    },
+    "ledgers": {
+      "assemble": 602,
+      "reconcileUsage": 602,
+      "reconcileUnread": 602,
+      "observeStatuses": 602,
+      "exportUsage": 465,
+      "dealProjectSeqs": 2
+    },
+    "localStorage": {
+      "usageWrites": 464,
+      "usageWritesPerFoldFrame": 0.9978494623655914,
+      "usageWritesPerSecond": 58,
+      "projectWrites": 1,
+      "reads": 524
+    },
+    "marks": [300],
+    "agentsOut": 77,
+    "elapsedMs": 2880,
+    "loadavg": {
+      "before": [105.40625, 80.9072265625, 62.9462890625],
+      "after": [105.40625, 80.9072265625, 62.9462890625]
+    }
+  },
+  "oracle-n60-8s-s1": {
+    "corpus": "n60-8s-s1",
+    "source": "recipe n=60,duration=8000,seed=1",
+    "seededCache": false,
+    "frames": {
+      "total": 601,
+      "fold": 465,
+      "mesh": 135
+    },
+    "durationS": 8,
+    "rebuilds": {
+      "total": 604,
+      "onFoldFrames": 465,
+      "perFoldFrame": 1
+    },
+    "renders": {
+      "total": 604,
+      "perFrame": 1.004991680532446
+    },
+    "ledgers": {
+      "assemble": 602,
+      "reconcileUsage": 602,
+      "reconcileUnread": 602,
+      "observeStatuses": 602,
+      "exportUsage": 465,
+      "dealProjectSeqs": 2
+    },
+    "localStorage": {
+      "usageWrites": 0,
+      "usageWritesPerFoldFrame": 0,
+      "usageWritesPerSecond": 0,
+      "projectWrites": 1,
+      "reads": 60
+    },
+    "marks": [300],
+    "agentsOut": 77,
+    "elapsedMs": 2572,
+    "loadavg": {
+      "before": [111.62255859375, 81.69921875, 63.1171875],
+      "after": [111.62255859375, 81.69921875, 63.1171875]
+    }
+  }
+}

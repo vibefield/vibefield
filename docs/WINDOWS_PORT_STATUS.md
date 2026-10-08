@@ -36,7 +36,10 @@ The Windows commit stack, oldest first:
 `{ok:true, nativeConnected:true, units:[mgmt, mesh-gateway, terminal, mesh-bridge, process]}`;
 `--smoke-godview` boots the deck (renderer canvas2d, swarm monitor, a live cmd.exe terminal
 that echoes). The daemon/pipe/terminal layer is proven; what's left is polish + the
-resource-gated rungs.
+resource-gated rungs. *(2026-10-07, MV-8b: run that smoke as `pnpm smoke:godview` or
+`node scripts/smoke-godview.mjs`. The bare `electron . --smoke-godview` refuses without the
+`--user-data-dir` the runner creates and removes (M155's isolated profile), and the runner now
+spawns the desktop's own Electron binary with no shell, which a Windows box needs.)*
 
 ## ACTIVE debugging (the eyeball session, first real launch)
 

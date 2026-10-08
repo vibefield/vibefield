@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { isSmokeLike, parseMode, type ShellMode, shutdownPolicy } from "../src/main/modes";
+import {
+  isSmokeLike,
+  parseMode,
+  rendererPolicyMode,
+  type ShellMode,
+  shutdownPolicy,
+} from "../src/main/modes";
 
 // Mode selection is parsed ONCE (ESR §5.2.6). These lock the precedence, the
 // smoke-like classification, and the daemon-lifetime policy so no downstream
@@ -10,10 +16,12 @@ const ALL_MODES: readonly ShellMode[] = [
   "dev",
   "smoke",
   "smoke-canvas",
+  "smoke-browser-widget",
   "smoke-plugin-restart",
   "smoke-godview",
   "live-surfaces-lab",
   "terminal-perf-lab",
+  "godview-perf-lab",
   "terminal-door-probe",
   "spike-loro",
 ];
@@ -29,10 +37,12 @@ describe("parseMode", () => {
     expect(parseMode(["--dev"])).toBe("dev");
     expect(parseMode(["--smoke"])).toBe("smoke");
     expect(parseMode(["--smoke-canvas"])).toBe("smoke-canvas");
+    expect(parseMode(["--smoke-browser-widget"])).toBe("smoke-browser-widget");
     expect(parseMode(["--smoke-plugin-restart"])).toBe("smoke-plugin-restart");
     expect(parseMode(["--smoke-godview"])).toBe("smoke-godview");
     expect(parseMode(["--live-surfaces-lab"])).toBe("live-surfaces-lab");
     expect(parseMode(["--terminal-perf-lab"])).toBe("terminal-perf-lab");
+    expect(parseMode(["--godview-perf-lab"])).toBe("godview-perf-lab");
     expect(parseMode(["--terminal-door-probe"])).toBe("terminal-door-probe");
     expect(parseMode(["--spike-loro"])).toBe("spike-loro");
   });
@@ -69,10 +79,12 @@ describe("isSmokeLike", () => {
   const smokeLike = new Set<ShellMode>([
     "smoke",
     "smoke-canvas",
+    "smoke-browser-widget",
     "smoke-plugin-restart",
     "smoke-godview",
     "live-surfaces-lab",
     "terminal-perf-lab",
+    "godview-perf-lab",
     "terminal-door-probe",
     "spike-loro",
   ]);
@@ -100,6 +112,8 @@ describe("shutdownPolicy", () => {
     // pair against its own data root and drives real sessions through it, so it
     // owns what it started and stops it.
     "terminal-perf-lab": "stop-owned",
+    // MV-0: the Godview perf lab is the perf lab's shape too.
+    "godview-perf-lab": "stop-owned",
     // TP-S3a: the door probe is the perf lab's shape — its own pair, stop-owned.
     "terminal-door-probe": "stop-owned",
     "spike-loro": "leave-running",
@@ -113,3 +127,20 @@ describe("shutdownPolicy", () => {
 // TP-S3e: `parseDirectTerminalDoor` retired with the bridge — the routed
 // transport is unconditional and the CSP test asserts the widened policy on
 // purpose (security-policy.test.ts).
+
+describe("the worker lab's renderer policy", () => {
+  it("admits Vite without changing the lab's isolation or daemon lifetime", () => {
+    const mode = parseMode(["--godview-perf-lab"]);
+    expect(rendererPolicyMode(mode, "dev")).toBe("dev");
+    expect(isSmokeLike(mode)).toBe(true);
+    expect(shutdownPolicy(mode)).toBe("stop-owned");
+    expect(rendererPolicyMode(mode, undefined)).toBe(mode);
+    expect(rendererPolicyMode(mode, "packaged")).toBe(mode);
+    expect(rendererPolicyMode(mode, "DEV")).toBe(mode);
+  });
+
+  it.each(ALL_MODES.filter((mode) => mode !== "godview-perf-lab"))(
+    "ignores the lab override in %s",
+    (mode) => expect(rendererPolicyMode(mode, "dev")).toBe(mode),
+  );
+});

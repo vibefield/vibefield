@@ -11,8 +11,10 @@
  * The deck is stubbed to a component that hands the overlay a fake DOOR and
  * renders nothing — it is the neighbour here, not the subject, and its own
  * mount behaviour has a fixture of its own (godview-deck.test.tsx). The door is
- * what gives the stage something to dispose: the mesh poll's interval and the
- * fold's subscription, both of which must die with the stage.
+ * what gives the stage something to dispose: the model board's subscription,
+ * which must die with the stage. MV-3d — and it is the ONLY one: the fold's
+ * `full` board is never asked, open or closed (the chrome reads the facts that
+ * ride the model board's own rows), and this fixture's spy on it says so.
  */
 
 import { act } from "react";
@@ -25,28 +27,44 @@ import { managedSummary } from "./managed-session-fixture";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 const doorFacts = vi.hoisted(() => ({
+  /** the fold's `full` board, asked: never, since MV-3d */
   observeCalls: 0,
   observeDisposals: 0,
+  /** MV-3b — the model board's opens and closes: the window's one subscription (PF6) */
+  modelOpens: 0,
+  modelCloses: 0,
   rows: [] as unknown[],
 }));
 
 vi.mock("../src/godview/GodviewDeck", async () => {
   const { useEffect } = await import("react");
+  const { scriptedModelBoard } = await import("./model-board-fixture");
+  type ModelBoardPort = import("../src/godview/monitor/remote-door").ModelBoardPort;
+  type FoldRows = import("../src/godview/monitor/facet-types").AgentSessionSummary[];
   const checkedAt = "2026-09-13T00:00:00.000Z";
   const status = { reachable: false, detail: "no index in this fixture", checkedAt };
-  const door = {
-    observeMesh: ({ onOpen }: { onOpen: (open: { devices: never[] }) => void }) => {
-      onOpen({ devices: [] });
-      return () => undefined;
-    },
-    attach: async () => ({ state: "no-pane" as const }),
-    observe: ({ onFrame }: { onFrame: (rows: unknown[]) => void }) => {
-      doorFacts.observeCalls += 1;
-      onFrame(doorFacts.rows);
-      return () => {
-        doorFacts.observeDisposals += 1;
+  // MV-3b — the model board behind the door's model port: fieldd's real backend
+  // on the fold rows (`model-board-fixture.ts`), stood up per open and torn down
+  // with the close, so the window's one subscription is what the counts read.
+  const model: ModelBoardPort = {
+    subscribe: async (onFrame, opts) => {
+      doorFacts.modelOpens += 1;
+      const board = scriptedModelBoard({ rows: doorFacts.rows as FoldRows });
+      const subscription = await board.port.subscribe(onFrame, opts);
+      return {
+        snapshot: subscription.snapshot,
+        unsubscribe: () => {
+          doorFacts.modelCloses += 1;
+          subscription.unsubscribe();
+          board.dispose();
+        },
       };
     },
+    reportShown: async () => ({ reported: true }),
+  };
+  const door = {
+    model,
+    attach: async () => ({ state: "no-pane" as const }),
     createTerminal: async () => ({ state: "no-pane" as const }),
     mountLocal: async () => ({ state: "no-pane" as const }),
     // AR-5's two ports. The real deck builds them over its fieldd client
@@ -107,6 +125,8 @@ beforeEach(() => {
   clearedIntervals = [];
   doorFacts.observeCalls = 0;
   doorFacts.observeDisposals = 0;
+  doorFacts.modelOpens = 0;
+  doorFacts.modelCloses = 0;
   doorFacts.rows = [managedSummary({ runtimeRunId: "run-1", kind: "claude", label: "Claude" })];
   localStorage.clear();
   resetActiveViewForTest();
@@ -205,6 +225,7 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
     expect(host.querySelector(".vf-godview")).toBeNull();
     expect(openedIntervals, "a closed Godview started a timer").toHaveLength(0);
     expect(doorFacts.observeCalls, "a closed Godview subscribed to the fold").toBe(0);
+    expect(doorFacts.modelOpens, "a closed Godview opened the model board").toBe(0);
   });
 
   it("mounts the stage on open and REMOVES it on close, clearing its timers and its subscription", async () => {
@@ -212,24 +233,30 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
 
     await setOpen(true);
     expect(stage(host), "the stage never mounted").not.toBeNull();
-    // the fold reached the chrome: one managed agent, said in words
+    // the board reached the chrome: one managed agent, said in words
     expect(host.querySelector(".vf-monitor-local-chip")?.textContent).toBe("1 managed agent");
-    expect(doorFacts.observeCalls).toBe(1);
+    // MV-3d: the fold's `full` board is not asked while Godview is open
+    expect(doorFacts.observeCalls, "the window asked the fold's full board").toBe(0);
+    // MV-3b: the window's one model subscription opened with the stage (the
+    // clocks the seam used to run here — the mesh poll, the 10 s now — are the
+    // backend's now, so there is no interval to count; whatever the stage
+    // still opens must close with it)
+    expect(doorFacts.modelOpens, "the model board never opened").toBe(1);
     const started = [...openedIntervals];
-    expect(started.length, "the mesh poll never started").toBeGreaterThan(0);
 
     await setOpen(false);
 
     // THE PF6 CLAIM, at the level it actually matters. The overlay stays in the
     // tree — the deck below is expensive to build and instant to reveal, so it
     // is kept and silenced — but the monitor is GONE, not hidden: every
-    // interval it opened went with it, and so did the fold subscription.
+    // interval it opened went with it, and so did its one subscription.
     expect(host.querySelector(".vf-godview"), "the overlay unmounted too").not.toBeNull();
     expect(stage(host), "the stage survived the close").toBeNull();
     for (const id of started) {
       expect(clearedIntervals, `interval ${id} outlived the close`).toContain(id);
     }
-    expect(doorFacts.observeDisposals, "the fold subscription outlived the close").toBe(1);
+    expect(doorFacts.modelCloses, "the model subscription outlived the close").toBe(1);
+    expect(doorFacts.observeCalls, "a closed Godview asked the fold's full board").toBe(0);
   });
 
   it("comes back on reopen, from the fold's current frame", async () => {
@@ -243,7 +270,8 @@ describe("the monitor's lifetime inside the overlay (PF6)", () => {
     await setOpen(false);
     await setOpen(true);
     expect(stage(host)).not.toBeNull();
-    expect(doorFacts.observeCalls).toBe(2);
+    expect(doorFacts.observeCalls).toBe(0);
+    expect(doorFacts.modelOpens).toBe(2);
     expect(host.querySelector(".vf-monitor-local-chip")?.textContent).toBe("1 managed agent");
   });
 

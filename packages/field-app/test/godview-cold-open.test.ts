@@ -163,27 +163,56 @@ function importedSheets(entry: string): string[] {
   return sheets;
 }
 
+/**
+ * MV-4…MV-6 (L18) — each ported view's own stylesheets, as the overlay loads
+ * them: the view's ENTRY module imports them (a side-effect import, never a
+ * host's), so they are found by following the package's entry to each view's
+ * `views/<id>/index` and reading the CSS that module imports.
+ */
+function viewSheets(packageEntry: string): string[] {
+  const root = dirname(packageEntry);
+  const entries = [
+    ...readFileSync(packageEntry, "utf8").matchAll(
+      /export \* from ['"](\.\/views\/[^/'"]+\/index)\.js['"]/g,
+    ),
+  ].map((match) => join(root, `${match[1]}.ts`));
+  return entries.flatMap((entry) =>
+    [...readFileSync(entry, "utf8").matchAll(/^import ['"](\.[^'"]+\.css)['"];/gm)].flatMap(
+      (match) => importedSheets(join(dirname(entry), match[1] as string)),
+    ),
+  );
+}
+
 describe("the ambient-animation audit (GT-D15.1)", () => {
   const godviewRoot = join(dirname(fileURLToPath(import.meta.url)), "..", "src", "godview");
   // The views package's sheet, resolved through the very export the app's
   // manifest imports (`@vibecook/puppeteer-views/styles/views.css`), so the
-  // audit reads what the overlay loads rather than a path it remembers.
-  const packageSheet = createRequire(import.meta.url).resolve(
-    "@vibecook/puppeteer-views/styles/views.css",
+  // audit reads what the overlay loads rather than a path it remembers — and,
+  // since the views carry their own (L18), every ported view's sheets through
+  // the package's entry, as the overlay's bundle reaches them.
+  const require = createRequire(import.meta.url);
+  const packageSheets = importedSheets(
+    require.resolve("@vibecook/puppeteer-views/styles/views.css"),
   );
-  const packageSheets = importedSheets(packageSheet);
+  const ownSheets = viewSheets(require.resolve("@vibecook/puppeteer-views"));
   const css = [
     readFileSync(join(godviewRoot, "godview.css"), "utf8"),
     readFileSync(join(godviewRoot, "deck-zoom.css"), "utf8"),
     ...packageSheets,
+    ...ownSheets,
   ].join("\n");
 
-  it("reads the package's sheet through the manifest's export, and follows its imports", () => {
+  it("reads the package's sheet through the manifest's export, and each view's own through its entry", () => {
     // Guards the audit against a moved file: the bundle must resolve and must
     // pull the swarm's own sheet in, or every assertion below would pass over
-    // a stylesheet that is not the one the overlay wears.
-    expect(packageSheets.length).toBeGreaterThanOrEqual(6);
-    expect(css).toContain(".vf-monitor-swarm");
+    // a stylesheet that is not the one the overlay wears. The package's sheet
+    // keeps the chrome's (the bar, the usage column, the find sheet); the
+    // views' are their own since MV-4…MV-6: list, rain, swarm (and its spawn
+    // bloom), timeline.
+    expect(packageSheets.length).toBeGreaterThanOrEqual(4);
+    expect(ownSheets.length).toBeGreaterThanOrEqual(5);
+    expect(css).toContain(".mv-swarm .vf-monitor-swarm");
+    expect(css).toContain(".mv-timeline .vf-monitor-timeline");
   });
 
   it("resets the overlay's controls at no weight, so every component's own type wins (AR-S5)", () => {
@@ -208,14 +237,15 @@ describe("the ambient-animation audit (GT-D15.1)", () => {
     // swarm's wave on a DOM body. It is the view's only loop. It animates
     // transform and opacity alone (the compositor's, no layout or paint). It
     // runs only while the timeline is the mounted view and a body is owed,
-    // and never under reduced motion or with Godview's animations off.
-    const argued = new Set(["vf-monitor-timeline-ring"]);
+    // and never under reduced motion or with Godview's animations off. Since
+    // MV-6 it is the timeline's own sheet's, named in its own prefix (L18).
+    const argued = new Set(["mv-timeline-ring"]);
     expect(
       keyframeBlocks(css)
         .map((block) => block.name)
         .filter((name) => !argued.has(name)),
     ).toEqual([]);
-    const ring = keyframeBlocks(css).find((block) => block.name === "vf-monitor-timeline-ring");
+    const ring = keyframeBlocks(css).find((block) => block.name === "mv-timeline-ring");
     expect(ring?.body).toBeDefined();
     expect(ring?.body).not.toMatch(/\b(width|height|top|left|box-shadow|filter|background)\s*:/);
   });

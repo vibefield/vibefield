@@ -289,7 +289,7 @@ function service(
     meshBus?: boolean;
   } = {},
 ): ArtifactService {
-  return new ArtifactService({
+  const instance = new ArtifactService({
     dataDir,
     bridge,
     maintenanceMs: false,
@@ -312,6 +312,9 @@ function service(
       ? { capturePreviewAvailable: options.capturePreviewAvailable }
       : {}),
   });
+  // Drain asynchronous catalog checkpoints before the fixture directory is removed.
+  cleanup.push(() => instance.dispose());
+  return instance;
 }
 
 const proxy = (

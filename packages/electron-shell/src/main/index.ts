@@ -85,7 +85,7 @@ import { LiveSurfaceTicketTable } from "./live-surfaces/ticket-table";
 import { LiveSurfaceWindowHost } from "./live-surfaces/window-host";
 import { ElectronLocalDiagnostics } from "./local-diagnostics";
 import { createElectronLogging, type ElectronLogging } from "./logging";
-import { isSmokeLike, parseMode } from "./modes";
+import { isSmokeLike, parseMode, rendererPolicyMode } from "./modes";
 import { installPluginProtocol } from "./plugin-protocol";
 import { RendererPluginProvenanceCatalog } from "./plugin-provenance";
 import { RecoveringFielddObservers } from "./recovering-fieldd-observers";
@@ -130,6 +130,7 @@ import { createMainWindow, loadRenderer } from "./windows";
 // contains none of that code (ESR-12), and packaging simply omits the file.
 
 const MODE = parseMode(process.argv);
+const RENDERER_POLICY_MODE = rendererPolicyMode(MODE, process.env["VF_GODVIEW_LAB_RENDERER"]);
 // TP-S3a — the direct terminal door (TP-D1 as ratified): a rollback flag, OFF
 // until S3e; it widens the production CSP to the cells' loopback ports and, at
 // S3b, routes the pool's transport. Parsed once, beside the mode.
@@ -143,7 +144,14 @@ const MODE = parseMode(process.argv);
 // TP-S0c: `terminal-perf-lab` joins `live-surfaces-lab` in KEEPING hardware
 // acceleration. A perf lab that measured a software rasteriser would publish
 // numbers for a renderer nobody runs — the GPU path is the thing under test.
-if (isSmokeLike(MODE) && MODE !== "live-surfaces-lab" && MODE !== "terminal-perf-lab") {
+// MV-0: `godview-perf-lab` keeps it too — the swarm's WebGPU canvas is one of
+// the four views it measures.
+if (
+  isSmokeLike(MODE) &&
+  MODE !== "live-surfaces-lab" &&
+  MODE !== "terminal-perf-lab" &&
+  MODE !== "godview-perf-lab"
+) {
   app.disableHardwareAcceleration();
 }
 // TP-S0c: an OCCLUDED Chromium window stops presenting. Chromium suspends rAF
@@ -154,7 +162,7 @@ if (isSmokeLike(MODE) && MODE !== "live-surfaces-lab" && MODE !== "terminal-perf
 // awake so a measured zero is the terminal's and not the compositor's. They are
 // mode-gated because a PRODUCTION shell should absolutely background an occluded
 // window — that is a battery feature, and only the lab wants it off.
-if (MODE === "terminal-perf-lab") {
+if (MODE === "terminal-perf-lab" || MODE === "godview-perf-lab") {
   app.commandLine.appendSwitch("disable-backgrounding-occluded-windows");
   app.commandLine.appendSwitch("disable-renderer-backgrounding");
 }
@@ -435,7 +443,7 @@ async function main(
   } catch {
     importMapHashes = [];
   }
-  installCsp(MODE, importMapHashes);
+  installCsp(RENDERER_POLICY_MODE, importMapHashes);
   // The renderer's own origin. Dev serves from Vite instead, so the handler is
   // pointless there; every other mode loads vibefield-app://shell and would show
   // a blank window without it. Root is the built renderer beside dist/main.
@@ -470,7 +478,7 @@ async function main(
       });
     },
   });
-  const appCsp = buildCsp(MODE, importMapHashes);
+  const appCsp = buildCsp(RENDERER_POLICY_MODE, importMapHashes);
   if (MODE !== "dev") {
     installAppProtocol({
       root: rendererRoot,
@@ -504,7 +512,7 @@ async function main(
     );
   });
   installWebContentsBackstop(
-    MODE,
+    RENDERER_POLICY_MODE,
     (contents) => {
       if (registry.ownsHost(contents)) return;
       logger.warn(
@@ -787,6 +795,7 @@ async function main(
     if (existing !== undefined) return existing;
     const sup = buildSupervisor({
       mode: MODE,
+      rendererPolicyMode: RENDERER_POLICY_MODE,
       root: userRoot,
       resources,
       viteUrl: VITE_URL,
@@ -994,7 +1003,7 @@ async function main(
   // for the direct proof. The perf lab also uses this isolated shell profile so
   // measurements never launch or prewarm the owner's agents.
   const typedAgent =
-    (MODE === "smoke-godview" || MODE === "terminal-perf-lab") &&
+    (MODE === "smoke-godview" || MODE === "terminal-perf-lab" || MODE === "godview-perf-lab") &&
     !process.argv.includes("--terminal-direct-proof") &&
     process.env["FIELDD_DATA_DIR"] === undefined
       ? (await testing()).stageTypedAgent({ vibefieldRoot: user.rootReal })
@@ -1427,6 +1436,34 @@ async function main(
       preloadPath: PRELOAD_PATH,
       viteUrl: VITE_URL,
       setView,
+      beforeExit: closeEvidence,
+      onWindow: (window) => {
+        installRendererLogging({
+          window,
+          sink: shellLogging.renderer,
+          pluginRouter: shellLogging.pluginRendererRouter,
+          pluginResolver: pluginProvenance,
+          desktopLogger: logger,
+          onProcessGone: () => {
+            void crashes.refresh("renderer").catch(() => undefined);
+          },
+        });
+      },
+    });
+    return;
+  }
+
+  // MV-0 — the Godview perf lab: the same wiring as the terminal perf lab (a
+  // SHOWN window, the real pair against an isolated root), driving a corpus
+  // through the replay door and reading the renderer's probe per view.
+  if (MODE === "godview-perf-lab") {
+    await (await testing()).runGodviewPerfLab({
+      handle: await fielddReady,
+      supervisor,
+      root,
+      registry,
+      preloadPath: PRELOAD_PATH,
+      viteUrl: VITE_URL,
       beforeExit: closeEvidence,
       onWindow: (window) => {
         installRendererLogging({

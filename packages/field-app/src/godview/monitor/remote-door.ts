@@ -1,12 +1,5 @@
 import type { AccountUsagePort, HistoryPort } from "@vibecook/puppeteer-views";
-import type {
-  AgentMeshFrame,
-  AgentMeshOpen,
-  AgentProfileSet,
-  AgentRunHistory,
-  DeviceInfo,
-} from "@vibefield/contracts";
-import type { AgentSessionSummary } from "./facet-types";
+import type { AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
 
 export type MonitorFeedState =
   | { state: "no-door" | "loading" | "ready" }
@@ -44,19 +37,6 @@ export interface MonitorUsagePort extends AccountUsagePort {
  * came in beside it, so a row can say which desktop it lives on.
  */
 export interface MonitorDoor {
-  /**
-   * DS-3 — THE MESH BOARD (`agent.subscribe {projection: "desk", scope:
-   * "mesh"}`, DS-D4): every self desktop's agents through this window's ONE
-   * door, multiplexed by its own fieldd (DS-L4 — the window merges nothing).
-   * `onOpen` receives every WHOLE board — the open answer, and the client's
-   * own re-snapshot after a reconnect — and the reader REPLACES what it held;
-   * `onFrame` every per-device frame (a delta, a device's reset, a device's
-   * state); `onError` why the board could not be opened, why the client's
-   * replay of it was refused, or that a frame could not be read — said with
-   * whether asking again may be answered (`MeshBoardFailure`, S4 2026-10-01).
-   * Returns the dispose.
-   */
-  observeMesh(listener: MeshBoardListener): () => void;
   /** DS-3 — the roster (`device.subscribe`): names and platforms, so a row
    * can say which desktop it lives on. Optional, and deliberately: a door
    * without it names each desktop by its id and draws no OS. */
@@ -66,13 +46,6 @@ export interface MonitorDoor {
    * desktops (every remote row says `attachable: false` until then); the
    * verb stays for that slice to rewire. */
   attach(request: RemoteAttachRequest): Promise<RemoteAttachOutcome>;
-  /**
-   * AR-3 — fieldd's fold (`agent.subscribe`): a snapshot, then full frames.
-   * Returns the dispose. `onFrame` receives every frame the daemon sends
-   * (state transfer, never edges); `onError` the reason the subscription could
-   * not be opened or was lost — the field renders that as UNAVAILABLE.
-   */
-  observe(listener: LocalFieldListener): () => void;
   /** Create an empty shell through the workspace's normal birth path — under
    * an Agent Profile when the request names one (SB-3). A refusal is an
    * outcome (`failed`, in fieldd's own words), never a throw. */
@@ -93,17 +66,29 @@ export interface MonitorDoor {
    * (PF6). Optional, and deliberately: a door without it draws no tabs,
    * which is also what the bar should draw when there is no feed to read. */
   profiles?: ProfileSetsPort;
-  /** TL (TL-D8) — fieldd's status ledger (`agent.history`): what each run did
-   * over the last day, for the timeline. Optional: a door without it (or a
-   * fieldd that predates the door) leaves the timeline drawing what this
-   * window watched. */
-  statusHistory?: StatusHistoryPort;
+  /** MV-3 (MV-D18) — THE MODEL BOARD: the backend's rows for every self
+   * desktop through this window's one door (`agent.subscribe {projection:
+   * "model", scope: "mesh"}`), and the screen's report of what its active pane
+   * shows (`agent.reportShown`, L5). Two verbs bound to one board — a window
+   * holds no client. Optional, and deliberately: a door without it (a fieldd
+   * from before the backend, the catalog) draws the stage with no rows and
+   * says so (`no-door`). */
+  model?: ModelBoardPort;
 }
 
-/** TL — one ask of `agent.history`, read run by run: a run that does not parse
- * is dropped and the rest stand. Absent ids ask for every run in the horizon. */
-export interface StatusHistoryPort {
-  load(runtimeRunIds?: readonly string[]): Promise<readonly AgentRunHistory[]>;
+/** MV-3 — the model board's two verbs (`doors.ts` `modelBoardOver`). The
+ * subscription is the deck's client's: `onFrame` receives the OPEN as a
+ * `.snapshot` (and the client's own re-snapshot after a reconnect) and every
+ * per-device frame as a `.delta`; `onReplayFailed` hears a replay the daemon
+ * refused after a reconnect — the subscription is over, and the feed asks
+ * again on its backoff (S4). */
+export interface ModelBoardPort {
+  subscribe(
+    onFrame: (payload: unknown, kind?: "snapshot" | "delta") => void,
+    opts?: { onReplayFailed?: (error: unknown) => void },
+  ): Promise<{ snapshot: unknown; unsubscribe: () => void }>;
+  /** L5 — the rows the window shows in its active pane, by MODEL id. */
+  reportShown(ids: readonly string[]): Promise<unknown>;
 }
 
 /** AR-S5 — the Agent Profiles as whole snapshots at fieldd's tick. Returns the
@@ -113,16 +98,9 @@ export interface ProfileSetsPort {
   subscribe(listener: (sets: readonly AgentProfileSet[]) => void): () => void;
 }
 
-/** DS-3 — the mesh board's listener (`MonitorDoor.observeMesh`). */
-export interface MeshBoardListener {
-  onOpen(open: AgentMeshOpen): void;
-  onFrame(frame: AgentMeshFrame): void;
-  onError(failure: MeshBoardFailure): void;
-}
-
-/** S4 (2026-10-01) — why the mesh board could not be read, structured: the
+/** S4 (2026-10-01) — why the model board could not be read, structured: the
  * reader decides from what fieldd SAID, never from its words. */
-export interface MeshBoardFailure {
+export interface ModelBoardFailure {
   /** fieldd's own words, or the door's for a board or frame it could not read */
   reason: string;
   /** asking again may be answered: fieldd's refusal said so (the board not
@@ -164,11 +142,6 @@ export interface LocalMountOptions {
  * ever asked it about the mesh. */
 export type RemoteSessionDoor = MonitorDoor;
 
-export interface LocalFieldListener {
-  onFrame(rows: readonly AgentSessionSummary[]): void;
-  onError(reason: string): void;
-}
-
 export type LocalMountOutcome =
   | {
       state: "mounted";
@@ -207,22 +180,15 @@ export type RemoteAttachOutcome =
   | { state: "no-pane" }
   | { state: "failed"; reason: string };
 
-/**
- * A monitor row id for another desktop's run, keyed `{device, runtimeRunId}`
- * as the mesh board keys it (DS-L2: a row's key says who owns it).
- *
- * Prefixed and device-qualified because the monitor's ids are a flat namespace
- * shared with local rows: two desktops can each have a run with one id, and
- * one of them can collide with ours. The prefix also makes a remote id
- * recognizable in a marker line, which is how the smoke tells the two apart.
- */
-export function remoteRowId(deviceId: string, runtimeRunId: string): string {
-  return `remote:${deviceId}:${runtimeRunId}`;
-}
-
+// RETIRED 2026-10-04 (MV-3b, M35): `remoteRowId` — the window's own id for
+// another desktop's run (`remote:{device}:{run}`). A peer's row carries its
+// OWNER's model id now, the one the backend dealt it, read off the one model
+// door; nothing qualifies it here.
+//
 // RETIRED 2026-09-30 (DS-3): `RemoteHostIdentity`, `RemoteSessionRow` and
 // `remoteSessionRows` — GT-D17's mesh half, which flattened ghosttea's
 // `runtime.listRemoteHosts()` into rows every two seconds. Under the routed
 // runtime that ask THREW ("Remote-host discovery is not part of the routed
-// host contract"), so the half had been dark since TP-S3e; the mesh board
-// (`mesh-field.ts`) is what a desktop reads another desktop's agents from now.
+// host contract"), so the half had been dark since TP-S3e; the model board
+// (`model-replica.ts`, MV-3b; the mesh board before it) is what a desktop reads
+// another desktop's agents from now.

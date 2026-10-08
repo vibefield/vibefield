@@ -1,13 +1,17 @@
 // @vitest-environment happy-dom
 /**
- * THE MESH HALF, MOUNTED (GT-D17's door; DS-3's board since 2026-09-30).
+ * THE MESH HALF, MOUNTED (GT-D17's door; DS-3's board since 2026-09-30; the
+ * one model door since MV-3b).
  *
  * The stage fixture beside this one (`godview-monitor.test.tsx`) proves the
- * local half: the fold's rows appear, select mounts, create spawns. This one
- * holds the OTHER desktops' half beside it — the mesh board, read through a
- * fake door standing in for the deck's fieldd client, because that client
- * needs a daemon and this claim does not: what is under test is the
- * projection, the routing and the device filter, which are ours.
+ * local half: this desktop's rows appear, select mounts, create spawns. This
+ * one holds the OTHER desktops' half beside it — their desk cuts on the model
+ * board, read through a fake door standing in for the deck's fieldd client,
+ * because that client needs a daemon and this claim does not: what is under
+ * test is the window's reading of the board, the routing and the device
+ * filter, which are ours. The rows are the backends' (`model-board-fixture.ts`
+ * stands fieldd's real backend up for this desktop and for each peer); the
+ * window joins what only it knows.
  *
  * What it holds:
  *   1. another desktop's agents become rows, beside the local ones, attributed
@@ -16,7 +20,7 @@
  *   4. selecting another desktop's run says what this desktop cannot do yet
  *      (DS-4) and asks the door for nothing; a local row still mounts
  *   5. the device filter: a dropdown that narrows the rows handed to the view
- *   6. no door ⇒ no rows; a board that cannot be read ⇒ local rows still, the
+ *   6. no door ⇒ no rows; a board that cannot be read ⇒ no rows invented, the
  *      reason on screen; PF6: the board is closed with the stage
  *   7. the board heals itself (S4): a failure that may heal asks again on the
  *      backoff, a terminal refusal stays put, an unreadable frame re-opens,
@@ -26,18 +30,18 @@
  * happy-dom does not have); the routing is view-independent.
  */
 
+import type { AgentView } from "@vibecook/puppeteer-view-sdk";
+import { createRecordingView } from "@vibecook/puppeteer-view-sdk/testing";
 import {
   type AccountUsagePort,
   type HistoryPort,
+  type MonitorViewEntry,
   monitorParameterDefaults,
   monitorViewFor,
+  rainDataString,
+  rainTailLength,
 } from "@vibecook/puppeteer-views";
-import type {
-  AgentFieldRow,
-  AgentMeshFrame,
-  AgentMeshOpen,
-  DeviceInfo,
-} from "@vibefield/contracts";
+import type { AgentModelMeshFrame, DeviceInfo } from "@vibefield/contracts";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -46,18 +50,16 @@ import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
 import { monitorHoldsKeys } from "../src/godview/monitor/launcher-keys";
-import type {
-  MeshBoardFailure,
-  MeshBoardListener,
-  MonitorDoor,
-} from "../src/godview/monitor/remote-door";
+import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import type { MonitorPaneFacts } from "../src/godview/monitor/useMonitorAgents";
 import { managedSummary } from "./managed-session-fixture";
-import { useInlineSwarmPhysics } from "./swarm-physics-inline";
+import {
+  type ScriptedModelBoard,
+  type ScriptedOpen,
+  scriptedModelBoard,
+} from "./model-board-fixture";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-
-useInlineSwarmPhysics();
 
 const ROW_VIEW = "list";
 
@@ -74,57 +76,38 @@ const HERE = "dev-here";
 const STUDIO = "dev-studio";
 const AT = "2026-09-30T21:00:00.000Z";
 
-/** The two managed rows the fold puts on the stage in every row below. */
 const LOCAL_ROWS: readonly AgentSessionSummary[] = [
   managedSummary({ runtimeRunId: "run-a", kind: "claude", label: "Claude", status: "working" }),
   managedSummary({ runtimeRunId: "run-b", kind: "codex", label: "Codex", status: "idle" }),
 ];
 
-function deskRow(
+/** Another desktop's run as ITS fold has it: studio's own backend cuts it for
+ * the board (`projectDeskRow`), so the window reads exactly what a peer sends.
+ * No PTY unless the test names one (DS-4e: an owner that names none is not
+ * attachable). */
+function peerRow(
   runtimeRunId: string,
-  overrides: Partial<AgentFieldRow> & Record<string, unknown> = {},
-): AgentFieldRow {
-  return {
+  overrides: Parameters<typeof managedSummary>[0] = {},
+): AgentSessionSummary {
+  return managedSummary({
     runtimeRunId,
-    revision: 1,
-    kind: "agent-a",
-    label: "Agent A",
-    tier: "managed",
-    device: STUDIO,
+    kind: "codex",
+    label: "Codex",
     status: "working",
-    statusSince: AT,
-    stateChangedAt: AT,
+    cwd: "/Users/peer/src/rosetta",
     createdAt: AT,
-    alive: true,
-    blockers: [],
-    project: { name: "rosetta" },
+    terminalSessionId: null,
     ...overrides,
-  } as AgentFieldRow;
+  });
 }
+
+const STUDIO_ROWS: readonly AgentSessionSummary[] = [peerRow("run-s1"), peerRow("run-s2")];
+const STUDIO_PEER = { device: STUDIO, name: "studio", platform: "linux" } as const;
 
 const ROSTER: DeviceInfo[] = [
   { deviceId: HERE, name: "pro", platform: "darwin", self: true, online: true, lastSeenAt: 0 },
   { deviceId: STUDIO, name: "studio", platform: "linux", self: false, online: true, lastSeenAt: 0 },
 ];
-
-function board(rows: AgentFieldRow[] = [deskRow("run-s1"), deskRow("run-s2")]): AgentMeshOpen {
-  return {
-    devices: [
-      {
-        device: HERE,
-        state: "live",
-        asOf: AT,
-        snapshot: { epoch: "here.1", revision: 1, rows: [] },
-      },
-      {
-        device: STUDIO,
-        state: "live",
-        asOf: AT,
-        snapshot: { epoch: "studio.1", revision: 5, rows },
-      },
-    ],
-  };
-}
 
 const CHECKED_AT = "2026-09-13T00:00:00.000Z";
 
@@ -148,39 +131,47 @@ interface FakeDoor extends MonitorDoor {
   attach: ReturnType<typeof vi.fn>;
   mountLocal: ReturnType<typeof vi.fn>;
   createTerminal: ReturnType<typeof vi.fn>;
-  /** push a per-device frame to the newest board listener */
-  push(frame: AgentMeshFrame): void;
-  /** tell the newest board listener its board failed (S4) */
-  fail(failure: MeshBoardFailure): void;
+  /** push a per-device frame to the live board */
+  push(frame: AgentModelMeshFrame): void;
+  /** the live board fails: the daemon refused the replay (S4) */
+  fail(cause: unknown): void;
+  /** studio's board again, with these rows (its own backend cuts them) */
+  peer(rows: readonly AgentSessionSummary[]): void;
   /** how many boards were opened, and closed */
   opened(): number;
   closed(): number;
 }
 
-/** What one open of the board answers: a board, a refusal no retry changes
- * (an Error), or a structured failure (S4). */
-type BoardAnswer = AgentMeshOpen | Error | MeshBoardFailure;
+/** What one open of the board answers: the board (null), a refusal (an Error —
+ * one stamped `retryable`, as fieldd's RPC errors are, may heal), or the board
+ * after something moved on it. */
+type BoardAnswer = null | Error | { before: () => void };
 
-/** `open` answers every open alike; a LIST answers the n-th open with its
- * n-th entry, and every later one with its last. */
-function fakeDoor(open: BoardAnswer | BoardAnswer[] = board(), rows = LOCAL_ROWS): FakeDoor {
-  let listener: MeshBoardListener | null = null;
-  let opened = 0;
-  let closed = 0;
-  const answers = Array.isArray(open) ? open : [open];
+/** MV-3b — the model board behind the door's model port: fieldd's real backend
+ * on this desktop's fold rows, and studio's on its own. One per door, disposed
+ * with the test. */
+let board: ScriptedModelBoard | null = null;
+
+/** `opens` answers the n-th open with its n-th entry (null: the board); every
+ * later open answers the board. */
+function fakeDoor(
+  opens: BoardAnswer | BoardAnswer[] = null,
+  rows: readonly AgentSessionSummary[] = LOCAL_ROWS,
+  peers: readonly AgentSessionSummary[] | null = STUDIO_ROWS,
+): FakeDoor {
+  board?.dispose();
+  const answers = (Array.isArray(opens) ? opens : [opens]).map(
+    (answer): ScriptedOpen => (answer instanceof Error ? { throws: answer } : answer),
+  );
+  const held = scriptedModelBoard({
+    rows,
+    device: { id: HERE, name: "pro", platform: "darwin" },
+    opens: answers,
+  });
+  if (peers !== null) held.peer({ ...STUDIO_PEER, rows: peers });
+  board = held;
   return {
-    observeMesh: (next) => {
-      opened += 1;
-      listener = next;
-      const answer = answers[Math.min(opened, answers.length) - 1] ?? board();
-      if (answer instanceof Error) next.onError({ reason: answer.message, retryable: false });
-      else if ("reason" in answer) next.onError(answer);
-      else next.onOpen(answer);
-      return () => {
-        closed += 1;
-        if (listener === next) listener = null;
-      };
-    },
+    model: held.port,
     devices: {
       subscribe: (deliver) => {
         deliver(ROSTER);
@@ -188,18 +179,15 @@ function fakeDoor(open: BoardAnswer | BoardAnswer[] = board(), rows = LOCAL_ROWS
       },
     },
     attach: vi.fn(async () => ({ state: "no-pane" as const })),
-    observe: vi.fn(({ onFrame }) => {
-      onFrame(rows);
-      return () => undefined;
-    }),
     createTerminal: vi.fn(async () => ({ state: "no-pane" as const })),
     mountLocal: vi.fn(async (sessionId: string) => ({ state: "mounted" as const, sessionId })),
     history: unreachableHistory(),
     usage: emptyUsage(),
-    push: (frame) => listener?.onFrame(frame),
-    fail: (failure) => listener?.onError(failure),
-    opened: () => opened,
-    closed: () => closed,
+    push: (frame) => held.push(frame),
+    fail: (cause) => held.fail(cause),
+    peer: (next) => held.peer({ ...STUDIO_PEER, rows: next }),
+    opened: () => held.opened(),
+    closed: () => held.closed(),
   };
 }
 
@@ -225,9 +213,22 @@ afterEach(() => {
   container?.remove();
   root = null;
   container = null;
+  board?.dispose();
+  board = null;
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   vi.restoreAllMocks();
 });
+
+/** The board's open lands in a microtask and the replica publishes on the next
+ * frame (happy-dom's frame is a `setImmediate`, which S4's fake timers leave
+ * real): let both arrive before reading the stage. */
+async function settle(): Promise<void> {
+  for (let round = 0; round < 3; round += 1) {
+    await act(async () => {
+      await new Promise((resolve) => setImmediate(resolve));
+    });
+  }
+}
 
 async function mountMonitor(
   door: MonitorDoor | null,
@@ -249,6 +250,23 @@ async function mountMonitor(
       </GodviewAgentsProvider>,
     );
   });
+  await settle();
+  return container;
+}
+
+/** A registry entry of the test's own (a ported view), on the same door and stage. */
+async function mountEntry(door: MonitorDoor, entry: MonitorViewEntry): Promise<HTMLElement> {
+  container = document.createElement("div");
+  document.body.appendChild(container);
+  root = createRoot(container);
+  await act(async () => {
+    root?.render(
+      <GodviewAgentsProvider door={door}>
+        <GodviewMonitor view={entry} parameters={{}} door={door} panes={{ sessionIds: [] }} />
+      </GodviewAgentsProvider>,
+    );
+  });
+  await settle();
   return container;
 }
 
@@ -297,35 +315,25 @@ describe("another desktop's agents as monitor citizens (DS-3)", () => {
   });
 
   it("a desktop alone: only the local claim, and no device chip (one desktop is no choice)", async () => {
-    const view = await mountMonitor(
-      fakeDoor({ devices: [{ device: HERE, state: "live", asOf: AT }] }),
-    );
+    const view = await mountMonitor(fakeDoor(null, LOCAL_ROWS, null));
     expect(view.querySelector(".vf-monitor-local-chip")?.textContent).toBe("2 managed agents");
     expect(view.querySelector(".vf-monitor-remote-chip")).toBeNull();
     expect(view.querySelector(".vf-device-filter")).toBeNull();
     expect(latest().remoteState).toBe("serving");
   });
 
-  it("a frame moves its row: the owner's delta, applied on its chain", async () => {
+  it("a frame moves its row: the owner's board again, applied on its chain", async () => {
     const door = fakeDoor();
     const view = await mountMonitor(door);
     await act(async () => {
-      door.push({
-        device: STUDIO,
-        delta: {
-          epoch: "studio.1",
-          since: 5,
-          revision: 6,
-          upserts: [
-            deskRow("run-s1", {
-              status: "blocked",
-              blockers: [{ id: "q", kind: "question", since: AT, question: "Keep it greyed?" }],
-            }),
-          ],
-          removed: ["run-s2"],
-        },
-      });
+      door.peer([
+        peerRow("run-s1", {
+          status: "blocked",
+          blocker: { kind: "question", question: "Keep it greyed?" },
+        }),
+      ]);
     });
+    await settle();
     expect(remoteRows(view)).toHaveLength(1);
     expect(remoteRows(view)[0]?.classList.contains("is-blocked")).toBe(true);
     expect(remoteRows(view)[0]?.querySelector(".vf-monitor-list-detail")?.textContent).toBe(
@@ -340,11 +348,51 @@ describe("another desktop's agents as monitor citizens (DS-3)", () => {
     await act(async () => {
       door.push({
         device: STUDIO,
-        delta: { epoch: "studio.1", since: 9, revision: 10, upserts: [], removed: [] },
+        delta: { epoch: `${STUDIO}.1`, since: 9, revision: 10, upserts: [], removed: [] },
       });
     });
     expect(door.closed()).toBe(1);
     expect(door.opened()).toBe(2);
+  });
+
+  it("M9 (MV-4): a peer's row draws the model's facts — the list its context share, the rain's column its CTX and a tail that follows it", async () => {
+    // The legacy shim gave a peer no core facts (`peerMonitor: "omit"`, M9's
+    // scope), so its context cell read "—" and its rain column named no CTX.
+    // The ported views draw the model uniformly: the peer's own backend
+    // computed the share, its desk cut carried it, and the window hands it on.
+    const studio = [peerRow("run-s1", { contextPercent: 41 }), peerRow("run-s2")];
+    const view = await mountMonitor(fakeDoor(null, LOCAL_ROWS, studio));
+    const context = (row: HTMLButtonElement | undefined): string | null | undefined =>
+      row?.querySelector(".vf-monitor-list-context")?.textContent;
+    const measured = remoteRows(view).find((row) => context(row) === "41%");
+    expect(measured).toBeDefined();
+    // a peer that reported none still says so, as any row does
+    expect(remoteRows(view).map(context).sort()).toEqual(["41%", "—"]);
+
+    // the rain reads the same cut of the model: the window hands a ported view the
+    // peer's row whole, so the rain's own words for it name the share
+    act(() => root?.unmount());
+    container?.remove();
+    const recording = createRecordingView("cut-probe");
+    const entry: MonitorViewEntry = {
+      id: "cut-probe",
+      label: "CUT",
+      parameterGroups: [],
+      mark: recording.view.manifest.mark,
+      view: recording.view,
+    };
+    await mountEntry(fakeDoor(null, LOCAL_ROWS, studio), entry);
+    const peers = (recording.lastInput?.model.agents ?? []).filter(
+      (row: AgentView) => !row.device.self,
+    );
+    const share = peers.find((row) => row.context?.usedPercent === 41);
+    if (share === undefined) throw new Error("the peer's measured row reaches the view");
+    // (the column flattens its symbols to spaces, so `CTX:41%` reads `CTX 41%`)
+    expect(rainDataString(share)).toContain("CTX 41%");
+    // its tail follows the share (an unmeasured window sits mid-scale)
+    const unmeasured = { ...share, context: undefined };
+    expect(rainTailLength(share, 100, 1, 0)).not.toBe(rainTailLength(unmeasured, 100, 1, 0));
+    expect(rainTailLength(share, 100, 1, 0)).toBeCloseTo(0.41 * 100 * 0.9);
   });
 
   it("an asleep desktop keeps its rows, greyed — asleep is a state, not an absence", async () => {
@@ -353,8 +401,70 @@ describe("another desktop's agents as monitor citizens (DS-3)", () => {
     await act(async () => {
       door.push({ device: STUDIO, state: "asleep", asOf: "2026-09-30T21:10:00.000Z" });
     });
+    await settle();
     expect(remoteRows(view)).toHaveLength(2);
     expect(remoteRows(view).every((row) => row.classList.contains("is-stale"))).toBe(true);
+  });
+});
+
+describe("MV-5/MV-6 — the swarm and the timeline on the window's cut, named changes (M9, M60)", () => {
+  const MINUTE = 60_000;
+  /** NOW-relative: a fixed date would expire under the timeline's day horizon. */
+  const ago = (minutes: number): string => new Date(Date.now() - minutes * MINUTE).toISOString();
+
+  it("M9: a peer's swarm body names the context share its own backend measured — CTX:41%, where the shim's peer said CTX:--%", async () => {
+    // The legacy shim gave a peer no core facts (`peerMonitor: "omit"`), so the
+    // swarm's body for it read `CTX:--%` and drew no ring. The ported swarm
+    // reads the model uniformly: the peer's desk cut carries the share.
+    const studio = [peerRow("run-s1", { contextPercent: 41 }), peerRow("run-s2")];
+    const host = await mountEntry(fakeDoor(null, LOCAL_ROWS, studio), monitorViewFor("swarm"));
+    const labels = [
+      ...host.querySelectorAll<HTMLButtonElement>(
+        '.vf-monitor-swarm-list button[data-agent-bubble-source="remote"]',
+      ),
+    ].map((button) => button.getAttribute("aria-label") ?? "");
+    expect(labels).toHaveLength(2);
+    expect(labels.filter((label) => label.includes(", CTX:41%"))).toHaveLength(1);
+    // a peer that measured nothing still says so, as any body does
+    expect(labels.filter((label) => label.includes(", CTX:--%"))).toHaveLength(1);
+    // M4: the line under the name is reply-first through the toolkit's one rule —
+    // a peer's says where it runs, then its state (VibeField's words already)
+    expect(labels.every((label) => label.includes(": studio · working"))).toBe(true);
+  });
+
+  it("M9 + M60: a peer's lane starts its current state at the row's statusSince — never at the moment this window first heard it", async () => {
+    // Runtime only (MV-6): a lane is born at its row's birth and claims its
+    // current state from `statusSince`. The shim's peer carried no core facts,
+    // so the old timeline's lane began where the window's ledger first saw it
+    // ("under a minute"); the ported timeline reads the peer's own clock.
+    const studio = [
+      peerRow("run-s1", {
+        createdAt: ago(30),
+        status: "blocked",
+        blocker: { kind: "question", question: "Keep the old export?" },
+      }),
+    ];
+    const host = await mountEntry(fakeDoor(null, LOCAL_ROWS, studio), monitorViewFor("timeline"));
+    const lanes = [
+      ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-timeline-agents button"),
+    ].map((button) => button.textContent ?? "");
+    const peer = lanes.find((label) => label.startsWith("on studio, "));
+    expect(peer, lanes.join(" | ")).toBeDefined();
+    expect(peer).toContain("blocked on a question for 30 minutes");
+  });
+
+  it("M60: a run that ended has no lane — the timeline holds the live rows the window shows, and no ledger lays an ended one under them", async () => {
+    const local = [
+      ...LOCAL_ROWS,
+      managedSummary({ runtimeRunId: "run-gone", kind: "grok", label: "Grok", alive: false }),
+    ];
+    const host = await mountEntry(fakeDoor(null, local, STUDIO_ROWS), monitorViewFor("timeline"));
+    const lanes = [
+      ...host.querySelectorAll<HTMLButtonElement>(".vf-monitor-timeline-agents button"),
+    ].map((button) => button.textContent ?? "");
+    // two local runs and the peer's two: the ended grok run is no lane
+    expect(lanes).toHaveLength(4);
+    expect(lanes.some((label) => label.includes("Grok"))).toBe(false);
   });
 });
 
@@ -373,9 +483,7 @@ describe("select routes by source", () => {
   // summary and its routed host asks the ticket by device), with the desktop
   // by its id for the routing and by its NAME for the words.
   it("another desktop's run whose owner names its PTY asks the door to ATTACH it — never to mount it here", async () => {
-    const door = fakeDoor(
-      board([deskRow("run-s1", { terminal: { hosted: "local", runtimeSessionId: "pty-s1" } })]),
-    );
+    const door = fakeDoor(null, LOCAL_ROWS, [peerRow("run-s1", { terminalSessionId: "pty-s1" })]);
     door.attach.mockResolvedValueOnce({ state: "attached", sessionId: "pty-s1", readWrite: true });
     const view = await mountMonitor(door);
     await act(async () => remoteRows(view)[0]?.click());
@@ -423,6 +531,7 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
         .querySelector<HTMLButtonElement>(`.vf-device-filter-row[data-device="${STUDIO}"]`)
         ?.click(),
     );
+    await settle();
     expect(rows(view)).toHaveLength(2);
     expect(remoteRows(view)).toHaveLength(2);
     expect(chip()?.textContent).toBe("studio");
@@ -435,6 +544,7 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
         .querySelector<HTMLButtonElement>(`.vf-device-filter-row[data-device="${HERE}"]`)
         ?.click(),
     );
+    await settle();
     expect(rows(view)).toHaveLength(LOCAL_ROWS.length);
     expect(remoteRows(view)).toHaveLength(0);
 
@@ -442,6 +552,7 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
     await act(async () =>
       view.querySelector<HTMLButtonElement>('.vf-device-filter-row[data-device=""]')?.click(),
     );
+    await settle();
     expect(rows(view)).toHaveLength(LOCAL_ROWS.length + 2);
   });
 
@@ -463,10 +574,12 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
   });
 
   it("holds the keys only while its menu is open, and lets them go when the chip goes with it open", async () => {
-    const here = board().devices[0];
-    if (here === undefined) throw new Error("no device in the fixture board");
     // each gap below re-opens the board: this desktop alone, then both again
-    const door = fakeDoor([board(), { devices: [here] }, board()]);
+    const door = fakeDoor([
+      null,
+      { before: () => board?.removePeer(STUDIO) },
+      { before: () => board?.peer({ ...STUDIO_PEER, rows: STUDIO_ROWS }) },
+    ]);
     const view = await mountMonitor(door);
     expect(monitorHoldsKeys()).toBe(false);
     await act(async () => view.querySelector<HTMLButtonElement>(".vf-device-filter-chip")?.click());
@@ -476,9 +589,10 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
     await act(async () =>
       door.push({
         device: STUDIO,
-        delta: { epoch: "studio.1", since: 9, revision: 10, upserts: [], removed: [] },
+        delta: { epoch: `${STUDIO}.1`, since: 9, revision: 10, upserts: [], removed: [] },
       }),
     );
+    await settle();
     expect(door.opened()).toBe(2);
     expect(view.querySelector(".vf-device-filter-chip")).toBeNull(); // one desktop: no choice
     // the chip went with its menu open: a fresh pane's launcher gets its keys back
@@ -492,6 +606,7 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
         delta: { epoch: "here.1", since: 7, revision: 8, upserts: [], removed: [] },
       }),
     );
+    await settle();
     expect(door.opened()).toBe(3);
     expect(view.querySelector(".vf-device-filter-chip")).not.toBeNull();
     expect(view.querySelector(".vf-device-filter-menu")).toBeNull();
@@ -507,14 +622,24 @@ describe("the board without a floor", () => {
     expect(latest().localState).toBe("no-door");
   });
 
-  it("a board that cannot be read: the local rows stand, no invented desktops, the reason ON SCREEN", async () => {
+  it("a board that cannot be read: no rows are invented — this desktop's ride the same door — and the reason is ON SCREEN", async () => {
+    // MV-D18: ONE door carries this desktop's rows and the peers'. The seam
+    // read two (the fold and the mesh board), so a refused mesh left the local
+    // rows standing; a refused model board leaves nothing to draw, and says why.
     const view = await mountMonitor(fakeDoor(new Error("FORBIDDEN_SCOPE: requires agent.observe")));
     expect(remoteRows(view)).toHaveLength(0);
-    expect(localRows(view)).toHaveLength(LOCAL_ROWS.length);
+    expect(localRows(view)).toHaveLength(0);
     expect(latest().remoteState).toBe("unavailable");
-    expect(view.querySelector(".vf-monitor-remote-unavailable-chip")?.textContent).toBe(
+    expect(latest().localState).toBe("unavailable");
+    // both halves say so, each in its own words, as they did when both doors refused
+    expect(
+      [...view.querySelectorAll(".vf-monitor-remote-unavailable-chip")].map(
+        (chip) => chip.textContent,
+      ),
+    ).toEqual([
+      "agents unavailable · FORBIDDEN_SCOPE: requires agent.observe",
       "mesh unavailable · FORBIDDEN_SCOPE: requires agent.observe",
-    );
+    ]);
   });
 
   it("PF6: the board is closed with the stage", async () => {
@@ -532,12 +657,17 @@ describe("the board without a floor", () => {
 // mesh board is not ready yet" — left "mesh unavailable" and no remote rows
 // until the stage was reopened. The two-second poll it replaced healed itself.
 describe("the board heals itself (S4)", () => {
-  const NOT_READY: MeshBoardFailure = {
-    reason: "the mesh board is not ready yet",
-    retryable: true,
-  };
+  /** fieldd's lost ask, as its RPC error arrives: the words, and `retryable` on the error itself. */
+  const notReady = (): Error =>
+    Object.assign(new Error("the mesh board is not ready yet"), {
+      kind: "UNAVAILABLE",
+      retryable: true,
+    });
+  /** the MESH half's chip (the one door fails both halves; the local half has its own words) */
   const chip = (host: HTMLElement): string | null | undefined =>
-    host.querySelector(".vf-monitor-remote-unavailable-chip")?.textContent;
+    [...host.querySelectorAll(".vf-monitor-remote-unavailable-chip")].find((node) =>
+      node.textContent?.startsWith("mesh "),
+    )?.textContent;
 
   beforeEach(() => {
     vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] });
@@ -553,7 +683,7 @@ describe("the board heals itself (S4)", () => {
   }
 
   it("a failure that may heal keeps 'mesh unavailable' on screen, then asks again after the backoff — and the second open answers", async () => {
-    const door = fakeDoor([NOT_READY, board()]);
+    const door = fakeDoor([notReady(), null]);
     const view = await mountMonitor(door);
     expect(door.opened()).toBe(1);
     expect(latest().remoteState).toBe("unavailable");
@@ -564,14 +694,15 @@ describe("the board heals itself (S4)", () => {
     expect(door.opened()).toBe(1); // not before the backoff
     await wait(1);
     expect(door.opened()).toBe(2);
-    expect(door.closed()).toBe(1); // the failed board was let go first
+    expect(door.closed()).toBe(0); // a refused open held no board to let go
+    await settle();
     expect(latest().remoteState).toBe("serving");
     expect(remoteRows(view)).toHaveLength(2);
     expect(chip(view)).toBeUndefined();
   });
 
   it("the backoff doubles while the board stays unavailable — 250, 500, 1000 ms — and resets once it answers", async () => {
-    const door = fakeDoor([NOT_READY, NOT_READY, NOT_READY, board()]);
+    const door = fakeDoor([notReady(), notReady(), notReady(), null]);
     const view = await mountMonitor(door);
     await wait(250);
     expect(door.opened()).toBe(2);
@@ -583,19 +714,21 @@ describe("the board heals itself (S4)", () => {
     expect(door.opened()).toBe(3);
     await wait(1);
     expect(door.opened()).toBe(4);
+    await settle();
     expect(remoteRows(view)).toHaveLength(2);
 
     // answered: the next failure (a replay refused after a reconnect) waits
     // the FIRST step again, not the fourth
-    await act(async () => door.fail(NOT_READY));
+    await act(async () => door.fail(notReady()));
     expect(latest().remoteState).toBe("unavailable");
     await wait(250);
     expect(door.opened()).toBe(5);
+    await settle();
     expect(latest().remoteState).toBe("serving");
   });
 
   it("a refusal no second ask can change stays put, with its reason", async () => {
-    const door = fakeDoor({ reason: "FORBIDDEN_SCOPE: requires agent.observe", retryable: false });
+    const door = fakeDoor(new Error("FORBIDDEN_SCOPE: requires agent.observe"));
     const view = await mountMonitor(door);
     await wait(30_000);
     expect(door.opened()).toBe(1);
@@ -606,28 +739,27 @@ describe("the board heals itself (S4)", () => {
     const door = fakeDoor();
     const view = await mountMonitor(door);
     await act(async () =>
-      door.fail({
-        reason: "the mesh board sent an unreadable frame: Invalid input",
-        retryable: true,
-        frame: true,
-      }),
+      door.push({ device: STUDIO, nonsense: "Invalid input" } as unknown as AgentModelMeshFrame),
     );
     expect(door.closed()).toBe(1);
     expect(door.opened()).toBe(2);
+    await settle();
     expect(latest().remoteState).toBe("serving");
     expect(remoteRows(view)).toHaveLength(2);
   });
 
   it("closing the stage cancels the wait: nothing is asked after it closed, and no timer is left", async () => {
-    const door = fakeDoor([NOT_READY, board()]);
+    const door = fakeDoor([notReady(), null]);
+    // the fixture's backend keeps clocks of its own; the stage's timers are the rest
+    const fixtureTimers = vi.getTimerCount();
     await mountMonitor(door);
     expect(door.opened()).toBe(1);
-    expect(vi.getTimerCount()).toBeGreaterThan(0); // the re-ask is waiting
+    expect(vi.getTimerCount()).toBeGreaterThan(fixtureTimers); // the re-ask is waiting
     act(() => root?.unmount());
     root = null;
-    expect(vi.getTimerCount()).toBe(0);
+    expect(vi.getTimerCount()).toBe(fixtureTimers);
     await wait(30_000);
     expect(door.opened()).toBe(1);
-    expect(door.closed()).toBe(1);
+    expect(door.closed()).toBe(0); // a refused open held no board to close
   });
 });

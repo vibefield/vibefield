@@ -94,8 +94,8 @@ describe("DS-5d — the holders ledger", () => {
     expect(flat(studio.acknowledgements(DOC))).toEqual([
       { device: "laptop", ack: { 1: 9 }, seenAt: clock.now },
     ]);
-    studio.stop();
-    laptop.stop();
+    await studio.stop();
+    await laptop.stop();
   });
 
   it("REMEMBERS a holder whose slice is gone: still waited for, with the time it was last heard", async () => {
@@ -110,14 +110,14 @@ describe("DS-5d — the holders ledger", () => {
     await studio.start();
     await laptop.start();
     const leftAt = clock.now;
-    laptop.stop();
+    await laptop.stop();
     store.leave("laptop");
     clock.now += 10 * DAY;
     expect(flat(studio.acknowledgements(DOC))).toEqual([
       { device: "laptop", ack: { 1: 4 }, seenAt: leftAt },
     ]);
     expect(studio.homesOf(DOC)).toEqual([]); // a home is a LIVE fact — unchanged
-    studio.stop();
+    await studio.stop();
   });
 
   it("keeps the ledger across a restart, and forgets a holder unheard for twice the horizon", async () => {
@@ -133,10 +133,10 @@ describe("DS-5d — the holders ledger", () => {
     await first.start();
     await laptop.start();
     const heard = clock.now;
-    laptop.stop();
+    await laptop.stop();
     store.leave("laptop");
     await first.flush();
-    first.stop();
+    await first.stop();
 
     // fieldd restarts with the laptop still away: the ledger is the memory.
     clock.now += 3 * DAY;
@@ -145,14 +145,14 @@ describe("DS-5d — the holders ledger", () => {
     expect(flat(second.acknowledgements(DOC))).toEqual([
       { device: "laptop", ack: { 1: 4 }, seenAt: heard },
     ]);
-    second.stop();
+    await second.stop();
 
     // Sixty-one days on, it is gone from the ledger altogether.
     clock.now = heard + 61 * DAY;
     const third = holders(store, "studio", clock, { ledgerPath });
     await third.start();
     expect(third.acknowledgements(DOC)).toEqual([]);
-    third.stop();
+    await third.stop();
   });
 
   it("a holding whose acknowledgement does not decode is a holder that acknowledges nothing", async () => {
@@ -170,9 +170,9 @@ describe("DS-5d — the holders ledger", () => {
       { device: "attic", ack: null, seenAt: clock.now },
       { device: "laptop", ack: null, seenAt: clock.now },
     ]);
-    studio.stop();
-    laptop.stop();
-    opaque.stop();
+    await studio.stop();
+    await laptop.stop();
+    await opaque.stop();
   });
 
   it("a ledger that has NEVER heard the store vouches for nothing; one that heard it in a past life still does, mesh down or not", async () => {
@@ -193,7 +193,7 @@ describe("DS-5d — the holders ledger", () => {
     const cold = offline();
     await expect(cold.start()).rejects.toThrow(/mesh down/);
     expect(cold.acknowledgements(DOC)).toBeNull();
-    cold.stop();
+    await cold.stop();
 
     // A life in which it heard the store, and the laptop in it.
     const store = new FakeHoldersStore();
@@ -204,8 +204,8 @@ describe("DS-5d — the holders ledger", () => {
     await warm.start();
     await laptop.start();
     await warm.flush();
-    warm.stop();
-    laptop.stop();
+    await warm.stop();
+    await laptop.stop();
 
     // The next boot, mesh down: the remembered laptop is still waited for.
     clock.now += DAY;
@@ -214,6 +214,6 @@ describe("DS-5d — the holders ledger", () => {
     expect(flat(later.acknowledgements(DOC))).toEqual([
       { device: "laptop", ack: { 1: 4 }, seenAt: clock.now - DAY },
     ]);
-    later.stop();
+    await later.stop();
   });
 });

@@ -135,6 +135,163 @@ export type AgentFieldRow = z.infer<typeof AgentFieldRow>;
 // `AGENT_FIELD.DESK_TEXT_CHARS`: the row says what a run said, never the whole
 // of it — the transcript is History's, by ticket (DS-7).
 
+// MV-3a (MV-D22, MV-D18; `thinking-monitor-view-sdk`) — THE MODEL'S ROW ON THE
+// WIRE. The monitor backend beside the runtime (`@vibecook/puppeteer-monitor`,
+// hosted by fieldd) computes every business fact about this desktop's agents
+// once and emits `MonitorAgentRow`s (`@vibecook/puppeteer-view-sdk/model`); the
+// window's replica applies them with no logic of its own. The desk row carries
+// one as `monitorRow`, so a window — this desktop's, or another of this
+// person's reading it through the mesh board — maps a row to the model by
+// renaming nothing. The schemas below MIRROR the SDK's types field for field
+// (fieldd pins the two against each other, `agent-monitor.ts`); every clock is
+// epoch milliseconds, as the model's are. What is NOT here: `device.self` (a
+// reader-relative fact the adapter sets) and, on a PEER's row, `project.seq`
+// (desktop-local identity, M16 — omitted by the owner's desk cut).
+
+/** A fixed-bucket series, oldest first; the last bucket is still filling. */
+export const MonitorSeries = z
+  .object({
+    stepMs: z.number().int().positive(),
+    steps: z.array(z.number()),
+    /** when the last bucket began, so series of different rows align */
+    lastStepAt: z.number().int(),
+  })
+  .passthrough();
+export type MonitorSeries = z.infer<typeof MonitorSeries>;
+
+/** What a blocked run waits on: the first blocker, its parts kept apart (M2 —
+ * the views word them in their own order). Texts are bounded by the OWNER's cut
+ * for a peer (`AGENT_FIELD.DESK_TEXT_CHARS`, M21) and core's own bound for this
+ * desktop's window. */
+export const MonitorWait = z
+  .object({
+    /** the runtime's own word, open: `permission`, `question`, `failure`, … */
+    kind: z.string(),
+    since: z.number().int(),
+    /** how many blockers wait; absent: one (M10) */
+    count: z.number().int().positive().optional(),
+    tool: z.string().optional(),
+    code: z.string().optional(),
+    header: z.string().optional(),
+    question: z.string().optional(),
+    detail: z.string().optional(),
+  })
+  .passthrough();
+export type MonitorWait = z.infer<typeof MonitorWait>;
+
+export const MonitorActivity = z
+  .object({
+    kind: z.string(),
+    line: z.string().optional(),
+    since: z.number().int().optional(),
+  })
+  .passthrough();
+export type MonitorActivity = z.infer<typeof MonitorActivity>;
+
+export const MonitorReply = z
+  .object({
+    text: z.string(),
+    at: z.number().int().optional(),
+    /** false while the reply is still streaming */
+    final: z.boolean().optional(),
+  })
+  .passthrough();
+export type MonitorReply = z.infer<typeof MonitorReply>;
+
+/** The cost in puppeteer's own words — an estimate of API-equivalent USD for
+ * observed work, never an invoice — with the burn and the ten-minute series
+ * the backend keeps in memory (runtime only; it refills after a restart from
+ * core's own buckets, L11). `coverage` is open: core's word today is
+ * `complete` · `partial` · `unavailable`. */
+export const MonitorCost = z
+  .object({
+    usd: z.number(),
+    coverage: z.string(),
+    burnPerHour: z.number().optional(),
+    series: MonitorSeries.optional(),
+  })
+  .passthrough();
+export type MonitorCost = z.infer<typeof MonitorCost>;
+
+/** The desktop a row lives on, as its owner names it. `self` is NOT carried:
+ * whether a row is the reader's own desktop is the reader's to say. */
+export const MonitorDeviceRef = z
+  .object({
+    id: z.string().min(1),
+    name: z.string().min(1),
+    /** the SDK's OS mark (`mac` · `windows` · `linux` · `ios` · `android`), open */
+    os: z.string().optional(),
+  })
+  .passthrough();
+export type MonitorDeviceRef = z.infer<typeof MonitorDeviceRef>;
+
+/** One row of the model (`MonitorAgentRow`), presentation-free: everything a
+ * screen may draw about one agent or bare terminal, computed by the backend.
+ * `status` and `kind` are the contract's own closed words — a reader building
+ * the SDK's type could do nothing with a fourth. */
+export const MonitorAgentRow = z
+  .object({
+    /** stable identity: survives a terminal's promotion and a run's resume */
+    id: z.string().min(1),
+    kind: z.enum(["agent", "terminal"]),
+    createdAt: z.number().int(),
+    status: z.enum(["idle", "working", "blocked"]),
+    statusSince: z.number().int(),
+    /** not heard from lately — presentation metadata, never a status */
+    stale: z.boolean(),
+    alive: z.boolean(),
+    /** the runtime has reported a state for this run (M10) */
+    observed: z.boolean(),
+    /** alive, but nothing drives it yet (AR-4) */
+    pending: z.boolean().optional(),
+    /** the line under the name, in the backend's words (M4: core's headline) */
+    detail: z.string(),
+    activity: MonitorActivity.optional(),
+    project: z
+      .object({
+        /** a folder NAME, never a path (EL7 B1); empty for a terminal in no project */
+        name: z.string(),
+        /** absent: nothing looked; null: looked, and there is no branch */
+        branch: z.string().nullable().optional(),
+        /** the project's colour sequence — this desktop's own windows only (M16) */
+        seq: z.number().int().nonnegative().optional(),
+      })
+      .passthrough(),
+    provider: z.object({ id: z.string(), label: z.string() }).passthrough().optional(),
+    model: z.string().optional(),
+    effort: z
+      .object({ value: z.string(), intent: z.enum(["configured", "observed"]).optional() })
+      .passthrough()
+      .optional(),
+    account: z.string().optional(),
+    context: z.object({ usedPercent: z.number() }).passthrough().optional(),
+    wait: MonitorWait.optional(),
+    reply: MonitorReply.optional(),
+    cost: MonitorCost.optional(),
+    tokens: z
+      .object({ total: z.number().optional(), perMinute: z.number().optional() })
+      .passthrough()
+      .optional(),
+    /** a finished turn nobody has looked at yet (L5) */
+    unread: z.boolean(),
+    device: MonitorDeviceRef,
+    tier: AgentTier.optional(),
+    /** the Agent Profile SET it runs under (`native` for the machine's own) */
+    profileSet: z.string().optional(),
+    /** a pane on the owning desktop can show it now */
+    attachable: z.boolean(),
+    /** M41 — whether a pane on ANOTHER desktop may type into this run, by its
+     * home desktop's policy: computed once by the row's home backend (today it
+     * equals `attachable`), read by a view only for a row from another desktop
+     * (the list's host chip, the swarm's host line). Optional on the wire, the
+     * tolerant reader's rule: a peer on an older daemon sends none, and the
+     * window adapter fills it from `attachable` — the rule that daemon applied —
+     * so the SDK's row always carries it. */
+    writable: z.boolean().optional(),
+  })
+  .passthrough();
+export type MonitorAgentRow = z.infer<typeof MonitorAgentRow>;
+
 /** The run's latest reply, bounded: puppeteer's `MonitorAssistantMessageState`
  * with its text cut to the registry's bound. `at` and `final` are optional
  * because the mirror carries the message as an open object (`agent-session.ts`)
@@ -157,10 +314,20 @@ export const AgentDeskBlocker = AgentFieldBlocker.extend({
 export type AgentDeskBlocker = z.infer<typeof AgentDeskBlocker>;
 
 /** The desk row. A desk row IS a field row (every field fact, same keys), so a
- * reader of `AgentFieldRow` reads it and keeps the rest as passthrough. */
+ * reader of `AgentFieldRow` reads it and keeps the rest as passthrough.
+ *
+ * MV-3a — it also carries the MODEL's row for the run (`monitorRow`): the
+ * backend's facts, computed once at the run's home desktop, so a window's
+ * replica applies them with no derivation. Optional on the wire: a desktop on
+ * an older daemon sends none, and a reader draws what it was sent. On a PEER's
+ * row the owner's cut bounds its texts at `AGENT_FIELD.DESK_TEXT_CHARS` and
+ * omits `project.seq` (M16, M21); this desktop's own window reads it whole.
+ * The chrome's facts (MV-3d) are not here: they ride only the `model` board's
+ * own rows (`AgentModelDeskRow.local`), which no peer receives. */
 export const AgentDeskRow = AgentFieldRow.extend({
   lastAssistantMessage: AgentDeskMessage.optional(),
   blockers: z.array(AgentDeskBlocker),
+  monitorRow: MonitorAgentRow.optional(),
   usage: z
     .object({
       cumulativeTokens: z.number().optional(),
@@ -181,8 +348,21 @@ export type AgentDeskRow = z.infer<typeof AgentDeskRow>;
  * (it never federates, DS-D4); `field` the content-free row (the phone's,
  * `AGENT_FIELD.MIN_INTERVAL_MS`); `desk` the field row plus the reply line,
  * the blocker's question and the cost (windows,
- * `AGENT_FIELD.DESK_MIN_INTERVAL_MS`). */
-export const AgentProjection = z.enum(["full", "field", "desk"]);
+ * `AGENT_FIELD.DESK_MIN_INTERVAL_MS`).
+ *
+ * MV-3a — `model` is THIS DESKTOP'S OWN WINDOWS' board (MV-D18, L8, L12,
+ * M16): the desk rows with the model's row whole (`project.seq` dealt, texts
+ * as core bounded them) plus this desktop's bare TERMINALS as rows of their
+ * own (`AgentDeskTerminalRow`), at the fold's own 16 ms floor
+ * (`AGENT_FIELD.FULL_TICK_MS`) with urgent changes ahead of it. Refused to a
+ * peer daemon and to a phone, like `full`; with `scope: "mesh"` the other
+ * desktops' boards beside it are their `desk` cuts, as their owners sent
+ * them. The phone's `field` row is untouched by all of this.
+ *
+ * MV-3d (M35) — this desktop's run rows on it also carry the chrome's facts
+ * (`AgentModelDeskRow.local`), so a window reads `model` alone: `full` is no
+ * longer asked while Godview is open. */
+export const AgentProjection = z.enum(["full", "field", "desk", "model"]);
 export type AgentProjection = z.infer<typeof AgentProjection>;
 
 /** `agent.subscribe`'s options. Absent or `full` is TODAY's subscription,
@@ -190,6 +370,9 @@ export type AgentProjection = z.infer<typeof AgentProjection>;
  * and must not learn a new frame shape to keep working. */
 export const AgentSubscribeParams = z
   .object({
+    /** `full` (today's), `field`, `desk`, or `model` (MV-3a, this desktop's
+     * windows: `AgentModelMeshOpen`/`AgentModelMeshFrame` under `scope:
+     * "mesh"`, `AgentModelSnapshot`/`AgentModelDelta` local) */
     projection: AgentProjection.optional(),
     /** DS-3 — `local` (the default: today's callers never move) is THIS
      * daemon's board; `mesh` is every self desktop the roster lists,
@@ -280,6 +463,169 @@ export type AgentMeshFrame =
   | { device: string; snapshot: RowsSnapshot<AgentFieldRow> }
   | { device: string; state: RowsDeviceState; asOf: string };
 
+// MV-3a (L8) — A BARE TERMINAL IS A ROW ON ITS OWN DESKTOP. The model draws
+// every PTY no agent speaks for as a row (`kind: "terminal"`), and only this
+// desktop's windows receive them: the `model` projection carries them, the
+// `desk` cut peers read never does (the program adds no cross-desktop
+// behaviour), and the phone's `field` row cannot (no run, no mirror). It is a
+// row of its own kind rather than a field row in disguise: a terminal has no
+// provider, no tier, no run — the field row's required facts would all be
+// invented. The board key stays `runtimeRunId` because every reader of the rows
+// protocol keys by that field (`diffFieldRows`, the mesh board's maps); for a
+// terminal it is the model's id (the floor session, or the identity it
+// carries), never a run.
+
+export const AgentDeskTerminalRow = z
+  .object({
+    /** the board key: the model row's id (a floor session), never a run */
+    runtimeRunId: z.string().min(1),
+    /** fieldd's per-row change stamp, as on the field row */
+    revision: z.number().int(),
+    kind: z.literal("terminal"),
+    device: z.string().min(1),
+    /** the pane join (G3): the floor session a window mounts */
+    terminal: AgentSessionTerminal,
+    monitorRow: MonitorAgentRow,
+  })
+  .passthrough();
+export type AgentDeskTerminalRow = z.infer<typeof AgentDeskTerminalRow>;
+
+// MV-3d (M35, M42) — THE CHROME'S FACTS, ON THIS DESKTOP'S OWN ROWS. Beside the
+// views, this desktop's window draws chrome the model does not serve, by design
+// (M19; MV-D17): the deck's pane frames and empty-pane launchers, the find
+// sheet, the AR-7 marker. Until MV-3d those read the fold's `full` board, a
+// second subscription that sent the whole board every 16 ms while anything
+// moved. They read `local` now: the fold's facts no other part of the row
+// carries, riding ON the run's desk row of the `model` board, so a fact arrives
+// in the frame of the row it annotates (no second stream to order against) and
+// a moved fact upserts the row in the board's next delta like any other.
+//
+// WHO SEES IT is the projection's rule, not this schema's: `model` is refused to
+// peers and the phone (M29), and fieldd writes `local` on the window's cut only
+// — never on the `desk` cut a peer receives, never in `monitorRow` (the model,
+// which syncs), never on the phone's field row. That is what lets it carry the
+// working directory as a PATH (EL7 B1 keeps the path off everything that leaves
+// this desktop). Every field is optional (the tolerant reader); a reader of a
+// row with no `local` reads a run fieldd said nothing more about. A bare
+// terminal's row carries none: no reader asks anything of a terminal beyond
+// its row.
+
+/** What this desktop's own window reads of one of its runs beside the model:
+ * the fold's facts, each named for the chrome that reads it and nothing more. */
+export const AgentModelLocalFacts = z
+  .object({
+    /** the provider-native session id the run's transcript is filed under (the
+     * fold's `sessionId`): the find sheet joins rosetta's hits by it */
+    nativeSessionId: z.string().min(1).optional(),
+    /** the directory the run works in, as a PATH: the mirror's observed cwd,
+     * else the workspace's source path, else its root. The pane frame names
+     * its badge from it and a pane returned to a shell opens there. Absent
+     * when nothing names one */
+    cwd: z.string().optional(),
+    /** AR-7 — where the run came from (`AGENT_SPAWNED_BY`, open; absent reads `app`) */
+    spawnedBy: z.string().optional(),
+    /** MF-1f — fieldd witnessed the run's process end while its pane is still
+     * on the floor; absent: it did not */
+    exited: z.boolean().optional(),
+    /** The mirror's own words the chrome reads, present exactly when fieldd
+     * holds a monitor mirror for the run — the provider has spoken. Absent is
+     * the run before its first state: the pane frame's bare badge, the
+     * marker's `observed: false`. */
+    mirror: z
+      .object({
+        /** the mirror's liveness, verbatim (the row's own `alive` is fieldd's
+         * reading, which an exit outranks) */
+        alive: z.boolean().optional(),
+        /** when the provider's session began (`session.startedAt`): the find
+         * sheet's scope for rosetta's hits */
+        startedAt: z.string().optional(),
+        /** the newest evidence the provider gave (`freshness.lastEvidenceAt`):
+         * when the find sheet says a run was last active */
+        lastEvidenceAt: z.string().optional(),
+        /** how the provider knows its context share (`context.percentageSource`,
+         * open: `provider` · `derived` · `unavailable`): no meter is drawn from
+         * an unavailable one */
+        contextSource: z.string().optional(),
+      })
+      .passthrough()
+      .optional(),
+  })
+  .passthrough();
+export type AgentModelLocalFacts = z.infer<typeof AgentModelLocalFacts>;
+
+/** A run's row on the `model` board: the desk row, and — this desktop's own
+ * runs, the window's cut — the chrome's facts (`local`). A peer's desk row on
+ * the same board carries none: its owner's desk cut never writes them. */
+export const AgentModelDeskRow = AgentDeskRow.extend({
+  local: AgentModelLocalFacts.optional(),
+}).passthrough();
+export type AgentModelDeskRow = z.infer<typeof AgentModelDeskRow>;
+
+/** A row of the `model` board: a desk row (an agent, `monitorRow` whole) or a
+ * bare terminal's row. Discriminated by shape — a terminal row has no
+ * `status`, `label` or `tier`, and the union tries the desk row first. */
+export const AgentModelBoardRow = z.union([AgentModelDeskRow, AgentDeskTerminalRow]);
+export type AgentModelBoardRow = z.infer<typeof AgentModelBoardRow>;
+
+/** `agent.subscribe {projection: "model"}` at the local scope: the field's
+ * pair over model-board rows. */
+export const AgentModelSnapshot = z
+  .object({
+    epoch: RowsEpoch.optional(),
+    revision: z.number().int(),
+    rows: z.array(AgentModelBoardRow),
+  })
+  .passthrough();
+export type AgentModelSnapshot = z.infer<typeof AgentModelSnapshot>;
+export const AgentModelDelta = z
+  .object({
+    epoch: RowsEpoch.optional(),
+    since: z.number().int(),
+    revision: z.number().int(),
+    upserts: z.array(AgentModelBoardRow),
+    removed: z.array(z.string()),
+  })
+  .passthrough();
+export type AgentModelDelta = z.infer<typeof AgentModelDelta>;
+
+/** `agent.subscribe {projection: "model", scope: "mesh"}` — the window's one
+ * door (MV-D18): this desktop's model board first (always `live`), then every
+ * other self desktop's DESK board as its owner cut it, each on its own chain
+ * (DS-D4: the daemon multiplexes, it never re-folds). The frames are the mesh
+ * board's three arms over model-board rows. */
+export interface AgentModelMeshDevice {
+  device: string;
+  state: RowsDeviceState;
+  asOf: string;
+  snapshot?: RowsSnapshot<AgentModelBoardRow> | undefined;
+}
+export interface AgentModelMeshOpen {
+  devices: AgentModelMeshDevice[];
+}
+export type AgentModelMeshFrame =
+  | { device: string; delta: RowsDelta<AgentModelBoardRow> }
+  | { device: string; snapshot: RowsSnapshot<AgentModelBoardRow> }
+  | { device: string; state: RowsDeviceState; asOf: string };
+// Annotated with the interfaces above: the inferred type of a mesh frame over
+// the model-board union is longer than the compiler will serialize into a
+// declaration (TS7056), so the schema is typed by its written-out output.
+export const AgentModelMeshOpen: z.ZodType<AgentModelMeshOpen, z.ZodTypeDef, unknown> =
+  meshRowsOpen(AgentModelBoardRow);
+export const AgentModelMeshFrame: z.ZodType<AgentModelMeshFrame, z.ZodTypeDef, unknown> =
+  meshRowsFrame(AgentModelBoardRow);
+
+/** MV-3a (L5) — `agent.reportShown`: which rows the calling window shows in its
+ * active pane, by MODEL id. The screen is the CONNECTION's own model board
+ * (identity is transport-derived, never on the wire — P6): the door refuses a
+ * report from a connection with no model board open, and a closed board
+ * forgets its screen (M20). An empty list clears the report. */
+export const AgentReportShownParams = z
+  .object({ ids: z.array(z.string().min(1)).max(4096) })
+  .passthrough();
+export type AgentReportShownParams = z.infer<typeof AgentReportShownParams>;
+export const AgentReportShownResult = z.object({ reported: z.literal(true) }).passthrough();
+export type AgentReportShownResult = z.infer<typeof AgentReportShownResult>;
+
 /** One device's slice of `field.agents.v1` (D4's hybrid). `expiresAt` is the
  * honesty clause: a desktop that dies without clearing its slice leaves rows a
  * reader must drop on the clock rather than believe forever. A live publisher
@@ -311,6 +657,35 @@ export const AgentFieldSlice = z
   })
   .passthrough();
 export type AgentFieldSlice = z.infer<typeof AgentFieldSlice>;
+
+// MV-3a (L4; `thinking-monitor-view-sdk`'s build plan §2) — the project
+// colour's identity, on disk. The monitor backend beside the runtime deals each
+// project its colour SEQUENCE the first time an agent runs in it, and every
+// window reads the colour from that sequence. Without a record of the deal a
+// daemon restart would reshuffle every project's colour, so fieldd keeps it in
+// `users/<fuid>/fieldd/project-identity.json` (LAYOUT `PROJECT_IDENTITY_FILE`,
+// 0600). It is identity and nothing else: no clock, no row of what a project
+// did (MV-D22, runtime only), and it never crosses the sync plane (M16 — a
+// sequence is desktop-local; a peer's would collide with this desktop's).
+
+/** One dealt project: the key its colour was dealt by (the host's canonical
+ * root — a PATH, which is why the file is private) and the sequence. */
+export const ProjectIdentityEntry = z
+  .object({ key: z.string().min(1), seq: z.number().int().nonnegative() })
+  .passthrough();
+export type ProjectIdentityEntry = z.infer<typeof ProjectIdentityEntry>;
+
+/** The file. `next` is the next sequence to deal, kept beside the entries so a
+ * record trimmed of its oldest keys never deals a retired sequence again
+ * (the renderer's `dealProjectSeqs` kept the same counter in localStorage). */
+export const ProjectIdentityFile = z
+  .object({
+    version: z.literal(1),
+    next: z.number().int().nonnegative(),
+    projects: z.array(ProjectIdentityEntry),
+  })
+  .passthrough();
+export type ProjectIdentityFile = z.infer<typeof ProjectIdentityFile>;
 
 /** AR-6-0 — the stop verb. A run id, never a terminal id: fieldd resolves the
  * PTY through the record it minted for that run. */

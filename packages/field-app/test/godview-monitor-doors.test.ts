@@ -26,25 +26,17 @@ import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { AccountUsageBatch } from "@vibecook/puppeteer-core";
-import type {
-  AgentMeshFrame,
-  AgentMeshOpen,
-  AgentProfileSet,
-  DeviceInfo,
-} from "@vibefield/contracts";
+import type { AgentProfileSet, DeviceInfo } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
   type DoorClient,
   devicesPortOver,
   historyPortOver,
-  meshBoardFailure,
-  meshBoardOver,
+  modelBoardFailure,
   profileSetsPortOver,
-  statusHistoryPortOver,
   toAccountUsageBatch,
   usagePortOver,
 } from "../src/godview/monitor/doors";
-import type { MeshBoardFailure } from "../src/godview/monitor/remote-door";
 
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
 
@@ -717,118 +709,24 @@ describe("the profiles port over fieldd's profile-sets feed (AR-S5)", () => {
   });
 });
 
-describe("DS-3 — the mesh board over fieldd's own door", () => {
-  const OPEN = fixture("agent-mesh-open.valid.json");
-  const FRAMES = fixture("agent-mesh-frames.valid.json") as unknown[];
-
-  function listen() {
-    const opens: AgentMeshOpen[] = [];
-    const frames: AgentMeshFrame[] = [];
-    const errors: MeshBoardFailure[] = [];
-    return {
-      opens,
-      frames,
-      errors,
-      listener: {
-        onOpen: (open: AgentMeshOpen) => opens.push(open),
-        onFrame: (frame: AgentMeshFrame) => frames.push(frame),
-        onError: (failure: MeshBoardFailure) => errors.push(failure),
-      },
-    };
-  }
-
-  it("asks for the desk board at the mesh scope, and reads the open, then every frame", async () => {
-    const door = subscribingClient();
-    const subscribe = vi.spyOn(door.client, "subscribe");
-    const seen = listen();
-    const dispose = meshBoardOver(door.client)(seen.listener);
-    expect(subscribe.mock.calls[0]?.slice(0, 2)).toEqual([
-      "agent.subscribe",
-      { projection: "desk", scope: "mesh" },
-    ]);
-    door.resolve(OPEN);
-    await settle();
-    expect(seen.opens.map((open) => open.devices.map((entry) => entry.state))).toEqual([
-      ["live", "live", "asleep", "stale"],
-    ]);
-    for (const frame of FRAMES) door.frame(frame, "delta");
-    expect(seen.frames).toHaveLength(FRAMES.length);
-    // the client's replay after a reconnect is a WHOLE board, and replaces
-    door.frame(OPEN, "snapshot");
-    expect(seen.opens).toHaveLength(2);
-    expect(seen.errors).toEqual([]);
-    dispose();
-    expect(door.unsubscribes).toBe(1);
-  });
-
-  it("an unreadable frame is a reason, never a blank — and a gap; a refused board says why", async () => {
-    const door = subscribingClient();
-    const seen = listen();
-    meshBoardOver(door.client)(seen.listener);
-    door.resolve(OPEN);
-    await settle();
-    door.frame({ device: "", delta: {} }, "delta");
-    expect(seen.errors[0]?.reason).toMatch(/^the mesh board sent an unreadable frame/);
-    expect(seen.errors[0]).toMatchObject({ retryable: true, frame: true });
-
-    const refused = subscribingClient();
-    const told = listen();
-    meshBoardOver(refused.client)(told.listener);
-    refused.reject(new Error("FORBIDDEN_SCOPE: requires agent.observe"));
-    await settle();
-    expect(told.errors).toEqual([
-      { reason: "FORBIDDEN_SCOPE: requires agent.observe", retryable: false },
-    ]);
-  });
-
-  it("S4: says whether asking again may be answered — from the refusal's kind and flag, never its words", async () => {
-    // the board not ready yet, and a socket that dropped mid-ask: both may heal
-    const starting = subscribingClient();
-    const first = listen();
-    meshBoardOver(starting.client)(first.listener);
-    starting.reject(rpcError("UNAVAILABLE", "the mesh board is not ready yet", true));
-    await settle();
-    expect(first.errors).toEqual([{ reason: "the mesh board is not ready yet", retryable: true }]);
-
+describe("the model board refusal", () => {
+  it("classifies retryability from the refusal kind and flag, never its words", () => {
     // a refusal whose kind no second ask changes stays put, whatever the flag
-    expect(meshBoardFailure(rpcError("PRECONDITION_FAILED", "not served here", true))).toEqual({
+    expect(modelBoardFailure(rpcError("PRECONDITION_FAILED", "not served here", true))).toEqual({
       reason: "not served here",
       retryable: false,
     });
-    expect(meshBoardFailure(rpcError("INCOMPATIBLE", "another major", false)).retryable).toBe(
+    expect(modelBoardFailure(rpcError("INCOMPATIBLE", "another major", false)).retryable).toBe(
       false,
     );
-    expect(meshBoardFailure(rpcError("FORBIDDEN_SCOPE", "no agent.observe", false)).retryable).toBe(
-      false,
-    );
-    expect(meshBoardFailure(rpcError("UNAVAILABLE", "connection closed", true)).retryable).toBe(
+    expect(
+      modelBoardFailure(rpcError("FORBIDDEN_SCOPE", "no agent.observe", false)).retryable,
+    ).toBe(false);
+    expect(modelBoardFailure(rpcError("UNAVAILABLE", "connection closed", true)).retryable).toBe(
       true,
     );
     // a cause with no kind and no flag is not guessed at
-    expect(meshBoardFailure(new Error("UNAVAILABLE: looks retryable")).retryable).toBe(false);
-  });
-
-  it("S4: a replay the daemon refused after a reconnect is a failure, said with its retryability", async () => {
-    const door = subscribingClient();
-    const seen = listen();
-    const dispose = meshBoardOver(door.client)(seen.listener);
-    door.resolve(OPEN);
-    await settle();
-    door.refuseReplay(rpcError("UNAVAILABLE", "the mesh board is not ready yet", true));
-    expect(seen.errors).toEqual([{ reason: "the mesh board is not ready yet", retryable: true }]);
-    dispose();
-    door.refuseReplay(rpcError("UNAVAILABLE", "after the stage closed", true));
-    expect(seen.errors).toHaveLength(1); // a closed stage hears nothing
-  });
-
-  it("unsubscribes on arrival when the stage closed first", async () => {
-    const late = subscribingClient();
-    const seen = listen();
-    meshBoardOver(late.client)(seen.listener)();
-    late.resolve(OPEN);
-    await settle();
-    expect(late.unsubscribes).toBe(1);
-    expect(seen.opens).toEqual([]);
+    expect(modelBoardFailure(new Error("UNAVAILABLE: looks retryable")).retryable).toBe(false);
   });
 });
 
@@ -853,44 +751,5 @@ describe("DS-3 — the roster port over device.subscribe", () => {
     expect(seen).toHaveLength(1);
     dispose();
     expect(door.unsubscribes).toBe(1);
-  });
-});
-
-describe("TL — the status history port over agent.history", () => {
-  const run = (id: string) => ({
-    runtimeRunId: id,
-    recordedFrom: "2026-10-02T14:00:00.000Z",
-    changes: [
-      { status: "working", at: "2026-10-02T14:00:00.000Z", did: "Edit tl-view.js" },
-      { status: "blocked", at: "2026-10-02T14:05:00.000Z", blocker: { kind: "permission" } },
-    ],
-  });
-
-  it("asks for every run, or for the runs named, and reads the answer run by run", async () => {
-    const { client, request } = requestingClient({
-      "agent.history": {
-        horizonMs: 86_400_000,
-        runs: [run("r1"), { runtimeRunId: "" }, run("r2")],
-      },
-    });
-    const port = statusHistoryPortOver(client);
-    const runs = await port.load();
-    expect(request).toHaveBeenCalledWith("agent.history", {});
-    // the run that does not parse is dropped; the rest stand
-    expect(runs.map((r) => r.runtimeRunId)).toEqual(["r1", "r2"]);
-    expect(runs[0]?.changes[0]?.did).toBe("Edit tl-view.js");
-    await port.load(["r2"]);
-    expect(request).toHaveBeenLastCalledWith("agent.history", { runtimeRunIds: ["r2"] });
-  });
-
-  it("reads an answer that is not a list of runs as no record, and lets a refusal reject", async () => {
-    const odd = requestingClient({ "agent.history": { horizonMs: 1, runs: "nope" } });
-    await expect(statusHistoryPortOver(odd.client).load()).resolves.toEqual([]);
-    const refusing = requestingClient({
-      "agent.history": async () => {
-        throw new Error("METHOD_NOT_FOUND: agent.history");
-      },
-    });
-    await expect(statusHistoryPortOver(refusing.client).load()).rejects.toThrow("METHOD_NOT_FOUND");
   });
 });

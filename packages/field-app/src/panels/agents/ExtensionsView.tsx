@@ -1,4 +1,4 @@
-import { AgentIcon } from "@vibecook/puppeteer-views";
+import { AgentIcon } from "@vibecook/puppeteer-view-sdk/react";
 import type {
   AgentExtensionOffer,
   AgentExtensionRun,

@@ -168,6 +168,7 @@ pub mod layout {
     pub const MESH_STATE_DIR: &[&str] = &["native", "mesh"];
     pub const LINK_FILE: &[&str] = &["fieldd", "link.json"];
     pub const TERMINAL_BINDINGS_FILE: &[&str] = &["fieldd", "terminal-bindings.json"];
+    pub const PROJECT_IDENTITY_FILE: &[&str] = &["fieldd", "project-identity.json"];
     pub const TERMINAL_CONFIG_FILE: &[&str] = &["native", "config.ghostty"];
     pub const MGMT_SOCKET: &[&str] = &["native", "run", "mgmt.sock"];
     pub const MESHDATA_SOCKET: &[&str] = &["native", "run", "meshdata.sock"];
@@ -192,7 +193,6 @@ pub mod layout {
     pub const AGENT_SESSIONS_DIR: &[&str] = &["agents", "sessions"];
     pub const AGENT_RUNS_DIR: &[&str] = &["agents", "runs"];
     pub const AGENT_SESSIONS_KEY_FILE: &[&str] = &["agents", "sessions.key"];
-    pub const AGENT_HISTORY_DIR: &[&str] = &["agents", "history"];
     pub const AGENT_SHIMS_DIR: &[&str] = &["agents", "shims"];
     pub const USERS_DIR: &[&str] = &["users"];
     pub const USERS_FILE: &[&str] = &["users.json"];
@@ -224,6 +224,7 @@ pub mod layout {
         ("MESH_STATE_DIR", MESH_STATE_DIR),
         ("LINK_FILE", LINK_FILE),
         ("TERMINAL_BINDINGS_FILE", TERMINAL_BINDINGS_FILE),
+        ("PROJECT_IDENTITY_FILE", PROJECT_IDENTITY_FILE),
         ("TERMINAL_CONFIG_FILE", TERMINAL_CONFIG_FILE),
         ("MGMT_SOCKET", MGMT_SOCKET),
         ("MESHDATA_SOCKET", MESHDATA_SOCKET),
@@ -248,7 +249,6 @@ pub mod layout {
         ("AGENT_SESSIONS_DIR", AGENT_SESSIONS_DIR),
         ("AGENT_RUNS_DIR", AGENT_RUNS_DIR),
         ("AGENT_SESSIONS_KEY_FILE", AGENT_SESSIONS_KEY_FILE),
-        ("AGENT_HISTORY_DIR", AGENT_HISTORY_DIR),
         ("AGENT_SHIMS_DIR", AGENT_SHIMS_DIR),
         ("USERS_DIR", USERS_DIR),
         ("USERS_FILE", USERS_FILE),

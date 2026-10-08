@@ -387,6 +387,7 @@ export class DocHoldersService {
   #timer: ReturnType<typeof setTimeout> | null = null;
   #dispose: (() => void) | null = null;
   #stopped = false;
+  #stopPromise: Promise<void> | null = null;
   /** DS-5d — every holder ever heard (present or not), by deviceId. */
   readonly #ledger = new Map<string, LedgerEntry>();
   readonly #ledgerFile: SystemDocFile | null;
@@ -492,17 +493,28 @@ export class DocHoldersService {
     await this.#ledgerFile?.persist();
   }
 
-  stop(): void {
-    // DS-5d — what was heard since the last write is not left behind.
-    if (this.#ledgerTimer !== null) {
-      void this.flush().catch(() => undefined);
-    }
+  /** Close observation synchronously, then settle the final ledger write.
+   * The owner may remove its data root only after this promise resolves. */
+  stop(): Promise<void> {
+    if (this.#stopPromise !== null) return this.#stopPromise;
     this.#stopped = true;
     if (this.#timer !== null) clearTimeout(this.#timer);
     this.#timer = null;
     this.#dispose?.();
     this.#dispose = null;
+    // A fired timer has already cleared itself: drain that in-flight write
+    // too, even when there is no new checkpoint to schedule.
+    const checkpoint =
+      this.#ledgerTimer !== null
+        ? this.flush()
+        : (this.#ledgerFile?.drained() ?? Promise.resolve());
+    this.#stopPromise = checkpoint.catch((error: unknown) => {
+      this.#log.warn("fieldd.docs.holders_ledger_unwritten", "The holders ledger was not written", {
+        error: String(error),
+      });
+    });
     this.#peers.clear();
+    return this.#stopPromise;
   }
 
   #onStoreEvent(payload: unknown, kind: "snapshot" | "delta"): void {

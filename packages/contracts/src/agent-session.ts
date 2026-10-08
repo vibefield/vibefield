@@ -62,7 +62,7 @@ export const AgentMonitorMirror = z
       z.object({ id: z.string(), kind: z.string(), since: z.string() }).passthrough(),
     ),
     lastAssistantMessage: z.object({}).passthrough().optional(),
-    /** TL — what it is doing now; the status ledger keeps a working span's last `line`. */
+    /** TL — what it is doing now. Runtime only (MV-6): nothing records a span's `line`. */
     activity: z
       .object({ kind: z.string(), line: z.string(), since: z.string() })
       .passthrough()

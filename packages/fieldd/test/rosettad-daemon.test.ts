@@ -78,6 +78,7 @@ async function setup(
   config: {
     rosettadBin?: string;
     mode?: string;
+    onFatal?: (reason: string) => void;
     /** AR-1: a record written BEFORE boot (the store loads it at construction) */
     enrollment?: Partial<IndexEnrollmentRecord>;
     /** AR-1: spawn the binary itself (the live rows), with an EMPTY home */
@@ -110,6 +111,7 @@ async function setup(
     dataDir,
     controlPort: 0,
     rosettadBin: config.rosettadBin ?? "/stand-in/rosettad",
+    ...(config.onFatal === undefined ? {} : { onFatal: config.onFatal }),
     ...(config.real ? {} : { rosettadSpawn: fakeSpawner(config.mode ?? "ok") }),
     // an EMPTY home: even the real daemon discovers nothing installed here
     // and never reads the developer's own vendor roots
@@ -295,7 +297,11 @@ describe("rosettad through fieldd (AR-0)", () => {
   });
 
   it("supersession puts the daemon down: the successor spawns its own over the SAME projection, so ours must be gone first", async () => {
-    const { mock, daemon } = await setup();
+    let fatalNotified: (reason: string) => void = () => undefined;
+    const fatalNotification = new Promise<string>((resolve) => {
+      fatalNotified = resolve;
+    });
+    const { mock, daemon } = await setup({ onFatal: fatalNotified });
     const { pid } = await ready(daemon);
     // the floor tells this fieldd another owner took the plane
     const frame = JSON.stringify({
@@ -307,6 +313,9 @@ describe("rosettad through fieldd (AR-0)", () => {
     await until(() => daemon.native.superseded, 4_000);
     await until(() => !alive(pid), 6_000);
     expect(daemon.health().rosettad.phase).toBe("stopped");
+    // Child exit precedes artifact/audit/log drains. Join the fatal ladder's
+    // completion before afterEach can remove the root those drains still own.
+    await expect(fatalNotification).resolves.toContain("superseded");
   });
 
   it("an EMPTY rosettadBin is the honest unconfigured, never a spawn of nothing", async () => {

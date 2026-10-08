@@ -9,10 +9,9 @@ import {
   AGENT_CATALOG,
   AGENT_FIELD,
   AgentCatalogParams,
-  type AgentFieldDelta,
-  type AgentFieldSnapshot,
-  AgentHistoryParams,
   AgentInterruptParams,
+  AgentReportShownParams,
+  type AgentReportShownResult,
   AgentResumeParams,
   AgentSpawnParams,
   AgentSubscribeParams,
@@ -51,6 +50,7 @@ import {
   ArtifactRefreshPreviewParams,
   ArtifactUnpublishParams,
   ArtifactUpdateParams,
+  type CallerContext,
   CONTRACTS_VERSION,
   createAgentCatalogReaders,
   DeviceGetParams,
@@ -159,8 +159,8 @@ import {
 import { projectPluginAuthority } from "@vibefield/plugin-runtime";
 import {
   createFieldSubscription,
+  deskProjector,
   malformedBoardAsk,
-  projectDeskRow,
   projectFieldRow,
   refuseBoardAsk,
 } from "./agent-field";
@@ -170,6 +170,8 @@ import {
   type ShellIntegration,
 } from "./agent-gateway";
 import { DEFAULT_SEARCH_LIMIT, EnrollmentStore, IndexService } from "./agent-index";
+import { createModelSubscription } from "./agent-model-board";
+import { type AgentMonitorService, createAgentMonitorService } from "./agent-monitor";
 import { AgentRuntimeService, type AgentRuntimeServiceOptions } from "./agent-runtime";
 import { type AccountUsagePollOptions, AccountUsageService } from "./agent-usage";
 import {
@@ -204,7 +206,7 @@ import {
 } from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
-import { type BoardProjection, MeshBoard } from "./mesh-board";
+import { type BoardDelta, type BoardProjection, type LocalBoard, MeshBoard } from "./mesh-board";
 import { MESH_BUS_CARRIES_CONTENT } from "./mesh-bus";
 import { MeshClient, type ServeSpec } from "./mesh-client";
 import { MeshLaneLink } from "./mesh-lane";
@@ -223,6 +225,7 @@ import { PluginUpdateTransport } from "./plugin-update-transport";
 import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
+import { createProjectIdentityStore } from "./project-identity";
 import { atFloor, wholeValueDoor } from "./projection";
 import { KeyJournal } from "./projects/key-journal";
 import { PlaceScanner } from "./projects/place-scanner";
@@ -280,6 +283,11 @@ import { workspaceError } from "./workspace/tickets";
 // root that mints narrower per-window tokens via system.mintWindowToken) and
 // product.json (port/pid/bootId discovery metadata for adopt-or-spawn).
 
+/** DS-5d — how long a stopping fieldd waits for the holders ledger's last
+ * write before it goes on without it (M176 item 7): the supervisor's default
+ * TERM grace, and the bound the egress drain beside it already keeps. */
+export const DOC_HOLDERS_STOP_MS = 2_000;
+
 export interface FielddConfig {
   dataDir: string;
   controlPort?: number; // default 0 = ephemeral (UA-D12; product.json records the actual)
@@ -297,6 +305,9 @@ export interface FielddConfig {
   /** TC-S2 test seam: the terminal cell-birth wait budget (production
    * defaults to the cell's genned hello deadline). */
   terminalBirthWaitMs?: number;
+  /** DS-5d test seam: the bound on the holders ledger's last write at stop
+   * (`DOC_HOLDERS_STOP_MS` by default). */
+  docHoldersStopMs?: number;
   /** DS-4 seam: how a terminal ticket forwarded from another desktop becomes
    * doors a window here dials (`TerminalServiceOptions.remoteCellRewriter`).
    * Absent = production's `EgressCellRewriter` (DS-1b, 2026-10-01): one egress
@@ -838,6 +849,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
   // every composition without it — a shell is born exactly as before.
   let shellIntegrationRef: ShellIntegration | null = null;
   let devicesForAgents: DeviceService | null = null;
+  /** MV-3a (MV-D22) — the monitor backend beside the runtime; built once the
+   * device roster exists. Null only in the window before that, and read by
+   * the door's `model` projection and the stop paths. */
+  let monitor: AgentMonitorService | null = null;
   // Show in Finder reaches Electron main through the shell provider, which
   // the api owns — built later in this boot, so bound through a ref too. GT-7:
   // Settings → Terminal's file actions (the terminal service) reach it here.
@@ -1021,6 +1036,33 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     let presenceRooms: PresenceRoomRouter | null = null;
     // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
     let docHolders: DocHoldersService | null = null;
+    // DS-5d — both stop ladders below wait for the ledger's last write (the
+    // owner may remove its data root only after it, M162), but BOUNDED (M176):
+    // the write is small and best-effort, so a filesystem that never answers
+    // costs that write and never the shutdown, and says so.
+    const settleDocHolders = async (): Promise<void> => {
+      const holders = docHolders;
+      if (holders === null) return;
+      const budgetMs = config.docHoldersStopMs ?? DOC_HOLDERS_STOP_MS;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const outcome = await Promise.race([
+        holders.stop().then(
+          () => "settled" as const,
+          () => "settled" as const,
+        ),
+        new Promise<"expired">((resolve) => {
+          timer = setTimeout(() => resolve("expired"), budgetMs);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (outcome === "expired") {
+        logger.warn(
+          "fieldd.docs.holders_stop_timeout",
+          "The holders ledger did not settle in time; shutdown continues without it",
+          { budgetMs },
+        );
+      }
+    };
     // UA-D7 — the user's posture, CACHED because the three sync gates ask
     // synchronously (a commit hook cannot await a settings-document read) and
     // because the settings doc is constructed further down. It starts at the
@@ -2877,14 +2919,6 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
     });
     api.register("agent.list", () => agents.list());
-    // TL (TL-D8) — the status ledger: asked once when Godview opens, and for
-    // a run it has not asked about; read-only and unaudited like the fold.
-    api.register("agent.history", (_ctx, params) => {
-      const parsed = AgentHistoryParams.safeParse(params ?? {});
-      if (!parsed.success)
-        throw new RpcCallError("PRECONDITION_FAILED", "expected { runtimeRunIds? }", false);
-      return agents.history(parsed.data);
-    });
     // DS-3 (DS-L3) — every field and desk subscription is its own revision
     // CHAIN, and its epoch says which: this boot plus the chain's ordinal. Two
     // subscriptions in one boot never share an epoch, so no reader can mistake
@@ -2896,16 +2930,57 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const openLocalBoard = (
       projection: BoardProjection,
       minIntervalMs: number,
-      emit: (delta: AgentFieldDelta) => void,
+      emit: (delta: BoardDelta) => void,
       heartbeatMs?: number,
-    ): { snapshot: AgentFieldSnapshot & { epoch: string }; dispose: () => void } => {
+    ): LocalBoard => {
       const epoch = nextBoardEpoch();
+      // MV-3a (MV-D18) — the `model` board: this desktop's own windows' cut of
+      // the backend's model (`agent-model-board.ts`), at the fold's tick, urgent
+      // changes ahead of it (L12). The backend is built once the roster exists;
+      // a window that asks before that is told to ask again.
+      if (projection === "model") {
+        const service = monitor;
+        if (service === null)
+          throw new RpcCallError("UNAVAILABLE", "the monitor backend is not ready yet", true, {
+            service: "agent-monitor",
+            state: "starting",
+          });
+        const board = createModelSubscription({
+          fold: { list: () => agents.list(), subscribe: (fn) => agents.subscribe(fn) },
+          monitor: service,
+          emit,
+          epoch,
+          minIntervalMs,
+          ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
+          onError: (error) =>
+            logger.warn("fieldd.agents.model_frame_failed", "A model subscriber's frame failed", {
+              error: error instanceof Error ? error.message : String(error),
+            }),
+        });
+        return { snapshot: { ...board.snapshot, epoch }, dispose: board.dispose };
+      }
       const board = createFieldSubscription({
         list: () => agents.list(),
-        subscribe: (fn) => agents.subscribe(fn),
+        // the desk row carries the backend's model row (a PEER's cut), so a
+        // backend change with no fold publish behind it — the 30 s cost step,
+        // a recency flip — moves the desk board too
+        subscribe:
+          projection === "desk"
+            ? (fn) => {
+                const offFold = agents.subscribe(fn);
+                const offModel = monitor?.subscribe(() => fn()) ?? (() => undefined);
+                return () => {
+                  offFold();
+                  offModel();
+                };
+              }
+            : (fn) => agents.subscribe(fn),
         emit,
         epoch,
-        project: projection === "desk" ? projectDeskRow : projectFieldRow,
+        project:
+          projection === "desk"
+            ? deskProjector((runtimeRunId) => monitor?.rowForRun(runtimeRunId))
+            : projectFieldRow,
         minIntervalMs,
         ...(heartbeatMs !== undefined ? { heartbeatMs } : {}),
         // TM-2 (F-M4) — the SAME gate the store publisher applies below. The
@@ -2923,6 +2998,32 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     /** DS-3 — the mesh board; built once PeerLink and the federated manager
      * exist (below). Null only in the window before that. */
     let meshBoard: MeshBoard | null = null;
+    /** MV-3a (L5, M20) — the screens, one per product connection that holds a
+     * model board: opened with the connection's first model board, forgotten
+     * with its last (a window opens one; two share the connection's screen).
+     * A call with no connection id (none a product door mints) has no screen. */
+    const screens = new Map<string, { count: number; close: () => void }>();
+    const openScreen = (ctx: CallerContext): (() => void) | null => {
+      const service = monitor;
+      const id = ctx.connection?.id;
+      if (service === null || id === undefined) return null;
+      let held = screens.get(id);
+      if (held === undefined) {
+        held = { count: 0, close: service.openScreen(id) };
+        screens.set(id, held);
+      }
+      const screen = held;
+      screen.count += 1;
+      let open = true;
+      return () => {
+        if (!open) return;
+        open = false;
+        screen.count -= 1;
+        if (screen.count > 0) return;
+        screens.delete(id);
+        screen.close();
+      };
+    };
     // MF-1 (§5, §10.2) — one door, three projections. Absent params or
     // `projection: "full"` is the subscription the desktop has always had,
     // unchanged: whole `AgentListResult` frames at the fold's own 16 ms tick,
@@ -2955,27 +3056,72 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // may ask SLOWER, never faster, on either projection. The field's was a
       // default and not a floor until 2026-10-01 (the landing review): a 16 ms
       // ask was honoured, and every distinct ask stood up its own mesh hub.
+      // MV-3a (L12) — the model board's floor is the fold's own tick.
       const floor =
-        projection === "desk"
-          ? Math.max(
-              minIntervalMs ?? AGENT_FIELD.DESK_MIN_INTERVAL_MS,
-              AGENT_FIELD.DESK_MIN_INTERVAL_MS,
-            )
-          : Math.max(minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS, AGENT_FIELD.MIN_INTERVAL_MS);
-      if (scope === "mesh") {
-        if (meshBoard === null)
-          throw new RpcCallError("UNAVAILABLE", "the mesh board is not ready yet", true, {
-            service: "mesh-board",
-            state: "starting",
-          });
-        // `.snapshot` carries the whole mesh (the open, and the client's own
-        // replay after a reconnect); `.delta` carries every per-device frame —
-        // a device's delta, a device's reset, a device's state.
-        const reader = meshBoard.open(projection, floor, (frame) => emit(frame, "delta"));
-        return { snapshot: reader.open, dispose: reader.dispose };
+        projection === "model"
+          ? Math.max(minIntervalMs ?? AGENT_FIELD.FULL_TICK_MS, AGENT_FIELD.FULL_TICK_MS)
+          : projection === "desk"
+            ? Math.max(
+                minIntervalMs ?? AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+                AGENT_FIELD.DESK_MIN_INTERVAL_MS,
+              )
+            : Math.max(minIntervalMs ?? AGENT_FIELD.MIN_INTERVAL_MS, AGENT_FIELD.MIN_INTERVAL_MS);
+      // MV-3a (L5, M20) — a window's model board IS its screen: what it reports
+      // shown clears unread marks, and the screen is forgotten with the board.
+      const screen = projection === "model" ? openScreen(ctx) : null;
+      try {
+        if (scope === "mesh") {
+          if (meshBoard === null)
+            throw new RpcCallError("UNAVAILABLE", "the mesh board is not ready yet", true, {
+              service: "mesh-board",
+              state: "starting",
+            });
+          // `.snapshot` carries the whole mesh (the open, and the client's own
+          // replay after a reconnect); `.delta` carries every per-device frame —
+          // a device's delta, a device's reset, a device's state.
+          const reader = meshBoard.open(projection, floor, (frame) => emit(frame, "delta"));
+          return {
+            snapshot: reader.open,
+            dispose: () => {
+              reader.dispose();
+              screen?.();
+            },
+          };
+        }
+        const board = openLocalBoard(projection, floor, (delta) => emit(delta), heartbeatMs);
+        return {
+          snapshot: board.snapshot,
+          dispose: () => {
+            board.dispose();
+            screen?.();
+          },
+        };
+      } catch (error) {
+        screen?.();
+        throw error;
       }
-      const board = openLocalBoard(projection, floor, (delta) => emit(delta), heartbeatMs);
-      return { snapshot: board.snapshot, dispose: board.dispose };
+    });
+    // MV-3a (L5) — `agent.reportShown {ids}`: which rows the window shows in
+    // its active pane, by model id, forwarded to the backend for its unread
+    // marks. The screen is the connection's model board — refused without one.
+    api.register("agent.reportShown", (ctx, params) => {
+      const parsed = AgentReportShownParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError("PRECONDITION_FAILED", "expected { ids: string[] }", false);
+      const screenId = ctx.connection?.id;
+      if (
+        monitor === null ||
+        screenId === undefined ||
+        !monitor.reportShown(screenId, parsed.data.ids)
+      )
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          'no model board is open on this connection — subscribe agent.subscribe {projection: "model"} first; the board is the screen',
+          false,
+          { state: "no-screen" },
+        );
+      const result: AgentReportShownResult = { reported: true };
+      return result;
     });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own
@@ -3362,6 +3508,48 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     });
     devicesForAgents = devices;
     devicesRef = devices; // arms the tailnet door's node-id correlation (T1 §1)
+    // MV-3a (MV-D22, MV-D18) — the monitor backend, hosted beside the runtime
+    // (`agent-monitor.ts`): puppeteer's push bus and all-runs snapshot in, the
+    // daemon's own facts beside them — the fold's rows, the floor's PTYs with
+    // the profile each was born under, this device, the Agent Profiles — and
+    // one model out, which the board cuts per audience. Project colours are
+    // dealt from the identity file (L4), so a restart reshuffles nothing.
+    monitor = createAgentMonitorService({
+      runtime: agents.runtime,
+      fold: { list: () => agents.list(), subscribe: (emit) => agents.subscribe(emit) },
+      terminals: {
+        list: () => (terminals.observation() !== undefined ? terminals.list() : undefined),
+        onInventory: (listener) => terminals.onInventory(listener),
+        profileSetOf: (sessionId) => terminals.profileSetOf(sessionId),
+      },
+      devices: {
+        current: () => {
+          const id = devices.currentDeviceId();
+          const row = devices.get(id);
+          return {
+            id,
+            ...(row?.name !== undefined ? { name: row.name } : {}),
+            ...(row?.platform !== undefined ? { platform: row.platform } : {}),
+          };
+        },
+        onChanged: (listener) => {
+          devices.on("changed", listener);
+          return () => {
+            devices.off("changed", listener);
+          };
+        },
+      },
+      profiles: {
+        sets: () => agents.profiles.sets(),
+        subscribe: (emit) => agents.profiles.subscribe(emit),
+      },
+      catalog: agents.catalog,
+      identity: createProjectIdentityStore({
+        file: join(config.dataDir, ...LAYOUT.PROJECT_IDENTITY_FILE),
+        logger: logger.child({ component: "agent.monitor.identity" }),
+      }),
+      logger,
+    });
     // D1 (2026-10-01) — a peer that dialled before the roster could vouch for
     // it was admitted as `tailnet`; once the roster shows its node as a
     // desktop, its connection closes for a fresh hello (ProductApi)
@@ -5250,12 +5438,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // successor's) before the runs are released
           (gateway?.stop() ?? Promise.resolve())
             .catch(() => undefined)
-            .then(() => agents.dispose()),
+            .then(() => {
+              monitor?.dispose(); // MV-3a — off the runtime's bus before the runs go
+              return agents.dispose();
+            }),
           // the successor spawns its own rosettad over the SAME db — ours must
           // be gone first, and stop() resolves only after the real exit
           rosettad?.stop() ?? Promise.resolve(),
           workspace.stop(), // FS-1a — the files worker leaves with the daemon
         ]);
+        await settleDocHolders(); // DS-5d — the holders ledger's last write, bounded (M176)
         indexTail.dispose(); // SP-6 — the session sockets close with the daemon they follow
         indexCatalog.dispose();
         runtimeDiagnostics.dispose();
@@ -5688,6 +5880,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           // rendezvous is withdrawn, and the list of our shells STAYS (a
           // launcher in a pane waits for the fieldd that comes next)
           await gateway?.stop();
+          monitor?.dispose(); // MV-3a — the backend leaves the runtime's bus before the runs are released
           await agents.dispose(); // AR-2/AR-4 — the runs RELEASED (their PTYs outlive us) before the index
           indexTail.dispose(); // SP-6 — every session socket closes before its daemon stops
           index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
@@ -5702,7 +5895,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           endpoints.dispose();
           mcp.dispose();
           await settingsDoc.dispose(); // D29′ — the doc's writes are already durable
-          docHolders?.stop(); // DS-5 — the slice expires with its publisher
+          await settleDocHolders(); // DS-5d — the slice closes, its ledger settled or bounded
           for (const off of systemDocs?.unregister ?? []) off();
           await systemDocs?.library.dispose(); // DS-5 — every library write is durable
           api.close();
@@ -5809,6 +6002,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // guard is stated so a later start-before-ready cannot leave an orphan.
     agentUsage.stop(); // AR-5d — a failed boot leaves no poller and no listener
     await gatewayRef?.stop().catch(() => undefined); // AR-7b — nor a listener of the gateway's
+    monitor?.dispose(); // MV-3a — nor the backend's listeners on the runtime's bus
     await agents.dispose();
     await rosettad?.stop();
     placeScanner.dispose(); // PJ-1 — likewise never started before ready

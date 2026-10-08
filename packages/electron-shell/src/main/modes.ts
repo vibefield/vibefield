@@ -11,6 +11,7 @@ export type ShellMode =
   | "smoke-godview"
   | "live-surfaces-lab"
   | "terminal-perf-lab"
+  | "godview-perf-lab"
   | "terminal-door-probe"
   | "spike-loro";
 
@@ -18,6 +19,7 @@ export type ShellMode =
 export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--live-surfaces-lab")) return "live-surfaces-lab";
   if (argv.includes("--terminal-perf-lab")) return "terminal-perf-lab";
+  if (argv.includes("--godview-perf-lab")) return "godview-perf-lab";
   if (argv.includes("--terminal-door-probe")) return "terminal-door-probe";
   if (argv.includes("--spike-loro")) return "spike-loro";
   if (argv.includes("--smoke-plugin-restart")) return "smoke-plugin-restart";
@@ -27,6 +29,17 @@ export function parseMode(argv: readonly string[]): ShellMode {
   if (argv.includes("--smoke-canvas")) return "smoke-canvas";
   if (argv.includes("--dev")) return "dev";
   return "production";
+}
+
+/** The Godview worker probe can serve the renderer from Vite while keeping
+ * its isolated data root and stop-owned pair. Only RENDERER policies use this
+ * answer; daemon lifetime, resources and test dispatch always use ShellMode.
+ * The flag has no effect outside that lab, especially in production. */
+export function rendererPolicyMode(
+  mode: ShellMode,
+  godviewLabRenderer: string | undefined,
+): ShellMode {
+  return mode === "godview-perf-lab" && godviewLabRenderer === "dev" ? "dev" : mode;
 }
 
 /** Test-harness modes: transient, port-isolated runs that never present UI.
@@ -41,6 +54,7 @@ export function isSmokeLike(mode: ShellMode): boolean {
     mode === "smoke-godview" ||
     mode === "live-surfaces-lab" ||
     mode === "terminal-perf-lab" ||
+    mode === "godview-perf-lab" ||
     mode === "terminal-door-probe" ||
     mode === "spike-loro"
   );
@@ -72,6 +86,8 @@ export function shutdownPolicy(mode: ShellMode): "stop-owned" | "leave-running" 
     mode === "smoke-plugin-restart" ||
     mode === "smoke-godview" ||
     mode === "terminal-perf-lab" ||
+    // MV-0: the Godview perf lab is the perf lab's shape — its own pair, stop-owned
+    mode === "godview-perf-lab" ||
     mode === "terminal-door-probe"
     ? "stop-owned"
     : "leave-running";

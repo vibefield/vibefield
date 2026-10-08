@@ -1,23 +1,22 @@
+import type { StageGeometry } from "@vibecook/puppeteer-view-sdk";
+import { MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
+import type { AgentView } from "@vibecook/puppeteer-view-sdk/model";
 import {
-  AgentSwarm,
-  agentFixture,
-  type MonitorAgent,
-  readMonitorPalette,
-  type SwarmFrame,
-  SwarmPhysicsProvider,
-  terminalFixture,
-} from "@vibecook/puppeteer-views";
-import { createInlineSwarmPhysicsDriver } from "@vibecook/puppeteer-views/physics";
+  agentViewFixture,
+  createFixtureReplica,
+  fixtureTheme,
+} from "@vibecook/puppeteer-view-sdk/testing";
+import { type SwarmFrame, swarmMonitorView } from "@vibecook/puppeteer-views";
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import {
-  createSwarmPhysicsDriver,
-  setSwarmPhysicsDriverFactory,
-} from "../src/godview/views/swarm/swarm-physics-driver";
 
-// Only GPU submission is replaced. Shipping pointer handlers, render models,
-// VibeField's driver adapter and the shared Matter.js simulation all run.
+// Only GPU submission is replaced. The shipping SDK view (MV-5) mounts through
+// the view host as VibeField's stage mounts it: its pointer handlers, render
+// models and its own physics (inline here — happy-dom has no Worker, so the
+// view's driver runs the same host in this thread and says so) all run. The
+// handoff is M59's: a launcher's agent row arrives wearing the shell's
+// `visualId`, and the body the shell had is the one the agent keeps.
 const { paint } = vi.hoisted(() => ({ paint: vi.fn<(frame: SwarmFrame) => void>() }));
 vi.mock(
   "../../../../puppeteer/packages/views/src/views/swarm/gpu/swarm-renderer.js",
@@ -33,14 +32,26 @@ vi.mock(
 let root: Root;
 let host: HTMLDivElement;
 const select = vi.fn();
-const createAt = vi.fn();
+const create = vi.fn();
 const bounds = new DOMRect(17, 31, 800, 600);
-const now = Date.now();
-const terminal = terminalFixture("shell", "test-project", false, now);
-const agent = {
-  ...agentFixture({ id: "run", project: "test-project", status: "idle", accent: 1 }, now),
-  visualId: "shell",
+const STAGE: StageGeometry = {
+  width: bounds.width,
+  height: bounds.height,
+  insets: { top: 0, right: 0, bottom: 0, left: 0 },
+  obstacles: [],
 };
+const terminal: AgentView = agentViewFixture({
+  id: "shell",
+  kind: "terminal",
+  project: { name: "test-project" },
+});
+const agent: AgentView = agentViewFixture({
+  id: "run",
+  project: { name: "test-project" },
+  visualId: "shell",
+});
+const replica = createFixtureReplica();
+(globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 beforeEach(() => {
   vi.useFakeTimers({
@@ -55,35 +66,36 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, "clientWidth", "get").mockReturnValue(bounds.width);
   vi.spyOn(HTMLElement.prototype, "clientHeight", "get").mockReturnValue(bounds.height);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue(bounds);
-  setSwarmPhysicsDriverFactory((options) => createInlineSwarmPhysicsDriver(options));
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
   paint.mockClear();
   select.mockClear();
-  createAt.mockClear();
+  create.mockClear();
+  replica.set([]);
 });
 afterEach(async () => {
   await act(async () => root.unmount());
   host.remove();
-  setSwarmPhysicsDriverFactory(undefined);
   vi.restoreAllMocks();
   vi.useRealTimers();
 });
 
-async function render(row: MonitorAgent): Promise<HTMLElement> {
+async function render(row: AgentView): Promise<HTMLElement> {
+  replica.set([row]);
   await act(async () =>
     root.render(
-      <SwarmPhysicsProvider factory={createSwarmPhysicsDriver}>
-        <AgentSwarm
-          agents={[row]}
-          parameters={{ gravityPull: 0 }}
-          palette={readMonitorPalette()}
-          actions={{ select, createAt }}
-        />
-      </SwarmPhysicsProvider>,
+      <MonitorViewHost
+        replica={replica}
+        view={swarmMonitorView}
+        stage={STAGE}
+        theme={fixtureTheme("light")}
+        parameters={{ gravityPull: 0 }}
+        commands={{ select, create }}
+      />,
     ),
   );
+  await frames(16);
   const stage = host.querySelector<HTMLElement>(".vf-monitor-swarm")!;
   stage.setPointerCapture = vi.fn();
   stage.hasPointerCapture = () => true;
@@ -138,7 +150,7 @@ describe("swarm pointer interaction", () => {
       expect(body().x - start.x).toBeGreaterThan(60);
       await pointer(stage, "pointerup", destination);
       expect(select).not.toHaveBeenCalled();
-      expect(createAt).not.toHaveBeenCalled();
+      expect(create).not.toHaveBeenCalled();
       expect(stage.releasePointerCapture).toHaveBeenCalledWith(1);
     },
   );
@@ -151,7 +163,7 @@ describe("swarm pointer interaction", () => {
     expect(host.querySelector('[role="tooltip"]')).not.toBeNull();
     await pointer(stage, "pointerdown", body());
     await pointer(stage, "pointerup", body());
-    expect(select).toHaveBeenCalledExactlyOnceWith(agent);
-    expect(select.mock.calls[0]?.[0].id).toBe("run");
+    // the row's own id is what select names — never the body it inherited
+    expect(select).toHaveBeenCalledExactlyOnceWith("run");
   });
 });

@@ -1,22 +1,24 @@
+import type { MonitorTheme, StageGeometry, ViewReport } from "@vibecook/puppeteer-view-sdk";
+import { frameScheduler, keepStage, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
+import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
 import {
   type AccountUsagePort,
   BarControl,
+  ChromeBoundary,
+  type FindAgent,
   FindSheet,
   type HistoryPort,
   InstrumentBar,
-  MONITOR_CHROME_ATTRIBUTE,
   MONITOR_STAGE_CLASS,
   MONITOR_VIEWS,
   type MonitorParameters,
-  ProfileGlyph,
   ProfileTabs,
-  SwarmPhysicsProvider,
   UsageColumn,
   useMonitorPalette,
-  type MonitorAgent as ViewsMonitorAgent,
 } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
 import {
+  memo,
   type ReactElement,
   useCallback,
   useEffect,
@@ -24,40 +26,25 @@ import {
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { emitGodviewMonitorMarker, type GodviewMonitorRunFacts } from "../development-console";
 import { DeviceFilterChip } from "./DeviceFilterChip";
 import type { GodviewTheme } from "./GodviewTuningPanel";
-import { managedRowId, monitorAgentCounts } from "./monitor/agents";
-import { type DeviceChoice, filterByDevice, standingChoice } from "./monitor/device-filter";
-import type { AgentSessionSummary } from "./monitor/facet-types";
-import { useAgentFold } from "./monitor/GodviewAgentsProvider";
-import {
-  bloomOwnsKeyEvent,
-  launcherOwnsKeyEvent,
-  setMonitorHoldsKeys,
-} from "./monitor/launcher-keys";
-import {
-  chosenProfile,
-  personaProfiles,
-  profileTabs,
-  recedeOutside,
-  showsProfileTabs,
-  withProfileSets,
-} from "./monitor/profile-tabs";
+import { monitorAgentCounts } from "./monitor/agents";
+import { type ChromeRun, NO_RUNS, useChromeKey } from "./monitor/chrome-facts";
+import type { DeviceChoice } from "./monitor/device-filter";
+import { useMonitorFeed } from "./monitor/GodviewAgentsProvider";
+import { launcherOwnsKeyEvent, setMonitorHoldsKeys } from "./monitor/launcher-keys";
+import { chosenProfile, showsProfileTabs } from "./monitor/profile-tabs";
 import type { MonitorDoor, MonitorFeedState } from "./monitor/remote-door";
-import { spawnMenuOf } from "./monitor/spawn-menu";
-import type { AgentMonitorView, MonitorAgent, MonitorSpawnMenu } from "./monitor/types";
+import type { MonitorViewEntry } from "./monitor/types";
 import {
   type MonitorPaneFacts,
   type MonitorSourceCounts,
   useMonitorAgents,
 } from "./monitor/useMonitorAgents";
 import { OsMark } from "./os-marks";
-import {
-  createSwarmPhysicsDriver,
-  currentSwarmPhysicsMode,
-} from "./views/swarm/swarm-physics-driver";
 
 const ACKNOWLEDGEMENT_MS = 2_600;
 
@@ -140,32 +127,53 @@ export function remoteUnavailableClaim(sources: MonitorSourceCounts): string | n
 }
 
 /**
- * AR-7 — the fold's rows as the marker names them: every run, whether the
- * stage draws it or not. The pane is the fold's own join (`terminal`, a LOCAL
+ * AR-7 — this desktop's runs as the marker names them: every run, whether the
+ * stage draws it or not. The pane is the run's own join (`terminal`, a LOCAL
  * row only — a peer's session id names no pane here), the provenance is the
  * row's word with the contract's default (absent reads `app`), and `drawn` is
- * asked of the rows the stage actually assembled, by the run — the id every
- * managed row is keyed by (`managedRowId`).
+ * asked of the RUNS the stage actually shows (MV-3b: the model's rows, each
+ * joined to its run through the board row it rode in on). The model carries
+ * neither the PTY join, nor the provenance, nor the exit a smoke reads here
+ * (M19): MV-3d reads them off each run's row of the model board, the chrome's
+ * facts beside the model (`local`), where the fold's `full` row used to be.
  */
 export function monitorRunFacts(
-  rows: readonly AgentSessionSummary[],
-  drawn: readonly Pick<MonitorAgent, "id" | "agent">[],
+  runs: readonly ChromeRun[],
+  drawnRuns: ReadonlySet<string>,
 ): GodviewMonitorRunFacts[] {
-  const bodies = new Set(drawn.filter((row) => row.agent !== undefined).map((row) => row.id));
-  return rows.map((row) => {
-    const terminal = row.terminal?.hosted === "local" ? row.terminal.runtimeSessionId : undefined;
+  return runs.map((run) => {
+    const terminal = run.terminal?.hosted === "local" ? run.terminal.runtimeSessionId : undefined;
     return {
-      run: row.runtimeRunId,
-      provider: row.kind,
+      run: run.runtimeRunId,
+      provider: run.kind,
       ...(terminal !== undefined && terminal !== "" ? { terminal } : {}),
-      spawnedBy: row.spawnedBy ?? "app",
-      status: row.status,
-      exited: row.continuation?.exited === true,
-      observed: row.monitor !== undefined,
-      drawn: bodies.has(managedRowId(row)),
+      spawnedBy: run.local?.spawnedBy ?? "app",
+      status: run.status,
+      exited: run.local?.exited === true,
+      observed: run.local?.mirror !== undefined,
+      drawn: drawnRuns.has(run.runtimeRunId),
     };
   });
 }
+
+const NO_DRAWN: ReadonlySet<string> = new Set();
+
+/** What the marker states of the runs before `drawn` is joined: a key, so the
+ * stage renders again for a marker fact and never for a token count. */
+function markerRunsKey(runs: readonly ChromeRun[]): string {
+  return JSON.stringify(monitorRunFacts(runs, NO_DRAWN));
+}
+
+/** What a view has said about itself before it says anything. */
+const NO_REPORT: ViewReport = Object.freeze({});
+
+/** The stage before it is measured: no size, no chrome. */
+const EMPTY_STAGE: StageGeometry = Object.freeze({
+  width: 0,
+  height: 0,
+  insets: Object.freeze({ top: 0, right: 0, bottom: 0, left: 0 }),
+  obstacles: Object.freeze([]),
+});
 
 /** With no deck there is no daemon to ask: the sheet says HISTORY OFF, the
  * column stays empty, and neither invents an answer. */
@@ -199,8 +207,47 @@ const noStatusCycle = (): void => undefined;
  * handler — the ask on record, beside the counters'. */
 const noThemeSwitch = (): void => undefined;
 
+/** M195 — the bar renders only when one of its own inputs moves. The monitor
+ * renders on every model publish (about once a frame while agents work), and
+ * every control on the bar is a tip with its own handlers: rendered inline it
+ * was rebuilt with each publish, and each view the registry adds (spend) cost
+ * one more tip per frame. Its inputs below keep their identity while what they
+ * say is the same, so the memo holds. */
+const MonitorBar = memo(InstrumentBar);
+
+/** `value`, or the one held while `key` says nothing in it changed: a stable
+ * identity for a value the window rebuilds on every publish. */
+function useHeldWhileSame<T>(value: T, key: string): T {
+  const held = useRef({ key, value });
+  if (held.current.key !== key) held.current = { key, value };
+  return held.current.value;
+}
+
+const REDUCED_MOTION = "(prefers-reduced-motion: reduce)";
+
+function reducedMotionQuery(): MediaQueryList | null {
+  return typeof window !== "undefined" && typeof window.matchMedia === "function"
+    ? window.matchMedia(REDUCED_MOTION)
+    : null;
+}
+
+function subscribeReducedMotion(onChange: () => void): () => void {
+  const query = reducedMotionQuery();
+  if (query === null) return () => undefined;
+  query.addEventListener("change", onChange);
+  return () => query.removeEventListener("change", onChange);
+}
+
+const readReducedMotion = (): boolean => reducedMotionQuery()?.matches ?? false;
+
+/** MV-W4 — the viewer's reduced-motion preference, live: a change reaches the
+ * mounted view without waiting for the stage to render for another reason. */
+function usePrefersReducedMotion(): boolean {
+  return useSyncExternalStore(subscribeReducedMotion, readReducedMotion, () => false);
+}
+
 export interface GodviewMonitorProps {
-  view: AgentMonitorView;
+  view: MonitorViewEntry;
   parameters: MonitorParameters;
   theme?: GodviewTheme;
   notice?: string | null;
@@ -213,6 +260,11 @@ export interface GodviewMonitorProps {
   panes?: MonitorPaneFacts;
   /** The product shell overlays native macOS controls on the leading edge. */
   reserveWindowControls?: boolean;
+  /** MV-W4 — the stage's animations switch, the value its owner hands
+   * `GodviewStage` (GT-3p: the lab's kill switch; the catalog's still stage).
+   * Off, a ported view's loop holds still, as the stage's CSS loops do under
+   * the attribute the stage writes from the same value. */
+  animations?: boolean;
   onSelectView?: (viewId: string) => void;
   onToggleTuning?: () => void;
 }
@@ -226,6 +278,7 @@ export function GodviewMonitor({
   door = null,
   panes,
   reserveWindowControls = false,
+  animations = true,
   onSelectView,
   onToggleTuning,
 }: GodviewMonitorProps): ReactElement {
@@ -239,6 +292,7 @@ export function GodviewMonitor({
     godviewRootRef.current = stageRef.current?.closest(".vf-godview") ?? null;
   }, []);
   const palette = useMonitorPalette(godviewRootRef);
+  const reducedMotion = usePrefersReducedMotion();
 
   // AR-S5 — THE PROFILE TABS (the agents-settings record's T3). The feed is
   // the one Settings reads, held only while this stage is (PF6). A chosen tab
@@ -265,21 +319,42 @@ export function GodviewMonitor({
   }, [profilesPort]);
   const showTabs = showsProfileTabs(profileSets);
   const chosen = useMemo(() => chosenProfile(profileSets, profileTab), [profileSets, profileTab]);
+  const chosenId = chosen?.id;
 
-  const { agents, actions, sources, acknowledgement, clearAcknowledgement, devices, history } =
-    useMonitorAgents({
-      palette,
-      door,
-      ...(panes ? { panes } : {}),
-      profiles: profileSets,
-    });
   // DS-3 — THE DEVICE FILTER: one desktop's rows, or every desktop's (the
   // default). A desktop that leaves the board falls back to all. The chip is
   // drawn only when there is a choice to make — two desktops or more — and
   // while its menu is open the stage holds the keys (QL-D2, as the find sheet
   // does), so a launcher in the focused pane never takes its ⎋.
   const [deviceChoice, setDeviceChoice] = useState<string | null>(null);
-  const deviceChosen = standingChoice(devices, deviceChoice);
+  // MV-3b — THE WINDOW on the replica (`useMonitorAgents`): the backend's rows
+  // through this window's one door, joined with the deck's panes, the chosen
+  // tab and the chosen desktop; list and rain as SDK views on the window's cut
+  // of it (MV-4…MV-6); Find alone adapts its local chrome facts (M19).
+  const {
+    viewReplica,
+    commands,
+    capabilities,
+    agents,
+    shown,
+    findAgents,
+    runByRow,
+    sources,
+    acknowledgement,
+    clearAcknowledgement,
+    devices,
+    deviceChosen,
+    tabs,
+  } = useMonitorAgents({
+    palette,
+    door,
+    ...(panes ? { panes } : {}),
+    profiles: profileSets,
+    profilesRead: profileSetsRead,
+    hasProfiles: profilesPort !== undefined,
+    chosenProfile: chosenId,
+    device: deviceChoice,
+  });
   const [deviceMenuOpen, setDeviceMenuOpen] = useState(false);
   // Held only while the chip is DRAWN and says its menu is open: the chip is
   // drawn for two desktops or more, and one unmounted with its menu open used
@@ -303,11 +378,26 @@ export function GodviewMonitor({
       subscribe: (listener) => source.subscribe(listener),
     };
   }, [usagePort, usageAttempt]);
+  // A failed column is tried again only for a fact that can fix it. The column
+  // reads its port and nothing else, so the facts are a new port: a new door,
+  // or the viewer's Retry. Never the model's rows (keyed on them, a persistent
+  // failure remounted on every publish, M176), and never the host update that
+  // follows the failure itself (the tile count it observes changes with it).
+  // A new port inside the boundary's window waits for its end (the backoff).
+  const usageRetryKey = columnUsagePort;
   useEffect(() => {
     setUsageState({ state: usagePort === undefined ? "no-door" : "loading" });
     return usagePort?.subscribeState?.(setUsageState);
   }, [usagePort]);
   const claimsRef = useRef<HTMLDivElement>(null);
+  // M49 — the claims behind their own boundary, INSIDE the strip: the strip
+  // stays measured (its rectangle is the stage's top inset and an obstacle),
+  // and the acknowledgement keeps its voice. They try again for the facts they
+  // state, never for the stage geometry a failure republishes (M176).
+  const claimsRetryKey = useMemo(
+    () => ({ sources, devices, usageState }),
+    [sources, devices, usageState],
+  );
   const [findOpen, setFindOpen] = useState(false);
   // QL-D2's other half: while the find sheet is up, its Escape is the sheet's,
   // not a fresh pane's launcher's (`launcher-keys.ts`).
@@ -316,90 +406,80 @@ export function GodviewMonitor({
     setMonitorHoldsKeys(true);
     return () => setMonitorHoldsKeys(false);
   }, [findOpen]);
-  /** What the swarm is painting with, read off its own element (AR-5). */
-  const [swarmRenderer, setSwarmRenderer] = useState("none");
+  // MV-5 (W5) — what the mounted view says about itself (`commands.report`):
+  // what it paints with, where its simulation runs, and whether it holds the
+  // keys. Never read off its DOM; the slot clears it when the view changes.
+  const [viewReport, setViewReport] = useState<ViewReport>(NO_REPORT);
+  /** Read by the capture listeners at event time: a report lands between renders. */
+  const viewHoldsKeysRef = useRef(false);
+  const onReport = useCallback((report: ViewReport): void => {
+    viewHoldsKeysRef.current = report.keysHeld === true;
+    setViewReport(report);
+  }, []);
+  /** AR-5: what the swarm paints with — `starting` while its physics runs and its device has not answered. */
+  const swarmRenderer =
+    viewReport.renderer ?? (viewReport.physics !== undefined ? "starting" : "none");
+  /** GT-3c: where its physics runs — `worker`, the honest `inline`, or `none` for a view with none. */
+  const swarmPhysics = viewReport.physics ?? "none";
+  const viewHoldsKeys = viewReport.keysHeld === true;
   /** The usage column's tiles, counted off the chrome slot (AR-5); -1 unmounted. */
   const [usageTiles, setUsageTiles] = useState(-1);
-  const personas = useMemo(() => personaProfiles(profileSets), [profileSets]);
-  const chosenId = chosen?.id;
-  /** SB-3 — every row says the profile it runs under (`profileSet`), the set
-   * the tabs compute: the spawn bloom lights the rows under what it points at. */
-  const rows = useMemo(() => withProfileSets(agents, personas), [agents, personas]);
-  /** DS-3 — the chosen desktop's rows (all of them by default): the device
-   * filter NARROWS what the swarm and the list are handed. */
-  const placed = useMemo(() => filterByDevice(rows, deviceChosen), [rows, deviceChosen]);
-  /** The rows as the stage draws them: every one, the chosen profile's as
-   * they are and the rest receded — still in the physics, in their places. */
-  const staged = useMemo(
-    () => recedeOutside(placed, chosenId, personas),
-    [placed, chosenId, personas],
-  );
-  const shown = useMemo(
-    () => (chosenId === undefined ? placed : staged.filter((agent) => agent.receded !== true)),
-    [placed, chosenId, staged],
-  );
-  /** TL — the record, its ended lanes narrowed exactly as the live rows are:
-   * an ended run on another desktop, or under another profile, is drawn (or
-   * receded) by the same rule as a live one. */
-  const stagedHistory = useMemo(
-    () => ({
-      ...history,
-      ended: recedeOutside(
-        filterByDevice(withProfileSets(history.ended, personas), deviceChosen),
-        chosenId,
-        personas,
-      ),
-    }),
-    [history, personas, deviceChosen, chosenId],
-  );
   const counts = useMemo(() => monitorAgentCounts(shown), [shown]);
-  // AR-7 — the fold's rows for the marker, handed on as the SAME object until
-  // a fact the marker states moves: the fold sends a whole board at fieldd's
-  // tick while an agent works, and a token count is no news to this line (the
-  // identity rule the deck's frame facts follow in `GodviewAgentsProvider`).
-  const fold = useAgentFold();
-  const runFacts = useRef<{ key: string; runs: GodviewMonitorRunFacts[] }>({ key: "", runs: [] });
-  const nextRuns = monitorRunFacts(fold.rows, agents);
-  const runsKey = JSON.stringify(nextRuns);
-  if (runsKey !== runFacts.current.key) runFacts.current = { key: runsKey, runs: nextRuns };
-  const runs = runFacts.current.runs;
-  const tabs = useMemo(
-    () => profileTabs(profileSets, rows, personas),
-    [profileSets, rows, personas],
-  );
-  /** SB-3 — what a new terminal can be born under, for the spawn bloom (and
-   * the list's menu): this desktop and its Agent Profiles (SB-D9). A host with
-   * no feed offers no menu, and a hold creates at once, as before. Handed on as
-   * the SAME object until what it says changes. */
-  const nextSpawnMenu =
-    profilesPort === undefined
-      ? undefined
-      : spawnMenuOf(profileSetsRead ? profileSets : null, tabs);
-  const spawnMenuKey = nextSpawnMenu === undefined ? "" : JSON.stringify(nextSpawnMenu);
-  const spawnMenuRef = useRef<{ key: string; menu: MonitorSpawnMenu | undefined }>({
-    key: "",
-    menu: undefined,
+  // AR-7 — this desktop's runs for the marker, handed on as the SAME object
+  // until a fact the marker states moves: a working agent's row moves several
+  // times a second, and a token count is no news to this line (the identity
+  // rule the deck's frame facts follow in `GodviewAgentsProvider`). MV-3d: the
+  // runs are the chrome's (`chrome-facts.ts`), and the stage hears them only
+  // when the marker's own key moves. `drawn` is asked of the runs behind the
+  // agent rows the stage shows, through the board's join (`runByRow`) —
+  // observed or not.
+  const chrome = useMonitorFeed()?.chrome ?? null;
+  const markerKey = useChromeKey(chrome, markerRunsKey);
+  const drawnRunIds = shown.flatMap((row) => {
+    const run = row.kind !== "agent" ? undefined : runByRow.get(row.id);
+    return run === undefined ? [] : [run];
   });
-  if (spawnMenuRef.current.key !== spawnMenuKey) {
-    spawnMenuRef.current = { key: spawnMenuKey, menu: nextSpawnMenu };
-  }
-  const spawnMenu = spawnMenuRef.current.menu;
+  const drawnKey = JSON.stringify(drawnRunIds);
+  // Row objects move with token counts; membership does not. Reuse the join
+  // until either the drawn ids or a fact the marker actually states changes.
+  const drawnRuns = useMemo(() => new Set(drawnRunIds), [drawnKey]);
+  const runs = useMemo(
+    () => monitorRunFacts(chrome?.runs() ?? NO_RUNS, drawnRuns),
+    [chrome, markerKey, drawnRuns],
+  );
   /** A tab with no sessions under it says so over the stage; with no sessions
    * at all the view's own empty state speaks instead. */
   const emptyUnder =
     chosen !== undefined && agents.length > 0 && shown.length === 0 ? chosen : undefined;
 
-  // Views that lay out in flow clear the chrome with these two insets (the
-  // list's padding reads both); the swarm instead reads the chrome elements'
-  // rects directly and steers bodies around them.
+  // MV-D19 — the view host's stage: the chrome measured below, as plain data.
+  // Every view reads it (MV-4…MV-6): the list's and the timeline's band and
+  // gutter are its insets, the swarm steers around its obstacles. The CSS
+  // variables the legacy views read off the stage are gone with them.
+  const [stageGeometry, setStageGeometry] = useState<StageGeometry>(EMPTY_STAGE);
+  // MV-W4 — the motion a view may make: none while the viewer asks for reduced
+  // motion, and none while the stage's animations switch is off (the lab's
+  // kill switch, the catalog's still stage). A view's loop stops on either
+  // (the rain draws once per change instead, the swarm holds still and pauses
+  // its physics). Both are known at the first render, so a view mounted under
+  // a still stage never starts its loop.
+  const monitorTheme = useMemo<MonitorTheme>(
+    () => ({ scheme: theme, tokens: palette, reducedMotion, animations }),
+    [theme, palette, reducedMotion, animations],
+  );
+
+  // Views that lay out in flow clear the chrome with these two insets — the
+  // list, the timeline and spend as the stage's `insets.left` and `insets.top` (M58);
+  // the swarm instead steers its bodies around the chrome's rectangles, the
+  // stage's `obstacles` (MV-D19).
   //
-  // The RIGHT inset is the package's own idea (`monitor/chrome.ts`): the usage
-  // column down the left edge is host chrome, and a view that cares finds it
-  // through the marker rather than by knowing what it is. The TOP inset is the
-  // same bargain for the strip above — and it is VibeField's to publish because
-  // the strip is VibeField's: AR-3's claims are not in the reference host at
-  // all, so the package's `list.css` reserves nothing for them and its toolbar
-  // laid out at y=11px, under a strip pinned at y=11px. James's 2026-09-13 pass
+  // The LEFT inset is the usage column's right edge: the column down the
+  // stage's left edge is host chrome, and a view learns it as geometry, never
+  // by finding the host's DOM. The TOP inset is the same for the strip above —
+  // and it is VibeField's to publish because the strip is VibeField's: AR-3's
+  // claims are not in the reference host at all, so the package's `list.css`
+  // reserved nothing for them and its toolbar laid out at y=11px, under a
+  // strip pinned at y=11px. James's 2026-09-13 pass
   // photographed the result: "1 MANAGED AGENT · MESH UNAVAILABLE…" and
   // "1 SESSIONS" printed over each other in the same corner. Two claims that
   // overlap are one unreadable claim, which is the failure GT-D17 names.
@@ -416,81 +496,61 @@ export function GodviewMonitor({
     if (!stage || !chrome || !claims || typeof ResizeObserver === "undefined") return;
     const publish = (): void => {
       const stageRect = stage.getBoundingClientRect();
-      stage.style.setProperty(
-        "--vf-monitor-chrome-right",
-        `${Math.round(chrome.getBoundingClientRect().right - stageRect.left)}px`,
-      );
+      const chromeRect = chrome.getBoundingClientRect();
+      const chromeRight = Math.round(chromeRect.right - stageRect.left);
       // A strip with nothing to say takes no room: it publishes 0, and the
       // view's own band then measures from the stage's top exactly as before.
-      // The GAP is not published — `godview.css` adds the package's own band to
-      // whatever this says, so no new spacing number is invented here
-      // (docs/UI_SYSTEM.md: a visual constant belongs in DESIGN.md and the
-      // token sheet, never loose in a component).
+      // The GAP is not published — the list's own stylesheet adds its band to
+      // the inset, and the timeline starts at it (M63) — so no new spacing
+      // number is invented here (docs/UI_SYSTEM.md: a visual constant belongs
+      // in DESIGN.md and the token sheet, never loose in a component).
       //
       // "Nothing to say" is read off the HEIGHT, not off the child count: the
       // strip always carries its `aria-live` acknowledgement span, empty or
       // not, so counting children would reserve a band for a silent strip.
       const claimsRect = claims.getBoundingClientRect();
       const bottom = claimsRect.height === 0 ? 0 : Math.round(claimsRect.bottom - stageRect.top);
-      stage.style.setProperty("--vf-monitor-claims-bottom", `${bottom}px`);
+      // the same measurement as the view host's stage (MV-D19): the chrome's
+      // right edge as the left inset, the strip's bottom as the top one, both
+      // elements as obstacles — unrounded, the rectangles the swarm measured
+      // off these two elements itself before it ported, so its bodies steer
+      // exactly as they did
+      const rect = (box: DOMRect) => ({
+        x: box.left - stageRect.left,
+        y: box.top - stageRect.top,
+        width: box.width,
+        height: box.height,
+      });
+      const measured: StageGeometry = {
+        width: Math.round(stageRect.width),
+        height: Math.round(stageRect.height),
+        insets: { top: bottom, right: 0, bottom: 0, left: chromeRight },
+        obstacles: [rect(chromeRect), ...(claimsRect.height === 0 ? [] : [rect(claimsRect)])],
+      };
+      // M176 item 1: every tick measures a fresh object; one that measures the
+      // same keeps the stage held (the SDK's own rule), so it renders nothing
+      setStageGeometry((current) => keepStage(current, measured));
     };
     const observer = new ResizeObserver(publish);
     observer.observe(chrome);
     observer.observe(claims);
+    // the stage itself too: a window that resizes moves the stage's size
+    // without resizing the column or the strip
+    observer.observe(stage);
     publish();
     return () => observer.disconnect();
   }, []);
 
-  // The swarm says what painted on its section (`data-swarm-renderer`); the
-  // marker repeats it. Observed rather than read once, because the device
-  // answers after the mount.
+  // SB-3 — while the view holds the keys (the spawn bloom held open, or opened
+  // for the keys: its `report`, MV-D8) the monitor holds them, as it does while
+  // the find sheet is up (QL-D2's other half): the deck's launchers stand aside,
+  // and the stage's own chords below yield. A HOLD's bloom needs no hold: its ⎋
+  // is the swarm field's own, heard with the focus on the field.
   useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || typeof MutationObserver === "undefined") return;
-    const read = (): void => {
-      const painted = stage
-        .querySelector("[data-swarm-renderer]")
-        ?.getAttribute("data-swarm-renderer");
-      setSwarmRenderer(painted ?? "none");
-    };
-    const observer = new MutationObserver(read);
-    observer.observe(stage, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["data-swarm-renderer"],
-    });
-    read();
-    return () => observer.disconnect();
-  }, [view.id]);
-
-  // SB-3 — while the spawn bloom is open the monitor holds the keys, as it does
-  // while the find sheet is up (QL-D2's other half): the deck's launchers stand
-  // aside, so a HOLD bloom's ⎋ — the swarm's own window listener, which does not
-  // move the focus — is never first taken by a launcher in the focused pane.
-  // Read off the bloom's own DOM (`data-bloom-state`), observed like the renderer.
-  const [bloomOpen, setBloomOpen] = useState(false);
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage || typeof MutationObserver === "undefined") return;
-    const read = (): void => {
-      setBloomOpen(stage.querySelector('.vf-bloom[data-bloom-state="open"]') !== null);
-    };
-    const observer = new MutationObserver(read);
-    observer.observe(stage, {
-      subtree: true,
-      childList: true,
-      attributes: true,
-      attributeFilter: ["data-bloom-state"],
-    });
-    read();
-    return () => observer.disconnect();
-  }, [view.id]);
-  useEffect(() => {
-    if (!bloomOpen) return;
+    if (!viewHoldsKeys) return;
     setMonitorHoldsKeys(true);
     return () => setMonitorHoldsKeys(false);
-  }, [bloomOpen]);
+  }, [viewHoldsKeys]);
 
   // The usage column's tiles, counted off the chrome slot the same way: the
   // column is the package's, its batch arrives on the door's schedule, and a
@@ -515,13 +575,10 @@ export function GodviewMonitor({
   }, [acknowledgement, clearAcknowledgement]);
 
   useEffect(() => {
-    // Read rather than passed down: the swarm chooses its physics home in its
-    // own mount effect, and React runs a child's effects BEFORE its parent's —
-    // so by the time this line is written the choice has already been made.
     emitGodviewMonitorMarker({
       viewId: view.id,
       agents: agents.length,
-      agentBacked: agents.filter((agent) => agent.agent !== undefined).length,
+      agentBacked: agents.filter((agent) => agent.kind === "agent").length,
       localClaim: localClaim(sources),
       localAgents: sources.local,
       terminals: sources.terminals,
@@ -531,7 +588,7 @@ export function GodviewMonitor({
       remoteHosts: sources.hosts,
       remoteState: sources.remoteState,
       ...(sources.remoteReason !== undefined ? { remoteReason: sources.remoteReason } : {}),
-      swarmPhysics: currentSwarmPhysicsMode(),
+      swarmPhysics,
       swarmRenderer,
       usageTiles,
       findSheet: findOpen ? "open" : "closed",
@@ -539,7 +596,18 @@ export function GodviewMonitor({
       shownAgents: shown.length,
       runs,
     });
-  }, [agents, view.id, sources, swarmRenderer, usageTiles, findOpen, chosenId, shown, runs]);
+  }, [
+    agents,
+    view.id,
+    sources,
+    swarmPhysics,
+    swarmRenderer,
+    usageTiles,
+    findOpen,
+    chosenId,
+    shown,
+    runs,
+  ]);
 
   const closeFind = useCallback((): void => setFindOpen(false), []);
 
@@ -552,8 +620,8 @@ export function GodviewMonitor({
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.metaKey || event.altKey || event.ctrlKey || event.shiftKey) return;
-      // SB-3: a spawn bloom that has the keyboard holds every key
-      if (bloomOwnsKeyEvent(event)) return;
+      // SB-3: a view that holds the keys (a spawn bloom with the keyboard) holds every key
+      if (viewHoldsKeysRef.current) return;
       // ⌘F summons Find (AR-5, D6): the sheet over the stage, the reference's chord.
       if (event.code === "KeyF") {
         event.preventDefault();
@@ -578,8 +646,8 @@ export function GodviewMonitor({
     const onKeyDown = (event: KeyboardEvent): void => {
       if (!event.altKey || event.metaKey || event.ctrlKey || event.shiftKey) return;
       if (launcherOwnsKeyEvent(event)) return;
-      // SB-3: nor does it take ⌥-digits from a spawn bloom that has the keyboard
-      if (bloomOwnsKeyEvent(event)) return;
+      // SB-3: nor does it take ⌥-digits from a view that holds the keys
+      if (viewHoldsKeysRef.current) return;
       const digit = /^Digit([0-9])$/.exec(event.code);
       if (digit === null) return;
       const index = Number(digit[1]);
@@ -592,84 +660,110 @@ export function GodviewMonitor({
     return () => window.removeEventListener("keydown", onKeyDown, true);
   }, [showTabs, tabKey]);
 
-  const MonitorView = view.Component;
+  // M195 — the bar's inputs, each the same object while what it says is the
+  // same, so `MonitorBar` renders for a count, a desktop, a tab, the view, the
+  // theme, Find or System control — never for a publish that moved none.
+  const { idle, working, blocked } = counts;
+  const barCounts = useMemo(() => ({ idle, working, blocked }), [idle, working, blocked]);
+  const barDevices = useHeldWhileSame(devices, JSON.stringify(devices));
+  const barTabs = useHeldWhileSame(tabs, JSON.stringify(tabs));
+  const selectView = useCallback((viewId: string) => onSelectView?.(viewId), [onSelectView]);
+  const toggleFind = useCallback(() => setFindOpen((current) => !current), []);
+  const toggleTuning = useCallback(() => onToggleTuning?.(), [onToggleTuning]);
+  const barLeading = useMemo(
+    () => (
+      <>
+        {reserveWindowControls ? (
+          <span className="vf-godview-native-controls-space" aria-hidden="true" />
+        ) : null}
+        <span className="vf-godview-header-notice" aria-live="polite">
+          {notice ?? ""}
+        </span>
+      </>
+    ),
+    [reserveWindowControls, notice],
+  );
+  const barCentre = useMemo(
+    () =>
+      showTabs || barDevices.length > 1 ? (
+        <>
+          {barDevices.length > 1 ? (
+            <DeviceFilterChip
+              devices={barDevices}
+              selected={deviceChosen}
+              onSelect={setDeviceChoice}
+              onOpenChange={setDeviceMenuOpen}
+            />
+          ) : null}
+          {showTabs ? (
+            <ProfileTabs
+              tabs={barTabs}
+              selected={chosenId ?? null}
+              onSelect={setProfileTab}
+              shortcuts
+            />
+          ) : null}
+        </>
+      ) : undefined,
+    [showTabs, barDevices, deviceChosen, barTabs, chosenId],
+  );
+  const barTrailing = useMemo(
+    () => (
+      <>
+        <BarControl
+          mark="find"
+          label="FIND"
+          shortcut="⌘F"
+          ariaLabel="Find an agent by what was said"
+          {...(findOpen ? { controls: "vf-find-sheet" } : {})}
+          on={findOpen}
+          onClick={toggleFind}
+        />
+        <BarControl
+          mark="tune"
+          label="SYSTEM CONTROL"
+          ariaLabel="System control"
+          controls="vf-godview-tweak-panel"
+          on={tuningOpen}
+          onClick={toggleTuning}
+        />
+      </>
+    ),
+    [findOpen, tuningOpen, toggleFind, toggleTuning],
+  );
+
   return (
     <>
-      <InstrumentBar
-        counts={counts}
-        onSelectStatus={noStatusCycle}
-        views={MONITOR_VIEWS}
-        viewId={view.id}
-        onSelectView={(viewId) => onSelectView?.(viewId)}
-        theme={theme}
-        onThemeChange={noThemeSwitch}
-        leading={
-          <>
-            {reserveWindowControls ? (
-              <span className="vf-godview-native-controls-space" aria-hidden="true" />
-            ) : null}
-            <span className="vf-godview-header-notice" aria-live="polite">
-              {notice ?? ""}
-            </span>
-          </>
-        }
-        {...(showTabs || devices.length > 1
-          ? {
-              centre: (
-                <>
-                  {devices.length > 1 ? (
-                    <DeviceFilterChip
-                      devices={devices}
-                      selected={deviceChosen}
-                      onSelect={setDeviceChoice}
-                      onOpenChange={setDeviceMenuOpen}
-                    />
-                  ) : null}
-                  {showTabs ? (
-                    <ProfileTabs
-                      tabs={tabs}
-                      selected={chosenId ?? null}
-                      onSelect={setProfileTab}
-                      shortcuts
-                    />
-                  ) : null}
-                </>
-              ),
-            }
-          : {})}
-        trailing={
-          <>
-            <BarControl
-              mark="find"
-              label="FIND"
-              shortcut="⌘F"
-              ariaLabel="Find an agent by what was said"
-              {...(findOpen ? { controls: "vf-find-sheet" } : {})}
-              on={findOpen}
-              onClick={() => setFindOpen((current) => !current)}
-            />
-            <BarControl
-              mark="tune"
-              label="SYSTEM CONTROL"
-              ariaLabel="System control"
-              controls="vf-godview-tweak-panel"
-              on={tuningOpen}
-              onClick={() => onToggleTuning?.()}
-            />
-          </>
-        }
-      />
+      <ChromeBoundary name="Monitor controls">
+        <MonitorBar
+          counts={barCounts}
+          onSelectStatus={noStatusCycle}
+          views={MONITOR_VIEWS}
+          viewId={view.id}
+          onSelectView={selectView}
+          theme={theme}
+          onThemeChange={noThemeSwitch}
+          leading={barLeading}
+          {...(barCentre !== undefined ? { centre: barCentre } : {})}
+          trailing={barTrailing}
+        />
+      </ChromeBoundary>
 
-      <FindSheet
-        open={findOpen}
-        agents={agents}
-        history={door?.history ?? NO_HISTORY}
-        onClose={closeFind}
-        onSelect={(agent: ViewsMonitorAgent) => {
-          actions.select(agent as MonitorAgent);
-          setFindOpen(false);
-        }}
-      />
+      {/* Find tries again for the agents it searches, as Godview's does (M192);
+          the bar above and the profile notice read only the window's own
+          state, so they stay unavailable until the monitor mounts again. */}
+      <ChromeBoundary name="Find" retryKey={findAgents}>
+        <FindSheet
+          open={findOpen}
+          agents={findAgents}
+          history={door?.history ?? NO_HISTORY}
+          onClose={closeFind}
+          onSelect={(agent: FindAgent) => {
+            commands.select(agent.id);
+            setFindOpen(false);
+          }}
+        />
+      </ChromeBoundary>
 
       <section
         ref={stageRef}
@@ -678,76 +772,84 @@ export function GodviewMonitor({
           sources.remote === 0 ? "Agent monitor" : "Agent monitor — local and remote sessions"
         }
       >
-        {/* The swarm's physics lives in OUR worker (GT-D16); the package's view
-            is handed the driver through its context and never learns which. */}
-        <SwarmPhysicsProvider factory={createSwarmPhysicsDriver}>
-          <MonitorView
-            agents={staged}
-            parameters={parameters}
-            actions={actions}
-            palette={palette}
-            history={stagedHistory}
-            {...(spawnMenu !== undefined ? { spawnMenu } : {})}
-          />
-        </SwarmPhysicsProvider>
+        {/* One SDK view reads this window's model, on the host's one frame
+            scheduler. Each view owns its styles, effects and resources. */}
+        <MonitorViewHost
+          replica={viewReplica}
+          view={view.view}
+          stage={stageGeometry}
+          theme={monitorTheme}
+          parameters={parameters}
+          capabilities={capabilities}
+          commands={commands}
+          onReport={onReport}
+          scheduler={frameScheduler}
+          className="vf-monitor-view-slot"
+        />
         {emptyUnder !== undefined ? (
-          <div className="vf-monitor-profile-empty" role="status">
-            <span className="vf-monitor-profile-empty-ring" aria-hidden="true">
-              <ProfileGlyph
-                glyph={emptyUnder.glyph}
-                kind={emptyUnder.kind}
-                filled={emptyUnder.default}
-                size={16}
-              />
-            </span>
-            <b>No sessions under {emptyUnder.label}</b>
-            <span>This tab shows sessions using this profile.</span>
-          </div>
+          <ChromeBoundary name="Profile">
+            <div className="vf-monitor-profile-empty" role="status">
+              <span className="vf-monitor-profile-empty-ring" aria-hidden="true">
+                <ProfileGlyph
+                  glyph={emptyUnder.glyph}
+                  kind={emptyUnder.kind}
+                  filled={emptyUnder.default}
+                  size={16}
+                />
+              </span>
+              <b>No sessions under {emptyUnder.label}</b>
+              <span>This tab shows sessions using this profile.</span>
+            </div>
+          </ChromeBoundary>
         ) : null}
         {/* The chrome slot: the usage column down the stage's left edge (record
             §05), the package's own; the swarm steers around it. */}
-        <div ref={chromeRef} className="vf-monitor-chrome" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
-          <UsageColumn port={columnUsagePort} />
+        <div ref={chromeRef} className="vf-monitor-chrome">
+          <ChromeBoundary name="Usage" retryKey={usageRetryKey}>
+            <UsageColumn port={columnUsagePort} />
+          </ChromeBoundary>
         </div>
         {/* The claims: VibeField's, on their own strip — also solid to the swarm. */}
-        <div ref={claimsRef} className="vf-monitor-claims" {...{ [MONITOR_CHROME_ATTRIBUTE]: "" }}>
-          {localClaim(sources) !== null ? (
-            <span className="vf-monitor-local-chip">{localClaim(sources)}</span>
-          ) : null}
-          {localUnavailableClaim(sources) !== null ? (
-            <span
-              className="vf-monitor-remote-unavailable-chip"
-              title={sources.localReason ?? "the agent fold could not be read"}
-            >
-              {localUnavailableClaim(sources)}
-            </span>
-          ) : null}
-          {remoteClaim(sources, devices) !== null ? (
-            <span className="vf-monitor-remote-chip">
-              {otherDesktops(devices).map((device) => (
-                <OsMark key={device.id} os={device.os} size={8} />
-              ))}
-              {remoteClaim(sources, devices)}
-            </span>
-          ) : null}
-          {remoteUnavailableClaim(sources) !== null ? (
-            <span
-              className="vf-monitor-remote-unavailable-chip"
-              title={sources.remoteReason ?? "the mesh could not be asked"}
-            >
-              {remoteUnavailableClaim(sources)}
-            </span>
-          ) : null}
-          {usageState.state === "unavailable" ? (
-            <button
-              type="button"
-              className="vf-monitor-feed-retry"
-              title={usageState.reason}
-              onClick={() => setUsageAttempt((attempt) => attempt + 1)}
-            >
-              Usage unavailable · Retry
-            </button>
-          ) : null}
+        <div ref={claimsRef} className="vf-monitor-claims">
+          <ChromeBoundary name="Agent counts" retryKey={claimsRetryKey}>
+            {localClaim(sources) !== null ? (
+              <span className="vf-monitor-local-chip">{localClaim(sources)}</span>
+            ) : null}
+            {localUnavailableClaim(sources) !== null ? (
+              <span
+                className="vf-monitor-remote-unavailable-chip"
+                title={sources.localReason ?? "the agent fold could not be read"}
+              >
+                {localUnavailableClaim(sources)}
+              </span>
+            ) : null}
+            {remoteClaim(sources, devices) !== null ? (
+              <span className="vf-monitor-remote-chip">
+                {otherDesktops(devices).map((device) => (
+                  <OsMark key={device.id} os={device.os} size={8} />
+                ))}
+                {remoteClaim(sources, devices)}
+              </span>
+            ) : null}
+            {remoteUnavailableClaim(sources) !== null ? (
+              <span
+                className="vf-monitor-remote-unavailable-chip"
+                title={sources.remoteReason ?? "the mesh could not be asked"}
+              >
+                {remoteUnavailableClaim(sources)}
+              </span>
+            ) : null}
+            {usageState.state === "unavailable" ? (
+              <button
+                type="button"
+                className="vf-monitor-feed-retry"
+                title={usageState.reason}
+                onClick={() => setUsageAttempt((attempt) => attempt + 1)}
+              >
+                Usage unavailable · Retry
+              </button>
+            ) : null}
+          </ChromeBoundary>
           <span className="vf-monitor-ack" aria-live="polite">
             {acknowledgement?.message ?? ""}
           </span>

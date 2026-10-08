@@ -1,163 +1,114 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
-import type { MonitorUsageState } from "@vibecook/puppeteer-core";
-import {
-  EMPTY_STATUS_LEDGER,
-  EMPTY_UNREAD_LEDGER,
-  EMPTY_USAGE_LEDGER,
-  endStatusLane,
-  exportUsage,
-  type MonitorHistoryBook,
-  type MonitorPalette,
-  observeStatuses,
-  type PaneAttachment,
-  reconcileUnread,
-  reconcileUsage,
-  type StatusLedger,
-  seedStatusHistory,
-  seedUsage,
-  statusHistoryBook,
-  type UnreadLedger,
-  USAGE_STEP_MS,
-  type UsageLedger,
-  type UsageLedgerKey,
-} from "@vibecook/puppeteer-views";
+import type { MonitorCapabilities } from "@vibecook/puppeteer-view-sdk";
+import { type MonitorReplicaLike, type ViewSlotCommands } from "@vibecook/puppeteer-view-sdk/host";
+import type {
+  AgentView,
+  ModelChanges,
+  MonitorAgentRow,
+  MonitorModel,
+} from "@vibecook/puppeteer-view-sdk/model";
+import { projectColourFor, projectName } from "@vibecook/puppeteer-view-sdk/toolkit";
+import { type FindAgent, type MonitorPalette, type ProfileTab } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { blockerTool, projectKey, projectLabel } from "./agent-status";
 import {
-  assembleMonitorAgents,
-  endedMonitorAgent,
-  type MonitorFloorRecord,
-  type MonitorManagedRecord,
-  type MonitorMeshRecord,
-  type MonitorTerminalRecord,
-  managedRowId,
-} from "./agents";
-import { type DeviceChoice, deviceChoices } from "./device-filter";
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
+import type { MonitorFloorRecord } from "./agents";
+import { NO_RUNS, useChromeKey } from "./chrome-facts";
+import { type DeviceChoice, standingChoice } from "./device-filter";
 import { deviceFacet, useDeviceRoster } from "./devices";
-import type { AgentSessionSummary } from "./facet-types";
-import { useAgentFold } from "./GodviewAgentsProvider";
-import type { LocalFieldState } from "./local-agent-field";
-import { type MeshFieldState, useMeshField } from "./mesh-field";
-import { meshHere, meshRecords } from "./mesh-rows";
+import { createFindAgents, findJoinKey } from "./find-agents";
+import { useMonitorFeed } from "./GodviewAgentsProvider";
+import type { HeldModelRow } from "./model-board";
+import type { GodviewMonitorFeed, MonitorFeedState } from "./model-replica";
+import { profileTabs } from "./profile-tabs";
+import type { LocalMountOutcome, MonitorDoor } from "./remote-door";
+import { spawnMenuOf, targetsHere } from "./spawn-menu";
+import type { MonitorAgent, MonitorSpawnMenu, MonitorSpawnTarget } from "./types";
 import {
-  dealProjectSeqs,
-  loadProjectLedger,
-  type ProjectLedger,
-  saveProjectLedger,
-} from "./project-ledger";
-import { type LocalMountOutcome, type MonitorDoor, remoteRowId } from "./remote-door";
-import { targetsHere } from "./spawn-menu";
-import type { MonitorActions, MonitorAgent, MonitorSpawnTarget } from "./types";
-import { createUsageHistoryCache } from "./usage-history-cache";
+  type BoardJoins,
+  boardJoins,
+  boardJoinsKey,
+  paneFactsKey,
+  windowKindsKey,
+  windowLocal,
+} from "./window-local";
+import {
+  createRowOrder,
+  createWindowRows,
+  deviceOfRow,
+  narrowToDevice,
+  sameVisualIds,
+  visualIdsOf,
+  type WindowRowFacts,
+} from "./window-rows";
+import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
 
 /**
- * Core's usage state, rebuilt from the mirror's row. The projection rides
- * the door verbatim (AR-D4), so every aggregate Core wrote is there under
- * its own name, past the two fields the contract spells; the sample ring is
- * read when it came through and empty when it did not — the ledger reads
- * the aggregates first and the last sample only as a fallback.
- */
-function coreUsage(usage: Readonly<Record<string, unknown>>): MonitorUsageState {
-  const num = (key: string): number | undefined => {
-    const value = usage[key];
-    return typeof value === "number" ? value : undefined;
-  };
-  const ring = usage.samples;
-  const samples = Array.isArray(ring)
-    ? ring.filter(
-        (sample): sample is MonitorUsageState["samples"][number] =>
-          typeof sample === "object" &&
-          sample !== null &&
-          typeof (sample as { cumulativeTokens?: unknown }).cumulativeTokens === "number",
-      )
-    : [];
-  return {
-    samples,
-    cumulativeTokens: num("cumulativeTokens"),
-    inputTokens: num("inputTokens"),
-    outputTokens: num("outputTokens"),
-    cacheReadTokens: num("cacheReadTokens"),
-    cacheCreationTokens: num("cacheCreationTokens"),
-    reasoningTokens: num("reasoningTokens"),
-    burnRatePerMin: num("burnRatePerMin"),
-    // SV — the estimate the usage ledger holds (its total and its 30 s steps).
-    // Until SV this projection dropped them, so no local row ever had a cost.
-    costUsd: num("costUsd"),
-    costRatePerMin: num("costRatePerMin"),
-    ...(usage.costCoverage === "complete" ||
-    usage.costCoverage === "partial" ||
-    usage.costCoverage === "unavailable"
-      ? { costCoverage: usage.costCoverage }
-      : {}),
-    ...(Array.isArray(usage.costHistory) ? { costHistory: costBuckets(usage.costHistory) } : {}),
-  };
-}
-
-/** Core's 30 s cost buckets, each one checked: a bucket without a moment and a finite cost is dropped. */
-function costBuckets(ring: readonly unknown[]): NonNullable<MonitorUsageState["costHistory"]> {
-  return ring.flatMap((bucket) => {
-    if (typeof bucket !== "object" || bucket === null) return [];
-    const { at, costUsd } = bucket as { at?: unknown; costUsd?: unknown };
-    if (typeof at !== "string" || typeof costUsd !== "number" || !Number.isFinite(costUsd)) {
-      return [];
-    }
-    return [{ at, costUsd }];
-  });
-}
-
-/** Where the renderer keeps what it dealt and what it counted (D3, D7): cache. */
-const PROJECT_LEDGER_KEY = "vf-godview-projects-v1";
-const USAGE_CACHE_KEY = "vf-godview-usage-history-v1";
-
-/**
- * THE SEAM. The single subscription to everything a monitor view renders, and
- * the only module in this subsystem that knows where agents come from.
+ * THE WINDOW (MV-3b; MV-D18, MV-D22). What is left of the seam once the
+ * backend computes every business fact beside the runtime (`design-mv.md` §1):
  *
- * It is a COMPOSITION (GT-D17), and since AR-3 both halves are real:
+ *   · THE REPLICA — the window's copy of the backend's model, fed by
+ *     `GodviewAgentsProvider` through the door's model port (`model-replica.ts`,
+ *     one subscription per window, PF6). All five views are SDK views — list
+ *     and rain (MV-4), the swarm (MV-5), the timeline (MV-6) and spend (MV-7):
+ *     they draw it as themselves, cut to the window's rows (`window-view.ts`),
+ *     one update per frame. The chrome reads the model too; only Find joins
+ *     its local facts into the shared sheet's rows (`find-agents.ts`, M19).
+ *   · THE LOCAL JOIN — what only this window knows, handed to the replica
+ *     (`setLocal`): its panes and the colour each wears, the pane the person is
+ *     working in, the row they pointed at, where they asked terminals to be
+ *     born, what each pane's terminal is doing (M28), the body each row
+ *     continues (M59: a launcher's agent takes the shell's place), which rows
+ *     the chosen profile tab recedes, and which rows this window shows at all
+ *     (M3: the live ones, and none whose pane has exited).
+ *   · THE VERBS — every one through the DOOR the deck built (`MonitorDoor`): a
+ *     local row's select mounts its PTY in the active pane, a peer's attaches
+ *     its terminal there, create opens an empty terminal — and every outcome is
+ *     said out loud, in fieldd's own words. Views receive SDK commands; the
+ *     window handles the door's promises.
+ *   · THE SCREEN — what the active pane shows, reported to the backend
+ *     (`reportShown`, L5), which keeps the unread marks.
  *
- *   · THE FOLD — fieldd's `agent.subscribe`: every managed session on this
- *     device, one row per run, with puppeteer's monitor projection riding
- *     verbatim. It replaced `MockAgentField`, and the label that said the rows
- *     were invented went with it. Since GT-6 the stream itself belongs to
- *     `GodviewAgentsProvider` one level up, because the deck's pane frames read
- *     the same rows; this hook consumes the fold and stays a projection.
- *   · THE MESH BOARD (DS-3, `mesh-field.ts`) — every OTHER self desktop's
- *     runs, through this window's one door to its own fieldd, which
- *     multiplexes each desktop's board as its owner numbered it (DS-D4). It
- *     replaced GT-D17's two-second host poll on 2026-09-30, which had been dark
- *     since the routed runtime (its ask threw). The roster (`devices.ts`) names
- *     each desktop, so every row says where it lives.
- *
- * Beside them, the deck's own panes: a pane no agent has claimed is an
- * unclaimed terminal row, the deck's fact and the deck's summary.
- *
- * Every verb goes through the DOOR the deck built (`MonitorDoor`): a local
- * row's select mounts its PTY in the active pane, a remote row's select would
- * attach its terminal there — DS-4's, refused honestly until it lands — and
- * create opens an empty terminal in it. The views still see actions; the
- * source sees promises.
- *
- * PF6: every subscription is opened on mount and closed on unmount, and the
- * stage that owns this hook is mounted ONLY while the overlay is open. A
- * closed Godview therefore holds no monitor subscription at all.
+ * What left: the fold's assembly (`agents.ts`), the usage and unread ledgers and
+ * the project colours (the backend's, L4/L5/L11), the mesh board's second reader
+ * (`mesh-field.ts`; the one door carries peers), the localStorage caches, and
+ * (MV-6, L10, MV-D13) the status ledger with fieldd's history laid under it:
+ * Godview is runtime only, and the timeline draws births and current states.
  */
 
 export interface UseMonitorAgentsOptions {
-  /** §2.6's accents, live from the tokens. The projection needs them to assign
-   * each session its stable relationship color. */
+  /** §2.6's accents, live from the tokens: the replica's theme colour (L7). */
   palette: MonitorPalette;
-  /** The deck's verbs (GT-D17, AR-3). Null before a deck exists — this host has
-   * no terminal bridge, or the overlay has not built one yet — and both halves
-   * of the field are then empty, honestly and without placeholders. */
+  /** The deck's verbs (GT-D17, AR-3) and its model port. Null before a deck
+   * exists — this host has no terminal bridge, or the overlay has not built one
+   * yet — and the stage is then empty, honestly and without placeholders. */
   door?: MonitorDoor | null;
   /** The sessions the deck's panes are showing, and the one the user is in.
    * Facts, published by the deck; the monitor reads them and drives nothing. */
   panes?: MonitorPaneFacts;
-  /** SB-3 — the Agent Profiles as the stage's feed last had them: what the
-   * acknowledgements call a birth's profile ("opened under Work"). Empty while
-   * there is no feed. */
+  /** AR-S5 — the Agent Profiles as the stage's feed last had them: the tabs,
+   * the spawn menu, and what the acknowledgements call a birth's profile
+   * ("opened under Work"). Empty while there is no feed. */
   profiles?: readonly AgentProfileSet[];
+  /** Whether the profiles feed has answered at all: until it has, the spawn
+   * menu's desktop is `reading` — an empty list is an answer, and not the same one. */
+  profilesRead?: boolean;
+  /** Whether the door has a profiles feed at all: a host with none offers no
+   * menu, and a hold creates at once, as before (SB-3). */
+  hasProfiles?: boolean;
+  /** AR-S5 — the chosen profile tab's set id; every other row of this desktop
+   * recedes (it keeps its place). Undefined: All. */
+  chosenProfile?: string | undefined;
+  /** DS-3 — the chosen desktop's id, as the chip holds it; null is every
+   * desktop, and a desktop that left the board falls back to all. */
+  device?: string | null;
 }
 
 export interface MonitorPaneFacts {
@@ -171,22 +122,45 @@ export interface MonitorPaneFacts {
   paneColors?: ReadonlyMap<string, string>;
   activePaneId?: string;
   /** The floor summaries of those panes' sessions (ghosttea's, as the deck
-   * holds them): what makes an unclaimed pane a terminal row, and what lets
-   * a managed row carry its PTY's summary. */
+   * holds them): what tells the window a pane has EXITED (its row is hidden)
+   * and what each pane's terminal is doing (M28). */
   sessions?: readonly SessionSummary[];
-  /** GT-6b — the UI roster the deck last read (`terminal.roster`, TP-D4): every
-   * live PTY the floor holds, pane or no pane. The monitor keeps the ones no
-   * pane is showing, so a session the deck displaced is still reachable. */
+  /** GT-6b — the UI roster the deck last read (`terminal.roster`, TP-D4). The
+   * backend lists the floor's PTYs itself now; the window reads this only for
+   * the ORDER the floor's terminals are drawn in. */
   floor?: readonly MonitorFloorRecord[];
-  /** SB-3 — which shells were born under which Agent Profile: the pool's
-   * record in fieldd's words (its create answers for births here, its roster
-   * for the rest). The same map until it changes. */
+  /** SB-3 — which shells were born under which Agent Profile. The backend reads
+   * fieldd's bindings record itself; kept on the deck's facts for the catalog's
+   * fixtures, read by nothing here. */
   profileSets?: ReadonlyMap<string, string>;
 }
 
 export interface MonitorAgentsResult {
+  /** The window's replica, for the view host; an empty one while there is no feed. */
+  replica: MonitorReplicaLike;
+  /** MV-4 — the replica cut to the rows the stage shows, for the view's
+   * host (`window-view.ts`): the chosen desktop's, in the stage's order, peers
+   * greyed by standing. */
+  viewReplica: MonitorReplicaLike;
+  /** The model as the replica last published it. */
+  model: MonitorModel;
+  /** The view host's commands: select and create route to this window's door. */
+  commands: ViewSlotCommands;
+  /** What the backend lends a view beyond the model (MV-D4): today's spawn menu. */
+  capabilities: MonitorCapabilities;
+  /** Every row the window holds, as the views read it (no device filter): the
+   * claims count these, the tabs light their dots from them. */
   agents: readonly MonitorAgent[];
-  actions: MonitorActions;
+  /** The rows the stage shows: the chosen desktop's, the chosen profile's unreceded. */
+  shown: readonly MonitorAgent[];
+  /** The rows the find sheet reads: the window's rows joined with each run's
+   * native session id and mirror clocks (the chrome's own reader, M19; MV-3d:
+   * off the chrome's facts, `findAgentsOf`). */
+  findAgents: readonly FindAgent[];
+  /** The run behind each of this desktop's agent rows (`BoardJoins.runByRow`):
+   * the marker's join, observed or not. Runtime identity is a local chrome
+   * fact, never inferred from a view's row. */
+  runByRow: ReadonlyMap<string, string>;
   /** How many rows each source contributed, so the stage can scope its claims
    * to the right ones (GT-D17) rather than labeling the whole field. */
   sources: MonitorSourceCounts;
@@ -194,34 +168,37 @@ export interface MonitorAgentsResult {
    * the stage; carried here because the actions are what produce it. */
   acknowledgement: MonitorAcknowledgement | null;
   clearAcknowledgement(): void;
-  /** DS-3 — every desktop on the mesh board, this one first, each with its
+  /** DS-3 — every desktop on the board, this one first, each with its
    * standing and how many agents it runs: the device filter's choices. */
   devices: readonly DeviceChoice[];
-  /** TL — what each lane did over time: fieldd's status ledger under what this
-   * window watched (`status-ledger.ts`), with the runs that ended inside the
-   * day. Unfiltered; the stage narrows `ended` as it narrows `agents`. */
-  history: GodviewHistoryBook;
+  /** DS-3 — the chosen desktop as the board still has it (null = all). */
+  deviceChosen: string | null;
+  /** AR-S5 — the tabs, in the feed's order, each with its orange dot. */
+  tabs: readonly ProfileTab[];
+  /** SB-3 — what a new terminal can be born under; undefined without a feed. */
+  spawnMenu: MonitorSpawnMenu | undefined;
+  /** The model board's honest state (`no-door` · `connecting` · `live` · `unavailable`). */
+  feed: MonitorFeedState;
 }
 
-/** The package's book with this host's rows: every row the ledger holds came
- * from this hook's own projection, so `ended` is Godview's `MonitorAgent`. */
-export interface GodviewHistoryBook extends MonitorHistoryBook {
-  readonly ended: readonly MonitorAgent[];
-}
+/** The local half's honest state, in the marker's words (`GodviewMonitorFacts.localState`). */
+export type LocalFieldState = "no-door" | "live" | "unavailable";
+/** The mesh half's honest state, in the marker's words (`GodviewMonitorFacts.remoteState`). */
+export type MeshFieldState = "no-door" | "serving" | "unavailable";
 
 export interface MonitorSourceCounts {
-  /** Managed sessions the fold contributed. */
+  /** Managed sessions this desktop contributed. */
   local: number;
-  /** The deck's panes no agent has claimed. */
+  /** This desktop's bare terminals. */
   terminals: number;
-  /** Other desktops' runs the mesh board contributed (DS-3). */
+  /** Other desktops' runs the board contributed (DS-3). */
   remote: number;
   /** The other desktops behind those rows. */
   hosts: number;
-  /** The local field's honest state — `unavailable` carries fieldd's own reason. */
+  /** The board's honest state for this desktop's rows — `unavailable` carries fieldd's own reason. */
   localState: LocalFieldState;
   localReason?: string;
-  /** The mesh board's honest state — `unavailable` carries fieldd's own reason. */
+  /** The board's honest state for the other desktops' rows — the same board, the mesh's words. */
   remoteState: MeshFieldState;
   remoteReason?: string;
 }
@@ -232,14 +209,8 @@ export interface MonitorAcknowledgement {
   message: string;
 }
 
-/** Where a remote row landed, remembered from the attach that put it there. */
-interface RemoteLink {
-  localSessionId: string;
-}
-
 /** SB-3 — a create in flight: where it was asked for (as given, unrounded), the
- * local sessions a terminal row stood for when it started, and the row that
- * has taken its position. */
+ * terminal rows that stood when it started, and the row that has taken its position. */
 interface PendingSpawn {
   readonly position: { x: number; y: number };
   readonly known: ReadonlySet<string>;
@@ -247,359 +218,243 @@ interface PendingSpawn {
 }
 
 const NO_PANES: MonitorPaneFacts = { sessionIds: [] };
+const NO_PROFILES: readonly AgentProfileSet[] = [];
+const NO_IDS: readonly string[] = Object.freeze([]);
+const NO_HELD: readonly HeldModelRow[] = Object.freeze([]);
+const NO_CHANGES: ModelChanges = Object.freeze({ added: NO_IDS, updated: NO_IDS, removed: NO_IDS });
+const EMPTY_MODEL: MonitorModel = Object.freeze({
+  revision: 0,
+  agents: Object.freeze([]),
+  byId: new Map<string, AgentView>(),
+});
+const EMPTY_SNAPSHOT = Object.freeze({ model: EMPTY_MODEL, changes: NO_CHANGES });
+/** The replica a stage with no feed draws: nothing, and never a frame of invented rows. */
+const EMPTY_REPLICA: MonitorReplicaLike = Object.freeze({
+  getSnapshot: () => EMPTY_SNAPSHOT,
+  subscribe: () => () => undefined,
+});
 
 /** AR-4b — how many times a replacement's hand-over is retried before the
  * row is left as it is and the last reason stands. */
 const REMOUNT_ATTEMPTS = 3;
 
-/** The damage gate's key: the facts the projection DRAWS from a row, per row
- * — the run and its epoch, the one derived status and when it changed, the
- * observation level, the terminal join (and the PTY it replaced), the
- * continuation's pending state, and from the mirror exactly what a view
- * reads (the headline, the blockers, the last assistant line, the model, the
- * context window, the cwd and branch, liveness) plus the mirror's own
- * revision. Cheap where `JSON.stringify` of the whole fold was not — the
- * mirror carries the subagent, workflow and team collections verbatim — at
- * one frame per 16 ms while an agent is active. */
-function rowsKey(rows: readonly AgentSessionSummary[]): string {
-  return rows
-    .map((row) => {
-      const monitor = row.monitor;
-      const last = monitor?.lastAssistantMessage as { text?: unknown } | undefined;
-      return [
-        row.runtimeRunId,
-        row.runtimeEpoch,
-        row.sessionId,
-        row.kind,
-        row.label,
-        row.profileId ?? "",
-        row.profileSet ?? "",
-        row.status,
-        row.stateChangedAt,
-        row.lastActivityAt ?? "",
-        row.observationLevel,
-        row.createdAt,
-        row.title ?? "",
-        row.terminal?.hosted ?? "",
-        row.terminal?.runtimeSessionId ?? "",
-        row.terminal?.replaced ?? "",
-        row.terminal?.cellBootId ?? "",
-        row.workspace?.sourcePath ?? "",
-        row.workspace?.root ?? "",
-        row.workspace?.branch ?? "",
-        row.continuation?.pending ?? "",
-        row.continuation?.reattached ? 1 : 0,
-        monitor === undefined ? "-" : "m",
-        monitor?.revision ?? "",
-        monitor?.status ?? "",
-        monitor?.alive === undefined ? "" : monitor.alive ? 1 : 0,
-        monitor?.environment?.cwd ?? "",
-        monitor?.environment?.git === undefined ? "?" : (monitor.environment.git?.branch ?? "null"),
-        monitor?.model?.id ?? "",
-        monitor?.model?.displayName ?? "",
-        monitor?.context?.usedPercent ?? "",
-        monitor?.context?.usedTokens ?? "",
-        monitor?.context?.capacityTokens ?? "",
-        typeof last?.text === "string" ? last.text : "",
-        // The same nested read the detail line makes (`blockerTool`): keyed on
-        // the root field, this gate was blind to the one thing the row draws
-        // about a permission, so a blocker that changed only its tool never
-        // re-rendered the list (GT-6 review — the defect had two homes).
-        (monitor?.blockers ?? [])
-          .map((blocker) => `${blocker.id}:${blocker.kind}:${blockerTool(blocker) ?? ""}`)
-          .join(","),
-      ].join("\u0001");
-    })
-    .join("\u0002");
+/** The replica's theme key (L7): the same tint and ramp are the same colours. */
+function themeKey(tint: { l: number; c: number }, neutral: string): string {
+  return `${tint.l}:${tint.c}:${neutral}`;
 }
 
-const NO_PROFILES: readonly AgentProfileSet[] = [];
+interface FeedFacts {
+  state: MonitorFeedState;
+  devices: ReturnType<GodviewMonitorFeed["devices"]>;
+  here: string | undefined;
+}
+
+const NO_FEED: FeedFacts = { state: { state: "no-door" }, devices: [], here: undefined };
+
+function readFeed(feed: GodviewMonitorFeed | null): FeedFacts {
+  if (feed === null) return NO_FEED;
+  return { state: feed.state(), devices: feed.devices(), here: feed.here() };
+}
+
+/** The board's state in the claims' two vocabularies (the marker's words). */
+function localStateOf(
+  state: MonitorFeedState,
+): Pick<MonitorSourceCounts, "localState" | "localReason"> {
+  if (state.state === "live") return { localState: "live" };
+  if (state.state === "unavailable")
+    return { localState: "unavailable", localReason: state.reason };
+  return { localState: "no-door" };
+}
+
+function remoteStateOf(
+  state: MonitorFeedState,
+): Pick<MonitorSourceCounts, "remoteState" | "remoteReason"> {
+  if (state.state === "live") return { remoteState: "serving" };
+  if (state.state === "unavailable")
+    return { remoteState: "unavailable", remoteReason: state.reason };
+  return { remoteState: "no-door" };
+}
+
+/** Model rows narrowed to the chosen desktop, retaining identity between frames. */
+function createNarrowing(): (
+  rows: readonly AgentView[],
+  device: string | null,
+  here: string | undefined,
+) => readonly AgentView[] {
+  let lastRows: readonly AgentView[] | undefined;
+  let lastDevice: string | null = null;
+  let lastHere: string | undefined;
+  let last: readonly AgentView[] = Object.freeze([]);
+  return (rows, device, here) => {
+    if (rows === lastRows && device === lastDevice && here === lastHere) return last;
+    last = narrowToDevice(rows, device, here);
+    lastRows = rows;
+    lastDevice = device;
+    lastHere = here;
+    return last;
+  };
+}
 
 export function useMonitorAgents({
   palette,
   door = null,
   panes = NO_PANES,
   profiles = NO_PROFILES,
+  profilesRead = false,
+  hasProfiles = false,
+  chosenProfile,
+  device = null,
 }: UseMonitorAgentsOptions): MonitorAgentsResult {
+  // ── the replica and the board's own facts ────────────────────────────────
+  const feed = useMonitorFeed();
+  const replica: MonitorReplicaLike = feed?.replica ?? EMPTY_REPLICA;
+  const model = useSyncExternalStore(
+    replica.subscribe,
+    replica.getSnapshot,
+    replica.getSnapshot,
+  ).model;
+  const [feedFacts, setFeedFacts] = useState<FeedFacts>(() => readFeed(feed));
+  useEffect(() => {
+    setFeedFacts(readFeed(feed));
+    if (feed === null) return;
+    return feed.subscribe(() => setFeedFacts(readFeed(feed)));
+  }, [feed]);
+  const roster = useDeviceRoster(door?.devices);
+  /** Which desktop is HERE: the roster's own row when it has answered, else the board's first. */
+  const here = roster.here ?? feedFacts.here;
+
+  // L7 — the theme's colour function, set the moment the feed exists: the
+  // backend deals each project a sequence, the replica joins the hue.
+  const tintL = palette.tint.l;
+  const tintC = palette.tint.c;
+  const neutral = palette.neutral;
+  useLayoutEffect(() => {
+    if (feed === null) return;
+    const tint = { l: tintL, c: tintC };
+    feed.replica.setTheme({
+      key: themeKey(tint, neutral),
+      colourFor: projectColourFor({ tint, neutral }),
+    });
+  }, [feed, tintL, tintC, neutral]);
+
+  // ── the window's joins, off the fold's board rows ────────────────────────
+  // Read per render: the fold is updated by the frames that make the replica
+  // publish, so a render the replica caused finds the joins at least as new as
+  // its model. Memoized on what the joins are made of.
+  const held = feed?.heldRows() ?? NO_HELD;
+  const joinsKey = boardJoinsKey(held, here);
+  const joins = useMemo<BoardJoins>(
+    () => boardJoins(held, here),
+    // the key stands for the held rows and `here`
+    [joinsKey],
+  );
+  const joinsRef = useRef(joins);
+  joinsRef.current = joins;
+
+  // ── the rows as the views read them ──────────────────────────────────────
+  const windowRows = useMemo(createWindowRows, []);
+  const standingKey = feedFacts.devices.map((entry) => `${entry.device}:${entry.state}`).join("\n");
+  const orderFor = useMemo(createRowOrder, []);
+  const orderKey = orderFor(held, here, panes).join("\n");
+  const visualKey = [...(panes.terminalVisualIds ?? [])].map(([a, b]) => `${a}:${b}`).join("\n");
+  const rowFacts = useMemo<WindowRowFacts>(
+    () => ({
+      standing: new Map(feedFacts.devices.map((entry) => [entry.device, entry.state] as const)),
+      order: orderKey === "" ? NO_IDS : orderKey.split("\n"),
+      sessionByRow: joins.sessionByRow,
+      visualIds: panes.terminalVisualIds,
+    }),
+    // keyed by the facts, never by the arrays the deck and the feed republish
+    [standingKey, orderKey, joins, visualKey],
+  );
+  /** Every row, in the stage's order, patched for this window (no device filter). */
+  const agents = windowRows.rowsFor(model, rowFacts);
+  // M59 — the body each row continues, for a view that places rows in space
+  // (the swarm keys its bodies by `visualId ?? id`): the window rows' own rule
+  // (a launcher's agent takes the fresh shell's body, `terminalVisualIds`; a
+  // row keeps the body it wore), handed to the replica's join below. Computed
+  // once per published model, and the SAME map while no row's body moved
+  // (M64), so a state-only publish re-diffs no row in the join.
+  const visualIdsRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const visualIds = useMemo(() => {
+    const next = visualIdsOf(agents);
+    if (!sameVisualIds(visualIdsRef.current, next)) visualIdsRef.current = next;
+    return visualIdsRef.current;
+  }, [agents]);
+
+  // DS-3 — the device filter's choices and the choice as the board still has it
+  const devices = useMemo<readonly DeviceChoice[]>(() => {
+    const counts = new Map<string, number>();
+    for (const row of agents) {
+      if (row.kind !== "agent") continue;
+      const id = deviceOfRow(row, here);
+      if (id === undefined) continue;
+      counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    const choices: DeviceChoice[] = [];
+    for (const entry of feedFacts.devices) {
+      const choice: DeviceChoice = {
+        ...deviceFacet(entry.device, roster.byId, here),
+        state: entry.state,
+        agents: counts.get(entry.device) ?? 0,
+      };
+      if (choice.here) choices.unshift(choice);
+      else choices.push(choice);
+    }
+    return choices;
+  }, [agents, feedFacts.devices, roster.byId, here]);
+  const deviceChosen = standingChoice(devices, device);
+  const narrow = useMemo(createNarrowing, []);
+  const placed = narrow(agents, deviceChosen, here);
+  const shown = useMemo(
+    () => (chosenProfile === undefined ? placed : placed.filter((row) => row.receded !== true)),
+    [placed, chosenProfile],
+  );
+
+  // AR-S5 — the tabs and the spawn menu (SB-3), from the profiles feed and the rows
+  const tabs = useMemo(() => profileTabs(profiles, agents), [profiles, agents]);
+  const nextSpawnMenu = hasProfiles ? spawnMenuOf(profilesRead ? profiles : null, tabs) : undefined;
+  const spawnMenuKey = nextSpawnMenu === undefined ? "" : JSON.stringify(nextSpawnMenu);
+  const spawnMenuRef = useRef<{ key: string; menu: MonitorSpawnMenu | undefined }>({
+    key: "",
+    menu: undefined,
+  });
+  if (spawnMenuRef.current.key !== spawnMenuKey) {
+    spawnMenuRef.current = { key: spawnMenuKey, menu: nextSpawnMenu };
+  }
+  const spawnMenu = spawnMenuRef.current.menu;
+  const capabilities = useMemo<MonitorCapabilities>(
+    () => (spawnMenu === undefined ? {} : { spawn: spawnMenu }),
+    [spawnMenu],
+  );
+
+  // ── the window's own facts for the replica's join ────────────────────────
   /** Which row the user last pointed at — a preview highlight for a row no
    * pane is showing yet. Cleared when the row lands in a pane. */
   const [selectedId, setSelectedId] = useState<string>();
+  /** SB-3 — where each born terminal was asked for, by the FLOOR SESSION the
+   * door's answer named; a claim (`hintFor`) stands in until the answer. */
   const [spawnHints, setSpawnHints] = useState<ReadonlyMap<string, { x: number; y: number }>>(
     () => new Map(),
   );
+  /** DS-4 — a peer row's local replica, by ROW id, from the attach that put it there. */
+  const [links, setLinks] = useState<ReadonlyMap<string, string>>(() => new Map());
   const [acknowledgement, setAcknowledgement] = useState<MonitorAcknowledgement | null>(null);
-  /** Row id → the replica it was attached as. Kept per ROW rather than per
-   * session because the row is what survives a refresh of the mesh. */
-  const [links, setLinks] = useState<ReadonlyMap<string, RemoteLink>>(() => new Map());
-  /** THE FOLD, from the window's one subscription (AR-6 §4.1, built at GT-6).
-   * This hook used to own `agent.subscribe` itself; the stream moved up to
-   * `GodviewAgentsProvider` so the deck's pane frames read the same rows in the
-   * same tick, and what stays here is the monitor's pure projection of them. */
-  const localField = useAgentFold();
-  /** DS-3 — the mesh board and the roster that names its desktops, both held
-   * only while this stage is (PF6). */
-  const meshField = useMeshField({ door });
-  const roster = useDeviceRoster(door?.devices);
-  const hereId = meshHere(meshField, roster);
-  const here = useMemo(
-    () => (hereId === undefined ? undefined : deviceFacet(hereId, roster.byId, hereId)),
-    [hereId, roster],
-  );
 
-  /** GT-3p's damage gate, kept: the projection's INPUTS as JSON. A frame
-   * that changed nothing anybody renders still arrives as a new object; the
-   * comparison holds the previous rows and returns them unchanged so the memo
-   * below sees the same reference. Cheap at this size. */
-  const stableRows = useRef(localField.rows);
-  const stableKey = useRef("");
-  const key = rowsKey(localField.rows);
-  if (key !== stableKey.current) {
-    stableKey.current = key;
-    stableRows.current = localField.rows;
-  }
-  const localRows = stableRows.current;
-
-  /** The deck publishes a fresh array whenever anything about its panes moves,
-   * and the projection below must not recompute on identity alone. The joined
-   * string is the dependency and the set is derived FROM it, so the memo cannot
-   * drift from what it depends on; NUL separates because no session id has one. */
-  const paneSessionKey = panes.sessionIds.join("\0");
-  const paneSessionIds = useMemo(
-    () => new Set(paneSessionKey === "" ? [] : paneSessionKey.split("\0")),
-    [paneSessionKey],
-  );
-  const paneSessions = panes.sessions;
-  const paneSummaryKey = JSON.stringify(
-    (paneSessions ?? []).map((s) => [s.id, s.exited, s.cwd, s.title, s.activity?.kind]),
-  );
-  const sessions = useMemo(() => {
-    const map = new Map<string, SessionSummary>();
-    for (const session of paneSessions ?? []) map.set(session.id, session);
-    return map;
-    // keyed by the facts a row draws, not by array identity (the deck
-    // republishes at ghosttea's cadence): paneSummaryKey stands in for paneSessions
-  }, [paneSummaryKey]);
-
-  /**
-   * The deck owns pane colours and keeps them while this monitor is closed.
-   * A session wears its active pane's colour, or its first pane's when none of
-   * its panes is active. Never deal a second ledger here: reopening the stage
-   * must not change the bubble-to-frame association.
-   */
-  const paneIdsKey = (panes.paneIds ?? []).join("\0");
-  const attachments = useMemo(() => {
-    const paneIds = paneIdsKey === "" ? [] : paneIdsKey.split("\0");
-    const bySession = new Map<string, string[]>();
-    paneIds.forEach((paneId, index) => {
-      const sessionId = panes.sessionIds[index];
-      if (sessionId === undefined) return;
-      const list = bySession.get(sessionId) ?? [];
-      list.push(paneId);
-      bySession.set(sessionId, list);
-    });
-    const result = new Map<string, PaneAttachment>();
-    for (const [sessionId, ids] of bySession) {
-      const activeIndex = panes.activePaneId === undefined ? -1 : ids.indexOf(panes.activePaneId);
-      const primaryPaneId = ids[activeIndex >= 0 ? activeIndex : 0] as string;
-      const color = panes.paneColors?.get(primaryPaneId);
-      result.set(sessionId, {
-        primaryPaneId,
-        paneIds: [primaryPaneId, ...ids.filter((id) => id !== primaryPaneId)],
-        ...(color ? { color } : {}),
-      });
-    }
-    return result;
-    // keyed by the facts, not by the array the deck republishes
-  }, [paneIdsKey, paneSessionKey, panes.activePaneId, panes.paneColors]);
-
-  /**
-   * AR-5 — the projects' colours (record §02, D3): every managed row's project
-   * is dealt a sequence the first time it is seen, persisted per device, and
-   * the theme's tint turns it into a hue in `agents.ts`. Dealt here, above the
-   * projection, so the projection stays pure.
-   */
-  const [projectLedger, setProjectLedger] = useState<ProjectLedger>(() =>
-    loadProjectLedger(PROJECT_LEDGER_KEY),
-  );
-  const projectKeysKey = localRows.map((row) => projectKey(row) ?? "").join("\0");
-  useEffect(() => {
-    const keys = localRows.map(projectKey).filter((key): key is string => key !== undefined);
-    const next = dealProjectSeqs(projectLedger, keys);
-    if (next === projectLedger) return;
-    saveProjectLedger(PROJECT_LEDGER_KEY, next);
-    setProjectLedger(next);
-    // the keys are the dependency; localRows rides along under its own key
-  }, [projectKeysKey, projectLedger]);
-
-  /**
-   * AR-5 — the UI's own account of each agent's tokens (the package's ledger,
-   * D7 for its cache): one series per run, the held total and the burn per
-   * step, folded from the mirror's `usage` at every step boundary and every
-   * frame. The views read this and never Core's moving estimate. Seeded from
-   * the cache once per conversation, saved at every step and when the page
-   * goes away.
-   */
-  const usageRef = useRef<UsageLedger>(EMPTY_USAGE_LEDGER);
-  const [usageStep, setUsageStep] = useState(0);
-  const usageSeedsRef = useRef(new Set<string>());
-  const [usageSeed, setUsageSeed] = useState(0);
-  const usageStore = useMemo(() => createUsageHistoryCache(USAGE_CACHE_KEY), []);
-  useEffect(() => {
-    let interval: number | undefined;
-    // Aligned to the step boundaries, so every agent's bars shift together.
-    const timeout = window.setTimeout(
-      () => {
-        setUsageStep((step) => step + 1);
-        interval = window.setInterval(() => setUsageStep((step) => step + 1), USAGE_STEP_MS);
-      },
-      USAGE_STEP_MS - (Date.now() % USAGE_STEP_MS),
-    );
-    return () => {
-      window.clearTimeout(timeout);
-      if (interval !== undefined) window.clearInterval(interval);
-    };
-  }, []);
-  const usageKeys = useMemo<UsageLedgerKey[]>(
-    () =>
-      localRows.flatMap((row) =>
-        row.monitor === undefined
-          ? []
-          : [{ id: managedRowId(row), providerId: row.kind, nativeSessionId: row.sessionId }],
-      ),
-    [localRows],
-  );
-  useEffect(() => {
-    let alive = true;
-    // A seed is MARKED when it lands, not when it is asked for: a cleanup
-    // that runs before the load answers (a double-invoked effect) unmarks
-    // what it asked, so the next run asks again rather than never (AR-5b).
-    const asked = new Set<string>();
-    for (const key of usageKeys) {
-      const seedKey = `${key.providerId} ${key.nativeSessionId}`;
-      if (usageSeedsRef.current.has(seedKey)) continue;
-      usageSeedsRef.current.add(seedKey);
-      asked.add(seedKey);
-      void usageStore
-        .load({ providerId: key.providerId, nativeSessionId: key.nativeSessionId })
-        .then((record) => {
-          if (!alive) return;
-          asked.delete(seedKey);
-          if (!record) return;
-          usageRef.current = seedUsage(usageRef.current, key.id, record, Date.now());
-          setUsageSeed((seed) => seed + 1);
-        })
-        .catch(() => undefined);
-    }
-    return () => {
-      alive = false;
-      for (const seedKey of asked) usageSeedsRef.current.delete(seedKey);
-    };
-  }, [usageKeys, usageStore]);
-  useEffect(() => {
-    const save = (): void => {
-      const records = exportUsage(usageRef.current, usageKeys, Date.now());
-      if (records.length > 0) void usageStore.save(records).catch(() => undefined);
-    };
-    save();
-    window.addEventListener("pagehide", save);
-    return () => window.removeEventListener("pagehide", save);
-  }, [usageKeys, usageStep, usageStore]);
-
-  /**
-   * TL (TL-D8) — what each lane did over time. The package's ledger folds
-   * every projection (so a reply not yet opened is recorded as unseen, and a
-   * peer's run from when this window first heard it); fieldd's ledger is laid
-   * under it once per live fold — asked when the fold goes live, which is when
-   * Godview opens and again after fieldd comes back. A fieldd from before the
-   * door refuses, and the record is then what this window watched.
-   */
-  const statusRef = useRef<StatusLedger>(EMPTY_STATUS_LEDGER);
-  /** Run → when fieldd says it exited, for the runs its ledger answered. */
-  const exitsRef = useRef<ReadonlyMap<string, number>>(new Map());
-  const [statusSeed, setStatusSeed] = useState(0);
-  const statusPort = door?.statusHistory;
-  const foldLive = localField.state === "live";
-  useEffect(() => {
-    if (statusPort === undefined || !foldLive) return;
-    let alive = true;
-    void statusPort
-      .load()
-      .then((runs) => {
-        if (!alive) return;
-        const nowMs = Date.now();
-        const exits = new Map(exitsRef.current);
-        let ledger = statusRef.current;
-        for (const run of runs) {
-          const recordedFromMs = Date.parse(run.recordedFrom);
-          if (!Number.isFinite(recordedFromMs)) continue;
-          const endedAtMs = run.exitedAt === undefined ? Number.NaN : Date.parse(run.exitedAt);
-          ledger = seedStatusHistory(
-            ledger,
-            run.runtimeRunId,
-            {
-              recordedFromMs,
-              changes: run.changes.map((change) => ({
-                status: change.status,
-                atMs: Date.parse(change.at),
-                ...(change.blocker ? { blocker: change.blocker } : {}),
-                ...(change.did ? { did: change.did } : {}),
-              })),
-              ...(Number.isFinite(endedAtMs) ? { endedAtMs } : {}),
-            },
-            nowMs,
-          );
-          if (Number.isFinite(endedAtMs)) exits.set(run.runtimeRunId, endedAtMs);
-        }
-        statusRef.current = ledger;
-        exitsRef.current = exits;
-        setStatusSeed((seed) => seed + 1);
-      })
-      .catch(() => undefined);
-    return () => {
-      alive = false;
-    };
-  }, [statusPort, foldLive]);
-
-  /** Unread is a fold over successive projections (the package's ledger). */
-  const unreadRef = useRef<UnreadLedger>(EMPTY_UNREAD_LEDGER);
-  const visualIdsRef = useRef<ReadonlyMap<string, string>>(new Map());
-
-  /** A pane link is only true while a pane is actually showing the replica: the
-   * user can close that pane, and a bubble still drawn as linked would be the
-   * monitor remembering an event instead of reporting a state. */
-  const remotes = useMemo<readonly MonitorMeshRecord[]>(
-    () =>
-      meshRecords(meshField, roster).map((record) => {
-        const link = links.get(remoteRowId(record.device.id, record.row.runtimeRunId));
-        if (link === undefined || !paneSessionIds.has(link.localSessionId)) return record;
-        return { ...record, localSessionId: link.localSessionId };
-      }),
-    [meshField, roster, links, paneSessionIds],
-  );
-
-  const managed = useMemo<readonly MonitorManagedRecord[]>(
-    () => localRows.map((summary) => ({ summary })),
-    [localRows],
-  );
-  /** The deck's panes, as terminal rows: the projection drops the ones a
-   * managed row claims. A pane whose session exited stays out (a dead pane is
-   * the deck's face to draw, not a row). */
-  /**
-   * SB-3 — a new terminal's spawn hint, from its row's FIRST appearance. The
-   * views' physics reads a row's `spawnHint` only when it CREATES the body, and
-   * the new shell's row can reach the stage (a pane's summary, the roster)
-   * before the door answers — a hint stamped only on the answer came too late,
-   * and the body landed away from where it was asked for. So while a create is
-   * in flight, the first NEW local terminal row seen after it started (one no
-   * row stood for then) takes its position; the door's answer stamps the
-   * session it names (`spawnHints`), which corrects a claim that was another's.
-   */
+  // SB-3 — a new terminal's spawn hint, from its row's FIRST appearance. The
+  // views' physics reads a row's `spawnHint` only when it CREATES the body, and
+  // the new shell's row can reach the stage before the door answers — a hint
+  // stamped only on the answer came too late. So while a create is in flight,
+  // the first NEW terminal row seen after it started (one no row stood for then)
+  // takes its position; the door's answer stamps the session it names, which
+  // corrects a claim that was another's.
   const pendingSpawns = useRef<PendingSpawn[]>([]);
   const [spawnsVersion, setSpawnsVersion] = useState(0);
-  const localTerminalIds = useRef<ReadonlySet<string>>(new Set());
-  localTerminalIds.current = new Set([
-    ...paneSessionIds,
+  const knownTerminals = useRef<ReadonlySet<string>>(new Set());
+  knownTerminals.current = new Set([
+    ...panes.sessionIds,
     ...(panes.floor ?? []).map((row) => row.sessionId),
+    ...joins.terminalRows.map((id) => joins.sessionByRow.get(id) ?? id),
   ]);
   const hintFor = (sessionId: string): { x: number; y: number } | undefined => {
     const answered = spawnHints.get(sessionId);
@@ -612,160 +467,99 @@ export function useMonitorAgents({
     open.claimed = sessionId;
     return open.position;
   };
-  const terminals = useMemo<readonly MonitorTerminalRecord[]>(
-    () =>
-      [...sessions.values()]
-        .filter((session) => !session.exited)
-        .map((session) => {
-          const spawnHint = hintFor(session.id);
-          return { session, ...(spawnHint !== undefined ? { spawnHint } : {}) };
-        }),
-    // the claims' own clock rides along: `hintFor` reads the claims it versions
-    [sessions, spawnHints, spawnsVersion],
-  );
-  /** GT-6b — the floor's live PTYs, as the deck last read them. Keyed on the
-   * facts a row draws rather than on array identity, for the same reason the
-   * pane summaries are: the deck republishes on its own cadence. */
-  const floorKey = JSON.stringify(
-    (panes.floor ?? []).map((row) => [row.sessionId, row.workloadClass, row.title ?? ""]),
-  );
-  const floor = useMemo<readonly MonitorFloorRecord[]>(
-    () =>
-      (panes.floor ?? []).map((row) => {
-        // a new shell can reach the stage through the roster first (SB-3)
-        const spawnHint = hintFor(row.sessionId);
-        return spawnHint === undefined ? row : { ...row, spawnHint };
-      }),
-    // keyed by the facts above, not by the array the deck handed over
-    [floorKey, spawnHints, spawnsVersion],
-  );
-
-  const agents = useMemo(() => {
-    const nowMs = Date.now();
-    // The usage ledger is folded before assembly so every view reads the held
-    // total and the stepped burn, never Core's moving estimate. `usageStep` is
-    // its clock; the fold itself reads the wall clock.
-    const usage = reconcileUsage(
-      usageRef.current,
-      localRows.map((row) => ({
-        id: managedRowId(row),
-        ...(row.monitor?.usage ? { usage: coreUsage(row.monitor.usage) } : {}),
-      })),
-      nowMs,
-    );
-    usageRef.current = usage;
-    const assembled = assembleMonitorAgents({
-      managed,
-      terminals,
-      floor,
-      mesh: remotes,
-      ...(here !== undefined ? { here } : {}),
-      colours: { tint: palette.tint, neutral: palette.neutral },
-      projectSeqs: projectLedger.seqByKey,
-      usage: usage.histories,
-      sessions,
-      attachments,
-      ...(panes.profileSets !== undefined ? { profileSets: panes.profileSets } : {}),
-      visualIds: panes.terminalVisualIds,
-      previousVisualIds: visualIdsRef.current,
-      nowMs,
-      ...(panes.activeSessionId !== undefined ? { activeSessionId: panes.activeSessionId } : {}),
-      ...(selectedId !== undefined ? { previewSelectedId: selectedId } : {}),
-    });
-    visualIdsRef.current = new Map(
-      assembled.map((agent) => [agent.id, agent.visualId ?? agent.id]),
-    );
-    const ledger = reconcileUnread(
-      unreadRef.current,
-      assembled.map((agent) => {
-        const statusSince = agent.agent?.monitor?.statusSince;
-        const statusSinceMs = statusSince === undefined ? Number.NaN : Date.parse(statusSince);
-        return {
-          id: agent.id,
-          status: agent.status,
-          active: agent.active,
-          hasAgent: agent.agent !== undefined,
-          ...(Number.isFinite(statusSinceMs) ? { statusSinceMs } : {}),
-        };
-      }),
-      nowMs,
-    );
-    unreadRef.current = ledger;
-    const projected = assembled.map((agent) =>
-      ledger.unreadIds.has(agent.id) ? { ...agent, unread: true } : agent,
-    );
-    let status = observeStatuses(statusRef.current, projected, nowMs);
-    // A run fieldd says ended, still in the fold but no longer drawn, keeps
-    // its lane faint (TL-D6): named from its row, ended where fieldd saw it end.
-    const drawn = new Set(projected.map((agent) => agent.id));
-    for (const summary of localRows) {
-      const id = managedRowId(summary);
-      const endedAtMs = exitsRef.current.get(id);
-      if (endedAtMs === undefined || drawn.has(id) || !status.lanes.has(id)) continue;
-      status = endStatusLane(
-        status,
-        endedMonitorAgent(
-          { summary },
-          {
-            colours: { tint: palette.tint, neutral: palette.neutral },
-            projectSeqs: projectLedger.seqByKey,
-            nowMs,
-          },
-        ),
-        endedAtMs,
-      );
+  const terminalSessionsKey = joins.terminalRows
+    .map((id) => joins.sessionByRow.get(id) ?? id)
+    .join("\n");
+  const hints = useMemo(() => {
+    const result = new Map<string, { x: number; y: number }>(spawnHints);
+    for (const session of terminalSessionsKey === "" ? [] : terminalSessionsKey.split("\n")) {
+      if (result.has(session)) continue;
+      const hint = hintFor(session);
+      if (hint !== undefined) result.set(session, hint);
     }
-    statusRef.current = status;
-    return projected;
-  }, [
-    palette.tint,
-    palette.neutral,
-    projectLedger,
-    selectedId,
-    localRows,
-    managed,
-    terminals,
-    floor,
-    remotes,
-    here,
-    sessions,
-    attachments,
-    panes.activeSessionId,
-    panes.terminalVisualIds,
-    panes.profileSets,
-    usageStep,
-    usageSeed,
-    statusSeed,
-  ]);
-  const history = useMemo(
-    () => statusHistoryBook(statusRef.current) as GodviewHistoryBook,
-    // the ledger moves only with the projection and with a seed
-    [agents, statusSeed],
-  );
+    return result;
+    // the claims' own clock rides along: `hintFor` reads the claims it versions
+  }, [spawnHints, terminalSessionsKey, spawnsVersion]);
 
+  // The exited panes: a dead pane is the deck's face to draw, not a row — and a
+  // managed agent whose pane exited is dropped with it, as the seam dropped it.
+  const exitedKey = (panes.sessions ?? [])
+    .filter((session) => session.exited)
+    .map((session) => joins.rowBySession.get(session.id) ?? session.id)
+    .sort()
+    .join("\n");
+  const visible = useMemo(() => {
+    const exited = new Set(exitedKey === "" ? [] : exitedKey.split("\n"));
+    return (row: MonitorAgentRow): boolean => row.alive && !exited.has(row.id);
+  }, [exitedKey]);
+  const receded = useMemo(
+    () =>
+      chosenProfile === undefined
+        ? undefined
+        : (row: MonitorAgentRow): boolean => !(row.device.self && row.profileSet === chosenProfile),
+    [chosenProfile],
+  );
+  const kindOf = useCallback(
+    (id: string): MonitorAgentRow["kind"] | undefined =>
+      model.byId.get(id)?.kind ?? feed?.held(id)?.row.kind,
+    [model, feed],
+  );
+  const panesKey = paneFactsKey(panes);
+  const kindsKey = windowKindsKey({ joins, kindOf, panes, spawnHints: hints });
+  const local = useMemo(
+    () =>
+      windowLocal({
+        joins,
+        kindOf,
+        panes,
+        links,
+        previewSelectedId: selectedId,
+        spawnHints: hints,
+        visualIds,
+        receded,
+        visible,
+      }),
+    // The kinds key covers every kindOf lookup the join makes. Model-only
+    // publishes keep the local facts and do not re-diff the replica.
+    [joins, kindsKey, panesKey, links, selectedId, hints, visualIds, receded, visible],
+  );
+  useLayoutEffect(() => {
+    feed?.replica.setLocal(local);
+  }, [feed, local]);
+  // L5 — a screen's shown rows are whatever its active pane shows (and the row
+  // the person pointed at); the backend clears their marks.
+  const shownKey = [...local.activeIds].sort().join("\n");
+  useEffect(() => {
+    feed?.reportShown(shownKey === "" ? [] : shownKey.split("\n"));
+  }, [feed, shownKey]);
+
+  // ── the verbs, through the door ──────────────────────────────────────────
   const announce = useCallback((message: string): void => {
     setAcknowledgement((current) => ({ nonce: (current?.nonce ?? 0) + 1, message }));
   }, []);
 
   /**
-   * AR-4 — a run resumed into a new PTY. The fold's row names the PTY it
+   * AR-4 — a run resumed into a new PTY. The board's row names the PTY it
    * replaced (`terminal.replaced`), and the pane that was showing the old one
    * is handed the new one through the door, once per replacement — so a
    * resume-when-idle never leaves a pane on a dead PTY. A replacement no pane
    * shows is not this hook's business: the row is enough.
    */
+  const paneSessionKey = panes.sessionIds.join("\n");
+  const paneSessionIds = useMemo(
+    () => new Set(paneSessionKey === "" ? [] : paneSessionKey.split("\n")),
+    [paneSessionKey],
+  );
   const remounted = useRef(new Set<string>());
   const remounting = useRef(new Set<string>());
   const remountAttempts = useRef(new Map<string, number>());
   useEffect(() => {
     if (door === null) return;
-    for (const row of localRows) {
-      const next = row.terminal?.runtimeSessionId;
-      const old = row.terminal?.replaced;
-      if (next === undefined || old === undefined) continue;
+    for (const { rowId, old, next } of joins.replacements) {
       const key = `${old}\u0000${next}`;
       if (remounted.current.has(key) || remounting.current.has(key)) continue;
       if (!paneSessionIds.has(old) || paneSessionIds.has(next)) continue;
+      const name = feed?.held(rowId)?.row.project.name ?? rowId;
       // A key is recorded only when the mount LANDED (AR-4b): a failure — the
       // floor not listing a just-born PTY yet, the pane closing under the
       // wait — is retried on the next frame or pane change, a bounded number
@@ -778,17 +572,17 @@ export function useMonitorAgents({
           remounting.current.delete(key);
           if (outcome.state === "mounted") {
             remounted.current.add(key);
-            announce(`${projectLabel(row)} resumed in its pane`);
+            announce(`${name} resumed in its pane`);
             return;
           }
           const last = attempt >= REMOUNT_ATTEMPTS;
           if (last) remounted.current.add(key);
           if (outcome.state === "no-pane") {
-            announce(`${projectLabel(row)} resumed, but no pane was open to hand it to`);
+            announce(`${name} resumed, but no pane was open to hand it to`);
             return;
           }
           announce(
-            `${projectLabel(row)} resumed, but its pane could not be handed the new terminal — ${outcome.reason}${last ? "" : "; trying again"}`,
+            `${name} resumed, but its pane could not be handed the new terminal — ${outcome.reason}${last ? "" : "; trying again"}`,
           );
         },
         () => {
@@ -796,100 +590,75 @@ export function useMonitorAgents({
         },
       );
     }
-  }, [door, localRows, paneSessionIds, announce]);
+  }, [door, feed, joins, paneSessionIds, announce]);
 
   /**
    * THE DOOR, opened (GT-D17). A remote row's select is the reference app's
-   * `MonitorActions.select` contract finally meaning what it always said:
-   * "Mount this session in the active pane".
-   *
-   * The mechanics are the deck's, not this hook's — `door.attach` is where the
-   * runtime and the workspace live, and the one thing that crosses back is an
-   * outcome. Every outcome is said out loud, including the two that are not
-   * failures: a deck with no panes has nowhere to put a session, and a peer
-   * that hands over a READ-ONLY session has still handed over one worth
-   * watching. (That clause said "refuses mirror-write" until TM-3 deleted
-   * VibeField's mirror-write capability, 2026-09-14 — the outcome is the peer's
-   * verdict either way, and the renderer never held such a key.)
+   * `commands.select` means:
+   * "Mount this session in the active pane". The mechanics are the deck's —
+   * `door.attach` is where the runtime and the workspace live — and the one
+   * thing that crosses back is an outcome, said out loud.
    */
   const attachRemote = useCallback(
     async (agent: MonitorAgent): Promise<void> => {
-      const remote = agent.remote;
-      if (remote === undefined) return;
+      if (agent.device.self) return;
+      const remote = agent.device;
       if (door === null) {
-        // The one outcome that used to be silent, and the only path where
-        // clicking a row did nothing without saying so. A door is null when no
-        // deck exists yet — the overlay is still coming up, or this host has no
-        // terminal bridge at all — and a row the mesh put on the stage is worth
-        // an answer either way.
-        announce(`${remote.deviceName} cannot be attached yet — the deck has no connection`);
+        announce(`${remote.name} cannot be attached yet — the deck has no connection`);
         return;
       }
-      if (!remote.attachable) {
-        // DS-4e — a run off the mesh board is attachable when its owner names
-        // its PTY; one that names none has nothing a pane can show. The
-        // sentence says what the row lacks, never that the other desktop is
-        // refusing.
-        announce(`${agent.project} runs on ${remote.deviceName} — it names no terminal to open`);
+      if (!agent.attachable) {
+        // DS-4e — a run off the board is attachable when its owner names its
+        // PTY; one that names none has nothing a pane can show.
+        announce(`${projectName(agent)} runs on ${remote.name} — it names no terminal to open`);
         return;
       }
+      // the run's PTY on ITS floor when the owner named one, the run otherwise
+      const board = feed?.held(agent.id)?.board;
+      const remoteSessionId =
+        board === undefined ? agent.id : (board.terminal?.runtimeSessionId ?? board.runtimeRunId);
       const outcome = await door.attach({
-        deviceId: remote.deviceId,
-        deviceName: remote.deviceName,
-        remoteSessionId: remote.remoteSessionId,
+        deviceId: remote.id,
+        deviceName: remote.name,
+        remoteSessionId,
       });
       if (outcome.state === "no-pane") {
         announce("no pane to attach to — open one in the deck first");
         return;
       }
       if (outcome.state === "failed") {
-        announce(`${remote.deviceName} could not be attached — ${outcome.reason}`);
+        announce(`${remote.name} could not be attached — ${outcome.reason}`);
         return;
       }
-      setLinks((current) => {
-        const next = new Map(current);
-        next.set(agent.id, { localSessionId: outcome.sessionId });
-        return next;
-      });
-      // Mirror-write, honest and in the same breath as the success: the pane is
-      // real either way, and which of the two it is decides whether typing into
-      // it does anything. The pane carries the library's own "View only" face;
-      // this is the monitor saying the same thing where the gesture happened.
+      setLinks((current) => new Map(current).set(agent.id, outcome.sessionId));
       announce(
         outcome.readWrite
-          ? `${agent.project} attached from ${remote.deviceName}`
-          : `${agent.project} attached from ${remote.deviceName} — view only, the peer refuses writes`,
+          ? `${projectName(agent)} attached from ${remote.name}`
+          : `${projectName(agent)} attached from ${remote.name} — view only, the peer refuses writes`,
       );
     },
-    [announce, door],
+    [announce, door, feed],
   );
 
   /**
    * A LOCAL row's select (AR-3): a managed agent's PTY, or an unclaimed
    * terminal, mounted in the pane the user is in. A row already showing there
-   * is acknowledged rather than re-mounted; a row whose PTY the fold no longer
-   * names (hosted: none) has nothing to mount and says so.
+   * is acknowledged rather than re-mounted; a row whose PTY the board no longer
+   * names has nothing to mount and says so.
    */
   const mountLocal = useCallback(
     async (agent: MonitorAgent): Promise<void> => {
-      // Three ways a row can name a mountable PTY, in descending order of
-      // what the host knows about it: the summary a pane gave it, the floor id
-      // a roster-only row carries (GT-6b), and the terminal join the fold
-      // named for a managed run.
-      const sessionId =
-        agent.session?.id ??
-        agent.floorSessionId ??
-        agent.agent?.summary?.terminal?.runtimeSessionId;
+      const sessionId = joinsRef.current.sessionByRow.get(agent.id);
       if (sessionId === undefined) {
-        announce(`${agent.project} has no terminal here to mount`);
+        announce(`${projectName(agent)} has no terminal here to mount`);
         return;
       }
       if (agent.active && panes.activeSessionId === sessionId) {
-        announce(`${agent.project} is in the active pane`);
+        announce(`${projectName(agent)} is in the active pane`);
         return;
       }
       if (door === null) {
-        announce(`${agent.project} cannot be mounted yet — the deck has no connection`);
+        announce(`${projectName(agent)} cannot be mounted yet — the deck has no connection`);
         return;
       }
       const outcome = await door.mountLocal(sessionId);
@@ -898,18 +667,18 @@ export function useMonitorAgents({
         return;
       }
       if (outcome.state === "failed") {
-        announce(`${agent.project} could not be mounted — ${outcome.reason}`);
+        announce(`${projectName(agent)} could not be mounted — ${outcome.reason}`);
         return;
       }
       setSelectedId(undefined);
-      announce(`${agent.project} mounted in the active pane`);
+      announce(`${projectName(agent)} mounted in the active pane`);
     },
     [announce, door, panes.activeSessionId],
   );
 
   const select = useCallback(
     (agent: MonitorAgent): void => {
-      if (agent.remote !== undefined) {
+      if (!agent.device.self) {
         void attachRemote(agent);
         return;
       }
@@ -921,13 +690,11 @@ export function useMonitorAgents({
 
   /**
    * A new terminal, in the active pane (SB-3): under the Agent Profile the
-   * spawn bloom or the list's menu chose, else unbound — a hold with no menu
-   * creates exactly as before it. The views match the body they drew at the
-   * release point to the row by `spawnHint`, so the position is kept as given.
-   * Every outcome is said, a refusal in fieldd's own words; a shell an older
-   * daemon could not bind is kept, and said to be unbound. A create that opened
-   * nothing then REJECTS with the sentence it said, so a view's pending body is
-   * put away at once rather than waiting its birth out.
+   * spawn bloom or the list's menu chose, else unbound. The views match the
+   * body they drew at the release point to the row by `spawnHint`, so the
+   * position is kept as given. Every outcome is said, a refusal in fieldd's own
+   * words; a create that opened nothing then REJECTS with the sentence it said,
+   * so a view's pending body is put away at once rather than waiting its birth out.
    */
   const createAt = useCallback(
     async (position?: { x: number; y: number }, target?: MonitorSpawnTarget): Promise<void> => {
@@ -949,7 +716,7 @@ export function useMonitorAgents({
       const under = label === undefined ? "" : ` under ${label}`;
       // SB-3: while in flight, the first new terminal row takes this position
       const spawn: PendingSpawn | undefined =
-        position === undefined ? undefined : { position, known: localTerminalIds.current };
+        position === undefined ? undefined : { position, known: knownTerminals.current };
       if (spawn !== undefined) pendingSpawns.current = [...pendingSpawns.current, spawn];
       const landed = (): void => {
         if (spawn === undefined) return;
@@ -994,40 +761,94 @@ export function useMonitorAgents({
   );
 
   const clearAcknowledgement = useCallback(() => setAcknowledgement(null), []);
-  const actions = useMemo<MonitorActions>(() => ({ select, createAt }), [createAt, select]);
+
+  // The views read the window's model cut. Commands and reads find this
+  // render's facts through one stable ref; a host-fact change refreshes the cut.
+  const agentsById = useMemo(() => new Map(agents.map((row) => [row.id, row] as const)), [agents]);
+  const latest = useRef({
+    viewRows: (current: MonitorModel) =>
+      narrow(windowRows.rowsFor(current, rowFacts), deviceChosen, here),
+    agentsById,
+    select,
+    createAt,
+  });
+  latest.current = {
+    viewRows: (current) => narrow(windowRows.rowsFor(current, rowFacts), deviceChosen, here),
+    agentsById,
+    select,
+    createAt,
+  };
+  const viewReplica = useMemo<WindowViewReplica>(
+    () => createWindowViewReplica(replica, (current) => latest.current.viewRows(current)),
+    [replica],
+  );
+  useLayoutEffect(() => {
+    viewReplica.refresh();
+  }, [viewReplica, placed, chosenProfile, deviceChosen]);
+
+  // The view host reads its commands through the latest props; these reach the latest window too.
+  const commands = useMemo<ViewSlotCommands>(
+    () => ({
+      select(agentId) {
+        const row = latest.current.agentsById.get(agentId);
+        if (row !== undefined) latest.current.select(row);
+      },
+      // M59 — the host's REAL answer: the slot reads the create's fulfilment as
+      // opened and its rejection (`createAt` refuses with the sentence it said)
+      // as a refusal, so a view's birth waits for its row and gives up at once
+      // when nothing opened (SB §2.6).
+      create(at, target) {
+        return latest.current.createAt(at, target);
+      },
+    }),
+    [],
+  );
+
+  // ── the chrome's facts (M19): the claims, the find sheet ─────────────────
   const sources = useMemo<MonitorSourceCounts>(
     () => ({
-      // Counted off the ASSEMBLED rows rather than the field's records: the
-      // projection drops an exited run, and a claim of N agents over N-1 drawn
-      // ones would be its own small dishonesty. Another desktop's run is an
-      // agent row too (DS-3), and it is not one of the fold's.
-      local: agents.filter((agent) => agent.agent !== undefined && agent.remote === undefined)
-        .length,
-      terminals: agents.filter((agent) => agent.agent === undefined && agent.remote === undefined)
-        .length,
-      remote: agents.filter((agent) => agent.remote !== undefined).length,
-      hosts: new Set(
-        agents.flatMap((agent) => (agent.remote === undefined ? [] : [agent.remote.deviceId])),
-      ).size,
-      localState: localField.state,
-      ...(localField.reason !== undefined ? { localReason: localField.reason } : {}),
-      remoteState: meshField.state,
-      ...(meshField.reason !== undefined ? { remoteReason: meshField.reason } : {}),
+      // Counted off the window's rows: another desktop's run is an agent row
+      // too (DS-3), and it is not one of this desktop's.
+      local: agents.filter((row) => row.kind === "agent" && row.device.self).length,
+      terminals: agents.filter((row) => row.kind === "terminal" && row.device.self).length,
+      remote: agents.filter((row) => !row.device.self).length,
+      hosts: new Set(agents.flatMap((row) => (row.device.self ? [] : [row.device.id]))).size,
+      ...localStateOf(feedFacts.state),
+      ...remoteStateOf(feedFacts.state),
     }),
-    [agents, meshField, localField],
+    [agents, feedFacts.state],
   );
-  const devices = useMemo(
-    () => deviceChoices(meshField, roster, agents),
-    [meshField, roster, agents],
+  // The find sheet joins rosetta's hits by the provider-native session id and
+  // scopes them from the mirror's clocks — facts the model does not carry
+  // (M19). MV-3d: they ride each run's row of the model board (the chrome's
+  // facts), joined by the run each row was dealt; the sheet's join moves only
+  // when a fact it keys moves, and reads the newest of them when it does.
+  const chrome = feed?.chrome ?? null;
+  const findKey = useChromeKey(chrome, findJoinKey);
+  const findAgentsOf = useMemo(createFindAgents, []);
+  const findAgents = useMemo<readonly FindAgent[]>(
+    () => findAgentsOf(agents, joins.runByRow, chrome?.runs() ?? NO_RUNS),
+    // keyed by the facts the sheet joins on, not by every frame a run moves in
+    [agents, joins, findKey, chrome, findAgentsOf],
   );
 
   return {
+    replica,
+    viewReplica,
+    model,
+    commands,
+    capabilities,
     agents,
-    actions,
-    history,
+    shown,
+    findAgents,
+    runByRow: joins.runByRow,
     sources,
     acknowledgement,
     clearAcknowledgement,
     devices,
+    deviceChosen,
+    tabs,
+    spawnMenu,
+    feed: feedFacts.state,
   };
 }

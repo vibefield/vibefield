@@ -186,6 +186,10 @@ overrides:
   "@vibecook/puppeteer-core": link:../puppeteer/packages/core
   "@vibecook/puppeteer-record": link:../puppeteer/packages/record
   "@vibecook/puppeteer-monitor": link:../puppeteer/packages/monitor
+  # MV-3a (2026-10-03): the monitor-view contract (`/model` is the model fieldd's
+  # backend emits and the desk row mirrors; the renderer's adapter and replica
+  # read it too). Types for fieldd; the replica's scheduler type for field-app.
+  "@vibecook/puppeteer-view-sdk": link:../puppeteer/packages/view-sdk
   "@vibecook/puppeteer-views": link:../puppeteer/packages/views
   # rosetta's TypeScript client (types + the REST/WS client); rosettad itself is
   # built from the same checkout by `pnpm siblings:build` and reaches fieldd as

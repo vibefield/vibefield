@@ -209,4 +209,16 @@ describe("the view registry's invariant (the deleted parameters test's claim, ke
       expect(view.parameterGroups.length, `${view.id} declares no controls`).toBeGreaterThan(0);
     }
   });
+
+  it("holds five views since MV-7, spend after the timeline: every walk above reaches it", () => {
+    // Each row in this file and the monitor's that walks MONITOR_VIEWS walks
+    // all five; none skips one.
+    expect(MONITOR_VIEWS.map((view) => view.id)).toEqual([
+      "swarm",
+      "list",
+      "rain",
+      "timeline",
+      "spend",
+    ]);
+  });
 });
