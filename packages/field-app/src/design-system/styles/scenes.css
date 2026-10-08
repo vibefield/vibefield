@@ -244,14 +244,10 @@
 }
 
 /* The Peek's plates (2026-10-08): the plate is the window — the view fills it
-   and recedes by the product's own rule; a narrow one is a narrow window. */
+   and recedes by the product's own rule. */
 .vf-ds-peek-view {
   position: absolute;
   inset: 0;
-}
-
-.vf-ds-peek-plate[data-state="peek-narrow"] {
-  max-width: 640px;
 }
 
 /* One Frame FR-4 — the corner's plates (the page's "Your face" plates): the

@@ -11,8 +11,7 @@ import { PeekPlate } from "../PeekPreview";
 // two faces before the room (2026-10-04, the room's own chunk): opening, and
 // a room that could not open. Its search is the frame's Peek (2026-10-08;
 // §8 "Search — the Peek"): the shipping controller over a fixture port drawn
-// from the same demo, at rest, holding words, before a word, with nothing
-// matching, and in a narrow window.
+// from the same demo — the button at rest, and the popup holding words.
 
 /** A chunk refusal in the loader's own words, real-shaped. */
 const FIXTURE_OPEN_FAILURE =
@@ -41,7 +40,7 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
-        title="Search — the frame's button at the head's right end, ⌘F printed under it"
+        title="Search — the frame's button at the head's right end, ⌘F printed under it (History before anything is read)"
         source="frame/Peek.tsx"
         bleed
       >
@@ -54,23 +53,7 @@ export function HistorySection(): ReactElement {
       >
         <PeekPlate state="open" />
       </Specimen>
-      <Specimen title="Before a word is typed — your latest sessions" source="frame/Peek.tsx" bleed>
-        <PeekPlate state="latest" />
-      </Specimen>
-      <Specimen
-        title="Nothing matches — said in words, never a blank"
-        source="frame/peek-model.ts"
-        bleed
-      >
-        <PeekPlate state="none" />
-      </Specimen>
-      <Specimen
-        title="A narrow window (K6) — the popup clamps, the peek folds and the list fills"
-        source="frame/peek-model.ts"
-        bleed
-      >
-        <PeekPlate state="narrow" />
-      </Specimen>
+
       <Specimen
         title="rosettad is not answering — the index's state, inside the frame"
         source="history/doors.ts"

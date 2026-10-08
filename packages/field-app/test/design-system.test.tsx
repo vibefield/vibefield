@@ -315,14 +315,13 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       [...(container?.querySelectorAll(".vf-ds-peek-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),
       ),
-    ).toEqual(["peek-closed", "peek-open", "peek-latest", "peek-none", "peek-narrow"]);
+    ).toEqual(["peek-closed", "peek-open"]);
     expect(history("peek-closed")?.querySelector(".vf-peek-button kbd")?.textContent).toBe("⌘F");
     expect(history("peek-closed")?.querySelector(".vf-peek-pop")).toBeNull();
     expect(
       history("peek-open")?.querySelector<HTMLInputElement>(".vf-peek-pop .vf-peek-field input")
         ?.value,
     ).toBe("plus");
-    expect(history("peek-none")?.querySelector(".vf-peek-pop")).not.toBeNull();
     expect(document.activeElement?.closest(".vf-peek-pop")).toBeFalsy();
     // DK-12 — the tools in hand: a plate per specimen, the shipping bar in its hand's role, its tools in their order
     const hands = [...(container?.querySelectorAll(".vf-ds-bar-plate") ?? [])].filter((p) =>

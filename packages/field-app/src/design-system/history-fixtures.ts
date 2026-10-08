@@ -29,9 +29,6 @@ export const FIXTURE_CHOSEN_SESSION = "s0";
  * peek beside it shows them. */
 export const FIXTURE_SEARCH_QUERY = "plus";
 
-/** Words nothing in the demo says: the Peek's honest empty answer. */
-export const FIXTURE_NO_MATCH_QUERY = "zeppelin";
-
 /** An index that does not answer: the topology stream closes without a row,
  * and the status door refuses in the frame's words. */
 function unavailableCatalog(catalog: CatalogPort): CatalogPort {

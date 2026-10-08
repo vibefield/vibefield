@@ -578,7 +578,6 @@ describe("UI system ownership boundaries", () => {
     expect(page).toMatch(/<HistoryResumePlate\s/u);
     expect(page).toMatch(/<PeekPlate state="closed"/u);
     expect(page).toMatch(/<PeekPlate state="open"/u);
-    expect(page).toMatch(/<PeekPlate state="narrow"/u);
     expect(page).toMatch(/<HistoryPreview state="unavailable"/u);
     expect(page).toMatch(/<HistoryPreview state="consent"/u);
     // …and the faces before the room (2026-10-04): opening, could not open.
