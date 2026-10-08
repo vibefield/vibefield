@@ -19,6 +19,7 @@ import {
   type IndexSession,
   type IndexSessionsParams,
   type IndexSessionsResult,
+  type PlaceFacts,
   type RowsCursor,
   type RowsDeviceState,
 } from "@vibefield/contracts";
@@ -177,11 +178,12 @@ interface MergedSession {
   members: Array<{ device: string; projectId: string | undefined }>;
 }
 
-type SortKey = [at: number | null, device: string, key: string];
+/** A keyset page's sort key (PJ-3's doors page by the same rule). */
+export type SortKey = [at: number | null, device: string, key: string];
 
 /** Sort: newest `at` first (absent last), then device, then key — the
  * owner's clock decides inside a device, the device breaks every tie. */
-function compareKeys(a: SortKey, b: SortKey): number {
+export function compareKeys(a: SortKey, b: SortKey): number {
   const left = a[0] ?? Number.NEGATIVE_INFINITY;
   const right = b[0] ?? Number.NEGATIVE_INFINITY;
   if (left !== right) return left > right ? -1 : 1;
@@ -194,7 +196,7 @@ function encodeCursor(key: SortKey): string {
   return Buffer.from(JSON.stringify(key), "utf8").toString("base64url");
 }
 
-function decodeCursor(cursor: string | undefined): SortKey | undefined {
+export function decodeCursor(cursor: string | undefined): SortKey | undefined {
   if (cursor === undefined) return undefined;
   try {
     const value = JSON.parse(Buffer.from(cursor, "base64url").toString("utf8")) as unknown;
@@ -215,7 +217,7 @@ function decodeCursor(cursor: string | undefined): SortKey | undefined {
 
 /** One page by keyset over a sorted list: the first `limit` accepted rows
  * strictly after `cursor`, and the next cursor when an accepted row remains. */
-function pageOf<T>(
+export function pageOf<T>(
   sorted: readonly T[],
   keyOf: (item: T) => SortKey,
   cursor: SortKey | undefined,
@@ -250,6 +252,13 @@ function pageOf<T>(
   }
   const last = items.at(-1);
   return { items, next: more && last !== undefined ? encodeCursor(keyOf(last)) : undefined };
+}
+
+/** A project row as a door answers it: everything but its places. */
+function withoutPlaces(row: IndexCatalogProject): IndexCatalogProject {
+  if (!("places" in row)) return row;
+  const { places: _places, ...rest } = row;
+  return rest as IndexCatalogProject;
 }
 
 const parseProject = (raw: unknown): IndexCatalogProject | undefined => {
@@ -377,7 +386,15 @@ export class IndexMesh extends EventEmitter {
         devices.has(row.device) && (params.family === undefined || row.family === params.family),
     );
     return {
-      rows: items,
+      // PJ-1 — a row's places replicate between this person's desktops; no
+      // door answers them yet (PJ-3 owns `project.*` and what crosses to a
+      // window or the phone: a place carries paths, PJ-L9)
+      // *Corrected 2026-10-08 (PJ-3):* the `project.*` doors answer them now,
+      // as places of a project (projects/project-doors.ts) — by `PlaceRef`,
+      // with a path only for the person's own devices (P1 (a), which replaced
+      // PJ-L9's "no path on the phone"). This door keeps answering without
+      // them: a row's places are the grouping's input, not History's.
+      rows: items.map(withoutPlaces),
       ...(next !== undefined ? { cursor: next } : {}),
       sources: this.#sources("projects", devices),
     };
@@ -525,6 +542,43 @@ export class IndexMesh extends EventEmitter {
   /** Every desktop's standing for a table (the listing's `sources`). */
   sourcesFor(table: IndexCatalogTable, scope: "local" | "mesh" = "mesh"): IndexCatalogSource[] {
     return this.#sources(table, this.#devicesInScope(scope, undefined));
+  }
+
+  /** PJ-1 (L1) — every PEER's places as its project rows carry them. The
+   * replica read them tolerantly (`IndexCatalogProject.places` is
+   * `PlaceFactsList`): an older peer's rows simply lack them, and a place this
+   * build cannot read was dropped, never the row (its history stays listed). */
+  peerPlaces(): Array<{ device: string; projectId: string; places: PlaceFacts[] }> {
+    const out: Array<{ device: string; projectId: string; places: PlaceFacts[] }> = [];
+    for (const peer of this.peerRows())
+      for (const row of peer.projects)
+        if (row.places !== undefined && row.places.length > 0)
+          out.push({ device: peer.device, projectId: row.projectId, places: row.places });
+    return out;
+  }
+
+  /** PJ-1 (§4) — every PEER's replicated rows, both tables, each row stamped
+   * with its owner: what the project grouping reads beside this desktop's. */
+  peerRows(): Array<{
+    device: string;
+    projects: IndexCatalogProject[];
+    sessions: IndexCatalogSession[];
+  }> {
+    const self = this.#opts.roster.currentDeviceId();
+    const out: Array<{
+      device: string;
+      projects: IndexCatalogProject[];
+      sessions: IndexCatalogSession[];
+    }> = [];
+    for (const peer of this.#peers.values()) {
+      if (peer.device === self) continue;
+      out.push({
+        device: peer.device,
+        projects: peer.projects.copy.rows(),
+        sessions: peer.sessions.copy.rows(),
+      });
+    }
+    return out;
   }
 
   /** A peer's replica, for tests and diagnostics. */

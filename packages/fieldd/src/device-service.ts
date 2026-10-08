@@ -171,6 +171,8 @@ export class DeviceService extends EventEmitter {
   private readonly logger: Logger;
   /** the mesh identity once known (D30); the persisted local id until then */
   private deviceId: string;
+  /** PJ-2 §0 — the persisted local id, kept after the mesh identity supersedes it */
+  private readonly localId: string;
   private slices = new Map<string, DeviceSlice>();
   /** keyed by the Tailscale stable node id (PeerInfo.id) — the tailnet's own
    * keyspace. NEVER keyed by the roster ULID; the two never collide (T1 §6). */
@@ -218,7 +220,8 @@ export class DeviceService extends EventEmitter {
     super();
     this.now = opts.now ?? Date.now;
     this.logger = (opts.logger ?? createNoopLogger()).child({ component: "devices" });
-    this.deviceId = this.loadLocalId();
+    this.localId = localDeviceIdAt(opts.dataDir);
+    this.deviceId = this.localId;
     // Re-sync on every mesh event that can change identity, reachability, or
     // the capability URL. "reconciled" also fires after every link reconnect.
     opts.mesh.on("reconciled", () => void this.sync());
@@ -238,6 +241,14 @@ export class DeviceService extends EventEmitter {
    * fallback until then (C5: PeerLink's own-id + the `device?` self check). */
   currentDeviceId(): string {
     return this.deviceId;
+  }
+
+  /** PJ-2 §0 — the persisted local id (`localDeviceIdAt`), which no link,
+   * unlink or relink moves. `currentDeviceId` is the roster's key and moves
+   * when the mesh identity arrives (and again at a relink); what this desktop
+   * persists keys by this instead. */
+  localDeviceId(): string {
+    return this.localId;
   }
 
   /** C5/D32 — fold PeerLink's live link verdict into the roster. The daemon
@@ -728,24 +739,30 @@ export class DeviceService extends EventEmitter {
     this.lastRosterSig = sig;
     this.emit("changed", roster);
   }
+}
 
-  private loadLocalId(): string {
-    const path = join(this.opts.dataDir, ...LAYOUT.DEVICE_ID);
-    try {
-      const existing = readFileSync(path, "utf8").trim();
-      if (existing.length > 0) return existing;
-    } catch {
-      /* first run */
-    }
-    const id = `local-${randomUUID()}`;
-    try {
-      mkdirSync(dirname(path), { recursive: true });
-      writeFileSync(path, id, { mode: 0o600 });
-    } catch {
-      /* unwritable dataDir — a per-boot id is the honest floor */
-    }
-    return id;
+/** This user root's own device id, persisted at `LAYOUT.DEVICE_ID` (minted on
+ * the first boot). It is the roster's id only until the mesh identity
+ * supersedes it (D30), but it NEVER moves itself: a link, an unlink and a
+ * relink (which archives the mesh state and mints a new ULID, `retire`) all
+ * leave it as it was. PJ-2 §0 (2026-10-08) — so it is what a fact this desktop
+ * PERSISTS keys by: a placeId hashes it, never the roster id. */
+export function localDeviceIdAt(dataDir: string): string {
+  const path = join(dataDir, ...LAYOUT.DEVICE_ID);
+  try {
+    const existing = readFileSync(path, "utf8").trim();
+    if (existing.length > 0) return existing;
+  } catch {
+    /* first run */
   }
+  const id = `local-${randomUUID()}`;
+  try {
+    mkdirSync(dirname(path), { recursive: true });
+    writeFileSync(path, id, { mode: 0o600 });
+  } catch {
+    /* unwritable dataDir — a per-boot id is the honest floor */
+  }
+  return id;
 }
 
 function narrowDeviceSlice(slice: DeviceSlice): DeviceSlice {

@@ -1,0 +1,57 @@
+{
+  "//": "PJ-1 (build-pj.md L1) — a project row carrying its places: the checkout at its root path and a worktree `git worktree list` names (worktreeOf), each with the facts its owner observed. The worktree shares the checkout's objects, so it holds the checkout's tip (a hit at depth 0). Synthetic SHAs; an older peer's row simply lacks `places`.",
+  "device": "01J9ZK3M5Q8XR2V7N4B6C1D0EF",
+  "projectId": "p-4f1c2a9e",
+  "name": "app",
+  "rootPaths": ["/home/dev/Projects/app", "/Volumes/Work/lanes/app-b"],
+  "gitRepo": "github.com:acme/app",
+  "family": "github.com/acme/app",
+  "sessionCount": 12,
+  "lastActivityAt": 1759276800000,
+  "places": [
+    {
+      "placeId": "pl-4c1e9a0b",
+      "path": "/home/dev/Projects/app",
+      "aliases": [],
+      "kind": "project",
+      "caseless": true,
+      "exists": true,
+      "mounted": true,
+      "git": true,
+      "homeRelative": "Projects/app",
+      "identityRemote": "github.com/acme/app",
+      "remotes": ["github.com/acme/app"],
+      "root": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+      "branch": "main",
+      "samples": [
+        { "sha": "1111111111111111111111111111111111111111", "depth": 0 },
+        { "sha": "2222222222222222222222222222222222222222", "depth": 1 }
+      ],
+      "hits": [],
+      "observedAt": 1759276800000
+    },
+    {
+      "placeId": "pl-6b20e8d5",
+      "path": "/Volumes/Work/lanes/app-b",
+      "aliases": [],
+      "kind": "project",
+      "caseless": true,
+      "exists": true,
+      "mounted": true,
+      "git": true,
+      "identityRemote": "github.com/acme/app",
+      "remotes": ["github.com/acme/app"],
+      "root": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+      "branch": "lane/b",
+      "worktreeOf": "pl-4c1e9a0b",
+      "samples": [
+        { "sha": "6666666666666666666666666666666666666666", "depth": 0 },
+        { "sha": "1111111111111111111111111111111111111111", "depth": 1 }
+      ],
+      "hits": [
+        { "placeId": "pl-4c1e9a0b", "sha": "1111111111111111111111111111111111111111", "depth": 0 }
+      ],
+      "observedAt": 1759276800000
+    }
+  ]
+}

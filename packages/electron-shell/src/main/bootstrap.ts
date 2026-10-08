@@ -363,6 +363,9 @@ async function mint(
     // The door has its own scope, held by this token alone: `shell.open` is
     // plugin-eligible, and a plugin must not reach a door that opens links and
     // reveals paths without a click. So the window does NOT hold shell.open.
+    // PJ-3: project.read — the `project.*` reads (History's project page,
+    // Godview's project chip), the person's own: never plugin-eligible. The
+    // acts (`project.intent`) ride settings.manage, already held (P2).
     scopes: [
       "doc.read",
       "doc.write",
@@ -384,6 +387,7 @@ async function mint(
       "agent.usage",
       "agents.manage",
       "terminal.link",
+      "project.read",
     ],
     label: `window-${senderId}`,
     rendererParticipant,

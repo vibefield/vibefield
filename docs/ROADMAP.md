@@ -3,7 +3,37 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-10-05 — FS WAVE 2 AND PACKAGED FILES VERIFICATION.**
+> stays in the design docs + specs. Last rewritten: **2026-10-08 — PROJECTS ARE FIRST-CLASS: RECORDS, DOORS AND A PER-DESKTOP HOME (PJ-2 `00964c63`, PJ-3 `a182409f`).**
+> PJ-3: the `project.*` doors (list, get with `movedTo`, sessions, pings with `regrouped`, intent), a key memory that survives a
+> restart, `project.read` never plugin-eligible, paths only for the user's own devices and never accepted in a request (P1).
+> PJ-2: records in the synced library — a first act freezes the colour (P3), splits and dismissals bound to records, the later
+> act wins, a relink keeps them; `project.intent` live for desktop windows (P2); placeIds re-keyed to the persisted local id
+> (the roster id moved at link and relink). James's J1–J11 are scored truth (145 rows on three desktops; J11: Home is a project,
+> one per desktop). Upstream merged at his word, nothing pushed: mille main `c8160d5` (M8 linear loading, M10 bounded reads,
+> G1/G2/G3/G6), rosetta main `eab2f57` (RO-15); the mille-git spec erratum v2 is ready to apply. **Every push is still HELD.**
+> Next: VibeField's mille pin `baa0de8` → `c8160d5` (an EL8 event; the doors surface `ETIMEDOUT`/`EDATALESS`); PJ-4 (History's
+> project page — needs rosetta's room) and PJ-7 (the phone over `project.*`); DS-7 and FS-4 at truffle's egress release (R12);
+> the phone over-the-air run (R8); FS-3 with DK; FS-5. Test health: `design-system.test.tsx` times out under load in every gate.
+> Previous rewrite, kept for continuity — **2026-10-08 (dawn) — PJ-1 COMPLETE: EVERY DESKTOP KNOWS ITS PLACES, AND FIELDD GROUPS THEM INTO PROJECTS (`12b5da36`).**
+> PJ-1a (`ea612a59`): one remote normalizer (DS-D9's `familyOf` delegates), the grouping engine as a pure function in fieldd, and a
+> redacted golden corpus — 132 rows on the Mac, 143 on three desktops, 0 trap pairs, identical on the unredacted data. PJ-1b
+> (`12b5da36`): one hardened git runner in the files worker for every caller, the `placeFacts` op, a scanner whose facts ride the
+> catalog's project rows (no new table), `taskRoots` in the agent catalog, and `ProjectGroups` over local ∪ replicated places,
+> held for PJ-3's doors. James's J3–J11 judgments remain for the golden truth. Upstream: rosetta RO-15 MERGED to its local main
+> (no VibeField pin move — the fix is in rosetta's own app); mille M8 (linear loading) + M10 (bounded reads) built and gated
+> together, awaiting James's R15; mille-git G1/G2/G3/G6 in build. **Every push is still HELD** (R9, R10).
+> Next: PJ-2 (records: names, inks, links, splits) and PJ-3 (the `project.*` doors); DS-7 and FS-4 at truffle's RFC 026 egress
+> release (R12: soon); the phone over-the-air run (R8); FS-3's desk tree with DK; FS-5.
+> Previous rewrite, kept for continuity — **2026-10-08 (morning) — THE FILES & HISTORY DOCKET RULED; A LIVE FILES SESSION OUTLIVES ITS TICKET (`dad2f1de`).**
+> James ruled thirteen calls and the twenty-four project-places marks on one page (DECISIONS, the FS and PJ rows). R1: a ticket's
+> expiry bounds redemption only, so History's file column no longer resets every 9.5 minutes; R6: each attachment is audited, a
+> place keeps the identity it was touched with, the viewport cap is named (LANDED §FS session fix-ups). PJ-D1…D24 all at the lean:
+> PJ-1 (= AR-8e) is unblocked; James's judgments J1–J11 remain for its golden fixtures. **Every push is HELD** (R9 (c), R10 (b)).
+> Upstream, built and awaiting James's word: rosetta RO-15 (`ro/15-git-sha-guard`); in build: mille M8 (linear hydration) and
+> M10 (time-bounded reads), which land fsm8 first; the mille-git spec erratum patch is drafted for James to apply.
+> Next: PJ-1's build plan; DS-7 and FS-4 at truffle's RFC 026 egress release (R12: soon); the phone over-the-air run (R8);
+> FS-3's desk tree with DK; FS-5. GitService replaces the interim git port at mille's release (R2), which waits on the push hold.
+> Previous rewrite, kept for continuity — **2026-10-05 — FS WAVE 2 AND PACKAGED FILES VERIFICATION.**
 > FS-1b attaches History to the files worker through single-use tree/git tickets and a renderer Worker;
 > bodies and diffs bypass fieldd RPC and Electron main. Root and principal loss revoke both legs, and worker
 > death reconnects to a fresh snapshot. FS-2 browses Recent places, home and volumes on the selected desktop,

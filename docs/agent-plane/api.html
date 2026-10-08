@@ -2056,8 +2056,12 @@
                   <td rowspan="3">This desktop's renderer participant only, with
                     <code>workspace.read</code>. Attached remote access remains FS-4/FS-5.</td></tr>
                 <tr><td><code>workspace.closeTicket</code></td><td>Releases the caller's pair,
-                  including unused grants. Expiry, socket loss, root loss and window revocation
-                  also close both legs.</td></tr>
+                  including unused grants. Socket loss, root loss, root withdrawal, window
+                  revocation and a worker restart also close both legs. <em>Erratum
+                  (2026-10-07, ruling R1):</em> expiry used to close a live pair too, so the
+                  client re-attached every ~9.5 minutes; the expiry now bounds redemption only
+                  &mdash; a pair not established by <code>expiresAt</code> is dropped, an
+                  established one has no timer.</td></tr>
                 <tr><td><code>workspace.fileAction</code></td><td>Confined path copy or shell
                   reveal. No file contents.</td></tr>
               </tbody>
@@ -2068,8 +2072,11 @@
               to that desktop, using its catalog's spawn offerings and default profile.
               The self-tailnet preset already grants <code>agent.spawn</code>.</p>
             <p>The unreleased mille channel is pinned at <code>baa0de8</code> in a dedicated
-              sibling checkout. R24 confines native imports to the files worker; field-app uses
-              the browser client/port/remote and UI entries. The read-only git port remains the
+              sibling checkout. R24 confines native imports to the files worker; field-app may use
+              the <code>/port</code> and <code>/remote</code> clients and the UI entry
+              (<code>/remote</code> today). <strong>Erratum (2026-10-07):</strong> this said
+              "browser client/port/remote"; there is no <code>/browser</code> entry, at the
+              wall or at the pin. The read-only git port remains the
               interim implementation pending the upstream GitService switch.</p>
           </section>
 

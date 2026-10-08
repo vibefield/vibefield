@@ -10,10 +10,12 @@
 // door honest (UNAVAILABLE restarting) and recovered; the L6 knob (`off`).
 
 import { execFileSync } from "node:child_process";
+import { once } from "node:events";
 import {
   existsSync,
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   realpathSync,
   rmSync,
   symlinkSync,
@@ -32,6 +34,7 @@ import {
   SOCKETS,
   WORKSPACE_LIMITS,
   WorkspaceGitFactsResult,
+  WorkspaceGitOpened,
   WorkspaceListResult,
   WorkspaceOpenTicketResult,
   WorkspacePickFolderResult,
@@ -42,9 +45,10 @@ import {
   WorkspaceSearchResult,
   WorkspaceUnavailableDetails,
 } from "@vibefield/contracts";
+import type { AuditRecordV1 } from "@vibefield/contracts/diagnostics";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
 import WebSocket from "ws";
-import { bootstrap, type FielddDaemon } from "../src/index";
+import { bootstrap, type FielddDaemon, verifyAuditSegment } from "../src/index";
 import { MockMgmtServer } from "../src/testing/mock-mgmt";
 import type { BrowseFacts } from "../src/workspace/browse-exports";
 import type { FilesHostLaunch } from "../src/workspace/launch";
@@ -176,6 +180,11 @@ async function open(url: string, headers?: Record<string, string>): Promise<WsRp
 
 /** A renderer window on this desktop holding `scopes`, as the shell mints it. */
 async function windowOf(daemon: FielddDaemon, scopes: Scope[]): Promise<WsRpc> {
+  return (await windowWithShell(daemon, scopes)).rpc;
+}
+
+/** The window, the shell that minted it and its token id (to revoke it). */
+async function windowWithShell(daemon: FielddDaemon, scopes: Scope[]) {
   const shell = await open(`ws://127.0.0.1:${daemon.controlPort}`);
   await helloAs(shell, daemon.shellToken, "shell-main");
   const minted = (await shell.call("system.mintWindowToken", {
@@ -185,10 +194,46 @@ async function windowOf(daemon: FielddDaemon, scopes: Scope[]): Promise<WsRpc> {
       participantId: "renderer:fs:w1",
       incarnation: "renderer:fs:w1:document-1",
     },
-  })) as { token: string };
+  })) as { token: string; tokenId: string };
   const rpc = await open(`ws://127.0.0.1:${daemon.controlPort}`);
   await helloAs(rpc, minted.token);
-  return rpc;
+  return { rpc, shell, tokenId: minted.tokenId };
+}
+
+/** `until` for a condition that has to read the disk. */
+async function eventually(fn: () => Promise<boolean>, ms: number): Promise<void> {
+  const deadline = Date.now() + ms;
+  while (!(await fn())) {
+    if (Date.now() > deadline) throw new Error("eventually: condition timeout");
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+}
+
+async function auditRecords(daemon: FielddDaemon): Promise<AuditRecordV1[]> {
+  const out: AuditRecordV1[] = [];
+  for (const name of readdirSync(daemon.audit.root)
+    .filter((n) => n.endsWith(".jsonl"))
+    .sort())
+    out.push(...(await verifyAuditSegment(join(daemon.audit.root, name))).records);
+  return out;
+}
+
+/** Both legs of a minted grant, as the renderer's Worker dials them. */
+async function attachLegs(grant: WorkspaceOpenTicketResult) {
+  const tree = await connectWebSocketChannel(grant.endpoints.treeUrl, {
+    exportId: grant.rootId,
+    credential: grant.ticket,
+    access: "read-only",
+    WebSocket: WebSocket as unknown as typeof globalThis.WebSocket,
+  });
+  cleanup.push(() => tree.close());
+  const git = new WebSocket(grant.endpoints.gitUrl);
+  cleanup.push(() => git.terminate());
+  await once(git, "open");
+  const ready = once(git, "message");
+  git.send(JSON.stringify({ type: "open", rootId: grant.rootId, credential: grant.gitTicket }));
+  WorkspaceGitOpened.parse(JSON.parse(String((await ready)[0])));
+  return { tree, git };
 }
 
 /** A renderer PLUGIN's token holding `workspace.read` (`{kind: "plugin"}`). */
@@ -399,6 +444,27 @@ describe("places, rows and the worker's life", () => {
     expect(error.data).toMatchObject({ kind: "NOT_FOUND", details: { missing: true } });
   });
 
+  it("never follows a place swapped for a link — to / or elsewhere: missing at every door (R6)", async () => {
+    const world = await boot();
+    const win = await windowOf(world.daemon, ["workspace.read"]);
+    const place = join(world.home, "Projects", "repo");
+    world.daemon.workspace.registry.touchPlace(place);
+    const rootId = rootIdFor("place", place);
+    expect(
+      WorkspaceListResult.parse(await win.call("workspace.list", { rootId })).entries.length,
+    ).toBeGreaterThan(0);
+    rmSync(place, { recursive: true });
+    for (const target of process.platform === "win32" ? [world.outside] : ["/", world.outside]) {
+      symlinkSync(target, place, "junction");
+      const listed = await win.callErr("workspace.list", { rootId });
+      expect(listed.data, target).toMatchObject({ kind: "NOT_FOUND", details: { missing: true } });
+      expect((await win.callErr("workspace.openTicket", { rootId })).data?.kind, target).toBe(
+        "NOT_FOUND",
+      );
+      rmSync(place);
+    }
+  });
+
   it("streams the roots as rows: the snapshot, then a place's arrival", async () => {
     const world = await boot();
     const win = await windowOf(world.daemon, ["workspace.read"]);
@@ -512,6 +578,125 @@ describe("the attached door (FS-1b)", () => {
     );
     expect(world.daemon.health().workspace.phase).toBe("ready");
   });
+});
+
+describe("each attachment's life in the ledger (R6)", () => {
+  it("records one establish and one end per session, with the cause, beside its mint", async () => {
+    const world = await boot();
+    const { rpc: win, shell, tokenId } = await windowWithShell(world.daemon, ["workspace.read"]);
+    const home = homeRoot(WorkspaceRootsResult.parse(await win.call("workspace.roots", {})));
+    const rows = async (sessionId: string) =>
+      (await auditRecords(world.daemon)).filter(
+        (row) => row.sessionId === sessionId && row.phase === "outcome",
+      );
+    const session = async (path: string) => {
+      const grant = WorkspaceOpenTicketResult.parse(
+        await win.call("workspace.openTicket", { rootId: home.rootId, path }),
+      );
+      const mint = (await auditRecords(world.daemon))
+        .filter((row) => row.action === "workspace.ticket.mint" && row.phase === "outcome")
+        .at(-1);
+      const sessionId = mint?.sessionId;
+      if (sessionId === undefined) throw new Error("the mint row names no session");
+      await attachLegs(grant);
+      await eventually(
+        async () =>
+          (await rows(sessionId)).some((row) => row.action === "workspace.session.establish"),
+        5_000,
+      );
+      return { grant, sessionId };
+    };
+    const ended = async (sessionId: string, timeoutMs = 5_000) => {
+      await eventually(
+        async () => (await rows(sessionId)).some((row) => row.action === "workspace.session.end"),
+        timeoutMs,
+      );
+      return (await rows(sessionId)).map((row) => [row.action, row.reasonCode]);
+    };
+
+    // closed: the window's own closeTicket
+    const closing = await session("Projects/repo");
+    await win.call("workspace.closeTicket", { ticket: closing.grant.ticket });
+    expect(await ended(closing.sessionId)).toEqual([
+      ["workspace.ticket.mint", undefined],
+      ["workspace.session.establish", undefined],
+      ["workspace.session.end", "CLOSED"],
+    ]);
+    const established = (await rows(closing.sessionId)).find(
+      (row) => row.action === "workspace.session.establish",
+    );
+    expect(established).toMatchObject({
+      actor: { kind: "system", id: "fieldd" },
+      target: { kind: "workspace-root", id: home.rootId },
+      outcome: "succeeded",
+      attrs: { clientId: tokenId },
+    });
+
+    // root lost: the folder goes, the bounded check ends it
+    mkdirSync(join(world.home, "wide", "f001", "inner"));
+    const losing = await session("wide/f001/inner");
+    rmSync(join(world.home, "wide", "f001", "inner"), { recursive: true });
+    expect(
+      (await ended(losing.sessionId, WORKSPACE_LIMITS.ATTACHED_ROOT_CHECK_MS + 5_000)).at(-1),
+    ).toEqual(["workspace.session.end", "ROOT_LOST"]);
+
+    // principal revoked: the shell revokes the window
+    const revoking = await session("Projects/repo/src");
+    await shell.call("system.revokeWindowToken", { tokenId });
+    expect((await ended(revoking.sessionId)).at(-1)).toEqual([
+      "workspace.session.end",
+      "PRINCIPAL_REVOKED",
+    ]);
+
+    // an unredeemed mint has no session rows; nothing above recorded a path
+    const all = await auditRecords(world.daemon);
+    for (const id of [closing.sessionId, losing.sessionId, revoking.sessionId]) {
+      const actions = all.filter((row) => row.sessionId === id).map((row) => row.action);
+      expect(actions.filter((a) => a === "workspace.session.establish")).toHaveLength(2);
+      expect(actions.filter((a) => a === "workspace.session.end")).toHaveLength(2);
+    }
+    expect(JSON.stringify(all.filter((row) => row.action.startsWith("workspace.")))).not.toContain(
+      world.home,
+    );
+  }, 40_000);
+
+  it("ends what a dying or stopping worker held, in fieldd's words", async () => {
+    const world = await boot();
+    const win = await windowOf(world.daemon, ["workspace.read"]);
+    const home = homeRoot(WorkspaceRootsResult.parse(await win.call("workspace.roots", {})));
+    const attachOne = async () => {
+      const grant = WorkspaceOpenTicketResult.parse(
+        await win.call("workspace.openTicket", { rootId: home.rootId, path: "Projects/repo" }),
+      );
+      const sessionId = (await auditRecords(world.daemon))
+        .filter((row) => row.action === "workspace.ticket.mint")
+        .at(-1)?.sessionId;
+      await attachLegs(grant);
+      await eventually(
+        async () =>
+          (await auditRecords(world.daemon)).some(
+            (row) => row.sessionId === sessionId && row.action === "workspace.session.establish",
+          ),
+        5_000,
+      );
+      return sessionId;
+    };
+    const endOf = async (sessionId: string | undefined) =>
+      (await auditRecords(world.daemon)).find(
+        (row) =>
+          row.sessionId === sessionId &&
+          row.action === "workspace.session.end" &&
+          row.phase === "outcome",
+      )?.reasonCode;
+    const killed = await attachOne();
+    process.kill(world.daemon.workspace.supervisor.health().pid as number, "SIGKILL");
+    await eventually(async () => (await endOf(killed)) !== undefined, 5_000);
+    expect(await endOf(killed)).toBe("WORKER_EXITED");
+    await until(() => world.daemon.workspace.supervisor.health().phase === "ready", 20_000);
+    const stopped = await attachOne();
+    await world.daemon.stop();
+    expect(await endOf(stopped)).toBe("WORKER_STOPPED");
+  }, 40_000);
 });
 
 async function pickerShell(daemon: FielddDaemon) {

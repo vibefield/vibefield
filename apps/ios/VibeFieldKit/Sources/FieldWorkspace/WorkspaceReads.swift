@@ -181,8 +181,10 @@ public final class WorkspaceReads {
   private func failed(_ error: any Error) {
     if let refusal = error as? FieldProductError {
       if refusal.kind == "UNAVAILABLE" {
-        if refusal.details?["service"]?.stringValue == "workspace" {
-          state = .unavailable(refusal.details?["state"]?.stringValue ?? "unavailable")
+        let unavailable = refusal.details?["state"]?.stringValue
+        // no door to the desktop is the desktop asleep, whoever says it
+        if refusal.details?["service"]?.stringValue == "workspace", unavailable != "no_door" {
+          state = .unavailable(unavailable ?? "unavailable")
         } else { state = .offline }
       } else { state = .refused(refusal.message) }
     } else { state = .refused(String(describing: error)) }

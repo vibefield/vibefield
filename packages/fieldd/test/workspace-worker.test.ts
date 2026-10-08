@@ -96,6 +96,11 @@ describe("the files worker (fieldd's supervisor over the real bundle)", () => {
     expect(health).toMatchObject({ phase: "ready", generation: 1, detail: null });
     expect(health.pid).toBeGreaterThan(0);
     expect(health.mille).toEqual({ packageVersion: "0.3.4", nativeVersion: "0.3.4" });
+    // the pipe answers the ops it names and no others: git reaches a root only
+    // over an attached session's own git leg (the `git` op was retired, R6)
+    expect(
+      await refusal(supervisor.request("git" as never, { rootPath: "/", request: {} } as never)),
+    ).toMatchObject({ error: { code: "internal", message: "unknown op git" } });
   });
 
   it("pages a wide folder: folders first, child counts, the cut and the next offset", async () => {
@@ -246,6 +251,28 @@ describe("the files worker (fieldd's supervisor over the real bundle)", () => {
     // a subtree behind a symlink is refused like a listing behind one
     const behind = await refusal(search("secret", "all", 10, ["escape"]));
     expect((behind as FilesHostRefusal).error.code).toBe("not-found");
+  });
+
+  it("answers `placeFacts` for the index's folders (PJ-1): a plain folder and one that is gone", async () => {
+    const { root } = tree();
+    const supervisor = await ready();
+    const gone = join(root, "never-there");
+    const answer = await supervisor.request("placeFacts", {
+      places: [{ path: join(root, "wide") }, { path: gone }],
+      peers: [],
+      taskRoots: [],
+    });
+    expect(answer.places).toEqual([
+      expect.objectContaining({
+        path: join(root, "wide"),
+        skipped: false,
+        canonical: join(root, "wide"),
+        exists: true,
+        git: null,
+        gitRefused: null,
+      }),
+      expect.objectContaining({ path: gone, skipped: false, exists: false, git: null }),
+    ]);
   });
 
   it("restarts a killed worker: questions in flight hear `restarting`, the generation moves", async () => {

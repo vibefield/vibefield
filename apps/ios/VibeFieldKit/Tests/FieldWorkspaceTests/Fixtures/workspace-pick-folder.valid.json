@@ -1,0 +1,12 @@
+{
+  "canceled": false,
+  "root": {
+    "rootId": "r_1234567890abcdef1234",
+    "name": "Chosen folder",
+    "path": "/Users/ada/Chosen folder",
+    "device": "desktop-ada",
+    "kind": "picked",
+    "missing": false,
+    "lastActiveAt": null
+  }
+}

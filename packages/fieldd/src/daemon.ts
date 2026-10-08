@@ -103,9 +103,16 @@ import {
   PluginsResolveModuleParams,
   PluginsUninstallParams,
   PORTS,
+  PROJECT_DOORS,
+  type Principal,
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
+  ProjectGetParams,
+  ProjectIntentParams,
+  ProjectListParams,
+  ProjectSessionsParams,
+  ProjectSubscribeParams,
   RendererParticipantIdentity,
   ROWS,
   SCOPES,
@@ -175,7 +182,7 @@ import {
 import { ArtifactService, type ArtifactServiceHealth } from "./artifact-service";
 import { AuditService, type AuditWriterTestHooks } from "./audit-service";
 import { nativeAlive, nativeEndpoint, nativeMgmtEndpoint } from "./boot-env";
-import { DeviceService } from "./device-service";
+import { DeviceService, localDeviceIdAt } from "./device-service";
 import { DiagnosticsService } from "./diagnostics-service";
 import { DocLane } from "./doc-lane";
 import { DocumentService } from "./doc-service";
@@ -190,7 +197,13 @@ import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } f
 import { IndexTailService } from "./index-tail";
 import { InstallSetReconciler } from "./install-reconciler";
 import { OutboundLaneIdAllocator } from "./lane-id";
-import { DocHoldersService, LibraryDocService, systemAccount, systemDocId } from "./library-doc";
+import {
+  carryLocalProjects,
+  DocHoldersService,
+  LibraryDocService,
+  systemAccount,
+  systemDocId,
+} from "./library-doc";
 import { LinkService, otherUserLinks } from "./link-service";
 import { McpService } from "./mcp-service";
 import { type BoardProjection, MeshBoard } from "./mesh-board";
@@ -213,6 +226,16 @@ import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { atFloor, wholeValueDoor } from "./projection";
+import { KeyJournal } from "./projects/key-journal";
+import { PlaceScanner } from "./projects/place-scanner";
+import {
+  admitProjectReader,
+  admitProjectWriter,
+  ProjectDoors,
+  parseProjectAsk,
+} from "./projects/project-doors";
+import { ProjectGroups } from "./projects/project-groups";
+import { ProjectRecords, projectIntentWriter } from "./projects/project-records";
 import { NO_EGRESS, type RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
   ROSETTAD_UNCONFIGURED,
@@ -564,6 +587,9 @@ export interface FielddDaemon {
   /** DS-6 — the aggregator: every self peer's catalog replicated (persisted
    * under `mesh/catalog`), the merged doors and search by asking. */
   indexMesh: IndexMesh;
+  /** PJ-1/PJ-3 — the projects this desktop groups (the `project.*` doors'
+   * source); tests regroup it directly rather than wait out the settle. */
+  projects: ProjectGroups;
   /** SP-6 — the session tails (`index.session.subscribe`): one rosetta socket
    * per tailed session, shared by its subscribers; tests count them. */
   indexTail: IndexTailService;
@@ -831,8 +857,59 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     timings: config.filesHostTimings,
     browse: config.workspace?.browse,
     rootsPollMs: config.workspace?.rootsPollMs,
+    // R6 — each attachment's establish and end, beside its mint
+    audit,
     logger,
   });
+  // PJ-1 (L1–L3, L7) — the place scanner: the catalog's project rows enriched
+  // with what the files worker reads of each root and its worktrees; a peer's
+  // places (the replica, bound below) are the samples its hits look for.
+  // Started with the files worker; idle while either has nothing to say.
+  // PJ-2 §0 — a placeId hashes this user root's PERSISTED local id, which no
+  // link or relink moves (the roster id does: device-service.ts), so the
+  // anchors, links and splits a record keeps by placeId never orphan.
+  const placeDeviceId = localDeviceIdAt(config.dataDir);
+  const placeScanner = new PlaceScanner({
+    catalog: indexCatalog,
+    worker: workspace.supervisor,
+    deviceId: () => placeDeviceId,
+    taskRoots: () => createAgentCatalogReaders(config.agentCatalog ?? AGENT_CATALOG).taskRoots(),
+    peerPlaces: () => indexMesh?.peerPlaces() ?? [],
+    actedRoots: () => workspace.registry.roots(),
+    logger,
+  });
+  // PJ-1 §4 (PJ-D20 (a)) — the projects: the grouping engine over this
+  // desktop's places and every peer's (the replica, bound below), held for
+  // PJ-3's doors; it follows this desktop's tables itself, and hears the
+  // peers' and the person's acts through the hooks below.
+  // PJ-2 (D4) — the library is mounted further down (and re-mounted on a
+  // relink, mountSystemDocs): the person's records reach the grouping through
+  // this ref, and the grouping follows each library mounted.
+  let projectLibrary: LibraryDocService | null = null;
+  /** false while a relink swaps the library: an act then is refused, not lost */
+  let projectsWritable = false;
+  const projectGroups = new ProjectGroups({
+    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    local: indexCatalog,
+    peers: () => indexMesh?.peerRows() ?? [],
+    acted: () => placeScanner.acted(),
+    // PJ-3 (D9) — the key memory: a key that regrouped answers `movedTo`,
+    // across a restart
+    journal: new KeyJournal({ file: join(config.dataDir, ...LAYOUT.PROJECT_KEYS_FILE), logger }),
+    intents: () => projectLibrary?.projectIntents() ?? null,
+    logger,
+  });
+  const offActed = workspace.registry.onChange(() => projectGroups.regroupSoon());
+  // PJ-2 (D7) — the person's acts on projects, written as records in the
+  // library: PJ-3's `project.intent` door writes through it, and a launch or
+  // a resume the person made records its place (D6, `onPlace` below).
+  const projectRecords = new ProjectRecords({
+    library: () => (projectsWritable ? projectLibrary : null),
+    groups: projectGroups,
+    placeOf: (cwd) => placeScanner.placeOf(cwd),
+    logger,
+  });
+  const projectIntents = projectIntentWriter(projectRecords);
   const agents = new AgentRuntimeService({
     userRoot: config.dataDir,
     vibefieldRoot: config.vibefieldRoot ?? null,
@@ -865,9 +942,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // AR-7 — `invoke` is answered from the launchers that stand; a typed run
     // is proven and watched against the same seams the gateway places it by
     launchers: () => gatewayRef?.launchers() ?? null,
-    // FS-1a (L2) — every run's folder is a place of the files service
-    onPlace: (cwd, at) => {
+    // FS-1a (L2) — every run's folder is a place of the files service; PJ-2
+    // (D6) — and a run started there (not one the daemon re-attached at
+    // boot) is an act in its place
+    onPlace: (cwd, at, how) => {
       workspace.registry.touchPlace(cwd, at);
+      if (how?.system !== true) projectRecords.actedIn(cwd, Date.parse(at));
     },
     ...(config.agentGateway?.processTable !== undefined
       ? { processTable: config.agentGateway.processTable }
@@ -1200,6 +1280,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const account = systemAccount(links.status().link?.login ?? null, config.userId);
       if (systemDocs?.account === account) return;
       if (systemDocs !== null) {
+        projectsWritable = false; // PJ-2 — no act lands on the library leaving
         for (const off of systemDocs.unregister) off();
         await systemDocs.library.dispose();
       }
@@ -1209,6 +1290,29 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger: logger.child({ component: "docs.library" }),
       });
       await library.ready();
+      // PJ-2 (D5) — a link keeps the records this desktop made unlinked; a
+      // carry that fails costs the carry, never the boot (the local library
+      // stays as it was, and the next mount carries again)
+      try {
+        const carried = await carryLocalProjects({
+          dataDir: config.dataDir,
+          userId: config.userId,
+          account,
+          into: library,
+          logger: logger.child({ component: "docs.library" }),
+        });
+        if (carried > 0)
+          logger.info("fieldd.projects.records_carried", "Project records carried into the link", {
+            records: carried,
+          });
+      } catch (error) {
+        logger.warn("fieldd.projects.records_not_carried", "Project records were not carried", {
+          error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+        });
+      }
+      projectLibrary = library;
+      projectGroups.followLibrary(library);
+      projectsWritable = true;
       // Registered only once loaded: its P7 install-set migrates in `ready()`,
       // and no whole entry may cross before it has (`settings-doc.ts`).
       await settingsDoc.ready();
@@ -1944,6 +2048,78 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       );
       return { snapshot: opened.open, dispose: opened.dispose, start: opened.start };
     });
+    // PJ-3 — the projects' doors (projects/project-doors.ts; PJ-D15 (a);
+    // build-pj23.md D8–D10; P1/P2 (a) 2026-10-08): what `projectGroups`
+    // groups over every self desktop's places, served from this desktop's
+    // merged view. In the order a caller hears its refusals: WHO (a peer
+    // daemon, a guest, a plugin, an MCP agent are refused FORBIDDEN_SCOPE —
+    // DS-L4 for the peer, whatever its derived preset holds; the act is a
+    // desktop window's, P2), WHAT (a path anywhere in the ask is
+    // `path-in-request`, P1; then the params), WHICH (a moved key follows the
+    // key memory on a read and is refused `key-moved` on an act), WHETHER
+    // (UNAVAILABLE {service: "projects"} before this boot's first grouping, and
+    // from the act while a relink swaps the library). PJ-2: the act writes the
+    // person's record through ProjectRecords (projectIntentWriter maps its
+    // refusals to the doors' own). A tailnet caller's pages
+    // are cut at INDEX_TAILNET_LIMITS.MAX_ROWS (`tailnetRowLimit`), and its
+    // answers carry what D10 and P1 let them.
+    const projectDoors = new ProjectDoors({
+      groups: projectGroups,
+      deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+      localSessions: () => indexCatalog.sessions.rows(),
+      peerSessions: () => indexMesh?.peerRows() ?? [],
+      sources: () => indexMesh?.sourcesFor("projects") ?? [],
+      records: () => projectIntents,
+    });
+    const projectPage = (ctx: { principal: Principal }, asked: number | undefined): number =>
+      tailnetRowLimit(ctx.principal, asked, PROJECT_DOORS.PAGE_DEFAULT_LIMIT) ??
+      PROJECT_DOORS.PAGE_DEFAULT_LIMIT;
+    api.register("project.list", (ctx, params) => {
+      const view = admitProjectReader(ctx, "project.list");
+      const ask = parseProjectAsk(
+        ProjectListParams,
+        params,
+        "expected { cursor?, limit? (1..500), devices?, q? }",
+      );
+      return projectDoors.list(ask, view, projectPage(ctx, ask.limit));
+    });
+    api.register("project.get", (ctx, params) => {
+      const view = admitProjectReader(ctx, "project.get");
+      const ask = parseProjectAsk(
+        ProjectGetParams,
+        params,
+        "expected { key } or { anchor: root:<sha> | remote:<key> | place:<placeId> }",
+      );
+      return projectDoors.get(ask, view);
+    });
+    api.register("project.sessions", (ctx, params) => {
+      const view = admitProjectReader(ctx, "project.sessions");
+      const ask = parseProjectAsk(
+        ProjectSessionsParams,
+        params,
+        "expected { key, places?: {device, placeId}[], devices?, agents?, cursor?, limit? (1..500) }",
+      );
+      return projectDoors.sessions(ask, view, projectPage(ctx, ask.limit));
+    });
+    api.registerSubscription("project.subscribe", (ctx, params, emit) => {
+      admitProjectReader(ctx, "project.subscribe");
+      const ask = parseProjectAsk(
+        ProjectSubscribeParams,
+        params,
+        "expected { since?: {epoch, revision}, minIntervalMs? }",
+      );
+      const pings = projectDoors.subscribe(ask, emit);
+      return { snapshot: pings.open, dispose: pings.dispose, start: pings.start };
+    });
+    api.register("project.intent", async (ctx, params) => {
+      admitProjectWriter(ctx, "project.intent");
+      const ask = parseProjectAsk(
+        ProjectIntentParams,
+        params,
+        "expected { key, op: rename {name} | pin {pinned} | hide {hidden} | link {place} | split {place} | dismiss {with} }",
+      );
+      return await projectDoors.intent(ask);
+    });
     // SP-3 — the direct plane's door (methods.ts; index-serve.ts). AR-8b: it
     // mints for a window on this desktop — every refusal said first, then the
     // mint inside its audited attempt (a ticket is a grant: D6's rule, the
@@ -1979,6 +2155,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         {
           action: "workspace.ticket.mint",
           target: { kind: "workspace-root", id: ask.root.rootId },
+          // R6 — the session's own rows (establish, end) carry the same id
+          sessionId: ask.attachId,
         },
         () => workspace.tickets.mint(ask, () => windowTokenIds.has(ask.clientId)),
         (ticket) => ({
@@ -4809,6 +4987,16 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.indexMesh ?? {}),
       logger,
     });
+    // PJ-1 — a peer's project rows moved: its places' samples may have, and
+    // the projects regroup over its places and sessions
+    indexMesh.on("change", (event: { scope: string; table?: string; device?: string }) => {
+      // PJ-3 — a visible projects page re-asks on any catalog's move (its
+      // sessions, its standing), as the History page's pings do
+      projectDoors.catalogChanged(event.device);
+      if (event.scope !== "mesh") return;
+      if (event.table === "projects") placeScanner.peersChanged();
+      projectGroups.regroupSoon();
+    });
 
     // AH-1 — the artifact serving foundation. Constructed HERE (before the supersession
     // closure below references it — a superseding takeover can fire before
@@ -5063,6 +5251,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       api.close();
       docLane.close();
       const reason = fatalReason;
+      placeScanner.dispose(); // PJ-1 — no scan asks a worker that is leaving
+      projectRecords.dispose();
+      projectGroups.dispose();
+      offActed();
       void (async () => {
         await Promise.allSettled([
           updateManager.dispose(),
@@ -5139,6 +5331,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const artifactDrain = artifacts.dispose();
       board.dispose();
       indexTail.dispose();
+      placeScanner.dispose();
+      projectRecords.dispose();
+      projectGroups.dispose();
+      offActed();
       indexCatalog.dispose();
       indexMesh?.dispose();
       federatedSubs.dispose();
@@ -5479,6 +5675,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (FS-D11 (b), always on; readiness is a transition, never a boot gate),
     // and the places this user's runs already recorded are seeded once.
     workspace.start();
+    placeScanner.start(); // PJ-1 — scans once the catalog and the worker are both ready
+    projectGroups.start(); // PJ-1 §4 — regroups as the places and sessions move
     try {
       workspace.registry.seedPlaces(agents.recordedPlaces());
     } catch (error) {
@@ -5510,6 +5708,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
           indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
+          placeScanner.dispose(); // PJ-1 — no scan asks a worker that is stopping
+          projectRecords.dispose();
+          projectGroups.dispose();
+          offActed();
           await workspace.stop(); // FS-1a — the files worker stops with the daemon (FS-D11 (b))
           detachHealthSources?.();
           endpoints.dispose();
@@ -5601,6 +5803,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       indexCatalog,
       indexTail,
       indexMesh: indexMesh as IndexMesh,
+      projects: projectGroups,
       agents,
       agentUsage,
       agentGateway: gateway,
@@ -5623,6 +5826,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     await gatewayRef?.stop().catch(() => undefined); // AR-7b — nor a listener of the gateway's
     await agents.dispose();
     await rosettad?.stop();
+    placeScanner.dispose(); // PJ-1 — likewise never started before ready
+    projectRecords.dispose();
+    projectGroups.dispose();
+    offActed();
     await workspace.stop(); // FS-1a — started only after ready; the guard is stated
     // The earliest supersession window, which the `stopForSupersession` listener
     // is not yet in scope to see: a takeover that lands while the services are

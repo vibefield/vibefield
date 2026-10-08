@@ -35,6 +35,18 @@ import { displayName, isFilesystemRoot, rootIdFor } from "./paths";
 //     session records the runtime already kept. PERSISTED: a place is never
 //     dropped — a folder that vanished is `missing: true` (PJ's word), and
 //     comes back the day the folder does.
+//     IDENTITY (R6, 2026-10-07): a place is keyed by the cwd as given, and
+//     records its REAL path (`realPath`) whenever a run touches it. A refresh
+//     marks it missing when its real path no longer matches (the folder
+//     swapped for a link — elsewhere, or to `/`) or is a filesystem root, so
+//     the export never follows a link it was not touched through; a live
+//     attachment on it ends through the worker's root check. System links
+//     resolve the same way every time (`/tmp/x` → `/private/tmp/x`), so they
+//     stay present. A run touching the place again re-records it: the folder
+//     is where work happens now. A place written before the field adopts its
+//     real path at the first refresh that finds the folder there and not a
+//     filesystem root; one that resolves to a filesystem root adopts nothing
+//     and stays missing until a run touches it again.
 //   · BROWSE exports — the home directory and the mounted volumes
 //     (browse-exports.ts), enumerated LIVE at every reading, never kept.
 //
@@ -248,17 +260,30 @@ export class RootsRegistry {
   touchPlace(cwd: string, at?: string): boolean {
     this.#load();
     const when = at ?? (this.#opts.now ?? (() => new Date()))().toISOString();
-    if (!this.#exportable(cwd)) return false;
+    const realPath = this.#exportableReal(cwd);
+    if (realPath === null) return false;
     const existing = this.#places.get(cwd);
     if (existing !== undefined) {
-      if (existing.lastActiveAt >= when && existing.missing !== true) return false;
+      if (
+        existing.lastActiveAt >= when &&
+        existing.missing !== true &&
+        existing.realPath === realPath
+      )
+        return false;
       this.#places.set(cwd, {
         ...existing,
         lastActiveAt: existing.lastActiveAt >= when ? existing.lastActiveAt : when,
         missing: false,
+        realPath,
       });
     } else {
-      this.#places.set(cwd, { path: cwd, addedAt: when, lastActiveAt: when, missing: false });
+      this.#places.set(cwd, {
+        path: cwd,
+        addedAt: when,
+        lastActiveAt: when,
+        missing: false,
+        realPath,
+      });
     }
     this.#persist();
     this.#emit();
@@ -271,10 +296,17 @@ export class RootsRegistry {
     this.#load();
     let added = 0;
     for (const { cwd, at } of places) {
-      if (!this.#exportable(cwd)) continue;
+      const realPath = this.#exportableReal(cwd);
+      if (realPath === null) continue;
       const existing = this.#places.get(cwd);
       if (existing === undefined) {
-        this.#places.set(cwd, { path: cwd, addedAt: at, lastActiveAt: at, missing: false });
+        this.#places.set(cwd, {
+          path: cwd,
+          addedAt: at,
+          lastActiveAt: at,
+          missing: false,
+          realPath,
+        });
         added += 1;
       } else if (existing.lastActiveAt < at) {
         this.#places.set(cwd, { ...existing, lastActiveAt: at });
@@ -288,24 +320,35 @@ export class RootsRegistry {
     return added;
   }
 
-  #exportable(path: string): boolean {
-    if (!(this.#opts.isDirectory ?? defaultIsDirectory)(path)) return false;
+  /** The folder's real path when the service may export it: a directory
+   * whose real path is not a filesystem root; otherwise null. */
+  #exportableReal(path: string): string | null {
+    if (!(this.#opts.isDirectory ?? defaultIsDirectory)(path)) return null;
     const real = (this.#opts.realpath ?? defaultRealpath)(path);
-    if (real === null) return false;
-    return !isFilesystemRoot(real, this.#platform);
+    if (real === null || isFilesystemRoot(real, this.#platform)) return null;
+    return real;
   }
 
   /** Refresh saved roots' missing state; a flip is persisted and heard.
-   * Picks also retain their canonical identity when a path becomes a link. */
+   * Places and picks both retain their canonical identity when a path
+   * becomes a link: a place against the real path it was touched with, a
+   * pick against its own (canonical) path. */
   refresh(rootId?: string): boolean {
     this.#load();
     const isDirectory = this.#opts.isDirectory ?? defaultIsDirectory;
     let changed = false;
     for (const [path, place] of this.#places) {
       if (rootId !== undefined && rootIdFor("place", path) !== rootId) continue;
-      const missing = !isDirectory(path);
-      if ((place.missing === true) !== missing) {
-        this.#places.set(path, { ...place, missing });
+      const real = this.#exportableReal(path);
+      // a place recorded before its identity was adopts it on first sight
+      const realPath = place.realPath ?? real ?? undefined;
+      const missing = real === null || real !== realPath;
+      if ((place.missing === true) !== missing || realPath !== place.realPath) {
+        this.#places.set(path, {
+          ...place,
+          missing,
+          ...(realPath !== undefined ? { realPath } : {}),
+        });
         changed = true;
       }
     }

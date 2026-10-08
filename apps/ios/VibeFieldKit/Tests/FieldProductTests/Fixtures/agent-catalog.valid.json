@@ -58,7 +58,10 @@
       "surfaces": {
         "desktop": true,
         "phone": true
-      }
+      },
+      "taskRoots": [
+        "~/Documents/Codex/*/*"
+      ]
     },
     {
       "id": "grok",

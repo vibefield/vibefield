@@ -1,0 +1,16 @@
+{
+  "//": "PJ-1 — a repository git would not read for this user (dubious ownership; safe.directory is never overridden, L3): a FACT, not an error. It groups as a repository with no identity; no remote, root, branch, sample or hit is known.",
+  "placeId": "pl-0d9b11e4",
+  "path": "/srv/shared/tool",
+  "aliases": [],
+  "kind": "project",
+  "caseless": false,
+  "exists": true,
+  "mounted": true,
+  "git": true,
+  "remotes": [],
+  "samples": [],
+  "hits": [],
+  "gitRefused": "dubious-ownership",
+  "observedAt": 1759276800000
+}

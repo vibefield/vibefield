@@ -422,16 +422,51 @@ export const INDEX_TIMELINE = {
   OBJECT_CHARS: 200,
 } as const;
 
+/** PJ-1 (`thinking-project-places.md` §4, PJ-D1…D24 RULED (a) 2026-10-07;
+ * `build-pj.md` L4, L5) — the project grouping is a LOCKSTEP event (PJ-L1):
+ * every daemon computes the same projects from the same place facts, so
+ * anything that changes which places join, or how a key or an ink is minted,
+ * bumps GROUPING_VERSION. Version 1 is the evidence rule (the identity
+ * remote, confirmed recent shared history, your links), the normalizer that
+ * supersedes DS-D9's family (L4) and the UNKEYED project key (L5 — keying it
+ * once a secret spans one person's desktops is a bump). Version 2 (PJ-2,
+ * build-pj23.md D2/D3) reads the person's intents as the library keeps them:
+ * a split bound to a record (`{place, notRecord}`, no longer global), links
+ * and splits ordered by their act time (for a pair, the later act wins), a
+ * dismissal bound to the pair of records, a record's places acted in.
+ *
+ * SAMPLE_DEPTHS: where a place samples its first-parent history — its tip,
+ * then 1, 2, 4 … 512 commits back — and RECENT_DEPTH: the deepest sample
+ * whose presence in another place's objects JOINS the two (§4.1 E2; deeper,
+ * or only the first commit, is the related-history suggestion). INK_DEALS:
+ * the range a record-less project's ink is dealt from its provisional anchor
+ * (§4.3; a record's ink is dealt once and kept). TS-only: no native reader. */
+export const GROUPING_VERSION = 2;
+export const PROJECT_GROUPING = {
+  SAMPLE_DEPTHS: [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
+  RECENT_DEPTH: 16,
+  INK_DEALS: 997,
+} as const;
+
 /** FS-1a (`thinking-files-service.md` §3, §4; FS-D12 RULED (a), 2026-10-05)
  * — the files service's bounds (`workspace.ts`). The door tier answers in
  * pages: LIST_PAGE rows a `workspace.list` page holds at most (a window's
  * default and ceiling), TAILNET_PAGE for a caller that crossed the tailnet (a
  * self phone: the cut is the DOOR's, `clipped` and `nextCursor` say so), and
  * SEARCH_HITS a `workspace.search` answers at most. The attached tier's
- * numbers ride beside them for FS-1b, which mints them (`workspace.openTicket`
- * is not built here): TICKET_TTL_MS a ticket's life, MAX_FILE_BYTES the most
- * one read hands over, SESSIONS_PER_CLIENT / SESSIONS_PER_EXPORT the attached
- * sessions one client and one export hold (mille-truffle's defaults).
+ * numbers ride beside them for FS-1b, which mints them: TICKET_TTL_MS how long
+ * a minted ticket may wait to be REDEEMED (R1, 2026-10-07 — a pair whose two
+ * legs are not both serving by then is dropped; an established session
+ * outlives it and ends only on close, either leg closing, root loss within
+ * ATTACHED_ROOT_CHECK_MS, principal revocation, root withdrawal or a worker or
+ * fieldd restart, so a client never re-attaches on a timer), MAX_FILE_BYTES
+ * the most one read hands over, SESSIONS_PER_CLIENT / SESSIONS_PER_EXPORT the
+ * attached sessions one client and one export hold (mille-truffle's defaults),
+ * MAX_VIEWPORT_ROWS the most rows one attached session's tree viewport may
+ * span — limit plus overscan on both sides — named in the policy the worker
+ * hands mille (R6, 2026-10-07): mille clamps a larger request and warns
+ * `VIEWPORT_CLAMPED`; 2 048 is mille's own `DEFAULT_REMOTE_MAX_VIEWPORT_ROWS`
+ * at the pin (baa0de8), now OUR number rather than its silent default.
  *
  * The rest bound what a door asks the worker to do: PATH_CHARS the longest
  * relative path a request may name, NAME_CHARS the longest entry name an
@@ -462,6 +497,7 @@ export const WORKSPACE_LIMITS = {
   SEARCH_HITS: 100,
   TICKET_TTL_MS: 600_000,
   MAX_FILE_BYTES: 16 * 1024 * 1024,
+  MAX_VIEWPORT_ROWS: 2_048,
   SESSIONS_PER_CLIENT: 4,
   SESSIONS_PER_EXPORT: 16,
   PATH_CHARS: 4_096,
@@ -480,7 +516,6 @@ export const WORKSPACE_LIMITS = {
   GIT_REQUEST_BYTES: 64 * 1024,
   GIT_REQUESTS_IN_FLIGHT: 8,
   SOCKET_BUFFER_BYTES: 32 * 1024 * 1024,
-  RENEW_BEFORE_MS: 30_000,
   RETRY_MIN_MS: 500,
   RETRY_MAX_MS: 10_000,
 } as const;
@@ -511,7 +546,11 @@ export const WORKSPACE_SERVICE = {
  * (the mille-git spec's PR 8) replaces the interim. READ_OPS answer; WRITE_OPS
  * are refused with READ_ONLY_ERROR whatever the caller holds; any other op
  * answers `unknown op: <op>`. DIFF_BYTES and LOG_LIMIT are rosetta's own
- * bounds, kept. TS-only: no native reader. */
+ * bounds, kept. TIMEOUT_MS is one invocation's default budget. CONCURRENCY
+ * (PJ-1, L3, 2026-10-08): the most git (and `ssh -G`) processes the files
+ * worker runs at once, across EVERY caller — the git port, `gitFacts` and the
+ * place facts; the rest wait their turn, first come first served. TS-only: no
+ * native reader. */
 export const WORKSPACE_GIT = {
   READ_OPS: ["branch", "status", "log", "diff", "commitFiles"],
   WRITE_OPS: ["stage", "unstage", "discard", "commit", "commitAll", "amend"],
@@ -519,6 +558,88 @@ export const WORKSPACE_GIT = {
   DIFF_BYTES: 8 * 1024 * 1024,
   LOG_LIMIT: 200,
   TIMEOUT_MS: 10_000,
+  CONCURRENCY: 6,
+} as const;
+
+/** PJ-1 (`thinking-project-places.md` §4.1, §9; `build-pj.md` L1–L3) — place
+ * facts: what this desktop reads of each folder its index names, through the
+ * files worker's one git runner (`WORKSPACE_GIT`).
+ *
+ * Where a place samples its history is PROJECT_GROUPING.SAMPLE_DEPTHS (the
+ * engine's word, above). GIT_TIMEOUT_MS: one place-facts invocation's
+ * budget (the first-parent root walks the whole first-parent chain; one that
+ * runs out leaves the root unsaid); SSH_TIMEOUT_MS: one `ssh -G <host>` (an
+ * alias read, C10), whose answer the worker keeps SSH_CACHE_MS.
+ * OP_BUDGET_MS: the most one `placeFacts` question works before it answers — a
+ * place it did not reach comes back `skipped` and is asked again next pass, so
+ * the answer lands inside the supervisor's own request budget. BATCH_PLACES:
+ * places per question; PARALLEL_PLACES: places one question reads at once
+ * (each reads its git calls in turn, so a scan holds at most this many of
+ * WORKSPACE_GIT.CONCURRENCY's turns and an interactive git port is never
+ * starved).
+ *
+ * The scanner (fieldd): SCAN_INTERVAL_MS is the throttled period that catches
+ * what no event announces (a commit, a remote added, a volume unplugged);
+ * CHANGE_SETTLE_MS the quiet a change (the catalog's project roots, a peer's
+ * places) waits for before it scans, so a burst is one pass. A place cached
+ * with an unchanged HEAD, config and worktree list costs one cheap read.
+ * MAX_PLACES bounds the places one desktop scans (rosetta's roots plus the
+ * worktrees `git worktree list` names); WORKTREES_MAX the worktrees one
+ * checkout adds. REGROUP_SETTLE_MS (§4): the quiet the projects grouping
+ * waits for after a change of its input — this desktop's rows, a peer's, an
+ * act — before it runs the engine again (an equal input runs nothing). TS-only:
+ * no native reader. */
+export const PLACE_FACTS = {
+  GIT_TIMEOUT_MS: 5_000,
+  SSH_TIMEOUT_MS: 3_000,
+  SSH_CACHE_MS: 5 * 60 * 1000,
+  OP_BUDGET_MS: 12_000,
+  BATCH_PLACES: 16,
+  PARALLEL_PLACES: 2,
+  SCAN_INTERVAL_MS: 5 * 60 * 1000,
+  CHANGE_SETTLE_MS: 2_000,
+  MAX_PLACES: 2_000,
+  WORKTREES_MAX: 256,
+  REGROUP_SETTLE_MS: 2_000,
+} as const;
+
+/** PJ-3 (`thinking-project-places.md` §9, PJ-D15 (a) RULED 2026-10-07;
+ * `build-pj23.md` D8–D10; P1/P2 RULED (a) 2026-10-08) — the `project.*`
+ * doors (`project-doors.ts`): this desktop's grouping, served to its own
+ * windows and the person's phone, never to a peer daemon (DS-L4).
+ *
+ * SERVICE / STATE_*: the honest UNAVAILABLE a door answers —
+ * STATE_GROUPING before the first grouping of this boot exists, and
+ * STATE_RECORDS_UNBUILT from `project.intent` until PJ-2's records are wired
+ * behind it, and STATE_RECORDS_REMOUNTING (PJ-2, retryable) while a relink
+ * swaps the account's library under them — the act is refused, never lost. PAGE_DEFAULT_LIMIT / PAGE_MAX_LIMIT: `project.list`'s and
+ * `project.sessions`' page when nothing is asked, and the most a window may
+ * ask (a tailnet caller's page is cut at INDEX_TAILNET_LIMITS.MAX_ROWS at the
+ * door). CHANGES_MIN_INTERVAL_MS: `project.subscribe`'s floor — the History
+ * page's pace, `INDEX_MESH.CHANGES_MIN_INTERVAL_MS`'s twin. NAME_MAX: a
+ * rename's longest name; QUERY_MAX: `project.list`'s `q`.
+ *
+ * The KEY JOURNAL (D9): a project's key moves when an anchor stops being
+ * unique to its group, and at its first record (`p1:` → `r:`), so a reader
+ * holding the old key is answered `movedTo`. fieldd remembers the last key
+ * each place was seen in (at most JOURNAL_PLACES_MAX places, the least
+ * recently seen dropped first) and the moves it inferred (at most
+ * JOURNAL_MOVES_MAX, the oldest dropped first), persisted at
+ * `LAYOUT.PROJECT_KEYS_FILE`; a `movedTo` follows at most MOVE_HOPS_MAX moves.
+ * TS-only: no native reader. */
+export const PROJECT_DOORS = {
+  SERVICE: "projects",
+  STATE_GROUPING: "grouping",
+  STATE_RECORDS_UNBUILT: "records-unbuilt",
+  STATE_RECORDS_REMOUNTING: "records-remounting",
+  PAGE_DEFAULT_LIMIT: 100,
+  PAGE_MAX_LIMIT: 500,
+  CHANGES_MIN_INTERVAL_MS: 500,
+  NAME_MAX: 120,
+  QUERY_MAX: 256,
+  JOURNAL_PLACES_MAX: 4_096,
+  JOURNAL_MOVES_MAX: 1_024,
+  MOVE_HOPS_MAX: 16,
 } as const;
 
 /** DS-D15 / DS-2 — forwarded mutations (`forwarding.ts`). The owner journals
@@ -840,6 +961,19 @@ export const SCOPES = [
   // table, and `agent.usage` stays local-only.*
   "index.search",
   "agent.usage",
+  // PJ-3 (PJ-D15 (a) RULED 2026-10-07; `build-pj23.md` D8, D10) — the
+  // `project.*` READS: the projects this desktop groups over every self
+  // desktop's places, with each place's sessions. The person's own devices
+  // read them — the window's token and the phone's preset (TAILNET_SCOPES) —
+  // and nothing else: NEVER plugin-eligible (AR-5b's precedent; `plugins.ts`
+  // names it nowhere), and a self peer DAEMON, which holds it only because
+  // PEER_FIELDD_SCOPES is DERIVED from the preset, is refused by every
+  // `project.*` handler (DS-L4: a daemon never aggregates another's
+  // aggregate). P1 (a), 2026-10-08: an answer to a self principal may carry a
+  // place's path; a guest never gets one (a guest holds no scope at all).
+  // The acts (`project.intent`) are not this scope's: they ride
+  // `settings.manage`, a desktop window's (P2 (a)).
+  "project.read",
 ] as const;
 export type Scope = (typeof SCOPES)[number];
 
@@ -856,7 +990,13 @@ export type Scope = (typeof SCOPES)[number];
  * `index.changes.subscribe` pings), every answer bounded for a `tailnet`
  * caller at fieldd's doors (INDEX_TAILNET_LIMITS). `index.catalog.subscribe`
  * rides the scope but stays the peer daemon's: its handler admits no other
- * kind. */
+ * kind.
+ * PJ-3 (PJ-D15 (a); P1 (a), 2026-10-08) — `project.read` joins: the phone
+ * lists its desktop's projects (`project.list`, `.get`, `.sessions`,
+ * `.subscribe`), naming a place only by `PlaceRef`, never by a path; the
+ * answer to a self phone may carry a place's path. It reaches the peer
+ * preset by derivation, and every `project.*` handler refuses a peer
+ * daemon. */
 export const TAILNET_SCOPES: readonly Scope[] = [
   "canvas.read",
   "canvas.write",
@@ -869,6 +1009,7 @@ export const TAILNET_SCOPES: readonly Scope[] = [
   "approval.respond",
   "workspace.read",
   "mcp.consume",
+  "project.read",
 ] as const;
 
 /** UA-4 (spec §7.3, UA-D5): the guest preset — a WhoIs-verified tailnet peer
@@ -1217,6 +1358,13 @@ export const LAYOUT = {
    * home directory, the mounted volumes) are enumerated live, never kept. */
   WORKSPACE_DIR: ["workspace"],
   WORKSPACE_ROOTS_FILE: ["workspace", "roots.json"],
+  /** PJ-3 (D9) — the projects' key memory under this user: the last key each
+   * place was seen in and the key moves inferred from it (`PROJECT_DOORS`),
+   * fieldd-owned, written atomically, so a reader holding a key from before a
+   * regroup — or from before a restart — is answered `movedTo`. Opaque keys
+   * and placeIds only: no path, no remote. */
+  PROJECTS_DIR: ["projects"],
+  PROJECT_KEYS_FILE: ["projects", "keys.json"],
 } as const;
 
 /** The segments that live at the VibeField ROOT and never re-root under

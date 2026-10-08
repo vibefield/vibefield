@@ -214,13 +214,16 @@ overrides:
   # than leaving a hoisted transitive to drift.
   "@vibecook/ghosttea-protocol": 0.12.0
   # FS-1a (2026-10-05, FS-D10 RULED (a) with its exit at once — 0.3.4 is on npm):
-  # mille, the file explorer engine behind the files service, enters as an EXACT
-  # registry pin (EL8; ice's shape — packages ask for "*"). Its eight native
-  # binaries ride as optional dependencies of this one row. fieldd's files worker
-  # is the ONLY importer of the root entry (wall R24: `@vibecook/mille` under
-  # packages/fieldd/src/workspace/ alone; field-app may take `/port` and
-  # mille-ui, which FS-1b adds). A `link:` window (`../mille-pin`) opens only for
-  # the unreleased M4/M6/M7 work and closes at mille's next release.
+  # mille, the file explorer engine behind the files service, entered as an
+  # EXACT registry pin (EL8; ice's shape — packages ask for "*"). Since FS-1b
+  # (2026-10-05) the two rows below are NOT that pin: they are the `link:`
+  # sibling window into the dedicated `../mille-pin` checkout, pinned by
+  # revision in siblings.lock.json, for the unreleased WebSocket channel
+  # (M4/M6/M7); it closes — back to an exact version — at mille's next release.
+  # fieldd's files worker is the ONLY importer of the engine (wall R24:
+  # `@vibecook/mille` under packages/fieldd/src/workspace/host alone; field-app
+  # may take `/port`, `/remote` and mille-ui). (Corrected 2026-10-07: this
+  # comment still called the rows an exact registry pin.)
   # ---- SIBLING MODE (AR-0, 2026-09-12) --------------------------------------
   # FS-1b: M4/M6/M7 at the lock's mille SHA; close at its first registry release.
   "@vibecook/mille": link:../mille-pin/packages/mille

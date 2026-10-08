@@ -204,5 +204,12 @@
   "WORKSPACE_ROOTS_FILE": [
     "workspace",
     "roots.json"
+  ],
+  "PROJECTS_DIR": [
+    "projects"
+  ],
+  "PROJECT_KEYS_FILE": [
+    "projects",
+    "keys.json"
   ]
 }
