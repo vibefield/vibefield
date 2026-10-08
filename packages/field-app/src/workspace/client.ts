@@ -244,10 +244,8 @@ export class WorkspaceClient implements WorktreeHostPort {
             treePort: event.data.treePort,
             gitPort: event.data.gitPort,
           });
-          this.#timer = setTimeout(
-            () => void this.#attach(revision),
-            Math.max(1, ticket.expiresAt - Date.now() - WORKSPACE_LIMITS.RENEW_BEFORE_MS),
-          );
+          // R1 (2026-10-07): the ticket's expiry bounds its redemption only; a
+          // live session ends on a real loss, which arrives as `closed`
         } else
           retry(
             typeof event.data?.message === "string"

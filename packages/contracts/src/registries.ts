@@ -428,10 +428,14 @@ export const INDEX_TIMELINE = {
  * default and ceiling), TAILNET_PAGE for a caller that crossed the tailnet (a
  * self phone: the cut is the DOOR's, `clipped` and `nextCursor` say so), and
  * SEARCH_HITS a `workspace.search` answers at most. The attached tier's
- * numbers ride beside them for FS-1b, which mints them (`workspace.openTicket`
- * is not built here): TICKET_TTL_MS a ticket's life, MAX_FILE_BYTES the most
- * one read hands over, SESSIONS_PER_CLIENT / SESSIONS_PER_EXPORT the attached
- * sessions one client and one export hold (mille-truffle's defaults).
+ * numbers ride beside them for FS-1b, which mints them: TICKET_TTL_MS how long
+ * a minted ticket may wait to be REDEEMED (R1, 2026-10-07 — a pair whose two
+ * legs are not both serving by then is dropped; an established session
+ * outlives it and ends only on close, either leg closing, root loss within
+ * ATTACHED_ROOT_CHECK_MS, principal revocation, root withdrawal or a worker or
+ * fieldd restart, so a client never re-attaches on a timer), MAX_FILE_BYTES
+ * the most one read hands over, SESSIONS_PER_CLIENT / SESSIONS_PER_EXPORT the
+ * attached sessions one client and one export hold (mille-truffle's defaults).
  *
  * The rest bound what a door asks the worker to do: PATH_CHARS the longest
  * relative path a request may name, NAME_CHARS the longest entry name an
@@ -480,7 +484,6 @@ export const WORKSPACE_LIMITS = {
   GIT_REQUEST_BYTES: 64 * 1024,
   GIT_REQUESTS_IN_FLIGHT: 8,
   SOCKET_BUFFER_BYTES: 32 * 1024 * 1024,
-  RENEW_BEFORE_MS: 30_000,
   RETRY_MIN_MS: 500,
   RETRY_MAX_MS: 10_000,
 } as const;

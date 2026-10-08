@@ -118,7 +118,9 @@ export interface StatsValue {
   engines: number;
 }
 
-/** A pair of independent, single-use credentials under one expiring lease. */
+/** A pair of independent, single-use credentials under one lease. Its
+ * `expiresAt` bounds REDEMPTION (R1, 2026-10-07): a pair not established by
+ * then is dropped; an established session ends only on a real loss. */
 export interface AttachRegistration {
   rootId: string;
   rootPath: string;

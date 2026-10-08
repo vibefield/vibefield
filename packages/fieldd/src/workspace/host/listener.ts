@@ -58,12 +58,18 @@ async function resolvePath(
   }
 }
 
+type Leg = "tree" | "git";
 type Pair = AttachRegistration & {
   stopped: boolean;
   sockets: Set<WebSocket>;
-  timer: NodeJS.Timeout;
+  /** the legs serving: redeemed, and the engine (tree) or `ready` (git) given */
+  live: Set<Leg>;
+  /** R1 (2026-10-07): armed only until both legs are live. The expiry bounds
+   * REDEMPTION — a pair not established by `expiresAt` is dropped, both legs
+   * together — and nothing time-based ends an established session. */
+  timer: NodeJS.Timeout | null;
 };
-type Credential = { pair: Pair; leg: "tree" | "git" };
+type Credential = { pair: Pair; leg: Leg };
 
 /** Secrets remain in this process and its private control pipe, never URLs or logs. */
 export class WorkspaceListener {
@@ -125,9 +131,10 @@ export class WorkspaceListener {
       ...ask,
       stopped: false,
       sockets: new Set(),
+      live: new Set(),
       timer: setTimeout(() => this.#revoke(pair), ask.expiresAt - Date.now()),
     };
-    pair.timer.unref();
+    pair.timer?.unref();
     this.#pairs.add(pair);
     if (this.#rootTimer === null) {
       this.#rootTimer = setInterval(
@@ -186,10 +193,21 @@ export class WorkspaceListener {
     for (const pair of this.#pairs) if (!keep.has(pair.rootId)) this.#revoke(pair);
   }
 
+  /** A leg began serving; with both, the session is established and its
+   * ticket's expiry no longer applies (R1). */
+  #live(pair: Pair, leg: Leg): void {
+    if (pair.stopped || pair.live.has(leg)) return;
+    pair.live.add(leg);
+    if (pair.live.size < 2 || pair.timer === null) return;
+    clearTimeout(pair.timer);
+    pair.timer = null;
+  }
+
   #revoke(pair: Pair): void {
     if (pair.stopped) return;
     pair.stopped = true;
-    clearTimeout(pair.timer);
+    if (pair.timer !== null) clearTimeout(pair.timer);
+    pair.timer = null;
     this.#credentials.delete(pair.ticket);
     this.#credentials.delete(pair.gitTicket);
     this.#pairs.delete(pair);
@@ -250,6 +268,7 @@ export class WorkspaceListener {
           }
           release = held.release;
           clearTimeout(timeout);
+          this.#live(pair, "tree");
           return {
             host: held.host,
             peerId: pair.clientId,
@@ -295,6 +314,7 @@ export class WorkspaceListener {
         }
         clearTimeout(timeout);
         socket.send(JSON.stringify({ type: "ready" }));
+        this.#live(pair, "git");
         return;
       }
       const active = pair;

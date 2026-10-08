@@ -82,7 +82,7 @@ describe("workspace leases at the Worker boundary", () => {
     const windows = [{ ...roots.roots[0]!, path: "C:\\Users\\Ada\\repo" }];
     expect(resolveWorkspaceRoot(windows, "c:/users/ada/repo/src")?.path).toBe("src");
   });
-  it("hands the room ports, renews before expiry, and resnapshots after a worker death", async () => {
+  it("keeps one session across its ticket's expiry and resnapshots only after a real loss", async () => {
     vi.useFakeTimers();
     const w = world();
     expect(await w.client.open(grant.rootPath)).toEqual({ ok: true, generation: 1 });
@@ -91,18 +91,43 @@ describe("workspace leases at the Worker boundary", () => {
     const one = ports();
     first.emit(one);
     expect(w.events.at(-1)).toMatchObject({ type: "ports", generation: 1, treePort: one.treePort });
-    await vi.advanceTimersByTimeAsync(
-      WORKSPACE_LIMITS.TICKET_TTL_MS - WORKSPACE_LIMITS.RENEW_BEFORE_MS,
-    );
-    expect(first.terminate).toHaveBeenCalledOnce();
+    // R1 (2026-10-07): the expiry bounds redemption only — well past it, the
+    // same session, the same generation, no second "starting", no re-attach
+    await vi.advanceTimersByTimeAsync(WORKSPACE_LIMITS.TICKET_TTL_MS * 3);
+    expect(first.terminate).not.toHaveBeenCalled();
+    expect(w.workers).toHaveLength(1);
+    expect(w.request.mock.calls.map(([method]) => method)).toEqual([
+      "workspace.roots",
+      "workspace.openTicket",
+    ]);
+    expect(w.events.filter((event) => event.type === "status")).toEqual([
+      expect.objectContaining({ state: "starting", generation: 1 }),
+    ]);
+    expect(w.events.at(-1)).toMatchObject({ type: "ports", generation: 1 });
+    expect(
+      await w.client.fileAction({
+        root: grant.rootPath,
+        generation: 1,
+        paths: ["src/main.ts"],
+        action: "copyPath",
+      }),
+    ).toEqual({ ok: true });
+    // a real loss: the status, a retry with backoff, a new generation
+    first.emit({ type: "closed" });
+    expect(w.events.at(-1)).toMatchObject({ type: "status", state: "error", generation: 1 });
     expect(w.request).toHaveBeenCalledWith("workspace.closeTicket", { ticket: "1".repeat(43) });
+    await vi.advanceTimersByTimeAsync(WORKSPACE_LIMITS.RETRY_MIN_MS);
     expect(w.workers).toHaveLength(2);
     w.workers[1]!.emit({ type: "closed" });
     expect(w.events.at(-1)).toMatchObject({ type: "status", state: "error", generation: 2 });
     await vi.advanceTimersByTimeAsync(WORKSPACE_LIMITS.RETRY_MIN_MS);
+    expect(w.workers).toHaveLength(2); // the backoff doubled
+    await vi.advanceTimersByTimeAsync(WORKSPACE_LIMITS.RETRY_MIN_MS);
     expect(w.workers).toHaveLength(3);
     w.workers[2]!.emit(ports());
     expect(w.events.at(-1)).toMatchObject({ type: "ports", generation: 3 });
+    await vi.advanceTimersByTimeAsync(WORKSPACE_LIMITS.TICKET_TTL_MS * 3);
+    expect(w.workers).toHaveLength(3);
     w.client.dispose();
     await vi.advanceTimersByTimeAsync(WORKSPACE_LIMITS.TICKET_TTL_MS);
     expect(w.workers).toHaveLength(3);
