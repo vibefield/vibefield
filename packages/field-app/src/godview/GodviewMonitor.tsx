@@ -452,7 +452,7 @@ export function GodviewMonitor({
   );
 
   // Views that lay out in flow clear the chrome with these two insets — the
-  // list and the timeline as the stage's `insets.left` and `insets.top` (M58);
+  // list, the timeline and spend as the stage's `insets.left` and `insets.top` (M58);
   // the swarm instead steers its bodies around the chrome's rectangles, the
   // stage's `obstacles` (MV-D19).
   //

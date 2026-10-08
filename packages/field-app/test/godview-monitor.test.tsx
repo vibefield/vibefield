@@ -534,9 +534,9 @@ describe("the monitor stage", () => {
 
   it("names no ported view in a host stylesheet (W5), and defines every skin name the views read (L18)", () => {
     // List and rain carry their own stylesheets since MV-4, the swarm (and its
-    // spawn bloom) since MV-5, the timeline since MV-6 (L18): no VibeField rule
-    // may name their classes or their root classes — swept over every
-    // stylesheet of this package and the design kit.
+    // spawn bloom) since MV-5, the timeline since MV-6, spend since MV-7 (L18):
+    // no VibeField rule may name their classes or their root classes — swept
+    // over every stylesheet of this package and the design kit.
     const stylesheets = (dir: string): string[] =>
       readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
         entry.isDirectory()
@@ -565,6 +565,8 @@ describe("the monitor stage", () => {
         /\.mv-swarm\b/,
         /vf-monitor-timeline/,
         /\.mv-timeline\b/,
+        /vf-monitor-spend/,
+        /\.mv-spend\b/,
         /--vf-monitor-flow-band/,
       ]) {
         expect(css, `${path} names ${name}`).not.toMatch(name);
@@ -584,6 +586,23 @@ describe("the monitor stage", () => {
     for (const name of MONITOR_SKIN) {
       const themed = defines(block("light"), name) && defines(block("dark"), name);
       expect(themed || defines(tokens, name), `${name} is defined on the stage`).toBe(true);
+    }
+    // M178: the sans the spend view sets its words in is a skin name since
+    // MV-7, defined once on :root in the token sheet (the loop above holds it)
+    expect(MONITOR_SKIN).toContain("--vf-font-sans");
+    // MV-7: spend paints with the palette's swarm inks, the timeline's ground
+    // and the stage (`useMonitorPalette` reads them from these names), so each
+    // is defined here too: in both skin blocks, or once in the tokens
+    for (const name of [
+      "--text-main",
+      "--vf-orange",
+      "--vf-godview-rain-green",
+      "--vf-select",
+      "--monitor-bg",
+      "--vf-card-deep",
+    ]) {
+      const themed = defines(block("light"), name) && defines(block("dark"), name);
+      expect(themed || defines(tokens, name), `${name} is defined for the palette`).toBe(true);
     }
   });
 

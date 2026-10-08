@@ -11,7 +11,7 @@ import { describe, expect, it } from "vitest";
 import { projectDeskRow, projectFieldRow, windowMonitorRow } from "../src/agent-field";
 import { createModelSubscription } from "../src/agent-model-board";
 import { managedSummary as summary } from "./agent-field-summary";
-import { stateOf, testMonitor } from "./agent-monitor-fixture";
+import { NOW0, stateOf, testMonitor } from "./agent-monitor-fixture";
 
 // MV-3a, step 7 — THE DIFFERENTIAL, fieldd-level: for every field the desk
 // projection (today's, read off the fold's row) and the model's row (the
@@ -165,6 +165,52 @@ describe("the differential — the desk projection and the model's row say the s
       `cost — desk carries the mirror's running costUsd/costCoverage; the model's cost is the ledger's (absent here: ${JSON.stringify(modelCost)}; the fixture mirror has no priced buckets)`,
     );
     console.log(`MV-3a differential — designed differences:\n  ${findings.join("\n  ")}`);
+    monitor.service.dispose();
+  });
+});
+
+// MV-7 — the spend view draws a local row's line from its `cost.series`, and a
+// row without one draws no line. The series is the backend's usage ledger over
+// core's own priced buckets (`costHistory`, which a live run's state carries):
+// here the state carries three of them, and this desktop's model row — and its
+// window's wire cut — carry the ledger's total, coverage, burn and its twenty
+// 30 s steps (the ten-minute window). (A peer's line is never drawn: the view
+// reads a series only on its own desktop's rows.)
+describe("MV-7 — a local row carries the ledger's ten-minute series", () => {
+  it("prices a run from core's buckets: usd, coverage, burn and the series, on the model row and the wire", async () => {
+    const base = CASES.working as AgentSessionSummary;
+    const monitor = await testMonitor({ summaries: [base] });
+    const priced = costing(base, 4.04, "complete");
+    const state = stateOf(priced);
+    // core's buckets sit on the 30 s grid: the current one and the two before it
+    const boundary = Math.floor(NOW0 / 30_000) * 30_000;
+    const bucket = (stepsAgo: number, costUsd: number) => ({
+      at: new Date(boundary - stepsAgo * 30_000).toISOString(),
+      costUsd,
+    });
+    monitor.fold.publish([priced]);
+    monitor.runtime.push({
+      ...state,
+      revision: 9,
+      usage: {
+        ...state.usage,
+        costUsd: 4.04,
+        costCoverage: "complete",
+        costRatePerMin: 0.05,
+        costHistory: [bucket(2, 0.4), bucket(1, 0.6), bucket(0, 0.2)],
+      },
+    } as AgentMonitorState);
+    const cost = monitor.row("run-working").cost;
+    expect(cost?.usd).toBe(4.04);
+    expect(cost?.coverage).toBe("complete");
+    expect(cost?.burnPerHour).toBeCloseTo(3);
+    expect(cost?.series?.stepMs).toBe(30_000);
+    expect(cost?.series?.lastStepAt).toBe(boundary);
+    expect(cost?.series?.steps).toHaveLength(20);
+    expect(cost?.series?.steps.slice(-3)).toEqual([0.4, 0.6, 0.2]);
+    // the window's own cut keeps it whole, and it parses as the contract's row
+    const wire = MonitorAgentRowSchema.parse(windowMonitorRow(monitor.row("run-working")));
+    expect(wire.cost?.series).toEqual(cost?.series);
     monitor.service.dispose();
   });
 });

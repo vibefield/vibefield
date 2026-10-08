@@ -4,6 +4,7 @@ import { DeviceFilterPreview } from "../DeviceFilterPreview";
 import { GodviewPreview } from "../GodviewPreview";
 import { meshBoardDoor } from "../godview-mesh-fixtures";
 import { profileTabsDoor } from "../godview-profiles-fixtures";
+import { spendDoor } from "../godview-spend-fixtures";
 import { timelineDoor } from "../godview-timeline-fixtures";
 import { PaneFramePreview } from "../PaneFramePreview";
 import { PaneLauncherPreview } from "../PaneLauncherPreview";
@@ -17,6 +18,7 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
   const theme = dark ? "dark" : "light";
   const profilesDoor = useMemo(() => profileTabsDoor(), []);
   const afternoonDoor = useMemo(() => timelineDoor(), []);
+  const moneyDoor = useMemo(() => spendDoor(), []);
   const meshDoor = useMemo(() => meshBoardDoor(), []);
   return (
     <Section
@@ -36,6 +38,15 @@ export function GodviewSection({ dark = false }: { dark?: boolean } = {}): React
       >
         <div data-godview-timeline-catalog="">
           <GodviewPreview door={afternoonDoor} initialView="timeline" theme={theme} />
+        </div>
+      </Specimen>
+      <Specimen
+        title="Spend — where the money went: what each agent spent in the last ten minutes, a line each from $0, runtime only"
+        source="@vibecook/puppeteer-views/views/spend"
+        bleed
+      >
+        <div data-godview-spend-catalog="">
+          <GodviewPreview door={moneyDoor} initialView="spend" theme={theme} />
         </div>
       </Specimen>
       <Specimen

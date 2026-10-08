@@ -140,6 +140,9 @@ describe("design system page", () => {
     expect(container?.textContent).toContain(
       "Swarm bodies — every drawn state, on the package's own fixtures",
     );
+    // MV-7: spend's specimen, on the shipping view through GodviewPreview and its fixture door
+    expect(container?.textContent).toContain("Spend — where the money went");
+    expect(container?.querySelector("[data-godview-spend-catalog] .vf-godview")).not.toBeNull();
     expect(container?.textContent).toContain("The interface, accounted for");
     // DESIGN.md §13: the glyph section mounts the shipping set from the kit leaf, all 60.
     expect(container?.querySelectorAll("#glyphs .vf-ds-glyph")).toHaveLength(60);

@@ -4066,6 +4066,122 @@ async function spawnBloomRows(ctx: {
   });
 }
 
+/**
+ * MV-7 — THE SPEND VIEW in VibeField's host, the fifth view of the registry.
+ * Chosen on the bar it MOUNTS (the monitor's marker names it, and its element
+ * sits in the slot that wears `mv-spend`), it PAINTS (its canvas holds a
+ * picture, read back from its 2D context), and its KEYS STAY ON ITS ROOT
+ * (MV-D8): with the root focused, ↓ focuses a row of its list; with the focus
+ * outside the view, ↓ moves nothing in it. The swarm is chosen again after, so
+ * the rows below see the stage they always saw.
+ */
+async function spendViewRow(ctx: {
+  win: BrowserWindow;
+  monitorWatch: MarkerWatch<MonitorFacts>;
+  verdict: Record<string, unknown>;
+}): Promise<void> {
+  const { win, monitorWatch, verdict } = ctx;
+  const evaluate = <T>(expression: string): Promise<T> =>
+    win.webContents.executeJavaScript(expression, true) as Promise<T>;
+  const choose = async (label: string, id: string): Promise<void> => {
+    const pressed = await evaluate<boolean>(
+      `(() => {
+        const control = document.querySelector('[role="group"][aria-label="Monitor view"] button[aria-label=${JSON.stringify(`${label} view`)}]');
+        if (!(control instanceof HTMLButtonElement)) return false;
+        control.click();
+        return true;
+      })()`,
+    );
+    if (!pressed) throw new Error(`the bar offers no ${label} view`);
+    await monitorWatch.until((facts) => facts.viewId === id, `the monitor to show ${id}`, 20_000);
+  };
+  const ROOT = `document.querySelector(".mv-spend .vf-monitor-spend")`;
+  const FOCUSED = `(${ROOT}?.querySelector(".vf-monitor-spend-row.is-focus")?.getAttribute("data-id") ?? null)`;
+  const pressDown = (): void => {
+    win.webContents.sendInputEvent({ type: "keyDown", keyCode: "Down" });
+    win.webContents.sendInputEvent({ type: "keyUp", keyCode: "Down" });
+  };
+  // the swarm is chosen again whatever happens, and the row's own failure is the one said
+  let failure: unknown;
+  try {
+    await choose("SPEND", "spend");
+    await waitForRendererFact(
+      win,
+      "the spend view to mount in its slot",
+      20_000,
+      `${ROOT} !== null`,
+    );
+    // painted: the canvas's bytes spread (one ground everywhere would read 0)
+    const SPREAD = `(() => {
+      const canvas = ${ROOT}?.querySelector("canvas.vf-monitor-spend-canvas");
+      if (!(canvas instanceof HTMLCanvasElement) || canvas.width === 0) return -1;
+      const context = canvas.getContext("2d");
+      if (context === null) return -2;
+      const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+      let min = 255, max = 0;
+      for (let index = 0; index < data.length; index += 97) {
+        const value = data[index];
+        if (value < min) min = value;
+        if (value > max) max = value;
+      }
+      return max - min;
+    })()`;
+    await waitForRendererFact(
+      win,
+      "the spend view to paint its canvas",
+      20_000,
+      `${SPREAD} > 0`,
+      SPREAD,
+    );
+    const spread = await evaluate<number>(SPREAD);
+    const rows = await evaluate<number>(
+      `${ROOT}?.querySelectorAll(".vf-monitor-spend-row:not([hidden])").length ?? 0`,
+    );
+    // its keys, on its root: focused there, ↓ focuses a row (when it lists one)
+    await evaluate<void>(`${ROOT}?.focus()`);
+    const onRoot = await evaluate<boolean>(`document.activeElement === ${ROOT}`);
+    if (!onRoot) throw new Error("the spend view's root would not take the focus");
+    pressDown();
+    const focused =
+      rows === 0
+        ? null
+        : await untilRead("↓ on the spend view's root to focus a row", 10_000, async () => {
+            const id = await evaluate<string | null>(FOCUSED);
+            return id === null ? undefined : id;
+          });
+    // …and outside it, ↓ is not the view's: nothing in it moves
+    await evaluate<void>(`${ROOT}?.blur()`);
+    const away = await evaluate<boolean>(
+      `document.activeElement === null || !${ROOT}?.contains(document.activeElement)`,
+    );
+    if (!away) throw new Error("the focus would not leave the spend view");
+    const before = await evaluate<string | null>(FOCUSED);
+    pressDown();
+    await sleep(300);
+    const after = await evaluate<string | null>(FOCUSED);
+    if (after !== before) {
+      throw new Error(`↓ outside the spend view moved its focus (${before} → ${after})`);
+    }
+    const line = {
+      mounted: true,
+      painted: spread,
+      rows,
+      focusedOnRoot: focused,
+      outsideMoved: false,
+    };
+    console.log(`SMOKE_GODVIEW_SPEND ${JSON.stringify(line)}`);
+    verdict["spendView"] = line;
+  } catch (error) {
+    failure = error;
+  }
+  try {
+    await choose("SWARM", "swarm");
+  } catch (error) {
+    failure ??= error;
+  }
+  if (failure !== undefined) throw failure;
+}
+
 /** GT-2/GT-2e: the product Godview, end to end, against the real pair.
  *
  * Everything the deck does here it does because a user asked: the overlay opens
@@ -6110,6 +6226,11 @@ export async function runSmokeGodview(opts: {
       deck,
       verdict,
     });
+
+    // ── 15b. THE SPEND VIEW (MV-7) — the registry's fifth view mounts, paints
+    // and keeps its keys on its root. After the bloom, so the rows the typed
+    // agents and the birth left are on its list; the swarm is chosen again after.
+    await spendViewRow({ win, monitorWatch, verdict });
 
     // ── GT-3p, REPORT-ONLY ────────────────────────────────────────────────
     // Everything below records numbers and asserts nothing. A performance row

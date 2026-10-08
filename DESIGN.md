@@ -1469,15 +1469,17 @@ The hot-point glow and rim retire with CardShell (above).
   theme browser's stage), `thumb` (a 600px window scaled, docked in the corner once the big
   one scrolls away, and minimizable to a pill). It is `inert` inside a `role="img"` with a
   description — a picture, never a second UI.
-- **The monitor view owns its drawing** (MV, ruled 2026-10-03). List, rain, swarm and timeline are
-  SDK modules. The host mounts one at a time, supplies geometry and a finite skin, and never styles
-  a view's classes. Each view's sheet is rooted at `.mv-<id>`; its local variables and keyframes
-  use `--mv-<id>-` and `mv-<id>-`. No host DOM, theme class or stylesheet is a view dependency.
-  **The skin** is the SDK's `MONITOR_SKIN`: `--text-main`, `--text-muted`, `--text-faint`,
-  `--panel-bg`, `--panel-border`, `--control-hover-bg`, `--control-hover-border`, `--idle-bg`,
-  `--monitor-bg`, and §6's named `--vf-ease-pop`, `--vf-ease-lift`, `--vf-ease-island`.
-  Both host themes define the colours; the shared token sheet defines the easings. A new shared
-  name changes the contract first; a view never copies a curve or reads an undeclared host token.
+- **The monitor view owns its drawing** (MV, ruled 2026-10-03). List, rain, swarm, timeline and
+  spend are SDK modules. The host mounts one at a time, supplies geometry and a finite skin, and
+  never styles a view's classes. Each view's sheet is rooted at `.mv-<id>`; its local variables and
+  keyframes use `--mv-<id>-` and `mv-<id>-`. No host DOM, theme class or stylesheet is a view
+  dependency. **The skin** is the SDK's `MONITOR_SKIN`: `--text-main`, `--text-muted`,
+  `--text-faint`, `--panel-bg`, `--panel-border`, `--control-hover-bg`, `--control-hover-border`,
+  `--idle-bg`, `--monitor-bg`, §6's named `--vf-ease-pop`, `--vf-ease-lift` and
+  `--vf-ease-island`, and the sans, `--vf-font-sans` (M178: the stage is monospace, so a view set
+  in the sans reads the token, never a copied stack). Both host themes define the colours; the
+  shared token sheet defines the easings and the sans. A new shared name changes the contract
+  first; a view never copies a curve or reads an undeclared host token.
   Stage insets replace host padding rules, including the timeline's former extra 11px (MV-6).
   **The bar reads the manifest:** each view supplies its filled mark and its focus keys; the host
   has no view mark table. The declared keys print in the control's tooltip — ruled 2026-10-07
@@ -1527,7 +1529,8 @@ The hot-point glow and rim retire with CardShell (above).
   - Only the window in view keeps its colour; the rest of the day is grayed.
   - The head is a 2px line with a knob, filled while following now and hollow while looking back.
   - **Pressing the map puts the head there, and dragging moves the head** across the known spans
-    (TL-D16). It is a `role="slider"`: ← → 5 min, ⇧ 30, Home the day's start, End now.
+    (TL-D16). It is a `role="slider"`: ← → 5 min, ⇧ 30, Home the day's start, End now. The now
+    button prints End's legend `↘` under its mark, in `--text-main` (ruling 4, M179).
   **Colours:** project for work, §2.5's orange for blocked, the swarm's blue for a reply not yet
   opened (TL-D3), text-faint for idle. Never red; now is ink. One click opens the agent in the pane
   you are in (the views' `select`).
@@ -1535,6 +1538,23 @@ The hot-point glow and rim retire with CardShell (above).
   **There is no history book.** MV-D13 superseded TL-D8's status ledger: `agent.history` and
   fieldd's status recorder are removed. A future history capability must READ
   rosettad's record; neither a view nor its backend may begin recording one.
+- **Godview's spend view is where the money went** (SV · MV-7 — James ruled 2026-10-07, M177: the
+  runtime-only view as built, puppeteer `feat/sv-live` `d1890e0`; SV-D15…D19 are ruled later).
+  A fifth monitor view (`SPEND`, after the timeline), painted into a canvas like the timeline:
+  what each agent spent in the last ten minutes, a line each from $0, an estimate of
+  API-equivalent USD and never an invoice. **A line is the backend's ten-minute series**
+  (`cost.series`, twenty 30 s steps, kept in its memory: runtime only). A row without a series
+  draws no line, and a peer's row never draws one (the view reads a series only on its own
+  desktop's rows). The burn is the five-minute rate off that series, the same definition now and
+  at a set moment, so the hero sums the printed rates (SV-D7's lean, M178).
+  - The list beside the chart names each run. **The line under a name is the toolkit's
+    `detailLine`** (M178, M4's one rule): the wait while blocked, else the reply, else the status;
+    a peer's leads with its desktop. The task as a model fact goes to the SV refinement round.
+  - Its words are set in the sans (`--vf-font-sans`); the stage around it stays monospace.
+  - ↑ ↓ move the keyboard's focus between rows and Return opens the focused one, said in the
+    bar's tooltip (ruling 4). **End lets go of a set moment, and its legend `↘` is printed on the
+    Now pill** (M181: every printed legend comes from the toolkit's `keyLegend` table), in the
+    view's secondary ink (6.5:1 light, 9.0:1 dark).
 - **History is rosetta's room, on the cover's glass** (AR-8c, built 2026-10-03; One Frame §9
   "History, joined"; FC-D6, FC-D15, FC-D16; AR-D36…AR-D43): History is rosetta's own room — the
   projects, the sessions, the panels and charts, the transcript and its folds — mounted from the

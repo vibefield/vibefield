@@ -162,6 +162,22 @@ describe("UI system ownership boundaries", () => {
     expect(fixture).not.toContain("useTerminalPool");
   });
 
+  it("keeps the spend specimen's fixture an ADAPTER: the package's own afternoon on a door, never the view's markup (MV-7)", () => {
+    // The specimen is the shipping spend view through the shipping Godview
+    // (`GodviewPreview`), and its fixture supplies only what a desktop's model
+    // board supplies — rows, from the views package's own afternoon — never a
+    // drawing, a class of the view's or a cost of its own making.
+    const section = source("design-system/sections/GodviewSection.tsx");
+    expect(section).toMatch(/<GodviewPreview door=\{moneyDoor\} initialView="spend"/);
+    const fixture = source("design-system/godview-spend-fixtures.ts");
+    expect(fixture).toMatch(
+      /import \{[^}]*spendAfternoon[^}]*spendRows[^}]*\} from "@vibecook\/puppeteer-views"/,
+    );
+    expect(fixture).not.toMatch(/vf-monitor-spend|mv-spend/);
+    expect(fixture).not.toMatch(/<[a-z]+[\s/>]/);
+    expect(fixture).not.toMatch(/\b(usd|series|steps):/);
+  });
+
   it("keeps the view frame's fixture an ADAPTER — the owner's value, never the frame's markup (FR-1)", () => {
     // The catalog stands in for the one thing a host supplies — the window's
     // view, which main owns in the product — and for the keys' timing, which the

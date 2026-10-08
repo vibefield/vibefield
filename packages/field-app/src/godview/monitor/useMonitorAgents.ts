@@ -56,11 +56,11 @@ import { createWindowViewReplica, type WindowViewReplica } from "./window-view";
  *
  *   · THE REPLICA — the window's copy of the backend's model, fed by
  *     `GodviewAgentsProvider` through the door's model port (`model-replica.ts`,
- *     one subscription per window, PF6). All four views are SDK views — list
- *     and rain (MV-4), the swarm (MV-5) and the timeline (MV-6): they draw it as
- *     themselves, cut to the window's rows (`window-view.ts`), one update per
- *     frame. The chrome reads the model too; only Find joins its local facts
- *     into the shared sheet's rows (`find-agents.ts`, M19).
+ *     one subscription per window, PF6). All five views are SDK views — list
+ *     and rain (MV-4), the swarm (MV-5), the timeline (MV-6) and spend (MV-7):
+ *     they draw it as themselves, cut to the window's rows (`window-view.ts`),
+ *     one update per frame. The chrome reads the model too; only Find joins
+ *     its local facts into the shared sheet's rows (`find-agents.ts`, M19).
  *   · THE LOCAL JOIN — what only this window knows, handed to the replica
  *     (`setLocal`): its panes and the colour each wears, the pane the person is
  *     working in, the row they pointed at, where they asked terminals to be
