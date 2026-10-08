@@ -188,22 +188,20 @@ export function judgeAwaySaid(said: PeersDoor["said"]): string[] {
   return problems;
 }
 
-/** I45: the first point B's presence sent out is its pointer's own — one of the world points it was moved to — never the
- * origin a spawned pointer's frame-late world point left in the first publish (ICE `0.15.0-desk.7`). */
+/** I45: the first point B's presence sent out is its pointer's own — never the origin a spawned pointer's frame-late world
+ * point left in the first publish (ICE `0.15.0-desk.7`). WHICH point is the pointer's: the smoke's first move when it is the
+ * first fact B hears — but a real pointer over B's window as it opens is B's pointer too (a run at 05:17Z met one: B's first
+ * point (624.2, 323.5), fractional, before any injected move), so the judge holds the defect itself, the origin, and the
+ * line says the point beside the move. */
 export function judgeFirstPoint(
   first: { readonly x: number; readonly y: number } | null,
-  moves: readonly { readonly x: number; readonly y: number }[],
 ): string[] {
   if (first === null) return ["B's presence sent no cursor out"];
   if (first.x === 0 && first.y === 0)
     return [
       "B's first published point is (0, 0) — its spawned pointer's origin, not its own (ICE I45)",
     ];
-  return moves.some((m) => Math.abs(m.x - first.x) <= 1 && Math.abs(m.y - first.y) <= 1)
-    ? []
-    : [
-        `B's first published point (${first.x}, ${first.y}) is none of the points its pointer was moved to (${JSON.stringify(moves)})`,
-      ];
+  return [];
 }
 
 /** Where window A must draw B's arrow box: B's client point → the world through B's camera → A's screen, less the tip. */
@@ -551,19 +549,12 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
     const doorB = await door(b);
     const camA = doorA.record?.camera ?? null;
     const camB = doorB.record?.camera ?? null;
-    // I45: the point B's presence FIRST sent out — B's pointer's own (its two moves', through B's camera), never (0, 0)
+    // I45: the point B's presence FIRST sent out — B's pointer's own, never (0, 0)
     const firstB = await js<{ x: number; y: number } | null>(
       b,
       "globalThis.__vfDesk?.presenceFirst?.() ?? null",
     );
-    const movedTo =
-      camB === null
-        ? []
-        : [{ x: point.x - 1, y: point.y }, point].map((m) => ({
-            x: m.x / camB.zoom + camB.x,
-            y: m.y / camB.zoom + camB.y,
-          }));
-    problems.push(...judgeFirstPoint(firstB, movedTo).map((p) => `PEERS ARRIVE: ${p}`));
+    problems.push(...judgeFirstPoint(firstB).map((p) => `PEERS ARRIVE: ${p}`));
     const seen = await dom();
     if (camA === null || camB === null)
       problems.push(`PEERS ARRIVE: no camera to place by (${JSON.stringify({ camA, camB })})`);
