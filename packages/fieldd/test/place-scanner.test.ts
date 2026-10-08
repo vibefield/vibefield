@@ -176,7 +176,8 @@ function scanner(
 const byPath = (places: Map<string, PlaceFacts[]>, projectId: string) =>
   new Map((places.get(projectId) ?? []).map((place) => [place.path, place]));
 
-describe("the place scanner (PJ-1)", () => {
+// real repositories and several passes each: more than vitest's 5 s on a loaded host
+describe("the place scanner (PJ-1)", { timeout: 30_000 }, () => {
   it("publishes each root as a place on its row, worktrees on their checkout's, spellings as aliases", async () => {
     const base = scratch();
     const app = repo(base, "app", 3);

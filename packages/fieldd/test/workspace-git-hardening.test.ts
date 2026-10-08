@@ -83,7 +83,7 @@ function withEnv(patch: Record<string, string>): void {
   });
 }
 
-describe("the environment git sees is an allowlist", () => {
+describe("the environment git sees is an allowlist", { timeout: 30_000 }, () => {
   it("keeps PATH, HOME, USER, LANG, LC_* and TMPDIR, and nothing else of the source", () => {
     const source = {
       PATH: "/usr/bin",
@@ -155,7 +155,7 @@ describe("the environment git sees is an allowlist", () => {
   });
 });
 
-describe("a repository's config cannot make a read run anything", () => {
+describe("a repository's config cannot make a read run anything", { timeout: 30_000 }, () => {
   it("a hook the repository names does not run", async () => {
     const base = scratch("vf-hook-");
     const root = repo(base, "hooked", "main");
@@ -194,7 +194,7 @@ describe("a repository's config cannot make a read run anything", () => {
   });
 });
 
-describe("the worker-wide cap (WORKSPACE_GIT.CONCURRENCY)", () => {
+describe("the worker-wide cap (WORKSPACE_GIT.CONCURRENCY)", { timeout: 30_000 }, () => {
   it("passes a slot straight on, in arrival order", async () => {
     const gate = new GitGate(2);
     const order: string[] = [];

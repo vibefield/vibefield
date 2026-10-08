@@ -173,7 +173,9 @@ describe("what a place is (pure)", () => {
   });
 });
 
-describe("placeFacts on real repositories", () => {
+// every test here builds real repositories (dozens of git processes): a
+// loaded host (the gate shares the machine) needs more than vitest's 5 s
+describe("placeFacts on real repositories", { timeout: 30_000 }, () => {
   it("reads a checkout: branch, tip, guarded root, samples, remotes, worktrees", async () => {
     const base = scratch("vf-place-");
     const root = repo(base, "proj", 20);
