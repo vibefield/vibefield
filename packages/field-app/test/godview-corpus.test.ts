@@ -11,6 +11,7 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { gunzipSync } from "node:zlib";
 import { AgentListResult, AgentMeshFrame, AgentMeshOpen, DeviceInfo } from "@vibefield/contracts";
 import { describe, expect, it } from "vitest";
@@ -68,6 +69,33 @@ describe("the recipe", () => {
       peerAgents: 6,
     });
     expect(() => parseRecipe("seed=1")).toThrow(/names n and duration/);
+  });
+
+  it("is the membership the proof audit expects (scripts/perf-godview-proof.mjs keeps a copy)", async () => {
+    const url = pathToFileURL(
+      join(import.meta.dirname, "..", "..", "..", "scripts", "perf-godview-proof.mjs"),
+    ).href;
+    const { declaredMembership } = (await import(/* @vite-ignore */ url)) as {
+      declaredMembership(recipe: string, viewId: string): Record<string, number | string>;
+    };
+    for (const text of [
+      "n=10,duration=8000,seed=1,markerAgent=3,bareTerminals=0",
+      "n=20,duration=8000,seed=1",
+      "n=60,duration=8000,seed=1,peers=4,bareTerminals=5",
+      "n=2,duration=8000,peerAgents=0",
+      "n=3.7,duration=2000",
+    ]) {
+      const { n, bareTerminals, peerAgents } = resolveRecipe(parseRecipe(text));
+      expect(declaredMembership(text, "list"), text).toEqual({
+        viewId: "list",
+        agents: n + bareTerminals + peerAgents,
+        localAgents: n,
+        terminals: bareTerminals,
+        remoteSessions: peerAgents,
+        remoteHosts: peerAgents > 0 ? 1 : 0,
+        shownAgents: n + bareTerminals + peerAgents,
+      });
+    }
   });
 });
 

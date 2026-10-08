@@ -136,6 +136,10 @@ pnpm perf:godview [--a <checkout>]
 pnpm perf:godview --synthetic-b root:2
 # captures: one current checkout = A/A; choose --source-a fold only for an old A
 pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
+# the proof audit: a run measured what it says, read off its files before any grade (MV-8b)
+node scripts/perf-godview-proof.mjs <run dir>
+# a NOISY R7's one repeat: the fresh R7 AND every sample pooled (R14) must pass (M155)
+node scripts/perf-godview-pool.mjs <first run dir> <repeat run dir> [--out <file>]
 ```
 
 **The runner** works as follows.
@@ -154,10 +158,31 @@ pnpm capture:godview [--a <A checkout>] [--b <B checkout>] [--out <dir>]
   Chromium profile per launch, with effective-path proof and no profile reuse.
 - Every view × n ∈ {10, 20, 60} gets an 8 s cell.
 - It reads paired T, MAD and z with A′ − A as the null arm, read the same way.
+- A row reads `worse` or `better` by M40's text: z > 4 and T past 2 % of A for the totals and
+  the components, the components also ≥ 1 ms/s; the frame and LoAF rows keep their instrument
+  floors. There is no null envelope (MV-8b, M177, 2026-10-07): the null arm makes a row `noisy`
+  only when it clears that same rule itself. Until then a row also had to clear |T₀| + 2·MAD₀,
+  and M107's two M40-literal reds passed inside it.
 - The gate verdict is one of: worse, noisy (the null moved), missing (a gate row unreadable) or
   pass. A/A reads `null-ok` or `null-moved`, and its rows read `moved`, never worse.
 - Fewer than seven rounds read `unread` whatever the rows say (M24: with fewer, MAD collapses and
   z reads ∞ on a difference of nothing; a two-round smoke read `null-moved` that way).
+
+**The proof audit** (`scripts/perf-godview-proof.mjs`) refuses a run, in every problem's own
+words, unless: the summary completed and judged; every declared arm × round has its report,
+ended, metered, hooked, from its own Chromium profile; every report holds every view × recipe
+once, the summary's cells in order; each cell's replay ended having delivered something through
+its arm's source (model: model frames and one model listener, no fold or mesh; fold: one fold
+and one mesh listener); React timed and the view's own root committing (`mv-<view>`, or the host
+root for a fold arm); WebGPU under the swarm; the deck's one healthy pane at both ends; and the
+monitor's membership equal to the corpus the recipe declares (field-app's corpus test holds that
+copy). It is instrument validation, never a grade.
+
+**The pooled reader** (`scripts/perf-godview-pool.mjs`) takes a NOISY cohort and its one
+complete repeat. It reproduces each cohort's summary row for row from its reports with today's
+estimator, refuses unlike cohorts (arms, window, clock, warm-up, instruments, recipes, views,
+cells, membership) and any profile reused across both, then judges all fourteen paired rounds.
+It exits 0 only when the repeat passes fresh AND the pool passes.
 
 **The capture tool** works as follows.
 
