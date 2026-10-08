@@ -36,7 +36,9 @@ import { type GitRun, parseWorktreeList, runGit, runScrubbed, scrubbedEnvironmen
 //     program), the worktree list, and `ssh -G` for an ssh host a remote names;
 //   · the HITS: the samples of every place with the same root, looked for in
 //     this place's objects (`cat-file --batch-check`, hex-checked) and then in
-//     its history (`merge-base --is-ancestor`), the shallowest held per place.
+//     its history (one `rev-list --stdin ^HEAD`: what they reach that HEAD
+//     does not; `merge-base --is-ancestor` per sample if that cannot answer),
+//     the shallowest held per place.
 //     Digested too (`hitsKey`): an unchanged tip and unchanged candidates
 //     answer "unchanged".
 // A question stops starting git after PLACE_FACTS.OP_BUDGET_MS; a place it did
@@ -414,6 +416,7 @@ async function cheapRead(
 async function fullRead(
   reading: Reading,
   run: ReturnType<typeof gitIn>,
+  cwd: string,
   cheap: Cheap,
 ): Promise<PlaceGitRead> {
   const listed = await run(["remote", "-v"]);
@@ -457,7 +460,10 @@ async function fullRead(
     const main = entries[0];
     const mainReal = main === undefined ? null : (realOrNull(main.path) ?? main.path);
     if (main !== undefined && mainReal !== top) worktreeOf = mainReal;
-    for (const entry of entries) {
+    // only a working tree's top names its siblings: a folder below one (a
+    // package of a monorepo) is a place of its own, not a checkout's worktree
+    const atTop = (realOrNull(cwd) ?? cwd) === top;
+    for (const entry of atTop ? entries : []) {
       if (worktrees.length >= PLACE_FACTS.WORKTREES_MAX) break;
       if (entry.bare || entry.prunable) continue;
       const real = realOrNull(entry.path);
@@ -507,6 +513,20 @@ function candidatesFor(reading: Reading, root: string): PlaceSampleSet[] {
   return out.sort((a, b) => (a.placeId < b.placeId ? -1 : a.placeId > b.placeId ? 1 : 0));
 }
 
+/** Which of `held` are in HEAD's history: ONE `rev-list` of what they reach
+ * that HEAD does not — a held commit absent from it is an ancestor. Its
+ * output is the candidates' divergence from this place (a lane's own few
+ * commits), never the history they share. null when it could not answer. */
+async function ancestorsOf(
+  run: ReturnType<typeof gitIn>,
+  held: ReadonlySet<string>,
+): Promise<Set<string> | null> {
+  const outside = await run(["rev-list", "--stdin", "^HEAD"], `${[...held].join("\n")}\n`);
+  if (!outside.ok) return null;
+  const beyond = new Set(lines(outside.stdout));
+  return new Set([...held].filter((sha) => !beyond.has(sha)));
+}
+
 async function hitsOf(
   run: ReturnType<typeof gitIn>,
   head: string,
@@ -524,21 +544,26 @@ async function hitsOf(
       const [sha, type] = line.split(" ");
       if (sha !== undefined && type === "commit") held.add(sha);
     }
+  if (held.size === 0) return [];
+  // the bulk answer; if it fails (a divergence past its buffer), one
+  // `merge-base --is-ancestor` per held sample, in depth order, as before
+  const bulk = await ancestorsOf(run, held);
   const ancestor = new Map<string, boolean>([[head, true]]);
+  const isAncestor = async (sha: string): Promise<boolean> => {
+    if (bulk !== null) return bulk.has(sha);
+    let answer = ancestor.get(sha);
+    if (answer === undefined) {
+      answer = (await run(["merge-base", "--is-ancestor", sha, "HEAD"])).code === 0;
+      ancestor.set(sha, answer);
+    }
+    return answer;
+  };
   const hits: PlaceHit[] = [];
   for (const candidate of candidates) {
     for (const sample of candidate.samples) {
-      if (!held.has(sample.sha)) continue;
-      let answer = ancestor.get(sample.sha);
-      if (answer === undefined) {
-        const asked = await run(["merge-base", "--is-ancestor", sample.sha, "HEAD"]);
-        answer = asked.code === 0;
-        ancestor.set(sample.sha, answer);
-      }
-      if (answer) {
-        hits.push({ placeId: candidate.placeId, sha: sample.sha, depth: sample.depth });
-        break; // the shallowest held; every deeper one is held too
-      }
+      if (!held.has(sample.sha) || !(await isAncestor(sample.sha))) continue;
+      hits.push({ placeId: candidate.placeId, sha: sample.sha, depth: sample.depth });
+      break; // the shallowest held; every deeper one is held too
     }
   }
   return hits;
@@ -578,7 +603,7 @@ async function readPlace(
     return { ...base, git: null, gitRefused: cheap, key: null, hits: [], hitsKey: null };
   const known = entry.known;
   const unchanged = known?.key === cheap.key;
-  const git = unchanged ? ("unchanged" as const) : await fullRead(reading, run, cheap);
+  const git = unchanged ? ("unchanged" as const) : await fullRead(reading, run, canonical, cheap);
   const root = git === "unchanged" ? (known?.root ?? null) : git.root;
   if (cheap.head === null || root === null)
     return { ...base, git, gitRefused: null, key: cheap.key, hits: [], hitsKey: null };

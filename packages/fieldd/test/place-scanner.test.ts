@@ -26,7 +26,7 @@ import {
 } from "../src/projects/place-scanner";
 import { readPlaces } from "../src/workspace/host/places";
 import type { FilesHostHealth } from "../src/workspace/supervisor";
-import { FilesHostUnavailable } from "../src/workspace/supervisor";
+import { FilesHostRefusal, FilesHostUnavailable } from "../src/workspace/supervisor";
 
 let cleanup: Array<() => void> = [];
 afterEach(() => {
@@ -100,6 +100,7 @@ function workerOf(opts: { ready?: boolean } = {}) {
   const events = new EventEmitter();
   let phase: FilesHostHealth["phase"] = opts.ready === false ? "starting" : "ready";
   let failNext = false;
+  let refuseNext = false;
   const asks: number[] = [];
   const worker = Object.assign(events, {
     health: (): FilesHostHealth => ({
@@ -119,6 +120,10 @@ function workerOf(opts: { ready?: boolean } = {}) {
           true,
         );
       }
+      if (refuseNext) {
+        refuseNext = false;
+        throw new FilesHostRefusal({ code: "internal", message: "did not answer in time" });
+      }
       return readPlaces(args, { temps: [] });
     },
   }) as unknown as PlaceFactsAsker & EventEmitter;
@@ -131,6 +136,9 @@ function workerOf(opts: { ready?: boolean } = {}) {
     },
     failNext() {
       failNext = true;
+    },
+    refuseNext() {
+      refuseNext = true;
     },
   };
 }
@@ -371,6 +379,23 @@ describe("the place scanner (PJ-1)", () => {
     expect(told).toEqual([]);
     control.ready();
     await until(() => told.length === 1, "the pass the next READY asks for");
+  });
+
+  it("a batch the worker refuses waits for the next pass; the others publish now", async () => {
+    const base = scratch();
+    const paths = ["a", "b", "c"].map((name) => repo(base, name, 1));
+    const { catalog, last } = catalogOf(
+      paths.map((path, i) => ({ projectId: `p-${i}`, rootPaths: [path] })),
+    );
+    const control = workerOf();
+    const s = scanner(catalog, control.worker);
+    s.start();
+    control.refuseNext(); // the first batch (two places, `batchPlaces: 2`)
+    await s.scanNow();
+    expect([...last().keys()]).toEqual(["p-2"]);
+    expect(s.lastPass()).toMatchObject({ skipped: 2, places: 1 });
+    await s.scanNow();
+    expect([...last().keys()].sort()).toEqual(["p-0", "p-1", "p-2"]);
   });
 
   it("a catalog whose roots did not move asks for no pass; one whose roots moved does", async () => {

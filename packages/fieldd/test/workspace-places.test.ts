@@ -271,6 +271,24 @@ describe("placeFacts on real repositories", () => {
     expect(done(missing)).toMatchObject({ exists: false, canonical: gone, git: null });
   });
 
+  it("a folder below a working tree's top names no worktrees, but still says whose worktree it is in", async () => {
+    const base = scratch("vf-place-sub-");
+    const root = repo(base, "mono", 2);
+    mkdirSync(join(root, "packages", "a"), { recursive: true });
+    const side = join(base, "mono-side");
+    git(root, "worktree", "add", "-q", "-b", "side", side);
+    mkdirSync(join(side, "packages", "a"), { recursive: true });
+    const [inMain, inSide] = (
+      await read({
+        places: [{ path: join(root, "packages", "a") }, { path: join(side, "packages", "a") }],
+        peers: [],
+        taskRoots: [],
+      })
+    ).places.map(gitOf);
+    expect(inMain).toMatchObject({ toplevel: root, worktreeOf: null, worktrees: [] });
+    expect(inSide).toMatchObject({ toplevel: side, worktreeOf: root, worktrees: [] });
+  });
+
   it("a remote is read as git uses it, insteadOf applied; the push default names the identity", async () => {
     const base = scratch("vf-place-url-");
     const root = repo(base, "proj", 1);
@@ -347,6 +365,33 @@ describe("placeFacts on real repositories", () => {
     expect(at(2, ga)).toBe(head(b));
     // c's root differs: nothing is looked for in it but its own
     expect(hc).toEqual([{ placeId: "C", sha: head(unrelated), depth: 0 }]);
+  });
+
+  it("a commit held but not in its history is no hit: worktrees share one object store", async () => {
+    const base = scratch("vf-place-shared-");
+    const a = repo(base, "a", 6);
+    const w = join(base, "w");
+    git(a, "worktree", "add", "-q", "-b", "w", w, "HEAD~2");
+    writeFileSync(join(w, "n.txt"), "w moves on\n");
+    git(w, "commit", "-q", "-am", "w1");
+    const first = await read({ places: [{ path: a }, { path: w }], peers: [], taskRoots: [] });
+    const [ga, gw] = first.places.map(gitOf);
+    const peers: PlaceSampleSet[] = [
+      { placeId: "A", root: ga?.root ?? "", samples: ga?.samples ?? [] },
+      { placeId: "W", root: gw?.root ?? "", samples: gw?.samples ?? [] },
+    ];
+    const [ha, hw] = (
+      await read({ places: [{ path: a }, { path: w }], peers, taskRoots: [] })
+    ).places.map((place) => done(place).hits);
+    // each holds the other's tip (one object store), but not in its history
+    expect(ha).toEqual([
+      { placeId: "A", sha: head(a), depth: 0 },
+      { placeId: "W", sha: git(a, "rev-parse", "HEAD~2").trim(), depth: 1 },
+    ]);
+    expect(hw).toEqual([
+      { placeId: "A", sha: git(a, "rev-parse", "HEAD~2").trim(), depth: 2 },
+      { placeId: "W", sha: head(w), depth: 0 },
+    ]);
   });
 
   it("an unchanged place costs the cheap read; a commit or new candidates read again", async () => {

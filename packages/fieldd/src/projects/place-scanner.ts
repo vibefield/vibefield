@@ -9,7 +9,11 @@ import type {
   PlaceRead,
   PlaceSampleSet,
 } from "../workspace/protocol";
-import { type FilesHostHealth, FilesHostUnavailable } from "../workspace/supervisor";
+import {
+  type FilesHostHealth,
+  FilesHostRefusal,
+  FilesHostUnavailable,
+} from "../workspace/supervisor";
 import {
   identityRemoteOf,
   normalizeRemotes,
@@ -326,9 +330,9 @@ export class PlaceScanner {
     if (!catalog.ready || this.#opts.worker.health().phase !== "ready") return;
     const started = this.#now();
     const roots = this.#roots();
-    this.#rootsDigest = digest(roots);
+    const rootsDigest = digest(roots);
     const candidates = this.#peerCandidates();
-    this.#peersDigest = digest(candidates);
+    const peersDigest = digest(candidates);
     const taskRoots = [...this.#opts.taskRoots()];
     const summary: PlaceScanSummary = {
       asked: 0,
@@ -353,11 +357,20 @@ export class PlaceScanner {
       for (let at = 0; at < wave.length; at += this.#batch) {
         const batch = wave.slice(at, at + this.#batch);
         for (const path of batch) asked.add(path);
-        const answer = await this.#opts.worker.request("placeFacts", {
-          places: batch.map((path) => this.#ask(path)),
-          peers: candidates,
-          taskRoots,
-        });
+        let answer: { places: PlaceRead[] };
+        try {
+          answer = await this.#opts.worker.request("placeFacts", {
+            places: batch.map((path) => this.#ask(path)),
+            peers: candidates,
+            taskRoots,
+          });
+        } catch (error) {
+          // a worker that answered no (its request budget ran out): this
+          // batch waits for the next pass, the rest are read now
+          if (!(error instanceof FilesHostRefusal)) throw error;
+          summary.skipped += batch.length;
+          continue;
+        }
         for (const read of answer.places) this.#take(read, summary);
       }
       const named: string[] = [];
@@ -378,6 +391,9 @@ export class PlaceScanner {
     const published = this.#assemble(owners, summary);
     this.#published = published;
     catalog.setPlaces(published);
+    // only a pass that published moves what the next change is compared with
+    this.#rootsDigest = rootsDigest;
+    this.#peersDigest = peersDigest;
     summary.asked = asked.size;
     summary.ms = this.#now() - started;
     this.#last = summary;
