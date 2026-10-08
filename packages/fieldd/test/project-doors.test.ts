@@ -17,6 +17,7 @@ import type {
 } from "@vibefield/contracts";
 import {
   ProjectChangesDelta,
+  ProjectGetParams,
   ProjectGetResult,
   ProjectListParams,
   ProjectListResult,
@@ -112,6 +113,15 @@ describe("who is admitted, and what each is told (D8, D10, P1)", () => {
     ).toEqual({
       kind: "PRECONDITION_FAILED",
       details: { reason: "path-in-request", field: "cwd" },
+    });
+    // an anchor that spells a folder is the same refusal, named at its field
+    expect(
+      refusal(() =>
+        parseProjectAsk(ProjectGetParams, { anchor: "remote:local:/Users/me/app" }, "x"),
+      ),
+    ).toEqual({
+      kind: "PRECONDITION_FAILED",
+      details: { reason: "path-in-request", field: "anchor" },
     });
     // a malformed ask without a path is the params' refusal, with no reason
     expect(refusal(() => parseProjectAsk(ProjectListParams, { limit: 0 }, "x"))).toEqual({

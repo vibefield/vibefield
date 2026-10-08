@@ -107,21 +107,31 @@ export function admitProjectWriter(ctx: CallerContext, method: string): void {
 /** P1 then the params: a path anywhere is `path-in-request`, a shape this
  * door does not take is `expected`. */
 export function parseProjectAsk<T>(
-  schema: { safeParse(input: unknown): { success: true; data: T } | { success: false } },
+  schema: {
+    safeParse(
+      input: unknown,
+    ):
+      | { success: true; data: T }
+      | { success: false; error: { issues: Array<{ message: string; path: PropertyKey[] }> } };
+  },
   params: unknown,
   expected: string,
 ): T {
-  const field = pathKeyIn(params);
-  if (field !== undefined)
-    throw new RpcCallError(
+  const pathRefusal = (field: string) =>
+    new RpcCallError(
       "PRECONDITION_FAILED",
       "a place is named by {device, placeId}, never by its path",
       false,
       { reason: "path-in-request", field } satisfies ProjectRefusal,
     );
+  const field = pathKeyIn(params);
+  if (field !== undefined) throw pathRefusal(field);
   const parsed = schema.safeParse(params ?? {});
-  if (!parsed.success) throw new RpcCallError("PRECONDITION_FAILED", expected, false);
-  return parsed.data;
+  if (parsed.success) return parsed.data;
+  // the schema's own P1 rule (an anchor that spells a folder)
+  const spelled = parsed.error.issues.find((issue) => issue.message === "path-in-request");
+  if (spelled !== undefined) throw pathRefusal(spelled.path.map(String).join("."));
+  throw new RpcCallError("PRECONDITION_FAILED", expected, false);
 }
 
 /** The act's writer — PJ-2's `ProjectRecords`, late-bound: the door resolves
