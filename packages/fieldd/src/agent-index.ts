@@ -1148,7 +1148,11 @@ export class IndexService {
       (id) => !roots.has(id) && !known.has(id),
     );
     if (!(await this.resolveSessions(unknownSessions, known, deadlineMs))) clipped = true;
-    const hits: IndexSearchHit[] = [];
+    const attributed: Array<{
+      hit: (typeof parsed.data.hits)[number];
+      rootId: string | undefined;
+      root: IndexSessionRow | undefined;
+    }> = [];
     for (const hit of parsed.data.hits) {
       let rootId: string | undefined = roots.has(hit.session_id) ? hit.session_id : undefined;
       if (rootId === undefined) {
@@ -1166,8 +1170,20 @@ export class IndexService {
         }
       }
       const root = rootId === undefined ? undefined : (roots.get(rootId) ?? known.get(rootId));
+      attributed.push({ hit, rootId, root });
+    }
+    // The Peek (GV-D8, 2026-10-08) — a row says where its root ran and which
+    // agent ran it: the root row's own columns, and its runtime's kind through
+    // the catalog. Display only, so a runtime table that cannot be read costs
+    // the agent's name, never the answer.
+    const providers = await this.rootProviders(
+      attributed.flatMap((entry) => (entry.root === undefined ? [] : [entry.root])),
+    );
+    const hits = attributed.map(({ hit, rootId, root }): IndexSearchHit => {
       const at = hit.at;
-      hits.push({
+      const provider =
+        typeof root?.runtime_id === "string" ? providers.get(root.runtime_id) : undefined;
+      return {
         sessionId: hit.session_id,
         ...(rootId !== undefined ? { rootSessionId: rootId } : {}),
         ...(root !== undefined && root.native_session_id !== ""
@@ -1178,9 +1194,40 @@ export class IndexService {
         kind: hit.kind,
         ...(typeof at === "number" ? { at } : {}),
         snippet: hit.snippet,
-      });
-    }
+        ...(root?.cwd ? { cwd: root.cwd } : {}),
+        ...(root?.project_id ? { projectId: root.project_id } : {}),
+        ...(provider !== undefined ? { provider } : {}),
+      };
+    });
     return { answered: true, state, hits, clipped };
+  }
+
+  /** The catalog agent each root's runtime maps to, by runtime id — read from
+   * the runtime table `index.recent` already caches for this daemon
+   * generation. A table that cannot be read is no agents at all: the hits
+   * still answer, each without its agent's name. */
+  private async rootProviders(
+    roots: readonly IndexSessionRow[],
+  ): Promise<ReadonlyMap<string, string>> {
+    if (roots.length === 0) return new Map();
+    let table: ReadonlyMap<string, RecentRuntime>;
+    try {
+      table = await this.recentRuntimeTable(roots);
+    } catch (error) {
+      this.logger.warn("fieldd.index.search_agents_unread", "Search hits ride without agents", {
+        error: error instanceof Error ? error.message : String(error),
+      });
+      return new Map();
+    }
+    const providers = new Map<string, string>();
+    for (const root of roots) {
+      const runtimeId = root.runtime_id;
+      if (typeof runtimeId !== "string" || providers.has(runtimeId)) continue;
+      const runtime = table.get(runtimeId);
+      const provider = runtime === undefined ? undefined : this.catalog.idForKind(runtime.kind);
+      if (provider !== undefined) providers.set(runtimeId, provider);
+    }
+    return providers;
   }
 
   // ── QL — the empty pane launcher's list ────────────────────────────────

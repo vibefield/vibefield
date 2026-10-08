@@ -178,6 +178,8 @@ async function setup(
     mode?: string;
     sessions?: unknown;
     search?: unknown;
+    /** extra `/api/runtimes` rows: which kind a scripted `runtime_id` names */
+    runtimes?: unknown;
     /** spawn the real binary against an empty home (the opt-in live rows) */
     rosettadBin?: string;
     real?: boolean;
@@ -197,13 +199,16 @@ async function setup(
   const sessionsFile = join(dataDir, "sessions.json");
   const searchFile = join(dataDir, "search.json");
   const logFile = join(dataDir, "requests.log");
+  const runtimesFile = join(dataDir, "runtimes.json");
   writeFileSync(sessionsFile, JSON.stringify(config.sessions ?? SESSIONS));
   writeFileSync(searchFile, JSON.stringify(config.search ?? { hits: HITS }));
+  writeFileSync(runtimesFile, JSON.stringify(config.runtimes ?? []));
   writeFileSync(logFile, "");
   const env = {
     FAKE_ROSETTAD_MODE: config.mode ?? "ok",
     FAKE_ROSETTAD_SESSIONS: sessionsFile,
     FAKE_ROSETTAD_SEARCH: searchFile,
+    FAKE_ROSETTAD_RUNTIMES: runtimesFile,
     FAKE_ROSETTAD_REQUEST_LOG: logFile,
   };
   const fakeSpawner = ((_bin: string, args: readonly string[], options: object) =>
@@ -373,6 +378,8 @@ describe("index.search — one question over the history (AR-5e)", () => {
     // s3 is outside the scope and never answers; the child's hit answers for
     // the ROOT the reader navigates to, with the root's native id
     expect(result.hits.map((hit) => hit.sessionId).sort()).toEqual(["c1", "s1", "s2"]);
+    // …with the ROOT's facts the Peek's row says (GV-D8): its folder and
+    // project; no agent, since no runtime row names rt1 in this world
     expect(result.hits.find((hit) => hit.sessionId === "s1")).toEqual({
       sessionId: "s1",
       rootSessionId: "s1",
@@ -382,6 +389,8 @@ describe("index.search — one question over the history (AR-5e)", () => {
       kind: "user",
       at: 1_000,
       snippet: "[needle] in a haystack",
+      cwd: "/w/one",
+      projectId: "p1",
     });
     expect(result.hits.find((hit) => hit.sessionId === "c1")).toMatchObject({
       rootSessionId: "s1",
@@ -389,6 +398,74 @@ describe("index.search — one question over the history (AR-5e)", () => {
       title: "First",
       timelineId: "t4",
     });
+  });
+
+  it("Everything (the Peek, GV-D8): an unscoped question walks every hit to its root and carries the ROOT's folder, project and agent", async () => {
+    const world = await setup({
+      // rt1 is a Claude Code runtime, so every root it ran resolves to the
+      // catalog's `claude`
+      runtimes: [{ id: "rt1", kind: "claude-code", data_root: "/w/.claude", enabled: true }],
+      search: {
+        hits: [
+          ...HITS,
+          // a session the index cannot name: no root, so no root facts
+          {
+            timeline_id: "t9",
+            session_id: "ghost",
+            kind: "user",
+            at: 9_000,
+            snippet: "a [needle] nobody owns",
+          },
+        ],
+      },
+    });
+    await ready(world.daemon);
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q-all");
+    const before = world.asked().length;
+    const result = IndexSearchResult.parse(
+      await win.call("index.search", { q: "needle", scope: "local" }),
+    );
+    // asked unscoped: no `sessions=`, so every root the index holds answers
+    const query = queryOf(searchesIn(world.asked().slice(before))[0] as string);
+    expect(query.get("sessions")).toBeNull();
+    expect(result.answered).toBe(true);
+    const by = (id: string) => result.hits.find((hit) => hit.sessionId === id);
+    expect(by("s1")).toMatchObject({
+      rootSessionId: "s1",
+      cwd: "/w/one",
+      projectId: "p1",
+      provider: "claude",
+    });
+    // the child's line says its ROOT's facts, never its own (it has none)
+    expect(by("c1")).toMatchObject({
+      rootSessionId: "s1",
+      cwd: "/w/one",
+      projectId: "p1",
+      provider: "claude",
+    });
+    // a root outside any project, with no folder recorded: the agent alone
+    expect(by("s3")).toMatchObject({ rootSessionId: "s3", provider: "claude" });
+    expect(by("s3")?.cwd).toBeUndefined();
+    expect(by("s3")?.projectId).toBeUndefined();
+    // unknown: the hit rides, carries nothing of a root, and the answer says
+    // it is clipped rather than complete
+    expect(by("ghost")).toBeDefined();
+    expect(by("ghost")?.rootSessionId).toBeUndefined();
+    expect(by("ghost")?.cwd).toBeUndefined();
+    expect(by("ghost")?.provider).toBeUndefined();
+    expect(result.clipped).toBe(true);
+  });
+
+  it("a runtime table that cannot name the agent costs the agent's name, never the answer", async () => {
+    // no runtime row names rt1: every hit still answers, folders and all
+    const world = await setup();
+    await ready(world.daemon);
+    const win = await windowToken(world.daemon, ["index.read", "index.search"], "q-noagent");
+    const result = IndexSearchResult.parse(await win.call("index.search", { q: "needle" }));
+    expect(result.answered).toBe(true);
+    expect(result.hits.map((hit) => hit.sessionId).sort()).toEqual(["c1", "s1", "s2", "s3"]);
+    expect(result.hits.every((hit) => hit.provider === undefined)).toBe(true);
+    expect(result.hits.find((hit) => hit.sessionId === "s1")?.cwd).toBe("/w/one");
   });
 
   it("kind and the other filters ride through as the caller asked them", async () => {
@@ -815,6 +892,17 @@ describe.skipIf(
     expect(found?.state.readiness === "ready" || found?.state.readiness === "catching-up").toBe(
       true,
     );
+    // The Peek's question (GV-D8): the same words UNSCOPED, as Everything asks
+    // them — the walk finds the root, and the hit carries the root's folder
+    // and the catalog agent its runtime's kind maps to.
+    const everything = (await win.call("index.search", {
+      q: "mockmodel",
+      scope: "local",
+    })) as IndexSearchResult;
+    expect(everything.answered).toBe(true);
+    const peekHit = everything.hits.find((hit) => hit.nativeSessionId === FIXTURE_NATIVE_ID);
+    expect(peekHit?.provider).toBe("claude");
+    expect(peekHit?.cwd).toMatch(/\S/);
 
     const status = (await win.call("index.status", {})) as IndexStatus;
     expect(status.search).toMatchObject({

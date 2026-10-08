@@ -1,0 +1,53 @@
+{
+  "//": "The Peek's Everything (GV-D8/D9, 2026-10-08): an UNSCOPED `index.search {scope: \"local\"}` — no live runs named, so every root is found by the walk — each hit carrying its ROOT's facts beside the attribution: the folder it ran in, rosetta's project id and the catalog agent its runtime maps to. Two hits share a root (one row in the Peek, two lines under it); the third ran outside any project, so it carries no projectId; the fourth's root the walk could not reach, so it carries no root and none of the root's facts — never its own session's in their place.",
+  "answered": true,
+  "state": { "readiness": "ready", "canonicalReady": true },
+  "hits": [
+    {
+      "sessionId": "ses-7c1e",
+      "rootSessionId": "ses-7c1e",
+      "nativeSessionId": "665e3e71-7c12-4810-925a-e8b92cb6f29d",
+      "title": "Page the reader by day",
+      "timelineId": "tl-41",
+      "kind": "user",
+      "at": 1759252800000,
+      "snippet": "page the history reader by day, and keep the [migration] reversible",
+      "cwd": "/Users/james/Projects/rosetta",
+      "projectId": "p-4f1c2a9e",
+      "provider": "codex"
+    },
+    {
+      "sessionId": "ses-7c1e",
+      "rootSessionId": "ses-7c1e",
+      "nativeSessionId": "665e3e71-7c12-4810-925a-e8b92cb6f29d",
+      "title": "Page the reader by day",
+      "timelineId": "tl-44",
+      "kind": "agent",
+      "at": 1759253100000,
+      "snippet": "The [migration] renames sessions.day to sessions.local_day; a down step restores it.",
+      "cwd": "/Users/james/Projects/rosetta",
+      "projectId": "p-4f1c2a9e",
+      "provider": "codex"
+    },
+    {
+      "sessionId": "ses-c2d0",
+      "rootSessionId": "ses-c2d0",
+      "nativeSessionId": "b0e1d7a4-2f6c-4e0b-9d3a-5c8f1e2a7b90",
+      "title": "Migration dry run",
+      "timelineId": "tl-9",
+      "kind": "agent",
+      "at": 1759058700000,
+      "snippet": "Dry run on a copy: 6,720 sessions moved, none failed. The real [migration] needs the daemon stopped.",
+      "cwd": "/Users/james/scratch",
+      "provider": "claude"
+    },
+    {
+      "sessionId": "ses-0f9a",
+      "timelineId": "tl-2",
+      "kind": "user",
+      "at": 1758961000000,
+      "snippet": "is the [migration] safe to run twice"
+    }
+  ],
+  "clipped": true
+}

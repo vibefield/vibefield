@@ -834,6 +834,18 @@ export const IndexSearchHit = z
     snippet: z.string(),
     /** DS-6 — the desktop whose index answered it (a mesh search's hits) */
     device: z.string().min(1).optional(),
+    // The Peek (GV-D8, 2026-10-08) — the ROOT's facts a row says under its
+    // title ("folder · agent") and a filter narrows by, folded from the root
+    // row fieldd already holds for the attribution: never the hit's own
+    // session's, and absent whenever the root is (or the root's row says
+    // nothing). Display only — no act rides on them.
+    /** the folder the root session ran in, as the index recorded it */
+    cwd: z.string().optional(),
+    /** rosetta's opaque project id for the root (`IndexSession.projectId`) */
+    projectId: z.string().min(1).optional(),
+    /** the catalog agent the root's runtime kind maps to — absent when no
+     * catalog row maps it (`IndexSession.provider`) */
+    provider: AgentProviderId.optional(),
   })
   .passthrough();
 export type IndexSearchHit = z.infer<typeof IndexSearchHit>;
