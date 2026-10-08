@@ -83,11 +83,6 @@ async function answer(op: WorkerOp, args: unknown): Promise<unknown> {
     case "gitFacts":
       await assertRootOf(ask);
       return await gitModule.gitFacts(String(ask["rootPath"]));
-    case "git": {
-      await assertRootOf(ask);
-      const service = gitModule.createGitService(String(ask["rootPath"]));
-      return await gitModule.answerGitRequest(service, ask["request"]);
-    }
     case "stats": {
       const memory = process.memoryUsage();
       const cpu = process.cpuUsage();

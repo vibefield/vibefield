@@ -96,6 +96,11 @@ describe("the files worker (fieldd's supervisor over the real bundle)", () => {
     expect(health).toMatchObject({ phase: "ready", generation: 1, detail: null });
     expect(health.pid).toBeGreaterThan(0);
     expect(health.mille).toEqual({ packageVersion: "0.3.4", nativeVersion: "0.3.4" });
+    // the pipe answers the ops it names and no others: git reaches a root only
+    // over an attached session's own git leg (the `git` op was retired, R6)
+    expect(
+      await refusal(supervisor.request("git" as never, { rootPath: "/", request: {} } as never)),
+    ).toMatchObject({ error: { code: "internal", message: "unknown op git" } });
   });
 
   it("pages a wide folder: folders first, child counts, the cut and the next offset", async () => {

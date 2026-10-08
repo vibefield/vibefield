@@ -104,12 +104,6 @@ export interface GitFactsArgs {
 
 export type GitFactsValue = WorkspaceGitFacts | null;
 
-export interface GitArgs {
-  rootPath: string;
-  /** one git-port request (`WorkspaceGitPortRequest`) */
-  request: unknown;
-}
-
 /** What the worker measures of itself (FS-1a's witness: the idle cost). */
 export interface StatsValue {
   pid: number;
@@ -178,7 +172,6 @@ export interface WorkerOps {
   list: { args: ListArgs; value: ListValue };
   search: { args: SearchArgs; value: SearchValue };
   gitFacts: { args: GitFactsArgs; value: GitFactsValue };
-  git: { args: GitArgs; value: unknown };
   stats: { args: Record<string, never>; value: StatsValue };
 }
 
@@ -188,7 +181,6 @@ export const WORKER_OPS: readonly WorkerOp[] = [
   "list",
   "search",
   "gitFacts",
-  "git",
   "stats",
   "resolve",
   "registerTicket",
