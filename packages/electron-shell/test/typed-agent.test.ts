@@ -1,10 +1,19 @@
 import { execFileSync, spawn, spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { AGENT_CATALOG, AgentDistributionRecord, ENV_PREFIXES, LAYOUT } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import {
+  HISTORY_SEED_WORDS,
   leakedVariables,
   personEnvironment,
   readTypedAgentCalls,
@@ -63,6 +72,31 @@ describe("stageTypedAgent — the run's own root, before the pair boots", () => 
     expect(staged.environment["FIELDD_AGENT_SEARCH_PATH"]).toBe(dirname(staged.stub));
     expect(staged.environment["HOME"]).toBe(staged.person);
     expect(existsSync(staged.work)).toBe(true);
+  });
+
+  it("gives the person one conversation with the typed agent, where that agent keeps it (AR-8, L4)", () => {
+    const vibefieldRoot = root();
+    const staged = stageTypedAgent({ vibefieldRoot, source: {}, ownerHome: "/Users/owner" });
+    const row = AGENT_CATALOG.find((entry) => entry.id === TYPED_AGENT_ID);
+    expect(staged.history.kind).toBe(row?.seams.rosetta?.kind);
+    // under the PERSON's home, in the agent's own layout, named by its session
+    const projects = join(staged.person, (row?.layoutRoot ?? "").slice(2), "projects");
+    const [project] = readdirSync(projects);
+    const file = join(projects, project as string, `${staged.history.nativeSessionId}.jsonl`);
+    const lines = readFileSync(file, "utf8")
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+    expect(lines.map((line) => line["type"])).toEqual(["user", "assistant"]);
+    for (const line of lines) {
+      expect(line["sessionId"]).toBe(staged.history.nativeSessionId);
+      expect(line["cwd"]).toBe(staged.work);
+      // timed against now, so no recency window ever hides it
+      expect(Date.now() - Date.parse(line["timestamp"] as string)).toBeLessThan(120_000);
+    }
+    expect(JSON.stringify(lines[1])).toContain(HISTORY_SEED_WORDS);
+    // the prompt does not carry the reply's words: only the BODY says them
+    expect(JSON.stringify(lines[0])).not.toContain(HISTORY_SEED_WORDS);
   });
 
   it("refuses a root that already holds a machine record: it stages only into one the run created", () => {
