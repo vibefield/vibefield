@@ -141,6 +141,7 @@ it("lists, expands, reads and searches on the same engine as row reads; refuses 
   cleanup.push(() => connection.close());
   expect(connection.accepted.export.access).toBe("read-only");
   expect(connection.accepted.limits.maxFileBytes).toBe(WORKSPACE_LIMITS.MAX_FILE_BYTES);
+  expect(connection.accepted.limits.maxViewportRows).toBe(WORKSPACE_LIMITS.MAX_VIEWPORT_ROWS);
   const fx = await connectFileExplorerChannel(connection.channel);
   cleanup.push(async () => {
     await fx.dispose();
@@ -159,6 +160,39 @@ it("lists, expands, reads and searches on the same engine as row reads; refuses 
   await expect(fx.create(entry.id, "refused.txt", 0)).rejects.toMatchObject({ code: "EROFS" });
   await expect(connect(grant)).rejects.toThrow();
   expect((await supervisor.request("stats", {})).engines).toBe(1);
+});
+
+it("clamps an oversized tree viewport to the named cap, says so, and keeps serving (R6)", async () => {
+  const { ticket } = await world();
+  const connection = await connect(await ticket());
+  cleanup.push(() => connection.close());
+  const fx = await connectFileExplorerChannel(connection.channel);
+  cleanup.push(async () => {
+    await fx.dispose();
+  });
+  const warnings: Array<{ code?: unknown; detail?: unknown }> = [];
+  fx.on("warning", (payload) => warnings.push(payload as { code?: unknown; detail?: unknown }));
+  await until(() => fx.getSnapshot().roots().length === 1);
+  const cap = WORKSPACE_LIMITS.MAX_VIEWPORT_ROWS;
+  fx.setViewport({ offset: 0, limit: cap + 1, overscan: 50 });
+  await until(() => warnings.some((w) => w.code === "VIEWPORT_CLAMPED"));
+  const clamp = JSON.parse(String(warnings.find((w) => w.code === "VIEWPORT_CLAMPED")?.detail));
+  expect(clamp).toEqual({
+    requested: { offset: 0, limit: cap + 1, overscan: 50 },
+    granted: { offset: 0, limit: cap, overscan: 0 },
+    maxViewportRows: cap,
+  });
+  // within the cap: no further warning, and the session answers
+  fx.setViewport({ offset: 0, limit: cap - 100, overscan: 50 });
+  const entry = fx.getSnapshot().roots()[0]!;
+  await fx.setExpanded({ add: [entry.id], remove: [] });
+  await until(() =>
+    fx
+      .getSnapshot()
+      .visibleRows({ offset: 0, limit: 50, expanded: new Set([entry.id]) })
+      .some((row) => row.name === "README.md"),
+  );
+  expect(warnings.filter((w) => w.code === "VIEWPORT_CLAMPED")).toHaveLength(1);
 });
 
 it("authorizes the git port separately, refuses writes, and revokes both sockets together", async () => {

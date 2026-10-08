@@ -11,6 +11,7 @@ import { join } from "node:path";
 import { WORKSPACE_LIMITS } from "@vibefield/contracts";
 import { afterEach, describe, expect, it } from "vitest";
 import { Engines, WorkerFailure } from "../src/workspace/host/engine";
+import { TREE_SESSION_POLICY } from "../src/workspace/host/listener";
 import { matchName, walkNames } from "../src/workspace/host/names";
 
 let cleanup: Array<() => void | Promise<void>> = [];
@@ -236,5 +237,17 @@ describe("the search's name walk and matcher (host/names.ts)", () => {
       .map(([name]) => name);
     expect(ranked).toEqual(["vibe-field", "vibe-field-old", "my-vibe-field-notes"]);
     expect(matchName("", "x")).toBeNull();
+  });
+});
+
+it("hands mille an attached session's every bound by name, the viewport cap included (R6)", () => {
+  // the witness that mille enforces it is workspace-attach.test.ts's clamp row;
+  // 2 048 equals mille's own default at the pin, so only this pin shows the
+  // number is ours
+  expect(TREE_SESSION_POLICY).toEqual({
+    access: "read-only",
+    allowSearch: true,
+    maxFileBytes: WORKSPACE_LIMITS.MAX_FILE_BYTES,
+    maxViewportRows: WORKSPACE_LIMITS.MAX_VIEWPORT_ROWS,
   });
 });

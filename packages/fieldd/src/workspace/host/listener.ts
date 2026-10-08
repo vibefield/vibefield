@@ -58,6 +58,16 @@ async function resolvePath(
   }
 }
 
+/** What an attached tree session may do: read-only (FS-D5), every bound
+ * named rather than left to mille's defaults — the viewport cap too (R6): a
+ * larger request is clamped and the client told `VIEWPORT_CLAMPED`. */
+export const TREE_SESSION_POLICY = {
+  access: "read-only",
+  allowSearch: true,
+  maxFileBytes: WORKSPACE_LIMITS.MAX_FILE_BYTES,
+  maxViewportRows: WORKSPACE_LIMITS.MAX_VIEWPORT_ROWS,
+} as const;
+
 type Leg = "tree" | "git";
 type Pair = AttachRegistration & {
   stopped: boolean;
@@ -295,11 +305,7 @@ export class WorkspaceListener {
           return {
             host: held.host,
             peerId: pair.clientId,
-            policy: {
-              access: "read-only",
-              allowSearch: true,
-              maxFileBytes: WORKSPACE_LIMITS.MAX_FILE_BYTES,
-            },
+            policy: TREE_SESSION_POLICY,
           };
         },
         openTimeoutMs: WORKSPACE_LIMITS.ATTACH_TIMEOUT_MS,

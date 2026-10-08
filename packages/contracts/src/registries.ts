@@ -435,7 +435,12 @@ export const INDEX_TIMELINE = {
  * ATTACHED_ROOT_CHECK_MS, principal revocation, root withdrawal or a worker or
  * fieldd restart, so a client never re-attaches on a timer), MAX_FILE_BYTES
  * the most one read hands over, SESSIONS_PER_CLIENT / SESSIONS_PER_EXPORT the
- * attached sessions one client and one export hold (mille-truffle's defaults).
+ * attached sessions one client and one export hold (mille-truffle's defaults),
+ * MAX_VIEWPORT_ROWS the most rows one attached session's tree viewport may
+ * span — limit plus overscan on both sides — named in the policy the worker
+ * hands mille (R6, 2026-10-07): mille clamps a larger request and warns
+ * `VIEWPORT_CLAMPED`; 2 048 is mille's own `DEFAULT_REMOTE_MAX_VIEWPORT_ROWS`
+ * at the pin (baa0de8), now OUR number rather than its silent default.
  *
  * The rest bound what a door asks the worker to do: PATH_CHARS the longest
  * relative path a request may name, NAME_CHARS the longest entry name an
@@ -466,6 +471,7 @@ export const WORKSPACE_LIMITS = {
   SEARCH_HITS: 100,
   TICKET_TTL_MS: 600_000,
   MAX_FILE_BYTES: 16 * 1024 * 1024,
+  MAX_VIEWPORT_ROWS: 2_048,
   SESSIONS_PER_CLIENT: 4,
   SESSIONS_PER_EXPORT: 16,
   PATH_CHARS: 4_096,
