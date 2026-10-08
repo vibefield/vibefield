@@ -389,6 +389,11 @@ export class IndexMesh extends EventEmitter {
       // PJ-1 — a row's places replicate between this person's desktops; no
       // door answers them yet (PJ-3 owns `project.*` and what crosses to a
       // window or the phone: a place carries paths, PJ-L9)
+      // *Corrected 2026-10-08 (PJ-3):* the `project.*` doors answer them now,
+      // as places of a project (projects/project-doors.ts) — by `PlaceRef`,
+      // with a path only for the person's own devices (P1 (a), which replaced
+      // PJ-L9's "no path on the phone"). This door keeps answering without
+      // them: a row's places are the grouping's input, not History's.
       rows: items.map(withoutPlaces),
       ...(next !== undefined ? { cursor: next } : {}),
       sources: this.#sources("projects", devices),
