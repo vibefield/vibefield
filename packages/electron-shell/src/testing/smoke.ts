@@ -8448,7 +8448,10 @@ export async function runSmokeGodview(opts: {
       win.webContents.sendInputEvent({ type: "keyDown", keyCode });
       win.webContents.sendInputEvent({ type: "keyUp", keyCode });
     };
-    const objectsNow = `(document.querySelector('[data-tray-open="true"]') ? "open" : "shut")`;
+    // DK-18: Objects is the desk's pegboard since DK-13 (the tray island and its `data-tray-open` are gone), and this smoke
+    // runs GPU-less — no desk, so no board can rise here (smoke:canvas's BOARD rows hold the board itself). What B moves
+    // here is the LINE's own: the frame's Objects surface, read off the line's create (`aria-expanded`, its ✕)
+    const objectsNow = `(document.querySelector(".vf-line-create")?.getAttribute("aria-expanded") === "true" ? "open" : "shut")`;
     win.webContents.on("console-message", hearLine);
     try {
       await focusDeck(win);
