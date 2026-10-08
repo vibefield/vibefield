@@ -55,10 +55,11 @@
     "siblings:build": "node scripts/siblings.mjs build",
     "check:deps": "node scripts/check-single-copy.mjs",
     "check:retired": "node scripts/check-retired-names.mjs",
+    "check:walls": "node scripts/check-import-boundaries.mjs --self-test && node scripts/check-import-boundaries.mjs --enforce",
     "check:ios-fixtures": "node scripts/check-ios-fixtures.mjs",
     "catalog:check": "node scripts/check-agent-catalog.mjs --enforce --literals",
     "bundle:assert": "pnpm --filter @vibefield/electron-shell run build && pnpm --filter @vibefield/electron-shell run build:renderer && node scripts/bundle-report.mjs --dist packages/electron-shell/dist --assert",
-    "verify": "pnpm preflight && pnpm check:deps && pnpm check:retired && pnpm check:ios-fixtures && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm bundle:assert && pnpm test && pnpm test:rust && pnpm gen:check",
+    "verify": "pnpm preflight && pnpm check:walls && pnpm check:deps && pnpm check:retired && pnpm check:ios-fixtures && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm bundle:assert && pnpm test && pnpm test:rust && pnpm gen:check",
     "hooks:install": "git config core.hooksPath scripts/git-hooks",
     "commit-draft": "sh scripts/commit-draft.sh"
   },
