@@ -179,6 +179,19 @@ describe("what the owner says a place is (L6)", () => {
     ["C:\\Users\\someone\\AppData\\Local\\Temp\\vf-smoke", win, "temp"],
     ["/Users/someone/Documents/Codex/2026-09-10/thread", mac, "task"],
     ["/Users/someone/Documents/Codex/2026-09-10", mac, "project"],
+    // M1: at or below the folder a task root names; never a sibling's prefix
+    ["/Users/someone/Documents/Codex/2026-09-10/thread/src/app", mac, "task"],
+    ["/Users/someone/Documents/Codex/2026-09-10/thread-two", mac, "task"],
+    ["/users/someone/documents/codex/2026-09-10/thread", mac, "task"],
+    ["/Users/someone/Documents/Codexes/2026-09-10/thread", mac, "project"],
+    // M1: case folds only on a caseless volume
+    ["/users/someone", { ...mac, caseless: false }, "project"],
+    ["/users/someone/documents/codex/2026-09-10/thread", { ...mac, caseless: false }, "project"],
+    ["/home/someone/TMP/x", { home: "/home/someone", caseless: false }, "project"],
+    ["/tmp/x", { home: "/home/someone", caseless: false }, "temp"],
+    // a test's own temporary roots replace the system's
+    ["/private/tmp/fixture", { ...mac, temps: ["/scratch"] }, "project"],
+    ["/scratch/run/1", { ...mac, temps: ["/scratch"] }, "temp"],
   ] as const)("%j is %j", (path, owner, kind) => {
     expect(placeKindOf(path, owner)).toBe(kind);
   });
@@ -188,5 +201,7 @@ describe("what the owner says a place is (L6)", () => {
     expect(homeRelativeOf("C:\\Users\\someone\\src\\App", "C:\\Users\\someone")).toBe("src/App");
     expect(homeRelativeOf("/Users/someone", "/Users/someone")).toBeUndefined();
     expect(homeRelativeOf("/Volumes/Work/app", "/Users/someone")).toBeUndefined();
+    expect(homeRelativeOf("/users/someone/x", "/Users/someone")).toBe("x");
+    expect(homeRelativeOf("/users/someone/x", "/Users/someone", false)).toBeUndefined();
   });
 });
