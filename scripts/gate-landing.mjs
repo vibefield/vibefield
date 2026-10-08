@@ -8,17 +8,20 @@
 // teardown and held gone by the launcher's row (`SMOKE_DAEMONS`). One verdict line per gate; exit 1 on any red.
 // `docs/desk-gates.md` is the list: what each gate proves, where it runs, and its verdict at the landing SHA.
 //
-// Usage: node scripts/gate-landing.mjs [--with-stages] [--only a,b] [--from name] [--logs <dir>] [--list]
+// Usage: node scripts/gate-landing.mjs [--with-stages] [--only a,b] [--from name] [--logs <dir>] [--timeout-min n] [--list]
 //   --with-stages   first `pnpm verify`'s chain stage by stage, each alone and EVERY one even after a red — `verify` stops at
 //                   its first red, and preflight is red in every worktree by a sibling, so a worktree's grade runs them so;
 //                   a red stage that is MAIN's known row is said so (`red — main's: …`), and still counts as red;
 //   --only a,b      just these gates, by name; --from name: the list from this gate on;
 //   --logs <dir>    where each gate's whole output goes (default: a fresh directory under the OS temp, named first);
+//   --timeout-min n a gate still running after n minutes (default 30) is stopped — its process group asked to end, as the
+//                   kit's `try` stops the app — and RED: a gate that hangs never holds the list (DK-18's final run met
+//                   one: smoke:canvas waiting for ever on a call into a window it had destroyed);
 //   --list          print the list and exit.
 
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, mkdirSync, mkdtempSync, readFileSync } from "node:fs";
-import { loadavg, tmpdir } from "node:os";
+import { constants, loadavg, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -39,7 +42,7 @@ export const STAGES = [
   { name: "fmt", run: ["cargo", "fmt", "--check"] },
   { name: "lint:rust", run: pnpm("lint:rust") },
   { name: "bundle:assert", run: pnpm("bundle:assert") },
-  { name: "test", run: pnpm("test"), main: onlyAr7b },
+  { name: "test", run: pnpm("test"), main: onlyAr7b, counts: projectCounts },
   { name: "test:rust", run: pnpm("test:rust") },
   { name: "gen:check", run: pnpm("gen:check") },
 ];
@@ -105,6 +108,35 @@ export function onlyAr7b(text) {
     : null;
 }
 
+/** The test stage's count for EVERY project, from its own section of Nx's output (`> nx run <project>:test`): vitest's
+ * `Tests …` line, or node's test runner's `ℹ pass`/`ℹ fail`. A project whose section holds no count is SAID so — Nx
+ * printed less of its output than it wrote (DK-18's final run: field-app's section stopped at 64 KiB under load 181) —
+ * and its verdict is then Nx's alone: its exit, by the failed-tasks list. */
+export function projectCounts(text) {
+  const out = plain(text);
+  const failed = new Set(
+    [...out.matchAll(/^\s*-\s+(@vibefield\/\S+):test\s*$/gmu)].map((m) => m[1]),
+  );
+  const sections = out.split(/^> nx run (@vibefield\/\S+):test.*$/mu);
+  const counts = [];
+  for (let i = 1; i < sections.length; i += 2) {
+    const name = sections[i];
+    const body = sections[i + 1] ?? "";
+    const vitest = body
+      .match(/^\s*Tests\s+\d+.*$/gmu)
+      ?.at(-1)
+      ?.trim();
+    const pass = /^ℹ pass (\d+)$/mu.exec(body)?.[1];
+    const fail = /^ℹ fail (\d+)$/mu.exec(body)?.[1];
+    const count =
+      vitest ?? (pass !== undefined ? `pass ${pass} | fail ${fail ?? "?"} (node --test)` : null);
+    counts.push(
+      `${name}: ${count ?? `NO COUNT in the log — its exit: ${failed.has(name) ? "FAILED" : "0 (not among the failed tasks)"}`}`,
+    );
+  }
+  return counts;
+}
+
 /** The lines a verdict quotes: the run's own words for its result. */
 const SAYS = [
   /^\s*Tests\s+\d+.*$/u,
@@ -158,19 +190,47 @@ function choose() {
   return list;
 }
 
-function runGate(gate, logPath) {
+/** The gate running now, its process group — what a signal to this script, or the timeout, stops. */
+let running = null;
+
+/** A gate in its own process group (a smoke is a tree: pnpm, the launcher, Electron, the daemons), stopped WHOLE at the
+ * timeout as the kit's `try` stops the app: SIGTERM to the group (the smoke launchers forward it to Electron and still
+ * take their daemon row), SIGKILL 20 s later. */
+function runGate(gate, logPath, timeoutMs) {
   return new Promise((done) => {
     const log = createWriteStream(logPath);
     const t0 = Date.now();
     const child = spawn(gate.run[0], gate.run.slice(1), {
       cwd: ROOT,
       env: { ...process.env, NX_SKIP_NX_CACHE: "true", NX_DAEMON: "false" },
+      detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
+    running = child;
     child.stdout.pipe(log, { end: false });
     child.stderr.pipe(log, { end: false });
+    let timedOut = false;
+    let kill = null;
+    const stop = (signal) => {
+      try {
+        process.kill(-child.pid, signal);
+      } catch {
+        child.kill(signal);
+      }
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      log.write(
+        `\ngate-landing: ${gate.name} ran past ${timeoutMs / 60_000} min and was stopped\n`,
+      );
+      stop("SIGTERM");
+      kill = setTimeout(() => stop("SIGKILL"), 20_000);
+    }, timeoutMs);
     child.once("close", (code, signal) => {
-      log.end(() => done({ code: code ?? 128, signal, ms: Date.now() - t0 }));
+      clearTimeout(timer);
+      clearTimeout(kill);
+      running = null;
+      log.end(() => done({ code: code ?? 128, signal, ms: Date.now() - t0, timedOut }));
     });
   });
 }
@@ -186,6 +246,17 @@ async function main() {
     for (const g of list) process.stdout.write(`${g.name}\t${g.run.join(" ")}\n`);
     return 0;
   }
+  const timeoutMs = Number(argValue("--timeout-min") ?? 30) * 60_000;
+  // a person's ^C (or a stop) reaches the gate running now: its group is not this script's
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"])
+    process.on(signal, () => {
+      if (running !== null) {
+        try {
+          process.kill(-running.pid, signal);
+        } catch {}
+      }
+      process.exit(128 + constants.signals[signal]);
+    });
   const logs = argValue("--logs") ?? mkdtempSync(join(tmpdir(), "vf-gate-landing-"));
   mkdirSync(logs, { recursive: true });
   const head = spawnSync("git", ["rev-parse", "HEAD"], {
@@ -208,15 +279,31 @@ async function main() {
       `${String(i + 1).padStart(2, "0")}-${gate.name.replaceAll(":", "_")}.log`,
     );
     const before = load();
-    const { code, ms } = await runGate(gate, logPath);
+    const { code, ms, timedOut } = await runGate(gate, logPath, timeoutMs);
     const out = readFileSync(logPath, "utf8");
-    const mains = code === 0 || gate.main === undefined ? null : gate.main(out);
-    const verdict = code === 0 ? "ok" : mains !== null ? "red — main's" : "RED";
-    verdicts.push({ gate: gate.name, verdict, code, main: mains });
+    const mains = code === 0 || timedOut || gate.main === undefined ? null : gate.main(out);
+    const verdict = timedOut
+      ? `RED (stopped at ${timeoutMs / 60_000} min)`
+      : code === 0
+        ? "ok"
+        : mains !== null
+          ? "red — main's"
+          : "RED";
+    verdicts.push({ gate: gate.name, verdict, code: timedOut ? -1 : code, main: mains });
     process.stdout.write(
       `GATE ${gate.name} ${verdict} exit=${code} ${(ms / 1000).toFixed(0)}s load ${before}→${load()}${mains === null ? "" : ` (main's: ${mains})`}\n`,
     );
-    for (const line of said(out)) process.stdout.write(`    ${line}\n`);
+    // a stopped gate's own last words are no verdict (Nx, stopped, still says it "successfully ran"): its stop is
+    const stopped = timedOut
+      ? [`${gate.name} ran past ${timeoutMs / 60_000} min and was stopped`]
+      : null;
+    const counts = stopped ?? gate.counts?.(out) ?? [];
+    for (const line of counts) process.stdout.write(`    ${line}\n`);
+    // a gate that says each project's count needs no last project's line beside them
+    for (const line of (stopped === null ? said(out) : []).filter(
+      (l) => counts.length === 0 || !/^Test(?:s| Files)\s/u.test(l),
+    ))
+      process.stdout.write(`    ${line}\n`);
     process.stdout.write(`    log ${logPath}\n`);
   }
   const red = verdicts.filter((v) => v.code !== 0);

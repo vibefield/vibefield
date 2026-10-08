@@ -4,6 +4,7 @@ import {
   LANDING,
   onlyAr7b,
   preflightSiblingsOnly,
+  projectCounts,
   STAGES,
   said,
   secondCopiesOutside,
@@ -114,6 +115,23 @@ test("test: red by fieldd's agent-gateway AR-7b row alone is main's; another row
     null,
   );
   assert.equal(onlyAr7b(`${AR7B}${TASKS(["@vibefield/fieldd", "@vibefield/field-app"])}`), null);
+});
+
+test("test: every project's count from its own section — one with none is SAID so, with its exit from Nx's list", () => {
+  const out =
+    "> nx run @vibefield/fieldd:test\n\n Test Files  1 failed | 155 passed | 1 skipped (157)\n" +
+    "      Tests  1 failed | 1908 passed | 23 skipped (1932)\n" +
+    "> nx run @vibefield/dev-runner:test\n\nℹ tests 129\nℹ pass 129\nℹ fail 0\n" +
+    // what the final run printed of field-app: 64 KiB of its files, never its count
+    '> nx run @vibefield/field-app:test\n\n ✓ test/history-doors.test.ts (18 tests) 36ms\nGODVIEW_DECK {"active\n' +
+    "> nx run @vibefield/plugin-cli:test\n\n ✓ test/a.test.ts (3 tests)\n" +
+    TASKS(["@vibefield/fieldd", "@vibefield/plugin-cli"]);
+  assert.deepEqual(projectCounts(out), [
+    "@vibefield/fieldd: Tests  1 failed | 1908 passed | 23 skipped (1932)",
+    "@vibefield/dev-runner: pass 129 | fail 0 (node --test)",
+    "@vibefield/field-app: NO COUNT in the log — its exit: 0 (not among the failed tasks)",
+    "@vibefield/plugin-cli: NO COUNT in the log — its exit: FAILED",
+  ]);
 });
 
 test("a verdict quotes the run's own words for its result", () => {
