@@ -491,6 +491,56 @@ describe("IndexCatalog — following rosetta's /ws/meta (DS-6)", () => {
   });
 });
 
+describe("IndexCatalog — PJ-1: the project rows carry their places (L1, L2)", () => {
+  const place = (placeId: string, path: string, observedAt = 1) => ({
+    placeId,
+    path,
+    aliases: [],
+    kind: "project" as const,
+    caseless: true,
+    exists: true,
+    mounted: true,
+    git: false,
+    remotes: [],
+    samples: [],
+    hits: [],
+    observedAt,
+  });
+
+  it("enriches a row with the scanner's places in ONE frame; an equal word makes no frame", async () => {
+    const world = await startFake();
+    const { catalog } = follower(world.origin);
+    // said before the first snapshot: kept, and on the rows once it lands
+    catalog.setPlaces(new Map([["p-lib", [place("pl_lib", "/work/lib")]]]));
+    await until(() => catalog.ready, 5_000, "the first snapshot");
+    expect(catalog.projects.get("p-lib")?.["places"]).toEqual([place("pl_lib", "/work/lib")]);
+    const frames: number[] = [];
+    const off = catalog.projects.onDelta((delta) => frames.push(delta.upserts.length));
+    cleanup.push(off);
+    const next = new Map([
+      ["p-app", [place("pl_app", "/work/app")]],
+      ["p-lib", [place("pl_lib", "/work/lib")]],
+    ]);
+    catalog.setPlaces(next);
+    expect(frames).toEqual([1]); // only the row that moved
+    const app = catalog.projects.get("p-app");
+    expect(IndexCatalogProject.safeParse(app).success).toBe(true);
+    expect(app?.["places"]).toEqual([place("pl_app", "/work/app")]);
+    // the same places again: the table drops an equal upsert, no frame (L2)
+    catalog.setPlaces(new Map(next));
+    expect(frames).toEqual([1]);
+    // a project the scanner says nothing of carries no `places` key
+    catalog.setPlaces(new Map([["p-app", [place("pl_app", "/work/app")]]]));
+    expect(frames).toEqual([1, 1]);
+    expect("places" in (catalog.projects.get("p-lib") ?? {})).toBe(false);
+    // a fresh snapshot keeps them
+    catalog.resnapshot();
+    world.write("projects", [...PROJECTS]);
+    await until(() => catalog.phase === "live", 5_000, "live again");
+    expect(catalog.projects.get("p-app")?.["places"]).toEqual([place("pl_app", "/work/app")]);
+  });
+});
+
 describe("IndexCatalog — the bearer on /ws/meta (AR-8b)", () => {
   it("a daemon behind a bearer serves the stream to the follower that presents the supervisor's; the same daemon refuses one that does not", async () => {
     const dir = mkdtempSync(join(tmpdir(), "vf-ixb-"));

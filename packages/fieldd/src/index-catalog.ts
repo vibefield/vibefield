@@ -17,6 +17,7 @@ import { createNoopLogger, type Logger } from "@vibefield/logging";
 import WebSocket from "ws";
 import { CatalogTable, createRowsPump, type RowsPump, type RowsPumpOptions } from "./catalog-rows";
 import { familyOf } from "./project-family";
+import type { PlaceFacts } from "./projects/place-facts-interim";
 import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 
 // DS-6 — the history catalog's SOURCE on this desktop (design-06 §5
@@ -51,7 +52,9 @@ import type { RosettadState, RosettadSupervisor } from "./rosettad-supervisor";
 // runtime rows are read only to name each session's agent (rosetta's `kind`,
 // the seam column the duplicate rule joins on, DS-D10, and the catalog id it
 // maps to). The project rows gain the repository FAMILY (DS-D9) and two
-// figures derived from this desktop's own sessions.
+// figures derived from this desktop's own sessions — and, PJ-1 (L1), their
+// PLACES: the facts the place scanner (projects/place-scanner.ts) read of each
+// root and its worktrees, handed in with `setPlaces` (no second table).
 //
 // The tables are KEPT across a lost stream and a stopped daemon — a catalog is
 // a fact that stays until a fresh snapshot says otherwise (DS-L8) — and they
@@ -174,6 +177,8 @@ export class IndexCatalog extends EventEmitter {
   #batchTimer: ReturnType<typeof setTimeout> | null = null;
   /** `<shape>` said once: a row this build cannot read */
   readonly #saidUnreadable = new Set<string>();
+  /** PJ-1 (L1) — project id → its places, as the place scanner last read them */
+  #places: ReadonlyMap<string, readonly PlaceFacts[]> = new Map();
 
   constructor(opts: IndexCatalogOptions) {
     super();
@@ -262,6 +267,20 @@ export class IndexCatalog extends EventEmitter {
     this.#clearTimers();
     this.#closeSocket();
     this.removeAllListeners();
+  }
+
+  /** PJ-1 (L1, L2) — the place scanner's word on every project's places: each
+   * row it changes is upserted, in ONE frame; a row whose places are as they
+   * were makes none (the table drops an equal upsert), so an unchanged scan
+   * publishes nothing. Kept across snapshots: a fresh one re-reads them. */
+  setPlaces(places: ReadonlyMap<string, readonly PlaceFacts[]>): void {
+    this.#places = places;
+    if (!this.#ready || this.#disposed) return;
+    const device = this.#opts.deviceId();
+    if (device !== this.#stamped) this.#restamp(device);
+    const upserts = [...this.#rawProjects.values()].map((raw) => this.#projectRow(raw, device));
+    const moved = this.projects.apply({ upserts }) !== null;
+    this.#changed(moved, false, false);
   }
 
   /** Take a fresh snapshot now (the cadence's own act, or a caller that has
@@ -726,6 +745,7 @@ export class IndexCatalog extends EventEmitter {
       if (at !== undefined && (last === undefined || at > last)) last = at;
     }
     const family = familyOf(raw.git_repo);
+    const places = this.#places.get(raw.id);
     return {
       device,
       projectId: raw.id,
@@ -735,6 +755,8 @@ export class IndexCatalog extends EventEmitter {
       ...(family !== undefined ? { family } : {}),
       sessionCount: members?.size ?? 0,
       ...(last !== undefined ? { lastActivityAt: last } : {}),
+      // PJ-1 (L1) — absent until the scanner has read the row's places
+      ...(places !== undefined && places.length > 0 ? { places: [...places] } : {}),
     };
   }
 

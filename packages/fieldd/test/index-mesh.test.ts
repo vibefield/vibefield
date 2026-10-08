@@ -455,6 +455,67 @@ describe("IndexMesh — the merged replica (DS-6)", () => {
     );
   });
 
+  it("PJ-1: reads a peer's places tolerantly — an older row lacks them, a bad place is dropped, never the row; no door answers them", async () => {
+    const a = desktop("dev-a");
+    const b = desktop("dev-b");
+    const sha = "a".repeat(40);
+    const good = {
+      placeId: "pl_good",
+      path: "/work/pb-app",
+      aliases: [],
+      kind: "project",
+      caseless: true,
+      exists: true,
+      mounted: true,
+      git: true,
+      remotes: ["github.com/o/app"],
+      identityRemote: "github.com/o/app",
+      root: sha,
+      samples: [{ sha, depth: 0 }],
+      hits: [],
+      observedAt: 5,
+      someday: "a field a newer peer adds rides along",
+    };
+    const forged = { ...good, placeId: "pl_forged", samples: [{ sha: "--output=/x", depth: 0 }] };
+    b.projects.upsert([
+      { ...project("dev-b", "pb-app", "github.com/o/app", 950), places: [good, forged, 42] },
+      // an older peer's row: no places at all
+      project("dev-b", "pb-old", undefined, 900),
+      { ...project("dev-b", "pb-junk", undefined, 800), places: "not a list" },
+    ]);
+    a.projects.upsert([
+      {
+        ...project("dev-a", "pa-app", "github.com/o/app", 990),
+        places: [{ ...good, placeId: "pl_mine" }],
+      },
+    ]);
+    const { aggregator } = mesh({
+      self: a,
+      desktops: [a, b],
+      peers: [{ deviceId: "dev-b", online: true }],
+    });
+    await until(() => aggregator.replica("dev-b")?.projects.length === 3, 3_000, "B's projects");
+    // every row stays — the bad places cost their row nothing
+    expect(
+      aggregator
+        .replica("dev-b")
+        ?.projects.map((row) => row.projectId)
+        .sort(),
+    ).toEqual(["pb-app", "pb-junk", "pb-old"]);
+    // only the PEERS' places, only the readable ones, unknown fields kept
+    const places = aggregator.peerPlaces();
+    expect(places).toEqual([{ device: "dev-b", projectId: "pb-app", places: [good] }]);
+    // the doors list the rows without their places (PJ-3 owns what crosses)
+    const listed = IndexProjectsResult.parse(aggregator.projects({ scope: "mesh" }));
+    expect(listed.rows.map((row) => row.projectId)).toEqual([
+      "pa-app",
+      "pb-app",
+      "pb-old",
+      "pb-junk",
+    ]);
+    expect(listed.rows.every((row) => !("places" in row))).toBe(true);
+  });
+
   it("asleep is a state: a peer that leaves keeps its rows, persisted — a new aggregator lists them before anyone answers", async () => {
     const a = desktop("dev-a");
     const b = desktop("dev-b");

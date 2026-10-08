@@ -211,6 +211,7 @@ import { PresenceRoomRouter } from "./presence-room";
 import { ProcessService, spawnMcpStdio } from "./process-service";
 import { ProductApi } from "./product-api";
 import { atFloor, wholeValueDoor } from "./projection";
+import { PlaceScanner } from "./projects/place-scanner";
 import { NO_EGRESS, type RemoteCellRewriter } from "./remote-cell-rewriter";
 import {
   ROSETTAD_UNCONFIGURED,
@@ -831,6 +832,19 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     rootsPollMs: config.workspace?.rootsPollMs,
     // R6 — each attachment's establish and end, beside its mint
     audit,
+    logger,
+  });
+  // PJ-1 (L1–L3, L7) — the place scanner: the catalog's project rows enriched
+  // with what the files worker reads of each root and its worktrees; a peer's
+  // places (the replica, bound below) are the samples its hits look for.
+  // Started with the files worker; idle while either has nothing to say.
+  const placeScanner = new PlaceScanner({
+    catalog: indexCatalog,
+    worker: workspace.supervisor,
+    deviceId: () => devicesForAgents?.currentDeviceId() ?? "local",
+    taskRoots: () => createAgentCatalogReaders(config.agentCatalog ?? AGENT_CATALOG).taskRoots(),
+    peerPlaces: () => indexMesh?.peerPlaces() ?? [],
+    actedRoots: () => workspace.registry.roots(),
     logger,
   });
   const agents = new AgentRuntimeService({
@@ -4798,6 +4812,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       ...(config.indexMesh ?? {}),
       logger,
     });
+    // PJ-1 — a peer's project rows moved: its places' samples may have
+    indexMesh.on("change", (event: { scope: string; table?: string }) => {
+      if (event.scope === "mesh" && event.table === "projects") placeScanner.peersChanged();
+    });
 
     // AH-1 — the artifact serving foundation. Constructed HERE (before the supersession
     // closure below references it — a superseding takeover can fire before
@@ -5052,6 +5070,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       api.close();
       docLane.close();
       const reason = fatalReason;
+      placeScanner.dispose(); // PJ-1 — no scan asks a worker that is leaving
       void (async () => {
         await Promise.allSettled([
           updateManager.dispose(),
@@ -5128,6 +5147,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const artifactDrain = artifacts.dispose();
       board.dispose();
       indexTail.dispose();
+      placeScanner.dispose();
       indexCatalog.dispose();
       indexMesh?.dispose();
       federatedSubs.dispose();
@@ -5468,6 +5488,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     // (FS-D11 (b), always on; readiness is a transition, never a boot gate),
     // and the places this user's runs already recorded are seeded once.
     workspace.start();
+    placeScanner.start(); // PJ-1 — scans once the catalog and the worker are both ready
     try {
       workspace.registry.seedPlaces(agents.recordedPlaces());
     } catch (error) {
@@ -5499,6 +5520,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           index.dispose(); // AC-D8 — stop reacting to the daemon's transitions
           indexCatalog.dispose(); // DS-6 — the stream closes before its daemon stops
           await rosettad?.stop(); // AR-0 — the index daemon is fieldd-lifetime (AR-D6 v1)
+          placeScanner.dispose(); // PJ-1 — no scan asks a worker that is stopping
           await workspace.stop(); // FS-1a — the files worker stops with the daemon (FS-D11 (b))
           detachHealthSources?.();
           endpoints.dispose();
@@ -5612,6 +5634,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     await gatewayRef?.stop().catch(() => undefined); // AR-7b — nor a listener of the gateway's
     await agents.dispose();
     await rosettad?.stop();
+    placeScanner.dispose(); // PJ-1 — likewise never started before ready
     await workspace.stop(); // FS-1a — started only after ready; the guard is stated
     // The earliest supersession window, which the `stopForSupersession` listener
     // is not yet in scope to see: a takeover that lands while the services are
