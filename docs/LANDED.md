@@ -8465,3 +8465,49 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 - The room's fixtures carry no delegated thread.
 - A narrower `usage` should be drift, not a lost record.
 - Export the room's search grouping for a DOM-free host test.
+
+## EL8 rosetta `eab2f57` + mille `c8160d5`, honest read refusals, and three test-health fixes (2026-10-08; `16020fa1` — seven commits `515c2f6a`→`16020fa1`; lane pins over main `34fce7c4`, rebased by the lead onto `eee2f024`, fast-forward)
+
+**Why:** James's "go" on the History lead's step 1 (2026-10-08): move both sibling pins now that their mains carry his merges (rosetta R14 RO-15 + #8; mille R15/R16 M8, M10, G1/G2/G3/G6). Plan `draft/history-finish/build-hf.md` (pins; M1 G1/G2).
+
+**What landed:**
+- **`515c2f6a` EL8 rosetta `856bd80` → `eab2f57`.**
+  - Only the lock's sha moved. R23 is green and the consumers typecheck.
+  - #8 orders session metadata before journaling. For VibeField this changes no ordering or titles: `session_list` sorts by last activity then id. But a Claude history with nested subagent sidecars no longer fails warm ingest with a FOREIGN KEY error; those sessions arrive with their parent and root links, which the `threads` table (AR-8 History gaps) now serves.
+  - A pass whose parent links form a cycle now fails before journaling.
+  - RO-15 hardens rosetta's own app's git reads; VibeField does not consume `clients/app`.
+- **`42635667` PJ-2.**
+  - The race (found by MV): the D6 test's wait ended when the record was visible, before its write landed, and the library was never disposed, so `rmSync` raced the tmp write.
+  - The fix: `ProjectRecords.dispose()` returns the settled chain; the test awaits records, then grouping, then `library.dispose()`, then removes the folder; the daemon's graceful stop awaits records before the library closes.
+  - 20 runs under 12 busy loops: 1 ENOTEMPTY before, 0 after.
+- **`f24ec8cd` EL8 mille `baa0de8` → `c8160d5`.** Only the lock's sha moved; with the lock line alone, typecheck and the ten `workspace-*` suites (111/111) and fixtures (311) are green. G1 and G2 have no consumer here (build-hf M1): the `/git` leg is still the interim port of rosetta's protocol, so G1 is owed to the GitService swap (R2). The interim is not capped at 10 000 files, since the room has no words for a cut list (petition RO-18).
+- **`a3297a97` FS: a folder that did not answer says so.**
+  - Every engine gets `ENGINE_OPTIONS`: `readTimeoutMs` = `WORKSPACE_LIMITS.READ_TIMEOUT_MS` (2 000) and `materializeDataless` = the new registry value `MATERIALIZE_DATALESS` (false).
+  - ETIMEDOUT reads: "“Keynote.key” did not answer within 2 s — macOS may still be downloading it from iCloud, or its drive stopped responding. Try again in a moment."
+  - EDATALESS reads: "“Archive” is in iCloud only — it is not downloaded to this Mac, and VibeField does not download a folder to list it. Download it in Finder, then try again."
+  - The doors' refusal codes: TIMEOUT (retryable) `{service, reason: "timed-out", timeoutMs}` and PRECONDITION_FAILED `{reason: "dataless"}` for list, search, gitFacts and openTicket.
+  - Folders: a folder that stalls on the way to the one asked gets the same refusal. A search hit whose folder stalled is left out with `complete: false`. `resolveConfined`'s own stall is `timed-out`, no longer `busy`, which had said RESOURCE_EXHAUSTED.
+  - The interim git runner's 8 MB overflow says so in words, not "stdout maxBuffer length exceeded".
+  - Contract: `WorkspaceReadRefusalDetails`, `WORKSPACE_READ_REFUSALS` and four fixtures; api.html and architecture.html carry the refusals. The phone shows the message as it comes.
+- **Test health (the lead's, test-only):**
+  - `d5084c52`: `godview-model-stream.test.ts` cases get 30 s. They compute ~3 s on a virtual clock, and a timed-out case leaves its clock installed for the next ones.
+  - `2bfdca47`: the AR-7 floor helper waits for the floor's terminal endpoints to reach the daemon ("the terminal floor is not available", red in 3 of 9 gates, a different row each time).
+  - `16020fa1`: `design-system.test.tsx`'s catalog render gets 60 s (red in most loaded gates since 10-07).
+
+**Witnesses:**
+- `workspace-read-refusals.test.ts`: 10 rows, where the real engine refuses through an `onHost` seam; plus a TIMEOUT row in `workspace-client.test.ts`.
+- Ten byte-exact red-proofs (`lanes/pins/redproof/`).
+- The two stress logs for PJ-2's race (before and after).
+
+**Validation** (`/Volumes/SamsungRed/lanes/pins/lead/`):
+- The lead's gate on the rebased tip `a3297a97`: `smoke.log` EXIT 0 and `smoke-godview.log` EXIT 0. Its verify was red only on `godview-model-stream.test.ts` (load 25), and the next two verifies were red only on the AR-7 floor race, then on `design-system.test.tsx`. Each got its test-only fix and each file was green alone.
+- `verify-5.log` **EXIT 0** on `16020fa1`, the landed tree, with no Nx cache.
+- The builder's own runs on the pre-rebase tip: verify-6 EXIT 0 after five load-timeout reds, and both smokes EXIT 0.
+
+**After landing:** James's `../rosetta-pin` moved to `eab2f57` (fetched from his local `../rosetta`; neither sibling commit is pushed, so the lock's `repository` cannot fetch them on another machine until he pushes), and `../mille-pin` to `c8160d5`. mille was rebuilt, rosettad rebuilt and preflight run in his tree.
+
+**Found:**
+- EACCES (a folder macOS privacy blocks) still reads "the files service could not answer"; it is the next honest code to map.
+- `project-records-witness.test.ts` has the same race class: a 60 ms sleep and undisposed libraries.
+- mille-ui's retry badge words a stall in upstream text.
+- James's `../puppeteer` install predates view-sdk, so typecheck is red in any tree that links it until `pnpm install` runs there.
