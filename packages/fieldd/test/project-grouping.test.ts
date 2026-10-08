@@ -94,9 +94,9 @@ describe("E1 — the identity remote joins, on any desktop", () => {
 
   it("names the project after the repository when the folder is another word", () => {
     const result = groupPlaces({
-      devices: [desk("mac", repo("m1", "/p/electron-ghostty", "github.com/o/ghosttea"))],
+      devices: [desk("mac", repo("m1", "/p/web-shell", "github.com/o/terminal"))],
     });
-    expect(result.projects[0]).toMatchObject({ name: "ghosttea", nameFrom: "repository" });
+    expect(result.projects[0]).toMatchObject({ name: "terminal", nameFrom: "repository" });
   });
 
   it("only SUGGESTS on another remote in common (a starter as upstream, C8b)", () => {
