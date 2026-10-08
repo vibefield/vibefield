@@ -578,11 +578,19 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
     5_000,
     `document.activeElement?.classList.contains("vf-pegboard-board") === true`,
   );
-  await until(
-    "the first specimen focused",
-    5_000,
-    `document.querySelector('.vf-pegboard-board [aria-selected="true"]') !== null`,
-  );
+  try {
+    await until(
+      "the first specimen focused",
+      5_000,
+      `document.querySelector('.vf-pegboard-board [aria-selected="true"]') !== null`,
+    );
+  } catch (error) {
+    // say what ICE holds (I37): its focus as the anchor last drew it, and what its lay hangs
+    const ice = await door();
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} — ICE's anchor ${JSON.stringify({ focused: ice.anchor.focused, laid: ice.laid })}`,
+    );
+  }
   await sleep(250); // the ring's fade and glide
   const first = await seen();
   const firstType = first.focused;

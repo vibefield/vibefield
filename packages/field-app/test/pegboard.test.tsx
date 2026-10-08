@@ -448,6 +448,58 @@ describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
     expect(ringRect()).toEqual(ringOnFocus());
   });
 
+  it("rings ICE's first when the board holds the keyboard with no focus event — B in a window that is not the key window (DK-13's path)", async () => {
+    // not the key window: the focus moves to the board, its event waits (here it never reaches React)
+    const hold = (event: Event): void => event.stopImmediatePropagation();
+    window.addEventListener("focus", hold, true);
+    window.addEventListener("focusin", hold, true);
+    try {
+      raise();
+    } finally {
+      window.removeEventListener("focus", hold, true);
+      window.removeEventListener("focusin", hold, true);
+    }
+    expect(document.activeElement).toBe(board());
+    // the publish that found the board holding the keyboard took this open's first stop: ICE's first, asked a
+    // microtask after it; the frame that focus asked for rings it
+    await Promise.resolve();
+    door.publish();
+    const first = [...board().querySelectorAll('[role="option"]')][0]?.getAttribute("data-type");
+    expect(trayFocus(ce.world)).toBe(first);
+    expect(focusedType()).toBe(first);
+    expect(ringRect()).not.toBeNull();
+    expect(ringRect()).toEqual(ringOnFocus());
+  });
+
+  it("asks ICE for the first again when B raised the board before its first lay — a microtask after the publish, never inside it", async () => {
+    // ICE's focus finds nothing hung yet as the drawer starts to rise: its `focus` answers "" and writes no specimen
+    const real = door.focus.bind(door);
+    let laid = false;
+    const asks = vi.spyOn(door, "focus").mockImplementation((to) => (laid ? real(to) : ""));
+    raise();
+    expect(document.activeElement).toBe(board());
+    expect(trayFocus(ce.world)).toBe("");
+    expect(focusedType()).toBeNull();
+    // the first lay lands: its publish asks for the first — but not inside the publish (the desk's frame)
+    laid = true;
+    asks.mockClear();
+    door.publish();
+    expect(asks).not.toHaveBeenCalled();
+    await Promise.resolve();
+    expect(asks).toHaveBeenCalledWith("first");
+    // the frame that focus asked for: ICE's anchor says the first, and the listbox and the ring follow it
+    door.publish();
+    const first = [...board().querySelectorAll('[role="option"]')][0]?.getAttribute("data-type");
+    expect(trayFocus(ce.world)).toBe(first);
+    expect(focusedType()).toBe(first);
+    expect(ringRect()).toEqual(ringOnFocus());
+    // ICE holding a focus, a publish asks nothing more
+    asks.mockClear();
+    door.publish();
+    await Promise.resolve();
+    expect(asks).not.toHaveBeenCalled();
+  });
+
   it("moves to the row below with ↓ — focused by its id, ICE scrolling the board to show it, the ring following its anchor", () => {
     raise();
     const rows = new Set(drawnNow().map((d) => d.row));

@@ -170,6 +170,8 @@ export function Pegboard({
   const ringOn = useRef(false);
   /** The board took the keyboard since it last came out: its first focus lands on its first specimen (DK-13). */
   const focusedThisOpen = useRef(false);
+  /** A first focus asked of ICE from a publish, not yet run (one at a time — never a write inside the frame). */
+  const firstAsked = useRef(false);
   /** Where the focus was before the board took it, to give it back when the board folds. */
   const returnFocus = useRef<HTMLElement | null>(null);
   /** The specimens the board hangs now — the listbox's options (re-set only when the list itself changes). */
@@ -225,6 +227,30 @@ export function Pegboard({
     // ICE's focus, followed (a render only when it moved to another specimen)
     const id = anchor?.focused?.id ?? null;
     setFocused((prev) => (prev === id ? prev : id));
+    // the board holds the keyboard. Taken with no focus event this open (B raised it while the window was not the key
+    // window, so the event waits; DK-13's path) it is this open's first stop: ringed, on ICE's first specimen. And while
+    // ICE holds no focus — B raised the board before its first lay was laid (the focus comes as the drawer starts to
+    // rise, and ICE's focus finds nothing hung yet), or ICE let it go with a category — the first it hangs (DK-13's
+    // reading). A WRITE — and this runs inside the desk's frame (the tray's publish is its reflector's), so it is asked a
+    // microtask after it, one at a time, until ICE's anchor says a focus
+    if (
+      anchor?.drawer != null &&
+      document.activeElement === boardRef.current &&
+      drawnSpecimens().length > 0
+    ) {
+      const took = !focusedThisOpen.current;
+      if (took) {
+        focusedThisOpen.current = true;
+        ringOn.current = true;
+      }
+      if ((took || id === null) && !firstAsked.current) {
+        firstAsked.current = true;
+        queueMicrotask(() => {
+          firstAsked.current = false;
+          if (document.activeElement === boardRef.current) boardDoor()?.focus("first");
+        });
+      }
+    }
     placeRing();
   }, [placeRing]);
 
@@ -233,14 +259,6 @@ export function Pegboard({
     return subscribeBoard(place);
   }, [place]);
 
-  // the board holds the keyboard and ICE holds no focus — its first lay not laid yet (B: the focus comes as the drawer
-  // starts to rise), or a category ICE let the focus go in — the first it hangs (DK-13's reading); a write, so never
-  // inside the tray's publish
-  useEffect(() => {
-    if (focused !== null || hung.length === 0 || !state.open) return;
-    if (document.activeElement !== boardRef.current) return;
-    boardDoor()?.focus("first");
-  }, [focused, hung, state.open]);
   useLayoutEffect(() => {
     placeRing();
   }, [focused, placeRing]);
