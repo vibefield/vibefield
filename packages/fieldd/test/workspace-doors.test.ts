@@ -444,6 +444,27 @@ describe("places, rows and the worker's life", () => {
     expect(error.data).toMatchObject({ kind: "NOT_FOUND", details: { missing: true } });
   });
 
+  it("never follows a place swapped for a link — to / or elsewhere: missing at every door (R6)", async () => {
+    const world = await boot();
+    const win = await windowOf(world.daemon, ["workspace.read"]);
+    const place = join(world.home, "Projects", "repo");
+    world.daemon.workspace.registry.touchPlace(place);
+    const rootId = rootIdFor("place", place);
+    expect(
+      WorkspaceListResult.parse(await win.call("workspace.list", { rootId })).entries.length,
+    ).toBeGreaterThan(0);
+    rmSync(place, { recursive: true });
+    for (const target of process.platform === "win32" ? [world.outside] : ["/", world.outside]) {
+      symlinkSync(target, place, "junction");
+      const listed = await win.callErr("workspace.list", { rootId });
+      expect(listed.data, target).toMatchObject({ kind: "NOT_FOUND", details: { missing: true } });
+      expect((await win.callErr("workspace.openTicket", { rootId })).data?.kind, target).toBe(
+        "NOT_FOUND",
+      );
+      rmSync(place);
+    }
+  });
+
   it("streams the roots as rows: the snapshot, then a place's arrival", async () => {
     const world = await boot();
     const win = await windowOf(world.daemon, ["workspace.read"]);

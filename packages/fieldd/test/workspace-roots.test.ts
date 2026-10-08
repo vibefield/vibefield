@@ -89,6 +89,7 @@ describe("the roots registry (places, persisted; browse exports, live)", () => {
         addedAt: "2026-10-05T10:00:00.000Z",
         lastActiveAt: "2026-10-05T10:00:00.000Z",
         missing: false,
+        realPath: project,
       },
     ]);
     // no temp file is left beside it
@@ -216,6 +217,112 @@ describe("the roots registry (places, persisted; browse exports, live)", () => {
       ["home", null],
     ]);
     expect(roots.seedPlaces([{ cwd: b, at: "2026-10-01T00:00:00.000Z" }])).toBe(0);
+  });
+});
+
+describe("a place keeps the identity it was touched with (R6)", () => {
+  it("reads a place swapped for a link — elsewhere, or to / — as missing, across a restart", () => {
+    const { file, folder } = world();
+    const home = folder("home");
+    const place = folder("project");
+    const elsewhere = folder("elsewhere");
+    const roots = registry(file, home);
+    roots.touchPlace(place, "2026-10-05T10:00:00.000Z");
+    const id = rootIdFor("place", place);
+    expect(roots.find(id)?.missing).toBe(false);
+    rmSync(place, { recursive: true });
+    symlinkSync(elsewhere, place, "junction");
+    expect(roots.refresh()).toBe(true);
+    expect(roots.find(id)?.missing).toBe(true);
+    expect(registry(file, home).find(id)?.missing).toBe(true);
+    const next = registry(file, home);
+    next.refresh();
+    expect(next.find(id)?.missing).toBe(true);
+    rmSync(place);
+    if (process.platform !== "win32") {
+      symlinkSync("/", place);
+      roots.refresh();
+      expect(roots.find(id)?.missing).toBe(true);
+      rmSync(place);
+    }
+    // the folder itself back: present again, the identity unchanged
+    mkdirSync(place);
+    roots.refresh();
+    expect(roots.find(id)?.missing).toBe(false);
+    expect(
+      WorkspaceRootsFile.parse(JSON.parse(readFileSync(file, "utf8"))).places[0]?.realPath,
+    ).toBe(place);
+  });
+
+  it("keeps a place reached through a system link (/tmp, /var) present, across a restart", () => {
+    const { file, folder } = world();
+    const home = folder("home");
+    // the injected seam: macOS's own links
+    const seams = {
+      platform: "darwin" as const,
+      realpath: (path: string) =>
+        path.startsWith("/tmp/") || path.startsWith("/var/") ? `/private${path}` : path,
+      isDirectory: () => true,
+    };
+    const roots = registry(file, home, seams);
+    expect(roots.touchPlace("/tmp/x", "2026-10-05T10:00:00.000Z")).toBe(true);
+    expect(roots.touchPlace("/var/folders/ab/T/run", "2026-10-05T10:00:00.000Z")).toBe(true);
+    expect(roots.refresh()).toBe(false);
+    const again = registry(file, home, seams);
+    expect(again.refresh()).toBe(false);
+    expect(again.roots().filter((row) => row.kind === "place" && !row.missing)).toHaveLength(2);
+    expect(
+      WorkspaceRootsFile.parse(JSON.parse(readFileSync(file, "utf8"))).places.map((p) => [
+        p.path,
+        p.realPath,
+      ]),
+    ).toEqual([
+      ["/tmp/x", "/private/tmp/x"],
+      ["/var/folders/ab/T/run", "/private/var/folders/ab/T/run"],
+    ]);
+    // and this machine's own temporary folder, through whatever link it has
+    const own = world();
+    const aliased = mkdtempSync(join(tmpdir(), "vf-alias-"));
+    cleanup.push(() => rmSync(aliased, { recursive: true, force: true }));
+    const real = registry(own.file, home);
+    expect(real.touchPlace(aliased)).toBe(true);
+    expect(real.refresh()).toBe(false);
+    const restarted = registry(own.file, home);
+    expect(restarted.refresh()).toBe(false);
+    expect(restarted.find(rootIdFor("place", aliased))?.missing).toBe(false);
+  });
+
+  it("adopts a real path for a place written before the field, never a filesystem root", () => {
+    const { file, folder, base } = world();
+    const home = folder("home");
+    const kept = folder("kept");
+    const rooted = join(base, "rooted");
+    if (process.platform !== "win32") symlinkSync("/", rooted);
+    else symlinkSync("C:\\", rooted, "junction");
+    mkdirSync(join(file, ".."), { recursive: true });
+    const old = (path: string) => ({
+      path,
+      addedAt: "2026-10-01T00:00:00.000Z",
+      lastActiveAt: "2026-10-01T00:00:00.000Z",
+      missing: false,
+    });
+    writeFileSync(file, JSON.stringify({ version: 1, places: [old(kept), old(rooted)] }));
+    const roots = registry(file, home);
+    expect(roots.refresh()).toBe(true);
+    expect(roots.find(rootIdFor("place", kept))?.missing).toBe(false);
+    expect(roots.find(rootIdFor("place", rooted))?.missing).toBe(true);
+    const stored = WorkspaceRootsFile.parse(JSON.parse(readFileSync(file, "utf8"))).places;
+    expect(stored.find((p) => p.path === kept)?.realPath).toBe(kept);
+    expect(stored.find((p) => p.path === rooted)?.realPath).toBeUndefined();
+    // what it adopted binds it: swapped later, it reads missing
+    rmSync(kept, { recursive: true });
+    symlinkSync(folder("other"), kept, "junction");
+    roots.refresh();
+    expect(roots.find(rootIdFor("place", kept))?.missing).toBe(true);
+    // a run there now is where work happens: the touch re-records it
+    expect(roots.touchPlace(kept, "2026-10-06T00:00:00.000Z")).toBe(true);
+    expect(roots.find(rootIdFor("place", kept))?.missing).toBe(false);
+    expect(roots.touchPlace(rooted)).toBe(false);
   });
 });
 

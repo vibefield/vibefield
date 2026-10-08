@@ -299,6 +299,14 @@ export const WorkspacePlaceRecord = z
     addedAt: z.string().min(1).max(64),
     lastActiveAt: z.string().min(1).max(64),
     missing: z.boolean().optional(),
+    /** R6 (2026-10-07), additive to v1 — the place's canonical identity: its
+     * real path when a run last touched it. A place whose real path no longer
+     * matches (the folder swapped for a link) or is a filesystem root reads
+     * `missing`. `path` stays the key, the cwd as given (`/tmp/x` resolves to
+     * `/private/tmp/x` on macOS and is still present). Absent on a place
+     * recorded before the field: it adopts its real path at the first refresh
+     * that finds the folder there and not a filesystem root (fieldd roots.ts). */
+    realPath: z.string().min(1).max(WORKSPACE_LIMITS.PATH_CHARS).optional(),
   })
   .passthrough();
 export type WorkspacePlaceRecord = z.infer<typeof WorkspacePlaceRecord>;
