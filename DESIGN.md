@@ -1763,7 +1763,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     popup*). It pops in on the island curve (§6). **The scrim** (§5, *Search scrim*) blurs and dims
     the whole window under it; **the view recedes** to 0.98 about 50% 46%, and the frame recedes with
     it (the line, the edges, the corner, the button) — only the window's lights stay sharp, as the OS
-    draws them. A click on the scrim closes the popup.
+    draws them. Nothing under the scrim holds the keyboard while it stands (the field is inert), and
+    the keyboard goes back where it was when the popup folds on its own. A click on the scrim closes
+    the popup.
   - **Top to foot.** **The field**: 64 tall, `search` 18 in tertiary ink 22 in, the words at 20/400
     (−0.01em) in primary ink with the select caret, and at its end **close** — a 40 circle, `close`
     12 lifted 9, **esc printed under it** (9/600, secondary), the ready fill under the pointer. In
