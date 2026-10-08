@@ -60,6 +60,7 @@
     "check:walls": "node scripts/check-import-boundaries.mjs --self-test && node scripts/check-import-boundaries.mjs --enforce",
     "check:ios-fixtures": "node scripts/check-ios-fixtures.mjs",
     "catalog:check": "node scripts/check-agent-catalog.mjs --enforce --literals",
+    "gate:landing": "node scripts/gate-landing.mjs",
     "bundle:assert": "pnpm --filter @vibefield/electron-shell run build && pnpm --filter @vibefield/electron-shell run build:renderer && node scripts/bundle-report.mjs --dist packages/electron-shell/dist --assert",
     "verify": "pnpm preflight && pnpm check:walls && pnpm check:deps && pnpm check:retired && pnpm check:ios-fixtures && pnpm icons:check && pnpm typecheck && pnpm lint && cargo fmt --check && pnpm lint:rust && pnpm bundle:assert && pnpm test && pnpm test:rust && pnpm gen:check",
     "hooks:install": "git config core.hooksPath scripts/git-hooks",
