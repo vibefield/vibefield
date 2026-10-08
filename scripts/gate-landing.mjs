@@ -192,6 +192,8 @@ function choose() {
 
 /** The gate running now, its process group — what a signal to this script, or the timeout, stops. */
 let running = null;
+/** The signal a person stopped the run with: the gate running then is stopped, and none after it starts. */
+let interrupted = null;
 
 /** A gate in its own process group (a smoke is a tree: pnpm, the launcher, Electron, the daemons), stopped WHOLE at the
  * timeout as the kit's `try` stops the app: SIGTERM to the group (the smoke launchers forward it to Electron and still
@@ -247,15 +249,16 @@ async function main() {
     return 0;
   }
   const timeoutMs = Number(argValue("--timeout-min") ?? 30) * 60_000;
-  // a person's ^C (or a stop) reaches the gate running now: its group is not this script's
+  // a person's ^C (or a stop) reaches the gate running now — its group is not this script's; no gate after it starts, and
+  // the run leaves once that gate has (its launcher's daemon row in its log), 30 s at most
   for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"])
     process.on(signal, () => {
-      if (running !== null) {
-        try {
-          process.kill(-running.pid, signal);
-        } catch {}
-      }
-      process.exit(128 + constants.signals[signal]);
+      interrupted = signal;
+      if (running === null) process.exit(128 + constants.signals[signal]);
+      try {
+        process.kill(-running.pid, signal);
+      } catch {}
+      setTimeout(() => process.exit(128 + constants.signals[signal]), 30_000).unref();
     });
   const logs = argValue("--logs") ?? mkdtempSync(join(tmpdir(), "vf-gate-landing-"));
   mkdirSync(logs, { recursive: true });
@@ -305,11 +308,13 @@ async function main() {
     ))
       process.stdout.write(`    ${line}\n`);
     process.stdout.write(`    log ${logPath}\n`);
+    if (interrupted !== null) break;
   }
   const red = verdicts.filter((v) => v.code !== 0);
   process.stdout.write(
-    `GATE_LANDING_DONE ${JSON.stringify({ sha: head, ok: red.length === 0, red: red.map((v) => `${v.gate}${v.main === null ? "" : " (main's)"}`), at: new Date().toISOString() })}\n`,
+    `GATE_LANDING_DONE ${JSON.stringify({ sha: head, ok: red.length === 0 && interrupted === null, red: red.map((v) => `${v.gate}${v.main === null ? "" : " (main's)"}`), ...(interrupted === null ? {} : { stopped: interrupted, ran: verdicts.length, of: list.length }), at: new Date().toISOString() })}\n`,
   );
+  if (interrupted !== null) return 128 + constants.signals[interrupted];
   return red.length === 0 ? 0 : 1;
 }
 
