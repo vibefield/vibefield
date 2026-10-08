@@ -86,18 +86,22 @@ RED ON MAIN `34fce7c4` the same way (a throwaway, removed): the puppeteer siblin
 install for the new `packages/view-sdk` (the cutover's 1.5). The evidence, side by side:
 - typecheck: the identical 165 error lines;
 - bundle:assert: the same Rolldown "failed to resolve `@vibecook/puppeteer-view-sdk/toolkit`";
-- fieldd's build, the smokes' first step: the same esbuild "Could not resolve `@vibecook/puppeteer-view-sdk/model`";
+- fieldd's build, the smokes' first step (smoke:plugin's too, inside its `try` run's app: `.vibefield-try/try.log`): the
+  same esbuild "Could not resolve `@vibecook/puppeteer-view-sdk/model`";
 - the suites run alone, failing files per project: field-app 30, fieldd-client 4, fieldd-supervisor 6 and electron-shell 1,
   all collection failures on the same imports, plus fieldd's `workspace-worker` packaged-role row, which runs the bundle the
   build cannot make. Each set is identical on main.
 
 The lane-only `peers-two-tabs.test.tsx` fails its collection on the same import: it reaches fieldd, which MV now wires to the
-monitor backend. fieldd's `agent-session` row was load (it passed alone twice). smoke:studio's dev runner waited on a fieldd it
-could not rebuild; the run's own stop ended it at 1,092 s, its daemon row `left: []`. The two GPU-less modes passed, but on the
-previous build (they reuse smoke:canvas's), so they prove nothing here. `pnpm still` went red once, by vitest's worker channel
-closing at exit (`ERR_IPC_CHANNEL_CLOSED`) after its ten tests had passed. Alone after, it passed 4 of 5; in one window, 3/3 on
-the merge and 3/3 on the lane's pre-merge tip — a teardown flake, not the merge's. AR-7b passed: MV made its test assert what
-AR-7b guards. **The gates run whole again once the sibling is prepared**; until then this merge has no green run.
+monitor backend. fieldd's `agent-session` row was load (it passed alone twice). smoke:studio's dev runner rebuilt neither
+fieldd nor the renderer's dependencies (the same imports) and waited; the gate's own stop (a SIGTERM to the gate script) ended
+it at 1,092 s, its daemon row `left: []` (its root, kept as a red run's is, held no logs and was removed). The two GPU-less
+modes passed, but on the previous build (they reuse smoke:canvas's), so they prove nothing here. `pnpm still` went red once, by
+vitest's worker channel closing at exit (`ERR_IPC_CHANNEL_CLOSED`) after its ten tests had passed. Alone after, 4 of 5 green
+(the fifth the same error); in one window, 3/3 on the merge and 3/3 on the lane's pre-merge tip. Main changes nothing `still`
+runs, and the same tinypool channel error ended a field-app run at DK-13 (2026-10-06): a teardown flake, not the merge's. AR-7b
+passed: MV made its test assert what AR-7b guards. **The gates run whole again once the sibling is prepared**; until then this
+merge has no green run.
 
 ## The hygiene every smoke keeps
 
