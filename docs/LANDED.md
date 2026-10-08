@@ -8350,3 +8350,77 @@ was produced in this slice; the earlier packaging receipt remains tied to `e6d39
 
 **Known, not fixed:** `design-system.test.tsx`'s setup hook needs more than 10 s whenever load passes ~40 and has gone red in every gate on 2026-10-08 (fsfix, pj1b, pj3, pj2) — a test-health fix for main, outside this track.
 
+## MV — Godview's monitor views are SDK modules over one backend (2026-10-08; `2a434475` — the merge of `mv/land` `a5f5b12d` onto main `fc928566`, gated in the lane land-vf; puppeteer main `6392865` → `594d222`; then ghosttea `8a0930e` → `10d0b17` as its own EL8 commit `ce92b08e`)
+
+**Why:** James's monitor-view rulings of 2026-10-03 are the frame:
+- views are pure presentation;
+- ONE backend per desktop, beside the runtime, and only its model syncs;
+- one view is mounted at a time, and a view never modifies anything outside itself;
+- "godview should stay runtime only";
+- only rosetta ingests transcripts.
+
+Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `draft/monitor-view-sdk/build-mv.md` (M1–M202). James ruled the last wave's nine asks on 2026-10-07 ("good, go with your lean, plan and go", M177), and landed it with "land it" (2026-10-08 19:34 UTC).
+
+**What landed:**
+- **The SDK and the one backend.**
+  - `@vibecook/puppeteer-view-sdk`: the contract, `/react`, `/host`, `/testing` and `/toolkit`.
+  - `@vibecook/puppeteer-monitor` runs beside the runtime, one per desktop: in fieldd, and in Electron main in puppeteer's Godview.
+  - Windows and the phone hold replicas of its model (MV-D22, D18).
+- **Godview's five views are SDK modules:** list, rain, swarm, timeline and spend.
+  - Spend is MV-7: the runtime-only watchlist, ported as built (M177 ruling 2). SV-D15…D19 are ruled later.
+  - Each view has its own root and its own CSS (L18), keys only while focused (MV-D8), and its mark in the manifest (MV-D16).
+- **Runtime only.** The window ledgers, the in-memory status ledger and the history book are gone (MV-D13). Spend reads the backend's ten-minute cost series.
+- **The wall** (`scripts/check-view-wall.mjs`, MV-W1–W5) reads the registered views in fail mode. `VIEW_RUNTIME_IMPORTS` is its one allow-list.
+- **Chrome boundaries** (M49) wrap every piece of Godview's chrome in both hosts.
+  - A piece retries only when an owning fact changes, within a 1 s → 30 s backoff.
+  - It reports once per episode.
+- **Perf.**
+  - The stage keeps an equal geometry (`keepStage`).
+  - VibeField's monitor bar renders only when its own inputs move (M195). This made the final tip cheaper than the qualified integration tip in every cell.
+  - The paired reader takes M40's literal rule, and the proof audit and the pooled reader are committed beside the harness.
+- **Keys.**
+  - The bar's tooltip prints a view's focus keys.
+  - A key that presses a visible control prints its legend on that control, from the toolkit's one table: `↘` on the timeline's now button and on spend's Now pill (M177 ruling 4, M181).
+- **Also:**
+  - AR-7b's test asserts what AR-7b guards (ruling 9).
+  - fieldd's docs-holders stop is bounded at 2 s (`DOC_HOLDERS_STOP_MS`).
+  - The Godview smoke runner spawns Electron itself, with no shell.
+  - The old `.vibefield/dev/data/users/1/agents/history/` (7 files, 1,870 bytes) is removed (ruling 6).
+
+**Witnesses and validation:**
+- **VibeField, on the merge `2a434475` in land-vf** (the lead's final gate, build-mv M201):
+  - `pnpm verify` with `NX_SKIP_NX_CACHE=true`, run 1: EXIT 1. One load flake in main's own PJ-2 test, `project-records.test.ts` D6: ENOTEMPTY in its temp-dir cleanup, at load 150 from another session. The file passes 5/5 alone.
+  - The one re-run: EXIT 0. fieldd 2132/23, field-app 1577/1, electron-shell 947/2.
+  - `build:all` 0. `node scripts/smoke-godview.mjs` 0, `ok: true`, 110 rows.
+- **Puppeteer `594d222`** (M189, M190):
+  - typecheck, packages, support, tests and the wall 0, with all five views 0 in fail mode;
+  - its three known reds exactly: the stale `adapter-codex` groundtruth map, that map's script test, and one format warning;
+  - goldens 60/60, frames 3/3, and the four smokes OK.
+- **Perf, by the M40-literal reader:**
+  - against the qualified integration tip `cf644fd0`: 0 worse, 18 better (M197);
+  - against pre-MV `29a9250d`, by M175's protocol: 0 worse, 36 better, 2 shifted (M198). The shifted rows are timeline style, the residual ruling 3 accepted.
+- **Captures:** two named visible changes: SPEND in the bar, and the `↘` legends.
+- **The landing** (`lanes/mv/land/land-mv.sh`):
+  - James's 11 working edits were stashed by path, main fast-forwarded, and the edits popped and verified;
+  - each edit's own lines are unchanged, and the 9 files the merge did not touch are byte-identical.
+
+**Records (build-mv M176 item 8):**
+- `018ac776` bundled the `05a1809` puppeteer pin with 69 other paths. That is an EL8 slip, recorded here and never rewritten.
+- mv56-vf passed only inside M99's combined candidate.
+- Codex ran M73–M175 and graded its own work. M176 is the independent audit.
+- For the DS owner: with the shutdown bound, DS-5d's "remove the root only after `stop()` resolves" (M162) holds only within `DOC_HOLDERS_STOP_MS` (2 s).
+
+**Named, no fix needed (ruling 3):**
+- The timeline n60 long frames are host starvation: script-free, starved before the rendering update, hitting every arm alike under load. The likely reason is the timeline's per-lane blur, which is unchanged since pre-MV (M185).
+- The timeline n20 heap at +30 MB against MV-4 is GC phase, not memory (M188).
+
+**Known, not fixed (after MV):**
+- ChromeBoundary never doubles its window for a piece that fails after it renders, so VibeField's usage column retries at most once a second.
+- Find re-renders on every publish.
+- Boundary errors reach no logger.
+- `pnpm siblings:pin` writes JSON that biome refuses (expanded arrays, an unescaped dash).
+- The perf lab's heap row needs a GC first.
+- Wall hardening: more bare globals, and CSS `:has(~)`.
+- `recede.ts` is dead code.
+- The replica's per-frame `safeParse` costs about 11 MiB/s at n20, in every view.
+- PJ-2's `project-records.test.ts` cleanup races the service's last write under load.
