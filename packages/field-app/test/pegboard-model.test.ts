@@ -2,8 +2,8 @@
  * DK-13 — THE PEGBOARD'S MODEL (field/desk/pegboard/pegboard-model.ts; DESIGN.md §8 "The pegboard — Objects, behind the
  * line"; R14, R19, P3c): what the filters offer (All, then the categories whose plugin is on, no counts), where they
  * stand in the board's clear header band (centred, 12 in, the 36 track in the 48 band, fading over the slide's last
- * 40 %), and the keyboard's path between the specimens (reading order, the rows above and below, the scroll that shows
- * the focused one whole).
+ * 40 %), and where the specimens hang (reading order; the row above and below for ↑ ↓). Since DK-17b (ICE I37) the walk
+ * ← →, the focus itself and the scroll that shows it are ICE's (`tray.focus`), tested in ICE's tray-focus suite.
  */
 import { specimenFit } from "@vibecook/ice/kernel";
 import { describe, expect, it } from "vitest";
@@ -16,9 +16,7 @@ import {
   offeredCategories,
   PEGBOARD,
   placeFilters,
-  revealScroll,
-  stepSpecimen,
-  visibleBand,
+  rowStep,
 } from "../src/field/desk/pegboard/pegboard-model";
 
 const CATEGORIES = [
@@ -126,7 +124,7 @@ const spec = (type: string, row: number, x0: number, w = 80): BoardSpecimen => (
   rect: { x0, y0: row, x1: x0 + w, y1: row + 100 },
 });
 
-describe("the keyboard's path between the specimens (R14)", () => {
+describe("↑ ↓ — the row above or below (R14; ← → are ICE's walk in the lay's order)", () => {
   // two rows: a b c over d e
   const board = [
     spec("a", 80, 40),
@@ -136,53 +134,19 @@ describe("the keyboard's path between the specimens (R14)", () => {
     spec("e", 280, 330),
   ];
 
-  it("lands on the first with any arrow while none is focused", () => {
-    expect(stepSpecimen(board, -1, "ArrowRight")).toBe(0);
-    expect(stepSpecimen(board, -1, "ArrowDown")).toBe(0);
-  });
-
-  it("moves ← → in reading order, never wrapping", () => {
-    expect(stepSpecimen(board, 0, "ArrowRight")).toBe(1);
-    expect(stepSpecimen(board, 2, "ArrowRight")).toBe(3);
-    expect(stepSpecimen(board, 4, "ArrowRight")).toBe(4);
-    expect(stepSpecimen(board, 0, "ArrowLeft")).toBe(0);
-    expect(stepSpecimen(board, 3, "ArrowLeft")).toBe(2);
-  });
-
-  it("moves ↑ ↓ to the nearest by its centre in the row above or below, staying at an edge row", () => {
+  it("moves to the nearest by its centre in the row above or below, staying at an edge row", () => {
     // b's centre 240: d's centre 160 (|80|), e's 370 (|130|) → d
-    expect(stepSpecimen(board, 1, "ArrowDown")).toBe(3);
+    expect(rowStep(board, 1, "ArrowDown")).toBe(3);
     // c's centre 400: e's 370 → e
-    expect(stepSpecimen(board, 2, "ArrowDown")).toBe(4);
+    expect(rowStep(board, 2, "ArrowDown")).toBe(4);
     // e's centre 370: a 80, b 240, c 400 → c
-    expect(stepSpecimen(board, 4, "ArrowUp")).toBe(2);
-    expect(stepSpecimen(board, 0, "ArrowUp")).toBe(0);
-    expect(stepSpecimen(board, 3, "ArrowDown")).toBe(3);
+    expect(rowStep(board, 4, "ArrowUp")).toBe(2);
+    expect(rowStep(board, 0, "ArrowUp")).toBe(0);
+    expect(rowStep(board, 3, "ArrowDown")).toBe(3);
   });
 
-  it("does not move with a key it does not take, nor on an empty board", () => {
-    expect(stepSpecimen(board, 1, "Enter")).toBeNull();
-    expect(stepSpecimen(board, 1, "Home")).toBeNull();
-    expect(stepSpecimen([], -1, "ArrowRight")).toBeNull();
-  });
-});
-
-describe("the scroll that shows the focused one whole", () => {
-  const band = visibleBand({ y: 438.5, h: 48 }, 780, { fade: 32 });
-
-  it("is the band under the header and its fade, above the foot and its fade", () => {
-    expect(band).toEqual({ top: 518.5, bottom: 660 });
-  });
-
-  it("moves the least: up for one above, down for one below, not at all for one inside", () => {
-    expect(revealScroll({ x0: 0, y0: 500, x1: 10, y1: 560 }, band, 100)).toBe(81.5);
-    expect(revealScroll({ x0: 0, y0: 600, x1: 10, y1: 700 }, band, 100)).toBe(140);
-    expect(revealScroll({ x0: 0, y0: 560, x1: 10, y1: 620 }, band, 100)).toBe(100);
-    // never above the board's top
-    expect(revealScroll({ x0: 0, y0: 300, x1: 10, y1: 360 }, band, 100)).toBe(0);
-  });
-
-  it("shows a specimen taller than the band from its top", () => {
-    expect(revealScroll({ x0: 0, y0: 600, x1: 10, y1: 900 }, band, 100)).toBe(181.5);
+  it("says nothing with nothing focused, nor on an empty board — the controller then asks ICE for the first", () => {
+    expect(rowStep(board, -1, "ArrowDown")).toBeNull();
+    expect(rowStep([], -1, "ArrowUp")).toBeNull();
   });
 });

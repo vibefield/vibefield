@@ -13,7 +13,9 @@
 //   KEYS      — B raises the board WITH the focus: the board's stop focused, the first specimen ringed where the desk
 //               draws it; → and ↓ move the ring; ⏎ lays the focused specimen at the view's centre — one object more, the
 //               selection, its box centred on the view — the board folds; ⌘Z takes it back (ONE undo step); Esc closes;
-//               the filters and the board two stops of Tab;
+//               the filters and the board two stops of Tab. Since DK-17b the focus is ICE's (I37 — `tray.focus`, read
+//               back from `anchor().focused`): the listbox says ICE's focused id and the ring stands 2 out from ICE's
+//               `focused.rect` — where the last frame drew the object;
 //   REFUSED   — B while typing in the draft types a b (the board stays shut); B under a cover (Godview) does nothing; an
 //               object in hand: the create faint ("Put it down first"), B and the create refused;
 //   PLUGIN    — the example clock's plugin off: the desk remounts, and the board no longer offers its "Things" (P3c); on
@@ -104,6 +106,21 @@ export function judgeRing(ring: Rect | null, object: Rect | null, type: string):
     : [
         `the ring ${JSON.stringify(ring)} is not 2 out from where the desk draws the ${type} ${JSON.stringify(object)}`,
       ];
+}
+
+/** The board's focus is ICE's (I37): the listbox's focused option is the anchor's `focused.id`, and the ring stands 2 out
+ * from the anchor's `focused.rect`. */
+export function judgeIceFocus(
+  listbox: string | null,
+  focused: { readonly id: string; readonly rect: Rect | null } | null,
+  ring: Rect | null,
+): string[] {
+  if (focused === null) return ["ICE's anchor says nothing focused"];
+  const problems: string[] = [];
+  if (listbox !== focused.id)
+    problems.push(`the listbox says ${listbox}, ICE's focus ${focused.id}`);
+  problems.push(...judgeRing(ring, focused.rect, `${focused.id} (ICE's focused.rect)`));
+  return problems;
 }
 
 /** Is a box centred on the view's centre (the object laid by ⏎)? */
@@ -226,6 +243,8 @@ interface DoorBoard {
       readonly label: string;
       readonly count: number;
     }[];
+    /** ICE's keyboard focus (I37): its type and its object as the last frame drew it */
+    readonly focused: { readonly id: string; readonly rect: Rect | null } | null;
   };
   readonly scroll: number;
   readonly foot: number | null;
@@ -575,6 +594,9 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
     (await door()).specimens.find((s) => s.type === type)?.object ?? null;
   problems.push(
     ...judgeRing(first.ring, await drawnOf(firstType), String(firstType)).map((p) => `KEYS: ${p}`),
+    ...judgeIceFocus(first.focused, (await door()).anchor.focused, first.ring).map(
+      (p) => `KEYS: ${p}`,
+    ),
   );
   await key("Right");
   keyMoves += 1;
@@ -588,6 +610,9 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
     ...judgeRing(right.ring, await drawnOf(right.focused), String(right.focused)).map(
       (p) => `KEYS: → ${p}`,
     ),
+    ...judgeIceFocus(right.focused, (await door()).anchor.focused, right.ring).map(
+      (p) => `KEYS: → ${p}`,
+    ),
   );
   await key("Down");
   keyMoves += 1;
@@ -595,10 +620,12 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
   const down = await seen();
   if (down.focused === right.focused)
     problems.push("KEYS: ↓ did not move the focus to the row below");
+  const downAnchor = (await door()).anchor;
   problems.push(
     ...judgeRing(down.ring, await drawnOf(down.focused), String(down.focused)).map(
       (p) => `KEYS: ↓ ${p}`,
     ),
+    ...judgeIceFocus(down.focused, downAnchor.focused, down.ring).map((p) => `KEYS: ↓ ${p}`),
   );
   // ⏎ — the focused one at the view's centre, one object more, selected, the board folded
   const before = await census();
@@ -638,7 +665,7 @@ export async function pegboardRows(d: BoardRowsDriver): Promise<string[]> {
       `KEYS: ⌘Z did not take the laid ${laying} back in one step (${JSON.stringify({ before, undone })})`,
     );
   say(
-    `SMOKE_CANVAS_BOARD_KEYS ${JSON.stringify({ first: firstType, ring: first.ring, right: right.focused, rightRing: right.ring, down: laying, downRing: down.ring, laid, box: laidBox, view, windowView, undone: laying === null ? null : (undone[laying] ?? 0) })}`,
+    `SMOKE_CANVAS_BOARD_KEYS ${JSON.stringify({ first: firstType, ring: first.ring, right: right.focused, rightRing: right.ring, down: laying, downRing: down.ring, iceFocused: downAnchor.focused, laid, box: laidBox, view, windowView, undone: laying === null ? null : (undone[laying] ?? 0) })}`,
   );
   await deselect();
 

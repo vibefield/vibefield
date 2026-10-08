@@ -10,7 +10,9 @@
  *     imperatively per publish in the header band, never a render per frame; a click chooses (`tray.category`);
  *   THE KEYS — a keyboard open takes the focus: the first specimen ringed where the board draws it, → ↓ move, ⏎ lays it at
  *     the view's centre (one undo step, selected; the board folds), Esc closes (before the desk's keymap), the pointer
- *     takes the ring away, the focus goes back where it was.
+ *     takes the ring away, the focus goes back where it was. Since DK-17b (ICE I37) the keys drive ICE's own doors — the
+ *     door here keeps `tray.focus` / `anchor().focused` / `tray.lay` over core's real ops (`focusTray`, `trayFocus`,
+ *     `ops.layFromTray`), the scroll into view core's lay's own.
  */
 import {
   Camera,
@@ -18,6 +20,7 @@ import {
   closeTray,
   type Entity,
   ensureTray,
+  focusTray,
   openTray,
   Position,
   PrefabId,
@@ -32,6 +35,7 @@ import {
   trayCategory,
   trayEntity,
   trayEntryCount,
+  trayFocus,
   trayOpen,
   Viewport,
 } from "@vibecook/ice";
@@ -57,11 +61,7 @@ import {
 import { readBoardStats, resetBoardStatsForTest } from "../src/field/desk/pegboard/board-stats";
 import { Pegboard } from "../src/field/desk/pegboard/Pegboard";
 import { moreOf, PegboardView } from "../src/field/desk/pegboard/PegboardView";
-import {
-  boardSpecimens,
-  placeFilters,
-  visibleBand,
-} from "../src/field/desk/pegboard/pegboard-model";
+import { boardSpecimens, placeFilters } from "../src/field/desk/pegboard/pegboard-model";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 import type { FrameSurface } from "../src/frame/frame-surface";
 
@@ -107,6 +107,8 @@ function trayDoor(engine: CanvasEngine): TestDoor {
   };
   /** The scroll as the desk last DREW it — the fact as of the last frame (a publish), trailing a scroll set since. */
   let drawnScroll = 0;
+  /** The focus as the last frame drew it (I37's `anchor().focused`): its type and its object where the board drew it. */
+  let drawnFocus: TrayAnchor["focused"] = null;
   const frame = () => {
     const scroll = drawnScroll;
     return {
@@ -154,11 +156,21 @@ function trayDoor(engine: CanvasEngine): TestDoor {
         entries: trayEntryCount(w),
         category: trayCategory(w),
         categories: trayCategories(w),
-        focused: null,
+        focused: drawnFocus,
       };
     },
-    focus: () => "",
-    lay: () => undefined,
+    focus: (to) => focusTray(w, to),
+    lay(id, opts) {
+      const type = id ?? trayFocus(w);
+      if (type === "") return undefined;
+      const camera = w.getResource(Camera);
+      if (camera === undefined) return undefined;
+      const at = opts?.at ?? { x: VIEW.width / 2, y: VIEW.height / 2 };
+      return engine.ops.layFromTray(
+        type,
+        opts?.space === "world" ? at : screenToWorld(at.x, at.y, camera),
+      );
+    },
     subscribe(fn) {
       listeners.add(fn);
       return () => {
@@ -170,6 +182,13 @@ function trayDoor(engine: CanvasEngine): TestDoor {
       act(() => {
         step();
         drawnScroll = fact();
+        const id = trayFocus(w);
+        const drawer = self.anchor().drawer;
+        const at =
+          drawer === null
+            ? undefined
+            : laidNow(engine, drawer, drawnScroll).find((d) => d.type === id);
+        drawnFocus = id === "" ? null : { id, rect: at === undefined ? null : at.rect };
         for (const fn of [...listeners]) fn();
       });
     },
@@ -208,15 +227,21 @@ const key = (
 
 /** Where the board draws each specimen now: the model over the world's laid specimens, the drawer and the scroll. */
 function drawnNow() {
-  const w = ce.world;
-  const tray = trayEntity(w);
   const drawer = door.anchor().drawer;
-  if (tray === undefined || drawer === null) return [];
+  if (drawer === null) return [];
+  return laidNow(ce, drawer, door.scroll());
+}
+
+/** The specimens core laid on `engine`'s board, where a drawer at `drawer` scrolled by `scroll` draws their objects. */
+function laidNow(engine: CanvasEngine, drawer: { x: number; y: number }, scroll: number) {
+  const w = engine.world;
+  const tray = trayEntity(w);
+  if (tray === undefined) return [];
   const laid = specimensOf(w, tray).map((e) => {
     const type = w.get(e, PrefabId)?.id as string;
     const at = w.get(e, Position) as { x: number; y: number };
     const size = w.get(e, Size) as { w: number; h: number };
-    const widget = ce.catalog.widget(type);
+    const widget = engine.catalog.widget(type);
     return {
       type,
       label: widget?.tray?.label ?? type,
@@ -224,7 +249,7 @@ function drawnNow() {
       natural: widget?.defaultSize ?? { w: 1, h: 1 },
     };
   });
-  return boardSpecimens(laid, drawer, door.scroll());
+  return boardSpecimens(laid, drawer, scroll);
 }
 
 /** The ring as the controller wrote it: its rect on screen. */
@@ -385,13 +410,21 @@ describe("the filters (R19, P3c)", () => {
   });
 });
 
-describe("inserting by keyboard (R14)", () => {
+describe("inserting by keyboard (R14) — on ICE's own doors (I37)", () => {
   const raise = (): void => {
     act(() => {
       requestBoardFocus();
       door.toggle();
     });
     door.publish({ p: 1 });
+    // the focus the board took moved ICE's: that move is a frame, and the ring is placed from what it drew
+    door.publish();
+  };
+  /** The ring 2 out from where the last frame drew ICE's focused object (`anchor().focused.rect`). */
+  const ringOnFocus = () => {
+    const rect = door.anchor().focused?.rect;
+    if (rect === null || rect === undefined) return null;
+    return { x0: rect.x0 - 2, y0: rect.y0 - 2, x1: rect.x1 + 2, y1: rect.y1 + 2 };
   };
 
   it("takes the focus when the keyboard raised the board, the first specimen ringed where the board draws it", () => {
@@ -401,6 +434,8 @@ describe("inserting by keyboard (R14)", () => {
       o.getAttribute("data-type"),
     );
     expect(specimens.length).toBeGreaterThan(2);
+    // ICE's focus — the board's first — and the listbox says it
+    expect(trayFocus(ce.world)).toBe(specimens[0]);
     expect(focusedType()).toBe(specimens[0]);
     // ringed 2 out from where the board draws its object (the focus ring's offset)
     const at = drawnNow().find((d) => d.type === specimens[0]);
@@ -410,26 +445,26 @@ describe("inserting by keyboard (R14)", () => {
       x1: (at?.rect.x1 ?? 0) + 2,
       y1: (at?.rect.y1 ?? 0) + 2,
     });
+    expect(ringRect()).toEqual(ringOnFocus());
   });
 
-  it("moves to the row below with ↓ — the board scrolled to show it (whole, or from its top), the ring following", () => {
+  it("moves to the row below with ↓ — focused by its id, ICE scrolling the board to show it, the ring following its anchor", () => {
     raise();
     const rows = new Set(drawnNow().map((d) => d.row));
     expect(rows.size).toBeGreaterThan(1);
     const from = drawnNow().find((d) => d.type === focusedType());
+    const scrolls = vi.spyOn(door, "scroll");
     key("ArrowDown");
+    // the focus moved at once (ICE's fact); the scroll that shows it is the lay's, in the frame the move asks for
+    expect(focusedType()).toBe(trayFocus(ce.world));
+    door.publish();
     const to = drawnNow().find((d) => d.type === focusedType());
     expect(to?.row).toBeGreaterThan(from?.row ?? Number.POSITIVE_INFINITY);
-    const drawer = door.anchor().drawer;
-    if (drawer === null || to === undefined) throw new Error("no drawer or no focus");
-    const band = visibleBand(drawer.header, VIEW.height, DRAWER);
     expect(door.scroll()).toBeGreaterThan(0);
-    expect(to.rect.y0).toBeGreaterThanOrEqual(band.top - 0.001);
-    // whole when it fits the band; one taller than the band shows from its top
-    if (to.rect.y1 - to.rect.y0 <= band.bottom - band.top)
-      expect(to.rect.y1).toBeLessThanOrEqual(band.bottom + 0.001);
-    else expect(to.rect.y0).toBeCloseTo(band.top, 6);
-    expect(ringRect()?.y0).toBeCloseTo(to.rect.y0 - 2, 6);
+    // VibeField scrolled nothing itself (DK-13's `revealScroll` retired): every call a read
+    expect(scrolls.mock.calls.every((c) => c[0] === undefined)).toBe(true);
+    expect(ringRect()).toEqual(ringOnFocus());
+    expect(ringRect()?.y0).toBeCloseTo((to?.rect.y0 ?? 0) - 2, 6);
   });
 
   it("moves between the specimens with the arrows, claiming them from the desk's keymap", () => {
@@ -439,24 +474,35 @@ describe("inserting by keyboard (R14)", () => {
     );
     const right = key("ArrowRight");
     expect(right.defaultPrevented).toBe(true);
+    // ICE's walk in the lay's order is the listbox's reading order
+    expect(trayFocus(ce.world)).toBe(options[1]);
     expect(focusedType()).toBe(options[1]);
+    key("ArrowLeft");
+    expect(focusedType()).toBe(options[0]);
+    // never wrapping: ← at the first stays there
     key("ArrowLeft");
     expect(focusedType()).toBe(options[0]);
     expect(keymapHeard).toEqual([]);
   });
 
-  it("lays the focused one at the view's centre with ⏎ — selected, ONE undo step — and the board folds", () => {
+  it("lays the focused one at the view's centre with ⏎ — the tray's own take: selected, ONE undo step — and ICE folds the board", () => {
     raise();
     key("ArrowRight");
     const type = focusedType();
     if (type === null) throw new Error("nothing focused");
     const before = deskCensus(ce)[type] ?? 0;
     const had = new Set(deskObjects(ce, type).map((o) => o.entity));
+    const lays = vi.spyOn(door, "lay");
+    const closes = vi.spyOn(door, "close");
     const enter = key("Enter");
     expect(enter.defaultPrevented).toBe(true);
+    // ICE's door, asked with nothing: the focused specimen at the view's centre
+    expect(lays).toHaveBeenCalledWith();
+    // the board folded by the lay itself (core's `closeTray`), never by VibeField's close
+    expect(trayOpen(ce.world)).toBe(false);
+    expect(closes).not.toHaveBeenCalled();
     act(() => step());
     expect(deskCensus(ce)[type]).toBe(before + 1);
-    expect(trayOpen(ce.world)).toBe(false);
     expect(readBoardStats().inserts).toBe(1);
     door.publish();
     expect(surfaceNow).toBeNull();
@@ -476,6 +522,18 @@ describe("inserting by keyboard (R14)", () => {
       step();
     });
     expect(deskCensus(ce)[type] ?? 0).toBe(before);
+  });
+
+  it("lays nothing and keeps the board out when ICE refuses the lay (nothing focused it hangs)", () => {
+    raise();
+    vi.spyOn(door, "lay").mockReturnValue(undefined);
+    const before = JSON.stringify(deskCensus(ce));
+    key("Enter");
+    act(() => step());
+    expect(JSON.stringify(deskCensus(ce))).toBe(before);
+    expect(readBoardStats().inserts).toBe(0);
+    expect(trayOpen(ce.world)).toBe(true);
+    expect(surfaceNow).toBe("objects");
   });
 
   it("closes the board on Esc before the desk's keymap hears it — but not from a field being typed in", () => {

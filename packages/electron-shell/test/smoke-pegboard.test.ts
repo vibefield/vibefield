@@ -8,6 +8,7 @@ import {
   judgeBoardCounters,
   judgeCentred,
   judgeFiltersPlace,
+  judgeIceFocus,
   judgeRing,
 } from "../src/testing/smoke-pegboard";
 
@@ -64,6 +65,26 @@ describe("the keyboard's ring (R14)", () => {
     expect(judgeRing({ x0: 0, y0: 0, x1: 1, y1: 1 }, null, "desk.note")).toEqual([
       "the desk drew no desk.note on the board",
     ]);
+  });
+});
+
+describe("the focus is ICE's (I37): the listbox says its id, the ring stands on its focused.rect", () => {
+  const rect = { x0: 100, y0: 500, x1: 200, y1: 640 };
+  const ring = { x0: 98, y0: 498, x1: 202, y1: 642 };
+  it("passes the listbox and the ring on ICE's focus", () => {
+    expect(judgeIceFocus("desk.note", { id: "desk.note", rect }, ring)).toEqual([]);
+  });
+  it("names a listbox on another specimen, a ring off ICE's rect, and no focus at all", () => {
+    expect(judgeIceFocus("desk.minimat", { id: "desk.note", rect }, ring)).toEqual([
+      "the listbox says desk.minimat, ICE's focus desk.note",
+    ]);
+    expect(
+      judgeIceFocus("desk.note", { id: "desk.note", rect: { ...rect, y0: 540, y1: 680 } }, ring),
+    ).toHaveLength(1);
+    expect(judgeIceFocus("desk.note", { id: "desk.note", rect: null }, ring)[0]).toMatch(
+      /drew no desk\.note/u,
+    );
+    expect(judgeIceFocus("desk.note", null, ring)).toEqual(["ICE's anchor says nothing focused"]);
   });
 });
 

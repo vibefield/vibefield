@@ -1,13 +1,14 @@
 import {
   type CanvasEngine,
+  type Entity,
   hungTypes,
   Position,
   PrefabId,
   Size,
   specimensOf,
   trayEntity,
+  trayFocus,
 } from "@vibecook/ice";
-import { DRAWER } from "@vibecook/ice/desk";
 import {
   type FocusEvent,
   type KeyboardEvent,
@@ -30,7 +31,6 @@ import {
 } from "./board-door";
 import { boardStats } from "./board-stats";
 import { filtersStyle, PegboardView, ringStyle } from "./PegboardView";
-import { layAtViewCentre } from "./pegboard-insert";
 import {
   type BoardSpecimen,
   boardSpecimens,
@@ -39,9 +39,7 @@ import {
   type LaidSpecimen,
   offeredCategories,
   placeFilters,
-  revealScroll,
-  stepSpecimen,
-  visibleBand,
+  rowStep,
 } from "./pegboard-model";
 
 // THE PEGBOARD'S CONTROLLER (DK-13; DESIGN.md §8 "The pegboard — Objects, behind the line"; R14, R19, R21, P3c). The
@@ -54,9 +52,12 @@ import {
 //  - THE FILTERS, placed imperatively each time the tray publishes — following the drawer every frame of its slide,
 //    fading in over its last 40 % — never a render per frame; All, then the categories the board hangs whose plugin is
 //    on (P3c), chosen by a click or ← → Home End (`tray.category(id)`).
-//  - INSERTING BY KEYBOARD (R14): the board a stop of Tab after the filters; the arrows move between the specimens the
-//    desk draws (the focused one ringed where it hangs, the board scrolled to show it), ⏎ lays it at the view's centre
-//    (one undo step; the board then folds, as a take handed to the desk does), Esc closes the board.
+//  - INSERTING BY KEYBOARD (R14), on ICE's own doors since desk.6 (I37; DK-17b retired DK-13's re-derived focus, take
+//    and scroll): the board a stop of Tab after the filters, its first specimen focused as it takes the keyboard
+//    (`tray.focus("first")`); ← → ICE's walk in the lay's order (`focus("prev" | "next")`), ↑ ↓ the specimen nearest in
+//    the row above or below, focused by its id — ICE scrolls the least that shows it; the RING over the focused object
+//    where the last frame drew it (`anchor().focused.rect`, 2 out); ⏎ `tray.lay()` — the tray's own take at the view's
+//    centre, one undo step, selected, the board folding as a handed take's does; Esc closes the board.
 
 const isEditable = (target: EventTarget | null): boolean =>
   target instanceof HTMLElement &&
@@ -140,18 +141,16 @@ function laidOf(engine: CanvasEngine, off: ReadonlySet<string>): LaidSpecimen[] 
 }
 
 /**
- * The specimens where the board draws them (the drawer as last drawn) at the board's scroll — the FACT, which the next
- * frame draws: the drawn scroll trails it by a frame, and the tray publishes no frame for a scroll alone (its anchor
- * says nothing of it), so a ring placed from the drawn one would stand where the specimen WAS.
+ * The specimens where the board hangs them (the drawer as last drawn) at the board's scroll — the listbox's options in
+ * reading order, and the rows ↑ ↓ step between. Never the ring's place: that is ICE's (`anchor().focused.rect`).
  */
-function drawnSpecimens(scroll?: number): BoardSpecimen[] {
+function drawnSpecimens(): BoardSpecimen[] {
   const desk = currentDesk();
   const door = boardDoor();
   if (desk === null || door === null) return [];
   const drawer = door.anchor().drawer;
   if (drawer === null) return [];
-  const at = scroll ?? door.scroll();
-  return boardSpecimens(laidOf(desk.engine, desk.off ?? new Set()), drawer, at);
+  return boardSpecimens(laidOf(desk.engine, desk.off ?? new Set()), drawer, door.scroll());
 }
 
 export function Pegboard({
@@ -165,11 +164,12 @@ export function Pegboard({
   const filtersRef = useRef<HTMLDivElement | null>(null);
   const boardRef = useRef<HTMLDivElement | null>(null);
   const ringRef = useRef<HTMLDivElement | null>(null);
-  /** The specimen the keyboard is on, and whether the ring shows (the board focused, by the keyboard). */
+  /** The specimen the keyboard is on — ICE's (`anchor().focused`, I37), followed for the listbox's words — and whether
+   * the ring shows (the board focused, by the keyboard). */
   const [focused, setFocused] = useState<string | null>(null);
-  const focusedRef = useRef<string | null>(null);
-  focusedRef.current = focused;
   const ringOn = useRef(false);
+  /** The board took the keyboard since it last came out: its first focus lands on its first specimen (DK-13). */
+  const focusedThisOpen = useRef(false);
   /** Where the focus was before the board took it, to give it back when the board folds. */
   const returnFocus = useRef<HTMLElement | null>(null);
   /** The specimens the board hangs now — the listbox's options (re-set only when the list itself changes). */
@@ -191,19 +191,18 @@ export function Pegboard({
   }, [state.category, options]);
 
   // ── the imperative placements: the filters in the header band, the ring over the focused specimen ───────────────
-  const placeRing = useCallback((scroll?: number): void => {
+  // The ring stands where the LAST FRAME drew the focused object (ICE's `anchor().focused.rect` — the fit inside its
+  // hang, what a press grabs; null while the drawer is not drawn): a focus move is a frame, and the scroll ICE takes to
+  // show it is drawn in it, so the ring never stands where a specimen was.
+  const placeRing = useCallback((): void => {
     const ring = ringRef.current;
     if (ring === null) return;
-    const type = focusedRef.current;
-    const at =
-      ringOn.current && type !== null
-        ? drawnSpecimens(scroll).find((s) => s.type === type)
-        : undefined;
-    if (at === undefined) {
+    const rect = ringOn.current ? (boardDoor()?.anchor().focused?.rect ?? null) : null;
+    if (rect === null) {
       delete ring.dataset["shown"];
       return;
     }
-    Object.assign(ring.style, ringStyle(at.rect));
+    Object.assign(ring.style, ringStyle(rect));
     ring.dataset["shown"] = "true";
     boardStats.placements += 1;
   }, []);
@@ -222,18 +221,10 @@ export function Pegboard({
       setHung((prev) =>
         prev.length === next.length && prev.every((p, i) => p.type === next[i]?.type) ? prev : next,
       );
-      // the board took the focus before its first lay (B: the focus comes as the drawer starts to rise): its first
-      const first = next[0];
-      if (
-        focusedRef.current === null &&
-        first !== undefined &&
-        document.activeElement === boardRef.current
-      ) {
-        ringOn.current = true;
-        focusedRef.current = first.type;
-        setFocused(first.type);
-      }
     }
+    // ICE's focus, followed (a render only when it moved to another specimen)
+    const id = anchor?.focused?.id ?? null;
+    setFocused((prev) => (prev === id ? prev : id));
     placeRing();
   }, [placeRing]);
 
@@ -242,13 +233,14 @@ export function Pegboard({
     return subscribeBoard(place);
   }, [place]);
 
-  // a focused specimen the board no longer hangs (another category, a plugin off) lands on the first it does
+  // the board holds the keyboard and ICE holds no focus — its first lay not laid yet (B: the focus comes as the drawer
+  // starts to rise), or a category ICE let the focus go in — the first it hangs (DK-13's reading); a write, so never
+  // inside the tray's publish
   useEffect(() => {
-    if (focused === null || hung.length === 0 || hung.some((s) => s.type === focused)) return;
-    const first = hung[0];
-    focusedRef.current = first?.type ?? null;
-    setFocused(first?.type ?? null);
-  }, [hung, focused]);
+    if (focused !== null || hung.length === 0 || !state.open) return;
+    if (document.activeElement !== boardRef.current) return;
+    boardDoor()?.focus("first");
+  }, [focused, hung, state.open]);
   useLayoutEffect(() => {
     placeRing();
   }, [focused, placeRing]);
@@ -308,7 +300,7 @@ export function Pegboard({
     }
     returnFocus.current = null;
     ringOn.current = false;
-    setFocused(null);
+    focusedThisOpen.current = false;
   }, [state.open]);
 
   // ── Esc closes the board (taken before the desk's own Esc ladder, which would also shut it — once is the board's) ─
@@ -341,7 +333,7 @@ export function Pegboard({
     };
   }, [state.open, placeRing]);
 
-  // ── the board's keys (R14) ─────────────────────────────────────────────────────────────────────────────────────
+  // ── the board's keys (R14), on ICE's doors (I37) ──────────────────────────────────────────────────────────────
   const onBoardKeyDown = (event: KeyboardEvent<HTMLDivElement>): void => {
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
     const door = boardDoor();
@@ -349,44 +341,42 @@ export function Pegboard({
     if (door === null || desk === null) return;
     if (event.key === "Enter") {
       event.preventDefault();
-      const type = focusedRef.current;
-      if (type === null) return;
-      const made = layAtViewCentre(desk.engine, type);
-      if (made === null) return;
+      // the tray's OWN take of the focused specimen, at the view's centre: one undo step, selected — and ICE folds the
+      // board as a handed take's does (refused — undefined — with nothing focused or a type the board no longer hangs)
+      let made: Entity | undefined;
+      try {
+        made = door.lay();
+      } catch {
+        return; // a document that takes no write (read-only) refuses the spawn, as ⏎ always did
+      }
+      if (made === undefined) return;
       boardStats.inserts += 1;
-      door.close();
       onSurfaceChange(foldSurface(surface, "objects"));
       return;
     }
-    const specimens = drawnSpecimens();
-    const index = specimens.findIndex((s) => s.type === focusedRef.current);
-    const next = stepSpecimen(specimens, index, event.key);
-    if (next === null) return;
+    let to: string;
+    if (event.key === "ArrowLeft") to = door.focus("prev");
+    else if (event.key === "ArrowRight") to = door.focus("next");
+    else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
+      // ICE's walk is linear; the row above or below is this board's geometry — focused by its id
+      const specimens = drawnSpecimens();
+      const index = specimens.findIndex((s) => s.type === trayFocus(desk.engine.world));
+      const next = rowStep(specimens, index, event.key);
+      const type = next === null ? undefined : specimens[next]?.type;
+      to = type === undefined ? door.focus("first") : door.focus(type);
+    } else return;
     event.preventDefault();
-    const to = specimens[next];
-    if (to === undefined) return;
     ringOn.current = true;
-    // the board scrolled to show it whole, under the header and over the foot
-    const anchor = door.anchor();
-    let scroll: number | undefined;
-    if (anchor.drawer !== null) {
-      const now = door.scroll();
-      const band = visibleBand(anchor.drawer.header, anchor.view.height, DRAWER);
-      const want = revealScroll(to.rect, band, now);
-      if (want !== now) scroll = door.scroll(want);
-    }
-    focusedRef.current = to.type;
-    setFocused(to.type);
-    placeRing(scroll);
+    setFocused(to === "" ? null : to);
+    // the ring follows the frame this focus move asks for (ICE scrolls the specimen into the face in it)
   };
   const onBoardFocus = (_event: FocusEvent<HTMLDivElement>): void => {
     ringOn.current = true;
-    if (focusedRef.current === null) {
-      const first = drawnSpecimens()[0];
-      if (first !== undefined) {
-        focusedRef.current = first.type;
-        setFocused(first.type);
-      }
+    const door = boardDoor();
+    if (door !== null && !focusedThisOpen.current) {
+      focusedThisOpen.current = true;
+      const to = door.focus("first");
+      setFocused(to === "" ? null : to);
     }
     placeRing();
   };

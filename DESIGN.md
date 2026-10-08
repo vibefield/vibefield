@@ -1122,6 +1122,16 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   closes it ("Close  Esc"); B toggles it, never while typing and never under a cover. **The tray
   island and its state are deleted at DK-13** (R21) — the pegboard replaces them; DK-17 is the
   sweep.
+  *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`):* the keyboard path runs on ICE's own doors
+  (petition I37). The focus is ICE's — `handle.tray.focus("first")` as the board takes the keyboard,
+  ← → its walk in the lay's order (`"prev"` / `"next"`, never wrapping), ↑ ↓ the specimen nearest
+  by centre in the row above or below, focused by its id — read back from `anchor().focused`; the
+  board scrolls the least that shows the focused specimen's HANG between the header and the foot
+  (ICE's, which does not keep it out of the content's fade under the header as DK-13's own scroll
+  did). The **ring** stands 2 out from `focused.rect` — the object's fit in its hang as the last
+  frame drew it, what a press there grabs — never the hang box: where DK-13 drew it. ⏎ is
+  `handle.tray.lay()`: the tray's own take at the view's centre, one undo step, selected, and the
+  board folding as a handed take's does.
 - **Send to…** (Chrome on the Mat §3.6; MC-D5 ruled through One Frame's lock: hand off to the line;
   DK-D26; One Frame §7, FC-D1; R15, R25; DK-14): **it only drafts** — it never sends and never
   aims; VibeField aims in one place, the line. Pressed (on the bar, in hand or in the menu), the

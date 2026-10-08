@@ -2,9 +2,10 @@ import type { TrayCategory } from "@vibecook/ice";
 import { specimenFit } from "@vibecook/ice/kernel";
 
 // THE PEGBOARD'S MODEL (DK-13; DESIGN.md §8 "The pegboard — Objects, behind the line"; R14, R19, P3c) — pure: what the
-// filters offer and where they stand in the board's clear header band, and the keyboard's path between the specimens
-// (where each is drawn, which is next, how far the board scrolls to show it). No DOM, no engine: the controller hands
-// it the desk's facts (the tray's anchor, the specimens core laid) and writes what it answers.
+// filters offer and where they stand in the board's clear header band, and where the specimens hang (the listbox's
+// options, and the row above or below for ↑ ↓). The keyboard's focus, its ← → walk, its scroll into view and its ring are
+// ICE's since desk.6 (I37 — `handle.tray.focus`, `anchor().focused`; DK-17b). No DOM, no engine: the controller hands it
+// the desk's facts (the tray's anchor, the specimens core laid) and writes what it answers.
 
 /** The canon's numbers (§8; §10 "The mat's places"). */
 export const PEGBOARD = {
@@ -17,11 +18,6 @@ export const PEGBOARD = {
   /** The filters fade in over the slide's last 40 % (ICE's own bar: `smoothstep(0.6, 1, p)`). */
   fadeFrom: 0.6,
 } as const;
-
-/** The header band's own numbers on the desk (ICE `DRAWER`): the content fades in under the header over `fade`. */
-export interface BoardLaw {
-  readonly fade: number;
-}
 
 /** One filter: its id (`tray.category(id)`; `""` is All) and what it shows. */
 export interface FilterOption {
@@ -144,23 +140,17 @@ export function boardSpecimens(
 }
 
 /**
- * The keyboard's path between the specimens (R14): ← → the one before or after in reading order, ↑ ↓ the nearest (by
- * its centre) in the row above or below — never wrapping. `index` is the focused one's (−1: none yet — any arrow lands
- * on the first). Returns the next index, or null for a key the board does not move with.
+ * ↑ ↓ on the board (R14): the specimen nearest by its centre in the row above or below the one at `index` — never
+ * wrapping (at the top or the bottom row it stays). Null with nothing focused (`index` −1) or nothing hung. ← → are
+ * ICE's own walk in the lay's order (`tray.focus("prev" | "next")`, I37).
  */
-export function stepSpecimen(
+export function rowStep(
   specimens: readonly BoardSpecimen[],
   index: number,
-  key: string,
+  key: "ArrowUp" | "ArrowDown",
 ): number | null {
-  const n = specimens.length;
-  if (n === 0) return null;
-  if (key !== "ArrowLeft" && key !== "ArrowRight" && key !== "ArrowUp" && key !== "ArrowDown")
-    return null;
   const at = specimens[index];
-  if (at === undefined) return 0;
-  if (key === "ArrowLeft") return Math.max(0, index - 1);
-  if (key === "ArrowRight") return Math.min(n - 1, index + 1);
+  if (at === undefined) return null;
   const rows = [...new Set(specimens.map((s) => s.row))].sort((a, b) => a - b);
   const to = rows[rows.indexOf(at.row) + (key === "ArrowDown" ? 1 : -1)];
   if (to === undefined) return index;
@@ -176,30 +166,4 @@ export function stepSpecimen(
     }
   });
   return best;
-}
-
-/** The band of the board where its content shows whole: under the header and its fade, above the foot and its fade. */
-export function visibleBand(
-  header: { readonly y: number; readonly h: number },
-  viewHeight: number,
-  law: BoardLaw,
-): { readonly top: number; readonly bottom: number } {
-  return { top: header.y + header.h + law.fade, bottom: viewHeight - PEGBOARD.foot - law.fade };
-}
-
-/** The scroll that shows `rect` whole inside `band` — the least move from `scroll` (never above the board's top). */
-export function revealScroll(
-  rect: ScreenRect,
-  band: { readonly top: number; readonly bottom: number },
-  scroll: number,
-): number {
-  if (rect.y0 < band.top) return Math.max(0, scroll - (band.top - rect.y0));
-  if (rect.y1 > band.bottom) {
-    const down = scroll + (rect.y1 - band.bottom);
-    // a specimen taller than the band shows its top
-    return rect.y1 - rect.y0 > band.bottom - band.top
-      ? Math.max(0, scroll + (rect.y0 - band.top))
-      : down;
-  }
-  return scroll;
 }
