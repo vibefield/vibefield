@@ -302,8 +302,8 @@ describe("placeFacts on real repositories", () => {
       taskRoots: [],
     });
     const [ga, gb, gc] = first.places.map(gitOf);
-    const set = (place: string, g: PlaceGitRead): PlaceSampleSet => ({
-      place,
+    const set = (placeId: string, g: PlaceGitRead): PlaceSampleSet => ({
+      placeId,
       root: g.root ?? "",
       samples: g.samples,
     });
@@ -313,7 +313,7 @@ describe("placeFacts on real repositories", () => {
       set("C", gc as PlaceGitRead),
       // a forged set: same root, samples that are no commit ids (never handed to git)
       {
-        place: "F",
+        placeId: "F",
         root: (ga as PlaceGitRead).root ?? "",
         samples: [
           { sha: "--output=/tmp/x", depth: 0 },
@@ -321,7 +321,11 @@ describe("placeFacts on real repositories", () => {
         ],
       },
       // claims the root, but its commits are the unrelated repository's
-      { place: "G", root: (ga as PlaceGitRead).root ?? "", samples: (gc as PlaceGitRead).samples },
+      {
+        placeId: "G",
+        root: (ga as PlaceGitRead).root ?? "",
+        samples: (gc as PlaceGitRead).samples,
+      },
     ];
     const second = await read({
       places: [{ path: a }, { path: b }, { path: unrelated }],
@@ -329,17 +333,20 @@ describe("placeFacts on real repositories", () => {
       taskRoots: [],
     });
     const [ha, hb, hc] = second.places.map((place) => done(place).hits);
+    const at = (depth: number, g: PlaceGitRead | undefined) =>
+      g?.samples.find((sample) => sample.depth === depth)?.sha;
     // a holds b's tip; b holds a's commit two back (a's tip and one-back are not in b)
     expect(ha).toEqual([
-      { place: "A", depth: 0 },
-      { place: "B", depth: 0 },
+      { placeId: "A", sha: head(a), depth: 0 },
+      { placeId: "B", sha: head(b), depth: 0 },
     ]);
     expect(hb).toEqual([
-      { place: "A", depth: 2 },
-      { place: "B", depth: 0 },
+      { placeId: "A", sha: at(2, ga), depth: 2 },
+      { placeId: "B", sha: head(b), depth: 0 },
     ]);
+    expect(at(2, ga)).toBe(head(b));
     // c's root differs: nothing is looked for in it but its own
-    expect(hc).toEqual([{ place: "C", depth: 0 }]);
+    expect(hc).toEqual([{ placeId: "C", sha: head(unrelated), depth: 0 }]);
   });
 
   it("an unchanged place costs the cheap read; a commit or new candidates read again", async () => {
@@ -357,12 +364,12 @@ describe("placeFacts on real repositories", () => {
     expect(again.hits).toBe("unchanged");
     expect(again.key).toBe(first.key);
     // new candidates for its root: the hits are read again, git is not
-    const peers = [{ place: "P", root: g.root ?? "", samples: g.samples }];
+    const peers = [{ placeId: "P", root: g.root ?? "", samples: g.samples }];
     const withPeers = done(
       (await read({ places: [{ path: root, known }], peers, taskRoots: [] })).places[0],
     );
     expect(withPeers.git).toBe("unchanged");
-    expect(withPeers.hits).toEqual([{ place: "P", depth: 0 }]);
+    expect(withPeers.hits).toEqual([{ placeId: "P", sha: head(root), depth: 0 }]);
     // a commit moves the key
     writeFileSync(join(root, "n.txt"), "moved\n");
     git(root, "commit", "-q", "-am", "moved");
@@ -488,6 +495,11 @@ describe("placeFacts on real repositories", () => {
       { home: base, temps: [join(base, "tmp")] },
     );
     expect(answer.places.map((place) => done(place).kind)).toEqual(["task", "temp", "home"]);
+    expect(answer.places.map((place) => done(place).homeRelative)).toEqual([
+      "Documents/Codex/2026-10-07/task-one",
+      "tmp/fixture",
+      null,
+    ]);
   });
 
   it("stops at its budget: what it did not reach comes back skipped", async () => {

@@ -121,7 +121,7 @@ export interface PlaceSample {
 /** A place's samples, handed to the worker to look for in other places. */
 export interface PlaceSampleSet {
   /** the place's id, as its owner publishes it (opaque here) */
-  place: string;
+  placeId: string;
   /** its first-parent root: only a place with the same root is searched */
   root: string;
   samples: PlaceSample[];
@@ -130,7 +130,8 @@ export interface PlaceSampleSet {
 /** Another place's sample found in this place's history (`cat-file -e`, then
  * `merge-base --is-ancestor`): the shallowest one held. */
 export interface PlaceHit {
-  place: string;
+  placeId: string;
+  sha: string;
   depth: number;
 }
 
@@ -209,6 +210,10 @@ export type PlaceRead =
       /** the volume ignores letter case */
       caseless: boolean;
       kind: PlaceKind;
+      /** the path below this user's home, `/`-separated (`Projects/app`);
+       * null when it is not below home (or is home) — what "the same folder
+       * on two desktops" compares, without a home path on the wire (§4.2) */
+      homeRelative: string | null;
       /** null: not in a repository, not there, or refused */
       git: PlaceGitRead | null | "unchanged";
       gitRefused: PlaceGitRefusal | null;

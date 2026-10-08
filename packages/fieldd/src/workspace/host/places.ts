@@ -142,6 +142,22 @@ export function placeKind(
   return "project";
 }
 
+/** The path below `home`, `/`-separated, or null (not below it, or home). */
+export function homeRelativeOf(
+  path: string,
+  home: string,
+  platform: NodeJS.Platform,
+  caseless: boolean,
+): string | null {
+  const p = slashed(path, platform);
+  const h = slashed(home, platform);
+  const fold = (s: string) => (caseless ? s.toLowerCase() : s);
+  const prefix = h.endsWith("/") ? h : `${h}/`;
+  return fold(p).startsWith(fold(prefix)) && p.length > prefix.length
+    ? p.slice(prefix.length)
+    : null;
+}
+
 /** Is the volume the path lives on there? Only a removable volume's mount
  * point can be absent: `/Volumes/<name>` (macOS), `/media/<user>/<name>`,
  * `/run/media/<user>/<name>`, `/mnt/<name>` (Linux), a drive (Windows). */
@@ -475,7 +491,7 @@ async function fullRead(
 function candidatesFor(reading: Reading, root: string): PlaceSampleSet[] {
   const out: PlaceSampleSet[] = [];
   for (const peer of reading.peers) {
-    if (peer.root !== root || typeof peer.place !== "string") continue;
+    if (peer.root !== root || typeof peer.placeId !== "string") continue;
     const samples = (Array.isArray(peer.samples) ? peer.samples : [])
       .filter(
         (sample) =>
@@ -486,9 +502,9 @@ function candidatesFor(reading: Reading, root: string): PlaceSampleSet[] {
           sample.depth <= MAX_DEPTH,
       )
       .sort((a, b) => a.depth - b.depth);
-    if (samples.length > 0) out.push({ place: peer.place, root, samples });
+    if (samples.length > 0) out.push({ placeId: peer.placeId, root, samples });
   }
-  return out.sort((a, b) => (a.place < b.place ? -1 : a.place > b.place ? 1 : 0));
+  return out.sort((a, b) => (a.placeId < b.placeId ? -1 : a.placeId > b.placeId ? 1 : 0));
 }
 
 async function hitsOf(
@@ -520,7 +536,7 @@ async function hitsOf(
         ancestor.set(sample.sha, answer);
       }
       if (answer) {
-        hits.push({ place: candidate.place, depth: sample.depth });
+        hits.push({ placeId: candidate.placeId, sha: sample.sha, depth: sample.depth });
         break; // the shallowest held; every deeper one is held too
       }
     }
@@ -544,7 +560,17 @@ async function readPlace(
     ? caselessAt(canonical, reading.platform)
     : reading.platform === "darwin" || reading.platform === "win32";
   const kind = placeKind(canonical, reading, reading.platform, caseless);
-  const base = { path: asked, skipped: false as const, canonical, exists, mounted, caseless, kind };
+  const homeRelative = homeRelativeOf(canonical, reading.home, reading.platform, caseless);
+  const base = {
+    path: asked,
+    skipped: false as const,
+    canonical,
+    exists,
+    mounted,
+    caseless,
+    kind,
+    homeRelative,
+  };
   if (!exists) return { ...base, git: null, gitRefused: null, key: null, hits: [], hitsKey: null };
   const run = gitIn(reading, canonical);
   const cheap = await cheapRead(run, canonical);
