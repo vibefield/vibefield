@@ -331,6 +331,15 @@ export async function floor(config: FloorConfig): Promise<Floor> {
       "the daemon's own gateway coming up",
     );
   }
+  // The floor's terminal endpoints reach the daemon over the management link after
+  // `bootstrap` resolves; a row that births a pane before they land is refused
+  // UNAVAILABLE "the terminal floor is not available" (2026-10-08: red under load in
+  // 3 of 9 gates, a different AR-7 row each time). Wait for them, as a window would.
+  await poll(
+    () => (daemon.native.terminalEndpoints !== undefined ? true : undefined),
+    FLOOR_WAIT_MS,
+    "the floor's terminal endpoints reaching the daemon",
+  );
   return {
     root,
     dataDir,
