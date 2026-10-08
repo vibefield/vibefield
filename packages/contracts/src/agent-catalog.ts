@@ -117,6 +117,18 @@ export const AgentLayoutRoot = z
   .max(256)
   .regex(/^~(\/[^/]+)*$/, "a layout root is `~` or `~/segment(/segment)*`");
 
+/** PJ-D21 (RULED 2026-10-07; `thinking-project-places.md` §4.2) — the folders
+ * an agent creates per task, as a `~/…` glob in which a `*` segment stands for
+ * any one folder name (Codex's: `~/Documents/Codex` and then two `*` segments,
+ * a date and a task). A place at or below a folder one names is a task folder,
+ * filed under Temporary (PJ-L4): the catalog declares it, so no path pattern
+ * for a vendor's folders ever lives in the engine (AR-L1). */
+export const AgentTaskRoot = z
+  .string()
+  .min(3)
+  .max(256)
+  .regex(/^~(\/[^/]+)+$/, "a task root is `~/segment(/segment)*`, `*` for one whole segment");
+
 /** One row of the catalog — STRICT (an unknown key in the table is a typo; the
  * wire form below is the tolerant one). */
 export const AgentCatalogEntry = z
@@ -144,6 +156,8 @@ export const AgentCatalogEntry = z
     admitted: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
     decision: z.string().min(1).max(512),
     surfaces: AgentSurfaces,
+    /** PJ-D21 — the folders the agent makes per task (absent: none) */
+    taskRoots: z.array(AgentTaskRoot).min(1).max(8).optional(),
   })
   .strict();
 export type AgentCatalogEntry = z.infer<typeof AgentCatalogEntry>;
@@ -210,6 +224,9 @@ export const AGENT_CATALOG = [
     // Erratum 2026-09-28 (AR7-D15, ruled 2026-09-27): a grammar is not the
     // licence; the claim stands because the adapter classifies
     // (`nativeInvocation.classifies: true` at puppeteer 2b83e2c; R23 reads it).
+    // 2026-10-08 PJ-D21 (ruled 2026-10-07): `taskRoots` — the Codex app makes
+    // a folder per task under `~/Documents/Codex/<date>/<task>` (the project
+    // places corpus, C17); a place there is Temporary, not a project.
     id: "codex",
     label: "Codex",
     status: "supported",
@@ -220,6 +237,7 @@ export const AGENT_CATALOG = [
     decision:
       "AC-D6 — supported: spawn witnessed here, the join on the scripted daemon; real-daemon join owed",
     surfaces: { desktop: true, phone: true },
+    taskRoots: ["~/Documents/Codex/*/*"],
   },
   {
     // 2026-09-22 AC-D6: `preview` — both pins implement it (launch, usage,
@@ -434,6 +452,9 @@ export interface AgentCatalogReaders {
   /** the rows a surface sees, in display order — `declined` never leaves
    * fieldd; `surface` applies the row's own visibility */
   visible(surface?: AgentSurface): AgentCatalogEntry[];
+  /** PJ-D21 — every row's task roots, whatever its status (a folder an agent
+   * made is a task folder whether or not the agent is offered today) */
+  taskRoots(): string[];
 }
 
 export function createAgentCatalogReaders(
@@ -460,6 +481,7 @@ export function createAgentCatalogReaders(
       table.filter(
         (row) => shown.includes(row.status) && (surface === undefined || row.surfaces[surface]),
       ),
+    taskRoots: () => [...new Set(table.flatMap((row) => row.taskRoots ?? []))],
   };
 }
 

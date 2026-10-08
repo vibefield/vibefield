@@ -10,6 +10,7 @@ import {
   AgentCatalogEntry,
   AgentCatalogResult,
   AgentProviderSummary,
+  AgentTaskRoot,
   catalogEntry,
   catalogIdForKind,
   createAgentCatalogReaders,
@@ -233,5 +234,21 @@ describe("the agent catalog (AC-1)", () => {
     expect(readers.visible().map((r) => r.id)).toEqual(["x"]);
     expect(readers.entry("claude")).toBeUndefined();
     expect(AGENT_CATALOG_READERS.table).toBe(AGENT_CATALOG);
+  });
+
+  it("task roots (PJ-D21): `~/…` globs on the rows that make task folders, read across the table", () => {
+    const roots = AGENT_CATALOG_READERS.taskRoots();
+    expect(roots).toContain("~/Documents/Codex/*/*");
+    for (const root of roots) expect(AgentTaskRoot.parse(root)).toBe(root);
+    const base = AgentCatalogEntry.parse(AGENT_CATALOG[0]);
+    for (const bad of [[], ["/abs/path"], ["Documents/x"], ["~"], ["~/a//b"]])
+      expect(() => AgentCatalogEntry.parse({ ...base, taskRoots: bad })).toThrow();
+    // every row's, whatever its status — a folder an agent made stays a task folder
+    const readers = createAgentCatalogReaders([
+      { ...base, id: "x", taskRoots: ["~/a/*"] },
+      { ...base, id: "y", status: "declined", taskRoots: ["~/a/*", "~/b/*/*"] },
+      { ...base, id: "z" },
+    ]);
+    expect(readers.taskRoots()).toEqual(["~/a/*", "~/b/*/*"]);
   });
 });

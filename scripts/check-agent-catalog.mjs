@@ -361,6 +361,15 @@ function validateCatalog(json) {
     if (row.layoutRoot !== null && typeof row.layoutRoot !== "string") {
       problems.push(`${where}: layoutRoot is neither a string nor null`);
     }
+    // PJ-D21 — the folders an agent makes per task: `~/…` globs, absent for most
+    if (
+      row.taskRoots !== undefined &&
+      (!Array.isArray(row.taskRoots) ||
+        row.taskRoots.length === 0 ||
+        row.taskRoots.some((root) => typeof root !== "string" || !/^~(\/[^/]+)+$/.test(root)))
+    ) {
+      problems.push(`${where}: taskRoots is not a non-empty list of \`~/…\` globs`);
+    }
     const p = row.seams?.puppeteer;
     const r = row.seams?.rosetta;
     if (row.seams === null || typeof row.seams !== "object") problems.push(`${where}: no seams`);
