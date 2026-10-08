@@ -45,6 +45,7 @@ export {
   type TerminalRosterState,
   type TerminalSessionView,
   type TransportTrace,
+  terminalBootstrapHome,
   terminalPoolCellCount,
   terminalPoolConfigured,
   terminalPoolDemand,

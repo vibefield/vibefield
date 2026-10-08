@@ -749,15 +749,23 @@ export function catalogPortOver(
 
 /* ── the host port ──────────────────────────────────────────────────────── */
 
-/** What the room asks a desktop, answered honestly for this one in slice 1:
- * the platform from the preload; no home directory (fieldd tells the renderer
- * only home-abbreviated paths, so the room shows full ones); no "open in
- * browser" (no file door on the desktop yet); no site icons (the room draws
- * its globe); and no worktree guest — ABSENT, so the guest stays closed with
- * its honest state until AR-8d (AR-D38). */
-export function hostPortOver(platform: string | null): HostPort {
+/** What the room asks a desktop, answered honestly for this one: the platform
+ * from the preload; the home directory from the window's bootstrap (AR-8 L2 —
+ * the room writes a path under it as `~/…`, and every path in full when it is
+ * null: a browser or catalog harness); no "open in browser" (no file door on
+ * the desktop yet); no site icons (the room draws its globe). The worktree
+ * guest is `historyPortsOver`'s to add.
+ *
+ * *Corrected 2026-10-08 (AR-8, build-hf.md §2):* slice 1 said "no home
+ * directory (fieldd tells the renderer only home-abbreviated paths, so the
+ * room shows full ones)". False: the catalog carries rosetta's ABSOLUTE
+ * `root_paths` and `cwd` (fieldd `index-catalog.ts`, `#projectRow` and
+ * `#sessionRow`), so the room showed every path in full for want of a home,
+ * not by design. It also said the worktree guest stays ABSENT until AR-8d —
+ * FS-1b hands the room the files service's `WorkspaceClient` as its guest. */
+export function hostPortOver(platform: string | null, homeDir: string | null): HostPort {
   return {
-    homeDir: null,
+    homeDir,
     platform,
     openInBrowser: async () => false,
     favicon: async () => null,
@@ -777,6 +785,9 @@ export interface HistoryPorts extends RoomPorts {
 
 export interface HistoryPortsOptions {
   readonly platform: string | null;
+  /** The OS user's home, as the window's bootstrap states it
+   * (`terminalBootstrapHome()`); absent or null when the window has none. */
+  readonly home?: string | null;
   readonly catalog?: CatalogPortOptions;
   readonly sessions?: SessionPortOptions;
   readonly assets?: AssetSourceOptions;
@@ -796,7 +807,7 @@ export function historyPortsOver(
     catalog,
     sessions,
     assets,
-    host: { ...hostPortOver(options.platform), worktree: workspace },
+    host: { ...hostPortOver(options.platform, options.home ?? null), worktree: workspace },
     dispose() {
       workspace.dispose();
       catalog.dispose();

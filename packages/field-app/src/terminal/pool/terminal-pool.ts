@@ -344,6 +344,16 @@ export function terminalPoolConfigured(): boolean {
   return terminalBootstrap !== null;
 }
 
+/** The OS user's home as main read it (`homedir()`) and stated it on this
+ * window's authenticated bootstrap — the same user rosettad indexes with
+ * `--home`. A plain read for a reader outside the pool (History's host port,
+ * AR-8 L2): the snapshot's `shell` is published only while the pool is dormant
+ * or open, and the home does not move with the pool's phase. Null in a browser
+ * or catalog harness, which has no bootstrap. */
+export function terminalBootstrapHome(): string | null {
+  return terminalBootstrap?.home ?? null;
+}
+
 export function configureTerminalPool(bootstrap: WindowTerminalBootstrap | undefined): void {
   terminalBootstrap = bootstrap ?? null;
   publish();
