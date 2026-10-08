@@ -260,6 +260,11 @@ import { workspaceError } from "./workspace/tickets";
 // root that mints narrower per-window tokens via system.mintWindowToken) and
 // product.json (port/pid/bootId discovery metadata for adopt-or-spawn).
 
+/** DS-5d — how long a stopping fieldd waits for the holders ledger's last
+ * write before it goes on without it (M176 item 7): the supervisor's default
+ * TERM grace, and the bound the egress drain beside it already keeps. */
+export const DOC_HOLDERS_STOP_MS = 2_000;
+
 export interface FielddConfig {
   dataDir: string;
   controlPort?: number; // default 0 = ephemeral (UA-D12; product.json records the actual)
@@ -277,6 +282,9 @@ export interface FielddConfig {
   /** TC-S2 test seam: the terminal cell-birth wait budget (production
    * defaults to the cell's genned hello deadline). */
   terminalBirthWaitMs?: number;
+  /** DS-5d test seam: the bound on the holders ledger's last write at stop
+   * (`DOC_HOLDERS_STOP_MS` by default). */
+  docHoldersStopMs?: number;
   /** DS-4 seam: how a terminal ticket forwarded from another desktop becomes
    * doors a window here dials (`TerminalServiceOptions.remoteCellRewriter`).
    * Absent = production's `EgressCellRewriter` (DS-1b, 2026-10-01): one egress
@@ -948,6 +956,33 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     let presenceRooms: PresenceRoomRouter | null = null;
     // DS-5 (DS-D6) — the holders slice, bound once DeviceService exists below.
     let docHolders: DocHoldersService | null = null;
+    // DS-5d — both stop ladders below wait for the ledger's last write (the
+    // owner may remove its data root only after it, M162), but BOUNDED (M176):
+    // the write is small and best-effort, so a filesystem that never answers
+    // costs that write and never the shutdown, and says so.
+    const settleDocHolders = async (): Promise<void> => {
+      const holders = docHolders;
+      if (holders === null) return;
+      const budgetMs = config.docHoldersStopMs ?? DOC_HOLDERS_STOP_MS;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      const outcome = await Promise.race([
+        holders.stop().then(
+          () => "settled" as const,
+          () => "settled" as const,
+        ),
+        new Promise<"expired">((resolve) => {
+          timer = setTimeout(() => resolve("expired"), budgetMs);
+        }),
+      ]);
+      clearTimeout(timer);
+      if (outcome === "expired") {
+        logger.warn(
+          "fieldd.docs.holders_stop_timeout",
+          "The holders ledger did not settle in time; shutdown continues without it",
+          { budgetMs },
+        );
+      }
+    };
     // UA-D7 — the user's posture, CACHED because the three sync gates ask
     // synchronously (a commit hook cannot await a settings-document read) and
     // because the settings doc is constructed further down. It starts at the
@@ -5220,7 +5255,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           rosettad?.stop() ?? Promise.resolve(),
           workspace.stop(), // FS-1a — the files worker leaves with the daemon
         ]);
-        await docHolders?.stop(); // DS-5d — finish the holders ledger before fatal exit
+        await settleDocHolders(); // DS-5d — the holders ledger's last write, bounded (M176)
         indexTail.dispose(); // SP-6 — the session sockets close with the daemon they follow
         indexCatalog.dispose();
         runtimeDiagnostics.dispose();
@@ -5658,7 +5693,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
           endpoints.dispose();
           mcp.dispose();
           await settingsDoc.dispose(); // D29′ — the doc's writes are already durable
-          await docHolders?.stop(); // DS-5d — the slice closes and its ledger is settled
+          await settleDocHolders(); // DS-5d — the slice closes, its ledger settled or bounded
           for (const off of systemDocs?.unregister ?? []) off();
           await systemDocs?.library.dispose(); // DS-5 — every library write is durable
           api.close();
