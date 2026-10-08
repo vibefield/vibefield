@@ -3,7 +3,16 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-10-05 — FS WAVE 2 AND PACKAGED FILES VERIFICATION.**
+> stays in the design docs + specs. Last rewritten: **2026-10-08 — THE FILES & HISTORY DOCKET RULED; A LIVE FILES SESSION OUTLIVES ITS TICKET (`dad2f1de`).**
+> James ruled thirteen calls and the twenty-four project-places marks on one page (DECISIONS, the FS and PJ rows). R1: a ticket's
+> expiry bounds redemption only, so History's file column no longer resets every 9.5 minutes; R6: each attachment is audited, a
+> place keeps the identity it was touched with, the viewport cap is named (LANDED §FS session fix-ups). PJ-D1…D24 all at the lean:
+> PJ-1 (= AR-8e) is unblocked; James's judgments J1–J11 remain for its golden fixtures. **Every push is HELD** (R9 (c), R10 (b)).
+> Upstream, built and awaiting James's word: rosetta RO-15 (`ro/15-git-sha-guard`); in build: mille M8 (linear hydration) and
+> M10 (time-bounded reads), which land fsm8 first; the mille-git spec erratum patch is drafted for James to apply.
+> Next: PJ-1's build plan; DS-7 and FS-4 at truffle's RFC 026 egress release (R12: soon); the phone over-the-air run (R8);
+> FS-3's desk tree with DK; FS-5. GitService replaces the interim git port at mille's release (R2), which waits on the push hold.
+> Previous rewrite, kept for continuity — **2026-10-05 — FS WAVE 2 AND PACKAGED FILES VERIFICATION.**
 > FS-1b attaches History to the files worker through single-use tree/git tickets and a renderer Worker;
 > bodies and diffs bypass fieldd RPC and Electron main. Root and principal loss revoke both legs, and worker
 > death reconnects to a fresh snapshot. FS-2 browses Recent places, home and volumes on the selected desktop,
