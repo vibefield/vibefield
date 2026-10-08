@@ -1,0 +1,16 @@
+{
+  "//": "PJ-1 — a plain folder in a task root the agent catalog declares (taskRoots, PJ-D21): Temporary whatever it holds, and no git facts at all. Spelled twice on a caseless volume, so rosetta's other spelling rides as an alias.",
+  "placeId": "pl-9e2c0f73",
+  "path": "/home/dev/Documents/Codex/2026-09-10/thread",
+  "aliases": ["/home/dev/documents/codex/2026-09-10/thread"],
+  "kind": "task",
+  "caseless": true,
+  "exists": false,
+  "mounted": true,
+  "git": false,
+  "homeRelative": "Documents/Codex/2026-09-10/thread",
+  "remotes": [],
+  "samples": [],
+  "hits": [],
+  "observedAt": 1759276800000
+}

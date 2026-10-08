@@ -1,0 +1,26 @@
+{
+  "//": "PJ-1 — one place as its OWNER publishes it (project-places.ts): a clone below home with its identity remote and a stray upstream (normalized), the guarded first-parent root, its samples (tip, then 1, 2, 4 … commits back) and a hit — another place's sample this desktop found in this place's own objects, 2 commits before that place's tip, so the two JOIN (≤ RECENT_DEPTH). Synthetic SHAs.",
+  "placeId": "pl-4c1e9a0b",
+  "path": "/home/dev/Projects/app",
+  "aliases": [],
+  "kind": "project",
+  "caseless": true,
+  "exists": true,
+  "mounted": true,
+  "git": true,
+  "homeRelative": "Projects/app",
+  "identityRemote": "github.com/acme/app",
+  "remotes": ["github.com/acme/app", "github.com/upstream/starter"],
+  "root": "a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0a0",
+  "branch": "main",
+  "samples": [
+    { "sha": "1111111111111111111111111111111111111111", "depth": 0 },
+    { "sha": "2222222222222222222222222222222222222222", "depth": 1 },
+    { "sha": "3333333333333333333333333333333333333333", "depth": 2 },
+    { "sha": "4444444444444444444444444444444444444444", "depth": 4 }
+  ],
+  "hits": [
+    { "placeId": "pl-77d3f2a1", "sha": "5555555555555555555555555555555555555555", "depth": 2 }
+  ],
+  "observedAt": 1759276800000
+}

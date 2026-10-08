@@ -136,6 +136,7 @@ import {
 } from "../src/mgmt";
 import { PluginRegistrySnapshot } from "../src/plugin-registry";
 import { PluginManifestV1 } from "../src/plugins";
+import { PlaceFacts } from "../src/project-places";
 import { RemoteEndpointSet } from "../src/remote-endpoints";
 import {
   ScreenshotCaptureResult,
@@ -306,6 +307,8 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // answer resumed or reset, a delta, the digest heartbeat), the mesh doors'
   // answers (`index-sessions.mesh`, `index-search-result.mesh` ride the
   // prefixes above) and the History page's ping params.
+  // PJ-1 (build-pj.md L1) — `index-catalog-project.places` carries the
+  // places its owner observed; a place's facts stand alone below.
   "index-catalog-project": IndexCatalogProject,
   "index-catalog-session": IndexCatalogSession,
   "index-catalog-subscribe-params": IndexCatalogSubscribeParams,
@@ -488,6 +491,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "workspace-git-opened": WorkspaceGitOpened,
   "workspace-file-action-params": WorkspaceFileActionParams,
   "workspace-file-action": WorkspaceFileActionResult,
+  // PJ-1 — a place as its owner publishes it (project-places.ts): a clone
+  // with samples and a joining hit, a repository git refused (a fact, L3),
+  // and a task folder with no git and an alias spelling.
+  "place-facts": PlaceFacts,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

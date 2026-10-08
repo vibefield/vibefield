@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
+import { PlaceFactsList } from "./project-places";
 import { INDEX_TICKET, INDEX_TIMELINE } from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
@@ -879,6 +880,11 @@ export const IndexCatalogProject = z
     /** epoch ms, the owner's clock: the newest of its sessions' activity
      * (absent while none has any) */
     lastActivityAt: z.number().finite().optional(),
+    /** PJ-1 (`build-pj.md` L1) — the places this project is at on its owner:
+     * one per root path, then each checkout's worktrees, with the facts the
+     * owner observed (`project-places.ts`). Absent on an older peer's row; a
+     * place this reader cannot read is dropped, never the row. */
+    places: PlaceFactsList.optional(),
   })
   .passthrough();
 export type IndexCatalogProject = z.infer<typeof IndexCatalogProject>;

@@ -422,6 +422,28 @@ export const INDEX_TIMELINE = {
   OBJECT_CHARS: 200,
 } as const;
 
+/** PJ-1 (`thinking-project-places.md` §4, PJ-D1…D24 RULED (a) 2026-10-07;
+ * `build-pj.md` L4, L5) — the project grouping is a LOCKSTEP event (PJ-L1):
+ * every daemon computes the same projects from the same place facts, so
+ * anything that changes which places join, or how a key or an ink is minted,
+ * bumps GROUPING_VERSION. Version 1 is the evidence rule (the identity
+ * remote, confirmed recent shared history, your links), the normalizer that
+ * supersedes DS-D9's family (L4) and the UNKEYED project key (L5 — keying it
+ * once a secret spans one person's desktops is a bump).
+ *
+ * SAMPLE_DEPTHS: where a place samples its first-parent history — its tip,
+ * then 1, 2, 4 … 512 commits back — and RECENT_DEPTH: the deepest sample
+ * whose presence in another place's objects JOINS the two (§4.1 E2; deeper,
+ * or only the first commit, is the related-history suggestion). INK_DEALS:
+ * the range a record-less project's ink is dealt from its provisional anchor
+ * (§4.3; a record's ink is dealt once and kept). TS-only: no native reader. */
+export const GROUPING_VERSION = 1;
+export const PROJECT_GROUPING = {
+  SAMPLE_DEPTHS: [0, 1, 2, 4, 8, 16, 32, 64, 128, 256, 512],
+  RECENT_DEPTH: 16,
+  INK_DEALS: 997,
+} as const;
+
 /** FS-1a (`thinking-files-service.md` §3, §4; FS-D12 RULED (a), 2026-10-05)
  * — the files service's bounds (`workspace.ts`). The door tier answers in
  * pages: LIST_PAGE rows a `workspace.list` page holds at most (a window's
