@@ -762,7 +762,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   one sheet at a time with the tray. Doc tiles: `aspect-[16/10] rounded-[10px]` faces
   painted as a **mini empty field** (canvas-bg + the §2.1 CSS-fallback dots — the
   ground motif as the doc's face until real thumbnails — *a mini mat since DK-16, 2026-10-07,
-  §2.1's erratum: the lattice at a quarter, under the board's still as it lands*); name 12px medium, relative
+  §2.1's erratum: the lattice at a quarter, under the board's still as it lands; that still is the
+  document's picture, never the person's selection — taken without the selection's marks (ICE I40's
+  `capture({ marks: false })`; DK-17b, 2026-10-08)*); name 12px medium, relative
   time caption in `tabular-nums`; the CURRENT doc wears the 1.5px inside `--vf-select`
   ring (it is the selection); hover 1.03 / active 0.95. **The sync dot (C6-4):** a 6px
   dot after the pill's doc name for STANDING sync states only — pending / peer-offline

@@ -139,7 +139,7 @@ describe("a board's still — at its close, and once on the desk's idle", () => 
     expect(h.d.asks).toHaveLength(0); // the desk is drawing: no still
     h.f.state.asleep = true;
     await vi.advanceTimersByTimeAsync(REST_POLL_MS);
-    expect(h.d.asks).toEqual([{ scale: STILL_SCALE }]); // a quarter of the view
+    expect(h.d.asks).toEqual([{ scale: STILL_SCALE, marks: false }]); // a quarter of the view
     expect(h.kept).toEqual([PNG]);
     expect(h.d.closed()).toBe(1); // the bitmap let go once encoded
     await vi.advanceTimersByTimeAsync(REST_POLL_MS * 20);
@@ -182,7 +182,7 @@ describe("a board's still — at its close, and once on the desk's idle", () => 
     h.f.state.asleep = false;
     h.f.lift(); // the cover lifts: taken AT ONCE — no poll waited for
     await vi.advanceTimersByTimeAsync(0);
-    expect(h.d.asks).toEqual([{ scale: STILL_SCALE }]);
+    expect(h.d.asks).toEqual([{ scale: STILL_SCALE, marks: false }]);
     expect(h.kept).toEqual([PNG]);
     expect(h.s.owed()).toBe(false);
     h.s.dispose();
@@ -194,7 +194,7 @@ describe("a board's still — at its close, and once on the desk's idle", () => 
     h.s.owe();
     h.f.cover(); // the freeze taken: settling, not parked
     await vi.advanceTimersByTimeAsync(0); // microtasks only — no poll has run
-    expect(h.d.asks).toEqual([{ scale: STILL_SCALE }]);
+    expect(h.d.asks).toEqual([{ scale: STILL_SCALE, marks: false }]);
     expect(h.kept).toEqual([PNG]);
     expect(h.s.owed()).toBe(false);
     h.f.park();
@@ -226,7 +226,7 @@ describe("a board's still — at its close, and once on the desk's idle", () => 
     const h = stills();
     h.s.owe(); // owed, the desk drawing on
     await h.s.close();
-    expect(h.d.asks).toEqual([{ scale: STILL_SCALE }]);
+    expect(h.d.asks).toEqual([{ scale: STILL_SCALE, marks: false }]);
     expect(h.kept).toEqual([PNG]);
     expect(h.s.owed()).toBe(false);
     expect(vi.getTimerCount()).toBe(0);
@@ -271,12 +271,36 @@ describe("the still's size: a quarter of the view, every kind in it", () => {
         encoded.push(bitmap);
         return PNG.slice();
       });
-      expect(d.asks, `dpr ${dpr}`).toEqual([{ scale: STILL_SCALE }]);
+      expect(d.asks, `dpr ${dpr}`).toEqual([{ scale: STILL_SCALE, marks: false }]);
       expect(encoded, `dpr ${dpr}`).toHaveLength(1); // the bitmap the door gave, as it gave it
       expect(png).toEqual(PNG);
       expect(d.closed(), `dpr ${dpr}`).toBe(1);
     }
     expect(STILL_SCALE).toBe(0.25);
+  });
+});
+
+describe("a thumbnail is the document's picture, not the person's selection (ICE I40)", () => {
+  // DK-17b: the door draws the selection's marks into a capture unless it is asked `marks: false` (ICE I40's contract —
+  // its own rows hold the pixels); a selection stands, as it does after the edit that owed the still
+  it("a thumbnail taken while a selection stands is asked without the marks, and keeps none", async () => {
+    const selection = { standing: true };
+    const asks: unknown[] = [];
+    const handle = {
+      capture: async (opts?: { readonly scale?: number; readonly marks?: boolean }) => {
+        asks.push(opts);
+        const marks = selection.standing && opts?.marks !== false;
+        return { width: 4, height: 2, marks, close: () => {} } as unknown as ImageBitmap;
+      },
+    };
+    const kept: boolean[] = [];
+    const png = await deskStillPng(handle, async (bitmap) => {
+      kept.push((bitmap as unknown as { marks: boolean }).marks);
+      return PNG.slice();
+    });
+    expect(png).toEqual(PNG);
+    expect(asks).toEqual([{ scale: STILL_SCALE, marks: false }]);
+    expect(kept).toEqual([false]); // the board, never its brackets
   });
 });
 

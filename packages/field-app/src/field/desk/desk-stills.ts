@@ -22,6 +22,11 @@ import {
 // settle — the desk still presenting, before the park (DK-15's own order: the capture, then the freeze) —
 // and one owed under a parked cover waits, and is taken at once as the cover lifts. Found by DK-10b: the
 // still taken under a parked cover landed in the smokes' parked second ("a cover did not park the desk").
+//
+// DK-17b — A THUMBNAIL IS THE DOCUMENT'S PICTURE, NOT THE PERSON'S SELECTION (ICE I40, `0.15.0-desk.6`; the lead's
+// ruling 2026-10-08): the door is asked WITHOUT the selection's marks (`marks: false`), so a still taken while a
+// selection stands — the edit that owed it usually leaves one — shows the board, never its brackets. The covers' still
+// keeps them: it is the desk as it stood (cover-still.ts).
 
 /** A thumbnail's size: a quarter of the view at its device ratio (what `capture({ scale: 0.25 })` names). */
 export const STILL_SCALE = 0.25;
@@ -56,7 +61,7 @@ export async function deskStillPng(
   handle: Pick<DeskLayerHandle, "capture">,
   encode: PngEncoder = encodePng,
 ): Promise<Uint8Array<ArrayBuffer> | undefined> {
-  const still = await handle.capture({ scale: STILL_SCALE });
+  const still = await handle.capture({ scale: STILL_SCALE, marks: false });
   if (still === undefined) return undefined;
   try {
     return await encode(still);
