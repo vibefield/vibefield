@@ -154,7 +154,12 @@ overrides:
   # back over the chrome until it is on the desk; I45 a spawned pointer's first
   # world point is its own, so a peer's first cursor never says (0, 0). No API
   # change; strata 0.13.0 and loro ^1.13.8 unchanged.
-  "@vibecook/ice": 0.15.0-desk.7
+  # 2026-10-08 bumped 0.15.0-desk.7 → 0.15.0 FINAL (DK-18) — the cutover pins a
+  # RELEASE, never a prerelease (DK-D12's prereleases end here): ICE `1030def`,
+  # `0.15.0-desk.7`'s code unchanged (ICE CHANGELOG `[0.15.0]` — every ask
+  # I20–I45, the contract). Nothing moves; strata 0.13.0 and loro ^1.13.8
+  # unchanged.
+  "@vibecook/ice": 0.15.0
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -280,7 +285,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.15.0-desk.7'
+  - '@vibecook/ice@0.15.0'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'
