@@ -2,10 +2,11 @@
 // FS packaging witness: reuse the real-worker suites with the executable and
 // addon from the artifact. The test harness may use development dependencies;
 // the worker must load only the files shipped beside the packaged fieldd SEA.
-import { execFileSync, spawn } from "node:child_process";
-import { lstatSync, readFileSync, realpathSync } from "node:fs";
+import { spawn } from "node:child_process";
+import { lstatSync, realpathSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertReleaseSigned } from "./release-signature.mjs";
 
 const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repoRoot = resolve(desktopRoot, "..", "..");
@@ -31,40 +32,7 @@ for (const file of [executable, addon, join(nativeRoot, "files-host.cjs")]) {
     throw new Error(`packaged Files input is not a regular file: ${file}`);
 }
 
-if (signed) {
-  if (process.platform !== "darwin")
-    throw new Error("--require-signed currently verifies macOS only");
-  const identity = JSON.parse(
-    readFileSync(join(desktopRoot, "packaging/release-identity.json"), "utf8"),
-  );
-  const team = identity.fields.macTeamId;
-  if (team.status !== "frozen" || typeof team.value !== "string") {
-    throw new Error("the macOS signing team must be frozen before release verification");
-  }
-  for (const file of [executable, addon]) {
-    execFileSync("/usr/bin/codesign", ["--verify", "--strict", file], { stdio: "pipe" });
-    // codesign writes its description to stderr. Check the actual nested code,
-    // not merely the enclosing app seal or the builder's requested identity.
-    const description = await capture("/usr/bin/codesign", ["--display", "--verbose=4", file]);
-    const value = (key) =>
-      description
-        .split(/\r?\n/u)
-        .find((line) => line.startsWith(`${key}=`))
-        ?.slice(key.length + 1);
-    if (
-      value("TeamIdentifier") !== team.value ||
-      !value("Authority")?.startsWith("Developer ID Application:") ||
-      value("Timestamp") === undefined ||
-      !/\bruntime\b/u.test(
-        description.split(/\r?\n/u).find((line) => line.startsWith("CodeDirectory ")) ?? "",
-      )
-    ) {
-      throw new Error(
-        `packaged Files code lacks the release team, timestamp or hardened runtime: ${file}`,
-      );
-    }
-  }
-}
+if (signed) await assertReleaseSigned(desktopRoot, [executable, addon], "Files");
 
 console.log(`Files package under test: ${nativeRoot}`);
 await new Promise((resolveRun, reject) => {
@@ -100,21 +68,3 @@ await new Promise((resolveRun, reject) => {
 console.log(
   `Files package verified (${signed ? "Developer ID signatures checked" : "runtime only; release signatures not checked"}).`,
 );
-
-function capture(command, commandArgs) {
-  return new Promise((resolveCapture, reject) => {
-    const child = spawn(command, commandArgs, { stdio: ["ignore", "pipe", "pipe"] });
-    let output = "";
-    child.stdout.on("data", (chunk) => {
-      output += chunk;
-    });
-    child.stderr.on("data", (chunk) => {
-      output += chunk;
-    });
-    child.once("error", reject);
-    child.once("exit", (code, signal) => {
-      if (code === 0) resolveCapture(output);
-      else reject(new Error(`${command} failed (${signal ?? code}): ${output}`));
-    });
-  });
-}

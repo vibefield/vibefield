@@ -43,6 +43,12 @@ await run(process.execPath, [
   "--require-signed",
 ]);
 await run(process.execPath, [
+  "packaging/verify-history-package.mjs",
+  "--native-root",
+  join("release", outputDirectory, "VibeField.app", "Contents", "Resources", "bin"),
+  "--require-signed",
+]);
+await run(process.execPath, [
   "packaging/verify-live-surface-release.mjs",
   "--app",
   join("release", outputDirectory, "VibeField.app"),

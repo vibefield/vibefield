@@ -40,6 +40,7 @@
     "package:stage": "pnpm run icons:check && pnpm build:all && pnpm run build:live-surfaces-native && pnpm run build:screenshot-helper && pnpm run package:sea && node ../../scripts/stage-package.mjs",
     "package:verify": "node ../../scripts/stage-package.mjs --verify",
     "package:verify:files": "node packaging/verify-files-package.mjs",
+    "package:verify:history": "node packaging/verify-history-package.mjs",
     "package:dir": "pnpm run package:stage && node packaging/run-electron-builder.mjs --dir --config packaging/electron-builder.yml",
     "package:mac:release": "node packaging/run-macos-release.mjs",
     "package:audit": "node ../../scripts/audit-fuses.mjs --app release/mac-arm64/VibeField.app"
