@@ -2056,8 +2056,12 @@
                   <td rowspan="3">This desktop's renderer participant only, with
                     <code>workspace.read</code>. Attached remote access remains FS-4/FS-5.</td></tr>
                 <tr><td><code>workspace.closeTicket</code></td><td>Releases the caller's pair,
-                  including unused grants. Expiry, socket loss, root loss and window revocation
-                  also close both legs.</td></tr>
+                  including unused grants. Socket loss, root loss, root withdrawal, window
+                  revocation and a worker restart also close both legs. <em>Erratum
+                  (2026-10-07, ruling R1):</em> expiry used to close a live pair too, so the
+                  client re-attached every ~9.5 minutes; the expiry now bounds redemption only
+                  &mdash; a pair not established by <code>expiresAt</code> is dropped, an
+                  established one has no timer.</td></tr>
                 <tr><td><code>workspace.fileAction</code></td><td>Confined path copy or shell
                   reveal. No file contents.</td></tr>
               </tbody>

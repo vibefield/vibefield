@@ -25,8 +25,14 @@ import { parseRelativePath } from "../paths";
 //    the worker);
 //  · git runs with optional locks off (`GIT_OPTIONAL_LOCKS=0`: a status never
 //    takes `index.lock` from under an agent's commit), no terminal prompt, no
-//    fsmonitor hook, and no external diff driver or textconv — a repository's
-//    own config never makes a READ run a program of its choosing.
+//    fsmonitor hook, and no external diff driver or textconv. Erratum
+//    (2026-10-08, found by rosetta's RO-15 lane on git 2.50.1): this header
+//    said a repository's own config then never makes a READ run a program of
+//    its choosing — false. A `filter.<driver>.clean` named in `.gitattributes`
+//    still runs when status or diff re-reads a file whose stat changed, and git
+//    has no switch for filters. It leaks nothing the repository's author lacks:
+//    the worker runs with fieldd's environment less the daemon's own prefixes
+//    (`workerEnvironment`, `../supervisor.ts`).
 
 /** What a git answer is made of. */
 interface GitRun {
