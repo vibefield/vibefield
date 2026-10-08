@@ -130,8 +130,11 @@ export interface SendRecord {
   /** Where the chip flew from (window CSS px) and the capture's rect (CSS px of the desk's view). */
   readonly fromBox: WindowBox;
   readonly rect: WindowBox | null;
-  /** The marks hidden by the host's own doors before the capture: the selection cleared, and put back after. */
-  readonly marks: { readonly cleared: boolean; readonly restored: boolean };
+  /** The still asked WITHOUT the selection's marks (ICE I40, `capture({ marks: false })`) — the option as asked: the
+   * selection is never cleared or put back (DK-17b; DK-14's `{ cleared, restored }` retired). */
+  readonly marks: false;
+  /** OBSERVED: the selection stood as at the press when the capture was asked and after it answered — null until then. */
+  readonly kept: boolean | null;
   /** The line took the chip (false: no line, or another in flight). */
   readonly taken: boolean;
   /** The draft was already aimed: no @, send armed. */
@@ -158,7 +161,10 @@ let seq = 0;
 
 /** A Send to… begins: its record from the act's facts. */
 export function beginSendRecord(
-  facts: Omit<SendRecord, "seq" | "aimed" | "reduced" | "still" | "at" | "marks" | "taken"> & {
+  facts: Omit<
+    SendRecord,
+    "seq" | "aimed" | "reduced" | "still" | "at" | "marks" | "kept" | "taken"
+  > & {
     readonly at?: Partial<SendRecord["at"]>;
   },
 ): SendRecord {
@@ -170,7 +176,8 @@ export function beginSendRecord(
     aimed: null,
     reduced: null,
     still: null,
-    marks: { cleared: false, restored: false },
+    marks: false,
+    kept: null,
     at: { pressed: performance.now(), ...(facts.at ?? {}) },
   };
   return last;

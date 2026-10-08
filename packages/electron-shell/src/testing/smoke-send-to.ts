@@ -2,15 +2,17 @@
 // DK-D26; plan addenda (50), (56)). It ONLY DRAFTS: pressed on the bar, in the bar grown into its menu, or on the tools in
 // hand, the selection becomes ONE chip in the line's draft. Each row presses the real chrome where it stands and reads back
 // off the DOM the line drew, off a page-side recorder (the flier's own transition events and its box every frame, the
-// moment the chip and @'s list appear, the bar's `data-shown`), and off the desk's door (`__vfDesk.sent()` — the act's
-// record: the chip's face, what it carries, the capture's rect, the still's size, the marks hidden and put back):
+// moment the chip and @'s list appear, the bar's `data-shown`, the selection's count), and off the desk's door
+// (`__vfDesk.sent()` — the act's record: the chip's face, what it carries, the capture's rect, the still's size, the
+// still asked without the selection's marks and the selection observed standing):
 //   NOTE    — a line written on the note, the note sent from the BAR: the chip wears its paper and its ink, `snippets` and
 //             its first 24 characters (24 tall, corners 7, 12.5/500, the glyph 13); the draft focused, the @ typed so @'s
 //             list is open, the caret after it; the FLIGHT — one transform transition on the island curve over 560 ms, from
 //             the selection's middle at 1.25 to the chip's place at 0.86 on a straight line; the @ 180 ms after the chip
-//             lands; the STILL attached, the anchor's box less the brackets' 6 at the view's device px, the selection
-//             cleared before it and put back after; the bar away from the press while the list is open, back 200 ms
-//             after it folds;
+//             lands; the STILL attached, the anchor's box less the brackets' 6 at the view's device px, drawn WITHOUT
+//             the selection's marks by ICE's capture (`marks: false`, I40 — DK-17b) and the selection NEVER changing,
+//             frame by frame, from the press on (no clear and no put-back: no blink a peer could see); the bar away
+//             from the press while the list is open, back 200 ms after it folds;
 //   CLOCK   — any other kind: its NAME, no glyph ("Clock");
 //   TWO     — the clock and the note, sent from the bar grown into its MENU: `package` and "2 objects", both carried;
 //   HAND    — the notebook IN HAND, sent from the tools in hand: the object stays in hand, the tools stay under the head,
@@ -118,6 +120,8 @@ export interface SendRecorded {
   /** the chip's transition as it first stood, computed — property and duration (reduced motion: its fade) */
   readonly chipTransition: string | null;
   readonly bar: readonly { readonly t: number; readonly shown: string | null }[];
+  /** the selection's count (`__vfDesk.anchor().count`) as it stood when armed, and each frame it changed after */
+  readonly selection: readonly { readonly t: number; readonly count: number | null }[];
 }
 
 /** The act's record (`__vfDesk.sent()`), as the rows read it. */
@@ -134,7 +138,10 @@ export interface SentSeen {
   }[];
   readonly fromBox: Box;
   readonly rect: Box | null;
-  readonly marks: { readonly cleared: boolean; readonly restored: boolean };
+  /** the still asked without the selection's marks (ICE I40) */
+  readonly marks: false;
+  /** the selection observed standing as at the press while the still was taken (null: not yet) */
+  readonly kept: boolean | null;
   readonly taken: boolean;
   readonly aimed: boolean | null;
   readonly reduced: boolean | null;
@@ -285,8 +292,9 @@ export function judgeAtAfter(rec: SendRecorded, atAfterMs: number = SEND.atAfter
 
 /**
  * The still the chip carries (DK-D26): taken, the rect the anchor's box less the brackets' outset, its size that rect at
- * the view's device px; the marks hidden first (the selection cleared) and put back after. `box` is the anchor's box as
- * published before the press (null in hand: the drawn box is the rect).
+ * the view's device px; asked WITHOUT the selection's marks (ICE I40, `marks: false`) and the selection observed standing
+ * as at the press (DK-17b — DK-14's clear-and-restore retired). `box` is the anchor's box as published before the press
+ * (null in hand: the drawn box is the rect).
  */
 export function judgeStill(
   sent: SentSeen | null,
@@ -324,12 +332,31 @@ export function judgeStill(
       );
     if (sent.still.bytes <= 0) problems.push("the still carries no bytes");
   }
-  if (inHand) {
-    if (sent.marks.cleared)
-      problems.push("in hand the selection was cleared (nothing to hide there)");
-  } else if (!sent.marks.cleared || !sent.marks.restored)
-    problems.push(`the marks were not hidden first and put back (${JSON.stringify(sent.marks)})`);
+  if (sent.marks !== false)
+    problems.push(
+      `the still was not asked without the selection's marks (${JSON.stringify(sent.marks)})`,
+    );
+  if (sent.kept !== true)
+    problems.push(
+      `the selection did not stand as at the press while the still was taken (kept ${JSON.stringify(sent.kept)}${inHand ? ", in hand" : ""})`,
+    );
   return problems;
+}
+
+/**
+ * NO BLINK (ICE I40): the selection never changes during Send to… — every frame the recorder saw from its arming (before
+ * the press) on holds the count it stood at then: no clear, no put-back, nothing a peer could see blink.
+ */
+export function judgeSelectionKept(rec: SendRecorded): string[] {
+  const first = rec.selection[0];
+  if (first === undefined) return ["the recorder saw no selection"];
+  // the recorder writes a sample only when the count moved: every one after the first is a change (a put-back included)
+  const changed = rec.selection.slice(1);
+  return changed.length === 0
+    ? []
+    : [
+        `the selection changed during Send to… — ${first.count} at the press, then ${changed.map((s) => `${s.count} at +${(s.t - rec.t0).toFixed(0)} ms`).join(", ")} (a blink a peer would see)`,
+      ];
 }
 
 /**
@@ -418,7 +445,7 @@ const READ_LINE = `(() => {
 /** The recorder, armed just before a press: the flier's transitions and its box every frame, the chip and the list
  * appearing, the bar's `data-shown`. */
 const ARM = `(() => {
-  const rec = { t0: performance.now(), events: [], samples: [], chipAt: null, atAt: null, atGoneAt: null, chipTransition: null, bar: [] };
+  const rec = { t0: performance.now(), events: [], samples: [], chipAt: null, atAt: null, atGoneAt: null, chipTransition: null, bar: [], selection: [] };
   globalThis.__dk14rec = rec;
   const on = (type) => (e) => {
     const el = e.target;
@@ -428,6 +455,7 @@ const ARM = `(() => {
   };
   for (const type of ["transitionstart", "transitionend", "transitioncancel"]) document.addEventListener(type, on(type), true);
   let lastShown;
+  let lastCount;
   const scaleOf = (m) => { const x = /matrix\\(([^)]+)\\)/.exec(m); if (x === null) return 1; const [a, b] = x[1].split(",").map(Number); return Math.hypot(a, b); };
   const step = () => {
     const now = performance.now();
@@ -444,6 +472,8 @@ const ARM = `(() => {
     if (rec.atAt !== null && rec.atGoneAt === null && !list) rec.atGoneAt = now;
     const shown = document.querySelector("[data-selection-bar]")?.getAttribute("data-shown") ?? null;
     if (shown !== lastShown) { rec.bar.push({ t: now, shown }); lastShown = shown; }
+    const count = globalThis.__vfDesk?.anchor?.()?.count ?? null;
+    if (count !== lastCount) { rec.selection.push({ t: now, count }); lastCount = count; }
     if (now - rec.t0 < 6000) requestAnimationFrame(step);
   };
   step();
@@ -607,7 +637,7 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
     await js(ARM);
     await pressAt(selector);
   };
-  /** The chip landed and the act over — its still attached (the act's last step, after the selection was put back),
+  /** The chip landed and the act over — its still attached (the act's last step, the selection observed standing),
    * @'s list open — or, aimed, no @. What the act recorded is the judges', never this wait's. */
   const landed = async (label: string, expectList = true): Promise<void> => {
     await until(
@@ -674,6 +704,7 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
       ).map(row),
       ...judgeAtAfter(rec).map(row),
       ...judgeStill(record, box, dpr).map(row),
+      ...judgeSelectionKept(rec).map(row),
     );
     if (record?.from !== "bar")
       problems.push(row(`the act was recorded from ${record?.from}, not the bar`));
@@ -681,12 +712,12 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
       problems.push(
         row(`the chip carries ${JSON.stringify(record?.objects)}, not the note's line`),
       );
-    const restored = await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0");
-    if (restored !== 1)
-      problems.push(row(`the selection was not put back after the still (${restored})`));
+    const standing = await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0");
+    if (standing !== 1)
+      problems.push(row(`the selection did not stand after the still (${standing})`));
     const pressedAt = record?.at.pressed ?? rec.t0;
     say(
-      `SMOKE_CANVAS_SEND_NOTE ${JSON.stringify({ chip, line: { ...seen, chips: undefined }, sent: record, flight: { events: rec.events.map((e) => ({ ...e, t: Math.round(e.t - pressedAt) })), frames: rec.samples.length, first: rec.samples[0], last: rec.samples.at(-1) }, at: { chip: rec.chipAt === null ? null : Math.round(rec.chipAt - pressedAt), list: rec.atAt === null ? null : Math.round(rec.atAt - pressedAt) } })}`,
+      `SMOKE_CANVAS_SEND_NOTE ${JSON.stringify({ chip, line: { ...seen, chips: undefined }, sent: record, flight: { events: rec.events.map((e) => ({ ...e, t: Math.round(e.t - pressedAt) })), frames: rec.samples.length, first: rec.samples[0], last: rec.samples.at(-1) }, at: { chip: rec.chipAt === null ? null : Math.round(rec.chipAt - pressedAt), list: rec.atAt === null ? null : Math.round(rec.atAt - pressedAt) }, selection: rec.selection.map((x) => ({ count: x.count, t: Math.round(x.t - pressedAt) })) })}`,
     );
     // the stills: the line with the note's chip and @'s list open, by day and by night
     const frame = await js<Box | null>(`(() => {
@@ -740,8 +771,11 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
         chip?.rect ?? null,
       ).map(row),
       ...judgeStill(record, box, dpr).map(row),
+      ...judgeSelectionKept(rec).map(row),
     );
-    say(`SMOKE_CANVAS_SEND_CLOCK ${JSON.stringify({ chip, sent: record })}`);
+    say(
+      `SMOKE_CANVAS_SEND_CLOCK ${JSON.stringify({ chip, sent: record, selection: rec.selection })}`,
+    );
     await fold();
     await clearDraft();
   }
@@ -777,6 +811,7 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
       ...judgeChip(chip, { glyph: "package", label: "2 objects" }).map(row),
       ...judgeTyped(seen).map(row),
       ...judgeStill(record, union, dpr).map(row),
+      ...judgeSelectionKept(await recorded()).map(row),
     );
     if (record?.from !== "menu")
       problems.push(row(`the act was recorded from ${record?.from}, not the menu`));
@@ -785,7 +820,7 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
       problems.push(row(`the chip carries ${JSON.stringify(types)}, not the note and the clock`));
     const count = await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0");
     if (count !== 2)
-      problems.push(row(`the two were not selected again after the still (${count})`));
+      problems.push(row(`the two did not stand selected after the still (${count})`));
     say(`SMOKE_CANVAS_SEND_TWO ${JSON.stringify({ chip, sent: record })}`);
     await fold();
     await clearDraft();
@@ -821,6 +856,7 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
       ...judgeChip(chip, { glyph: null, label: "Notebook" }).map(row),
       ...judgeTyped(seen).map(row),
       ...judgeStill(record, null, dpr, true).map(row),
+      ...judgeSelectionKept(rec).map(row),
     );
     if (drawn !== null) problems.push(...judgeFlight(rec, drawn, chip?.rect ?? null).map(row));
     if (record?.from !== "hand")
@@ -879,6 +915,7 @@ export async function sendToRows(d: SendRowsDriver): Promise<string[]> {
     problems.push(
       ...judgeChip(chip, { glyph: null, label: "Clock" }).map(row),
       ...judgeStill(record, box, dpr).map(row),
+      ...judgeSelectionKept(await recorded()).map(row),
     );
     say(`SMOKE_CANVAS_SEND_MISSING ${JSON.stringify({ chip, sent: record })}`);
     await fold();

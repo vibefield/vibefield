@@ -874,16 +874,10 @@ describe("Send to… — the three doors draft ONE chip (DK-14)", () => {
     setLineSendPhase("idle");
   });
 
-  /** The act's still-taking tail is over (the selection put back, or nothing to put back in hand). */
+  /** The act's still-taking tail is over (its capture answered — the selection observed standing as at the press). */
   const settled = async (): Promise<void> => {
     await vi.waitFor(() => expect(lastSend()?.at.pressed).toBeDefined(), { timeout: 2_000 });
-    await vi.waitFor(
-      () => {
-        const s = lastSend();
-        expect(s?.marks.cleared === true ? s.marks.restored : true).toBe(true);
-      },
-      { timeout: 2_000 },
-    );
+    await vi.waitFor(() => expect(lastSend()?.kept).not.toBeNull(), { timeout: 2_000 });
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 20));
     });
@@ -899,7 +893,7 @@ describe("Send to… — the three doors draft ONE chip (DK-14)", () => {
     expect(taken[0]).toMatchObject({ kind: "desk", glyph: "snippets", label: "Note" });
     expect(taken[0]?.objects.map((o) => o.type)).toEqual(["desk.note"]);
     expect(lastSend()?.from).toBe("bar");
-    // away at once: the act is on (the marks are hidden for its still, then @'s list is open)
+    // away at once: the act is on (its chip flies, then @'s list is open)
     expect(bar().getAttribute("data-shown")).toBe("false");
     await settled();
     act(() => setLineSendPhase("listing"));
@@ -952,7 +946,7 @@ describe("Send to… — the three doors draft ONE chip (DK-14)", () => {
     expect(lastSend()).toMatchObject({
       from: "hand",
       fromBox: { x0: 470, y0: 222, x1: 710, y1: 542 },
-      marks: { cleared: false, restored: false },
+      marks: false,
     });
     // the object stays in hand; the tools are not stepped aside
     expect(putDown).not.toHaveBeenCalled();

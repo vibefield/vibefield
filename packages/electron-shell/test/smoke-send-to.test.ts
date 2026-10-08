@@ -2,8 +2,9 @@
 // face and size, the draft after it lands (focused, the @ typed after it, @'s list open, the caret after), the flight
 // read off the flier's own transition events and its box every frame (560 on the island curve, 1.25 → 0.86 on a straight
 // line, from the selection to where the chip stands), the @ 180 ms after the landing, the still (the anchor's box less the
-// brackets' 6 at the device's px; the marks hidden first and put back), and the bar aside while the act is on. Pure — the
-// rows' words, red where the canon is missed.
+// brackets' 6 at the device's px; asked without the selection's marks, the selection standing — ICE I40, DK-17b), the
+// selection unchanged frame by frame (no blink), and the bar aside while the act is on. Pure — the rows' words, red where
+// the canon is missed.
 import { describe, expect, it } from "vitest";
 import {
   type ChipSeen,
@@ -12,6 +13,7 @@ import {
   judgeBarAside,
   judgeChip,
   judgeFlight,
+  judgeSelectionKept,
   judgeStill,
   judgeTyped,
   type LineSeen,
@@ -138,6 +140,7 @@ const flight = (over: Partial<SendRecorded> = {}, bend = 0): SendRecorded => {
       { t: 1003, shown: "false" },
       { t: 3215, shown: "true" },
     ],
+    selection: [{ t: 990, count: 1 }],
     ...over,
   };
 };
@@ -222,7 +225,8 @@ const sentSeen = (over: Partial<SentSeen> = {}): SentSeen => ({
   objects: [],
   fromBox: { x0: 106, y0: 106, x1: 180, y1: 180 },
   rect: { x0: 106, y0: 106, x1: 180.5, y1: 180.5 },
-  marks: { cleared: true, restored: true },
+  marks: false,
+  kept: true,
   taken: true,
   aimed: false,
   reduced: false,
@@ -232,14 +236,12 @@ const sentSeen = (over: Partial<SentSeen> = {}): SentSeen => ({
 });
 const BOX = { x0: 100, y0: 100, x1: 186.5, y1: 186.5 };
 
-describe("the still (DK-D26: the anchor's box less the brackets' 6, at the device's px; the marks hidden first)", () => {
+describe("the still (DK-D26: the anchor's box less the brackets' 6, at the device's px; without the marks — ICE I40)", () => {
   it("passes the canon's still", () => {
     expect(judgeStill(sentSeen(), BOX, 2)).toEqual([]);
-    expect(
-      judgeStill(sentSeen({ marks: { cleared: false, restored: false } }), null, 2, true),
-    ).toEqual([]);
+    expect(judgeStill(sentSeen(), null, 2, true)).toEqual([]);
   });
-  it("names a missing still, a rect with the brackets in it, a wrong size, the marks left in", () => {
+  it("names a missing still, a rect with the brackets in it, a wrong size, the marks asked, the selection moved", () => {
     expect(judgeStill(sentSeen({ still: null }), BOX, 2)).toEqual([
       "no still was attached to the chip",
     ]);
@@ -249,16 +251,41 @@ describe("the still (DK-D26: the anchor's box less the brackets' 6, at the devic
     expect(judgeStill(sentSeen({ still: { width: 75, height: 75, bytes: 1 } }), BOX, 2)[0]).toMatch(
       /75 × 75/u,
     );
-    expect(judgeStill(sentSeen({ marks: { cleared: false, restored: false } }), BOX, 2)[0]).toMatch(
-      /marks were not hidden first/u,
+    // DK-14's record (the marks hidden by a clear and put back) is no still without the marks
+    expect(
+      judgeStill(
+        sentSeen({ marks: { cleared: true, restored: true } as unknown as false }),
+        BOX,
+        2,
+      )[0],
+    ).toMatch(/not asked without the selection's marks/u);
+    expect(judgeStill(sentSeen({ kept: false }), BOX, 2)[0]).toMatch(
+      /did not stand as at the press/u,
     );
-    expect(judgeStill(sentSeen({ marks: { cleared: true, restored: false } }), BOX, 2)[0]).toMatch(
-      /put back/u,
-    );
-    expect(judgeStill(sentSeen(), null, 2, true)).toEqual([
-      "in hand the selection was cleared (nothing to hide there)",
-    ]);
+    expect(judgeStill(sentSeen({ kept: null }), null, 2, true)[0]).toMatch(/kept null, in hand/u);
     expect(judgeStill(null, BOX, 2)).toEqual(["no Send to… was recorded"]);
+  });
+});
+
+describe("no blink (ICE I40): the selection never changes during Send to…, frame by frame", () => {
+  it("passes a selection that stood at its count from the arming on", () => {
+    expect(judgeSelectionKept(flight())).toEqual([]);
+    expect(judgeSelectionKept(flight({ selection: [{ t: 990, count: 2 }] }))).toEqual([]);
+  });
+  it("names DK-14's blink — cleared for the still and put back 150 ms later — and a recorder that saw nothing", () => {
+    const blink = flight({
+      selection: [
+        { t: 990, count: 1 },
+        { t: 1003, count: 0 },
+        { t: 1150, count: 1 },
+      ],
+    });
+    expect(judgeSelectionKept(blink)[0]).toMatch(
+      /1 at the press, then 0 at \+13 ms, 1 at \+160 ms \(a blink a peer would see\)/u,
+    );
+    expect(judgeSelectionKept(flight({ selection: [] }))).toEqual([
+      "the recorder saw no selection",
+    ]);
   });
 });
 

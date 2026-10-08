@@ -3,11 +3,11 @@
  * DK-14 — SEND TO… (DESIGN.md §8 "Send to…", "The missing face"; R15 as amended, DK-D26; plan addendum (50)): the chip's
  * FACE by kind and what it CARRIES (send-face.ts), where it is set in the draft and what a message says of it (draft.ts),
  * the line's door and its phase (line-send.ts), and THE ACT (send-to.ts) over a real field engine and a desk handle that
- * keeps ICE's doors' contract — the still's rect the anchor's box less the brackets' outset, the marks hidden FIRST by the
- * host's own doors (the selection cleared, the capture taken after they left, the selection put back), and in hand the
- * object's DRAWN box with nothing cleared.
+ * keeps ICE's doors' contract — the still's rect the anchor's box less the brackets' outset, taken WITHOUT the selection's
+ * marks by ICE's own capture (`capture({ rect, marks: false })`, I40 — DK-17b retired DK-14's clear-and-restore: the act
+ * writes no selection at all), and in hand the object's DRAWN box.
  */
-import type { CanvasEngine, Entity } from "@vibecook/ice";
+import { type CanvasEngine, type Entity, selectedEntities } from "@vibecook/ice";
 import type { SelectionAnchor } from "@vibecook/ice/desk";
 import { deskPalette } from "@vibecook/ice/desk/objects";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -21,15 +21,7 @@ import {
   firstChars,
   type SentObject,
 } from "../src/field/desk/send/send-face";
-import {
-  BRACKETS,
-  captureRect,
-  insetBox,
-  MARKS_LEAVE_MS,
-  MARKS_PATIENCE_MS,
-  marksLeft,
-  sendSelection,
-} from "../src/field/desk/send/send-to";
+import { BRACKETS, captureRect, insetBox, sendSelection } from "../src/field/desk/send/send-to";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 import {
   chipMessage,
@@ -256,7 +248,9 @@ let taken: { chip: DeskChip; from: WindowBox }[];
 let attached: (unknown | null)[];
 let unpublishLine: () => void;
 let desk: MountedDesk;
-let captured: { rect?: unknown }[];
+let captured: { rect?: unknown; marks?: unknown }[];
+/** A capture held open by a test (the act's tail waits on it), released by `answer()`. */
+let holdCapture: Promise<void> | null;
 
 const flush = async (): Promise<void> => {
   for (let i = 0; i < 6; i++) await Promise.resolve();
@@ -273,6 +267,7 @@ beforeEach(async () => {
   taken = [];
   attached = [];
   captured = [];
+  holdCapture = null;
   anchor = {
     box: BOX,
     count: 1,
@@ -294,15 +289,17 @@ beforeEach(async () => {
   });
   ce.ops.setSelection([noteE]);
   calls = [];
+  vi.mocked(ce.ops.setSelection).mockClear();
   desk = {
     engine: ce,
     handle: {
       selection: { anchor: () => anchor, subscribe: () => () => undefined },
       perf: () => ({ frames }),
       dirty: () => dirty,
-      capture: vi.fn(async (opts: { rect?: unknown }) => {
+      capture: vi.fn(async (opts: { rect?: unknown; marks?: unknown }) => {
         calls.push("capture");
         captured.push(opts);
+        if (holdCapture !== null) await holdCapture;
         return { width: 376, height: 276, close: () => calls.push("close") };
       }),
       canvas: document.createElement("canvas"),
@@ -332,13 +329,10 @@ afterEach(() => {
 
 const seams = {
   encode: async () => new Uint8Array(new ArrayBuffer(321)),
-  marks: async () => {
-    calls.push("marks-left");
-  },
 };
 
 describe("SEND TO… — the act (send-to.ts)", () => {
-  it("hands the line ONE chip from the selection's own box (the brackets' 6 off), then the still — the marks hidden FIRST", async () => {
+  it("hands the line ONE chip from the selection's own box (the brackets' 6 off), then the still WITHOUT the marks — the selection never touched", async () => {
     expect(sendSelection(desk, "bar", seams)).toBe(true);
     expect(taken).toHaveLength(1);
     const { chip: c, from } = taken[0]!;
@@ -347,56 +341,55 @@ describe("SEND TO… — the act (send-to.ts)", () => {
     // the window's box of the objects themselves: the anchor's less the outset (the view at the window's 0, 0)
     expect(from).toEqual({ x0: 406, y0: 306, x1: 594, y1: 444 });
     await flush();
-    // the order: the selection cleared, the marks let leave, THEN the capture, and the selection put back
-    expect(calls).toEqual(["clear", "marks-left", "capture", "close", "select:1"]);
-    expect(captured[0]).toEqual({ rect: { x: 406, y: 306, width: 188, height: 138 } });
+    // ICE draws the capture without the selection's marks (I40): no clear, no wait for the brackets, no put-back —
+    // the act writes no selection, so nothing blinks for a peer
+    expect(calls).toEqual(["capture", "close"]);
+    expect(captured[0]).toEqual({
+      rect: { x: 406, y: 306, width: 188, height: 138 },
+      marks: false,
+    });
+    expect(ce.ops.setSelection).not.toHaveBeenCalled();
+    expect(ce.ops.clearSelection).not.toHaveBeenCalled();
+    expect(selectedEntities(ce.world)).toEqual([noteE]);
     expect(attached).toHaveLength(1);
     expect(attached[0]).toMatchObject({ width: 376, height: 276, bytes: 321 });
     expect(lastSend()).toMatchObject({
       from: "bar",
-      marks: { cleared: true, restored: true },
+      marks: false,
+      kept: true,
       rect: { x0: 406, y0: 306, x1: 594, y1: 444 },
     });
   });
 
-  it('several: the union\'s 10 off, `package` and "N objects", both put back', async () => {
+  it('several: the union\'s 10 off, `package` and "N objects" — the selection standing as it stood', async () => {
     ce.ops.setSelection([noteE, clockLike]);
     calls = [];
+    vi.mocked(ce.ops.setSelection).mockClear();
     anchor = { ...anchor, count: 2 };
     expect(sendSelection(desk, "menu", seams)).toBe(true);
     expect(taken[0]?.chip).toMatchObject({ glyph: "package", label: "2 objects" });
     expect(taken[0]?.from).toEqual({ x0: 410, y0: 310, x1: 590, y1: 440 });
     await flush();
-    expect(calls.at(-1)).toBe("select:2");
-    expect(lastSend()?.from).toBe("menu");
-  });
-
-  it("puts nothing back over a selection the person made meanwhile", async () => {
-    let release: () => void = () => undefined;
-    const slow = {
-      ...seams,
-      marks: () =>
-        new Promise<void>((resolve) => {
-          release = resolve;
-        }),
-    };
-    sendSelection(desk, "bar", slow);
-    ce.ops.setSelection([clockLike]);
-    calls = [];
-    release();
-    await flush();
     expect(calls).toEqual(["capture", "close"]);
-    // the record says so: the selection standing after is the person's, not the one put back
-    expect(lastSend()?.marks.restored).toBe(false);
+    expect(ce.ops.setSelection).not.toHaveBeenCalled();
+    expect(lastSend()).toMatchObject({ from: "menu", marks: false, kept: true });
   });
 
-  it("the record OBSERVES the marks hidden: a clear that left the selection standing is recorded as none", async () => {
-    vi.mocked(ce.ops.clearSelection).mockImplementation(() => {
-      calls.push("clear");
+  it("the record OBSERVES the selection: the person's own change while the still is taken is said, and nothing is written over it", async () => {
+    let answer: () => void = () => undefined;
+    holdCapture = new Promise<void>((resolve) => {
+      answer = resolve;
     });
     sendSelection(desk, "bar", seams);
     await flush();
-    expect(lastSend()?.marks).toEqual({ cleared: false, restored: true });
+    expect(lastSend()?.kept).toBeNull(); // the capture not yet answered
+    ce.ops.setSelection([clockLike]);
+    calls = [];
+    answer();
+    await flush();
+    expect(calls).toEqual(["close"]);
+    expect(lastSend()?.kept).toBe(false);
+    expect(selectedEntities(ce.world)).toEqual([clockLike]);
   });
 
   it("takes nothing, clears nothing, when the line will not take the chip (another still landing)", async () => {
@@ -417,8 +410,11 @@ describe("SEND TO… — the act (send-to.ts)", () => {
     expect(taken[0]?.from).toEqual({ x0: 470, y0: 222, x1: 710, y1: 542 });
     await flush();
     expect(calls).toEqual(["capture", "close"]);
-    expect(captured[0]).toEqual({ rect: { x: 470, y: 222, width: 240, height: 320 } });
-    expect(lastSend()).toMatchObject({ from: "hand", marks: { cleared: false, restored: false } });
+    expect(captured[0]).toEqual({
+      rect: { x: 470, y: 222, width: 240, height: 320 },
+      marks: false,
+    });
+    expect(lastSend()).toMatchObject({ from: "hand", marks: false, kept: true });
   });
 
   it("does nothing with nothing selected", () => {
@@ -429,7 +425,7 @@ describe("SEND TO… — the act (send-to.ts)", () => {
   });
 });
 
-describe("the geometry and the wait (send-to.ts)", () => {
+describe("the geometry (send-to.ts)", () => {
   it("the brackets' outset: 6 for one object, the union's 10 for several", () => {
     expect(BRACKETS).toEqual({ one: 6, several: 10 });
     expect(insetBox(BOX, 1)).toEqual({ x0: 406, y0: 306, x1: 594, y1: 444 });
@@ -444,34 +440,5 @@ describe("the geometry and the wait (send-to.ts)", () => {
       height: 80,
     });
     expect(captureRect({ x0: 1200, y0: 0, x1: 1300, y1: 10 }, VIEW)).toBeNull();
-  });
-
-  it("waits for a frame PRESENTED after the brackets' 120 ms leave — and no longer than its patience", async () => {
-    let t = 0;
-    let f = 0;
-    const handle = { perf: () => ({ frames: f }), dirty: () => true } as never;
-    const steps: number[] = [];
-    await marksLeft(
-      handle,
-      () => t,
-      async () => {
-        t += 16;
-        if (t > 60) f += 1; // the desk draws from 60 ms on
-        steps.push(t);
-      },
-    );
-    expect(MARKS_LEAVE_MS).toBe(120);
-    // the first frame at or past 120 is the leave's; the next one presented is the first without the marks
-    expect(steps.at(-1)).toBe(144);
-    t = 0;
-    const idle = { perf: () => ({ frames: 0 }), dirty: () => false } as never;
-    await marksLeft(
-      idle,
-      () => t,
-      async () => {
-        t += 50;
-      },
-    );
-    expect(t).toBeGreaterThanOrEqual(MARKS_PATIENCE_MS);
   });
 });

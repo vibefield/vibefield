@@ -1150,6 +1150,13 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   smoke:canvas: the bar away 16ms after the press, back 208ms after the list folds — R8's 200;
   aimed, 200 after the chip lands, there being no list. The tools in hand never step aside for it
   (plan addendum (50)): in hand nothing is cleared — the hand is drawn out of the marks.
+  *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`):* the marks are hidden by ICE's capture itself —
+  `handle.capture({ rect, marks: false })` (petition I40) draws the still without the selection's
+  marks — so the selection is **never cleared or put back**: no selection write during Send to…,
+  and nothing a peer could see blink (smoke:canvas holds the selection's count on every frame from
+  the press). The still is taken at once, of the last presented frame. The bar still steps aside
+  from the press, as built — its first reason (the clear's fade) is gone; whether it should wait
+  for the list again, as this section's first words say, is open (DK-17b's note).
 - **The missing face** (DK-D18 as amended 2026-10-03: no VibeField kind; ICE I24; R11, R12, R24):
   an object the desk cannot draw — its type has **no kind** on this desk (a plugin off or gone, a
   type this build never registered — ghost stubs register faceless types only — or one registered

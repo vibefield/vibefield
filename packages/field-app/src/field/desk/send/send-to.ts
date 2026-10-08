@@ -17,23 +17,17 @@ import { chipFace, chipObjects, type SentObject } from "./send-face";
 // in the bar grown into its menu, or on the tools in hand, the selection becomes ONE chip in the line's draft — it only
 // drafts: it never sends and never aims. This reads the selection as the host reads it (its entities, each one's type,
 // words and durable props), makes the chip's face and what it carries (send-face.ts), hands it to the line with where it
-// flies from (line-send.ts), and takes the chip's STILL through the desk's capture door:
+// flies from (line-send.ts), and takes the chip's STILL through the desk's capture door, of the OBJECTS — the capture
+// drawn WITHOUT the selection's marks (`capture({ rect, marks: false })`, ICE I40, desk.6): the selection is never
+// touched — no clear, no restore, no blink a peer could see (DK-17b retired DK-14's 144–160 ms clear-and-restore):
 //   ON THE DESK — the rect is the anchor's box WITHOUT the brackets' outset (6 for one object, the union's 10 for
-//   several), the MARKS HIDDEN FIRST by the host's own doors: the selection is cleared, the brackets' presence left
-//   (ICE's 120 ms), the capture taken of the last presented frame, and the selection put back as it was;
+//   several), taken of the last presented frame at once;
 //   IN HAND — the object STAYS in hand (addendum (50)): the chip flies from where the desk DRAWS it (the held pose
-//   seam's frame, `__vfDesk.held()`), and the still is that drawn box — the hand is drawn out of the marks (D4b), so
-//   there is nothing to hide.
+//   seam's frame, `__vfDesk.held()`), and the still is that drawn box — the hand is drawn out of the marks (D4b).
 // The still is PNG bytes kept in this renderer under a `blob:` URL (the packaged `img-src` admits `blob:` — DK-4).
 
 /** The brackets' outset around the selection (ICE's marks: 6 out for one object, the union's 10 for several). */
 export const BRACKETS = { one: 6, several: 10 } as const;
-
-/** The brackets' presence fades this long once the selection is cleared (ICE's `MARKS.clocks.leave` / `unionFade`). */
-export const MARKS_LEAVE_MS = 120;
-
-/** The longest the act waits for the marks to leave before it captures what the desk last presented. */
-export const MARKS_PATIENCE_MS = 600;
 
 /** A box in CSS px of the desk's view (the anchor's, the pick's). */
 export interface ViewBox {
@@ -95,43 +89,15 @@ function viewOrigin(desk: MountedDesk): { left: number; top: number } {
   return { left: rect?.left ?? 0, top: rect?.top ?? 0 };
 }
 
-const nextFrame = (): Promise<void> =>
-  new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") requestAnimationFrame(() => resolve());
-    else setTimeout(resolve, 16);
-  });
-
-/**
- * The brackets gone from what the desk presents: the selection was just cleared, and their presence fades over the
- * marks' leave. Resolves once a frame has been presented after the fade ended — or, once the desk has drawn since the
- * clear and owes no frame, after the fade and two frames more — and at the latest after `MARKS_PATIENCE_MS`.
- */
-export async function marksLeft(
-  handle: Pick<DeskLayerHandle, "perf" | "dirty">,
-  now: () => number = () => performance.now(),
-  frame: () => Promise<void> = nextFrame,
-): Promise<void> {
-  const t0 = now();
-  const f0 = handle.perf().frames;
-  let fAtLeave: number | null = null;
-  while (now() - t0 < MARKS_PATIENCE_MS) {
-    await frame();
-    const t = now() - t0;
-    if (t < MARKS_LEAVE_MS) continue;
-    const frames = handle.perf().frames;
-    fAtLeave ??= frames;
-    if (frames > fAtLeave) return;
-    if (t >= MARKS_LEAVE_MS + 40 && frames > f0 && !handle.dirty()) return;
-  }
-}
-
-/** The still: the rect through the capture door at the view's device px, as PNG bytes under a `blob:` URL. */
+/** The still: the rect through the capture door at the view's device px, WITHOUT the selection's marks (ICE I40 — the
+ * objects as they look unselected; the selection, the world and the presented frame untouched), as PNG bytes under a
+ * `blob:` URL. */
 export async function stillOf(
   handle: Pick<DeskLayerHandle, "capture">,
   rect: { x: number; y: number; width: number; height: number },
   encode: PngEncoder = encodePng,
 ): Promise<ChipStill | null> {
-  const bitmap = await handle.capture({ rect });
+  const bitmap = await handle.capture({ rect, marks: false });
   if (bitmap === undefined) return null;
   try {
     const png = await encode(bitmap);
@@ -151,7 +117,6 @@ const sameEntities = (a: readonly Entity[], b: readonly Entity[]): boolean =>
 /** What the act needs of the world beyond the desk — a test's doubles stand in for them. */
 export interface SendSeams {
   readonly encode?: PngEncoder;
-  readonly marks?: (handle: Pick<DeskLayerHandle, "perf" | "dirty">) => Promise<void>;
   /** The object in hand and where the desk drew it (`heldNow` — the pose seam a desk's frame fills). */
   readonly held?: typeof heldNow;
 }
@@ -164,8 +129,9 @@ export function sendSelection(desk: MountedDesk, from: SendFrom, seams: SendSeam
   const { engine, handle } = desk;
   const inHand = from === "hand";
   const held = inHand ? (seams.held ?? heldNow)(engine) : null;
-  const entities: readonly Entity[] =
-    held !== null ? [held.entity as Entity] : selectedEntities(engine.world);
+  /** The selection at the press — the act never writes it; the record observes that it stands the same after. */
+  const before = selectedEntities(engine.world);
+  const entities: readonly Entity[] = held !== null ? [held.entity as Entity] : before;
   if (entities.length === 0) return false;
   const objects = sentObjects(desk, entities);
   if (objects.length === 0) return false;
@@ -218,31 +184,16 @@ export function sendSelection(desk: MountedDesk, from: SendFrom, seams: SendSeam
 
   void (async () => {
     let still: ChipStill | null = null;
-    const hide = !inHand;
-    // the record OBSERVES the marks hidden — nothing selected at the moment the still is taken — and the same
-    // selection standing again after; it never takes the act's word for either
-    let cleared = false;
+    // the record OBSERVES the selection standing as it stood at the press — when the capture is asked and after it
+    // answered — never the act's word (the act writes no selection at all)
+    let kept = sameEntities(selectedEntities(engine.world), before);
     try {
-      if (hide) {
-        // the marks hidden first, by the host's own doors: the selection cleared — and put back below
-        engine.ops.clearSelection();
-        await (seams.marks ?? marksLeft)(handle);
-      }
-      cleared = selectedEntities(engine.world).length === 0;
       if (rect !== null) still = await stillOf(handle, rect, seams.encode);
     } catch {
       still = null; // a capture that failed carries no still; the chip still says what it carries in words
     } finally {
-      let restored = false;
-      if (hide) {
-        // put back as it was — unless the person has selected something else meanwhile
-        if (selectedEntities(engine.world).length === 0) {
-          const alive = entities.filter((e) => engine.world.get(e, PrefabId) !== undefined);
-          if (alive.length > 0) engine.ops.setSelection(alive);
-        }
-        restored = sameEntities(selectedEntities(engine.world), entities);
-      }
-      noteSend(record.seq, { marks: { cleared, restored } });
+      kept = kept && sameEntities(selectedEntities(engine.world), before);
+      noteSend(record.seq, { kept });
     }
     ticket.attach(still);
   })();

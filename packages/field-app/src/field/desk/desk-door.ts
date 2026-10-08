@@ -258,7 +258,8 @@ export interface VfDeskDoor {
    * reading fit's witness; null with nothing held. A read. */
   held(): { readonly entity: number; readonly frame: HeldFrame | null } | null;
   /** DK-14 — the last Send to… as it went (`frame/line-send.ts`): where it was pressed, the chip's face and what it
-   * carries, the capture's rect and the still's size, the marks hidden and put back, whether the draft was aimed, and
+   * carries, the capture's rect and the still's size, the still asked without the selection's marks and the selection
+   * observed standing (ICE I40, DK-17b), whether the draft was aimed, and
    * each step's time; null before any. A read. */
   sent(): SendRecord | null;
   /** DK-15 — the covers this renderer has stood, oldest first (the last 8; `cover-still.ts`): each step in the order taken —
