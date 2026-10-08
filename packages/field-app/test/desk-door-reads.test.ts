@@ -233,6 +233,61 @@ describe("the desk door's reads (DK-8)", () => {
     }
   });
 
+  it("DK-17b (ICE I45): the relay says the point this window's presence FIRST sent out — its pointer's own, never (0, 0)", async () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    ce.world.setResource(Viewport, { w: 1200, h: 800, dpr: 1 });
+    ce.docs.attachPresence({ name: "🦊 Tab", color: "#68686b" });
+    const g = globalThis as { location?: { search: string } };
+    const before = g.location;
+    g.location = { search: "?presenceRelay=1" };
+    const undo = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+      () => false,
+    );
+    try {
+      const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk as VfDeskDoor;
+      const first = door.presenceFirst;
+      const tap = door.presenceTap;
+      if (first === undefined || tap === undefined) throw new Error("no relay installed");
+      expect(first()).toBeNull(); // no cursor has gone out yet
+      let now = 0;
+      const move = (x: number, y: number): void => {
+        ce.stack.queue.enqueue({
+          kind: "move",
+          pointerId: "mouse",
+          device: "mouse",
+          screenX: x,
+          screenY: y,
+          buttons: 0,
+          mods: NO_MODS,
+        });
+        now += 16;
+        ce.step(now); // ONE step: the spawn's own frame publishes (a frame-late world point said (0, 0) there)
+      };
+      /** the throttle sends on its own timer: wait for the first cursor out */
+      const sent = async (): Promise<void> => {
+        const t0 = Date.now();
+        while (first() === null && Date.now() - t0 < 3_000) {
+          tap();
+          await new Promise((r) => setTimeout(r, 10));
+        }
+      };
+      move(120, 40); // the mouse pointer spawns on its first fact
+      await sent();
+      expect(first()).toEqual({ x: 120, y: 40 }); // its own (the camera at rest: world = screen), never (0, 0)
+      move(300, 200);
+      await new Promise((r) => setTimeout(r, 60));
+      tap();
+      expect(first()).toEqual({ x: 120, y: 40 }); // the FIRST, kept: a later point never replaces it
+    } finally {
+      undo();
+      if (before === undefined) delete g.location;
+      else g.location = before;
+      ce.dispose();
+    }
+  });
+
   it("DK-16: installs the GPU faults only on a page asked for them (`?deskFaults=1`), on the mount's OWN device — lost, or one uncaptured error", () => {
     const ce = createFieldEngine(buildRegistry());
     ce.docs.create();

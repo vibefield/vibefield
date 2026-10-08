@@ -286,6 +286,10 @@ export interface VfDeskDoor {
    * `presence().wire.apply`). */
   presenceTap?(): readonly string[];
   presenceApply?(payloads: readonly string[]): number;
+  /** DK-17b (ICE I45) — the point this window's presence FIRST sent out: its `PresenceCursor` x/y as the first outbound
+   * payload that carried one left, or null before — installed with the relay. Since desk.7 a spawned pointer's first
+   * world point is its own, so a peer's first cursor is never the origin a frame-late world point left behind. */
+  presenceFirst?(): { readonly x: number; readonly y: number } | null;
   /** DK-16 — the smokes' GPU faults, installed only on a page loaded with `?deskFaults=1`, on the layer's OWN device:
    * "lose" destroys it, as a GPU reset loses it — the desk goes `failed` ("the device was lost: …") and the stage's card
    * offers its Reload; "error" raises one uncaptured validation error — the desk goes `degraded` and draws on, the status
@@ -528,16 +532,29 @@ function presenceSaid(engine: CanvasEngine): PresenceSaid | null {
 }
 
 /** The relay's two doors over this engine's presence session — the session followed as it attaches and re-attaches. */
-function presenceRelay(engine: CanvasEngine): Pick<VfDeskDoor, "presenceTap" | "presenceApply"> {
+function presenceRelay(
+  engine: CanvasEngine,
+): Pick<VfDeskDoor, "presenceTap" | "presenceApply" | "presenceFirst"> {
   let tapped: ReturnType<CanvasEngine["docs"]["presence"]>;
   let off: (() => void) | null = null;
   const sent: string[] = [];
+  let first: { readonly x: number; readonly y: number } | null = null;
   const follow = (): void => {
     const session = engine.docs.presence();
     if (session === tapped) return;
     off?.();
     tapped = session;
-    off = session?.onOutbound((payload) => sent.push(toBase64(payload))) ?? null;
+    off =
+      session?.onOutbound((payload) => {
+        sent.push(toBase64(payload));
+        // the cursor the throttle just encoded: the first one that went out is the one a peer first draws (I45)
+        if (first !== null) return;
+        const peer = session.localPeer;
+        const cursor = engine.world.isAlive(peer)
+          ? engine.world.get(peer, PresenceCursor)
+          : undefined;
+        if (cursor !== undefined) first = { x: cursor.x, y: cursor.y };
+      }) ?? null;
   };
   follow();
   return {
@@ -551,6 +568,10 @@ function presenceRelay(engine: CanvasEngine): Pick<VfDeskDoor, "presenceTap" | "
       if (session === undefined) return 0;
       for (const payload of payloads) session.wire.apply(fromBase64(payload));
       return payloads.length;
+    },
+    presenceFirst() {
+      follow();
+      return first;
     },
   };
 }

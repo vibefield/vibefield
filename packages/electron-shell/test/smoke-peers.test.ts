@@ -17,6 +17,7 @@ import {
   judgeCoverSaid,
   judgeDegradedBanner,
   judgeExit,
+  judgeFirstPoint,
   judgeIdle,
   judgeLostCard,
   judgePeerPlace,
@@ -145,6 +146,26 @@ describe("the window exit from BESIDE the desk (ICE I44) — away within one pub
     expect(judgeExit(exit({ from: "drag", point: null }))).toEqual([
       "the head's drag strip is missing from B's page — nothing to leave from",
     ]);
+  });
+});
+
+describe("a peer's first published point is its own (ICE I45) — never the spawn's (0, 0)", () => {
+  const moves = [
+    { x: 519, y: 340 },
+    { x: 520, y: 340 },
+  ];
+  it("passes the first point B's pointer was moved to", () => {
+    expect(judgeFirstPoint({ x: 519, y: 340 }, moves)).toEqual([]);
+    expect(judgeFirstPoint({ x: 520, y: 340 }, moves)).toEqual([]);
+  });
+  it("names desk.6's first publish — the origin — and a point B's pointer never stood at", () => {
+    expect(judgeFirstPoint({ x: 0, y: 0 }, moves)).toEqual([
+      "B's first published point is (0, 0) — its spawned pointer's origin, not its own (ICE I45)",
+    ]);
+    expect(judgeFirstPoint({ x: 300, y: 200 }, moves)[0]).toMatch(
+      /none of the points its pointer was moved to/,
+    );
+    expect(judgeFirstPoint(null, moves)).toEqual(["B's presence sent no cursor out"]);
   });
 });
 
