@@ -147,7 +147,14 @@ overrides:
   # path, `tray.focus`/`tray.lay`; I35 `createStill({ services })`). One type
   # widens — `PresenceCursor` gains two defaulted fields, so a cursor value
   # written by hand names both. strata 0.13.0 and loro ^1.13.8 unchanged.
-  "@vibecook/ice": 0.15.0-desk.6
+  # 2026-10-08 bumped 0.15.0-desk.6 → 0.15.0-desk.7 (DK-17b) — desk.6 and two
+  # defects VibeField found adopting it (ICE CHANGELOG `### Fixed`): I44 the
+  # window exit is heard from anywhere in the host's document — a pointer out
+  # of the window from the chrome beside the desk is away too, and stays away
+  # back over the chrome until it is on the desk; I45 a spawned pointer's first
+  # world point is its own, so a peer's first cursor never says (0, 0). No API
+  # change; strata 0.13.0 and loro ^1.13.8 unchanged.
+  "@vibecook/ice": 0.15.0-desk.7
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -273,7 +280,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.15.0-desk.6'
+  - '@vibecook/ice@0.15.0-desk.7'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'
