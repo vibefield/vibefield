@@ -1765,6 +1765,12 @@ export const METHODS: MethodDef[] = [
   // own worker (another desktop's roots are its own). Idempotent reads, every
   // one. FS-1b attaches only this desktop's renderer windows; close releases a lease.
   // FS-3's attended folder choice is local and non-idempotent, unlike the reads.
+  // `workspace.fileAction` is NOT idempotent either (R6, 2026-10-07; it was
+  // declared so at FS-1b): `revealInFileManager` opens the desktop's file
+  // manager, a side effect a repeat repeats. Nothing retries a call on this
+  // flag, and a `local` method never forwards (so no receipt key binds it);
+  // the flag is the registry's word to a caller deciding whether a blind retry
+  // is safe — for this one it is not.
   defineMethod({
     surface: "product",
     method: "workspace.pickFolder",
@@ -1776,7 +1782,7 @@ export const METHODS: MethodDef[] = [
     surface: "product",
     method: "workspace.fileAction",
     scope: "workspace.read",
-    idempotent: true,
+    idempotent: false,
     locality: "local",
   }),
   defineMethod({

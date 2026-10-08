@@ -135,6 +135,27 @@ describe("method registry lint (design-01 §9.2 + D36)", () => {
     }
   });
 
+  it("workspace.*: the reads are idempotent; an act with an effect a repeat repeats is not (R6)", () => {
+    const flags = Object.fromEntries(
+      METHODS.filter((m) => m.method.startsWith("workspace.")).map((m) => [m.method, m.idempotent]),
+    );
+    expect(flags).toEqual({
+      // a fresh dialog, a fresh grant, a second Finder window
+      "workspace.pickFolder": false,
+      "workspace.openTicket": false,
+      "workspace.fileAction": false,
+      // closing twice answers `closed: false` the second time, nothing more
+      "workspace.closeTicket": true,
+      "workspace.roots": true,
+      "workspace.list": true,
+      "workspace.search": true,
+      "workspace.gitFacts": true,
+      "workspace.subscribe": true,
+    });
+    // `local`: never forwarded, so the flag binds no receipt key
+    expect(KEYED_FORWARD_METHODS.has("workspace.fileAction")).toBe(false);
+  });
+
   it("guestOk methods are idempotent, non-mutating, and exactly the v1 set (UA-4 / UA-D14)", () => {
     const guestOk = METHODS.filter((m) => m.guestOk === true);
     // spec §7.3 v1 law: system.hello only. Widening is a deliberate edit
