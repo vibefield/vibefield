@@ -1287,18 +1287,26 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         logger: logger.child({ component: "docs.library" }),
       });
       await library.ready();
-      // PJ-2 (D5) — a link keeps the records this desktop made unlinked
-      const carried = await carryLocalProjects({
-        dataDir: config.dataDir,
-        userId: config.userId,
-        account,
-        into: library,
-        logger: logger.child({ component: "docs.library" }),
-      });
-      if (carried > 0)
-        logger.info("fieldd.projects.records_carried", "Project records carried into the link", {
-          records: carried,
+      // PJ-2 (D5) — a link keeps the records this desktop made unlinked; a
+      // carry that fails costs the carry, never the boot (the local library
+      // stays as it was, and the next mount carries again)
+      try {
+        const carried = await carryLocalProjects({
+          dataDir: config.dataDir,
+          userId: config.userId,
+          account,
+          into: library,
+          logger: logger.child({ component: "docs.library" }),
         });
+        if (carried > 0)
+          logger.info("fieldd.projects.records_carried", "Project records carried into the link", {
+            records: carried,
+          });
+      } catch (error) {
+        logger.warn("fieldd.projects.records_not_carried", "Project records were not carried", {
+          error: error instanceof Error ? error.message.slice(0, 200) : String(error),
+        });
+      }
       projectLibrary = library;
       projectGroups.followLibrary(library);
       projectsWritable = true;
