@@ -37,6 +37,7 @@ import type { FielddHandle, FielddSupervisor } from "@vibefield/fieldd-superviso
 import { app, type BrowserWindow } from "electron";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
+import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 
 /** One context's dial, as the renderer reports it back. */
 export interface DoorDialResult {
@@ -305,7 +306,17 @@ export async function runTerminalDoorProbe(opts: {
       await opts.handle.client.request("terminal.terminate", { sessionId }).catch(() => undefined);
     }
     await opts.supervisor.dispose().catch(() => undefined);
+    // DK-18 (39): the run's own daemons stopped and waited for (smoke-daemons.ts), its root and — green — its home gone
+    const daemons = await stopRunDaemons(process.env[SMOKE_RUN_ENV], process.pid).catch(
+      (error: unknown) => ({ failed: error instanceof Error ? error.message : String(error) }),
+    );
+    process.stdout.write(`SMOKE_TEARDOWN ${JSON.stringify(daemons)}\n`);
     await opts.beforeExit().catch(() => undefined);
+    try {
+      removeSmokeRoot(opts.root, code === 0);
+    } catch {
+      /* the exit is unconditional */
+    }
     leave(code);
   }
 }

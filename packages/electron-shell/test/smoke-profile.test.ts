@@ -86,6 +86,104 @@ describe("main's smoke profile", () => {
 describe("the smoke launcher (apps/desktop/packaging/run-smoke.mjs)", () => {
   const desktopRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../../../apps/desktop");
   const launcher = join(desktopRoot, "packaging", "run-smoke.mjs");
+  /** Electron's own seam for its binary (`ELECTRON_OVERRIDE_DIST_PATH`): a stand-in Node script at the path Electron's
+   * package names, run in `dist`; the launcher spawns it as it would Electron. */
+  const fakeElectron = (dist: string, body: string): void => {
+    const relative = readFileSync(
+      join(
+        dirname(createRequire(join(desktopRoot, "package.json")).resolve("electron")),
+        "path.txt",
+      ),
+      "utf8",
+    );
+    const binary = join(dist, relative);
+    mkdirSync(dirname(binary), { recursive: true });
+    writeFileSync(binary, `#!${process.execPath}\n${body}`);
+    chmodSync(binary, 0o755);
+  };
+  const alive = (pid: number): boolean => {
+    try {
+      process.kill(pid, 0);
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
+  it.skipIf(process.platform === "win32")(
+    "DK-18 (39): marks the run, and a daemon the smoke LEFT is found by the mark, reaped, and makes the run red",
+    () => {
+      // the stand-in starts a DETACHED daemon (it inherits the run's mark, as fieldd and field-native do) and exits 0
+      const dist = mkdtempSync(join(tmpdir(), "dk-18-fake-electron-"));
+      let daemon = 0;
+      try {
+        fakeElectron(
+          dist,
+          `const { spawn } = require("node:child_process");\n` +
+            `const d = spawn(process.execPath, ["-e", "setTimeout(() => {}, 60000)"], { detached: true, stdio: "ignore" });\n` +
+            `d.unref();\n` +
+            `process.stdout.write("FAKE_ELECTRON " + JSON.stringify({ mark: process.env.VF_SMOKE_RUN ?? null, daemon: d.pid }) + "\\n");\n` +
+            `setTimeout(() => process.exit(0), 300);\n`,
+        );
+        const run = spawnSync(process.execPath, [launcher, "--smoke-canvas"], {
+          cwd: desktopRoot,
+          encoding: "utf8",
+          env: { ...process.env, ELECTRON_OVERRIDE_DIST_PATH: dist },
+        });
+        const seen = JSON.parse(/FAKE_ELECTRON (.*)/.exec(run.stdout)?.[1] ?? "null") as {
+          mark: string | null;
+          daemon: number;
+        };
+        daemon = seen.daemon;
+        // the mark is the run's profile name
+        const removed = JSON.parse(
+          /SMOKE_PROFILE_REMOVED (.*)/.exec(run.stdout)?.[1] ?? "null",
+        ) as {
+          userData: string;
+        };
+        expect(seen.mark).toBe(removed.userData.slice(removed.userData.lastIndexOf("/") + 1));
+        const row = JSON.parse(/SMOKE_DAEMONS (.*)/.exec(run.stdout)?.[1] ?? "null") as {
+          left: { pid: number; name: string }[];
+          reaped: number[];
+        };
+        expect(row.left).toEqual([{ pid: seen.daemon, name: "node" }]);
+        expect(row.reaped).toEqual([seen.daemon]);
+        // red although Electron said 0, and nothing left alive
+        expect(run.status).toBe(1);
+        expect(alive(seen.daemon)).toBe(false);
+      } finally {
+        if (daemon > 0 && alive(daemon)) process.kill(daemon, "SIGKILL");
+        rmSync(dist, { recursive: true, force: true });
+      }
+    },
+  );
+
+  it.skipIf(process.platform === "win32")(
+    "DK-18 (39): a run whose processes all went with it keeps Electron's code — the row finds nothing",
+    () => {
+      const dist = mkdtempSync(join(tmpdir(), "dk-18-fake-electron-"));
+      try {
+        fakeElectron(
+          dist,
+          `const { spawnSync } = require("node:child_process");\n` +
+            `spawnSync(process.execPath, ["-e", "0"]);\n` +
+            `process.exit(0);\n`,
+        );
+        const run = spawnSync(process.execPath, [launcher, "--smoke-canvas"], {
+          cwd: desktopRoot,
+          encoding: "utf8",
+          env: { ...process.env, ELECTRON_OVERRIDE_DIST_PATH: dist },
+        });
+        const row = JSON.parse(/SMOKE_DAEMONS (.*)/.exec(run.stdout)?.[1] ?? "null") as {
+          left: unknown[];
+        };
+        expect(row.left).toEqual([]);
+        expect(run.status).toBe(0);
+      } finally {
+        rmSync(dist, { recursive: true, force: true });
+      }
+    },
+  );
 
   it.skipIf(process.platform === "win32")(
     "hands Electron a fresh profile, removes it after, and exits with Electron's own code",

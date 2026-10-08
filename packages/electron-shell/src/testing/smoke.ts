@@ -111,6 +111,7 @@ import {
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
 import { coverRows } from "./smoke-covers";
+import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
 import { selectionBarRows } from "./smoke-selection-bar";
@@ -212,16 +213,24 @@ export function waitForConsole(
 const sleep = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms));
 
 /** Stop-owned via the supervisor (adopted daemons survive — ownership law),
- * then remove the root ONLY if this run created it (an injected
- * FIELDD_DATA_DIR is someone else's data). */
+ * then — DK-18 (39) — the run's OWN daemons stopped and WAITED for
+ * (testing/smoke-daemons.ts: the supervisor never waits for the field-native it
+ * signals, and never signals one a restarted fieldd adopted, so the pair outlived
+ * every smoke), then remove the root ONLY if this run created it (an injected
+ * FIELDD_DATA_DIR is someone else's data) — and, the run green, its whole HOME
+ * (the `vf-smoke-*` root above the user root: its logs; a red run keeps them,
+ * named by `SMOKE_HOME`). */
 async function teardown(
   supervisor: FielddSupervisor,
   root: string,
   beforeExit: () => Promise<void>,
+  ok: boolean,
 ): Promise<void> {
   await supervisor.dispose();
+  const daemons = await stopRunDaemons(process.env[SMOKE_RUN_ENV], process.pid);
+  console.log(`SMOKE_TEARDOWN ${JSON.stringify(daemons)}`);
   await beforeExit();
-  if (!process.env["FIELDD_DATA_DIR"]) rmSync(root, { recursive: true, force: true });
+  removeSmokeRoot(root, ok);
 }
 
 export async function runSmoke(
@@ -242,7 +251,7 @@ export async function runSmoke(
     units: health.native?.units?.map((u) => u.unit) ?? [],
   };
   console.log(`SMOKE ${JSON.stringify(summary)}`);
-  await teardown(supervisor, root, beforeExit);
+  await teardown(supervisor, root, beforeExit, summary.ok);
   app.exit(summary.ok ? 0 : 2); // exit is queued; the caller returns without opening a window
 }
 
@@ -1027,7 +1036,7 @@ export async function runSmokeCanvas(opts: {
     } catch (e) {
       console.error(`SMOKE_TRY failed: ${e instanceof Error ? e.message : e}`);
     }
-    await teardown(opts.supervisor, opts.root, opts.beforeExit);
+    await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
     app.exit(ok ? 0 : 2);
     return;
   }
@@ -1261,7 +1270,7 @@ export async function runSmokeCanvas(opts: {
   } catch (e) {
     console.error(`SMOKE_CANVAS failed: ${e instanceof Error ? e.message : e}`);
   }
-  await teardown(opts.supervisor, opts.root, opts.beforeExit);
+  await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
   app.exit(ok ? 0 : 2);
 }
 
@@ -3631,7 +3640,7 @@ export async function runSmokePluginRestart(opts: {
   }
   for (const event of plantedEvents) process.removeAllListeners(event);
   try {
-    await teardown(opts.supervisor, opts.root, opts.beforeExit);
+    await teardown(opts.supervisor, opts.root, opts.beforeExit, ok);
   } finally {
     if (powerSaveBlockerId !== null && powerSaveBlocker.isStarted(powerSaveBlockerId)) {
       powerSaveBlocker.stop(powerSaveBlockerId);
@@ -5981,7 +5990,7 @@ export async function runSmokeGodview(opts: {
   const finish = async (): Promise<void> => {
     console.log(`SMOKE_GODVIEW ${JSON.stringify(verdict)}`);
     rmSync(scratch, { recursive: true, force: true });
-    await teardown(opts.supervisor, opts.root, opts.beforeExit);
+    await teardown(opts.supervisor, opts.root, opts.beforeExit, verdict["ok"] === true);
     app.exit(verdict["ok"] === true ? 0 : 2);
   };
   try {
