@@ -350,6 +350,7 @@ dark, or hard. The exact recipes (do not eyeball new ones):
 | Edge tray (enters from the left; 2026-09-23) | `20px 0 40px rgba(0,0,0,0.08)` · dark `0.4` — the side panel's shadow cast the other way; as `drop-shadow()` where the silhouette is a path (`--vf-drop-edge`, and `--vf-drop-island` for the island recipe) |
 | Drag proxy (above everything) | `drop-shadow(0 24px 48px rgba(0,0,0,0.35))` |
 | Tray tile | `drop-shadow(0 10px 18px rgba(0,0,0,0.16))` |
+| Search popup (the Peek, §8 "Search"; GV-D8, built 2026-10-08) | `0 40px 100px rgba(0,0,0,0.24), 0 12px 30px rgba(0,0,0,0.10)` · dark `0 40px 100px rgba(0,0,0,0.6)` and a 6% top light (`inset 0 1px 0` white/6) — ringed by the strong hairline |
 
 **One exception to "chrome is glass" (2026-09-23, James — the notch):** the edge tray's notch
 and its drawer (§8, edge trays) are OPAQUE solid chrome (`--vf-chrome-solid`, the theme's
@@ -366,6 +367,7 @@ claim it.
 | Sheet | surface `/90` + `backdrop-blur-3xl` | open tray, large panels, the fields explorer grown from the head's pill (FR-3) |
 | Overlay chip | surface `/90–95` + `backdrop-blur-xl` | put-back affordance, HUD toasts |
 | Backdrop dim | `black/10` light · `black/40` dark | behind open sheets; canvas recedes to `scale(0.98)` |
+| Search scrim (GV-D8; K7, 2026-10-08) | `black/16` light · `black/46` dark, over a backdrop blur of 18 and `saturate(0.9)` | behind the Peek only (§8 "Search"): the window blurred and dimmed, the view and the frame receding to `scale(0.98)` under it. Darker than the backdrop dim so it reads as dimmed (One Frame §23); the backdrop dim stays the sheets' until James rules otherwise (docket PK1) |
 
 **Menus are solid, floating controls are glass** (One Frame FR-7, FC-D14 ruled 2026-10-01): a menu
 is rows to be read, so it is `--vf-chrome-solid` — opaque — ringed by `--vf-hairline-strong`, with
@@ -516,6 +518,14 @@ fading in over 160ms and the rows rising nearest-first as before (§8); folding 
 face, which never moves, stays lifted while it is open. Reduced motion (M6): no growth anywhere —
 the sliver becomes the notch at once, its glyph and count fading in over 120ms, and the Me menu
 fades in whole over 120ms.
+
+**Search (the Peek; One Frame §23, GV-D8; built 2026-10-08).** The popup pops in over **260ms on
+the island curve** from 2% above its place at 0.97 (`translate(-50%, -48%) scale(0.97)`), fading in
+with it; the scrim fades in over 240ms plain `ease`; the view **and the frame** recede to
+`scale(0.98)` about 50% 46% of the window over **420ms on the island curve** (M5's recede; the
+window is already covered, so nothing new freezes). Folding, the popup goes at once — what you picked is already opening
+behind it — the scrim fades out over the same 240ms and the window comes forward over the same
+420ms. Reduced motion (M6): no pop and no recede — the scrim and the popup fade in over 120ms.
 
 ---
 
@@ -1674,6 +1684,10 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     the room's own sheet — and the room's layer, where its dialogs and that sheet land, **starts at
     the head band's foot (52)** as it ends at the reserve, so neither ever covers the band: the band
     keeps only the lights, and a file shown full screen ends under it too.
+    *Corrected 2026-10-08 (the Peek, P1):* the Peek has landed (§8 "Search — the Peek") and the
+    room's sheet left with it. The band holds the window's lights and, at its right end, **the
+    frame's search button** (GV-D10); the room's layer still starts at the band's foot, so no dialog
+    ever covers the band or the button.
   - **Its create is Resume** (`resume`, §13): waiting, faint by ink, until the room has a session
     chosen ("Resume this session — choose a session first"), and waiting with the empty pane
     launcher's own words for one it would not resume ("its folder is gone", "not offered here", "not
@@ -1709,29 +1723,102 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     that cannot open says so in the same place, never a blank: **"History could not open"** over
     what failed, in its own words, and a quiet **Retry** (the splash's rule: the plain reason, then
     Retry).
-  - **Until the Peek lands, its search is the room's own sheet** (the search interim, ruled by James
-    2026-10-04; AR-D41 stands — the Peek is the one search, and this sheet leaves when it lands). The
-    room's strip, under the head band, holds the room's launcher — the pill that says what it searches
-    ("Search 11 sessions across 4 agents") — and **no key is spent on opening it**: ⌘K is the
-    palette's (§7), so the pill prints no key and opens with a press. It grows into the room's
-    top-attached sheet in the room's layer: its top on the head band's foot, its foot well above the
-    reserve, centred and never nearer a side than 84, so the slivers stay clear. While it stands the
-    sheet is **one of the frame's open surfaces** (`history-search`, §10): the palette, a drawer, the
-    Me menu, Settings or a change of view folds it, and opening it folds them — so **Esc** closes the
-    sheet, and nothing of the frame's is open to take that Esc first. A hit opens its session and
-    lands the transcript on the message; the stepper it leaves in the transcript's head walks the
-    session's other matches, and VibeField binds the two keys that stepper names: **⌘G** the next
-    match and **⇧⌘G** the previous (Ctrl G and Ctrl Shift G off the Mac), heard on the window's
-    capture phase while History is the view and nothing of the frame's is open. With no match to walk
-    the key is left alone. The empty transcript says **"Pick a session, or search above."** — the
-    room's own sentence named ⌘K, a key VibeField does not give it (RO-14). Recent searches keep
-    under `vf.history.` with the room's other preferences.
+  - **Its search is the Peek** (§8 "Search — the Peek"; built 2026-10-08, P1). The search interim
+    (ruled by James 2026-10-04) retired with its landing, as AR-D41 said it would: the room's strip
+    no longer holds its launcher pill and the room's own sheet is never drawn — VibeField passes the
+    room no `search` — and the `history-search` surface left the frame's value with them. The frame's
+    button at the band's right end and **⌘F** open the Peek on **Everything** (GV-D9), and a past row
+    opens the room **at the line** through the room's own `openAt`: the session, in its project, the
+    transcript landed on the message. **⌘G / ⇧⌘G retired with the interim** (K3): they walked the
+    stepper a hit from the room's sheet left, and the room's `openAt` clears that stepper, so nothing
+    is left to step. The empty transcript says **"Pick a session, or search with ⌘F."** (Ctrl+F off
+    the Mac) — the key the button prints (K2). No recent searches are kept: the room's sheet kept
+    them, and the Peek draws none.
+    *The interim, for the record (2026-10-04 to 2026-10-08):* the room's strip held its launcher
+    ("Search 11 sessions across 4 agents"), which printed no key (⌘K is the palette's) and grew into
+    the room's top-attached sheet in the room's layer, one of the frame's open surfaces
+    (`history-search`); a hit landed the transcript on the message, and ⌘G / ⇧⌘G walked the
+    session's other matches; the empty transcript said "Pick a session, or search above."
   - History follows the app's **theme** (the room reads the page's `.dark` and the kit's `--vf-*`);
     it has no toggle of its own. Under **reduced motion** the room's own transitions collapse — the
     floor the room asks of its host, scoped to the view. Its **preferences** (dealt project tints,
-    the fold, recent searches) keep under `vf.history.` in the window's storage, where a refusal
+    the fold) keep under `vf.history.` in the window's storage, where a refusal
     costs only the memory. ⌘3 out and back keeps the room as it was: its scroll, its choice, its
     open stream.
+- **Search — the Peek** (One Frame §23, round 3; GV-D8 the Peek, GV-D9 the view's own scope,
+  GV-D10 the frame's button, GV-D3 the filters inside search — ruled 2026-10-02; built for History
+  2026-10-08, P1): ONE search for every view that searches, the frame's and never a view's — "the
+  search designs are the same and consistent on both views … a bigger and centered popup in the
+  middle of the screen with background all blurred and dimmed" (James, 2 Oct). It is History's
+  today; Godview keeps its own Find (the bar's sheet on ⌘F) until P2 brings Live now here.
+  - **The button** is the frame's: a 40 glass circle (the line's glass, §5) at the head's right end —
+    16 in, `top-2`, on the lights' axis — holding `search` 15 in secondary ink (primary under the
+    pointer), lifted 8 so **its key is printed under it**, as the views track prints its keys: ⌘F at
+    9/600 in secondary ink, the ⌘ at 8.5/500 in tertiary (Ctrl F off the Mac). It stands above the
+    cover with the line, the edges and the corner (62), in the views that search — History, in this
+    build. **⌘F** (Ctrl+F) opens the popup, or puts the caret back in its field while it is open:
+    a product chord (§10).
+  - **The popup — Peek, 900 × 560**, centred in the window: solid (`--vf-chrome-solid`, FC-D14 —
+    rows to be read), corners 24, ringed by the strong hairline, with its own shadow (§5, *Search
+    popup*). It pops in on the island curve (§6). **The scrim** (§5, *Search scrim*) blurs and dims
+    the whole window under it; **the view recedes** to 0.98 about 50% 46%, and the frame recedes with
+    it (the line, the edges, the corner, the button) — only the window's lights stay sharp, as the OS
+    draws them. A click on the scrim closes the popup.
+  - **Top to foot.** **The field**: 64 tall, `search` 18 in tertiary ink 22 in, the words at 20/400
+    (−0.01em) in primary ink with the select caret, and at its end **close** — a 40 circle, `close`
+    12 lifted 9, **esc printed under it** (9/600, secondary), the ready fill under the pointer. In
+    Everything it says "Search your whole agentic past…". **The scope row**, 48 tall between two
+    hairlines: a **Live now · Everything** segment — the ready fill as its track, padding 3, corners
+    12; each half 28 tall at 12.5/500 in secondary ink, the chosen one solid in primary ink with the
+    hairline and a 1px shadow — then that scope's dropdowns, 30 tall, corners 15, a 13 glyph in
+    secondary ink, the name at 12.5/500 and a turned `chevron` 11 in tertiary (the ready fill under
+    the pointer). Everything's are **Every project · Prompts and replies · Any agent**; each opens a
+    solid menu (§5) 4 under it, and a filter that is on names itself on its dropdown. **The body**:
+    the list, 380 wide, and the peek beside it, a hairline between them. **The foot**, 52 tall over
+    a hairline: one count sentence at 12/400 in tertiary ink, and **Open** — 32 tall, corners 16,
+    12.5/600 on the ready fill (14% under the pointer) — with **↵ printed on it** in tertiary ink: in
+    History it says **Open at the line**.
+  - **A row is a session** — the root a reader lands in; the lines that matched are its evidence,
+    never rows of their own. Its head: the title at 14/600, then the time at 12 `tabular-nums` in
+    tertiary ink at the right end (the clock inside today, the day and the clock inside the year, the
+    day and the year beyond it). Under it, indented 17 (the state dot's column, empty for a past
+    session): **folder · agent** at 12 in tertiary ink — the folder it ran in, by its last name, and
+    the agent by the catalog's label. Then up to three matched lines, newest first: a 40 column
+    saying who said it — **you**, **agent**, or the kind as itself (11/500, tertiary) — and the line
+    at 13/1.45 in secondary ink, cut at a word with its first match among its first words, then
+    ellipsised. Padding 10 12, corners 14, 2 apart; the hot row in the ready fill.
+  - **A match is neutral, everywhere** (K1): the text's own primary ink at 600 on an 11% wash of it,
+    corners 3 — never orange, which means "waiting on you" here (§2.5), and never the select blue.
+    The peek too: the round-3 kit's orange line marker was a leftover.
+  - **The peek** (K8, until the docket's PK3 rules): what opening the row would show. Today, that
+    session's matched lines — every hit the index answered for it, in reading order, each led by
+    who said it and marked as above, at 13.5/1.55 in primary ink — under the session's title at
+    15/600 and its folder · agent · time at 12 in tertiary ink over a hairline; the line ↵ lands on
+    sits in the ready fill. One component draws it, so an upstream reader or a timeline excerpt
+    replaces it whole.
+  - **Honest, empty or not.** With no words typed, Everything lists your latest sessions and the foot
+    says "Your latest sessions · every word you type must match". With words, it says how many
+    sessions and lines matched, and that it is the first page only when the index stopped at its
+    limit. With nothing matching: **"Nothing in your past holds every word of “q”. Try fewer words,
+    or a phrase in quotes."** — rosetta matches a quoted phrase whole, and while a quote is still
+    open nothing is asked: the foot says "Close the quote to search for the phrase". An index that
+    cannot answer says so in the foot in fieldd's words, and the list keeps what it last showed —
+    never "no matches" for a question nobody answered. **Live now**, in History, says that live
+    sessions are searched in Godview for now (K9; the docket's PK5 decides whether History gets a
+    live feed of its own), with a press back to Everything.
+  - **Keys** (the kit's): ⌘F opens the popup or refocuses its field; **Esc** closes an open menu,
+    then the popup, before anything else hears it; **↑ ↓** move the hot row; **↵** opens it; a click
+    opens a row. **One surface at a time**: the popup is one of the frame's open surfaces, `search`
+    (§10) — the palette, a drawer, the Me menu, Settings or a change of view fold it, and it folds
+    them; ⌘K over it opens the palette, ⌘F over the palette opens it.
+  - **Open at the line.** A past row — ↵, a click or Open — folds the popup and opens History at the
+    line: the room's own `openAt` with the hit's session and message, the session in its project and
+    the transcript landed on the message (§8 "History"). Everything reads this desktop's index (K5);
+    other desktops' history waits for DS-7, since the room cannot open a peer's session yet.
+  - **A narrow window** (K6): the popup clamps to the window — 24 clear of each side, and 96 clear
+    of the window's top and foot (the line's 72, and 24), so it never covers the head or the line.
+    Below a 680 popup — a window narrower than 728 — the list and a useful peek no longer both fit:
+    **the peek folds and the list fills the popup**.
 - **The phone's folder picker and launch sheet** (FS-2, 2026-10-05): the launch sheet
   keeps one system medium detent through loading, selection, refusal and spawning. Folder
   comes first, chosen in its own large sheet above the launch sheet. No task field: the
@@ -1857,7 +1944,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   covers over the desk). A covered view ends its content at 692, the **reserve** of 88 above the
   window's foot, and keeps 8px clear at each edge for the notches' slivers; its own ground runs
   under the line, and only the canvas runs content
-  under it. Above the frame stand only Settings, the palette and the loading veil (and, until
+  under it. Above the frame stand only Settings, the palette, the Peek's scrim and popup (64, §8
+  "Search — the Peek", 2026-10-08) and the loading veil (and, until
   FR-4 opens it above the line, the open Me menu, which grows over the track's left end — *since
   FR-4 it stands with the frame, above the line, and nothing of the frame's is under it*).
   **The active view has ONE owner** — the window's, held in main beside the menu that names it,
@@ -1870,7 +1958,11 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   never printed (FR-5): **B** toggles Objects on Canvas — never while typing (the draft, a note, any
   field) and never under a cover; **⌘T** (Ctrl+T) is Godview's New terminal, a product chord taken
   on the capture phase in Godview so a focused pane never sees it (ghostty's new_tab); and **@ is
-  never a shortcut** — it is typed in the draft. **The head's keys** (DK-D24; One Frame §6) are
+  never a shortcut** — it is typed in the draft. **Search's key** (§8 "Search — the Peek",
+  2026-10-08) is PRINTED under the frame's search button: **⌘F** (Ctrl+F) opens the Peek, a product
+  chord taken on the capture phase while History is the view — Godview keeps its own Find on ⌘F
+  until P2 — so Settings → Terminal → Keyboard says Ghostty's find never reaches a pane while
+  History or Godview is the view. **The head's keys** (DK-D24; One Frame §6) are
   the zoom's, SAID in its menu and the palette, never printed: **⌘+** (⌘= or ⌘+, the keypad's too)
   zooms in, **⌘−** out, **⌘0** to actual size and **⇧1** to fit — Ctrl+Plus, Ctrl+Minus, Ctrl+0
   and Shift+1 off the Mac. They are Canvas's, not the product's chords: heard on the window's
@@ -1897,7 +1989,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   surfaces** — `objects · @ · fields · zoom · palette · me · clipboard · artifacts`, one value, so
   any one opening folds every other (F11); Settings still folds them and is folded by them.
   *Until the Peek lands (2026-10-04, the search interim), History's room's sheet is a ninth,
-  `history-search` (§8 "History").* **The
+  `history-search` (§8 "History").* *Since 2026-10-08 (the Peek, P1) the ninth is **`search`**,
+  the Peek's popup (§8 "Search — the Peek"); `history-search` left with the room's sheet.* **The
   app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
   shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
   resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
