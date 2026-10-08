@@ -13,6 +13,7 @@ import {
   DEGRADED_SENTENCE,
   type ExitSeen,
   expectedBox,
+  freshPoint,
   judgeAwaySaid,
   judgeCoverSaid,
   judgeDegradedBanner,
@@ -24,6 +25,7 @@ import {
   LOST_CARD,
   measureChip,
   type PeerSeen,
+  pointKey,
 } from "../src/testing/smoke-peers";
 import {
   judgeNeverDrewCover,
@@ -346,5 +348,29 @@ describe("the rim — the cover's tint over the mat's ground (plan addendum (69)
         "dark",
       )[0],
     ).toMatch(/over the canvas's colour/);
+  });
+});
+
+describe("PEERS IDLE's move (DK-18, plan (81)) — it ends on a point B's pointer has NEVER been at", () => {
+  it("takes the point itself when B was never there", () => {
+    expect(freshPoint({ x: 520, y: 340 }, new Set())).toEqual({ x: 520, y: 340 });
+  });
+
+  it("walks on past every point B was sent — so a coalesced pair still ends on a new fact", () => {
+    // ARRIVE and the theme rows sent B to (519, 340) and (520, 340): the idle move must not end on either
+    const visited = new Set([pointKey({ x: 519, y: 340 }), pointKey({ x: 520, y: 340 })]);
+    const at = freshPoint({ x: 520, y: 340 }, visited);
+    expect(visited.has(pointKey(at))).toBe(false);
+    expect(at).toEqual({ x: 531, y: 340 });
+  });
+
+  it("never returns a visited point, however many there are", () => {
+    const visited = new Set<string>();
+    for (let i = 0; i < 40; i += 1) {
+      const at = freshPoint({ x: 520, y: 340 }, visited);
+      expect(visited.has(pointKey(at))).toBe(false);
+      visited.add(pointKey(at));
+    }
+    expect(visited.size).toBe(40);
   });
 });

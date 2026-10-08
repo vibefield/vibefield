@@ -16,8 +16,10 @@ import {
   judgeBack,
   judgeFade,
   judgeHold,
+  judgeLostSaid,
   judgeRecede,
   judgeRise,
+  LOST_NOTICE,
   scaleOf,
 } from "../src/testing/smoke-covers";
 import type { StillnessSample } from "../src/testing/smoke-stillness";
@@ -378,5 +380,27 @@ describe("the readings", () => {
     expect(alphaOf("color(srgb 0.109804 0.109804 0.117647 / 0.72)")).toBe(0.72);
     expect(alphaOf("rgba(28, 28, 30, 0.72)")).toBe(0.72);
     expect(alphaOf("rgb(61, 90, 48)")).toBe(1);
+  });
+});
+
+describe("judgeLostSaid (DK-18, plan (81)) — the lost device's words read AT THEIR SAYING, from the door", () => {
+  const said = [{ id: LOST_NOTICE, text: COVERS.lostWords }];
+  const shown = [null, COVERS.lostWords, null];
+
+  it("passes the words in the door's said log and among the texts the line showed — whenever the row looks", () => {
+    // the line already gone by the time the row looks (its 2.4 s stand passed under load): the record still holds them
+    expect(judgeLostSaid(said, shown)).toEqual([]);
+  });
+
+  it("refuses a log that says nothing, or other words", () => {
+    expect(judgeLostSaid([], shown)).toEqual(["the status line said nothing of the lost device"]);
+    expect(judgeLostSaid([{ id: LOST_NOTICE, text: "Something went wrong" }], shown)).toEqual([
+      'the status line said "Something went wrong"',
+    ]);
+  });
+
+  it("refuses a line that never showed the words, and a recorder never armed", () => {
+    expect(judgeLostSaid(said, [null])[0]).toMatch(/never showed the words/);
+    expect(judgeLostSaid(said, null)).toEqual(["the line's recorder was never armed"]);
   });
 });

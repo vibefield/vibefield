@@ -10,7 +10,10 @@
 //             the name, in the chrome's own text ink; ICE's cursors absent (the layer's word `false`, and no element of the
 //             desk but the chip saying the name); the stills dk-16-peer-{light,dark}.png and the chip's contrast, measured
 //             on the lit mat from the captured pixels;
-//   IDLE    — B's pointer still: hidden at 8 s after its last move (by A's own timer), never before 7.5;
+//   IDLE    — B's pointer still: hidden at 8 s after its last move (by A's own timer), never before 7.5; the move that
+//             starts the clock ends on a point B's pointer has NEVER been at (DK-18, plan (81)), so it is a new fact even
+//             when Chromium coalesces B's two events into one — as does every move of B's but ARRIVE's (DK-18 met the same
+//             weakness at CONTRAST: a coalesced move by night said nothing new, and A hid B by its idle clock under load);
 //   BOARD   — A's pegboard out: the layer hidden; folded, shown;
 //   COVER   — A covered by Godview: hidden; A's own presence says away (ICE's `setAway("cover")`, its cursor away); back
 //             to the canvas, shown;
@@ -235,6 +238,27 @@ export function judgePeerPlace(
       `the arrow's element stands at (${rect.left}, ${rect.top}), not (${expected.x}, ${expected.y})`,
     );
   return problems;
+}
+
+/** Where a point is kept in the set of places B's pointer has been sent. */
+export const pointKey = (at: { readonly x: number; readonly y: number }): string =>
+  `${at.x},${at.y}`;
+
+/**
+ * IDLE (DK-18, plan (81)) — a point B's pointer has NEVER been sent to: `from`, else the next one along a short walk right
+ * and down from it, so the move that starts the idle clock is a NEW fact even when Chromium coalesces B's two events into
+ * one. A pointer that comes back to a pixel it was already at has not moved (ICE I33 drops the repeat): B publishes
+ * nothing, and A's idle clock runs from B's EARLIER move — the grade's 7,502 ms hide under load 258–333, DK-17b's 7,500 /
+ * 7,503 ms, red with nothing wrong in the desk.
+ */
+export function freshPoint(
+  from: { readonly x: number; readonly y: number },
+  visited: ReadonlySet<string>,
+): { x: number; y: number } {
+  for (let i = 0; ; i += 1) {
+    const at = { x: from.x + 11 * (i % 8), y: from.y + 7 * Math.floor(i / 8) };
+    if (!visited.has(pointKey(at))) return at;
+  }
 }
 
 /** IDLE: hidden at 8 s after the last move — not before `notBefore` was seen drawn, and within the slack after 8 s. */
@@ -522,11 +546,19 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
   })();
   let lastMove = 0;
   const point = { x: 520, y: 340 };
-  const moveB = async (at: { x: number; y: number } = point): Promise<void> => {
-    // two moves a pixel apart, so the second always says something new to the adapter (I33 drops a repeat)
+  /** every point B's pointer has been sent to (DK-18: a move ends on one it never was) */
+  const visited = new Set<string>();
+  const moveB = async (
+    at: { x: number; y: number } = freshPoint(point, visited),
+  ): Promise<void> => {
+    // two moves a pixel apart, so the second always says something new to the adapter (I33 drops a repeat) — unless
+    // Chromium coalesces the two into one, which then ends where B may already be: so a move ends on a FRESH point (DK-18,
+    // plan (81)) unless it is given one — ARRIVE's, the point its expected box is drawn from
     b.webContents.sendInputEvent({ type: "mouseMove", x: at.x - 1, y: at.y });
+    visited.add(pointKey({ x: at.x - 1, y: at.y }));
     await sleep(30);
     b.webContents.sendInputEvent({ type: "mouseMove", x: at.x, y: at.y });
+    visited.add(pointKey(at));
     lastMove = Date.now();
   };
   const shownInA = async (): Promise<boolean> => (await peerOf())?.hidden === null;
@@ -535,11 +567,11 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
     // ── ARRIVE: B's arrow in A, its tip on B's pointer ─────────────────────────────────────────────────────────────────
     await theme("light");
     b.focus();
-    await moveB();
+    await moveB(point);
     await until("B's peer drawn in A", 15_000, async () => {
       const p = await peerOf();
       if (p === undefined || p.cursor === null) {
-        await moveB();
+        await moveB(point);
         return false;
       }
       return p.hidden === null;
@@ -624,8 +656,9 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
     }
     await theme("light");
 
-    // ── IDLE: hidden at 8 s after B's last move ────────────────────────────────────────────────────────────────────────
-    await moveB();
+    // ── IDLE: hidden at 8 s after B's last move — a move to a point B has never been at (DK-18) ─────────────────────────
+    const idleAt = freshPoint(point, visited);
+    await moveB(idleAt);
     await until("B drawn again before the idle row", 5_000, shownInA);
     const still = lastMove;
     await sleep(Math.max(0, still + PEERS.idleNotBeforeMs - Date.now()));
@@ -644,10 +677,10 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
     const idleDom = await dom();
     if (idleDom.shown !== 0) problems.push("PEERS IDLE: the idle peer's arrow is still visible");
     say(
-      `SMOKE_CANVAS_PEERS_IDLE ${JSON.stringify({ early, hiddenAfterMs: hiddenAfter, shown: idleDom.shown })}`,
+      `SMOKE_CANVAS_PEERS_IDLE ${JSON.stringify({ at: idleAt, early, hiddenAfterMs: hiddenAfter, shown: idleDom.shown })}`,
     );
-    // a move brings it back
-    await moveB({ x: point.x + 20, y: point.y });
+    // a move brings it back — to a fresh point too, so it says something new however its events land
+    await moveB(freshPoint({ x: point.x + 20, y: point.y }, visited));
     await until("B drawn again after its idle", 5_000, shownInA);
 
     // ── BOARD: A's pegboard out — the layer hidden; folded — shown ─────────────────────────────────────────────────────

@@ -21,7 +21,10 @@
 //               desk drawing again;
 //   LOST    — the cover's capture answering nothing (the witnesses' switch, as a lost device answers): the mat's ground
 //             (`--vf-mat-ground` — #3D5A30 by day, #313C40 by night), "The desk lost its graphics device" said ONCE, a
-//             theme change under it taken again and said no more; the counters still; dk-15-lost-device.png;
+//             theme change under it taken again and said no more; the counters still; dk-15-lost-device.png. The words
+//             are read AT THEIR SAYING (DK-18, plan (81)): the door's said log, which the line writes as it takes the
+//             notice, and a page recorder of the line's text armed before the rise — never one late read of a notice
+//             that stands 2.4 s (under load the grade read it after it had gone);
 //   REDUCED — reduced motion emulated: no recede (the still at scale 1, no transition), the cover's fade 120 ms.
 //   RIM     — (DK-16; plan addendum (69)) the receded still's edges, ~1 % of the window a side, are the MAT'S GROUND: the
 //             still's own ring read back after every rise and every theme change, and the rim's pixels under History's
@@ -394,6 +397,35 @@ export function judgeAgain(
   return { pass, problems };
 }
 
+/** One notice as the door's said log holds it (field-app `frame/status-line.ts` `SaidNotice`). */
+export interface SaidSeen {
+  readonly id: string;
+  readonly text: string;
+}
+
+/** The lost device's notice id (field-app `cover-still.ts`). */
+export const LOST_NOTICE = "desk-lost-device";
+
+/**
+ * LOST's words AT THEIR SAYING (DK-18, plan (81)): `said` — the door's said log's lost-device entries since the row began,
+ * each written as the line TOOK the notice — holds the words once; `shown` — every text the line showed, recorded in the
+ * page as it changed from before the rise — holds them too. Neither depends on when the row looks: the notice stands
+ * 2.4 s, and a row that read the line once, late, read nothing under load.
+ */
+export function judgeLostSaid(
+  said: readonly SaidSeen[],
+  shown: readonly (string | null)[] | null,
+): string[] {
+  const problems: string[] = [];
+  if (said.length === 0) problems.push("the status line said nothing of the lost device");
+  else if (said[0]?.text !== COVERS.lostWords)
+    problems.push(`the status line said ${JSON.stringify(said[0]?.text)}`);
+  if (shown === null) problems.push("the line's recorder was never armed");
+  else if (!shown.includes(COVERS.lostWords))
+    problems.push(`the line never showed the words (it showed ${JSON.stringify(shown)})`);
+  return problems;
+}
+
 /** THE LOWERING: thaw FIRST, the canvas shown, the still dropped — and on the first frame down, the desk shown under a
  * cover still lowering, the still gone. */
 export function judgeBack(rec: CoverRecordSeen | undefined, recorded: CoverRecorded): string[] {
@@ -460,6 +492,29 @@ const ARM_RECORDER = (ms: number): string => `(() => {
 })()`;
 
 const READ_RECORDER = "globalThis.__vfCoverRec";
+
+/** DK-18 (plan (81)) — the status line's text as the page saw it change, armed before the cover rises: every text, in
+ * order, from what stood at the arming. Read once, which stops it. */
+const ARM_LINE = `(() => {
+  const g = globalThis;
+  g.__vfSmokeLine?.stop();
+  const read = () => document.querySelector(".vf-status-line__text")?.textContent ?? null;
+  const shown = [read()];
+  const observer = new MutationObserver(() => {
+    const now = read();
+    if (now !== shown[shown.length - 1]) shown.push(now);
+  });
+  observer.observe(document.body, { subtree: true, childList: true, characterData: true });
+  g.__vfSmokeLine = { shown, stop: () => observer.disconnect() };
+  return true;
+})()`;
+
+const READ_LINE = `(() => {
+  const r = globalThis.__vfSmokeLine;
+  if (r === undefined) return null;
+  r.stop();
+  return r.shown;
+})()`;
 
 /** The view's facts a row judges by: the DPR, the desk canvas's layout and backing size, the views' grounds. */
 const READ_VIEW = `(() => {
@@ -801,12 +856,13 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
     await canvasFirst();
     await theme("light");
     await sleep(400);
-    const said0 = (await js<{ id: string }[]>("globalThis.__vfDesk.notices()")).filter(
-      (n) => n.id === "desk-lost-device",
+    const said0 = (await js<SaidSeen[]>("globalThis.__vfDesk.notices()")).filter(
+      (n) => n.id === LOST_NOTICE,
     ).length;
     await js(`globalThis.__vfDesk.coverCaptures("nothing")`);
     try {
       const seq = await nextSeq();
+      await js(ARM_LINE);
       await setView("godview");
       await until("the lost-device cover parked", 10_000, parkedPass("rise", 1, seq));
       await sleep(400);
@@ -822,11 +878,12 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
         );
       if (rec?.said !== COVERS.lostWords)
         problems.push(row(`the status line was asked ${JSON.stringify(rec?.said)}`));
-      const line = await js<string | null>(
-        `document.querySelector(".vf-status-line__text")?.textContent ?? null`,
-      );
-      if (line !== COVERS.lostWords)
-        problems.push(row(`the status line reads ${JSON.stringify(line)}`));
+      // the words at their saying (DK-18): the door's said log and the line's own recorded texts — never a late read
+      const saidNow = (await js<SaidSeen[]>("globalThis.__vfDesk.notices()"))
+        .filter((n) => n.id === LOST_NOTICE)
+        .slice(said0);
+      const line = await js<(string | null)[] | null>(READ_LINE);
+      problems.push(...judgeLostSaid(saidNow, line).map(row));
       const held = await hold(row("hold"), 1_500);
       problems.push(...held.problems.map(row));
       await shoot("dk-15-lost-device.png");
@@ -844,13 +901,13 @@ export async function coverRows(d: CoverRowsDriver): Promise<string[]> {
             `by night the still is ${JSON.stringify(night.still)}, not the mat's ground (${COVERS.ground.dark})`,
           ),
         );
-      const said1 = (await js<{ id: string }[]>("globalThis.__vfDesk.notices()")).filter(
-        (n) => n.id === "desk-lost-device",
+      const said1 = (await js<SaidSeen[]>("globalThis.__vfDesk.notices()")).filter(
+        (n) => n.id === LOST_NOTICE,
       ).length;
       if (said1 - said0 !== 1)
         problems.push(row(`the words were said ${said1 - said0} times, not once`));
       say(
-        `SMOKE_CANVAS_COVER_LOST ${JSON.stringify({ face: rec?.passes[0]?.face, steps: rec?.steps, said: rec?.said, line, day: facts.still, night: night.still, notices: said1 - said0, hold: held.facts })}`,
+        `SMOKE_CANVAS_COVER_LOST ${JSON.stringify({ face: rec?.passes[0]?.face, steps: rec?.steps, said: rec?.said, saidLog: saidNow, line, day: facts.still, night: night.still, notices: said1 - said0, hold: held.facts })}`,
       );
     } finally {
       await js(`globalThis.__vfDesk.coverCaptures("desk")`);
