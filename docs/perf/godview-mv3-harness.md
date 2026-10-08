@@ -117,6 +117,12 @@ frame scheduler moved into rAF. Every cell now carries two totals.
     a failure.
   - Per-view rows in historical reports are context. Retired counters are unknown when absent,
     never fabricated zeroes; all-root and CDP totals remain the gate.
+  - A z on a mark→ row is no evidence. Each launch gives such a row ONE sample (the cell's one
+    status flip), and its latency is a phase lottery: at rain it falls anywhere in one draw
+    period (0–33 ms) in every arm. Half the paired differences can sit near one period, so the
+    median lands there and the MAD stays small. mv8b-vf's R7 read rain n60 mark→draw2d +19.6 ms
+    at z 7.5, its repeat −7.5 ms, and its own rain n10 B earlier (M185). Read the per-launch
+    values before reading anything into a mark→ row.
 - **Negative control** (`VF_GODVIEW_PERF_SYNTHETIC=root:<ms>`): a separate React root commits
   once per frame with that much render work. The totals include it. The retired `view:<ms>`
   control now rejects clearly, as do invalid or zero loads.
