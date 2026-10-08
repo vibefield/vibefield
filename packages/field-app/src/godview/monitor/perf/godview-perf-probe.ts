@@ -25,6 +25,36 @@ export interface GodviewPerfMark {
   nextFrameAfter: number | null;
 }
 
+/** One script a long animation frame ran (`PerformanceScriptTiming`): who called it, where it
+ * lives, and how long it ran, forced style and layout included. */
+export interface GodviewPerfLoafScript {
+  invoker: string;
+  invokerType: string;
+  sourceURL: string;
+  sourceFunctionName: string;
+  sourceCharPosition: number;
+  startTime: number;
+  duration: number;
+  forcedStyleAndLayoutDuration: number;
+}
+
+/** MV-8b — one long animation frame with its attribution. Times are on the probe's own clock
+ * (`performance.now()`, the report's `sinceMs` timebase): rendering began at `renderStart` and
+ * style and layout at `styleAndLayoutStart` (0 when the frame rendered nothing). */
+export interface GodviewPerfLoafEntry {
+  startTime: number;
+  duration: number;
+  blockingDuration: number;
+  renderStart: number;
+  styleAndLayoutStart: number;
+  scripts: GodviewPerfLoafScript[];
+}
+
+/** How many of the window's longest frames a report keeps, with their attribution. */
+export const LOAF_KEPT = 5;
+/** A frame this long or longer is counted in `over100Ms` (M177's long frames). */
+export const LOAF_LONG_MS = 100;
+
 export interface GodviewPerfReport {
   sinceMs: number;
   windowMs: number;
@@ -32,7 +62,17 @@ export interface GodviewPerfReport {
   /** MV-3c — the page's animation-frame callbacks: their count, their summed
    * time, and that time per frame */
   raf: { callbacks: number; totalMs: number; perFrame: { p50: number; p95: number; max: number } };
-  loaf: { observable: boolean; count: number; blockingMs: number; longestMs: number };
+  /** Long animation frames (≥ 50 ms, the browser's own cut): how many, their blocking, the
+   * longest; MV-8b — how many ran 100 ms or more, and the five longest with attribution,
+   * longest first. */
+  loaf: {
+    observable: boolean;
+    count: number;
+    blockingMs: number;
+    longestMs: number;
+    over100Ms: number;
+    longest: GodviewPerfLoafEntry[];
+  };
   canvas2d: { calls: number; framesWithCalls: number };
   gpu: { submits: number; framesWithSubmits: number };
   dom: { mutations: number; childList: number; attributes: number; characterData: number };
@@ -63,6 +103,35 @@ function busyWait(ms: number): void {
   while (now() < until) {
     // the synthetic load is the wait itself
   }
+}
+
+const numberOf = (value: unknown): number => (typeof value === "number" ? value : 0);
+const textOf = (value: unknown): string => (typeof value === "string" ? value : "");
+
+/** A long animation frame entry as the report keeps it: only what attributes its time. */
+function loafEntry(entry: PerformanceEntry): GodviewPerfLoafEntry {
+  const frame = entry as PerformanceEntry & Record<string, unknown>;
+  const scripts = Array.isArray(frame["scripts"]) ? (frame["scripts"] as unknown[]) : [];
+  return {
+    startTime: entry.startTime,
+    duration: entry.duration,
+    blockingDuration: numberOf(frame["blockingDuration"]),
+    renderStart: numberOf(frame["renderStart"]),
+    styleAndLayoutStart: numberOf(frame["styleAndLayoutStart"]),
+    scripts: scripts.map((script) => {
+      const held = script as Record<string, unknown>;
+      return {
+        invoker: textOf(held["invoker"]),
+        invokerType: textOf(held["invokerType"]),
+        sourceURL: textOf(held["sourceURL"]),
+        sourceFunctionName: textOf(held["sourceFunctionName"]),
+        sourceCharPosition: numberOf(held["sourceCharPosition"]),
+        startTime: numberOf(held["startTime"]),
+        duration: numberOf(held["duration"]),
+        forcedStyleAndLayoutDuration: numberOf(held["forcedStyleAndLayoutDuration"]),
+      };
+    }),
+  };
 }
 
 function quantile(sorted: readonly number[], q: number): number {
@@ -127,6 +196,9 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
   let loafCount = 0;
   let loafBlockingMs = 0;
   let loafLongestMs = 0;
+  let loafOver100 = 0;
+  /** the window's longest frames so far, longest first, at most LOAF_KEPT */
+  let loafLongest: GodviewPerfLoafEntry[] = [];
   let draw2dCalls = 0;
   let draw2dThisFrame = false;
   let framesWithDraw2d = 0;
@@ -208,6 +280,17 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
           .blockingDuration;
         loafBlockingMs += typeof blocking === "number" ? blocking : 0;
         loafLongestMs = Math.max(loafLongestMs, entry.duration);
+        if (entry.duration >= LOAF_LONG_MS) loafOver100 += 1;
+        // keep the longest few with what attributes them; the rest stay counts
+        const kept = loafLongest.at(-1);
+        if (
+          loafLongest.length < LOAF_KEPT ||
+          (kept !== undefined && entry.duration > kept.duration)
+        ) {
+          loafLongest = [...loafLongest, loafEntry(entry)]
+            .sort((a, b) => b.duration - a.duration)
+            .slice(0, LOAF_KEPT);
+        }
       }
     });
     loaf.observe({ type: "long-animation-frame", buffered: false });
@@ -292,6 +375,8 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
       loafCount = 0;
       loafBlockingMs = 0;
       loafLongestMs = 0;
+      loafOver100 = 0;
+      loafLongest = [];
       draw2dCalls = 0;
       draw2dThisFrame = false;
       framesWithDraw2d = 0;
@@ -339,6 +424,11 @@ export function installGodviewPerfProbe(): GodviewPerfProbe {
           count: loafCount,
           blockingMs: loafBlockingMs,
           longestMs: loafLongestMs,
+          over100Ms: loafOver100,
+          longest: loafLongest.map((entry) => ({
+            ...entry,
+            scripts: entry.scripts.map((script) => ({ ...script })),
+          })),
         },
         canvas2d: { calls: draw2dCalls, framesWithCalls: framesWithDraw2d },
         gpu: { submits: gpuSubmits, framesWithSubmits: framesWithGpu },
