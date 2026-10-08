@@ -36,16 +36,34 @@ export function presenceName(profile: FieldUserProfile): string {
   return `${faceOf(profile, []).emoji} ${name}`;
 }
 
+/** The host's away reason while a view covers the canvas (ICE's `setAway`, I42). */
+export const COVER_AWAY = "cover";
+
+/** Whether this window's view covers its canvas — every view but the canvas (`frame/view-state.ts`) — and a listener for
+ * its moves. */
+export interface CoverSeam {
+  readonly covered: () => boolean;
+  readonly subscribe: (fn: () => void) => () => void;
+}
+
 /** Attach transport-free ICE presence to the already-authenticated doc lane.
  * The returned inverse deliberately detaches ICE first: its synchronous leave
- * must enter `onOutbound` before either transport subscription is removed. */
+ * must enter `onOutbound` before either transport subscription is removed.
+ * With `cover`, a view that covers the canvas (Godview, History — the desk a
+ * still under it) sends this window's pointer AWAY for the session's life:
+ * ICE's door for a host whose own chrome covers the desk (petition I42,
+ * `setAway("cover")`), said at the attach and at each move of the view, and
+ * published between frames — so a peer hears it under the cover's parked
+ * freeze, in either order with the freeze; the lowering says it back. The
+ * pointer leaving the desk's host is ICE's own (its adapter's `leave`). */
 export function attachDocumentPresence(opts: {
   ce: CanvasEngine;
   lane: DocLaneClient;
   profile: FieldUserProfile;
   docId: string;
+  cover?: CoverSeam;
 }): () => void {
-  const { ce, lane, profile, docId } = opts;
+  const { ce, lane, profile, docId, cover } = opts;
   const name = presenceName(profile);
   if (name.length === 0) {
     getRendererLogger()
@@ -82,10 +100,14 @@ export function attachDocumentPresence(opts: {
     }
   });
   const stopOutbound = presence.onOutbound((payload) => lane.sendPresence(payload));
+  const sayCover = (): void => presence.setAway(cover?.covered() === true ? COVER_AWAY : null);
+  sayCover();
+  const stopCover = cover?.subscribe(sayCover) ?? (() => {});
   let closed = false;
   return () => {
     if (closed) return;
     closed = true;
+    stopCover();
     detachPresence();
     stopOutbound();
     stopInbound();

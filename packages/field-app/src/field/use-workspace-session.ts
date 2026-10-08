@@ -4,6 +4,7 @@ import { useEffect, useLayoutEffect, useMemo, useSyncExternalStore } from "react
 import { setBoardStatus } from "../board-status";
 import type { DocManager, DocManagerState } from "../doc-manager";
 import { buildRegistry, createFieldEngine, fieldPackScope, seedField } from "../field-engine";
+import { getActiveView, subscribeActiveView } from "../frame/view-state";
 import type { FieldUserProfile } from "../host";
 import { getRendererLogger } from "../logging";
 import {
@@ -272,6 +273,10 @@ export function useWorkspaceSession(
           lane,
           profile,
           docId: pending.docId,
+          cover: {
+            covered: () => getActiveView() !== "canvas",
+            subscribe: subscribeActiveView,
+          },
         });
       } catch (error) {
         getRendererLogger()

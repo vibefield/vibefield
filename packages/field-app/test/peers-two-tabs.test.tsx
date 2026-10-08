@@ -5,9 +5,11 @@
  * `peerOpened` to the other, its bytes delivered to the lane the other claimed) — and on each desktop a WINDOW: a real field
  * engine on the board, its presence attached by VibeField's own `attachDocumentPresence` over a lane that publishes into its
  * desktop's room and hears that room's pushes (fieldd's doc lane does exactly this over its socket, `doc-lane.ts`), its
- * pointer's whereabouts said by `attachPeerFacet`, and the peers it sees placed by the reflector. Fieldd never parses the
- * bytes; what crosses is ICE's presence and VibeField's facet. Window A sees window B's pointer: its arrow's tip ON the
- * pointer through A's camera, its chip "🐙 Ada" — and hidden when B idles 8 s, leaves its window, or enters a mini mat.
+ * pointer the desk adapter's facts in its engine's input queue, and the peers it sees placed by the reflector. Fieldd never
+ * parses the bytes; what crosses is ICE's presence — since DK-17b (desk.6, I42) its cursor says away and canvas itself, and
+ * VibeField's interim facet is gone. Window A sees window B's pointer: its arrow's tip ON the pointer through A's camera,
+ * its chip "🐙 Ada" — and hidden when B idles 8 s, when B's pointer leaves its desk (ICE's `leave`), and while B's view
+ * covers its canvas (ICE's `setAway("cover")`, said by B's presence attach).
  */
 import {
   Camera,
@@ -15,14 +17,15 @@ import {
   defineQuery,
   type Entity,
   Local,
+  NO_MODS,
   Not,
   PresenceCursor,
   PresencePeer,
+  Viewport,
 } from "@vibecook/ice";
 import { PresenceRoomRouter } from "@vibefield/fieldd";
 import type { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { afterEach, describe, expect, it } from "vitest";
-import { attachPeerFacet } from "../src/field/desk/peers/peer-facet";
 import { arrowBoxAt } from "../src/field/desk/peers/peers-model";
 import { createPeersController } from "../src/field/desk/peers/peers-reflector";
 import { attachDocumentPresence } from "../src/field/document-presence";
@@ -137,25 +140,51 @@ const profile = (name: string, emoji: string): FieldUserProfile => ({
   onboarded: true,
 });
 
-/** A window: the board, its presence over its desktop's lane, its pointer's facet on a document of its own. */
+/** A window: the board, its presence over its desktop's lane (its view's cover said by the attach), and its pointer — the
+ * desk adapter's facts, enqueued as the adapter enqueues them (a move at a view point; `leave`, the pointer out of the
+ * desk's host with nowhere to go). */
 function windowOn(desktop: Desktop, who: FieldUserProfile) {
   const ce = createFieldEngine(buildRegistry());
   cleanups.push(() => ce.dispose());
   ce.docs.create();
+  ce.world.setResource(Viewport, { w: 1200, h: 800, dpr: 1 });
   ce.world.setResource(Camera, { x: 0, y: 0, zoom: 1, gesturing: false });
   const lane = laneOn(desktop);
+  let covered = false;
+  const coverListeners = new Set<() => void>();
   const detach = attachDocumentPresence({
     ce,
     lane: lane as DocLaneClient,
     profile: who,
     docId: DOC,
+    cover: {
+      covered: () => covered,
+      subscribe: (fn) => {
+        coverListeners.add(fn);
+        return () => coverListeners.delete(fn);
+      },
+    },
   });
   cleanups.push(detach);
-  const doc = document.implementation.createHTMLDocument(who.name);
-  cleanups.push(
-    attachPeerFacet({ ce, covered: () => false, subscribeCovered: () => () => {}, doc }),
-  );
-  return { ce, doc };
+  return {
+    ce,
+    pointer(kind: "move" | "leave", x = 0, y = 0): void {
+      ce.stack.queue.enqueue({
+        kind,
+        pointerId: "mouse",
+        device: "mouse",
+        screenX: x,
+        screenY: y,
+        buttons: 0,
+        mods: NO_MODS,
+      });
+    },
+    /** The window's view covers its canvas (Godview, History) — or not. */
+    cover(next: boolean): void {
+      covered = next;
+      for (const fn of [...coverListeners]) fn();
+    },
+  };
 }
 
 const remotesQ = defineQuery([PresencePeer, Not(Local)]);
@@ -209,19 +238,13 @@ describe("two tabs over fieldd — the peers on the mat, end to end (DK-16)", ()
       clearTimer: (t) => timers.delete(t as number),
     });
     cleanups.push(ctl.attach());
-    const bSession = b.ce.docs.presence();
-    if (bSession === undefined) throw new Error("B has no presence");
-    bSession.eph.addComponent(bSession.localPeer, PresenceCursor, {
-      x: 420,
-      y: 260,
-      device: "mouse",
-      away: false,
-      canvas: "",
-    });
+    // B's pointer over B's desk: B's camera at the origin × 1, so the view point (420, 260) is the world's
+    b.pointer("move", 420, 260);
 
-    // the room converges: B's presence crosses fieldd B's room → the mesh → fieldd A's room → A's lane
+    // the room converges: B's presence crosses fieldd B's room → the mesh → fieldd A's room → A's lane (B's pointer's
+    // world point lands the tick after it spawns, so the wait is for the point, not the first cursor)
     await settle([a.ce, b.ce], () =>
-      remotes(a.ce).some((e) => a.ce.world.get(e, PresenceCursor) !== undefined),
+      remotes(a.ce).some((e) => a.ce.world.get(e, PresenceCursor)?.x === 420),
     );
     const [ada] = remotes(a.ce);
     expect(a.ce.world.get(ada as Entity, PresenceCursor)).toMatchObject({ x: 420, y: 260 });
@@ -251,20 +274,25 @@ describe("two tabs over fieldd — the peers on the mat, end to end (DK-16)", ()
     fire();
     expect(el.dataset["hidden"]).toBe("idle");
     // B moves: drawn again, where it went
-    bSession.eph
-      .edit(bSession.localPeer)
-      .set(PresenceCursor, { x: 430, y: 260, device: "mouse", away: false, canvas: "" });
+    b.pointer("move", 430, 260);
     await settle([a.ce, b.ce], () => a.ce.world.get(ada as Entity, PresenceCursor)?.x === 430);
     expect(el.dataset["hidden"]).toBeUndefined();
     expect(el.style.transform).toBe("translate(493px, 328px)");
 
-    // AWAY: B's pointer leaves B's window — B's facet says so at once, and A hides it
-    b.doc.body.dispatchEvent(
-      new PointerEvent("pointerout", { bubbles: true, relatedTarget: null }),
-    );
+    // AWAY: B's pointer leaves B's desk with nowhere to go — ICE's own `leave` (its adapter's fact), and A hides it
+    b.pointer("leave", 430, 260);
     await settle([a.ce, b.ce], () => el.dataset["hidden"] === "away");
-    // back over B's page: drawn again
-    b.doc.body.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
+    expect(a.ce.world.get(ada as Entity, PresenceCursor)).toMatchObject({ away: true, x: 430 });
+    expect(b.ce.docs.presence()?.away()).toBeNull(); // the pointer's own word, not B's host's
+    // back over B's desk: drawn again
+    b.pointer("move", 432, 260);
+    await settle([a.ce, b.ce], () => el.dataset["hidden"] === undefined);
+
+    // COVER: B's view covers its canvas — B's presence says it away (ICE's `setAway("cover")`), A hides it; lowered, back
+    b.cover(true);
+    await settle([a.ce, b.ce], () => el.dataset["hidden"] === "away");
+    expect(b.ce.docs.presence()?.away()).toBe("cover");
+    b.cover(false);
     await settle([a.ce, b.ce], () => el.dataset["hidden"] === undefined);
   });
 });

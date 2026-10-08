@@ -5,6 +5,7 @@ import {
   Not,
   Position,
   PrefabId,
+  PresenceCursor,
   Size,
   Specimen,
   specimensOf,
@@ -31,7 +32,6 @@ import { DESK_FACE_URLS, deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
 import type { ObjectWords } from "./desk-object-words";
 import { peersRenders } from "./peers/PeersOnTheMat";
-import { type PeerFacetSent, peerFacetSent } from "./peers/peer-facet";
 import { type PeersRecord, peersRecord } from "./peers/peers-reflector";
 import { type BoardStats, readBoardStats } from "./pegboard/board-stats";
 
@@ -263,14 +263,15 @@ export interface VfDeskDoor {
    * desk's. Read, or set — a witness's switch, like `ambient`. */
   coverCaptures(answer?: "desk" | "nothing"): "desk" | "nothing";
   /** DK-16 — the peers on the mat: whether the layer was mounted with ICE's remote cursors (`handle.cursors` — false: none
-   * of ICE's are drawn), the peers as this window last placed them (each one's pointer, facet, verdict and box; the layer's
-   * verdict; the canvas and camera they were placed by; the reflector's flushes, the element writes, the idle timers
-   * fired), how often the layer has rendered (never per frame), and what this window last said of its own pointer. A read. */
+   * of ICE's are drawn), the peers as this window last placed them (each one's cursor — x/y, away, canvas — its verdict
+   * and box; the layer's verdict; the canvas and camera they were placed by; the reflector's flushes, the element writes,
+   * the idle timers fired), how often the layer has rendered (never per frame), and — DK-17b, ICE's I42 — what this
+   * window says of its own pointer: the host's away reason and the cursor as its presence last wrote it. A read. */
   peers(): {
     readonly cursors: boolean;
     readonly record: PeersRecord | null;
     readonly renders: number;
-    readonly facet: PeerFacetSent | null;
+    readonly said: PresenceSaid | null;
   };
   /** DK-16 — the smokes' presence relay, installed only on a page loaded with `?presenceRelay=1` (two windows of one shell
    * share no presence room — fieldd's rooms are other desktops' — so the smoke plays the mesh): the presence payloads this
@@ -451,7 +452,7 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
       cursors: (handle as Partial<DeskLayerHandle>).cursors !== false,
       record: peersRecord(),
       renders: peersRenders(),
-      facet: peerFacetSent(),
+      said: presenceSaid(engine),
     }),
     ...(presenceRelayAsked() ? presenceRelay(engine) : {}),
     ...(deskFaultsAsked() ? { gpuFault: (kind) => gpuFault(desk.device?.() ?? null, kind) } : {}),
@@ -481,6 +482,25 @@ const toBase64 = (bytes: Uint8Array): string => {
 
 const fromBase64 = (text: string): Uint8Array =>
   Uint8Array.from(atob(text), (char) => char.charCodeAt(0));
+
+/** What this window says of its own pointer (ICE's presence, I42): the host's away reason (`presence().away()` — "cover"
+ * while a view covers the canvas, `document-presence.ts`) and its `PresenceCursor` as the publish last wrote it — away
+ * (the reason held, or the pointer out of the desk's host) and the canvas its x/y lie in — or null before the first. */
+export interface PresenceSaid {
+  readonly reason: string | null;
+  readonly cursor: { readonly away: boolean; readonly canvas: string } | null;
+}
+
+function presenceSaid(engine: CanvasEngine): PresenceSaid | null {
+  const session = engine.docs.presence();
+  if (session === undefined) return null;
+  const peer = session.localPeer;
+  const cursor = engine.world.isAlive(peer) ? engine.world.get(peer, PresenceCursor) : undefined;
+  return {
+    reason: session.away(),
+    cursor: cursor === undefined ? null : { away: cursor.away, canvas: cursor.canvas ?? "" },
+  };
+}
 
 /** The relay's two doors over this engine's presence session — the session followed as it attaches and re-attaches. */
 function presenceRelay(engine: CanvasEngine): Pick<VfDeskDoor, "presenceTap" | "presenceApply"> {

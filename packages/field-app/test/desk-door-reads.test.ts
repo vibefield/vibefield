@@ -3,7 +3,15 @@
 // props — the cells of its groups, merged, never the pegboard's specimens — and the board's persistence row. Reads
 // only: the door still writes no document.
 
-import { defineQuery, type Entity, Local, Not, PresencePeer } from "@vibecook/ice";
+import {
+  defineQuery,
+  type Entity,
+  Local,
+  NO_MODS,
+  Not,
+  PresencePeer,
+  Viewport,
+} from "@vibecook/ice";
 import { COMMENT_PAD_TYPE } from "@vibefield/plugin-comment-pad";
 import { afterEach, describe, expect, it } from "vitest";
 import { setBoardStatus } from "../src/board-status";
@@ -80,7 +88,53 @@ describe("the desk door's reads (DK-8)", () => {
     };
     expect(read({ cursors: false })?.cursors).toBe(false);
     expect(read({})?.cursors).toBe(true); // absent, ICE's host draws them (I26)
-    expect(read({ cursors: false })).toMatchObject({ record: null, facet: null });
+    expect(read({ cursors: false })).toMatchObject({ record: null, said: null });
+    ce.dispose();
+  });
+
+  it("DK-17b: says what this window says of its own pointer — ICE's presence (I42): the host's reason and its cursor", () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    ce.world.setResource(Viewport, { w: 1200, h: 800, dpr: 1 });
+    ce.docs.attachPresence({ name: "🦊 Tab", color: "#68686b" });
+    const said = () => {
+      const undo = installDeskDoor(
+        {
+          engine: ce,
+          handle: { cursors: false } as never,
+          generation: 1,
+          mount: 0,
+          theme: "light",
+        },
+        () => false,
+      );
+      const peers = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk?.peers();
+      undo();
+      return peers?.said;
+    };
+    // a session, no pointer published yet
+    expect(said()).toEqual({ reason: null, cursor: null });
+    let now = 0;
+    const move = (x: number) => {
+      ce.stack.queue.enqueue({
+        kind: "move",
+        pointerId: "mouse",
+        device: "mouse",
+        screenX: x,
+        screenY: 40,
+        buttons: 0,
+        mods: NO_MODS,
+      });
+      for (let i = 0; i < 2; i++) {
+        now += 16;
+        ce.step(now);
+      }
+    };
+    move(120);
+    expect(said()).toEqual({ reason: null, cursor: { away: false, canvas: "" } });
+    ce.docs.presence()?.setAway("cover");
+    move(121);
+    expect(said()).toEqual({ reason: "cover", cursor: { away: true, canvas: "" } });
     ce.dispose();
   });
 

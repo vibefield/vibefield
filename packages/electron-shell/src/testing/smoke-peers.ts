@@ -2,8 +2,9 @@
 // "When the desk can't draw"; R17, R18; ICE I26). Two windows of one shell share no presence room — fieldd's rooms fan a
 // board's presence out to OTHER desktops, and one desktop holds a board in one window — so the smoke PLAYS THE MESH: window
 // A (the canvas smoke's own) and window B (a second window on its own board), each loaded with `?presenceRelay=1`, and every
-// payload one window's presence sends handed to the other's as its lane hands a room's. What crosses is ICE's presence and
-// VibeField's facet, opaque to the relay as it is to fieldd. Then B's REAL pointer (the OS's events, sent to its window):
+// payload one window's presence sends handed to the other's as its lane hands a room's. What crosses is ICE's presence —
+// since DK-17b (desk.6, I42) its cursor says away and canvas itself — opaque to the relay as it is to fieldd. Then B's
+// REAL pointer (the OS's events, sent to its window):
 //   ARRIVE  — B's arrow in A with its tip ON B's pointer: B's client point through B's camera into the world, and through
 //             A's camera back to A's screen (the record's box and the element's own rect); the chip the face first, then
 //             the name, in the chrome's own text ink; ICE's cursors absent (the layer's word `false`, and no element of the
@@ -11,8 +12,10 @@
 //             on the lit mat from the captured pixels;
 //   IDLE    — B's pointer still: hidden at 8 s after its last move (by A's own timer), never before 7.5;
 //   BOARD   — A's pegboard out: the layer hidden; folded, shown;
-//   COVER   — A covered by Godview: hidden; back to the canvas, shown;
-//   AWAY    — B's pointer leaves B's window: hidden in A at once; back over B's page, shown;
+//   COVER   — A covered by Godview: hidden; A's own presence says away (ICE's `setAway("cover")`, its cursor away); back
+//             to the canvas, shown;
+//   AWAY    — B's pointer leaves B's window: hidden in A at once, by ICE's own leave (B's cursor away, no host reason);
+//             back over B's page, shown;
 //   GONE    — B closed: its peer leaves A's roster;
 //   COUNTERS — the layer placed every move and rendered only for the roster and its own verdicts.
 // And, on A again (`?deskFaults=1`), THE DESK'S FAULTS on its own device:
@@ -50,11 +53,16 @@ export interface Camera {
   readonly zoom: number;
 }
 
-/** One peer as a window's door last placed it (`__vfDesk.peers().record.peers`). */
+/** One peer as a window's door last placed it (`__vfDesk.peers().record.peers`): its `PresenceCursor` — x/y, and ICE's
+ * away and canvas (I42). */
 export interface PeerSeen {
   readonly entity: number;
-  readonly cursor: { readonly x: number; readonly y: number } | null;
-  readonly where: { readonly away: boolean; readonly canvas: string } | null;
+  readonly cursor: {
+    readonly x: number;
+    readonly y: number;
+    readonly away: boolean;
+    readonly canvas: string;
+  } | null;
   readonly idleMs: number;
   readonly hidden: string | null;
   readonly box: { readonly x: number; readonly y: number } | null;
@@ -72,11 +80,35 @@ export interface PeersDoor {
     readonly idles: number;
   } | null;
   readonly renders: number;
-  readonly facet: {
-    readonly away: boolean;
-    readonly canvas: string;
-    readonly left: boolean;
+  /** What the window says of its own pointer (ICE's presence, I42): the host's away reason and its cursor as published. */
+  readonly said: {
+    readonly reason: string | null;
+    readonly cursor: { readonly away: boolean; readonly canvas: string } | null;
   } | null;
+}
+
+/** COVER: a covered window says its own pointer away — the host's reason "cover" (ICE's `setAway`) and its published
+ * cursor away. */
+export function judgeCoverSaid(said: PeersDoor["said"]): string[] {
+  if (said === null) return ["the window has no presence to say it with"];
+  const problems: string[] = [];
+  if (said.reason !== "cover")
+    problems.push(`its presence holds the reason ${JSON.stringify(said.reason)}, not "cover"`);
+  if (said.cursor === null) problems.push("its presence published no cursor to say it on");
+  else if (!said.cursor.away) problems.push("its published cursor is not away");
+  return problems;
+}
+
+/** AWAY: the peer hidden by its pointer's own leave — ICE's (`PointerOutside`): its cursor away with no host reason held. */
+export function judgeAwaySaid(said: PeersDoor["said"]): string[] {
+  if (said === null) return ["the peer's window has no presence"];
+  const problems: string[] = [];
+  if (said.reason !== null)
+    problems.push(
+      `the peer's host holds the reason ${JSON.stringify(said.reason)} — not the pointer's own leave`,
+    );
+  if (said.cursor?.away !== true) problems.push("the peer's own cursor is not away");
+  return problems;
 }
 
 /** Where window A must draw B's arrow box: B's client point → the world through B's camera → A's screen, less the tip. */
@@ -531,33 +563,43 @@ export async function peersRows(d: PeersRowsDriver): Promise<string[]> {
     const covered = await dom();
     if (covered.layer?.visibility !== "hidden" || covered.shown !== 0)
       problems.push(`PEERS COVER: a peer drawn under the cover (${JSON.stringify(covered.layer)})`);
-    const facetCovered = (await door(a)).facet;
-    if (facetCovered?.away !== true)
-      problems.push(
-        `PEERS COVER: A said its own pointer ${JSON.stringify(facetCovered)} under the cover, not away`,
-      );
+    const saidCovered = (await door(a)).said;
+    problems.push(
+      ...judgeCoverSaid(saidCovered).map(
+        (p) =>
+          `PEERS COVER: A's own pointer under the cover — ${p} (${JSON.stringify(saidCovered)})`,
+      ),
+    );
     await js(a, `globalThis.vibefield.view.set("canvas")`);
     await until("A back on the canvas", 10_000, async () => (await dom()).layer?.hidden === null);
+    const saidBack = (await door(a)).said;
+    if (saidBack?.reason !== null)
+      problems.push(`PEERS COVER: A back on the canvas still holds ${JSON.stringify(saidBack)}`);
     await moveB();
     await until("B drawn again after the cover", 5_000, shownInA);
     say(
-      `SMOKE_CANVAS_PEERS_COVER ${JSON.stringify({ covered: covered.layer, facet: facetCovered })}`,
+      `SMOKE_CANVAS_PEERS_COVER ${JSON.stringify({ covered: covered.layer, said: saidCovered, back: saidBack })}`,
     );
 
     // ── AWAY: B's pointer leaves B's window ────────────────────────────────────────────────────────────────────────────
     b.webContents.sendInputEvent({ type: "mouseLeave", x: point.x, y: -4 });
     let awayBy: "the OS's leave" | "none" = "none";
+    let saidAway: PeersDoor["said"] = null;
     try {
       await until("B said away in A", 3_000, async () => (await peerOf())?.hidden === "away");
       awayBy = "the OS's leave";
+      saidAway = (await door(b)).said;
+      problems.push(
+        ...judgeAwaySaid(saidAway).map((p) => `PEERS AWAY: ${p} (${JSON.stringify(saidAway)})`),
+      );
     } catch {
       problems.push(
-        `PEERS AWAY: B's pointer left its window and A still drew it (${JSON.stringify(await peerOf())}; B's facet ${JSON.stringify((await door(b)).facet)})`,
+        `PEERS AWAY: B's pointer left its window and A still drew it (${JSON.stringify(await peerOf())}; B said ${JSON.stringify((await door(b)).said)})`,
       );
     }
     await moveB();
     await until("B drawn again over its page", 5_000, shownInA);
-    say(`SMOKE_CANVAS_PEERS_AWAY ${JSON.stringify({ by: awayBy })}`);
+    say(`SMOKE_CANVAS_PEERS_AWAY ${JSON.stringify({ by: awayBy, said: saidAway })}`);
 
     // ── COUNTERS: placed every move, rendered only for the roster and the layer's verdicts ────────────────────────────
     const c0 = await door(a);

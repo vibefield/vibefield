@@ -1218,6 +1218,15 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   presence facet, `vibefield.PeerWhere { away, canvas }`, written change-only beside ICE's cursor
   until ICE carries both (ask I42); a peer whose own view is covered is sent away. Peers also hide
   under the pegboard, under your cover, and while the desk does not draw.
+  *Amended 2026-10-07 (DK-17b, ICE `0.15.0-desk.6`):* ICE carries both now (petition I42) and the
+  interim facet is gone. Each peer's `PresenceCursor` says `away` — its pointer left its desk's host
+  with nowhere to go (ICE's pointer adapter's `leave`), or its host holds a reason — and `canvas` —
+  the entered container's durable key, "" at the root, a keyless one `~<peerId>/<entity>`
+  (`presenceCanvasOf`, which names this window's own canvas the same way, so the two compare). VibeField
+  says one thing of its own: a view that covers the canvas sends this window's pointer away through
+  ICE's `setAway("cover")`, said as the presence attaches and as the view moves, and published between
+  frames, so a peer hears it under the cover's parked freeze too. A peer on a build that sends neither
+  field reads as ICE's defaults: present, on the root.
 - **When the desk can't draw** (DK-D32 ruled 2026-10-02; Chrome on the Mat §3.7; R18; DK-3, DK-16):
   the layer's status (`onStatus`) is said in VibeField's words — never ICE's black monospace screen,
   never a blank. **`failed`** — WebGPU absent (a remote desktop has none, Windows is unverified) or

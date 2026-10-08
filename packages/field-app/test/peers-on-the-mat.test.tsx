@@ -8,6 +8,9 @@
  * its tip at 2,2; THE LABEL a chip, the face first, then the name. The peers here are REAL presence sessions — ICE's own
  * `attachPresence` on worlds of their own — whose bytes reach the host's session as a lane hands them (`wire.apply`), core's
  * recipe: Loro's throttle runs on the wasm clock, so a room converges by short real waits, deadline-polled.
+ * DK-17b (desk.6, ICE I42): the away and the canvas are ICE's own words on the cursor — `PresenceCursor.away` (the pointer
+ * left the desk's host with nowhere to go, or the host said so) and `.canvas` (`presenceCanvasOf`) — and VibeField says
+ * only its cover, through ICE's `setAway("cover")` at the presence's attach; the interim `vibefield.PeerWhere` facet is gone.
  */
 
 import { readFileSync } from "node:fs";
@@ -20,26 +23,23 @@ import {
   defineQuery,
   type Entity,
   Local,
+  NO_MODS,
   Not,
   PrefabId,
   PresenceCursor,
   PresencePeer,
   type PresenceSession,
+  presenceCanvasOf,
+  Viewport,
 } from "@vibecook/ice";
 import { MINIMAT_TYPE } from "@vibecook/ice/desk/objects";
 import { EngineProvider } from "@vibecook/ice/react";
+import type { DocLaneClient } from "@vibefield/fieldd-client/doclane";
 import { act, createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { PeersOnTheMat, peersRenders } from "../src/field/desk/peers/PeersOnTheMat";
-import {
-  attachPeerFacet,
-  canvasKey,
-  PeerWhere,
-  peerFacetSent,
-  resetPeerFacetForTest,
-} from "../src/field/desk/peers/peer-facet";
 import {
   arrowBoxAt,
   nextIdleAt,
@@ -49,10 +49,15 @@ import {
   peerLabel,
   peersHidden,
 } from "../src/field/desk/peers/peers-model";
-import { createPeersController, peersRecord } from "../src/field/desk/peers/peers-reflector";
+import {
+  canvasHere,
+  createPeersController,
+  peersRecord,
+} from "../src/field/desk/peers/peers-reflector";
+import { attachDocumentPresence, COVER_AWAY } from "../src/field/document-presence";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
 import { resetActiveViewForTest } from "../src/frame/view-state";
-import { type FieldHost, setHost } from "../src/host";
+import { type FieldHost, type FieldUserProfile, setHost } from "../src/host";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -63,7 +68,6 @@ let cleanups: Array<() => void> = [];
 afterEach(() => {
   for (const fn of cleanups.reverse()) fn();
   cleanups = [];
-  resetPeerFacetForTest();
   resetActiveViewForTest();
 });
 
@@ -149,21 +153,23 @@ describe("the model — where a peer stands, and when it does not", () => {
 
   it("hides a peer with no pointer, one away, one in another canvas, and one idle 8 s — never sooner", () => {
     const here = { canvas: "", now: 10_000 };
-    const at = { x: 1, y: 2 };
-    expect(peerHidden({ cursor: null, where: null, movedAt: 9_000 }, here)).toBe("no-pointer");
+    const at = { x: 1, y: 2, away: false, canvas: "" };
+    expect(peerHidden({ cursor: null, movedAt: 9_000 }, here)).toBe("no-pointer");
+    expect(peerHidden({ cursor: { ...at, away: true }, movedAt: 9_000 }, here)).toBe("away");
+    expect(peerHidden({ cursor: { ...at, canvas: "k1" }, movedAt: 9_000 }, here)).toBe("canvas");
+    // a peer whose build sends neither field reads as ICE's defaults — in its window, on the root: drawn on the root,
+    // hidden inside a container
+    expect(peerHidden({ cursor: at, movedAt: 9_000 }, here)).toBeNull();
+    expect(peerHidden({ cursor: at, movedAt: 9_000 }, { ...here, canvas: "k1" })).toBe("canvas");
+    // a peer in a keyless container of its own is never in this window's canvas, even this window's own keyless one
     expect(
-      peerHidden({ cursor: at, where: { away: true, canvas: "" }, movedAt: 9_000 }, here),
-    ).toBe("away");
-    expect(
-      peerHidden({ cursor: at, where: { away: false, canvas: "k1" }, movedAt: 9_000 }, here),
+      peerHidden(
+        { cursor: { ...at, canvas: "~them/12" }, movedAt: 9_000 },
+        { ...here, canvas: "~me/12" },
+      ),
     ).toBe("canvas");
-    // a peer whose build sends no facet: in its window, on the root — drawn on the root, hidden inside a container
-    expect(peerHidden({ cursor: at, where: null, movedAt: 9_000 }, here)).toBeNull();
-    expect(peerHidden({ cursor: at, where: null, movedAt: 9_000 }, { ...here, canvas: "k1" })).toBe(
-      "canvas",
-    );
-    expect(peerHidden({ cursor: at, where: null, movedAt: 2_001 }, here)).toBeNull(); // 7999 ms
-    expect(peerHidden({ cursor: at, where: null, movedAt: 2_000 }, here)).toBe("idle"); // 8000 ms
+    expect(peerHidden({ cursor: at, movedAt: 2_001 }, here)).toBeNull(); // 7999 ms
+    expect(peerHidden({ cursor: at, movedAt: 2_000 }, here)).toBe("idle"); // 8000 ms
   });
 
   it("reads the label as the presence name has it — the face first, then the name", () => {
@@ -179,87 +185,127 @@ describe("the model — where a peer stands, and when it does not", () => {
   });
 });
 
-describe("the facet — this window's pointer, said to its peers (the interim of ICE ask I42)", () => {
-  const facetOf = (ce: CanvasEngine) => {
+describe("this window's word — ICE's cursor says away and canvas (I42); VibeField says only its cover", () => {
+  /** This window's own cursor as its presence last wrote it (ICE's publish: change-only, between steps). */
+  const saidOf = (ce: CanvasEngine) => {
     const local = ce.docs.presence()?.localPeer;
-    return local === undefined ? undefined : ce.world.get(local, PeerWhere);
+    return local === undefined ? undefined : ce.world.get(local, PresenceCursor);
   };
-
-  it("says in its window, on the root, ONCE — and nothing more while nothing moves", async () => {
-    const ce = await host();
+  /** The desk adapter's facts, as it enqueues them: a mouse move at a view point, or the pointer's `leave`. */
+  const pointer = (ce: CanvasEngine, kind: "move" | "leave", x = 300, y = 200): void => {
+    ce.stack.queue.enqueue({
+      kind,
+      pointerId: "mouse",
+      device: "mouse",
+      screenX: x,
+      screenY: y,
+      buttons: 0,
+      mods: NO_MODS,
+    });
+  };
+  /** A doc lane that carries nothing — the presence's own bytes are read at its session. */
+  const quietLane = {
+    onPresence: () => () => {},
+    sendPresence: () => {},
+  } as unknown as DocLaneClient;
+  const who = {
+    userId: "usr_host",
+    fuid: 1,
+    name: "Host",
+    face: { emoji: "🐙" },
+    resident: true,
+    onboarded: true,
+  } as FieldUserProfile;
+  /** A window's engine with its presence attached by VibeField's own `attachDocumentPresence`, covered as the seam says. */
+  function windowWith(cover: {
+    covered: () => boolean;
+    subscribe: (fn: () => void) => () => void;
+  }) {
+    const ce = createFieldEngine(buildRegistry());
+    cleanups.push(() => ce.dispose());
+    ce.docs.create();
+    ce.world.setResource(Viewport, { w: 1200, h: 800, dpr: 1 });
+    ce.world.setResource(Camera, { x: 0, y: 0, zoom: 1, gesturing: false });
     cleanups.push(
-      attachPeerFacet({
-        ce,
-        covered: () => false,
-        subscribeCovered: () => () => {},
-        doc: document,
-      }),
+      attachDocumentPresence({ ce, lane: quietLane, profile: who, docId: "doc_said", cover }),
     );
-    expect(facetOf(ce)).toMatchObject({ away: false, canvas: "" });
-    for (let i = 0; i < 5; i++) tick(ce);
-    expect(peerFacetSent()).toMatchObject({ away: false, canvas: "", left: false, writes: 1 });
+    return ce;
+  }
+  const never = { covered: () => false, subscribe: () => () => {} };
+
+  it("says nothing of its own beside ICE's cursor: the pointer's x/y, in its window, on the root — written once", async () => {
+    const ce = windowWith(never);
+    pointer(ce, "move");
+    tick(ce);
+    tick(ce); // the pointer's world point lands the tick after it spawns (ICE's own)
+    expect(saidOf(ce)).toMatchObject({ x: 300, y: 200, away: false, canvas: "" });
+    expect(ce.docs.presence()?.away()).toBeNull();
+    // ICE's facet alone rides the local peer — no facet of VibeField's (the interim `vibefield.PeerWhere` is gone)
+    const local = ce.docs.presence()?.localPeer as Entity;
+    expect(
+      ce.world
+        .componentsOf(local)
+        .map((c) => c.name)
+        .filter((n) => n.startsWith("vibefield.")),
+    ).toEqual([]);
   });
 
-  it("says AWAY at once when the pointer leaves the window, and back when it is over the page again", async () => {
-    const ce = await host();
-    cleanups.push(
-      attachPeerFacet({
-        ce,
-        covered: () => false,
-        subscribeCovered: () => () => {},
-        doc: document,
-      }),
-    );
-    // a pointerout with nowhere to go (relatedTarget null): the pointer left the window — no frame asked for
+  it("leaves the pointer's leave to ICE: its adapter's `leave` sends it away in one step, the next move back — and a document's pointerout says nothing", async () => {
+    const ce = windowWith(never);
+    pointer(ce, "move");
+    tick(ce);
+    // what DK-16's facet listened for — a pointerout with nowhere to go — moves nothing now: the desk adapter's leave is the one
     document.body.dispatchEvent(
       new PointerEvent("pointerout", { bubbles: true, relatedTarget: null }),
     );
-    expect(facetOf(ce)).toMatchObject({ away: true });
-    expect(peerFacetSent()).toMatchObject({ away: true, left: true, writes: 2 });
-    // a pointerout to another element of the page is not leaving
-    document.body.dispatchEvent(
-      new PointerEvent("pointerout", { bubbles: true, relatedTarget: null }),
-    );
-    expect(peerFacetSent()?.writes).toBe(2);
-    document.body.dispatchEvent(new PointerEvent("pointerover", { bubbles: true }));
-    expect(facetOf(ce)).toMatchObject({ away: false });
-    expect(peerFacetSent()).toMatchObject({ left: false, writes: 3 });
+    tick(ce);
+    expect(saidOf(ce)).toMatchObject({ away: false });
+    pointer(ce, "leave");
+    tick(ce);
+    expect(saidOf(ce)).toMatchObject({ away: true, x: 300, y: 200 });
+    expect(ce.docs.presence()?.away()).toBeNull(); // the pointer's own, not the host's word
+    pointer(ce, "move", 310, 200);
+    tick(ce);
+    expect(saidOf(ce)).toMatchObject({ away: false, x: 310 });
   });
 
-  it("says AWAY while the window's view covers its canvas — the pointer is over Godview, not the desk", async () => {
-    const ce = await host();
+  it("says AWAY while the window's view covers its canvas — ICE's `setAway(\"cover\")`, between frames — and back as it lowers", async () => {
     let covered = false;
     const listeners = new Set<() => void>();
-    cleanups.push(
-      attachPeerFacet({
-        ce,
-        covered: () => covered,
-        subscribeCovered: (fn) => {
-          listeners.add(fn);
-          return () => listeners.delete(fn);
-        },
-        doc: document,
-      }),
-    );
+    const ce = windowWith({
+      covered: () => covered,
+      subscribe: (fn) => {
+        listeners.add(fn);
+        return () => listeners.delete(fn);
+      },
+    });
+    pointer(ce, "move");
+    tick(ce);
+    expect(saidOf(ce)).toMatchObject({ away: false });
     covered = true;
     for (const fn of listeners) fn();
-    expect(facetOf(ce)).toMatchObject({ away: true });
-    expect(peerFacetSent()).toMatchObject({ away: true, left: false });
+    expect(ce.docs.presence()?.away()).toBe(COVER_AWAY);
+    // no frame asked for: ICE publishes the host's away a microtask after the call, so a parked desk says it too
+    await Promise.resolve();
+    expect(saidOf(ce)).toMatchObject({ away: true });
     covered = false;
     for (const fn of listeners) fn();
-    expect(facetOf(ce)).toMatchObject({ away: false });
+    await Promise.resolve();
+    expect(ce.docs.presence()?.away()).toBeNull();
+    expect(saidOf(ce)).toMatchObject({ away: false });
   });
 
-  it("says the CANVAS its x/y lie in — an entered mini mat's durable key, and the root again on the way out", async () => {
+  it("says AWAY at once for a presence attached under a standing cover — the reason is said at the attach", () => {
+    const ce = windowWith({ covered: () => true, subscribe: () => () => {} });
+    expect(ce.docs.presence()?.away()).toBe(COVER_AWAY);
+    pointer(ce, "move");
+    tick(ce);
+    expect(saidOf(ce)).toMatchObject({ away: true });
+  });
+
+  it("names its canvas as ICE names a peer's — an entered mini mat's durable key, a keyless container never \"\" — and the root again on the way out", async () => {
     const ce = await host(true);
-    cleanups.push(
-      attachPeerFacet({
-        ce,
-        covered: () => false,
-        subscribeCovered: () => () => {},
-        doc: document,
-      }),
-    );
+    ce.world.setResource(Viewport, { w: 1200, h: 800, dpr: 1 });
     let minimat: Entity | undefined;
     ce.world.query(defineQuery([PrefabId])).each((b) => {
       for (const r of b)
@@ -268,23 +314,32 @@ describe("the facet — this window's pointer, said to its peers (the interim of
     if (minimat === undefined) throw new Error("the seed laid no mini mat");
     // the container's capability lands at the equip flush, a frame after it projects
     for (let i = 0; i < 3; i++) tick(ce);
-    const key = String(ce.docs.current()?.store.keyOf(minimat));
+    pointer(ce, "move");
+    tick(ce);
+    expect(canvasHere(ce)).toBe("");
+    const key = ce.docs.current()?.store.keyOf(minimat);
+    expect(typeof key).toBe("string");
     ce.nav.enterContainer(minimat, { transition: "none" });
     tick(ce);
-    expect(canvasKey(ce)).toBe(key);
-    expect(facetOf(ce)).toMatchObject({ canvas: key });
+    // this window's canvas and the canvas its own cursor says are ONE name — what a peer's is compared with
+    expect(canvasHere(ce)).toBe(key);
+    expect(saidOf(ce)).toMatchObject({ canvas: key });
+    // a container no document keys is named `~<peerId>/<entity>` — never "", never another peer's (VibeField's own
+    // `runtime:<frame>` retired with the facet: both sides must name a canvas the same way, and this is ICE's)
+    const peerId = ce.docs.presence()?.peerId as string;
+    expect(presenceCanvasOf(ce.world, peerId, () => undefined)).toBe(`~${peerId}/${minimat}`);
     ce.nav.exitContainer({ transition: "none" });
     tick(ce);
-    expect(facetOf(ce)).toMatchObject({ canvas: "" });
+    expect(canvasHere(ce)).toBe("");
+    expect(saidOf(ce)).toMatchObject({ canvas: "" });
   });
 
-  it("rides the presence wire: another window's session reads it on this window's peer", async () => {
-    const ce = await host();
-    cleanups.push(
-      attachPeerFacet({ ce, covered: () => true, subscribeCovered: () => () => {}, doc: document }),
-    );
+  it("rides the presence wire: another window reads this window's cover on its cursor", async () => {
+    const ce = windowWith({ covered: () => true, subscribe: () => () => {} });
     const out: Uint8Array[] = [];
     cleanups.push(ce.docs.presence()?.onOutbound((b) => out.push(b)) ?? (() => {}));
+    pointer(ce, "move");
+    tick(ce);
     const other = createFieldEngine(buildRegistry());
     cleanups.push(() => other.dispose());
     other.docs.create();
@@ -297,7 +352,7 @@ describe("the facet — this window's pointer, said to its peers (the interim of
       tick(ce);
       other.step(clock);
       const [them] = remotes(other);
-      seen = them === undefined ? undefined : other.world.get(them, PeerWhere);
+      seen = them === undefined ? undefined : other.world.get(them, PresenceCursor);
       await sleep(5);
     }
     expect(seen).toMatchObject({ away: true, canvas: "" });
@@ -365,9 +420,20 @@ describe("the controller — each peer placed through the camera in a reflector,
     // a frame that moved nothing flushes nothing and writes nothing
     tick(ce);
     expect(ctl.record()).toMatchObject({ writes, flushes });
-    // a flush that moves nothing OF THIS PEER (its facet arrives, saying what was assumed) writes nothing to it
-    ada.session.eph.addComponent(ada.session.localPeer, PeerWhere, { away: false, canvas: "" });
-    await converge(ce, [ada], () => ce.world.get(them as Entity, PeerWhere) !== undefined);
+    // a flush that moves nothing OF THIS PEER (another peer's pointer arrives, unbound here) writes nothing to it
+    const eve = peer("🦉 Eve");
+    eve.session.eph.addComponent(eve.session.localPeer, PresenceCursor, {
+      x: 9,
+      y: 9,
+      device: "mouse",
+      away: false,
+      canvas: "",
+    });
+    await converge(
+      ce,
+      [ada, eve],
+      () => remotes(ce).length === 2 && remotes(ce).every((e) => cursorOf(ce, e) !== undefined),
+    );
     expect(ctl.record().flushes).toBeGreaterThan(flushes);
     expect(ctl.record().writes).toBe(writes);
     // the peer moves: placed where it went
@@ -405,30 +471,34 @@ describe("the controller — each peer placed through the camera in a reflector,
     expect(el.dataset["hidden"]).toBeUndefined();
   });
 
-  it("hides a peer whose pointer left its window, and one inside another canvas — by their own facet", async () => {
+  it("hides a peer whose pointer left its window, and one inside another canvas — by ICE's own words on its cursor", async () => {
     const ce = await host();
     const cy = peer("🐼 Cy");
+    // Cy's cursor as Cy's own publish writes it (I42): away — its pointer out of its desk's host, or its view covered
     cy.session.eph.addComponent(cy.session.localPeer, PresenceCursor, {
       x: 5,
       y: 5,
       device: "mouse",
-      away: false,
+      away: true,
       canvas: "",
     });
-    cy.session.eph.addComponent(cy.session.localPeer, PeerWhere, { away: true, canvas: "" });
-    await converge(ce, [cy], () =>
-      remotes(ce).some((e) => ce.world.get(e, PeerWhere)?.away === true),
-    );
+    await converge(ce, [cy], () => remotes(ce).some((e) => cursorOf(ce, e)?.away === true));
     const { ctl } = controllerOn(ce);
     const [them] = remotes(ce);
     const el = document.createElement("div");
     cleanups.push(ctl.bind(them as Entity, el));
     expect(el.dataset["hidden"]).toBe("away");
-    cy.session.eph.edit(cy.session.localPeer).set(PeerWhere, { away: false, canvas: "a-mini-mat" });
-    await converge(ce, [cy], () => ce.world.get(them as Entity, PeerWhere)?.away === false);
+    // back, but inside a mini mat this window does not show: its x/y lie in that container's frame
+    cy.session.eph
+      .edit(cy.session.localPeer)
+      .set(PresenceCursor, { x: 5, y: 5, device: "mouse", away: false, canvas: "a-mini-mat" });
+    await converge(ce, [cy], () => cursorOf(ce, them as Entity)?.away === false);
     expect(el.dataset["hidden"]).toBe("canvas");
-    cy.session.eph.edit(cy.session.localPeer).set(PeerWhere, { away: false, canvas: "" });
-    await converge(ce, [cy], () => ce.world.get(them as Entity, PeerWhere)?.canvas === "");
+    expect(peersRecord()?.peers[0]?.cursor).toMatchObject({ away: false, canvas: "a-mini-mat" });
+    cy.session.eph
+      .edit(cy.session.localPeer)
+      .set(PresenceCursor, { x: 5, y: 5, device: "mouse", away: false, canvas: "" });
+    await converge(ce, [cy], () => cursorOf(ce, them as Entity)?.canvas === "");
     expect(el.dataset["hidden"]).toBeUndefined();
   });
 
@@ -551,11 +621,9 @@ describe("<PeersOnTheMat> — the roster's names, placed by the reflector", () =
     await act(async () => sayView?.({ view: "godview" }));
     expect(layer()?.getAttribute("data-hidden")).toBe("cover");
     expect(peersRecord()?.layer).toBe("cover");
-    // …and this window's own pointer is said to be away from the desk while its view covers it
-    expect(peerFacetSent()).toMatchObject({ away: true, left: false });
+    // (this window's own pointer is said away under the cover by its presence's attach — `document-presence.ts`)
     await act(async () => sayView?.({ view: "canvas" }));
     expect(layer()?.hasAttribute("data-hidden")).toBe(false);
-    expect(peerFacetSent()).toMatchObject({ away: false });
   });
 
   it("stands the whole layer hidden while the desk does not draw", async () => {

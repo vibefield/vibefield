@@ -1,10 +1,9 @@
 import type { Entity } from "@vibecook/ice";
 import { useCanvasEngine, usePresencePeers } from "@vibecook/ice/react";
 import { type ReactElement, useEffect, useLayoutEffect, useMemo } from "react";
-import { getActiveView, subscribeActiveView, useCovered } from "../../../frame/view-state";
+import { useCovered } from "../../../frame/view-state";
 import { useBoardFacts } from "../pegboard/board-door";
 import { PeerCursorView, PeersLayerView } from "./PeersView";
-import { attachPeerFacet } from "./peer-facet";
 import { peerLabel, peersHidden } from "./peers-model";
 import { createPeersController } from "./peers-reflector";
 
@@ -12,9 +11,11 @@ import { createPeersController } from "./peers-reflector";
 // child — in the desk's own box, under ICE's engine context — beside the layer that draws no remote cursors of its own
 // (`deskLayer({ cursors: false })`, I26), so nobody is drawn twice. `usePresencePeers` gives the roster's NAMES: one
 // element per peer, its chip the face and the name. The controller places them every frame in a reflector
-// (`peers-reflector.ts`); this window's own pointer is said to its peers by the facet (`peer-facet.ts`). The layer
-// stands hidden while the desk does not draw, under a cover and while the board is out (plan addenda (58), (68)).
-// Renders only when the roster or a verdict of the layer moves — never per frame.
+// (`peers-reflector.ts`); this window's own pointer is said to its peers by ICE's presence (I42: its cursor's away when
+// the pointer leaves the desk's host with nowhere to go, its canvas the entered container's key) and its cover by the
+// presence's attach (`document-presence.ts`, `setAway("cover")`). The layer stands hidden while the desk does not draw,
+// under a cover and while the board is out (plan addenda (58), (68)). Renders only when the roster or a verdict of the
+// layer moves — never per frame.
 
 let renders = 0;
 
@@ -40,16 +41,6 @@ export function PeersOnTheMat({ drawing }: { drawing: boolean }): ReactElement {
     [ce],
   );
   useEffect(() => controller.attach(), [controller]);
-  useEffect(
-    () =>
-      attachPeerFacet({
-        ce,
-        covered: () => getActiveView() !== "canvas",
-        subscribeCovered: subscribeActiveView,
-        doc: document,
-      }),
-    [ce],
-  );
   useLayoutEffect(() => controller.setLayer(hidden), [controller, hidden]);
   // one ref per peer for the controller's life: a ref of a new identity each render would unbind and bind it again
   const refs = useMemo(() => new Map<Entity, (el: HTMLDivElement | null) => () => void>(), []);

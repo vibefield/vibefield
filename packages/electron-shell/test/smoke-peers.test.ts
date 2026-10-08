@@ -12,6 +12,8 @@ import {
   contrast,
   DEGRADED_SENTENCE,
   expectedBox,
+  judgeAwaySaid,
+  judgeCoverSaid,
   judgeDegradedBanner,
   judgeIdle,
   judgeLostCard,
@@ -31,8 +33,7 @@ import {
 
 const peer = (over: Partial<PeerSeen> = {}): PeerSeen => ({
   entity: 7,
-  cursor: { x: 1, y: 1 },
-  where: null,
+  cursor: { x: 1, y: 1, away: false, canvas: "" },
   idleMs: 100,
   hidden: null,
   box: { x: 0, y: 0 },
@@ -63,6 +64,31 @@ describe("the peers' place — B's pointer through B's camera into the world, an
     expect(
       judgePeerPlace([peer({ box: want }), peer({ box: want, entity: 8 })], want, null)[0],
     ).toMatch(/2 peers drawn/);
+  });
+});
+
+describe("what a window says of its own pointer — ICE's presence (I42, desk.6), the interim facet gone", () => {
+  it('COVER: a covered window holds the reason "cover" and its published cursor is away', () => {
+    expect(judgeCoverSaid({ reason: "cover", cursor: { away: true, canvas: "" } })).toEqual([]);
+    expect(judgeCoverSaid({ reason: null, cursor: { away: true, canvas: "" } })[0]).toMatch(
+      /reason null, not "cover"/,
+    );
+    expect(judgeCoverSaid({ reason: "cover", cursor: { away: false, canvas: "" } })[0]).toMatch(
+      /not away/,
+    );
+    expect(judgeCoverSaid({ reason: "cover", cursor: null })[0]).toMatch(/no cursor/);
+    expect(judgeCoverSaid(null)[0]).toMatch(/no presence/);
+  });
+
+  it("AWAY: the peer's own cursor away with no host reason — the pointer's leave, ICE's", () => {
+    expect(judgeAwaySaid({ reason: null, cursor: { away: true, canvas: "" } })).toEqual([]);
+    expect(judgeAwaySaid({ reason: "left", cursor: { away: true, canvas: "" } })[0]).toMatch(
+      /not the pointer's own leave/,
+    );
+    expect(judgeAwaySaid({ reason: null, cursor: { away: false, canvas: "" } })[0]).toMatch(
+      /not away/,
+    );
+    expect(judgeAwaySaid(null)[0]).toMatch(/no presence/);
   });
 });
 

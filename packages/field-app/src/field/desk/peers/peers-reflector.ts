@@ -7,37 +7,44 @@ import {
   Not,
   PresenceCursor,
   PresencePeer,
+  presenceCanvasOf,
   type World,
 } from "@vibecook/ice";
 import type { CameraState } from "@vibecook/ice/kernel";
-import { canvasKey, PeerWhere, peerWhereOf } from "./peer-facet";
 import {
   arrowBoxAt,
   nextIdleAt,
+  type PeerCursor,
   type PeerHidden,
   type PeersHidden,
-  type PeerWhereFacts,
   peerHidden,
 } from "./peers-model";
 
 // PEERS ON THE MAT, placed (DK-16; DESIGN.md §8 "Peers on the mat", R17). React renders the roster — one element per
 // peer, by `usePresencePeers`, which gives only its names — and this controller PLACES them: a REFLECTOR on the engine
-// (post-notify, never an ECS write, never a layout read — design-002 §5) reads each peer's `PresenceCursor` world x/y
-// through this window's camera on every frame that moved either, and writes the element's transform and its verdict
-// imperatively — never a render of React per frame. Its observers are what arm the world now that ICE draws no remote
-// cursors (I26: their reflector was the host's one observing reflector). An idle verdict falls due with no frame at all
-// (a peer that stopped moving sends nothing), so it is a timer of this window's clock, which writes the DOM and wakes
-// nothing. Under a cover the loop is parked and nothing flushes; the layer stands hidden by its own verdict anyway.
+// (post-notify, never an ECS write, never a layout read — design-002 §5) reads each peer's `PresenceCursor` — its world
+// x/y through this window's camera, its away and its canvas (ICE's, I42) — on every frame that moved either, and writes
+// the element's transform and its verdict imperatively — never a render of React per frame. Its observers are what arm
+// the world now that ICE draws no remote cursors (I26: their reflector was the host's one observing reflector). An idle
+// verdict falls due with no frame at all (a peer that stopped moving sends nothing), so it is a timer of this window's
+// clock, which writes the DOM and wakes nothing. Under a cover the loop is parked and nothing flushes; the layer stands
+// hidden by its own verdict anyway.
 
 const cursorsQ = defineQuery([PresencePeer, PresenceCursor, Not(Local)]);
-const wheresQ = defineQuery([PresencePeer, PeerWhere, Not(Local)]);
+
+/** This window's canvas as ICE names a peer's (`presenceCanvasOf`, I42 — "" the board's root, the entered container's
+ * durable key, a keyless one `~<peerId>/<entity>`, never another peer's): a peer is drawn only in the canvas shown here. */
+export function canvasHere(ce: Pick<CanvasEngine, "world" | "docs">): string {
+  return presenceCanvasOf(ce.world, ce.docs.presence()?.peerId ?? "", (e) =>
+    ce.docs.current()?.store.keyOf(e),
+  );
+}
 
 /** One peer as this window last placed it. */
 export interface PeerSeen {
   readonly entity: number;
-  /** the pointer in world units, or null */
-  readonly cursor: { readonly x: number; readonly y: number } | null;
-  readonly where: PeerWhereFacts | null;
+  /** its `PresenceCursor` — the pointer in world units, away, the canvas — or null */
+  readonly cursor: PeerCursor | null;
   /** ms ago it last moved, by this window's clock */
   readonly idleMs: number;
   readonly hidden: PeerHidden;
@@ -116,12 +123,10 @@ export function createPeersController(seams: PeersSeams): PeersController {
   const place = (world: World): void => {
     const now = seams.now();
     camera = cameraOf(world);
-    canvas = canvasKey(ce);
+    canvas = canvasHere(ce);
     const next: PeerSeen[] = [];
     for (const [entity, el] of els) {
-      const alive = world.isAlive(entity);
-      const cursor = alive ? (world.get(entity, PresenceCursor) ?? null) : null;
-      const where = alive ? peerWhereOf(world, entity) : null;
+      const cursor = world.isAlive(entity) ? (world.get(entity, PresenceCursor) ?? null) : null;
       let p = placed.get(entity);
       if (p === undefined) {
         // first seen: its first verdict is always written, and first sight counts as a move
@@ -133,8 +138,12 @@ export function createPeersController(seams: PeersSeams): PeersController {
         p.y = cursor.y;
         p.movedAt = now;
       }
-      const at = cursor === null ? null : { x: cursor.x, y: cursor.y };
-      const hidden = peerHidden({ cursor: at, where, movedAt: p.movedAt }, { canvas, now });
+      // a string cell reads null where nothing was written: "" — the root, as an older peer's blob reads
+      const at: PeerCursor | null =
+        cursor === null
+          ? null
+          : { x: cursor.x, y: cursor.y, away: cursor.away, canvas: cursor.canvas ?? "" };
+      const hidden = peerHidden({ cursor: at, movedAt: p.movedAt }, { canvas, now });
       const box = at === null ? null : arrowBoxAt(at, camera);
       if (box !== null) {
         const transform = `translate(${box.x}px, ${box.y}px)`;
@@ -154,7 +163,6 @@ export function createPeersController(seams: PeersSeams): PeersController {
       next.push({
         entity: entity as number,
         cursor: at,
-        where,
         idleMs: now - p.movedAt,
         hidden,
         box,
@@ -192,10 +200,7 @@ export function createPeersController(seams: PeersSeams): PeersController {
         name: "vibefield.peers",
         observe: {
           resources: [Camera],
-          queries: [
-            { q: cursorsQ, cols: [PresenceCursor] },
-            { q: wheresQ, cols: [PeerWhere] },
-          ],
+          queries: [{ q: cursorsQ, cols: [PresenceCursor] }],
         },
         flush: (world) => {
           flushes += 1;

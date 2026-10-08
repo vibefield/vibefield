@@ -6,8 +6,10 @@ import { type CameraState, worldToScreen } from "@vibecook/ice/kernel";
 // this window's camera. WHEN NOT — the whole layer: under a cover (the desk is a still), while the pegboard is out (the
 // desk is inert under it — plan addenda (58), (68)) and while the desk does not draw; one peer: a peer with no pointer
 // yet, a pointer that left its window (or whose view covers its canvas), a peer inside another canvas (its x/y lie in a
-// container's frame, not this one's), and an idle peer after 8 s. THE ARROW, 18 × 22, its tip at 2,2 in its box; THE LABEL a
-// chip whose box's top-left stands 14 right of and 18 below the arrow box's top-left. Pure: no ECS, no DOM.
+// container's frame, not this one's), and an idle peer after 8 s — the away and the canvas are ICE's own words on the
+// cursor (`PresenceCursor.away` / `.canvas`, petition I42, desk.6; DK-17b retired VibeField's interim facet). THE ARROW,
+// 18 × 22, its tip at 2,2 in its box; THE LABEL a chip whose box's top-left stands 14 right of and 18 below the arrow box's
+// top-left. Pure: no ECS, no DOM.
 
 /** The canon's numbers (DESIGN.md §8 "Peers on the mat", R17). */
 export const PEERS = {
@@ -29,18 +31,20 @@ export type PeersHidden = "desk" | "cover" | "board" | null;
 /** Why one peer is not drawn, or null while it is. */
 export type PeerHidden = "no-pointer" | "away" | "canvas" | "idle" | null;
 
-/** Where a peer's pointer is, beyond its world x/y — its own word on the wire (`peer-facet.ts`); null from a build
- * that sends none (then the pointer is taken as in its window, on the board's root). */
-export interface PeerWhereFacts {
+/** A peer's pointer as its `PresenceCursor` says it (ICE, I42): its world x/y, whether it is AWAY (it left its window, or
+ * its host says a view covers its canvas) and the CANVAS its x/y lie in (`presenceCanvasOf`: "" the board's root, the
+ * entered container's durable key, a keyless one `~<peerId>/<entity>`). A build that sends neither field reads as ICE's
+ * defaults: present, on the root. */
+export interface PeerCursor {
+  readonly x: number;
+  readonly y: number;
   readonly away: boolean;
-  /** The canvas its x/y lie in: the entered container's durable key, "" on the board's root. */
   readonly canvas: string;
 }
 
 export interface PeerFacts {
-  /** Its `PresenceCursor` in world units, or null — no pointer published yet. */
-  readonly cursor: { readonly x: number; readonly y: number } | null;
-  readonly where: PeerWhereFacts | null;
+  /** Its `PresenceCursor`, or null — no pointer published yet. */
+  readonly cursor: PeerCursor | null;
   /** This window's clock when the pointer last moved (first seen counts as a move). */
   readonly movedAt: number;
 }
@@ -57,14 +61,14 @@ export function peersHidden(s: {
   return null;
 }
 
-/** One peer's verdict against this window's canvas and clock. */
+/** One peer's verdict against this window's canvas (named as ICE names a peer's) and clock. */
 export function peerHidden(
   peer: PeerFacts,
   here: { readonly canvas: string; readonly now: number },
 ): PeerHidden {
   if (peer.cursor === null) return "no-pointer";
-  if (peer.where?.away === true) return "away";
-  if ((peer.where?.canvas ?? "") !== here.canvas) return "canvas";
+  if (peer.cursor.away) return "away";
+  if (peer.cursor.canvas !== here.canvas) return "canvas";
   if (here.now - peer.movedAt >= PEERS.idleMs) return "idle";
   return null;
 }
