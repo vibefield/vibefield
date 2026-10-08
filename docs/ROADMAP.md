@@ -3,7 +3,18 @@
 > **Status:** the living now/next file — the corpus's single answer to "where are we, what's
 > next." REWRITTEN in place at each milestone (never appended); history goes to `LANDED.md`,
 > decision status to `DECISIONS.md`, petition status to `draft/petitions/README.md`, law
-> stays in the design docs + specs. Last rewritten: **2026-10-08 — PJ-1 COMPLETE: EVERY DESKTOP KNOWS ITS PLACES, AND FIELDD GROUPS THEM INTO PROJECTS (`12b5da36`).**
+> stays in the design docs + specs. Last rewritten: **2026-10-08 — PROJECTS ARE FIRST-CLASS: RECORDS, DOORS AND A PER-DESKTOP HOME (PJ-2 `00964c63`, PJ-3 `a182409f`).**
+> PJ-3: the `project.*` doors (list, get with `movedTo`, sessions, pings with `regrouped`, intent), a key memory that survives a
+> restart, `project.read` never plugin-eligible, paths only for the user's own devices and never accepted in a request (P1).
+> PJ-2: records in the synced library — a first act freezes the colour (P3), splits and dismissals bound to records, the later
+> act wins, a relink keeps them; `project.intent` live for desktop windows (P2); placeIds re-keyed to the persisted local id
+> (the roster id moved at link and relink). James's J1–J11 are scored truth (145 rows on three desktops; J11: Home is a project,
+> one per desktop). Upstream merged at his word, nothing pushed: mille main `c8160d5` (M8 linear loading, M10 bounded reads,
+> G1/G2/G3/G6), rosetta main `eab2f57` (RO-15); the mille-git spec erratum v2 is ready to apply. **Every push is still HELD.**
+> Next: VibeField's mille pin `baa0de8` → `c8160d5` (an EL8 event; the doors surface `ETIMEDOUT`/`EDATALESS`); PJ-4 (History's
+> project page — needs rosetta's room) and PJ-7 (the phone over `project.*`); DS-7 and FS-4 at truffle's egress release (R12);
+> the phone over-the-air run (R8); FS-3 with DK; FS-5. Test health: `design-system.test.tsx` times out under load in every gate.
+> Previous rewrite, kept for continuity — **2026-10-08 (dawn) — PJ-1 COMPLETE: EVERY DESKTOP KNOWS ITS PLACES, AND FIELDD GROUPS THEM INTO PROJECTS (`12b5da36`).**
 > PJ-1a (`ea612a59`): one remote normalizer (DS-D9's `familyOf` delegates), the grouping engine as a pure function in fieldd, and a
 > redacted golden corpus — 132 rows on the Mac, 143 on three desktops, 0 trap pairs, identical on the unredacted data. PJ-1b
 > (`12b5da36`): one hardened git runner in the files worker for every caller, the `placeFacts` op, a scanner whose facts ride the
