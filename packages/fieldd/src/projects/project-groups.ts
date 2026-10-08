@@ -348,7 +348,10 @@ export class ProjectGroups {
         places: input.devices.reduce((n, device) => n + device.places.length, 0),
         rows: result.projects.length,
         acrossDevices: listed.filter((project) => project.devices.length > 1).length,
-        homePlaces: buckets["home"] ?? 0,
+        // J11 — each desktop's Home is a project now, not a bucket
+        homePlaces: result.projects
+          .filter((project) => project.kind === "home")
+          .reduce((n, project) => n + project.places.length, 0),
         tempPlaces: buckets["temp"] ?? 0,
         suggestions: result.suggestions.length,
         moved: moves.length,

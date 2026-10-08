@@ -197,27 +197,76 @@ describe("E2 — confirmed RECENT shared history", () => {
   });
 });
 
-describe("the buckets (PJ-L4)", () => {
-  it("files home, temporary and task folders as two buckets across desktops", () => {
+describe("Temporary is a bucket; each desktop's Home is a project (PJ-L4, J11)", () => {
+  it("files temporary and task folders as ONE bucket across desktops", () => {
     const result = groupPlaces({
       devices: [
         desk(
           "mac",
-          place("home", "/Users/a", { kind: "home" }),
-          place("root", "/", { kind: "home" }),
           place("t1", "/private/tmp/x", { kind: "temp" }),
           repo("fixture", "/private/tmp/fixture", null, { kind: "temp" }),
           repo("task", "/Users/a/Documents/Codex/1/2", "github.com/o/app", { kind: "task" }),
         ),
-        desk("box", place("home2", "C:/Users/a", { kind: "home" })),
+        desk("box", place("t2", "C:/Users/a/AppData/Local/Temp/y", { kind: "temp" })),
       ],
     });
-    const home = result.projects.find((p) => p.bucket === "home")!;
     const temp = result.projects.find((p) => p.bucket === "temp")!;
-    expect(home.places.map((p) => p.placeId).sort()).toEqual(["home", "home2", "root"]);
-    expect(temp.places.map((p) => p.placeId).sort()).toEqual(["fixture", "t1", "task"]);
-    expect([home.name, temp.name]).toEqual(["Home", "Temporary"]);
-    expect(home.key).toBe(projectKey("bucket:home"));
+    expect(temp.places.map((p) => p.placeId).sort()).toEqual(["fixture", "t1", "t2", "task"]);
+    expect(temp).toMatchObject({ name: "Temporary", nameFrom: "bucket", kind: "temp" });
+    expect(temp.key).toBe(projectKey("bucket:temp"));
+  });
+
+  it("J11 — a desktop's home folder, `/` and drive roots are ITS Home: a project, never joined to another desktop's", () => {
+    const devices = [
+      desk(
+        "mac",
+        at(place("home", "/Users/a", { kind: "home" }), { sessions: 9, lastAt: 9 }),
+        place("root", "/", { kind: "home" }),
+        // a dotfiles repository at ~ is still Home, and its remote joins nothing
+        repo("dots", "/Users/a/dotfiles", "github.com/a/dotfiles"),
+      ),
+      desk(
+        "box",
+        place("home2", "C:/Users/a", { kind: "home" }),
+        place("drive", "D:/", { kind: "home" }),
+      ),
+      desk("studio", repo("home3", "/Users/a", "github.com/a/dotfiles", { kind: "home" })),
+    ];
+    const result = groupPlaces({ devices });
+    const homes = result.projects.filter((p) => p.kind === "home");
+    expect(homes.map((p) => p.places.map((pl) => pl.placeId).sort())).toEqual(
+      expect.arrayContaining([["home", "root"], ["drive", "home2"], ["home3"]]),
+    );
+    expect(homes).toHaveLength(3);
+    for (const home of homes) {
+      expect(home).toMatchObject({
+        name: "Home",
+        nameFrom: "home",
+        bucket: null,
+        provisional: true,
+      });
+      // told apart by its desktop, not by a parent folder ("Users")
+      expect(home.disambiguation).toBeUndefined();
+      expect(home.key).toMatch(/^p1:/);
+    }
+    expect(new Set(homes.map((p) => p.key)).size).toBe(3);
+    // the studio's home holds the dotfiles remote, and still joins nothing
+    expect(together(result, "home3", "dots")).toBe(false);
+    expect(result.suggestions.filter((x) => [x.a, x.b].includes("home3"))).toEqual([]);
+    // a record binds to a Home like to any project
+    const named = groupPlaces({
+      devices,
+      intents: {
+        records: [
+          { id: "rec-h", anchors: ["place:home2", "place:drive"], name: "Box", createdAt: 1 },
+        ],
+      },
+    });
+    expect(projectOf(named, "home2")).toMatchObject({
+      key: "r:rec-h",
+      name: "Box",
+      nameFrom: "you",
+    });
   });
 
   it("keeps a real clone in a temp folder with its repository", () => {

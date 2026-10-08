@@ -30,7 +30,9 @@ export type CommitSha = z.infer<typeof CommitSha>;
 
 /** What the OWNER says a place is (L6), from its own knowledge:
  *  - `home` — the device's home folder itself, `/`, or a bare drive root
- *    (PJ-L4: the Home bucket; a deeper folder under home is NOT home);
+ *    (PJ-L4; a deeper folder under home is NOT home). Since J11
+ *    (2026-10-08) these are THAT DEVICE'S Home, a project of its own — no
+ *    longer one bucket across devices;
  *  - `temp` — under a system temporary root (`/tmp`, `/private/tmp`,
  *    `/var/folders`, `%LOCALAPPDATA%\Temp`, the OS temp dir). A git checkout
  *    there with an identity remote still belongs to its repository; the

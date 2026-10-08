@@ -13,7 +13,8 @@
 //      (`hits`), and the two share their first-parent root;
 //   E3 the person's links (and splits, which keep a place apart from the
 //      project a record names — PJ-2).
-// Home and Temporary are buckets, not projects (PJ-L4). What evidence only
+// Temporary is a bucket, not a project (PJ-L4); each desktop's Home is a
+// project of its own (PJ-L4 as amended, below). What evidence only
 // suggests — old shared history, another remote in common, the same folder on
 // two desktops, the same name — is a suggestion, one per pair of projects,
 // never a merge. Records (the person's acts, PJ-2) bind to the group they
@@ -34,6 +35,13 @@
 //     suggestion between a split place and the record it was split from;
 //   - a record's places acted in (D6) make those places `acted` on every
 //     desktop, and its pinned and hidden ride the project it names.
+//
+// J11 (James, 2026-10-08 05:06; PJ-D3 AMENDED for Home only): a desktop's home
+// folder, `/` and its drive roots are THAT DESKTOP'S HOME — a project like the
+// others (named Home, keyed and inked by its own anchors, recorded, renamed,
+// pinned), one per desktop, so two desktops' homes never join. Its places
+// take part in no evidence and no suggestion: nothing links into Home or
+// splits out of it. Temporary stays the one bucket.
 //
 // PURE: no I/O, no clock, no randomness — every daemon computes the same
 // projects from the same facts (PJ-L1, DS-L4), so a change here is a lockstep
@@ -136,7 +144,9 @@ export interface GroupingInput {
 /** home · temp · repo (git with an identity remote) · local (git without
  * one) · folder (no git) */
 export type PlaceClass = "home" | "temp" | "repo" | "local" | "folder";
-export type ProjectBucket = "home" | "temp";
+/** Temporary (PJ-L4). Home was one too until J11 (2026-10-08): now a project
+ * per desktop, `kind: "home"`. */
+export type ProjectBucket = "temp";
 
 export interface GroupingEdge {
   readonly a: string;
@@ -185,7 +195,8 @@ export interface GroupedProject {
   /** `root:<sha>` · `remote:<key>` · `place:<placeId>`, sorted */
   readonly anchors: readonly string[];
   name: string;
-  nameFrom: "bucket" | "folder" | "repository" | "you";
+  /** `home`: a desktop's Home, named so by the engine (J11) */
+  nameFrom: "bucket" | "home" | "folder" | "repository" | "you";
   /** the deal index of the project's ink (§4.3) */
   ink: number;
   readonly kind: PlaceClass;
@@ -210,7 +221,7 @@ export interface GroupedProject {
 
 export interface GroupingResult {
   readonly groupingVersion: number;
-  /** newest first; the buckets are rows like any other */
+  /** newest first; Temporary (the bucket) is a row like any other */
   readonly projects: readonly GroupedProject[];
   readonly suggestions: readonly GroupingSuggestion[];
   readonly edges: readonly GroupingEdge[];
@@ -338,9 +349,9 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
   const link = (a: Place, b: Place, why: EdgeWhy): void => {
     if (uf.union(a.i, b.i)) edges.push({ a: a.id, b: b.id, ...why });
   };
-  const bucketOf = (x: Place): ProjectBucket | null =>
-    x.cls === "home" || x.cls === "temp" ? x.cls : null;
-  const out = (x: Place): boolean => bucketOf(x) !== null;
+  const bucketOf = (x: Place): ProjectBucket | null => (x.cls === "temp" ? x.cls : null);
+  /** Temporary, and each desktop's Home (J11), join nothing by evidence */
+  const out = (x: Place): boolean => bucketOf(x) !== null || x.cls === "home";
 
   // PJ-2 (D2) — the splits that bind: each keeps its place apart from the
   // SIDE its record names, the places the record's `place:` anchors name
@@ -483,11 +494,16 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
   }
   if (lifted) for (const edge of heldBack) if (breaks(edge[0], edge[1]).length === 0) link(...edge);
 
-  // gather: the buckets, then each union
+  // gather: the bucket, each desktop's Home, then each union
   const groups = new Map<string, Place[]>();
   for (const x of P) {
     const bucket = bucketOf(x);
-    const key = bucket !== null ? `bucket:${bucket}` : `uf:${uf.find(x.i)}`;
+    const key =
+      bucket !== null
+        ? `bucket:${bucket}`
+        : x.cls === "home"
+          ? `home:${x.deviceId}`
+          : `uf:${uf.find(x.i)}`;
     const xs = groups.get(key);
     if (xs === undefined) groups.set(key, [x]);
     else xs.push(x);
@@ -509,7 +525,7 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
   }
   const byName = new Map<string, Place[]>();
   for (const x of P) {
-    if (bucketOf(x) !== null) continue;
+    if (out(x)) continue;
     const name = baseName(x.facts.path).toLowerCase();
     const xs = byName.get(name);
     if (xs === undefined) byName.set(name, [x]);
@@ -545,6 +561,7 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
     const bucket: ProjectBucket | null = key.startsWith("bucket:")
       ? (key.slice("bucket:".length) as ProjectBucket)
       : null;
+    const home = key.startsWith("home:");
     xs.sort((a, b) => (b.input.lastAt || 0) - (a.input.lastAt || 0));
     const anchors = new Set<string>();
     for (const x of xs) {
@@ -562,7 +579,7 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
     )[0]!;
     let name: string;
     let nameFrom: GroupedProject["nameFrom"];
-    if (bucket === "home") [name, nameFrom] = ["Home", "bucket"];
+    if (home) [name, nameFrom] = ["Home", "home"];
     else if (bucket === "temp") [name, nameFrom] = ["Temporary", "bucket"];
     else if (anyRepo !== undefined && anyRepo.idRemote !== null) {
       // the repository's name, spelled like its busiest folder when they are
@@ -582,7 +599,15 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
       name,
       nameFrom,
       ink: 0,
-      kind: bucket ?? (anyRepo !== undefined ? "repo" : anyGit !== undefined ? "local" : "folder"),
+      kind:
+        bucket ??
+        (home
+          ? "home"
+          : anyRepo !== undefined
+            ? "repo"
+            : anyGit !== undefined
+              ? "local"
+              : "folder"),
       bucket,
       places: xs.map(
         (x): GroupedPlace => ({
@@ -673,6 +698,8 @@ export function groupPlaces(input: GroupingInput): GroupingResult {
   projects.sort((a, b) => (b.lastAt || 0) - (a.lastAt || 0));
   const byShown = new Map<string, GroupedProject[]>();
   for (const p of projects) {
+    // a desktop's Home is told apart by its desktop (PJ-D24), not a folder
+    if (p.kind === "home") continue;
     const shown = p.name.toLowerCase();
     const ps = byShown.get(shown);
     if (ps === undefined) byShown.set(shown, [p]);

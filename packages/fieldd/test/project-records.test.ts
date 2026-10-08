@@ -195,12 +195,17 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
     expect(linked.key).toBe(d.of("m").key);
   });
 
-  it("D6 — a launch records its place; one in a folder no place holds waits; Home makes none", async () => {
-    const d = await desktop([repo("a", "/p/app", APP), place("h", "/Users/ada", { kind: "home" })]);
+  it("D6 — a launch records its place; one in a folder no place holds waits; Temporary makes none", async () => {
+    const d = await desktop([
+      repo("a", "/p/app", APP),
+      place("h", "/Users/ada", { kind: "home" }),
+      place("t", "/private/tmp/x", { kind: "temp" }),
+    ]);
     d.folders.set("/p/app", "a");
     d.folders.set("/Users/ada", "h");
+    d.folders.set("/private/tmp/x", "t");
     d.records.actedIn("/p/app/src", 5_000);
-    d.records.actedIn("/Users/ada", 5_001);
+    d.records.actedIn("/private/tmp/x", 5_001);
     d.records.actedIn("/p/later", 5_002);
     await until(() => d.library.projectIntents().records.length === 1, "the launch's record");
     expect(d.library.projectIntents().records[0]).toMatchObject({
@@ -211,21 +216,28 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
     d.setPlaces([
       repo("a", "/p/app", APP),
       place("h", "/Users/ada", { kind: "home" }),
+      place("t", "/private/tmp/x", { kind: "temp" }),
       place("l", "/p/later"),
     ]);
     d.folders.set("/p/later", "l");
     d.groups.regroupNow();
     await until(() => d.library.projectIntents().records.length === 2, "the later place's record");
     expect(d.of("l")).toMatchObject({ provisional: false });
-    expect(d.of("h").recordId).toBeUndefined();
+    expect(d.of("t").recordId).toBeUndefined();
+    // J11 — a desktop's Home is a project: a launch there is an act like any
+    d.records.actedIn("/Users/ada", 5_003);
+    await until(() => d.library.projectIntents().records.length === 3, "Home's record");
+    expect(d.of("h")).toMatchObject({ name: "Home", provisional: false });
   });
 
-  it("refuses an act on a bucket, an unknown key, a place not the project's, a bad name, itself", async () => {
+  it("refuses an act on Temporary, an unknown key, a place not the project's, a bad name, itself, Home's links", async () => {
     const d = await desktop([
       repo("a", "/p/app", APP),
       repo("b", "/q/app", APP),
       place("solo", "/p/solo"),
       place("h", "/Users/ada", { kind: "home" }),
+      place("root", "/", { kind: "home" }),
+      place("t", "/private/tmp/x", { kind: "temp" }),
     ]);
     const code = async (work: Promise<unknown>) => {
       try {
@@ -236,7 +248,8 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
       }
     };
     const app = d.of("a").key;
-    expect(await code(d.records.intent(d.of("h").key, { op: "pin", pinned: true }, "t"))).toBe(
+    const home = d.of("h").key;
+    expect(await code(d.records.intent(d.of("t").key, { op: "pin", pinned: true }, "t"))).toBe(
       "bucket",
     );
     expect(await code(d.records.intent("p1:nothing", { op: "pin", pinned: true }, "t"))).toBe(
@@ -253,10 +266,19 @@ describe("PJ-2 — ProjectRecords: a record is made by an act", () => {
       "invalid",
     );
     expect(await code(d.records.intent(app, { op: "link", with: app }, "t"))).toBe("invalid");
-    expect(await code(d.records.intent(app, { op: "dismiss", with: d.of("h").key }, "t"))).toBe(
+    expect(await code(d.records.intent(app, { op: "dismiss", with: d.of("t").key }, "t"))).toBe(
       "bucket",
     );
+    // J11 — Home groups by its desktop alone
+    expect(await code(d.records.intent(app, { op: "link", with: home }, "t"))).toBe("home");
+    expect(await code(d.records.intent(home, { op: "dismiss", with: app }, "t"))).toBe("home");
+    expect(await code(d.records.intent(home, { op: "split", place: "root" }, "t"))).toBe("home");
     expect(d.library.projectIntents().records).toEqual([]);
+    // and is renamed like any project
+    expect(await code(d.records.intent(home, { op: "rename", name: "Studio home" }, "t"))).toBe(
+      "wrote",
+    );
+    expect(d.of("root")).toMatchObject({ name: "Studio home", nameFrom: "you" });
 
     const none = await desktop([repo("a", "/p/app", APP)], { library: false });
     expect(

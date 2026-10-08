@@ -29,8 +29,11 @@ import type { ProjectWrite } from "./records-doc";
 //                           projects get one
 //   acted (a launch/resume) the place joins the record's places acted in (D6)
 //
-// Home and Temporary are buckets, not projects (PJ-L4): an act on one is
-// refused, and a launch there makes no record. Acts are serialized, each
+// Temporary is a bucket, not a project (PJ-L4): an act on it is refused, and
+// a launch there makes no record. A desktop's Home is a project (J11,
+// 2026-10-08) — renamed, pinned, hidden and launched into like any — but it
+// groups by its desktop, not by evidence, so nothing links into it, splits
+// out of it or is dismissed beside it. Acts are serialized, each
 // reading the grouping after the last one's commit, and a key an act moved
 // (`p1:` → `r:` at the project's first record) still names the project here.
 
@@ -48,8 +51,11 @@ export type ProjectRefusalCode =
   | "unavailable"
   /** no project answers to the key */
   | "not-found"
-  /** Home or Temporary (PJ-L4) */
+  /** Temporary (PJ-L4) */
   | "bucket"
+  /** a link, split or dismissal with a desktop's Home (J11: it groups by its
+   * desktop alone) */
+  | "home"
   /** the place is not one of the project's, or is its only one */
   | "not-in-project"
   /** a name that is empty or too long; a link or dismissal of a project with itself */
@@ -203,6 +209,8 @@ export class ProjectRecords {
         return this.#write(library, key, recordId, writes, by);
       }
       case "split": {
+        if (project.kind === "home")
+          throw new ProjectRecordsRefusal("home", "nothing splits out of a desktop's Home");
         const place = project.places.find(
           (pl) => pl.placeId === op.place || pl.aliasIds.includes(op.place),
         );
@@ -244,7 +252,7 @@ export class ProjectRecords {
       throw new ProjectRecordsRefusal("unavailable", "the projects are not read yet");
     const project = this.#find(snapshot, key);
     if (project.bucket !== null)
-      throw new ProjectRecordsRefusal("bucket", "Home and Temporary are not projects");
+      throw new ProjectRecordsRefusal("bucket", "Temporary is not a project");
     return { library, project, snapshot };
   }
 
@@ -263,9 +271,11 @@ export class ProjectRecords {
   #other(snapshot: ProjectGroupsSnapshot, project: GroupedProject, key: string): GroupedProject {
     const other = this.#find(snapshot, key);
     if (other.bucket !== null)
-      throw new ProjectRecordsRefusal("bucket", "Home and Temporary are not projects");
+      throw new ProjectRecordsRefusal("bucket", "Temporary is not a project");
     if (other === project)
       throw new ProjectRecordsRefusal("invalid", "a project cannot be joined to itself");
+    if (project.kind === "home" || other.kind === "home")
+      throw new ProjectRecordsRefusal("home", "a desktop's Home joins and is suggested to nothing");
     return other;
   }
 

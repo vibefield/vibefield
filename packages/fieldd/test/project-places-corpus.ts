@@ -56,6 +56,11 @@ export interface PlacesCorpus {
   readonly synthetic: readonly CorpusPlace[];
   /** label → placeIds, or `@scratch` (every place the owner calls temp) */
   readonly truth: Readonly<Record<string, readonly string[] | string>>;
+  /** PJ-2 — the person's judgments (J1–J11): each verdict and the truth
+   * labels it scores, each label one project */
+  readonly judgments?: Readonly<
+    Record<string, { readonly verdict: string; readonly labels: readonly string[] }>
+  >;
   readonly trapLabels: readonly string[];
   readonly roles: {
     readonly project: string;
@@ -230,7 +235,9 @@ export function witnessOf(corpus: PlacesCorpus) {
     [...truth].filter(([id, label]) => trapIds.has(id) || corpus.trapLabels.includes(label)),
   );
   const traps = score(mesh, trapTruth);
-  const clear = new Map([...truth].filter(([, label]) => label !== "home" && label !== "scratch"));
+  // Temporary is the one bucket, not a project; since J11 each desktop's Home
+  // is a project, and scored like one
+  const clear = new Map([...truth].filter(([, label]) => label !== "scratch"));
   const projects = score(mesh, clear);
 
   // exact groups: every clear multi-place truth group is one project, alone
@@ -271,8 +278,29 @@ export function witnessOf(corpus: PlacesCorpus) {
       falseSplits: projects.falseSplits.length,
     },
     exactGroups: `${exact}/${clearGroups}`,
+    judgments: judgmentsOf(corpus, truth, keyOf),
     invariants: invariantsOf(corpus, all, run),
   };
+}
+
+/** PJ-2 — whether the three desktops' grouping holds each judgment: every
+ * label it scores is one project, and no two of its labels share one. */
+function judgmentsOf(
+  corpus: PlacesCorpus,
+  truth: ReadonlyMap<string, string>,
+  keyOf: ReadonlyMap<string, string>,
+): Record<string, "holds" | "breaks"> {
+  const out: Record<string, "holds" | "breaks"> = {};
+  for (const [id, j] of Object.entries(corpus.judgments ?? {})) {
+    const keys = j.labels.map(
+      (label) =>
+        new Set([...truth].filter(([, l]) => l === label).map(([place]) => keyOf.get(place))),
+    );
+    const one = keys.every((set) => set.size === 1);
+    const apart = new Set(keys.map((set) => [...set][0])).size === keys.length;
+    out[id] = one && apart ? "holds" : "breaks";
+  }
+  return out;
 }
 
 /** The prototype runner's four invariants (run-grouping.mjs:160-179). */

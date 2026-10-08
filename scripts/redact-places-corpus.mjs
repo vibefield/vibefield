@@ -28,6 +28,16 @@
 // the assembled corpus there, unredacted, and nothing else) and comparing.
 //
 //   node scripts/redact-places-corpus.mjs [<corpus dir>] [--plain <out.json>]
+//     [--judgments <file>]
+//
+// PJ-2 (2026-10-08) — the person's JUDGMENTS (J1–J11 on the Files & History
+// Docket) become scored truth here: `--judgments` (default
+// `<corpus dir>/judgments.json`, when it exists) names, per judgment, the truth
+// labels it `replaces`, the `groups` of places it scores as one project each
+// (`J<n>.<k>`, labels that name no one and are kept as written), or a label it
+// `confirms`. Every place of a replaced label must land in some group, or the
+// script refuses. The file names folders, so it lives beside the corpus in
+// draft/; the fixture carries only each judgment's verdict and its labels.
 //
 // <corpus dir> defaults to draft/project-places/test (the owner's checkout,
 // where `draft/` lives); the output is
@@ -37,7 +47,7 @@
 // and the vocabulary it keeps, and refuses to write anything else.
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -45,20 +55,67 @@ const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const OUT = join(ROOT, "packages/fieldd/test/fixtures/projects/places-corpus.json");
 
 const args = process.argv.slice(2);
-const plainAt = args.indexOf("--plain");
-const plainOut = plainAt === -1 ? null : args[plainAt + 1];
-const positional =
-  plainAt === -1 ? args : args.filter((_, i) => i !== plainAt && i !== plainAt + 1);
+const flag = (name) => {
+  const at = args.indexOf(name);
+  return at === -1 ? null : { at, value: args[at + 1] };
+};
+const plain = flag("--plain");
+const judged = flag("--judgments");
+const plainOut = plain?.value ?? null;
+const taken = new Set([plain, judged].flatMap((f) => (f === null ? [] : [f.at, f.at + 1])));
+const positional = args.filter((_, i) => !taken.has(i));
 const corpusDir = resolve(positional[0] ?? join(ROOT, "draft/project-places/test"));
 
 const real = JSON.parse(readFileSync(join(corpusDir, "real-mbp.json"), "utf8"));
 const syn = JSON.parse(readFileSync(join(corpusDir, "synthetic.json"), "utf8"));
+const judgmentsFile = judged?.value ?? join(corpusDir, "judgments.json");
+const judgments =
+  judged !== null || existsSync(judgmentsFile)
+    ? JSON.parse(readFileSync(resolve(judgmentsFile), "utf8"))
+    : {};
 
 // ── the corpus, assembled as the witness reads it ───────────────────────────
 
 const idOf = (p) => `${p.device}:${p.path}`;
-const truth = syn.truth;
 const byId = new Map([...real, ...syn.places].map((p) => [idOf(p), p]));
+
+// the person's judgments, applied to the corpus's labels: what each scores
+const truth = { ...syn.truth };
+const scored = {};
+const owed = new Set();
+const placed = new Set();
+const judgmentIds = Object.keys(judgments)
+  .filter((key) => /^J\d+$/.test(key))
+  .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+for (const key of judgmentIds) {
+  const j = judgments[key];
+  if (typeof j.verdict !== "string") throw new Error(`${key}: no verdict`);
+  const labels = [];
+  for (const label of j.replaces ?? []) {
+    if (!Array.isArray(truth[label])) throw new Error(`${key}: replaces a label the truth lacks`);
+    for (const id of truth[label]) owed.add(id);
+    delete truth[label];
+  }
+  (j.groups ?? []).forEach((ids, k) => {
+    const label = `${key}.${k + 1}`;
+    for (const id of ids) {
+      if (!byId.has(id)) throw new Error(`${label}: a place the corpus lacks`);
+      if (placed.has(id)) throw new Error(`${label}: a place two judgments score`);
+      placed.add(id);
+    }
+    truth[label] = ids;
+    labels.push(label);
+  });
+  if (j.confirms !== undefined) {
+    if (truth[j.confirms] === undefined)
+      throw new Error(`${key}: confirms a label the truth lacks`);
+    labels.push(j.confirms);
+  }
+  scored[key] = { verdict: j.verdict, labels };
+}
+for (const id of owed) {
+  if (!placed.has(id)) throw new Error("a replaced label's place is in no judgment's group");
+}
 
 // The witness's roles, found by STRUCTURE so this file names no folder: the
 // main checkout is the busiest Mac place of the product's own truth group; the
@@ -145,6 +202,7 @@ const corpus = {
   mac: real.map(assemble),
   synthetic: syn.places.map(assemble),
   truth,
+  judgments: scored,
   trapLabels: [productLabel, "c11-tool"],
   roles: { project, clone, link },
 };
@@ -331,7 +389,7 @@ const branch = (raw) => (KEEP_BRANCHES.has(raw) ? raw : raw.split("/").map(segme
 
 const labels = new Map();
 function label(raw) {
-  if (LABELS_KEPT.has(raw)) return raw;
+  if (LABELS_KEPT.has(raw) || /^J\d+\.\d+$/.test(raw)) return raw;
   const open = raw.startsWith("?");
   const bare = open ? raw.slice(1) : raw;
   let token = labels.get(bare);
@@ -361,7 +419,7 @@ const redacted = {
   "//": [
     "PJ-1 — GENERATED by scripts/redact-places-corpus.mjs from the project-places corpus (thinking-project-places.md §4.4): one real Mac's 161 places (`mac`) and two synthetic desktops' 31 (`synthetic`, the review's traps C8a, C8b, C10, C11, C13, C15, C19 marked `adversarial`).",
     "Every owner, repository, folder, branch and commit SHA is a RANDOM token drawn for this run alone; no mapping exists. Equality survives, and nothing else: rerunning the script changes every token and must leave every witness count unchanged.",
-    "`truth`: the corpus's labels for which places are one project; `?`-labelled sets are judgment calls (J1–J11 on the Files & History Docket) left OUT of every score until the person rules on them. `trapLabels` and `roles` name what the witness scores and which places its invariants touch.",
+    "`truth`: the corpus's labels for which places are one project. `judgments`: the person's answers on the Files & History Docket (J1–J10 read back 2026-10-08 04:34, J11 at 05:06 — a desktop's Home is a project, one per desktop, PJ-D3 amended), each with the truth labels it scores (`J<n>.<k>`: one project each) or confirms; every one is scored. The two `?`-labelled sets left are no judgment's (none was asked) and stay OUT of every score. `trapLabels` and `roles` name what the witness scores and which places its invariants touch.",
   ],
   devices: corpus.devices.map((d) => ({ ...d, home: path(d.home) })),
   taskRoots: corpus.taskRoots,
@@ -371,6 +429,12 @@ const redacted = {
     Object.entries(corpus.truth).map(([l, ids]) => [
       label(l),
       Array.isArray(ids) ? ids.map(id) : ids,
+    ]),
+  ),
+  judgments: Object.fromEntries(
+    Object.entries(corpus.judgments).map(([key, j]) => [
+      key,
+      { verdict: j.verdict, labels: j.labels.map(label) },
     ]),
   ),
   trapLabels: corpus.trapLabels.map(label),
@@ -408,6 +472,19 @@ for (const p of [...redacted.mac, ...redacted.synthetic]) {
 }
 for (const ids of Object.values(redacted.truth)) {
   if (Array.isArray(ids)) for (const i of ids) checkPath(i.slice(i.indexOf(":") + 1), "truth");
+}
+// a verdict is the docket's own short answer, in words that name no one
+const VERDICT_WORDS = new Set(
+  "a b c one two project projects places of vibe-field separate their own temporary like the others per desktop home pj-d amended for".split(
+    " ",
+  ),
+);
+for (const [key, j] of Object.entries(redacted.judgments)) {
+  for (const word of j.verdict.toLowerCase().match(/[a-z][a-z-]*/g) ?? []) {
+    if (!VERDICT_WORDS.has(word)) problems.push(`${key}: a verdict word outside the docket's`);
+  }
+  for (const l of j.labels)
+    if (!(l in redacted.truth)) problems.push(`${key}: a label not in the truth`);
 }
 const text = JSON.stringify(redacted);
 if (/[0-9a-f]{40}/.test(text)) problems.push("a 40-hex string");
