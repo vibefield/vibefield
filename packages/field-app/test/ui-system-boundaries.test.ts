@@ -256,8 +256,33 @@ describe("UI system ownership boundaries", () => {
     // drawn on the document's body, outside the field. A resting transform
     // would bury the head under the drag strip (BootRoot, 2026-07-22).
     const field = source("field.tsx");
-    expect(field).toContain('data-peek-recede={searching ? "true" : "false"}');
+    expect(field).toContain(
+      '<div className="field-recede" data-peek-recede={searching ? "true" : "false"}>',
+    );
     expect(field).toContain("inert={searching}");
+    // What recedes is what you see — the still and the chrome, the cover with
+    // it — and never the desk's own box (DK-15): the keyed scene comes BEFORE
+    // the recede's box and outside it; the still and the chrome inside it; the
+    // field's wrapper carries no recede of its own.
+    const wrap = field.slice(field.indexOf('className="field-wrap"'));
+    const at = (needle: string): number => wrap.indexOf(needle);
+    expect(wrap.slice(0, at('className="field-scene"'))).not.toContain("data-peek-recede");
+    expect(at('className="field-scene"')).toBeGreaterThan(-1);
+    expect(at('className="field-scene"')).toBeLessThan(at('className="field-recede"'));
+    expect(at("<CoverStill")).toBeGreaterThan(at('className="field-recede"'));
+    expect(at("<ChromeLayer")).toBeGreaterThan(at("<CoverStill"));
+    // At rest the box is only a box: no transform, z-index, opacity, filter,
+    // isolation, containment or will-change — so no stacking context, and the
+    // chrome stacks as the field's own children did — and it takes no pointer
+    // while its children take theirs back at NO specificity (a child's own
+    // `pointer-events` still rules).
+    const base = source("styles/base.css");
+    const box = base.match(/^\.field-recede \{([^}]*)\}/m)?.[1] ?? "";
+    expect(box).toContain("position: absolute;");
+    expect(box).toContain("inset: 0;");
+    expect(box).toContain("pointer-events: none;");
+    expect(box).not.toMatch(/transform|z-index|opacity|filter|isolation|contain|will-change/);
+    expect(base).toMatch(/^:where\(\.field-recede\) > \* \{\s*pointer-events: auto;\s*\}/m);
     const css = source("frame/peek.css");
     const resting = css.match(/^\[data-peek-recede\] \{([^}]*)\}/m)?.[1] ?? "";
     expect(resting).toContain("transform-origin: 50% 46%;");

@@ -44,6 +44,21 @@ body {
   inset: 0;
 }
 
+/* THE RECEDE UNDER THE PEEK (GV-D8 × DK-15; DESIGN.md §6): the cover's still and the frame's chrome in one box the
+   size of the field, after the desk's in the window's order — what recedes while the Peek stands (frame/peek.css,
+   `data-peek-recede`), the desk's own box (.field-scene) outside it. At rest it is a box and nothing more: no
+   transform, z-index, opacity or filter, so no stacking context and its children stack as the field's own; it takes
+   no pointer, and its children take theirs back — at no specificity, so a child's own `pointer-events` still rules. */
+.field-recede {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+:where(.field-recede) > * {
+  pointer-events: auto;
+}
+
 .field-scene {
   position: absolute;
   inset: 0;

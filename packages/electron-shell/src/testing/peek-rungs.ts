@@ -11,10 +11,12 @@ import { HISTORY_SEED_WORDS } from "./typed-agent";
 //
 //   · the GEOMETRY rung: ⌘F — a product chord while History is the view —
 //     opens the frame's popup centred in the window at 900 × 560 (K6's clamp
-//     otherwise), over the scrim, with the field (the cover AND the frame)
-//     receded to 0.98 and out of reach; Esc folds it and the field comes back
-//     to no transform at all (a resting transform would bury the head under
-//     the drag strip);
+//     otherwise), over the scrim, with what you see (the still, the cover AND
+//     the frame — `.field-recede`) receded to 0.98, the desk's own box never
+//     transformed (DK-15), and the field out of reach; Esc folds it and the box
+//     comes back to no transform at all (a resting transform would bury the
+//     head under the drag strip) — inert at rest: no stacking context, no
+//     pointer of its own, every child positioned;
 //   · the SEEDED HIT rung: a word only the seeded reply says, found by the
 //     real rosettad as Everything asks it; ⌘F, the word, the row read, then
 //     ↵ — the room lands AT THE LINE (`data-hit` / `.is-landed`), the row's
@@ -74,6 +76,8 @@ const VIEW_NOW = `(document.querySelector(".vf-views-line")?.getAttribute("data-
 const PEEK_NOW = `(() => {
   const pop = document.querySelector('.vf-peek-pop[role="dialog"]');
   const wrap = document.querySelector(".field-wrap");
+  const recede = document.querySelector(".field-recede");
+  const scene = document.querySelector(".field-scene");
   const cover = document.querySelector(".vf-cover");
   const scrim = document.querySelector(".vf-peek-scrim");
   const c = cover ? cover.getBoundingClientRect() : null;
@@ -90,6 +94,11 @@ const PEEK_NOW = `(() => {
     scrimFilter: scrim ? getComputedStyle(scrim).backdropFilter : null,
     coverScale: c ? Math.round((c.width / window.innerWidth) * 1000) / 1000 : null,
     wrapTransform: wrap ? getComputedStyle(wrap).transform : null,
+    recedeTransform: recede ? getComputedStyle(recede).transform : null,
+    sceneTransform: scene ? getComputedStyle(scene).transform : null,
+    // the desk's box as DRAWN against its layout: every transform above it
+    // counts here, its own computed transform alone would miss the field's
+    sceneDrawn: scene && scene.offsetWidth > 0 ? Math.round((scene.getBoundingClientRect().width / scene.offsetWidth) * 1000) / 1000 : null,
     wrapInert: wrap ? wrap.inert === true : null,
     fieldFocused: pop !== null && document.activeElement === pop.querySelector("input"),
     button: document.querySelector(".vf-peek-button kbd")?.textContent ?? null,
@@ -110,11 +119,71 @@ interface PeekNow {
   scrimFilter: string | null;
   coverScale: number | null;
   wrapTransform: string | null;
+  recedeTransform: string | null;
+  sceneTransform: string | null;
+  sceneDrawn: number | null;
   wrapInert: boolean | null;
   fieldFocused: boolean;
   button: string | null;
   rows: number;
   foot: string | null;
+}
+
+/** The scale a computed `transform` draws at (its matrix's a), 1 for none. */
+function scaleOf(transform: string | null): number | null {
+  if (transform === null) return null;
+  if (transform === "none") return 1;
+  const a = /^matrix\(([^,]+),/.exec(transform)?.[1];
+  return a === undefined ? Number.NaN : Number(a);
+}
+
+/** The recede's box at rest, as the window stacks and hits it (DK-15 × GV-D8):
+ * no transform and nothing else that makes a stacking context, no pointer of
+ * its own, every child of it positioned (so none paints or hits in a new place
+ * for being inside it), and no point of the window hits the box itself. */
+const RESTING_NOW = `(() => {
+  const recede = document.querySelector(".field-recede");
+  if (!recede) return JSON.stringify({ present: false });
+  const style = getComputedStyle(recede);
+  const children = [...recede.children].map((child) => {
+    const own = getComputedStyle(child);
+    const box = child.getBoundingClientRect();
+    return { tag: child.tagName.toLowerCase(), cls: String(child.className).slice(0, 40), position: own.position, display: own.display, area: Math.round(box.width * box.height) };
+  });
+  const points = [];
+  for (const fx of [0.05, 0.5, 0.95]) for (const fy of [0.08, 0.5, 0.92]) points.push([Math.round(innerWidth * fx), Math.round(innerHeight * fy)]);
+  const hitsBox = points.filter(([x, y]) => document.elementFromPoint(x, y) === recede).length;
+  return JSON.stringify({
+    present: true,
+    transform: style.transform,
+    zIndex: style.zIndex,
+    opacity: style.opacity,
+    filter: style.filter,
+    isolation: style.isolation,
+    willChange: style.willChange,
+    pointerEvents: style.pointerEvents,
+    children: children.length,
+    unpositioned: children.filter((c) => c.position === "static" && c.display !== "none" && c.area > 0),
+    sceneOutside: !recede.contains(document.querySelector(".field-scene")),
+    hitsBox,
+    points: points.length,
+  });
+})()`;
+
+interface RestingNow {
+  present: boolean;
+  transform?: string;
+  zIndex?: string;
+  opacity?: string;
+  filter?: string;
+  isolation?: string;
+  willChange?: string;
+  pointerEvents?: string;
+  children?: number;
+  unpositioned?: unknown[];
+  sceneOutside?: boolean;
+  hitsBox?: number;
+  points?: number;
 }
 
 /** The popup's size in this window, by the Peek's own law (K6). */
@@ -157,6 +226,24 @@ export async function peekGeometryRung(win: BrowserWindow): Promise<Record<strin
   }
   if (!open.fieldFocused) throw new Error("⌘F opened the Peek without the caret in its field");
   if (open.wrapInert !== true) throw new Error("the field stayed in reach under the Peek");
+  // GV-D8 × DK-15: NO transform reaches the desk's own box or the field's
+  // wrapper — the scene's own transform rests at scale(1) (the sheets' recede,
+  // base.css): identity, never a recede, and the box is drawn at its layout
+  // size, nothing above it scaling it…
+  if (
+    scaleOf(open.sceneTransform) !== 1 ||
+    open.sceneDrawn !== 1 ||
+    open.wrapTransform !== "none"
+  ) {
+    throw new Error(
+      `a transform reached the desk's box under the Peek: scene ${open.sceneTransform} drawn at ${open.sceneDrawn}, wrap ${open.wrapTransform}`,
+    );
+  }
+  // …while what you see recedes: the still and the chrome, the cover with it
+  const recedeScale = scaleOf(open.recedeTransform);
+  if (recedeScale === null || Math.abs(recedeScale - 0.98) > 0.001) {
+    throw new Error(`the still and the chrome did not recede to 0.98: ${open.recedeTransform}`);
+  }
   if (!(open.scrimFilter ?? "").includes("blur(18px)")) {
     throw new Error(`the scrim does not blur 18: ${open.scrimFilter}`);
   }
@@ -164,9 +251,27 @@ export async function peekGeometryRung(win: BrowserWindow): Promise<Record<strin
   const closed = JSON.parse(
     await untilValue(win, "Esc folding the Peek, the field back", PEEK_NOW, 10_000, (value) => {
       const now = JSON.parse(value) as PeekNow;
-      return !now.open && now.wrapTransform === "none" && now.scrimOpacity === "0";
+      return !now.open && now.recedeTransform === "none" && now.scrimOpacity === "0";
     }),
   ) as PeekNow;
+  // …and at rest the recede's box changes nothing: no stacking context, no
+  // pointer of its own, every child positioned, no point hitting the box
+  const resting = JSON.parse(await win.webContents.executeJavaScript(RESTING_NOW)) as RestingNow;
+  if (
+    !resting.present ||
+    resting.transform !== "none" ||
+    resting.zIndex !== "auto" ||
+    resting.opacity !== "1" ||
+    resting.filter !== "none" ||
+    resting.isolation !== "auto" ||
+    resting.willChange !== "auto" ||
+    resting.pointerEvents !== "none" ||
+    (resting.unpositioned?.length ?? 1) !== 0 ||
+    resting.sceneOutside !== true ||
+    resting.hitsBox !== 0
+  ) {
+    throw new Error(`the recede's box is not inert at rest: ${JSON.stringify(resting)}`);
+  }
   return {
     button: before.button,
     size: `${open.width}×${open.height}`,
@@ -175,8 +280,21 @@ export async function peekGeometryRung(win: BrowserWindow): Promise<Record<strin
     scrim: { opacity: open.scrimOpacity, filter: open.scrimFilter },
     coverScale: open.coverScale,
     fieldInert: open.wrapInert,
+    recede: {
+      open: open.recedeTransform,
+      scene: open.sceneTransform,
+      sceneDrawn: open.sceneDrawn,
+      wrap: open.wrapTransform,
+    },
     escFolded: !closed.open,
-    restingTransform: closed.wrapTransform,
+    restingTransform: closed.recedeTransform,
+    resting: {
+      children: resting.children,
+      unpositioned: resting.unpositioned?.length,
+      hitsBox: `${resting.hitsBox}/${resting.points}`,
+      pointerEvents: resting.pointerEvents,
+      zIndex: resting.zIndex,
+    },
   };
 }
 
@@ -313,7 +431,7 @@ export async function peekPhotosRung(
   key(win, "Escape");
   await untilValue(win, "Esc folding the photographed Peek", PEEK_NOW, 10_000, (value) => {
     const now = JSON.parse(value) as PeekNow;
-    return !now.open && now.wrapTransform === "none";
+    return !now.open && now.recedeTransform === "none";
   });
   return { word: opts.word, rows: found.rows, shots };
 }

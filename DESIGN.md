@@ -523,7 +523,10 @@ fades in whole over 120ms.
 the island curve** from 2% above its place at 0.97 (`translate(-50%, -48%) scale(0.97)`), fading in
 with it; the scrim fades in over 240ms plain `ease`; the view **and the frame** recede to
 `scale(0.98)` about 50% 46% of the window over **420ms on the island curve** (M5's recede; the
-window is already covered, so nothing new freezes). Folding, the popup goes at once — what you picked is already opening
+window is already covered, so nothing new freezes). What recedes is what you see — **the cover,
+the still under it and the frame's chrome, together** in one box the size of the window — and
+**never the desk's own box** (DK-15, above: no transform reaches the desk while a cover stands);
+at rest that box carries no transform, so it stacks and takes the pointer as if it were not there. Folding, the popup goes at once — what you picked is already opening
 behind it — the scrim fades out over the same 240ms and the window comes forward over the same
 420ms. Reduced motion (M6): no pop and no recede — the scrim and the popup fade in over 120ms.
 
@@ -1790,7 +1793,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     rows to be read), corners 24, ringed by the strong hairline, with its own shadow (§5, *Search
     popup*). It pops in on the island curve (§6). **The scrim** (§5, *Search scrim*) blurs and dims
     the whole window under it; **the view recedes** to 0.98 about 50% 46%, and the frame recedes with
-    it (the line, the edges, the corner, the button) — only the window's lights stay sharp, as the OS
+    it (the line, the edges, the corner, the button) — the cover, the still under it and the chrome
+    together, never the desk's own box (DK-15; §6) — only the window's lights stay sharp, as the OS
     draws them. Nothing under the scrim holds the keyboard while it stands (the field is inert), and
     the keyboard goes back where it was when the popup folds on its own. A click on the scrim closes
     the popup.

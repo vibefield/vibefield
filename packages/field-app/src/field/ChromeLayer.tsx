@@ -271,7 +271,9 @@ export function ChromeLayer({
 
   return (
     <>
-      {/* Chrome overlays sit OUTSIDE the recede wrapper — they never scale. */}
+      {/* Chrome overlays sit OUTSIDE the scene's recede (a sheet's) — they never
+          scale with the desk. Under the Peek they recede with the cover and the
+          still, in field.tsx's `.field-recede` (DESIGN.md §6). */}
       {/* THE HEAD (One Frame FR-3, DESIGN.md §8 "The head"): the field's name
           pill with the crumbs folded in, which grows the fields explorer, and
           the zoom readout — alone at the right since FR-4 took the theme into
