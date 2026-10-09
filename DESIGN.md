@@ -2019,8 +2019,9 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   surfaces** — `objects · @ · fields · zoom · palette · me · clipboard · artifacts`, one value, so
   any one opening folds every other (F11); Settings still folds them and is folded by them.
   *Until the Peek lands (2026-10-04, the search interim), History's room's sheet is a ninth,
-  `history-search` (§8 "History").* *Since 2026-10-08 (the Peek, P1) the ninth is **`search`**,
-  the Peek's popup (§8 "Search — the Peek"); `history-search` left with the room's sheet.* **The
+  `history-search` (§8 "History").* *Since 2026-10-08 (the Peek, P1) **`search`**, the Peek's popup,
+  is one of them (§8 "Search — the Peek") and `history-search` left with the room's sheet; beside
+  the desk's selection menu (DK-11, §10 "The mat's places") the one owner holds ten.* **The
   app's theme has ONE owner, main's** (FC-D5): Light · Dark · Auto, one value per device kept by the
   shell, Auto following the OS through Electron's `nativeTheme`, and the owner projects what it
   resolves to back into `nativeTheme` — so the window's native chrome, its menus and the page's
@@ -2048,7 +2049,8 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   has no bar (R7). **The bar's grown menu is one of the frame's open surfaces** — the one owner's
   ninth, `objects · @ · fields · zoom · palette · me · clipboard · artifacts · selection menu` — so
   opening it folds the rest, any of them opening folds it, and its Esc is taken before the desk's
-  Esc ladder (R5). **The status line** (§8) is the head's: centred under it at y 56, or under the
+  Esc ladder (R5). *With the Peek (2026-10-08, P1) the one owner holds ten: these and `search`,
+  the Peek's popup (§8 "Search — the Peek").* **The status line** (§8) is the head's: centred under it at y 56, or under the
   tools in hand at y 112 while an object is held (R12).
 - **Review ritual**: UI PRs cite the sections they follow, include a screenshot in both
   themes, and answer the §0 bar question. Deviations from a token/recipe/easing are a
