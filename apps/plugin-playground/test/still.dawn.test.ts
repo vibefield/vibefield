@@ -19,7 +19,8 @@
 //    blessed once by the named flag — its dress AND its writing (DK-17b; ICE I35): a still lends the desk's hand
 //    (`TEXT_RASTER`, the product's faces on a Node canvas) and the pad reads it, so `written` and `long` carry their
 //    comments, each inside the pad's own box;
-//  - the browser pane (plugins/browser-pane — PORTALS' first kind, PT-1): held to ITS golden over its four playground states,
+//  - the browser pane (plugins/browser-pane — PORTALS' first kind, PT-1): held to ITS golden over its five playground states (PT-2's
+//    `live` a web page's face, filled by `stillLive` over the pane's own playground/live.ts — the one that READS what was lent),
 //    blessed once by the named flag — it reads none of the desk's hand (its head is its own lent service's, and a Node still
 //    draws the committed heads); and a PHONE-SIZE pane, drawn at a phone's cut, judged by its face's colour count and
 //    contrast, never a hash: its page the phone's own 66.59 mm display across, light with contrast by day and dark by night,
@@ -417,26 +418,29 @@ describe("the browser pane — PORTALS' first kind (PT-1)", () => {
     ran = await still(PANE);
   });
 
-  it("is held to its golden: its four playground states by day and by night, blessed once by the named flag", () => {
+  it("is held to its golden: its five playground states by day and by night, blessed once by the named flag", () => {
     expect(ran.code).toBe(0);
     expect(ran.stills.map((s) => `${s.state} · ${s.theme}: ${s.code}`)).toEqual([
       "default · day: ok",
       "smoke · day: ok",
       "bronze · day: ok",
       "blank · day: ok",
+      "live · day: ok",
       "default · night: ok",
       "smoke · night: ok",
       "bronze · night: ok",
       "blank · night: ok",
+      "live · night: ok",
     ]);
     for (const s of ran.stills) expect(s.detail).toContain("held to its golden");
   });
 
-  it("reads none of the desk's hand — its head is its own service's, and a Node still draws the committed heads — and each state is its own", () => {
-    for (const s of ran.stills) expect(s.lent, `${s.state} · ${s.theme}`).toBeUndefined();
+  it("reads none of the desk's hand — its head is its own service's, and a Node still draws the committed heads — but a web page READS the faces lent (PT-2), and each state is its own", () => {
+    for (const s of ran.stills)
+      expect(s.lent, `${s.state} · ${s.theme}`).toEqual(s.state === "live" ? ["live"] : undefined);
     for (const theme of ["day", "night"]) {
       const shas = ran.stills.filter((s) => s.theme === theme).map((s) => s.sha256);
-      expect(new Set(shas).size, theme).toBe(4);
+      expect(new Set(shas).size, theme).toBe(5);
     }
   });
 

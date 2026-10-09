@@ -136,6 +136,8 @@ export type RefusalCode =
   | "states-unknown-type"
   /** a declared type's state record is empty — say so rather than silently pass zero rows */
   | "states-empty"
+  /** `playground/live.ts` exists but its default export is not the faces' stills (PT-2: a function of a key and a spec) */
+  | "live-invalid"
   // --- state-level: one fixture's props (`validateState`; the kind harness says it on its rows) ---
   /** the fixture's props violate the manifest's declared prop schema */
   | "state-invalid";

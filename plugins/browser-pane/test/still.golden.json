@@ -31,6 +31,16 @@
       "height": 2524,
       "sha256": "a0d83144351daaa91d5735f6ba165358d70f07468ab19e342e1d7370fc34f3f1"
     },
+    "vibefield.browser-pane:live:day": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "2407d11d28001f5aabef98a3417283f1414bb6c26b45eb0217d82c94afaa603d"
+    },
+    "vibefield.browser-pane:live:night": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "850687a5c535d9272008e1bd38eb00bb394fbf8ac86396f2a7528adc7f1673df"
+    },
     "vibefield.browser-pane:smoke:day": {
       "width": 2996,
       "height": 2524,

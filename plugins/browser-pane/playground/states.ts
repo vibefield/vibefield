@@ -15,5 +15,7 @@ export default {
     bronze: { finish: "bronze", scheme: "dark" },
     // a page the desk cannot show yet (PT-1 has the sample alone): the dark film, the head's prompt
     blank: { url: "about:blank" },
+    // PT-2 — a web page: a LIVE face the host fills; in a still, the sample's own bytes through the live path (playground/live.ts)
+    live: { url: "https://lumen.example/reader" },
   },
 };

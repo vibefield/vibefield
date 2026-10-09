@@ -9,9 +9,11 @@ import { inflateSync } from "node:zlib";
 import type { TextRaster } from "@vibecook/ice/desk";
 import { afterEach, describe, expect, it } from "vitest";
 import { parseArgs } from "../src/cli";
+import { readLiveModule } from "../src/live-stills";
 import { toNdjson, toTable } from "../src/report";
 import {
   blessedGolden,
+  countOpens,
   countReads,
   drawWhereRead,
   type GoldenRead,
@@ -235,6 +237,37 @@ describe("the desk's hand, lent where it is read (DK-17b; ICE I35, `createStill(
     expect(stills[0]?.disposed).toBe(true);
     expect(kept.lent).toBe(false);
     expect(kept.still).toBe(stills[1]);
+  });
+
+  it("PT-2: counts the faces a kind opens on the lent LIVE — a read of the hand — and hands each open to the source", () => {
+    const asked: string[] = [];
+    let opened = 0;
+    const live = countOpens(
+      {
+        open: (key, spec, _arrived) => {
+          asked.push(`${key} ${String(spec.url)}`);
+          return { key } as never;
+        },
+      },
+      () => {
+        opened += 1;
+      },
+    );
+    expect(opened).toBe(0);
+    expect(live.open("k-1", { url: "https://lumen.example/reader" }, () => {}).key).toBe("k-1");
+    expect(opened).toBe(1);
+    expect(asked).toEqual(["k-1 https://lumen.example/reader"]);
+  });
+
+  it("PT-2: reads a plugin's faces as a function of a key and a spec — anything else is live-invalid", () => {
+    const still = () => ({ width: 1, height: 1, bytes: new Uint8Array(4) });
+    const read = readLiveModule({ default: still });
+    expect(read.ok && read.live).toBe(still);
+    for (const bad of [{}, { default: {} }, { default: "x" }]) {
+      const no = readLiveModule(bad);
+      expect(no.ok).toBe(false);
+      if (!no.ok) expect(no.code).toBe("live-invalid");
+    }
   });
 
   it("says on the row what the kind read — and nothing for a kind that read none", () => {

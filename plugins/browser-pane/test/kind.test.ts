@@ -65,13 +65,14 @@ describe("the browser pane's kind, judged by the kind-conformance harness WITH t
     expect(refusals(r)).toEqual([]);
     // it OPENS (ICE's pick-up), and goes into no mini mat (it provides no CONTAINABLE: no chip yet)
     expect(r.plan.modes).toEqual(["idle", "selected", "held", "open"]);
-    expect(r.plan.fixtures).toEqual(["default", "smoke", "bronze", "blank"]);
-    expect(r.states).toBe(4 * (4 * r.plan.zooms.length + 1));
+    expect(r.plan.fixtures).toEqual(["default", "smoke", "bronze", "blank", "live"]);
+    expect(r.states).toBe(5 * (4 * r.plan.zooms.length + 1));
     // its declaration, its program (READ: the not-compiled note), each fixture driven, its dispose
     expect(r.verdicts.map((v) => v.code)).toEqual([
       "ok",
       "ok",
       "object-wgsl-not-compiled",
+      "ok",
       "ok",
       "ok",
       "ok",

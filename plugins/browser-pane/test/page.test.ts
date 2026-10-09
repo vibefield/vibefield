@@ -157,7 +157,7 @@ describe("the head — keyed by what it says and its band", () => {
     expect(engraveSplit(118)).toEqual({ h: 58, at: 60 });
   });
 
-  it("the committed heads are a still's: the default pane on the sample and on a blank page, a phone's on the sample, at the still's band", () => {
+  it("the committed heads are a still's: the default pane on the sample and on a blank page, a phone's on the sample, the default pane on a live page (PT-2), at the still's band", () => {
     const phone = deviceById("phone");
     if (phone === undefined) throw new Error("phone");
     const P = shapeOf(cutOf(phone), phone);
@@ -165,6 +165,12 @@ describe("the head — keyed by what it says and its band", () => {
       headKey(S, headStateOf(SAMPLE_URL, S), bandDensity(S, bandFor(2))),
       headKey(S, headStateOf("about:blank", S), bandDensity(S, bandFor(2))),
       headKey(P, headStateOf(SAMPLE_URL, P), bandDensity(P, bandFor(2))),
+      // the playground's live state: the face's words (playground/live.ts) say its address
+      headKey(
+        S,
+        headStateOf("https://lumen.example/reader", S, { address: "https://lumen.example/reader" }),
+        bandDensity(S, bandFor(2)),
+      ),
     ];
     expect(STILL_HEADS.map((h) => h.key)).toEqual(want);
     for (const key of want) {

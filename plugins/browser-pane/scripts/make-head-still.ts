@@ -12,6 +12,7 @@ import { writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCanvas, ImageData } from "@napi-rs/canvas";
+import type { LiveInfo } from "@vibefield/plugin-sdk/desk";
 import { cutOf, DEFAULT_DEVICE, type Device, deviceById } from "../src/devices";
 import { bandDensity, bandFor, headKey, headStateOf } from "../src/head";
 import { drawHead, type HeadContext, headBitmap } from "../src/head-canvas";
@@ -23,11 +24,24 @@ import { sampleFavicon } from "../src/sample-page";
 /** The still's density: zoom 1 at dpr 2 (the playground's `STILL_DPR`). */
 const STILL_ZOOM_DPR = 2;
 
-/** The heads a still draws: the default pane on the sample and on a blank page, a phone's pane on the sample. */
-const HEADS: readonly { readonly device: Device; readonly url: string; readonly what: string }[] = [
+/** The heads a still draws: the default pane on the sample and on a blank page, a phone's pane on the sample — and (PT-2) the
+ * default pane on a live page, its words the face's (the playground's `live` state: playground/live.ts says its address). */
+const LIVE_URL = "https://lumen.example/reader";
+const HEADS: readonly {
+  readonly device: Device;
+  readonly url: string;
+  readonly info?: LiveInfo;
+  readonly what: string;
+}[] = [
   { device: DEFAULT_DEVICE, url: SAMPLE_URL, what: "the default pane on the sample" },
   { device: DEFAULT_DEVICE, url: "about:blank", what: "the default pane on a blank page" },
   { device: deviceById("phone") as Device, url: SAMPLE_URL, what: "a phone's pane on the sample" },
+  {
+    device: DEFAULT_DEVICE,
+    url: LIVE_URL,
+    info: { address: LIVE_URL },
+    what: "the default pane on a live page",
+  },
 ];
 
 const base64 = (bytes: Uint8Array): string => Buffer.from(bytes).toString("base64");
@@ -41,10 +55,10 @@ const ctx = canvas.getContext("2d") as unknown as HeadContext;
 
 const rows: string[] = [];
 let total = 0;
-for (const { device, url, what } of HEADS) {
+for (const { device, url, info, what } of HEADS) {
   // the size a document holds for the device (a new pane's, a device switch's) — what a still spawns, so the keys agree
   const S = shapeOf(cutOf(device), device);
-  const st = headStateOf(url, S);
+  const st = headStateOf(url, S, info);
   const tpu = bandDensity(S, bandFor(STILL_ZOOM_DPR));
   const fav = st.favicon === "sample" ? (favicon as unknown as CanvasImageSource) : null;
   const { width, height } = drawHead(canvas, ctx, S, st, tpu, fav);

@@ -37,6 +37,7 @@ import {
   productPalette,
   runKindConformance,
 } from "@vibefield/plugin-sdk/testing";
+import { LIVE_RELATIVE_PATH, type LiveStills, readLiveModule } from "./live-stills";
 import { readStatesModule, STATES_RELATIVE_PATH, type StatesFile } from "./states";
 import { openStills, type StillRun, type StillRunOptions, stillFixtures } from "./still";
 import { messageOf, pointer, type RunResult, type RunSummary, type Verdict } from "./verdict";
@@ -273,11 +274,47 @@ export async function runPlayground(options: RunOptions): Promise<RunResult> {
     }
   }
 
+  // --- the faces a still shows (PT-2): a portal kind's live faces filled from the plugin's own bytes ------------
+  let live: LiveStills | undefined;
+  const livePath = join(root, LIVE_RELATIVE_PATH);
+  if (options.still !== undefined && existsSync(livePath)) {
+    let read: ReturnType<typeof readLiveModule>;
+    try {
+      read = readLiveModule(await options.loader.load(livePath));
+    } catch (error) {
+      read = {
+        ok: false,
+        code: "live-invalid",
+        detail: `${livePath}: ${messageOf(error)}`,
+        expected: "a module that imports cleanly and default-exports the faces' stills",
+      };
+    }
+    if (!read.ok)
+      return stopAt(
+        manifest.id,
+        {
+          kind: "plugin",
+          plugin: manifest.id,
+          status: "refused",
+          code: "live-invalid",
+          ...(read.expected !== undefined ? { expected: read.expected } : {}),
+          detail: read.detail,
+        },
+        objects.length,
+      );
+    live = read.live;
+  }
+
   // --- the stills (DK-11, `--still`): each kind's states drawn on Dawn, held to the plugin's golden -------
   const stills: StillRun | undefined =
     options.still === undefined
       ? undefined
-      : openStills(root, manifest.id, options.still, options.only !== undefined);
+      : openStills(
+          root,
+          manifest.id,
+          { ...options.still, ...(live === undefined ? {} : { live }) },
+          options.only !== undefined,
+        );
 
   // --- the object kinds: the kind-conformance harness (DK-7) ---------------
   // Each row's code half is the module's export its binding names — read off the

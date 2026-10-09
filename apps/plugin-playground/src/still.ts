@@ -16,7 +16,8 @@
 // Each still's PNG lands in `<dir>/.vibefield-still/` for a reader's eye (never a source; ignored in this repository).
 //
 // A still lends the kinds the DESK'S HAND (DK-17b; ICE I35, `createStill({ services })`): the product's text raster under
-// `TEXT_RASTER` (text-raster.ts — the shipped faces on a Node canvas), and a kind that READS it is drawn with its desk state,
+// `TEXT_RASTER` (text-raster.ts — the shipped faces on a Node canvas) — and, for a plugin that authors the faces its stills
+// show (PT-2, live-stills.ts), ICE's `stillLive` over them under `LIVE` — and a kind that READS either is drawn with its desk state,
 // its `local` — its writing, as the product draws it (the comment pad's comments). A kind that reads no lent service is drawn
 // again without it, as a still always was — ICE's facts and pins alone (a clock shows its shop time): a desk state that reads
 // the wall clock (the desk clock's) would otherwise put the hour the still was taken into its golden. The row says what a kind
@@ -38,10 +39,12 @@ import {
   type TextRaster,
   type ThemeName,
 } from "@vibecook/ice/desk";
+import { LIVE, type LiveSources, stillLive } from "@vibecook/ice/desk/kit";
 import type { ObjectContribution } from "@vibefield/contracts";
 import { buildObjectType } from "@vibefield/field-app/object-types";
 import type { ObjectBinding } from "@vibefield/plugin-sdk";
 import { defaultProps, kindOfBinding, productPalette } from "@vibefield/plugin-sdk/testing";
+import type { LiveStills } from "./live-stills";
 import {
   messageOf,
   type StillCode,
@@ -550,6 +553,18 @@ export interface StillRunOptions {
   readonly gpu: StillGpu;
   /** the desk's hand, lent to the kinds as the product's desk lends it (`TEXT_RASTER`; text-raster.ts) */
   readonly text: TextRaster;
+  /** PT-2 — the faces this plugin's stills show (its `playground/live.ts`): lent as `stillLive` under `LIVE` */
+  readonly live?: LiveStills;
+}
+
+/** `stillLive` over a plugin's faces, counting the faces a kind opens — whether it READ the `LIVE` lent. */
+export function countOpens(sources: LiveSources, opened: () => void): LiveSources {
+  return {
+    open(key, spec, arrived) {
+      opened();
+      return sources.open(key, spec, arrived);
+    },
+  };
 }
 
 /** One object kind, as the run hands it over after the kind harness judged it. */
@@ -595,6 +610,20 @@ export function openStills(
   const { gpu } = options;
   /** the desk's hand, lent to every still and counted: a kind that reads it keeps its desk state */
   const hand = countReads(options.text);
+  /** the faces a kind opened on the lent `LIVE` since the last reset — a read of the hand as much as a raster asked */
+  let opens = 0;
+  const reads = {
+    count: () => hand.count() + opens,
+    reset() {
+      hand.reset();
+      opens = 0;
+    },
+  };
+  /** what the kind READ of what was lent, by name — asked right after the lent draw, before another adds to the counts */
+  const readNames = (): string[] => [
+    ...(hand.count() > 0 ? [TEXT_RASTER.name] : []),
+    ...(opens > 0 ? [LIVE.name] : []),
+  ];
 
   const notDrawn = (
     type: string,
@@ -653,7 +682,24 @@ export function openStills(
           objects: [type],
           theme,
           palette: productPalette[theme],
-          ...(lent ? { services: [service(TEXT_RASTER, hand.raster)] } : {}),
+          ...(lent
+            ? {
+                services: [
+                  service(TEXT_RASTER, hand.raster),
+                  // a fresh source per still: a face opened by one still is never another's
+                  ...(options.live === undefined
+                    ? []
+                    : [
+                        service(
+                          LIVE,
+                          countOpens(stillLive(gpu.device, options.live), () => {
+                            opens += 1;
+                          }),
+                        ),
+                      ]),
+                ],
+              }
+            : {}),
           stage: ({ engine }) => {
             if (props === undefined) return; // the bare mat
             engine.ops.spawnWidget(row.type, {
@@ -670,10 +716,11 @@ export function openStills(
       for (const { name: themeName, theme } of STILL_THEMES) {
         for (const [state, props] of Object.entries(fixtures)) {
           const heard = await hearing(async () => {
-            const { still: a, lent } = await drawWhereRead((l) => draw(props, theme, l), hand);
+            const { still: a, lent } = await drawWhereRead((l) => draw(props, theme, l), reads);
+            const read = lent ? readNames() : [];
             const b = await draw(props, theme, lent);
             const bare = await draw(undefined, theme, lent);
-            return { a, b, bare, lent };
+            return { a, b, bare, lent, read };
           });
           if ("error" in heard) {
             rows.push({
@@ -691,7 +738,7 @@ export function openStills(
             });
             continue;
           }
-          const { a, b, bare, lent } = heard.value;
+          const { a, b, bare, read } = heard.value;
           mkdirSync(shots, { recursive: true });
           const png = join(shots, `${fileSafe(row.type)}--${fileSafe(state)}--${themeName}.png`);
           writeFileSync(png, stillPng(a));
@@ -700,7 +747,7 @@ export function openStills(
             type: row.type,
             state,
             theme: themeName,
-            lent: lent ? [TEXT_RASTER.name] : [],
+            lent: read,
             frame,
             a,
             b,
