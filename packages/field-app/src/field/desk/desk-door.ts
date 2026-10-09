@@ -169,6 +169,9 @@ export function deskCensus(engine: CanvasEngine): Record<string, number> {
 /** An object as the door reads it: its entity, its props (the cells of its groups, merged) and its rect on its desk. */
 export interface DeskObjectRow {
   readonly entity: number;
+  /** PT-2 — its DURABLE key in the open document (strata's `store.keyOf` — what `KindHost.keyOf` gives a kind, a live face's
+   * key): the same object across a reload, where its entity may be another; null for an object the document does not hold. */
+  readonly key: string | null;
   readonly props: Readonly<Record<string, unknown>>;
   /** PT-1 — its `Position` (the top-left) and `Size`, world units: what a resize or a re-cut wrote. */
   readonly rect: { readonly x: number; readonly y: number; readonly w: number; readonly h: number };
@@ -183,6 +186,7 @@ export function deskObjects(engine: CanvasEngine, type: string): DeskObjectRow[]
   const widget = engine.catalog.widget(type);
   if (widget === undefined) return [];
   const out: DeskObjectRow[] = [];
+  const store = engine.docs.current()?.store;
   engine.world.query(objectsQ).each((batch) => {
     for (const row of batch) {
       const e = batch.entity(row);
@@ -194,6 +198,7 @@ export function deskObjects(engine: CanvasEngine, type: string): DeskObjectRow[]
       const size = engine.world.get(e, Size);
       out.push({
         entity: e as number,
+        key: (store?.keyOf(e) as string | undefined) ?? null,
         props,
         rect: { x: at?.x ?? 0, y: at?.y ?? 0, w: size?.w ?? 0, h: size?.h ?? 0 },
       });

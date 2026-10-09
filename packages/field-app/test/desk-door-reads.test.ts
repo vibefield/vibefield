@@ -36,12 +36,15 @@ describe("the desk door's reads (DK-8)", () => {
     ce.dispose();
   });
 
-  it("PT-1: reads each object's RECT beside its props — its Position and Size, what a resize writes — a kind's DESK STATE by its name, and the CAMERA; PT-2: the smokes' one WRITE", async () => {
+  it("PT-1: reads each object's RECT beside its props — its Position and Size, what a resize writes — a kind's DESK STATE by its name, and the CAMERA; PT-2: its durable KEY and the smokes' one WRITE", async () => {
     const ce = createFieldEngine(buildRegistry());
     await seedField(ce, ce.docs.create(), createDeskBlobStore());
     const pad = deskObjects(ce, COMMENT_PAD_TYPE)[0];
     expect(pad?.rect.w).toBe(220);
     expect(pad?.rect.h).toBe(280);
+    // PT-2 — its durable key, as the document holds it (a live face's key)
+    expect(typeof pad?.key).toBe("string");
+    expect(pad?.key).toBe(ce.docs.current()?.store.keyOf((pad?.entity ?? -1) as never));
     expect(Number.isFinite(pad?.rect.x) && Number.isFinite(pad?.rect.y)).toBe(true);
     // the handle's `local(name)`, read through the door as it is — a kind's own witness of its objects
     const state = { said: () => "a word" };
