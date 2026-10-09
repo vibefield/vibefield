@@ -504,6 +504,10 @@ describe("the live page's demand over the SIGHT (PT-2 ruling 5)", () => {
     expect(sameDemand(paneDemand(at(700), S), paneDemand(at(600), S))).toBe(false);
     expect(sameDemand(undefined, paneDemand(at(700), S))).toBe(false);
     // a new viewport is a new demand (a resize, a device switch)
+    // a new viewport alone is a new demand — the same raster, rate and rung
+    const d = paneDemand(at(700), S);
+    expect(sameDemand(d, { ...d, viewport: [1300, 800] })).toBe(false);
+    expect(sameDemand(d, { ...d, raster: [d.raster[0], d.raster[1]] })).toBe(true);
     const wider = shapeOf({ w: 800, h: 461.94 }, device("laptop"));
     expect(sameDemand(paneDemand(at(700), S), paneDemand(at(700), wider))).toBe(false);
   });

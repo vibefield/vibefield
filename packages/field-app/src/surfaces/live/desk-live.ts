@@ -265,7 +265,6 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     }
 
     let closed = false;
-    let opening = true;
     let presentation = handle.presentation;
     let offFrame: (() => void) | null = null;
     /** A frame landed since the last take; the state or the page's words moved since the last take. */
@@ -276,9 +275,8 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let asked: LiveDemand | undefined;
     let writer: LiveWriter | undefined;
     let writerDevice: GPUDevice | undefined;
-    const tell = (): void => {
-      if (!opening && !closed) arrived();
-    };
+    // close() unsubscribes both listeners at once, so nothing tells after it
+    const tell = (): void => arrived();
     const listen = (next: SurfaceHandleState<ProductSurfaceFrame>["presentation"]): void => {
       if (next === presentation && offFrame !== null) return;
       offFrame?.();
@@ -298,7 +296,6 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       wordsOwed = true;
       tell();
     });
-    opening = false;
 
     const face: LiveFace = {
       key,
