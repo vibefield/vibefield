@@ -178,6 +178,8 @@ const { GodviewDeck } = await import("../src/godview/GodviewDeck");
 const { GodviewAgentsProvider } = await import("../src/godview/monitor/GodviewAgentsProvider");
 const { paneCwd, readDeviceHost } = await import("../src/godview/deck-restore");
 type RemoteSessionDoor = import("../src/godview/monitor/remote-door").RemoteSessionDoor;
+const { getGodviewLineDoor } = await import("../src/frame/line-door");
+type LineViewDoor = import("../src/frame/line-door").LineViewDoor;
 const { DEFAULT_DECK_APPEARANCE, resetDeckAppearanceForTest, setDeckAppearance } = await import(
   "../src/godview/deck-appearance"
 );
@@ -1448,6 +1450,100 @@ describe("the door's local mount, and the pane a replacement belongs in (AR-4 ·
     // the refusal is silent in the workspace: no pane changed hands
     expect(store.log.filter((entry) => entry === "mount:never-born")).toEqual([]);
     expect(store.showing("pane-1")).toBe("listed-pty");
+
+    await dispose();
+  });
+});
+
+// P3 — History's Jump to reaches the deck through the line's door (the one verb
+// it adds there): `reveal` shows the pane a running session is already in, and
+// mounts the session only where no pane shows it — never a second mount.
+describe("the line door's reveal, History's Jump to (P3)", () => {
+  const lineDoor = (): LineViewDoor => {
+    const door = getGodviewLineDoor();
+    if (door === null) throw new Error("the deck published no line door");
+    return door;
+  };
+
+  it("activates the pane already showing the session, and mounts nothing", async () => {
+    // The user is in pane-1; the running agent's PTY is in pane-2. Jump to is
+    // the pane coming forward — a mount would pull the same PTY into pane-1.
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "agent-pty", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-1",
+    });
+    floor = [...floor, { sessionId: "agent-pty" }];
+    const { dispose } = await mountDeckWithDoor(store);
+
+    const outcome = await act(async () => lineDoor().reveal("agent-pty"));
+
+    expect(outcome).toEqual({ state: "opened" });
+    expect(store.activePaneId).toBe("pane-2");
+    expect(store.log, "the shown session was mounted again").toEqual(["activate:agent-pty"]);
+    expect(store.showing("pane-1"), "the user's pane was taken").toBe("user-pty");
+
+    await dispose();
+  });
+
+  it("asks nothing of the workspace when the session is already in the active pane", async () => {
+    const store = workspaceProbe({
+      panes: [{ id: "pane-1", session: { id: "agent-pty", cols: 100, rows: 30 } }],
+      activePaneId: "pane-1",
+    });
+    floor = [...floor, { sessionId: "agent-pty" }];
+    const { dispose } = await mountDeckWithDoor(store);
+
+    expect(await act(async () => lineDoor().reveal("agent-pty"))).toEqual({ state: "opened" });
+    expect(store.log).toEqual([]);
+
+    await dispose();
+  });
+
+  it("mounts a session no pane shows in the active pane, through the door's mount", async () => {
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "other-pty", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-1",
+    });
+    floor = [...floor, { sessionId: "agent-pty" }];
+    const { dispose } = await mountDeckWithDoor(store);
+
+    expect(await act(async () => lineDoor().reveal("agent-pty"))).toEqual({ state: "opened" });
+    expect(store.showing("pane-1")).toBe("agent-pty");
+    expect(store.showing("pane-2")).toBe("other-pty");
+    expect(store.log).toEqual(["mount:agent-pty"]);
+    // …and one the floor does not list is refused in the door's words
+    expect(await act(async () => lineDoor().reveal("never-born"))).toEqual({
+      state: "refused",
+      reason: "the floor does not list this session",
+    });
+
+    await dispose();
+  });
+
+  it("refuses when the pane showing the session never takes focus, and mounts nothing", async () => {
+    const store = workspaceProbe({
+      panes: [
+        { id: "pane-1", session: { id: "user-pty", cols: 100, rows: 30 } },
+        { id: "pane-2", session: { id: "agent-pty", cols: 100, rows: 30 } },
+      ],
+      activePaneId: "pane-1",
+      activatable: false,
+    });
+    floor = [...floor, { sessionId: "agent-pty" }];
+    const { dispose } = await mountDeckWithDoor(store);
+
+    expect(await act(async () => lineDoor().reveal("agent-pty"))).toEqual({
+      state: "refused",
+      reason: "the pane showing it could not be made the active one",
+    });
+    expect(store.log.filter((entry) => entry.startsWith("mount:"))).toEqual([]);
+    expect(store.showing("pane-1")).toBe("user-pty");
 
     await dispose();
   });

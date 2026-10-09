@@ -258,6 +258,7 @@ describe("the frame's one owner of the open surface", () => {
       paste: () => false,
       canPlace: true,
       place: async () => ({ state: "opened" }),
+      reveal: async () => ({ state: "opened" }),
     });
     act(() => setViewNow?.("godview"));
     act(() => setSurfaceNow?.("palette"));

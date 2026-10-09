@@ -51,6 +51,10 @@ export interface LineViewDoor {
    * by the deck and mounted in the ACTIVE pane — the pane the swarm's open uses
    * (GT-D17; the session it showed is detached, never killed). */
   place(terminal: unknown): Promise<NewTerminalOutcome>;
+  /** P3 — History's Jump to lands here: the pane showing floor session
+   * `sessionId` becomes the active one, or, when no pane shows it, it is
+   * mounted in the active pane through the door's serialized mount (AR-4b). */
+  reveal(sessionId: string): Promise<NewTerminalOutcome>;
 }
 
 let godview: LineViewDoor | null = null;

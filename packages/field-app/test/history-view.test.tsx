@@ -261,6 +261,7 @@ describe("History in the frame (AR-8c)", () => {
       paste: () => false,
       canPlace: true,
       place,
+      reveal: async () => ({ state: "opened" }),
     });
     mount(client);
     to("history");
