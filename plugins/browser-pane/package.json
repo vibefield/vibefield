@@ -1,0 +1,38 @@
+{
+  "name": "@vibefield/plugin-browser-pane",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "VibeField's first portal (PT-1, PORTALS): the browser pane — a slab of clear glass lying on the desk, cut to its page at its device's density, its head engraved, its page a still in PT-1 — a plugin kind through @vibefield/plugin-sdk/desk alone.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "build": "plugin-build",
+    "gen:manifest": "tsx scripts/emit-manifest.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@vibefield/contracts": "workspace:*",
+    "@vibefield/plugin-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "@napi-rs/canvas": "1.0.10",
+    "@types/node": "catalog:",
+    "@vibefield/plugin-build": "workspace:*",
+    "@webgpu/types": "^0.1.74",
+    "tsx": "^4.19.0",
+    "typescript": "catalog:",
+    "vitest": "catalog:"
+  },
+  "nx": {
+    "targets": {
+      "build": {
+        "outputs": [
+          "{projectRoot}/dist"
+        ]
+      }
+    }
+  }
+}

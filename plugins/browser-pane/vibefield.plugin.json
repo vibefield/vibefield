@@ -1,0 +1,107 @@
+{
+  "activation": [
+    "onObject:vibefield.browser-pane"
+  ],
+  "capabilities": [],
+  "contributes": {
+    "objects": [
+      {
+        "binding": {
+          "kind": "browserPane"
+        },
+        "description": "A pane of glass cut to its page: resize it and its page re-lays out; switch its device and it is re-cut to that screen's size",
+        "groups": {},
+        "interaction": {
+          "movable": true,
+          "resizable": true,
+          "selectable": true,
+          "snap": "both"
+        },
+        "minSize": {
+          "h": 146.35,
+          "w": 165.39
+        },
+        "props": {
+          "device": {
+            "default": "laptop",
+            "kind": "enum",
+            "options": [
+              "laptop",
+              "desktop",
+              "tablet",
+              "phone"
+            ]
+          },
+          "finish": {
+            "default": "low-iron",
+            "kind": "enum",
+            "options": [
+              "low-iron",
+              "float",
+              "smoke",
+              "bronze"
+            ]
+          },
+          "scheme": {
+            "default": "desk",
+            "kind": "enum",
+            "options": [
+              "desk",
+              "light",
+              "dark"
+            ]
+          },
+          "url": {
+            "default": "https://lumen.example/",
+            "kind": "string",
+            "maxLength": 2048
+          }
+        },
+        "provides": [
+          "vibefield.browser-pane",
+          "desk.object"
+        ],
+        "schemaVersion": 1,
+        "size": {
+          "h": 461.94,
+          "w": 698.16
+        },
+        "title": "Browser",
+        "tray": {
+          "category": "portals",
+          "hang": {
+            "accessory": "shelf",
+            "h": 138.58,
+            "pegs": [
+              [
+                -2,
+                0.5
+              ],
+              [
+                2,
+                0.5
+              ]
+            ],
+            "w": 209.45
+          },
+          "label": "Browser",
+          "local": true,
+          "order": 0
+        },
+        "type": "vibefield.browser-pane"
+      }
+    ]
+  },
+  "description": "A browser on the desk: a pane of clear glass cut to its page at its device's density, its chrome engraved in its head — its page a still for now; live pages come with the desk's live-surface door",
+  "engines": {
+    "app": ">=0.0.0",
+    "contracts": "^0.1.0"
+  },
+  "entries": {
+    "renderer": "./dist/renderer.js"
+  },
+  "id": "vibefield.browser-pane",
+  "manifestVersion": 1,
+  "title": "Browser pane",
+  "version": "0.1.0"
+}
