@@ -302,6 +302,46 @@ describe("SurfaceService.open — the kind→scope matrix", () => {
   });
 });
 
+describe("SurfaceService.open — reload continuity (DT-1c's reuseKey)", () => {
+  it("forwards the caller's reuseKey to main's mint, where custody dedupes a reload onto the SAME page", async () => {
+    const authority = fakeAuthority();
+    const { surfaces } = service(authority);
+    await surfaces.open(windowContext(["surface.attach", "surface.browser"]), {
+      source: BROWSER_SOURCE,
+      reuseKey: "desk:13918995204487956201-1",
+    });
+    expect(authority.minted).toEqual([
+      {
+        rendererParticipant: PARTICIPANT,
+        source: BROWSER_SOURCE,
+        reuseKey: "desk:13918995204487956201-1",
+      },
+    ]);
+  });
+
+  it("mints with no reuseKey when the caller gives none — a fresh page each time", async () => {
+    const authority = fakeAuthority();
+    const { surfaces } = service(authority);
+    await surfaces.open(windowContext(["surface.attach", "surface.browser"]), {
+      source: BROWSER_SOURCE,
+    });
+    expect(authority.minted[0]).not.toHaveProperty("reuseKey");
+  });
+
+  it("refuses a reuseKey the contract does not admit, before any mint", async () => {
+    const authority = fakeAuthority();
+    const { surfaces } = service(authority);
+    const error = await refusal(
+      surfaces.open(windowContext(["surface.attach", "surface.browser"]), {
+        source: BROWSER_SOURCE,
+        reuseKey: "a key with spaces",
+      }),
+    );
+    expect(error.kind).toBe("PRECONDITION_FAILED");
+    expect(authority.minted).toEqual([]);
+  });
+});
+
 describe("SurfaceService.open — the local-window binding", () => {
   it("refuses a caller that carries no renderer participant", async () => {
     const authority = fakeAuthority();

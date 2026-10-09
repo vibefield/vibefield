@@ -200,11 +200,14 @@ export function createSurfaceService(options: SurfaceServiceOptions): SurfaceSer
       if (!parsed.success) {
         throw new RpcCallError(
           "PRECONDITION_FAILED",
-          "expected { source, idempotencyKey? }",
+          "expected { source, reuseKey?, idempotencyKey? }",
           false,
         );
       }
       const source = parsed.data.source;
+      // DT-1c's continuity key (a desk object's durable key): forwarded to main's mint, where custody dedupes on it so
+      // a renderer reload re-binds the SAME running page instead of restarting it (PT-2 — it was parsed and dropped here)
+      const reuseKey = parsed.data.reuseKey;
       const required = SURFACE_KIND_SCOPE[source.kind];
       if (!scopesOf(ctx).includes(required)) {
         throw new RpcCallError("FORBIDDEN_SCOPE", `requires ${required}`, false, { required });
@@ -251,6 +254,7 @@ export function createSurfaceService(options: SurfaceServiceOptions): SurfaceSer
             .surfacesMint({
               rendererParticipant,
               source,
+              ...(reuseKey === undefined ? {} : { reuseKey }),
               ...(owner === undefined ? {} : { owner }),
             })
             .then((result) => SurfaceOpenResultV1.parse(result), throughSurfaces);
