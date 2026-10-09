@@ -471,6 +471,48 @@ export class IndexMesh extends EventEmitter {
     };
   }
 
+  /** PJ-4 (A-D3 (a)) — one unary door asked of a self peer by search's rules
+   * (DS-6b): a desktop the replica holds asleep or incompatible is not asked
+   * (its standing is the answer), a silent one times out at the search
+   * budget, and a refusal is read for what it says of the desktop, never as
+   * its state (`#refusedSource`). The projects' merged figures fan out
+   * through it (`project.figures`); the answer itself is the caller's to read. */
+  async ask(
+    device: string,
+    method: string,
+    params: unknown,
+  ): Promise<
+    | { answered: true; value: unknown; tookMs: number }
+    | { answered: false; source: IndexSearchSource }
+  > {
+    const peer = this.#peers.get(device);
+    if (peer !== undefined) {
+      const standing = this.#standing(peer);
+      if (standing === "incompatible")
+        return { answered: false, source: { device, state: "incompatible", tookMs: 0 } };
+      if (standing === "asleep")
+        return {
+          answered: false,
+          source: { device, state: "asleep", tookMs: 0, detail: ASLEEP_DETAIL },
+        };
+    }
+    const started = this.#now();
+    try {
+      const value = await this.#withTimeout(this.#opts.link.request(device, method, params));
+      if (value === "timeout")
+        return {
+          answered: false,
+          source: { device, state: "timeout", tookMs: this.#took(started) },
+        };
+      return { answered: true, value, tookMs: this.#took(started) };
+    } catch (error) {
+      return {
+        answered: false,
+        source: { device, ...this.#refusedSource(device, error), tookMs: this.#took(started) },
+      };
+    }
+  }
+
   /** `index.changes.subscribe` — invalidation pings: a rows subscription whose
    * rows are always empty and whose revision moves when the scope's catalog
    * (or a desktop's standing) moves. */

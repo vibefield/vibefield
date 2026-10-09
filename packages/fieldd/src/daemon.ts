@@ -108,6 +108,8 @@ import {
   ProcessStatParams,
   type ProcessSubEvent,
   type ProductInfo,
+  ProjectFiguresDayParams,
+  ProjectFiguresParams,
   ProjectGetParams,
   ProjectIntentParams,
   ProjectListParams,
@@ -2132,6 +2134,27 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       peerSessions: () => indexMesh?.peerRows() ?? [],
       sources: () => indexMesh?.sourcesFor("projects") ?? [],
       records: () => projectIntents,
+      // PJ-4 (H2) — a project's merged figures: this desktop's parts from its
+      // own index, a peer's through its `federate` door by search's rules
+      // (asleep and incompatible desktops are not asked; a silent one times out)
+      figures: {
+        local: {
+          project: (ask) => index.project(ask),
+          projectDay: (ask) => index.projectDay(ask),
+        },
+        peer: (device, method, params) =>
+          indexMesh !== null
+            ? indexMesh.ask(device, method, params)
+            : Promise.resolve({
+                answered: false as const,
+                source: {
+                  device,
+                  state: "timeout" as const,
+                  tookMs: 0,
+                  detail: "this desktop has no mesh to ask it through",
+                },
+              }),
+      },
     });
     const projectPage = (ctx: { principal: Principal }, asked: number | undefined): number =>
       tailnetRowLimit(ctx.principal, asked, PROJECT_DOORS.PAGE_DEFAULT_LIMIT) ??
@@ -2162,6 +2185,32 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         "expected { key, places?: {device, placeId}[], devices?, agents?, cursor?, limit? (1..500) }",
       );
       return projectDoors.sessions(ask, view, projectPage(ctx, ask.limit));
+    });
+    // PJ-4 (H2 (a)) — a project's merged figures: every (desktop, rosetta
+    // project) its sessions are filed under, summed, with each desktop's
+    // standing and what is partial (projects/project-figures.ts). The reads'
+    // gate (D8: never a peer daemon) and P1's; a tailnet caller's contribution
+    // rows are cut at its bound with `clipped`.
+    api.register("project.figures", async (ctx, params) => {
+      admitProjectReader(ctx, "project.figures");
+      const ask = parseProjectAsk(
+        ProjectFiguresParams,
+        params,
+        "expected { key, sinceMs?: ms ≥ 0, offsetMinutes?: −840…840 }",
+      );
+      return await projectDoors.figures(
+        ask,
+        tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
+      );
+    });
+    api.register("project.figuresDay", async (ctx, params) => {
+      admitProjectReader(ctx, "project.figuresDay");
+      const ask = parseProjectAsk(
+        ProjectFiguresDayParams,
+        params,
+        "expected { key, day: YYYY-MM-DD, offsetMinutes?: −840…840 }",
+      );
+      return await projectDoors.figuresDay(ask);
     });
     api.registerSubscription("project.subscribe", (ctx, params, emit) => {
       admitProjectReader(ctx, "project.subscribe");

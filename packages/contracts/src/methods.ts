@@ -1823,6 +1823,28 @@ export const METHODS: MethodDef[] = [
     idempotent: true,
     locality: "federate",
   }),
+  // PJ-4 (H2 (a), 2026-10-09; A-D3) — a project's MERGED figures: fieldd fans
+  // `index.project` / `index.projectDay` out to every (desktop, rosetta
+  // project) the project's sessions are filed under — a peer through its own
+  // `federate` door — sums what is additive and says which desktops answered
+  // and what is partial (project-doors.ts). Reads of this desktop's aggregate
+  // like the four above: `project.read`, `federate`, refused to a peer daemon
+  // by the handler (DS-L4); a tailnet caller's contribution rows are cut at
+  // INDEX_TAILNET_LIMITS.MAX_ROWS with `clipped`.
+  defineMethod({
+    surface: "product",
+    method: "project.figures",
+    scope: "project.read",
+    idempotent: true,
+    locality: "federate",
+  }),
+  defineMethod({
+    surface: "product",
+    method: "project.figuresDay",
+    scope: "project.read",
+    idempotent: true,
+    locality: "federate",
+  }),
   defineMethod({
     surface: "product",
     method: "project.subscribe",

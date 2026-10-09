@@ -28,6 +28,8 @@ import {
   PEER_FIELDD_SCOPES,
   type PlaceFacts,
   ProjectChangesDelta,
+  ProjectFiguresDayResult,
+  ProjectFiguresResult,
   ProjectGetResult,
   ProjectIntentResult,
   ProjectListResult,
@@ -509,5 +511,39 @@ describe("PJ-4 — the join column over the real door (A-D4)", () => {
     );
     expect(peer.rows.length).toBe(4);
     for (const row of peer.rows) expect(row).not.toHaveProperty("projectKey");
+  }, 30_000);
+});
+
+describe("PJ-4 — the merged figures over the real door (H2)", () => {
+  it("a window reads a project's figures from this desktop's index, each rosetta project asked once; a peer daemon is refused (DS-L4)", async () => {
+    const projects = ProjectListResult.parse(await world.window.call("project.list", {}));
+    const app = projects.rows.find((r) => r.places.some((p) => p.ref.placeId === "pl_app"));
+    if (app === undefined) throw new Error("no project holds pl_app");
+    const figures = ProjectFiguresResult.parse(
+      await world.window.call("project.figures", {
+        key: app.key,
+        sinceMs: 1_000,
+        offsetMinutes: -420,
+      }),
+    );
+    // the scripted index answers one golden-shaped day for the app's rosetta
+    // project (both its sessions are filed there: a WHOLE part)
+    expect(figures.heatmap.map((d) => [d.day, d.tokens])).toEqual([["2026-08-26", 123]]);
+    expect(figures.contribution.map((c) => [c.device, c.projectId])).toEqual([
+      [world.self, "p-app"],
+    ]);
+    expect(figures.sources).toEqual([
+      expect.objectContaining({ device: world.self, state: "answered", projects: 1, split: 0 }),
+    ]);
+    expect(figures).toMatchObject({ partial: false, lifetimePartial: false, clipped: false });
+    const day = ProjectFiguresDayResult.parse(
+      await world.phone.call("project.figuresDay", { key: app.key, day: "2026-08-26" }),
+    );
+    expect(day.models).toEqual([{ hour: 16, model: "claude-opus-5-5", tokens: 123 }]);
+    // a peer daemon never reads this desktop's aggregate
+    for (const method of ["project.figures", "project.figuresDay"] as const) {
+      const refused = await world.peer.callErr(method, { key: app.key, day: "2026-08-26" });
+      expect(refused.data?.kind, method).toBe("FORBIDDEN_SCOPE");
+    }
   }, 30_000);
 });

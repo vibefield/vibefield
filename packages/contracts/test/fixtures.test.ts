@@ -147,6 +147,10 @@ import {
   PlaceRef,
   ProjectChangesDelta,
   ProjectChangesOpen,
+  ProjectFiguresDayParams,
+  ProjectFiguresDayResult,
+  ProjectFiguresParams,
+  ProjectFiguresResult,
   ProjectGetParams,
   ProjectGetResult,
   ProjectIntentParams,
@@ -561,6 +565,13 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "project-intent-params": ProjectIntentParams,
   "project-intent": ProjectIntentResult,
   "project-refusal": ProjectRefusal,
+  // PJ-4 (H2) — a project's merged figures: one desktop answered, one asleep,
+  // one rosetta project held in part (its days left out, its rows kept for
+  // this project's sessions), and one day's hours over the same parts.
+  "project-figures-params": ProjectFiguresParams,
+  "project-figures": ProjectFiguresResult,
+  "project-figures-day-params": ProjectFiguresDayParams,
+  "project-figures-day": ProjectFiguresDayResult,
 };
 
 // *.vector.json = cross-language crypto vectors, not wire shapes — pinned by their own tests.

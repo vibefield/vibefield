@@ -135,6 +135,9 @@ interface Behaviour {
    * cursor) is cut mid-transfer: the open answer and `afterPages` more pages
    * arrive, then the link under it dies. One cut, then it is spent. */
   cutReset?: { table: "projects" | "sessions"; afterPages: number };
+  /** PJ-4 — another unary door's answer by method (`IndexMesh.ask`); the link
+   * fails it the ways `search` says */
+  answers?: Record<string, unknown>;
 }
 
 /** The fake link: serves each desktop's tables through the REAL pump and
@@ -241,9 +244,12 @@ function link(desktops: Map<string, Desktop>, behaviour: Map<string, Behaviour>)
       };
     },
     async request(device, method, params) {
-      expect(method).toBe("index.search");
-      expect((params as { scope?: string }).scope).toBe("local"); // never fans out twice
+      const answers = behaviour.get(device)?.answers;
+      if (method !== "index.search") expect(answers?.[method], method).toBeDefined();
+      else expect((params as { scope?: string }).scope).toBe("local"); // never fans out twice
       const how = behaviour.get(device)?.search;
+      if (method !== "index.search" && (how === undefined || typeof how === "object"))
+        return answers?.[method];
       if (how === undefined || how === "asleep") {
         // PeerLink's own words, as every one of its sites says them since fx1
         throw new RpcCallError("UNAVAILABLE", "peer call timed out", true, {
@@ -1125,6 +1131,49 @@ describe("IndexMesh — search by asking (DS-D8)", () => {
     expect(later.sources?.find((source) => source.device === "dev-b")).toMatchObject({
       state: "asleep",
       tookMs: 0,
+    });
+  });
+
+  // PJ-4 (A-D3 (a)) — the projects' merged figures ask each peer's own door
+  // through the same rules a mesh search does
+  it("PJ-4: ask() asks a peer's door by search's rules — an asleep desktop is not asked, a silent one times out, a refusal reads the roster", async () => {
+    const a = desktop("dev-a");
+    const figures = { projectId: "r-app", heatmap: [] };
+    const behaviour = new Map<string, Behaviour>([
+      ["dev-b", { answers: { "index.project": figures } }],
+      ["dev-c", { search: "hang", answers: { "index.project": figures } }],
+      ["dev-d", { search: "not-ready", answers: { "index.project": figures } }],
+      ["dev-e", { search: "incompatible", answers: { "index.project": figures } }],
+    ]);
+    const { aggregator } = mesh({
+      self: a,
+      desktops: [a],
+      peers: [
+        { deviceId: "dev-b", online: true },
+        { deviceId: "dev-c", online: true },
+        { deviceId: "dev-d", online: true, state: "awake" },
+        { deviceId: "dev-e", online: true },
+        { deviceId: "dev-g", online: false },
+      ],
+      behaviour,
+    });
+    const ask = (device: string) => aggregator.ask(device, "index.project", { projectId: "r-app" });
+    expect(await ask("dev-b")).toMatchObject({ answered: true, value: figures });
+    expect(await ask("dev-c")).toMatchObject({ answered: false, source: { state: "timeout" } });
+    expect(await ask("dev-d")).toMatchObject({ answered: false, source: { state: "building" } });
+    expect(await ask("dev-e")).toMatchObject({
+      answered: false,
+      source: { state: "incompatible" },
+    });
+    // the roster says it is away: never asked, its standing is the answer
+    expect(await ask("dev-g")).toEqual({
+      answered: false,
+      source: {
+        device: "dev-g",
+        state: "asleep",
+        tookMs: 0,
+        detail: "this desktop is asleep; wake it to search its history",
+      },
     });
   });
 });

@@ -6,6 +6,10 @@ import {
   type PlaceRef,
   PROJECT_DOORS,
   type ProjectEdge,
+  type ProjectFiguresDayParams,
+  type ProjectFiguresDayResult,
+  type ProjectFiguresParams,
+  type ProjectFiguresResult,
   type ProjectGetParams,
   type ProjectGetResult,
   type ProjectIntentParams,
@@ -30,6 +34,13 @@ import { RpcCallError } from "../native-link";
 import type { GroupedPlace, GroupedProject } from "./grouping";
 import type { KeyMove } from "./key-journal";
 import { slashPath } from "./place-kind";
+import {
+  type FiguresAsk,
+  type FiguresPart,
+  type FiguresPlan,
+  projectFigures,
+  projectFiguresDay,
+} from "./project-figures";
 import { type ProjectGroups, type ProjectGroupsSnapshot, placeResolver } from "./project-groups";
 
 // PJ-3 — THE `project.*` DOORS (`thinking-project-places.md` §9; PJ-D15 (a);
@@ -167,6 +178,9 @@ export interface ProjectDoorsOptions {
   sources: () => IndexCatalogSource[];
   /** PJ-2's records; null until they are wired (the act answers UNAVAILABLE) */
   records?: () => ProjectIntentWriter | null;
+  /** PJ-4 — where a project's merged figures are asked (this desktop's index,
+   * a peer's door); absent, the figures doors answer UNAVAILABLE */
+  figures?: Omit<FiguresAsk, "self">;
   now?: () => number;
   /** the pings' floor (default PROJECT_DOORS.CHANGES_MIN_INTERVAL_MS) */
   changesMinIntervalMs?: number;
@@ -538,6 +552,95 @@ export class ProjectDoors {
         if (timer !== null) clearTimeout(timer);
       },
     };
+  }
+
+  // ── PJ-4: the merged figures (H2 (a), A-D3) ──
+
+  /** What a project's figures are asked of: every (desktop, rosetta project)
+   * that files one of its sessions — keyed by BOTH (A4.1) — and whether the
+   * project holds it WHOLE (every session it files on that desktop joins one
+   * of this project's places by the longest path, the rule `project.sessions`
+   * reads). A session with no rosetta project (rosetta's unassigned bucket)
+   * has no figures door. A key that regrouped plans the project it moved
+   * into (`movedTo`), as every read does. */
+  figuresPlan(key: string): FiguresPlan {
+    const indexed = this.#require();
+    const { project, movedTo } = this.#resolveKey(indexed, key);
+    const self = this.#opts.deviceId();
+    const parts = new Map<
+      string,
+      { part: FiguresPart & { sessions: Set<string> }; others: number }
+    >();
+    const conversations = new Map<string, string>();
+    for (const device of project.devices) {
+      const placeOf = this.#resolverFor(indexed, device);
+      const rows =
+        device === self
+          ? this.#opts.localSessions()
+          : (this.#opts.peerSessions().find((peer) => peer.device === device)?.sessions ?? []);
+      for (const row of rows) {
+        if (row.projectId === undefined) continue;
+        const id = `${device}\u0000${row.projectId}`;
+        const held = parts.get(id) ?? {
+          part: { device, projectId: row.projectId, whole: true, sessions: new Set<string>() },
+          others: 0,
+        };
+        parts.set(id, held);
+        const placeId =
+          typeof row.cwd === "string" && row.cwd.length > 0 ? placeOf(row.cwd) : undefined;
+        if (placeId !== undefined && indexed.places.get(placeId)?.project === project) {
+          held.part.sessions.add(row.sessionId);
+          if (row.kind !== undefined && row.nativeSessionId !== "")
+            conversations.set(
+              `${device}\u0000${row.sessionId}`,
+              `${row.kind}\u0000${row.nativeSessionId}`,
+            );
+        } else held.others += 1;
+      }
+    }
+    const order = (a: FiguresPart, b: FiguresPart): number =>
+      project.devices.indexOf(a.device) - project.devices.indexOf(b.device) ||
+      (a.projectId < b.projectId ? -1 : a.projectId > b.projectId ? 1 : 0);
+    return {
+      key: project.key,
+      ...(movedTo !== undefined ? { movedTo } : {}),
+      devices: [...project.devices],
+      parts: [...parts.values()]
+        .filter(({ part }) => part.sessions.size > 0)
+        .map(({ part, others }): FiguresPart => ({ ...part, whole: others === 0 }))
+        .sort(order),
+      conversations,
+    };
+  }
+
+  /** `project.figures` — the merged panels (contracts' project.figures). */
+  async figures(
+    params: ProjectFiguresParams,
+    maxContributionRows?: number,
+  ): Promise<ProjectFiguresResult> {
+    const plan = this.figuresPlan(params.key);
+    return await projectFigures(
+      plan,
+      { sinceMs: params.sinceMs, offsetMinutes: params.offsetMinutes },
+      this.#figuresAsk(),
+      maxContributionRows,
+    );
+  }
+
+  /** `project.figuresDay` — one day's hours over the whole parts. */
+  async figuresDay(params: ProjectFiguresDayParams): Promise<ProjectFiguresDayResult> {
+    const plan = this.figuresPlan(params.key);
+    return await projectFiguresDay(plan, params.day, params.offsetMinutes, this.#figuresAsk());
+  }
+
+  #figuresAsk(): FiguresAsk {
+    const figures = this.#opts.figures;
+    if (figures === undefined)
+      throw new RpcCallError("UNAVAILABLE", "this desktop reads no figures", false, {
+        service: PROJECT_DOORS.SERVICE,
+        state: "figures-unwired",
+      });
+    return { ...figures, self: this.#opts.deviceId() };
   }
 
   // ── the act ──
