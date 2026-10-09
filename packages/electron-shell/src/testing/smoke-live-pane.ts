@@ -384,6 +384,17 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
       epoch: row?.texture?.epoch ?? null,
     };
   };
+  /** The desk at rest before a watch: its frame count the same over 250 ms, waited up to 3 s (a desk that never rests is
+   * watched anyway, and said by the judge). */
+  const atRest = async (): Promise<void> => {
+    let last = -1;
+    for (let i = 0; i < 12; i += 1) {
+      const now = (await counts()).frames;
+      if (now === last) return;
+      last = now;
+      await sleep(250);
+    }
+  };
   const watch = async (ms: number): Promise<{ ms: number; from: Counts; to: Counts }> => {
     const from = await counts();
     const t0 = Date.now();
@@ -555,6 +566,9 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
     problems.push(...judgeLive(live));
 
     // ── IDLE: the page still — nothing drawn, nothing presented ───────────────────────────────────────────────────
+    // watched from rest: a frame the desk still owes (after the LIVE row's captures, or another kind's owed wake) is not the
+    // page's
+    await atRest();
     const idle = await watch(LIVE_ROWS.watchMs);
     said.idle = idle;
     problems.push(...judgeIdle(idle));
