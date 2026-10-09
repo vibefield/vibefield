@@ -94,7 +94,13 @@ import {
   type LiveSurfaceLabRendererResult,
 } from "./live-surface-lab-contract";
 import { type LoopbackExchange, recordLoopback } from "./loopback-network";
-import { peekGeometryRung, peekSeededHitRung, peekShotDir } from "./peek-rungs";
+import {
+  PEEK_SEED_WORD,
+  peekGeometryRung,
+  peekPhotosRung,
+  peekSeededHitRung,
+  peekShotDir,
+} from "./peek-rungs";
 import {
   type CountVector,
   countVector,
@@ -8005,14 +8011,13 @@ export async function runSmokeGodview(opts: {
     //      — receded to 0.98 and out of reach; Esc folds it and the field rests
     //      with no transform at all. Then the real hit: a word only the seeded
     //      reply says, found by the real rosettad as Everything asks, searched
-    //      by ⌘F and opened by ↵ — the room lands at the line; photographed
-    //      light and dark on the way (offscreen captures).
+    //      by ⌘F and opened by ↵ — the room lands at the line. (Its photographs
+    //      are the smoke's last rung.)
     verdict["peek"] = await peekGeometryRung(win);
     verdict["peekSeededHit"] = await peekSeededHitRung(win, {
       handle: opts.handle,
       seeded: (verdict["historySession"] as { opened?: boolean }).opened === true,
-      word: "harbour",
-      shotDir: peekShotDir(),
+      word: PEEK_SEED_WORD,
     });
     pressViewKey(win, "godview");
     await untilRenderer(
@@ -8963,6 +8968,15 @@ export async function runSmokeGodview(opts: {
         unmeasured: error instanceof Error ? error.message : String(error),
       };
     }
+
+    // THE PEEK, PHOTOGRAPHED (P1 §6) — last: the popup holding the seeded word
+    //      in History, light then dark, then Auto again; its theme round trip
+    //      disturbed a later rung's typing when it ran mid-smoke (peek-rungs.ts).
+    verdict["peekPhotos"] = await peekPhotosRung(win, {
+      seeded: (verdict["historySession"] as { opened?: boolean } | undefined)?.opened === true,
+      word: PEEK_SEED_WORD,
+      shotDir: peekShotDir(),
+    });
 
     verdict["ok"] = true;
   } catch (error) {

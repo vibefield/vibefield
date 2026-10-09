@@ -2,6 +2,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import type { FielddHandle } from "@vibefield/fieldd-supervisor";
 import { app, type BrowserWindow } from "electron";
+import { HISTORY_SEED_WORDS } from "./typed-agent";
 
 // THE PEEK'S RUNGS in `pnpm smoke:godview` (GV-D8/D9/D10, 2026-10-08; DESIGN.md
 // §8 "Search — the Peek"; the lane brief P1 §6). Both ride the History rung,
@@ -15,10 +16,13 @@ import { app, type BrowserWindow } from "electron";
 //     to no transform at all (a resting transform would bury the head under
 //     the drag strip);
 //   · the SEEDED HIT rung: a word only the seeded reply says, found by the
-//     real rosettad as Everything asks it; ⌘F, the word, the row read and the
-//     popup photographed in light and dark (offscreen captures), then ↵ —
-//     the room lands AT THE LINE (`data-hit` / `.is-landed`), the row's
+//     real rosettad as Everything asks it; ⌘F, the word, the row read, then
+//     ↵ — the room lands AT THE LINE (`data-hit` / `.is-landed`), the row's
 //     newest matched line.
+//
+// And a third, LAST in the smoke: the popup photographed in light and dark
+// holding that word (offscreen captures) — last because its theme round trip
+// disturbs a later rung (`peekPhotosRung`).
 //
 // Test-only by construction: this module rides the smoke bundle
 // (dist/testing/smoke.cjs), which packaging omits.
@@ -176,6 +180,12 @@ export async function peekGeometryRung(win: BrowserWindow): Promise<Record<strin
   };
 }
 
+/** A word only the seeded conversation's reply says (`HISTORY_SEED_WORDS`). */
+export const PEEK_SEED_WORD = "harbour";
+if (!HISTORY_SEED_WORDS.split(/\s+/).includes(PEEK_SEED_WORD)) {
+  throw new Error(`the seeded reply no longer says “${PEEK_SEED_WORD}”`);
+}
+
 interface SearchAnswer {
   answered: boolean;
   hits: Array<{ sessionId: string; rootSessionId?: string; timelineId: string; at?: number }>;
@@ -186,14 +196,33 @@ async function capture(win: BrowserWindow, path: string): Promise<string> {
   return path;
 }
 
+/** ⌘F in History and the word typed into the Peek's field, until a row for
+ * it is listed and the foot counts what matched. */
+async function searchInPeek(win: BrowserWindow, word: string): Promise<PeekNow> {
+  await untilValue(win, "History, the view", VIEW_NOW, 10_000, (value) => value === "history");
+  chord(win, "f");
+  await untilValue(win, "⌘F opening the Peek", PEEK_NOW, 10_000, (value) =>
+    settled(JSON.parse(value) as PeekNow),
+  );
+  // the words stay between opens: select what the field holds, then type
+  await win.webContents.executeJavaScript(`document.querySelector('.vf-peek-pop input')?.select()`);
+  await type(win, word);
+  return JSON.parse(
+    await untilValue(win, "the Peek's row for the word", PEEK_NOW, 30_000, (value) => {
+      const now = JSON.parse(value) as PeekNow;
+      return now.rows > 0 && (now.foot ?? "").includes("matched");
+    }),
+  ) as PeekNow;
+}
+
 /** The real hit, over the person's own seeded conversation — enrolled and
  * opened by the History rung just before (typed-agent.ts' seed, build-hf L4):
  * a word only its reply says, found by the index unscoped as Everything asks,
- * then ⌘F in History, the word typed, the row read and photographed, and ↵ —
- * the room must land on the row's newest matched line. */
+ * then ⌘F in History, the word typed, the row read, and ↵ — the room must land
+ * on the row's newest matched line. */
 export async function peekSeededHitRung(
   win: BrowserWindow,
-  opts: { handle: FielddHandle; seeded: boolean; word: string; shotDir?: string },
+  opts: { handle: FielddHandle; seeded: boolean; word: string },
 ): Promise<Record<string, unknown>> {
   if (!opts.seeded) {
     return { unavailable: "the History rung seeded no conversation (no person, or no index)" };
@@ -214,20 +243,7 @@ export async function peekSeededHitRung(
       (a, b) => (b.at ?? Number.NEGATIVE_INFINITY) - (a.at ?? Number.NEGATIVE_INFINITY),
     )[0]?.timelineId;
 
-  await untilValue(win, "History, the view", VIEW_NOW, 10_000, (value) => value === "history");
-  chord(win, "f");
-  await untilValue(win, "⌘F opening the Peek", PEEK_NOW, 10_000, (value) =>
-    settled(JSON.parse(value) as PeekNow),
-  );
-  // the words stay between opens: clear what the field holds, then type
-  await win.webContents.executeJavaScript(`document.querySelector('.vf-peek-pop input')?.select()`);
-  await type(win, opts.word);
-  const found = JSON.parse(
-    await untilValue(win, "the Peek's row for the word", PEEK_NOW, 30_000, (value) => {
-      const now = JSON.parse(value) as PeekNow;
-      return now.rows > 0 && (now.foot ?? "").includes("matched");
-    }),
-  ) as PeekNow;
+  const found = await searchInPeek(win, opts.word);
   const row = String(
     await win.webContents.executeJavaScript(`(() => {
       const row = document.querySelector('.vf-peek-pop [role="option"]');
@@ -242,22 +258,6 @@ export async function peekSeededHitRung(
       });
     })()`),
   );
-  // Photographs, light then dark, the popup over the receded room — then the
-  // theme back to the run's own (Auto).
-  const shots: string[] = [];
-  if (opts.shotDir !== undefined) {
-    mkdirSync(opts.shotDir, { recursive: true });
-    const THEME_NOW = `document.documentElement.classList.contains("dark") ? "dark" : "light"`;
-    for (const theme of ["light", "dark"] as const) {
-      await win.webContents.executeJavaScript(
-        `window.vibefield.theme.set(${JSON.stringify(theme)})`,
-      );
-      await untilValue(win, `the ${theme} theme`, THEME_NOW, 5_000, (value) => value === theme);
-      await sleep(500);
-      shots.push(await capture(win, join(opts.shotDir, `peek-${theme}.png`)));
-    }
-    await win.webContents.executeJavaScript(`window.vibefield.theme.set("auto")`);
-  }
   // ↵ — the popup folds and the room lands on the line.
   key(win, "Return");
   const landed = await untilValue(
@@ -282,8 +282,40 @@ export async function peekSeededHitRung(
     foot: found.foot,
     row: JSON.parse(row) as unknown,
     landedOn: landed,
-    ...(shots.length > 0 ? { shots } : {}),
   };
+}
+
+/** The Peek photographed, light then dark, holding the seeded word over the
+ * receded room — then the theme back to the run's own (Auto) and the popup
+ * folded. LAST in the smoke, on purpose: a theme round trip through
+ * `window.vibefield.theme.set` mid-run made a later rung's synthesized ⇧1
+ * type nothing into the line's draft (2 of 2 runs; the same captures without
+ * the round trip passed), so nothing runs after it. */
+export async function peekPhotosRung(
+  win: BrowserWindow,
+  opts: { seeded: boolean; word: string; shotDir: string },
+): Promise<Record<string, unknown>> {
+  if (!opts.seeded) {
+    return { unavailable: "the History rung seeded no conversation (no person, or no index)" };
+  }
+  chord(win, "3");
+  const found = await searchInPeek(win, opts.word);
+  mkdirSync(opts.shotDir, { recursive: true });
+  const THEME_NOW = `document.documentElement.classList.contains("dark") ? "dark" : "light"`;
+  const shots: string[] = [];
+  for (const theme of ["light", "dark"] as const) {
+    await win.webContents.executeJavaScript(`window.vibefield.theme.set(${JSON.stringify(theme)})`);
+    await untilValue(win, `the ${theme} theme`, THEME_NOW, 5_000, (value) => value === theme);
+    await sleep(500);
+    shots.push(await capture(win, join(opts.shotDir, `peek-${theme}.png`)));
+  }
+  await win.webContents.executeJavaScript(`window.vibefield.theme.set("auto")`);
+  key(win, "Escape");
+  await untilValue(win, "Esc folding the photographed Peek", PEEK_NOW, 10_000, (value) => {
+    const now = JSON.parse(value) as PeekNow;
+    return !now.open && now.wrapTransform === "none";
+  });
+  return { word: opts.word, rows: found.rows, shots };
 }
 
 /** Where the Peek's photographs go: the run's own directory when it names
