@@ -8583,3 +8583,74 @@ Within it sit the contract's 21 marks (MV-D1…D22, D16 marks only), built as `d
 **Main's own red rows** — proven ON MAIN at `fc928566` (a throwaway worktree on a cargo target of its own, removed): preflight — the ghosttea sibling off its pin (`10d0b17bbc14` against the lock's `8a0930e86fc7`); check:deps — FS-1b's mille sibling links react and react-dom as ABSOLUTE symlinks into the main checkout, so `check-single-copy` walks into that checkout's tree and counts its loro, ICE and strata as second copies (any checkout but `vibe-field` itself reads red; the lane's own copies are one each); fieldd `agent-gateway.test.ts` AR-7b row 1 ("expected '{…audit_…' not to contain '/private/tmp/vf-ar7-…/work'"). **At `34fce7c4`** two of the three are gone — preflight is green (main moved ghosttea's pin to the sibling's `10d0b17`) and AR-7b passes (MV made its test assert what AR-7b guards) — and check:deps' mille row stands alone.
 
 **Not done here** (ROADMAP and DECISIONS carry each): the fast-forward itself — the orchestrator's, with James's word, once main is quiet and the main checkout's overlapping work (`DESIGN.md`, another session's logo work, at DK-19's hand-back) is committed by its owner; the fleet's upgrade, both Macs together (plan (93)); James's eleven two-Mac steps, which decide (20)'s stamp wait and (95)'s drag strip; Phase 6 — PORTALS, STRING, the OBJECT KIT, the AGENT'S EYES, the UPLOAD PLANE; James's parked calls (DECISIONS, "DK — the build's rulings"), among them DK-D22's packaged built-ins — a packaged build stages no plugin until WP8, so it has no comment pad until then or until the pad is compiled into field-app.
+
+## AR-8 the Peek (P1) and Jump to (P3) — History's search is the frame's Peek; a running session is a jump away (2026-10-09; `dfb503fd` — fifteen commits `5c4ffedb`→`dfb503fd`; lanes peek and jump over main `0b8de59c`, rebased by lane jump onto the desk's landing `56f848dc`, fast-forward)
+
+**Why:** James's "go with a" (2026-10-08): the History lead builds the Peek, open-at and Jump to, ruled 2026-10-02 in One Frame. GV-D8 is the Peek, GV-D9 the view's own scope, GV-D10 one frame button with ⌘F printed (the strip pill retires). The plan is `draft/history-finish/build-hf.md` §3b, with the lead's K1–K11 and M7.
+
+**What landed — the Peek (P1):**
+- **DESIGN.md first.**
+  - §5: the search scrim tier, black 16% light / 46% dark with blur 18 and saturate .9 (the sheets keep their 10/40, K7), and `--vf-shadow-search`.
+  - §6: the motion. The popup pops 260 ms from translate(-50%,-48%) scale .97, the scrim fades 240 ms, and the view recedes to 0.98 over 420 ms on the island curve. Reduced motion fades over 120 ms.
+  - §8: a new entry, "Search — the Peek". §8 History is rewritten: the band holds the button, ⌘G/⇧⌘G retire (K3), and the empty transcript says "Pick a session, or search with ⌘F." (K2).
+  - §10: the `search` surface replaces `history-search`; the one owner holds ten with the desk's `selection`.
+- **The Peek** (`frame/peek*`) is one 900×560 popup over the scrim. It has Live now and Everything (History opens on Everything; Live now says live sessions are searched in Godview until P2, K9), three dropdowns (project, prompts and replies, agent), the list (rows grouped by root; a neutral match, K1), the past peek (the session's matched lines, K8), and a foot with "Open at the line ↵".
+  - ⌘F (Ctrl+F off a Mac) is a product chord while History is the view (K4); Settings → Keyboard says it is kept from a pane.
+  - Keys: ↑↓, ↵, Esc. One surface at a time. The field is inert under the Peek and focus returns on close.
+  - Narrow windows clamp to 24 px clear at the sides and 96 at the top and foot, folding below a 680 popup (K6).
+  - Everything is local until DS-7 (K5).
+- **Open at the line.** A past row calls the room's `openAt({sessionId, timelineId})` through a module-store door that HistoryView consumes. A hit inside a delegated thread rides its root's row and opens there through `index.threads` (D2 carried from the retired interim test).
+- **`index.search` hits** carry their root's `cwd`, `projectId` and agent, additively, with fixtures. A quoted phrase matches whole on the real rosettad (witnessed), so the empty sentence may say so.
+- **The interim retires:** `history/search.ts` and its test, the room's `search` prop, the `history-search` surface and ⌘G/⇧⌘G. The catalog's interim plate gives way to two Peek plates over the shipping view.
+- **The recede under a cover (M7).** GV-D8's recede and DK-15 (§6: no transform reaches the desk's own box under a cover) meet in one full-window `.field-recede` box holding the still and the chrome. That box recedes to 0.98 and `.field-scene` never does. At rest the box makes no stacking context and takes no pointer (`:where(.field-recede) > * { pointer-events: auto }`).
+
+**What landed — Jump to (P3):**
+- **Liveness.** One plain `agent.list`, no subscription (PF6: a closed Godview asks nothing), joined on the room's native id. A session is live when its run is not stamped ended and its terminal is on this desktop's floor. It is asked again on a new choice, when History shows again, and at every press. The create keeps its last word while an answer is on the way, so nothing flickers.
+- **The line's create.** "Jump to this session" under the `jump` glyph while the session runs here, Resume otherwise. The palette follows the same door.
+  - Pressed: Godview opens and `LineViewDoor.reveal(sessionId)` brings forward the pane showing that floor session, else mounts it in the active pane. This is Godview's one new verb; puppeteer and the view modules are untouched.
+  - Notes: "Jumped to its pane" / "Could not jump — …".
+- **Resume refuses a running session** with "This session is running — Jump to it", and the create flips. Before P3, fieldd already refused a second run of a live conversation (PRECONDITION_FAILED `terminal-alive`, AR-4b's one-run law), so nothing ever ran twice. What was missing was the act and the words, and the survey's "defect lead" was that. fieldd's `terminal-alive` refusal gets the same words.
+
+**Witnesses:**
+- vitest: `peek`, `peek-plate`, `peek-model`, `history-jump`, the P3 block of `history-view`, `godview-deck` reveal, the line and head models, `ui-system-boundaries` (the recede structure and the box's resting CSS), and `design-system`.
+- `pnpm smoke:godview` (offscreen):
+  - `peek`: ⌘F gives 900×560 centred, the scrim with blur(18px) saturate(0.9), the receding box at 0.98, `.field-scene` identity and drawn at its layout size, `.field-wrap` `none`. At rest the box has no stacking properties and 0 of 9 sampled points hit it.
+  - `peekSeededHit`: "harbour" gives 1 row, and ↵ lands on the line.
+  - The Jump to rung: the seeded session is resumed from History, a second `agent.resume` is refused `terminal-alive`, ⌘D makes another pane active, and Jump to activates the agent's pane without mounting it again.
+  - The Peek's photographs come last (light and dark, then Auto).
+- Red-proofs:
+  - dropping the root facts (fieldd: 4 rows red);
+  - HistoryView ignoring `openAt`;
+  - a disabled ⌘F matcher (exactly the 3 ⌘F rows red);
+  - the D2 thread row;
+  - Jump to: the join, the exit check, the press-time check, the `terminal-alive` mapping, the flicker, and `reveal` always mounting (deck rows and the smoke rung red);
+  - the recede: the transform moved back onto `.field-wrap` makes the smoke fail with "a transform reached the desk's box under the Peek … drawn at 0.98".
+
+**The rebase onto the desk's landing (lane jump):**
+- Two commits stopped with conflicts.
+  - UI_SYSTEM's catalog list: the desk's, plus the Peek's bullet.
+  - `field.tsx`: DK had removed the keymap overrides line.
+  - `frame-surface.ts`: `search` beside `selection`; `history-search` gone.
+  - The `design-system` and `ui-system-boundaries` tests: the desk's sources, plus the Peek's.
+  - `Composer.tsx`: DK-13's create, with History's branch calling `resumeOrJump()`.
+- Everything else auto-merged.
+- A retired plugin's ignored build folders (`plugins/field-tools`, `plugins/note`, `examples/plugins/widgetlab`) left in a worktree turn `glyphs.test.tsx` red with ENOENT. A fresh checkout has none.
+
+**Validation** (`/Volumes/SamsungRed/lanes/jump/`):
+- The lane's `gate.sh` on `dfb503fd`, the landed tree: `verify.log` **EXIT 0**, `smoke.log` EXIT 0, `smoke-godview.log` EXIT 0 (load 5–27).
+- The first run on `dfb503fd` was red only in fieldd teardown (doc-sync ENOTEMPTY, the rosettad stop ladder's announce file), with no fieldd diff; both files were 62/62 alone.
+- Earlier tips:
+  - P1 alone on `0b8de59c`: gate run 7 EXIT 0 (lane peek).
+  - P3 on it: first run EXIT 0.
+  - The rebased `bf9f4caf`: EXIT 0 after one run red on the stale plugin folders.
+
+**Found:**
+- A theme round trip mid-smoke (light → dark → auto) made a much later rung's synthesized typing insert nothing, in 2 of 2 runs. The photographs run last now; the cause is unknown, and whether real typing after a theme switch is affected is unverified.
+- A conversation run by a vendor CLI outside VibeField (Terminal.app) is in neither the fold nor `runContinuing`, so Resume would start a second process on it. This was true before P3.
+- history-view's `until` (5 s) races vitest's 5 s timeout, so one red row cascades.
+- The ground-truth seeded session has no title ("Untitled session").
+
+**Next:**
+- P2, Live now in Godview: puppeteer's FindSheet leaves VibeField, and the monitor publishes a find door. It waits on docket PK2 (the button until Stories), PK4 (⌥0–⌥9) and PK5 (live search from History).
+- PK3 decides the past peek's picture (rosetta's reader, lean).
+- The MV lead: Godview gained one door verb, `reveal` (`341b56a5`). No view module changed.
