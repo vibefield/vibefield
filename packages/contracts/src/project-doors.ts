@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AgentProviderId, IndexCatalogSession, IndexCatalogSource } from "./agent-index";
+import { ProjectKey } from "./project-places";
 import { PROJECT_DOORS } from "./registries";
 import { RowsSubscribeParams, rowsDelta, rowsOpen } from "./rows";
 
@@ -89,12 +90,6 @@ export const PlaceRef = z
   })
   .passthrough();
 export type PlaceRef = z.infer<typeof PlaceRef>;
-
-/** A project's key: `r:<record id>` once a record binds, else a provisional
- * `p1:` key (opaque; fieldd `projects/normalize.ts`). Readers compare it,
- * never parse it. */
-export const ProjectKey = z.string().min(1).max(256).regex(/^\S+$/);
-export type ProjectKey = z.infer<typeof ProjectKey>;
 
 /** An anchor as a REQUEST names one (`project.get {anchor}`): a first
  * commit, an identity remote's key, or a place — and never a local-path
@@ -330,6 +325,14 @@ export const ProjectChangesDelta = rowsDelta(z.never())
     regrouped: z.array(ProjectRegrouped).optional(),
     /** which desktops' catalogs moved, as a hint */
     devices: z.array(z.string().min(1)).optional(),
+    /** PJ-4 — which catalog tables moved (`INDEX_CATALOG_TABLES`' names, an
+     * open vocabulary), as a hint, when NOTHING ELSE did
+     * since `since`: a page that holds a table no ping names keeps it (the
+     * History room re-pages its threads only when `threads` moved, AR-8 L1).
+     * Absent when the grouping's answer moved too, or a desktop's standing —
+     * a reader then re-asks everything it shows. A table this reader does not
+     * know is read as "everything moved". */
+    tables: z.array(z.string().min(1)).optional(),
   })
   .passthrough();
 export type ProjectChangesDelta = z.infer<typeof ProjectChangesDelta>;

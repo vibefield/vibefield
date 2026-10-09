@@ -34,6 +34,7 @@ import {
   type ProjectIntentWriter,
   type ProjectView,
   parseProjectAsk,
+  readsProjects,
 } from "../src/projects/project-doors";
 import { ProjectGroups, type ProjectGroupsChange } from "../src/projects/project-groups";
 
@@ -619,6 +620,139 @@ describe("project.subscribe", () => {
     expect(stale.open).toHaveProperty("snapshot");
     sub.dispose();
     doors.dispose();
+  });
+});
+
+describe("PJ-4 — the join column (A-D4): every catalog session carries its project's key", () => {
+  const keyed = (w: ReturnType<typeof world>) =>
+    new Map(
+      w.doors.keyed(w.sessions.rows()).map((row) => [row.sessionId, row.projectKey] as const),
+    );
+
+  it("tags each of this desktop's rows with the key project.sessions files it under", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const page = ProjectListResult.parse(w.doors.list({}, WINDOW_VIEW, 100));
+    const keys = keyed(w);
+    // the join is the doors' own: every session project.sessions answers
+    // under a key carries exactly that key — the window groups nothing
+    for (const project of page.rows) {
+      const filed = ProjectSessionsResult.parse(
+        w.doors.sessions({ key: project.key, devices: ["dev-a"] }, WINDOW_VIEW, 100),
+      );
+      for (const row of filed.rows)
+        expect(keys.get(row.sessionId), row.sessionId).toBe(project.key);
+    }
+    const byName = new Map(page.rows.map((row) => [row.name, row.key]));
+    expect(Object.fromEntries(keys)).toEqual({
+      s1: byName.get("app"),
+      // the nested checkout's session: its own place, the same project
+      s2: byName.get("app"),
+      s3: byName.get("notes"),
+      s4: byName.get("Home"),
+      s5: byName.get("app"),
+    });
+  });
+
+  it("leaves the column off a row no place holds, and never trusts one a row arrived with", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const [stray, forged] = w.doors.keyed([
+      session("dev-a", "x1", "/Volumes/Elsewhere/thing", 5),
+      { ...session("dev-a", "x2", "/Users/me/notes/a", 5), projectKey: "r:forged" },
+    ]);
+    expect(stray).not.toHaveProperty("projectKey");
+    expect(forged?.projectKey).toBe(keyed(w).get("s3"));
+    // no cwd, no key
+    expect(w.doors.keyed([{ ...session("dev-a", "x3", "", 5) }])[0]).not.toHaveProperty(
+      "projectKey",
+    );
+  });
+
+  it("reads a peer's row by ITS places, never this desktop's same-spelled folder", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const app = appOf(w)!.key;
+    const [t1, spoofed] = w.doors.keyed([
+      session("dev-b", "t1", "/home/me/src/app", 60),
+      // dev-b has no place at this desktop's /Users/me/app spelling
+      session("dev-b", "t9", "/Users/me/app/src", 60),
+    ]);
+    expect(t1?.projectKey).toBe(app);
+    expect(spoofed).not.toHaveProperty("projectKey");
+  });
+
+  it("answers rows without the column before this boot's first grouping — never a refusal", () => {
+    const w = world();
+    const rows = w.doors.keyed(w.sessions.rows());
+    expect(rows).toHaveLength(5);
+    for (const row of rows) expect(row).not.toHaveProperty("projectKey");
+    expect(w.doors.keyOf("dev-a", "/Users/me/app")).toBeUndefined();
+  });
+
+  it("files a delegated thread under its ROOT's project, whatever folder it worked in", () => {
+    const w = world();
+    w.groups.regroupNow();
+    const threads = w.doors.keyedThreads(
+      [
+        { sessionId: "c1", rootSessionId: "s1", cwd: "/Users/me/notes" },
+        { sessionId: "c2", rootSessionId: "gone" },
+      ],
+      (id) => w.sessions.get(id),
+    );
+    expect(threads[0]?.projectKey).toBe(appOf(w)!.key);
+    expect(threads[1]).not.toHaveProperty("projectKey");
+  });
+
+  it("is a reader's column: never answered to a peer daemon (DS-L4)", () => {
+    expect(readsProjects(WINDOW)).toBe(true);
+    expect(readsProjects(PHONE)).toBe(true);
+    expect(readsProjects(ctx({ kind: "peer-fieldd", deviceId: "dev-b" }))).toBe(false);
+    expect(readsProjects(ctx({ kind: "plugin", id: "p", scopes: ["index.search"] }))).toBe(false);
+  });
+
+  it("a ping names the catalog tables that moved — only when nothing else did", async () => {
+    const w = world();
+    w.groups.regroupNow();
+    const frames: unknown[] = [];
+    const sub = w.doors.subscribe({}, (payload) => frames.push(payload));
+    sub.start();
+    const waitFor = async (n: number) => {
+      const deadline = Date.now() + 3_000;
+      while (frames.length < n) {
+        if (Date.now() > deadline) throw new Error("timed out");
+        await new Promise((r) => setTimeout(r, 5));
+      }
+    };
+    // this desktop's threads alone: the room keeps its roots
+    w.doors.catalogChanged("dev-a", "threads");
+    await waitFor(1);
+    expect(ProjectChangesDelta.parse(frames[0]).tables).toEqual(["threads"]);
+    // two tables in one ping
+    w.doors.catalogChanged("dev-a", "threads");
+    w.doors.catalogChanged("dev-a", "sessions");
+    await waitFor(2);
+    expect(ProjectChangesDelta.parse(frames[1]).tables).toEqual(["sessions", "threads"]);
+    // a desktop's standing (no table) — everything is asked again
+    w.doors.catalogChanged("dev-b");
+    await waitFor(3);
+    expect(ProjectChangesDelta.parse(frames[2]).tables).toBeUndefined();
+    // a new grouping beside a threads move — everything again
+    w.doors.catalogChanged("dev-a", "threads");
+    w.projects.upsert([
+      {
+        device: "dev-a",
+        projectId: "r-notes",
+        name: "notes",
+        rootPaths: [],
+        sessionCount: 0,
+        places: [place("pl-notes", "/Users/me/notes", repo())],
+      },
+    ]);
+    w.groups.regroupNow();
+    await waitFor(4);
+    expect(ProjectChangesDelta.parse(frames[3]).tables).toBeUndefined();
+    sub.dispose();
   });
 });
 

@@ -23,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import {
   CONTRACTS_VERSION,
   computeEffectiveGrants,
+  IndexSessionsResult,
   LAYOUT,
   PEER_FIELDD_SCOPES,
   type PlaceFacts,
@@ -238,7 +239,7 @@ beforeAll(async () => {
   const window = await open(`ws://127.0.0.1:${daemon.controlPort}`);
   await helloAs(
     window,
-    daemon.tokens.mint(["project.read", "settings.manage"], "pj3-window").token,
+    daemon.tokens.mint(["project.read", "settings.manage", "index.search"], "pj3-window").token,
   );
   world = {
     daemon,
@@ -476,4 +477,37 @@ describe("PJ-3 — the phone reads its desktop's projects (P1, D8, D10)", () => 
       expect(grants.denied, source).toEqual([{ capability: "project.read", reason: "entry-kind" }]);
     }
   });
+});
+
+describe("PJ-4 — the join column over the real door (A-D4)", () => {
+  it("a window's listing carries each session's project key — project.list's — and a peer daemon's none (DS-L4)", async () => {
+    const projects = ProjectListResult.parse(await world.window.call("project.list", {}));
+    // by place, not by name: the window renamed the app's project above
+    const keyAt = (placeId: string): string => {
+      const row = projects.rows.find((r) => r.places.some((p) => p.ref.placeId === placeId));
+      if (row === undefined) throw new Error(`no project holds ${placeId}`);
+      return row.key;
+    };
+    const listing = IndexSessionsResult.parse(
+      await world.window.call("index.sessions", { scope: "local", limit: 500 }),
+    );
+    const keys = Object.fromEntries(listing.rows.map((row) => [row.sessionId, row.projectKey]));
+    expect(keys).toEqual({
+      "s-app-1": keyAt("pl_app"),
+      "s-app-2": keyAt("pl_app"),
+      "s-notes": keyAt("pl_notes"),
+      "s-fork": keyAt("pl_fork"),
+    });
+    // the phone is the person's own device: it reads the same column
+    const phone = IndexSessionsResult.parse(
+      await world.phone.call("index.sessions", { scope: "local", limit: 500 }),
+    );
+    expect(phone.rows.find((row) => row.sessionId === "s-app-1")?.projectKey).toBe(keyAt("pl_app"));
+    // a peer daemon groups its own: this desktop's aggregate never reaches it
+    const peer = IndexSessionsResult.parse(
+      await world.peer.call("index.sessions", { scope: "local", limit: 500 }),
+    );
+    expect(peer.rows.length).toBe(4);
+    for (const row of peer.rows) expect(row).not.toHaveProperty("projectKey");
+  }, 30_000);
 });

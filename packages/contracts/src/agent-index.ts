@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { isAbsoluteDesktopPath } from "./paths";
-import { PlaceFactsList } from "./project-places";
+import { PlaceFactsList, ProjectKey } from "./project-places";
 import { INDEX_TICKET, INDEX_TIMELINE } from "./registries";
 import { composeRemoteEndpoints, remoteDoorUrl, remoteEndpointSet } from "./remote-endpoints";
 import {
@@ -679,6 +679,16 @@ export const IndexSession = z
     family: z.string().min(1).optional(),
     provider: AgentProviderId.optional(),
     startedAt: z.number().finite().optional(),
+    // PJ-4 (A-D4, the lead's decision 2026-10-09; `thinking-project-places.md`
+    // PJ-L1, DS-L4) — the JOIN COLUMN: the PJ project whose place holds the
+    // session's cwd by the longest path, the key `project.list` answers it
+    // under. Computed by the ANSWERING daemon from its own grouping at the
+    // moment it answers (beside `family`, DS-D9's column), never replicated,
+    // so a window maps the room's rows to projects without grouping anything.
+    // Absent on a lookup's rows, for a cwd no place holds yet (a project the
+    // place scanner has not read: the room's unassigned bucket says so), and
+    // in an answer to a peer daemon (it groups its own, DS-L4).
+    projectKey: ProjectKey.optional(),
   })
   .passthrough();
 export type IndexSession = z.infer<typeof IndexSession>;
@@ -1072,6 +1082,10 @@ export const IndexThread = z
       .passthrough()
       .nullable(),
     streamState: z.string(),
+    /** PJ-4 (A-D4) — its ROOT's project key (`IndexSession.projectKey`): a
+     * thread hangs under its root, whatever folder it worked in, as rosetta
+     * folds a child's figures into its root's. Absent while the root's is. */
+    projectKey: ProjectKey.optional(),
   })
   .passthrough();
 export type IndexThread = z.infer<typeof IndexThread>;

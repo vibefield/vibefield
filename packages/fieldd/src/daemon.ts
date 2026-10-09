@@ -237,6 +237,7 @@ import {
   admitProjectWriter,
   ProjectDoors,
   parseProjectAsk,
+  readsProjects,
 } from "./projects/project-doors";
 import { ProjectGroups } from "./projects/project-groups";
 import { ProjectRecords, projectIntentWriter } from "./projects/project-records";
@@ -1889,11 +1890,15 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       // listing's
       if (parsed.data.nativeSessionIds !== undefined)
         return await index.sessions(parsed.data.nativeSessionIds);
-      return requireMesh().sessions({
+      const page = requireMesh().sessions({
         ...parsed.data,
         scope: ctx.principal.kind === "peer-fieldd" ? "local" : parsed.data.scope,
         limit: tailnetRowLimit(ctx.principal, parsed.data.limit, INDEX_MESH.PAGE_DEFAULT_LIMIT),
       });
+      // PJ-4 (A-D4) — the join column: each row's PJ project, from THIS
+      // desktop's grouping at this moment, for a caller the projects answer
+      // (a window, the phone) and never a peer daemon (DS-L4)
+      return readsProjects(ctx) ? { ...page, rows: projectDoors.keyed(page.rows) } : page;
     });
     api.register("index.search", async (ctx, params) => {
       const parsed = IndexSearchParams.safeParse(params);
@@ -1983,7 +1988,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     const threadsPage = createThreadsPager(indexCatalog);
     api.register("index.threads", (ctx, params) => {
       checkThreadsCaller(ctx);
-      return threadsPage(params);
+      const page = threadsPage(params);
+      // PJ-4 (A-D4) — each thread carries its ROOT's project key
+      return {
+        ...page,
+        rows: projectDoors.keyedThreads(page.rows, (id) => indexCatalog.sessions.get(id)),
+      };
     });
     // QL (QL-D9) — the empty pane launcher's list: a folder's past sessions
     // (its rosetta project) or every project's. A projection like the two
@@ -5190,7 +5200,7 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     indexMesh.on("change", (event: { scope: string; table?: string; device?: string }) => {
       // PJ-3 — a visible projects page re-asks on any catalog's move (its
       // sessions, its standing), as the History page's pings do
-      projectDoors.catalogChanged(event.device);
+      projectDoors.catalogChanged(event.device, event.table);
       if (event.scope !== "mesh") return;
       if (event.table === "projects") placeScanner.peersChanged();
       projectGroups.regroupSoon();
