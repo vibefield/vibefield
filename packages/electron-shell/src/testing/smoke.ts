@@ -75,6 +75,7 @@ import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { labProfileProof } from "./godview-lab-profile";
+import { jumpToRung } from "./jump-rungs";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
   LIVE_SURFACE_LAB_ALL_TICKETS,
@@ -8923,6 +8924,32 @@ export async function runSmokeGodview(opts: {
       win.webContents.off("console-message", hearLine);
     }
     verdict["lineKeys"] = lineKeys;
+
+    // JUMP TO (P3; DESIGN.md §8 "History") — the seeded conversation, started by
+    //      History's own Resume (the typed stub), is shown again from History by
+    //      Jump to: the agent's pane made the active one in Godview, never
+    //      mounted twice; fieldd refuses a second run of it; its PTY ended,
+    //      History says Resume again. After 11h, because its end leaves the
+    //      active pane showing an ENDED session, which no row that types into a
+    //      shell could use; the warm open below restores past it (it expects a
+    //      killed pane already) and the Peek's photographs never type in a pane.
+    verdict["jumpTo"] = await jumpToRung(win, {
+      handle: opts.handle,
+      staged: opts.typedAgent,
+      seeded: (verdict["historySession"] as { opened?: boolean } | undefined)?.opened === true,
+      deck,
+      pressViewKey: (view) => pressViewKey(win, view),
+      split: async () => {
+        const before = await deckSettled(deck, 1_000, 30_000);
+        await focusDeck(win);
+        pressChord(win, SPLIT_CHORD.key, SPLIT_CHORD.shift);
+        await deck.until(
+          (facts) => facts.panes === before.panes + 1,
+          `${SPLIT_CHORD.label} to split the agent's pane`,
+          45_000,
+        );
+      },
+    });
 
     // THE WARM OPEN — the AFTER number, and the row that actually tests GT-D14.
     //
