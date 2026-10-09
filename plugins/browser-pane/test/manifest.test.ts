@@ -99,7 +99,10 @@ describe("vibefield.browser-pane", () => {
   });
 
   it("asks for a live page's two scopes — the desk's LIVE service opens a page only for an object whose plugin holds both (PT-2)", () => {
-    expect([...browserPaneManifest.capabilities].sort()).toEqual(["surface.attach", "surface.browser"]);
+    expect([...browserPaneManifest.capabilities].sort()).toEqual([
+      "surface.attach",
+      "surface.browser",
+    ]);
   });
 
   it("activates as any plugin does, binding no command, surface or behavior — its kind is its export", async () => {
