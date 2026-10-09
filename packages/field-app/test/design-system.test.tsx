@@ -46,6 +46,8 @@ beforeEach(async () => {
   document.body.appendChild(container);
   root = createRoot(container);
   await act(async () => root?.render(<DesignSystemPage />));
+  // Rendering the whole catalog takes seconds alone and passes vitest's 10 s hook default
+  // under a loaded gate (2026-10-08: red in most loaded gates since 10-07).
 }, PAGE_BUDGET_MS);
 
 afterEach(() => {
@@ -139,7 +141,6 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
         `Missing section for ${link.textContent}`,
       ).not.toBeNull();
     }
-    expect(container?.querySelector('#living-mark a[href="./logo-studio.html"]')).not.toBeNull();
     expect(container?.textContent).toContain("The field, in one frame.");
     expect(container?.textContent).toContain("The actual field, under glass");
     expect(container?.textContent).toContain("Infinite canvas and visual tuning workbench");

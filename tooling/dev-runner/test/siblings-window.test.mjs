@@ -232,7 +232,17 @@ test("stage-package.mjs consults the decision and keeps its refusal", () => {
   // asks and still refuses. Reintroducing an unconditional registry row would
   // be silent everywhere else.
   const script = readFileSync(join(REPO_ROOT, "scripts/stage-package.mjs"), "utf8");
-  assert.match(script, /import \{ sidecarStagingSource \} from "\.\/siblings\.mjs"/);
+  assert.match(script, /import \{[^}]*\bsidecarStagingSource\b[^}]*\} from "\.\/siblings\.mjs"/);
   assert.match(script, /sidecarStagingSource\(repoRoot\)/);
   assert.match(script, /stage REFUSED/);
+});
+
+test("stage-package.mjs stages the lock's own rosettad, optionally (AR-8, L3)", () => {
+  // The same narrow guard for the other sibling binary a package carries: the
+  // stage asks the lock's reader for rosettad (never a path of its own), and the
+  // row stays optional — a package without it boots and says so in History.
+  const script = readFileSync(join(REPO_ROOT, "scripts/stage-package.mjs"), "utf8");
+  assert.match(script, /import \{[^}]*\brosettadBinary\b[^}]*\} from "\.\/siblings\.mjs"/);
+  assert.match(script, /rosettadBinary\(repoRoot\)/);
+  assert.match(script, /stage: `bin\/\$\{rosettadName\}`,[^}]*\boptional:/);
 });

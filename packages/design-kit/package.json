@@ -6,7 +6,6 @@
   "exports": {
     ".": "./src/index.ts",
     "./face": "./src/face.tsx",
-    "./logo": "./src/logo/index.ts",
     "./tokens.css": "./src/tokens.css",
     "./primitives": "./src/primitives.tsx",
     "./icons": "./src/icons/index.tsx",
@@ -24,7 +23,6 @@
   },
   "devDependencies": {
     "@types/react": "catalog:",
-    "@webgpu/types": "^0.1.74",
     "react": "catalog:",
     "typescript": "catalog:"
   }

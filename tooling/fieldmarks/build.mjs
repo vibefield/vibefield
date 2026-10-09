@@ -13,7 +13,7 @@ const temp = await mkdtemp(join(tmpdir(), "vf-fieldmarks-build-"));
 
 try {
   execFileSync("python3", [join(root, "tooling/fieldmarks/generate.py")], { stdio: "inherit" });
-  const archive = await readFile(join(root, "docs/design/vibefield-fieldmarks.zip"));
+  const archive = await readFile(join(root, "draft/design/vibefield-fieldmarks.zip"));
   const archiveUrl = `data:application/zip;base64,${archive.toString("base64")}`;
   const define = {
     "process.env.NODE_ENV": '"production"',
@@ -73,7 +73,7 @@ process.stdout.write(renderToString(createElement(FieldmarksReport, { archiveUrl
 </body>
 </html>
 `;
-  const output = join(root, "docs/design/fieldmarks.html");
+  const output = join(root, "draft/design/fieldmarks.html");
   await writeFile(output, html);
   console.log(`Built ${output} (${Buffer.byteLength(html).toLocaleString()} bytes).`);
   console.log(

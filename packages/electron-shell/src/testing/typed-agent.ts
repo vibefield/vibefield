@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { delimiter, dirname, isAbsolute, join, resolve, sep } from "node:path";
@@ -36,6 +37,13 @@ import {
 //     (fieldd/test/agent-gateway-floor.ts) — so every pane is born theirs, the
 //     agent's own settings are read from THEIR home, and no line the smoke
 //     types reaches the owner's shell history.
+//
+// AR-8 (L4): the person also has a HISTORY — one synthesized conversation with
+// the typed agent, in that agent's own transcript layout under their HOME, which
+// is the home rosettad indexes (fieldd's `--home` is its own HOME, the
+// person's). The History rung enrolls the agent and opens it: the body's words
+// rendering in the room are the packaged origin's fetch, preflight and socket
+// working from a real Chromium page.
 //
 // And the pair is handed one seam of fieldd's own: `FIELDD_AGENT_SEARCH_PATH`
 // (fieldd `bin.ts`), the stub's directory — the install inventory then finds
@@ -243,6 +251,91 @@ autoload -Uz add-zsh-hook && add-zsh-hook precmd _vf_person_cwd
   writeFileSync(join(person, ".profile"), `echo ".profile $$" >> '${ran}'\n`);
 }
 
+/** Words only the seeded conversation's BODY carries — the agent's reply —
+ * so the History rung can tell its transcript rendered from a catalog row. */
+export const HISTORY_SEED_WORDS = "Lanterns hang along the harbour wall tonight";
+
+/** The person's one conversation with the typed agent, written where that agent
+ * keeps its transcripts (the catalog's layout root under their HOME) in its own
+ * line format — a prompt and a reply, timed a minute ago so no recency window
+ * hides it (the shape rosetta's own adapter tests write, build-hf L4). */
+function writePersonTranscript(
+  person: string,
+  work: string,
+  row: (typeof AGENT_CATALOG)[number],
+): { kind: string; nativeSessionId: string } {
+  const kind = row.seams.rosetta?.kind;
+  const layoutRoot = row.layoutRoot;
+  if (kind === undefined || layoutRoot === null || !layoutRoot.startsWith("~/")) {
+    throw new Error(
+      "the typed agent's catalog row names no rosetta kind or home layout: History has nothing to seed",
+    );
+  }
+  const sessionId = randomUUID();
+  const prompt = randomUUID();
+  const reply = randomUUID();
+  const at = (secondsAgo: number) => new Date(Date.now() - secondsAgo * 1_000).toISOString();
+  const common = {
+    isSidechain: false,
+    userType: "external",
+    cwd: work,
+    sessionId,
+    version: "2.1.241",
+    gitBranch: "HEAD",
+  };
+  const lines = [
+    {
+      ...common,
+      parentUuid: null,
+      type: "user",
+      uuid: prompt,
+      timestamp: at(60),
+      message: { role: "user", content: "Where are the lanterns?" },
+    },
+    {
+      ...common,
+      parentUuid: prompt,
+      type: "assistant",
+      uuid: reply,
+      timestamp: at(30),
+      message: {
+        id: "msg_smoke_0000",
+        type: "message",
+        role: "assistant",
+        model: "claude-opus-5",
+        content: [{ type: "text", text: `${HISTORY_SEED_WORDS}.` }],
+        stop_reason: "end_turn",
+        stop_sequence: null,
+        stop_details: null,
+        // the recorded shape the adapter requires: the four counters, the cache
+        // split, and the two nullable-never-absent fields (a reply without them
+        // is a hard error and only the prompt indexes — measured)
+        usage: {
+          input_tokens: 12,
+          output_tokens: 9,
+          cache_creation_input_tokens: 0,
+          cache_read_input_tokens: 0,
+          cache_creation: { ephemeral_1h_input_tokens: 0, ephemeral_5m_input_tokens: 0 },
+          inference_geo: "",
+          service_tier: "standard",
+        },
+      },
+    },
+  ];
+  const projects = join(
+    person,
+    layoutRoot.slice(2),
+    "projects",
+    work.replace(/[^A-Za-z0-9]/g, "-"),
+  );
+  mkdirSync(projects, { recursive: true });
+  writeFileSync(
+    join(projects, `${sessionId}.jsonl`),
+    `${lines.map((line) => JSON.stringify(line)).join("\n")}\n`,
+  );
+  return { kind, nativeSessionId: sessionId };
+}
+
 /** What `stageTypedAgent` put in place, for the step that types. */
 export interface StagedTypedAgent {
   /** the catalog id the stub stands in for */
@@ -260,6 +353,9 @@ export interface StagedTypedAgent {
   work: string;
   /** the environment the pair is spawned with */
   environment: Record<string, string>;
+  /** AR-8 — the person's one conversation, for the History rung: the rosetta
+   * kind to enroll, and the session's own id */
+  history: { kind: string; nativeSessionId: string };
 }
 
 /**
@@ -298,6 +394,7 @@ export function stageTypedAgent(opts: {
   writeFileSync(stub, typedAgentStubSource(calls));
   chmodSync(stub, 0o755);
   writePersonFiles(person, ran);
+  const history = writePersonTranscript(person, work, row);
   // Every other agent's install names a path that is never created: whatever
   // fieldd would start for one of them fails to start.
   const absent = join(base, "absent");
@@ -326,5 +423,6 @@ export function stageTypedAgent(opts: {
       }),
       FIELDD_AGENT_SEARCH_PATH: bin,
     },
+    history,
   };
 }

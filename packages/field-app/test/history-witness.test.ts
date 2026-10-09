@@ -25,6 +25,13 @@
  *    read through the room's port — rosettad answers past its credential check
  *    with its own not_found (the ground truth's first row is a prompt, which
  *    names no file), never `wrong-scope`, and never the room's refusal words.
+ *  - AR-8 (L3, 2026-10-08): the room's transport speaks as the PACKAGED window
+ *    does — every socket and every read carries `Origin: vibefield-app://shell`
+ *    — and rosettad admits it: each read answers that origin in
+ *    `access-control-allow-origin`, the preflight a browser sends for the
+ *    grant's header is answered for it, and the session socket upgrades (101);
+ *    a foreign origin gets neither. verify-history-package.mjs runs this file
+ *    with FIELDD_ROSETTAD_BIN naming a package's own rosettad.
  *
  * The second desktop's home is SYNTHESIZED (build-hf.md L4, 2026-10-08): a
  * Claude-format transcript VibeField writes for its own test, its shape cribbed
@@ -39,7 +46,9 @@
  *    its root, opens on its own grant, and a search hit inside it keeps its
  *    id and resolves to its root: the room's grouping keeps it.
  */
+import { randomBytes } from "node:crypto";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { request as httpRequest } from "node:http";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -114,6 +123,85 @@ async function until<T>(
     if (Date.now() > deadline) throw new Error(`until: ${label}`);
     await sleep(150);
   }
+}
+
+/** The packaged renderer's origin (electron-shell `APP_ORIGIN`), which fieldd
+ * hands rosettad as `--allow-origin`. */
+const APP_ORIGIN = "vibefield-app://shell";
+/** An origin nothing admits. */
+const FOREIGN_ORIGIN = "https://example.invalid";
+
+/** The room's transport as the packaged window's: Node's WebSocket and fetch,
+ * each sending the app's Origin (a browser sends it unasked), and what rosettad
+ * answered — the URLs dialed, and every read's `access-control-allow-origin`. */
+const dialed: string[] = [];
+const answered: Array<{ url: string; status: number; allowOrigin: string | null }> = [];
+class AppOriginSocket extends WebSocket {
+  constructor(url: string | URL, protocols?: string | string[]) {
+    // Node's WebSocket takes an init with headers beside the protocols; the
+    // DOM's type knows only the protocols
+    super(url, { protocols, headers: { origin: APP_ORIGIN } } as unknown as string[]);
+    dialed.push(String(url));
+  }
+}
+const appFetch: typeof fetch = async (input, init) => {
+  const headers = new Headers(init?.headers);
+  headers.set("origin", APP_ORIGIN);
+  const response = await fetch(input, { ...init, headers });
+  answered.push({
+    url: input instanceof Request ? input.url : String(input),
+    status: response.status,
+    allowOrigin: response.headers.get("access-control-allow-origin"),
+  });
+  return response;
+};
+
+/** A session socket's upgrade asked by hand, carrying a grant and an Origin:
+ * the status rosettad answered (101 is the upgrade). */
+function upgradeStatus(url: string, grant: string, origin: string): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const asked = httpRequest(url.replace(/^ws/, "http"), {
+      headers: {
+        connection: "Upgrade",
+        upgrade: "websocket",
+        "sec-websocket-version": "13",
+        "sec-websocket-key": randomBytes(16).toString("base64"),
+        "sec-websocket-protocol": `rosetta, rosetta.grant.${grant}`,
+        origin,
+      },
+    });
+    asked.once("upgrade", (response, socket) => {
+      socket.destroy();
+      resolve(response.statusCode ?? 0);
+    });
+    asked.once("response", (response) => {
+      response.resume();
+      resolve(response.statusCode ?? 0);
+    });
+    asked.once("error", reject);
+    asked.end();
+  });
+}
+
+/** The preflight Chromium sends before a read that carries the grant's header. */
+async function preflight(
+  url: string,
+  origin: string,
+): Promise<{ status: number; allowOrigin: string | null; allowHeaders: string | null }> {
+  const response = await fetch(url, {
+    method: "OPTIONS",
+    headers: {
+      origin,
+      "access-control-request-method": "GET",
+      "access-control-request-headers": "authorization",
+    },
+  });
+  await response.body?.cancel();
+  return {
+    status: response.status,
+    allowOrigin: response.headers.get("access-control-allow-origin"),
+    allowHeaders: response.headers.get("access-control-allow-headers"),
+  };
 }
 
 /** Every frame fieldd sends the window, kept as it arrived: the door's bytes. */
@@ -245,7 +333,10 @@ describe.skipIf(
 
     // The adapters, over the window's client, every call logged.
     const doorCalls: string[] = [];
-    const ports = historyPortsOver(loggedDoor(window, doorCalls), { platform: process.platform });
+    const ports = historyPortsOver(loggedDoor(window, doorCalls), {
+      platform: process.platform,
+      sessions: { WebSocketImpl: AppOriginSocket, fetchFn: appFetch },
+    });
     cleanup.push(() => ports.dispose());
 
     // the catalog lane: the session reaches the room's meta, as rosetta's row
@@ -319,13 +410,47 @@ describe.skipIf(
         fielddFrames: received.length,
       })}`,
     );
-    const answered = fileRead as { status: number; code: string | null; message: string };
+    const read = fileRead as { status: number; code: string | null; message: string };
     console.log(
       `RO13_WITNESS ${JSON.stringify({
         timelineId: firstRow,
-        status: answered.status,
-        code: answered.code,
-        message: answered.message,
+        status: read.status,
+        code: read.code,
+        message: read.message,
+      })}`,
+    );
+
+    // AR-8: the packaged window's origin, end to end. The stream above opened
+    // over a socket that sent it; every read rosettad answered, answered it.
+    expect(dialed.some((url) => url.includes("/ws/sessions/"))).toBe(true);
+    expect(answered.length).toBeGreaterThan(0);
+    for (const reply of answered) expect(reply.allowOrigin).toBe(APP_ORIGIN);
+    // a ticket of the window's own, asked by hand for the two checks the
+    // room's client cannot show: the preflight, and the upgrade's status
+    const ticket = IndexOpenTicket.parse(
+      await window.request("index.openTicket", { sessionId: sid }),
+    );
+    const { restUrl, sessionUrl } = IndexEndpointSet.parse(ticket.endpoints);
+    const page = `${restUrl.replace(/\/$/, "")}/api/sessions/${encodeURIComponent(sid)}`;
+    const admitted = await preflight(page, APP_ORIGIN);
+    expect(admitted.status).toBeLessThan(300);
+    expect(admitted.allowOrigin).toBe(APP_ORIGIN);
+    expect(admitted.allowHeaders?.toLowerCase()).toContain("authorization");
+    const foreign = await preflight(page, FOREIGN_ORIGIN);
+    expect(foreign.allowOrigin).toBeNull();
+    const upgraded = await upgradeStatus(sessionUrl, ticket.grant, APP_ORIGIN);
+    expect(upgraded).toBe(101);
+    const refused = await upgradeStatus(sessionUrl, ticket.grant, FOREIGN_ORIGIN);
+    expect(refused).toBe(403);
+    console.log(
+      `ORIGIN_WITNESS ${JSON.stringify({
+        origin: APP_ORIGIN,
+        dialed: dialed.length,
+        reads: answered.map((reply) => ({ status: reply.status, allowOrigin: reply.allowOrigin })),
+        preflight: admitted,
+        foreignPreflight: foreign,
+        upgrade: upgraded,
+        foreignUpgrade: refused,
       })}`,
     );
     ports.sessions.close(sid);

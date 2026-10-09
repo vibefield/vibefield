@@ -11,6 +11,7 @@ import {
   WorkspaceListParams,
   type WorkspaceListResult,
   WorkspaceListResult as WorkspaceListResultSchema,
+  type WorkspaceReadRefusalDetails,
   type WorkspaceRoot,
   WorkspaceRootsParams,
   type WorkspaceRootsResult,
@@ -24,6 +25,7 @@ import { CatalogTable, createRowsPump, type RowsEmit } from "../catalog-rows";
 import { RpcCallError } from "../native-link";
 import { atFloor } from "../projection";
 import { parseRelativePath, relativePathRefusal } from "./paths";
+import type { WorkerError } from "./protocol";
 import type { RootsRegistry } from "./roots";
 import { FilesHostRefusal, type FilesHostSupervisor, FilesHostUnavailable } from "./supervisor";
 
@@ -45,12 +47,36 @@ import { FilesHostRefusal, type FilesHostSupervisor, FilesHostUnavailable } from
 //      whose folder is gone is NOT_FOUND and the registry marks it `missing`.
 //   4. WHETHER the worker can answer — UNAVAILABLE {service: "workspace",
 //      state: starting | restarting | off | unconfigured | failed | stopped}.
+//   5. WHETHER the folder answered (M10, `readRefused`) — a read stalled past
+//      READ_TIMEOUT_MS is TIMEOUT {reason: "timed-out"}, retryable; a folder in
+//      iCloud only is PRECONDITION_FAILED {reason: "dataless"}; the message
+//      names the folder in words.
 //
 // PAGES (L4): a `workspace.list` page holds at most LIST_PAGE rows, and a
 // TAILNET caller's at most TAILNET_PAGE — the DOOR's cut, never the worker's
 // — with `clipped` and `nextCursor` saying more follows. A self peer daemon
 // keeps a window's pages (it asks on behalf of one, `tailnet-rows.ts`'s rule).
 // `workspace.roots` is cut the same way, newest places first.
+
+/** M10 — a folder read that did not answer, in the door's words: the worker's
+ * sentence as it is (it names the folder; the reader draws it), and the kind
+ * and reason a caller branches on (`WorkspaceReadRefusalDetails`) — TIMEOUT,
+ * retryable, for `timed-out`; PRECONDITION_FAILED for `dataless`, which
+ * answers once the person downloads the folder. Null for any other code. */
+export function readRefused(error: WorkerError): RpcCallError | null {
+  if (error.code === "timed-out")
+    return new RpcCallError("TIMEOUT", error.message, true, {
+      service: WORKSPACE_SERVICE.SERVICE,
+      reason: "timed-out",
+      timeoutMs: WORKSPACE_LIMITS.READ_TIMEOUT_MS,
+    } satisfies WorkspaceReadRefusalDetails);
+  if (error.code === "dataless")
+    return new RpcCallError("PRECONDITION_FAILED", error.message, false, {
+      service: WORKSPACE_SERVICE.SERVICE,
+      reason: "dataless",
+    } satisfies WorkspaceReadRefusalDetails);
+  return null;
+}
 
 /** The cursor's spelling: the next page's offset (opaque to readers). */
 function cursorOf(offset: number): string {
@@ -168,6 +194,8 @@ export class WorkspaceDoors {
           state: error.state,
         });
       if (error instanceof FilesHostRefusal) {
+        const unread = readRefused(error.error);
+        if (unread !== null) throw unread;
         switch (error.error.code) {
           case "root-missing":
             this.#registry.markMissing(root.rootId);

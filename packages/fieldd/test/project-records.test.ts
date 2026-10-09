@@ -21,9 +21,12 @@ import { provisionalInk } from "../src/projects/normalize";
 import { ProjectGroups } from "../src/projects/project-groups";
 import { ProjectRecords, ProjectRecordsRefusal } from "../src/projects/project-records";
 
-let cleanup: Array<() => void> = [];
-afterEach(() => {
-  for (const fn of cleanup.reverse()) fn();
+// Torn down in reverse, each step awaited: the records' running act lands,
+// then the library's writes drain (`dispose`), and only then is its folder
+// removed — a removal racing the last write fails ENOTEMPTY under load.
+let cleanup: Array<() => void | Promise<void>> = [];
+afterEach(async () => {
+  for (const fn of cleanup.reverse()) await fn();
   cleanup = [];
 });
 
@@ -75,6 +78,7 @@ async function desktop(places: PlaceFacts[], opts: { library?: boolean } = {}) {
     dataDir: dir,
     docId: systemDocId("library", systemAccount(null, "fuid")),
   });
+  cleanup.push(() => library.dispose());
   await library.ready();
   const mounted = opts.library === false ? null : library;
   const groups = new ProjectGroups({

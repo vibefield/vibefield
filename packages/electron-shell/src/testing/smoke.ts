@@ -18,6 +18,9 @@ import {
   catalogEntry,
   DocListResult,
   type FrameView,
+  IndexEndpointSet,
+  IndexOpenTicket,
+  IndexSessionsResult,
   LAYOUT,
   TerminalConfigDocument,
   TerminalConfigValidation,
@@ -90,6 +93,7 @@ import {
   LIVE_SURFACE_LAB_TICKETS,
   type LiveSurfaceLabRendererResult,
 } from "./live-surface-lab-contract";
+import { type LoopbackExchange, recordLoopback } from "./loopback-network";
 import {
   type CountVector,
   countVector,
@@ -143,6 +147,7 @@ import {
 } from "./smoke-visibility";
 import { keepFromPerson, smokeWindow, smokeWindowsFocused } from "./smoke-window";
 import {
+  HISTORY_SEED_WORDS,
   leakedVariables,
   readTypedAgentCalls,
   type StagedTypedAgent,
@@ -4446,6 +4451,149 @@ async function untilRenderer(
   throw new Error(`${label} did not happen within ${timeoutMs}ms (${seen})`);
 }
 
+/** rosettad's own routes on a loopback origin — its reads and its three
+ * sockets — and nothing else of the page's loopback traffic (fieldd's door is
+ * the root path; a cell's door is its own). */
+const ROSETTAD_LOOPBACK =
+  /^(http|ws):\/\/127\.0\.0\.1:\d+\/(api\/|ws\/(sessions|collaboration|meta)\b)/;
+
+/** THE HISTORY RUNG'S SESSION (AR-8, L3 — the packaged origin, end to end).
+ * The person's one conversation (typed-agent.ts, L4) is enrolled through the
+ * door Settings → Agents uses, then opened in the room the way a person opens
+ * it — its project, then its row — until the reply's words render. Those words
+ * reach the page only over the direct plane: the room's ticket, then rosetta's
+ * client dialling rosettad from `vibefield-app://shell` under the product's
+ * CSP. Chromium's own network domain records every exchange with rosettad
+ * meanwhile, so the verdict says what crossed and what Chromium thought of it
+ * (Origin, allow-origin, any private/local-network access header, any block).
+ * An index this run does not configure is said, not failed: the words a
+ * developer's build gives then are the verdict. */
+async function openSeededSession(
+  win: BrowserWindow,
+  handle: FielddHandle,
+  person: StagedTypedAgent | undefined,
+  at: { room: string },
+): Promise<Record<string, unknown>> {
+  const health = (await handle.client.request("system.health")) as {
+    rosettad: { phase: string; detail: string | null };
+  };
+  if (person === undefined)
+    return { opened: false, why: "no person was staged, so no conversation was seeded" };
+  if (health.rosettad.phase === "unconfigured")
+    return { opened: false, why: `the agent index is unconfigured: ${health.rosettad.detail}` };
+  const network = await recordLoopback(win.webContents, (url) => ROSETTAD_LOOPBACK.test(url));
+  // what the page said meanwhile (a CSP refusal, a blocked load, the room's own
+  // error) — only for a failure's words
+  const said: string[] = [];
+  const onConsole = (...args: unknown[]) => {
+    const detail = args[0] as { message?: unknown; level?: unknown } | undefined;
+    const line =
+      typeof detail?.message === "string"
+        ? `${String(detail.level)}: ${detail.message}`
+        : args.slice(1).map(String).join(" ");
+    said.push(line.slice(0, 300));
+  };
+  win.webContents.on("console-message", onConsole);
+  let exchanges: LoopbackExchange[] = [];
+  let steps = "";
+  let pageRead: { status?: number; session?: string | null; error?: string } = {};
+  let sessionId: string | undefined;
+  try {
+    await handle.client.request("index.enroll", { kinds: [person.history.kind] });
+    steps = await untilRendererValue(
+      win,
+      "the seeded conversation opened in History, its reply rendered",
+      `(() => {
+        const room = ${at.room};
+        if (!room) return "no room";
+        const words = (room.textContent ?? "").replace(/\\s+/g, " ");
+        if (words.includes(${JSON.stringify(HISTORY_SEED_WORDS)})) return "rendered";
+        const row = room.querySelector(".ah-session-list-item");
+        if (row) {
+          if (!row.classList.contains("is-selected")) row.click();
+          return "row";
+        }
+        const project = room.querySelector(".ah-project-list-item");
+        if (project) {
+          if (!project.classList.contains("is-selected")) project.click();
+          return "project";
+        }
+        return "waiting: " + words.trim().slice(0, 160);
+      })()`,
+      180_000,
+      (answer) => answer === "rendered",
+    ).catch((error: unknown) => {
+      throw new Error(
+        `${String(error)}; rosettad exchanges: ${JSON.stringify(network.exchanges())}; ` +
+          `the page said: ${JSON.stringify(said.slice(-12))}`,
+      );
+    });
+    // The room opened its session over the SOCKET alone (rosetta's client
+    // streams the body), so it made no request a browser preflights. The
+    // page makes one more, the kind the room makes for an entry's detail or a
+    // file: a session's header page over HTTP carrying a grant in
+    // `Authorization` — from the page itself, under its own origin and CSP,
+    // so Chromium preflights it and decides whether a custom-scheme page may
+    // read loopback at all. The grant is the shell's own ticket.
+    sessionId = IndexSessionsResult.parse(
+      await handle.client.request("index.sessions", {
+        nativeSessionIds: [person.history.nativeSessionId],
+      }),
+    ).rows[0]?.sessionId;
+    if (sessionId === undefined) throw new Error("the seeded session has no row in index.sessions");
+    const ticket = IndexOpenTicket.parse(
+      await handle.client.request("index.openTicket", { sessionId }),
+    );
+    const page = `${IndexEndpointSet.parse(ticket.endpoints).restUrl.replace(/\/$/, "")}/api/sessions/${encodeURIComponent(sessionId)}`;
+    pageRead = JSON.parse(
+      (await win.webContents.executeJavaScript(
+        `fetch(${JSON.stringify(page)}, { headers: { authorization: ${JSON.stringify(`Rosetta-Grant ${ticket.grant}`)} } }).then(
+          async (response) => JSON.stringify({ status: response.status, session: (await response.json())?.session?.id ?? null }),
+          (error) => JSON.stringify({ error: String(error) }),
+        )`,
+      )) as string,
+    ) as typeof pageRead;
+  } finally {
+    win.webContents.off("console-message", onConsole);
+    exchanges = network.exchanges();
+    await network.stop();
+  }
+  const socket = exchanges.find(
+    (exchange) => exchange.kind === "websocket" && /\/ws\/sessions\//.test(exchange.url),
+  );
+  const refused = exchanges.filter((exchange) => exchange.failure !== null);
+  const read = exchanges.find((exchange) => exchange.kind === "fetch");
+  const preflight = exchanges.find((exchange) => exchange.kind === "preflight");
+  const verdict = {
+    opened: steps === "rendered",
+    pageRead: {
+      status: pageRead.status,
+      sameSession: pageRead.session === sessionId,
+      error: pageRead.error,
+    },
+    exchanges: exchanges.map((exchange) => ({
+      ...exchange,
+      url: exchange.url.replace(/^(\w+:\/\/127\.0\.0\.1):\d+/, "$1:<port>"),
+    })),
+  };
+  if (
+    socket?.status !== 101 ||
+    socket.origin !== APP_ORIGIN ||
+    pageRead.status !== 200 ||
+    pageRead.session !== sessionId ||
+    read?.allowOrigin !== APP_ORIGIN ||
+    preflight?.origin !== APP_ORIGIN ||
+    preflight.allowOrigin !== APP_ORIGIN ||
+    (preflight.status ?? 0) >= 300 ||
+    refused.length > 0
+  ) {
+    throw new Error(
+      `the session's direct plane from ${APP_ORIGIN} did not go cleanly: ${JSON.stringify(verdict)}`,
+    );
+  }
+  return verdict;
+}
+
 /** `untilRenderer` for a value (One Frame FR-2's row 11h): poll until `accept`
  * takes what the page answers, and hand that answer back. */
 async function untilRendererValue(
@@ -7847,6 +7995,9 @@ export async function runSmokeGodview(opts: {
       5_000,
     );
     verdict["history"] = { ...(JSON.parse(historyFace) as object), kept: true };
+    verdict["historySession"] = await openSeededSession(win, opts.handle, opts.typedAgent, {
+      room: HISTORY_ROOM,
+    });
     pressViewKey(win, "godview");
     await untilRenderer(
       win,

@@ -35,7 +35,7 @@ import { fileURLToPath } from "node:url";
 // Not a dependency — a repo script. scripts/siblings.mjs is the ONE reader of
 // siblings.lock.json (CLAUDE.md §Machine setup), and staging is its fourth
 // consumer after preflight, the Nx cache stamp and the dev runner.
-import { sidecarStagingSource } from "./siblings.mjs";
+import { newestSourceMtime, rosettadBinary, sidecarStagingSource } from "./siblings.mjs";
 
 const args = process.argv.slice(2);
 const argValue = (flag) => {
@@ -111,6 +111,27 @@ if (sidecarStaging.source === "refuse") {
   process.exit(1);
 }
 
+// ---- which rosettad a package stages (AR-8, L3) ----------------------------
+// History's index daemon is the lock's own build — `pnpm siblings:build` puts it
+// in the rosetta checkout's cargo target, outside this repo, so the row below
+// carries an ABSOLUTE `from` (resolvePlan resolves against the repo root, which
+// leaves an absolute path as it is). Optional like the screenshot helper: a
+// package without it boots, and fieldd says in a person's words that this copy
+// has no agent history. A Rust source newer than the binary is preflight's WARN,
+// said again here where the binary ships; it stays a warning because cargo,
+// not an mtime, is the judge of freshness (a no-op rebuild relinks nothing).
+const rosettadName = process.platform === "win32" ? "rosettad.exe" : "rosettad";
+const rosettadBuilt = rosettadBinary(repoRoot);
+if (rosettadBuilt?.path && existsSync(rosettadBuilt.path)) {
+  const newest = newestSourceMtime(rosettadBuilt.dir);
+  if (newest !== null && statSync(rosettadBuilt.path).mtimeMs < newest) {
+    console.warn(
+      `stage WARN: a Rust source in ${rosettadBuilt.dir} is newer than ${rosettadBuilt.path} — ` +
+        "run `pnpm siblings:build` before packaging (a no-op when cargo agrees it is fresh)",
+    );
+  }
+}
+
 // `app/` becomes app.asar (electron-builder's `files` root); `bin/`, `tray/` and `plugins/` are
 // extraResources. The split is §10.1's law: executable app code goes in the archive, native
 // executables and anything needing a real filesystem path stay outside it.
@@ -164,6 +185,17 @@ const PLAN = [
     // executable — a real file on disk, as the service harness is.
     stage: "bin/files-host.cjs",
     from: "packages/fieldd/dist/files-host.cjs",
+    kind: "file",
+  },
+  {
+    // AR-7: the spawn-through shim the agent gateway writes its launchers over. The
+    // gateway looks for it beside the daemon (agent-gateway.ts `bundledShim`), so
+    // beside the SEA it goes; fieldd's build bundles it from the kit the daemon was
+    // bundled with. Staged, it is found — and a packaged gateway still offers no
+    // launcher until a launcher runtime exists for a single executable (AR-7j):
+    // the shim is the file a launcher runs, not the Node that runs it.
+    stage: "bin/agent-shim.cjs",
+    from: "packages/fieldd/dist/agent-shim.cjs",
     kind: "file",
   },
   {
@@ -270,6 +302,19 @@ const PLAN = [
     mode: EXEC_MODE,
     produce:
       sidecarStaging.source === "window" ? "pnpm siblings:build" : "pnpm install --frozen-lockfile",
+  },
+  {
+    // AR-8 (L3): History's index daemon, decided above. The shell resolves it
+    // beside fieldd (resources.ts `rosettadPath`) and hands it to fieldd as
+    // FIELDD_ROSETTAD_BIN; a real child executable, so it stays outside the ASAR
+    // and the signer seals it as a nested binary (electron-builder.yml).
+    stage: `bin/${rosettadName}`,
+    from: rosettadBuilt?.path ?? null,
+    kind: "file",
+    mode: EXEC_MODE,
+    optional:
+      "rosettad is absent — the packaged app's History will say this copy has no agent history",
+    produce: "pnpm siblings:build",
   },
   {
     stage: "tray",
@@ -469,7 +514,9 @@ const resolvePlan = () => {
   const skipped = [];
   const missing = [];
   for (const entry of PLAN) {
-    const abs = entry.from ? join(repoRoot, entry.from) : null;
+    // `resolve`, not `join`: every row is repo-relative except rosettad's, which
+    // lives in the rosetta checkout's cargo target and arrives absolute.
+    const abs = entry.from ? resolve(repoRoot, entry.from) : null;
     if (!abs || !existsSync(abs)) {
       if (!entry.optional) {
         fail(

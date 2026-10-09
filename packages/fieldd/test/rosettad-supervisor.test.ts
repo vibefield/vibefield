@@ -29,6 +29,7 @@ import {
   RosettadSupervisor,
   type RosettadTimings,
   rosettadAllowOrigins,
+  rosettadUnconfigured,
 } from "../src/rosettad-supervisor";
 
 const FAKE = join(dirname(fileURLToPath(import.meta.url)), "fixtures", "fake-rosettad.mjs");
@@ -401,6 +402,23 @@ describe("RosettadSupervisor — the index daemon's kill matrix (AR-0 S2)", () =
       "pid",
       "protocolVersion",
     ]);
+  });
+
+  it("a packaged fieldd says it in a person's words — no variable, no daemon's name (AR-8, L3)", () => {
+    // vitest runs fieldd from source, so the constant above is the developer's
+    // sentence; the packaged one is the single executable's
+    // (verify-history-package.mjs reads it from the real SEA).
+    const packaged = rosettadUnconfigured(true);
+    expect(packaged).toEqual({ ...ROSETTAD_UNCONFIGURED, detail: packaged.detail });
+    expect(Object.isFrozen(packaged)).toBe(true);
+    expect(rosettadUnconfigured(false)).toEqual(ROSETTAD_UNCONFIGURED);
+    const words = packaged.detail ?? "";
+    expect(words).not.toMatch(/FIELDD|rosettad|_BIN|\(/);
+    expect(words).toContain("VibeField");
+    // it completes the frame every door says it in, so it starts lower-case
+    expect(`the agent index is unconfigured: ${words}`).toMatch(
+      /^the agent index is unconfigured: [a-z]/,
+    );
   });
 });
 

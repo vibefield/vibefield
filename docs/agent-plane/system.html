@@ -2077,6 +2077,44 @@
                   (<code>electron-shell/src/main/security-policy.ts</code>).
                 </p>
               </div>
+              <div class="contract-row">
+                <strong>The packaged app carries rosettad (AR-8, L3)</strong>
+                <p>
+                  <code>scripts/stage-package.mjs</code> stages the lock's own rosettad (the binary
+                  <code>pnpm siblings:build</code> makes in the rosetta checkout) as
+                  <code>Resources/bin/rosettad</code> — optional like the screenshot helper, fatal only
+                  under <code>--require-complete</code> — and <code>agent-shim.cjs</code> beside the fieldd
+                  executable. <code>electron-builder.yml</code> lists rosettad for inside-out signing
+                  (Developer ID, hardened runtime, secure timestamp); like every nested binary it inherits
+                  the shared <code>allow-jit</code> entitlement, which a Rust daemon does not need. The shell
+                  hands fieldd <code>FIELDD_ROSETTAD_BIN</code> from its environment or, packaged, the staged
+                  path when it is there (<code>resources.ts</code> <code>rosettadPath</code>,
+                  <code>main/fieldd.ts</code>). A packaged build without it says so in a person's words —
+                  "this copy of VibeField was built without agent history — install a build that includes it
+                  to read your agents' sessions here" — where a developer's build names the variable
+                  (<code>rosettad-supervisor.ts</code> <code>rosettadUnconfigured</code>). The shim staged is
+                  not yet a launcher: a single-executable fieldd chooses no launcher runtime (AR-7j).
+                  <span class="badge tone-built">Built</span>
+                </p>
+              </div>
+              <div class="contract-row">
+                <strong>The packaged origin, witnessed</strong>
+                <p>
+                  <code>pnpm --filter @vibefield/desktop package:verify:history --native-root
+                  &lt;Resources/bin&gt; [--require-signed]</code> checks the packaged rosettad's own signature,
+                  execs the packaged fieldd to read its unconfigured words and its ready pair, and runs the
+                  ticket rows and the History witness over the packaged rosettad with the room's transport
+                  sending <code>Origin: vibefield-app://shell</code> (allow-origin on every read, the
+                  preflight admitted, the session socket's 101; a foreign origin gets neither); the macOS
+                  release command runs it after signing. <code>pnpm smoke:godview</code>'s History rung opens a
+                  seeded conversation in the room from the real page at that origin and makes a preflighted
+                  grant read from it. Measured on Electron 43.1.1 (Chromium 150): the socket upgrades and
+                  both the read and its <code>OPTIONS</code> preflight answer with allow-origin; Chromium
+                  sent no private- or local-network access header and blocked nothing — its local-network
+                  access rules did not engage for this custom secure scheme reaching
+                  <code>127.0.0.1</code>. <span class="badge tone-built">Built</span>
+                </p>
+              </div>
             </div>
             <p class="section-note">
               <strong>The witness.</strong> A real fieldd and the real rosettad over rosetta's ground-truth

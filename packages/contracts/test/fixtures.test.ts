@@ -212,6 +212,7 @@ import {
   WorkspaceOpenTicketResult,
   WorkspacePickFolderParams,
   WorkspacePickFolderResult,
+  WorkspaceReadRefusalDetails,
   WorkspaceRootsDelta,
   WorkspaceRootsFile,
   WorkspaceRootsOpen,
@@ -522,6 +523,10 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   "workspace-roots-open": WorkspaceRootsOpen,
   "workspace-roots-delta": WorkspaceRootsDelta,
   "workspace-unavailable": WorkspaceUnavailableDetails,
+  // M10 (mille c8160d5) — a folder read that did not answer: `timed-out`
+  // (TIMEOUT) and `dataless` (PRECONDITION_FAILED), with their
+  // `error-data.workspace-*` pair (the ErrorData prefix).
+  "workspace-read-refusal": WorkspaceReadRefusalDetails,
   "workspace-git-port": WorkspaceGitPortTranscript,
   "workspace-roots-file": WorkspaceRootsFile,
   "workspace-open-ticket-params": WorkspaceOpenTicketParams,

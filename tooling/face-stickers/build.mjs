@@ -13,7 +13,7 @@ const temp = await mkdtemp(join(tmpdir(), "vf-face-stickers-build-"));
 
 try {
   execFileSync("python3", [join(root, "tooling/face-stickers/generate.py")], { stdio: "inherit" });
-  const archive = await readFile(join(root, "docs/design/vibefield-face-club.zip"));
+  const archive = await readFile(join(root, "draft/design/vibefield-face-club.zip"));
   const archiveUrl = `data:application/zip;base64,${archive.toString("base64")}`;
   const define = {
     "process.env.NODE_ENV": '"production"',
@@ -73,7 +73,7 @@ process.stdout.write(renderToString(createElement(FaceStickersReport, { archiveU
 </body>
 </html>
 `;
-  const output = join(root, "docs/design/face-stickers.html");
+  const output = join(root, "draft/design/face-stickers.html");
   await writeFile(output, html);
   console.log(`Built ${output} (${Buffer.byteLength(html).toLocaleString()} bytes).`);
   console.log(

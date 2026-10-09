@@ -147,6 +147,14 @@ mac:
     # the stage — a package without it boots and answers `helper-missing` — so WP10's signer
     # must tolerate its absence in a preview and require it under --require-complete.
     - Contents/Resources/bin/field-screenshot-helper.app/Contents/MacOS/field-screenshot-helper
+    # AR-8 (L3): History's index daemon — a child fieldd spawns, sealed inside-out like
+    # field-native. Optional in the stage as the screenshot helper is, with the same
+    # consequence for a SIGNED build: the signer codesigns every listed path, so it signs
+    # only a stage that has it (release packaging stages with --require-complete first).
+    # It inherits entitlements.mac.inherit.plist like every nested binary here; it needs
+    # none of it (no JIT), and this builder has no per-file entitlements to say so.
+    # verify-history-package.mjs --require-signed checks its actual nested signature.
+    - Contents/Resources/bin/rosettad
   # Hardened runtime is on from the first package even though nothing is signed yet, so the
   # entitlement set is exercised from the start rather than discovered at notarization time.
   hardenedRuntime: true

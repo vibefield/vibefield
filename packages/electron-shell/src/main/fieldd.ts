@@ -63,6 +63,15 @@ export function buildSupervisor(opts: {
     ? [override ?? opts.resources.fielddArgs[0]]
     : [...opts.resources.fielddArgs];
   const nativeBin = process.env["FIELDD_NATIVE_BIN"] ?? opts.resources.fieldNativePath;
+  // AR-8 (L3) — History's index daemon, the same shape: the environment's choice
+  // wins (the dev runner exports the lock's build; a harness points at one), and
+  // otherwise the layout's — beside fieldd in a package — when it is there.
+  // Empty means unset, as fieldd reads it. Neither ⇒ nothing is passed and
+  // fieldd's index says this copy has no agent history.
+  const rosettadPath = opts.resources.rosettadPath;
+  const rosettadBin =
+    process.env["FIELDD_ROSETTAD_BIN"] ||
+    (rosettadPath !== null && existsSync(rosettadPath) ? rosettadPath : undefined);
   const launchTarget = nodeMode ? args[0] : command;
   if (launchTarget === undefined || !existsSync(launchTarget)) {
     throw new Error(`fieldd bin missing (build it): ${launchTarget ?? "(unset)"}`);
@@ -103,6 +112,7 @@ export function buildSupervisor(opts: {
       // fieldd still refuses an ambient override on its own.
       FIELD_LOG_DIR: opts.logRoot,
       FIELDD_ALLOW_LOG_DIR_OVERRIDE: "1",
+      ...(rosettadBin !== undefined ? { FIELDD_ROSETTAD_BIN: rosettadBin } : {}),
     },
     ...(existsSync(nativeBin) ? { nativeExecutable: nativeBin } : {}),
     // The renderer's OWN origin, in every mode. Chromium sends

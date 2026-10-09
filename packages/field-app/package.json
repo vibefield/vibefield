@@ -16,7 +16,6 @@
     ".": "./src/index.ts",
     "./appearance": "./src/appearance/index.ts",
     "./design-system": "./src/design-system/mount.tsx",
-    "./logo-studio": "./src/design-system/logo/mount.tsx",
     "./design-system/studio-controller": "./src/design-system/studio-controller.ts",
     "./desk-faces": "./src/field/desk/desk-faces.ts",
     "./logging": "./src/logging.ts",

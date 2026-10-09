@@ -508,7 +508,9 @@ export interface FieldMark {
             info=zipfile.ZipInfo('vibefield-after-hours/'+name,date_time=(2026,9,22,0,0,0))
             info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o644<<16
             z.writestr(info,content.encode(),compresslevel=9)
-    write('docs/design/vibefield-fieldmarks.zip',archive.getvalue())
+    # Local review archives are outside production consistency checks.
+    if not options.check:
+        write('draft/design/vibefield-fieldmarks.zip',archive.getvalue())
     if MISMATCHES:
         print('Generated files differ:\n'+'\n'.join(MISMATCHES),file=sys.stderr);raise SystemExit(1)
     print(('Verified' if options.check else 'Generated')+' AFTER HOURS: 78 marks in sticker and artwork editions, plus sprite.')

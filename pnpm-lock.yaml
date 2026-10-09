@@ -292,9 +292,6 @@ importers:
       '@types/react':
         specifier: 'catalog:'
         version: 19.2.17
-      '@webgpu/types':
-        specifier: ^0.1.74
-        version: 0.1.74
       react:
         specifier: 'catalog:'
         version: 19.2.7

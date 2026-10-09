@@ -1,0 +1,5 @@
+{
+  "//": "M10 (mille c8160d5) — the folder lives only in iCloud (mille's EDATALESS) and VibeField does not download a folder to list it (WORKSPACE_LIMITS.MATERIALIZE_DATALESS): refused PRECONDITION_FAILED, not retryable until the person downloads it.",
+  "service": "workspace",
+  "reason": "dataless"
+}

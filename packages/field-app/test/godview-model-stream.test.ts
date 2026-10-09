@@ -64,7 +64,10 @@ describe("the corpus observer", () => {
   });
 });
 
-describe("the model stream", () => {
+// Each case computes a corpus through fieldd's own code on a virtual clock: ~3 s alone, past
+// vitest's 5 s default under a loaded gate — and a timed-out case keeps running with its clock
+// installed, so the cases after it read the wrong time (2026-10-08: red in 4 of 7 loaded gates).
+describe("the model stream", { timeout: 30_000 }, () => {
   it("is a pure function of its recipe: the same bytes twice, other bytes for another seed", async () => {
     const one = encodeModelStreamJsonl((await streamOf(RECIPE)).stream);
     const two = encodeModelStreamJsonl((await streamOf(RECIPE)).stream);

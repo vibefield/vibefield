@@ -25,5 +25,5 @@ Default React finish is `artwork`; default semantics are decorative. Label the e
 button or supply `label` for an independent image. Role characters and personal alter egos
 are proposals; they do not change account faces, provider identities, or observed state.
 
-Source: `tooling/fieldmarks/generate.py`. Handoff: `docs/design/fieldmarks.md`.
-Interactive offline sheet: `docs/design/fieldmarks.html`.
+Source: `tooling/fieldmarks/generate.py`. Handoff: `draft/design/fieldmarks.md`.
+Interactive offline sheet: `draft/design/fieldmarks.html`.

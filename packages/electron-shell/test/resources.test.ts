@@ -98,6 +98,10 @@ describe("resolveDevelopmentResources", () => {
     expect(linux.screenshotHelperPath).toBeNull();
   });
 
+  it("names no rosettad — the dev runner resolves the lock's build and exports it (AR-8)", () => {
+    expect(dev.rosettadPath).toBeNull();
+  });
+
   it("offers both plugin roots, including the dev-linked pack", () => {
     expect(dev.pluginRoots.bundled).toEqual([join(REPO, "plugins")]);
     expect(dev.pluginRoots.devLinked).toEqual([join(REPO, "examples", "plugins")]);
@@ -145,6 +149,10 @@ describe("resolvePackagedResources", () => {
     );
   });
 
+  it("puts rosettad beside fieldd, flat under bin/ (AR-8, L3)", () => {
+    expect(pkg.rosettadPath).toBe(join(RESOURCES, "bin", "rosettad"));
+  });
+
   it("does not make the screenshot helper a boot-fatal resource (SNAP-D5)", () => {
     // Every OTHER packaged binary is asserted before anything spawns; the
     // screenshot helper is optional in the stage, so a package without it must
@@ -180,6 +188,7 @@ describe("resolvePackagedResources", () => {
         ? []
         : [pkg.macosLiveSurfaceCapture.helperPath, pkg.macosLiveSurfaceCapture.adapterPath]),
       ...(pkg.screenshotHelperPath === null ? [] : [pkg.screenshotHelperPath]),
+      ...(pkg.rosettadPath === null ? [] : [pkg.rosettadPath]),
       ...pkg.pluginRoots.bundled,
       ...Object.values(pkg.tray).flatMap((set) => Object.values(set)),
     ].join("\n");
@@ -201,6 +210,7 @@ describe("resolvePackagedResources", () => {
     expect(win.fieldNativePath.endsWith("field-native.exe")).toBe(true);
     expect(win.macosLiveSurfaceCapture).toBeNull();
     expect(win.screenshotHelperPath?.endsWith("field-screenshot-helper.exe")).toBe(true);
+    expect(win.rosettadPath?.endsWith("rosettad.exe")).toBe(true);
     expect(pkg.fieldNativePath.endsWith("field-native")).toBe(true);
     expect(
       resolvePackagedResources({
@@ -340,6 +350,31 @@ describe("assertPackagedResources", () => {
           readHead: read(path, true),
         }),
       ).toThrow(expect.objectContaining({ code: mismatchCode }));
+    }
+  });
+
+  it("boots without rosettad, and refuses one built for another architecture (AR-8, L3)", () => {
+    // Absent is History's honest "no agent history", never a refusal to boot;
+    // present, it gets the same architecture question as every executable.
+    const rosettad = packaged().rosettadPath!;
+    const heads =
+      (answer: Uint8Array | null) =>
+      (path: string): Uint8Array | null =>
+        path === rosettad ? answer : MACHO_ARM64;
+    expect(() =>
+      assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: heads(null) }),
+    ).not.toThrow();
+    expect(() =>
+      assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: heads(MACHO_ARM64) }),
+    ).not.toThrow();
+    try {
+      assertPackagedResources(packaged(), { nodeArch: "arm64", readHead: heads(MACHO_X64) });
+      throw new Error("expected a ResourceError");
+    } catch (error) {
+      expect(error).toBeInstanceOf(ResourceError);
+      expect((error as ResourceError).code).toBe("rosettad-arch-mismatch");
+      expect((error as ResourceError).path).toBe(rosettad);
+      expect((error as ResourceError).message).toContain("x64");
     }
   });
 

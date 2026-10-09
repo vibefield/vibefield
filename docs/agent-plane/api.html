@@ -2117,8 +2117,25 @@
               answer verbatim. Start session sends <code>agent.spawn {provider, cwd}</code>
               to that desktop, using its catalog's spawn offerings and default profile.
               The self-tailnet preset already grants <code>agent.spawn</code>.</p>
-            <p>The unreleased mille channel is pinned at <code>baa0de8</code> in a dedicated
-              sibling checkout. R24 confines native imports to the files worker; field-app may use
+            <p><strong>A folder that did not answer</strong> (M10, 2026-10-08) is refused in
+              words, never as a blank or a generic failure. Every engine hands mille the worker's
+              one read deadline (<code>WORKSPACE_LIMITS.READ_TIMEOUT_MS</code>, 2 s) and never
+              downloads a folder that lives only in iCloud
+              (<code>MATERIALIZE_DATALESS</code>: false). A read that made no progress in time
+              (an iCloud folder downloading, a drive or share that stopped) answers
+              <code>TIMEOUT {service: "workspace", reason: "timed-out", timeoutMs}</code>,
+              retryable; a folder in iCloud only answers <code>PRECONDITION_FAILED {service:
+              "workspace", reason: "dataless"}</code> until the person downloads it
+              (<code>WorkspaceReadRefusalDetails</code>, fixtures
+              <code>workspace-read-refusal.*</code>). The message names the folder and says
+              what happened; the phone's folder browser shows it as it is.
+              <code>workspace.list</code>, <code>workspace.search</code> and
+              <code>workspace.openTicket</code> (History opening a folder) answer alike; a search
+              hit whose folder did not answer is left out with <code>complete: false</code>.</p>
+            <p>The unreleased mille channel is pinned at <code>c8160d5</code> in a dedicated
+              sibling checkout (<em>2026-10-08:</em> moved from <code>baa0de8</code>, EL8 — M8
+              hydration, M10 bounded reads, mille-git G1–G3, unpushed). R24 confines native
+              imports to the files worker; field-app may use
               the <code>/port</code> and <code>/remote</code> clients and the UI entry
               (<code>/remote</code> today). <strong>Erratum (2026-10-07):</strong> this said
               "browser client/port/remote"; there is no <code>/browser</code> entry, at the

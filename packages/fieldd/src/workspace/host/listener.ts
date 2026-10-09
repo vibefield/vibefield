@@ -6,10 +6,13 @@ import { PORTS, WORKSPACE_LIMITS, WorkspaceGitOpen } from "@vibefield/contracts"
 import { type WebSocket, WebSocketServer } from "ws";
 import { isWithin } from "../paths";
 import type { AttachEndReason, AttachEvent, AttachRegistration } from "../protocol";
-import { type Engines, WorkerFailure } from "./engine";
+import { type Engines, readRefusal, WorkerFailure } from "./engine";
 import { answerGitRequest, createGitService } from "./git";
 
-/** Resolve a requested descendant without walking/hydrating a whole mille tree. */
+/** Resolve a requested descendant without walking/hydrating a whole mille tree.
+ * A folder that does not answer within the worker's one read deadline is
+ * refused as mille's own stalled read is (`timed-out`, M10), never `busy` —
+ * no engine cap is involved. */
 export async function resolveConfined(
   root: string,
   segments: readonly string[],
@@ -21,7 +24,7 @@ export async function resolveConfined(
       resolvePath(root, segments, file),
       new Promise<never>((_, reject) => {
         timer = setTimeout(
-          () => reject(new WorkerFailure("busy", "This folder is not answering yet")),
+          () => reject(readRefusal("timed-out", join(root, ...segments))),
           WORKSPACE_LIMITS.READ_TIMEOUT_MS,
         );
       }),

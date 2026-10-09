@@ -121,13 +121,7 @@ export default defineConfig(({ mode }) => ({
     entries:
       mode === "live-surfaces-lab"
         ? ["spike-live-surfaces-lab.html"]
-        : [
-            "index.html",
-            "studio-product.html",
-            "studio.html",
-            "design-system.html",
-            "logo-studio.html",
-          ],
+        : ["index.html", "studio-product.html", "studio.html", "design-system.html"],
     include: [
       "@vibefield/field-app > @vibecook/ice/desk",
       "@vibefield/field-app > @vibecook/ice/desk/engine",
@@ -186,7 +180,6 @@ export default defineConfig(({ mode }) => ({
         mode === "design"
           ? {
               "design-system": designSystemEntry,
-              "logo-studio": join(rendererRoot, "logo-studio.html"),
             }
           : mode === "live-surfaces-lab"
             ? {

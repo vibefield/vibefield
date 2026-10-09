@@ -59,6 +59,14 @@ export interface DesktopResources {
    * helper: a screenshot is a peripheral, so an absent helper is an honest
    * `helper-missing` at capture time — never a refusal to boot. */
   readonly screenshotHelperPath: string | null;
+  /** AR-8 (L3) — History's index daemon, handed to fieldd as FIELDD_ROSETTAD_BIN
+   * when nothing in the environment names one. Packaged: beside fieldd, where
+   * the stager puts it when `pnpm siblings:build` produced one. Development:
+   * null — the dev runner resolves the lock's build and exports the variable
+   * itself. Optional like the screenshot helper: an absent one boots, and
+   * fieldd's index says in a person's words that this copy has no agent
+   * history; only a PRESENT one is asserted, for its architecture. */
+  readonly rosettadPath: string | null;
   /** plugin discovery roots — absolute, never derived by the daemon itself */
   readonly pluginRoots: {
     readonly bundled: readonly string[];
@@ -188,6 +196,7 @@ export function resolveDevelopmentResources(opts: {
       ),
       platform,
     ),
+    rosettadPath: null,
     pluginRoots: {
       bundled: [join(opts.repoRoot, "plugins")],
       devLinked: [join(opts.repoRoot, "examples", "plugins")],
@@ -233,6 +242,7 @@ export function resolvePackagedResources(opts: {
           }
         : null,
     screenshotHelperPath: screenshotHelperPath(bin, platform),
+    rosettadPath: join(bin, exe("rosettad", platform)),
     pluginRoots: {
       bundled: [join(opts.resourcesPath, "plugins", "bundled")],
       devLinked: [],
@@ -249,7 +259,8 @@ export type ResourceProblemCode =
   | "live-surface-capture-helper-missing"
   | "live-surface-capture-helper-arch-mismatch"
   | "live-surface-adapter-missing"
-  | "live-surface-adapter-arch-mismatch";
+  | "live-surface-adapter-arch-mismatch"
+  | "rosettad-arch-mismatch";
 
 /** A packaged resource failure is fatal and TYPED — distribution spec §4.3 and
  * §14 both require a doctor code rather than a stack trace, because the user
@@ -322,6 +333,22 @@ export function assertPackagedResources(
       `The packaged field-native executable is ${arch}, but this machine is ${host}.`,
       resources.fieldNativePath,
     );
+  }
+
+  // AR-8 (L3): rosettad is optional — absent is History's honest "no agent
+  // history" — but one that IS staged must be for this machine: the wrong
+  // architecture would read as an index that fails to start, not a packaging bug.
+  const rosettadPath = resources.rosettadPath;
+  const rosettadHead = rosettadPath === null ? null : readHead(rosettadPath);
+  if (rosettadPath !== null && rosettadHead !== null) {
+    const rosettadArch = identifyExecutable(rosettadHead).arch;
+    if (!archCompatible(rosettadArch, host)) {
+      throw new ResourceError(
+        "rosettad-arch-mismatch",
+        `The packaged rosettad executable is ${rosettadArch}, but this machine is ${host}.`,
+        rosettadPath,
+      );
+    }
   }
 
   const capture = resources.macosLiveSurfaceCapture;

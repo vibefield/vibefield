@@ -204,12 +204,35 @@ const ENROLL_LINE = /^(?:rosettad: )?--enroll /;
 const ENROLL_REFUSAL_LINES = 32;
 const ENROLL_REFUSAL_CHARS = 4_096;
 
-export const ROSETTAD_UNCONFIGURED: RosettadHealth = Object.freeze({
-  phase: "unconfigured",
-  detail: "no rosettad binary was configured (FIELDD_ROSETTAD_BIN)",
-  pid: null,
-  protocolVersion: null,
-});
+/** Whether this process is a single-executable application — a packaged
+ * fieldd (EDP-14), and so one whose words a person reads. */
+function singleExecutable(): boolean {
+  try {
+    const builtin = process.getBuiltinModule?.("node:sea") as { isSea?: () => boolean } | undefined;
+    return builtin?.isSea?.() === true;
+  } catch {
+    return false; // a Node with no such module is no single executable
+  }
+}
+
+/** The unconfigured state in the words of whoever will read it (AR-8, L3). A
+ * packaged fieldd speaks to a person: this copy was built without its index
+ * daemon, what that costs and what to do — never a variable they cannot set. A
+ * developer's fieldd names the variable that configures it. Either sentence
+ * completes the frame every door says it in: `the agent index is unconfigured:
+ * <detail>`. */
+export function rosettadUnconfigured(packaged: boolean): RosettadHealth {
+  return Object.freeze({
+    phase: "unconfigured",
+    detail: packaged
+      ? "this copy of VibeField was built without agent history — install a build that includes it to read your agents' sessions here"
+      : "no rosettad binary was configured (FIELDD_ROSETTAD_BIN)",
+    pid: null,
+    protocolVersion: null,
+  });
+}
+
+export const ROSETTAD_UNCONFIGURED: RosettadHealth = rosettadUnconfigured(singleExecutable());
 
 /** The client-facing projection of a state — the ONLY way a state reaches a
  * FielddHealth (a spread of the state would carry the origin along). */
