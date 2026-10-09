@@ -1591,6 +1591,7 @@ async function main(
         });
         installDiagnostics(window);
       },
+      liveSurfaces: () => liveSurfaceAuthority?.state() ?? null,
     });
     return;
   }

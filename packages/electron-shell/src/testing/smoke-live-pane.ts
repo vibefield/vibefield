@@ -416,6 +416,92 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
     const off = x1 <= 0 || x0 >= v.w || y1 <= 0 || y0 >= v.h;
     return { off, centre: { x: v.left + (x0 + x1) / 2, y: v.top + (y0 + y1) / 2 } };
   };
+  /** `e` brought to the middle of the view by drags on the bare mat, judged by the camera (no selection needed). */
+  const bringToMiddle = async (e: number): Promise<void> => {
+    for (let i = 0; i < 8; i += 1) {
+      const r = (await rows()).find((x) => x.entity === e)?.rect;
+      if (r === undefined) throw new Error("the pane left the board");
+      const v = await js<{
+        x: number;
+        y: number;
+        zoom: number;
+        w: number;
+        h: number;
+        left: number;
+        top: number;
+      }>(
+        `(() => { const c = globalThis.__vfDesk.camera(); const b = document.querySelector("[data-desk]").getBoundingClientRect();
+          return { x: c.x, y: c.y, zoom: c.zoom, w: b.width, h: b.height, left: b.left, top: b.top }; })()`,
+      );
+      const by = {
+        dx: v.w / 2 - (r.x + r.w / 2 - v.x) * v.zoom,
+        dy: v.h / 2 - (r.y + r.h / 2 - v.y) * v.zoom,
+      };
+      if (Math.hypot(by.dx, by.dy) < 40) return;
+      let step = {
+        dx: Math.round(Math.max(-400, Math.min(400, by.dx))),
+        dy: Math.round(Math.max(-250, Math.min(250, by.dy))),
+      };
+      // a crowded view (a reload's arrival fit frames the whole board) may hold no bare mat for a long drag: a shorter one
+      let mat: { x: number; y: number } | null = null;
+      for (let k = 0; k < 4 && mat === null; k += 1) {
+        mat = await js<{ x: number; y: number } | null>(BARE_FOR_PAN(step.dx, step.dy));
+        if (mat === null) step = { dx: Math.round(step.dx / 2), dy: Math.round(step.dy / 2) };
+      }
+      if (mat === null) {
+        // say what stands where the mat should be: what covers the desk's middle, how much of it picks nothing
+        const seen = await js(`(() => {
+          const d = globalThis.__vfDesk; const el = document.querySelector("[data-desk]"); const r = el.getBoundingClientRect();
+          let bare = 0, all = 0;
+          for (let y = 40; y < r.height - 40; y += 40) for (let x = 40; x < r.width - 40; x += 40) { all += 1; if (d.pick({ x, y }) === null) bare += 1; }
+          const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+          return { desk: [Math.round(r.width), Math.round(r.height)], bare, all, middle: top === null ? null : top.tagName + "." + String(top.className).slice(0, 60), inDesk: top !== null && el.contains(top) };
+        })()`);
+        throw new Error(
+          `no bare mat to bring the pane to the middle from (${JSON.stringify(seen)})`,
+        );
+      }
+      const from = { x: v.left + mat.x, y: v.top + mat.y };
+      await drag(from, { x: from.x + step.dx, y: from.y + step.dy }, 8, 300);
+      await sleep(500);
+    }
+  };
+  /** The camera once it holds still (a reload's arrival fit flies it): two reads 250 ms apart, the same. */
+  const settledCamera = async (): Promise<void> => {
+    let last = "";
+    for (let i = 0; i < 24; i += 1) {
+      const now = JSON.stringify(await js("globalThis.__vfDesk.camera()"));
+      if (now === last) return;
+      last = now;
+      await sleep(250);
+    }
+  };
+  /** `e` taken by a press on its page: the camera settled first, a second press if the first is not heard; said whole if neither is. */
+  const selectPane = async (e: number, label: string): Promise<void> => {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await settledCamera();
+      const where = await onScreen(e);
+      if (where.off || where.centre === null) throw new Error(`${label}: the pane is off screen`);
+      await press(where.centre);
+      try {
+        await until(label, 3_000, "(globalThis.__vfDesk.anchor()?.count ?? 0) === 1");
+        return;
+      } catch {
+        if (attempt === 0) continue;
+        const at = await js<{ left: number; top: number }>(
+          `(() => { const r = document.querySelector("[data-desk]").getBoundingClientRect(); return { left: r.left, top: r.top }; })()`,
+        );
+        const picked = await js(
+          `globalThis.__vfDesk.pick({ x: ${where.centre.x - at.left}, y: ${where.centre.y - at.top} })`,
+        );
+        const camera = await js("globalThis.__vfDesk.camera()");
+        const rect = (await rows()).find((r) => r.entity === e)?.rect;
+        throw new Error(
+          `${label} did not happen (pressed ${JSON.stringify(where.centre)}, picked ${JSON.stringify(picked)}, camera ${JSON.stringify(camera)}, rect ${JSON.stringify(rect)})`,
+        );
+      }
+    }
+  };
   try {
     // ── the pane laid alone on clear ground, at actual size, brought to the middle (PT-1's steps) ──────────────────
     const at = await layPane(h, before, (e) => {
@@ -557,6 +643,26 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
     const loadsBefore = d.fixture.loads();
     const tokensBefore = d.fixture.tokens();
     const ready = await d.reload();
+    // the desk reachable again: DESK_READY is the desk's first frame, said under the boot's splash — the splash lifts once
+    // the board is warm and the frames are steady, and until then nothing on the desk takes a press
+    await until(
+      "the desk reachable after the reload (the boot's splash lifted)",
+      45_000,
+      `(() => { const el = document.querySelector("[data-desk]"); if (el === null) return false; const r = el.getBoundingClientRect();
+        const top = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2); return top !== null && el.contains(top); })()`,
+    );
+    // the pane by its key on the new document (its entity may be another), brought into view: the reload's arrival fit
+    // frames the board as it likes, and a page seen at no px is paused — the row is the PAGE's, not the camera's
+    await settledCamera();
+    if (d.shotDir !== undefined) {
+      mkdirSync(d.shotDir, { recursive: true });
+      writeFileSync(join(d.shotDir, "pt-2-after-reload.png"), (await d.win.capturePage()).toPNG());
+    }
+    const again = (await rows()).find((r) => r.key === paneKey);
+    if (again === undefined) throw new Error("the pane is not on the board after the reload");
+    e = again.entity;
+    pane = e;
+    await bringToMiddle(e);
     let stateAfter: string | null = null;
     let presentedAfter = 0;
     try {
@@ -581,24 +687,11 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
     };
     said.reload = reload;
     problems.push(...judgeReload(reload));
-    // the pane by its key on the new document (its entity may be another)
-    const again = (await rows()).find((r) => r.key === paneKey);
-    if (again === undefined) throw new Error("the pane is not on the board after the reload");
-    e = again.entity;
-    pane = e;
 
     // ── GONE: the pane deleted; its face gone at once; main's runtimes back after the pool's grace ──────────────────
     const runtimesWith = d.custody()?.runtimes ?? null;
     d.fixture.setPlaying(false);
-    const where = await onScreen(e);
-    if (where.off || where.centre === null)
-      throw new Error("the pane is off screen after the reload: nothing to delete it by");
-    await press(where.centre);
-    await until(
-      "the pane selected to delete",
-      10_000,
-      "(globalThis.__vfDesk.anchor()?.count ?? 0) === 1",
-    );
+    await selectPane(e, "the pane selected to delete");
     await sleep(300);
     await key("Backspace");
     await until(
@@ -608,7 +701,14 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
     );
     pane = undefined;
     const deletedAt = Date.now();
-    const faceLeft = (await faceRow()) === null;
+    // the face closes when the kind forgets the pane — once its delete's ghost has faded (`KindLocal.forget`), not at the census
+    let faceLeft = false;
+    try {
+      await until("the pane's face closed", 5_000, `${FACE_ROW(paneKey)} === null`);
+      faceLeft = true;
+    } catch {
+      /* said by the judge below */
+    }
     let runtimesAfter = d.custody()?.runtimes ?? null;
     while (runtimesAfter !== runtimesBefore && Date.now() - deletedAt < LIVE_ROWS.goneWithinMs) {
       await sleep(500);
@@ -631,6 +731,7 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
     say(`SMOKE_CANVAS_LIVE ${JSON.stringify(said)}`);
     try {
       if (pane !== undefined && (await js<boolean>("globalThis.__vfDesk.held() === null"))) {
+        await bringToMiddle(pane).catch(() => undefined);
         const where = await onScreen(pane);
         if (!where.off && where.centre !== null) {
           await press(where.centre);
@@ -655,12 +756,13 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
   return problems;
 }
 
-/** A bare point of the mat from which a horizontal pan by `dx` stays inside the desk (desk CSS px). */
-const BARE_FOR_PAN = (dx: number): string => `(() => {
+/** A bare point of the mat — nothing picks round it, the desk's own element under it — from which a pan by (dx, dy) stays inside
+ * the desk (desk CSS px). */
+const BARE_FOR_PAN = (dx: number, dy = 0): string => `(() => {
   const d = globalThis.__vfDesk; const el = document.querySelector("[data-desk]"); const r = el.getBoundingClientRect();
   for (let y = 160; y < r.height - 160; y += 20) for (let x = 40; x < r.width - 40; x += 20) {
-    const tx = x + ${dx};
-    if (tx < 40 || tx > r.width - 40) continue;
+    const tx = x + ${dx}, ty = y + ${dy};
+    if (tx < 40 || tx > r.width - 40 || ty < 120 || ty > r.height - 120) continue;
     let clear = true;
     for (let k = -20; k <= 20 && clear; k += 10) for (let l = -20; l <= 20 && clear; l += 10)
       if (d.pick({ x: x + k, y: y + l }) !== null) clear = false;

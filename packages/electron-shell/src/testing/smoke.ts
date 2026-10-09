@@ -75,6 +75,7 @@ import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { labProfileProof } from "./godview-lab-profile";
+import { startLiveFixture } from "./live-fixture";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
   LIVE_SURFACE_LAB_ALL_TICKETS,
@@ -119,6 +120,7 @@ import { browserPaneRows, PANE_FLAG } from "./smoke-browser-pane";
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskRigRows } from "./smoke-desk-rig";
+import { LIVE_FLAG, type LiveRowsDriver, livePaneRows } from "./smoke-live-pane";
 import { faultRows, peersRows } from "./smoke-peers";
 import { pegboardRows } from "./smoke-pegboard";
 import { restRows } from "./smoke-rest";
@@ -974,6 +976,8 @@ export async function runSmokeCanvas(opts: {
   viteUrl: string;
   beforeExit: () => Promise<void>;
   onWindow?: (window: BrowserWindow) => void;
+  /** PT-2 — main's live-surface custody (`LiveSurfaceAuthority.state()`): the live rows' GONE reads its runtimes. */
+  liveSurfaces?: () => { readonly runtimes: number; readonly owners: number } | null;
 }): Promise<void> {
   const gpu = !process.argv.includes("--disable-gpu");
   // DK-16: the GPU kept and the page given no `navigator.gpu` (`--smoke-no-webgpu`, as a remote desktop has none —
@@ -1102,7 +1106,11 @@ export async function runSmokeCanvas(opts: {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
-      if (process.argv.includes(PANE_FLAG)) {
+      if (process.argv.includes(LIVE_FLAG)) {
+        // PT-2 — the live page's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs --smoke-canvas
+        // --live-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
+        problems.push(...(await liveRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
+      } else if (process.argv.includes(PANE_FLAG)) {
         // PT-1 — the browser pane's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
         // --smoke-canvas --browser-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
         try {
@@ -1268,6 +1276,10 @@ export async function runSmokeCanvas(opts: {
         } catch (error) {
           problems.push(`PT-1 PANE: ${error instanceof Error ? error.message : String(error)}`);
         }
+        // PT-2 (PORTALS): the page live — a pane pointed at the smoke's own fixture page, its face live, still, playing, held,
+        // unseen, reloaded and gone (testing/smoke-live-pane.ts). After PT-1's rows (each lays its own pane and deletes it) and
+        // before the refusal's
+        problems.push(...(await liveRows(win, shotDir, opts.viteUrl, opts.liveSurfaces)));
         // DK-9: last — it leaves the desk on its card
         problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
       }
@@ -1660,6 +1672,46 @@ async function deskRefusalRow(win: BrowserWindow, viteUrl: string): Promise<stri
  * (field/desk/desk-gpu.ts `deskRefuseFirstDevice`): the stage must say DESK_RETRY, say no card,
  * and draw on its retry's mount (DESK_READY with `mount: 1`).
  */
+/**
+ * PT-2 — the live page's rows (testing/smoke-live-pane.ts) over the smoke's own fixture page on 127.0.0.1, served for the rows
+ * and closed after them; the window's RENDERER REPLACED for the RELOAD row (`loadRenderer`, the same webContents — so the same
+ * participant, a new document — as the retry row replaces it, with the window's doors and without the first board's seeding: a
+ * bare `webContents.reload()` re-asks the seeding switch and leaves the boot's splash "settling" over the desk), answered once
+ * the desk says DESK_READY again.
+ */
+async function liveRows(
+  win: BrowserWindow,
+  shotDir: string | undefined,
+  viteUrl: string,
+  liveSurfaces: (() => { readonly runtimes: number; readonly owners: number } | null) | undefined,
+): Promise<string[]> {
+  const fixture = await startLiveFixture();
+  try {
+    const driver: LiveRowsDriver = {
+      win,
+      shotDir,
+      say: (line) => console.log(line),
+      fixture,
+      custody: () => liveSurfaces?.() ?? null,
+      reload: async () => {
+        const ready = waitForConsole(win, "DESK_READY ", 60_000);
+        await loadRenderer(win, "smoke-canvas", viteUrl, { presenceRelay: "1", deskFaults: "1" });
+        try {
+          await ready;
+          return true;
+        } catch {
+          return false;
+        }
+      },
+    };
+    return await livePaneRows(driver);
+  } catch (error) {
+    return [`PT-2 LIVE: ${error instanceof Error ? error.message : String(error)}`];
+  } finally {
+    await fixture.close();
+  }
+}
+
 async function deskRetryRow(win: BrowserWindow, viteUrl: string): Promise<string[]> {
   const log = deskMarkerLog(win);
   const problems: string[] = [];
