@@ -163,17 +163,23 @@ export function deskCensus(engine: CanvasEngine): Record<string, number> {
   return out;
 }
 
+/** An object as the door reads it: its entity, its props (the cells of its groups, merged) and its rect on its desk. */
+export interface DeskObjectRow {
+  readonly entity: number;
+  readonly props: Readonly<Record<string, unknown>>;
+  /** PT-1 — its `Position` (the top-left) and `Size`, world units: what a resize or a re-cut wrote. */
+  readonly rect: { readonly x: number; readonly y: number; readonly w: number; readonly h: number };
+}
+
 /**
- * Each object of `type` on the open board with its props — the cells of its groups, merged — what a smoke reads to
- * know what a kind's own write landed (DK-8: the comment pad's typed line). Never the pegboard's specimens.
+ * Each object of `type` on the open board with its props — the cells of its groups, merged — and its rect, what a smoke
+ * reads to know what a kind's own write landed (DK-8: the comment pad's typed line; PT-1: the browser pane's size, written by
+ * a resize and re-cut by its device switch). Never the pegboard's specimens.
  */
-export function deskObjects(
-  engine: CanvasEngine,
-  type: string,
-): { readonly entity: number; readonly props: Readonly<Record<string, unknown>> }[] {
+export function deskObjects(engine: CanvasEngine, type: string): DeskObjectRow[] {
   const widget = engine.catalog.widget(type);
   if (widget === undefined) return [];
-  const out: { entity: number; props: Record<string, unknown> }[] = [];
+  const out: DeskObjectRow[] = [];
   engine.world.query(objectsQ).each((batch) => {
     for (const row of batch) {
       const e = batch.entity(row);
@@ -181,7 +187,13 @@ export function deskObjects(
       const props: Record<string, unknown> = {};
       for (const g of widget.groups)
         Object.assign(props, (engine.world.get(e, g.component) as object | undefined) ?? {});
-      out.push({ entity: e as number, props });
+      const at = engine.world.get(e, Position);
+      const size = engine.world.get(e, Size);
+      out.push({
+        entity: e as number,
+        props,
+        rect: { x: at?.x ?? 0, y: at?.y ?? 0, w: size?.w ?? 0, h: size?.h ?? 0 },
+      });
     }
   });
   return out;
@@ -228,10 +240,13 @@ export interface VfDeskDoor {
   sample(opts?: CaptureOptions): Promise<DeskSample | null>;
   theme(): ThemeName;
   census(): Record<string, number>;
-  /** Each object of a type with its props (`deskObjects`) — what a kind's own write landed. */
-  objects(
-    type: string,
-  ): readonly { readonly entity: number; readonly props: Readonly<Record<string, unknown>> }[];
+  /** Each object of a type with its props and its rect (`deskObjects`) — what a kind's own write landed. */
+  objects(type: string): readonly DeskObjectRow[];
+  /**
+   * PT-1 — a kind's DESK STATE on this desk (`handle.local(name)` — what its `ObjectKind.local` made), or undefined: no such
+   * kind, or none kept. A read: a smoke asks a kind's own witness of it (the browser pane's `said(e)` — what its head says).
+   */
+  local(name: string): unknown;
   /** The board's persistence as its status row reads it — `live` with the last acknowledged save's time once a save lands. */
   board(): { readonly state: BoardPersistenceState; readonly lastSavedAt: number | null };
   /** What the desk was fed, by the routes the packaged CSP admits (ruling 8): the plates set, each
@@ -429,6 +444,7 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     theme: () => desk.theme,
     census: () => deskCensus(engine),
     objects: (type) => deskObjects(engine, type),
+    local: (name) => (handle as Partial<DeskLayerHandle>).local?.(name),
     board: () => {
       const s = getBoardStatus();
       return { state: s.state, lastSavedAt: s.lastSavedAt ?? null };

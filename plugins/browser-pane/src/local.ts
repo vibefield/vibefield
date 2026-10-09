@@ -32,6 +32,8 @@ export interface PaneLocal extends KindLocal {
     state: HeadState,
     tpu: number,
   ): { readonly key: string; readonly bitmap?: HeadBitmap };
+  /** What `e`'s head says now — its address, its viewport readout — as its record last asked (a smoke's witness, read through the desk door). */
+  said(e: Entity): HeadState | undefined;
   /** Heads drawn since the desk was made (a test's witness). */
   stats(): { readonly heads: number };
 }
@@ -45,6 +47,7 @@ const doorsOf = (host: KindHost | undefined): PaneDoors | undefined => {
 
 export function createPaneLocal(host: KindHost | undefined): PaneLocal {
   const heads = new Map<Entity, { readonly key: string; readonly bitmap: HeadBitmap }>();
+  const saying = new Map<Entity, HeadState>();
   let drawn = 0;
   let wired: PaneDoors | undefined;
   /** The root pass's doors, its deferral wired to the desk's wake the first time they are there. */
@@ -60,6 +63,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
   return {
     head(e, S, state, tpu) {
       doors();
+      saying.set(e, state);
       const key = headKey(S, state, tpu);
       const had = heads.get(e);
       if (had?.key === key) return had;
@@ -70,6 +74,7 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
       drawn += 1;
       return next;
     },
+    said: (e) => saying.get(e),
     stats: () => ({ heads: drawn }),
     tick: () => waiting(),
     due: (now) => (waiting() ? now + PAGE_REMAKE_MS / 3 : Number.POSITIVE_INFINITY),
@@ -77,10 +82,12 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     landed: (e) => doors()?.made(e as number) ?? 0,
     forget(e) {
       heads.delete(e);
+      saying.delete(e);
       doors()?.forget(e as number);
     },
     dispose() {
       heads.clear();
+      saying.clear();
       wired?.onPending(undefined);
       wired = undefined;
     },

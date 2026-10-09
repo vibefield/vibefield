@@ -246,6 +246,13 @@ describe("the browser pane's world half", () => {
       ctxOf({}, { local, view: { camX: 0, camY: 0, zoom: 2, width: 1200, height: 800, dpr: 2 } }),
     );
     expect(asked).toEqual(["lumen.example|1280x800|2", "lumen.example|1280x800|4"]);
+    // the local's witness says what the head says now (the smoke reads it through the desk door): its readout follows the size
+    expect(local.said(1 as Entity)?.viewport).toEqual([1280, 800]);
+    const wider = { cx: 100, cy: 80, w: PANE_SIZE.w + 52.494, h: PANE_SIZE.h };
+    k.record(k.resolve(ctxOf({}, { rect: wider })), ctxOf({}, { local, rect: wider }));
+    expect(local.said(1 as Entity)?.viewport).toEqual([1380, 800]);
+    local.forget?.(1 as Entity);
+    expect(local.said(1 as Entity)).toBeUndefined();
   });
 
   it("its RUNG is its head's band: the record is remade at a half-octave of the screen's density, never within one", () => {

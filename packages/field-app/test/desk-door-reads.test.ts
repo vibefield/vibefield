@@ -1,7 +1,8 @@
 // @vitest-environment node
 // DK-8 — THE DESK DOOR'S TWO NEW READS (`window.__vfDesk`, what smoke:canvas's pad row reads): an object type's
-// props — the cells of its groups, merged, never the pegboard's specimens — and the board's persistence row. Reads
-// only: the door still writes no document.
+// props — the cells of its groups, merged, never the pegboard's specimens — and the board's persistence row. PT-1 adds
+// each object's rect (what the browser pane's resize and re-cut wrote) and a kind's desk state by its name (the pane's
+// witness of what its head says). Reads only: the door still writes no document.
 
 import {
   defineQuery,
@@ -31,6 +32,40 @@ describe("the desk door's reads (DK-8)", () => {
     expect(pads).toHaveLength(1);
     expect(pads[0]?.props).toEqual({ text: "", seeds: "", pen: "ball", accent: "indigo", seed: 0 });
     expect(deskObjects(ce, "no.such.type")).toEqual([]);
+    ce.dispose();
+  });
+
+  it("PT-1: reads each object's RECT beside its props — its Position and Size, what a resize writes — and a kind's DESK STATE by its name", async () => {
+    const ce = createFieldEngine(buildRegistry());
+    await seedField(ce, ce.docs.create(), createDeskBlobStore());
+    const pad = deskObjects(ce, COMMENT_PAD_TYPE)[0];
+    expect(pad?.rect.w).toBe(220);
+    expect(pad?.rect.h).toBe(280);
+    expect(Number.isFinite(pad?.rect.x) && Number.isFinite(pad?.rect.y)).toBe(true);
+    // the handle's `local(name)`, read through the door as it is — a kind's own witness of its objects
+    const state = { said: () => "a word" };
+    const undo = installDeskDoor(
+      {
+        engine: ce,
+        handle: { local: (name: string) => (name === "some.kind" ? state : undefined) } as never,
+        generation: 1,
+        mount: 0,
+        theme: "light",
+      },
+      () => false,
+    );
+    const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
+    expect(door?.local("some.kind")).toBe(state);
+    expect(door?.local("no.such.kind")).toBeUndefined();
+    expect(door?.objects(COMMENT_PAD_TYPE)[0]?.rect).toEqual(pad?.rect);
+    undo();
+    // a handle with no such door (a test's) answers nothing
+    const bare = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light" },
+      () => false,
+    );
+    expect((globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk?.local("some.kind")).toBeUndefined();
+    bare();
     ce.dispose();
   });
 
