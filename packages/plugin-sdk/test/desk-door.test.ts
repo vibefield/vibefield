@@ -13,6 +13,8 @@ import type { ObjectBinding, ObjectContext, ObjectHit, ObjectKind } from "../src
 import * as door from "../src/desk";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
+/** The live face's host half (PT-2): ICE's kit has them; the door hides them. */
+const HOST_HALF = ["createLiveTexture", "stillLive"];
 const SOURCE = readFileSync(join(HERE, "..", "src", "desk.ts"), "utf8");
 
 /** Every module specifier the door's source names (static, re-export and type-only alike). */
@@ -34,13 +36,32 @@ describe("the SDK's /desk door", () => {
     expect(SOURCE).not.toMatch(/["']@ice\//);
   });
 
-  it("hands over the render kit WHOLE, the same bindings ICE's kinds use (one copy)", () => {
+  it("hands over the render kit WHOLE, the same bindings ICE's kinds use (one copy) — but the live face's host half", () => {
     for (const name of Object.keys(iceKit)) {
+      if (HOST_HALF.includes(name)) continue;
       expect(door, `kit name ${name}`).toHaveProperty(name);
       expect((door as Record<string, unknown>)[name], name).toBe(
         (iceKit as Record<string, unknown>)[name],
       );
     }
+  });
+
+  it("PT-2: hands a kind the LIVE FACE it reads, never the host's writer nor a still's source (PA-22)", () => {
+    // what a kind reads: the key a host lends its sources under, the sight, the depth a face is read at
+    expect(door.LIVE).toBe(iceKit.LIVE);
+    expect(door.createSight).toBe(iceKit.createSight);
+    expect(door.liveDepth).toBe(iceKit.liveDepth);
+    expectTypeOf<door.LiveFace>().toEqualTypeOf<iceKit.LiveFace>();
+    expectTypeOf<door.LiveTexture>().toEqualTypeOf<iceKit.LiveTexture>();
+    // the host's half is in ICE's kit and NOT through this door
+    for (const name of HOST_HALF) {
+      expect(typeof (iceKit as Record<string, unknown>)[name], name).toBe("function");
+      expect((door as Record<string, unknown>)[name], name).toBeUndefined();
+    }
+    // and a kind reaches a live page's keys, its redraw and the desk's frames through its host
+    expectTypeOf<door.KindHost["keyOf"]>().toEqualTypeOf<iceDesk.KindHost["keyOf"]>();
+    expectTypeOf<door.KindHost["redraw"]>().toEqualTypeOf<iceDesk.KindHost["redraw"]>();
+    expectTypeOf<door.KindHost["frames"]>().toEqualTypeOf<iceDesk.KindHost["frames"]>();
   });
 
   it("hands over the kind contract, the placement keys and the service keys", () => {
