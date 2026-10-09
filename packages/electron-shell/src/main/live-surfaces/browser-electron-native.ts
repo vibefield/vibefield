@@ -95,6 +95,11 @@ class ElectronBrowserSurfaceWindow implements BrowserSurfaceNativeWindow {
     this.window.webContents.stopPainting();
   }
 
+  setAudioMuted(muted: boolean): void {
+    if (this.isDestroyed()) return;
+    this.window.webContents.setAudioMuted(muted);
+  }
+
   invalidate(): void {
     this.window.webContents.invalidate();
   }

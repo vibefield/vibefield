@@ -1,6 +1,7 @@
 import { EventEmitter } from "node:events";
 import type { LiveSurfaceDemandV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { LiveSurfaceAuthority } from "../src/main/live-surfaces/authority";
 import {
   BrowserControlTargetRegistry,
   type BrowserControlTargetWebContents,
@@ -51,6 +52,9 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
   readonly startPainting = vi.fn();
   readonly stopPainting = vi.fn();
   readonly invalidate = vi.fn();
+  /** The page's sound: muted or not, and every call that set it. */
+  muted = false;
+  readonly mutes: boolean[] = [];
   readonly #events = new EventEmitter();
 
   constructor(
@@ -76,6 +80,11 @@ class FakeBrowserWindow implements BrowserSurfaceNativeWindow {
 
   setFrameRate(fps: number): void {
     this.frameRates.push(fps);
+  }
+
+  setAudioMuted(muted: boolean): void {
+    this.muted = muted;
+    this.mutes.push(muted);
   }
 
   async setBackingRaster(
@@ -446,6 +455,147 @@ describe("BrowserLiveSurfaceRuntime", () => {
       expect(lab.native.windows[0]?.destroyed).toBe(true);
       expect(lab.runtime.summary.state).toBe("hibernated");
       lab.runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("a page whose renderer LEFT is MUTED for its grace — a pause stops its painting, not its sound — and unmuted when one re-attaches; an attached pause keeps its sound (PT-2)", async () => {
+    // Electron 43 (PT-2's probe): an offscreen page under `stopPainting()` paints nothing and its audio plays on —
+    // `isCurrentlyAudible()` true, its AudioContext's clock running. The grace keeps a page no renderer shows: silent.
+    vi.useFakeTimers();
+    try {
+      const result = setup({ detachedHibernateMs: 1000 });
+      const first = attach(result.runtime, "attachment_browser_00000001");
+      first.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      await vi.advanceTimersByTimeAsync(0);
+      const window = result.native.windows[0];
+      window?.paint(sharedPaint(320, 180).paint);
+      // an attached pause (a pane off the view, the pool's own grace): painting stops, the sound stays the page's
+      first.attachment.setDemand(demand(2, "paused"));
+      expect(result.runtime.summary.state).toBe("paused");
+      expect(window?.muted).toBe(false);
+      first.attachment.setDemand(demand(3, "live", 30, { width: 640, height: 360 }));
+      expect(result.runtime.summary.state).toBe("live");
+      // the renderer leaves: paused AND muted while the grace keeps it
+      first.attachment.dispose();
+      expect(result.runtime.summary.state).toBe("paused");
+      expect(window?.muted).toBe(true);
+      // the next document attaches inside the grace: the same page, live, its sound back
+      await vi.advanceTimersByTimeAsync(500);
+      const second = attach(result.runtime, "attachment_browser_00000002");
+      second.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      expect(result.native.windows).toHaveLength(1);
+      expect(result.runtime.summary.state).toBe("live");
+      expect(window?.muted).toBe(false);
+      expect(window?.mutes).toEqual([true, false]);
+      // none back: muted, then hibernated once the grace lapses; the page made again for the next renderer is born with its
+      // sound, and is muted in its own grace
+      second.attachment.dispose();
+      expect(window?.muted).toBe(true);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(result.runtime.summary.state).toBe("hibernated");
+      const third = attach(result.runtime, "attachment_browser_00000003");
+      third.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      await vi.advanceTimersByTimeAsync(0);
+      const again = result.native.windows[1];
+      expect(again?.muted).toBe(false);
+      again?.paint(sharedPaint(320, 180).paint);
+      third.attachment.dispose();
+      expect(again?.muted).toBe(true);
+      result.runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("the grace holds only while the WINDOW lives: custody's window close and the app's quit destroy a page in its grace AT ONCE, as an explicit hibernated demand does — no timer outlives it (PT-2)", async () => {
+    vi.useFakeTimers();
+    try {
+      const native = new FakeNative();
+      const controlTargets = new BrowserControlTargetRegistry({
+        resolveTarget: (targetId) => native.targets.get(targetId),
+      });
+      const runtimes: BrowserLiveSurfaceRuntime[] = [];
+      const windows = new Map<string, { webContentsId: number }>();
+      let tickets = 0;
+      const custody = new LiveSurfaceAuthority({
+        resolveWindow: (identity) => windows.get(identity.incarnation) ?? null,
+        hostFor: () =>
+          ({
+            issue: () => {
+              tickets += 1;
+              return { v: 1, token: `ticket-${tickets}-${"x".repeat(30)}` };
+            },
+          }) as never,
+        factories: {
+          browser: (surfaceId, browserSource) => {
+            const runtime = new BrowserLiveSurfaceRuntime({
+              surfaceId,
+              source: browserSource,
+              native,
+              controlTargets,
+              detachedHibernateMs: 60_000,
+            });
+            runtimes.push(runtime);
+            return runtime;
+          },
+          sckWindow: () => {
+            throw new Error("no capture here");
+          },
+          iosSimulator: () => {
+            throw new Error("no simulator here");
+          },
+        },
+        enumeration: { sckWindows: async () => [], bootedSimulators: async () => [] },
+      });
+      /** A page minted by window `webContentsId`'s document, shown, then its renderer gone: paused, in its grace. */
+      const inGrace = async (webContentsId: number, n: number) => {
+        const document = { participantId: `window-${n}`, incarnation: `window-${n}:document-1` };
+        windows.set(document.incarnation, { webContentsId });
+        custody.mint({
+          rendererParticipant: document,
+          source: source(),
+          reuseKey: `desk:page-${n}`,
+        });
+        const runtime = runtimes[runtimes.length - 1] as BrowserLiveSurfaceRuntime;
+        const renderer = attach(runtime, `attachment_browser_0000000${n}`);
+        renderer.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+        await vi.advanceTimersByTimeAsync(0);
+        const window = native.windows[native.windows.length - 1];
+        window?.paint(sharedPaint(320, 180).paint);
+        renderer.attachment.dispose();
+        expect(runtime.summary.state).toBe("paused");
+        expect(window?.destroyed).toBe(false);
+        return { runtime, window };
+      };
+      // the window closes (its `destroyed` hook: `releaseAllForWebContents`): the page goes with it, not 60 s later
+      const closed = await inGrace(7, 1);
+      custody.releaseAllForWebContents(7);
+      expect(closed.window?.destroyed).toBe(true);
+      expect(closed.runtime.summary.state).toBe("closed");
+      // the app quits (`disposeShellState` → custody's `dispose`): the same
+      const quit = await inGrace(8, 2);
+      custody.dispose();
+      expect(quit.window?.destroyed).toBe(true);
+      expect(quit.runtime.summary.state).toBe("closed");
+      expect(custody.state()).toEqual({ runtimes: 0, owners: 0 });
+      // no grace's timer outlives the runtimes it was for
+      expect(vi.getTimerCount()).toBe(0);
+      // an explicit `hibernated` demand from a renderer that comes back: at once, the grace or not
+      const asked = setup({ detachedHibernateMs: 60_000 });
+      const one = attach(asked.runtime, "attachment_browser_00000001");
+      one.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      await vi.advanceTimersByTimeAsync(0);
+      asked.native.windows[0]?.paint(sharedPaint(320, 180).paint);
+      one.attachment.dispose();
+      expect(asked.native.windows[0]?.destroyed).toBe(false);
+      const two = attach(asked.runtime, "attachment_browser_00000002");
+      two.attachment.setDemand(demand(1, "hibernated"));
+      expect(asked.native.windows[0]?.destroyed).toBe(true);
+      expect(asked.runtime.summary.state).toBe("hibernated");
+      asked.runtime.dispose();
+      expect(vi.getTimerCount()).toBe(0);
     } finally {
       vi.useRealTimers();
     }

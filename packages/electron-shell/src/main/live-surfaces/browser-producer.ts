@@ -77,6 +77,8 @@ export interface BrowserSurfaceNativeWindow {
   setFrameRate(fps: number): void;
   startPainting(): void;
   stopPainting(): void;
+  /** The page's sound. `stopPainting()` stops an offscreen page's frames, never its audio (Electron 43). */
+  setAudioMuted(muted: boolean): void;
   invalidate(): void;
   /** Keeps logical layout fixed while selecting a producer backing raster. */
   setBackingRaster(
@@ -531,6 +533,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #rasterTimer: ReturnType<typeof setTimeout> | null = null;
   #restartTimer: ReturnType<typeof setTimeout> | null = null;
   #hibernateTimer: ReturnType<typeof setTimeout> | null = null;
+  /** Muted because no renderer is attached (the grace's page); unmuted when one comes back. */
+  #mutedDetached = false;
   #effectiveDemand: LiveSurfaceDemandV1 | null = null;
   #transport: "shared-texture" | "cpu-bgra" | undefined;
   /** The logical viewport the page is CURRENTLY laid out at (DT-3f): starts as
@@ -884,11 +888,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       // No renderer attached — a window reload's gap, or its last face gone: the page PAUSES and is KEPT, so a renderer that
       // re-attaches within the grace (main's custody re-binds the surface by its reuse key) finds the SAME page, its memory
       // whole; none back, it hibernates once the grace lapses (PT-2). An explicit `hibernated` demand still hibernates at once.
+      // A pause stops the page's frames, never its sound: a page no renderer shows is MUTED while the grace keeps it.
       if (state === "live") this.pauseProducer();
+      this.muteDetached(true);
       this.armDetachedHibernate();
       return;
     }
     this.cancelDetachedHibernate();
+    this.muteDetached(false);
     if (demand.mode === "live") {
       if (state === "created" || state === "hibernated" || state === "failed") {
         this.startProducer();
@@ -1265,6 +1272,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     }, this.#detachedHibernateMs);
   }
 
+  /** A page whose renderer left is silent until one is attached again (an attached pause keeps its sound — PT-5's call). */
+  private muteDetached(muted: boolean): void {
+    if (this.#mutedDetached === muted) return;
+    const window = this.#window;
+    if (window === null || window.isDestroyed()) return;
+    this.#mutedDetached = muted;
+    window.setAudioMuted(muted);
+  }
+
   private cancelDetachedHibernate(): void {
     if (this.#hibernateTimer === null) return;
     clearTimeout(this.#hibernateTimer);
@@ -1439,6 +1455,8 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const callbacks = this.#callbacks;
     this.#window = null;
     this.#callbacks = null;
+    // the next window is born with its sound
+    this.#mutedDetached = false;
     if (this.#startupTimer !== null) {
       clearTimeout(this.#startupTimer);
       this.#startupTimer = null;
