@@ -51,7 +51,6 @@ test("product, Studio, and browser catalog share one dependency optimizer graph"
       "studio-product.html",
       "studio.html",
       "design-system.html",
-      "logo-studio.html",
     ]);
     assert.ok(config.optimizeDeps.include.includes("@vibefield/field-app > @react-three/fiber"));
   }
@@ -90,16 +89,11 @@ test("the production renderer and browser catalog have disjoint build outputs", 
     join(workspacePaths.repoRoot, "packages/electron-shell/dist/renderer"),
   );
 
-  // The design build carries the catalog and the Logo Studio (DESIGN.md §12): two
-  // design documents, neither a product entry.
-  assert.deepEqual(Object.keys(design.build.rollupOptions.input), ["design-system", "logo-studio"]);
+  // The design build carries only the catalog, separate from product entries.
+  assert.deepEqual(Object.keys(design.build.rollupOptions.input), ["design-system"]);
   assert.equal(
     design.build.rollupOptions.input["design-system"],
     join(workspacePaths.repoRoot, "packages/electron-shell/src/renderer-host/design-system.html"),
-  );
-  assert.equal(
-    design.build.rollupOptions.input["logo-studio"],
-    join(workspacePaths.repoRoot, "packages/electron-shell/src/renderer-host/logo-studio.html"),
   );
   assert.equal(
     design.build.outDir,

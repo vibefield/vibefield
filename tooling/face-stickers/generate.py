@@ -86,8 +86,10 @@ export interface FaceStickerDrawing {
             info=zipfile.ZipInfo('vibefield-face-club/'+name,date_time=(2026,9,22,0,0,0))
             info.compress_type=zipfile.ZIP_DEFLATED;info.external_attr=0o644<<16
             z.writestr(info,content.encode(),compresslevel=9)
-    write('docs/design/vibefield-face-club.zip',archive.getvalue())
+    # Local review archives are outside production consistency checks.
+    if not args.check:
+        write('draft/design/vibefield-face-club.zip',archive.getvalue())
     if mismatch:
         print('Generated files differ:\n'+'\n'.join(mismatch),file=sys.stderr);raise SystemExit(1)
-    print(('Verified' if args.check else 'Generated')+' FACE CLUB: all 48 deck emoji, 96 optical drawings, 192 SVGs, 2 sprites, and ZIP.')
+    print(('Verified' if args.check else 'Generated')+' FACE CLUB: all 48 deck emoji, 96 optical drawings, 192 SVGs, 2 sprites'+('.' if args.check else ', and ZIP.'))
 if __name__=='__main__':main()
