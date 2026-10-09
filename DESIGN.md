@@ -706,9 +706,11 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     **Canvas — Objects** (`plus`, B): the objects rise behind the line and the plus turns 135° into
     ✕ over 600ms on the island curve; **Godview — New terminal** (`start`, ⌘T): a fresh shell in the
     active pane, which shows its launcher; **History — Resume** (`resume`): waiting, faint by ink as
-    the Assistant's cell is, until a session is chosen. Between views the glyph cross-fades in place,
-    200ms `ease` (One Frame §12); the tooltip says the act and its key ("Objects  B", "New terminal
-    ⌘T", "Resume this session — choose a session first"), open it says "Close  Esc";
+    the Assistant's cell is, until a session is chosen — and **Jump to** (`jump`) while the chosen
+    session runs on this desktop (§8 "History", 2026-10-08). Between views the glyph cross-fades in
+    place, 200ms `ease` (One Frame §12), and so does History's between Resume and Jump to; the
+    tooltip says the act and its key ("Objects  B", "New terminal ⌘T", "Resume this session —
+    choose a session first", "Jump to this session"), open it says "Close  Esc";
   - **the rule** — 1 × 18 in the strong hairline, 8 after create and 6 before the draft;
   - **the draft** — an editor, not a field: 14px body (§3 — the page drew 15, off the ramp, F15) in
     primary ink, padded 10, one line that keeps the caret in view (typing past one line is the
@@ -846,7 +848,8 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     act, **its key at the row's end**: **Views** — Canvas ⌘1 · Godview ⌘2 · History ⌘3 ·
     Assistant ⌘4, which waits ("not built yet"); **On this view** — the line's create (Objects B
     on Canvas, New terminal ⌘T in Godview, Resume this session in History, waiting until a session
-    is chosen) and on Canvas the four zoom acts; **App** — Settings… ⌘,; then each enabled
+    is chosen — Jump to this session while it runs here, by the line's own reading) and on Canvas
+    the four zoom acts; **App** — Settings… ⌘,; then each enabled
     plugin's palette commands under the plugin's name, one no live handler answers drawn
     "unavailable" and never run. Eyebrows 10px mono capitals in tertiary ink; rows 36, a 16 glyph
     in a 24 column in secondary ink (the zoom acts carry none), 13/500, the hot row in the ready
@@ -1696,6 +1699,30 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     and the window moves to Godview to show it; the note says **"Resumed in the active pane"**, or
     **"Could not resume — …"** in the launcher's words, and then the window stays in History. Jump to,
     for a session still running, is owed.
+    *Corrected 2026-10-08 (P3):* Jump to is built — the next entry.
+  - **Its create is Jump to while the session runs here** (`jump`, §13; AR-D43, K11 — built
+    2026-10-08, P3; the room's own row footer, PJ-D9 (a), waits for PJ-4's slot). Whether the
+    chosen session runs is read by **one plain `agent.list`** — no subscription, so a closed Godview
+    still asks nothing (PF6) — joined on the room's native id: a run continuing that conversation,
+    not stamped ended, with its terminal on this desktop's floor. It is asked again when the choice
+    changes, when History shows again, and at every press (the board's feed is Godview's, and the
+    index's pings move with transcripts, not with runs, so the line listens to neither). While an
+    answer is on its way **the create keeps what it said** — its glyph, its words, its wait — so a
+    new choice never flickers through Resume on its way to Jump to. Live, the glyph cross-fades to
+    `jump` (200ms `ease`, as between views) and the act is **"Jump to this session"**, which never
+    waits on the launcher's reading: a running session is shown even where it could not be resumed.
+    Pressed, the window moves to Godview and the pane showing that session becomes the active one —
+    or, when no pane shows it, it is put in the active pane, as a resumed one is; the note says
+    **"Jumped to its pane"**, or **"Could not jump — …"** in the deck's words. A session running on
+    another desktop is not running *here* (reaching it is the mesh's, DS-4): the create stays
+    Resume and says nothing new. The palette's row is the line's: the same reading, the same act.
+  - **Resume refuses a running session.** A Resume pressed while the session runs here (the line's
+    reading was older than the press) asks nothing of `agent.resume`: the note says **"This session
+    is running — Jump to it"**, and the create becomes Jump to. Fieldd's own refusal of a second run
+    on one conversation (AR-4b's one-run law, `terminal-alive`) is said in the same words. A Jump to
+    pressed after the session ended says **"This session has ended — Resume it"**, and the create
+    becomes Resume. *Before P3* nothing double-ran either: fieldd refused the second run, and the
+    line said "Could not resume — it is already running" with no way to the pane that was.
   - **Its honest states are said inside the frame** (§9; the tolerant reader). An index that cannot
     answer keeps the room's own **"rosettad is not answering"** (or "Connecting to rosettad") with
     fieldd's own words under it — "The agent index is starting", "The agent index is failed: …",
@@ -2156,7 +2183,8 @@ button (FC-D1 ruled type @).
 **`jump`** (2026-10-03, One Frame §13; Session Glyphs' jump-T3) goes to a session that is running — a
 live row in History, a link in running text: `terminal`'s window with its wall opened on the left for
 the arrow going in, since a box with an arrow leaving it is already `outward`; its Hardware record is
-the page's T4. **The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
+the page's T4. Since 2026-10-08 (P3) it is also History's create while the chosen session runs here
+(§8, the line; §8 "History"), cross-fading with `resume` in the create's one place. **The desk's seven** (2026-10-03, Chrome on the Mat §5; MC-D8 ruled 2026-10-02) are
 ICE's selection glyphs redrawn in the Instrument construction for the desk's chrome (§8):
 `duplicate` · `tape` · `lift` · `trash` on the selection bar — `tape` and `lift` are one padlock, shut
 and opened — and `pen` · `eraser` · `today`, the modes and the act the held kinds declare; their
