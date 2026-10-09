@@ -1,6 +1,8 @@
-import type { CanvasEngine } from "@vibecook/ice";
+import type { CanvasEngine, WidgetType } from "@vibecook/ice";
 import { type DeskLayerHandle, type DeskLayerStatus, objectKindOf } from "@vibecook/ice/desk";
+import { createLiveTexture } from "@vibecook/ice/desk/kit";
 import { Desk, type LayerFactory } from "@vibecook/ice/react";
+import type { PluginRegistry } from "@vibefield/plugin-runtime";
 import {
   type ReactElement,
   useCallback,
@@ -16,9 +18,14 @@ import {
   emitDeskUnavailableMarker,
 } from "../development-console";
 import { sayStatus, withdrawStatus } from "../frame/status-line";
+import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
+import { currentWindowClient } from "../plugin-host/plugin-client";
 import { getPluginRegistrySnapshot } from "../plugin-host/plugin-registry-store";
 import type { WindowKinds } from "../plugin-host/window-kinds";
+import { createDeskLiveSources, type DeskLiveSources } from "../surfaces/live/desk-live";
+import { createLiveGate } from "../surfaces/live/live-gate";
+import { getSurfacePool } from "../surfaces/pool";
 import { useAppTheme } from "../theme";
 import { DeskUnavailableView } from "./desk/DeskUnavailableView";
 import { deskCensus, installDeskDoor, type MountedDesk, publishDesk } from "./desk/desk-door";
@@ -69,6 +76,8 @@ export interface CanvasStageProps {
   refused?: DeskUnavailableWords | null;
   /** DK-9 — the window's kinds: the types the desk is mounted without, and when they change. */
   kinds?: WindowKinds;
+  /** PT-2 — the window's plugin registry: the live pages' gate reads an object's plugin and its grants (none: no LIVE lent). */
+  registry?: PluginRegistry<WidgetType>;
 }
 
 const NO_KINDS_CHANGE = (): (() => void) => () => undefined;
@@ -79,6 +88,7 @@ export function CanvasStage({
   generation,
   refused = null,
   kinds,
+  registry,
 }: CanvasStageProps): ReactElement {
   const theme = useAppTheme().resolved;
   const themeRef = useRef(theme);
@@ -126,9 +136,30 @@ export function CanvasStage({
   });
 
   // A new factory per engine and per remount: `<Desk>` re-boots on a new identity, never on a render.
-  const layer = useMemo<LayerFactory>(() => {
+  const { layer, live } = useMemo<{
+    layer: LayerFactory;
+    live: DeskLiveSources | undefined;
+  }>(() => {
     const dressed = themeRef.current;
     const gpu = deskGpu(mount, typeof location === "undefined" ? "" : location.search);
+    // PT-2 — THE DESK'S LIVE PAGES, one service per mount: its writers on THIS mount's device (`onDevice`), its pages in the
+    // window's LSF pool (whose grace keeps a page attached across a remount), its gate the window's registry — by the object
+    const live =
+      registry === undefined
+        ? undefined
+        : createDeskLiveSources({
+            pool: () => {
+              try {
+                return getSurfacePool(getHost());
+              } catch {
+                return null; // no host wired (a harness): no live surfaces, said by each face
+              }
+            },
+            mintClient: currentWindowClient,
+            gate: createLiveGate({ engine: ce, registry }),
+            device: () => deviceRef.current ?? undefined,
+            writer: createLiveTexture,
+          });
     const factory = fieldDeskLayer({
       engine: ce,
       theme: dressed,
@@ -138,11 +169,12 @@ export function CanvasStage({
       onDevice: (device) => {
         deviceRef.current = device;
       },
+      ...(live === undefined ? {} : { live }),
     });
     // the kinds of what is ON (DK-9): a plugin that is off has its types left out of the catalog the
     // layer is mounted with — read once, at the mount, as ICE reads it
     const off = kinds?.off() ?? new Set<string>();
-    return (ctx) => {
+    const layer: LayerFactory = (ctx) => {
       deviceRef.current = null; // the new layer's own device arrives with its boot
       const handle =
         off.size === 0
@@ -158,7 +190,10 @@ export function CanvasStage({
       wornRef.current = dressed;
       return handle;
     };
-  }, [ce, mount, kinds]);
+    return { layer, live };
+  }, [ce, mount, kinds, registry]);
+  // the mount's faces closed with it (its kinds close theirs on their own dispose — this is the service's word)
+  useEffect(() => () => live?.dispose(), [live]);
 
   // THE THEME BRIDGE (ruling 2; r4 §4): every change of the owner's answer re-dresses the live desk
   // — and only a change: the layer was MADE in the theme it wears (`wornRef`).
@@ -206,6 +241,7 @@ export function CanvasStage({
       words,
       off: mountedOff,
       device: () => deviceRef.current,
+      ...(live === undefined ? {} : { live }),
     };
     deskRef.current = desk;
     const unpublish = publishDesk(desk);
@@ -315,7 +351,7 @@ export function CanvasStage({
       if (deskRef.current === desk) deskRef.current = null;
       if (handleRef.current === handle) handleRef.current = null;
     };
-  }, [ce, generation, mount, remount]);
+  }, [ce, generation, mount, remount, live]);
 
   if (refused !== null) {
     return (

@@ -351,6 +351,7 @@ export function FieldView({
             generation={generation}
             refused={refused ? BEFORE_THE_DESK : null}
             {...(kinds === undefined ? {} : { kinds })}
+            registry={registry}
           />
         )}
       </div>

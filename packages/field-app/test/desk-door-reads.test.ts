@@ -20,6 +20,7 @@ import { setBoardStatus } from "../src/board-status";
 import { createDeskBlobStore } from "../src/field/desk/desk-blobs";
 import { deskObjects, installDeskDoor, type VfDeskDoor } from "../src/field/desk/desk-door";
 import { buildRegistry, createFieldEngine, seedField } from "../src/field-engine";
+import { createDeskLiveSources } from "../src/surfaces/live/desk-live";
 
 afterEach(() => {
   setBoardStatus({ state: "booting" });
@@ -95,10 +96,50 @@ describe("the desk door's reads (DK-8)", () => {
     );
     const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
     expect(door?.objects(COMMENT_PAD_TYPE)).toEqual([]);
+    // PT-2 — no live service lent on this mount: no live read
+    expect(door?.live()).toBeNull();
     setBoardStatus({ state: "live", lastSavedAt: 1234 });
     expect(door?.board()).toEqual({ state: "live", lastSavedAt: 1234 });
     setBoardStatus({ state: "saving" });
     expect(door?.board()).toEqual({ state: "saving", lastSavedAt: null });
+    undo();
+    ce.dispose();
+  });
+
+  it("PT-2: reads the mount's LIVE pages as its service counts them — its totals and each open face's row", () => {
+    const ce = createFieldEngine(buildRegistry());
+    ce.docs.create();
+    const live = createDeskLiveSources({
+      pool: () => null,
+      mintClient: () => null,
+      gate: () => ({ type: "vibefield.browser-pane" }),
+      device: () => undefined,
+      writer: () => {
+        throw new Error("no frame reaches a writer here");
+      },
+    });
+    live.open(
+      "13918995204487956201-1",
+      {
+        source: "browser",
+        url: "http://127.0.0.1:1/page",
+        viewport: [1280, 800],
+        scheme: "light",
+        label: "x",
+      },
+      () => {},
+    );
+    const undo = installDeskDoor(
+      { engine: ce, handle: {} as never, generation: 1, mount: 0, theme: "light", live },
+      () => false,
+    );
+    const door = (globalThis as { __vfDesk?: VfDeskDoor }).__vfDesk;
+    expect(door?.live()).toEqual({ stats: live.stats(), faces: live.faces() });
+    expect(door?.live()?.faces[0]).toMatchObject({
+      key: "13918995204487956201-1",
+      state: { is: "failed", reason: "live pages are unavailable in this window" },
+    });
+    expect(door?.live()?.stats).toMatchObject({ opened: 1, refused: 1, open: 1 });
     undo();
     ce.dispose();
   });

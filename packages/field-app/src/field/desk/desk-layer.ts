@@ -7,6 +7,7 @@ import {
   type GridConfig,
   type ThemeName,
 } from "@vibecook/ice/desk";
+import { LIVE, type LiveSources, service } from "@vibecook/ice/desk/kit";
 import { deskPalette, deskTheme } from "@vibecook/ice/desk/objects";
 import { deskText } from "./desk-assets";
 import { deskBlobs } from "./desk-blobs";
@@ -61,8 +62,11 @@ export interface FieldDeskLayerOptions {
   /** Where the layer acquires its device — `navigator.gpu` unless given (desk-gpu.ts's forced
    * first failure, the relaunch heal's smoke door). */
   readonly gpu?: GPU;
-  /** Told the layer's OWN device once it arrives (ICE's `onDevice`) — the smokes' GPU faults reach it (DK-16). */
+  /** Told the layer's OWN device once it arrives (ICE's `onDevice`) — the smokes' GPU faults reach it (DK-16), and the live
+   * service's writers are made on it (PT-2). */
   readonly onDevice?: (device: GPUDevice) => void;
+  /** PT-2 — the desk's live pages (`surfaces/live/desk-live.ts`), lent under ICE's `LIVE`: a portal kind's face opens on it. */
+  readonly live?: LiveSources;
 }
 
 /**
@@ -70,8 +74,8 @@ export interface FieldDeskLayerOptions {
  * adds none), the shipped hand (`text`), the document a note's typing commits into (`docs` — the
  * facade's, the one VibeField opens, autosaves and attaches presence to), the renderer-local byte
  * store (`blobs`, DK-D21), the grid, the hand's reserves (`hold`, DK-12 — the tools in hand under the head), the
- * pegboard's foot (`tray`, DK-13 — its lay clears the line), and no
- * further services yet (the kv service rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
+ * pegboard's foot (`tray`, DK-13 — its lay clears the line), and the desk's LIVE pages when the stage lends them (PT-2:
+ * `services` — a portal kind's face; the kv service rides later). The room's other people are VibeField's to draw (DK-16, DESIGN.md §8
  * "Peers on the mat"; ICE I26): `cursors: false`, so the host mounts no remote cursors of ICE's and nobody is drawn twice —
  * the desk's children draw each peer by face (`peers/PeersOnTheMat.tsx`), and their observers arm the world.
  */
@@ -90,5 +94,6 @@ export function fieldDeskLayer(opts: FieldDeskLayerOptions): DeskLayerFactory {
     ...(opts.gpuLedger === true ? { gpuLedger: true } : {}),
     ...(opts.gpu === undefined ? {} : { gpu: opts.gpu }),
     ...(opts.onDevice === undefined ? {} : { onDevice: opts.onDevice }),
+    ...(opts.live === undefined ? {} : { services: [service(LIVE, opts.live)] }),
   });
 }

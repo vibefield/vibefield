@@ -29,6 +29,11 @@ import type {
 import { type BoardPersistenceState, getBoardStatus } from "../../board-status";
 import { lastSend, type SendRecord } from "../../frame/line-send";
 import { type SaidNotice, statusLineSaid } from "../../frame/status-line";
+import type {
+  DeskLiveFaceRow,
+  DeskLiveSources,
+  DeskLiveStats,
+} from "../../surfaces/live/desk-live";
 import { type BarStats, readBarStats } from "./bar/bar-stats";
 import { type CoverRecord, coverCaptures, coverRecords } from "./cover-still";
 import { DESK_FACE_URLS, deskText } from "./desk-assets";
@@ -64,6 +69,8 @@ export interface MountedDesk {
   readonly off?: ReadonlySet<string>;
   /** DK-16 — the layer's OWN device once it arrived (null before, and with none): what the smokes' GPU faults reach. */
   readonly device?: () => GPUDevice | null;
+  /** PT-2 — the mount's live pages (the service lent under ICE's `LIVE`); absent where none is lent. */
+  readonly live?: DeskLiveSources;
 }
 
 /** What the chrome says of a type when the mount names no words: the type, drawn. */
@@ -262,6 +269,13 @@ export interface VfDeskDoor {
    * is PT-3's — so a smoke can point a pane at its fixture page. False on a board this window may not write or an object gone.
    */
   writeProps(entity: number, patch: Readonly<Record<string, unknown>>): boolean;
+  /**
+   * PT-2 — the mount's LIVE pages as its service counts them (surfaces/live/desk-live.ts): its totals (faces opened, frames
+   * presented and dropped, demands, writers made) and each open face's row — its key (the object's durable key), the kind's
+   * last ask, the demand the pool last wrote for its page, its state and words, its arrivals, presents and texture. Null where
+   * no live service is lent. A read: the live-pane smoke's witness.
+   */
+  live(): { readonly stats: DeskLiveStats; readonly faces: readonly DeskLiveFaceRow[] } | null;
   /**
    * PT-1 — a kind's DESK STATE on this desk (`handle.local(name)` — what its `ObjectKind.local` made), or undefined: no such
    * kind, or none kept. A read: a smoke asks a kind's own witness of it (the browser pane's `said(e)` — what its head says).
@@ -464,6 +478,8 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     theme: () => desk.theme,
     census: () => deskCensus(engine),
     objects: (type) => deskObjects(engine, type),
+    live: () =>
+      desk.live === undefined ? null : { stats: desk.live.stats(), faces: desk.live.faces() },
     writeProps: (entity, patch) => {
       const session = engine.docs.current();
       const e = entity as Entity;
