@@ -701,10 +701,11 @@ const SizeSpec = z.object({ w: z.number().positive(), h: z.number().positive() }
 /** ICE interaction flags — durable contract, host-derived into the prefab.
  * Vocabulary is the engine's WidgetInteraction verbatim: snap
  * source/target/both/none (default target), dragOn press/longPress,
- * sweepContained = the comment-box drag, keyboard/keyboardEscape = the
- * design-007 §3.1/§3.3 keyboard claim (declared 2026-08-13 for the mind map
- * pack — before this they rode `.passthrough()` with an emit warning, and a
- * bogus value would have flowed to the engine unvalidated). */
+ * sweepContained = the comment-box drag. The keyboard claim
+ * (keyboard/keyboardEscape, design-007 §3.1/§3.3, declared 2026-08-13 for the
+ * mind map pack) is RETIRED with ICE 0.16 (M24 LT2: its tag was read by nothing
+ * since the desk, and ICE refuses it at definition) — refused by name below,
+ * `INTERACTION_RETIRED_FIELDS`, so no manifest declares what the engine throws on. */
 const InteractionFlags = z
   .object({
     selectable: z.boolean().optional(),
@@ -714,14 +715,17 @@ const InteractionFlags = z
     dragOn: z.enum(["press", "longPress"]).optional(),
     solid: z.boolean().optional(),
     sweepContained: z.boolean().optional(),
-    /** "exclusive": while a node inside this widget holds browser focus, the
-     * engine keymap + Space pan stand down; keys flow to the widget. */
-    keyboard: z.enum(["shared", "exclusive"]).optional(),
-    /** Escape under an exclusive claim: "release" (default; Esc blurs the
-     * widget) or "widget" (vim-grade — even Esc flows; release is click-away). */
-    keyboardEscape: z.enum(["release", "widget"]).optional(),
   })
   .passthrough();
+
+/** The interaction flags an object no longer declares, each with where it went (PT-2 — ICE 0.16.0-portals.2 removed the
+ * keyboard claim and REFUSES it at definition: the tolerant reader would otherwise carry it to the engine's throw). */
+export const INTERACTION_RETIRED_FIELDS: Readonly<Record<string, string>> = {
+  keyboard:
+    "interaction.keyboard is retired: a kind takes keys by leasing the desk's one editor (ICE's EditorLease — the lease is the claim)",
+  keyboardEscape:
+    'interaction.keyboardEscape is retired: an object in hand that owns Escape says open.escape: "kind"',
+};
 
 /** container semantics (folder-class): drop-to-consume + nested canvas. */
 const ContainerSpec = z
@@ -1334,6 +1338,11 @@ export const PluginManifestV1: z.ZodEffects<typeof PluginManifestV1Shape> =
       // never learn what moved)
       for (const [field, why] of Object.entries(OBJECT_RETIRED_FIELDS))
         if (Object.hasOwn(o, field)) issue(why, [...path, field]);
+      // the keyboard claim, refused by name where it was declared (PT-2: ICE 0.16 throws on it at definition)
+      const flags = o.interaction;
+      if (flags !== undefined)
+        for (const [field, why] of Object.entries(INTERACTION_RETIRED_FIELDS))
+          if (Object.hasOwn(flags, field)) issue(why, [...path, "interaction", field]);
       // the tray entry's face and take name declared props, each a value of
       // its prop's kind (ICE validates the same at defineObject; saying it here
       // keeps a bad specimen out of the manifest, not the mount)

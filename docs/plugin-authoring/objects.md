@@ -36,7 +36,7 @@ One entry per kind under `contributes.objects`:
 | `schemaVersion` | number | yes | `integer; > 0` |
 | `size` | { w: number, h: number } | yes | — |
 | `minSize` | { w: number, h: number } | no | — |
-| `interaction` | { selectable?: boolean, movable?: boolean, resizable?: boolean, snap?: `source` \| `target` \| `both` \| `none`, dragOn?: `press` \| `longPress`, solid?: boolean, sweepContained?: boolean, keyboard?: `shared` \| `exclusive`, keyboardEscape?: `release` \| `widget` } | no | — |
+| `interaction` | { selectable?: boolean, movable?: boolean, resizable?: boolean, snap?: `source` \| `target` \| `both` \| `none`, dragOn?: `press` \| `longPress`, solid?: boolean, sweepContained?: boolean } | no | — |
 | `container` | `{ accepts: string[], provides?: string[], portal?: object }` | no | — |
 | `provides` | `string[]` | no | at most 16 item(s) |
 | `ports` | { id: string, side: `n` \| `e` \| `s` \| `w`, index?: number, accepts?: string[] }[] | no | at most 16 item(s) |
@@ -751,6 +751,27 @@ export interface OpenBinding {
      * word draws nothing of the desk).
      */
     readonly readout?: string | ((ctx: HeldReadoutContext) => string | undefined);
+    /**
+     * The WHEEL in hand (design-019 §5, M24 LT2): `"hand"` (the default — a plain wheel moves the object once brought close) or `"kind"`
+     * — a plain wheel while it is held is the kind's, told as a `HeldEvent` "wheel" with its point (a page scrolls); the hand never pans
+     * for it. ⌘-wheel and the pinch still zoom the hand, and past 0.72× still put it down. Carried onto the widget type (`heldWheel`) by
+     * `defineObject`, where core's held input reads it.
+     */
+    readonly wheel?: "hand" | "kind";
+    /**
+     * The CURSOR in hand (design-019 §5, M24 LT2): asked while the object is held and the mouse is over one of the kind's NAMED parts
+     * (any but `content` and `frame`) — a link's `pointer`, a text field's `text`, from what its source says (`LiveInfo.cursor`); the
+     * desk shows it above its own (core's L4), written to the container only when it changes. `undefined` or "": the desk's own. One
+     * that throws is a strike against the kind (petition I24) and the desk's own is shown.
+     */
+    cursor?(ctx: HeldCursorContext): string | undefined;
+    /**
+     * ESCAPE in hand (design-019 §5, M24 LT2): `"desk"` (the default — Esc puts the object down, in one press even while its kind leases
+     * the editor) or `"kind"` — Esc is the kind's (a source that owns it: a terminal; its lease takes the key): the keymap never puts the
+     * object down for it nor blurs the editor, and the hand is put down by Done, a click off it, or the pinch. Carried onto the widget
+     * type (`heldEscape`) by `defineObject`, where the keymap reads it.
+     */
+    readonly escape?: "desk" | "kind";
 }
 /** One tool of the held bar, as a kind declares it (its `open.tools`). */
 export interface HeldToolDef {

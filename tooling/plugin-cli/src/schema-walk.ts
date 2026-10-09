@@ -173,10 +173,11 @@ export function describe(schema: unknown, depth = 0): Described {
       const shape = def.shape?.() ?? {};
       const keys = Object.keys(shape).filter((key) => !isNeverField(shape[key]));
       // Nine is where the widget `interaction` flags fit (keyboard/keyboardEscape
-      // joined 2026-08-13, S2) — the one nested shape an author configures by
-      // hand, and the one worth the width. The docs-anchors test pins the inline
-      // rendering, so outgrowing this number reds a suite instead of silently
-      // collapsing the vocabulary to "object".
+      // joined 2026-08-13, S2, and left with ICE 0.16's LT2 — seven now, PT-2) —
+      // the one nested shape an author configures by hand, and the one worth the
+      // width. The docs-anchors test pins the inline rendering, so outgrowing
+      // this number reds a suite instead of silently collapsing the vocabulary
+      // to "object".
       if (depth > 0 || keys.length === 0 || keys.length > 9)
         return { type: "object", constraints: [], optional: false };
       const fields = keys.map((key) => {

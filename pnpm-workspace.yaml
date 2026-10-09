@@ -159,7 +159,19 @@ overrides:
   # `0.15.0-desk.7`'s code unchanged (ICE CHANGELOG `[0.15.0]` — every ask
   # I20–I45, the contract). Nothing moves; strata 0.13.0 and loro ^1.13.8
   # unchanged.
-  "@vibecook/ice": 0.15.0
+  # 2026-10-09 bumped 0.15.0 → 0.16.0-portals.2 (PORTALS PT-2) — a PRERELEASE
+  # on `next` again, as DK-3…DK-17b were (portals.1 was cut, never published):
+  # ICE `826acc8` on `portals/lt2`, CHANGELOG `[Unreleased]`. M24 LT1, the live
+  # face (design-019): `createLiveTexture` (the host's writer), `LIVE`/
+  # `LiveSources`/`LiveFace` and its words, `createSight`, `liveDepth`,
+  # `stillLive`, `mipsInto`; `KindHost.redraw`, `keyOf`, `frames`; the kit's
+  # WGSL name `mat`. LT2, the hand's input to a kind in hand: `KindLocal.held`
+  # and `HeldEvent`, `OpenBinding.wheel`/`cursor`/`escape`, the editor lease's
+  # `compose`/`commit`, `LiveTexture.logical`. ONE REMOVAL breaks a declaration:
+  # `interaction.keyboard`/`keyboardEscape` (the inert `KeyboardExclusive`
+  # claim) — ICE throws on them at definition, and the plugin contract refuses
+  # them by name since this bump. strata 0.13.0 and loro ^1.13.8 unchanged.
+  "@vibecook/ice": 0.16.0-portals.2
   # NF-0 (native-floor spec NF-D1): Ghosttea graduated to registry releases at
   # 0.6.0 (2026-07-29, one version across crates/npm/SwiftPM) — same EL8 posture
   # as ice above. fieldd consumes ghosttea-client since NF-3. NF-7 (2026-08-01)
@@ -292,7 +304,7 @@ catalog:
   vitest: ^3.0.0
 minimumReleaseAgeExclude:
   - '@vibecook/strata-ecs@0.13.0'
-  - '@vibecook/ice@0.15.0'
+  - '@vibecook/ice@0.16.0-portals.2'
   - '@vibecook/ghosttea-client@0.12.0'
   - '@vibecook/ghosttea-protocol@0.12.0'
   - '@vibecook/ghosttea-electron@0.12.0'

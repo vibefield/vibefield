@@ -21,7 +21,7 @@ by ONE export name; `tray` hangs it on the pegboard. `objects.md` is the deep en
 | `schemaVersion` | number | yes | `integer; > 0` |
 | `size` | { w: number, h: number } | yes | — |
 | `minSize` | { w: number, h: number } | no | — |
-| `interaction` | { selectable?: boolean, movable?: boolean, resizable?: boolean, snap?: `source` \| `target` \| `both` \| `none`, dragOn?: `press` \| `longPress`, solid?: boolean, sweepContained?: boolean, keyboard?: `shared` \| `exclusive`, keyboardEscape?: `release` \| `widget` } | no | — |
+| `interaction` | { selectable?: boolean, movable?: boolean, resizable?: boolean, snap?: `source` \| `target` \| `both` \| `none`, dragOn?: `press` \| `longPress`, solid?: boolean, sweepContained?: boolean } | no | — |
 | `container` | `{ accepts: string[], provides?: string[], portal?: object }` | no | — |
 | `provides` | `string[]` | no | at most 16 item(s) |
 | `ports` | { id: string, side: `n` \| `e` \| `s` \| `w`, index?: number, accepts?: string[] }[] | no | at most 16 item(s) |

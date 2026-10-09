@@ -27,12 +27,15 @@ describe("generated docs teach the shipped API", () => {
   it("the interaction vocabulary renders inline — an `object` cell teaches nothing (S2)", () => {
     // schema-walk's inline-object threshold is calibrated to this exact shape;
     // if interaction outgrows it again, this reds instead of the table silently
-    // collapsing (which is how keyboard/keyboardEscape nearly shipped invisible).
+    // collapsing (which is how keyboard/keyboardEscape nearly shipped invisible —
+    // retired since with ICE 0.16's LT2, PT-2: refused by name, never taught).
     // (DK-8: on objects.md — widgets.md retired with `contributes.widgets`)
     const objects = read("docs/plugin-authoring/objects.md");
     expect(objects).toContain("sweepContained?: boolean");
-    expect(objects).toContain("keyboard?: `shared` \\| `exclusive`");
-    expect(objects).toContain("keyboardEscape?: `release` \\| `widget`");
+    expect(objects).toContain("snap?: `source` \\| `target` \\| `both` \\| `none`");
+    expect(objects).toContain("dragOn?: `press` \\| `longPress`");
+    expect(objects).not.toContain("keyboard?:");
+    expect(objects).not.toContain("keyboardEscape?:");
   });
 
   it("keeps parser tombstones out of the author-facing vocabulary", () => {

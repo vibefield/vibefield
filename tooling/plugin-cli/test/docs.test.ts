@@ -273,8 +273,10 @@ describe("coverage of what an author has to know", () => {
   });
 
   it("DK-10: says nothing of `widget` but the retired words' own refusals and the names ICE's vocabulary keeps", () => {
-    // the retired words, each said only where it is refused by name; ICE's `keyboardEscape` value; the limit the
-    // plan's addendum (15) keeps — nothing else of the old face may creep back into what an author reads
+    // the retired words, each said only where it is refused by name; the limit the plan's addendum (15) keeps; ICE's
+    // own words in what the docs quote of it — its `OpenBinding`'s wheel and Escape "carried onto the widget type"
+    // (0.16's LT2, PT-2) — nothing else of the old face may creep back into what an author reads (ICE's
+    // `keyboardEscape` value left with the keyboard claim, PT-2)
     const kept = [
       /`?onWidget:(<type>|com\.example\.demo)?`?/g,
       /onwidget-activation-retired/g,
@@ -283,8 +285,8 @@ describe("coverage of what an author has to know", () => {
       /the retired widget-context command placement/g,
       /contributes\.widgets/g,
       /widgets-contribution-retired/g,
-      /keyboardEscape\?: `release` \\\| `widget`/g,
       /`WIDGET_BEHAVIORS_MAX`/g,
+      /Carried onto the widget/g,
     ];
     for (const [name, text] of docs) {
       const left = kept.reduce((t, word) => t.replace(word, ""), text);

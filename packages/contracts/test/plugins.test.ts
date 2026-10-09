@@ -164,28 +164,31 @@ describe("PluginManifestV1 invariants (§7.1)", () => {
     );
   });
 
-  it("the keyboard claim is a declared, bounded field (S2 — the mind map's door)", () => {
-    // Declared values parse AND survive typed (before S2 they rode .passthrough()).
+  it("the keyboard claim is RETIRED — refused by name where it is declared, saying where it went (PT-2, ICE 0.16's LT2)", () => {
+    // ICE 0.16.0-portals.2 removed the claim (its tag read by nothing since the desk) and throws on it at definition: the
+    // tolerant reader would carry it there, so the manifest refuses it first — each field, in its own words, at its path
+    const declaring = (interaction: Record<string, unknown>) => (b: ReturnType<typeof base>) => {
+      b.contributes.objects[0] = {
+        ...b.contributes.objects[0],
+        interaction,
+      } as unknown as (typeof b.contributes.objects)[0];
+      return b;
+    };
+    refuse(
+      declaring({ keyboard: "exclusive" }),
+      /interaction\.keyboard is retired: a kind takes keys by leasing/,
+    );
+    refuse(
+      declaring({ keyboardEscape: "release" }),
+      /interaction\.keyboardEscape is retired: .*open\.escape/,
+    );
+    // the flags that stand parse as ever
     const m = base();
     m.contributes.objects[0] = {
       ...m.contributes.objects[0],
-      interaction: { keyboard: "exclusive", keyboardEscape: "release" },
+      interaction: { selectable: true, snap: "both", dragOn: "press" },
     } as (typeof m.contributes.objects)[0];
-    const r = validatePluginManifest(m);
-    expect(r.ok).toBe(true);
-    if (r.ok) {
-      const w = r.manifest.contributes?.objects?.[0];
-      expect(w?.interaction?.keyboard).toBe("exclusive");
-      expect(w?.interaction?.keyboardEscape).toBe("release");
-    }
-    // A bogus value is REFUSED — the pre-S2 behavior (silent flow to the engine) is the bug.
-    refuse((b) => {
-      b.contributes.objects[0] = {
-        ...b.contributes.objects[0],
-        interaction: { keyboard: "bogus" },
-      } as unknown as (typeof b.contributes.objects)[0];
-      return b;
-    }, /keyboard/i);
+    expect(validatePluginManifest(m).ok).toBe(true);
   });
 
   it("groups are named, disjoint, and reference declared props; omitting them is legal", () => {
