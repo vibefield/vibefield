@@ -115,6 +115,7 @@ import {
   type PhysicalSoakOptions,
   type PhysicalSoakSample,
 } from "./plugin-runtime-soak";
+import { browserPaneRows, PANE_FLAG } from "./smoke-browser-pane";
 import { coverRows } from "./smoke-covers";
 import { removeSmokeRoot, SMOKE_RUN_ENV, stopRunDaemons } from "./smoke-daemons";
 import { deskRigRows } from "./smoke-desk-rig";
@@ -1101,7 +1102,17 @@ export async function runSmokeCanvas(opts: {
       problems.push(...(await deskWitnesses(win, shotDir)));
       console.log(`SMOKE_CANVAS_MARKERS ${JSON.stringify(deskSaid.said)}`);
       deskSaid.stop();
-      if (faultRun) {
+      if (process.argv.includes(PANE_FLAG)) {
+        // PT-1 — the browser pane's rows ALONE after the boot's (the author's loop: `node packaging/run-smoke.mjs
+        // --smoke-canvas --browser-pane` on smoke:canvas's build); smoke:canvas runs them in its own order below
+        try {
+          problems.push(
+            ...(await browserPaneRows({ win, shotDir, say: (line) => console.log(line) })),
+          );
+        } catch (error) {
+          problems.push(`PT-1 PANE: ${error instanceof Error ? error.message : String(error)}`);
+        }
+      } else if (faultRun) {
         // DK-9: the fault fixture's run (`smoke:kind-faults`) — the witnesses above ran with the broken kind
         // refused at the boot; the fault rows lay the broken clocks beside a drawn one. The pad's, the retry's
         // and the refusal's rows are smoke:canvas's own run.
@@ -1246,6 +1257,17 @@ export async function runSmokeCanvas(opts: {
         problems.push(...pad.problems);
         problems.push(...(await deskRetryRow(win, opts.viteUrl)));
         if (pad.typed) problems.push(...(await commentPadReopenRow(win)));
+        // PT-1 (PORTALS): the browser pane — laid from the pegboard, its face drawn by day and by night, resized (its readout
+        // following), re-cut to a phone and back in one undo step, picked up and put down, then deleted. After the pad's
+        // rows (they find the pad where the camera left it — these rows pan and wheel the camera) and before the refusal's,
+        // which leaves the desk on its card (testing/smoke-browser-pane.ts)
+        try {
+          problems.push(
+            ...(await browserPaneRows({ win, shotDir, say: (line) => console.log(line) })),
+          );
+        } catch (error) {
+          problems.push(`PT-1 PANE: ${error instanceof Error ? error.message : String(error)}`);
+        }
         // DK-9: last — it leaves the desk on its card
         problems.push(...(await deskRefusalRow(win, opts.viteUrl)));
       }
