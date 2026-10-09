@@ -94,6 +94,7 @@ import {
   type LiveSurfaceLabRendererResult,
 } from "./live-surface-lab-contract";
 import { type LoopbackExchange, recordLoopback } from "./loopback-network";
+import { peekGeometryRung, peekSeededHitRung, peekShotDir } from "./peek-rungs";
 import {
   type CountVector,
   countVector,
@@ -7997,6 +7998,21 @@ export async function runSmokeGodview(opts: {
     verdict["history"] = { ...(JSON.parse(historyFace) as object), kept: true };
     verdict["historySession"] = await openSeededSession(win, opts.handle, opts.typedAgent, {
       room: HISTORY_ROOM,
+    });
+    // THE PEEK (GV-D8/D10, 2026-10-08; DESIGN.md §8 "Search — the Peek"): ⌘F,
+    //      a product chord while History is the view, opens the frame's popup
+    //      centred at 900 × 560 over the scrim with the field — cover and frame
+    //      — receded to 0.98 and out of reach; Esc folds it and the field rests
+    //      with no transform at all. Then the real hit: a word only the seeded
+    //      reply says, found by the real rosettad as Everything asks, searched
+    //      by ⌘F and opened by ↵ — the room lands at the line; photographed
+    //      light and dark on the way (offscreen captures).
+    verdict["peek"] = await peekGeometryRung(win);
+    verdict["peekSeededHit"] = await peekSeededHitRung(win, {
+      handle: opts.handle,
+      seeded: (verdict["historySession"] as { opened?: boolean }).opened === true,
+      word: "harbour",
+      shotDir: peekShotDir(),
     });
     pressViewKey(win, "godview");
     await untilRenderer(
