@@ -46,7 +46,7 @@ import {
   uniformBuffer,
 } from "@vibefield/plugin-sdk/desk";
 import { stillHead } from "./head-still";
-import { BROWSER, type BrowserLaw } from "./law";
+import { BROWSER, type BrowserLaw, pageOnBox } from "./law";
 import {
   glowLevel,
   type HeadBitmap,
@@ -413,12 +413,14 @@ export class PanePass implements KindPass<PaneInstance> {
       2 * S.page[3] * s.view.zoom * s.view.dpr,
     ];
     if (live !== undefined) {
-      live.sight.saw(live.e, s, {
-        cx: r.geometry.centre[0],
-        cy: r.geometry.centre[1],
-        w: 2 * S.page[2],
-        h: 2 * S.page[3],
-      });
+      // the sight is told only what this slot DRAWS of the page: prepared within its reach, it may lie past the box
+      if (pageOnBox(r.geometry, s.view))
+        live.sight.saw(live.e, s, {
+          cx: r.geometry.centre[0],
+          cy: r.geometry.centre[1],
+          w: 2 * S.page[2],
+          h: 2 * S.page[3],
+        });
       const t = live.face.texture();
       surface.live = t;
       this.lay(surface, r);

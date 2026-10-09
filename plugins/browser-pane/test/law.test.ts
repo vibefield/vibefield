@@ -33,6 +33,7 @@ import {
   Pane,
   PaneUniforms,
   pageDemand,
+  pageOnBox,
   pagePoint,
   paneDemand,
   paneFinish,
@@ -432,6 +433,35 @@ describe("resizing and the stream", () => {
     // held: the half rung stays while it still covers the page and is under 2.3× it
     expect(pageDemand(G, view(0, 0, 0.45), 2, false, BROWSER, 1280).width).toBe(1280);
     expect(glowLevel(2560)).toBeCloseTo(Math.log2(2560 / 24), 9);
+  });
+});
+
+describe("the live page SEEN where it is drawn — its page on the slot's box (PT-2)", () => {
+  it("is seen while any of its page meets the box, and not once it lies past it — whatever its reach still prepares", () => {
+    const { G, rect } = pane("laptop", 400, 300);
+    const S = G.shape;
+    // the page's world rect, as the pane lies flat
+    const px0 = rect.cx + S.page[0] - S.page[2];
+    const px1 = rect.cx + S.page[0] + S.page[2];
+    const view = (camX: number, camY: number, zoom = 1) => ({
+      camX,
+      camY,
+      zoom,
+      width: 1200,
+      height: 800,
+    });
+    // the view over the pane: seen
+    expect(pageOnBox(G, view(rect.cx - 600, rect.cy - 400))).toBe(true);
+    // the page's right edge just past the view's left: unseen (a shadow and a glow still reach in — the pass prepares it)
+    expect(pageOnBox(G, view(px1 + 1, rect.cy - 400))).toBe(false);
+    expect(pageOnBox(G, view(px1 - 1, rect.cy - 400))).toBe(true);
+    // at a zoom of 2 the view spans 600 world units: its left edge at the view's right edge is past it, a unit in is seen
+    expect(pageOnBox(G, view(px0 - 600 + 1, rect.cy - 200, 2))).toBe(true);
+    expect(pageOnBox(G, view(px0 - 600, rect.cy - 200, 2))).toBe(false);
+    // a slot's own box (a mini mat's face): the page must meet THAT, not the attachment
+    expect(
+      pageOnBox(G, { ...view(rect.cx - 600, rect.cy - 400), box: { x: 0, y: 0, w: 10, h: 10 } }),
+    ).toBe(false);
   });
 });
 

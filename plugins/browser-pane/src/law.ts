@@ -726,6 +726,38 @@ export function pageDemand(
 
 // ---------------------------------------------------------------- the live page's demand, over the SIGHT (PT-2)
 
+/** A slot's view as the pass reads it: the camera (world at the view's top-left) and zoom, the attachment, the slot's box. */
+export interface PaneView {
+  readonly camX: number;
+  readonly camY: number;
+  readonly zoom: number;
+  readonly width: number;
+  readonly height: number;
+  readonly box?:
+    | { readonly x: number; readonly y: number; readonly w: number; readonly h: number }
+    | undefined;
+}
+
+/**
+ * Does the PAGE lie in the slot's box (CSS px)? What the pass tells the SIGHT (PT-2): a pane is PREPARED while within its reach of
+ * the view — its shadow, its glow — and its quad culled by the shader past the box; its page is SEEN only where it is drawn, so
+ * a pane panned just off the view pauses its page. The page's world rect is its centre and half extents along the pane's axes
+ * (the eye's parallax, a hair, left out).
+ */
+export function pageOnBox(G: PaneGeometry, view: PaneView): boolean {
+  const S = G.shape;
+  const cx = G.centre[0] + G.ex[0] * S.page[0] + G.ey[0] * S.page[1];
+  const cy = G.centre[1] + G.ex[1] * S.page[0] + G.ey[1] * S.page[1];
+  const hx = Math.abs(G.ex[0]) * S.page[2] + Math.abs(G.ey[0]) * S.page[3];
+  const hy = Math.abs(G.ex[1]) * S.page[2] + Math.abs(G.ey[1]) * S.page[3];
+  const b = view.box ?? { x: 0, y: 0, w: view.width, h: view.height };
+  const x0 = (cx - hx - view.camX) * view.zoom;
+  const x1 = (cx + hx - view.camX) * view.zoom;
+  const y0 = (cy - hy - view.camY) * view.zoom;
+  const y1 = (cy + hy - view.camY) * view.zoom;
+  return x1 > b.x && x0 < b.x + b.w && y1 > b.y && y0 < b.y + b.h;
+}
+
 /** What the desk says it drew of a face last frame (ICE's `Seen`, design-019 §3.4): drawn, its largest device px, held. */
 export interface PaneSeen {
   readonly seen: boolean;
