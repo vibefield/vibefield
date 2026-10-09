@@ -173,6 +173,7 @@ export function browserPaneKind(
             source: "browser",
             url,
             viewport: S.viewport,
+            deviceScaleFactor: S.device.dpr,
             scheme,
             label: displayOf(url) || "Browser",
           },

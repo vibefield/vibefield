@@ -166,6 +166,7 @@ const spec = {
   source: "browser",
   url: PAGE,
   viewport: S.viewport,
+  deviceScaleFactor: S.device.dpr,
   scheme: "light",
   label: "127.0.0.1:4321",
 } as const;
@@ -367,6 +368,14 @@ describe("the pane's live page — its record", () => {
     expect(before.live?.sight).toBe(local.sight);
     expect(before.page).toBeNull(); // the film
     expect(before.loading).toBe(-1);
+    // the page the record opened: its address, its viewport at its device's own density, the desk's scheme
+    expect(t.opened[0]?.spec).toMatchObject({
+      source: "browser",
+      url: PAGE,
+      viewport: S.viewport,
+      deviceScaleFactor: S.device.dpr,
+      scheme: "light",
+    });
     t.faces.get("13918995204487956201-1")?.land({ width: 1280, height: 800 });
     local.tick?.(0);
     const after = k.record(G, ctxOf({ url: PAGE }, local)) as PaneInstance;

@@ -124,6 +124,7 @@ describe("the desk door's reads (DK-8)", () => {
         source: "browser",
         url: "http://127.0.0.1:1/page",
         viewport: [1280, 800],
+        deviceScaleFactor: 2,
         scheme: "light",
         label: "x",
       },

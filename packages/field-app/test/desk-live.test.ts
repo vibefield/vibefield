@@ -23,6 +23,7 @@ const PAGE = {
   source: "browser",
   url: "http://127.0.0.1:4321/",
   viewport: [1280, 800],
+  deviceScaleFactor: 2,
   scheme: "light",
   label: "Browser",
 };
@@ -270,6 +271,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
             initialUrl: "http://127.0.0.1:4321/",
             profile: { mode: "memory", ref: "desk:13918995204487956201-1" },
             logicalViewport: { width: 1280, height: 800 },
+            deviceScaleFactor: 2,
           },
           reuseKey: "13918995204487956201-1",
         },

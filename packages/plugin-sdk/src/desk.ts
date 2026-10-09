@@ -152,13 +152,15 @@ export const stillLive: undefined = undefined;
 /**
  * THE PAGE A BROWSER FACE OPENS (PT-2) — the `spec` a browser kind hands the host's `LIVE` service (`LiveSources.open(key, spec,
  * arrived)`, ICE design-019 §3.2: the HOST's contract, which the desk never reads), typed here so the plugin and the host agree:
- * the address (the host's browser policy decides what loads), the page's CSS viewport (the kind's own, from its size), its colour
- * scheme, and the label the host's surface wears.
+ * the address (the host's browser policy decides what loads), the page's CSS viewport (the kind's own, from its size) and the
+ * device px each CSS px is drawn at (its device's own ratio — the page is laid out at the viewport and rastered at the two
+ * multiplied), its colour scheme, and the label the host's surface wears.
  */
 export interface LiveBrowserSpec {
   readonly source: "browser";
   readonly url: string;
   readonly viewport: readonly [number, number];
+  readonly deviceScaleFactor: number;
   readonly scheme: "light" | "dark";
   readonly label: string;
 }
@@ -175,14 +177,22 @@ const cssLength = (v: unknown): v is number =>
 export function liveBrowserSpec(
   spec: Readonly<Record<string, unknown>>,
 ): LiveBrowserSpec | undefined {
-  const { source, url, viewport, scheme, label } = spec;
+  const { source, url, viewport, deviceScaleFactor, scheme, label } = spec;
   if (source !== "browser" || typeof url !== "string" || url.length === 0) return undefined;
   if (!Array.isArray(viewport) || viewport.length !== 2) return undefined;
   const [w, h] = viewport as readonly unknown[];
   if (!cssLength(w) || !cssLength(h)) return undefined;
+  // the page's own density: device px a CSS px, as a display has (LSF draws at most 8)
+  if (
+    typeof deviceScaleFactor !== "number" ||
+    !Number.isFinite(deviceScaleFactor) ||
+    deviceScaleFactor <= 0 ||
+    deviceScaleFactor > 8
+  )
+    return undefined;
   if (scheme !== "light" && scheme !== "dark") return undefined;
   if (typeof label !== "string") return undefined;
-  return { source, url, viewport: [w, h], scheme, label };
+  return { source, url, viewport: [w, h], deviceScaleFactor, scheme, label };
 }
 
 // docs:begin object-binding

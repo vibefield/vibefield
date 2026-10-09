@@ -8,6 +8,7 @@ const PAGE: LiveBrowserSpec = {
   source: "browser",
   url: "https://lumen.example/",
   viewport: [1280, 800],
+  deviceScaleFactor: 2,
   scheme: "light",
   label: "Browser",
 };
@@ -30,6 +31,10 @@ describe("liveBrowserSpec — the host reads a browser face's page", () => {
     expect(liveBrowserSpec({ ...PAGE, viewport: [1280.5, 800] })).toBeUndefined();
     expect(liveBrowserSpec({ ...PAGE, viewport: [0, 800] })).toBeUndefined();
     expect(liveBrowserSpec({ ...PAGE, viewport: [1280, 40_000] })).toBeUndefined();
+    expect(liveBrowserSpec({ ...PAGE, deviceScaleFactor: 0 })).toBeUndefined();
+    expect(liveBrowserSpec({ ...PAGE, deviceScaleFactor: 9 })).toBeUndefined();
+    expect(liveBrowserSpec({ ...PAGE, deviceScaleFactor: "2" })).toBeUndefined();
+    expect(liveBrowserSpec({ ...PAGE, deviceScaleFactor: undefined })).toBeUndefined();
     expect(liveBrowserSpec({ ...PAGE, scheme: "desk" })).toBeUndefined();
     expect(liveBrowserSpec({ ...PAGE, label: undefined })).toBeUndefined();
     expect(liveBrowserSpec({})).toBeUndefined();

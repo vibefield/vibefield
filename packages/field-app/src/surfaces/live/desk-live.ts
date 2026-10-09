@@ -230,13 +230,15 @@ const logicalOf = (size: {
 /** The face's page in the pool: apart from any panel's (ruling 4). */
 const poolKey = (key: string): string => `desk:${key}`;
 
-/** LSF's browser source for a page: a memory profile per face, laid out at the page's viewport. */
+/** LSF's browser source for a page: a memory profile per face, laid out at the page's viewport at its device's density (LSF
+ * sizes its frame by the two multiplied, and lays the page out at the viewport). */
 function browserSource(key: string, page: LiveBrowserSpec) {
   return {
     kind: "browser" as const,
     initialUrl: page.url,
     profile: { mode: "memory" as const, ref: poolKey(key) },
     logicalViewport: { width: page.viewport[0], height: page.viewport[1] },
+    deviceScaleFactor: page.deviceScaleFactor,
   };
 }
 
