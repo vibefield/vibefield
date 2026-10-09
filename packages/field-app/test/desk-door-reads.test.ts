@@ -36,7 +36,7 @@ describe("the desk door's reads (DK-8)", () => {
     ce.dispose();
   });
 
-  it("PT-1: reads each object's RECT beside its props — its Position and Size, what a resize writes — a kind's DESK STATE by its name, and the CAMERA", async () => {
+  it("PT-1: reads each object's RECT beside its props — its Position and Size, what a resize writes — a kind's DESK STATE by its name, and the CAMERA; PT-2: the smokes' one WRITE", async () => {
     const ce = createFieldEngine(buildRegistry());
     await seedField(ce, ce.docs.create(), createDeskBlobStore());
     const pad = deskObjects(ce, COMMENT_PAD_TYPE)[0];
@@ -59,6 +59,16 @@ describe("the desk door's reads (DK-8)", () => {
     expect(door?.local("some.kind")).toBe(state);
     expect(door?.local("no.such.kind")).toBeUndefined();
     expect(door?.objects(COMMENT_PAD_TYPE)[0]?.rect).toEqual(pad?.rect);
+    // PT-2 — the smokes' one write: a pad's text merged into its props in one transaction, one undo step back
+    const padEntity = pad?.entity ?? -1;
+    expect(door?.writeProps(padEntity, { text: "a line" })).toBe(true);
+    expect(door?.objects(COMMENT_PAD_TYPE)[0]?.props.text).toBe("a line");
+    expect(door?.objects(COMMENT_PAD_TYPE)[0]?.props.pen).toBe("ball");
+    expect(ce.docs.undo()).toBe(true);
+    ce.world.sync();
+    expect(door?.objects(COMMENT_PAD_TYPE)[0]?.props.text).toBe("");
+    expect(() => door?.writeProps(padEntity, { nonsense: 1 })).toThrow(/unknown prop/);
+    expect(door?.writeProps(987_654, { text: "x" })).toBe(false);
     // the camera as the engine holds it: where the view's top-left stands in the world, and its zoom
     ce.world.setResource(Camera, { x: -120, y: 48, zoom: 2, gesturing: false });
     expect(door?.camera()).toEqual({ x: -120, y: 48, zoom: 2 });

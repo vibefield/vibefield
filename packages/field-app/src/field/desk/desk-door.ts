@@ -2,6 +2,7 @@ import {
   Camera,
   type CanvasEngine,
   defineQuery,
+  type Entity,
   heldEntity,
   Not,
   Position,
@@ -9,6 +10,7 @@ import {
   PresenceCursor,
   Size,
   Specimen,
+  setWidgetProps,
   specimensOf,
   trayEntity,
 } from "@vibecook/ice";
@@ -250,6 +252,12 @@ export interface VfDeskDoor {
    */
   camera(): { readonly x: number; readonly y: number; readonly zoom: number };
   /**
+   * PT-2 — a SMOKE's write, the door's one: `patch` merged into the object's props in ONE transaction (one undo step; ICE's
+   * `setWidgetProps` — validated against the type's schema first), as the object's own UI writes them — the pane's address field
+   * is PT-3's — so a smoke can point a pane at its fixture page. False on a board this window may not write or an object gone.
+   */
+  writeProps(entity: number, patch: Readonly<Record<string, unknown>>): boolean;
+  /**
    * PT-1 — a kind's DESK STATE on this desk (`handle.local(name)` — what its `ObjectKind.local` made), or undefined: no such
    * kind, or none kept. A read: a smoke asks a kind's own witness of it (the browser pane's `said(e)` — what its head says).
    */
@@ -451,6 +459,13 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     theme: () => desk.theme,
     census: () => deskCensus(engine),
     objects: (type) => deskObjects(engine, type),
+    writeProps: (entity, patch) => {
+      const session = engine.docs.current();
+      const e = entity as Entity;
+      if (session === undefined || session.readOnly || !engine.world.isAlive(e)) return false;
+      setWidgetProps(session.store, engine.world, e, patch);
+      return true;
+    },
     camera: () => {
       const c = engine.world.getResource(Camera);
       return { x: c?.x ?? 0, y: c?.y ?? 0, zoom: c?.zoom ?? 1 };
