@@ -4,7 +4,7 @@ import type { StillHead } from "./head-still";
 export const STILL_HEADS: readonly StillHead[] = [
   // the default pane on the sample: 1396 × 118 texels at 2 a world unit
   {
-    key: "349.08|230.97|2|lumen.example|true|sample|false|false|false|1280x800",
+    key: "1396x58|2|lumen.example|true|sample|false|false|false|1280x800",
     width: 1396,
     height: 118,
     h: 58,
@@ -16,7 +16,7 @@ export const STILL_HEADS: readonly StillHead[] = [
   },
   // the default pane on a blank page: 1396 × 118 texels at 2 a world unit
   {
-    key: "349.08|230.97|2||false||false|false|false|1280x800",
+    key: "1396x58|2||false||false|false|false|1280x800",
     width: 1396,
     height: 118,
     h: 58,
@@ -28,7 +28,7 @@ export const STILL_HEADS: readonly StillHead[] = [
   },
   // a phone's pane on the sample: 402 × 118 texels at 2 a world unit
   {
-    key: "100.52|211.00|2|lumen.example|true|sample|false|false|false|402x874",
+    key: "402x58|2|lumen.example|true|sample|false|false|false|402x874",
     width: 402,
     height: 118,
     h: 58,

@@ -18,7 +18,12 @@
 //  - the comment pad (plugins/comment-pad — VibeField's own first kind): held to ITS golden over its four playground states,
 //    blessed once by the named flag — its dress AND its writing (DK-17b; ICE I35): a still lends the desk's hand
 //    (`TEXT_RASTER`, the product's faces on a Node canvas) and the pad reads it, so `written` and `long` carry their
-//    comments, each inside the pad's own box.
+//    comments, each inside the pad's own box;
+//  - the browser pane (plugins/browser-pane — PORTALS' first kind, PT-1): held to ITS golden over its four playground states,
+//    blessed once by the named flag — it reads none of the desk's hand (its head is its own lent service's, and a Node still
+//    draws the committed heads); and a PHONE-SIZE pane, drawn at a phone's cut, judged by its face's colour count and
+//    contrast, never a hash: its page the phone's own 66.59 mm display across, light with contrast by day and dark by night,
+//    its head frosted.
 import { execFile } from "node:child_process";
 import { createHash } from "node:crypto";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -43,6 +48,7 @@ const REPO = resolve(HERE, "..", "..", "..");
 const FIXTURE = join(HERE, "fixtures", "still-kinds");
 const CLOCK = join(REPO, "examples", "plugins", "desk-clock");
 const PAD = join(REPO, "plugins", "comment-pad");
+const PANE = join(REPO, "plugins", "browser-pane");
 
 interface Ran {
   readonly code: number;
@@ -399,6 +405,173 @@ describe("the comment pad — VibeField's own first kind", () => {
         written.dispose();
       }
       blank.dispose();
+    } finally {
+      gpu.destroy();
+    }
+  });
+});
+
+describe("the browser pane — PORTALS' first kind (PT-1)", () => {
+  let ran: Ran;
+  beforeAll(async () => {
+    ran = await still(PANE);
+  });
+
+  it("is held to its golden: its four playground states by day and by night, blessed once by the named flag", () => {
+    expect(ran.code).toBe(0);
+    expect(ran.stills.map((s) => `${s.state} · ${s.theme}: ${s.code}`)).toEqual([
+      "default · day: ok",
+      "smoke · day: ok",
+      "bronze · day: ok",
+      "blank · day: ok",
+      "default · night: ok",
+      "smoke · night: ok",
+      "bronze · night: ok",
+      "blank · night: ok",
+    ]);
+    for (const s of ran.stills) expect(s.detail).toContain("held to its golden");
+  });
+
+  it("reads none of the desk's hand — its head is its own service's, and a Node still draws the committed heads — and each state is its own", () => {
+    for (const s of ran.stills) expect(s.lent, `${s.state} · ${s.theme}`).toBeUndefined();
+    for (const theme of ["day", "night"]) {
+      const shas = ran.stills.filter((s) => s.theme === theme).map((s) => s.sha256);
+      expect(new Set(shas).size, theme).toBe(4);
+    }
+  });
+
+  it("a PHONE-SIZE pane — drawn at a phone's cut: its page the phone's own display across, light with contrast by day and dark by night, its head frosted (judged by colour count and contrast, never a hash)", async () => {
+    const gpu: StillGpu = await stillGpu();
+    try {
+      const mod = (await import(/* @vite-ignore */ join(PANE, "src", "index.ts"))) as {
+        readonly browserPane: ObjectBinding;
+        readonly browserPaneManifest: {
+          readonly contributes?: { readonly objects?: readonly ObjectContribution[] };
+        };
+        readonly cutOf: (d: unknown) => { readonly w: number; readonly h: number };
+        readonly deviceById: (id: string) => unknown;
+        readonly shapeOf: (
+          size: { readonly w: number; readonly h: number },
+          d: unknown,
+        ) => {
+          readonly half: readonly [number, number];
+          readonly page: readonly [number, number, number, number];
+          readonly band: number;
+          readonly viewport: readonly [number, number];
+        };
+        readonly MM: number;
+        readonly IPHONE_17_PRO_DISPLAY_MM: number;
+      };
+      const row = mod.browserPaneManifest.contributes?.objects?.[0] as ObjectContribution;
+      const type: WidgetType = buildObjectType({ ...row, behaviors: [] }, mod.browserPane);
+      const phone = mod.deviceById("phone");
+      const cut = mod.cutOf(phone);
+      const S = mod.shapeOf(cut, phone);
+      expect(S.viewport).toEqual([402, 874]);
+      const frame = stillFrame(cut, kindOfBinding(mod.browserPane)?.reach ?? 0);
+      const dpr = 2;
+      const draw = (theme: "light" | "dark") =>
+        createStill({
+          device: gpu.device,
+          format: "rgba8unorm",
+          size: frame.size,
+          dpr,
+          objects: [type],
+          theme,
+          palette: productPalette[theme],
+          stage: ({ engine }) => {
+            engine.ops.spawnWidget(row.type, {
+              x: frame.at.x,
+              y: frame.at.y,
+              w: cut.w,
+              h: cut.h,
+              props: { device: "phone" },
+              undoable: false,
+            });
+          },
+        });
+      // world (the pane's own frame, its centre the world's origin at the still's centre) → the still's device px
+      const W = frame.size.width;
+      const H = frame.size.height;
+      const px = (x: number, y: number) =>
+        [Math.round((x + W / 2) * dpr), Math.round((y + H / 2) * dpr)] as const;
+      const region = (
+        shot: { readonly width: number; readonly rgba: Uint8Array },
+        x0: number,
+        y0: number,
+        x1: number,
+        y1: number,
+      ) => {
+        const [a, b] = px(x0, y0);
+        const [c, d] = px(x1, y1);
+        const colours = new Set<number>();
+        let min = 255;
+        let max = 0;
+        let sum = 0;
+        let n = 0;
+        for (let y = b; y < d; y++)
+          for (let x = a; x < c; x++) {
+            const i = (y * shot.width + x) * 4;
+            const r = shot.rgba[i] as number;
+            const g = shot.rgba[i + 1] as number;
+            const bl = shot.rgba[i + 2] as number;
+            colours.add(((r >> 3) << 10) | ((g >> 3) << 5) | (bl >> 3));
+            const luma = 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+            min = Math.min(min, luma);
+            max = Math.max(max, luma);
+            sum += luma;
+            n += 1;
+          }
+        return { colours: colours.size, min, max, mean: sum / Math.max(n, 1), n };
+      };
+      const [pcx, pcy, phx, phy] = S.page;
+      const day = await draw("light");
+      const night = await draw("dark");
+      try {
+        // the page, inset from its edges: a light page with dark bars on it (its contrast), its colours many
+        const page = region(day, pcx - phx + 4, pcy - phy + 4, pcx + phx - 4, pcy + phy - 4);
+        expect(page.colours, "page colours by day").toBeGreaterThan(25);
+        expect(page.max - page.min, "page contrast by day").toBeGreaterThan(150);
+        expect(page.mean, "page mean luma by day").toBeGreaterThan(160);
+        const dark = region(night, pcx - phx + 4, pcy - phy + 4, pcx + phx - 4, pcy + phy - 4);
+        // by night the page follows the desk into its dark scheme: under half the day page's light
+        expect(dark.mean, "page mean luma by night (the desk's scheme)").toBeLessThan(
+          page.mean / 2,
+        );
+        expect(dark.colours, "page colours by night").toBeGreaterThan(20);
+        // the page is the phone's own display across (66.59 mm): from the first light pixel to the last on a row near its
+        // top, where its ground reaches both of its edges
+        const [, rowY] = px(0, pcy - phy * 0.94);
+        let first = -1;
+        let last = -1;
+        for (let x = 0; x < day.width; x++) {
+          const i = (rowY * day.width + x) * 4;
+          const luma =
+            0.2126 * (day.rgba[i] as number) +
+            0.7152 * (day.rgba[i + 1] as number) +
+            0.0722 * (day.rgba[i + 2] as number);
+          if (luma > 150) {
+            if (first < 0) first = x;
+            last = x;
+          }
+        }
+        // the eye's parallax magnifies the face a hair (~1 %): within 3 % of the display's width
+        const display = mod.IPHONE_17_PRO_DISPLAY_MM * mod.MM * dpr;
+        const across = last - first + 1;
+        expect(
+          Math.abs(across - display) / display,
+          `${across} px across vs ${display}`,
+        ).toBeLessThan(0.03);
+        // the head: its capsule frosted pale over the mat's green (the committed compact head — the address alone)
+        const top = -S.half[1];
+        const head = region(day, -S.half[0] + 14, top + 6, S.half[0] - 14, S.band - 6);
+        const mat = region(day, -S.half[0] - 60, top - 60, -S.half[0] - 30, top - 30);
+        expect(head.max - mat.mean, "the frost over the mat").toBeGreaterThan(80);
+        expect(head.colours, "the head's colours").toBeGreaterThan(20);
+      } finally {
+        day.dispose();
+        night.dispose();
+      }
     } finally {
       gpu.destroy();
     }

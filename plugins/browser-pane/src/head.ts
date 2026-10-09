@@ -62,11 +62,15 @@ export const GUTTER = 2;
 /** The band ladder's ends, texels per world unit: a head is never drawn coarser or finer. */
 export const BAND = { min: 0.5, max: 8 } as const;
 
-/** What a raster depends on — a new key is a new raster. */
-export const headKey = (S: PaneShape, st: HeadState, tpu: number): string =>
-  [
-    S.half[0].toFixed(2),
-    S.half[1].toFixed(2),
+/**
+ * What a raster depends on — a new key is a new raster: its size in TEXELS (never the pane's world extent as a decimal: the
+ * desk stores a size as f32, so 201.03 comes back 201.0299…, and a key spelt from it drifts across a rounding boundary —
+ * the texels it rounds to do not), its band, and what it says.
+ */
+export const headKey = (S: PaneShape, st: HeadState, tpu: number): string => {
+  const { width, half } = headSize(S, tpu);
+  return [
+    `${width}x${half}`,
     tpu,
     st.display,
     st.secure,
@@ -76,6 +80,7 @@ export const headKey = (S: PaneShape, st: HeadState, tpu: number): string =>
     st.canForward,
     st.viewport.join("x"),
   ].join("|");
+};
 
 /**
  * The band a zoom × dpr draws a head at, texels per world unit: the note's √2 ladder (the smallest step at or past the

@@ -128,6 +128,19 @@ describe("the head — keyed by what it says and its band", () => {
     expect(headKey(S, st, 4)).not.toBe(k);
   });
 
+  it("a size as the desk STORES it — f32 (201.03 comes back 201.0299…) — keys the same head and cuts the same viewport", () => {
+    for (const d of DEVICES) {
+      const cut = cutOf(d);
+      const stored = { w: Math.fround(cut.w), h: Math.fround(cut.h) };
+      const a = shapeOf(cut, d);
+      const b = shapeOf(stored, d);
+      expect(headKey(b, headStateOf(SAMPLE_URL, b), 2), d.id).toBe(
+        headKey(a, headStateOf(SAMPLE_URL, a), 2),
+      );
+      expect(viewportOf(stored, d), d.id).toEqual([d.width, d.height]);
+    }
+  });
+
   it("the band ladder: half-octaves at or past the screen's density, within its ends; the density held under the texel cap", () => {
     expect(bandFor(2)).toBe(2);
     expect(bandFor(1.6)).toBe(2);

@@ -1,0 +1,45 @@
+{
+  "host": "Metal driver on macOS Version 26.5.2 (Build 25F84) (apple metal-3) · darwin-arm64 · webgpu 0.4.0",
+  "stills": {
+    "vibefield.browser-pane:blank:day": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "d08f772aff3a0c077571f3c8c6e7135678db41a69f5f00275eac6ddba9c44a3f"
+    },
+    "vibefield.browser-pane:blank:night": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "f6cd6fe3e75031633d304938ea4320b1c9a08a78b95ffc6a7a05251361623a90"
+    },
+    "vibefield.browser-pane:bronze:day": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "11c3604dbb7a511406017ac9a93c80d954244e8ac1a59b427e073519384171b4"
+    },
+    "vibefield.browser-pane:bronze:night": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "18f12c0d9a2f835ce3ebcc8e41d6bd5c5876e537378be57205a5958d3c2083b8"
+    },
+    "vibefield.browser-pane:default:day": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "a936a891bfef3fd4fdab5fe80071f1d884894c3cf8ac1b9918d4a6a549c1d895"
+    },
+    "vibefield.browser-pane:default:night": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "a0d83144351daaa91d5735f6ba165358d70f07468ab19e342e1d7370fc34f3f1"
+    },
+    "vibefield.browser-pane:smoke:day": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "ced9ce0f17aabb32f1bd2527e6a5fadec3bd177d7131269a0c6f135999c0f96f"
+    },
+    "vibefield.browser-pane:smoke:night": {
+      "width": 2996,
+      "height": 2524,
+      "sha256": "2d65a8d85ee8caf1a426ade5c9a93b54467476a30dd71ca08586a2c8faf39bbb"
+    }
+  }
+}
