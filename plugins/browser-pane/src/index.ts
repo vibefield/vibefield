@@ -11,6 +11,7 @@ export * from "./ids";
 export * from "./kind";
 export * from "./law";
 export * from "./layout";
+export * from "./live";
 export { createPaneLocal, type PaneLocal } from "./local";
 export { browserPaneManifest } from "./manifest";
 export { browserPane } from "./object";

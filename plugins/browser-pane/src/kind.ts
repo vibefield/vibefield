@@ -11,6 +11,7 @@
 import {
   type HeldToolDef,
   type KindProgram,
+  type LiveFace,
   type MarkFrame,
   type ObjectContext,
   type ObjectHit,
@@ -37,7 +38,14 @@ import {
   shapeOf,
   silhouetteOf,
 } from "./law";
-import type { HeadPlan, PagePlan, PaneInstance, PaneLookValues } from "./layout";
+import {
+  type HeadPlan,
+  livePlan,
+  type PagePlan,
+  type PaneInstance,
+  type PaneLookValues,
+} from "./layout";
+import { isPageUrl } from "./live";
 import { createPaneLocal, type PaneLocal } from "./local";
 import { PanePass } from "./pass";
 import { pageTexels } from "./sample-page";
@@ -59,9 +67,9 @@ export function schemeOf(
 }
 
 /**
- * What the page shows in PT-1: the sample web's landing page — a still the pass draws (sample-page.ts) — laid out for the
- * pane's viewport in its scheme, or nothing for any other address (the dark film: a page the desk cannot show yet; PT-2
- * brings live frames).
+ * What the page shows with no live face: the sample web's landing page — a still the pass draws (sample-page.ts) — laid out
+ * for the pane's viewport in its scheme, or nothing for any other address (the dark film — a web page's before its first
+ * frame, and where no host lends `LIVE`; PT-2's live page is the face's texture, `livePlan`).
  */
 export function pagePlan(url: string, S: PaneShape, scheme: "light" | "dark"): PagePlan | null {
   if (url !== SAMPLE_URL) return null;
@@ -121,7 +129,10 @@ export function paneOpening(law: BrowserLaw = BROWSER): OpenBinding {
     },
     pose: "camera",
     tools: PANE_TOOLS,
-    readout: ({ props }) => displayOf(urlOf(props())) || PROMPT,
+    // a live page's word is the address it is at (its producer's truth — a redirect's), a still's the one it was given
+    readout: ({ props, entity, local }) =>
+      displayOf((local as PaneLocal | undefined)?.page(entity)?.info.address ?? urlOf(props())) ||
+      PROMPT,
   };
 }
 
@@ -138,8 +149,9 @@ export function browserPaneKind(
     local: (host) => createPaneLocal(host),
     resolve(ctx: ObjectContext): PaneGeometry {
       const S = shapeOf(ctx.rect, deviceOf(ctx.props.device), law);
-      // by night a lit page's glow reaches round the pane: the quad grows to hold it
-      const lit = ctx.theme.name === "dark" && urlOf(ctx.props) === SAMPLE_URL;
+      // by night a lit page's glow reaches round the pane: the quad grows to hold it (a still's, or a live page's)
+      const url = urlOf(ctx.props);
+      const lit = ctx.theme.name === "dark" && (url === SAMPLE_URL || isPageUrl(url, SAMPLE_URL));
       return resolvePane(ctx.rect, ctx.flux, S, ctx.lamp, law, lit ? glowReach(law) : 0);
     },
     record(G: PaneGeometry, ctx: ObjectContext): PaneInstance {
@@ -150,9 +162,27 @@ export function browserPaneKind(
         );
       const url = urlOf(ctx.props);
       const S = G.shape;
-      const state = headStateOf(url, S);
+      const scheme = schemeOf(ctx.props, ctx.theme.name);
+      const local = ctx.local as PaneLocal | undefined;
+      // PT-2 — a web page is a LIVE FACE the host opens by the pane's durable key; any other address closes the one it had
+      let face: LiveFace | undefined;
+      if (isPageUrl(url, SAMPLE_URL))
+        face = local?.face(
+          ctx.entity,
+          {
+            source: "browser",
+            url,
+            viewport: S.viewport,
+            scheme,
+            label: displayOf(url) || "Browser",
+          },
+          S,
+        );
+      else local?.drop(ctx.entity);
+      const words = face === undefined ? undefined : local?.page(ctx.entity);
+      const state = headStateOf(url, S, words?.info);
       const tpu = bandDensity(S, bandFor(ctx.view.zoom * ctx.view.dpr));
-      const laid = (ctx.local as PaneLocal | undefined)?.head(ctx.entity, S, state, tpu);
+      const laid = local?.head(ctx.entity, S, state, tpu);
       const key = laid?.key ?? headKey(S, state, tpu);
       const bitmap = laid?.bitmap;
       // no service lent (a Node still): the committed raster this head's key names, if one says it — else none
@@ -166,14 +196,24 @@ export function browserPaneKind(
           : split !== undefined
             ? { key, still: key, split }
             : { key };
+      const t = face?.texture();
       return {
         geometry: G,
         finish: paneFinish(look, stringProp(ctx.props, "finish", "low-iron")),
         look,
-        page: pagePlan(url, S, schemeOf(ctx.props, ctx.theme.name)),
+        // a live page's texture once its first frame lands (the film before), the sample's still, or the film
+        page:
+          face === undefined
+            ? pagePlan(url, S, scheme)
+            : t === undefined
+              ? null
+              : livePlan(t, S.viewport, scheme),
         brightness: 1,
-        loading: -1,
+        loading: words?.info.loading ?? -1,
         head,
+        ...(face === undefined || local === undefined
+          ? {}
+          : { live: { e: ctx.entity, face, sight: local.sight } }),
       };
     },
     // what is drawn is what is picked: the slab as its eye sees it — the face, the arris (a wall, were one seen). At rest

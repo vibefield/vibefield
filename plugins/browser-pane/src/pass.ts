@@ -20,6 +20,12 @@
 // `PAGE_REMAKE_MS` (a resize's every frame) is DEFERRED — the last one stretched into the new page — and the kind's local
 // is told (`onPending`), so the desk wakes to make it once the hand has paused. THE HEAD's raster is the record's (the
 // host's lent service drew it) or, where no service is lent, the committed one its key names (head-still.ts).
+//
+// PT-2 — A LIVE PAGE is its face's texture (the host's `LIVE` service fills it — the pass never sees a frame): bound as the
+// surface's page (again when its EPOCH moves — a new texture), its mips made as deep as this slot reads them (`liveDepth`; by
+// night the glow's coarse level too) into the frame's encoder — once per revision, whatever the slots — and the face's SIGHT
+// told what this slot drew of the page (`Sight.saw`: the page's world size → device px through the slot's view). Before its
+// first frame the page is the film.
 
 import {
   bindGroup,
@@ -30,7 +36,9 @@ import {
   createRecordStore,
   type KindExtra,
   type KindPass,
+  type LiveTexture,
   litByOwn,
+  liveDepth,
   type MatPass,
   type RecordStore,
   renderPipeline,
@@ -74,6 +82,8 @@ export const PAGE_REMAKE_MS = 90;
  */
 export class PaneSurface {
   readonly page: PageTexture;
+  /** PT-2 — the live face's texture shown as the page while it has one (the host's: never destroyed here). */
+  live: LiveTexture | undefined;
   ink: GPUTexture;
   inkWidth = 1;
   inkHeight = 1;
@@ -83,7 +93,8 @@ export class PaneSurface {
   madeAt = Number.NEGATIVE_INFINITY;
   made = 0;
   private group_: GPUBindGroup | null = null;
-  private boundPage: GPUTexture | null = null;
+  private boundPage: GPUTexture | LiveTexture | null = null;
+  private boundEpoch = -1;
   private boundInk: GPUTexture | null = null;
   private readonly device: GPUDevice;
   private readonly layout: GPUBindGroupLayout;
@@ -126,18 +137,30 @@ export class PaneSurface {
     );
   }
 
-  /** The pane's group 1: its page and its head. */
+  /** The pane's group 1: its page (the live face's texture while it has one) and its head. */
   get group(): GPUBindGroup {
-    if (!this.group_ || this.boundPage !== this.page.texture || this.boundInk !== this.ink) {
+    const live = this.live;
+    const page = live ?? this.page.texture;
+    const epoch = live?.epoch ?? -1;
+    if (
+      !this.group_ ||
+      this.boundPage !== page ||
+      this.boundEpoch !== epoch ||
+      this.boundInk !== this.ink
+    ) {
       this.group_ = this.device.createBindGroup({
         label: "browser-pane/surface",
         layout: this.layout,
         entries: [
-          { binding: 0, resource: this.page.texture.createView() },
+          {
+            binding: 0,
+            resource: live === undefined ? this.page.texture.createView() : live.view(),
+          },
           { binding: 1, resource: this.ink.createView() },
         ],
       });
-      this.boundPage = this.page.texture;
+      this.boundPage = page;
+      this.boundEpoch = epoch;
       this.boundInk = this.ink;
     }
     return this.group_;
@@ -382,6 +405,32 @@ export class PanePass implements KindPass<PaneInstance> {
     s: SlotContext,
     now: number,
   ): void {
+    const live = r.live;
+    const S = r.geometry.shape;
+    // the page's device px through this slot's view
+    const px: [number, number] = [
+      2 * S.page[2] * s.view.zoom * s.view.dpr,
+      2 * S.page[3] * s.view.zoom * s.view.dpr,
+    ];
+    if (live !== undefined) {
+      live.sight.saw(live.e, s, {
+        cx: r.geometry.centre[0],
+        cy: r.geometry.centre[1],
+        w: 2 * S.page[2],
+        h: 2 * S.page[3],
+      });
+      const t = live.face.texture();
+      surface.live = t;
+      this.lay(surface, r);
+      if (t === undefined) return;
+      const depth = liveDepth(t, px);
+      t.prepare(
+        encoder,
+        s.light.night > 0 ? Math.max(depth, Math.ceil(glowLevel(t.width))) : depth,
+      );
+      return;
+    }
+    surface.live = undefined;
     const plan = r.page;
     if (plan !== null && plan.key !== surface.pageKey) {
       if (surface.pageKey === null || now - surface.madeAt >= PAGE_REMAKE_MS) {
@@ -405,20 +454,10 @@ export class PanePass implements KindPass<PaneInstance> {
         this.shared.onPending?.();
       }
     }
-    if (r.head.key !== surface.inkKey) {
-      const bitmap =
-        r.head.bitmap ?? (r.head.still !== undefined ? stillHead(r.head.still) : undefined);
-      if (bitmap !== undefined) {
-        surface.setInk(bitmap);
-        this.counts = { ...this.counts, heads: this.counts.heads + 1 };
-      }
-      surface.inkKey = r.head.key;
-    }
+    this.lay(surface, r);
     if (plan === null) return;
     const page = surface.page;
-    const S = r.geometry.shape;
-    const device = 2 * S.page[2] * s.view.zoom * s.view.dpr;
-    const deviceY = 2 * S.page[3] * s.view.zoom * s.view.dpr;
+    const [device, deviceY] = px;
     const lod = Math.max(
       Math.log2(
         Math.max(page.width / Math.max(device, 1e-3), page.height / Math.max(deviceY, 1e-3)),
@@ -427,6 +466,18 @@ export class PanePass implements KindPass<PaneInstance> {
     );
     const upTo = s.light.night > 0 ? Math.max(lod + 1, glowLevel(page.width)) : lod + 1;
     this.counts = { ...this.counts, mips: this.counts.mips + page.prepare(encoder, upTo) };
+  }
+
+  /** The head's raster laid when what it says moved: the record's (the service drew it), or the committed one its key names. */
+  private lay(surface: PaneSurface, r: PaneInstance): void {
+    if (r.head.key === surface.inkKey) return;
+    const bitmap =
+      r.head.bitmap ?? (r.head.still !== undefined ? stillHead(r.head.still) : undefined);
+    if (bitmap !== undefined) {
+      surface.setInk(bitmap);
+      this.counts = { ...this.counts, heads: this.counts.heads + 1 };
+    }
+    surface.inkKey = r.head.key;
   }
 
   /** This frame's panes in paint order, through the persistent store (keyed by `extra.keys`; none = packed afresh — the still's form). */

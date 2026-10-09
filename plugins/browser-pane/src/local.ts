@@ -9,11 +9,25 @@
 //
 // A desk lending no head service (a Node still, a bare host) draws no head from here: the record names the committed
 // raster its key names instead (head-still.ts), or none.
+//
+// PT-2 — and each pane's LIVE FACE (live.ts): its page, opened by the object's durable key on the host's `LIVE` service, taken
+// when it says something arrived, asked of by the pane's demand law over the desk's SIGHT. Its tick takes and asks; its due is
+// the sight's step owed after a drawn frame, or a held-back viewport — nothing polled at rest.
 
-import type { Entity, KindHost, KindLocal } from "@vibefield/plugin-sdk/desk";
+import type {
+  Entity,
+  KindHost,
+  KindLocal,
+  LiveBrowserSpec,
+  LiveFace,
+  LiveInfo,
+  LiveState,
+  Sight,
+} from "@vibefield/plugin-sdk/desk";
 import { HEAD_RASTER, type HeadState, headKey } from "./head";
 import type { PaneShape } from "./law";
 import type { HeadBitmap } from "./layout";
+import { createPaneFaces, type PaneFaceStats } from "./live";
 import { PAGE_REMAKE_MS } from "./pass";
 
 /** The pass's doors the local reads (the root pass, once the ground has made it). */
@@ -36,6 +50,18 @@ export interface PaneLocal extends KindLocal {
   said(e: Entity): HeadState | undefined;
   /** Heads drawn since the desk was made (a test's witness). */
   stats(): { readonly heads: number };
+  /** PT-2 — `e`'s live face for the page `spec` names (opened at its first ask; undefined: no `LIVE` lent, no durable key). */
+  face(e: Entity, spec: LiveBrowserSpec, S: PaneShape): LiveFace | undefined;
+  /** PT-2 — `e`'s face closed: its address is no longer a page. */
+  drop(e: Entity): void;
+  /** PT-2 — the sight the pass tells, carried on the records of panes with a face. */
+  readonly sight: Sight;
+  /** PT-2 — `e`'s page's words now (its state and info), or undefined: no face. */
+  page(
+    e: Entity,
+  ): { readonly key: string; readonly state: LiveState; readonly info: LiveInfo } | undefined;
+  /** PT-2 — what the faces did (a test's and a smoke's witness). */
+  faces(): PaneFaceStats;
 }
 
 const doorsOf = (host: KindHost | undefined): PaneDoors | undefined => {
@@ -46,6 +72,7 @@ const doorsOf = (host: KindHost | undefined): PaneDoors | undefined => {
 };
 
 export function createPaneLocal(host: KindHost | undefined): PaneLocal {
+  const live = createPaneFaces(host);
   const heads = new Map<Entity, { readonly key: string; readonly bitmap: HeadBitmap }>();
   const saying = new Map<Entity, HeadState>();
   let drawn = 0;
@@ -76,16 +103,28 @@ export function createPaneLocal(host: KindHost | undefined): PaneLocal {
     },
     said: (e) => saying.get(e),
     stats: () => ({ heads: drawn }),
-    tick: () => waiting(),
-    due: (now) => (waiting() ? now + PAGE_REMAKE_MS / 3 : Number.POSITIVE_INFINITY),
+    face: (e, spec, S) => live.face(e, spec, S),
+    drop: (e) => live.drop(e),
+    sight: live.sight,
+    page: (e) => live.words(e),
+    faces: () => live.stats(),
+    // the faces' takes and asks answer nothing of their own: a landed frame asks a redraw, new words a remake of its pane
+    tick: (now) => {
+      live.tick(now);
+      return waiting();
+    },
+    due: (now) =>
+      Math.min(waiting() ? now + PAGE_REMAKE_MS / 3 : Number.POSITIVE_INFINITY, live.due(now)),
     // a page made after its record (a deferred one) changes how the pane looks with no fact of its own moving
     landed: (e) => doors()?.made(e as number) ?? 0,
     forget(e) {
       heads.delete(e);
       saying.delete(e);
       doors()?.forget(e as number);
+      live.forget(e);
     },
     dispose() {
+      live.dispose();
       heads.clear();
       saying.clear();
       wired?.onPending(undefined);

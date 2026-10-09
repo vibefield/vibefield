@@ -7,7 +7,7 @@
 // The raster holds both: its upper half the engraving's coverage (alpha), its lower half the colour print
 // (premultiplied), a two-texel gutter between — `engraveSplit` says where each half's rows are.
 
-import { serviceKey } from "@vibefield/plugin-sdk/desk";
+import { type LiveInfo, serviceKey } from "@vibefield/plugin-sdk/desk";
 import { displayOf, isSecure } from "./address";
 import { SAMPLE_URL } from "./ids";
 import type { PaneShape } from "./law";
@@ -28,17 +28,20 @@ export interface HeadState {
 }
 
 /**
- * What a pane's head says in PT-1, from its address and its shape: the address as printed, its lock, the sample's
- * favicon on the sample, and the viewport — never loading, no history (a still page has neither: PT-2's live page does).
+ * What a pane's head says, from its address and its shape: the address as printed, its lock, the sample's favicon on the
+ * sample, and the viewport — a still page never loading, with no history. A LIVE page (PT-2) says its own words instead
+ * (`info` — the host's `LiveInfo`, the producer's committed navigation truth): the address it is at (a redirect's, never the
+ * one typed), its lock, loading while it loads, and how far back and forward its history reaches.
  */
-export function headStateOf(url: string, S: PaneShape): HeadState {
+export function headStateOf(url: string, S: PaneShape, info?: LiveInfo): HeadState {
+  const at = info?.address ?? url;
   return {
-    display: displayOf(url),
-    secure: isSecure(url),
-    favicon: url === SAMPLE_URL ? "sample" : null,
-    loading: false,
-    canBack: false,
-    canForward: false,
+    display: displayOf(at),
+    secure: isSecure(at),
+    favicon: url === SAMPLE_URL && info === undefined ? "sample" : null,
+    loading: info?.loading !== undefined,
+    canBack: info?.back === true,
+    canForward: info?.forward === true,
     viewport: S.viewport,
   };
 }

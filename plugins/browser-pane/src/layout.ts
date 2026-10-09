@@ -10,7 +10,14 @@
 // the desk reuses it across a pan and a zoom within the head's rung); the selection RING is gone (ICE D4a: the desk's
 // marks draw the selection — a kind draws none of its own).
 
-import { defineStruct, type RGB } from "@vibefield/plugin-sdk/desk";
+import {
+  defineStruct,
+  type Entity,
+  type LiveFace,
+  type LiveTexture,
+  type RGB,
+  type Sight,
+} from "@vibefield/plugin-sdk/desk";
 import { BROWSER, type BrowserLaw, bandLayout, MM, type PaneGeometry } from "./law";
 
 export const Pane = defineStruct("Pane", [
@@ -81,7 +88,7 @@ export interface PaneLookValues {
   readonly finishes: Readonly<Record<string, PaneFinish>>;
 }
 
-/** What the page shows: a still the plugin draws (PT-1), its key and its texture's size — or nothing (the dark film). */
+/** What the page shows: a still the plugin draws (PT-1) or a live page's texture (PT-2), its key and its texture's size — or nothing (the dark film). */
 export interface PagePlan {
   /** Changes whenever the page's texels would: the generator's inputs. */
   readonly key: string;
@@ -129,6 +136,28 @@ export interface PaneInstance {
   readonly hover?:
     | { readonly u: number; readonly v: number; readonly r: number; readonly presence: number }
     | undefined;
+  /**
+   * PT-2 — the pane's LIVE page: its face (stable for the pane's life: the pass reads its texture at each prepare, so a frame
+   * that lands redraws without a new record) and the sight the pass tells what it drew. Absent: the sample's still or the film.
+   */
+  readonly live?:
+    | { readonly e: Entity; readonly face: LiveFace; readonly sight: Sight }
+    | undefined;
+}
+
+/** A live page's plan: the face's texture as it stands — its size is what the shader's level reads (a new size remakes the record). */
+export function livePlan(
+  t: Pick<LiveTexture, "width" | "height" | "epoch">,
+  viewport: readonly [number, number],
+  scheme: "light" | "dark",
+): PagePlan {
+  return {
+    key: `live|${t.epoch}|${t.width}x${t.height}`,
+    viewport,
+    scheme,
+    width: t.width,
+    height: t.height,
+  };
 }
 
 /** The levels of a texture `w × h` texels: its chain down to one texel. */
