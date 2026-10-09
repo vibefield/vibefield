@@ -410,9 +410,36 @@ const READ_HAND_TOOLS = `(() => {
   }));
 })()`;
 
-/** PT-1's rows (above). Returns the problems, each in words. */
-export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
-  const { win, say } = d;
+/** The person's hands on the window and the door's reads — the pane's rows' (PT-1) and the live page's (PT-2). */
+export interface PaneHands {
+  js<T>(expression: string): Promise<T>;
+  /** Polls `expression` until it answers true, or throws in words after `timeoutMs`. */
+  until(label: string, timeoutMs: number, expression: string): Promise<void>;
+  move(x: number, y: number): void;
+  press(at: { x: number; y: number }, clickCount?: number): Promise<void>;
+  /** A press-drag-release by the primary button, in steps. */
+  drag(
+    from: { x: number; y: number },
+    to: { x: number; y: number },
+    steps?: number,
+    holdMs?: number,
+  ): Promise<void>;
+  key(keyCode: string, modifiers?: ("meta" | "control")[]): Promise<void>;
+  undoKey(): Promise<void>;
+  pressSelector(selector: string): Promise<void>;
+  /** The panes on the board. */
+  census(): Promise<number>;
+  rows(): Promise<{ entity: number; props: Record<string, unknown>; rect: DoorRect }[]>;
+  said(e: number): Promise<readonly [number, number] | null>;
+  deskAt(): Promise<{ left: number; top: number }>;
+  /** The selection's frame on screen (the brackets stand 6 out of it), desk CSS px. */
+  frame(): Promise<Rect | null>;
+  theme(name: "light" | "dark"): Promise<void>;
+  shoot(name: string, r: Rect): Promise<void>;
+}
+
+export function paneHands(d: PaneRowsDriver): PaneHands {
+  const { win } = d;
   const js = <T>(expression: string): Promise<T> =>
     win.webContents.executeJavaScript(expression, true) as Promise<T>;
   const until = async (label: string, timeoutMs: number, expression: string): Promise<void> => {
@@ -535,6 +562,202 @@ export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
     writeFileSync(join(d.shotDir, name), image.toPNG());
   };
 
+  return {
+    js,
+    until,
+    move,
+    press,
+    drag,
+    key,
+    undoKey,
+    pressSelector,
+    census,
+    rows,
+    said,
+    deskAt,
+    frame,
+    theme,
+    shoot,
+  };
+}
+
+/** Where a laid pane stands: the window's view and the desk's place in it (CSS px). */
+export interface LaidAt {
+  readonly view: { readonly w: number; readonly h: number };
+  readonly deskOff: { readonly left: number; readonly top: number };
+}
+
+/**
+ * CLEAR GROUND then LAID (the header's first row): the pane taken off the pegboard by the pointer and dropped alone on clear
+ * ground at actual size. `onPane` hears the new pane the moment it is found, so a later step that throws leaves it to the
+ * caller to delete.
+ */
+export async function layPane(
+  h: PaneHands,
+  before: number,
+  onPane: (e: number) => void,
+): Promise<LaidAt & { readonly laid: PaneSeen["laid"]; readonly pane: number | undefined }> {
+  const { js, until, drag, key, pressSelector, census, rows, deskAt } = h;
+
+  // ── CLEAR GROUND: actual size (⌘0, the head's zoom act), then the view panned — drags on the bare mat (or a calendar's
+  // paper: a press there pans too), each held before its release so no inertia carries the pan on — until the drop point
+  // stands over ground 600 units clear of every object on the board: found in WORLD units, each object's rect and the
+  // camera off the door — never by a pick, which a calendar's paper does not answer ──────────────────────────────────────
+  await key("Escape");
+  const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
+  const deskOff = await deskAt();
+  await key("0", [process.platform === "darwin" ? "meta" : "control"]);
+  await until(
+    "the desk at actual size",
+    5_000,
+    `document.querySelector(".vf-head-zoom")?.getAttribute("aria-label") === "Zoom, 100%"`,
+  );
+  await sleep(600);
+  const deskSize = await js<{ w: number; h: number }>(
+    `(() => { const r = document.querySelector("[data-desk]").getBoundingClientRect(); return { w: r.width, h: r.height }; })()`,
+  );
+  const drop = { x: Math.round(deskSize.w / 2), y: Math.round(deskSize.h * 0.36) };
+  const others = await js<DoorRect[]>(OTHERS);
+  // every object's rect, in whichever canvas it lies (a mini mat's inside included) — the union only grows by them
+  const right = Math.max(...others.map((r) => r.x + r.w));
+  const top = Math.min(...others.map((r) => r.y));
+  const foot = Math.max(...others.map((r) => r.y + r.h));
+  const ground = { x: right + 600 + PANE_HALF.w, y: (top + foot) / 2 };
+  /** Where the ground stands on screen against the drop point (desk CSS px). */
+  const offBy = async (): Promise<{ dx: number; dy: number }> => {
+    const c = await js<{ x: number; y: number; zoom: number }>("globalThis.__vfDesk.camera()");
+    return { dx: (ground.x - c.x) * c.zoom - drop.x, dy: (ground.y - c.y) * c.zoom - drop.y };
+  };
+  let off = await offBy();
+  // within 60 px is near enough (the ground is 600 clear): a drag shorter than ICE's 10-px dead zone does not pan at all
+  for (let i = 0; i < 24 && Math.hypot(off.dx, off.dy) > 60; i += 1) {
+    const step = {
+      dx: Math.max(-500, Math.min(500, off.dx)),
+      dy: Math.max(-300, Math.min(300, off.dy)),
+    };
+    const mat = await js<{ x: number; y: number } | null>(BARE_FOR(-step.dx, -step.dy));
+    if (mat === null) throw new Error("no bare mat to pan the desk from");
+    const from = { x: deskOff.left + mat.x, y: deskOff.top + mat.y };
+    await drag(from, { x: from.x - step.dx, y: from.y - step.dy }, 8, 300);
+    await sleep(500);
+    off = await offBy();
+  }
+  if (Math.hypot(off.dx, off.dy) > 60)
+    throw new Error(`the view never reached the clear ground (${JSON.stringify(off)} to go)`);
+
+  // ── LAID: the Browser specimen taken off the PORTALS chip by the pointer, dropped on the clear ground ────────────
+  const known = new Set((await rows()).map((r) => r.entity));
+  await pressSelector(".vf-line-create");
+  await until("the board out", 5_000, "globalThis.__vfDesk.pegboard()?.anchor.open === true");
+  // the chip pressed once the board's slide is done: `open` is said from the slide's start, its chips still under the view
+  const slid = (): Promise<void> =>
+    until(
+      "the board's slide done",
+      5_000,
+      `(() => { const b = globalThis.__vfDesk.pegboard(); return b !== null && b.anchor.open && (b.anchor.drawer?.p ?? 0) >= 0.999; })()`,
+    );
+  await slid();
+  await sleep(200);
+  await pressSelector(`.vf-pegboard-track button[data-id="${PANE.category}"]`);
+  try {
+    await until(
+      "the board on its portals",
+      5_000,
+      `globalThis.__vfDesk.pegboard()?.anchor.category === ${JSON.stringify(PANE.category)}`,
+    );
+  } catch (error) {
+    const chips =
+      await js(`[...document.querySelectorAll(".vf-pegboard-track button[data-id]")].map((b) => {
+      const r = b.getBoundingClientRect();
+      return [b.getAttribute("data-id"), Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)];
+    })`);
+    throw new Error(
+      `${error instanceof Error ? error.message : String(error)} (the chips: ${JSON.stringify(chips)}; the view ${JSON.stringify(await js("[innerWidth, innerHeight]"))})`,
+    );
+  }
+  await slid();
+  await sleep(350);
+  const board = await js<{
+    specimens: { type: string; object: Rect }[];
+    desk: { left: number; top: number };
+  } | null>(READ_BOARD);
+  const hung = board?.specimens.find((s) => s.type === PANE.type);
+  if (board === null || hung === undefined)
+    throw new Error("the board hangs no Browser on its portals chip");
+  await drag(
+    {
+      x: board.desk.left + (hung.object.x0 + hung.object.x1) / 2,
+      y: board.desk.top + (hung.object.y0 + hung.object.y1) / 2,
+    },
+    { x: board.desk.left + drop.x, y: board.desk.top + drop.y },
+    12,
+    350,
+  );
+  const deadline = Date.now() + 5_000;
+  while ((await census()) === before && Date.now() < deadline) await sleep(60);
+  await sleep(700);
+  const pane = (await rows()).find((r) => !known.has(r.entity))?.entity;
+  if (pane !== undefined) onPane(pane);
+  const laidAt = (await rows()).find((r) => r.entity === pane)?.rect;
+  const othersNow = await js<DoorRect[]>(OTHERS);
+  const laid: PaneSeen["laid"] = {
+    before,
+    after: await census(),
+    selected: await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0"),
+    faulted: await js<boolean>(
+      `(globalThis.__vfDesk.status().faults ?? []).some((f) => f.kind === ${JSON.stringify(PANE.type)})`,
+    ),
+    folded: await js<boolean>("globalThis.__vfDesk.pegboard()?.anchor.open === false"),
+    alone: laidAt !== undefined && !othersNow.some((r) => overlaps(laidAt, r)),
+  };
+  return { laid, pane, view, deskOff };
+}
+
+/** The laid pane brought to the middle of the view by drags on the bare mat (the FACE row's first step). */
+export async function paneToMiddle(h: PaneHands, e: number, at: LaidAt): Promise<void> {
+  const { js, drag, rows, frame } = h;
+  const { view, deskOff } = at;
+  // ── the pane brought to the middle by a drag on the bare mat ──────────────────────────────────────────────────
+  for (let i = 0; i < 3; i += 1) {
+    const f = await frame();
+    if (f === null) break;
+    const by = {
+      dx: view.w / 2 - (deskOff.left + (f.x0 + f.x1) / 2),
+      dy: view.h / 2 - (deskOff.top + (f.y0 + f.y1) / 2),
+    };
+    if (Math.hypot(by.dx, by.dy) < 24) break;
+    const mat = await js<{ x: number; y: number } | null>(BARE(40));
+    if (mat === null) break;
+    const from = { x: deskOff.left + mat.x, y: deskOff.top + mat.y };
+    await drag(from, { x: from.x + by.dx, y: from.y + by.dy }, 6);
+    await sleep(400);
+    // a drag on the mat may have let the selection go: take it again by a click on the pane's head
+    if ((await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0")) === 0) {
+      const r = (await rows()).find((x) => x.entity === e);
+      if (r === undefined) break;
+    }
+  }
+}
+
+/** PT-1's rows (above). Returns the problems, each in words. */
+export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
+  const { win, say } = d;
+  const h = paneHands(d);
+  const {
+    js,
+    until,
+    press,
+    drag,
+    key,
+    undoKey,
+    pressSelector,
+    census,
+    rows,
+    said,
+    frame,
+    theme,
+    shoot,
+  } = h;
   const problems: string[] = [];
   const ambient = await js<string>("globalThis.__vfDesk.ambient()");
   const themeWas = await js<string>("globalThis.__vfDesk.theme()");
@@ -543,140 +766,15 @@ export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
   let pane: number | undefined;
   const before = await census();
   try {
-    // ── CLEAR GROUND: actual size (⌘0, the head's zoom act), then the view panned — drags on the bare mat (or a calendar's
-    // paper: a press there pans too), each held before its release so no inertia carries the pan on — until the drop point
-    // stands over ground 600 units clear of every object on the board: found in WORLD units, each object's rect and the
-    // camera off the door — never by a pick, which a calendar's paper does not answer ──────────────────────────────────────
-    await key("Escape");
-    const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
-    const deskOff = await deskAt();
-    await key("0", [process.platform === "darwin" ? "meta" : "control"]);
-    await until(
-      "the desk at actual size",
-      5_000,
-      `document.querySelector(".vf-head-zoom")?.getAttribute("aria-label") === "Zoom, 100%"`,
-    );
-    await sleep(600);
-    const deskSize = await js<{ w: number; h: number }>(
-      `(() => { const r = document.querySelector("[data-desk]").getBoundingClientRect(); return { w: r.width, h: r.height }; })()`,
-    );
-    const drop = { x: Math.round(deskSize.w / 2), y: Math.round(deskSize.h * 0.36) };
-    const others = await js<DoorRect[]>(OTHERS);
-    // every object's rect, in whichever canvas it lies (a mini mat's inside included) — the union only grows by them
-    const right = Math.max(...others.map((r) => r.x + r.w));
-    const top = Math.min(...others.map((r) => r.y));
-    const foot = Math.max(...others.map((r) => r.y + r.h));
-    const ground = { x: right + 600 + PANE_HALF.w, y: (top + foot) / 2 };
-    /** Where the ground stands on screen against the drop point (desk CSS px). */
-    const offBy = async (): Promise<{ dx: number; dy: number }> => {
-      const c = await js<{ x: number; y: number; zoom: number }>("globalThis.__vfDesk.camera()");
-      return { dx: (ground.x - c.x) * c.zoom - drop.x, dy: (ground.y - c.y) * c.zoom - drop.y };
-    };
-    let off = await offBy();
-    // within 60 px is near enough (the ground is 600 clear): a drag shorter than ICE's 10-px dead zone does not pan at all
-    for (let i = 0; i < 24 && Math.hypot(off.dx, off.dy) > 60; i += 1) {
-      const step = {
-        dx: Math.max(-500, Math.min(500, off.dx)),
-        dy: Math.max(-300, Math.min(300, off.dy)),
-      };
-      const mat = await js<{ x: number; y: number } | null>(BARE_FOR(-step.dx, -step.dy));
-      if (mat === null) throw new Error("no bare mat to pan the desk from");
-      const from = { x: deskOff.left + mat.x, y: deskOff.top + mat.y };
-      await drag(from, { x: from.x - step.dx, y: from.y - step.dy }, 8, 300);
-      await sleep(500);
-      off = await offBy();
-    }
-    if (Math.hypot(off.dx, off.dy) > 60)
-      throw new Error(`the view never reached the clear ground (${JSON.stringify(off)} to go)`);
-
-    // ── LAID: the Browser specimen taken off the PORTALS chip by the pointer, dropped on the clear ground ────────────
-    const known = new Set((await rows()).map((r) => r.entity));
-    await pressSelector(".vf-line-create");
-    await until("the board out", 5_000, "globalThis.__vfDesk.pegboard()?.anchor.open === true");
-    // the chip pressed once the board's slide is done: `open` is said from the slide's start, its chips still under the view
-    const slid = (): Promise<void> =>
-      until(
-        "the board's slide done",
-        5_000,
-        `(() => { const b = globalThis.__vfDesk.pegboard(); return b !== null && b.anchor.open && (b.anchor.drawer?.p ?? 0) >= 0.999; })()`,
-      );
-    await slid();
-    await sleep(200);
-    await pressSelector(`.vf-pegboard-track button[data-id="${PANE.category}"]`);
-    try {
-      await until(
-        "the board on its portals",
-        5_000,
-        `globalThis.__vfDesk.pegboard()?.anchor.category === ${JSON.stringify(PANE.category)}`,
-      );
-    } catch (error) {
-      const chips =
-        await js(`[...document.querySelectorAll(".vf-pegboard-track button[data-id]")].map((b) => {
-        const r = b.getBoundingClientRect();
-        return [b.getAttribute("data-id"), Math.round(r.left), Math.round(r.top), Math.round(r.right), Math.round(r.bottom)];
-      })`);
-      throw new Error(
-        `${error instanceof Error ? error.message : String(error)} (the chips: ${JSON.stringify(chips)}; the view ${JSON.stringify(await js("[innerWidth, innerHeight]"))})`,
-      );
-    }
-    await slid();
-    await sleep(350);
-    const board = await js<{
-      specimens: { type: string; object: Rect }[];
-      desk: { left: number; top: number };
-    } | null>(READ_BOARD);
-    const hung = board?.specimens.find((s) => s.type === PANE.type);
-    if (board === null || hung === undefined)
-      throw new Error("the board hangs no Browser on its portals chip");
-    await drag(
-      {
-        x: board.desk.left + (hung.object.x0 + hung.object.x1) / 2,
-        y: board.desk.top + (hung.object.y0 + hung.object.y1) / 2,
-      },
-      { x: board.desk.left + drop.x, y: board.desk.top + drop.y },
-      12,
-      350,
-    );
-    const deadline = Date.now() + 5_000;
-    while ((await census()) === before && Date.now() < deadline) await sleep(60);
-    await sleep(700);
-    pane = (await rows()).find((r) => !known.has(r.entity))?.entity;
-    const laidAt = (await rows()).find((r) => r.entity === pane)?.rect;
-    const othersNow = await js<DoorRect[]>(OTHERS);
-    const laid: PaneSeen["laid"] = {
-      before,
-      after: await census(),
-      selected: await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0"),
-      faulted: await js<boolean>(
-        `(globalThis.__vfDesk.status().faults ?? []).some((f) => f.kind === ${JSON.stringify(PANE.type)})`,
-      ),
-      folded: await js<boolean>("globalThis.__vfDesk.pegboard()?.anchor.open === false"),
-      alone: laidAt !== undefined && !othersNow.some((r) => overlaps(laidAt, r)),
-    };
+    const at = await layPane(h, before, (e) => {
+      pane = e;
+    });
+    const { laid, deskOff } = at;
     problems.push(...judgeLaid(laid));
-    if (pane === undefined) throw new Error("no new pane on the board after the take");
-    const e = pane;
+    if (at.pane === undefined) throw new Error("no new pane on the board after the take");
+    const e = at.pane;
 
-    // ── the pane brought to the middle by a drag on the bare mat ──────────────────────────────────────────────────
-    for (let i = 0; i < 3; i += 1) {
-      const f = await frame();
-      if (f === null) break;
-      const by = {
-        dx: view.w / 2 - (deskOff.left + (f.x0 + f.x1) / 2),
-        dy: view.h / 2 - (deskOff.top + (f.y0 + f.y1) / 2),
-      };
-      if (Math.hypot(by.dx, by.dy) < 24) break;
-      const mat = await js<{ x: number; y: number } | null>(BARE(40));
-      if (mat === null) break;
-      const from = { x: deskOff.left + mat.x, y: deskOff.top + mat.y };
-      await drag(from, { x: from.x + by.dx, y: from.y + by.dy }, 6);
-      await sleep(400);
-      // a drag on the mat may have let the selection go: take it again by a click on the pane's head
-      if ((await js<number>("globalThis.__vfDesk.anchor()?.count ?? 0")) === 0) {
-        const r = (await rows()).find((x) => x.entity === e);
-        if (r === undefined) break;
-      }
-    }
+    await paneToMiddle(h, e, at);
     // at actual size the pane is about three fifths of the view: framed as it lies, its bar and the line clear of it
     const width = (f: Rect | null): number => (f === null ? 0 : f.x1 - f.x0);
     await sleep(500);
