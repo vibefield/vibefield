@@ -410,6 +410,15 @@ const READ_HAND_TOOLS = `(() => {
   }));
 })()`;
 
+/** A pane as the door's `objects(type)` reads it. */
+export interface PaneRow {
+  readonly entity: number;
+  /** The object's durable key in the open document — the same pane across a reload (PT-2). */
+  readonly key: string | null;
+  readonly props: Record<string, unknown>;
+  readonly rect: DoorRect;
+}
+
 /** The person's hands on the window and the door's reads — the pane's rows' (PT-1) and the live page's (PT-2). */
 export interface PaneHands {
   js<T>(expression: string): Promise<T>;
@@ -429,7 +438,8 @@ export interface PaneHands {
   pressSelector(selector: string): Promise<void>;
   /** The panes on the board. */
   census(): Promise<number>;
-  rows(): Promise<{ entity: number; props: Record<string, unknown>; rect: DoorRect }[]>;
+  /** The panes on the board as the door reads them: each one's entity, its durable key (PT-2), props and rect. */
+  rows(): Promise<PaneRow[]>;
   said(e: number): Promise<readonly [number, number] | null>;
   deskAt(): Promise<{ left: number; top: number }>;
   /** The selection's frame on screen (the brackets stand 6 out of it), desk CSS px. */
@@ -526,7 +536,7 @@ export function paneHands(d: PaneRowsDriver): PaneHands {
   };
   const census = async (): Promise<number> =>
     (await js<Record<string, number>>("globalThis.__vfDesk.census()"))[PANE.type] ?? 0;
-  const rows = (): Promise<{ entity: number; props: Record<string, unknown>; rect: DoorRect }[]> =>
+  const rows = (): Promise<PaneRow[]> =>
     js(`globalThis.__vfDesk.objects(${JSON.stringify(PANE.type)})`);
   const said = async (e: number): Promise<readonly [number, number] | null> =>
     js(`globalThis.__vfDesk.local(${JSON.stringify(PANE.type)})?.said?.(${e})?.viewport ?? null`);
