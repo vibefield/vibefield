@@ -257,6 +257,10 @@ describe("the pane's live page — its faces", () => {
     t.draw(local, 1 as Entity, 0.25);
     local.tick?.(26);
     expect(f.demands).toHaveLength(1);
+    // drawn a hair bigger: the sight moves, but the law's ask is the same (its rung, its rate) — sent once, not again
+    t.draw(local, 1 as Entity, 0.26);
+    local.tick?.(28);
+    expect(f.demands).toHaveLength(1);
     expect(local.due?.(30)).toBe(Number.POSITIVE_INFINITY); // stepped: nothing owed, nothing polled
     // in the hand: native at 60, interactive
     t.draw(local, 1 as Entity, 1, "hand");
