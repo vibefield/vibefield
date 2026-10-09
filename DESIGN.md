@@ -1707,8 +1707,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     not stamped ended, with its terminal on this desktop's floor. It is asked again when the choice
     changes, when History shows again, and at every press (the board's feed is Godview's, and the
     index's pings move with transcripts, not with runs, so the line listens to neither). While an
-    answer is on its way **the create keeps what it said** — its glyph, its words, its wait — so a
-    new choice never flickers through Resume on its way to Jump to. Live, the glyph cross-fades to
+    answer is on its way **the create keeps what it said** — Resume or Jump to, its glyph and its
+    words — so a new choice never flickers through Resume on its way to Jump to (a press asks
+    afresh, so what is kept only ever names the act). Live, the glyph cross-fades to
     `jump` (200ms `ease`, as between views) and the act is **"Jump to this session"**, which never
     waits on the launcher's reading: a running session is shown even where it could not be resumed.
     Pressed, the window moves to Godview and the pane showing that session becomes the active one —
