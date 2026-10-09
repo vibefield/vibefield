@@ -112,6 +112,8 @@ function fakeHandle(key: string, opts: SurfaceAcquireOptions) {
     key,
     opts,
     demands: [] as SurfaceDemandRequest[],
+    /** What the pool's snapshot says it last wrote to the wire for this key. */
+    wire: null as unknown,
     released: 0,
     retried: 0,
     get state() {
@@ -172,7 +174,8 @@ function setup(over: Partial<DeskLiveDeps> = {}) {
           handles.push(h);
           return h as never;
         },
-        snapshot: () => ({}) as never,
+        snapshot: () =>
+          ({ entries: handles.map((h) => ({ key: h.key, demand: h.wire })) }) as never,
         dispose: () => {},
       }) as never,
     mintClient: () => ({
@@ -189,18 +192,20 @@ function setup(over: Partial<DeskLiveDeps> = {}) {
     writer: (d, o) => {
       const w = { device: d, o, presented: [] as unknown[], destroyed: 0 };
       writers.push(w);
+      const face = {
+        width: o.width,
+        height: o.height,
+        format: "rgba8unorm-srgb" as const,
+        revision: 0,
+        epoch: 0,
+        view: () => ({}) as never,
+        prepare: () => {},
+        bytes: 0,
+      };
       const writer: LiveWriter = {
-        face: {
-          width: o.width,
-          height: o.height,
-          format: "rgba8unorm-srgb",
-          revision: 0,
-          epoch: 0,
-          view: () => ({}) as never,
-          prepare: () => {},
-          bytes: 0,
-        },
+        face,
         present: (frame, rect) => {
+          face.revision += 1;
           w.presented.push({ frame, rect });
         },
         presentBytes: () => {},
@@ -406,6 +411,59 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     second.face.take();
     expect(second.handles[0]?.key).toBe(first.handles[0]?.key);
     expect(second.writers[0]?.device).toBe(other);
+  });
+
+  it("a face's ROW is what a smoke reads: the kind's ask, LSF's wire demand for its page, its arrivals, presents and drops, its texture; the stats count the writers made", () => {
+    const { face, handle, presentation, live } = attached();
+    face.take();
+    expect(live.faces()).toEqual([
+      {
+        key: "13918995204487956201-1",
+        demand: undefined,
+        wire: null,
+        state: { is: "live" },
+        arrivals: 0,
+        presented: 0,
+        dropped: 0,
+        texture: undefined,
+      },
+    ]);
+    face.demand(UNSEEN);
+    presentation.land();
+    face.take();
+    face.demand(SEEN);
+    handle.wire = { revision: 2, mode: "live", targetFps: 30 };
+    presentation.land();
+    presentation.land();
+    face.take();
+    expect(live.faces()).toEqual([
+      {
+        key: "13918995204487956201-1",
+        demand: SEEN,
+        wire: { revision: 2, mode: "live", targetFps: 30 },
+        state: { is: "live" },
+        arrivals: 3,
+        presented: 1,
+        dropped: 1,
+        texture: { width: 2560, height: 1600, revision: 1, epoch: 0 },
+      },
+    ]);
+    expect(live.stats()).toMatchObject({ presented: 1, dropped: 1, writers: 1 });
+    // a refused face is a row too: its state says why, and it counts nothing
+    const refused = setup({ gate: () => ({ refused: "no object on this board holds this face" }) });
+    refused.live.open("k-2", PAGE, () => {});
+    expect(refused.live.faces()).toEqual([
+      {
+        key: "k-2",
+        demand: undefined,
+        wire: null,
+        state: { is: "failed", reason: "no object on this board holds this face" },
+        arrivals: 0,
+        presented: 0,
+        dropped: 0,
+        texture: undefined,
+      },
+    ]);
   });
 
   it("the GATE's refusal is a failed face with the words — no page, no pool, nothing taken", () => {

@@ -18,6 +18,7 @@
 
 import {
   LIVE_SURFACE_FPS_BUCKETS_V1,
+  type LiveSurfaceDemandV1,
   type LiveSurfaceFpsBucketV1,
   SurfaceOpenResultV1,
 } from "@vibefield/contracts";
@@ -65,16 +66,37 @@ export interface DeskLiveStats {
   /** Frames taken for an unseen face (or with no device yet) and closed, drawn nowhere (ruling 6). */
   readonly dropped: number;
   readonly demands: number;
+  /** ICE writers made — one per face and device; a remade one is a new texture (the PLAYING row's "none remade"). */
+  readonly writers: number;
+}
+
+/** One open face as a smoke reads it. */
+export interface DeskLiveFaceRow {
+  readonly key: string;
+  /** The kind's last ask (undefined before its law has spoken: paused). */
+  readonly demand: LiveDemand | undefined;
+  /** What the pool last wrote to the wire for the page — LSF's demand — null before any. */
+  readonly wire: LiveSurfaceDemandV1 | null;
+  readonly state: LiveState;
+  /** Frames the attachment told of; frames presented into the texture; frames taken and closed unseen. */
+  readonly arrivals: number;
+  readonly presented: number;
+  readonly dropped: number;
+  /** The face's texture: its size, its present count, its generation (a remade texture is a new epoch). */
+  readonly texture:
+    | {
+        readonly width: number;
+        readonly height: number;
+        readonly revision: number;
+        readonly epoch: number;
+      }
+    | undefined;
 }
 
 export interface DeskLiveSources extends LiveSources {
   stats(): DeskLiveStats;
-  /** The keys open now and each one's last demand — a smoke's witness of the law's asks. */
-  faces(): readonly {
-    readonly key: string;
-    readonly demand: LiveDemand | undefined;
-    readonly state: LiveState;
-  }[];
+  /** The faces open now — a smoke's witness of the law's asks, the source's pace and the texture's life. */
+  faces(): readonly DeskLiveFaceRow[];
   /** Every face closed (the mount is going). */
   dispose(): void;
 }
@@ -193,24 +215,44 @@ function failedFace(key: string, reason: string, release: () => void): LiveFace 
   };
 }
 
+/** The face's page in the pool: apart from any panel's (ruling 4). */
+const poolKey = (key: string): string => `desk:${key}`;
+
 /** LSF's browser source for a page: a memory profile per face, laid out at the page's viewport. */
 function browserSource(key: string, page: LiveBrowserSpec) {
   return {
     kind: "browser" as const,
     initialUrl: page.url,
-    profile: { mode: "memory" as const, ref: `desk:${key}` },
+    profile: { mode: "memory" as const, ref: poolKey(key) },
     logicalViewport: { width: page.viewport[0], height: page.viewport[1] },
   };
 }
 
 export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
-  const faces = new Map<string, { face: LiveFace; demand: () => LiveDemand | undefined }>();
-  const counts = { opened: 0, refused: 0, presented: 0, dropped: 0, demands: 0 };
+  const faces = new Map<string, { face: LiveFace; row: () => DeskLiveFaceRow }>();
+  const counts = { opened: 0, refused: 0, presented: 0, dropped: 0, demands: 0, writers: 0 };
+  const wireOf = (key: string): LiveSurfaceDemandV1 | null =>
+    deps
+      .pool()
+      ?.snapshot()
+      .entries.find((entry) => entry.key === poolKey(key))?.demand ?? null;
 
   const refuse = (key: string, reason: string): LiveFace => {
     counts.refused += 1;
     const face = failedFace(key, reason, () => faces.delete(key));
-    faces.set(key, { face, demand: () => undefined });
+    faces.set(key, {
+      face,
+      row: () => ({
+        key,
+        demand: undefined,
+        wire: null,
+        state: face.state(),
+        arrivals: 0,
+        presented: 0,
+        dropped: 0,
+        texture: undefined,
+      }),
+    });
     return face;
   };
 
@@ -232,7 +274,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     const label = `${gate.type}/live ${key}`;
     let handle: SurfaceHandle<ProductSurfaceFrame>;
     try {
-      handle = pool.acquire(`desk:${key}`, {
+      handle = pool.acquire(poolKey(key), {
         // paused until the kind's law has seen the face: the page is made and laid out at its viewport, painting nothing yet
         initialDemand: liveDemandIntent({
           mode: "paused",
@@ -275,6 +317,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
     let asked: LiveDemand | undefined;
     let writer: LiveWriter | undefined;
     let writerDevice: GPUDevice | undefined;
+    const tally = { arrivals: 0, presented: 0, dropped: 0 };
     // close() unsubscribes both listeners at once, so nothing tells after it
     const tell = (): void => arrived();
     const listen = (next: SurfaceHandleState<ProductSurfaceFrame>["presentation"]): void => {
@@ -283,6 +326,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
       presentation = next;
       offFrame =
         presentation?.onFrame(() => {
+          tally.arrivals += 1;
           frameOwed = true;
           tell();
         }) ?? null;
@@ -311,7 +355,10 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         const device = deps.device();
         if (asked === undefined || asked.mode === "paused" || device === undefined) {
           // an unseen face's frame (ruling 6) — or one before the device: taken and closed, drawn nowhere
-          if (p.presentLatestVia(() => false).kind !== "idle") counts.dropped += 1;
+          if (p.presentLatestVia(() => false).kind !== "idle") {
+            counts.dropped += 1;
+            tally.dropped += 1;
+          }
           return changed;
         }
         const r = p.presentLatestVia((frame, metadata) => {
@@ -320,12 +367,14 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
             writer?.destroy();
             writer = deps.writer(device, { label, width: rect.width, height: rect.height });
             writerDevice = device;
+            counts.writers += 1;
           }
           writer.present(frame, rect);
           return true;
         });
         if (r.kind !== "consumed") return changed;
         counts.presented += 1;
+        tally.presented += 1;
         return true;
       },
       state: () => (closed ? { is: "closed" } : liveStateOf(handle.state, () => handle.retry())),
@@ -348,15 +397,30 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         faces.delete(key);
       },
     };
-    faces.set(key, { face, demand: () => asked });
+    faces.set(key, {
+      face,
+      row: () => {
+        const t = writer?.face;
+        return {
+          key,
+          demand: asked,
+          wire: wireOf(key),
+          state: face.state(),
+          ...tally,
+          texture:
+            t === undefined
+              ? undefined
+              : { width: t.width, height: t.height, revision: t.revision, epoch: t.epoch },
+        };
+      },
+    });
     return face;
   };
 
   return {
     open,
     stats: () => ({ ...counts, open: faces.size }),
-    faces: () =>
-      [...faces.entries()].map(([key, f]) => ({ key, demand: f.demand(), state: f.face.state() })),
+    faces: () => [...faces.values()].map((f) => f.row()),
     dispose() {
       for (const { face } of [...faces.values()]) face.close();
       faces.clear();
