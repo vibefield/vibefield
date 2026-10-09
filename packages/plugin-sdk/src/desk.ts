@@ -136,6 +136,43 @@ export {
 } from "@vibecook/ice/desk/engine";
 export * from "@vibecook/ice/desk/kit";
 
+// docs:begin live-browser-spec
+/**
+ * THE PAGE A BROWSER FACE OPENS (PT-2) — the `spec` a browser kind hands the host's `LIVE` service (`LiveSources.open(key, spec,
+ * arrived)`, ICE design-019 §3.2: the HOST's contract, which the desk never reads), typed here so the plugin and the host agree:
+ * the address (the host's browser policy decides what loads), the page's CSS viewport (the kind's own, from its size), its colour
+ * scheme, and the label the host's surface wears.
+ */
+export interface LiveBrowserSpec {
+  readonly source: "browser";
+  readonly url: string;
+  readonly viewport: readonly [number, number];
+  readonly scheme: "light" | "dark";
+  readonly label: string;
+}
+// docs:end live-browser-spec
+
+/** A whole, positive CSS length the source can be laid out at. */
+const cssLength = (v: unknown): v is number =>
+  typeof v === "number" && Number.isSafeInteger(v) && v > 0 && v <= 32_768;
+
+/**
+ * A `spec` read as a browser page (the host's side): the spec when every field is what `LiveBrowserSpec` says, else undefined —
+ * a host refuses what it cannot read rather than guessing at it.
+ */
+export function liveBrowserSpec(
+  spec: Readonly<Record<string, unknown>>,
+): LiveBrowserSpec | undefined {
+  const { source, url, viewport, scheme, label } = spec;
+  if (source !== "browser" || typeof url !== "string" || url.length === 0) return undefined;
+  if (!Array.isArray(viewport) || viewport.length !== 2) return undefined;
+  const [w, h] = viewport as readonly unknown[];
+  if (!cssLength(w) || !cssLength(h)) return undefined;
+  if (scheme !== "light" && scheme !== "dark") return undefined;
+  if (typeof label !== "string") return undefined;
+  return { source, url, viewport: [w, h], scheme, label };
+}
+
 // docs:begin object-binding
 /**
  * An OBJECT's code half (spec §12.8; DK-0f's contract): the value of the renderer module's NAMED

@@ -513,6 +513,10 @@ export interface PluginSurfaceState {
  * `VideoFrame`s whose leases the host must close on a fixed schedule, and a
  * handle that exposed one would be handing plugin code an object it could
  * retain past its lease.
+ *
+ * A plugin KIND may sample a texture VIEW the host's `LIVE` service fills (PT-2,
+ * ICE design-019 §3.2 — a face's `LiveTexture`, opened by the object's durable
+ * key); it never receives a frame, a ticket or a GPU object of the producer's.
  */
 export interface PluginSurfaceHandle {
   readonly status: PluginSurfaceStatus;

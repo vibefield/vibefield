@@ -34,6 +34,7 @@ import {
   PaneUniforms,
   pageDemand,
   pagePoint,
+  paneDemand,
   paneFinish,
   paneLook,
   paneReach,
@@ -45,6 +46,7 @@ import {
   resolvePane,
   rimAt,
   SAMPLE_URL,
+  sameDemand,
   sdPage,
   sdPane,
   seen,
@@ -423,13 +425,87 @@ describe("resizing and the stream", () => {
     expect(d03.fps).toBe(30);
     const d01 = pageDemand(G, view(0, 0, 0.1), 2, false);
     expect(d01.width).toBe(320);
-    expect(d01.fps).toBe(12);
+    expect(d01.fps).toBe(15); // the prototype's 12 is no LSF bucket (PT-2 ruling 5)
     const use = pageDemand(G, view(0, 0, 1), 2, true);
     expect([use.width, use.height, use.fps]).toEqual([2560, 1600, 60]);
     expect(pageDemand(G, view(5000, 0, 1), 2, false).fps).toBe(0);
     // held: the half rung stays while it still covers the page and is under 2.3× it
     expect(pageDemand(G, view(0, 0, 0.45), 2, false, BROWSER, 1280).width).toBe(1280);
     expect(glowLevel(2560)).toBeCloseTo(Math.log2(2560 / 24), 9);
+  });
+});
+
+describe("the live page's demand over the SIGHT (PT-2 ruling 5)", () => {
+  const laptop = () => pane("laptop").S;
+  const phone = () => pane("phone").S;
+  const at = (px: number, held = false) => ({
+    seen: true,
+    px: [px, Math.round(px * 0.625)] as const,
+    held,
+  });
+
+  it("unseen — off screen, culled, behind the hand — is paused, its layout kept", () => {
+    const d = paneDemand({ seen: false, px: [0, 0], held: false }, laptop());
+    expect(d).toEqual({
+      mode: "paused",
+      fps: 0,
+      raster: [0, 0],
+      viewport: [1280, 800],
+      interactive: false,
+    });
+  });
+
+  it("held is the native capture at 60, interactive", () => {
+    expect(paneDemand(at(900, true), laptop())).toEqual({
+      mode: "live",
+      fps: 60,
+      raster: [2560, 1600],
+      viewport: [1280, 800],
+      interactive: true,
+    });
+    // a phone's native is its own 3× capture
+    expect(paneDemand(at(300, true), phone()).raster).toEqual([1206, 2622]);
+  });
+
+  it("at rest: the halving of native that covers the page's device px — at most three — 30 fps from 320 device px, 15 under", () => {
+    const S = laptop();
+    expect(paneDemand(at(2560), S)).toMatchObject({ mode: "live", fps: 30, raster: [2560, 1600] });
+    expect(paneDemand(at(1500), S).raster).toEqual([2560, 1600]); // 1280 does not cover 1500
+    expect(paneDemand(at(1280), S).raster).toEqual([1280, 800]);
+    expect(paneDemand(at(700), S).raster).toEqual([1280, 800]);
+    expect(paneDemand(at(640), S).raster).toEqual([640, 400]);
+    expect(paneDemand(at(330), S)).toMatchObject({ fps: 30, raster: [640, 400] });
+    expect(paneDemand(at(300), S)).toMatchObject({ fps: 15, raster: [320, 200] });
+    // never past three halvings, however small
+    expect(paneDemand(at(40), S)).toMatchObject({
+      fps: 15,
+      raster: [320, 200],
+      interactive: false,
+    });
+    for (const px of [2560, 1000, 300, 40])
+      expect(paneDemand(at(px), S).viewport).toEqual([1280, 800]);
+  });
+
+  it("holds a rung through a wobble: kept while it still covers the page and is under 2.3× it", () => {
+    const S = laptop();
+    // zooming out from 1280 → 1100 px: 1280 still covers and is under 2.3×, so it stays (fresh, 1280 too)
+    expect(paneDemand(at(1100), S, 1280).raster).toEqual([1280, 800]);
+    // at 600 px a fresh ask is 640, but the held 1280 is under 2.3 × 600 = 1380: it stays
+    expect(paneDemand(at(600), S, 1280).raster).toEqual([1280, 800]);
+    // at 500 px the held 1280 is past 2.3 × 500 = 1150: it drops to the rung that covers
+    expect(paneDemand(at(500), S, 1280).raster).toEqual([640, 400]);
+    // a held rung that no longer covers the page is dropped
+    expect(paneDemand(at(900), S, 640).raster).toEqual([1280, 800]);
+  });
+
+  it("speaks change-only: the same ask is the same demand", () => {
+    const S = laptop();
+    expect(sameDemand(paneDemand(at(700), S), paneDemand(at(800), S))).toBe(true);
+    expect(sameDemand(paneDemand(at(700), S), paneDemand(at(600), S))).toBe(false);
+    expect(sameDemand(undefined, paneDemand(at(700), S))).toBe(false);
+    // a new viewport is a new demand (a resize, a device switch)
+    const wider = shapeOf({ w: 800, h: 461.94 }, device("laptop"));
+    expect(sameDemand(paneDemand(at(700), S), paneDemand(at(700), wider))).toBe(false);
   });
 });
 

@@ -138,7 +138,8 @@ const BROWSER_SPEC = {
    * device pixels on screen (never more than `rungs` halvings down), at a rate by its size on screen, 0 off screen (the
    * last frame holds); in use, the native capture at full rate.
    */
-  stream: { texelsPerPx: 1, rungs: 3, fps: { focused: 60, near: 30, far: 12 }, nearPx: 320 },
+  // far 15, not the prototype's 12: LSF delivers in buckets (0/2/5/10/15/30/60) and 12 is none of them (PT-2 ruling 5)
+  stream: { texelsPerPx: 1, rungs: 3, fps: { focused: 60, near: 30, far: 15 }, nearPx: 320 },
   /** The lamp on a face — the kit's one physics (`PHYSICS.light`): the fill a face turned away keeps, how far past flat one turned toward it brightens. */
   lamp: PHYSICS.light,
   /** Resizing: how far from the outline (CSS px on screen) a press takes an edge, and the smallest page (CSS px). */
@@ -722,6 +723,82 @@ export function pageDemand(
   while (k < law.stream.rungs && nw / 2 ** (k + 1) >= devPx) k++;
   return { width: Math.round(nw / 2 ** k), height: Math.round(nh / 2 ** k), fps, visible };
 }
+
+// ---------------------------------------------------------------- the live page's demand, over the SIGHT (PT-2)
+
+/** What the desk says it drew of a face last frame (ICE's `Seen`, design-019 §3.4): drawn, its largest device px, held. */
+export interface PaneSeen {
+  readonly seen: boolean;
+  readonly px: readonly [number, number];
+  readonly held: boolean;
+}
+
+/** What the pane asks of its page's source (ICE's `LiveDemand`, design-019 §4) — the host maps it to its producer. */
+export interface PaneLiveDemand {
+  readonly mode: "live" | "paused";
+  readonly fps: number;
+  readonly raster: readonly [number, number];
+  readonly viewport?: readonly [number, number];
+  readonly interactive: boolean;
+}
+
+/**
+ * THE PANE'S DEMAND LAW over its SIGHT (PT-2 ruling 5 — the prototype's `pageDemand` above, re-based on what the desk says it
+ * drew of the page, `px` the page's device px): UNSEEN — off screen, culled, behind the hand — paused; HELD — the native capture
+ * at 60, interactive; at rest the halving of native that covers the page's device px (at most `rungs` halvings; a rung `held`
+ * is kept while it still covers the page and is no more than 2.3× it, so a wobbling zoom never flips the raster), 30 fps while
+ * the page is ≥ 320 device px wide and 15 below. The viewport is always the pane's own (its Size at its device's density) — a
+ * paused page keeps its layout, so waking it never reflows it.
+ */
+export function paneDemand(
+  s: PaneSeen,
+  S: PaneShape,
+  held?: number,
+  law: BrowserLaw = BROWSER,
+): PaneLiveDemand {
+  const viewport = S.viewport;
+  if (!s.seen) return { mode: "paused", fps: 0, raster: [0, 0], viewport, interactive: false };
+  const [nw, nh] = nativeOf(S);
+  if (s.held)
+    return {
+      mode: "live",
+      fps: law.stream.fps.focused,
+      raster: [nw, nh],
+      viewport,
+      interactive: true,
+    };
+  const devPx = Math.max(s.px[0], 1) * law.stream.texelsPerPx;
+  const fps = devPx >= law.stream.nearPx ? law.stream.fps.near : law.stream.fps.far;
+  const rungs = Array.from({ length: law.stream.rungs + 1 }, (_, k) => Math.round(nw / 2 ** k));
+  const at = (k: number): PaneLiveDemand => ({
+    mode: "live",
+    fps,
+    raster: [Math.round(nw / 2 ** k), Math.round(nh / 2 ** k)],
+    viewport,
+    interactive: false,
+  });
+  if (
+    held !== undefined &&
+    rungs.includes(held) &&
+    held >= Math.min(devPx, nw) &&
+    held <= devPx * 2.3
+  )
+    return at(rungs.indexOf(held));
+  let k = 0;
+  while (k < law.stream.rungs && nw / 2 ** (k + 1) >= devPx) k++;
+  return at(k);
+}
+
+/** Two demands that ask the same — the law speaks change-only. */
+export const sameDemand = (a: PaneLiveDemand | undefined, b: PaneLiveDemand): boolean =>
+  a !== undefined &&
+  a.mode === b.mode &&
+  a.fps === b.fps &&
+  a.interactive === b.interactive &&
+  a.raster[0] === b.raster[0] &&
+  a.raster[1] === b.raster[1] &&
+  a.viewport?.[0] === b.viewport?.[0] &&
+  a.viewport?.[1] === b.viewport?.[1];
 
 // ---------------------------------------------------------------- resizing: the viewport a dragged edge asks for
 
