@@ -416,9 +416,20 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
     const off = x1 <= 0 || x0 >= v.w || y1 <= 0 || y0 >= v.h;
     return { off, centre: { x: v.left + (x0 + x1) / 2, y: v.top + (y0 + y1) / 2 } };
   };
-  /** `e` brought to the middle of the view by drags on the bare mat, judged by the camera (no selection needed). */
+  /** The camera once it holds still (a reload's arrival fit flies it): two reads 250 ms apart, the same. */
+  const settledCamera = async (): Promise<void> => {
+    let last = "";
+    for (let i = 0; i < 24; i += 1) {
+      const now = JSON.stringify(await js("globalThis.__vfDesk.camera()"));
+      if (now === last) return;
+      last = now;
+      await sleep(250);
+    }
+  };
+  /** `e` brought to the middle of the view by drags on the bare mat, judged by the camera (no selection needed); said whole if
+   * eight drags do not bring it there. */
   const bringToMiddle = async (e: number): Promise<void> => {
-    for (let i = 0; i < 8; i += 1) {
+    for (let i = 0; ; i += 1) {
       const r = (await rows()).find((x) => x.entity === e)?.rect;
       if (r === undefined) throw new Error("the pane left the board");
       const v = await js<{
@@ -438,6 +449,10 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
         dy: v.h / 2 - (r.y + r.h / 2 - v.y) * v.zoom,
       };
       if (Math.hypot(by.dx, by.dy) < 40) return;
+      if (i === 8)
+        throw new Error(
+          `the pane not brought to the middle in 8 drags (camera ${JSON.stringify(v)}, rect ${JSON.stringify(r)})`,
+        );
       let step = {
         dx: Math.round(Math.max(-400, Math.min(400, by.dx))),
         dy: Math.round(Math.max(-250, Math.min(250, by.dy))),
@@ -463,17 +478,9 @@ export async function livePaneRows(d: LiveRowsDriver): Promise<string[]> {
       }
       const from = { x: v.left + mat.x, y: v.top + mat.y };
       await drag(from, { x: from.x + step.dx, y: from.y + step.dy }, 8, 300);
-      await sleep(500);
-    }
-  };
-  /** The camera once it holds still (a reload's arrival fit flies it): two reads 250 ms apart, the same. */
-  const settledCamera = async (): Promise<void> => {
-    let last = "";
-    for (let i = 0; i < 24; i += 1) {
-      const now = JSON.stringify(await js("globalThis.__vfDesk.camera()"));
-      if (now === last) return;
-      last = now;
-      await sleep(250);
+      // measured once the camera holds, not after a fixed wait: the camera has inertia, and a release it reads as moving
+      // glides on
+      await settledCamera();
     }
   };
   /** `e` taken by a press on its page: the camera settled first, a second press if the first is not heard; said whole if neither is. */

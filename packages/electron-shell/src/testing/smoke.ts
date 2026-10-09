@@ -1675,9 +1675,9 @@ async function deskRefusalRow(win: BrowserWindow, viteUrl: string): Promise<stri
 /**
  * PT-2 — the live page's rows (testing/smoke-live-pane.ts) over the smoke's own fixture page on 127.0.0.1, served for the rows
  * and closed after them; the window's RENDERER REPLACED for the RELOAD row (`loadRenderer`, the same webContents — so the same
- * participant, a new document — as the retry row replaces it, with the window's doors and without the first board's seeding: a
- * bare `webContents.reload()` re-asks the seeding switch and leaves the boot's splash "settling" over the desk), answered once
- * the desk says DESK_READY again.
+ * participant, a new document — as the retry row replaces it, with the window's doors and without the first board's seeding,
+ * which a bare `webContents.reload()` would ask again), answered once the desk says DESK_READY again. DESK_READY is said beneath
+ * the boot's splash, so the rows wait for it to lift before they press.
  */
 async function liveRows(
   win: BrowserWindow,
