@@ -41,8 +41,16 @@ export function HistoryPreview({ state = "room" }: { state?: HistoryState }): Re
 /** A session chosen in the room, and the line's create — Resume — live for it:
  * the room's own selection is what History lends the line (the product wires
  * the same report through `HistoryView`), and pressing Resume here answers as
- * a placed pane would ("Resumed in the active pane"). */
-export function HistoryResumePlate({ keys = "mac" }: { keys?: ViewKeys }): ReactElement {
+ * a placed pane would ("Resumed in the active pane"). `live`: the chosen
+ * session runs here, so the create is Jump to (P3), answering as a revealed
+ * pane would ("Jumped to its pane"). */
+export function HistoryResumePlate({
+  keys = "mac",
+  live = false,
+}: {
+  keys?: ViewKeys;
+  live?: boolean;
+}): ReactElement {
   const [ports] = useState(() => historyFixturePorts("chosen"));
   const [openAt] = useState<RoomTarget>({ sessionId: FIXTURE_CHOSEN_SESSION });
   const [selection, setSelection] = useState<RoomSelection | null>(null);
@@ -52,9 +60,11 @@ export function HistoryResumePlate({ keys = "mac" }: { keys?: ViewKeys }): React
     () => ({
       chosen: selection?.sessionId ?? null,
       waits: null,
+      live: live && selection !== null,
       resume: async () => ({ state: "resumed" }),
+      jump: async () => ({ state: "jumped" }),
     }),
-    [selection],
+    [selection, live],
   );
   return (
     <>

@@ -141,6 +141,16 @@ describe("the palette's table of the frame's acts (One Frame §7)", () => {
     ]);
   });
 
+  it("says History's Jump to while the chosen session runs here — the line's own reading (P3)", () => {
+    const live = frameActGroups("history", "mac", null, true)[1]?.acts ?? [];
+    expect(live.map((act) => [act.name, act.glyph, act.waits, act.run.kind])).toEqual([
+      ["Jump to this session", "jump", null, "create"],
+    ]);
+    // a live word from History never reaches another view's create
+    expect(rows("godview", "mac")[1]).toEqual(["On this view", ["New terminal ⌘T"]]);
+    expect(frameActGroups("godview", "mac", null, true)[1]?.acts[0]?.glyph).toBe("start");
+  });
+
   it("says the waiting Assistant waits, and the keys the Windows way", () => {
     const views = frameActGroups("canvas", "other")[0]?.acts ?? [];
     expect(views.find((act) => act.id === "view-assistant")?.waits).toBe("not built yet");

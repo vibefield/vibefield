@@ -74,8 +74,9 @@
   outline-offset: 2px;
 }
 
-/* The three views' glyphs stand in one place and cross-fade (200ms, One
-   Frame §12); Objects' plus turns 135° into ✕ while the objects are out. */
+/* The three views' glyphs — and History's Jump to (P3) — stand in one place
+   and cross-fade (200ms, One Frame §12); Objects' plus turns 135° into ✕
+   while the objects are out. */
 .vf-line-create-glyph {
   display: grid;
   grid-area: 1 / 1;

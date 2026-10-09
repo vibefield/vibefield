@@ -576,6 +576,8 @@ describe("UI system ownership boundaries", () => {
     // (AR-8c): the room, a choice with Resume live, unavailable, consent.
     expect(page).toMatch(/<HistoryPreview state="room"/u);
     expect(page).toMatch(/<HistoryResumePlate\s/u);
+    // …and a choice that runs here, the line's create saying Jump to (P3)
+    expect(page).toMatch(/<HistoryResumePlate live\s/u);
     expect(page).toMatch(/<PeekPlate state="closed"/u);
     expect(page).toMatch(/<PeekPlate state="open"/u);
     expect(page).toMatch(/<HistoryPreview state="unavailable"/u);

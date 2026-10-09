@@ -62,10 +62,11 @@ import {
 import { type FrameSurface, foldSurface } from "./frame-surface";
 import {
   type HistoryLineDoor,
+  historyCreateWaits,
+  jumpNote,
   type LineViewDoor,
   newTerminalNote,
   resumeNote,
-  resumeWaits,
   useGodviewLineDoor,
   useHistoryLineDoor,
 } from "./line-door";
@@ -605,15 +606,17 @@ export function Composer({
   }, [door, say]);
 
   // History's create is Resume (AR-8c): the chosen session, continued in its
-  // own agent; the note says what came of it — in History, or in Godview once
-  // the frame has moved there to show the pane.
-  const resume = useCallback(async () => {
-    const waits = resumeWaits(historyDoor);
+  // own agent — or Jump to while it runs here (P3): its pane, shown. The note
+  // says what came of it — in History, or in Godview once the frame has moved
+  // there to show the pane.
+  const resumeOrJump = useCallback(async () => {
+    const waits = historyCreateWaits(historyDoor);
     if (historyDoor === null || waits !== null) {
       say(resumeNote({ state: "refused", reason: waits ?? "choose a session first" }), "create");
       return;
     }
-    say(resumeNote(await historyDoor.resume()), "create");
+    if (historyDoor.live) say(jumpNote(await historyDoor.jump()), "create");
+    else say(resumeNote(await historyDoor.resume()), "create");
   }, [historyDoor, say]);
 
   // Objects on Canvas (DK-13; DESIGN.md §8 "The pegboard"): the create calls the board's `toggle()` and the frame's
@@ -631,9 +634,9 @@ export function Composer({
         if (open === null) return;
         onSurfaceChange(open ? "objects" : foldSurface(surface, "objects"));
       } else if (view === "godview") void newTerminal();
-      else if (view === "history") void resume();
+      else if (view === "history") void resumeOrJump();
     },
-    [board, boardRefused, newTerminal, onSurfaceChange, resume, surface, view],
+    [board, boardRefused, newTerminal, onSurfaceChange, resumeOrJump, surface, view],
   );
 
   // The palette runs the view's act through the line (One Frame FR-3), so the
@@ -997,7 +1000,7 @@ export function Composer({
 
   const createWaits =
     view === "history"
-      ? resumeWaits(historyDoor)
+      ? historyCreateWaits(historyDoor)
       : view === "godview" && door === null
         ? "the deck is not connected yet"
         : null;
@@ -1011,6 +1014,7 @@ export function Composer({
         objectsOpen={board === null ? surface === "objects" : board.open}
         createHeld={boardRefused}
         createWaits={createWaits}
+        createLive={view === "history" && historyDoor?.live === true}
         aim={aim}
         seed={seed}
         revision={revision}

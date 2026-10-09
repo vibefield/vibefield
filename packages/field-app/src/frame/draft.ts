@@ -266,17 +266,21 @@ export function sendNote(outcome: SendOutcome): string {
  * glyph; FR-3: only Canvas's is a bare plus). `key` is said in the tooltip,
  * never printed (FR-5). */
 export interface CreateAct {
-  readonly glyph: "plus" | "start" | "resume";
+  readonly glyph: "plus" | "start" | "resume" | "jump";
   readonly name: string;
   readonly key: string | null;
 }
 
-export function createActOf(view: FrameView, keys: "mac" | "other"): CreateAct {
+/** `live`: History's chosen session runs on this desktop, so its create is
+ * Jump to (P3) — History's line door says so. */
+export function createActOf(view: FrameView, keys: "mac" | "other", live = false): CreateAct {
   switch (view) {
     case "godview":
       return { glyph: "start", name: "New terminal", key: keys === "mac" ? "⌘T" : "Ctrl+T" };
     case "history":
-      return { glyph: "resume", name: "Resume this session", key: null };
+      return live
+        ? { glyph: "jump", name: "Jump to this session", key: null }
+        : { glyph: "resume", name: "Resume this session", key: null };
     default:
       return { glyph: "plus", name: "Objects", key: "B" };
   }

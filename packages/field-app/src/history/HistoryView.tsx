@@ -10,6 +10,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import {
+  type JumpOutcome,
   publishHistoryLineDoor,
   type ResumeOutcome,
   whenGodviewCanPlace,
@@ -20,6 +21,7 @@ import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import { terminalBootstrapHome } from "../terminal/pool";
 import { historyPortsOver } from "./doors";
+import { type LiveRun, readLiveRun } from "./jump";
 import { useHistoryOpenAt } from "./open-at";
 import { type ResumeReading, readResume, resumeNative } from "./resume";
 import { HistoryRoomMount } from "./room-chunk";
@@ -34,6 +36,10 @@ import { HistoryRoomMount } from "./room-chunk";
 // the canvas's chunk and mounts the room through it, "Opening History" saying
 // so while it arrives — so the ports, the feed's words and the line's door are
 // here from the first open, before the room is.
+//
+// While the chosen session runs on this desktop the create is Jump to (P3,
+// `jump.ts`): the pane it runs in, revealed by Godview's deck — and Resume
+// refuses it in Jump to's words, asking `agent.resume` nothing.
 //
 // Its search is the frame's — the Peek (2026-10-08, GV-D8; `frame/Peek.tsx`):
 // a past row the Peek opens arrives through `open-at.ts`, and this controller
@@ -96,12 +102,48 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   const readingRef = useRef(current);
   readingRef.current = current;
 
+  // P3 — whether the chosen session runs here: one plain `agent.list`, asked
+  // on a new choice and when History shows again (a press asks once more). The
+  // LAST answer stands until the next arrives, so the create never flickers
+  // through Resume on its way to Jump to; it only ever chooses the act — what
+  // a press shows is the press's own answer.
+  const [live, setLive] = useState(false);
+  const noteLiveness = useCallback((of: RoomSelection, run: LiveRun | null) => {
+    if (selectionRef.current?.sessionId === of.sessionId) setLive(run !== null);
+  }, []);
+  useEffect(() => {
+    if (selection === null) {
+      setLive(false);
+      return;
+    }
+    if (!active) return;
+    let cancelled = false;
+    void readLiveRun(fieldd, selection.nativeSessionId).then((run) => {
+      if (!cancelled) setLive(run !== null);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [fieldd, selection, active]);
+
   const resume = useCallback(async (): Promise<ResumeOutcome> => {
     const chosen = selectionRef.current;
     if (chosen === null) return { state: "refused", reason: "choose a session first" };
+    // Never a second run on a running conversation: asked at the press, since
+    // the line's reading may be older than it.
+    const running = await readLiveRun(fieldd, chosen.nativeSessionId);
+    if (running !== null) {
+      noteLiveness(chosen, running);
+      return { state: "running" };
+    }
     const read = readingRef.current ?? (await readResume(fieldd, chosen));
     if (read.state === "waits") return { state: "refused", reason: read.why };
     const answer = await resumeNative(fieldd, read.facts);
+    if (answer.state === "running") {
+      // fieldd's one-run law saw a run the fold had not shown us yet
+      noteLiveness(chosen, await readLiveRun(fieldd, chosen.nativeSessionId));
+      return answer;
+    }
     if (answer.state === "refused") return answer;
     // Seen where it runs: the frame moves to Godview, whose deck — mounted on
     // its first open — places the agent in the pane the swarm's open uses.
@@ -120,13 +162,34 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
       reason: placed.reason,
     });
     return { state: "refused", reason: `it resumed, but no pane took it (${placed.reason})` };
-  }, [fieldd]);
+  }, [fieldd, noteLiveness]);
+
+  // P3 — Jump to: the run is asked for again at the press (it may have ended
+  // since the line's reading), and the pane showing its floor session is
+  // revealed in Godview — activated, or mounted in the active pane.
+  const jump = useCallback(async (): Promise<JumpOutcome> => {
+    const chosen = selectionRef.current;
+    if (chosen === null) return { state: "refused", reason: "choose a session first" };
+    const run = await readLiveRun(fieldd, chosen.nativeSessionId);
+    noteLiveness(chosen, run);
+    if (run === null) return { state: "ended" };
+    void requestView("godview");
+    const deck = await whenGodviewCanPlace(RESUME_DECK_WAIT_MS);
+    if (deck === null) return { state: "refused", reason: "the deck did not open to show it" };
+    const shown = await deck.reveal(run.floorSessionId);
+    if (shown.state === "opened") return { state: "jumped" };
+    log().info("renderer.history.jump_unshown", "the running session's pane was not shown", {
+      sessionId: chosen.sessionId,
+      reason: shown.reason,
+    });
+    return { state: "refused", reason: shown.reason };
+  }, [fieldd, noteLiveness]);
 
   const chosen = selection?.sessionId ?? null;
   const waits = current?.state === "waits" ? current.why : null;
   useEffect(() => {
-    publishHistoryLineDoor({ chosen, waits, resume });
-  }, [chosen, waits, resume]);
+    publishHistoryLineDoor({ chosen, waits, live: chosen !== null && live, resume, jump });
+  }, [chosen, waits, live, resume, jump]);
   useEffect(() => () => publishHistoryLineDoor(null), []);
 
   // Where the Peek opened History at a line: each pick a fresh object, which

@@ -101,8 +101,9 @@ afterEach(() => {
   configureTerminalPool(undefined);
 });
 
-/** fieldd, scripted: the index's doors as AR-8b answers them. */
-function fieldd(resume: () => unknown) {
+/** fieldd, scripted: the index's doors as AR-8b answers them; `list` is the
+ * fold's `agent.list` (P3), unanswered when left out. */
+function fieldd(resume: () => unknown, list?: () => unknown) {
   const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
   const client = {
     status: "ready",
@@ -139,6 +140,9 @@ function fieldd(resume: () => unknown) {
           return fixture("agent-providers.valid.json");
         case "agent.resume":
           return resume();
+        case "agent.list":
+          if (list !== undefined) return list();
+          throw Object.assign(new Error("agent.list is not scripted"), { kind: "NOT_FOUND" });
         default:
           throw Object.assign(new Error(`${method} is not scripted`), { kind: "NOT_FOUND" });
       }
@@ -287,9 +291,9 @@ describe("History in the frame (AR-8c)", () => {
 
   it("a refusal is said on the line in the launcher's words, and the window stays in History", async () => {
     const client = fieldd(() => {
-      throw Object.assign(new Error("terminal still running"), {
+      throw Object.assign(new Error("persona signed out"), {
         kind: "PRECONDITION_FAILED",
-        details: { state: "terminal-alive" },
+        details: { state: "signed-out" },
       });
     });
     mount(client);
@@ -303,7 +307,7 @@ describe("History in the frame (AR-8c)", () => {
       () => host?.querySelector(".vf-line-note")?.textContent,
       "the line's note",
     );
-    expect(note).toBe("Could not resume — it is already running");
+    expect(note).toBe("Could not resume — its profile is signed out");
     expect(asked).not.toContain("godview");
   });
 
@@ -332,5 +336,211 @@ describe("History in the frame (AR-8c)", () => {
     }, "both projects' paths");
     // the catalog carries rosetta's absolute roots: the home is the room's to fold
     expect(paths).toEqual(["/opt/build/tools", "~/Projects/vibe-field"]);
+  });
+});
+
+// P3 — Jump to (DESIGN.md §8 "History"; AR-D43, K11). Whether the chosen
+// session runs here is fieldd's fold, asked with one plain `agent.list` and
+// joined on the room's native id; the run's floor session is what Godview's
+// deck reveals.
+describe("Jump to, while the chosen session runs here (P3)", () => {
+  const SUMMARY = fixture("agent-session-summary.valid.json");
+  const NATIVE = SESSION["nativeSessionId"] as string;
+  /** The fold with the chosen conversation's run in it (and another run). */
+  const running = (overrides: Record<string, unknown> = {}) => ({
+    sessions: [
+      {
+        ...SUMMARY,
+        sessionId: "another-conversation",
+        runtimeRunId: "run-other",
+        terminal: { hosted: "local", runtimeSessionId: "pty-other" },
+      },
+      {
+        ...SUMMARY,
+        sessionId: NATIVE,
+        runtimeRunId: "run-agent",
+        terminal: { hosted: "local", runtimeSessionId: "pty-agent" },
+        ...overrides,
+      },
+    ],
+  });
+  const ENDED = { continuation: { persisted: true, resumable: true, exited: true } };
+  const glyphShown = (): string | null | undefined =>
+    create().querySelector("[data-shown]")?.getAttribute("data-glyph");
+  const says = (name: string) => () => (create().getAttribute("aria-label") === name ? true : null);
+  const noteNow = (): string | null | undefined =>
+    host?.querySelector(".vf-line-note")?.textContent;
+  const deck = (overrides: Partial<LineViewDoor> = {}): LineViewDoor => ({
+    panes: [],
+    onScreen: false,
+    newTerminal: async () => ({ state: "opened" }),
+    paste: () => false,
+    canPlace: true,
+    place: async () => ({ state: "opened" }),
+    reveal: async () => ({ state: "opened" }),
+    ...overrides,
+  });
+
+  it("says Jump to under `jump` while the session runs here, and Resume once its run has ended", async () => {
+    let fold: unknown = running();
+    const client = fieldd(
+      () => SPAWNED,
+      () => fold,
+    );
+    mount(client);
+    to("history");
+    await choose();
+    await until(says("Jump to this session"), "the create to say Jump to");
+    expect(glyphShown()).toBe("jump");
+    expect(create().title).toBe("Jump to this session");
+    expect(create().hasAttribute("aria-disabled")).toBe(false);
+    // one plain request: nothing subscribes to the board for it (PF6)
+    expect(client.calls.some((call) => call.method === "agent.list")).toBe(true);
+    expect(client.calls.some((call) => call.method === "agent.subscribe")).toBe(false);
+
+    // the run ended (its record stamped with the exit, its pane still on the
+    // floor): History showing again asks again, and the create is Resume
+    fold = running(ENDED);
+    to("godview");
+    to("history");
+    await until(says("Resume this session"), "the create to say Resume again");
+    expect(glyphShown()).toBe("resume");
+  });
+
+  it("a press asks Godview for the view, then reveals the run's floor session — nothing is resumed", async () => {
+    let askedAtReveal: FrameView[] = [];
+    const reveal = vi.fn<LineViewDoor["reveal"]>(async () => {
+      askedAtReveal = [...asked];
+      return { state: "opened" };
+    });
+    publishGodviewLineDoor(deck({ reveal }));
+    const client = fieldd(
+      () => SPAWNED,
+      () => running(),
+    );
+    mount(client);
+    to("history");
+    await choose();
+    await until(says("Jump to this session"), "the create to say Jump to");
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe("Jumped to its pane");
+    expect(reveal).toHaveBeenCalledTimes(1);
+    expect(reveal).toHaveBeenCalledWith("pty-agent");
+    expect(askedAtReveal, "the deck was asked before the frame moved").toContain("godview");
+    expect(client.calls.some((call) => call.method === "agent.resume")).toBe(false);
+  });
+
+  it("Resume on a session that runs here refuses in Jump to's words, resumes nothing, and becomes Jump to", async () => {
+    let fold: unknown = { sessions: [] };
+    const place = vi.fn<LineViewDoor["place"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck({ place }));
+    const client = fieldd(
+      () => SPAWNED,
+      () => fold,
+    );
+    mount(client);
+    to("history");
+    await choose();
+    await until(says("Resume this session"), "the create to say Resume");
+    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
+    // the run started since the line's reading (in Godview, on the phone…)
+    fold = running();
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe("This session is running — Jump to it");
+    expect(client.calls.some((call) => call.method === "agent.resume")).toBe(false);
+    expect(place).not.toHaveBeenCalled();
+    expect(asked).not.toContain("godview");
+    await until(says("Jump to this session"), "the create to become Jump to");
+    expect(glyphShown()).toBe("jump");
+  });
+
+  it("fieldd's one-run refusal is said in the same words, and the create becomes Jump to", async () => {
+    let fold: unknown = { sessions: [] };
+    const client = fieldd(
+      () => {
+        // the run the fold had not shown yet
+        fold = running();
+        throw Object.assign(new Error("the conversation is already running in another session"), {
+          kind: "PRECONDITION_FAILED",
+          details: { runtimeRunId: "run-agent", state: "terminal-alive" },
+        });
+      },
+      () => fold,
+    );
+    mount(client);
+    to("history");
+    await choose();
+    await until(() => (create().hasAttribute("aria-disabled") ? null : true), "Resume to wake");
+    // a fold that has not seen the run yet: the press goes as far as fieldd
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe("This session is running — Jump to it");
+    expect(client.calls.filter((call) => call.method === "agent.resume")).toHaveLength(1);
+    expect(asked).not.toContain("godview");
+    await until(says("Jump to this session"), "the create to become Jump to");
+  });
+
+  it("Jump to after the run ended says so, shows nothing, and becomes Resume", async () => {
+    let fold: unknown = running();
+    const reveal = vi.fn<LineViewDoor["reveal"]>(async () => ({ state: "opened" }));
+    publishGodviewLineDoor(deck({ reveal }));
+    const client = fieldd(
+      () => SPAWNED,
+      () => fold,
+    );
+    mount(client);
+    to("history");
+    await choose();
+    await until(says("Jump to this session"), "the create to say Jump to");
+    fold = { sessions: [] };
+    await act(async () => {
+      create().click();
+    });
+    expect(await until(noteNow, "the line's note")).toBe("This session has ended — Resume it");
+    expect(reveal).not.toHaveBeenCalled();
+    expect(asked).not.toContain("godview");
+    await until(says("Resume this session"), "the create to become Resume");
+  });
+
+  it("keeps saying Jump to while a new answer is on its way — no flicker through Resume", async () => {
+    let answer: () => Promise<unknown> = async () => running();
+    const client = fieldd(
+      () => SPAWNED,
+      () => answer(),
+    );
+    mount(client);
+    to("history");
+    await choose();
+    await until(says("Jump to this session"), "the create to say Jump to");
+    let release: (fold: unknown) => void = () => undefined;
+    answer = () =>
+      new Promise((resolve) => {
+        release = resolve;
+      });
+    const asks = client.calls.filter((call) => call.method === "agent.list").length;
+    to("godview");
+    to("history");
+    await until(
+      () =>
+        client.calls.filter((call) => call.method === "agent.list").length > asks ? true : null,
+      "History showing again to ask again",
+    );
+    // the ask is out and unanswered: the create still says what it said
+    for (let tick = 0; tick < 5; tick++) {
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      });
+      expect(create().getAttribute("aria-label")).toBe("Jump to this session");
+      expect(glyphShown()).toBe("jump");
+    }
+    await act(async () => {
+      release(running(ENDED));
+    });
+    await until(says("Resume this session"), "the create to say Resume once answered");
   });
 });
