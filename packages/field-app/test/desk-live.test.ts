@@ -413,7 +413,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     expect(second.writers[0]?.device).toBe(other);
   });
 
-  it("a face's ROW is what a smoke reads: the kind's ask, LSF's wire demand for its page, its arrivals, presents and drops, its texture; the stats count the writers made", () => {
+  it("a face's ROW is what a smoke reads: the kind's ask, LSF's wire demand for its page, its words, its arrivals, presents and drops, its texture; the stats count the writers made", () => {
     const { face, handle, presentation, live } = attached();
     face.take();
     expect(live.faces()).toEqual([
@@ -422,6 +422,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         demand: undefined,
         wire: null,
         state: { is: "live" },
+        info: {},
         arrivals: 0,
         presented: 0,
         dropped: 0,
@@ -433,6 +434,15 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     face.take();
     face.demand(SEEN);
     handle.wire = { revision: 2, mode: "live", targetFps: 30 };
+    handle.set({
+      browser: {
+        url: "http://127.0.0.1:4321/",
+        title: "Fixture",
+        loading: false,
+        canGoBack: false,
+        canGoForward: false,
+      },
+    });
     presentation.land();
     presentation.land();
     face.take();
@@ -442,6 +452,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         demand: SEEN,
         wire: { revision: 2, mode: "live", targetFps: 30 },
         state: { is: "live" },
+        info: { address: "http://127.0.0.1:4321/", title: "Fixture", back: false, forward: false },
         arrivals: 3,
         presented: 1,
         dropped: 1,
@@ -458,6 +469,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
         demand: undefined,
         wire: null,
         state: { is: "failed", reason: "no object on this board holds this face" },
+        info: {},
         arrivals: 0,
         presented: 0,
         dropped: 0,

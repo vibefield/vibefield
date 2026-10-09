@@ -78,6 +78,8 @@ export interface DeskLiveFaceRow {
   /** What the pool last wrote to the wire for the page — LSF's demand — null before any. */
   readonly wire: LiveSurfaceDemandV1 | null;
   readonly state: LiveState;
+  /** The face's words — the page's address, title, loading line, history reach (what the kind's head reads). */
+  readonly info: LiveInfo;
   /** Frames the attachment told of; frames presented into the texture; frames taken and closed unseen. */
   readonly arrivals: number;
   readonly presented: number;
@@ -247,6 +249,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         demand: undefined,
         wire: null,
         state: face.state(),
+        info: face.info(),
         arrivals: 0,
         presented: 0,
         dropped: 0,
@@ -406,6 +409,7 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
           demand: asked,
           wire: wireOf(key),
           state: face.state(),
+          info: face.info(),
           ...tally,
           texture:
             t === undefined
