@@ -61,6 +61,7 @@ export class LiveSurfaceRendererAttachment<
   TFrame extends LiveSurfaceClosableFrame = LiveSurfaceClosableFrame,
 > {
   readonly #summaryListeners = new Set<(summary: LiveSurfaceRuntimeSummaryV1) => void>();
+  readonly #frameListeners = new Set<() => void>();
   readonly #queue: LatestLiveSurfaceFrameQueue<TFrame>;
   #summary: LiveSurfaceRuntimeSummaryV1;
   #closed = false;
@@ -182,6 +183,19 @@ export class LiveSurfaceRendererAttachment<
     return () => this.#summaryListeners.delete(listener);
   }
 
+  /**
+   * PT-2 — a frame LANDED: called after the queue holds a new pending frame (accepted, or superseding the one it held), never
+   * for one it dropped (not demanded, a stale epoch or sequence, closed, another surface's). The listener is told, never handed
+   * the frame: the consumer takes it (`takeFrame`, a presentation's `presentLatestVia`) when it next draws — so a consumer that
+   * sleeps at rest (the desk) is woken per arrival and never polls. Observers are isolated (one that throws cannot cost another
+   * its word, nor the queue its frame); a closed attachment keeps none.
+   */
+  onFrame(listener: () => void): () => void {
+    if (this.#closed) return () => undefined;
+    this.#frameListeners.add(listener);
+    return () => this.#frameListeners.delete(listener);
+  }
+
   dispose(): void {
     if (this.#closed) return;
     this.sendControl({ v: 1, type: "detach", attachmentId: this.attachmentId });
@@ -197,7 +211,15 @@ export class LiveSurfaceRendererAttachment<
       }
       return;
     }
-    this.#queue.offer({ value: frame, metadata: envelope.metadata });
+    const offered = this.#queue.offer({ value: frame, metadata: envelope.metadata });
+    if (offered.kind === "dropped") return;
+    for (const listener of [...this.#frameListeners]) {
+      try {
+        listener();
+      } catch {
+        // An arrival observer cannot break delivery or another observer's word.
+      }
+    }
   }
 
   acceptSummary(summary: LiveSurfaceRuntimeSummaryV1): boolean {
@@ -240,6 +262,7 @@ export class LiveSurfaceRendererAttachment<
     this.#closed = true;
     this.#queue.close();
     this.#summaryListeners.clear();
+    this.#frameListeners.clear();
     this.onLocalClose(this.attachmentId);
   }
 }

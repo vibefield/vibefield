@@ -200,6 +200,76 @@ describe("LiveSurfaceRendererTransport", () => {
     expect(attachment.frameStats).toMatchObject({ pending: 0, inFlight: 0 });
   });
 
+  it("tells a subscriber when a frame LANDS — once per frame the queue keeps, never for one it drops (PT-2)", async () => {
+    const { attachment, hostControl, preloadFrames } = await attachedTransport();
+    const heard = vi.fn();
+    attachment.onFrame(heard);
+    const post = (sequence: string, surfaceId?: string) => {
+      const frame = fakeFrame();
+      preloadFrames.postMessage({
+        type: "frame",
+        envelope: {
+          v: 1,
+          attachmentId: attachment.attachmentId,
+          metadata: { ...metadata(sequence), ...(surfaceId === undefined ? {} : { surfaceId }) },
+        },
+        frame,
+      });
+      return frame;
+    };
+    post("1");
+    expect(heard).toHaveBeenCalledTimes(1);
+    // superseding the pending frame is a frame landing too (the newest is what a consumer takes)
+    post("2");
+    expect(heard).toHaveBeenCalledTimes(2);
+    // a stale sequence: dropped and closed — and nobody told
+    const stale = post("2");
+    expect(stale.close).toHaveBeenCalledTimes(1);
+    expect(heard).toHaveBeenCalledTimes(2);
+    // another surface's frame on this attachment: closed, untold
+    const stranger = post("3", "surface_ffffffffffffffff");
+    expect(stranger.close).toHaveBeenCalledTimes(1);
+    expect(heard).toHaveBeenCalledTimes(2);
+    // not demanded (paused): dropped, untold
+    hostControl.postMessage({
+      v: 1,
+      type: "summary",
+      attachmentId: attachment.attachmentId,
+      summary: summary(1, "paused", 2),
+    });
+    post("4");
+    expect(heard).toHaveBeenCalledTimes(2);
+    // the listener was told, never handed the frame: the consumer takes it
+    expect(heard.mock.calls.every((args) => args.length === 0)).toBe(true);
+  });
+
+  it("isolates a throwing frame observer, stops telling one that unsubscribed, and tells none once closed (PT-2)", async () => {
+    const { attachment, preloadFrames } = await attachedTransport();
+    const post = (sequence: string) =>
+      preloadFrames.postMessage({
+        type: "frame",
+        envelope: { v: 1, attachmentId: attachment.attachmentId, metadata: metadata(sequence) },
+        frame: fakeFrame(),
+      });
+    const after = vi.fn();
+    attachment.onFrame(() => {
+      throw new Error("a faulty observer");
+    });
+    const off = attachment.onFrame(after);
+    post("1");
+    expect(after).toHaveBeenCalledTimes(1);
+    expect(attachment.frameStats).toMatchObject({ pending: 1 });
+    off();
+    post("2");
+    expect(after).toHaveBeenCalledTimes(1);
+    const late = vi.fn();
+    attachment.dispose();
+    attachment.onFrame(late)();
+    post("3");
+    expect(late).not.toHaveBeenCalled();
+    expect(after).toHaveBeenCalledTimes(1);
+  });
+
   it("drains an old epoch and makes a later lease release a no-op", async () => {
     const { attachment, hostControl, preloadFrames } = await attachedTransport();
     const frame = fakeFrame();

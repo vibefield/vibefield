@@ -134,6 +134,13 @@ export class LiveSurfacePresentation<
     };
   }
 
+  /** PT-2 — told when a frame lands on the attachment (`LiveSurfaceRendererAttachment.onFrame`); a closed presentation
+   * tells nothing. */
+  onFrame(listener: () => void): () => void {
+    if (this.closed) return () => undefined;
+    return this.attachment.onFrame(listener);
+  }
+
   setDemand(demand: LiveSurfaceDemandV1): void {
     if (this.#closed) throw new Error("cannot set demand on a closed live surface presentation");
     this.attachment.setDemand(demand);

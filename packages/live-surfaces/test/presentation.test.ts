@@ -206,6 +206,24 @@ describe("LiveSurfacePresentation", () => {
     expect(result.presentation.presentLatestVia(() => true).kind).toBe("idle");
   });
 
+  it("tells of a frame landing through its attachment — the consumer then takes it — and nothing once disposed (PT-2)", () => {
+    const result = setup();
+    const heard = vi.fn();
+    result.presentation.onFrame(heard);
+    result.attachment.acceptFrame({ close: vi.fn() } as FakeFrame, {
+      v: 1,
+      attachmentId: result.attachment.attachmentId,
+      metadata: metadata(),
+    });
+    expect(heard).toHaveBeenCalledOnce();
+    expect(result.presentation.presentLatestVia(() => true).kind).toBe("consumed");
+    result.presentation.dispose();
+    const late = vi.fn();
+    result.presentation.onFrame(late);
+    expect(late).not.toHaveBeenCalled();
+    expect(heard).toHaveBeenCalledOnce();
+  });
+
   it("presentLatestVia counts a rejecting or throwing consumer and still closes the frame", () => {
     const result = setup();
     const rejected: FakeFrame = { close: vi.fn() };
