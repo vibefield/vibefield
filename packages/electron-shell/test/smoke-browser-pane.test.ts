@@ -14,6 +14,7 @@ import {
   judgeLaid,
   judgeResize,
   laptopViewport,
+  overlaps,
   PANE,
   type PaneSeen,
   pageRegion,
@@ -22,7 +23,7 @@ import {
 
 /** The first product run's numbers (smoke:canvas, PT-1). */
 const SEEN: PaneSeen = {
-  laid: { before: 0, after: 1, selected: 1, faulted: false, folded: true },
+  laid: { before: 0, after: 1, selected: 1, faulted: false, folded: true, alone: true },
   face: {
     day: { px: 360_000, colors: 412, lumaRange: 221, lumaMean: 186 },
     night: { px: 360_000, colors: 268, lumaRange: 182, lumaMean: 54 },
@@ -90,17 +91,29 @@ describe("the travel a handle's drag writes — ICE's drag starts where it leave
   });
 });
 
+describe("overlap — two world rects", () => {
+  it("overlap where they share area, and not where they only touch or lie apart", () => {
+    const a = { x: 0, y: 0, w: 100, h: 50 };
+    expect(overlaps(a, { x: 99, y: 49, w: 10, h: 10 })).toBe(true);
+    expect(overlaps(a, { x: 100, y: 0, w: 10, h: 10 })).toBe(false);
+    expect(overlaps(a, { x: -20, y: 60, w: 10, h: 10 })).toBe(false);
+  });
+});
+
 describe("LAID — the pane taken off the pegboard by the pointer", () => {
   it("passes the run's take", () => {
     expect(judgeLaid(SEEN.laid)).toEqual([]);
   });
 
-  it("refuses a take that laid nothing, an object not selected, a faulted kind, a board left out", () => {
+  it("refuses a take that laid nothing, an object not selected, a faulted kind, a board left out, a pane over another object", () => {
     expect(judgeLaid({ ...SEEN.laid, after: 0 })[0]).toMatch(/laid 0 panes, not one/);
     expect(judgeLaid({ ...SEEN.laid, selected: 0 })[0]).toMatch(/not the one pane/);
     expect(judgeLaid({ ...SEEN.laid, faulted: true })[0]).toMatch(/refused or struck/);
     expect(judgeLaid({ ...SEEN.laid, folded: false })).toEqual([
       "LAID: the board stayed out after the take",
+    ]);
+    expect(judgeLaid({ ...SEEN.laid, alone: false })).toEqual([
+      "LAID: the pane lies over another object — its face would not be its own",
     ]);
   });
 });

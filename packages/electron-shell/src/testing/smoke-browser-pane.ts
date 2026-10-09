@@ -2,10 +2,13 @@
 // portal kind (`plugins/browser-pane`, staged through fieldd like the comment pad), driven by a person's acts on the real
 // desk and read back off the desk door (`window.__vfDesk`: the census, each object's props and rect, the selection's anchor,
 // the hand, a kind's own witness through `local(name)`) — never a hash:
-//   LAID    — by day, the board raised by the line's create, the PORTALS chip chosen, the Browser specimen taken off the
-//             board by the pointer and dropped where nothing picks: ONE pane more, the one selection, its kind neither
-//             refused nor struck, the board folded;
-//   FACE    — the pane brought to the middle (a drag on the bare mat) and wheeled in about itself, then its PAGE captured
+//   LAID    — by day, at actual size (⌘0) on CLEAR GROUND — the view panned until the drop lies 600 units clear of every
+//             object on the board (their rects and the camera off the door — a calendar's paper answers no pick), so the pane lies
+//             alone and its face is its own (its glass shows the MAT under it, never another object) — the board raised by
+//             the line's create, the PORTALS chip chosen once the board's slide is done, the Browser specimen taken off it by
+//             the pointer and dropped there: ONE pane more, the one selection, its kind neither refused nor struck, the
+//             board folded, the pane over no other object;
+//   FACE    — the pane brought to the middle (a drag on the bare mat), at actual size, then its PAGE captured
 //             without the marks (the region inside the clear border and under the engraved head — a flat page fails here
 //             whatever the head and the glass draw): a face by its colours and its contrast, by day and by night, the
 //             night's page (the desk's dark scheme) darker than the day's; the stills pt-1-pane-{light,dark}.png, whole;
@@ -68,6 +71,9 @@ export function travelAfterSlop(
   return { dx: 0, dy: 0 };
 }
 
+/** Half the size a pane is laid at (the manifest's: a laptop's page, its border and its head). */
+const PANE_HALF = { w: 698.16 / 2, h: 461.94 / 2 } as const;
+
 /** The viewport a size cuts at the laptop's density — the law's `viewportOf`, said again: whole CSS px, never under the floor. */
 export function laptopViewport(rect: {
   readonly w: number;
@@ -129,6 +135,8 @@ export interface PaneSeen {
     readonly selected: number;
     readonly faulted: boolean;
     readonly folded: boolean;
+    /** the laid pane overlaps no other object on the board (world rects) — its face is its own */
+    readonly alone: boolean;
   };
   readonly face: {
     readonly day: FaceSeen | null;
@@ -187,6 +195,8 @@ export function judgeLaid(seen: PaneSeen["laid"]): string[] {
   if (seen.faulted)
     problems.push("LAID: the pane's kind is refused or struck — not drawn as itself");
   if (!seen.folded) problems.push("LAID: the board stayed out after the take");
+  if (!seen.alone)
+    problems.push("LAID: the pane lies over another object — its face would not be its own");
   return problems;
 }
 
@@ -331,6 +341,36 @@ const BARE = (region: number): string => `(() => {
   }
   return null;
 })()`;
+
+/** Every object's world rect on the board but the panes' (the door's census, each type's rows). */
+const OTHERS = `(() => {
+  const d = globalThis.__vfDesk; const out = [];
+  for (const type of Object.keys(d.census())) if (type !== ${JSON.stringify("vibefield.browser-pane")}) for (const o of d.objects(type)) out.push(o.rect);
+  return out;
+})()`;
+
+/**
+ * A point where a press PANS (nothing takes it — the bare mat, or a calendar's paper, which pans too) from which a drag by
+ * (dx, dy) stays inside the desk (desk CSS px).
+ */
+const BARE_FOR = (dx: number, dy: number): string => `(() => {
+  const d = globalThis.__vfDesk; const el = document.querySelector("[data-desk]"); const r = el.getBoundingClientRect();
+  for (let y = 160; y < r.height - 160; y += 20) for (let x = 40; x < r.width - 40; x += 20) {
+    const tx = x + ${dx}, ty = y + ${dy};
+    if (tx < 40 || tx > r.width - 40 || ty < 120 || ty > r.height - 120) continue;
+    let clear = true;
+    for (let k = -20; k <= 20 && clear; k += 10) for (let l = -20; l <= 20 && clear; l += 10)
+      if (d.pick({ x: x + k, y: y + l }) !== null) clear = false;
+    if (!clear) continue;
+    const under = document.elementFromPoint(r.left + x, r.top + y);
+    if (under !== null && el.contains(under)) return { x, y };
+  }
+  return null;
+})()`;
+
+/** Whether two world rects overlap. */
+export const overlaps = (a: DoorRect, b: DoorRect): boolean =>
+  a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
 
 /** A region of the desk captured without the marks, read back as a face (in the renderer: a bitmap never crosses). */
 const FACE = (rect: {
@@ -495,10 +535,53 @@ export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
   let pane: number | undefined;
   const before = await census();
   try {
-    // ── LAID: the Browser specimen taken off the PORTALS chip by the pointer, dropped where nothing picks ──────────
+    // ── CLEAR GROUND: actual size (⌘0, the head's zoom act), then the view panned — drags on the bare mat (or a calendar's
+    // paper: a press there pans too), each held before its release so no inertia carries the pan on — until the drop point
+    // stands over ground 600 units clear of every object on the board: found in WORLD units, each object's rect and the
+    // camera off the door — never by a pick, which a calendar's paper does not answer ──────────────────────────────────────
     await key("Escape");
-    const drop = await js<{ x: number; y: number } | null>(BARE(200));
-    if (drop === null) throw new Error("no point where nothing picks to lay the pane on");
+    const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
+    const deskOff = await deskAt();
+    await key("0", [process.platform === "darwin" ? "meta" : "control"]);
+    await until(
+      "the desk at actual size",
+      5_000,
+      `document.querySelector(".vf-head-zoom")?.getAttribute("aria-label") === "Zoom, 100%"`,
+    );
+    await sleep(600);
+    const deskSize = await js<{ w: number; h: number }>(
+      `(() => { const r = document.querySelector("[data-desk]").getBoundingClientRect(); return { w: r.width, h: r.height }; })()`,
+    );
+    const drop = { x: Math.round(deskSize.w / 2), y: Math.round(deskSize.h * 0.36) };
+    const others = await js<DoorRect[]>(OTHERS);
+    // every object's rect, in whichever canvas it lies (a mini mat's inside included) — the union only grows by them
+    const right = Math.max(...others.map((r) => r.x + r.w));
+    const top = Math.min(...others.map((r) => r.y));
+    const foot = Math.max(...others.map((r) => r.y + r.h));
+    const ground = { x: right + 600 + PANE_HALF.w, y: (top + foot) / 2 };
+    /** Where the ground stands on screen against the drop point (desk CSS px). */
+    const offBy = async (): Promise<{ dx: number; dy: number }> => {
+      const c = await js<{ x: number; y: number; zoom: number }>("globalThis.__vfDesk.camera()");
+      return { dx: (ground.x - c.x) * c.zoom - drop.x, dy: (ground.y - c.y) * c.zoom - drop.y };
+    };
+    let off = await offBy();
+    // within 60 px is near enough (the ground is 600 clear): a drag shorter than ICE's 10-px dead zone does not pan at all
+    for (let i = 0; i < 24 && Math.hypot(off.dx, off.dy) > 60; i += 1) {
+      const step = {
+        dx: Math.max(-500, Math.min(500, off.dx)),
+        dy: Math.max(-300, Math.min(300, off.dy)),
+      };
+      const mat = await js<{ x: number; y: number } | null>(BARE_FOR(-step.dx, -step.dy));
+      if (mat === null) throw new Error("no bare mat to pan the desk from");
+      const from = { x: deskOff.left + mat.x, y: deskOff.top + mat.y };
+      await drag(from, { x: from.x - step.dx, y: from.y - step.dy }, 8, 300);
+      await sleep(500);
+      off = await offBy();
+    }
+    if (Math.hypot(off.dx, off.dy) > 60)
+      throw new Error(`the view never reached the clear ground (${JSON.stringify(off)} to go)`);
+
+    // ── LAID: the Browser specimen taken off the PORTALS chip by the pointer, dropped on the clear ground ────────────
     const known = new Set((await rows()).map((r) => r.entity));
     await pressSelector(".vf-line-create");
     await until("the board out", 5_000, "globalThis.__vfDesk.pegboard()?.anchor.open === true");
@@ -550,6 +633,8 @@ export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
     while ((await census()) === before && Date.now() < deadline) await sleep(60);
     await sleep(700);
     pane = (await rows()).find((r) => !known.has(r.entity))?.entity;
+    const laidAt = (await rows()).find((r) => r.entity === pane)?.rect;
+    const othersNow = await js<DoorRect[]>(OTHERS);
     const laid: PaneSeen["laid"] = {
       before,
       after: await census(),
@@ -558,14 +643,13 @@ export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
         `(globalThis.__vfDesk.status().faults ?? []).some((f) => f.kind === ${JSON.stringify(PANE.type)})`,
       ),
       folded: await js<boolean>("globalThis.__vfDesk.pegboard()?.anchor.open === false"),
+      alone: laidAt !== undefined && !othersNow.some((r) => overlaps(laidAt, r)),
     };
     problems.push(...judgeLaid(laid));
     if (pane === undefined) throw new Error("no new pane on the board after the take");
     const e = pane;
 
-    // ── the pane brought to the middle by a drag on the bare mat, wheeled in about itself ────────────────────────
-    const view = await js<{ w: number; h: number }>("({ w: innerWidth, h: innerHeight })");
-    const deskOff = await deskAt();
+    // ── the pane brought to the middle by a drag on the bare mat ──────────────────────────────────────────────────
     for (let i = 0; i < 3; i += 1) {
       const f = await frame();
       if (f === null) break;
@@ -585,35 +669,10 @@ export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
         if (r === undefined) break;
       }
     }
+    // at actual size the pane is about three fifths of the view: framed as it lies, its bar and the line clear of it
     const width = (f: Rect | null): number => (f === null ? 0 : f.x1 - f.x0);
-    let f0 = await frame();
-    const at =
-      f0 === null
-        ? { x: view.w / 2, y: view.h / 2 }
-        : { x: deskOff.left + (f0.x0 + f0.x1) / 2, y: deskOff.top + (f0.y0 + f0.y1) / 2 };
-    const wheel = async (dir: number): Promise<Rect | null> => {
-      win.webContents.sendInputEvent({
-        type: "mouseWheel",
-        x: Math.round(at.x),
-        y: Math.round(at.y),
-        deltaX: 0,
-        deltaY: 120 * dir,
-      });
-      await sleep(320);
-      return frame();
-    };
-    const target = view.w * 0.62;
-    let f1 = await wheel(1);
-    const dir = width(f1) >= width(f0) ? 1 : -1;
-    if (dir < 0) f1 = await wheel(-1);
-    for (
-      let i = 0;
-      i < 18 && f1 !== null && width(f1) < target && f1.y1 - f1.y0 < view.h * 0.62;
-      i += 1
-    )
-      f1 = await wheel(dir);
     await sleep(500);
-    f0 = await frame();
+    const f0 = await frame();
     if (f0 === null) throw new Error("the pane was not selected after it was framed");
 
     // ── FACE: the PAGE captured without the marks, by day and by night; the stills, whole ───────────────────────

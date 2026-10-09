@@ -1,4 +1,5 @@
 import {
+  Camera,
   type CanvasEngine,
   defineQuery,
   heldEntity,
@@ -243,6 +244,12 @@ export interface VfDeskDoor {
   /** Each object of a type with its props and its rect (`deskObjects`) — what a kind's own write landed. */
   objects(type: string): readonly DeskObjectRow[];
   /**
+   * PT-1 — the CAMERA as the engine holds it (core's `Camera`): the view's top-left in world units and its zoom — a desk point
+   * on screen is `(world − at) · zoom` (kernel `worldToScreen`). A read: a smoke that lays an object on clear ground finds the
+   * ground in world units (each object's rect) and pans the view to it.
+   */
+  camera(): { readonly x: number; readonly y: number; readonly zoom: number };
+  /**
    * PT-1 — a kind's DESK STATE on this desk (`handle.local(name)` — what its `ObjectKind.local` made), or undefined: no such
    * kind, or none kept. A read: a smoke asks a kind's own witness of it (the browser pane's `said(e)` — what its head says).
    */
@@ -444,6 +451,10 @@ export function installDeskDoor(desk: MountedDesk, platesSet: () => boolean): ()
     theme: () => desk.theme,
     census: () => deskCensus(engine),
     objects: (type) => deskObjects(engine, type),
+    camera: () => {
+      const c = engine.world.getResource(Camera);
+      return { x: c?.x ?? 0, y: c?.y ?? 0, zoom: c?.zoom ?? 1 };
+    },
     local: (name) => (handle as Partial<DeskLayerHandle>).local?.(name),
     board: () => {
       const s = getBoardStatus();
