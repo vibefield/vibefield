@@ -125,6 +125,15 @@ the suites of the projects it touches, alone and green: contracts 886, field-app
 field-native: gen:check rewrites the generated `.rs` files unchanged, and fieldd's setup rebuilt it). The full gate runs once,
 on the final merge.
 
+**And on main merged a fifth time, the final** (`7170bd17` — 15 commits: AR-8's packaged History, EL8's rosetta `eab2f57` and
+mille `c8160d5` pins, the DS, AR-7, MV, PJ-2 and FS test fixes, the design prototypes' removal; 102 files; five conflicts, each
+both intents — LANDED, design-kit's manifest, electron-shell's vite config, the design-system test, the lock; nine unions; the
+lock regenerated offline, one copy each; no `.rs`). The siblings first, read-only against main's lock: all five at their pins
+and clean, rosettad built and mille installed and built after their pins moved; `siblings.mjs status` agrees from the lane.
+Then the cheap stages each alone — preflight, walls, retired, typecheck, lint, fmt and gen:check ok, check:deps MAIN's — and
+the suites the merge touches, alone and green: contracts 890, electron-shell 1,138, field-app 1,900, fieldd 2,158 (on the
+lane's field-native, rebuilt after gen:check), the dev runner's 131. The orchestrator's full gate on it is the grade.
+
 ## The hygiene every smoke keeps
 
 - **Its own profile** (DK-5): `apps/desktop/packaging/run-smoke.mjs` mints an Electron profile under the OS temp, hands it as
@@ -214,7 +223,7 @@ two-Mac check are James's hands. Nothing in step 1 writes.
 1. The lane's tip is the graded one: `git -C ../vf-desk rev-parse desk/landing` prints the SHA the orchestrator graded, and
    `git -C ../vf-desk status --short` prints nothing.
 2. Main has not moved since the lane last merged it: `git rev-parse main` equals the second parent of the lane's last merge
-   (`eee2f024` at DK-19's third hand-back, the merge `b259c718` —
+   (`21f26256` at DK-19's fifth merge, `7170bd17` —
    `git log --merges --first-parent -1 --format=%P desk/landing`), and `git merge-base --is-ancestor main desk/landing`
    exits 0. **If main moved, merge it into the lane again — never a rebase ((73): a rebase orphans every graded SHA the
    landing log names):** `git merge-tree --write-tree desk/landing main` first; each conflict resolved keeping both intents;
@@ -233,8 +242,9 @@ two-Mac check are James's hands. Nothing in step 1 writes.
    comm -12 /tmp/cutover-dirty.txt /tmp/cutover-lane.txt   # must print nothing
    git diff --cached --name-only                            # must print nothing (a bystander's staged files)
    ```
-   At DK-19's hand-back it printed `DESIGN.md`: another session's uncommitted logo work (its two hunks in §12 and at §13's end,
-   far from the lane's). Its owner commits it first — and then main has moved: 1.2.
+   At every DK-19 hand-back before the fifth merge it printed `DESIGN.md` (another session's uncommitted logo work, its two
+   hunks in §12 and at §13's end, far from the lane's); main's `21f26256` resolved it, and at the fifth merge it printed
+   nothing. Work like that is its owner's to commit first — and then main has moved: 1.2.
 4. ICE's `latest` is `0.15.0`: `npm view @vibecook/ice dist-tags` (James moved it 2026-10-08 06:29Z; the pin is exact and does
    not wait on it).
 5. Every sibling is PREPARED at its pin, not only checked out at it; preflight is green either way. Read the sibling's entry in
@@ -258,7 +268,7 @@ Then, in the main checkout: `pnpm install --frozen-lockfile --offline` (the lock
 `touch packages/field-native/src/registries.rs` and `cargo build -p field-native`; the gates on the cutover SHA,
 `NX_SKIP_NX_CACHE=true NX_DAEMON=false node scripts/gate-landing.mjs --with-stages`, red only by main's known rows;
 `pnpm commit-draft` (the drafts' snapshot). Pushing is James's word (every push is HELD). The main before the cutover is
-`eee2f024` at DK-19's third hand-back (or the main 1.2 merged): a fast-forward is undone only by moving main back to it —
+`21f26256` at DK-19's fifth merge (or the main 1.2 merged): a fast-forward is undone only by moving main back to it —
 James's call, never over a dirty tree.
 
 **3. If the fast-forward refuses:**
