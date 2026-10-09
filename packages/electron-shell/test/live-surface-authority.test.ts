@@ -193,6 +193,27 @@ describe("LiveSurfaceAuthority", () => {
     expect(second.surfaceId).toBe(first.surfaceId);
   });
 
+  it("a reload's re-bind forgives the gone document's mints: the new document's one close releases the page (PT-2)", () => {
+    // the window's pool leaves custody standing when its document unloads (reload continuity), so the gone document's mint
+    // is never paid back; were it still counted, the page would outlive the object that held it until the window closed
+    const { authority, windows, disposed } = fixture();
+    const before = participant("window-1", "document-1");
+    windows.set(before.incarnation, { webContentsId: 7 });
+    const first = authority.mint(mintParams(before, BROWSER_SOURCE, { reuseKey: "entity-42" }));
+
+    const after = participant("window-1", "document-2");
+    windows.delete(before.incarnation);
+    windows.set(after.incarnation, { webContentsId: 7 });
+    authority.mint(mintParams(after, BROWSER_SOURCE, { reuseKey: "entity-42" }));
+    expect(authority.state()).toEqual({ runtimes: 1, owners: 1 });
+
+    expect(authority.release({ rendererParticipant: after, surfaceId: first.surfaceId })).toEqual({
+      released: true,
+    });
+    expect(disposed).toEqual([first.surfaceId]);
+    expect(authority.state()).toEqual({ runtimes: 0, owners: 0 });
+  });
+
   it("sweeps un-keyed runtimes whose minting document is gone", () => {
     const { authority, windows, disposed } = fixture();
     const before = participant("window-1", "document-1");
