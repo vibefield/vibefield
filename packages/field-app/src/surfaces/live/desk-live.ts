@@ -8,7 +8,8 @@
 //  - THE KEYS (ruling 4): the pool's key is `desk:<key>` (apart from any panel's); the mint's `reuseKey` is the durable key
 //    itself, so a reload re-attaches the SAME running page (fieldd forwards it to custody since PT-2).
 //  - ONE COPY (ruling 1): a frame is taken through the presentation's `presentLatestVia` — its lease released on every path —
-//    straight into ICE's writer, on the DESK's device, from LSF's `visibleRect`. LSF's own texture store is not used here.
+//    straight into ICE's writer, on the DESK's device, from LSF's `visibleRect`, with its `logicalSize` as the texture's
+//    `logical` (the page's CSS viewport — what PT-3's hand maps into). LSF's own texture store is not used here.
 //  - THE WAKE: the attachment tells of a landed frame (`onFrame`) and the handle of a moved state or page (`onState`); each is one
 //    `arrived()`. `take()` presents the newest frame once; an UNSEEN face's frame is taken and closed, drawn nowhere (ruling 6).
 //  - THE DEMAND (ruling 5): the kind's `LiveDemand` → the pool's intent (fps to the nearest bucket not above, the raster, the
@@ -16,6 +17,16 @@
 //  - ONE SERVICE PER DESK MOUNT: its writers are made on that mount's device; a remount makes a new service, and the pool's
 //    grace keeps the page attached across it.
 
+import type {
+  LiveDemand,
+  LiveFace,
+  LiveInfo,
+  LiveSources,
+  LiveState,
+  LiveTexture,
+  LiveTextureOptions,
+  LiveWriter,
+} from "@vibecook/ice/desk/kit";
 import {
   LIVE_SURFACE_FPS_BUCKETS_V1,
   type LiveSurfaceDemandV1,
@@ -30,16 +41,6 @@ import type {
   SurfaceHandleState,
   SurfacePool,
 } from "../pool";
-import type {
-  LiveDemand,
-  LiveFace,
-  LiveInfo,
-  LiveSources,
-  LiveState,
-  LiveTexture,
-  LiveTextureOptions,
-  LiveWriter,
-} from "./ice-live";
 
 /** What the gate answers for a face's key: the object's type (its kind's name — the texture's label), or why it may not open. */
 export type LiveGateAnswer = { readonly type: string } | { readonly refused: string };
@@ -217,6 +218,15 @@ function failedFace(key: string, reason: string, release: () => void): LiveFace 
   };
 }
 
+/** A frame's logical size as ICE's writer takes it — each side finite and > 0 (the writer refuses any other), or none. */
+const logicalOf = (size: {
+  readonly width: number;
+  readonly height: number;
+}): readonly [number, number] | undefined =>
+  Number.isFinite(size.width) && Number.isFinite(size.height) && size.width > 0 && size.height > 0
+    ? [size.width, size.height]
+    : undefined;
+
 /** The face's page in the pool: apart from any panel's (ruling 4). */
 const poolKey = (key: string): string => `desk:${key}`;
 
@@ -366,13 +376,14 @@ export function createDeskLiveSources(deps: DeskLiveDeps): DeskLiveSources {
         }
         const r = p.presentLatestVia((frame, metadata) => {
           const rect = metadata.geometry.visibleRect;
+          const size = metadata.geometry.logicalSize;
           if (writer === undefined || writerDevice !== device) {
             writer?.destroy();
             writer = deps.writer(device, { label, width: rect.width, height: rect.height });
             writerDevice = device;
             counts.writers += 1;
           }
-          writer.present(frame, rect);
+          writer.present(frame, rect, logicalOf(size));
           return true;
         });
         if (r.kind !== "consumed") return changed;

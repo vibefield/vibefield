@@ -3,6 +3,7 @@
 // device (labelled `<kind>/live <key>`, from the frame's `visibleRect`) and releases its lease; an UNSEEN face's frame is taken and
 // closed, no redraw; the demand map; the state and the words; close; a remount's service makes its writers on its own device; the
 // capability gate's refusal is a failed face with the words; the mint names the page and the durable key.
+import type { LiveDemand, LiveTextureOptions, LiveWriter } from "@vibecook/ice/desk/kit";
 import type { LiveSurfaceFrameMetadataV1, LiveSurfaceRuntimeSummaryV1 } from "@vibefield/contracts";
 import { describe, expect, it, vi } from "vitest";
 import {
@@ -11,7 +12,7 @@ import {
   fpsBucket,
   liveDemandIntent,
 } from "../src/surfaces/live/desk-live";
-import type { LiveDemand, LiveTextureOptions, LiveWriter } from "../src/surfaces/live/ice-live";
+
 import type {
   SurfaceAcquireOptions,
   SurfaceDemandRequest,
@@ -40,7 +41,9 @@ const UNSEEN: LiveDemand = {
   interactive: false,
 };
 
-function metadata(): LiveSurfaceFrameMetadataV1 {
+function metadata(
+  logicalSize: { width: number; height: number } = { width: 1280, height: 800 },
+): LiveSurfaceFrameMetadataV1 {
   return {
     v: 1,
     surfaceId: "surface_0123456789abcdef",
@@ -50,7 +53,7 @@ function metadata(): LiveSurfaceFrameMetadataV1 {
       revision: 1,
       codedSize: { width: 2600, height: 1620 },
       visibleRect: { x: 4, y: 2, width: 2560, height: 1600 },
-      logicalSize: { width: 1280, height: 800 },
+      logicalSize,
       orientation: 0,
     },
     hostReceivedAtUs: "1",
@@ -62,7 +65,10 @@ function metadata(): LiveSurfaceFrameMetadataV1 {
 }
 
 /** A presentation as the pool hands it: frames LAND (`land`), a consumer takes the newest, its lease always released. */
-function fakePresentation(summaryState: LiveSurfaceRuntimeSummaryV1["state"] = "live") {
+function fakePresentation(
+  summaryState: LiveSurfaceRuntimeSummaryV1["state"] = "live",
+  logicalSize?: { width: number; height: number },
+) {
   const listeners = new Set<() => void>();
   const pending: { close: ReturnType<typeof vi.fn> }[] = [];
   const closed: unknown[] = [];
@@ -78,9 +84,9 @@ function fakePresentation(summaryState: LiveSurfaceRuntimeSummaryV1["state"] = "
       for (const older of pending.splice(0)) older.close();
       if (frame === undefined) return { kind: "idle" as const };
       try {
-        const ok = consumer(frame, metadata());
+        const ok = consumer(frame, metadata(logicalSize));
         return ok
-          ? { kind: "consumed" as const, metadata: metadata() }
+          ? { kind: "consumed" as const, metadata: metadata(logicalSize) }
           : { kind: "dropped" as const, reason: "consumer-rejected" as const };
       } finally {
         frame.close(); // the lease, released on every path
@@ -198,15 +204,16 @@ function setup(over: Partial<DeskLiveDeps> = {}) {
         format: "rgba8unorm-srgb" as const,
         revision: 0,
         epoch: 0,
+        logical: [o.width, o.height] as readonly [number, number],
         view: () => ({}) as never,
         prepare: () => {},
         bytes: 0,
       };
       const writer: LiveWriter = {
         face,
-        present: (frame, rect) => {
+        present: (frame, rect, logical) => {
           face.revision += 1;
-          w.presented.push({ frame, rect });
+          w.presented.push({ frame, rect, logical });
         },
         presentBytes: () => {},
         presentTexture: () => {},
@@ -297,7 +304,7 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     expect(arrived).toHaveBeenCalledTimes(3);
   });
 
-  it("TAKE presents the newest frame ONCE into ICE's writer on the desk's device — from the frame's visibleRect, its lease released", () => {
+  it("TAKE presents the newest frame ONCE into ICE's writer on the desk's device — from the frame's visibleRect, at its logical size, its lease released", () => {
     const { face, presentation, writers, device } = attached();
     face.take();
     face.demand(SEEN);
@@ -311,8 +318,9 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
       width: 2560,
       height: 1600,
     });
+    // its visible rect, and its LOGICAL size — the page's CSS viewport (ICE's `LiveTexture.logical`, what PT-3's hand maps into)
     expect(writers[0]?.presented).toEqual([
-      { frame: newest, rect: { x: 4, y: 2, width: 2560, height: 1600 } },
+      { frame: newest, rect: { x: 4, y: 2, width: 2560, height: 1600 }, logical: [1280, 800] },
     ]);
     // the older one was closed on arrival of the newer, the newest after its copy: no lease outlives a take
     expect(older.close).toHaveBeenCalled();
@@ -320,6 +328,23 @@ describe("the desk's LIVE service — a face over the window's pool", () => {
     expect(face.texture()?.width).toBe(2560);
     // nothing new: nothing taken, no redraw
     expect(face.take()).toBe(false);
+  });
+
+  it("a frame whose logical size the writer would refuse is presented WITHOUT one — the texels then stand for it", () => {
+    const { face, handle, writers } = attached();
+    const odd = fakePresentation("live", { width: 0, height: 800 });
+    handle.set({ presentation: odd as never });
+    face.take();
+    face.demand(SEEN);
+    odd.land();
+    expect(face.take()).toBe(true);
+    expect(writers[0]?.presented).toEqual([
+      {
+        frame: expect.anything(),
+        rect: { x: 4, y: 2, width: 2560, height: 1600 },
+        logical: undefined,
+      },
+    ]);
   });
 
   it("an UNSEEN face's frame is taken and closed, drawn nowhere, no redraw (ruling 6) — and so is one before the desk's device", () => {
