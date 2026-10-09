@@ -404,6 +404,53 @@ describe("BrowserLiveSurfaceRuntime", () => {
     result.runtime.dispose();
   });
 
+  it("a renderer that LEAVES pauses the page and keeps it — one re-attaching within the grace finds the SAME page; none back, hibernated after it (PT-2)", async () => {
+    // a window reload: the document's attachment goes and the next one's comes; the page (its memory, its WebContents) must be
+    // there for it — main's custody re-binds the surface by its reuse key, and the runtime must not have destroyed the page
+    vi.useFakeTimers();
+    try {
+      const result = setup({ detachedHibernateMs: 1000 });
+      const first = attach(result.runtime, "attachment_browser_00000001");
+      first.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      await vi.advanceTimersByTimeAsync(0);
+      result.native.windows[0]?.paint(sharedPaint(320, 180).paint);
+      expect(result.runtime.summary.state).toBe("live");
+      first.attachment.dispose();
+      expect(result.runtime.summary.state).toBe("paused");
+      expect(result.native.windows[0]?.destroyed).toBe(false);
+      // the next document attaches inside the grace: the SAME window, live again, never loaded twice
+      await vi.advanceTimersByTimeAsync(500);
+      const second = attach(result.runtime, "attachment_browser_00000002");
+      second.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      expect(result.native.windows).toHaveLength(1);
+      expect(result.runtime.summary.state).toBe("live");
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(result.native.windows[0]?.destroyed).toBe(false);
+      expect(result.native.windows[0]?.loadedUrls).toEqual([source().initialUrl]);
+      // the last renderer leaves and none comes back: hibernated once the grace lapses, not before
+      second.attachment.dispose();
+      await vi.advanceTimersByTimeAsync(999);
+      expect(result.native.windows[0]?.destroyed).toBe(false);
+      expect(result.runtime.summary.state).toBe("paused");
+      await vi.advanceTimersByTimeAsync(1);
+      expect(result.native.windows[0]?.destroyed).toBe(true);
+      expect(result.runtime.summary.state).toBe("hibernated");
+      result.runtime.dispose();
+      // a runtime with no grace (a lab's): a detach hibernates at once, as it always did
+      const lab = setup({ detachedHibernateMs: 0 });
+      const once = attach(lab.runtime);
+      once.attachment.setDemand(demand(1, "live", 30, { width: 640, height: 360 }));
+      await vi.advanceTimersByTimeAsync(0);
+      lab.native.windows[0]?.paint(sharedPaint(320, 180).paint);
+      once.attachment.dispose();
+      expect(lab.native.windows[0]?.destroyed).toBe(true);
+      expect(lab.runtime.summary.state).toBe("hibernated");
+      lab.runtime.dispose();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("carries the DT-D6 lane: wire input, chrome navigation, and committed nav truth", async () => {
     const result = setup();
     const renderer = attach(result.runtime);

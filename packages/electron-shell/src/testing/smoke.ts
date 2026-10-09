@@ -9761,6 +9761,8 @@ export async function runLiveSurfacesLab(opts: {
           },
           native,
           controlTargets,
+          // the lab owns its runtimes outright (no custody re-binds them): a detach hibernates at once, as the lab reads it
+          detachedHibernateMs: 0,
           onPaintCallbackDurationUs: (durationUs) => mainDutyMeter.observePaint(durationUs),
         }),
       );
@@ -9776,6 +9778,7 @@ export async function runLiveSurfacesLab(opts: {
       },
       native,
       controlTargets,
+      detachedHibernateMs: 0,
       requestSharedTexture: false,
       onPaintCallbackDurationUs: (durationUs) => mainDutyMeter.observePaint(durationUs),
     });

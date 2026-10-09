@@ -34,6 +34,9 @@ const DEFAULT_STARTUP_TIMEOUT_MS = 5_000;
 const DEFAULT_RASTER_STABILIZATION_MS = 300;
 const DEFAULT_CPU_FALLBACK_PAINTS = 3;
 const DEFAULT_RESTART_LIMIT = 1;
+/** How long a page with no renderer attached is kept paused before it hibernates (PT-2: a window reload's gap — the window
+ * pool's own grace). */
+const DEFAULT_DETACHED_HIBERNATE_MS = 60_000;
 const CPU_FALLBACK_MAX_FPS = 10;
 const CPU_FALLBACK_MAX_PIXELS = 1280 * 720;
 
@@ -191,6 +194,9 @@ export interface BrowserLiveSurfaceRuntimeOptions {
   readonly rasterStabilizationMs?: number;
   readonly cpuFallbackPaints?: number;
   readonly restartLimit?: number;
+  /** How long the page is kept PAUSED once no renderer is attached before it hibernates (default 60 s): a renderer that
+   * re-attaches within it — a window reload's next document, re-bound by main's custody — finds the SAME page. 0: at once. */
+  readonly detachedHibernateMs?: number;
   /** Optional main-private instrumentation; observer faults never affect frames. */
   readonly onPaintCallbackDurationUs?: (durationUs: bigint) => void;
 }
@@ -515,6 +521,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   readonly #rasterStabilizationMs: number;
   readonly #cpuFallbackPaints: number;
   readonly #restartLimit: number;
+  readonly #detachedHibernateMs: number;
   readonly #onPaintCallbackDurationUs: ((durationUs: bigint) => void) | undefined;
   readonly #lifecycle = new LiveSurfaceLifecycle();
   readonly #attachments = new Map<string, BrowserRuntimeAttachmentRecord>();
@@ -523,6 +530,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
   #startupTimer: ReturnType<typeof setTimeout> | null = null;
   #rasterTimer: ReturnType<typeof setTimeout> | null = null;
   #restartTimer: ReturnType<typeof setTimeout> | null = null;
+  #hibernateTimer: ReturnType<typeof setTimeout> | null = null;
   #effectiveDemand: LiveSurfaceDemandV1 | null = null;
   #transport: "shared-texture" | "cpu-bgra" | undefined;
   /** The logical viewport the page is CURRENTLY laid out at (DT-3f): starts as
@@ -573,8 +581,13 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.#rasterStabilizationMs = options.rasterStabilizationMs ?? DEFAULT_RASTER_STABILIZATION_MS;
     this.#cpuFallbackPaints = options.cpuFallbackPaints ?? DEFAULT_CPU_FALLBACK_PAINTS;
     this.#restartLimit = options.restartLimit ?? DEFAULT_RESTART_LIMIT;
+    this.#detachedHibernateMs = options.detachedHibernateMs ?? DEFAULT_DETACHED_HIBERNATE_MS;
     this.#onPaintCallbackDurationUs = options.onPaintCallbackDurationUs;
-    if (this.#startupTimeoutMs <= 0 || this.#rasterStabilizationMs < 0) {
+    if (
+      this.#startupTimeoutMs <= 0 ||
+      this.#rasterStabilizationMs < 0 ||
+      !(this.#detachedHibernateMs >= 0)
+    ) {
       throw new RangeError("browser producer timing bounds are invalid");
     }
     if (!Number.isSafeInteger(this.#cpuFallbackPaints) || this.#cpuFallbackPaints <= 0) {
@@ -706,7 +719,7 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     };
   }
 
-  /** Explicit source-owner teardown; renderer detach alone only hibernates the source. */
+  /** Explicit source-owner teardown; renderer detach alone only pauses the source, and hibernates it once the grace lapses. */
   dispose(): void {
     if (this.#closed) return;
     this.#closed = true;
@@ -868,10 +881,14 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     const demand = this.#effectiveDemand;
     const state = this.#lifecycle.snapshot.state;
     if (demand === null) {
+      // No renderer attached — a window reload's gap, or its last face gone: the page PAUSES and is KEPT, so a renderer that
+      // re-attaches within the grace (main's custody re-binds the surface by its reuse key) finds the SAME page, its memory
+      // whole; none back, it hibernates once the grace lapses (PT-2). An explicit `hibernated` demand still hibernates at once.
       if (state === "live") this.pauseProducer();
-      if (this.#lifecycle.snapshot.state === "paused") this.hibernateProducer();
+      this.armDetachedHibernate();
       return;
     }
+    this.cancelDetachedHibernate();
     if (demand.mode === "live") {
       if (state === "created" || state === "hibernated" || state === "failed") {
         this.startProducer();
@@ -1233,6 +1250,27 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
     this.publishSummary();
   }
 
+  private armDetachedHibernate(): void {
+    if (this.#hibernateTimer !== null || this.#closed) return;
+    // no grace (a lab's runtime, no custody behind it): hibernated at once, as a detach always did
+    if (this.#detachedHibernateMs === 0) {
+      this.hibernateProducer();
+      return;
+    }
+    this.#hibernateTimer = setTimeout(() => {
+      this.#hibernateTimer = null;
+      if (this.#closed || aggregateDemand(this.#attachments.values()) !== null) return;
+      if (this.#lifecycle.snapshot.state === "live") this.pauseProducer();
+      this.hibernateProducer();
+    }, this.#detachedHibernateMs);
+  }
+
+  private cancelDetachedHibernate(): void {
+    if (this.#hibernateTimer === null) return;
+    clearTimeout(this.#hibernateTimer);
+    this.#hibernateTimer = null;
+  }
+
   private hibernateProducer(): void {
     if (this.#lifecycle.snapshot.state !== "paused") return;
     this.#lifecycle.transition("hibernated");
@@ -1512,5 +1550,6 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
 
   private clearTimers(): void {
     this.clearSourceTimers();
+    this.cancelDetachedHibernate();
   }
 }
