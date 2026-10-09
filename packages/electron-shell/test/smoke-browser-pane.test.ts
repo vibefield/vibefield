@@ -123,7 +123,7 @@ describe("FACE — the page drawn, by day and by night", () => {
     expect(judgeFace(SEEN.face)).toEqual([]);
   });
 
-  it("refuses a flat face (a fill, a film), a capture that answered nothing, a night no darker than the day", () => {
+  it("refuses a flat face (a fill, a film), a capture that answered nothing, a night no darker than the day, a day page that is not light", () => {
     const flat = { px: 360_000, colors: 6, lumaRange: 30, lumaMean: 20 };
     expect(judgeFace({ ...SEEN.face, day: flat })[0]).toMatch(/by day the page is flat/);
     expect(judgeFace({ ...SEEN.face, night: null })).toEqual([
@@ -132,6 +132,10 @@ describe("FACE — the page drawn, by day and by night", () => {
     expect(
       judgeFace({ day: SEEN.face.day, night: { ...SEEN.face.night, lumaMean: 180 } as never })[0],
     ).toMatch(/no darker than by day/);
+    // the missing face over the mat (a hatched card on the green grain) has colours and contrast enough — but no light page
+    expect(
+      judgeFace({ ...SEEN.face, day: { px: 966_588, colors: 180, lumaRange: 140, lumaMean: 74 } }),
+    ).toEqual(["FACE: by day the page is not the sample's light page (its mean luma 74, ≥ 150)"]);
   });
 });
 

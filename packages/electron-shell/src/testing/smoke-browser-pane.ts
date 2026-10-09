@@ -10,8 +10,10 @@
 //             board folded, the pane over no other object;
 //   FACE    — the pane brought to the middle (a drag on the bare mat), at actual size, then its PAGE captured
 //             without the marks (the region inside the clear border and under the engraved head — a flat page fails here
-//             whatever the head and the glass draw): a face by its colours and its contrast, by day and by night, the
-//             night's page (the desk's dark scheme) darker than the day's; the stills pt-1-pane-{light,dark}.png, whole;
+//             whatever the head and the glass draw): a face by its colours and its contrast, by day and by night — by day
+//             the sample's LIGHT page (never the mat, never the desk's missing face), the night's page (the desk's dark
+//             scheme) darker than the day's; the stills pt-1-pane-{light,dark}.png, whole. A step that cannot go on ends the
+//             rows with what the steps before it found;
 //   RESIZE  — selected, its SE knob dragged by the pointer: its Size grows by what was dragged (its top-left held), and the
 //             head's READOUT follows — the pane's own witness (`said(e)`, what its head says) names the viewport the new size
 //             cuts at the laptop's density, whole CSS px;
@@ -50,6 +52,8 @@ export const PANE = {
   /** the face's floors — a page, not a fill: its distinct colours (5 bits a channel) and its luma range */
   minColors: 40,
   minLumaRange: 120,
+  /** by day the sample page is LIGHT (its ground near white): its mean luma at least this — never the mat, never the missing face */
+  minDayMean: 150,
   /** the drag the resize makes on the SE knob, CSS px, in so many moves */
   drag: { dx: 90, dy: 60 },
   dragSteps: 10,
@@ -216,6 +220,10 @@ export function judgeFace(seen: PaneSeen["face"]): string[] {
         `FACE: ${when} the page is flat — ${face.colors} colours over a luma range of ${face.lumaRange} (≥ ${PANE.minColors}, ≥ ${PANE.minLumaRange})`,
       );
   }
+  if (seen.day !== null && seen.day.lumaMean < PANE.minDayMean)
+    problems.push(
+      `FACE: by day the page is not the sample's light page (its mean luma ${seen.day.lumaMean}, ≥ ${PANE.minDayMean})`,
+    );
   if (seen.day !== null && seen.night !== null && seen.night.lumaMean >= seen.day.lumaMean * 0.75)
     problems.push(
       `FACE: by night the page is no darker than by day (its mean luma ${seen.night.lumaMean} against the day's ${seen.day.lumaMean})`,
@@ -800,6 +808,9 @@ export async function browserPaneRows(d: PaneRowsDriver): Promise<string[]> {
     };
     problems.push(...judgeHand(hand));
     say(`SMOKE_CANVAS_PANE ${JSON.stringify({ laid, face, resize, device, hand })}`);
+  } catch (error) {
+    // a step that cannot go on ends the rows — never what the rows before it found (they are said with it)
+    problems.push(`PT-1 PANE: ${error instanceof Error ? error.message : String(error)}`);
   } finally {
     // the board as it was found: the pane deleted, the theme and the wind as they were
     try {
