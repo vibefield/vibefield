@@ -45,6 +45,7 @@
     "@vibefield/fieldd-client": "workspace:*",
     "@vibefield/live-surfaces": "workspace:*",
     "@vibefield/plugin-browser": "workspace:*",
+    "@vibefield/plugin-browser-pane": "workspace:*",
     "@vibefield/plugin-comment-pad": "workspace:*",
     "@vibefield/plugin-runtime": "workspace:*",
     "@vibefield/plugin-sdk": "workspace:*",

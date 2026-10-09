@@ -283,10 +283,10 @@ interface CanvasFacts {
  * `stagedPlugins` is the MECHANISM fact: the dev-bundled fallback can satisfy
  * a registry census on its own, so without this number a renderer that quietly
  * fell back would look exactly like one that staged correctly — the field must
- * be filled the real way. Since DK-8 the staged renderer modules are FOUR: the
- * product's two (`plugins/browser` — its Artifacts panel — and VibeField's own comment
- * pad, `plugins/comment-pad`, bundled, built by build:all through field-app's
- * dependencies) and two dev-linked examples — the behavior-conformance carrier and
+ * be filled the real way. Since PT-1 the staged renderer modules are FIVE: the
+ * product's three (`plugins/browser` — its Artifacts panel — VibeField's own comment
+ * pad, `plugins/comment-pad`, and the browser pane, `plugins/browser-pane`, bundled,
+ * built by build:all through field-app's dependencies) and two dev-linked examples — the behavior-conformance carrier and
  * the desk clock (DK-6: `examples/plugins/desk-clock`), built by build:all through
  * field-app's dev dependencies (the carrier since DK-8 — before that it staged
  * whatever `dist/` its last hand build or the playground's test wrote); kv-service
@@ -323,8 +323,9 @@ const CANVAS_CENSUS = {
   exampleClock: "vibefield.example.desk-clock",
   // DK-8: 7 → 6 → 5 → 4 — `vibefield.note`, `vibefield.field-tools` and `examples/plugins/widgetlab` retired
   // (ICE's note and mini mat, the comment pad; widgetlab's demos go): the browser's Artifacts panel, the comment
-  // pad, the behavior-conformance carrier and the example desk clock stay.
-  minStagedPlugins: 4,
+  // pad, the behavior-conformance carrier and the example desk clock stay. PT-1: 4 → 5 — the browser pane
+  // (`plugins/browser-pane`, objects-only, bundled and built through field-app's dependencies as the pad is).
+  minStagedPlugins: 5,
   // THE CSS CENSUS RETIRED (DK-8; the plan's retire table — "the CSS census in `smoke:canvas` and
   // `smoke:plugin-restart`", DK-5 kept it for here): it counted the scoped stylesheets of the plugins that
   // drew DOM WIDGETS (note, field-tools, widgetlab — and the browser's), 4 → 3 → 2 as the first two retired;

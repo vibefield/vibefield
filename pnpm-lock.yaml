@@ -422,6 +422,9 @@ importers:
       '@vibefield/plugin-browser':
         specifier: workspace:*
         version: link:../../plugins/browser
+      '@vibefield/plugin-browser-pane':
+        specifier: workspace:*
+        version: link:../../plugins/browser-pane
       '@vibefield/plugin-comment-pad':
         specifier: workspace:*
         version: link:../../plugins/comment-pad

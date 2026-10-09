@@ -114,7 +114,7 @@ function registerStaged(
 
 /** THE DEV-ONLY BUNDLED SET (P8-D2) — since DK-8 the PRODUCT's plugins: the browser's
  * Artifacts panel and VibeField's comment pad (the note, field-tools and widgetlab
- * retired with their widgets). Until P8b-3 the bundled set rode the app bundle
+ * retired with their widgets), and since PT-1 the browser PANE (PORTALS' first kind). Until P8b-3 the bundled set rode the app bundle
  * as static imports and WAS the plugin system; now it is the fallback for a
  * dev run whose artifacts are not built yet, and production ships none of them
  * — the branch folds to `false` at build time, so the dynamic imports below are
@@ -129,9 +129,10 @@ let devBundled: readonly BundledRendererPlugin[] | null = null;
 export async function loadDevBundledPlugins(): Promise<readonly BundledRendererPlugin[]> {
   if (!import.meta.env.DEV) return [];
   if (devBundled !== null) return devBundled;
-  const [browser, commentPad] = await Promise.all([
+  const [browser, commentPad, browserPane] = await Promise.all([
     import("@vibefield/plugin-browser"),
     import("@vibefield/plugin-comment-pad"),
+    import("@vibefield/plugin-browser-pane"),
   ]);
   devBundled = [
     { manifest: browser.browserManifest, mod: browser.browserRenderer },
@@ -143,6 +144,15 @@ export async function loadDevBundledPlugins(): Promise<readonly BundledRendererP
       objectBindings: objectBindingsFrom(
         commentPad,
         commentPad.commentPadManifest.contributes?.objects ?? [],
+      ),
+    },
+    // PT-1 (PORTALS): the browser pane — its code half read off the package's namespace the same way
+    {
+      manifest: browserPane.browserPaneManifest,
+      mod: browserPane.browserPaneRenderer,
+      objectBindings: objectBindingsFrom(
+        browserPane,
+        browserPane.browserPaneManifest.contributes?.objects ?? [],
       ),
     },
   ];
