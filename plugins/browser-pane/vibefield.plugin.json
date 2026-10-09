@@ -2,7 +2,10 @@
   "activation": [
     "onObject:vibefield.browser-pane"
   ],
-  "capabilities": [],
+  "capabilities": [
+    "surface.attach",
+    "surface.browser"
+  ],
   "contributes": {
     "objects": [
       {
@@ -92,7 +95,7 @@
       }
     ]
   },
-  "description": "A browser on the desk: a pane of clear glass cut to its page at its device's density, its chrome engraved in its head — its page a still for now; live pages come with the desk's live-surface door",
+  "description": "A browser on the desk: a pane of clear glass cut to its page at its device's density, its chrome engraved in its head — its page live through the desk's LIVE service, its own sample a still",
   "engines": {
     "app": ">=0.0.0",
     "contracts": "^0.1.0"

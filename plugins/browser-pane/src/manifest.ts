@@ -31,11 +31,12 @@ export const browserPaneManifest: PluginManifestV1 = {
   version: "0.1.0",
   title: "Browser pane",
   description:
-    "A browser on the desk: a pane of clear glass cut to its page at its device's density, its chrome engraved in its head — its page a still for now; live pages come with the desk's live-surface door",
+    "A browser on the desk: a pane of clear glass cut to its page at its device's density, its chrome engraved in its head — its page live through the desk's LIVE service, its own sample a still",
   engines: { app: ">=0.0.0", contracts: "^0.1.0" },
   entries: { renderer: "./dist/renderer.js" },
   activation: [`onObject:${BROWSER_PANE_TYPE}`],
-  capabilities: [], // a still page asks for nothing; PT-2's live page asks for its surface
+  // PT-2: a live page — the desk's LIVE service opens it only for an object whose plugin is granted both (ruling 3)
+  capabilities: ["surface.attach", "surface.browser"],
   contributes: {
     objects: [
       {
