@@ -22,6 +22,7 @@ import { act, useEffect, useSyncExternalStore } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
+import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import { resetActiveViewForTest } from "../src/frame/view-state";
 import type { MonitorDoor } from "../src/godview/monitor/remote-door";
 import { type FieldHost, setHost } from "../src/host";
@@ -45,9 +46,6 @@ const stand = vi.hoisted(() => ({
   door: null as unknown,
   tick: 0,
   ticked: new Set<() => void>(),
-  /** M192: Find throws in render while told to; every render it was asked for */
-  findThrows: false,
-  findRenders: 0,
 }));
 
 /** The deck, stood in: it builds its door on mount and withdraws it on unmount,
@@ -91,18 +89,6 @@ vi.mock("../src/godview/GodviewDeckEdge", async (importOriginal) => {
     GodviewDeckEdge: (props: Parameters<typeof actual.GodviewDeckEdge>[0]) => {
       if (stand.edgeThrows) throw new Error("the edge lost its stored shift");
       return <actual.GodviewDeckEdge {...props} />;
-    },
-  };
-});
-
-vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@vibecook/puppeteer-views")>();
-  return {
-    ...actual,
-    FindSheet: (props: Parameters<typeof actual.FindSheet>[0]) => {
-      stand.findRenders += 1;
-      if (stand.findThrows) throw new Error("Find lost the agents it searches");
-      return <actual.FindSheet {...props} />;
     },
   };
 });
@@ -208,8 +194,6 @@ beforeEach(() => {
   stand.deckRenders = 0;
   stand.tick = 0;
   stand.ticked.clear();
-  stand.findThrows = false;
-  stand.findRenders = 0;
   stand.door = fakeDoor();
   markers = [];
   localStorage.clear();
@@ -222,6 +206,7 @@ beforeEach(() => {
     }
   });
   resetActiveViewForTest();
+  resetGodviewFindDoorForTest();
   publishView = null;
   const quiet = () => undefined;
   setRendererLogger({
@@ -330,47 +315,22 @@ describe("the overlay's chrome cannot take down the monitor (M49)", () => {
     expect(document.getElementById("vf-godview-tweak-panel")).not.toBeNull();
   });
 
-  it("a throwing Find says so; the monitor, its view and the deck stay, and a change in the agents it searches tries it again (M192)", async () => {
-    const said = (host: HTMLElement): string[] =>
-      [...host.querySelectorAll('span[role="status"]')].map((span) => span.textContent ?? "");
+  it("lends the frame's Peek its Live now while Godview shows, and withdraws it when it closes (P2 — Find left the stage)", async () => {
     const host = await mountOverlay();
-    const before = monitorParts(host);
-    expect(said(host)).not.toContain("Find unavailable");
-    // from here on the row's own clock: a model change can reach the sheet in
-    // more than one frame, and each new agents list is a new key whose wait for
-    // the window must be a timer this row moves
-    holdChromeClock();
-    // the agents it searches change, and its read throws
-    stand.findThrows = true;
-    await act(async () =>
-      board?.publish([
-        managedSummary({ runtimeRunId: "run-claude", kind: "claude", label: "Claude" }),
-        managedSummary({ runtimeRunId: "run-second", kind: "claude", label: "Claude" }),
-      ]),
-    );
-    await settle();
-    expect(said(host)).toContain("Find unavailable");
-    expectSameMonitor(host, before);
-    expect(host.querySelector(".deck-stand-in")).not.toBeNull();
-    // an overlay render that hands it the same agents is no reason to try it
-    const renders = stand.findRenders;
-    const toggle = host.querySelector<HTMLButtonElement>('button[aria-label="System control"]');
-    await act(async () => toggle?.click());
-    await settle();
-    expect(stand.findRenders).toBe(renders);
-    // new agents are, at the end of its window at the latest
-    stand.findThrows = false;
+    // no sheet of its own: the stage mounts no Find, and the bar has no FIND
+    expect(host.querySelector(".vf-find-sheet")).toBeNull();
+    expect(host.querySelector('button[aria-label="Find an agent by what was said"]')).toBeNull();
     await act(async () =>
       board?.publish([
         managedSummary({ runtimeRunId: "run-claude", kind: "claude", label: "Claude" }),
       ]),
     );
     await settle();
-    await advanceChromeClock();
-    await settle();
-    expect(said(host)).not.toContain("Find unavailable");
-    expect(stand.findRenders).toBeGreaterThan(renders);
-    expectSameMonitor(host, before);
+    const door = getGodviewFindDoor();
+    expect(door).not.toBeNull();
+    expect(door?.rows.some((row) => row.agent?.provider.label === "Claude")).toBe(true);
+    await setView("canvas");
+    expect(getGodviewFindDoor()).toBeNull();
   });
 
   it("a throwing deck edge says so in the lip's place; the monitor, its view and the deck stay", async () => {

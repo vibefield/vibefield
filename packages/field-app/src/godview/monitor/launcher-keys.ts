@@ -16,6 +16,12 @@
 // Claims rather than a boolean: every host takes its own and gives back only
 // that one, so two decks (a remount racing its predecessor's cleanup) never
 // have the second's take erased by the first's give-back.
+//
+// *P2 (2026-10-09; docket PK4 (a)):* the strip and its ⌥0–⌥9 retired — the
+// profiles are chosen in search's Live now (GV-D3) — so nothing on the stage
+// takes a ⌥digit and `launcherOwnsKeyEvent` has no reader in the product: every
+// ⌥digit reaches whatever has the focus, a fresh pane's launcher included. The
+// claim stays the deck's record of where a launcher stands.
 
 /** Whether this key's target is inside a pane whose launcher takes it. */
 export type LauncherKeysHolds = (target: Node) => boolean;

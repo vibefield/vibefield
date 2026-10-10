@@ -46,6 +46,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { GodviewMonitorFacts } from "../src/development-console";
+import { getGodviewFindDoor, resetGodviewFindDoorForTest } from "../src/frame/find-door";
 import { GodviewMonitor } from "../src/godview/GodviewMonitor";
 import type { AgentSessionSummary } from "../src/godview/monitor/facet-types";
 import { GodviewAgentsProvider } from "../src/godview/monitor/GodviewAgentsProvider";
@@ -215,6 +216,7 @@ afterEach(() => {
   container = null;
   board?.dispose();
   board = null;
+  resetGodviewFindDoorForTest();
   for (const name of Object.keys(TOKENS)) document.documentElement.style.removeProperty(name);
   vi.restoreAllMocks();
 });
@@ -246,6 +248,7 @@ async function mountMonitor(
           parameters={monitorParameterDefaults(view.parameterGroups)}
           door={door}
           panes={panes}
+          publishesFind
         />
       </GodviewAgentsProvider>,
     );
@@ -314,11 +317,11 @@ describe("another desktop's agents as monitor citizens (DS-3)", () => {
     expect(view.querySelector(".vf-monitor-remote-unavailable-chip")).toBeNull();
   });
 
-  it("a desktop alone: only the local claim, and no device chip (one desktop is no choice)", async () => {
+  it("a desktop alone: only the local claim, and no desktop to choose (one desktop is no choice)", async () => {
     const view = await mountMonitor(fakeDoor(null, LOCAL_ROWS, null));
     expect(view.querySelector(".vf-monitor-local-chip")?.textContent).toBe("2 managed agents");
     expect(view.querySelector(".vf-monitor-remote-chip")).toBeNull();
-    expect(view.querySelector(".vf-device-filter")).toBeNull();
+    expect(getGodviewFindDoor()?.filters.desks).toEqual([]);
     expect(latest().remoteState).toBe("serving");
   });
 
@@ -507,73 +510,47 @@ describe("select routes by source", () => {
   });
 });
 
-describe("the device filter — one dropdown, before the profile tabs", () => {
-  it("offers every desktop as its mark and its name, here first, all by default", async () => {
+// GV-D3 (P2, 2026-10-09): the desktops are chosen in search's Live now — the
+// scope row's dropdown, which calls the door the stage publishes
+// (`find-door.ts`); the bar's chip left with the profile tabs.
+const chooseDesk = async (id: string | null): Promise<void> => {
+  await act(async () => getGodviewFindDoor()?.setDesk(id));
+  await settle();
+};
+
+describe("the device filter — in search's Live now (GV-D3)", () => {
+  it("offers every desktop as its mark and its name, here first, all by default — and the bar draws no chip", async () => {
     const view = await mountMonitor(fakeDoor());
-    const chip = view.querySelector<HTMLButtonElement>(".vf-device-filter-chip");
-    expect(chip?.textContent).toBe("All desktops");
-    expect(chip?.getAttribute("aria-haspopup")).toBe("listbox");
-    await act(async () => chip?.click());
-    const options = [...view.querySelectorAll<HTMLButtonElement>(".vf-device-filter-row")];
-    expect(options.map((option) => option.getAttribute("data-device"))).toEqual(["", HERE, STUDIO]);
-    expect(options[1]?.textContent).toContain("here");
-    expect(options[2]?.querySelector(".vf-os-mark")?.getAttribute("data-os")).toBe("linux");
-    expect(options[0]?.getAttribute("aria-selected")).toBe("true");
+    expect(view.querySelector(".vf-godview-header .vf-device-filter")).toBeNull();
+    const filters = getGodviewFindDoor()?.filters;
+    expect(filters?.desk).toBeNull();
+    expect(filters?.desks.map((desk) => [desk.id, desk.here, desk.os])).toEqual([
+      [HERE, true, "macos"],
+      [STUDIO, false, "linux"],
+    ]);
+    expect(filters?.desks[1]?.name).toBe("studio");
+    expect(filters?.desks[1]?.note).toBe("2 agents");
   });
 
-  it("narrows the rows handed to the view, and widens back to all", async () => {
+  it("narrows the rows handed to the view and to Live now, and widens back to all", async () => {
     const view = await mountMonitor(fakeDoor());
-    const chip = (): HTMLButtonElement | null =>
-      view.querySelector<HTMLButtonElement>(".vf-device-filter-chip");
-    await act(async () => chip()?.click());
-    await act(async () =>
-      view
-        .querySelector<HTMLButtonElement>(`.vf-device-filter-row[data-device="${STUDIO}"]`)
-        ?.click(),
-    );
-    await settle();
+    await chooseDesk(STUDIO);
     expect(rows(view)).toHaveLength(2);
     expect(remoteRows(view)).toHaveLength(2);
-    expect(chip()?.textContent).toBe("studio");
-    expect(view.querySelector(".vf-device-filter-menu")).toBeNull();
+    expect(getGodviewFindDoor()?.filters.desk).toBe(STUDIO);
+    expect(getGodviewFindDoor()?.rows.every((row) => !row.desk.self)).toBe(true);
     expect(latest().shownAgents).toBe(2);
 
-    await act(async () => chip()?.click());
-    await act(async () =>
-      view
-        .querySelector<HTMLButtonElement>(`.vf-device-filter-row[data-device="${HERE}"]`)
-        ?.click(),
-    );
-    await settle();
+    await chooseDesk(HERE);
     expect(rows(view)).toHaveLength(LOCAL_ROWS.length);
     expect(remoteRows(view)).toHaveLength(0);
+    expect(getGodviewFindDoor()?.rows.every((row) => row.desk.self)).toBe(true);
 
-    await act(async () => chip()?.click());
-    await act(async () =>
-      view.querySelector<HTMLButtonElement>('.vf-device-filter-row[data-device=""]')?.click(),
-    );
-    await settle();
+    await chooseDesk(null);
     expect(rows(view)).toHaveLength(LOCAL_ROWS.length + 2);
   });
 
-  it("closes on Escape and hands the focus back to the chip", async () => {
-    const view = await mountMonitor(fakeDoor());
-    const chip = view.querySelector<HTMLButtonElement>(".vf-device-filter-chip");
-    await act(async () => chip?.click());
-    const menu = view.querySelector<HTMLElement>(".vf-device-filter-menu");
-    expect(document.activeElement?.getAttribute("data-device")).toBe("");
-    await act(async () => {
-      menu?.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true }));
-    });
-    expect(document.activeElement?.getAttribute("data-device")).toBe(HERE);
-    await act(async () => {
-      menu?.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
-    });
-    expect(view.querySelector(".vf-device-filter-menu")).toBeNull();
-    expect(document.activeElement).toBe(chip);
-  });
-
-  it("holds the keys only while its menu is open, and lets them go when the chip goes with it open", async () => {
+  it("a desktop that leaves the board leaves the choices, and a choice of it falls back to all", async () => {
     // each gap below re-opens the board: this desktop alone, then both again
     const door = fakeDoor([
       null,
@@ -581,11 +558,8 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
       { before: () => board?.peer({ ...STUDIO_PEER, rows: STUDIO_ROWS }) },
     ]);
     const view = await mountMonitor(door);
-    expect(monitorHoldsKeys()).toBe(false);
-    await act(async () => view.querySelector<HTMLButtonElement>(".vf-device-filter-chip")?.click());
-    expect(view.querySelector(".vf-device-filter-menu")).not.toBeNull();
-    expect(monitorHoldsKeys()).toBe(true); // the menu's Escape is its own
-
+    await chooseDesk(STUDIO);
+    expect(remoteRows(view)).toHaveLength(2);
     await act(async () =>
       door.push({
         device: STUDIO,
@@ -594,22 +568,10 @@ describe("the device filter — one dropdown, before the profile tabs", () => {
     );
     await settle();
     expect(door.opened()).toBe(2);
-    expect(view.querySelector(".vf-device-filter-chip")).toBeNull(); // one desktop: no choice
-    // the chip went with its menu open: a fresh pane's launcher gets its keys back
-    expect(monitorHoldsKeys()).toBe(false);
-
-    // the other desktop comes back: the chip is drawn again, CLOSED — the
-    // menu that went away is not remembered as open
-    await act(async () =>
-      door.push({
-        device: HERE,
-        delta: { epoch: "here.1", since: 7, revision: 8, upserts: [], removed: [] },
-      }),
-    );
-    await settle();
-    expect(door.opened()).toBe(3);
-    expect(view.querySelector(".vf-device-filter-chip")).not.toBeNull();
-    expect(view.querySelector(".vf-device-filter-menu")).toBeNull();
+    expect(getGodviewFindDoor()?.filters.desks).toEqual([]); // one desktop: no choice
+    expect(getGodviewFindDoor()?.filters.desk).toBeNull();
+    expect(rows(view)).toHaveLength(LOCAL_ROWS.length);
+    // nothing the stage holds the keys for: the menus are search's
     expect(monitorHoldsKeys()).toBe(false);
   });
 });

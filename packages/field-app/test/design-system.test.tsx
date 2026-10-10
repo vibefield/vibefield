@@ -317,9 +317,21 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
       [...(container?.querySelectorAll(".vf-ds-peek-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),
       ),
-    ).toEqual(["peek-closed", "peek-open"]);
+    ).toEqual(["peek-live", "peek-closed", "peek-open"]);
     expect(history("peek-closed")?.querySelector(".vf-peek-button kbd")?.textContent).toBe("⌘F");
     expect(history("peek-closed")?.querySelector(".vf-peek-pop")).toBeNull();
+    // P2 — Godview's Live now, the same controller over the monitor's door as a
+    // fixture holds it: waiting first, a shell last, the scope row's filters
+    const live = history("peek-live");
+    expect(
+      [...(live?.querySelectorAll('.vf-peek-row[data-kind="live"] .vf-peek-dot') ?? [])].map(
+        (dot) => dot.getAttribute("data-state"),
+      ),
+    ).toEqual(["blocked", "working", "shell"]);
+    expect(live?.querySelector(".vf-peek-row .vf-peek-os")?.textContent).toBe("studio");
+    expect(
+      [...(live?.querySelectorAll(".vf-peek-dd-label") ?? [])].map((label) => label.textContent),
+    ).toEqual(["All desktops", "Every profile"]);
     expect(
       history("peek-open")?.querySelector<HTMLInputElement>(".vf-peek-pop .vf-peek-field input")
         ?.value,
@@ -479,8 +491,9 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     const bloom = container?.querySelector<HTMLElement>("[data-spawn-bloom-catalog]");
     if (!bloom) throw new Error("Spawn bloom catalog not found");
     // The SHIPPING swarm view: happy-dom has no WebGPU, so it draws its honest
-    // line and its keyboard list — the fixture's three agents — and the profile
-    // tabs the fixture's managed profiles call for.
+    // line and its keyboard list — the fixture's three agents; the profiles
+    // its managed profiles call for are chosen in search's Live now (GV-D3,
+    // P2), so the bar draws no tabs.
     expect(bloom.querySelector(".vf-monitor-swarm")?.textContent).toContain("WEBGPU UNAVAILABLE");
     expect(
       bloom.querySelector("[data-monitor-view-slot]")?.getAttribute("data-monitor-view-renderer"),
@@ -488,8 +501,7 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(
       bloom.querySelectorAll(".vf-monitor-swarm-list li button:not([data-swarm-new-terminal])"),
     ).toHaveLength(3);
-    expect(bloom.querySelector('[data-profile-tab="work"]')).not.toBeNull();
-    expect(bloom.querySelector('[data-profile-tab="demo"]')).not.toBeNull();
+    expect(bloom.querySelector("[data-profile-tab]")).toBeNull();
 
     // The hidden list's keys door is there, beside the bodies.
     expect(bloom.querySelector("[data-swarm-new-terminal]")).not.toBeNull();

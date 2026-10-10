@@ -1,5 +1,7 @@
+import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
 import type { SnippetSegment } from "@vibecook/puppeteer-views";
-import { FieldGlyph, type GlyphName } from "@vibefield/design-kit/glyphs";
+import type { FrameView } from "@vibefield/contracts";
+import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import {
   Fragment,
   type KeyboardEvent,
@@ -8,6 +10,9 @@ import {
   type Ref,
   useId,
 } from "react";
+import { OS_LABEL, OsMark } from "../godview/os-marks";
+import type { LiveDeskChoice, LiveFilters, LiveProfileChoice } from "./find-door";
+import { isLiveRow, type PeekListRow, type PeekLiveRow } from "./peek-live";
 import {
   PEEK_ROW_LINES,
   type PeekFilters,
@@ -25,42 +30,102 @@ import "./peek.css";
 // SEARCH — THE PEEK (DESIGN.md §8 "Search — the Peek", §5, §6, §10; One
 // Frame §23, GV-D8/D9/D10/D3) — controller-free, so the catalog mounts this
 // exact markup over a fixture port. The frame's button with its key printed
-// under it, and the layer: the scrim that blurs and dims the window, and the
-// popup — the field, the scope row, the list beside the peek, the foot. What
-// the Peek DOES lives in `Peek.tsx`; what it shows is all props.
+// under it (and, in Godview, the filter it wears), and the layer: the scrim
+// that blurs and dims the window, and the popup — the field, the scope row,
+// the list beside the peek, the foot. What the Peek DOES lives in `Peek.tsx`;
+// what it shows is all props.
+
+/** The filter a search button wears (GV-D3): the chosen desktop, the chosen
+ * profile, or both. */
+export interface PeekToken {
+  readonly desk: LiveDeskChoice | null;
+  readonly profile: LiveProfileChoice | null;
+}
 
 /** The frame's search button at the head's right end, ⌘F printed under its
- * glyph (Ctrl F off the Mac). */
+ * glyph (Ctrl F off the Mac). With a filter on, the glass grows a token
+ * naming it — "studio · Work" — and an × that clears it (GV-D3): a filtered
+ * view never looks unfiltered. */
 export function PeekButtonView({
   keys,
   open,
   onPress,
   buttonRef,
+  findRef,
+  token = null,
+  onClearToken,
 }: {
   keys: ViewKeys;
   open: boolean;
   onPress: () => void;
   buttonRef?: Ref<HTMLButtonElement>;
+  /** the glass itself, which the controller measures (the bar steps aside) */
+  findRef?: Ref<HTMLDivElement>;
+  token?: PeekToken | null;
+  onClearToken?: () => void;
 }): ReactElement {
   const mac = keys === "mac";
+  const words =
+    token === null
+      ? null
+      : [token.desk?.name, token.profile?.label].filter((part) => part !== undefined).join(" · ");
   return (
-    <button
-      ref={buttonRef}
-      type="button"
-      className="vf-peek-button no-drag"
-      aria-label="Search"
-      aria-haspopup="dialog"
-      aria-expanded={open}
-      aria-keyshortcuts={mac ? "Meta+F" : "Control+F"}
-      title={`Search  ${mac ? "⌘F" : "Ctrl+F"}`}
-      onClick={onPress}
+    <div
+      ref={findRef}
+      className="vf-peek-find no-drag"
+      data-scoped={token === null ? undefined : "true"}
     >
-      <FieldGlyph name="search" size={15} />
-      {/* the key printed under the glyph, as the views track prints its keys */}
-      <kbd className="vf-peek-key">
-        <span>{mac ? "⌘" : "Ctrl"}</span>F
-      </kbd>
-    </button>
+      <button
+        ref={buttonRef}
+        type="button"
+        className="vf-peek-button"
+        aria-label={words === null ? "Search" : `Search, filtered to ${words}`}
+        aria-haspopup="dialog"
+        aria-expanded={open}
+        aria-keyshortcuts={mac ? "Meta+F" : "Control+F"}
+        title={`Search  ${mac ? "⌘F" : "Ctrl+F"}`}
+        onClick={onPress}
+      >
+        <FieldGlyph name="search" size={15} />
+        {/* the key printed under the glyph, as the views track prints its keys */}
+        <kbd className="vf-peek-key">
+          <span>{mac ? "⌘" : "Ctrl"}</span>F
+        </kbd>
+      </button>
+      {token !== null && (
+        <span className="vf-peek-token">
+          {token.desk !== null && (
+            <span className="vf-peek-token-part">
+              <OsMark os={token.desk.os} size={12} />
+              {token.desk.name}
+            </span>
+          )}
+          {token.desk !== null && token.profile !== null && (
+            <i className="vf-peek-token-sep" aria-hidden="true" />
+          )}
+          {token.profile !== null && (
+            <span className="vf-peek-token-part">
+              <ProfileGlyph
+                glyph={token.profile.glyph}
+                kind={token.profile.kind}
+                filled={token.profile.isDefault === true}
+                size={12}
+              />
+              {token.profile.label}
+            </span>
+          )}
+          <button
+            type="button"
+            className="vf-peek-token-clear"
+            aria-label="Clear the filters"
+            title="Every desktop and profile again"
+            onClick={onClearToken}
+          >
+            <FieldGlyph name="close" size={10} />
+          </button>
+        </span>
+      )}
+    </div>
   );
 }
 
@@ -124,6 +189,51 @@ export function PeekPast({ row }: { row: PeekRow }): ReactElement {
   );
 }
 
+/** THE LIVE PEEK (GV-D8): what opening a live row would show — the run's own
+ * pane, resting, which the controller draws (`renderLive`, the watch-only
+ * pane); a run on another desktop says where it runs, as nothing here can
+ * watch another desktop's terminal yet (K10, until DS-4's mirror). */
+export function PeekLive({
+  row,
+  renderLive,
+}: {
+  row: PeekLiveRow;
+  renderLive?: ((row: PeekLiveRow) => ReactNode) | undefined;
+}): ReactElement {
+  let picture: ReactNode;
+  if (row.remote !== null) {
+    picture = (
+      <div className="vf-peek-live-words">
+        <span className="vf-peek-os">
+          <OsMark os={row.remote.os} size={13} />
+          {row.remote.name}
+        </span>
+        <p>
+          It runs on {row.remote.name}. Search shows this desktop's terminals; Open brings its
+          terminal into the active pane.
+        </p>
+      </div>
+    );
+  } else if (row.floorSessionId !== null && renderLive !== undefined) {
+    picture = renderLive(row);
+  } else {
+    picture = (
+      <div className="vf-peek-live-words">
+        <p>
+          {row.floorSessionId === null
+            ? "Its terminal is not on this desktop's floor."
+            : "Its terminal shows here in the window."}
+        </p>
+      </div>
+    );
+  }
+  return (
+    <section className="vf-peek-live" aria-label="What opening it shows">
+      {picture}
+    </section>
+  );
+}
+
 function RowLine({ line }: { line: PeekLine }): ReactElement {
   return (
     <span className="vf-peek-ev">
@@ -135,8 +245,8 @@ function RowLine({ line }: { line: PeekLine }): ReactElement {
   );
 }
 
-/** Which dropdown's menu is open. */
-export type PeekMenu = "project" | "kind" | "agent";
+/** Which dropdown's menu is open: Everything's three, Live now's two. */
+export type PeekMenu = "project" | "kind" | "agent" | "desk" | "profile";
 
 const KIND_WORDS: Readonly<Record<PeekKind, string>> = {
   any: "Prompts and replies",
@@ -149,18 +259,25 @@ interface MenuChoice {
   readonly label: string;
   readonly on: boolean;
   readonly pick: () => void;
+  /** a mark before the name (a desktop's OS, a profile's glyph) */
+  readonly lead?: ReactNode;
+  /** a word after it (a desktop's agents or its standing) */
+  readonly note?: string;
+  /** a desktop that is not answering: drawn quiet */
+  readonly quiet?: boolean;
 }
 
 function Dropdown({
   id,
-  glyph,
+  lead,
   label,
   open,
   onToggle,
   choices,
 }: {
   id: PeekMenu;
-  glyph: GlyphName;
+  /** the mark before the name: a glyph, or the chosen desktop's or profile's */
+  lead: ReactNode;
   label: string;
   open: boolean;
   onToggle: () => void;
@@ -177,7 +294,7 @@ function Dropdown({
         aria-controls={open ? menuId : undefined}
         onClick={onToggle}
       >
-        <FieldGlyph name={glyph} size={13} />
+        <span className="vf-peek-dd-lead">{lead}</span>
         <span className="vf-peek-dd-label">{label}</span>
         <FieldGlyph name="chevron" size={11} turn={90} className="vf-peek-dd-turn" />
       </button>
@@ -191,9 +308,14 @@ function Dropdown({
               aria-checked={choice.on}
               className="vf-menu-row"
               data-hot={choice.on ? "" : undefined}
+              data-quiet={choice.quiet === true ? "" : undefined}
               onClick={choice.pick}
             >
+              {choice.lead !== undefined && (
+                <span className="vf-peek-menu-lead">{choice.lead}</span>
+              )}
               <span className="vf-menu-label">{choice.label}</span>
+              {choice.note !== undefined && <em className="vf-peek-menu-note">{choice.note}</em>}
             </button>
           ))}
         </div>
@@ -205,13 +327,19 @@ function Dropdown({
 export interface PeekViewProps {
   open: boolean;
   keys: ViewKeys;
+  /** the view the Peek opens over: what a past row's Open says */
+  view?: FrameView;
   layout: PeekLayout;
   query: string;
   scope: PeekScope;
   filters: PeekFilters;
   projects: readonly PeekProject[];
   agents: readonly { readonly id: string; readonly label: string }[];
-  rows: readonly PeekRow[];
+  /** Live now's dropdowns (GV-D3, Godview's): null where the view has none */
+  liveFilters?: LiveFilters | null;
+  onLiveDesk?: (id: string | null) => void;
+  onLiveProfile?: (id: string | null) => void;
+  rows: readonly PeekListRow[];
   /** the hot row's index (−1 for none) */
   hot: number;
   /** the foot's one sentence */
@@ -219,6 +347,8 @@ export interface PeekViewProps {
   /** the empty body's sentence when there are no rows, or null for none */
   none: string | null;
   menu: PeekMenu | null;
+  /** the live peek's picture: the run's own pane, watched */
+  renderLive?: (row: PeekLiveRow) => ReactNode;
   inputRef?: Ref<HTMLInputElement>;
   listRef?: Ref<HTMLDivElement>;
   onQuery: (query: string) => void;
@@ -230,23 +360,46 @@ export interface PeekViewProps {
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
 }
 
+/** What Open says for a row (the kit's `openLabel`). */
+export function openWords(row: PeekListRow, view: FrameView | undefined): string {
+  if (isLiveRow(row)) return "Open in the terminals";
+  if (view !== undefined && view !== "history") return "Open in History";
+  return row.lines.length > 0 ? "Open at the line" : "Open the session";
+}
+
+/** The distinct OS marks of every desktop: what "All desktops" wears. */
+function deskMarks(desks: readonly LiveDeskChoice[]): ReactNode {
+  const seen = [...new Set(desks.map((desk) => desk.os))];
+  return (
+    <span className="vf-peek-marks">
+      {seen.map((os) => (
+        <OsMark key={os} os={os} size={11} />
+      ))}
+    </span>
+  );
+}
+
 /** The layer: the scrim, and the popup over it while open. The scrim stays
  * mounted so it can fade out; the popup goes at once (DESIGN.md §6). */
 export function PeekView(props: PeekViewProps): ReactElement {
   const {
     open,
-    keys,
+    view,
     layout,
     query,
     scope,
     filters,
     projects,
     agents,
+    liveFilters = null,
+    onLiveDesk,
+    onLiveProfile,
     rows,
     hot,
     foot,
     none,
     menu,
+    renderLive,
     inputRef,
     listRef,
     onQuery,
@@ -260,32 +413,23 @@ export function PeekView(props: PeekViewProps): ReactElement {
   const listId = useId();
   const optionId = (index: number): string => `${listId}-row-${index}`;
   const hotRow = hot >= 0 ? rows[hot] : undefined;
-  const mac = keys === "mac";
   const toggle = (which: PeekMenu) => () => onMenu(menu === which ? null : which);
   const project = projects.find((entry) => entry.id === filters.project);
   const agent = agents.find((entry) => entry.id === filters.agent);
+  const words = query.trim();
   let body: ReactNode;
-  if (scope === "live") {
-    // K9: in History, Live now says where the live sessions are searched
-    body = (
-      <div className="vf-peek-list">
-        <div className="vf-peek-none">
-          <p>
-            In History, search reads your past. Live sessions are searched in Godview for now —{" "}
-            {mac ? "⌘2, then ⌘F" : "Ctrl+2, then Ctrl+F"}.
-          </p>
-          <button type="button" className="vf-peek-widen" onClick={() => onScope("everything")}>
-            {query.trim() === "" ? "Search everything" : `Search everything for “${query.trim()}”`}
-          </button>
-        </div>
-      </div>
-    );
-  } else if (rows.length === 0) {
+  if (rows.length === 0) {
     body = (
       <div className="vf-peek-list">
         {none !== null && (
           <div className="vf-peek-none">
             <p>{none}</p>
+            {/* when nothing live holds the words, the way to the past (GV-D9) */}
+            {scope === "live" && words !== "" && (
+              <button type="button" className="vf-peek-widen" onClick={() => onScope("everything")}>
+                {`Search everything for “${words}”`}
+              </button>
+            )}
           </div>
         )}
       </div>
@@ -302,6 +446,7 @@ export function PeekView(props: PeekViewProps): ReactElement {
         >
           {rows.map((row, index) => {
             const where = whereWords(row);
+            const live = isLiveRow(row);
             return (
               // biome-ignore lint/a11y/useKeyWithClickEvents: the field holds the keys (↑ ↓ ↵), as a combobox's listbox does
               <div
@@ -312,14 +457,30 @@ export function PeekView(props: PeekViewProps): ReactElement {
                 aria-selected={index === hot}
                 className="vf-peek-row"
                 data-hot={index === hot ? "true" : undefined}
+                data-kind={live ? "live" : "past"}
+                data-floor-session={live ? (row.floorSessionId ?? undefined) : undefined}
                 onClick={() => onOpen(index)}
               >
                 <span className="vf-peek-row-head">
-                  <i className="vf-peek-dot" aria-hidden="true" />
+                  <i
+                    className="vf-peek-dot"
+                    data-state={live ? row.state : undefined}
+                    aria-hidden="true"
+                  />
                   <b className="vf-peek-title">{row.title}</b>
                   <span className="vf-peek-when">{row.when}</span>
                 </span>
-                {where !== null && <span className="vf-peek-sub">{where}</span>}
+                {(where !== null || (live && row.remote !== null)) && (
+                  <span className="vf-peek-sub">
+                    {where}
+                    {live && row.remote !== null && (
+                      <span className="vf-peek-os" title={OS_LABEL[row.remote.os]}>
+                        <OsMark os={row.remote.os} size={11} />
+                        {row.remote.name}
+                      </span>
+                    )}
+                  </span>
+                )}
                 {row.lines.slice(0, PEEK_ROW_LINES).map((line) => (
                   <RowLine key={line.id} line={line} />
                 ))}
@@ -327,7 +488,145 @@ export function PeekView(props: PeekViewProps): ReactElement {
             );
           })}
         </div>
-        {!layout.folded && hotRow !== undefined && <PeekPast row={hotRow} />}
+        {!layout.folded &&
+          hotRow !== undefined &&
+          (isLiveRow(hotRow) ? (
+            <PeekLive row={hotRow} renderLive={renderLive} />
+          ) : (
+            <PeekPast row={hotRow} />
+          ))}
+      </div>
+    );
+  }
+  let dropdowns: ReactNode = null;
+  if (scope === "everything") {
+    dropdowns = (
+      <div className="vf-peek-dds">
+        <Dropdown
+          id="project"
+          lead={<FieldGlyph name="folder" size={13} />}
+          label={project?.name ?? "Every project"}
+          open={menu === "project"}
+          onToggle={toggle("project")}
+          choices={[
+            { id: null, name: "Every project" },
+            ...projects.map((entry) => ({ id: entry.id, name: entry.name })),
+          ].map((entry) => ({
+            key: entry.id ?? "every",
+            label: entry.name,
+            on: filters.project === entry.id,
+            pick: () => onFilters({ ...filters, project: entry.id }),
+          }))}
+        />
+        <Dropdown
+          id="kind"
+          lead={<FieldGlyph name="message" size={13} />}
+          label={KIND_WORDS[filters.kind]}
+          open={menu === "kind"}
+          onToggle={toggle("kind")}
+          choices={(["any", "user", "agent"] as const).map((kind) => ({
+            key: kind,
+            label: KIND_WORDS[kind],
+            on: filters.kind === kind,
+            pick: () => onFilters({ ...filters, kind }),
+          }))}
+        />
+        <Dropdown
+          id="agent"
+          lead={<FieldGlyph name="agents" size={13} />}
+          label={agent?.label ?? "Any agent"}
+          open={menu === "agent"}
+          onToggle={toggle("agent")}
+          choices={[{ id: null, label: "Any agent" }, ...agents].map((entry) => ({
+            key: entry.id ?? "any",
+            label: entry.label,
+            on: filters.agent === entry.id,
+            pick: () => onFilters({ ...filters, agent: entry.id }),
+          }))}
+        />
+      </div>
+    );
+  } else if (
+    liveFilters !== null &&
+    (liveFilters.desks.length > 0 || liveFilters.profiles.length > 0)
+  ) {
+    // GV-D3: the desktops and the profiles — the view's own filters, which
+    // filter the view too; each offered only when there is a choice to make
+    const desk = liveFilters.desks.find((entry) => entry.id === liveFilters.desk);
+    const profile = liveFilters.profiles.find((entry) => entry.id === liveFilters.profile);
+    dropdowns = (
+      <div className="vf-peek-dds">
+        {liveFilters.desks.length > 0 && (
+          <Dropdown
+            id="desk"
+            lead={
+              desk === undefined ? deskMarks(liveFilters.desks) : <OsMark os={desk.os} size={12} />
+            }
+            label={desk?.name ?? "All desktops"}
+            open={menu === "desk"}
+            onToggle={toggle("desk")}
+            choices={[
+              {
+                key: "all",
+                label: "All desktops",
+                on: liveFilters.desk === null,
+                pick: () => onLiveDesk?.(null),
+              },
+              ...liveFilters.desks.map((entry) => ({
+                key: entry.id,
+                label: entry.here ? `${entry.name} · here` : entry.name,
+                on: liveFilters.desk === entry.id,
+                pick: () => onLiveDesk?.(entry.id),
+                lead: <OsMark os={entry.os} size={11} />,
+                note: entry.note,
+                quiet: entry.quiet,
+              })),
+            ]}
+          />
+        )}
+        {liveFilters.profiles.length > 0 && (
+          <Dropdown
+            id="profile"
+            lead={
+              profile === undefined ? (
+                <FieldGlyph name="person" size={13} />
+              ) : (
+                <ProfileGlyph
+                  glyph={profile.glyph}
+                  kind={profile.kind}
+                  filled={profile.isDefault === true}
+                  size={13}
+                />
+              )
+            }
+            label={profile?.label ?? "Every profile"}
+            open={menu === "profile"}
+            onToggle={toggle("profile")}
+            choices={[
+              {
+                key: "every",
+                label: "Every profile",
+                on: liveFilters.profile === null,
+                pick: () => onLiveProfile?.(null),
+              },
+              ...liveFilters.profiles.map((entry) => ({
+                key: entry.id,
+                label: entry.label,
+                on: liveFilters.profile === entry.id,
+                pick: () => onLiveProfile?.(entry.id),
+                lead: (
+                  <ProfileGlyph
+                    glyph={entry.glyph}
+                    kind={entry.kind}
+                    filled={entry.isDefault === true}
+                    size={12}
+                  />
+                ),
+                ...(entry.blocked === true ? { note: "waiting" } : {}),
+              })),
+            ]}
+          />
+        )}
       </div>
     );
   }
@@ -342,6 +641,7 @@ export function PeekView(props: PeekViewProps): ReactElement {
           aria-modal="true"
           aria-label="Search"
           data-folded={layout.folded ? "true" : undefined}
+          data-scope={scope}
           style={{ width: layout.width, height: layout.height }}
           onKeyDown={onKeyDown}
         >
@@ -391,67 +691,22 @@ export function PeekView(props: PeekViewProps): ReactElement {
                 </button>
               ))}
             </div>
-            {scope === "everything" && (
-              <div className="vf-peek-dds">
-                <Dropdown
-                  id="project"
-                  glyph="folder"
-                  label={project?.name ?? "Every project"}
-                  open={menu === "project"}
-                  onToggle={toggle("project")}
-                  choices={[
-                    { id: null, name: "Every project" },
-                    ...projects.map((entry) => ({ id: entry.id, name: entry.name })),
-                  ].map((entry) => ({
-                    key: entry.id ?? "every",
-                    label: entry.name,
-                    on: filters.project === entry.id,
-                    pick: () => onFilters({ ...filters, project: entry.id }),
-                  }))}
-                />
-                <Dropdown
-                  id="kind"
-                  glyph="message"
-                  label={KIND_WORDS[filters.kind]}
-                  open={menu === "kind"}
-                  onToggle={toggle("kind")}
-                  choices={(["any", "user", "agent"] as const).map((kind) => ({
-                    key: kind,
-                    label: KIND_WORDS[kind],
-                    on: filters.kind === kind,
-                    pick: () => onFilters({ ...filters, kind }),
-                  }))}
-                />
-                <Dropdown
-                  id="agent"
-                  glyph="agents"
-                  label={agent?.label ?? "Any agent"}
-                  open={menu === "agent"}
-                  onToggle={toggle("agent")}
-                  choices={[{ id: null, label: "Any agent" }, ...agents].map((entry) => ({
-                    key: entry.id ?? "any",
-                    label: entry.label,
-                    on: filters.agent === entry.id,
-                    pick: () => onFilters({ ...filters, agent: entry.id }),
-                  }))}
-                />
-              </div>
-            )}
+            {dropdowns}
           </div>
           <div className="vf-peek-body">{body}</div>
           <div className="vf-peek-foot">
             <span className="vf-peek-said" role="status">
               {foot}
             </span>
-            {scope === "everything" && hotRow !== undefined && (
+            {hotRow !== undefined && (
               <button
                 type="button"
                 className="vf-peek-open"
-                aria-label={hotRow.lines.length > 0 ? "Open at the line" : "Open the session"}
+                aria-label={openWords(hotRow, view)}
                 aria-keyshortcuts="Enter"
                 onClick={() => onOpen(hot)}
               >
-                {hotRow.lines.length > 0 ? "Open at the line" : "Open the session"}
+                {openWords(hotRow, view)}
                 <kbd className="vf-peek-open-key">↵</kbd>
               </button>
             )}

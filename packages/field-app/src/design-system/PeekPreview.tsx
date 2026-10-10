@@ -1,6 +1,7 @@
 import type { RoomPorts, RoomTarget } from "@rosetta/room";
 import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
-import { type ReactElement, useCallback, useState } from "react";
+import { type ReactElement, useCallback, useMemo, useState } from "react";
+import type { LiveFilters } from "../frame/find-door";
 import type { FrameSurface } from "../frame/frame-surface";
 import { Peek } from "../frame/Peek";
 import type { PeekTarget } from "../frame/peek-model";
@@ -8,6 +9,11 @@ import type { ViewKeys } from "../frame/views";
 import { HistoryRoomView } from "../history/HistoryRoomView";
 import { FIXTURE_SEARCH_QUERY, historyFixturePorts } from "./history-fixtures";
 import { peekFixturePort } from "./peek-fixtures";
+import {
+  LIVE_FIXTURE_FILTERS,
+  LIVE_FIXTURE_NOW,
+  peekLiveFixtureDoor,
+} from "./peek-live-fixtures";
 
 // Search — the Peek, in the catalog (DESIGN.md §8 "Search — the Peek";
 // GV-D8/D9/D10, built 2026-10-08): the SHIPPING Peek controller (`Peek.tsx`)
@@ -25,8 +31,9 @@ import { peekFixturePort } from "./peek-fixtures";
 // does not draw — before a word, nothing matching, a narrow window (K6) —
 // are the window tests' (`peek.test.tsx`).
 
-/** The states the catalog draws the Peek in. */
-export type PeekPlateState = "closed" | "open";
+/** The states the catalog draws the Peek in: History's at rest and open, and
+ * Godview's Live now (P2). */
+export type PeekPlateState = "closed" | "open" | "live";
 
 export function PeekPlate({
   state,
@@ -34,6 +41,54 @@ export function PeekPlate({
 }: {
   state: PeekPlateState;
   keys?: ViewKeys;
+}): ReactElement {
+  return state === "live" ? (
+    <PeekLivePlate keys={keys} />
+  ) : (
+    <PeekHistoryPlate state={state} keys={keys} />
+  );
+}
+
+/** Godview's Live now (P2): the SHIPPING controller in Godview, open over the
+ * monitor's door as a fixture holds it (`peek-live-fixtures.ts`) — its live
+ * runs waiting first, a peer's run saying where it runs, the scope row's two
+ * filters live on the plate (a choice narrows the rows and the button wears
+ * it). The live peek's pane needs a window's terminals, which no catalog has:
+ * the plate draws the words a window without them says. */
+function PeekLivePlate({ keys }: { keys: ViewKeys }): ReactElement {
+  const [filters, setFilters] = useState<LiveFilters>(LIVE_FIXTURE_FILTERS);
+  const godview = useMemo(() => peekLiveFixtureDoor(filters, setFilters), [filters]);
+  const [surface, setSurface] = useState<FrameSurface | null>("search");
+  const [plate, setPlate] = useState<HTMLDivElement | null>(null);
+  const noop = useCallback(() => undefined, []);
+  const now = useCallback(() => LIVE_FIXTURE_NOW, []);
+  const [port] = useState(() => peekFixturePort(createRoomDemo()));
+  return (
+    <div ref={setPlate} className="vf-ds-history-plate vf-ds-peek-plate" data-state="peek-live">
+      <Peek
+        view="godview"
+        keys={keys}
+        surface={surface}
+        onSurfaceChange={setSurface}
+        port={port}
+        onOpenPast={noop}
+        godview={godview}
+        onOpenLive={noop}
+        bindKeys={false}
+        container={plate}
+        takeFocus={false}
+        now={now}
+      />
+    </div>
+  );
+}
+
+function PeekHistoryPlate({
+  state,
+  keys,
+}: {
+  state: "closed" | "open";
+  keys: ViewKeys;
 }): ReactElement {
   const [demo] = useState(() => createRoomDemo());
   const [ports] = useState<RoomPorts>(() =>

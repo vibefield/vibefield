@@ -287,10 +287,10 @@ export interface GodviewMonitorFacts {
    * reported, whatever its state); `-1` while no column is mounted. A count,
    * not a judgement: an empty batch is the ordinary answer of a fresh daemon. */
   usageTiles: number;
-  /** AR-5: `open` · `closed` — the find sheet, the chord's witness. */
-  findSheet: string;
-  /** AR-S5: the chosen profile tab's id — `all` while All is chosen or no
-   * strip is drawn — and how many rows it leaves on the stage unreceded. */
+  /** AR-S5: the chosen profile's id — `all` while every profile is shown or
+   * there is no choice to make — and how many rows it leaves on the stage
+   * unreceded. (P2: the profiles are chosen in search's Live now, GV-D3; the
+   * find sheet's `findSheet` left with the sheet — the Peek is the frame's.) */
   profileTab: string;
   shownAgents: number;
   /**

@@ -19,11 +19,18 @@
  * and D2 (AR-8): a line inside a delegated thread rides its root's row and
  * opens the room at it. (The search interim's own rows left with it:
  * `history-search.test.tsx`, its D2 row carried over here.)
+ *
+ * P2 (2026-10-09): the button and ⌘F in Godview too, opening on Live now over
+ * the rows Godview's monitor publishes (`find-door.ts`) — GV-D3's filters in
+ * the scope row and on the button, a pick doing the view's own select — and,
+ * in History, Live now on a feed of the Peek's own, open only while it shows
+ * (docket PK5), a pick taking Jump to's path.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createCanvasEngine } from "@vibecook/ice";
+import type { HistoryPort, HistorySearchResponse } from "@vibecook/puppeteer-views";
 import type { FrameView, FrameViewState, ShellPlatform } from "@vibefield/contracts";
 import type { FielddClient } from "@vibefield/fieldd-client";
 import { FielddProvider } from "@vibefield/fieldd-client/react";
@@ -31,8 +38,22 @@ import { act, type ReactElement, useEffect, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { isCommandPaletteChord, listenForProductChord } from "../src/field/product-chords";
+import {
+  type GodviewFindDoor,
+  type LiveFeedSnapshot,
+  type LiveFilters,
+  type LiveFindAgent,
+  type OpenLiveFeed,
+  publishGodviewFindDoor,
+  resetGodviewFindDoorForTest,
+} from "../src/frame/find-door";
 import { type FrameSurface, foldSurface } from "../src/frame/frame-surface";
-import { resetGodviewLineDoorForTest, resetHistoryLineDoorForTest } from "../src/frame/line-door";
+import {
+  type LineViewDoor,
+  publishGodviewLineDoor,
+  resetGodviewLineDoorForTest,
+  resetHistoryLineDoorForTest,
+} from "../src/frame/line-door";
 import { FramePeek } from "../src/frame/Peek";
 import { ViewFrame } from "../src/frame/ViewFrame";
 import { resetActiveViewForTest, useActiveView } from "../src/frame/view-state";
@@ -121,6 +142,8 @@ let root: Root | null = null;
 let host: HTMLElement | null = null;
 let dispose: (() => void) | null = null;
 let surfaceNow: FrameSurface | null = null;
+/** Every view the frame asked the shell for. */
+let viewAsked: FrameView[] = [];
 
 beforeAll(async () => {
   await import("../src/history/HistoryRoomView");
@@ -134,7 +157,10 @@ function hostOn(platform: ShellPlatform): void {
     completeClose: () => undefined,
     platform,
     view: {
-      set: (next) => Promise.resolve({ view: next }),
+      set: (next) => {
+        viewAsked.push(next);
+        return Promise.resolve({ view: next });
+      },
       onState: (handler) => {
         publish = handler;
         return () => {
@@ -150,8 +176,10 @@ beforeEach(() => {
   resetGodviewLineDoorForTest();
   resetHistoryLineDoorForTest();
   resetHistoryOpenAtForTest();
+  resetGodviewFindDoorForTest();
   publish = null;
   surfaceNow = null;
+  viewAsked = [];
   window.localStorage.clear();
   setRendererLogger({
     child: () => ({ error: () => undefined, info: () => undefined }) as unknown as RendererLogger,
@@ -227,7 +255,10 @@ function fieldd(
  * owner of the open surface, the frame with History's controller in the
  * cover, the palette and the clipboard's drawer on the same value, ⌘K's glue,
  * and the frame's Peek over the window's client. */
-function mount(client: ReturnType<typeof fieldd>): void {
+function mount(
+  client: ReturnType<typeof fieldd>,
+  opts: { openLiveFeed?: OpenLiveFeed } = {},
+): void {
   const engine = createCanvasEngine({});
   const clipboard = new ClipboardStore(() => 0);
   dispose = () => engine.dispose();
@@ -245,7 +276,13 @@ function mount(client: ReturnType<typeof fieldd>): void {
     );
     return (
       <FielddProvider client={client as unknown as FielddClient}>
-        <FramePeek view={view} keys={keys} surface={surface} onSurfaceChange={setSurface} />
+        <FramePeek
+          view={view}
+          keys={keys}
+          surface={surface}
+          onSurfaceChange={setSurface}
+          {...(opts.openLiveFeed !== undefined ? { openLiveFeed: opts.openLiveFeed } : {})}
+        />
         <ViewFrame
           godview={<div data-testid="godview-content" />}
           history={(active) => <HistoryView active={active} />}
@@ -340,10 +377,10 @@ async function searchCatalog(input: HTMLInputElement): Promise<void> {
 describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
   it("the frame's button stands at the head's right end in History with ⌘F printed, opens the popup on Everything over your latest sessions, and Esc gives the keyboard back", async () => {
     mount(fieldd());
-    // not on the canvas, nor in Godview (its own Find, until P2)
+    // not on the canvas; in the views that search, History and Godview (P2)
     expect(button()).toBeNull();
     to("godview");
-    expect(button()).toBeNull();
+    expect(button()).not.toBeNull();
     await openHistory();
     const at = button();
     expect(at?.querySelector("kbd")?.textContent).toBe("⌘F");
@@ -376,13 +413,18 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(document.activeElement).toBe(button());
   });
 
-  it("⌘F opens it while History is the view and puts the caret back while it is open — and is left alone on the canvas and in Godview", async () => {
+  it("⌘F opens it while History or Godview is the view and puts the caret back while it is open — and is left alone on the canvas", async () => {
     mount(fieldd());
     expect(press(document.body, { key: "f", metaKey: true }).defaultPrevented).toBe(false);
     expect(surfaceNow).toBeNull();
     to("godview");
-    // Godview's own Find keeps ⌘F until P2: the Peek does not claim it there
-    expect(press(document.body, { key: "f", metaKey: true }).defaultPrevented).toBe(false);
+    // P2: Godview's own Find left; the Peek takes ⌘F there, opening on Live now
+    expect(press(document.body, { key: "f", metaKey: true }).defaultPrevented).toBe(true);
+    expect(surfaceNow).toBe("search");
+    expect(pop()?.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe(
+      "Live now",
+    );
+    press(await until(field, "Godview's popup field"), { key: "Escape" });
     expect(surfaceNow).toBeNull();
     await openHistory();
     // not the key: the other platform's modifier, ⇧ or ⌥ with it
@@ -447,7 +489,10 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     const mark = css.match(/^\.vf-peek-pop mark \{([^}]*)\}/mu)?.[1] ?? "";
     expect(mark).toContain("color: var(--vf-text-primary);");
     expect(mark).toContain("var(--vf-text-primary) 11%");
-    expect(css).not.toMatch(/--vf-orange|--vf-select\)\s*\d|#[\da-f]{3,8}\b/iu);
+    // (a live run's state dot is the one orange — waiting, §2.5 — and never a match)
+    expect(css.match(/--vf-orange/gu)?.length).toBe(1);
+    const ink = css.replace(/^\.vf-peek-dot\[data-state="blocked"\] \{[^}]*\}/mu, "");
+    expect(ink).not.toMatch(/--vf-orange|--vf-select\)\s*\d|#[\da-f]{3,8}\b/iu);
   });
 
   it("↑ ↓ move the hot row and ↵ opens it: the popup folds and History's room opens at the line — the hit's own ids, through the room's openAt", async () => {
@@ -639,37 +684,106 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     );
   });
 
-  it("Live now, in History, says that live sessions are searched in Godview (K9) — and offers the way back", async () => {
-    mount(fieldd());
+  it("Live now, in History, is live while it shows (PK5): the feed opens with the tab and closes on a change of scope, the popup's close, a change of view and unmount", async () => {
+    const feed = liveFeedFake();
+    mount(fieldd(), { openLiveFeed: feed.open });
+    await openHistory();
+    let input = await openPeek();
+    // Everything, History's own: no feed
+    expect(feed.live()).toBe(0);
+    liveNowTab();
+    expect(feed.live()).toBe(1);
+    expect(input.placeholder).toBe("Words said in a live session, a folder, an agent…");
+    expect(foot()).toBe("Asking what runs…");
+    feed.push({ runs: LIVE_RUNS, state: { kind: "live" } });
+    await until(() => (options().length === 2 ? true : null), "two live rows");
+    expect(foot()).toBe("2 live sessions, waiting first");
+    // waiting first; where a peer's run runs (K10); no dropdowns in History
+    expect(options().map((row) => row.querySelector(".vf-peek-title")?.textContent)).toEqual([
+      "deploy",
+      "vibe-field",
+    ]);
+    expect(options()[0]?.querySelector(".vf-peek-when")?.textContent).toBe("waiting");
+    expect(options()[0]?.querySelector(".vf-peek-os")?.textContent).toBe("studio");
+    expect(pop()?.querySelector(".vf-peek-dds")).toBeNull();
+    // K9's words retired with the feed
+    expect(pop()?.textContent).not.toContain("searched in Godview");
+    // a change of scope closes it, Live now opens it again
+    everythingTab();
+    expect(feed.live()).toBe(0);
+    liveNowTab();
+    expect(feed.live()).toBe(1);
+    // the popup's close closes it
+    press(input, { key: "Escape" });
+    expect(feed.live()).toBe(0);
+    // each open starts on Everything again (GV-D9) — and opens nothing
+    input = await openPeek();
+    expect(pop()?.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe(
+      "Everything",
+    );
+    expect(feed.live()).toBe(0);
+    // a change of view folds the popup, and closes the feed with it
+    liveNowTab();
+    expect(feed.live()).toBe(1);
+    to("canvas");
+    await until(() => (surfaceNow === null ? true : null), "the popup folded by the view");
+    expect(feed.live()).toBe(0);
+    // unmount closes it
+    await openHistory();
+    await openPeek();
+    liveNowTab();
+    expect(feed.live()).toBe(1);
+    act(() => root?.unmount());
+    root = null;
+    expect(feed.live()).toBe(0);
+    expect(feed.opened()).toBe(4);
+  });
+
+  it("History's Live now asks rosetta through its own feed, and a pick takes Jump to's path — Godview, and the deck reveals the run's pane", async () => {
+    const feed = liveFeedFake();
+    const reveal = vi.fn(async () => ({ state: "opened" as const }));
+    publishGodviewLineDoor({ canPlace: true, reveal } as unknown as LineViewDoor);
+    mount(fieldd(), { openLiveFeed: feed.open });
     await openHistory();
     const input = await openPeek();
+    liveNowTab();
+    feed.push({ runs: LIVE_RUNS, state: { kind: "live" } });
     typeInto(input, "catalog");
-    act(() =>
-      [...(pop()?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])]
-        .find((radio) => radio.textContent === "Live now")
-        ?.click(),
-    );
+    await until(() => (options().length === 1 ? true : null), "the run whose words matched");
+    expect(feed.searched.at(-1)).toMatchObject({
+      query: "catalog",
+      nativeSessionIds: ["native-local"],
+      prefix: true,
+    });
+    expect(options()[0]?.querySelector(".vf-peek-tx")?.textContent).toBe("the catalog doors");
+    expect(foot()).toBe("1 session · 1 line matched");
+    expect(pop()?.querySelector(".vf-peek-open")?.textContent).toBe("Open in the terminals↵");
+    press(input, { key: "Enter" });
+    expect(surfaceNow).toBeNull();
+    await until(() => (reveal.mock.calls.length > 0 ? true : null), "the deck's reveal");
+    expect(viewAsked).toEqual(["godview"]);
+    expect(reveal).toHaveBeenCalledExactlyOnceWith("pty-local");
+    expect(feed.live()).toBe(0);
+  });
+
+  it("History's Live now with nothing matching offers everything for the words, keeping them", async () => {
+    const feed = liveFeedFake();
+    mount(fieldd(), { openLiveFeed: feed.open });
+    await openHistory();
+    const input = await openPeek();
+    liveNowTab();
+    feed.push({ runs: LIVE_RUNS, state: { kind: "live" } });
+    typeInto(input, "zzz");
+    await until(() => pop()?.querySelector(".vf-peek-none p")?.textContent, "the empty sentence");
     expect(pop()?.querySelector(".vf-peek-none p")?.textContent).toBe(
-      "In History, search reads your past. Live sessions are searched in Godview for now — ⌘2, then ⌘F.",
+      "No live session holds every word of “zzz”.",
     );
-    expect(foot()).toBe("Live now is searched in Godview");
-    expect(pop()?.querySelector(".vf-peek-open")).toBeNull();
-    expect(pop()?.querySelector(".vf-peek-dds")).toBeNull();
     act(() => pop()?.querySelector<HTMLButtonElement>(".vf-peek-widen")?.click());
     expect(pop()?.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe(
       "Everything",
     );
-    // each open starts on Everything again (GV-D9)
-    act(() =>
-      [...(pop()?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])]
-        .find((radio) => radio.textContent === "Live now")
-        ?.click(),
-    );
-    press(input, { key: "Escape" });
-    await openPeek();
-    expect(pop()?.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe(
-      "Everything",
-    );
+    expect(field()?.value).toBe("zzz");
+    expect(feed.live()).toBe(0);
   });
 
   it("a narrow window (K6): the popup clamps 24 clear of each side, the peek folds and the list fills", async () => {
@@ -701,6 +815,272 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(press(document.body, { key: "G", metaKey: true, shiftKey: true }).defaultPrevented).toBe(
       false,
     );
+  });
+});
+
+// ---- P2 — Live now: Godview's door, History's own feed ---------------------
+
+const LIVE_READY = {
+  reachable: true,
+  readiness: "ready" as const,
+  checkedAt: "2026-10-09T12:00:00Z",
+};
+
+function liveRun(id: string, extra: Partial<LiveFindAgent>): LiveFindAgent {
+  return {
+    id,
+    createdAtMs: Date.now() - 60_000,
+    status: "working",
+    project: id,
+    detail: "",
+    color: "#000",
+    desk: { id: "here", name: "MacBook Pro", os: "macos", self: true },
+    ...extra,
+  };
+}
+
+/** This desktop's Claude in vibe-field, on floor session pty-local; a peer's
+ * Codex in deploy on studio, waiting. */
+const LIVE_RUNS: readonly LiveFindAgent[] = [
+  liveRun("row-local", {
+    project: "vibe-field",
+    floorSessionId: "pty-local",
+    agent: { provider: { id: "claude", label: "Claude Code" }, nativeSessionId: "native-local" },
+  }),
+  liveRun("row-peer", {
+    project: "deploy",
+    status: "blocked",
+    desk: { id: "studio", name: "studio", os: "linux", self: false },
+    agent: { provider: { id: "codex", label: "Codex" } },
+  }),
+];
+
+/** rosetta, as Live now asks it: "catalog" is said in the local run. */
+function liveHistory(searched: unknown[]): HistoryPort {
+  return {
+    status: async () => LIVE_READY,
+    facts: async () => [],
+    search: async (request): Promise<HistorySearchResponse> => {
+      searched.push(request);
+      return {
+        status: LIVE_READY,
+        answered: true,
+        clipped: false,
+        hits:
+          request.query === "catalog"
+            ? [
+                {
+                  sessionId: "rs-local",
+                  rootSessionId: "rs-local",
+                  nativeSessionId: "native-local",
+                  timelineId: "tl-1",
+                  kind: "agent",
+                  at: Date.now(),
+                  snippet: "the [catalog] doors",
+                },
+              ]
+            : [],
+      };
+    },
+  };
+}
+
+/** History's feed, scripted: how many are open, and what they answer. */
+function liveFeedFake() {
+  const listeners = new Set<() => void>();
+  const searched: unknown[] = [];
+  let snapshot: LiveFeedSnapshot = { runs: [], state: { kind: "connecting" } };
+  let opened = 0;
+  let disposed = 0;
+  const history = liveHistory(searched);
+  const open: OpenLiveFeed = () => {
+    opened += 1;
+    let gone = false;
+    return {
+      read: () => snapshot,
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      history,
+      dispose: () => {
+        if (gone) return;
+        gone = true;
+        disposed += 1;
+      },
+    };
+  };
+  return {
+    open,
+    searched: searched as Array<Record<string, unknown>>,
+    push(next: LiveFeedSnapshot) {
+      snapshot = next;
+      act(() => {
+        for (const listener of listeners) listener();
+      });
+    },
+    live: () => opened - disposed,
+    opened: () => opened,
+  };
+}
+
+const scopeTab = (name: string): void =>
+  act(() =>
+    [...(pop()?.querySelectorAll<HTMLButtonElement>('[role="radio"]') ?? [])]
+      .find((radio) => radio.textContent === name)
+      ?.click(),
+  );
+const liveNowTab = (): void => scopeTab("Live now");
+const everythingTab = (): void => scopeTab("Everything");
+
+/** Godview's monitor, as it publishes Live now's door: its rows, rosetta's
+ * port, its select, and the two filters — which republish the door as the
+ * monitor would. */
+function godviewDoor(): {
+  door: () => GodviewFindDoor;
+  select: ReturnType<typeof vi.fn>;
+  searched: Array<Record<string, unknown>>;
+} {
+  const select = vi.fn();
+  const searched: unknown[] = [];
+  const history = liveHistory(searched);
+  let filters: LiveFilters = {
+    desks: [
+      { id: "here", name: "MacBook Pro", os: "macos", here: true, note: "1 agent", quiet: false },
+      { id: "studio", name: "studio", os: "linux", here: false, note: "1 agent", quiet: false },
+    ],
+    desk: null,
+    profiles: [
+      { id: "native", label: "This Mac", kind: "native", isDefault: true },
+      { id: "work", label: "Work", kind: "managed", glyph: "briefcase", blocked: true },
+    ],
+    profile: null,
+  };
+  let current: GodviewFindDoor;
+  const republish = (): void => {
+    current = {
+      rows: LIVE_RUNS,
+      history,
+      select,
+      filters,
+      setDesk: (id) => {
+        filters = { ...filters, desk: id };
+        act(() => republish());
+      },
+      setProfile: (id) => {
+        filters = { ...filters, profile: id };
+        act(() => republish());
+      },
+    };
+    publishGodviewFindDoor(current);
+  };
+  republish();
+  return { door: () => current, select, searched: searched as Array<Record<string, unknown>> };
+}
+
+const liveDropdown = (id: string): HTMLButtonElement | null =>
+  pop()?.querySelector<HTMLButtonElement>(`[data-peek-dd="${id}"] .vf-peek-dd`) ?? null;
+const menuRow = (label: string): HTMLButtonElement | undefined =>
+  [
+    ...(pop()?.querySelectorAll<HTMLButtonElement>('.vf-peek-menu [role="menuitemradio"]') ?? []),
+  ].find((row) => row.querySelector(".vf-menu-label")?.textContent === label);
+
+describe("Search — the Peek, in Godview: Live now (P2)", () => {
+  it("opens on Live now over the monitor's rows, waiting first, a peer's run saying where it runs (K10), Open in the terminals", async () => {
+    const godview = godviewDoor();
+    mount(fieldd());
+    to("godview");
+    expect(press(document.body, { key: "f", metaKey: true }).defaultPrevented).toBe(true);
+    const input = await until(field, "the popup's field");
+    expect(pop()?.querySelector('[role="radio"][aria-checked="true"]')?.textContent).toBe(
+      "Live now",
+    );
+    expect(input.placeholder).toBe("Words said in a live session, a folder, an agent…");
+    await until(() => (options().length === 2 ? true : null), "the live rows");
+    expect(
+      options().map((row) => [
+        row.getAttribute("data-kind"),
+        row.querySelector(".vf-peek-title")?.textContent,
+        row.querySelector(".vf-peek-dot")?.getAttribute("data-state"),
+        row.querySelector(".vf-peek-when")?.textContent,
+        row.querySelector(".vf-peek-sub")?.textContent,
+      ]),
+    ).toEqual([
+      ["live", "deploy", "blocked", "waiting", "deploy · Codexstudio"],
+      ["live", "vibe-field", "working", "working", "vibe-field · Claude Code"],
+    ]);
+    expect(foot()).toBe("2 live sessions, waiting first");
+    // the peer's run cannot be watched from here: the peek says where it runs
+    expect(pop()?.querySelector(".vf-peek-live-words")?.textContent).toContain(
+      "It runs on studio.",
+    );
+    // this desktop's run: its own pane (the watch-only pane; this window has no pool)
+    press(input, { key: "ArrowDown" });
+    expect(pop()?.querySelector("[data-live-peek]")?.getAttribute("data-live-peek")).toBe(
+      "unavailable",
+    );
+    expect(pop()?.querySelector(".vf-peek-open")?.textContent).toBe("Open in the terminals↵");
+    // the words: asked of rosetta through the monitor's port, scoped to the live runs
+    typeInto(input, "catalog");
+    await until(() => (options().length === 1 ? true : null), "the run that said it");
+    expect(godview.searched.at(-1)).toMatchObject({
+      query: "catalog",
+      nativeSessionIds: ["native-local"],
+    });
+    // ↵: the view's own select, and the popup folds
+    press(input, { key: "Enter" });
+    expect(surfaceNow).toBeNull();
+    expect(godview.select).toHaveBeenCalledExactlyOnceWith("row-local");
+    expect(viewAsked).toEqual([]);
+  });
+
+  it("carries the view's filters in the scope row (GV-D3), and the button wears the one that is on — its × clears it", async () => {
+    const godview = godviewDoor();
+    mount(fieldd());
+    to("godview");
+    // at rest: no token, the plain circle
+    expect(host?.querySelector(".vf-peek-token")).toBeNull();
+    await openPeek();
+    expect(liveDropdown("desk")?.textContent).toBe("All desktops");
+    expect(liveDropdown("profile")?.textContent).toBe("Every profile");
+    act(() => liveDropdown("desk")?.click());
+    expect(
+      [...(pop()?.querySelectorAll(".vf-peek-menu [role='menuitemradio']") ?? [])].map((row) =>
+        row.textContent?.trim(),
+      ),
+    ).toEqual(["All desktops", "MacBook Pro · here1 agent", "studio1 agent"]);
+    act(() => menuRow("studio")?.click());
+    expect(godview.door().filters.desk).toBe("studio");
+    expect(liveDropdown("desk")?.textContent).toBe("studio");
+    act(() => liveDropdown("profile")?.click());
+    expect(menuRow("Work")?.textContent).toBe("Workwaiting");
+    act(() => menuRow("Work")?.click());
+    expect(godview.door().filters.profile).toBe("work");
+    // the button says so at rest, with the popup closed too
+    press(field() ?? document.body, { key: "Escape" });
+    const parts = [...(host?.querySelectorAll(".vf-peek-token-part") ?? [])].map(
+      (part) => part.textContent,
+    );
+    expect(parts).toEqual(["studio", "Work"]);
+    expect(button()?.getAttribute("aria-label")).toBe("Search, filtered to studio · Work");
+    act(() => host?.querySelector<HTMLButtonElement>(".vf-peek-token-clear")?.click());
+    expect(godview.door().filters.desk).toBeNull();
+    expect(godview.door().filters.profile).toBeNull();
+    expect(host?.querySelector(".vf-peek-token")).toBeNull();
+    // in History the button wears no filter: they are Godview's
+    act(() => godview.door().setDesk("studio"));
+    await openHistory();
+    expect(host?.querySelector(".vf-peek-token")).toBeNull();
+  });
+
+  it("asks nothing of a feed of its own in Godview — the monitor's rows are the ones it reads (PF6 stays Godview's)", async () => {
+    godviewDoor();
+    const feed = liveFeedFake();
+    mount(fieldd(), { openLiveFeed: feed.open });
+    to("godview");
+    await openPeek();
+    await until(() => (options().length === 2 ? true : null), "the live rows");
+    expect(feed.opened()).toBe(0);
   });
 });
 

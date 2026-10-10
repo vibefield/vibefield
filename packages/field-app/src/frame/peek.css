@@ -8,30 +8,27 @@
    A 40 glass circle (the line's glass), 16 in at `top-2`, on the lights'
    axis; the glyph lifted 8 so its key is printed under it (9/600, the ⌘ at
    8.5/500 in tertiary ink). Above the cover with the line (62); no-drag, as it
-   stands in the window's drag strip. */
-.vf-peek-button {
+   stands in the window's drag strip. With a filter on (GV-D3, Godview's) the
+   glass grows a token after the circle, right-anchored, so the circle steps
+   left by the token's width and the glass is one pill. */
+.vf-peek-find {
   position: absolute;
   z-index: 62;
   top: 8px;
   right: 16px;
-  display: grid;
-  width: 40px;
+  display: flex;
+  min-width: 40px;
   height: 40px;
-  place-items: center;
-  padding: 0;
-  border: 0;
+  align-items: center;
   border-radius: 20px;
-  color: var(--vf-text-secondary);
   background: color-mix(in srgb, var(--vf-chrome-solid) 88%, transparent);
   backdrop-filter: blur(24px);
   box-shadow:
     0 0 0 1px var(--vf-hairline),
     var(--vf-shadow-island);
-  cursor: pointer;
-  transition: color 120ms ease;
 }
 
-.dark .vf-peek-button {
+.dark .vf-peek-find {
   background: color-mix(in srgb, var(--vf-chrome-solid) 94%, transparent);
   box-shadow:
     0 0 0 1px var(--vf-hairline-strong),
@@ -39,9 +36,79 @@
     inset 0 1px 0 rgb(255 255 255 / 6%);
 }
 
+.vf-peek-button {
+  position: relative;
+  display: grid;
+  width: 40px;
+  height: 40px;
+  flex: none;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 20px;
+  color: var(--vf-text-secondary);
+  background: none;
+  cursor: pointer;
+  transition: color 120ms ease;
+}
+
 .vf-peek-button:hover,
 .vf-peek-button[aria-expanded="true"] {
   color: var(--vf-text-primary);
+}
+
+/* the filter the button wears: "studio · Work ×", 13/500 in primary ink */
+.vf-peek-token {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding-right: 7px;
+  color: var(--vf-text-primary);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.vf-peek-token-part {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vf-peek-token-part > svg {
+  flex: none;
+  color: var(--vf-text-secondary);
+}
+
+.vf-peek-token-sep {
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: var(--vf-hairline-strong);
+}
+
+.vf-peek-token-clear {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 13px;
+  color: var(--vf-text-tertiary);
+  background: none;
+  cursor: pointer;
+}
+
+.vf-peek-token-clear:hover {
+  color: var(--vf-text-primary);
+  background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
+}
+
+.vf-peek-token-clear:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
 }
 
 .vf-peek-button:focus-visible {
@@ -294,9 +361,37 @@
   background: color-mix(in srgb, var(--vf-foreground) 8%, transparent);
 }
 
-.vf-peek-dd > .vf-glyph:first-child {
+.vf-peek-dd-lead {
+  display: inline-flex;
   flex: none;
   color: var(--vf-text-secondary);
+}
+
+/* "All desktops" wears every desktop's mark */
+.vf-peek-marks {
+  display: inline-flex;
+  gap: 3px;
+}
+
+/* a menu row's mark and its word (a desktop's agents, a profile that waits) */
+.vf-peek-menu-lead {
+  display: inline-flex;
+  flex: none;
+  margin-right: 8px;
+  color: var(--vf-text-secondary);
+}
+
+.vf-peek-menu-note {
+  flex: none;
+  margin-left: auto;
+  padding-left: 12px;
+  color: var(--vf-text-tertiary);
+  font-size: 11.5px;
+  font-style: normal;
+}
+
+.vf-peek-menu [data-quiet] .vf-menu-label {
+  color: var(--vf-text-tertiary);
 }
 
 .vf-peek-dd-label {
@@ -384,12 +479,27 @@
 }
 
 /* the state dot's column: a past session has none, so it stays empty — and
-   the sub-line and the lines keep its 17 */
+   the sub-line and the lines keep its 17. A live run's dot: working green,
+   waiting orange (§2.5), idle and a shell faint. */
 .vf-peek-dot {
   width: 8px;
   height: 8px;
   flex: none;
+  border-radius: 4px;
   visibility: hidden;
+}
+
+.vf-peek-dot[data-state] {
+  background: var(--vf-text-faint);
+  visibility: visible;
+}
+
+.vf-peek-dot[data-state="working"] {
+  background: var(--vf-green);
+}
+
+.vf-peek-dot[data-state="blocked"] {
+  background: var(--vf-orange);
 }
 
 .vf-peek-title {
@@ -421,6 +531,18 @@
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* where a run on another desktop runs (K10): its OS mark and its name */
+.vf-peek-os {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+  color: var(--vf-text-secondary);
+  font-size: 11.5px;
+  font-weight: 500;
+  vertical-align: middle;
 }
 
 .vf-peek-ev {
@@ -525,6 +647,64 @@
 .vf-peek-past-summary {
   padding: 8px;
   color: var(--vf-text-secondary);
+}
+
+/* ── the live peek (GV-D8): the run's own pane, resting ── */
+.vf-peek-live {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  padding: 14px;
+}
+
+.vf-peek-livepane {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--vf-godview-light-terminal-bg);
+  box-shadow: 0 0 0 1px var(--vf-hairline);
+}
+
+.dark .vf-peek-livepane {
+  background: var(--vf-godview-dark-terminal-bg);
+}
+
+/* two of the watch-only layers are the DOM's: `inert` on the box (the
+   component's), and no pointer of its own here — it consumes no gesture */
+.vf-peek-livepane-surface {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.vf-peek-livepane-words,
+.vf-peek-live-words p {
+  margin: auto;
+  padding: 0 24px;
+  color: var(--vf-text-tertiary);
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.vf-peek-live-words {
+  display: grid;
+  flex: 1;
+  align-content: center;
+  justify-items: center;
+  gap: 10px;
+}
+
+.vf-peek-live-words .vf-peek-os {
+  margin-left: 0;
+  font-size: 13px;
 }
 
 /* ── empty, honestly ── */

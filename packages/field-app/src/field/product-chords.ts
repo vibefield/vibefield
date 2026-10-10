@@ -26,10 +26,10 @@ import { isSettingsChord } from "./me-menu-wiring";
 // Settings can say which Ghostty default it keeps from a pane.
 //
 // ⌘F (the Peek, GV-D8/D10, 2026-10-08) is search's, printed under the frame's
-// button: the Peek claims it while History is the view, and Godview's own Find
-// takes the same chord while Godview is (until P2 makes them one). So Ghostty's
-// start_search reaches a pane in neither — the row says WHEN, so Settings says
-// it honestly rather than as an always.
+// button: the Peek claims it while History or Godview is the view (Godview's
+// own Find left with P2, 2026-10-09). So Ghostty's start_search reaches a pane
+// in neither — the row says WHEN, so Settings says it honestly rather than as
+// an always.
 
 type ChordKey = Pick<
   KeyboardEvent,

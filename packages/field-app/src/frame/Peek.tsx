@@ -1,21 +1,48 @@
-import { type CursorKey, FIND_DEBOUNCE_MS, moveCursor } from "@vibecook/puppeteer-views";
+import {
+  type CursorKey,
+  FIND_DEBOUNCE_MS,
+  type HistoryPort,
+  moveCursor,
+} from "@vibecook/puppeteer-views";
 import type { FrameView, IndexRecentSession, IndexSearchHit } from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type KeyboardEvent,
   type ReactElement,
+  type ReactNode,
   useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
   useState,
+  useSyncExternalStore,
 } from "react";
 import { createPortal } from "react-dom";
 import { isSearchChord, listenForProductChord } from "../field/product-chords";
 import { openHistoryAt } from "../history/open-at";
+import { getRendererLogger } from "../logging";
+import {
+  filterToken,
+  type GodviewFindDoor,
+  type LiveFeed,
+  type LiveFeedSnapshot,
+  type LiveFindAgent,
+  type OpenLiveFeed,
+  useGodviewFindDoor,
+} from "./find-door";
 import { type FrameSurface, foldSurface } from "./frame-surface";
+import { openLiveRow } from "./live-open";
 import { PeekButtonView, type PeekMenu, PeekView } from "./PeekView";
+import {
+  isLiveRow,
+  type LiveFeedState,
+  liveFoot,
+  liveNone,
+  type PeekListRow,
+  type PeekLiveRow,
+  peekLiveRows,
+} from "./peek-live";
 import {
   hasOpenQuote,
   latestRows,
@@ -32,25 +59,69 @@ import {
   peekRows,
   unansweredWords,
 } from "./peek-model";
+import { LivePeekPane } from "./peek-pane/LivePeekPane";
 import { type PeekPort, type PeekProject, peekPortOver } from "./peek-port";
+import { useLiveFind } from "./use-live-find";
 import { requestView } from "./view-state";
 import type { ViewKeys } from "./views";
 
 // SEARCH — THE PEEK'S CONTROLLER (DESIGN.md §8 "Search — the Peek"; One Frame
-// §23, GV-D8/D9/D10/D3; built for History 2026-10-08, P1). It owns what the
-// Peek DOES — the words asked of the index (debounced, the newest answer
-// kept), your latest sessions before a word is typed, the filters, the hot
-// row, the keys, the focus, the window it fits — and nothing it shows, which
-// is `PeekView`'s. Whether it is open is NOT its own: that is the frame's one
-// value (`frame-surface.ts`, `search`), which this reads and asks — so the
-// palette, a drawer, the Me menu, Settings and a change of view fold it, and
-// it folds them. What it reads comes through a port, so the catalog runs this
-// exact controller over a fixture.
+// §23, GV-D8/D9/D10/D3; built for History 2026-10-08, P1; Live now and
+// Godview 2026-10-09, P2). It owns what the Peek DOES — the words asked of the
+// index (debounced, the newest answer kept), your latest sessions before a
+// word is typed, the filters, the hot row, the keys, the focus, the window it
+// fits — and nothing it shows, which is `PeekView`'s. Whether it is open is
+// NOT its own: that is the frame's one value (`frame-surface.ts`, `search`),
+// which this reads and asks — so the palette, a drawer, the Me menu, Settings
+// and a change of view fold it, and it folds them. What it reads comes
+// through a port, so the catalog runs this exact controller over a fixture.
+//
+// LIVE NOW (P2): Godview's rows through the door its monitor publishes
+// (`find-door.ts`, GV-D3's filters with them), or — in History — a feed of the
+// Peek's own, opened only while Live now shows (docket PK5): asked through
+// puppeteer's find model (`use-live-find.ts`) and drawn as the Peek's rows
+// (`peek-live.ts`).
 
-/** The views that search with the Peek in this build: History. Godview keeps
- * its own Find (the bar's sheet, ⌘F) until P2 brings Live now here. */
+/** The views that search with the Peek: History and Godview (P2). */
 export function viewSearchesWithPeek(view: FrameView): boolean {
-  return view === "history";
+  return view === "history" || view === "godview";
+}
+
+/** The scope a view opens on (GV-D9): Live now in Godview, Everything in History. */
+export function ownScope(view: FrameView): PeekScope {
+  return view === "godview" ? "live" : "everything";
+}
+
+const NO_RUNS: readonly LiveFindAgent[] = Object.freeze([]);
+const NO_FEED_SNAPSHOT: LiveFeedSnapshot = Object.freeze({
+  runs: NO_RUNS,
+  state: { kind: "connecting" as const },
+});
+const NO_SUBSCRIPTION = (): (() => void) => () => undefined;
+
+/** PK5 — History's own feed, held exactly while `shows`: opened when Live now
+ * comes to show, disposed when it stops (a change of scope, the popup's close,
+ * the view's change, unmount). */
+function useLiveFeedWhile(
+  openFeed: (() => LiveFeed) | undefined,
+  shows: boolean,
+): { feed: LiveFeed | null; snapshot: LiveFeedSnapshot } {
+  const [feed, setFeed] = useState<LiveFeed | null>(null);
+  useEffect(() => {
+    if (!shows || openFeed === undefined) {
+      setFeed(null);
+      return;
+    }
+    const opened = openFeed();
+    setFeed(opened);
+    return () => opened.dispose();
+  }, [shows, openFeed]);
+  const subscribe = useCallback(
+    (listener: () => void) => (feed === null ? NO_SUBSCRIPTION() : feed.subscribe(listener)),
+    [feed],
+  );
+  const read = useCallback(() => (feed === null ? NO_FEED_SNAPSHOT : feed.read()), [feed]);
+  return { feed, snapshot: useSyncExternalStore(subscribe, read, read) };
 }
 
 function boxOf(container: HTMLElement | null | undefined): { width: number; height: number } {
@@ -69,6 +140,14 @@ export interface PeekProps {
   port: PeekPort;
   /** Where a past row opens: History's room at the line, in the product. */
   onOpenPast: (target: PeekTarget) => void;
+  /** Godview's live rows (`find-door.ts`), read while Godview is the view. */
+  godview?: GodviewFindDoor | null;
+  /** PK5 — History's own feed, opened only while Live now shows there. */
+  openLiveFeed?: (() => LiveFeed) | undefined;
+  /** Where a live row opens: in the terminals (`live-open.ts`, in the product). */
+  onOpenLive?: (row: PeekLiveRow) => void;
+  /** The live peek's picture: the run's own pane, watched. */
+  renderLive?: (row: PeekLiveRow) => ReactNode;
   /** Whether ⌘F is heard on the window. The catalog's Peek binds none: its
    * page is not a window the frame owns. */
   bindKeys?: boolean;
@@ -91,6 +170,10 @@ export function Peek({
   onSurfaceChange,
   port,
   onOpenPast,
+  godview = null,
+  openLiveFeed,
+  onOpenLive,
+  renderLive,
   bindKeys = true,
   container,
   initialQuery = "",
@@ -100,7 +183,7 @@ export function Peek({
   const open = surface === "search";
   const searches = viewSearchesWithPeek(view);
   const [query, setQuery] = useState(initialQuery);
-  const [scope, setScope] = useState<PeekScope>("everything");
+  const [scope, setScope] = useState<PeekScope>(() => ownScope(view));
   const [filters, setFilters] = useState<PeekFilters>(NO_PEEK_FILTERS);
   const [menu, setMenu] = useState<PeekMenu | null>(null);
   const [hot, setHot] = useState(0);
@@ -115,6 +198,7 @@ export function Peek({
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const buttonRef = useRef<HTMLButtonElement>(null);
+  const findRef = useRef<HTMLDivElement>(null);
   const returnFocus = useRef<Element | null>(null);
 
   const fold = useCallback(
@@ -129,14 +213,14 @@ export function Peek({
     input.setSelectionRange(end, end);
   }, []);
 
-  // Each open starts on the view's own scope — Everything in History (GV-D9)
-  // — at the first row, and asks for what the list shows before a word is
-  // typed and for the projects its dropdown names.
+  // Each open starts on the view's own scope — Live now in Godview, Everything
+  // in History (GV-D9) — at the first row; Everything asks for what its list
+  // shows before a word is typed and for the projects its dropdown names.
   const [wasOpen, setWasOpen] = useState(open);
   if (wasOpen !== open) {
     setWasOpen(open);
     if (open) {
-      setScope("everything");
+      setScope(ownScope(view));
       setMenu(null);
       setHot(0);
       setBox(boxOf(container));
@@ -148,8 +232,9 @@ export function Peek({
       }
     }
   }
+  const everythingShows = open && scope === "everything";
   useEffect(() => {
-    if (!open) return;
+    if (!everythingShows) return;
     let current = true;
     setLatestPhase({ answered: false });
     port.latest().then(
@@ -176,7 +261,7 @@ export function Peek({
     return () => {
       current = false;
     };
-  }, [open, port]);
+  }, [everythingShows, port]);
 
   // The words, asked of the index: debounced (Find's 120ms), the newest ask's
   // answer kept and every older one dropped. An unanswered question keeps the
@@ -220,13 +305,54 @@ export function Peek({
         : searchPhase;
   // The clock is read when the list changes, never every render.
   const empty = words === "";
-  const rows = useMemo(
+  const pastRows = useMemo(
     () => (empty ? latestRows(latest, filters, now()) : peekRows(hits, filters, now())),
     [empty, latest, hits, filters, now],
   );
-  const filtered = filters.project !== null || filters.agent !== null;
+
+  // LIVE NOW: Godview's rows while Godview is the view; in History, the
+  // Peek's own feed while Live now shows (PK5) — and none at all otherwise.
+  const liveShows = open && scope === "live";
+  const inGodview = view === "godview";
+  const historyFeed = useLiveFeedWhile(openLiveFeed, liveShows && !inGodview);
+  let liveRuns: readonly LiveFindAgent[] = NO_RUNS;
+  let liveFeed: LiveFeedState = { kind: "connecting" };
+  let liveHistory: HistoryPort | null = null;
+  if (inGodview) {
+    if (godview !== null) {
+      liveRuns = godview.rows;
+      liveFeed = { kind: "live" };
+      liveHistory = godview.history;
+    }
+  } else if (openLiveFeed === undefined) {
+    liveFeed = { kind: "unavailable", reason: "this window has no feed of what runs" };
+  } else {
+    liveRuns = historyFeed.snapshot.runs;
+    liveFeed = historyFeed.snapshot.state;
+    liveHistory = historyFeed.feed?.history ?? null;
+  }
+  const liveFilters = inGodview ? (godview?.filters ?? null) : null;
+  const live = useLiveFind({
+    active: liveShows,
+    runs: liveRuns,
+    history: liveHistory,
+    query,
+    now,
+  });
+  const liveRows = useMemo(
+    () => peekLiveRows(live.found, liveRuns, query),
+    [live.found, liveRuns, query],
+  );
+  const rows: readonly PeekListRow[] = scope === "live" ? liveRows : pastRows;
+
+  const filtered =
+    scope === "live"
+      ? liveFilters !== null && (liveFilters.desk !== null || liveFilters.profile !== null)
+      : filters.project !== null || filters.agent !== null;
   let none: string | null = null;
-  if (rows.length === 0) {
+  if (rows.length === 0 && scope === "live") {
+    none = liveNone(liveFeed, query, filtered);
+  } else if (rows.length === 0) {
     if (phase.kind === "latest" && phase.answered) {
       none =
         phase.failed === undefined
@@ -242,14 +368,29 @@ export function Peek({
       none = "Search could not ask the index.";
     }
   }
-  const foot = peekFoot(scope, phase, rows);
+  const foot =
+    scope === "live"
+      ? liveFoot({
+          feed: liveFeed,
+          query,
+          rows: liveRows,
+          status: live.status,
+          searching: live.searching,
+          answered: live.answered,
+          clipped: live.clipped,
+        })
+      : peekFoot(phase, pastRows);
   const hotIndex = rows.length === 0 ? -1 : Math.min(hot, rows.length - 1);
 
   // A new list starts at its first row (React's state-from-the-previous-render
-  // pattern: no effect, no extra frame with a stale row hot).
-  const [rowsSeen, setRowsSeen] = useState(rows);
-  if (rowsSeen !== rows) {
-    setRowsSeen(rows);
+  // pattern: no effect, no extra frame with a stale row hot). Live now's list
+  // is rebuilt as the runs move (a state, a clock), so it is new only when its
+  // rows are — the find sheet's rule — and never under a walking cursor.
+  const listSeen =
+    scope === "live" ? `live\n${liveRows.map((row) => row.id).join("\n")}` : pastRows;
+  const [rowsSeen, setRowsSeen] = useState<unknown>(listSeen);
+  if (rowsSeen !== listSeen) {
+    setRowsSeen(listSeen);
     setHot(0);
   }
 
@@ -257,16 +398,18 @@ export function Peek({
     (index: number) => {
       const row = rows[index];
       if (row === undefined) return;
+      // a row opened is its view's to focus: the room's, or the pane's
       returnFocus.current = null;
       fold();
-      onOpenPast(row.target);
+      if (isLiveRow(row)) onOpenLive?.(row);
+      else onOpenPast(row.target);
     },
-    [rows, fold, onOpenPast],
+    [rows, fold, onOpenPast, onOpenLive],
   );
 
   // ⌘F (Ctrl+F) — a product chord on the window's capture phase while a view
-  // that searches is showing: it opens the Peek, or puts the caret back in its
-  // field while it is open. Elsewhere (Godview, until P2) it is left alone.
+  // that searches is showing (History and Godview): it opens the Peek, or puts
+  // the caret back in its field while it is open. Elsewhere it is left alone.
   useEffect(() => {
     if (!bindKeys) return;
     return listenForProductChord(
@@ -326,10 +469,10 @@ export function Peek({
         setHot((at) => Math.max(0, moveCursor(at, key, rows.length)));
       } else if (event.key === "Enter" && !event.nativeEvent.isComposing) {
         event.preventDefault();
-        if (scope === "everything") openRow(hotIndex);
+        openRow(hotIndex);
       }
     },
-    [rows.length, scope, openRow, hotIndex, menu, fold],
+    [rows.length, openRow, hotIndex, menu, fold],
   );
 
   // The keyboard: the field on open (the caret at its end), and back where it
@@ -379,6 +522,46 @@ export function Peek({
     [focusField],
   );
 
+  // PK2: the button's width, published for the views whose own head shares its
+  // band (Godview's bar ends one gap short of it, godview.css) — the circle's
+  // 40, or wider while a filter token rides it. The window's own Peek only: a
+  // catalog plate binds nothing on its page.
+  useLayoutEffect(() => {
+    const find = findRef.current;
+    if (!searches || !bindKeys || find === null) return;
+    const root = document.documentElement;
+    const publish = (): void =>
+      root.style.setProperty("--vf-peek-find-width", `${Math.round(find.offsetWidth)}px`);
+    publish();
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+    observer?.observe(find);
+    return () => {
+      observer?.disconnect();
+      root.style.removeProperty("--vf-peek-find-width");
+    };
+  }, [searches, bindKeys]);
+
+  // GV-D3: in Godview the button wears the filter that is on, and its × clears it
+  const token = inGodview && godview !== null ? filterToken(godview.filters) : null;
+  const clearToken = useCallback(() => {
+    godview?.setDesk(null);
+    godview?.setProfile(null);
+  }, [godview]);
+  const pickDesk = useCallback(
+    (id: string | null) => {
+      godview?.setDesk(id);
+      setMenu(null);
+    },
+    [godview],
+  );
+  const pickProfile = useCallback(
+    (id: string | null) => {
+      godview?.setProfile(id);
+      setMenu(null);
+    },
+    [godview],
+  );
+
   const target = container === undefined ? document.body : container;
   return (
     <>
@@ -387,6 +570,9 @@ export function Peek({
           keys={keys}
           open={open}
           buttonRef={buttonRef}
+          findRef={findRef}
+          token={token}
+          onClearToken={clearToken}
           onPress={() => (open ? fold() : onSurfaceChange("search"))}
         />
       )}
@@ -395,17 +581,22 @@ export function Peek({
           <PeekView
             open={open}
             keys={keys}
+            view={view}
             layout={layout}
             query={query}
             scope={scope}
             filters={filters}
             projects={projects}
             agents={agents}
+            liveFilters={liveFilters}
+            onLiveDesk={pickDesk}
+            onLiveProfile={pickProfile}
             rows={rows}
             hot={hotIndex}
             foot={foot}
             none={none}
             menu={menu}
+            {...(renderLive !== undefined ? { renderLive } : {})}
             inputRef={inputRef}
             listRef={listRef}
             onQuery={setQuery}
@@ -422,26 +613,64 @@ export function Peek({
   );
 }
 
+/** The live peek in the product: the run's own pane, watched (GV-D8). */
+const renderLivePane = (row: PeekLiveRow): ReactNode =>
+  row.floorSessionId === null ? null : <LivePeekPane sessionId={row.floorSessionId} />;
+
 /** The Peek as the frame holds it (ChromeLayer): over this window's fieldd
- * client, a past row opening History's room at the line (`open-at.ts`) — and
- * asking for History first, should the Peek ever open elsewhere. */
+ * client, a past row opening History's room at the line (`open-at.ts`) —
+ * asking for History first when the Peek opened in Godview — and a live row
+ * opening in the terminals (`live-open.ts`): Godview's own select there, Jump
+ * to's reveal from History, whose Live now reads the feed `openLiveFeed`
+ * opens over this client (PK5). */
 export function FramePeek({
   view,
   keys,
   surface,
   onSurfaceChange,
+  openLiveFeed,
 }: {
   view: FrameView;
   keys: ViewKeys;
   surface: FrameSurface | null;
   onSurfaceChange: (next: FrameSurface | null) => void;
+  openLiveFeed?: OpenLiveFeed;
 }): ReactElement | null {
   const fieldd = useFielddClient();
   const port = useMemo(() => peekPortOver(fieldd), [fieldd]);
+  const godview = useGodviewFindDoor();
+  const openFeed = useMemo(
+    () =>
+      openLiveFeed === undefined
+        ? undefined
+        : () =>
+            openLiveFeed({
+              request: (method, params) => fieldd.request(method, params),
+              subscribe: (method, params, onFrame, opts) =>
+                fieldd.subscribe(method, params, onFrame, opts),
+            }),
+    [openLiveFeed, fieldd],
+  );
   const openPast = useCallback(
     (target: PeekTarget) => {
       openHistoryAt(target);
       if (view !== "history") void requestView("history");
+    },
+    [view],
+  );
+  const openLive = useCallback(
+    (row: PeekLiveRow) => {
+      void openLiveRow(row, view).then((outcome) => {
+        if (outcome.state === "refused") {
+          getRendererLogger()
+            .child({ component: "peek" })
+            .info("renderer.peek.live_unshown", "a live row the Peek opened was not shown", {
+              row: row.id,
+              from: view,
+              reason: outcome.reason,
+            });
+        }
+      });
     },
     [view],
   );
@@ -453,6 +682,10 @@ export function FramePeek({
       onSurfaceChange={onSurfaceChange}
       port={port}
       onOpenPast={openPast}
+      godview={godview}
+      openLiveFeed={openFeed}
+      onOpenLive={openLive}
+      renderLive={renderLivePane}
     />
   );
 }

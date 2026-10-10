@@ -1,6 +1,6 @@
 import type { SessionSummary } from "@vibecook/ghosttea-protocol";
 import type { MonitorCapabilities } from "@vibecook/puppeteer-view-sdk";
-import { type MonitorReplicaLike, type ViewSlotCommands } from "@vibecook/puppeteer-view-sdk/host";
+import type { MonitorReplicaLike, ViewSlotCommands } from "@vibecook/puppeteer-view-sdk/host";
 import type {
   AgentView,
   ModelChanges,
@@ -8,7 +8,7 @@ import type {
   MonitorModel,
 } from "@vibecook/puppeteer-view-sdk/model";
 import { projectColourFor, projectName } from "@vibecook/puppeteer-view-sdk/toolkit";
-import { type FindAgent, type MonitorPalette, type ProfileTab } from "@vibecook/puppeteer-views";
+import type { MonitorPalette, ProfileTab } from "@vibecook/puppeteer-views";
 import type { AgentProfileSet } from "@vibefield/contracts";
 import {
   useCallback,
@@ -19,6 +19,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import type { LiveFindAgent } from "../../frame/find-door";
 import type { MonitorFloorRecord } from "./agents";
 import { NO_RUNS, useChromeKey } from "./chrome-facts";
 import { type DeviceChoice, standingChoice } from "./device-filter";
@@ -153,10 +154,11 @@ export interface MonitorAgentsResult {
   agents: readonly MonitorAgent[];
   /** The rows the stage shows: the chosen desktop's, the chosen profile's unreceded. */
   shown: readonly MonitorAgent[];
-  /** The rows the find sheet reads: the window's rows joined with each run's
-   * native session id and mirror clocks (the chrome's own reader, M19; MV-3d:
-   * off the chrome's facts, `findAgentsOf`). */
-  findAgents: readonly FindAgent[];
+  /** The rows the Peek's Live now reads (P2; the find sheet's until then): the
+   * window's rows joined with each run's native session id and mirror clocks
+   * (the chrome's own reader, M19; MV-3d: off the chrome's facts,
+   * `findAgentsOf`), where each runs and this desktop's floor session. */
+  findAgents: readonly LiveFindAgent[];
   /** The run behind each of this desktop's agent rows (`BoardJoins.runByRow`):
    * the marker's join, observed or not. Runtime identity is a local chrome
    * fact, never inferred from a view's row. */
@@ -826,8 +828,8 @@ export function useMonitorAgents({
   const chrome = feed?.chrome ?? null;
   const findKey = useChromeKey(chrome, findJoinKey);
   const findAgentsOf = useMemo(createFindAgents, []);
-  const findAgents = useMemo<readonly FindAgent[]>(
-    () => findAgentsOf(agents, joins.runByRow, chrome?.runs() ?? NO_RUNS),
+  const findAgents = useMemo<readonly LiveFindAgent[]>(
+    () => findAgentsOf(agents, joins.runByRow, chrome?.runs() ?? NO_RUNS, joins.sessionByRow),
     // keyed by the facts the sheet joins on, not by every frame a run moves in
     [agents, joins, findKey, chrome, findAgentsOf],
   );

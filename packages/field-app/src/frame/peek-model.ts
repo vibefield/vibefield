@@ -15,8 +15,8 @@ import {
 // puppeteer views' own (`find-model.ts`: the snippet's marks, who said it,
 // when), reused as they are; nothing here dials anything.
 
-/** The two scopes the segment offers. Everything is History's own (GV-D9);
- * Live now is Godview's Find until P2 brings it here (K9). */
+/** The two scopes the segment offers: Live now, Godview's own, and
+ * Everything, History's (GV-D9). Live now's rows are `peek-live.ts`'s. */
 export type PeekScope = "live" | "everything";
 
 /** Which side of the conversation a search reads (`IndexSearchParams.kind`). */
@@ -165,7 +165,11 @@ export function rowSegments(
 
 /* ── the rows ──────────────────────────────────────────────────────────── */
 
-function lineOf(hit: IndexSearchHit): PeekLine {
+/** What a line is read from: an index hit (Everything's) or a find hit (Live
+ * now's, puppeteer's `HistorySearchHit`) — the fields both carry. */
+type LineHit = Pick<IndexSearchHit, "sessionId" | "timelineId" | "kind" | "at" | "snippet">;
+
+function lineOf(hit: LineHit): PeekLine {
   const whole = parseSnippet(hit.snippet);
   return {
     id: `${hit.sessionId}/${hit.timelineId}`,
@@ -180,6 +184,19 @@ function lineOf(hit: IndexSearchHit): PeekLine {
 
 const newestFirst = (left: PeekLine, right: PeekLine): number =>
   (right.at ?? Number.NEGATIVE_INFINITY) - (left.at ?? Number.NEGATIVE_INFINITY);
+
+/** A run's matched lines, newest first, each once (Live now's rows). */
+export function linesOf(hits: readonly LineHit[]): PeekLine[] {
+  const seen = new Set<string>();
+  const lines: PeekLine[] = [];
+  for (const hit of hits) {
+    const line = lineOf(hit);
+    if (seen.has(line.id)) continue;
+    seen.add(line.id);
+    lines.push(line);
+  }
+  return lines.sort(newestFirst);
+}
 
 /** An answer's hits as the Peek's rows: grouped by root in the index's own
  * order (its first hit decides a row's place), each row's lines newest
@@ -281,9 +298,9 @@ export function unansweredWords(result: IndexSearchResult): string {
   return detail ?? `the index's search is ${readiness}`;
 }
 
-/** The foot's one sentence (the kit's `footHtml`, in VibeField's numbers). */
-export function peekFoot(scope: PeekScope, phase: PeekPhase, rows: readonly PeekRow[]): string {
-  if (scope === "live") return "Live now is searched in Godview";
+/** Everything's foot: one sentence (the kit's `footHtml`, in VibeField's
+ * numbers). Live now's is `peek-live.ts`'s `liveFoot`. */
+export function peekFoot(phase: PeekPhase, rows: readonly PeekRow[]): string {
   switch (phase.kind) {
     case "latest":
       if (phase.failed !== undefined)

@@ -160,33 +160,30 @@ describe("the words on a row", () => {
 describe("the foot and the empty body say what is listed, in numbers and in words", () => {
   it("counts sessions and lines, and says a clipped answer is the first page only", () => {
     const rows = peekRows(EVERYTHING.hits, NO_PEEK_FILTERS, NOW);
-    expect(peekFoot("everything", { kind: "answer", result: EVERYTHING }, rows)).toBe(
+    expect(peekFoot({ kind: "answer", result: EVERYTHING }, rows)).toBe(
       "3 sessions · 4 lines matched · the first page only — narrow the search",
     );
-    expect(
-      peekFoot("everything", { kind: "answer", result: { ...EVERYTHING, clipped: false } }, rows),
-    ).toBe("3 sessions · 4 lines matched");
+    expect(peekFoot({ kind: "answer", result: { ...EVERYTHING, clipped: false } }, rows)).toBe(
+      "3 sessions · 4 lines matched",
+    );
   });
 
   it("an index with no answer says why — never 'no matches'", () => {
     const building = IndexSearchResult.parse(fixture("index-search-result.building.json"));
-    expect(peekFoot("everything", { kind: "answer", result: building }, [])).toMatch(
+    expect(peekFoot({ kind: "answer", result: building }, [])).toMatch(
       /^No answer yet — the index is being built · 21%$/u,
     );
-    expect(peekFoot("everything", { kind: "failed", reason: "fieldd is not answering" }, [])).toBe(
+    expect(peekFoot({ kind: "failed", reason: "fieldd is not answering" }, [])).toBe(
       "Search could not ask the index — fieldd is not answering",
     );
   });
 
-  it("before a word, while a quote is open, while searching, and in Live now", () => {
-    expect(peekFoot("everything", { kind: "latest", answered: true }, [])).toBe(
+  it("before a word, while a quote is open, and while searching", () => {
+    expect(peekFoot({ kind: "latest", answered: true }, [])).toBe(
       "Your latest sessions · every word you type must match",
     );
-    expect(peekFoot("everything", { kind: "open-quote" }, [])).toBe(
-      "Close the quote to search for the phrase",
-    );
-    expect(peekFoot("everything", { kind: "searching" }, [])).toBe("Searching your past…");
-    expect(peekFoot("live", { kind: "searching" }, [])).toBe("Live now is searched in Godview");
+    expect(peekFoot({ kind: "open-quote" }, [])).toBe("Close the quote to search for the phrase");
+    expect(peekFoot({ kind: "searching" }, [])).toBe("Searching your past…");
   });
 
   it("nothing matching is said in the kit's words, naming the filters when they hid it", () => {

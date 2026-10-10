@@ -235,12 +235,17 @@ describe("UI system ownership boundaries", () => {
     // never the product's doors or fieldd's client.
     const preview = source("design-system/PeekPreview.tsx");
     const fixtures = source("design-system/peek-fixtures.ts");
+    // P2: Live now's plate — the same controller in Godview over the door the
+    // monitor publishes, as a fixture holds it; never the live pane's terminals
+    const live = source("design-system/peek-live-fixtures.ts");
+    expect(preview).toContain("peekLiveFixtureDoor");
+    expect(preview).not.toContain("LivePeekPane");
     expect(preview).toMatch(/<Peek\s/u);
     expect(preview).toMatch(/<HistoryRoomView\s/u);
     expect(preview).toContain("peekFixturePort");
     expect(preview).toContain("data-peek-recede");
     expect(fixtures).toContain('from "@rosetta/room/fixtures"');
-    for (const file of [preview, fixtures]) {
+    for (const file of [preview, fixtures, live]) {
       expect(file).not.toMatch(/className="(?:vf-peek|ah-|tr-|vf-history)/);
       expect(file).not.toContain("<style");
       expect(file).not.toContain("getHost");
@@ -463,7 +468,6 @@ describe("UI system ownership boundaries", () => {
     const paneFrame = source("design-system/PaneFramePreview.tsx");
     const paneLauncher = source("design-system/PaneLauncherPreview.tsx");
     const switchScene = source("design-system/SwitchPreview.tsx");
-    const deviceFilter = source("design-system/DeviceFilterPreview.tsx");
     const viewFrame = source("design-system/ViewFramePreview.tsx");
     const line = source("design-system/ComposerLinePreview.tsx");
     const head = source("design-system/HeadPreview.tsx");
@@ -475,7 +479,7 @@ describe("UI system ownership boundaries", () => {
     const pegboard = source("design-system/PegboardPreview.tsx");
     const peers = source("design-system/PeersPreview.tsx");
     const peek = source("design-system/PeekPreview.tsx");
-    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${deviceFilter}\n${viewFrame}\n${line}\n${head}\n${palette}`;
+    const catalog = `${peers}\n${pegboard}\n${bar}\n${history}\n${peek}\n${corner}\n${edges}\n${page}\n${onboarding}\n${swarmBodies}\n${groundWorkbench}\n${groundPreview}\n${paneFrame}\n${paneLauncher}\n${switchScene}\n${viewFrame}\n${line}\n${head}\n${palette}`;
     for (const productionView of [
       "ArtifactPanelPreview",
       "CommandPalettePreview",
@@ -516,9 +520,6 @@ describe("UI system ownership boundaries", () => {
       "PaneFrameChrome",
       "PaneLauncherPreview",
       "PaneLauncherChrome",
-      // DS-3 — the device filter's shipping chip, on fixtures, never a copy
-      "DeviceFilterPreview",
-      "DeviceFilterChip",
       // One Frame FR-1 — the view frame: the track, the cover, History's room
       "ViewFramePreview",
       "ViewsTrackView",

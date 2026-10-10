@@ -261,6 +261,8 @@ export function GodviewOverlay(): ReactElement | null {
               reserveWindowControls={getHost().platform === "darwin"}
               // MV-W4: the same switch, for a ported view's own loop
               animations={labSwitches.animations}
+              // P2: the window's Godview lends the frame's Peek its Live now
+              publishesFind
               onSelectView={monitor.selectView}
               onToggleTuning={() => setTuningOpen((current) => !current)}
             />

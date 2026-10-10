@@ -28,6 +28,7 @@ import { requestView, subscribeMenuZoom, useActiveView } from "../frame/view-sta
 import { viewKeysOf } from "../frame/views";
 import { runZoom } from "../frame/zoom";
 import { GodviewOverlay } from "../godview";
+import { openHistoryLiveFeed } from "../godview/monitor/live-feed";
 import { HistoryView } from "../history/HistoryView";
 import { prefetchHistoryRoomWhenIdle } from "../history/room-chunk";
 import { getHost } from "../host";
@@ -291,11 +292,18 @@ export function ChromeLayer({
 
       {/* SEARCH — THE PEEK (GV-D8/D9/D10, 2026-10-08; DESIGN.md §8 "Search — the
           Peek"): the frame's button at the head's right end, above the cover
-          in the views that search (History, in this build), ⌘F printed under
-          it; its scrim and popup are drawn on the document's body, outside
-          the field, so the view and the frame recede under them. One of the
-          frame's open surfaces (`search`). */}
-      <FramePeek view={view} keys={keys} surface={surface} onSurfaceChange={onSurfaceChange} />
+          in the views that search (History, and Godview since P2), ⌘F printed
+          under it; its scrim and popup are drawn on the document's body,
+          outside the field, so the view and the frame recede under them. One
+          of the frame's open surfaces (`search`). History's Live now reads a
+          feed of its own, opened only while it shows (docket PK5). */}
+      <FramePeek
+        view={view}
+        keys={keys}
+        surface={surface}
+        onSurfaceChange={onSurfaceChange}
+        openLiveFeed={openHistoryLiveFeed}
+      />
 
       {/* THE EDGES (SNAP-3; One Frame FR-4, DESIGN.md §8 edge trays, §10): the
           clipboard's notch on the left and Artifacts' on the right — its
