@@ -1135,7 +1135,10 @@
               <p><strong>Godview is runtime only.</strong> Neither the backend nor a view records a status
                 history. The timeline draws birth and current state; removed runs leave it. The former
                 <code>agent.history</code> door and fieldd status ledger are removed. Future historical
-                spans must be read from rosettad through a declared capability.</p>
+                spans must be read from rosettad through a declared capability. <em>Built 2026-10-10 (TL): that
+                capability is <code>history</code> (the seams table's row "the record's past → a view"). The
+                timeline now draws a row's recorded past before its current state, and the runs that ended; it is
+                read from rosettad at each ask, and still nothing here records.</em></p>
               <p><strong>Ownership law: only rosetta may ingest transcripts.</strong> puppeteer and fieldd
                 must not add transcript readers; history-derived facts go through rosetta. The MV backend
                 consumes the runtime's published live state and adds no reader. This supersedes the earlier
@@ -1440,7 +1443,34 @@
                       boundary: an error there names the piece unavailable and cannot unmount the monitor or its view; a deck
                       that fails whole takes its door with it (GT-D17). <em>Made true 2026-10-07 (MV-8b): the deck, System
                       control and the claims stood outside any boundary until then.</em></p></td>
-                    <td><span class="badge tone-built">Built</span><p>MV-1…MV-8; integration gates precede main landing</p></td>
+                    <td><span class="badge tone-built">Built</span><p>MV-1…MV-8; landed 2026-10-08 (VibeField
+                      <code>2a434475</code>, puppeteer <code>594d222</code>). <em>Corrected 2026-10-10: this cell went on
+                      saying "integration gates precede main landing" after the landing.</em></p></td>
+                  </tr>
+                  <tr>
+                    <td><span class="route">the record's past → a view (capability <code>history</code>)</span></td>
+                    <td><span class="badge tone-puppeteer">puppeteer</span></td>
+                    <td><p>fieldd · field-app</p></td>
+                    <td><p><code>@vibecook/puppeteer-monitor</code> (<code>MonitorHistoryPort</code>, <code>readPast</code>)<br />
+                      <code>@vibecook/puppeteer-view-sdk</code> · <code>/host</code> (<code>viewWantsHistory</code>,
+                      <code>keepPast</code>, <code>lendHistory</code>)<br />
+                      <code>packages/fieldd/src/index-activity.ts</code> · <code>agent-monitor.ts</code><br />
+                      <code>packages/field-app/src/godview/monitor/monitor-history.ts</code></p></td>
+                    <td><p>The declared capability the monitor-ownership note above reserved. A view asks through its
+                      manifest alone (<code>capabilities.optional: ["history"]</code>; today the timeline). While such a
+                      view is mounted, the window reads <code>agent.recordedLanes</code> over the fixed day. The backend's
+                      <code>readPast</code> derives each lane through fieldd's history port: rosettad's
+                      <code>/api/activity</code> turns (protocol 27), or the catalog's session bounds when the route
+                      cannot answer, joined with this runtime's own run records — only a run this runtime ran is a lane.
+                      The window keeps the snapshot as ONE object while nothing moves, colours and recedes its ended
+                      lanes as it does the model's rows, narrows them to the chosen desktop, and lends it as
+                      <code>capabilities.history</code>. Honest states: nothing is lent before the first answer, or on a
+                      desktop with no rosettad (the door refuses <code>NOT_FOUND {state: "no-record"}</code>); a record
+                      that cannot be read is <code>unavailable</code> in its own words; a failed re-read keeps the last
+                      past as <code>partial</code>. The backend, fieldd and the views record nothing, and no view reads
+                      a transcript.</p></td>
+                    <td><span class="badge tone-built">Built</span><p>TL (the read) and TLV (the timeline's drawing),
+                      2026-10-10; this desktop only (B-D4), the phone later (B-D5)</p></td>
                   </tr>
                   <tr>
                     <td><span class="route">host chrome ports</span></td>
