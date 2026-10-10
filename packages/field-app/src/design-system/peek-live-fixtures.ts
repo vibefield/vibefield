@@ -1,11 +1,12 @@
 import type { HistoryPort, HistorySearchHit } from "@vibecook/puppeteer-views";
+import { visibleCatalog } from "@vibefield/contracts";
 import type { GodviewFindDoor, LiveFilters, LiveFindAgent } from "../frame/find-door";
 
 // LIVE NOW'S FIXTURE ADAPTER (P2; docs/UI_SYSTEM.md "Catalog fidelity";
 // DESIGN.md §8 "Search — the Peek"). The catalog mounts the SHIPPING Peek
 // controller (`frame/Peek.tsx`) in Godview over this door — what Godview's
-// monitor publishes (`find-door.ts`): its live runs (this desktop's Claude at
-// work, a Codex waiting on studio, a bare shell), rosetta's port answering
+// monitor publishes (`find-door.ts`): its live runs (this desktop's first
+// catalog agent at work, the second waiting on studio, a bare shell), rosetta's port answering
 // their words, and the two filters of the scope row. Never the Peek's markup.
 
 const NOW = Date.parse("2026-10-09T15:42:00.000Z");
@@ -24,36 +25,43 @@ function run(id: string, extra: Partial<LiveFindAgent>): LiveFindAgent {
   };
 }
 
+/** Two of the catalog's own agents (AR-L1: the fixture names no vendor). */
+const [FIRST, SECOND] = visibleCatalog("desktop");
+const provider = (entry: typeof FIRST): { id: string; label: string } => ({
+  id: entry?.id ?? "agent",
+  label: entry?.label ?? "Agent",
+});
+
 export const LIVE_FIXTURE_RUNS: readonly LiveFindAgent[] = [
-  run("row-claude", {
+  run("row-first", {
     project: "vibe-field",
-    floorSessionId: "pty-claude",
-    agent: { provider: { id: "claude", label: "Claude Code" }, nativeSessionId: "native-claude" },
+    floorSessionId: "pty-first",
+    agent: { provider: provider(FIRST), nativeSessionId: "native-first" },
   }),
-  run("row-codex", {
+  run("row-second", {
     project: "deploy",
     status: "blocked",
     desk: { id: "studio", name: "studio", os: "linux", self: false },
-    agent: { provider: { id: "codex", label: "Codex" } },
+    agent: { provider: provider(SECOND) },
   }),
   run("row-shell", { project: "scratch", status: "idle", floorSessionId: "pty-shell" }),
 ];
 
-/** The words the fixture's rosetta holds: the Claude run said "migration". */
+/** The words the fixture's rosetta holds: the first run said "migration". */
 const SAID: readonly HistorySearchHit[] = [
   {
-    sessionId: "rs-claude",
-    rootSessionId: "rs-claude",
-    nativeSessionId: "native-claude",
+    sessionId: "rs-first",
+    rootSessionId: "rs-first",
+    nativeSessionId: "native-first",
     timelineId: "tl-2",
     kind: "agent",
     at: NOW - 3 * 60_000,
     snippet: "the [migration] dry run finished in 41 s",
   },
   {
-    sessionId: "rs-claude",
-    rootSessionId: "rs-claude",
-    nativeSessionId: "native-claude",
+    sessionId: "rs-first",
+    rootSessionId: "rs-first",
+    nativeSessionId: "native-first",
     timelineId: "tl-1",
     kind: "user",
     at: NOW - 9 * 60_000,
@@ -64,12 +72,12 @@ const SAID: readonly HistorySearchHit[] = [
 const HISTORY: HistoryPort = {
   status: async () => READY,
   facts: async (ids) =>
-    ids.includes("native-claude")
+    ids.includes("native-first")
       ? [
           {
-            nativeSessionId: "native-claude",
-            sessionId: "rs-claude",
-            rootSessionId: "rs-claude",
+            nativeSessionId: "native-first",
+            sessionId: "rs-first",
+            rootSessionId: "rs-first",
             title: "Move the catalog to the new store",
             updatedAt: NOW,
             streamState: "live",
@@ -91,7 +99,14 @@ const HISTORY: HistoryPort = {
 
 export const LIVE_FIXTURE_FILTERS: LiveFilters = {
   desks: [
-    { id: "this-mac", name: "MacBook Pro", os: "macos", here: true, note: "2 agents", quiet: false },
+    {
+      id: "this-mac",
+      name: "MacBook Pro",
+      os: "macos",
+      here: true,
+      note: "2 agents",
+      quiet: false,
+    },
     { id: "studio", name: "studio", os: "linux", here: false, note: "1 agent", quiet: false },
   ],
   desk: null,
