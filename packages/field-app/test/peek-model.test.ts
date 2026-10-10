@@ -85,11 +85,15 @@ describe("the rows: a session each, the matched lines its evidence", () => {
   });
 
   it("the project and agent filters narrow the rows; the side is the index's to ask", () => {
+    // PJ-4: a hit carries its root's PJ project (the join column), and the
+    // project filter narrows by it — never by rosetta's own id
+    const keyed = EVERYTHING.hits.map((hit) =>
+      hit.projectId === "p-4f1c2a9e" ? { ...hit, projectKey: "p1:vibe" } : hit,
+    );
     expect(
-      peekRows(EVERYTHING.hits, { ...NO_PEEK_FILTERS, project: "p-4f1c2a9e" }, NOW).map(
-        (row) => row.id,
-      ),
+      peekRows(keyed, { ...NO_PEEK_FILTERS, project: "p1:vibe" }, NOW).map((row) => row.id),
     ).toEqual(["ses-7c1e"]);
+    expect(peekRows(keyed, { ...NO_PEEK_FILTERS, project: "p-4f1c2a9e" }, NOW)).toEqual([]);
     expect(
       peekRows(EVERYTHING.hits, { ...NO_PEEK_FILTERS, agent: "claude" }, NOW).map((row) => row.id),
     ).toEqual(["ses-c2d0"]);

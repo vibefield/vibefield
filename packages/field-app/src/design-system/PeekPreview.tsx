@@ -4,9 +4,9 @@ import { type ReactElement, useCallback, useMemo, useState } from "react";
 import type { LiveFilters } from "../frame/find-door";
 import type { FrameSurface } from "../frame/frame-surface";
 import { Peek } from "../frame/Peek";
-import type { PeekTarget } from "../frame/peek-model";
+import type { PeekRow, PeekTarget } from "../frame/peek-model";
 import type { ViewKeys } from "../frame/views";
-import { HistoryRoomView } from "../history/HistoryRoomView";
+import { HistoryRoomView, PeekReaderView } from "../history/HistoryRoomView";
 import { FIXTURE_SEARCH_QUERY, historyFixturePorts } from "./history-fixtures";
 import { peekFixturePort } from "./peek-fixtures";
 import { LIVE_FIXTURE_FILTERS, LIVE_FIXTURE_NOW, peekLiveFixtureDoor } from "./peek-live-fixtures";
@@ -15,7 +15,8 @@ import { LIVE_FIXTURE_FILTERS, LIVE_FIXTURE_NOW, peekLiveFixtureDoor } from "./p
 // GV-D8/D9/D10, built 2026-10-08): the SHIPPING Peek controller (`Peek.tsx`)
 // over a fixture port (`peek-fixtures.ts`), standing over the SHIPPING History
 // view (`HistoryRoomView`). Open, it holds words over the room drawn from the
-// same demo the port answers from — so a pick, by a click, by ↵ or by Open,
+// same demo the port answers from, the hot row read by the room's own reader
+// at its line (PK3) — so a pick, by a click, by ↵ or by Open,
 // lands that room on the line through its own `openAt`, as the product's does
 // through `open-at.ts`. At rest it is the frame's button over History before
 // anything is read (the consent face: a real state, and a light one — every
@@ -97,6 +98,21 @@ function PeekHistoryPlate({
   // a fresh object per pick, as the product's door hands the room
   const openPast = useCallback((target: PeekTarget) => setOpenAt({ ...target }), []);
   const now = useCallback(() => demo.now, [demo]);
+  // PK3 — the past picture is the room's own reader over the same demo ports
+  // the room beside it reads (the product's: the window's History ports)
+  const pastReader = useCallback(
+    (row: PeekRow, query: string) => (
+      <PeekReaderView
+        ports={ports}
+        at={{
+          sessionId: row.target.sessionId,
+          timelineId: row.target.timelineId ?? null,
+          query: query.trim() === "" ? null : query.trim(),
+        }}
+      />
+    ),
+    [ports],
+  );
   return (
     <div
       ref={setPlate}
@@ -119,6 +135,7 @@ function PeekHistoryPlate({
         initialQuery={state === "open" ? FIXTURE_SEARCH_QUERY : ""}
         takeFocus={false}
         now={now}
+        pastReader={pastReader}
       />
     </div>
   );

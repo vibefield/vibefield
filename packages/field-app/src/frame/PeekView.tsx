@@ -152,41 +152,22 @@ export function whereWords(row: Pick<PeekRow, "folder" | "agent">): string | nul
   return parts.length === 0 ? null : parts.join(" · ");
 }
 
-/** THE PEEK (K8, until the docket's PK3 rules): what opening the row would
- * show — today that session's matched lines in reading order under its title,
- * folder · agent and time, the line Open lands on in the ready fill. ONE
- * component, so an upstream reader or a timeline excerpt replaces it whole. */
-export function PeekPast({ row }: { row: PeekRow }): ReactElement {
+/** THE PEEK (K8): what opening the row would show, under its title, folder ·
+ * agent and time. PK3 (James's docket v9; built 2026-10-09): the room's own
+ * read-only reader, landed at the matched line — handed in as `reader` by
+ * the controller (the room's code rides the room's chunk); without one, the
+ * session's matched lines in reading order, the line Open lands on in the
+ * ready fill (`PeekPastLines`, also the reader's stand-in while it loads).
+ * ONE component, so the reader replaces it whole. */
+export function PeekPast({ row, reader }: { row: PeekRow; reader?: ReactNode }): ReactElement {
   const where = whereWords(row);
-  const lands = row.target.timelineId ?? null;
-  const reading = [...row.lines].sort(
-    (left, right) => (left.at ?? Number.POSITIVE_INFINITY) - (right.at ?? Number.POSITIVE_INFINITY),
-  );
   return (
     <section className="vf-peek-past" aria-label="What opening it shows">
       <header className="vf-peek-past-head">
         <b>{row.title}</b>
         <small>{[where, row.when].filter(Boolean).join(" · ")}</small>
       </header>
-      <div className="vf-peek-past-lines">
-        {reading.map((line) => (
-          <div
-            key={line.id}
-            className="vf-peek-past-line"
-            data-lands={line.timelineId === lands ? "true" : undefined}
-          >
-            <span className="vf-peek-who">{line.who}</span>
-            <p>
-              <Marked segments={line.whole} />
-            </p>
-          </div>
-        ))}
-        {reading.length === 0 && (
-          <p className="vf-peek-past-summary">
-            {row.summary ?? "Open it to read the session from its start."}
-          </p>
-        )}
-      </div>
+      {reader === undefined || reader === null ? <PeekPastLines row={row} /> : reader}
     </section>
   );
 }
@@ -233,6 +214,36 @@ export function PeekLive({
     <section className="vf-peek-live" aria-label="What opening it shows">
       {picture}
     </section>
+  );
+}
+
+/** The session's matched lines in reading order (K8's picture until PK3, and
+ * the reader's stand-in). */
+export function PeekPastLines({ row }: { row: PeekRow }): ReactElement {
+  const lands = row.target.timelineId ?? null;
+  const reading = [...row.lines].sort(
+    (left, right) => (left.at ?? Number.POSITIVE_INFINITY) - (right.at ?? Number.POSITIVE_INFINITY),
+  );
+  return (
+    <div className="vf-peek-past-lines">
+      {reading.map((line) => (
+        <div
+          key={line.id}
+          className="vf-peek-past-line"
+          data-lands={line.timelineId === lands ? "true" : undefined}
+        >
+          <span className="vf-peek-who">{line.who}</span>
+          <p>
+            <Marked segments={line.whole} />
+          </p>
+        </div>
+      ))}
+      {reading.length === 0 && (
+        <p className="vf-peek-past-summary">
+          {row.summary ?? "Open it to read the session from its start."}
+        </p>
+      )}
+    </div>
   );
 }
 
@@ -360,6 +371,9 @@ export interface PeekViewProps {
   onOpen: (index: number) => void;
   onClose: () => void;
   onKeyDown?: (event: KeyboardEvent<HTMLDivElement>) => void;
+  /** PK3 — the past picture for the hot row (the room's reader at its line,
+   * with the words typed); absent: the matched lines */
+  pastReader?: ((row: PeekRow, query: string) => ReactNode) | undefined;
 }
 
 /** What Open says for a row (the kit's `openLabel`). */
@@ -424,6 +438,7 @@ export function PeekView(props: PeekViewProps): ReactElement {
     onOpen,
     onClose,
     onKeyDown,
+    pastReader,
   } = props;
   const listId = useId();
   const optionId = (index: number): string => `${listId}-row-${index}`;
@@ -516,7 +531,7 @@ export function PeekView(props: PeekViewProps): ReactElement {
               <PeekLive row={hotRow} renderLive={renderLive} />
             </ChromeBoundary>
           ) : (
-            <PeekPast row={hotRow} />
+            <PeekPast row={hotRow} reader={pastReader?.(hotRow, query)} />
           ))}
       </div>
     );

@@ -49,7 +49,7 @@ import { readLiveRun } from "./jump";
 import { useHistoryOpenAt } from "./open-at";
 import { type ResumeReading, readResume } from "./resume";
 import { HistoryRoomMount } from "./room-chunk";
-import { windowHistoryPorts } from "./window-ports";
+import { productHistoryPorts } from "./window-ports";
 
 // HISTORY'S CONTROLLER (AR-8c). It holds the room's ports — the WINDOW's
 // (`window-ports.ts`, PJ-4: the Peek's reader reads the same) — tells the
@@ -93,21 +93,7 @@ function targetOfSelection(selection: RoomSelection): SessionTarget {
 
 export function HistoryView({ active }: { active: boolean }): ReactElement {
   const fieldd = useFielddClient();
-  const ports = useMemo(
-    () =>
-      windowHistoryPorts(fieldd, () => ({
-        platform: getHost().platform ?? null,
-        home: terminalBootstrapHome(),
-        workspace: {
-          copyText: async (text) => {
-            const diagnostics = getHost().diagnostics;
-            if (diagnostics) await diagnostics.copyText(text);
-            else await navigator.clipboard.writeText(text);
-          },
-        },
-      })),
-    [fieldd],
-  );
+  const ports = useMemo(() => productHistoryPorts(fieldd), [fieldd]);
   useEffect(() => ports.catalog.setActive(active), [ports, active]);
   const words = useSyncExternalStore(
     useCallback((listener: () => void) => ports.catalog.onWordsChange(listener), [ports]),

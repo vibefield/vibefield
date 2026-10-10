@@ -148,3 +148,19 @@
   outline: 2px solid var(--vf-select);
   outline-offset: 2px;
 }
+
+/* PK3 — the Peek's past picture is the room's reader (`PeekReaderView`):
+   it fills the peek under its facts, and a match stays neutral (K1) — the
+   text's own ink at 600 on an 11% wash of it — through the reader's own
+   tokens; the matched line keeps the reader's own quiet edge (its default,
+   the tertiary ink). Never --vf-select. */
+.vf-peek-reader {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  overflow: hidden;
+  --ah-match: color-mix(in srgb, var(--vf-text-primary) 11%, transparent);
+  --ah-match-weight: 600;
+}

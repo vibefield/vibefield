@@ -2,10 +2,12 @@ import {
   HistoryRoom,
   type HistoryRoomHandle,
   type KeyValueStore,
+  type ReaderAddress,
   type RoomHostInputs,
   type RoomPorts,
   type RoomSelection,
   type RoomTarget,
+  TranscriptReader,
 } from "@rosetta/room";
 import { FieldGlyph } from "@vibefield/design-kit/glyphs";
 import { EmptyState } from "@vibefield/design-kit/primitives";
@@ -186,6 +188,39 @@ export function HistoryRoomView({
         />
       </div>
       <div className="vf-history-layers" ref={setLayers} />
+    </div>
+  );
+}
+
+/** PK3 (James's docket v9; W2 — the swap is pj4's): the Peek's past picture is
+ * the room's own read-only reader, landed at the matched line with the
+ * query's words marked — K8's one replaceable component, replaced whole. It
+ * rides this chunk with the room (it IS the room's code), over the window's
+ * History ports, so it reads the room's one meta feed and its session leases.
+ * K1: a match stays neutral — the text's own ink at 600 on an 11% wash of it —
+ * through the reader's own tokens (`--ah-match`, `--ah-match-weight`, set by
+ * `.vf-peek-reader`); the matched line keeps the reader's quiet edge. Never
+ * `--vf-select`. Its `at` is
+ * read by VALUE (ROOM API v2): a new line lands, the same one does not move. */
+export function PeekReaderView({
+  ports,
+  at,
+}: {
+  ports: RoomPorts;
+  at: ReaderAddress;
+}): ReactElement {
+  return (
+    <div className="vf-peek-reader">
+      <TranscriptReader
+        catalog={ports.catalog}
+        sessions={ports.sessions}
+        assets={ports.assets}
+        host={ports.host ?? null}
+        at={at}
+        surface="host"
+        storagePrefix={HISTORY_STORAGE_PREFIX}
+        storage={null}
+      />
     </div>
   );
 }

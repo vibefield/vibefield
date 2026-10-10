@@ -63,6 +63,7 @@ export interface PeekRow {
   readonly folder: string | null;
   /** the catalog's label for the root's agent */
   readonly agent: string | null;
+  /** the root's PJ project (its key, PJ-4): what "Every project" narrows by */
   readonly projectId: string | null;
   readonly provider: string | null;
   readonly lines: readonly PeekLine[];
@@ -209,7 +210,7 @@ export function peekRows(
 ): PeekRow[] {
   const groups = new Map<string, { first: IndexSearchHit; lines: PeekLine[] }>();
   for (const hit of hits) {
-    if (filters.project !== null && hit.projectId !== filters.project) continue;
+    if (filters.project !== null && hit.projectKey !== filters.project) continue;
     if (filters.agent !== null && hit.provider !== filters.agent) continue;
     const root = hit.rootSessionId ?? hit.sessionId;
     const group = groups.get(root);
@@ -226,7 +227,7 @@ export function peekRows(
       when: whenLabel(newest?.at, nowMs),
       folder: folderName(first.cwd),
       agent: agentLabel(first.provider),
-      projectId: first.projectId ?? null,
+      projectId: first.projectKey ?? null,
       provider: first.provider ?? null,
       lines,
       summary: null,
@@ -246,7 +247,7 @@ export function latestRows(
   nowMs: number,
 ): PeekRow[] {
   return sessions
-    .filter((session) => filters.project === null || session.project?.id === filters.project)
+    .filter((session) => filters.project === null || session.projectKey === filters.project)
     .filter((session) => filters.agent === null || session.provider === filters.agent)
     .map((session) => ({
       id: session.sessionId,
@@ -254,7 +255,7 @@ export function latestRows(
       when: whenLabel(session.activity?.lastAt ?? session.updatedAt, nowMs),
       folder: folderName(session.cwd),
       agent: agentLabel(session.provider),
-      projectId: session.project?.id ?? null,
+      projectId: session.projectKey ?? null,
       provider: session.provider ?? null,
       lines: [],
       summary: session.summary ?? null,

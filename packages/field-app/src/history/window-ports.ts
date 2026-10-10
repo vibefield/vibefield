@@ -1,3 +1,5 @@
+import { getHost } from "../host";
+import { terminalBootstrapHome } from "../terminal/pool";
 import {
   type HistoryDoorClient,
   type HistoryPorts,
@@ -26,6 +28,22 @@ export function windowHistoryPorts(
   held?.ports.dispose();
   held = { client, ports: historyPortsOver(client, options()) };
   return held.ports;
+}
+
+/** The product's ports for this window: the platform from the preload, the
+ * home from the window's bootstrap (AR-8 L2), the clipboard the host's. */
+export function productHistoryPorts(client: HistoryDoorClient): HistoryPorts {
+  return windowHistoryPorts(client, () => ({
+    platform: getHost().platform ?? null,
+    home: terminalBootstrapHome(),
+    workspace: {
+      copyText: async (text) => {
+        const diagnostics = getHost().diagnostics;
+        if (diagnostics) await diagnostics.copyText(text);
+        else await navigator.clipboard.writeText(text);
+      },
+    },
+  }));
 }
 
 /** Test seam: let go of the window's ports. */

@@ -76,6 +76,7 @@ import {
   IndexRecentParams,
   IndexRetireParams,
   IndexSearchParams,
+  type IndexSearchResult,
   IndexSessionParams,
   IndexSessionSubscribeParams,
   IndexSessionsParams,
@@ -1917,9 +1918,13 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         ...parsed.data,
         limit: tailnetRowLimit(ctx.principal, parsed.data.limit, DEFAULT_SEARCH_LIMIT),
       };
+      // PJ-4 — each hit carries its root's project key, for a caller the
+      // projects answer (the Peek's "Every project"); never a peer daemon
+      const keyHits = (answer: IndexSearchResult): IndexSearchResult =>
+        readsProjects(ctx) ? { ...answer, hits: projectDoors.keyed(answer.hits) } : answer;
       if (question.scope === "mesh" && ctx.principal.kind !== "peer-fieldd")
-        return await requireMesh().search(question);
-      if (ctx.principal.kind !== "peer-fieldd") return await index.search(question);
+        return keyHits(await requireMesh().search(question));
+      if (ctx.principal.kind !== "peer-fieldd") return keyHits(await index.search(question));
       // a peer's ask is ANSWERED: an index that is not up is the honest
       // `answered: false`, which the asking desktop's `sources` reads as
       // `building` (as index-mesh's `#askPeer` reads UNAVAILABLE {service:
@@ -2010,10 +2015,12 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       // SP-D13 — bounded for a tailnet caller like the doors above (a peer
       // daemon never gets here: the door's D36 wall refuses it a `local` door)
-      return await index.recent({
+      const recent = await index.recent({
         ...parsed.data,
         limit: tailnetRowLimit(ctx.principal, parsed.data.limit, INDEX_RECENT_DEFAULT_LIMIT),
       });
+      // PJ-4 — each row carries its project's key (the join column)
+      return readsProjects(ctx) ? { ...recent, rows: projectDoors.keyed(recent.rows) } : recent;
     });
     // AR-8b (thinking-ar-history-room.md §3) — the History room's reads:
     // one session's header row, a project's panels folded into one answer, one

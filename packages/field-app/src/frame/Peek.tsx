@@ -21,6 +21,8 @@ import {
 import { createPortal } from "react-dom";
 import { isSearchChord, listenForProductChord } from "../field/product-chords";
 import { openHistoryAt } from "../history/open-at";
+import { PeekReaderMount } from "../history/room-chunk";
+import { productHistoryPorts } from "../history/window-ports";
 import { getRendererLogger } from "../logging";
 import {
   filterToken,
@@ -34,7 +36,7 @@ import {
 import { type FrameSurface, foldSurface } from "./frame-surface";
 import { jumpNote, sayOnLine } from "./line-door";
 import { openLiveRow } from "./live-open";
-import { PeekButtonView, type PeekMenu, PeekView } from "./PeekView";
+import { PeekButtonView, type PeekMenu, PeekPastLines, PeekView } from "./PeekView";
 import {
   isLiveRow,
   type LiveFeedState,
@@ -51,6 +53,7 @@ import {
   type PeekFilters,
   type PeekLayout,
   type PeekPhase,
+  type PeekRow,
   type PeekScope,
   type PeekTarget,
   peekAgents,
@@ -177,6 +180,9 @@ export interface PeekProps {
    * catalog plate drawn open must not take its page's focus. */
   takeFocus?: boolean;
   now?: () => number;
+  /** PK3 — the past picture for the hot row: the room's reader, in the
+   * product and the catalog; absent: the matched lines */
+  pastReader?: (row: PeekRow, query: string) => ReactNode;
 }
 
 export function Peek({
@@ -195,6 +201,7 @@ export function Peek({
   initialQuery = "",
   takeFocus = true,
   now = Date.now,
+  pastReader,
 }: PeekProps): ReactElement | null {
   const open = surface === "search";
   const searches = viewSearchesWithPeek(view);
@@ -638,6 +645,7 @@ export function Peek({
             onOpen={openRow}
             onClose={fold}
             onKeyDown={onKeyDown}
+            pastReader={pastReader}
           />,
           target,
         )}
@@ -683,6 +691,22 @@ export function FramePeek({
             }),
     [openLiveFeed, fieldd],
   );
+  // PK3 — the room's reader over the WINDOW's History ports: the same meta
+  // feed and session leases History's room holds (lane room's finding 1)
+  const pastReader = useCallback(
+    (row: PeekRow, query: string) => (
+      <PeekReaderMount
+        ports={productHistoryPorts(fieldd)}
+        at={{
+          sessionId: row.target.sessionId,
+          timelineId: row.target.timelineId ?? null,
+          query: query.trim() === "" ? null : query.trim(),
+        }}
+        fallback={<PeekPastLines row={row} />}
+      />
+    ),
+    [fieldd],
+  );
   const openPast = useCallback(
     (target: PeekTarget) => {
       openHistoryAt(target);
@@ -720,6 +744,7 @@ export function FramePeek({
       openLiveFeed={openFeed}
       onOpenLive={openLive}
       renderLive={renderLivePane}
+      pastReader={pastReader}
     />
   );
 }

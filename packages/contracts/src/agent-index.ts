@@ -859,6 +859,11 @@ export const IndexSearchHit = z
     /** the catalog agent the root's runtime kind maps to — absent when no
      * catalog row maps it (`IndexSession.provider`) */
     provider: AgentProviderId.optional(),
+    /** PJ-4 — the root's PJ project (`IndexSession.projectKey`, the join
+     * column): what the Peek's "Every project" narrows by. Absent where the
+     * listing's column would be (no place holds the folder yet; a peer
+     * daemon's answer) */
+    projectKey: ProjectKey.optional(),
   })
   .passthrough();
 export type IndexSearchHit = z.infer<typeof IndexSearchHit>;

@@ -1965,6 +1965,15 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     15/600 and its folder · agent · time at 12 in tertiary ink over a hairline; the line ↵ lands on
     sits in the ready fill. One component draws it, so an upstream reader or a timeline excerpt
     replaces it whole.
+    *Corrected 2026-10-09 (PK3, built in PJ-4):* under the same head, the peek is now the room's own
+    **read-only reader** (rosetta's `TranscriptReader`) at the matched line, the words typed marked
+    — the session as opening it shows it, with no acts and nothing written back. A match stays
+    neutral (K1) through the reader's own tokens: the text's own ink at 600 on an 11% wash of it,
+    and the matched line keeps the reader's quiet edge in the tertiary ink. It reads the window's
+    History ports (the room's one meta feed and its session leases); while its code arrives, and if
+    it cannot draw, the matched lines above stand in. **Every project** names your projects as
+    History lists them (fieldd's, with a folder on this desktop), and narrows by the project each
+    hit's session is filed under.
   - **Honest, empty or not.** With no words typed, Everything lists your latest sessions and the foot
     says "Your latest sessions · every word you type must match". With words, it says how many
     sessions and lines matched, and that it is the first page only when the index stopped at its

@@ -93,9 +93,17 @@ describe("the Peek's plate — the shipping controller over the room demo", () =
     expect(row.querySelector(".vf-peek-title")?.textContent).toBe("One frame for four views");
     expect(row.querySelector(".vf-peek-sub")?.textContent).toBe("vibe-field · Claude Code");
     expect(row.querySelectorAll(".vf-peek-ev")).toHaveLength(3);
-    // the newest matched line is where Open lands — the peek says which
-    const lands = pop.querySelector('.vf-peek-past-line[data-lands="true"]');
-    expect(lands?.textContent).toContain("only Canvas draws it as a plus");
+    // the newest matched line is where Open lands — the peek (PK3, the room's
+    // own reader) is landed on it, read-only
+    const lands = await until(
+      () =>
+        pop.querySelector<HTMLElement>(
+          '.vf-peek-reader [data-hit="true"], .vf-peek-reader .is-landed[data-timeline-id="s0-t10"]',
+        ),
+      "the reader landed on the matched line",
+      20_000,
+    );
+    expect(lands.textContent).toContain("only Canvas draws it as a plus");
     act(() => row.click());
     expect(plate.querySelector(".vf-peek-pop")).toBeNull();
     expect(plate.querySelector('.vf-ds-peek-view[data-peek-recede="false"]')).not.toBeNull();

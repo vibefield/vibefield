@@ -505,6 +505,13 @@ describe("PJ-4 — the join column over the real door (A-D4)", () => {
       device: world.self,
       placeId: "pl_app",
     });
+    // the launcher's and the Peek's latest list carries it too
+    const recent = (await world.window.call("index.recent", { scope: "all", limit: 50 })) as {
+      rows: Array<{ sessionId: string; projectKey?: string }>;
+    };
+    expect(recent.rows.find((row) => row.sessionId === "s-app-1")?.projectKey).toBe(
+      keyAt("pl_app"),
+    );
     // the phone is the person's own device: it reads the same column
     const phone = IndexSessionsResult.parse(
       await world.phone.call("index.sessions", { scope: "local", limit: 500 }),

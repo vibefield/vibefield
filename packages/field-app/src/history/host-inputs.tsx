@@ -250,11 +250,7 @@ function placeDetail(model: HistoryHostModel, place: ProjectPlace): string | und
 
 /** Why a folder cannot be opened here — ③ draws this instead (R6's
  * `elsewhere`) — or undefined. */
-function elsewhereOf(
-  model: HistoryHostModel,
-  place: ProjectPlace,
-  device: HostDevice,
-): string | undefined {
+function elsewhereOf(place: ProjectPlace, device: HostDevice): string | undefined {
   if (!device.here)
     return device.asleep
       ? `${device.name} is asleep — its files stay on ${device.name}`
@@ -286,7 +282,7 @@ function foldersOf(
         </span>
       ),
       folders: places.map((place): RoomFolder => {
-        const elsewhere = elsewhereOf(model, place, device);
+        const elsewhere = elsewhereOf(place, device);
         const path = place.path ?? place.name;
         return {
           key: folderKeyOf(place),
@@ -526,7 +522,6 @@ export function RenameCard({
       <label>
         <span>Rename the project</span>
         <input
-          // biome-ignore lint/a11y/noAutofocus: the person just asked to rename it
           autoFocus
           value={value}
           maxLength={120}

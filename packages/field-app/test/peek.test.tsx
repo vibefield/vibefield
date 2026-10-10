@@ -106,6 +106,8 @@ const ROOT_FACTS = {
   cwd: SESSION.cwd,
   projectId: "p-4f1c2a9e",
   provider: "claude",
+  // PJ-4 — the root's PJ project, the join column fieldd adds to a hit
+  projectKey: "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8",
 };
 
 /** "catalog": two lines of the room's session (one root, one row), and a
@@ -475,14 +477,20 @@ describe("Search — the Peek, in History (GV-D8/D9/D10)", () => {
     expect(foot()).toBe("2 sessions · 3 lines matched");
     expect(first?.getAttribute("aria-selected")).toBe("true");
     expect(field()?.getAttribute("aria-activedescendant")).toBe(first?.id);
-    // the peek: the hot session's lines in reading order, the landing one lit
+    // the peek (PK3): the hot session under its facts, read by the room's own
+    // reader at the matched line, over the window's History ports
     const peek = pop()?.querySelector(".vf-peek-past");
     expect(peek?.querySelector(".vf-peek-past-head b")?.textContent).toBe(SESSION.title);
-    expect(
-      [...(peek?.querySelectorAll(".vf-peek-past-line") ?? [])].map((line) =>
-        line.getAttribute("data-lands"),
-      ),
-    ).toEqual([null, "true"]);
+    await until(() => peek?.querySelector(".vf-peek-reader .ah-reader"), "the room's reader");
+    expect(peek?.querySelectorAll(".vf-peek-past-line")).toHaveLength(0);
+    // K1 through the reader's own tokens: neutral, never the select blue
+    const host = readFileSync(join(HERE, "..", "src", "history", "history-host.css"), "utf8");
+    const reader = host.match(/^\.vf-peek-reader \{([^}]*)\}/mu)?.[1] ?? "";
+    expect(reader).toContain(
+      "--ah-match: color-mix(in srgb, var(--vf-text-primary) 11%, transparent);",
+    );
+    expect(reader).toContain("--ah-match-weight: 600;");
+    expect(reader).not.toMatch(/--vf-select|--vf-orange/u);
     expect(pop()?.querySelector(".vf-peek-open")?.textContent).toBe("Open at the line↵");
     // K1 — a match is neutral: the text's own ink, never orange or the select blue
     const css = readFileSync(join(HERE, "..", "src", "frame", "peek.css"), "utf8");
