@@ -1,4 +1,11 @@
 import type { RoomSelection, RoomTarget } from "@rosetta/room";
+import {
+  type AgentProviderSummary,
+  AgentProvidersResult,
+  type DeviceInfo,
+  DeviceListResult,
+  ProjectGetResult,
+} from "@vibefield/contracts";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type ReactElement,
@@ -11,31 +18,46 @@ import {
 } from "react";
 import {
   type JumpOutcome,
+  jumpNote,
   publishHistoryLineDoor,
   type ResumeOutcome,
-  whenGodviewCanPlace,
+  resumeNote,
+  sayOnHistoryLine,
 } from "../frame/line-door";
-import { requestView } from "../frame/view-state";
 import { viewKeysOf } from "../frame/views";
 import { getHost } from "../host";
 import { getRendererLogger } from "../logging";
 import { terminalBootstrapHome } from "../terminal/pool";
-import { historyPortsOver } from "./doors";
-import { type LiveRun, readLiveRun } from "./jump";
+import {
+  type HistoryActsDeps,
+  intentNote,
+  jumpTarget,
+  newAgent,
+  newAgentNote,
+  projectIntent,
+  resumeTarget,
+  type SessionTarget,
+} from "./acts";
+import {
+  type HistoryHostActs,
+  type HistoryHostState,
+  historyHostInputs,
+  NO_HOST_STATE,
+} from "./host-inputs";
+import { deviceOf, EMPTY_HOST_MODEL, type HistoryHostModel, hostModelOf } from "./host-model";
+import { readLiveRun } from "./jump";
 import { useHistoryOpenAt } from "./open-at";
-import { type ResumeReading, readResume, resumeNative } from "./resume";
+import { type ResumeReading, readResume } from "./resume";
 import { HistoryRoomMount } from "./room-chunk";
+import { windowHistoryPorts } from "./window-ports";
 
-// HISTORY'S CONTROLLER (AR-8c). It builds the room's ports over this window's
-// fieldd client (`doors.ts`) and holds them for the view's life — the room is
-// mounted on History's first open and kept mounted after (⌘3 out and back in
-// keeps its scroll, its selection and its open stream) — tells the catalog when
-// the view shows, says the index's state in the frame's words, and lends the
-// line History's create: Resume, for the session the room has chosen. The room
-// itself is its own chunk (`room-chunk.tsx`, 2026-10-04): this controller rides
-// the canvas's chunk and mounts the room through it, "Opening History" saying
-// so while it arrives — so the ports, the feed's words and the line's door are
-// here from the first open, before the room is.
+// HISTORY'S CONTROLLER (AR-8c). It holds the room's ports — the WINDOW's
+// (`window-ports.ts`, PJ-4: the Peek's reader reads the same) — tells the
+// catalog when the view shows, says the index's state in the frame's words,
+// and lends the line History's create: Resume, for the session the room has
+// chosen. The room itself is its own chunk (`room-chunk.tsx`, 2026-10-04):
+// this controller rides the canvas's chunk and mounts the room through it,
+// "Opening History" saying so while it arrives.
 //
 // While the chosen session runs on this desktop the create is Jump to (P3,
 // `jump.ts`): the pane it runs in, revealed by Godview's deck — and Resume
@@ -43,23 +65,37 @@ import { HistoryRoomMount } from "./room-chunk";
 //
 // Its search is the frame's — the Peek (2026-10-08, GV-D8; `frame/Peek.tsx`):
 // a past row the Peek opens arrives through `open-at.ts`, and this controller
-// hands it to the room's own `openAt`. The search interim it hosted from
-// 2026-10-04 — the room's own sheet as a frame surface, ⌘G / ⇧⌘G on its
-// stepper — retired with the Peek's landing.
-
-/** How long Resume waits for Godview's deck — mounted on Godview's first open
- * — to be able to place the resumed agent. */
-export const RESUME_DECK_WAIT_MS = 20_000;
+// hands it to the room's own `openAt`.
+//
+// PJ-4 (H1–H6) — History by project. Beside the room's ports it hands the room
+// its HOST INPUTS (`host-inputs.tsx`), drawn from one host model per listing
+// (`host-model.ts`): fieldd's projects and this desktop's keyed sessions (the
+// catalog port's listing), each desktop's name and OS (`device.list`), what
+// runs here now (one plain `agent.list` — P3's reading, asked per listing and
+// only while History shows: PF6) and the agents this desktop offers
+// (`agent.providers`). The room's own acts — a row's Resume or Jump to, ④'s,
+// New agent, the project's acts — are this controller's (`acts.ts`), and
+// what each came to is said on the line (`sayOnHistoryLine`).
 
 function log() {
   return getRendererLogger().child({ component: "history" });
+}
+
+/** The room's selection as an act names it. */
+function targetOfSelection(selection: RoomSelection): SessionTarget {
+  return {
+    sessionId: selection.sessionId,
+    nativeSessionId: selection.nativeSessionId,
+    folder: selection.folder,
+    ...(selection.hostKey !== undefined ? { hostKey: selection.hostKey } : {}),
+  };
 }
 
 export function HistoryView({ active }: { active: boolean }): ReactElement {
   const fieldd = useFielddClient();
   const ports = useMemo(
     () =>
-      historyPortsOver(fieldd, {
+      windowHistoryPorts(fieldd, () => ({
         platform: getHost().platform ?? null,
         home: terminalBootstrapHome(),
         workspace: {
@@ -69,18 +105,69 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
             else await navigator.clipboard.writeText(text);
           },
         },
-      }),
+      })),
     [fieldd],
   );
-  useEffect(() => () => ports.dispose(), [ports]);
   useEffect(() => ports.catalog.setActive(active), [ports, active]);
   const words = useSyncExternalStore(
     useCallback((listener: () => void) => ports.catalog.onWordsChange(listener), [ports]),
     () => ports.catalog.words(),
   );
 
-  // The chosen session, and what Resume would do with it — read as the room
-  // reports the choice, so the line can say before a press why it waits.
+  /* ── the host model (PJ-4): one per listing, gathered while History shows ── */
+
+  const [model, setModel] = useState<HistoryHostModel>(EMPTY_HOST_MODEL);
+  const modelRef = useRef(model);
+  modelRef.current = model;
+  const roster = useRef<readonly DeviceInfo[]>([]);
+  const providers = useRef<readonly AgentProviderSummary[]>([]);
+  const activeRef = useRef(active);
+  activeRef.current = active;
+  const gather = useCallback(async () => {
+    if (ports.catalog.listing() === null) return;
+    const [devices, offered, runs] = await Promise.allSettled([
+      fieldd.request("device.list", {}).then((answer) => DeviceListResult.parse(answer).devices),
+      fieldd
+        .request("agent.providers", {})
+        .then((answer) => AgentProvidersResult.parse(answer).providers),
+      fieldd.request("agent.list", {}).then((answer) => {
+        const sessions =
+          typeof answer === "object" && answer !== null
+            ? (answer as { sessions?: unknown }).sessions
+            : undefined;
+        return Array.isArray(sessions) ? (sessions as unknown[]) : [];
+      }),
+    ]);
+    // a door that could not answer keeps what it said last (a desktop's name,
+    // the agents offered); what runs now is read afresh or not at all
+    if (devices.status === "fulfilled") roster.current = devices.value;
+    if (offered.status === "fulfilled") providers.current = offered.value;
+    const latest = ports.catalog.listing();
+    if (latest === null) return;
+    setModel(
+      hostModelOf(
+        latest,
+        roster.current,
+        runs.status === "fulfilled" ? runs.value : [],
+        providers.current,
+      ),
+    );
+  }, [fieldd, ports]);
+  useEffect(
+    () =>
+      ports.catalog.onListing(() => {
+        if (activeRef.current) void gather();
+      }),
+    [ports, gather],
+  );
+  // History showing again reads what runs now (the catalog reads its listing
+  // again if a ping was noted meanwhile)
+  useEffect(() => {
+    if (active) void gather();
+  }, [active, gather]);
+
+  /* ── the chosen session and the line's create ────────────────────────── */
+
   const [selection, setSelection] = useState<RoomSelection | null>(null);
   const [reading, setReading] = useState<{
     readonly of: RoomSelection;
@@ -105,12 +192,8 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   // P3 — whether the chosen session runs here: one plain `agent.list`, asked
   // on a new choice and when History shows again (a press asks once more). The
   // LAST answer stands until the next arrives, so the create never flickers
-  // through Resume on its way to Jump to; it only ever chooses the act — what
-  // a press shows is the press's own answer.
+  // through Resume on its way to Jump to.
   const [live, setLive] = useState(false);
-  const noteLiveness = useCallback((of: RoomSelection, run: LiveRun | null) => {
-    if (selectionRef.current?.sessionId === of.sessionId) setLive(run !== null);
-  }, []);
   useEffect(() => {
     if (selection === null) {
       setLive(false);
@@ -126,64 +209,47 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     };
   }, [fieldd, selection, active]);
 
+  const deps = useMemo<HistoryActsDeps>(
+    () => ({
+      client: fieldd,
+      self: () => modelRef.current.self,
+      nameOf: (device) => deviceOf(modelRef.current, device).name,
+      unplaced: (what, reason) =>
+        log().info("renderer.history.unplaced", "an act ran, but no pane showed it", {
+          what,
+          ...(reason !== undefined ? { reason } : {}),
+        }),
+    }),
+    [fieldd],
+  );
+  /** A press's own answer moves the create, as the line's reading would. */
+  const noteRun = useCallback(
+    async (target: SessionTarget) => {
+      if (selectionRef.current?.sessionId !== target.sessionId) return;
+      setLive((await readLiveRun(fieldd, target.nativeSessionId)) !== null);
+    },
+    [fieldd],
+  );
+
   const resume = useCallback(async (): Promise<ResumeOutcome> => {
     const chosen = selectionRef.current;
     if (chosen === null) return { state: "refused", reason: "choose a session first" };
-    // Never a second run on a running conversation: asked at the press, since
-    // the line's reading may be older than it.
-    const running = await readLiveRun(fieldd, chosen.nativeSessionId);
-    if (running !== null) {
-      noteLiveness(chosen, running);
-      return { state: "running" };
-    }
-    const read = readingRef.current ?? (await readResume(fieldd, chosen));
-    if (read.state === "waits") return { state: "refused", reason: read.why };
-    const answer = await resumeNative(fieldd, read.facts);
-    if (answer.state === "running") {
-      // fieldd's one-run law saw a run the fold had not shown us yet
-      noteLiveness(chosen, await readLiveRun(fieldd, chosen.nativeSessionId));
-      return answer;
-    }
-    if (answer.state === "refused") return answer;
-    // Seen where it runs: the frame moves to Godview, whose deck — mounted on
-    // its first open — places the agent in the pane the swarm's open uses.
-    void requestView("godview");
-    const deck = await whenGodviewCanPlace(RESUME_DECK_WAIT_MS);
-    if (deck === null) {
-      log().info("renderer.history.resume_unplaced", "the session resumed, but no deck took it", {
-        sessionId: chosen.sessionId,
-      });
-      return { state: "refused", reason: "it resumed, but the deck did not open to show it" };
-    }
-    const placed = await deck.place(answer.terminal);
-    if (placed.state === "opened") return { state: "resumed" };
-    log().info("renderer.history.resume_unmounted", "the session resumed, but no pane took it", {
-      sessionId: chosen.sessionId,
-      reason: placed.reason,
-    });
-    return { state: "refused", reason: `it resumed, but no pane took it (${placed.reason})` };
-  }, [fieldd, noteLiveness]);
+    const target = targetOfSelection(chosen);
+    const outcome = await resumeTarget(deps, target, readingRef.current);
+    if (outcome.state === "running") await noteRun(target);
+    return outcome;
+  }, [deps, noteRun]);
 
-  // P3 — Jump to: the run is asked for again at the press (it may have ended
-  // since the line's reading), and the pane showing its floor session is
-  // revealed in Godview — activated, or mounted in the active pane.
+  // P3 — Jump to: the run asked for again at the press, the pane showing its
+  // floor session revealed in Godview
   const jump = useCallback(async (): Promise<JumpOutcome> => {
     const chosen = selectionRef.current;
     if (chosen === null) return { state: "refused", reason: "choose a session first" };
-    const run = await readLiveRun(fieldd, chosen.nativeSessionId);
-    noteLiveness(chosen, run);
-    if (run === null) return { state: "ended" };
-    void requestView("godview");
-    const deck = await whenGodviewCanPlace(RESUME_DECK_WAIT_MS);
-    if (deck === null) return { state: "refused", reason: "the deck did not open to show it" };
-    const shown = await deck.reveal(run.floorSessionId);
-    if (shown.state === "opened") return { state: "jumped" };
-    log().info("renderer.history.jump_unshown", "the running session's pane was not shown", {
-      sessionId: chosen.sessionId,
-      reason: shown.reason,
-    });
-    return { state: "refused", reason: shown.reason };
-  }, [fieldd, noteLiveness]);
+    const target = targetOfSelection(chosen);
+    const outcome = await jumpTarget(deps, target);
+    await noteRun(target);
+    return outcome;
+  }, [deps, noteRun]);
 
   const chosen = selection?.sessionId ?? null;
   const waits = current?.state === "waits" ? current.why : null;
@@ -191,6 +257,66 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
     publishHistoryLineDoor({ chosen, waits, live: chosen !== null && live, resume, jump });
   }, [chosen, waits, live, resume, jump]);
   useEffect(() => () => publishHistoryLineDoor(null), []);
+
+  /* ── the host's state and acts (PJ-4) ────────────────────────────────── */
+
+  const [hostState, setHostState] = useState<HistoryHostState>(() => ({
+    ...NO_HOST_STATE,
+    home: terminalBootstrapHome(),
+  }));
+  /** the listing each project's suggestions were last asked in, so a shown
+   * project asks `project.get` once per listing */
+  const asked = useRef(new Map<string, HistoryHostModel>());
+  const showSuggestions = useCallback(
+    (project: string) => {
+      if (asked.current.get(project) === modelRef.current) return;
+      asked.current.set(project, modelRef.current);
+      void fieldd
+        .request("project.get", { key: project })
+        .then((answer) => {
+          const { suggestions } = ProjectGetResult.parse(answer);
+          setHostState((state) => {
+            const held = new Map(state.suggestions);
+            held.set(project, suggestions);
+            return { ...state, suggestions: held };
+          });
+        })
+        .catch(() => undefined);
+    },
+    [fieldd],
+  );
+  const acts = useMemo<HistoryHostActs>(
+    () => ({
+      setDesktop: (desktop) => setHostState((state) => ({ ...state, desktop })),
+      setAgent: (agent) => setHostState((state) => ({ ...state, agent })),
+      resume: (target) => {
+        void resumeTarget(deps, target).then((outcome) => {
+          sayOnHistoryLine(resumeNote(outcome));
+          if (outcome.state === "running") void noteRun(target);
+        });
+      },
+      jump: (target) => {
+        void jumpTarget(deps, target).then((outcome) => {
+          sayOnHistoryLine(jumpNote(outcome));
+          void noteRun(target);
+        });
+      },
+      newAgent: (ask) => {
+        void newAgent(deps, ask).then((outcome) => sayOnHistoryLine(newAgentNote(outcome)));
+      },
+      intent: (params, words) => {
+        void projectIntent(fieldd, params).then((outcome) =>
+          sayOnHistoryLine(intentNote(outcome, words)),
+        );
+      },
+      rename: (key) => setHostState((state) => ({ ...state, renaming: key })),
+      shown: (project) => showSuggestions(project),
+    }),
+    [deps, fieldd, noteRun, showSuggestions],
+  );
+  const inputs = useMemo(() => historyHostInputs(model, hostState, acts), [model, hostState, acts]);
+
+  /* ── where the room opens ────────────────────────────────────────────── */
 
   // Where the Peek opened History at a line: each pick a fresh object, which
   // the room's `openAt` lands on (`open-at.ts`).
@@ -206,9 +332,9 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
   useEffect(
     () =>
       ports.catalog.onRegrouped(({ sessions }) => {
-        const chosen = selectionRef.current;
-        if (chosen !== null && sessions.has(chosen.sessionId))
-          setOpenAt({ sessionId: chosen.sessionId });
+        const chosenNow = selectionRef.current;
+        if (chosenNow !== null && sessions.has(chosenNow.sessionId))
+          setOpenAt({ sessionId: chosenNow.sessionId });
       }),
     [ports],
   );
@@ -221,6 +347,7 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
       onSelect={setSelection}
       openAt={openAt}
       keys={keys}
+      inputs={inputs}
     />
   );
 }

@@ -4536,13 +4536,19 @@ async function openSeededSession(
         if (words.includes(${JSON.stringify(HISTORY_SEED_WORDS)})) return "rendered";
         const row = room.querySelector(".ah-session-list-item");
         if (row) {
-          if (!row.classList.contains("is-selected")) row.click();
+          if (!row.classList.contains("is-selected")) (row.querySelector(".ah-session-list-item__hit") ?? row).click();
           return "row";
         }
         const project = room.querySelector(".ah-project-list-item");
         if (project) {
           if (!project.classList.contains("is-selected")) project.click();
           return "project";
+        }
+        // PJ-4 (H5): Temporary is one folded line at the list's foot — open it
+        const fold = room.querySelector('.ah-fold[aria-expanded="false"]');
+        if (fold) {
+          fold.click();
+          return "fold";
         }
         return "waiting: " + words.trim().slice(0, 160);
       })()`,

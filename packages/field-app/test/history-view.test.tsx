@@ -228,8 +228,13 @@ async function choose(): Promise<void> {
     "the room's project row",
   );
   act(() => project.click());
+  // PJ-4 (ROOM API v2): a row with a host act is a box whose covering button
+  // is the selection; a row without one is the button itself
   const session = await until(
-    () => historySlot()?.querySelector<HTMLButtonElement>("button.ah-session-list-item"),
+    () =>
+      historySlot()?.querySelector<HTMLButtonElement>(
+        ".ah-session-list-item .ah-session-list-item__hit, button.ah-session-list-item",
+      ),
     "the room's session row",
   );
   act(() => session.click());
@@ -378,10 +383,14 @@ describe("a regroup keeps the chosen session chosen (PJ-4)", () => {
     mount(client);
     to("history");
     await choose();
-    const chosen = (): string | null =>
-      historySlot()
-        ?.querySelector(".ah-session-list-item.is-selected")
-        ?.getAttribute("aria-label") ?? null;
+    const chosen = (): string | null => {
+      const row = historySlot()?.querySelector(".ah-session-list-item.is-selected");
+      return (
+        row?.querySelector(".ah-session-list-item__hit")?.getAttribute("aria-label") ??
+        row?.getAttribute("aria-label") ??
+        null
+      );
+    };
     const before = await until(chosen, "the chosen session");
     expect(historySlot()?.querySelector(".ah-project-list-item.is-selected")).not.toBeNull();
     // the project's first record re-keys it p1: → r: (D9), and fieldd files

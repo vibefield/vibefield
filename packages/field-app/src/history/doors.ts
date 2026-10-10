@@ -53,6 +53,7 @@ import {
 } from "@vibefield/contracts";
 import { WorkspaceClient, type WorkspaceClientOptions } from "../workspace/client";
 import { type AssetSourceOptions, assetSourceOver, type HistoryAssetSource } from "./asset-source";
+import type { HistoryListing } from "./host-model";
 import { type HistorySections, historySectionsOf } from "./sections";
 import { type HistorySessionPort, type SessionPortOptions, sessionPortOver } from "./session-port";
 
@@ -573,9 +574,14 @@ export interface HistoryCatalogPort extends CatalogPort {
   /** PJ-4 — after the room has been handed a regrouped listing. */
   onRegrouped(listener: (regroup: HistoryRegroup) => void): () => void;
   /** PJ-4 (H5) — Home and Temporary as the last listing read them, or null
-   * before the first: what the room's sections will draw (PJ-4's second
-   * half); until then both are ordinary rows. */
+   * before the first: what the room's sections draw (R3). */
   sections(): HistorySections | null;
+  /** PJ-4 — the listing the room was last handed, as fieldd answered it (the
+   * projects, this desktop's keyed sessions, every desktop's standing): what
+   * the host's inputs are drawn from (`host-model.ts`). Null before the first. */
+  listing(): HistoryListing | null;
+  /** After the room has been handed a new listing. */
+  onListing(listener: (listing: HistoryListing) => void): () => void;
   /** Whether the History view is showing. While it is not, the catalog's
    * pings are noted and the listing is read again when it shows. */
   setActive(active: boolean): void;
@@ -603,6 +609,8 @@ export function catalogPortOver(
   /** The newest topology a listing answered — for search's filters. */
   let lastMeta: MetaState | null = null;
   let lastSections: HistorySections | null = null;
+  let lastListing: HistoryListing | null = null;
+  const listingListeners = new Set<(listing: HistoryListing) => void>();
   const wordsListeners = new Set<() => void>();
   const activeListeners = new Set<() => void>();
   const connectionListeners = new Set<() => void>();
@@ -656,13 +664,19 @@ export function catalogPortOver(
    * only when a ping names its tables (AR-8 L1 — a root's rename does not
    * re-page every subagent this desktop ever ran). */
   let held: {
-    roots: { projects: ProjectSummary[]; sessions: IndexSession[]; self: string | null } | null;
+    roots: {
+      projects: ProjectSummary[];
+      sessions: IndexSession[];
+      sources: IndexCatalogSource[];
+      self: string | null;
+    } | null;
     threads: IndexThread[] | null;
   } = { roots: null, threads: null };
 
   async function readRoots(): Promise<{
     projects: ProjectSummary[];
     sessions: IndexSession[];
+    sources: IndexCatalogSource[];
     self: string | null;
   }> {
     const [projects, sessions] = await Promise.all([
@@ -682,6 +696,8 @@ export function catalogPortOver(
     return {
       projects: projects.rows,
       sessions: sessions.rows,
+      // every desktop's standing for the projects (DS-L8), else the listing's
+      sources: projects.sources ?? sessions.sources ?? [],
       self: selfOf(sessions.sources) ?? selfOf(projects.sources),
     };
   }
@@ -701,6 +717,13 @@ export function catalogPortOver(
     held = { roots, threads };
     const meta = metaStateOf(roots.projects, roots.sessions, threads, roots.self);
     lastSections = historySectionsOf(roots.projects, roots.sessions, roots.self, now());
+    lastListing = {
+      projects: roots.projects,
+      sessions: roots.sessions,
+      sources: roots.sources,
+      self: roots.self,
+      sections: lastSections,
+    };
     return meta;
   }
 
@@ -726,7 +749,75 @@ export function catalogPortOver(
     return answer;
   }
 
+  /** PJ-4 — ONE feed for the port, however many read it (History's room and
+   * the Peek's reader both subscribe: the reader opens its own `subscribeMeta`,
+   * lane room's finding). The first reader opens the feed; a later one is
+   * handed what it holds now (its status, then its listing as a snapshot) and
+   * hears every change with the rest; the last to close closes it. A feed that
+   * closed for good (a refusal that will not change) is not shared: the next
+   * reader opens a fresh one, as each reader did before. */
+  interface SharedFeed {
+    feed: { close(): void };
+    status: SubscriptionStatus | null;
+    meta: MetaState | null;
+    error: { code: "internal"; message: string } | null;
+  }
+  let shared: SharedFeed | null = null;
+  const readers = new Set<MetaSubscriptionHandlers>();
+  const fanout: MetaSubscriptionHandlers = {
+    onStatus: (status) => {
+      if (shared !== null) shared.status = status;
+      for (const reader of [...readers]) reader.onStatus?.(status);
+    },
+    onChange: (meta, kind) => {
+      if (shared !== null) shared.meta = meta;
+      for (const reader of [...readers]) reader.onChange?.(meta, kind);
+    },
+    onError: (error) => {
+      if (shared !== null) shared.error = { code: "internal", message: error.message };
+      for (const reader of [...readers]) reader.onError?.(error);
+    },
+  };
+
   function subscribeMeta(handlers: MetaSubscriptionHandlers): { close(): void } {
+    if (shared !== null && shared.status === "closed") {
+      shared.feed.close();
+      shared = null;
+    }
+    readers.add(handlers);
+    if (shared === null) {
+      const opening: SharedFeed = {
+        feed: { close: () => undefined },
+        status: null,
+        meta: null,
+        error: null,
+      };
+      shared = opening;
+      opening.feed = openFeed(fanout);
+    } else {
+      const held = shared;
+      queueMicrotask(() => {
+        if (!readers.has(handlers)) return;
+        if (held.status !== null) handlers.onStatus?.(held.status);
+        if (held.meta !== null) handlers.onChange?.(held.meta, "snapshot");
+        if (held.error !== null) handlers.onError?.(held.error);
+      });
+    }
+    let closed = false;
+    return {
+      close() {
+        if (closed) return;
+        closed = true;
+        readers.delete(handlers);
+        if (readers.size === 0 && shared !== null) {
+          shared.feed.close();
+          shared = null;
+        }
+      },
+    };
+  }
+
+  function openFeed(handlers: MetaSubscriptionHandlers): { close(): void } {
     let closed = false;
     let loaded = false;
     let status: SubscriptionStatus | null = null;
@@ -809,6 +900,8 @@ export function catalogPortOver(
             loaded = true;
             handlers.onChange?.(meta, source);
             setStatus("live");
+            const listing = lastListing;
+            if (listing !== null) for (const listener of [...listingListeners]) listener(listing);
             // PJ-4 — the room lets go of a project id it no longer holds, so
             // a regroup that re-filed sessions tells the host which, after
             // the room has the listing that files them anew
@@ -1020,6 +1113,15 @@ export function catalogPortOver(
 
     sections: () => lastSections,
 
+    listing: () => lastListing,
+
+    onListing(listener) {
+      listingListeners.add(listener);
+      return () => {
+        listingListeners.delete(listener);
+      };
+    },
+
     words: currentWords,
 
     onWordsChange(listener) {
@@ -1033,9 +1135,12 @@ export function catalogPortOver(
       if (disposed) return;
       disposed = true;
       for (const feed of [...feeds]) feed.close();
+      readers.clear();
+      shared = null;
       wordsListeners.clear();
       connectionListeners.clear();
       regroupListeners.clear();
+      listingListeners.clear();
       figures.clear();
     },
   };

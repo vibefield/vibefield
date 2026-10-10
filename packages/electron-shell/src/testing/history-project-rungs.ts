@@ -152,11 +152,16 @@ export async function historyByProjectPhotos(
       const row = rows.find((candidate) =>
         (candidate.querySelector(".ah-project-list-item__header strong")?.textContent ?? "").trim() ===
           ${JSON.stringify(opts.name ?? "")}) ?? rows[0];
-      if (!row) return "no project row";
+      if (!row) {
+        // PJ-4 (H5): Temporary folds at the list's foot — open it first
+        const fold = room.querySelector('.ah-fold[aria-expanded="false"]');
+        if (fold) { fold.click(); return "fold"; }
+        return "no project row";
+      }
       if (!row.classList.contains("is-selected")) { row.click(); return "project"; }
       const session = room.querySelector(".ah-session-list-item");
       if (!session) return "no session row";
-      if (!session.classList.contains("is-selected")) { session.click(); return "session"; }
+      if (!session.classList.contains("is-selected")) { (session.querySelector(".ah-session-list-item__hit") ?? session).click(); return "session"; }
       return "chosen";
     })()`,
     20_000,

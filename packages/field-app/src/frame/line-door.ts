@@ -219,6 +219,41 @@ export function historyCreateWaits(door: HistoryLineDoor | null): string | null 
 export function resetHistoryLineDoorForTest(): void {
   history = null;
   historyListeners.clear();
+  historySaid = null;
+  saidListeners.clear();
+}
+
+// PJ-4 — WHAT HISTORY'S OWN ACTS CAME TO. The room now holds acts of its own
+// (a session row's Resume or Jump to, ②'s New agent, a project's acts — the
+// host's inputs, R4/R5, H4), pressed in the room, not on the line; their
+// outcome is said on the line all the same, where the create's is, in the
+// same words. A fresh `seq` per thing said, so the same words twice are said
+// twice.
+let historySaid: { readonly seq: number; readonly text: string } | null = null;
+let saidSeq = 0;
+const saidListeners = new Set<() => void>();
+
+/** History's side: say this on the line. */
+export function sayOnHistoryLine(text: string): void {
+  saidSeq += 1;
+  historySaid = { seq: saidSeq, text };
+  for (const fn of [...saidListeners]) fn();
+}
+
+function subscribeSaid(fn: () => void): () => void {
+  saidListeners.add(fn);
+  return () => {
+    saidListeners.delete(fn);
+  };
+}
+
+function getHistorySaid(): { readonly seq: number; readonly text: string } | null {
+  return historySaid;
+}
+
+/** The line's side: the newest thing History's acts said, or null. */
+export function useHistorySaid(): { readonly seq: number; readonly text: string } | null {
+  return useSyncExternalStore(subscribeSaid, getHistorySaid, getHistorySaid);
 }
 
 // ── WHAT THE FRAME SAYS ON THE LINE (P2) ────────────────────────────────────

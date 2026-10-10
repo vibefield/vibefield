@@ -70,6 +70,7 @@ import {
   resumeNote,
   useGodviewLineDoor,
   useHistoryLineDoor,
+  useHistorySaid,
 } from "./line-door";
 import {
   currentSendSeq,
@@ -364,6 +365,15 @@ export function Composer({
     notes.current += 1;
     setNote({ seq: notes.current, text, at: where });
   }, []);
+  // PJ-4 — what History's own acts came to (a row's Resume, New agent, a
+  // project's act) is said where the create's outcome is
+  const historySaid = useHistorySaid();
+  const heardSaid = useRef(historySaid?.seq ?? 0);
+  useEffect(() => {
+    if (historySaid === null || historySaid.seq === heardSaid.current) return;
+    heardSaid.current = historySaid.seq;
+    say(historySaid.text, "create");
+  }, [historySaid, say]);
   useEffect(() => {
     if (note === null) return;
     const timer = window.setTimeout(() => setNote(null), NOTE_MS);

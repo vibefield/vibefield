@@ -2,6 +2,7 @@ import {
   HistoryRoom,
   type HistoryRoomHandle,
   type KeyValueStore,
+  type RoomHostInputs,
   type RoomPorts,
   type RoomSelection,
   type RoomTarget,
@@ -23,6 +24,8 @@ import { type ViewKeys, viewKeysOf } from "../frame/views";
 // lands after the kit's tokens by load order (its README's one ordering rule).
 import "@rosetta/room/styles/room.css";
 import "./history-room-view.css";
+// PJ-4: VibeField's own content inside the room's host slots
+import "./history-host.css";
 // DK-15: on the desk the room's fades are the cover's tint, never frost — in the room's own chunk, after its sheet
 import "./history-room-glass.css";
 
@@ -122,6 +125,12 @@ export interface HistoryRoomViewProps {
   /** Where the room's handle is kept, should the host hold it; the view
    * keeps its own when absent. */
   roomRef?: RefObject<HistoryRoomHandle | null>;
+  /** PJ-4 — what VibeField hands the room beyond its ports (rosetta
+   * `host-inputs.ts`; `host-inputs.tsx` builds them): projects' colours and
+   * marks, the sections, row and head acts, ③'s folders, the chips. Absent:
+   * the room as rosetta's app shows it. Memoized by the controller — the room
+   * calls them as it renders. */
+  inputs?: RoomHostInputs;
 }
 
 export function HistoryRoomView({
@@ -132,6 +141,7 @@ export function HistoryRoomView({
   storage,
   keys,
   roomRef,
+  inputs,
 }: HistoryRoomViewProps): ReactElement {
   const [layers, setLayers] = useState<HTMLDivElement | null>(null);
   // An object ref, not a ref callback: the room's handle type is declared in
@@ -172,6 +182,7 @@ export function HistoryRoomView({
           consent={<HistoryConsentState />}
           emptyPrompt={emptyPrompt}
           onSelect={onSelect}
+          {...inputs}
         />
       </div>
       <div className="vf-history-layers" ref={setLayers} />

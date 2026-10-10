@@ -1789,6 +1789,62 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     says rosetta's own words ("the recorded file is no longer available"); "Recorded files can't
     open here yet — no file door on the desktop" is said only when rosettad refuses the grant the
     file read (a daemon from before the scope, or a grant minted without it).
+  - **It lists your projects** (PJ-4, H1–H6 ruled (a) 2026-10-09; "we map, the room draws"): the
+    room's projects are fieldd's (`project.list`: places grouped by evidence, PJ-L1), each session
+    filed under the key fieldd joined it to, and what the room draws beyond its own rows is
+    VibeField's, handed through the room's host inputs (rosetta `host-inputs.ts`) and drawn in the
+    room's vocabulary. Until transcripts travel (DS-7) the list is THIS desktop's places and
+    sessions (H3): a project with no folder here is not listed, and nothing of another desktop is
+    handed to the room as if it were here.
+    - **A project's colour is its ink** (§2.9), never the room's dealt tint.
+    - **A project row** leads its path line with one OS mark per desktop it lives on (§6.0 of the
+      record, PJ-D24: Simple Icons' marks, 11 px, in the path line's ink), left-aligned in the
+      listing's order, this desktop's first; an asleep desktop's mark is in the tertiary ink.
+      Under the path, in the room's second-line type, what the others hold: **"4 sessions on
+      Studio"** (and "(asleep)" after one that is). Its time slot says **"n live"** while its
+      sessions run here.
+    - **The list's order:** **Live now** first (a project with a session running here, by P3's
+      reading: one plain `agent.list` per listing, asked only while History shows), then
+      **Pinned**, then the projects in the room's own order (each desktop's **Home** among them, a
+      row like any other, J11), then **Temporary** as ONE folded line at the foot — "Temporary ·
+      6" (its sessions of the last 14 days) and **Show** — and under it, folded the same way,
+      **Hidden**. An empty section draws nothing.
+    - **In a project:** **Live now** first, then the room's days; in Temporary, the sessions older
+      than 14 days fold behind **"Older than 14 days · n · Show older"** (PJ-L4).
+    - **A session row** (PJ-D9) carries, in its id slot, this desktop's mark and the folder's path,
+      cut whole folders from the left to fit (FitPath: `…/project100/vibe-field`, never a name cut
+      mid-word; the whole path is its title); and at its end **Resume** (the `resume` glyph and the
+      word) or, while it runs here, **Jump to** (`jump`) — or, quiet in the reason's place, why
+      neither, in the empty pane launcher's own words: "folder is gone", "not installed", "not
+      offered here", "can’t resume" — and "its volume is not connected". ④'s head carries the same act as a pill, or the same reason after the range. Pressed,
+      each does what the line's create does, and the note on the line says what came of it.
+    - **New agent** is ②'s head's one primary — the `start` glyph on the room's primary fill — and
+      opens the room's rows: **Starts in** names the folder ③ shows (its mark, its path, its
+      branch, "1 agent is already working there"; or, dimmed, why it cannot start there: another
+      desktop's folder waits for routed acts, DS-2), then **Agent** — each agent this desktop
+      offers, one row per persona (its name at the row's end, "its own" for the agent's own
+      sign-in), the most recently used first — then **Model and effort**, one dimmed row: "Model
+      and effort can't be set from here yet (PJ-6)". A row starts the agent in that folder and the
+      window moves to Godview to show its pane; the note says **"Started in ~/…"**.
+    - **③'s head is the folder list** (PJ-D22): every folder of the project under its desktop's
+      mark and name ("here", "asleep"), a linked worktree one step in, the shown one checked; past
+      nine a filter heads it. A folder on another desktop is never opened here: ③ says **"Files
+      stay on Studio"** (or that Studio is asleep), and its caption names the desktop and the
+      branch ("Studio · main"); a folder that is gone or unmounted says so in the same place. New
+      agent follows the folder ③ shows (PJ-D8).
+    - **The chips** (R7): over the list, **any desktop ▾** — every desktop with its mark, "here" or
+      "asleep", and how many of these projects live on it (one with none is dimmed, so a choice
+      never empties the list); over a project's sessions, **any agent ▾** — the agents its
+      sessions ran under, with their counts.
+    - **The project's acts** (H4, behind ②'s `···`, desktop windows only — P2): **Rename…**,
+      **Pin to the top** / **Unpin**, **Hide** / **Show again**, and **Not part of this project**
+      — every folder, one row each (a split). Temporary has none: it is not a project. Rename
+      opens in ②'s card slot as a field with **Cancel** and **Rename** (the room's name cannot be
+      edited in place yet). The same slot otherwise carries the **suggestions** (PJ-D16): "vibe-
+      field shares old history with **vf-docs**" with **Not the same** and **One project**.
+    - **The cards' look** (VibeField's own, inside the room's card slot): corners 12, the hairline,
+      padded 10 12, its words at 12.5/400 in secondary ink, its buttons 26 tall, corners 13,
+      12/500 — the ready fill, the one primary inverted on the foreground like the room's go.
   - **Its first open says "Opening History"** (2026-10-04): the room — its code and its sheet — is
     its own chunk, on neither the first paint nor the canvas's. It loads when the window is first
     idle after the canvas has drawn, or at the first ⌘3 if that comes sooner. While it arrives the

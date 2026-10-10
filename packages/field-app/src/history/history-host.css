@@ -1,0 +1,150 @@
+/* PJ-4 — what VibeField draws INSIDE the room's host slots (DESIGN.md §8
+   "History" — "It lists your projects"): the desktops' marks, a session's
+   folder, the acts' glyph and word, the reasons, ③'s honest states, the
+   cards. The room sizes and places the slots (rosetta host-inputs.css); these
+   rules style only VibeField's own content in them, on the kit's tokens. */
+
+.vf-history-marks {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.vf-history-mark {
+  display: inline-flex;
+  flex: none;
+  color: inherit;
+}
+
+/* PJ-L6: asleep is a state, said in the tertiary ink */
+.vf-history-mark[data-asleep="true"] {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-history-where {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  max-width: 100%;
+}
+
+/* FitPath drops whole folders; the box only has to refuse to wrap */
+.vf-history-fitpath {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.vf-history-act {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.vf-history-reason,
+.vf-history-elsewhere-line {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-history-elsewhere {
+  color: var(--vf-text-secondary);
+}
+
+.vf-history-group,
+.vf-history-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.vf-history-group small {
+  color: var(--vf-text-tertiary);
+}
+
+.vf-history-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--vf-hairline);
+  border-radius: 12px;
+  color: var(--vf-text-secondary);
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+}
+
+.vf-history-card p {
+  margin: 0;
+}
+
+.vf-history-card b {
+  color: var(--vf-text-primary);
+  font-weight: 600;
+}
+
+.vf-history-rename label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.vf-history-rename input {
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--vf-hairline-strong);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--vf-text-primary);
+  font: inherit;
+}
+
+.vf-history-rename input:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 1px;
+}
+
+.vf-history-suggestion {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.vf-history-suggestion + .vf-history-suggestion {
+  padding-top: 8px;
+  border-top: 1px solid var(--vf-hairline);
+}
+
+.vf-history-card-acts {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.vf-history-card-acts button {
+  height: 26px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 13px;
+  background: var(--vf-fill);
+  color: var(--vf-text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.vf-history-card-acts button:hover {
+  background: var(--vf-fill-hover);
+}
+
+.vf-history-card-acts button[data-primary="true"] {
+  background: var(--vf-foreground);
+  color: var(--vf-canvas-bg);
+}
+
+.vf-history-card-acts button:focus-visible {
+  outline: 2px solid var(--vf-select);
+  outline-offset: 2px;
+}

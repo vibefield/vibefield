@@ -624,6 +624,48 @@ describe("the catalog port's meta feed (AR-8c; PJ-4)", () => {
     feed.close();
   });
 
+  it("PJ-4: ONE feed however many read it — the room and the Peek's reader share its reads, a late reader is handed what it holds", async () => {
+    const door = scripted({ sessions: [SESSIONS] });
+    const catalog = catalogPortOver(door);
+    const room: Array<{ meta: MetaState; source: string }> = [];
+    const reader: Array<{ meta: MetaState; source: string }> = [];
+    const first = catalog.subscribeMeta({
+      onChange: (meta, source) => room.push({ meta, source }),
+    });
+    await flush();
+    const count = (method: string) => door.calls.filter((call) => call.method === method).length;
+    expect(count("project.list")).toBe(1);
+    const second = catalog.subscribeMeta({
+      onChange: (meta, source) => reader.push({ meta, source }),
+    });
+    await flush();
+    // the late reader is handed the listing the feed holds, asking nothing
+    expect(reader.map((change) => change.source)).toEqual(["snapshot"]);
+    expect(reader[0]?.meta).toBe(room[0]?.meta);
+    expect(count("project.list")).toBe(1);
+    expect(count("project.subscribe")).toBe(1);
+    // a ping is ONE read, heard by both
+    door.ping();
+    await flush();
+    expect(count("project.list")).toBe(2);
+    expect(room.map((change) => change.source)).toEqual(["snapshot", "mutation"]);
+    expect(reader.map((change) => change.source)).toEqual(["snapshot", "mutation"]);
+    // one reader leaves: the feed stays for the other; the last closes it
+    first.close();
+    door.ping();
+    await flush();
+    expect(reader).toHaveLength(3);
+    expect(room).toHaveLength(2);
+    second.close();
+    door.ping();
+    await flush();
+    expect(count("project.list")).toBe(3);
+    // a reader after every one left opens a fresh feed
+    catalog.subscribeMeta({});
+    await flush();
+    expect(count("project.subscribe")).toBe(2);
+  });
+
   it("says the projects' refusal in fieldd's words and asks again, never a blank", async () => {
     vi.useFakeTimers();
     let ready = false;
