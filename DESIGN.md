@@ -1645,12 +1645,13 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   presses a control the view shows, its legend is printed on that control, under the glyph in
   readable ink (never an outlined box or a corner digit), as the views track prints ⌘1–⌘4 (§8).
   View loops stop under reduced motion or the stage's animations switch. Each piece of host
-  chrome has its own boundary — the bar, Find, the usage column, the profile notice, the claims,
+  chrome has its own boundary — the bar, the usage column, the profile notice, the claims,
   System control, the deck and its edge, each pane's frame, the frames and the launchers: one that
   throws says "‹name› unavailable" where it stood (a deck piece in the deck's unavailable face),
   the monitor and its view stay mounted, and it is tried again only for a fact it is handed, at
-  most once a window (1 s, doubling to 30 s while it keeps failing); Find's fact is the agents it
-  searches. The bar and the profile notice read only the window's own state, so they stay
+  most once a window (1 s, doubling to 30 s while it keeps failing). (Find stood in this list until
+  P2, 2026-10-09: the sheet left VibeField for the frame's Peek.) The bar and the profile notice
+  read only the window's own state, so they stay
   unavailable until the monitor mounts again (M192). It never
   leaves a silent blank. The deck builds the monitor's door, so a deck that fails whole leaves the
   monitor on no door (GT-D17). *(Made true 2026-10-07, MV-8b: the deck, System control and the
@@ -1825,14 +1826,22 @@ its hot-point glow and rim left with the card (above); its last two rows are the
   2026-10-08, P1): ONE search for every view that searches, the frame's and never a view's — "the
   search designs are the same and consistent on both views … a bigger and centered popup in the
   middle of the screen with background all blurred and dimmed" (James, 2 Oct). It is History's
-  today; Godview keeps its own Find (the bar's sheet on ⌘F) until P2 brings Live now here.
+  and, since P2 (2026-10-09; docket v9 PK2/PK4/PK5, all (a)), Godview's: puppeteer's Find sheet
+  left VibeField with the bar's FIND, and Live now is the Peek's.
   - **The button** is the frame's: a 40 glass circle (the line's glass, §5) at the head's right end —
     16 in, `top-2`, on the lights' axis — holding `search` 15 in secondary ink (primary under the
     pointer), lifted 8 so **its key is printed under it**, as the views track prints its keys: ⌘F at
     9/600 in secondary ink, the ⌘ at 8.5/500 in tertiary (Ctrl F off the Mac). It stands above the
-    cover with the line, the edges and the corner (62), in the views that search — History, in this
-    build. **⌘F** (Ctrl+F) opens the popup, or puts the caret back in its field while it is open:
-    a product chord (§10).
+    cover with the line, the edges and the corner (62), in the views that search — History and
+    Godview. **⌘F** (Ctrl+F) opens the popup, or puts the caret back in its field while it is open:
+    a product chord (§10). **In Godview** (PK2 (a), until the Stories head, GV-D1, is built) it
+    stands in the same place, over the instrument bar's right end: the bar's tools end one head gap
+    (12) short of it, so System control sits beside it and never under it, and the bar steps aside
+    by the button's own measure as its glass widens. The button is 40 tall at `top-2` and the bar
+    40 tall from the window's top, so it hangs 8 below the bar's foot, over the stage's edge.
+    **With a filter on** (Godview's, GV-D3) the glass grows a token after the circle naming it —
+    the desktop's OS mark and name, a hairline, the profile's glyph and name ("studio · Work"), at
+    13/500 in primary ink — and a 26 × that clears both: a filtered view never looks unfiltered.
   - **The popup — Peek, 900 × 560**, centred in the window: solid (`--vf-chrome-solid`, FC-D14 —
     rows to be read), corners 24, ringed by the strong hairline, with its own shadow (§5, *Search
     popup*). It pops in on the island curve (§6). **The scrim** (§5, *Search scrim*) blurs and dims
@@ -1850,12 +1859,20 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     12; each half 28 tall at 12.5/500 in secondary ink, the chosen one solid in primary ink with the
     hairline and a 1px shadow — then that scope's dropdowns, 30 tall, corners 15, a 13 glyph in
     secondary ink, the name at 12.5/500 and a turned `chevron` 11 in tertiary (the ready fill under
-    the pointer). Everything's are **Every project · Prompts and replies · Any agent**; each opens a
-    solid menu (§5) 4 under it, and a filter that is on names itself on its dropdown. **The body**:
+    the pointer). Everything's are **Every project · Prompts and replies · Any agent**; Live now's,
+    in Godview, are the view's own filters (GV-D3) — **All desktops** (every desktop's OS mark; a
+    desktop's mark and name, `here` beside this one, its agents or its standing beside each, a
+    desktop not answering quiet) and **Every profile** (the person glyph; a profile's own glyph,
+    filled for the default, `waiting` beside one a session under it waits in) — each offered only
+    when there is a choice to make (two desktops; a profile besides This Mac), and they **filter the
+    view too**: the stage shows what search's Live now shows. History's Live now has none. Each
+    opens a solid menu (§5) 4 under it, and a filter that is on names itself on its dropdown. In
+    Godview the placeholder says "Words said in a live session, a folder, an agent…". **The body**:
     the list, 380 wide, and the peek beside it, a hairline between them. **The foot**, 52 tall over
     a hairline: one count sentence at 12/400 in tertiary ink, and **Open** — 32 tall, corners 16,
-    12.5/600 on the ready fill (14% under the pointer) — with **↵ printed on it** in tertiary ink: in
-    History it says **Open at the line**.
+    12.5/600 on the ready fill (14% under the pointer) — with **↵ printed on it** in tertiary ink: a
+    live row's says **Open in the terminals**; a past row's **Open at the line** in History and
+    **Open in History** in Godview.
   - **A row is a session** — the root a reader lands in; the lines that matched are its evidence,
     never rows of their own. Its head: the title at 14/600, then the time at 12 `tabular-nums` in
     tertiary ink at the right end (the clock inside today, the day and the clock inside the year, the
@@ -1864,10 +1881,26 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     the agent by the catalog's label. Then up to three matched lines, newest first: a 40 column
     saying who said it — **you**, **agent**, or the kind as itself (11/500, tertiary) — and the line
     at 13/1.45 in secondary ink, cut at a word with its first match among its first words, then
-    ellipsised. Padding 10 12, corners 14, 2 apart; the hot row in the ready fill.
+    ellipsised. Padding 10 12, corners 14, 2 apart; the hot row in the ready fill. **A live row**
+    (Live now, P2) is the same shape: the 8 dot in the state's colour (§2.5 — working green,
+    waiting orange, idle and a shell faint), the session's title (the transcript's, else its folder)
+    and, where a past row says its time, its state — **waiting · working · idle · a shell**; under
+    it folder · agent ("shell" for a bare terminal), and **a run on another desktop says where it
+    runs** (K10): its OS mark and the desktop's name at 11.5/500 in secondary ink. With words, the
+    runs whose facts or transcript hold every word (puppeteer's find model: the live runs joined to
+    rosetta's words), by how many lines matched, then waiting → working → idle → shell; without
+    words, every live session in that order, the bare shells last.
   - **A match is neutral, everywhere** (K1): the text's own primary ink at 600 on an 11% wash of it,
     corners 3 — never orange, which means "waiting on you" here (§2.5), and never the select blue.
     The peek too: the round-3 kit's orange line marker was a leftover.
+  - **The live peek** (GV-D8, P2): what opening a live row would show — **the run's own pane,
+    resting**: its terminal, watched, at corners 14 on the terminal's ground with a hairline, 14 in.
+    It watches by construction (the canvas mirror's five layers, which DK-17 retired from the canvas,
+    restored here): a runtime that refuses every geometry and input verb, `inert`, no pointer, no
+    focus, read-only — so it makes **no geometry claim** (the pane keeps the PTY's size; the peek
+    draws what fits), takes no focus and types nothing. A run on another desktop cannot be watched
+    from here (no mirror until DS-4's): the peek says where it runs and that Open brings its
+    terminal into the active pane.
   - **The peek** (K8, until the docket's PK3 rules): what opening the row would show. Today, that
     session's matched lines — every hit the index answered for it, in reading order, each led by
     who said it and marked as above, at 13.5/1.55 in primary ink — under the session's title at
@@ -1881,14 +1914,29 @@ its hot-point glow and rim left with the card (above); its last two rows are the
     or a phrase in quotes."** — rosetta matches a quoted phrase whole, and while a quote is still
     open nothing is asked: the foot says "Close the quote to search for the phrase". An index that
     cannot answer says so in the foot in fieldd's words, and the list keeps what it last showed —
-    never "no matches" for a question nobody answered. **Live now**, in History, says that live
-    sessions are searched in Godview for now (K9; the docket's PK5 decides whether History gets a
-    live feed of its own), with a press back to Everything.
-  - **Keys** (the kit's): ⌘F opens the popup or refocuses its field; **Esc** closes an open menu,
-    then the popup, before anything else hears it; **↑ ↓** move the hot row; **↵** opens it; a click
-    opens a row. **One surface at a time**: the popup is one of the frame's open surfaces, `search`
+    never "no matches" for a question nobody answered. **Live now**'s foot: "3 live sessions,
+    waiting first" before a word (or "Nothing runs right now"); with words "2 sessions · 3 lines
+    matched", with "searching" while the newest ask is out, "the words were not searched" when the
+    index did not answer (the last answer's lines stand), "the first page only — narrow the
+    search" when it clipped; the index's own state after it when it is not ready ("transcript search
+    off — …", "indexing · 40%"). Nothing live holding the words: **"No live session holds every word
+    of “q”."** with a press, **Search everything for “q”**. **Live now in History** (docket PK5
+    (a), 2026-10-09) is live while it shows: the Peek opens the monitor's own feed (the model board,
+    over this window's fieldd client) when Live now comes to show and closes it when it stops — a
+    change of scope, the popup's close, unmount — so Godview itself still asks nothing while closed
+    (PF6). Until it answers the foot says "Asking what runs…"; refused, "What runs could not be
+    read — ‹fieldd's words›". (K9's "searched in Godview" retired with it.)
+  - **Keys** (the kit's): ⌘F opens the popup or refocuses its field, on the view's own scope —
+    **Live now in Godview, Everything in History** (GV-D9); **Esc** closes an open menu, then the
+    popup, before anything else hears it; **↑ ↓** move the hot row; **↵** opens it; a click opens a
+    row. **One surface at a time**: the popup is one of the frame's open surfaces, `search`
     (§10) — the palette, a drawer, the Me menu, Settings or a change of view fold it, and it folds
     them; ⌘K over it opens the palette, ⌘F over the palette opens it.
+  - **Open in the terminals** (P2). A live row — ↵, a click or Open — folds the popup and, in
+    Godview, does what the view's own select does: this desktop's run mounted in the active pane, a
+    peer's attached there. From History it takes Jump to's path (P3): the frame moves to Godview and
+    the deck reveals the pane showing the run (activated, or mounted in the active pane); a peer's
+    run is selected through Godview as it opens.
   - **Open at the line.** A past row — ↵, a click or Open — folds the popup and opens History at the
     line: the room's own `openAt` with the hit's session and message, the session in its project and
     the transcript landed on the message (§8 "History"). Everything reads this desktop's index (K5);
@@ -2038,9 +2086,12 @@ demo content is real-shaped (AAPL, San Francisco, 64°).
   on the capture phase in Godview so a focused pane never sees it (ghostty's new_tab); and **@ is
   never a shortcut** — it is typed in the draft. **Search's key** (§8 "Search — the Peek",
   2026-10-08) is PRINTED under the frame's search button: **⌘F** (Ctrl+F) opens the Peek, a product
-  chord taken on the capture phase while History is the view — Godview keeps its own Find on ⌘F
-  until P2 — so Settings → Terminal → Keyboard says Ghostty's find never reaches a pane while
-  History or Godview is the view. **The head's keys** (DK-D24; One Frame §6) are
+  chord taken on the capture phase while History or Godview is the view (Godview's own Find left
+  with P2, 2026-10-09) — so Settings → Terminal → Keyboard says Ghostty's find never reaches a pane
+  while History or Godview is the view. **⌥0–⌥9 are nobody's** (docket PK4 (a), 2026-10-09): they
+  chose Godview's profile tabs, and the tabs left the bar for search's scope row (GV-D3), so ⌥ and
+  every digit reach the pane — a fresh pane's launcher keeps its own ⌥n there (QL-D2); nothing
+  prints them. **The head's keys** (DK-D24; One Frame §6) are
   the zoom's, SAID in its menu and the palette, never printed: **⌘+** (⌘= or ⌘+, the keypad's too)
   zooms in, **⌘−** out, **⌘0** to actual size and **⇧1** to fit — Ctrl+Plus, Ctrl+Minus, Ctrl+0
   and Shift+1 off the Mac. They are Canvas's, not the product's chords: heard on the window's
