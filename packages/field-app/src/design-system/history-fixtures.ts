@@ -1,11 +1,12 @@
 import type { CatalogPort, CatalogStatus, RoomPorts } from "@rosetta/room";
 import { createDemoPorts, createRoomDemo, type RoomDemo } from "@rosetta/room/fixtures";
-import type {
-  IndexCatalogSource,
-  IndexSession,
-  ProjectFiguresDayResult,
-  ProjectFiguresResult,
-  ProjectSummary,
+import {
+  AGENT_CATALOG_READERS,
+  type IndexCatalogSource,
+  type IndexSession,
+  type ProjectFiguresDayResult,
+  type ProjectFiguresResult,
+  type ProjectSummary,
 } from "@vibefield/contracts";
 import { catalogPortOver, type HistoryDoorClient } from "../history/doors";
 
@@ -99,9 +100,6 @@ function consentCatalog(catalog: CatalogPort): CatalogPort {
 export const FIXTURE_DESKTOP = "01J9ZK3M5Q8XR2V7N4B6C1D0EF";
 const FIXTURE_LAPTOP = "01J9ZM0PQ7W3E6R8T2Y4U1I5O9";
 
-/** The catalog agent each demo runtime stands for (the catalog's own ids). */
-const FIXTURE_AGENT: Record<string, string> = { claude: "claude", codex: "codex" };
-
 const keyOf = (name: string): string => `p1:demo-${name}`;
 
 /** fieldd's projects over the demo's folders, as `project.list` answers a
@@ -183,9 +181,13 @@ function fixtureProjects(demo: RoomDemo): ProjectSummary[] {
  * its project's key (A-D4). */
 function fixtureSessions(demo: RoomDemo): IndexSession[] {
   const names = new Map(demo.meta.projects.map((row) => [row.id, row.name]));
+  // the agent a demo runtime stands for, read through the catalog by its
+  // rosetta kind — never an agent id written here (R23b, AR-L1)
+  const kinds = new Map(demo.meta.runtimes.map((runtime) => [runtime.id, runtime.kind]));
   return demo.meta.sessions.map((row) => {
     const project = row.project_id === null ? undefined : names.get(row.project_id);
-    const provider = FIXTURE_AGENT[row.runtime_id];
+    const kind = kinds.get(row.runtime_id);
+    const provider = kind === undefined ? undefined : AGENT_CATALOG_READERS.idForKind(kind);
     return {
       sessionId: row.id,
       nativeSessionId: row.native_session_id,
