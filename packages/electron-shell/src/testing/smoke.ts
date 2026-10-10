@@ -75,6 +75,7 @@ import { sharedProfilePath } from "../main/smoke-profile";
 import type { WindowRegistry } from "../main/window-policy";
 import { createMainWindow, loadRenderer } from "../main/windows";
 import { labProfileProof } from "./godview-lab-profile";
+import { historyByProjectPhotos, historyByProjectRung } from "./history-project-rungs";
 import { jumpToRung } from "./jump-rungs";
 import { LiveSurfaceFixtureRuntime } from "./live-surface-fixture-runtime";
 import {
@@ -8006,6 +8007,14 @@ export async function runSmokeGodview(opts: {
     verdict["historySession"] = await openSeededSession(win, opts.handle, opts.typedAgent, {
       room: HISTORY_ROOM,
     });
+    // HISTORY BY PROJECT (PJ-4, H1): the seeded session filed by the real
+    //      fieldd under its PJ project, and the room listing that project by
+    //      fieldd's name — the row the opened session sits in, chosen
+    verdict["historyByProject"] = await historyByProjectRung(win, {
+      handle: opts.handle,
+      seeded: (verdict["historySession"] as { opened?: boolean }).opened === true,
+      nativeSessionId: opts.typedAgent?.history.nativeSessionId,
+    });
     // THE PEEK (GV-D8/D10, 2026-10-08; DESIGN.md §8 "Search — the Peek"): ⌘F,
     //      a product chord while History is the view, opens the frame's popup
     //      centred at 900 × 560 over the scrim with the field — cover and frame
@@ -9002,6 +9011,12 @@ export async function runSmokeGodview(opts: {
     verdict["peekPhotos"] = await peekPhotosRung(win, {
       seeded: (verdict["historySession"] as { opened?: boolean } | undefined)?.opened === true,
       word: PEEK_SEED_WORD,
+      shotDir: peekShotDir(),
+    });
+    // HISTORY BY PROJECT, PHOTOGRAPHED (PJ-4) — beside the Peek's, the same
+    //      last pass: light then dark, then Auto again
+    verdict["historyByProjectPhotos"] = await historyByProjectPhotos(win, {
+      checked: (verdict["historyByProject"] as { checked?: boolean } | undefined)?.checked === true,
       shotDir: peekShotDir(),
     });
 
