@@ -4,6 +4,7 @@
 export * from "./address";
 export * from "./device";
 export * from "./devices";
+export { chordOf, createPaneHand, handOf, type PaneHand, type PaneHandStats } from "./hand";
 export * from "./head";
 export { drawHead, type HeadContext, headBitmap, headRaster } from "./head-canvas";
 export { packRuns, type StillHead, stillHead, stillSplit, unpackHead } from "./head-still";
@@ -12,7 +13,12 @@ export * from "./kind";
 export * from "./law";
 export * from "./layout";
 export * from "./live";
-export { createPaneLocal, type PaneLocal } from "./local";
+export {
+  createPaneLocal,
+  type PaneExtent,
+  type PaneHandDoors,
+  type PaneLocal,
+} from "./local";
 export { browserPaneManifest } from "./manifest";
 export { browserPane } from "./object";
 export { PageTexture } from "./page";

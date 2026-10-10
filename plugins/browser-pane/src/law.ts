@@ -269,6 +269,8 @@ export interface PaneGeometry {
   readonly shadowAlpha: number;
   /** Its presence: 1 whole, falling to 0 as a delete's ghost fades. */
   readonly alpha: number;
+  /** PT-3 — drawn IN HAND: its page and its head's controls are named parts (`heldPartAt`); at rest every point is the pane. */
+  readonly held?: boolean;
   /** The world rect the pass's quad covers: the pane as the eye sees it, its shadow, and its glow's reach. */
   readonly bounds: {
     readonly x0: number;
@@ -340,6 +342,7 @@ export function resolvePane(
   lamp: Lamp = LAMP,
   law: BrowserLaw = BROWSER,
   glow = 0,
+  held = false,
 ): PaneGeometry {
   // square to the mat and never tipped: core's drag carries the rect, and nothing on this desk turns by itself
   const h = heightOf(flux, law);
@@ -362,6 +365,7 @@ export function resolvePane(
     slope,
     shadowAlpha: law.shadow.alpha + (law.shadow.alphaHeld - law.shadow.alpha) * aloft,
     alpha: flux.fade,
+    ...(held ? { held: true } : {}),
   };
   let x0 = Number.POSITIVE_INFINITY;
   let y0 = Number.POSITIVE_INFINITY;
@@ -607,6 +611,58 @@ export function pickPane(G: PaneGeometry, wx: number, wy: number, eye: PaneEye =
     return { part: "band", control: controlAt(S, hit.u, hit.v) };
   return { part: "glass" };
 }
+
+// ---------------------------------------------------------------- in hand (PT-3)
+
+/** The pane's OPEN extent (`open.extent`): the page and the head, in its own desk units, centred as its rect is — the hand's
+ * points are measured from its centre. */
+export function openExtent(
+  rect: Pick<ObjectRect, "cx" | "cy">,
+  S: PaneShape,
+): { readonly cx: number; readonly cy: number; readonly w: number; readonly h: number } {
+  const top = -S.half[1];
+  const foot = S.page[1] + S.page[3];
+  return { cx: rect.cx, cy: rect.cy + (top + foot) / 2, w: 2 * S.page[2], h: foot - top };
+}
+
+/** A pane's NAMED PARTS in hand (PT-3 ruling 2): its page, and its head's engraved controls (the size readout is not one). */
+export type HeldPart = "page" | "back" | "forward" | "reload" | "address";
+export const HELD_CONTROLS: readonly HeldPart[] = ["back", "forward", "reload", "address"];
+
+/**
+ * What the hand points at on a pane IN HAND (ruling 2): its PAGE (presses there are the kind's — a double-click selects a word,
+ * never puts the pane down), an engraved CONTROL of its head, the rest of the glass (`content` — the object's, a drag carries
+ * it), or nothing past its silhouette. As the pane's own eye draws it (`pickPane`): what is pressed is what is seen.
+ */
+export function heldPartAt(G: PaneGeometry, wx: number, wy: number): HeldPart | "content" | null {
+  const pick = pickPane(G, wx, wy);
+  if (pick === null) return null;
+  if (pick.part === "page") return "page";
+  if (pick.part === "band" && pick.control !== null && pick.control !== "size") return pick.control;
+  return "content";
+}
+
+/**
+ * A point of the hand (`HeldEvent` — the open extent's units, centred) → the page's CSS px: through the pane's own eye onto its
+ * face's plane, so a press dragged off the page keeps a point (ruling 3; the face scales it to the displayed frame).
+ */
+export function heldPagePoint(
+  G: PaneGeometry,
+  ext: { readonly cx: number; readonly cy: number },
+  x: number,
+  y: number,
+): readonly [number, number] {
+  const [u, v] = facePoint(G, ext.cx + x, ext.cy + y);
+  return pagePoint(G.shape, u, v);
+}
+
+/**
+ * What the finger moved ON THE SCREEN as the page's CSS px (ruling 4; BROWSER.md §6): a wheel's CSS px of the hand over the
+ * hand's zoom (CSS px a desk unit) are desk units, and those over the page's density (desk units a CSS px — `S.scale`) are
+ * the page's px — so the page scrolls by what the finger moved, whatever the zoom.
+ */
+export const wheelToPage = (d: number, zoom: number, S: PaneShape): number =>
+  d / (Math.max(zoom, 1e-9) * S.scale);
 
 /**
  * Which edge of a pane a desk point is on, for a resize: the outline as the eye sees it at the top face, within `band`

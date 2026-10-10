@@ -24,9 +24,12 @@ import {
   facePoint,
   glowLevel,
   glowReach,
+  heldPagePoint,
+  heldPartAt,
   IPHONE_17_PRO_DISPLAY_MM,
   MM,
   nativeOf,
+  openExtent,
   PANE_FINISHES,
   PANE_MIN_SIZE,
   PANE_SIZE,
@@ -56,6 +59,7 @@ import {
   silhouetteOf,
   sizeOf,
   viewportOf,
+  wheelToPage,
 } from "../src";
 import { LAMP } from "../src/law";
 
@@ -626,5 +630,71 @@ describe("the address", () => {
       "https://duckduckgo.com/?q=glass%20on%20a%20cutting%20mat",
     );
     expect(resolveAddress("")).toBe(SAMPLE_URL);
+  });
+});
+
+describe("PT-3 — the pane in hand: its named parts, its page's points, the finger's travel", () => {
+  it("IN HAND names its PAGE and its head's CONTROLS (the size readout is the pane's own) — the rest of its glass is `content`, past it nothing", () => {
+    const d = device("laptop");
+    const size = sizeOf([d.width, d.height], d);
+    const S = shapeOf(size, d);
+    const rect = { cx: 40, cy: -30, w: size.w, h: size.h };
+    const G = resolvePane(rect, REST, S, LAMP, BROWSER, 0, true);
+    expect(G.held).toBe(true);
+    expect(resolvePane(rect, REST, S, LAMP).held).toBeUndefined();
+    const at = (u: number, v: number) => seen(G.eye, pointAt(G, u, v));
+    const mid = at(...faceOfPage(S, 640, 400));
+    expect(heldPartAt(G, mid[0], mid[1])).toBe("page");
+    const L = bandLayout(S);
+    for (const [name, c] of [
+      ["back", L.back],
+      ["forward", L.forward],
+      ["reload", L.reload],
+      ["address", [L.address[0] - L.address[2] * 0.5, L.address[1]]],
+    ] as const) {
+      const w = at(c?.[0] ?? 0, c?.[1] ?? 0);
+      expect(heldPartAt(G, w[0], w[1]), name).toBe(name);
+    }
+    const border = at(S.half[0] - S.border * 0.5, 0);
+    expect(heldPartAt(G, border[0], border[1])).toBe("content");
+    if (L.size !== null) {
+      const readout = at(L.size - L.glyph * 0.5, L.cy);
+      expect(heldPartAt(G, readout[0], readout[1])).toBe("content");
+    }
+    const out = at(S.half[0] + 20, 0);
+    expect(heldPartAt(G, out[0], out[1])).toBeNull();
+  });
+
+  it("a point of the hand is the page's CSS px through the pane's own eye — and past the page's edge it keeps going", () => {
+    const { S, rect, G } = pane("laptop", 100, 50);
+    const ext = openExtent(rect, S);
+    expect(ext.w).toBeCloseTo(2 * S.page[2], 9);
+    expect(ext.cy - ext.h / 2).toBeCloseTo(rect.cy - S.half[1], 9);
+    const hand = (u: number, v: number) => {
+      const w = seen(G.eye, pointAt(G, u, v));
+      return [w[0] - ext.cx, w[1] - ext.cy] as const;
+    };
+    for (const [x, y] of [
+      [640, 400],
+      [0, 0],
+      [1279, 799],
+      [123.5, 456.25],
+    ] as const) {
+      const [px, py] = heldPagePoint(G, ext, ...hand(...faceOfPage(S, x, y)));
+      expect(px).toBeCloseTo(x, 6);
+      expect(py).toBeCloseTo(y, 6);
+    }
+    const [past] = heldPagePoint(G, ext, ...hand(S.half[0] + 10, S.page[1]));
+    expect(past).toBeGreaterThan(S.viewport[0]);
+  });
+
+  it("the page scrolls by what the finger moved ON THE SCREEN, whatever the zoom (BROWSER.md §6)", () => {
+    const { S } = pane("laptop");
+    for (const zoom of [0.25, 1, 2.5]) {
+      // one page px is zoom × S.scale screen px: 120 screen px are that many fewer page px
+      expect(wheelToPage(120, zoom, S)).toBeCloseTo(120 / (zoom * S.scale), 9);
+      expect(wheelToPage(-120, zoom, S)).toBeCloseTo(-120 / (zoom * S.scale), 9);
+    }
+    expect(wheelToPage(0, 1, S)).toBe(0);
   });
 });

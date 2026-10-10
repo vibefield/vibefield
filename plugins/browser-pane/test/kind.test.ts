@@ -25,6 +25,7 @@ import {
   browserPaneManifest,
   cutOf,
   deviceById,
+  faceOfPage,
   HEAD_RASTER,
   type HeadBitmap,
   type HeadRaster,
@@ -36,9 +37,11 @@ import {
   PROMPT,
   pagePlan,
   paneLook,
+  pointAt,
   rungFor,
   SAMPLE_URL,
   schemeOf,
+  seen,
   shapeOf,
   silhouetteOf,
   stillSplit,
@@ -275,7 +278,7 @@ describe("the browser pane's world half", () => {
     expect(rung(40)).toBe(6); // the finest band, 8
   });
 
-  it("OPENS as ICE's pick-up: its extent is the page and the head, its word the address as printed, its tools declared and inert", () => {
+  it("OPENS as ICE's pick-up: its extent is the page and the head, its word the address as printed, its tools the browser's acts (PT-3)", () => {
     const open = k.open;
     if (open === undefined) throw new Error("the pane does not open");
     const rect = { cx: 100, cy: 80, w: PANE_SIZE.w, h: PANE_SIZE.h };
@@ -297,11 +300,18 @@ describe("the browser pane's world half", () => {
         : open.readout;
     expect(word({})).toBe("lumen.example");
     expect(word({ url: "about:blank" })).toBe(PROMPT);
-    // declared only (PT-3 works them): no kind and no op — the bar shows them dim and runs nothing
+    // PT-3 works them: each an ACTION with its op; the browser's chords on back, forward, reload and the address, none on the device
     for (const t of PANE_TOOLS) {
-      expect(t.kind, t.id).toBeUndefined();
-      expect(t.run, t.id).toBeUndefined();
+      expect(t.kind, t.id).toBe("action");
+      expect(typeof t.run, t.id).toBe("function");
     }
+    expect(Object.fromEntries(PANE_TOOLS.map((t) => [t.id, t.keys ?? []]))).toEqual({
+      back: ["mod+["],
+      forward: ["mod+]"],
+      reload: ["mod+r"],
+      address: ["mod+l"],
+      device: [],
+    });
   });
 
   it("dresses its glass from its props (an unknown finish is low-iron), its loading line the host's selection", () => {
@@ -318,5 +328,46 @@ describe("the browser pane's world half", () => {
     expect(odd.finish).toEqual(L.finishes["low-iron"]);
     expect(smoke.loading).toBe(-1);
     expect(L.progress).toEqual(look.progress);
+  });
+});
+
+describe("PT-3 — the pane in use (its kind)", () => {
+  const k = browserPaneKind();
+  const HELD = { e: 1, open: true, grow: 1, snap: true } as unknown as NonNullable<
+    ObjectContext["held"]
+  >;
+
+  it("at rest every point of it is the pane; IN HAND its page and its head's controls are named parts (ruling 2)", () => {
+    const rest = k.resolve(ctxOf({})) as PaneGeometry;
+    const held = k.resolve(ctxOf({}, { held: HELD })) as PaneGeometry;
+    const mid = (G: PaneGeometry) => seen(G.eye, pointAt(G, ...faceOfPage(G.shape, 640, 400)));
+    expect(k.hit(rest, ...mid(rest))).toBe("content");
+    expect(k.hit(held, ...mid(held))).toBe("page");
+    // nothing past its silhouette, held or not
+    expect(k.hit(held, 100 + held.shape.half[0] + 40, 80)).toBeNull();
+  });
+
+  it("its opening takes the WHEEL (the page's) and leaves ESC the desk's; its CURSOR is the page's over the page and a lit control's over the head", () => {
+    const open = k.open;
+    if (open === undefined) throw new Error("the pane does not open");
+    expect(open.wheel).toBe("kind");
+    expect(open.escape).toBe("desk");
+    const local = {
+      page: () => ({
+        key: "k",
+        state: { is: "live" },
+        info: { cursor: "text", back: true, forward: false },
+      }),
+    };
+    const cursor = (part: string) => open.cursor?.({ entity: 1 as Entity, part, local });
+    expect(cursor("page")).toBe("text");
+    expect(cursor("back")).toBe("pointer");
+    // nowhere to go forward: the desk's own cursor
+    expect(cursor("forward")).toBeUndefined();
+    expect(cursor("reload")).toBe("pointer");
+    expect(cursor("address")).toBe("pointer");
+    expect(cursor("content")).toBeUndefined();
+    // no page: no cursor of its own
+    expect(open.cursor?.({ entity: 1 as Entity, part: "page", local: undefined })).toBeUndefined();
   });
 });

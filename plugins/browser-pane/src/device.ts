@@ -7,9 +7,13 @@
 // The act writes the object's `Position` and `Size` and its props' cell directly, through the menu's one transaction:
 // the `/desk` door carries no `Size` (a kind is handed its rect, never its components), so this module alone reads the
 // SDK's `/canvas` door — `Position`, `Size` and the widget catalog's read helper (said in the import wall and the note).
+//
+// PT-3 — the held bar's DEVICE tool runs the same switch on the pane in hand, to the next device (one undo step); and the
+// props CELL is handed out from here (`propsCell`) for the hand's one write of its own — a page's navigation into the `url`
+// prop (hand.ts) — so this module stays the pane's only reader of the `/canvas` door.
 
-import { getWidgetType, Position, Size } from "@vibefield/plugin-sdk/canvas";
-import type { MenuActionDef } from "@vibefield/plugin-sdk/desk";
+import { getWidgetType, Position, Size, type WidgetType } from "@vibefield/plugin-sdk/canvas";
+import type { Entity, HeldToolApi, MenuActionDef, World } from "@vibefield/plugin-sdk/desk";
 import { cutOf, DEVICES, type Device } from "./devices";
 import { BROWSER_PANE_TYPE } from "./ids";
 
@@ -42,28 +46,48 @@ export function switchedRect(
   return { x: cx - next.w / 2, y: cy - next.h / 2, w: next.w, h: next.h };
 }
 
+/** The pane type's props CELL — the component its props live in (the catalog's group `props`); undefined before the type is defined. */
+export const propsCell = (): WidgetType["groups"][number]["component"] | undefined =>
+  getWidgetType(BROWSER_PANE_TYPE)?.groups.find((g) => g.name === "props")?.component;
+
+/** A switch to `device` of each pane named, in ONE transaction of the act's (one undo step). */
+function switchTo(
+  api: Pick<HeldToolApi, "transact"> & { readonly world: World },
+  entities: readonly Entity[],
+  device: Device,
+): void {
+  const cell = propsCell();
+  if (cell === undefined) return;
+  api.transact((tx) => {
+    for (const e of entities) {
+      const at = api.world.get(e, Position);
+      const size = api.world.get(e, Size);
+      if (at === undefined || size === undefined) continue;
+      const next = switchedRect(at, size, device);
+      const props = (api.world.get(e, cell) ?? {}) as Record<string, unknown>;
+      tx.edit(e)
+        .set(Position, { x: next.x, y: next.y })
+        .set(Size, { w: next.w, h: next.h })
+        .set(cell, { ...props, device: device.id });
+    }
+  });
+}
+
 /** The four acts: each re-cuts every selected pane to its device in ONE transaction (one undo step). */
 export const DEVICE_ACTS: readonly MenuActionDef[] = DEVICES.map((device) => ({
   id: deviceActId(device.id),
   label: SWITCH[device.id].label,
   glyph: { path: SWITCH[device.id].path },
-  run(api) {
-    const cell = getWidgetType(BROWSER_PANE_TYPE)?.groups.find(
-      (g) => g.name === "props",
-    )?.component;
-    if (cell === undefined) return;
-    api.transact((tx) => {
-      for (const e of api.entities) {
-        const at = api.world.get(e, Position);
-        const size = api.world.get(e, Size);
-        if (at === undefined || size === undefined) continue;
-        const next = switchedRect(at, size, device);
-        const props = (api.world.get(e, cell) ?? {}) as Record<string, unknown>;
-        tx.edit(e)
-          .set(Position, { x: next.x, y: next.y })
-          .set(Size, { w: next.w, h: next.h })
-          .set(cell, { ...props, device: device.id });
-      }
-    });
-  },
+  run: (api) => switchTo(api, api.entities, device),
 }));
+
+/** PT-3 — the held bar's DEVICE tool: the pane in hand to the NEXT device (laptop → desktop → iPad → iPhone → laptop), one undo step. */
+export function nextDevice(api: HeldToolApi): void {
+  const cell = propsCell();
+  const props = (cell === undefined ? undefined : api.world.get(api.entity, cell)) as
+    | Readonly<Record<string, unknown>>
+    | undefined;
+  const at = DEVICES.findIndex((d) => d.id === props?.device);
+  const next = DEVICES[(Math.max(at, 0) + 1) % DEVICES.length];
+  if (next !== undefined) switchTo(api, [api.entity], next);
+}

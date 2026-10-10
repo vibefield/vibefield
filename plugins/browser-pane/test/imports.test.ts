@@ -128,7 +128,7 @@ describe("the browser pane reaches ICE through the SDK's doors alone (K-L1)", ()
     // the device module names only Position, Size and the catalog's read helper of that door
     const device = readFileSync(join(PKG, "src/device.ts"), "utf8");
     expect(/import \{ ([^}]+) \} from "@vibefield\/plugin-sdk\/canvas"/.exec(device)?.[1]).toBe(
-      "getWidgetType, Position, Size",
+      "getWidgetType, Position, Size, type WidgetType",
     );
   });
 

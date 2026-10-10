@@ -7,8 +7,14 @@
 // go round (the silhouette as its eye sees it), its look from the palette (theme.ts), its rung (the head's raster band),
 // its desk state (the heads, the deferred pages' wake — local.ts) and its OPENING: picked up into the hand, read at the
 // reading size — ICE's pick-up (design-015 §8), never a camera lean-in (PT-1 ruling 2).
+//
+// PT-3 — IN USE: in hand its page and its head's controls are NAMED PARTS (`heldPartAt` — at rest every point stays the pane),
+// the wheel over it is the page's (`open.wheel: "kind"`), the cursor over its page is the page's own (`open.cursor`), Esc stays
+// the desk's (one press puts it down), and the held bar's tools WORK — back, forward, reload (stop while it loads), the address
+// (its DOM half's editor over the capsule — hand.ts), the device (PT-1's switch).
 
 import {
+  type HeldToolApi,
   type HeldToolDef,
   type KindProgram,
   type LiveFace,
@@ -22,7 +28,9 @@ import {
   stringProp,
 } from "@vibefield/plugin-sdk/desk";
 import { displayOf, PROMPT } from "./address";
+import { nextDevice } from "./device";
 import { deviceOf } from "./devices";
+import { handOf } from "./hand";
 import { bandDensity, bandFor, headKey, headStateOf, rungFor } from "./head";
 import { stillSplit } from "./head-still";
 import { BROWSER_PANE_KIND, PANE_SCHEMES, type PaneScheme, SAMPLE_URL } from "./ids";
@@ -31,6 +39,10 @@ import {
   type BrowserLaw,
   castPane,
   glowReach,
+  HELD_CONTROLS,
+  type HeldPart,
+  heldPartAt,
+  openExtent,
   type PaneGeometry,
   type PaneShape,
   paneReach,
@@ -83,23 +95,63 @@ export function pagePlan(url: string, S: PaneShape, scheme: "light" | "dark"): P
   };
 }
 
-/** The held bar's tools — DECLARED ONLY in PT-1 (no `kind`: the bar shows them dim and nothing runs them; PT-3 works them). */
+/** A held control's act from the bar (or its chord, when the keymap has it): the hand on this world runs it on the pane in hand. */
+const runControl =
+  (control: HeldPart) =>
+  (api: HeldToolApi): void =>
+    handOf(api.world)?.tool(api.entity, control);
+
+/**
+ * The held bar's tools (PT-3 ruling 8) — ACTIONS now: ‹ back, › forward, ↻ reload (✕ stop while the page loads) through the page's
+ * navigation, the ADDRESS (the one editor over the head's capsule), the DEVICE (PT-1's switch, to the next device). The chords
+ * are the browser's (⌘[ ⌘] ⌘R ⌘L) — while the page's lease holds the keys, the lease runs them (ruling 7). ICE's bar has no word
+ * for a slot's state, so a slot stays lit where there is nowhere to go and its act does nothing; the HEAD draws the truth (a
+ * hairline chevron, ✕ while loading).
+ */
 export const PANE_TOOLS: readonly HeldToolDef[] = [
-  { id: "back", label: "Back", hint: "⌘[", glyph: { path: "M14.5 5.5 L8 12 L14.5 18.5" } },
-  { id: "forward", label: "Forward", hint: "⌘]", glyph: { path: "M9.5 5.5 L16 12 L9.5 18.5" } },
+  {
+    id: "back",
+    label: "Back",
+    kind: "action",
+    keys: ["mod+["],
+    hint: "⌘[",
+    glyph: { path: "M14.5 5.5 L8 12 L14.5 18.5" },
+    run: runControl("back"),
+  },
+  {
+    id: "forward",
+    label: "Forward",
+    kind: "action",
+    keys: ["mod+]"],
+    hint: "⌘]",
+    glyph: { path: "M9.5 5.5 L16 12 L9.5 18.5" },
+    run: runControl("forward"),
+  },
   {
     id: "reload",
     label: "Reload",
+    kind: "action",
+    keys: ["mod+r"],
     hint: "⌘R",
     glyph: { path: "M18.5 12 A6.5 6.5 0 1 1 15.6 6.6 M18.5 4.5 V9 H14" },
+    run: runControl("reload"),
   },
   {
     id: "address",
     label: "Address",
+    kind: "action",
+    keys: ["mod+l"],
     hint: "⌘L",
     glyph: { path: "M7 8.5 H17 A3.5 3.5 0 0 1 17 15.5 H7 A3.5 3.5 0 0 1 7 8.5 Z" },
+    run: runControl("address"),
   },
-  { id: "device", label: "Device", glyph: { path: "M6 6.5 H18 V15.5 H6 Z M3.5 18.5 H20.5" } },
+  {
+    id: "device",
+    label: "Device",
+    kind: "action",
+    glyph: { path: "M6 6.5 H18 V15.5 H6 Z M3.5 18.5 H20.5" },
+    run: nextDevice,
+  },
 ];
 
 /** The pane's program for a host's shader text (the kit's pieces from it; its own from shaders.ts): its pass on the root's mat. */
@@ -121,14 +173,20 @@ export interface BrowserPaneKindOptions {
 export function paneOpening(law: BrowserLaw = BROWSER): OpenBinding {
   return {
     // the page plus the head, in the pane's own desk units, centred as its rect is
-    extent: ({ rect, props }) => {
-      const S = shapeOf(rect, deviceOf(props.device), law);
-      const top = -S.half[1];
-      const foot = S.page[1] + S.page[3];
-      return { cx: rect.cx, cy: rect.cy + (top + foot) / 2, w: 2 * S.page[2], h: foot - top };
-    },
+    extent: ({ rect, props }) => openExtent(rect, shapeOf(rect, deviceOf(props.device), law)),
     pose: "camera",
     tools: PANE_TOOLS,
+    // PT-3 — the wheel over it is its page's (the hand never pans for it); Esc the desk's (one press puts it down)
+    wheel: "kind",
+    escape: "desk",
+    // the cursor over its page is the page's own; over a control the head's (a lit chevron, the reload, the capsule)
+    cursor: ({ entity, part, local }) => {
+      const info = (local as PaneLocal | undefined)?.page(entity)?.info;
+      if (part === "page") return info?.cursor;
+      if (part === "back") return info?.back === true ? "pointer" : undefined;
+      if (part === "forward") return info?.forward === true ? "pointer" : undefined;
+      return (HELD_CONTROLS as readonly string[]).includes(part) ? "pointer" : undefined;
+    },
     // a live page's word is the address it is at (its producer's truth — a redirect's), a still's the one it was given
     readout: ({ props, entity, local }) =>
       displayOf((local as PaneLocal | undefined)?.page(entity)?.info.address ?? urlOf(props())) ||
@@ -152,7 +210,15 @@ export function browserPaneKind(
       // by night a lit page's glow reaches round the pane: the quad grows to hold it (a still's, or a live page's)
       const url = urlOf(ctx.props);
       const lit = ctx.theme.name === "dark" && (url === SAMPLE_URL || isPageUrl(url, SAMPLE_URL));
-      return resolvePane(ctx.rect, ctx.flux, S, ctx.lamp, law, lit ? glowReach(law) : 0);
+      return resolvePane(
+        ctx.rect,
+        ctx.flux,
+        S,
+        ctx.lamp,
+        law,
+        lit ? glowReach(law) : 0,
+        ctx.held !== undefined,
+      );
     },
     record(G: PaneGeometry, ctx: ObjectContext): PaneInstance {
       const look = ctx.look as PaneLookValues | undefined;
@@ -180,6 +246,12 @@ export function browserPaneKind(
           S,
         );
       else local?.drop(ctx.entity);
+      if (face !== undefined) {
+        // PT-3 — the url it read (one that moved under the page is followed), and, in hand, where the hand's points land
+        local?.follow(ctx.entity, url);
+        if (ctx.held !== undefined)
+          local?.laid(ctx.entity, G, openExtent(ctx.rect, S), ctx.view.zoom);
+      }
       const words = face === undefined ? undefined : local?.page(ctx.entity);
       const state = headStateOf(url, S, words?.info);
       const tpu = bandDensity(S, bandFor(ctx.view.zoom * ctx.view.dpr));
@@ -218,10 +290,10 @@ export function browserPaneKind(
       };
     },
     // what is drawn is what is picked: the slab as its eye sees it — the face, the arris (a wall, were one seen). At rest
-    // every point of it is the pane itself (`content`): a drag on the head or the page moves it. The parts are named by
-    // the law (`pickPane`, `controlAt`) for the pane in use — PT-3's.
+    // every point of it is the pane itself (`content`): a drag on the head or the page moves it. IN HAND (PT-3 ruling 2) its
+    // page and its head's controls are named parts — presses there are the kind's (`heldPartAt`), the rest is the pane's.
     hit: (G: PaneGeometry, wx: number, wy: number): ObjectHit | null =>
-      castPane(G, wx, wy) === null ? null : "content",
+      G.held === true ? heldPartAt(G, wx, wy) : castPane(G, wx, wy) === null ? null : "content",
     // the desk's marks go round the silhouette as the pane's own eye sees it (its corner, magnified as it is)
     frame: (G: PaneGeometry): MarkFrame => {
       const s = silhouetteOf(G);

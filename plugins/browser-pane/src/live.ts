@@ -16,6 +16,9 @@
 //    the law again with the same sight — a NEW VIEWPORT is the source's relayout, sent at most once each `PAGE_REMAKE_MS` while
 //    the size moves (the still's re-cut, PT-1, is now the source's) and once more when it rests. The kind is due NOW while a
 //    frame was drawn its sight has not stepped over, or when a held-back viewport falls due; never else.
+//  - IN USE (PT-3): the face is SENT what the hand gives it (`send` — the local's `held`, the hand's lease) and the page's
+//    CURSOR is its word (`LiveInfo.cursor`): a cursor that moves asks a frame (`redraw` — the desk's cursor is read in a frame),
+//    never a remake — the record does not read it.
 
 import {
   createSight,
@@ -25,6 +28,7 @@ import {
   type LiveBrowserSpec,
   type LiveFace,
   type LiveInfo,
+  type LiveInput,
   type LiveState,
   type Sight,
 } from "@vibefield/plugin-sdk/desk";
@@ -50,6 +54,8 @@ export interface PaneFaceStats {
   readonly landed: number;
   readonly redraws: number;
   readonly remakes: number;
+  /** PT-3: inputs sent to the faces. */
+  readonly sent: number;
   /** Demands sent (change-only), and new viewports held back while a size moved. */
   readonly demands: number;
   readonly held: number;
@@ -88,15 +94,20 @@ export interface PaneFaces {
   words(
     e: Entity,
   ): { readonly key: string; readonly state: LiveState; readonly info: LiveInfo } | undefined;
+  /** PT-3 — `e`'s face if it is open (never opens one). */
+  opened(e: Entity): LiveFace | undefined;
+  /** PT-3 — send `e`'s face an input (false: no face, or a view-only one). */
+  send(e: Entity, input: LiveInput): boolean;
   forget(e: Entity): void;
   dispose(): void;
   stats(): PaneFaceStats;
 }
 
-/** What a face says that the record reads, as one string. */
+/** What a face says that the record reads, as one string — never its cursor (the desk reads that in a frame, not a record). */
 const wordsOf = (face: LiveFace): string => {
   const s = face.state();
-  return JSON.stringify([s.is, s.is === "failed" ? s.reason : null, face.info()]);
+  const { cursor: _cursor, ...said } = face.info();
+  return JSON.stringify([s.is, s.is === "failed" ? s.reason : null, said]);
 };
 
 export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BROWSER): PaneFaces {
@@ -107,7 +118,16 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
   const woken = new Set<Entity>();
   /** Panes whose shape moved since their last demand: the law is asked again with the sight it has. */
   const relaw = new Set<Entity>();
-  const counts = { opened: 0, closed: 0, landed: 0, redraws: 0, remakes: 0, demands: 0, held: 0 };
+  const counts = {
+    opened: 0,
+    closed: 0,
+    landed: 0,
+    redraws: 0,
+    remakes: 0,
+    demands: 0,
+    held: 0,
+    sent: 0,
+  };
 
   const close = (e: Entity): void => {
     const f = faces.get(e);
@@ -119,7 +139,7 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
     counts.closed += 1;
   };
 
-  /** A take that landed: a redraw for a frame in the same texture, a remake for a new texture or new words. */
+  /** A take that landed: a redraw for a frame in the same texture (or a cursor that moved), a remake for a new texture or new words. */
   const landed = (e: Entity, f: FaceEntry): "redraw" | "remake" => {
     counts.landed += 1;
     const t = f.face.texture();
@@ -240,6 +260,14 @@ export function createPaneFaces(host: KindHost | undefined, law: BrowserLaw = BR
       return f === undefined
         ? undefined
         : { key: f.key, state: f.face.state(), info: f.face.info() };
+    },
+    opened: (e) => faces.get(e)?.face,
+    send(e, input) {
+      const f = faces.get(e)?.face;
+      if (f?.input === undefined) return false;
+      counts.sent += 1;
+      f.input(input);
+      return true;
     },
     forget(e) {
       close(e);

@@ -6,13 +6,17 @@
 // viewport is sent at most once each PAGE_REMAKE_MS while the size moves, and once more when it rests. The record carries the
 // face (the film before its first frame, its texture after), the head says the page's own words, the hand reads its address.
 import {
+  BROWSER_NAVIGATION,
+  type BrowserNavigationCommand,
   DEFAULT_GRID,
   type Entity,
+  type HeldEvent,
   type KindHost,
   LIVE,
   type LiveDemand,
   type LiveFace,
   type LiveInfo,
+  type LiveInput,
   type LiveState,
   type LiveTexture,
   lampOf,
@@ -22,16 +26,22 @@ import {
 import { productPalette } from "@vibefield/plugin-sdk/testing";
 import { describe, expect, it } from "vitest";
 import {
+  bandLayout,
   browserPaneKind,
   createPaneLocal,
   deviceById,
+  faceOfPage,
   isPageUrl,
+  openExtent,
   PAGE_REMAKE_MS,
   PANE_SIZE,
+  type PaneGeometry,
   type PaneInstance,
   paneDemand,
   paneLook,
+  pointAt,
   SAMPLE_URL,
+  seen,
   shapeOf,
 } from "../src";
 
@@ -44,6 +54,7 @@ function fakeFace(key: string, arrived: () => void) {
   let info: LiveInfo = {};
   let owed = false;
   const demands: LiveDemand[] = [];
+  const inputs: LiveInput[] = [];
   let closed = 0;
   /** The host's texture is ONE object for the face's life (ICE's writer): a present moves its revision, a resize its epoch. */
   const put = (t?: Partial<LiveTexture>): void => {
@@ -66,6 +77,7 @@ function fakeFace(key: string, arrived: () => void) {
     land(t?: Partial<LiveTexture>): void;
     say(next: { state?: LiveState; info?: LiveInfo }): void;
     demands: LiveDemand[];
+    inputs: LiveInput[];
     closed(): number;
   } = {
     key,
@@ -79,6 +91,9 @@ function fakeFace(key: string, arrived: () => void) {
     info: () => info,
     demand: (d) => {
       demands.push(d);
+    },
+    input: (e) => {
+      inputs.push(e);
     },
     close: () => {
       closed += 1;
@@ -100,14 +115,25 @@ function fakeFace(key: string, arrived: () => void) {
       arrived();
     },
     demands,
+    inputs,
     closed: () => closed,
   };
   return face;
 }
 
 /** A host lending `LIVE` (or not), its doors counted; the desk's frames moved by the test. */
-function fakeHost(opts: { live?: boolean; keys?: Record<number, string>; holds?: boolean } = {}) {
+function fakeHost(
+  opts: { live?: boolean; keys?: Record<number, string>; holds?: boolean; nav?: boolean } = {},
+) {
   const opened: { key: string; spec: Record<string, unknown> }[] = [];
+  /** PT-3: what the host's second service was asked — a page navigated by its key. */
+  const navigations: { key: string; command: BrowserNavigationCommand }[] = [];
+  const navigation = {
+    navigate(key: string, command: BrowserNavigationCommand) {
+      navigations.push({ key, command });
+      return true;
+    },
+  };
   const faces = new Map<string, ReturnType<typeof fakeFace>>();
   const n = { wake: 0, redraw: 0, remake: [] as Entity[] };
   let frames = 0;
@@ -124,7 +150,11 @@ function fakeHost(opts: { live?: boolean; keys?: Record<number, string>; holds?:
   const host: KindHost = {
     pass: () => undefined,
     use: <T>(key: { name: string }) =>
-      opts.live !== false && key.name === LIVE.name ? (sources as T) : undefined,
+      opts.live !== false && key.name === LIVE.name
+        ? (sources as T)
+        : opts.nav !== false && key.name === BROWSER_NAVIGATION.name
+          ? (navigation as T)
+          : undefined,
     keyOf: (e: Entity) => keys[e as number],
     wake: () => {
       n.wake += 1;
@@ -141,6 +171,7 @@ function fakeHost(opts: { live?: boolean; keys?: Record<number, string>; holds?:
     host,
     opened,
     faces,
+    navigations,
     n,
     /** A frame drawn: the slot's view tells the sight what it drew of `e`'s page, then the count moves. */
     draw(local: ReturnType<typeof createPaneLocal>, e: Entity, zoom: number, target?: "hand") {
@@ -439,5 +470,184 @@ describe("the pane's live page — its record", () => {
           })
         : word,
     ).toBe("example.org");
+  });
+});
+
+describe("PT-3 — the pane in use: its hand's input, its controls, the url it follows", () => {
+  const k = browserPaneKind();
+  const KEY = "13918995204487956201-1";
+  /** A pane IN HAND, recorded at the hand's zoom: its local, its face (a texture landed at `logical`), where its parts are. */
+  const inHand = (logical: readonly [number, number] = [640, 400], zoom = 2) => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const held = {
+      ...ctxOf({ url: PAGE }, local),
+      held: { e: 1, open: true, grow: 1, snap: true },
+      view: { camX: 0, camY: 0, zoom, width: 1200, height: 800, dpr: 2 },
+    } as unknown as ObjectContext;
+    const G = k.resolve(held) as PaneGeometry;
+    expect(G.held).toBe(true);
+    k.record(G, held);
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.land({ logical });
+    local.tick?.(0);
+    const ext = openExtent(held.rect, G.shape);
+    /** A face point (the pane's frame) as the hand tells it: the desk point the pane's own eye sees it at, from the extent's centre. */
+    const hand = (u: number, v: number): readonly [number, number] => {
+      const w = seen(G.eye, pointAt(G, u, v));
+      return [w[0] - ext.cx, w[1] - ext.cy];
+    };
+    return { t, local, G, face, hand };
+  };
+  const press = (
+    phase: "down" | "move" | "up",
+    at: readonly [number, number],
+    part: string | null,
+    buttons: number,
+    count = 1,
+  ): HeldEvent =>
+    ({
+      type: "pointer",
+      phase,
+      x: at[0],
+      y: at[1],
+      part,
+      button: phase === "move" ? -1 : 0,
+      buttons,
+      count: phase === "move" ? 0 : count,
+    }) as HeldEvent;
+
+  it("a press on the PAGE, its moves wherever they go and its release reach the face in the DISPLAYED frame's logical px; a hover over the page too, off it not", () => {
+    const { local, G, face, hand } = inHand([640, 400]);
+    const mid = hand(...faceOfPage(G.shape, 640, 400));
+    const corner = hand(...faceOfPage(G.shape, 128, 80));
+    const off = hand(G.shape.half[0] + 10, 0);
+    local.held?.(1 as Entity, [
+      press("down", mid, "page", 1, 2),
+      press("move", off, null, 1),
+      press("up", corner, "content", 0, 2),
+      press("move", corner, "page", 0),
+      press("move", off, "content", 0),
+    ]);
+    const near = (a: number, b: number) => Math.abs(a - b) < 1e-6;
+    const sent = face.inputs.map((i) =>
+      i.kind === "pointer" ? [i.phase, i.x, i.y, i.buttons, i.count] : i.kind,
+    );
+    // the page's px scaled to the frame on display (640 × 400 of the 1280 × 800 page): halved
+    expect(sent).toHaveLength(4);
+    type Sent = [string, number, number, number, number];
+    const [down, moved, up, hover] = sent as [Sent, Sent, Sent, Sent];
+    expect(down[0]).toBe("down");
+    expect(near(down[1], 320) && near(down[2], 200)).toBe(true);
+    expect(down.slice(3)).toEqual([1, 2]);
+    // the press's move off the page is still the page's (a drag selects past its edge)
+    expect(moved[0]).toBe("move");
+    expect(moved[1]).toBeGreaterThan(640);
+    expect(up[0]).toBe("up");
+    expect(near(up[1], 64) && near(up[2], 40)).toBe(true);
+    // a hover over the page: the page's; a hover off it with nothing pressed: not
+    expect(hover[0]).toBe("move");
+    expect(local.faces()).toMatchObject({ sent: 4 });
+  });
+
+  it("the WHEEL over the page scrolls it by what the finger moved on the screen; a wheel off the page is not the page's", () => {
+    const { local, G, face, hand } = inHand([1280, 800], 2.5);
+    const mid = hand(...faceOfPage(G.shape, 640, 400));
+    local.held?.(1 as Entity, [
+      { type: "wheel", x: mid[0], y: mid[1], dx: 0, dy: 120 },
+      { type: "wheel", x: G.shape.half[0] + 50, y: 0, dx: 0, dy: 120 },
+    ]);
+    expect(face.inputs).toHaveLength(1);
+    const w = face.inputs[0];
+    expect(w?.kind).toBe("wheel");
+    if (w?.kind === "wheel") {
+      // 120 CSS px of the hand at zoom 2.5, a page px being 2.5 × the density's desk units on screen
+      expect(w.dy).toBeCloseTo(120 / (2.5 * G.shape.scale), 9);
+      expect(w.dx).toBe(0);
+    }
+  });
+
+  it("a CONTROL's press acts on its release over it — back, forward, reload (stop while it loads) through the page's navigation, the address the hand's — a release elsewhere nothing", () => {
+    const { t, local, G, face, hand } = inHand();
+    const L = bandLayout(G.shape);
+    const at = (c: readonly [number, number] | null) => hand(c?.[0] ?? 0, c?.[1] ?? 0);
+    const click = (part: string, c: readonly [number, number]) =>
+      local.held?.(1 as Entity, [press("down", c, part, 1), press("up", c, part, 0)]);
+    click("back", at(L.back));
+    click("forward", at(L.forward));
+    click("reload", at(L.reload));
+    face.say({ state: { is: "live" }, info: { address: PAGE, loading: 0.5 } });
+    local.tick?.(0);
+    click("reload", at(L.reload));
+    // a press on back released over the page: nothing
+    local.held?.(1 as Entity, [
+      press("down", at(L.back), "back", 1),
+      press("up", at(L.back), "page", 0),
+    ]);
+    expect(t.navigations).toEqual([
+      { key: KEY, command: { action: "back" } },
+      { key: KEY, command: { action: "forward" } },
+      { key: KEY, command: { action: "reload" } },
+      { key: KEY, command: { action: "stop" } },
+    ]);
+    // a control's press is never the page's
+    expect(face.inputs).toEqual([]);
+    // the address: the hand's (its DOM half binds the door)
+    const addressed: Entity[] = [];
+    local.bind({ address: (e) => addressed.push(e) });
+    click("address", hand(L.address[0], L.address[1]));
+    expect(addressed).toEqual([1]);
+    // with no navigation lent, a control does nothing and says so
+    const bare = createPaneLocal(fakeHost({ nav: false }).host);
+    expect(bare.navigate(1 as Entity, { action: "back" })).toBe(false);
+  });
+
+  it("the url its record reads: one that moved UNDER the live page is FOLLOWED, the page's own navigation never echoed — and `addressed` is where a page is that its record has not read", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    const NEXT = "http://127.0.0.1:4321/next";
+    const PEER = "http://127.0.0.1:4321/peer";
+    const recordAt = (url: string) => {
+      const ctx = ctxOf({ url }, local);
+      k.record(k.resolve(ctx), ctx);
+    };
+    recordAt(PAGE);
+    const face = t.faces.get(KEY);
+    if (face === undefined) throw new Error("no face");
+    face.say({ state: { is: "live" }, info: { address: PAGE } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([]);
+    // the page went somewhere of its own: where it is, the record has not read — the hand writes it
+    face.say({ state: { is: "live" }, info: { address: NEXT } });
+    local.tick?.(0);
+    expect([...local.addressed()]).toEqual([[1, NEXT]]);
+    // the write lands: the record reads it — no navigation (it is where the page is), nothing addressed
+    recordAt(NEXT);
+    expect(t.navigations).toEqual([]);
+    expect([...local.addressed()]).toEqual([]);
+    // a peer's navigation arrives through the document: the page follows it, by its key — never re-opened
+    recordAt(PEER);
+    expect(t.navigations).toEqual([{ key: KEY, command: { action: "go", url: PEER } }]);
+    expect(t.opened).toHaveLength(1);
+    // the same url read again: nothing more
+    recordAt(PEER);
+    expect(t.navigations).toHaveLength(1);
+  });
+
+  it("a page's CURSOR that moves asks a frame — never a remake: the record does not read it", () => {
+    const t = fakeHost();
+    const local = createPaneLocal(t.host);
+    local.face(1 as Entity, spec, S);
+    const face = t.faces.get(KEY);
+    face?.say({ state: { is: "live" }, info: { address: PAGE } });
+    local.tick?.(0);
+    const remakes = t.n.remake.length;
+    const redraws = t.n.redraw;
+    face?.say({ state: { is: "live" }, info: { address: PAGE, cursor: "pointer" } });
+    local.tick?.(1);
+    expect(t.n.remake).toHaveLength(remakes);
+    expect(t.n.redraw).toBe(redraws + 1);
+    expect(local.page(1 as Entity)?.info.cursor).toBe("pointer");
   });
 });
