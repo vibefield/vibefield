@@ -64,6 +64,20 @@ describe("the SDK's /desk door", () => {
     expectTypeOf<door.KindHost["frames"]>().toEqualTypeOf<iceDesk.KindHost["frames"]>();
   });
 
+  it("PT-3: types a kind's hand by ICE's names, and keys a browser page's navigation beside LIVE", () => {
+    // what the hand tells a kind in hand, and what its cursor reads — ICE's own types, by name (LT2's question 6)
+    expectTypeOf<door.HeldEvent>().toEqualTypeOf<iceDesk.HeldEvent>();
+    expectTypeOf<door.HeldCursorContext>().toEqualTypeOf<iceDesk.HeldCursorContext>();
+    // the second service (ruling 10): its own key, never LIVE's — navigation goes through the face's page, by its key
+    expect(door.BROWSER_NAVIGATION.name).toBe("vibefield.browser.navigation");
+    expect(door.BROWSER_NAVIGATION).not.toBe(door.LIVE);
+    expectTypeOf<door.BrowserNavigation["navigate"]>().toEqualTypeOf<
+      (key: string, command: door.BrowserNavigationCommand) => boolean
+    >();
+    expectTypeOf<{ action: "go"; url: string }>().toMatchTypeOf<door.BrowserNavigationCommand>();
+    expectTypeOf<{ action: "stop" }>().toMatchTypeOf<door.BrowserNavigationCommand>();
+  });
+
   it("hands over the kind contract, the placement keys and the service keys", () => {
     expect(door.defineObject).toBe(iceDesk.defineObject);
     expect(door.isObjectKind).toBe(iceDesk.isObjectKind);

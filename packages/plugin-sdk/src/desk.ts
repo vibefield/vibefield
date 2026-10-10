@@ -37,6 +37,7 @@
 
 import type { MenuActionDef } from "@vibecook/ice";
 import type { DriverFactory, ObjectDef, ObjectHost, ObjectKind } from "@vibecook/ice/desk";
+import { serviceKey } from "@vibecook/ice/desk/kit";
 
 export type {
   Entity,
@@ -61,6 +62,8 @@ export {
   driversOf,
   FLUX_REST,
   type HeldContext,
+  type HeldCursorContext,
+  type HeldEvent,
   type HeldReadoutContext,
   hostOf,
   type InsideContext,
@@ -194,6 +197,30 @@ export function liveBrowserSpec(
   if (typeof label !== "string") return undefined;
   return { source, url, viewport: [w, h], deviceScaleFactor, scheme, label };
 }
+
+/**
+ * A BROWSER PAGE'S NAVIGATION (PT-3 ruling 10) — the second service VibeField lends beside `LIVE`. ICE's `LiveFace` has no
+ * navigation verb and gets none (the desk stays ignorant of sources), so a browser kind navigates its face's page THROUGH this
+ * service, by the face's key — never by re-opening it: a face is keyed by its object's durable key and main's custody re-binds
+ * a page by it, so an address written under a running page cannot reach the page. The host gates it by the object, as it
+ * gates `LIVE` (the kind's plugin granted `surface.attach` and `surface.browser`), and `go` meets the browser's own address
+ * policy at the producer.
+ */
+export type BrowserNavigationCommand =
+  | { readonly action: "go"; readonly url: string }
+  | { readonly action: "back" }
+  | { readonly action: "forward" }
+  | { readonly action: "reload" }
+  | { readonly action: "stop" };
+
+/** What the host lends under `BROWSER_NAVIGATION`. */
+export interface BrowserNavigation {
+  /** Send the page `key`'s face holds a navigation — false: nothing sent (no page open for the key, or one the host refuses). */
+  navigate(key: string, command: BrowserNavigationCommand): boolean;
+}
+
+/** The key the host lends a browser kind its pages' navigation under (`KindHost.use(BROWSER_NAVIGATION)`). */
+export const BROWSER_NAVIGATION = serviceKey<BrowserNavigation>("vibefield.browser.navigation");
 
 // docs:begin object-binding
 /**
