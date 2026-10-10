@@ -281,6 +281,34 @@ describe("R1–R3: the ledger", () => {
     expect(sections.flatMap((s) => s.ids ?? [])).not.toContain("p1:away");
   });
 
+  it("R3 + H5: Temporary's fold never says 0 — none recent, it counts the older ones and says so; none at all, it is a plain row", () => {
+    const temporaryOf = (temporary: HistoryListing["sections"]["temporary"]) => {
+      const model = hostModelOf(
+        { ...LISTING, sections: { ...LISTING.sections, temporary } },
+        ROSTER,
+        RUNS,
+        PROVIDERS,
+      );
+      return {
+        any: projectSectionsOf(model, NO_HOST_STATE),
+        laptop: projectSectionsOf(model, { ...NO_HOST_STATE, desktop: STUDIO }),
+      };
+    };
+    // nothing in the last 14 days, two older: the line says what it holds
+    const older = temporaryOf({ key: "p1:temp", recent: [], older: ["s-tmp-old", "s-tmp-x"] });
+    expect(older.any.find((s) => s.key === "temporary")?.fold).toEqual({
+      label: "Temporary · older than 14 days",
+      act: "Show",
+      count: 2,
+    });
+    // nothing at all: no fold — Temporary is an ordinary row of the rest
+    const empty = temporaryOf({ key: "p1:temp", recent: [], older: [] });
+    expect(empty.any.map((s) => s.key)).not.toContain("temporary");
+    expect(empty.any.find((s) => s.key === "projects")?.ids).toBeUndefined();
+    expect(empty.laptop.find((s) => s.key === "projects")?.ids).toContain("p1:temp");
+    expect(empty.any.flatMap((s) => (s.fold === undefined ? [] : [s.fold.count]))).not.toContain(0);
+  });
+
   it("R3 + R7: a desktop chosen names every section's rows, so a project not on it is not drawn", () => {
     const sections = projectSectionsOf(MODEL, { ...NO_HOST_STATE, desktop: LAPTOP });
     expect(sections.every((section) => section.ids !== undefined)).toBe(true);

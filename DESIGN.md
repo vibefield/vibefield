@@ -1808,7 +1808,9 @@ its hot-point glow and rim left with the card (above); its last two rows are the
       **Pinned**, then the projects in the room's own order (each desktop's **Home** among them, a
       row like any other, J11), then **Temporary** as ONE folded line at the foot — "Temporary ·
       6" (its sessions of the last 14 days) and **Show** — and under it, folded the same way,
-      **Hidden**. An empty section draws nothing.
+      **Hidden**. An empty section draws nothing, and a fold never says "0": with nothing from the
+      last 14 days the line reads "Temporary · older than 14 days · 3", and a Temporary holding no
+      session here is an ordinary row, with nothing to fold away.
     - **In a project:** **Live now** first, then the room's days; in Temporary, the sessions older
       than 14 days fold behind **"Older than 14 days · n · Show older"** (PJ-L4).
     - **A session row** (PJ-D9) carries, in its id slot, this desktop's mark and the folder's path,

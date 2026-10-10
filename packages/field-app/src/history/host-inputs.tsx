@@ -743,18 +743,30 @@ export function projectSectionsOf(model: HistoryHostModel, state: HistoryHostSta
     { key: "live", title: "Live now", ids: live.map((p) => p.key), order: "room" },
     { key: "pinned", title: "Pinned", ids: pinned.map((p) => p.key), order: "room" },
   ];
-  const rest = shown.filter((project) => project.hidden !== true && project.bucket !== "temp");
+  // H5 — Temporary folds at the foot while it holds sessions here, counted by
+  // those that show (James: "Temporary · 6"); with none from the last 14 days,
+  // by the older ones waiting behind it, and the line says so. Holding none at
+  // all, there is nothing to fold away: it is a plain row. A fold never says
+  // "0" (the room draws whatever count it is given, and its rows without one).
+  const recent = model.sections.temporary?.recent.length ?? 0;
+  const older = model.sections.temporary?.older.length ?? 0;
+  const folds = recent + older > 0;
+  const rest = shown.filter(
+    (project) => project.hidden !== true && (project.bucket !== "temp" || !folds),
+  );
   sections.push(
     state.desktop === null
       ? { key: "projects" }
       : { key: "projects", ids: rest.map((p) => p.key), order: "room" },
   );
-  const recent = model.sections.temporary?.recent.length ?? 0;
-  if (temporary.length > 0)
+  if (temporary.length > 0 && folds)
     sections.push({
       key: "temporary",
       ids: temporary.map((p) => p.key),
-      fold: { label: "Temporary", act: "Show", count: recent },
+      fold:
+        recent > 0
+          ? { label: "Temporary", act: "Show", count: recent }
+          : { label: "Temporary · older than 14 days", act: "Show", count: older },
     });
   if (hidden.length > 0)
     sections.push({

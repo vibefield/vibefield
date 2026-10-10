@@ -4,8 +4,9 @@
  * fidelity"): the SHIPPING view (`HistoryRoomView`) over the SHIPPING adapter
  * (`history/doors.ts`) with a fixture fieldd under it (`history-fixtures.ts`,
  * data only), handed the room's host inputs by the shipping builder. The room
- * lists fieldd's projects by their names — Home a row, Temporary folded at
- * the foot, Live now first — with the chosen session in its project, and the
+ * lists fieldd's projects by their names — Home a row, an empty Temporary a
+ * plain row (it folds at the foot only while it holds sessions), Live now
+ * first — with the chosen session in its project, and the
  * project that also holds a checkout on the asleep laptop shows this
  * desktop's folder alone (the device guard, drawn) and says what the laptop
  * holds by its mark and name.
@@ -52,12 +53,13 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
     await act(async () => root?.render(<HistoryPreview state="projects" />));
     const rows = await until(() => {
       const found = [...(host?.querySelectorAll(".ah-project-list-item") ?? [])];
-      return found.length >= 7 ? found : null;
+      return found.length >= 8 ? found : null;
     }, "the projects' rows");
     const names = rows.map(
       (row) => row.querySelector(".ah-project-list-item__header strong")?.textContent,
     );
-    // Home is a row; Temporary is one folded row at the foot (H5, J11)
+    // Home is a row (J11); the demo's Temporary holds no session here, so it
+    // is a plain row too — a fold never says "0" (H5)
     expect(new Set(names)).toEqual(
       new Set([
         "vibe-field",
@@ -67,12 +69,10 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
         "ghosttea",
         "truffle",
         "Home",
+        "Temporary",
       ]),
     );
-    const fold = host?.querySelector<HTMLButtonElement>('.ah-fold[data-section="temporary"]');
-    expect(fold?.getAttribute("aria-expanded")).toBe("false");
-    expect(fold?.textContent).toContain("Temporary");
-    expect(fold?.textContent).toContain("Show");
+    expect(host?.querySelector('.ah-fold[data-section="temporary"]')).toBeNull();
     // R3 — Live now heads ① with the project one of whose sessions runs here
     const live = host?.querySelector('.ah-section[data-section="live"]');
     expect(live?.textContent).toBe("Live now");
