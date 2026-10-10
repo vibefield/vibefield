@@ -68,9 +68,9 @@ import {
 //   R6 ③'s head as every folder by desktop — one on another desktop says
 //      "Files stay on Studio" (PJ-D22) and is never opened here;
 //   R7 a desktop chip over the list, an agent chip over a project;
-//   H4 (ROOM API v3, James's slots) each project act where it acts: pin and
-//      hide at ①'s row end, "Not part of this project" on ③'s folder row,
-//      rename on ②'s name itself.
+//   H4 (ROOM API v3, James's slots) each project act where it acts: a `···`
+//      in ②'s head holding pin and hide, the same `···` at ①'s row end,
+//      "Not part of this project" on ③'s folder row, rename on ②'s name.
 
 /* ── the state the controller keeps, and its acts ──────────────────────── */
 
@@ -439,10 +439,11 @@ function newAgentAct(
   };
 }
 
-/** H4 — pin and hide, at ①'s row end (James's slot; ROOM API v3): a quiet
- * `···` opening the two rows. Temporary is not a project: it has none
- * (absent, never disabled — D-i6). */
-function projectRowAct(project: ProjectSummary, acts: HistoryHostActs): RoomAct | undefined {
+/** H4 — pin and hide: a quiet `···` opening the two rows, in ②'s head and
+ * ALSO at ①'s row end (James's ruling; ROOM API v3's row slot). Rename and
+ * split are never in it: each has its own place. Temporary is not a project:
+ * it has none (absent, never disabled — D-i6). */
+function pinHideAct(project: ProjectSummary, acts: HistoryHostActs): RoomAct | undefined {
   if (project.bucket === "temp") return undefined;
   const key = project.key;
   return {
@@ -811,7 +812,7 @@ export function historyHostInputs(
       if (found === undefined) return null;
       const devices = model.devices.filter((device) => found.devices.includes(device.id));
       const elsewhere = elsewhereCounts(model, found);
-      const rowAct = projectRowAct(found, acts);
+      const rowAct = pinHideAct(found, acts);
       return {
         marks: (
           <span className="vf-history-marks">
@@ -863,9 +864,13 @@ export function historyHostInputs(
     projectActs: (key, context) => {
       const found = project(key);
       if (found === undefined) return null;
-      // ②'s head keeps New agent alone: pin, hide, split and rename sit where
-      // they act (H4), so a `···` here would only repeat them
-      return [newAgentAct(model, found, context.folder, state, acts)];
+      // ②'s head: New agent, then the `···` of pin and hide (H4 (a) — ①'s
+      // rows carry the same two ALSO); rename is the name, split ③'s rows
+      const more = pinHideAct(found, acts);
+      return [
+        newAgentAct(model, found, context.folder, state, acts),
+        ...(more !== undefined ? [more] : []),
+      ];
     },
     projectRename: (key) => {
       const found = project(key);

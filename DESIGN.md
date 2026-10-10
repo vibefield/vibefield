@@ -1838,13 +1838,17 @@ its hot-point glow and rim left with the card (above); its last two rows are the
       "asleep", and how many of these projects live on it (one with none is dimmed, so a choice
       never empties the list); over a project's sessions, **any agent ▾** — the agents its
       sessions ran under, with their counts.
-    - **The project's acts sit where they act** (H4, James's ruling on the slots, built on ROOM
-      API v3 2026-10-10; desktop windows only — P2). Temporary has none of them: it is not a
-      project.
-      - **Pin and hide on ①'s row:** a quiet `···` at the row's end, before its time, opens
-        **Pin to the top** / **Unpin** and **Hide** / **Show again** ("It folds under Hidden, at
-        the list's foot"). A hidden project folds under **Hidden** at the list's foot, its row's
-        act saying **Show again**.
+    - **The project's acts sit where they act** (H4 (a), as James ruled it on docket v9: a `···`
+      in the project's head; rename on the name itself; split on a folder's row in the folder
+      dropdown; pin and hide also on list rows, with a Hidden foot — built on ROOM API v3
+      2026-10-10; desktop windows only — P2). Temporary has none of them: it is not a project.
+      - **A `···` in ②'s head,** after New agent, opens **Pin to the top** / **Unpin** and
+        **Hide** / **Show again** ("It folds under Hidden, at the list's foot") for the project
+        the column shows. Rename and split are not in it: each has its own place, below.
+      - **Pin and hide also on ①'s row:** the same quiet `···` at the row's end, before its
+        time, opens the same two rows — the ruling's "also": a project is pinned or hidden from
+        the list without being opened. A hidden project folds under **Hidden** at the list's
+        foot, its row's act saying **Show again**.
       - **Split on ③'s folder row:** each folder of a project with more than one, a desktop's
         Home excepted (J11), carries **Not part of this project** beside it — quiet until the row
         is under the pointer, → reaches it from the row; pressed, the folder leaves the project
@@ -1853,8 +1857,6 @@ its hot-point glow and rim left with the card (above); its last two rows are the
         Escape or leaving it keeps the old. A refusal stays in the field and says why under it —
         **"Could not rename — the project changed while you looked — try again"**, in fieldd's
         intent's own words — and a rename that took says **"Renamed to …"** on the line.
-      - ②'s head keeps one act of its own, **New agent**: with these in place a `···` there
-        would only repeat them, so it is gone.
     - **②'s card slot** carries the **suggestions** (PJ-D16): "vibe-field shares old history with
       **vf-docs**" with **Not the same** and **One project**.
     - **The card's look** (VibeField's own, inside the room's card slot; the suggestions are its

@@ -10,9 +10,9 @@
  * project that also holds a checkout on the asleep laptop shows this
  * desktop's folder alone (the device guard, drawn) and says what the laptop
  * holds by its mark and name. H4's acts are drawn where they act — a `···`
- * at each project's row end, "Not part of this project" on ③'s folder rows,
- * rename on ②'s name — and a rename asks the fixture fieldd, whose refusal
- * the room says under the name.
+ * of pin and hide in ②'s head and at each project's row end, "Not part of
+ * this project" on ③'s folder rows, rename on ②'s name — and a rename asks
+ * the fixture fieldd, whose refusal the room says under the name.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -125,9 +125,9 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
     ).toEqual(["desktop", "agent"]);
   }, 30_000);
 
-  it("H4 on the plate — the acts where they act: a `···` at each project's row end but Temporary's, ②'s head New agent alone, a split on ③'s folder rows, and a rename refused under ②'s name in the fixture fieldd's words", async () => {
+  it("H4 on the plate — the acts where they act: a `···` of pin and hide in ②'s head and at each project's row end but Temporary's, a split on ③'s folder rows, and a rename refused under ②'s name in the fixture fieldd's words", async () => {
     const rows = await plate();
-    // (a) pin and hide at ①'s row end: every project, never Temporary (not a project)
+    // (a) pin and hide ALSO at ①'s row end: every project, never Temporary (not a project)
     const acted = rows.filter(
       (row) => row.querySelector('.ah-hostact[data-place="row"][data-act="project-acts"]') !== null,
     );
@@ -160,17 +160,30 @@ describe("History by project — the catalog's plate (PJ-4)", () => {
         ?.click(),
     );
     expect(host?.querySelector(".ah-menu")).toBeNull();
-    // ②'s head keeps New agent alone, and its card slot is empty without a
-    // suggestion: the rename card is gone
+    // (a) ②'s head: New agent, then the `···` — pin and hide, and neither
+    // rename nor split in it. Its card slot is empty without a suggestion:
+    // the rename card is gone
     await until(
       () => host?.querySelector(".ah-project-list-item.is-selected"),
       "the chosen project",
     );
-    expect(
-      [...(host?.querySelectorAll('.ah-hostact[data-place="head"]') ?? [])].map((node) =>
-        node.getAttribute("data-act"),
-      ),
-    ).toEqual(["new-agent"]);
+    const head = [...(host?.querySelectorAll<HTMLElement>('.ah-hostact[data-place="head"]') ?? [])];
+    expect(head.map((node) => node.getAttribute("data-act"))).toEqual([
+      "new-agent",
+      "project-acts",
+    ]);
+    expect(head[1]?.getAttribute("aria-label")).toBe("Pin or hide vibe-field");
+    act(() => head[1]?.click());
+    expect(menuRows()).toEqual(["pin", "hide"]);
+    expect(host?.querySelector(".ah-frame > .ah-menu[data-layer] .ah-menu__act")).toBeNull();
+    act(() =>
+      host
+        ?.querySelector<HTMLElement>(
+          '.ah-frame > .ah-menu[data-layer] .ah-menu__item[data-key="hide"]',
+        )
+        ?.click(),
+    );
+    expect(host?.querySelector(".ah-menu")).toBeNull();
     expect(host?.querySelector(".ah-hostcard, .vf-history-card")).toBeNull();
     // (b) "Not part of this project" beside each of vibe-field's two folders
     act(() => host?.querySelector<HTMLElement>("button.ah-folderpick")?.click());

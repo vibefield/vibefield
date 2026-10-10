@@ -56,13 +56,13 @@ function HistoryStatePreview({ state }: { state: HistoryState }): ReactElement {
  * a fixture fieldd, handed the room's host inputs by the SHIPPING builder
  * (`historyHostInputs`) over the model the controller would gather — colours,
  * desktop marks, Live now / Home / Temporary, row acts, New agent, ③'s
- * folders, the chips, and the project's acts where they act (H4): pin and
- * hide at ①'s row end, "Not part of this project" on ③'s folder rows, rename
- * on ②'s name. The chips answer here as they do in the product, and a rename
- * asks the fixture fieldd through the shipping intent — which refuses, so the
- * plate shows how a refusal reads under the name; an act that would ask
- * fieldd otherwise (Resume, Jump to, New agent, pin, hide, split) does
- * nothing — a catalog acts on no one. */
+ * folders, the chips, and the project's acts where they act (H4): a `···`
+ * of pin and hide in ②'s head and at ①'s row end, "Not part of this project"
+ * on ③'s folder rows, rename on ②'s name. The chips answer here as they do
+ * in the product, and a rename asks the fixture fieldd through the shipping
+ * intent — which refuses, so the plate shows how a refusal reads under the
+ * name; an act that would ask fieldd otherwise (Resume, Jump to, New agent,
+ * pin, hide, split) does nothing — a catalog acts on no one. */
 function HistoryProjectsPreview(): ReactElement {
   const [fixture] = useState(() => historyProjectsFixture());
   const [openAt] = useState<RoomTarget>({ sessionId: FIXTURE_CHOSEN_SESSION });

@@ -550,8 +550,9 @@ describe("R5: New agent and the project's acts", () => {
       disabled: true,
       detail: "Model and effort can't be set from here yet (PJ-6)",
     });
-    // ②'s head keeps New agent alone: H4's acts sit where they act
-    expect(others).toEqual([]);
+    // ②'s head: New agent, then H4's `···` (its rows: the next test)
+    expect(others.map((act) => act.key)).toEqual(["project-acts"]);
+    expect(others[0]?.primary).toBeUndefined();
   });
 
   it("New agent follows ③: a folder on another desktop names why it can't start there, and its rows are dimmed", () => {
@@ -563,7 +564,40 @@ describe("R5: New agent and the project's acts", () => {
     expect(items(act?.menu).filter((row) => row.onSelect !== undefined)).toEqual([]);
   });
 
-  it("H4 (a): pin and hide at ①'s row end — each its intent; a pinned project unpins, a hidden one shows again; Temporary has none", () => {
+  it("H4 (a): a `···` in ②'s head — Pin to the top and Hide, each its intent, never rename nor split; a pinned project unpins, a hidden one shows again; Temporary's head is New agent alone", () => {
+    const acts = spyActs();
+    const inputs = historyHostInputs(MODEL, NO_HOST_STATE, acts);
+    const head = (key: string) => inputs.projectActs?.(key, { folder: null }) ?? [];
+    const more = head("p1:vibe")[1];
+    expect(more?.key).toBe("project-acts");
+    expect(more?.label).toBe("Pin or hide vibe-field");
+    expect(more?.onPress).toBeUndefined();
+    // vibe-field has three folders and a name: neither split nor rename is here
+    const rows = items(more?.menu);
+    expect(rows.map((row) => [row.key, row.label])).toEqual([
+      ["pin", "Pin to the top"],
+      ["hide", "Hide"],
+    ]);
+    rows[0]?.onSelect?.();
+    rows[1]?.onSelect?.();
+    expect(acts.intent.mock.calls).toEqual([
+      [
+        { key: "p1:vibe", op: "pin", pinned: true },
+        { done: "Pinned vibe-field", verb: "pin" },
+      ],
+      [
+        { key: "p1:vibe", op: "hide", hidden: true },
+        { done: "Hid vibe-field", verb: "hide it" },
+      ],
+    ]);
+    expect(items(head("p1:notes")[1]?.menu)[0]?.label).toBe("Unpin");
+    expect(items(head("p1:old")[1]?.menu)[1]?.label).toBe("Show again");
+    // Home is a project row like any other (J11); Temporary is not a project
+    expect(head("p1:home").map((act) => act.key)).toEqual(["new-agent", "project-acts"]);
+    expect(head("p1:temp").map((act) => act.key)).toEqual(["new-agent"]);
+  });
+
+  it("H4 (a): pin and hide ALSO at ①'s row end — the same two rows, each its intent; a pinned project unpins, a hidden one shows again; Temporary has none", () => {
     const acts = spyActs();
     const inputs = historyHostInputs(MODEL, NO_HOST_STATE, acts);
     const act = inputs.projectRow?.("p1:vibe")?.act;
