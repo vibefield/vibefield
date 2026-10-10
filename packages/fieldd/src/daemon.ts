@@ -10,6 +10,7 @@ import {
   AGENT_FIELD,
   AgentCatalogParams,
   AgentInterruptParams,
+  AgentRecordedLanesParams,
   AgentReportShownParams,
   type AgentReportShownResult,
   AgentResumeParams,
@@ -67,6 +68,7 @@ import {
   INDEX_MESH,
   INDEX_RECENT_DEFAULT_LIMIT,
   INDEX_TIMELINE,
+  IndexActivityParams,
   IndexCatalogSubscribeParams,
   IndexChangesSubscribeParams,
   IndexEnrollParams,
@@ -168,6 +170,7 @@ import {
   malformedBoardAsk,
   projectFieldRow,
   refuseBoardAsk,
+  wireRecordedLanes,
 } from "./agent-field";
 import {
   type AgentGatewayOptions,
@@ -196,6 +199,7 @@ import { EgressRoutes, FloorEgress, resolveEgressPath } from "./egress";
 import { EgressCellRewriter } from "./egress-cell-rewriter";
 import { EndpointService } from "./endpoint-service";
 import { FederatedSubscriptionManager } from "./federated-subs";
+import { clipActivity, createActivityReader, monitorHistoryPort } from "./index-activity";
 import { IndexCatalog } from "./index-catalog";
 import { IndexMesh } from "./index-mesh";
 import { INDEX_SERVE_ID, IndexServeDriver, IndexTicketMinter, indexPlaneLive } from "./index-serve";
@@ -820,6 +824,10 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
     ...catalogCadences(config.indexCatalog),
     logger,
   });
+  // TL (docket v9, T5) — the record's sessions in a window (index-activity.ts):
+  // `index.activity`'s reader and the monitor backend's history port. The
+  // floor answers from the catalog's bounds; it never pages a transcript.
+  const activity = createActivityReader({ catalog: indexCatalog });
   // DS-6 — the aggregator needs the roster and the peer link, which are built
   // further down; the doors registered before them read it through this ref
   // (every door is reachable only after the API listens, when it is bound).
@@ -2064,6 +2072,33 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         );
       return await index.projectDay(parsed.data);
     });
+    // TL (docket v9, RULED 2026-10-09: T4, T5, B-D4) — the record's sessions
+    // and turns in a window of at most a day, for Godview's timeline and,
+    // later, the phone. `federate`: a foreign `device` forwards whole (an
+    // asleep peer is the forwarder's refusal, never an empty day) and a peer's
+    // ask is answered from THIS desktop's record. SP-D13-bounded for a tailnet
+    // caller, newest sessions first, `clipped` saying so. Never a transcript
+    // read: rosettad's turns or the catalog's bounds (index-activity.ts).
+    api.register("index.activity", async (ctx, params) => {
+      const parsed = IndexActivityParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { sinceMs, untilMs (after sinceMs, at most a day later), sessions? (1..256 ids), silenceMs? (60 000..3 600 000 ms), device? }",
+          false,
+        );
+      const { sinceMs, untilMs, sessions, silenceMs } = parsed.data;
+      const answer = await activity.read({
+        sinceMs,
+        untilMs,
+        ...(sessions !== undefined ? { sessions } : {}),
+        ...(silenceMs !== undefined ? { silenceMs } : {}),
+      });
+      return clipActivity(
+        answer,
+        tailnetRowLimit(ctx.principal, undefined, Number.MAX_SAFE_INTEGER),
+      );
+    });
     // SP-6 (thinking-sync-planes.md §5.4 "until RO-1"; SP-D5 (a)) — one
     // session's transcript over the door until the ticket: the page door and
     // the live tail. SP-D13-bounded for a tailnet caller like the doors above:
@@ -3201,6 +3236,31 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
       const result: AgentReportShownResult = { reported: true };
       return result;
     });
+    // TL (docket v9, RULED 2026-10-09; B-D6 (a)) — `agent.recordedLanes`: the
+    // lanes' past as the backend beside the runtime derives it from the record,
+    // asked by a window only while a mounted view asks (PF6). Read through to
+    // rosettad at each ask (the backend's history port) and held nowhere — not
+    // the removed `agent.history`. A peer reads it without colour sequences
+    // (M16), as it reads the model's rows.
+    api.register("agent.recordedLanes", async (ctx, params) => {
+      const parsed = AgentRecordedLanesParams.safeParse(params ?? {});
+      if (!parsed.success)
+        throw new RpcCallError(
+          "PRECONDITION_FAILED",
+          "expected { sinceMs, untilMs (after sinceMs, at most a day later), device? }",
+          false,
+        );
+      if (monitor === null)
+        throw new RpcCallError("UNAVAILABLE", "the agent monitor is starting", true, {
+          service: "agent.monitor",
+          state: "starting",
+        });
+      const past = await monitor.readPast({
+        sinceMs: parsed.data.sinceMs,
+        untilMs: parsed.data.untilMs,
+      });
+      return wireRecordedLanes(past, ctx.principal.kind === "peer-fieldd" ? "peer" : "window");
+    });
     // AR-5d — the usage column's feed (agent-usage.ts). Both doors answer the
     // PROJECTION and nothing else: percentages, labels, the provider's own
     // sentence for a refusal (EL7). Before the first reading lands the answer
@@ -3639,6 +3699,8 @@ export async function bootstrap(config: FielddConfig): Promise<FielddDaemon> {
         file: join(config.dataDir, ...LAYOUT.PROJECT_IDENTITY_FILE),
         logger: logger.child({ component: "agent.monitor.identity" }),
       }),
+      // TL — the record, read at each ask and held nowhere (index-activity.ts)
+      history: monitorHistoryPort(activity, agents.catalog),
       logger,
     });
     // D1 (2026-10-01) — a peer that dialled before the roster could vouch for
