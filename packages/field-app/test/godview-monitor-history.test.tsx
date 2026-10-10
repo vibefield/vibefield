@@ -119,6 +119,7 @@ interface ProbeProps {
   wants: boolean;
   rows: Rows;
   receded?: (lane: MonitorEndedRow) => boolean;
+  desk?: string | null;
 }
 
 let root: Root | undefined;
@@ -136,6 +137,7 @@ function Probe(initial: ProbeProps) {
     here: HERE,
     palette: PALETTE,
     receded: props.receded ?? NEVER_RECEDES,
+    desk: props.desk ?? null,
     now: () => Date.now(),
   });
   seen.push(history);
@@ -270,6 +272,42 @@ describe("identity: built once per snapshot, kept while nothing moves (v2 item 5
   });
 });
 
+describe("an ended lane does what a live row does under each filter (the MV lead's ruling, 2026-10-10)", () => {
+  it("the scope row's desktop NARROWS: this desktop's ended lanes leave before the past is lent, and the object holds while the choice does", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS, desk: "01JPEER" });
+    await port.answer();
+    const peerOnly = last()!;
+    expect(peerOnly.ended.map((lane) => lane.id)).toEqual(["past:claude:nat-peer"]);
+    // narrowed, never receded: what is left is drawn whole
+    expect(peerOnly.ended.map((lane) => lane.receded)).toEqual([false]);
+    // publishes with the choice unchanged keep the SAME object
+    await update({ port, wants: true, rows: [...ROWS], desk: "01JPEER" });
+    await update({ port, wants: true, rows: [...ROWS], desk: "01JPEER" });
+    expect(last()).toBe(peerOnly);
+    // this desktop chosen: only its lane
+    await update({ port, wants: true, rows: [...ROWS], desk: HERE });
+    expect(last()!.ended.map((lane) => lane.id)).toEqual(["past:claude:nat-today"]);
+    // every desktop: both, and no new read was needed for any of it
+    await update({ port, wants: true, rows: [...ROWS], desk: null });
+    expect(last()!.ended.map((lane) => lane.id)).toEqual([
+      "past:claude:nat-today",
+      "past:claude:nat-peer",
+    ]);
+    expect(port.asks).toHaveLength(1);
+  });
+
+  it("a choice that drops nothing lends the same object as no choice", async () => {
+    const port = fakePort();
+    const peerOnlyAnswer = { ...ANSWER, ended: ANSWER.ended.slice(1) };
+    await mount({ port, wants: true, rows: ROWS, desk: null });
+    await port.answer(peerOnlyAnswer);
+    const all = last()!;
+    await update({ port, wants: true, rows: ROWS, desk: "01JPEER" });
+    expect(last()).toBe(all);
+  });
+});
+
 describe("re-reads follow the rows (v2 item 8)", () => {
   it("a run leaving the model reads again within a second; a terminal's status moves nothing", async () => {
     const port = fakePort();
@@ -401,6 +439,7 @@ describe("the capability reaches a view's input", () => {
         here: HERE,
         palette: PALETTE,
         receded: NEVER_RECEDES,
+        desk: null,
         now: () => NOW,
       });
       return (

@@ -455,15 +455,15 @@ export function GodviewMonitor({
   // TL (docket v9; B-D6 (a); TIMELINE SHAPES v2) — the record's past for the
   // mounted view whose manifest declares `history`, the backend's through this
   // window's door, read only while that view is mounted (PF6: this stage
-  // unmounts with Godview). An ended lane recedes by the rows' own rule over
-  // the profile tab and the desktop chip; under a profile tab, a run whose
-  // profile is unknown recedes.
+  // unmounts with Godview). An ended lane does exactly what a live row does
+  // under each filter (the MV lead's ruling, 2026-10-10): the scope row's
+  // desktop NARROWS — lanes elsewhere leave before the past is lent — and the
+  // profile tab RECEDES, where a run whose profile is unknown recedes.
   const wantsHistory = viewWantsHistory(view.view);
   const pastReceded = useCallback(
     (lane: MonitorEndedRow): boolean =>
-      (chosenId !== undefined && !(lane.device.self && lane.profileSet === chosenId)) ||
-      (deviceChosen !== null && (lane.device.self ? here : lane.device.id) !== deviceChosen),
-    [chosenId, deviceChosen, here],
+      chosenId !== undefined && !(lane.device.self && lane.profileSet === chosenId),
+    [chosenId],
   );
   const history = useMonitorHistory({
     port: door?.pastLanes,
@@ -472,6 +472,7 @@ export function GodviewMonitor({
     here,
     palette,
     receded: pastReceded,
+    desk: deviceChosen,
   });
   const viewCapabilities = useMemo<MonitorCapabilities>(
     () => (history === undefined ? capabilities : { ...capabilities, history }),

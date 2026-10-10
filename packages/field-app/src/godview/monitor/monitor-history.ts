@@ -81,6 +81,25 @@ function isNoRecord(error: unknown): boolean {
   return kind === "NOT_FOUND" && state === "no-record";
 }
 
+/** The desktop an ended lane lives on, as `deviceOfRow` says it for a live row. */
+function deskOf(lane: MonitorEndedRow, here: string | undefined): string | undefined {
+  return lane.device.self ? here : lane.device.id;
+}
+
+/**
+ * The past narrowed to the chosen desktop, as the live rows are (`narrowToDevice`): the ended lanes elsewhere leave
+ * the snapshot BEFORE it is lent. The SAME snapshot when nothing is narrowed or nothing leaves, so identity holds.
+ */
+export function narrowPast(
+  snapshot: MonitorPastSnapshot,
+  desk: string | null,
+  here: string | undefined,
+): MonitorPastSnapshot {
+  if (desk === null) return snapshot;
+  const kept = snapshot.ended.filter((lane) => deskOf(lane, here) === desk);
+  return kept.length === snapshot.ended.length ? snapshot : { ...snapshot, ended: kept };
+}
+
 /** What moves a re-read: which agent rows the model holds, and when each one's
  * current status began. */
 export function historyRowsKey(
@@ -115,15 +134,17 @@ export interface MonitorHistoryOptions {
   /** this desktop's id: the rows whose `device.self` is true */
   readonly here: string | undefined;
   readonly palette: Pick<MonitorPalette, "tint" | "neutral">;
-  /** the window's rule for a lane drawn faint, over its device and profile filters; keep it stable */
+  /** the window's rule for a lane drawn faint — the RECEDING filters (the profile tab); keep it stable */
   readonly receded: (lane: MonitorEndedRow) => boolean;
+  /** the chosen desktop (P2's scope row), which NARROWS: an ended lane elsewhere leaves, as a live row does. Null: all */
+  readonly desk: string | null;
   /** test seam */
   readonly now?: (() => number) | undefined;
 }
 
 /** `capabilities.history` for the mounted view, read only while it declares it. */
 export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistory | undefined {
-  const { port, wants, here, palette, receded } = options;
+  const { port, wants, here, palette, receded, desk } = options;
   const now = options.now ?? Date.now;
   const asking = wants && port !== undefined;
   // nothing to watch while nothing asks: no view pays for a past it does not draw
@@ -237,10 +258,15 @@ export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistor
   const tintL = palette.tint.l;
   const tintC = palette.tint.c;
   const neutral = palette.neutral;
-  // built once per snapshot (and per theme or filter), never per publish
+  // the narrowing filter first, keyed on the snapshot's identity and the choice
+  const narrowed = useMemo(
+    () => (snapshot === undefined ? undefined : narrowPast(snapshot, desk, here)),
+    [snapshot, desk, here],
+  );
+  // built once per narrowed snapshot (and per theme or receding filter), never per publish
   return useMemo(() => {
-    if (!asking || noRecord || snapshot === undefined) return undefined;
+    if (!asking || noRecord || narrowed === undefined) return undefined;
     const colourFor = projectColourFor({ tint: { l: tintL, c: tintC }, neutral });
-    return lendHistory(snapshot, { colourFor, receded });
-  }, [asking, noRecord, snapshot, tintL, tintC, neutral, receded]);
+    return lendHistory(narrowed, { colourFor, receded });
+  }, [asking, noRecord, narrowed, tintL, tintC, neutral, receded]);
 }
