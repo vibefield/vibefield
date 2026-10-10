@@ -3,13 +3,20 @@
  * AR-8c — the History room's ports (`history/doors.ts`, `session-port.ts`,
  * `asset-source.ts`): pure adapters over a fieldd client, read here against
  * the CONTRACT fixtures (EL9 — the same JSON fieldd's own suites parse) and a
- * scripted client. The rows: the catalog assembled from DS-6's listings and
+ * scripted client. The rows: the catalog assembled from the listings and
  * pings into the room's meta shapes; the session lease renewed before its
  * grant expires and repointed when the ticket's origin moves; the asset
  * cache's bound and its revokes; a recorded file read with the window's grant
  * (RO-13), and the honest refusal when rosettad refuses the grant's reach. And
  * (AR-8 L1) the delegated threads: `index.threads`' rows as rosetta's children
  * in the room's meta, read again only when a ping names their table.
+ *
+ * PJ-4 (H1 — "we map, the room draws"): the room's projects are fieldd's PJ
+ * projects (`project.list`), its sessions filed under the key fieldd joined
+ * each to (`projectKey`, A-D4 — the keyed fixtures), its figures the merged
+ * ones (`project.figures`, H2), its pings `project.subscribe` (whose
+ * `regrouped` re-keys the selection), and THE DEVICE GUARD (V6): nothing of
+ * another desktop — a row, a path — reaches the room.
  */
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -22,21 +29,28 @@ import {
   type SubscriptionStatus,
 } from "@rosetta/protocol";
 import {
-  IndexProjectResult,
-  IndexProjectsResult,
   IndexSessionsResult,
   IndexStatus,
   IndexThreadsResult,
+  ProjectFiguresDayResult,
+  ProjectFiguresResult,
+  ProjectListResult,
+  type ProjectSummary,
 } from "@vibefield/contracts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { assetSourceOver } from "../src/history/asset-source";
 import {
   catalogPortOver,
   catalogStatusOf,
+  dayUsageOf,
   type HistoryDoorClient,
+  type HistoryRegroup,
+  isThisDesktops,
   metaStateOf,
   pingParts,
+  projectRowOf,
   projectStatsOf,
+  selfOf,
   sessionRowOf,
   threadRowOf,
   usageOf,
@@ -50,17 +64,29 @@ import {
 const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "contracts", "fixtures");
 const fixture = (name: string): unknown => JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 
-const PROJECTS = IndexProjectsResult.parse(fixture("index-projects.mesh.json"));
-const SESSIONS = IndexSessionsResult.parse(fixture("index-sessions.mesh.json"));
+/** studio is this desktop; the laptop is asleep (project-list.valid) */
+const STUDIO = "01J9ZK3M5Q8XR2V7N4B6C1D0EF";
+const LAPTOP = "01J9ZM0PQ7W3E6R8T2Y4U1I5O9";
+/** the projects, one page (the fixture's own answer says a page follows) */
+const PROJECTS = (() => {
+  const { cursor: _next, ...page } = ProjectListResult.parse(fixture("project-list.valid.json"));
+  return page;
+})();
+/** this desktop's listing, each row keyed to its project (A-D4) */
+const SESSIONS = IndexSessionsResult.parse(fixture("index-sessions.keyed.json"));
 const STATUS = IndexStatus.parse(fixture("index-status.valid.json"));
 const THREADS = IndexThreadsResult.parse(fixture("index-threads.valid.json"));
-const PROJECT = IndexProjectResult.parse(fixture("index-project.valid.json"));
+const KEYED_THREADS = IndexThreadsResult.parse(fixture("index-threads.keyed.json"));
+const FIGURES = ProjectFiguresResult.parse(fixture("project-figures.valid.json"));
+const DAY = ProjectFiguresDayResult.parse(fixture("project-figures-day.valid.json"));
 const TICKET = fixture("index-open-ticket.local.json") as {
   device: string;
   endpoints: { sessionUrl: string; restUrl: string };
   grant: string;
   expiresAt: number;
 };
+const VIBE_FIELD = "p1:k7m2q9x4c3v8b6n1z5r0t2w4y6a8";
+const HOME = "p1:h0m3pr0j3cth0m3pr0j3cth0m3";
 
 /** A second page of the listing: a session the catalog maps to no agent, with
  * no activity and a stream state this build never heard of. */
@@ -74,6 +100,8 @@ const PAGE_TWO = {
       streamState: "rewinding",
       projectId: "p-4f1c2a9e",
       updatedAt: 1759000000000,
+      device: STUDIO,
+      projectKey: HOME,
     },
   ],
   sources: SESSIONS.sources,
@@ -88,24 +116,27 @@ afterEach(() => {
 function client(answers: Record<string, (params: Record<string, unknown>) => unknown>) {
   const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
   let onFrame: ((payload: unknown, kind?: "snapshot" | "delta") => void) | null = null;
+  let revision = 0;
   const door: HistoryDoorClient & {
     calls: typeof calls;
-    ping(kind?: "snapshot" | "delta", tables?: string[]): void;
+    ping(kind?: "snapshot" | "delta", tables?: string[], extra?: Record<string, unknown>): void;
   } = {
     calls,
-    ping: (kind = "delta", tables = ["sessions"]) =>
+    ping: (kind = "delta", tables = ["sessions"], extra = {}) => {
+      revision += 1;
       onFrame?.(
         {
-          epoch: "changes-local-1",
-          since: 0,
-          revision: 1,
+          epoch: "projects-1",
+          since: revision - 1,
+          revision,
           upserts: [],
           removed: [],
-          tables,
-          devices: [],
+          ...(tables.length > 0 ? { tables } : {}),
+          ...extra,
         },
         kind,
-      ),
+      );
+    },
     request: async (method, params) => {
       calls.push({ method, params });
       const answer = answers[method];
@@ -118,7 +149,7 @@ function client(answers: Record<string, (params: Record<string, unknown>) => unk
       calls.push({ method, params });
       onFrame = frame;
       return {
-        snapshot: { snapshot: { epoch: "changes-local-1", revision: 0, rows: [] } },
+        snapshot: { snapshot: { epoch: "projects-1", revision: 0, rows: [] } },
         unsubscribe: () => {
           onFrame = null;
         },
@@ -132,10 +163,20 @@ const flush = async (): Promise<void> => {
   for (let i = 0; i < 20; i += 1) await Promise.resolve();
 };
 
-/* ── the catalog: DS-6's rows → the room's meta ───────────────────────── */
+/** A project only another desktop holds: a place on the laptop alone. */
+const LAPTOP_ONLY: ProjectSummary = {
+  ...PROJECTS.rows[0]!,
+  key: "p1:l4pt0p0nly",
+  name: "laptop-notes",
+  places: [PROJECTS.rows[0]!.places[1]!],
+  devices: [LAPTOP],
+  anchors: [`place:${PROJECTS.rows[0]!.places[1]!.ref.placeId}`],
+};
 
-describe("the catalog port's rows (AR-8c)", () => {
-  it("maps a listing row field by field into rosetta's SessionRow, the catalog's honest nulls kept", () => {
+/* ── the catalog: PJ projects and the keyed listings → the room's meta ─── */
+
+describe("the catalog port's rows (AR-8c; PJ-4 H1)", () => {
+  it("maps a listing row field by field into rosetta's SessionRow, filed under the key fieldd joined it to", () => {
     const row = SESSIONS.rows[0];
     if (row === undefined) throw new Error("fixture has no row");
     expect(sessionRowOf(row)).toEqual({
@@ -143,7 +184,8 @@ describe("the catalog port's rows (AR-8c)", () => {
       native_session_id: "665e3e71-7c12-4810-925a-e8b92cb6f29d",
       // the agent, read through the catalog: the provider's rosetta kind
       runtime_id: "claude-code",
-      project_id: "p-4f1c2a9e",
+      // PJ-4 (A-D4): the PJ key, never rosetta's id (`p-4f1c2a9e`)
+      project_id: VIBE_FIELD,
       cwd: "/Users/me/Projects/vibe-field",
       parent_session_id: null,
       delegation: null,
@@ -156,6 +198,11 @@ describe("the catalog port's rows (AR-8c)", () => {
       activity: { first_at: 1759270000000, last_at: 1759276800000 },
       stream_state: "indexed",
     });
+    // a second clone of the same repository (another rosetta project): the
+    // same project in History — fieldd joined it, the window grouped nothing
+    expect(sessionRowOf(SESSIONS.rows[1]!).project_id).toBe(VIBE_FIELD);
+    // a folder no place holds yet: rosetta's own unassigned bucket says so
+    expect(sessionRowOf(SESSIONS.rows[2]!).project_id).toBeNull();
     // a row with less: no agent, no activity, a word this build does not know
     expect(sessionRowOf(IndexSessionsResult.parse(PAGE_TWO).rows[0]!)).toMatchObject({
       runtime_id: "unknown",
@@ -177,7 +224,8 @@ describe("the catalog port's rows (AR-8c)", () => {
       id: "ses-5d1e88a0",
       native_session_id: "a3f0c2d9e1b7",
       runtime_id: "claude-code",
-      project_id: "p-4f1c2a9e",
+      // an unkeyed thread, with no root's key handed: unassigned
+      project_id: null,
       cwd: "/Users/me/Projects/vibe-field",
       parent_session_id: "ses-9b2f0c7d",
       delegation: {
@@ -211,33 +259,107 @@ describe("the catalog port's rows (AR-8c)", () => {
     expect(threadRowOf({ ...member, delegation: { color: "teal" } }).delegation?.color).toBeNull();
   });
 
-  it("assembles the room's whole topology: one runtime per agent kind, projects with their remotes", () => {
-    const meta = metaStateOf(PROJECTS.rows, [
-      ...SESSIONS.rows,
-      ...IndexSessionsResult.parse(PAGE_TWO).rows,
-    ]);
+  it("PJ-4: files a thread under its ROOT's project — fieldd's key, else the root's as the roots were read", () => {
+    const [keyed, orphan] = KEYED_THREADS.rows;
+    expect(threadRowOf(keyed!).project_id).toBe(VIBE_FIELD);
+    // its root's key, for a thread read a moment before its root was keyed
+    expect(threadRowOf(orphan!, HOME).project_id).toBe(HOME);
+    expect(threadRowOf(orphan!).project_id).toBeNull();
+  });
+
+  it("PJ-4: a PJ project as the room's row — its key, its name, THIS desktop's places as roots, its identity remote", () => {
+    const [vibeField, home] = PROJECTS.rows;
+    expect(projectRowOf(vibeField!, STUDIO)).toEqual({
+      id: VIBE_FIELD,
+      name: "vibe-field",
+      // the laptop's place (/Users/me/code/vf-docs) is never handed: the room
+      // would open this Mac's same-spelled folder for it (A4.2)
+      root_paths: ["/Users/me/Projects/vibe-field"],
+      // the normalized key the room opens as https://… (R9)
+      git_repo: "github.com/acme/vibe-field",
+    });
+    expect(projectRowOf(home!, STUDIO)).toEqual({
+      id: HOME,
+      name: "Home",
+      root_paths: ["/Users/me"],
+      git_repo: null,
+    });
+    // two projects that read alike: the parent folder that tells them apart
+    expect(projectRowOf({ ...home!, name: "Mochi", disambiguation: "p018" }, STUDIO).name).toBe(
+      "Mochi · p018",
+    );
+    // a remote that is a local path is no repository to open
+    expect(
+      projectRowOf({ ...vibeField!, anchors: ["remote:local:/Users/me/bare.git"] }, STUDIO)
+        .git_repo,
+    ).toBeNull();
+    // no desktop known: no path at all
+    expect(projectRowOf(vibeField!, null).root_paths).toEqual([]);
+  });
+
+  it("assembles the room's whole topology: one runtime per agent kind, the projects with a place here, every session filed by its key", () => {
+    const self = selfOf(SESSIONS.sources);
+    expect(self).toBe(STUDIO);
+    const meta = metaStateOf(
+      [...PROJECTS.rows, LAPTOP_ONLY],
+      [...SESSIONS.rows, ...IndexSessionsResult.parse(PAGE_TWO).rows],
+      [],
+      self,
+    );
     expect(meta.runtimes.map((runtime) => [runtime.id, runtime.kind])).toEqual([
       ["claude-code", "claude-code"],
+      ["codex", "codex"],
       ["unknown", "unknown"],
     ]);
-    expect(meta.projects[0]).toEqual({
-      id: "p-4f1c2a9e",
-      name: "vibe-field",
-      root_paths: ["/Users/me/Projects/vibe-field"],
-      git_repo: "github.com:jamesyong42/vibe-field",
-    });
-    expect(meta.sessions.map((row) => row.id)).toEqual(["ses-9b2f0c7d", "ses-unmapped"]);
-    // AR-8 (L1): the threads ride beside the roots — the room builds its
-    // subthreads and its search grouping from the one list
-    const withThreads = metaStateOf(PROJECTS.rows, SESSIONS.rows, THREADS.rows);
-    expect(
-      withThreads.sessions.map((row) => [row.id, row.parent_session_id, row.root_session_id]),
-    ).toEqual([
-      ["ses-9b2f0c7d", null, "ses-9b2f0c7d"],
-      ["ses-5d1e88a0", "ses-9b2f0c7d", "ses-9b2f0c7d"],
-      ["ses-7c40aa19", "ses-5d1e88a0", "ses-9b2f0c7d"],
-      ["ses-0e93b7c2", "ses-9b2f0c7d", "ses-9b2f0c7d"],
+    // H3 (a): a project only the laptop holds is not listed yet
+    expect(meta.projects.map((project) => project.id)).toEqual([VIBE_FIELD, HOME]);
+    expect(meta.sessions.map((row) => [row.id, row.project_id])).toEqual([
+      ["ses-9b2f0c7d", VIBE_FIELD],
+      ["ses-31c0de55", VIBE_FIELD],
+      ["ses-a07b1f62", null],
+      ["ses-unmapped", HOME],
     ]);
+    // AR-8 (L1): the threads ride beside the roots — the room builds its
+    // subthreads and its search grouping from the one list — and each takes
+    // its root's key when fieldd's own is not on it yet
+    const withThreads = metaStateOf(PROJECTS.rows, SESSIONS.rows, THREADS.rows, self);
+    expect(
+      withThreads.sessions.map((row) => [
+        row.id,
+        row.parent_session_id,
+        row.root_session_id,
+        row.project_id,
+      ]),
+    ).toEqual([
+      ["ses-9b2f0c7d", null, "ses-9b2f0c7d", VIBE_FIELD],
+      ["ses-31c0de55", null, "ses-31c0de55", VIBE_FIELD],
+      ["ses-a07b1f62", null, "ses-a07b1f62", null],
+      ["ses-5d1e88a0", "ses-9b2f0c7d", "ses-9b2f0c7d", VIBE_FIELD],
+      ["ses-7c40aa19", "ses-5d1e88a0", "ses-9b2f0c7d", VIBE_FIELD],
+      ["ses-0e93b7c2", "ses-9b2f0c7d", "ses-9b2f0c7d", VIBE_FIELD],
+    ]);
+  });
+
+  it("PJ-4 — THE DEVICE GUARD (V6): another desktop's session never reaches the room, nor anything that names a desktop when none is known", () => {
+    const remote = {
+      ...SESSIONS.rows[0]!,
+      sessionId: "ses-on-the-laptop",
+      device: LAPTOP,
+      // the same spelling as this Mac's checkout: the room would resume HERE
+      cwd: "/Users/me/Projects/vibe-field",
+    };
+    expect(isThisDesktops(remote, STUDIO)).toBe(false);
+    expect(isThisDesktops(SESSIONS.rows[0]!, STUDIO)).toBe(true);
+    const meta = metaStateOf(PROJECTS.rows, [...SESSIONS.rows, remote], [], STUDIO);
+    expect(meta.sessions.map((row) => row.id)).not.toContain("ses-on-the-laptop");
+    expect(meta.projects.flatMap((project) => project.root_paths)).toEqual([
+      "/Users/me/Projects/vibe-field",
+      "/Users/me",
+    ]);
+    // which desktop is this one, unknown: no project, no row that names one
+    const blind = metaStateOf(PROJECTS.rows, [...SESSIONS.rows, remote], [], null);
+    expect(blind.projects).toEqual([]);
+    expect(blind.sessions).toEqual([]);
   });
 
   it("AR-8 (L1): reads a ping's `tables` — the parts it names; none, or a word it does not know, is both", () => {
@@ -281,31 +403,42 @@ describe("the catalog port's rows (AR-8c)", () => {
     ).toBeNull();
   });
 
-  it("splits ONE index.project answer into the panel's figures and its usage, nulls kept null", () => {
-    const stats = projectStatsOf(PROJECT);
+  it("PJ-4 (H2): splits ONE project.figures answer into the panel's figures and its usage, nulls kept null", () => {
+    const stats = projectStatsOf(FIGURES);
     expect(stats.heat[0]).toEqual({
-      day: "2026-08-26",
-      tokens: 123,
-      cost_micro_usd: 4210,
+      day: "2026-09-29",
+      tokens: 182000,
+      cost_micro_usd: 1240000,
       billed_micro_usd: null,
-      unpriced_tokens: 23,
+      unpriced_tokens: 0,
       unrecorded_output: 0,
       reported_cost_adjustment_micro_usd: 0,
     });
-    expect(stats.contribution[0]).toMatchObject({ session_id: "s1", project_id: "p1", commits: 1 });
-    const usage = usageOf(PROJECT);
-    expect(usage.models.map((row) => [row.model, row.cost_micro_usd])).toEqual([
-      ["claude-opus-5", 4210],
-      ["unknown", null],
+    // every desktop's rows, the room's facts by session id
+    expect(stats.contribution.map((row) => [row.session_id, row.tokens])).toEqual([
+      ["ses-9b2f0c7d", 182000],
+      ["ses-31c0de55", 96000],
     ]);
-    expect(usage.hours[0]).toMatchObject({ hour: 15, tokens: 123 });
+    const usage = usageOf(FIGURES);
+    expect(usage.models.map((row) => [row.model, row.cost_micro_usd])).toEqual([
+      ["claude-opus-5-5", 1240000],
+      ["gpt-6-astra", 610000],
+    ]);
+    expect(usage.hours[0]).toMatchObject({ hour: 15, tokens: 278000 });
+    expect(dayUsageOf(DAY)).toEqual({
+      day: "2026-09-29",
+      models: [
+        { hour: 14, model: "claude-opus-5-5", tokens: 120000 },
+        { hour: 15, model: "claude-opus-5-5", tokens: 62000 },
+      ],
+    });
   });
 });
 
-describe("the catalog port's meta feed (AR-8c)", () => {
-  function scripted(pages: { sessions: unknown[]; threads?: unknown[] }) {
+describe("the catalog port's meta feed (AR-8c; PJ-4)", () => {
+  function scripted(pages: { sessions: unknown[]; threads?: unknown[]; projects?: unknown }) {
     return client({
-      "index.projects": () => PROJECTS_ONE_PAGE,
+      "project.list": () => pages.projects ?? PROJECTS,
       "index.sessions": (params) => {
         const page = params["cursor"] === undefined ? 0 : Number(params["cursor"]);
         return pages.sessions[page];
@@ -315,12 +448,12 @@ describe("the catalog port's meta feed (AR-8c)", () => {
         return (pages.threads ?? [{ rows: [] }])[page];
       },
       "index.status": () => fixture("index-status.valid.json"),
-      "index.project": () => fixture("index-project.valid.json"),
+      "project.figures": () => fixture("project-figures.valid.json"),
+      "project.figuresDay": () => fixture("project-figures-day.valid.json"),
     });
   }
-  const PROJECTS_ONE_PAGE = { rows: PROJECTS.rows, sources: PROJECTS.sources };
 
-  it("answers one snapshot assembled from every page of both listings, then a mutation per ping", async () => {
+  it("answers one snapshot assembled from every page of the projects and this desktop's listing, then a mutation per ping", async () => {
     const pages: { sessions: unknown[] } = {
       sessions: [{ ...SESSIONS, cursor: "1" }, PAGE_TWO],
     };
@@ -333,16 +466,28 @@ describe("the catalog port's meta feed (AR-8c)", () => {
       onStatus: (status) => statuses.push(status),
     });
     await flush();
-    expect(door.calls.map((call) => call.method)).toContain("index.changes.subscribe");
+    // PJ-4: the projects' pings, never the index's
+    expect(door.calls.find((call) => call.method.endsWith("subscribe"))).toEqual({
+      method: "project.subscribe",
+      params: {},
+    });
     expect(changes).toHaveLength(1);
     expect(changes[0]?.source).toBe("snapshot");
+    expect(changes[0]?.meta.projects.map((row) => row.name)).toEqual(["vibe-field", "Home"]);
     expect(changes[0]?.meta.sessions.map((row) => row.id)).toEqual([
       "ses-9b2f0c7d",
+      "ses-31c0de55",
+      "ses-a07b1f62",
       "ses-unmapped",
     ]);
-    // the listings are this desktop's own, asked at the door's page ceiling
-    const listing = door.calls.find((call) => call.method === "index.sessions");
-    expect(listing?.params).toEqual({ scope: "local", limit: 500 });
+    // the listings at the doors' page ceilings: every project; this desktop's sessions
+    expect(door.calls.find((call) => call.method === "project.list")?.params).toEqual({
+      limit: 500,
+    });
+    expect(door.calls.find((call) => call.method === "index.sessions")?.params).toEqual({
+      scope: "local",
+      limit: 500,
+    });
     expect(statuses).toEqual(["connecting", "live"]);
 
     // a ping: the listing is read again and said as a mutation
@@ -354,7 +499,7 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     await flush();
     expect(changes).toHaveLength(2);
     expect(changes[1]?.source).toBe("mutation");
-    expect(changes[1]?.meta.sessions[1]?.title).toBe("renamed");
+    expect(changes[1]?.meta.sessions[3]?.title).toBe("renamed");
 
     // hidden, a ping is noted, not read; showing reads it once
     catalog.setActive(false);
@@ -380,6 +525,8 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     expect(changes).toHaveLength(1);
     expect(changes[0]?.sessions.map((row) => row.id)).toEqual([
       "ses-9b2f0c7d",
+      "ses-31c0de55",
+      "ses-a07b1f62",
       "ses-5d1e88a0",
       "ses-7c40aa19",
       "ses-0e93b7c2",
@@ -394,7 +541,7 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     const askedSince = (at: number): string[] =>
       asked()
         .slice(at)
-        .filter((method) => method !== "index.changes.subscribe");
+        .filter((method) => method !== "project.subscribe");
 
     // a thread moved: only the threads are read again — the roots are kept
     let at = asked().length;
@@ -404,37 +551,92 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     expect(askedSince(at)).toEqual(["index.threads"]);
     expect(changes.at(-1)?.sessions.map((row) => row.title)).toEqual([
       "the history catalog across desktops",
+      "a second clone of the same repository",
+      "a folder the place scanner has not read yet",
       "renamed thread",
     ]);
 
-    // a root moved: the two listings, and the threads are kept
+    // a root moved: the projects and the listing, and the threads are kept
     at = asked().length;
     door.ping("delta", ["sessions"]);
     await flush();
-    expect(askedSince(at).sort()).toEqual(["index.projects", "index.sessions"]);
-    expect(changes.at(-1)?.sessions).toHaveLength(2);
+    expect(askedSince(at).sort()).toEqual(["index.sessions", "project.list"]);
+    expect(changes.at(-1)?.sessions).toHaveLength(4);
 
-    // a ping that names nothing (a phase moved): all three
+    // a ping that names nothing (the grouping or a standing moved): all three
     at = asked().length;
     door.ping("delta", []);
     await flush();
-    expect(askedSince(at).sort()).toEqual(["index.projects", "index.sessions", "index.threads"]);
+    expect(askedSince(at).sort()).toEqual(["index.sessions", "index.threads", "project.list"]);
     feed.close();
   });
 
-  it("says the catalog's refusal in fieldd's words and asks again, never a blank", async () => {
+  it("PJ-4: a regroup re-files sessions — the host hears the moves and which sessions moved, AFTER the room has the listing that files them anew", async () => {
+    const pages: { sessions: unknown[]; projects: unknown } = {
+      sessions: [SESSIONS],
+      projects: PROJECTS,
+    };
+    const door = scripted(pages);
+    const catalog = catalogPortOver(door);
+    const order: string[] = [];
+    const regroups: HistoryRegroup[] = [];
+    catalog.onRegrouped((regroup) => {
+      order.push("regrouped");
+      regroups.push(regroup);
+    });
+    const changes: MetaState[] = [];
+    const feed = catalog.subscribeMeta({
+      onChange: (meta) => {
+        order.push("change");
+        changes.push(meta);
+      },
+    });
+    await flush();
+    expect(regroups).toEqual([]);
+    // the project's first record re-keys it p1: → r: (D9)
+    const RECORD = "r:01JA0B1C2D3E4F5G6H7J8K9M0N";
+    pages.projects = {
+      ...PROJECTS,
+      rows: PROJECTS.rows.map((row) => (row.key === VIBE_FIELD ? { ...row, key: RECORD } : row)),
+    };
+    pages.sessions = [
+      {
+        ...SESSIONS,
+        rows: SESSIONS.rows.map((row) =>
+          row.projectKey === VIBE_FIELD ? { ...row, projectKey: RECORD } : row,
+        ),
+      },
+    ];
+    door.ping("delta", [], { regrouped: [{ from: VIBE_FIELD, to: RECORD }] });
+    await flush();
+    expect(order).toEqual(["change", "change", "regrouped"]);
+    expect(changes.at(-1)?.projects[0]?.id).toBe(RECORD);
+    expect(regroups).toEqual([
+      {
+        moves: [{ from: VIBE_FIELD, to: RECORD }],
+        sessions: new Set(["ses-9b2f0c7d", "ses-31c0de55"]),
+      },
+    ]);
+    // a ping that moved nothing tells the host nothing
+    door.ping("delta", ["sessions"]);
+    await flush();
+    expect(regroups).toHaveLength(1);
+    feed.close();
+  });
+
+  it("says the projects' refusal in fieldd's words and asks again, never a blank", async () => {
     vi.useFakeTimers();
     let ready = false;
     const door = client({
-      "index.projects": () => {
+      "project.list": () => {
         if (!ready) {
-          throw Object.assign(new Error("the history catalog has not read the index yet"), {
+          throw Object.assign(new Error("this desktop has not grouped its places yet"), {
             kind: "UNAVAILABLE",
             retryable: true,
-            details: { service: "index", state: "connecting" },
+            details: { service: "projects", state: "grouping" },
           });
         }
-        return { rows: PROJECTS.rows, sources: PROJECTS.sources };
+        return PROJECTS;
       },
       "index.sessions": () => SESSIONS,
       "index.threads": () => ({ rows: [] }),
@@ -444,7 +646,7 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     catalog.subscribeMeta({ onChange: (_meta, source) => changes.push(source) });
     await vi.advanceTimersByTimeAsync(0);
     expect(changes).toEqual([]);
-    expect(catalog.words()).toBe("The history catalog has not read the index yet (connecting)");
+    expect(catalog.words()).toBe("This desktop has not grouped its places yet (grouping)");
     expect(catalog.unavailable?.()).toBe(catalog.words());
     ready = true;
     await vi.advanceTimersByTimeAsync(600);
@@ -466,22 +668,41 @@ describe("the catalog port's meta feed (AR-8c)", () => {
     expect(catalog.unavailable?.()).toBe("The agent index is failed: exited 101");
   });
 
-  it("shares ONE index.project flight between the panel's figures and its usage", async () => {
-    const door = client({ "index.project": () => fixture("index-project.valid.json") });
+  it("PJ-4 (H2): shares ONE project.figures flight between the panel's figures and its usage, by the PJ key; a day is project.figuresDay", async () => {
+    const door = scripted({ sessions: [SESSIONS] });
     const catalog = catalogPortOver(door);
     const window = { sinceMs: 1_700_000_000_000, offsetMinutes: -420 };
     const [stats, usage] = await Promise.all([
-      catalog.projectStats("p1", window),
-      catalog.usage("p1", window),
+      catalog.projectStats(VIBE_FIELD, window),
+      catalog.usage(VIBE_FIELD, window),
     ]);
-    expect(stats.heat).toHaveLength(1);
+    expect(stats.heat).toHaveLength(2);
     expect(usage.hours).toHaveLength(1);
-    expect(door.calls.filter((call) => call.method === "index.project")).toEqual([
+    expect(door.calls.filter((call) => call.method === "project.figures")).toEqual([
       {
-        method: "index.project",
-        params: { projectId: "p1", sinceMs: 1_700_000_000_000, offsetMinutes: -420 },
+        method: "project.figures",
+        params: { key: VIBE_FIELD, sinceMs: 1_700_000_000_000, offsetMinutes: -420 },
       },
     ]);
+    const day = await catalog.dayUsage(VIBE_FIELD, "2026-09-29", -420);
+    expect(day.models).toHaveLength(2);
+    expect(door.calls.find((call) => call.method === "project.figuresDay")?.params).toEqual({
+      key: VIBE_FIELD,
+      day: "2026-09-29",
+      offsetMinutes: -420,
+    });
+    // no rosetta id reaches a figures door: the room's id IS the project
+    expect(door.calls.some((call) => call.method === "index.project")).toBe(false);
+  });
+
+  it("PJ-4 (H5): keeps the listing's sections — this desktop's Home and the Temporary bucket", async () => {
+    const door = scripted({ sessions: [SESSIONS] });
+    const catalog = catalogPortOver(door);
+    expect(catalog.sections()).toBeNull();
+    const feed = catalog.subscribeMeta({});
+    await flush();
+    expect(catalog.sections()).toEqual({ home: [{ key: HOME, device: STUDIO }], temporary: null });
+    feed.close();
   });
 });
 

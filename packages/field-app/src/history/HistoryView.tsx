@@ -1,4 +1,4 @@
-import type { RoomSelection } from "@rosetta/room";
+import type { RoomSelection, RoomTarget } from "@rosetta/room";
 import { useFielddClient } from "@vibefield/fieldd-client/react";
 import {
   type ReactElement,
@@ -194,7 +194,24 @@ export function HistoryView({ active }: { active: boolean }): ReactElement {
 
   // Where the Peek opened History at a line: each pick a fresh object, which
   // the room's `openAt` lands on (`open-at.ts`).
-  const openAt = useHistoryOpenAt();
+  const picked = useHistoryOpenAt();
+  // PJ-4 — a regroup re-files sessions under new project keys, and the room
+  // lets go of a project id it no longer holds: the chosen session is opened
+  // again where it is filed now (`openAt` lands a session in its project). The
+  // newest ask — the Peek's pick or this — is the one the room hears.
+  const [openAt, setOpenAt] = useState<RoomTarget | null>(picked);
+  useEffect(() => {
+    if (picked !== null) setOpenAt(picked);
+  }, [picked]);
+  useEffect(
+    () =>
+      ports.catalog.onRegrouped(({ sessions }) => {
+        const chosen = selectionRef.current;
+        if (chosen !== null && sessions.has(chosen.sessionId))
+          setOpenAt({ sessionId: chosen.sessionId });
+      }),
+    [ports],
+  );
   const [keys] = useState(() => viewKeysOf(getHost().platform));
 
   return (

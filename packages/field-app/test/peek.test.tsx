@@ -57,10 +57,13 @@ const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 
 const PROJECTS = fixture("index-projects.mesh.json") as { rows: unknown[]; sources: unknown[] };
-const SESSIONS = fixture("index-sessions.mesh.json") as {
+/** PJ-4 — History's projects (`project.list`) and its keyed listing */
+const PJ_PROJECTS = fixture("project-list.valid.json") as { rows: unknown[]; sources: unknown[] };
+const KEYED = fixture("index-sessions.keyed.json") as {
   rows: Array<Record<string, unknown>>;
   sources: unknown[];
 };
+const SESSIONS = { rows: [KEYED.rows[0] as Record<string, unknown>], sources: KEYED.sources };
 const SESSION = SESSIONS.rows[0] as Record<string, unknown> & {
   sessionId: string;
   nativeSessionId: string;
@@ -181,8 +184,14 @@ function fieldd(
     async request(method: string, params: Record<string, unknown> = {}) {
       calls.push({ method, params });
       switch (method) {
+        // the Peek's dropdown still names rosetta's projects (its own port)
         case "index.projects":
           return { rows: [PROJECTS.rows[0]], sources: PROJECTS.sources };
+        // PJ-4 — History's room lists fieldd's
+        case "project.list":
+          return { rows: [PJ_PROJECTS.rows[0]], sources: PJ_PROJECTS.sources, groupingVersion: 2 };
+        case "project.figures":
+          return fixture("project-figures.valid.json");
         case "index.sessions":
           return SESSIONS;
         case "index.threads":

@@ -96,22 +96,24 @@ afterEach(() => {
 
 /** fieldd, scripted: the index's doors as AR-8b answers them. */
 function fieldd() {
-  const projects = fixture("index-projects.mesh.json") as { rows: unknown[]; sources: unknown[] };
+  // PJ-4 — History lists fieldd's projects, each session filed by its key
+  const projects = fixture("project-list.valid.json") as { rows: unknown[]; sources: unknown[] };
+  const keyed = fixture("index-sessions.keyed.json") as { rows: unknown[]; sources: unknown[] };
   return {
     status: "ready",
     onStatusChange: () => () => undefined,
     async request(method: string) {
       switch (method) {
-        case "index.projects":
-          return { rows: [projects.rows[0]], sources: projects.sources };
+        case "project.list":
+          return { rows: [projects.rows[0]], sources: projects.sources, groupingVersion: 2 };
         case "index.sessions":
-          return fixture("index-sessions.mesh.json");
+          return { rows: [keyed.rows[0]], sources: keyed.sources };
         case "index.threads":
           return { rows: [] };
         case "index.status":
           return fixture("index-status.valid.json");
-        case "index.project":
-          return { ...fixture("index-project.valid.json"), projectId: "p-4f1c2a9e" };
+        case "project.figures":
+          return fixture("project-figures.valid.json");
         default:
           throw Object.assign(new Error(`${method} is not scripted`), { kind: "NOT_FOUND" });
       }
@@ -211,7 +213,7 @@ describe("History's room, its own chunk (2026-10-04)", () => {
     expect(create?.title).toContain("choose a session first");
     // The Peek asks for a place before the room is here (a pick made while
     // the chunk is on its way): the door holds it for the room.
-    const chosen = (fixture("index-sessions.mesh.json").rows as Array<{ sessionId: string }>)[0];
+    const chosen = (fixture("index-sessions.keyed.json").rows as Array<{ sessionId: string }>)[0];
     act(() => openHistoryAt({ sessionId: chosen?.sessionId ?? "", timelineId: null }));
 
     // The chunk lands: the room takes the face's place, on the same glass.

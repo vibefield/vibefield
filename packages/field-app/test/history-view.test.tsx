@@ -40,12 +40,20 @@ const FIXTURES = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "cont
 const fixture = (name: string): Record<string, unknown> =>
   JSON.parse(readFileSync(join(FIXTURES, name), "utf8"));
 
-const PROJECTS = fixture("index-projects.mesh.json") as { rows: unknown[]; sources: unknown[] };
-const SESSIONS = fixture("index-sessions.mesh.json") as {
+// PJ-4 — History lists fieldd's projects (`project.list`), each session filed
+// under the key fieldd joined it to (`index.sessions`' `projectKey`)
+const PROJECTS = fixture("project-list.valid.json") as {
   rows: Array<Record<string, unknown>>;
   sources: unknown[];
 };
-const SESSION = SESSIONS.rows[0] as Record<string, unknown>;
+const KEYED = fixture("index-sessions.keyed.json") as {
+  rows: Array<Record<string, unknown>>;
+  sources: unknown[];
+};
+/** one session, in the first project (vibe-field) */
+const SESSIONS = { rows: [KEYED.rows[0]], sources: KEYED.sources };
+const SESSION = KEYED.rows[0] as Record<string, unknown>;
+const STUDIO = "01J9ZK3M5Q8XR2V7N4B6C1D0EF";
 const SPAWNED = fixture("agent-spawn.valid.json");
 
 let publish: ((state: FrameViewState) => void) | null = null;
@@ -105,23 +113,31 @@ afterEach(() => {
  * fold's `agent.list` (P3), unanswered when left out. */
 function fieldd(resume: () => unknown, list?: () => unknown) {
   const calls: Array<{ method: string; params: Record<string, unknown> }> = [];
+  let onFrame: ((payload: unknown, kind?: "snapshot" | "delta") => void) | null = null;
   const client = {
     status: "ready",
     onStatusChange: () => () => undefined,
     calls,
+    /** a `project.subscribe` ping (PJ-4) */
+    ping(payload: Record<string, unknown>): void {
+      onFrame?.(
+        { epoch: "projects-1", since: 0, revision: 1, upserts: [], removed: [], ...payload },
+        "delta",
+      );
+    },
     async request(method: string, params: Record<string, unknown> = {}) {
       calls.push({ method, params });
       switch (method) {
-        case "index.projects":
-          return { rows: [PROJECTS.rows[0]], sources: PROJECTS.sources };
+        case "project.list":
+          return { rows: [PROJECTS.rows[0]], sources: PROJECTS.sources, groupingVersion: 2 };
         case "index.sessions":
           return SESSIONS;
         case "index.threads":
           return { rows: [] };
         case "index.status":
           return fixture("index-status.valid.json");
-        case "index.project":
-          return { ...fixture("index-project.valid.json"), projectId: "p-4f1c2a9e" };
+        case "project.figures":
+          return fixture("project-figures.valid.json");
         case "index.recent":
           return {
             rows: [
@@ -147,11 +163,16 @@ function fieldd(resume: () => unknown, list?: () => unknown) {
           throw Object.assign(new Error(`${method} is not scripted`), { kind: "NOT_FOUND" });
       }
     },
-    async subscribe(method: string, params: Record<string, unknown>) {
+    async subscribe(
+      method: string,
+      params: Record<string, unknown>,
+      frame: (payload: unknown, kind?: "snapshot" | "delta") => void,
+    ) {
       calls.push({ method, params });
+      onFrame = frame;
       return {
         subId: "sub-1",
-        snapshot: { snapshot: { epoch: "changes-local-1", revision: 0, rows: [] } },
+        snapshot: { snapshot: { epoch: "projects-1", revision: 0, rows: [] } },
         unsubscribe: () => undefined,
       };
     },
@@ -241,7 +262,7 @@ describe("History in the frame (AR-8c)", () => {
       "a column's scroller",
     );
     scroller.scrollTop = 120;
-    const subscribed = client.calls.filter((call) => call.method === "index.changes.subscribe");
+    const subscribed = client.calls.filter((call) => call.method === "project.subscribe");
     expect(subscribed).toHaveLength(1);
 
     to("godview");
@@ -250,9 +271,7 @@ describe("History in the frame (AR-8c)", () => {
     expect(historySlot()?.querySelector(".ah-frame")).toBe(frame);
     expect(historySlot()?.querySelector(".ah-cols .ah-scroll")).toBe(scroller);
     expect(scroller.scrollTop).toBe(120);
-    expect(client.calls.filter((call) => call.method === "index.changes.subscribe")).toHaveLength(
-      1,
-    );
+    expect(client.calls.filter((call) => call.method === "project.subscribe")).toHaveLength(1);
   });
 
   it("Resume continues the chosen session by its native id with the launcher's facts, placed in Godview's pane", async () => {
@@ -318,13 +337,24 @@ describe("History in the frame (AR-8c)", () => {
     const ask = client.request.bind(client);
     const outside = {
       ...(PROJECTS.rows[0] as Record<string, unknown>),
-      projectId: "p-0b7e2c4d",
+      key: "p1:t00ls",
       name: "tools",
-      rootPaths: ["/opt/build/tools"],
+      places: [
+        {
+          ref: { device: STUDIO, placeId: "pl_tools" },
+          name: "tools",
+          path: "/opt/build/tools",
+          class: "folder",
+          exists: true,
+          mounted: true,
+          sessions: 0,
+        },
+      ],
+      anchors: ["place:pl_tools"],
     };
     client.request = async (method: string, params: Record<string, unknown> = {}) =>
-      method === "index.projects"
-        ? { rows: [PROJECTS.rows[0], outside], sources: PROJECTS.sources }
+      method === "project.list"
+        ? { rows: [PROJECTS.rows[0], outside], sources: PROJECTS.sources, groupingVersion: 2 }
         : ask(method, params);
     mount(client);
     to("history");
@@ -334,9 +364,62 @@ describe("History in the frame (AR-8c)", () => {
       ].map((path) => path.textContent);
       return shown.length === 2 ? shown.sort() : null;
     }, "both projects' paths");
-    // the catalog carries rosetta's absolute roots: the home is the room's to fold
+    // a project's roots are its places' absolute paths here: the home is the room's to fold
     expect(paths).toEqual(["/opt/build/tools", "~/Projects/vibe-field"]);
   });
+});
+
+// PJ-4 — `project.subscribe`'s `regrouped {from, to}` re-keys the room's
+// selection: the room lets go of a project id it no longer holds, so History
+// opens the chosen session again where it is filed now.
+describe("a regroup keeps the chosen session chosen (PJ-4)", () => {
+  it("re-keys the selection when the chosen session's project moves to a new key", async () => {
+    const client = fieldd(() => SPAWNED);
+    mount(client);
+    to("history");
+    await choose();
+    const chosen = (): string | null =>
+      historySlot()
+        ?.querySelector(".ah-session-list-item.is-selected")
+        ?.getAttribute("aria-label") ?? null;
+    const before = await until(chosen, "the chosen session");
+    expect(historySlot()?.querySelector(".ah-project-list-item.is-selected")).not.toBeNull();
+    // the project's first record re-keys it p1: → r: (D9), and fieldd files
+    // its sessions under the new key
+    const from = PROJECTS.rows[0]?.["key"] as string;
+    const record = "r:01JA0B1C2D3E4F5G6H7J8K9M0N";
+    const ask = client.request.bind(client);
+    client.request = async (method: string, params: Record<string, unknown> = {}) => {
+      if (method === "project.list" || method === "index.sessions")
+        client.calls.push({ method, params });
+      if (method === "project.list")
+        return {
+          rows: [{ ...PROJECTS.rows[0], key: record }],
+          sources: PROJECTS.sources,
+          groupingVersion: 2,
+        };
+      if (method === "index.sessions")
+        return { ...SESSIONS, rows: [{ ...SESSION, projectKey: record }] };
+      return ask(method, params);
+    };
+    await act(async () => {
+      client.ping({ regrouped: [{ from, to: record }] });
+    });
+    // the room holds the new key, and the same session is chosen in it
+    await until(
+      () =>
+        client.calls.filter((call) => call.method === "project.list").length >= 2 ? true : null,
+      "the regrouped listing",
+      2_000,
+    );
+    await until(
+      () => (chosen() === before ? true : null),
+      "the same session chosen again under its new key",
+      2_000,
+    );
+    expect(historySlot()?.querySelector(".ah-project-list-item.is-selected")).not.toBeNull();
+    expect(create().title).not.toContain("choose a session first");
+  }, 20_000);
 });
 
 // P3 — Jump to (DESIGN.md §8 "History"; AR-D43, K11). Whether the chosen
