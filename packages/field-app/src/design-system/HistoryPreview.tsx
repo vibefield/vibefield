@@ -1,17 +1,25 @@
 import type { RoomSelection, RoomTarget } from "@rosetta/room";
-import { type ReactElement, useMemo, useState } from "react";
+import { type ReactElement, useEffect, useMemo, useState } from "react";
 import { Composer } from "../frame/Composer";
 import type { FrameSurface } from "../frame/frame-surface";
 import type { HistoryLineDoor } from "../frame/line-door";
 import { ViewsTrackView } from "../frame/ViewsTrack";
 import type { ViewKeys } from "../frame/views";
 import { HistoryRoomView } from "../history/HistoryRoomView";
+import {
+  type HistoryHostActs,
+  type HistoryHostState,
+  historyHostInputs,
+  NO_HOST_STATE,
+} from "../history/host-inputs";
+import { EMPTY_HOST_MODEL, hostModelOf } from "../history/host-model";
 import { FIXTURE_LINE_DOOR, fixtureClipboardStore, fixtureStillUrl } from "./ComposerLinePreview";
 import {
   FIXTURE_CHOSEN_SESSION,
   FIXTURE_UNAVAILABLE_WORDS,
   type HistoryState,
   historyFixturePorts,
+  historyProjectsFixture,
 } from "./history-fixtures";
 
 // History, in the catalog (AR-8c): the SHIPPING view (`HistoryRoomView`) over
@@ -23,6 +31,11 @@ import {
 
 /** The view in one state, filling whatever plate holds it. */
 export function HistoryPreview({ state = "room" }: { state?: HistoryState }): ReactElement {
+  if (state === "projects") return <HistoryProjectsPreview />;
+  return <HistoryStatePreview state={state} />;
+}
+
+function HistoryStatePreview({ state }: { state: HistoryState }): ReactElement {
   const [ports] = useState(() => historyFixturePorts(state));
   const [openAt] = useState<RoomTarget | null>(() =>
     state === "chosen" || state === "projects" ? { sessionId: FIXTURE_CHOSEN_SESSION } : null,
@@ -34,6 +47,51 @@ export function HistoryPreview({ state = "room" }: { state?: HistoryState }): Re
       openAt={openAt}
       storage={null}
       keys="mac"
+    />
+  );
+}
+
+/** History BY PROJECT (PJ-4): the shipping view over the shipping adapter and
+ * a fixture fieldd, handed the room's host inputs by the SHIPPING builder
+ * (`historyHostInputs`) over the model the controller would gather — colours,
+ * desktop marks, Live now / Home / Temporary, row acts, New agent and the
+ * project's acts, ③'s folders, the chips. The chips and Rename… answer here
+ * as they do in the product; an act that would ask fieldd (Resume, Jump to,
+ * New agent, pin, hide, split) does nothing — a catalog acts on no one. */
+function HistoryProjectsPreview(): ReactElement {
+  const [fixture] = useState(() => historyProjectsFixture());
+  const [openAt] = useState<RoomTarget>({ sessionId: FIXTURE_CHOSEN_SESSION });
+  const [listing, setListing] = useState(() => fixture.catalog.listing());
+  useEffect(() => fixture.catalog.onListing(setListing), [fixture]);
+  const model = useMemo(
+    () =>
+      listing === null
+        ? EMPTY_HOST_MODEL
+        : hostModelOf(listing, fixture.roster, fixture.runs, fixture.providers),
+    [listing, fixture],
+  );
+  const [state, setState] = useState<HistoryHostState>({ ...NO_HOST_STATE, home: "/Users/demo" });
+  const acts = useMemo<HistoryHostActs>(
+    () => ({
+      setDesktop: (desktop) => setState((now) => ({ ...now, desktop })),
+      setAgent: (agent) => setState((now) => ({ ...now, agent })),
+      resume: () => undefined,
+      jump: () => undefined,
+      newAgent: () => undefined,
+      intent: () => undefined,
+      rename: (key) => setState((now) => ({ ...now, renaming: key })),
+      shown: () => undefined,
+    }),
+    [],
+  );
+  const inputs = useMemo(() => historyHostInputs(model, state, acts), [model, state, acts]);
+  return (
+    <HistoryRoomView
+      ports={fixture.ports}
+      openAt={openAt}
+      storage={null}
+      keys="mac"
+      inputs={inputs}
     />
   );
 }

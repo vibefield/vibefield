@@ -2,13 +2,15 @@ import type { CatalogPort, CatalogStatus, RoomPorts } from "@rosetta/room";
 import { createDemoPorts, createRoomDemo, type RoomDemo } from "@rosetta/room/fixtures";
 import {
   AGENT_CATALOG_READERS,
+  type AgentProviderSummary,
+  type DeviceInfo,
   type IndexCatalogSource,
   type IndexSession,
   type ProjectFiguresDayResult,
   type ProjectFiguresResult,
   type ProjectSummary,
 } from "@vibefield/contracts";
-import { catalogPortOver, type HistoryDoorClient } from "../history/doors";
+import { catalogPortOver, type HistoryCatalogPort, type HistoryDoorClient } from "../history/doors";
 
 // History's FIXTURE ADAPTER (AR-8c; docs/UI_SYSTEM.md "Catalog fidelity"). The
 // catalog mounts the SHIPPING `HistoryRoomView` over the room package's own
@@ -127,7 +129,7 @@ function fixtureProjects(demo: RoomDemo): ProjectSummary[] {
     );
     const places =
       index === 0
-        ? [here, place(FIXTURE_LAPTOP, `${row.id}-laptop`, `/Users/demo/code/${row.name}`, 0)]
+        ? [here, place(FIXTURE_LAPTOP, `${row.id}-laptop`, `/Users/demo/code/${row.name}`, 4)]
         : [here];
     return {
       key: keyOf(row.name),
@@ -204,6 +206,9 @@ function fixtureSessions(demo: RoomDemo): IndexSession[] {
       ...(provider !== undefined ? { provider } : {}),
       startedAt: row.started_at,
       ...(project !== undefined ? { projectKey: keyOf(project) } : {}),
+      ...(row.project_id !== null
+        ? { place: { device: FIXTURE_DESKTOP, placeId: `pl_${row.project_id}` } }
+        : {}),
     };
   });
 }
@@ -336,17 +341,87 @@ export function historyProjectsClient(demo: RoomDemo): HistoryDoorClient {
 
 /** History by project: the demo's room, its catalog the SHIPPING adapter
  * over the fixture fieldd (the index's own state is the demo's). */
-function projectsPorts(demo: RoomDemo): RoomPorts {
+function projectsPorts(demo: RoomDemo): { ports: RoomPorts; catalog: HistoryCatalogPort } {
   const ports = createDemoPorts(demo);
-  const catalog = catalogPortOver(historyProjectsClient(demo), { now: () => demo.now });
-  return { ...ports, catalog: { ...catalog, status: ports.catalog.status } };
+  const shipping = catalogPortOver(historyProjectsClient(demo), { now: () => demo.now });
+  const catalog: HistoryCatalogPort = { ...shipping, status: ports.catalog.status };
+  return { ports: { ...ports, catalog }, catalog };
+}
+
+/** PJ-4 — what the history controller gathers beside the listing, for the
+ * projects plate's host inputs (`historyHostInputs`, the shipping builder):
+ * the roster that names the two desktops by their OS (PJ-D24), what runs here
+ * now (one session of the first project — Live now, and its row's Jump to),
+ * and the agents this desktop offers, read from the catalog by the demo's
+ * runtimes' kinds — never an agent id written here (R23b, AR-L1). */
+export interface HistoryProjectsFixture {
+  readonly ports: RoomPorts;
+  readonly catalog: HistoryCatalogPort;
+  readonly roster: readonly DeviceInfo[];
+  readonly runs: readonly unknown[];
+  readonly providers: readonly AgentProviderSummary[];
+}
+
+export function historyProjectsFixture(now: number = Date.now()): HistoryProjectsFixture {
+  const demo = createRoomDemo(now);
+  const { ports, catalog } = projectsPorts(demo);
+  const roster: DeviceInfo[] = [
+    {
+      deviceId: FIXTURE_DESKTOP,
+      name: "Studio",
+      platform: "darwin",
+      self: true,
+      online: true,
+      lastSeenAt: now,
+    },
+    {
+      deviceId: FIXTURE_LAPTOP,
+      name: "Laptop",
+      platform: "darwin",
+      self: false,
+      online: false,
+      lastSeenAt: now - 3_600_000,
+    },
+  ];
+  const first = demo.meta.projects[0]?.id;
+  const live = demo.meta.sessions.filter((row) => row.project_id === first)[1];
+  const kinds = [...new Set(demo.meta.runtimes.map((runtime) => runtime.kind))];
+  const providers = kinds.flatMap((kind): AgentProviderSummary[] => {
+    const id = AGENT_CATALOG_READERS.idForKind(kind);
+    const entry = id === undefined ? undefined : AGENT_CATALOG_READERS.entry(id);
+    if (id === undefined || entry === undefined) return [];
+    return [{ id, label: entry.label, available: true, resumable: true, personas: [] }];
+  });
+  const liveKind = demo.meta.runtimes.find((runtime) => runtime.id === live?.runtime_id)?.kind;
+  const liveProvider =
+    liveKind === undefined ? undefined : AGENT_CATALOG_READERS.idForKind(liveKind);
+  const runs =
+    live === undefined || liveProvider === undefined
+      ? []
+      : [
+          {
+            sessionId: live.native_session_id,
+            kind: liveProvider,
+            label: providers.find((row) => row.id === liveProvider)?.label ?? liveProvider,
+            device: FIXTURE_DESKTOP,
+            tier: "managed",
+            runtimeRunId: "run-fixture",
+            runtimeEpoch: 1,
+            terminal: { hosted: "local", runtimeSessionId: "sess-fixture", workloadClass: "agent" },
+            status: "working",
+            observationLevel: "native-hooks",
+            createdAt: new Date(now - 600_000).toISOString(),
+            stateChangedAt: new Date(now - 60_000).toISOString(),
+          },
+        ];
+  return { ports, catalog, roster, runs, providers };
 }
 
 /** The room's ports for one catalog state, over the package's demo. */
 export function historyFixturePorts(state: HistoryState, now: number = Date.now()): RoomPorts {
   const demo = createRoomDemo(now);
   const ports = createDemoPorts(demo);
-  if (state === "projects") return projectsPorts(demo);
+  if (state === "projects") return projectsPorts(demo).ports;
   if (state === "unavailable") return { ...ports, catalog: unavailableCatalog(ports.catalog) };
   if (state === "consent") return { ...ports, catalog: consentCatalog(ports.catalog) };
   return ports;
