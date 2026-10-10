@@ -4,7 +4,7 @@
  * and its contrast, never by a hash, the night's page darker than the day's); a resize by the SE knob that writes Size and a
  * readout that FOLLOWS (the viewport the new size cuts, whole CSS px); a device switch re-cut about the centre with the head
  * at the phone's viewport, and ONE ⌘Z taking the size, the place and the device back together; and ICE's pick-up — in hand,
- * settled, its word the address, its five tools declared only — put down by Esc, still selected.
+ * settled, its word the address, its five tools live (PT-3) — put down by Esc, still selected.
  */
 import { describe, expect, it } from "vitest";
 import {
@@ -49,7 +49,7 @@ const SEEN: PaneSeen = {
     settled: true,
     word: "lumen.example",
     readout: "lumen.example",
-    tools: PANE.tools.map((id) => ({ id, dim: true })),
+    tools: PANE.tools.map((id) => ({ id, dim: false })),
     down: true,
     selectedAfter: 1,
   },
@@ -208,7 +208,7 @@ describe("HAND — ICE's pick-up, put down by Esc", () => {
     expect(judgeHand(SEEN.hand)).toEqual([]);
   });
 
-  it("refuses no pick-up, a word that is not the address, tools missing or shown live, a pane not put down", () => {
+  it("refuses no pick-up, a word that is not the address, tools missing or shown dim, a pane not put down", () => {
     expect(judgeHand({ ...SEEN.hand, held: false })[0]).toBe("HAND: ⏎ did not pick the pane up");
     expect(judgeHand({ ...SEEN.hand, settled: false })[0]).toBe("HAND: the pick-up never settled");
     expect(judgeHand({ ...SEEN.hand, readout: "Search or enter website name" })[0]).toMatch(
@@ -218,9 +218,9 @@ describe("HAND — ICE's pick-up, put down by Esc", () => {
     expect(
       judgeHand({
         ...SEEN.hand,
-        tools: SEEN.hand.tools.map((t) => (t.id === "reload" ? { ...t, dim: false } : t)),
+        tools: SEEN.hand.tools.map((t) => (t.id === "reload" ? { ...t, dim: true } : t)),
       }),
-    ).toEqual(["HAND: reload shown live — PT-1 declares them only"]);
+    ).toEqual(["HAND: reload shown dim — declared only, though PT-3's held tools work"]);
     expect(judgeHand({ ...SEEN.hand, down: false, selectedAfter: 0 })).toEqual([
       "HAND: Esc did not put the pane down",
       "HAND: put down, 0 selected — not the pane still",

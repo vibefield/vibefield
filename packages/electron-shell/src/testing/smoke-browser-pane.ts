@@ -20,7 +20,8 @@
 //   DEVICE  — the selection bar's iPhone act: the pane re-cut to the phone's own cut about its centre and `device` written —
 //             the head says 402 × 874 — then ONE ⌘Z takes the size, the place and the device back together (one transaction);
 //   HAND    — ⏎ picks it up (ICE's pick-up, never a camera lean-in): in hand, settled, its word the address as printed, its
-//             five held tools shown DECLARED ONLY (dim); the still pt-1-pane-held.png; Esc puts it down, still selected.
+//             five held tools shown LIVE (PT-3: they work — testing/smoke-use-pane.ts presses them); the still
+//             pt-1-pane-held.png; Esc puts it down, still selected.
 // Then the pane is deleted (⌫) and the board is as found: the census back, the theme and the wind as they were.
 // `--browser-pane` beside `--smoke-canvas` runs these rows alone after the boot's (the author's loop; this file's header).
 
@@ -292,7 +293,7 @@ export function judgeDevice(resized: DoorRect, seen: PaneSeen["device"]): string
   return problems;
 }
 
-/** HAND: picked up, settled, the address printed in the held bar, its five tools declared only (dim); Esc puts it down, still selected. */
+/** HAND: picked up, settled, the address printed in the held bar, its five tools live (PT-3); Esc puts it down, still selected. */
 export function judgeHand(seen: PaneSeen["hand"]): string[] {
   const problems: string[] = [];
   if (!seen.held) problems.push("HAND: ⏎ did not pick the pane up");
@@ -306,9 +307,11 @@ export function judgeHand(seen: PaneSeen["hand"]): string[] {
     problems.push(
       `HAND: the held tools are ${ids.join(", ") || "none"}, not ${PANE.tools.join(", ")}`,
     );
-  const live = seen.tools.filter((t) => !t.dim).map((t) => t.id);
-  if (live.length > 0)
-    problems.push(`HAND: ${live.join(", ")} shown live — PT-1 declares them only`);
+  const dim = seen.tools.filter((t) => t.dim).map((t) => t.id);
+  if (dim.length > 0)
+    problems.push(
+      `HAND: ${dim.join(", ")} shown dim — declared only, though PT-3's held tools work`,
+    );
   if (!seen.down) problems.push("HAND: Esc did not put the pane down");
   if (seen.selectedAfter !== 1)
     problems.push(`HAND: put down, ${seen.selectedAfter} selected — not the pane still`);
