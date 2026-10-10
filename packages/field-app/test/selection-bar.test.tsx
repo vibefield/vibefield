@@ -734,6 +734,54 @@ describe("the tools in hand (DK-12)", () => {
     expect(putDown).toHaveBeenCalledTimes(1);
   });
 
+  it("PT-5a (ICE I49): a tool its kind says is DISABLED is dim, aria-disabled, and its press and its key use nothing; live again, it is used — and a tool that changed its word (Reload → Stop) says the new one", () => {
+    vi.useFakeTimers();
+    mount();
+    const use = vi.spyOn(ce.ops, "useHeldTool");
+    const back = {
+      id: "back",
+      label: "Back",
+      kind: "action",
+      hint: "⌘[",
+      glyph: { path: "M0 0" },
+    } as const;
+    const reload = {
+      id: "reload",
+      label: "Reload",
+      kind: "action",
+      glyph: { path: "M1 1" },
+    } as const;
+    inHandNow({ tools: [{ ...back, enabled: false }, reload], active: "", readout: "A page" });
+    expect(tool("back").getAttribute("aria-disabled")).toBe("true");
+    expect(tool("back").hasAttribute("data-disabled")).toBe(true);
+    // it keeps its look (an action's cell), never the faint slot's
+    expect(tool("back").dataset.look).toBe("action");
+    expect(tool("reload").hasAttribute("aria-disabled")).toBe(false);
+    expect(tool("reload").hasAttribute("data-disabled")).toBe(false);
+    act(() => tool("back").click());
+    act(() => tool("back").focus());
+    key("Enter");
+    expect(use).not.toHaveBeenCalled();
+    act(() => tool("reload").click());
+    expect(use).toHaveBeenLastCalledWith("reload");
+    // the page went somewhere: ‹ is live — and loading, ↻ reads Stop
+    act(() =>
+      selection.publish({
+        held: held({
+          tools: [back, { ...reload, label: "Stop", glyph: { path: "M2 2" } }],
+          active: "",
+          readout: "A page",
+        }),
+      }),
+    );
+    expect(tool("back").hasAttribute("aria-disabled")).toBe(false);
+    expect(tool("back").hasAttribute("data-disabled")).toBe(false);
+    expect(tool("reload").getAttribute("aria-label")).toBe("Stop");
+    act(() => tool("back").click());
+    expect(use).toHaveBeenLastCalledWith("back");
+    expect(use).toHaveBeenCalledTimes(2);
+  });
+
   it("is a toolbar named “Tools in hand” with one tab stop: ← → between its tools and Done, the word no stop; Esc back to the desk", () => {
     vi.useFakeTimers();
     mount();

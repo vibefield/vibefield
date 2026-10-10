@@ -16,8 +16,10 @@
 import {
   type HeldToolApi,
   type HeldToolDef,
+  type HeldToolStateContext,
   type KindProgram,
   type LiveFace,
+  type LiveInfo,
   type MarkFrame,
   type ObjectContext,
   type ObjectHit,
@@ -101,12 +103,20 @@ const runControl =
   (api: HeldToolApi): void =>
     handOf(api.world)?.tool(api.entity, control);
 
+/** A held page's words as a tool's state reads them: off the pane's desk state (ICE I49 — `HeldToolStateContext.local`);
+ * none where no desk answers, or the pane shows no live page (a still, the film). */
+const infoOf = (c: HeldToolStateContext): LiveInfo | undefined =>
+  (c.local as PaneLocal | undefined)?.page(c.entity)?.info;
+
+/** ↻ while the page loads: Stop — the head's ✕. */
+export const STOP_GLYPH = { path: "M7 7 L17 17 M17 7 L7 17" } as const;
+
 /**
- * The held bar's tools (PT-3 ruling 8) — ACTIONS now: ‹ back, › forward, ↻ reload (✕ stop while the page loads) through the page's
- * navigation, the ADDRESS (the one editor over the head's capsule), the DEVICE (PT-1's switch, to the next device). The chords
- * are the browser's (⌘[ ⌘] ⌘R ⌘L) — while the page's lease holds the keys, the lease runs them (ruling 7). ICE's bar has no word
- * for a slot's state, so a slot stays lit where there is nowhere to go and its act does nothing; the HEAD draws the truth (a
- * hairline chevron, ✕ while loading).
+ * The held bar's tools (PT-3 ruling 8) — ACTIONS: ‹ back, › forward, ↻ reload through the page's navigation, the ADDRESS (the
+ * one editor over the head's capsule), the DEVICE (PT-1's switch, to the next device). The chords are the browser's (⌘[ ⌘] ⌘R
+ * ⌘L) — while the page's lease holds the keys, the lease runs them (ruling 7). PT-5a (ruling 2; ICE I49) — each SAYS ITS STATE,
+ * read with the anchor: ‹ and › are DISABLED where the page has nowhere to go (a still has nowhere), and ↻ reads STOP — its
+ * glyph the head's ✕, its label — while the page loads. The bar and the head say the same truth now.
  */
 export const PANE_TOOLS: readonly HeldToolDef[] = [
   {
@@ -117,6 +127,7 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
     hint: "⌘[",
     glyph: { path: "M14.5 5.5 L8 12 L14.5 18.5" },
     run: runControl("back"),
+    state: (c) => ({ enabled: infoOf(c)?.back === true }),
   },
   {
     id: "forward",
@@ -126,6 +137,7 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
     hint: "⌘]",
     glyph: { path: "M9.5 5.5 L16 12 L9.5 18.5" },
     run: runControl("forward"),
+    state: (c) => ({ enabled: infoOf(c)?.forward === true }),
   },
   {
     id: "reload",
@@ -135,6 +147,8 @@ export const PANE_TOOLS: readonly HeldToolDef[] = [
     hint: "⌘R",
     glyph: { path: "M18.5 12 A6.5 6.5 0 1 1 15.6 6.6 M18.5 4.5 V9 H14" },
     run: runControl("reload"),
+    state: (c) =>
+      infoOf(c)?.loading !== undefined ? { glyph: STOP_GLYPH, label: "Stop" } : undefined,
   },
   {
     id: "address",

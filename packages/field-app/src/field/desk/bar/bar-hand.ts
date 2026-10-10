@@ -15,7 +15,10 @@ export type { HeldAnchor, HeldSlot };
 //   a MODE WITH A SWATCH (ICE's pens, the whiteboard's markers) is a DOT in the slot's own ink;
 //   a MODE WITHOUT ONE (the eraser, the calendar's pen) a 32 cell, the inverted solid while it is the one in hand;
 //   an ACTION (undo, today, a page) a 32 cell;
-//   a slot with no `kind` (declared only) waits, faint by ink.
+//   a slot with no `kind` (declared only) waits, faint by ink;
+//   a slot its kind says is DISABLED NOW (ICE I49 — `HeldSlot.enabled === false`: ‹ with no history) is dim the same
+//   way, `aria-disabled`, and its press does nothing — it keeps its look, and comes live again when the kind says so. Its
+//   label and glyph are already what the kind says now (↻ reads Stop while a page loads).
 // Its glyph is drawn by §13's table through the bar's one path renderer (KindGlyph); a slot with neither a glyph nor
 // a swatch shows its label (R3). The readout is ONE slot after the tools — the string carries no position (R13) — and
 // a kind that says none shows none. Done puts it down (`ops.putDown()`).
@@ -46,6 +49,8 @@ export type HandCell =
       readonly run: HandRun;
       /** The run changed here: a 6 gap before it (the row's 2 and 4 of its own). */
       readonly gap: boolean;
+      /** Its kind says it is disabled now (ICE I49): dim, `aria-disabled`, its press nothing. */
+      readonly disabled: boolean;
     }
   /** The kind's word in hand (I22 — "Page 1", "September", the clock's time). */
   | { readonly kind: "readout"; readonly text: string }
@@ -96,6 +101,7 @@ export function handCells(held: Pick<HeldAnchor, "tools" | "active" | "readout">
       on: slot.kind === "mode" && slot.id === held.active,
       run,
       gap: last !== undefined && run !== last,
+      disabled: slot.enabled === false,
     });
     last = run;
   }
@@ -110,7 +116,7 @@ export function slotsKey(tools: readonly HeldSlot[]): string {
   return tools
     .map(
       (t) =>
-        `${t.id}\u0000${t.label}\u0000${t.kind ?? ""}\u0000${t.hint ?? ""}\u0000${JSON.stringify(t.glyph ?? null)}\u0000${t.swatch ?? ""}`,
+        `${t.id}\u0000${t.label}\u0000${t.kind ?? ""}\u0000${t.hint ?? ""}\u0000${JSON.stringify(t.glyph ?? null)}\u0000${t.swatch ?? ""}\u0000${t.enabled === false ? "off" : ""}`,
     )
     .join("\u0001");
 }

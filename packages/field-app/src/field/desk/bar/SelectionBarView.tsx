@@ -580,12 +580,12 @@ export function SelectionBarView({
     onCell(cell);
   };
 
-  /** Send to…, a tool used, or Done: never a faint slot, a rule or the readout. */
+  /** Send to…, a tool used, or Done: never a faint slot, one its kind says is disabled (ICE I49), a rule or the readout. */
   const runHand = (cell: HandCell): void => {
     if (
       cell.kind === "send" ||
       cell.kind === "done" ||
-      (cell.kind === "tool" && cell.look !== "faint")
+      (cell.kind === "tool" && cell.look !== "faint" && !cell.disabled)
     )
       onHand?.(cell);
   };
@@ -727,7 +727,8 @@ export function SelectionBarView({
             aria-label={cell.label}
             title={cell.tip}
             {...(mode ? { "aria-pressed": cell.on } : {})}
-            {...(cell.look === "faint" ? { "aria-disabled": true } : {})}
+            {...(cell.look === "faint" || cell.disabled ? { "aria-disabled": true } : {})}
+            {...(cell.disabled ? { "data-disabled": "" } : {})}
             {...(cell.swatch === undefined
               ? {}
               : { style: { "--vf-bar-swatch": cell.swatch } as CSSProperties })}

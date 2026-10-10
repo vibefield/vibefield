@@ -255,10 +255,14 @@
   background: var(--vf-foreground);
 }
 
-/* a slot declared only, with no kind: it waits, faint by ink */
+/* a slot declared only, with no kind: it waits, faint by ink — and one its kind says is disabled NOW (ICE I49: ‹ with no
+   history) is dim the same way, whatever its look */
 .vf-bar-cell[data-look="faint"],
 .vf-bar-cell[data-look="faint"]:hover,
-.vf-bar-cell[data-look="faint"]:active {
+.vf-bar-cell[data-look="faint"]:active,
+.vf-bar-cell[data-disabled],
+.vf-bar-cell[data-disabled]:hover,
+.vf-bar-cell[data-disabled]:active {
   color: color-mix(in srgb, var(--vf-text-faint) 55%, transparent);
   background: transparent;
   transform: none;

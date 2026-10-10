@@ -286,4 +286,36 @@ describe("what a slot looks like, and where the runs change (§8, R13)", () => {
     expect(slotsKey(night) !== slotsKey(NOTEBOOK)).toBe(changed);
     expect(slotsKey([{ id: "a", label: "A" }])).not.toBe(slotsKey([{ id: "a", label: "B" }]));
   });
+
+  it("PT-5a (ICE I49): a slot its kind says is DISABLED NOW keeps its look and is marked so — and a slot's state is part of what the bar says of it (its key moves when it comes live, when its label or its glyph changes)", () => {
+    const back = {
+      id: "back",
+      label: "Back",
+      kind: "action",
+      hint: "⌘[",
+      glyph: { path: "M0 0" },
+    } as const;
+    const reload = {
+      id: "reload",
+      label: "Reload",
+      kind: "action",
+      glyph: { path: "M1 1" },
+    } as const;
+    const stop = { ...reload, label: "Stop", glyph: { path: "M2 2" } } as const;
+    const cells = handCells({ tools: [{ ...back, enabled: false }, reload], active: "" });
+    const tools = cells.filter((c) => c.kind === "tool");
+    expect(tools.map((c) => [c.id, c.look, c.disabled])).toEqual([
+      ["back", "action", true],
+      ["reload", "action", false],
+    ]);
+    // a slot declared only is faint, never "disabled": its kind said nothing of it
+    const faint = handCells({ tools: [{ id: "later", label: "Later" }], active: "" });
+    expect(faint.filter((c) => c.kind === "tool").map((c) => [c.look, c.disabled])).toEqual([
+      ["faint", false],
+    ]);
+    // the key: live ≠ disabled; Reload ≠ Stop
+    expect(slotsKey([back])).not.toBe(slotsKey([{ ...back, enabled: false }]));
+    expect(slotsKey([{ ...back, enabled: false }])).toBe(slotsKey([{ ...back, enabled: false }]));
+    expect(slotsKey([reload])).not.toBe(slotsKey([stop]));
+  });
 });
