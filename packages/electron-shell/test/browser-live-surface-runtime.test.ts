@@ -707,7 +707,8 @@ describe("BrowserLiveSurfaceRuntime", () => {
     renderer.attachment.dispatchInput?.({ kind: "compose", text: "", caret: 0 }, revision);
     renderer.attachment.dispatchInput?.({ kind: "compose", text: "にほ", caret: 2 }, revision);
     renderer.attachment.dispatchInput?.({ kind: "compose", text: "ん", caret: 9 }, revision);
-    // a move with the primary held is a drag; a wheel of 40 of the page's CSS px is 80 device px at its density 2
+    // a move with the primary held is a drag; a wheel of 40 of the page's CSS px stays 40 at its density 2 — CDP's wheel
+    // deltas are CSS px (the PT-3 smoke's WHEEL row: multiplied by the density, the page scrolled twice the finger's travel)
     renderer.attachment.dispatchInput?.(
       { kind: "pointer", action: "move", x: 20, y: 30, buttons: 1 },
       revision,
@@ -724,10 +725,11 @@ describe("BrowserLiveSurfaceRuntime", () => {
     ]);
     expect(window?.mouseInputs).toEqual([
       { type: "mouseMoved", x: 20, y: 30, button: "none", buttons: 1 },
-      { type: "mouseWheel", x: 10, y: 12, deltaX: 6, deltaY: 80 },
+      { type: "mouseWheel", x: 10, y: 12, deltaX: 3, deltaY: 40 },
     ]);
-    // the page's cursor: said with the browser state, once it has one; Chromium's own names as CSS says them
-    window?.cursorTo("pointer");
+    // the page's cursor: said with the browser state, once it has one; Electron's names as CSS says them — its `hand` is a link's
+    // (CSS `pointer`), its `pointer` Chromium's ARROW (CSS `default`)
+    window?.cursorTo("hand");
     expect(result.runtime.summary.browser).toBeUndefined();
     window?.emitNavigationState({
       url: "https://example.test/app",
@@ -738,17 +740,28 @@ describe("BrowserLiveSurfaceRuntime", () => {
     });
     expect(result.runtime.summary.browser?.cursor).toBe("pointer");
     const published = renderer.summaries.length;
-    window?.cursorTo("pointer");
+    window?.cursorTo("hand");
     expect(renderer.summaries).toHaveLength(published);
     window?.cursorTo("text");
     expect(result.runtime.summary.browser?.cursor).toBe("text");
     expect(renderer.summaries.length).toBeGreaterThan(published);
-    window?.cursorTo("nodrop");
-    expect(result.runtime.summary.browser?.cursor).toBe("no-drop");
-    window?.cursorTo("ne-panning");
-    expect(result.runtime.summary.browser?.cursor).toBe("all-scroll");
-    window?.cursorTo("custom");
-    expect(result.runtime.summary.browser?.cursor).toBe("default");
+    const said = (type: string): string | undefined => {
+      window?.cursorTo(type);
+      return result.runtime.summary.browser?.cursor;
+    };
+    expect(said("pointer")).toBe("default");
+    expect(said("grab")).toBe("grab");
+    expect(said("nodrop")).toBe("no-drop");
+    expect(said("ne-panning")).toBe("all-scroll");
+    expect(said("m-panning-vertical")).toBe("all-scroll");
+    expect(said("drag-drop-link")).toBe("alias");
+    expect(said("ns-no-resize")).toBe("ns-resize");
+    expect(said("custom")).toBe("default");
+    // a name CSS does not know is never passed on (where it is set it would be ignored, the last cursor left up)
+    expect(said("text")).toBe("text");
+    expect(said("sparkle")).toBe("default");
+    expect(said("text")).toBe("text");
+    expect(said("constructor")).toBe("default");
     result.runtime.dispose();
   });
 

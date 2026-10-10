@@ -448,16 +448,70 @@ function clampBrowserState(
   };
 }
 
+/** The cursors Electron names as CSS does (`cursor-changed`'s types that are CSS keywords too). */
+const CSS_CURSORS: ReadonlySet<string> = new Set([
+  "default",
+  "crosshair",
+  "text",
+  "wait",
+  "help",
+  "e-resize",
+  "n-resize",
+  "ne-resize",
+  "nw-resize",
+  "s-resize",
+  "se-resize",
+  "sw-resize",
+  "w-resize",
+  "ns-resize",
+  "ew-resize",
+  "nesw-resize",
+  "nwse-resize",
+  "col-resize",
+  "row-resize",
+  "move",
+  "vertical-text",
+  "cell",
+  "context-menu",
+  "alias",
+  "progress",
+  "copy",
+  "none",
+  "not-allowed",
+  "zoom-in",
+  "zoom-out",
+  "grab",
+  "grabbing",
+]);
+
+/** The ones it names otherwise: its `pointer` is Chromium's ARROW (CSS's `default`) and its `hand` the link's (CSS's `pointer`) —
+ * the PT-3 smoke's CURSOR row saw a link say `hand`; Chromium's own (no-drop, the drag's, a resize that cannot) as CSS's kin. */
+const ELECTRON_CURSORS: ReadonlyMap<string, string> = new Map([
+  ["pointer", "default"],
+  ["hand", "pointer"],
+  ["nodrop", "no-drop"],
+  ["custom", "default"],
+  ["null", "default"],
+  ["drag-drop-none", "no-drop"],
+  ["drag-drop-move", "move"],
+  ["drag-drop-copy", "copy"],
+  ["drag-drop-link", "alias"],
+  ["ns-no-resize", "ns-resize"],
+  ["ew-no-resize", "ew-resize"],
+  ["nesw-no-resize", "nesw-resize"],
+  ["nwse-no-resize", "nwse-resize"],
+]);
+
 /**
- * Electron's `cursor-changed` type → the CSS cursor the page means (PT-3): most are CSS names already; Chromium's own names
- * map to theirs (`nodrop` → `no-drop`, the panning arrows → `all-scroll`), and one only an image can say (`custom`) reads as
- * the default.
+ * Electron's `cursor-changed` type → the CSS cursor the page means (PT-3): the CSS keywords as they are, Electron's own names as
+ * CSS spells them (above), the panning arrows as `all-scroll`, one only an image can say (`custom`) as the default — and anything
+ * else as the default, never passed through: a name CSS does not know is IGNORED where it is set, leaving the last cursor up.
  */
 export function cssCursorOf(type: string): string {
-  if (type === "nodrop") return "no-drop";
-  if (type === "custom") return "default";
-  if (type.endsWith("-panning")) return "all-scroll";
-  return /^[a-z][a-z-]{0,31}$/.test(type) ? type : "default";
+  const named = ELECTRON_CURSORS.get(type);
+  if (named !== undefined) return named;
+  if (/-panning(-vertical|-horizontal)?$/.test(type)) return "all-scroll";
+  return CSS_CURSORS.has(type) ? type : "default";
 }
 
 /** The special keys the wire carries by NAME. CDP acts on most of them only
@@ -861,15 +915,15 @@ export class BrowserLiveSurfaceRuntime implements LiveSurfaceRuntimeAuthority {
       ) {
         throw new Error("Browser wheel input is outside the bounded contract");
       }
-      // The wire's deltas are the page's CSS px (what the finger moved on screen, PT-3 ruling 4); CDP's `mouseWheel`
-      // scrolls by DEVICE px of the page as laid out (LT2's probe) — so the page's own density multiplies them here.
-      const density = this.source.deviceScaleFactor ?? 1;
+      // The wire's deltas are the page's CSS px (what the finger moved on screen, PT-3 ruling 4), and CDP's `mouseWheel`
+      // takes CSS px too — never device px: the PT-3 smoke's WHEEL row measured a page at density 2 scrolled by twice the
+      // finger's travel when its density multiplied them here (LT2's probe said device px; the page said otherwise).
       await window.dispatchMouse({
         type: "mouseWheel",
         x,
         y,
-        deltaX: request.deltaX * density,
-        deltaY: request.deltaY * density,
+        deltaX: request.deltaX,
+        deltaY: request.deltaY,
       });
       return;
     }
