@@ -1567,10 +1567,10 @@
                   </tr>
                   <tr>
                     <td><span class="route">agent.recordedLanes</span></td>
-                    <td><p><code>AgentRecordedLanesParams {sinceMs, untilMs (at most a day later), device?}</code> → <code>AgentRecordedLanesResult</code>, the SDK's <code>MonitorPastSnapshot</code> (TL, docket v9 RULED 2026-10-09: each model row's past up to its <code>statusSince</code>, and the ended runs the record holds, as spans <code>worked · quiet · unrecorded · active</code>)</p></td>
+                    <td><p><code>AgentRecordedLanesParams {sinceMs, untilMs (at most a day later), device?}</code> → <code>AgentRecordedLanesResult</code>, the SDK's <code>MonitorPastSnapshot</code> (TL, docket v9 RULED 2026-10-09; TIMELINE SHAPES v2: each model row's past up to its <code>statusSince</code>, and THIS runtime's runs the model no longer holds — matched to fieldd's session records — as spans <code>worked · quiet · unrecorded · bounds</code>; a session this runtime never ran is no lane)</p></td>
                     <td><p><code>index.search</code> · <code>federate</code></p></td>
                     <td><p>yes</p></td>
-                    <td><p>The monitor backend's <code>readPast</code> over its history port (<code>index-activity.ts</code>), asked by a window only while a mounted view asks (PF6). Read through to rosettad at each ask and held nowhere — not the removed <code>agent.history</code>. A peer reads no colour sequence (M16). No index: <code>state: "unavailable"</code> with a person's words.</p></td>
+                    <td><p>The monitor backend's <code>readPast</code> over its history port (<code>index-activity.ts</code>, with the session records' runs), asked by a window only while a mounted view's manifest declares <code>history</code> (PF6). Read through to rosettad at each ask and held nowhere — not the removed <code>agent.history</code>. A peer reads no colour sequence (M16); colour is read, never dealt. A record not up: <code>state: "unavailable"</code> at once, in a person's words. No rosettad configured: <code>NOT_FOUND {state: "no-record"}</code>, and the window lends no past.</p></td>
                     <td><span class="badge tone-built">Built</span></td>
                     <td><p><code>index-activity-doors.test.ts</code>, <code>godview-monitor-history.test.tsx</code></p></td>
                   </tr>

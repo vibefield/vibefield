@@ -1,20 +1,27 @@
 // @vitest-environment happy-dom
 /**
- * TL (docket v9, RULED 2026-10-09; B-D6 (a)) — the record's past, lent to a
- * view as `capabilities.history`, through the window's door
+ * TL (docket v9, RULED 2026-10-09; B-D6 (a); TIMELINE SHAPES v2) — the record's
+ * past, lent to a view as `capabilities.history`, through the window's door
  * (`agent.recordedLanes`, the backend's derivation).
  *
- * Two claims. PF6: the door is asked only while a mounted view asks — never
- * before it asks, never after it unmounts or stops asking, and the rows'
- * movement under a standing ask reads again no sooner than the floor. And the
- * capability REACHES a view's input: a recording view (the SDK's own test
- * view, never the timeline) reports an ask on mount, and the next input it is
- * handed carries the past, each ended lane coloured with the theme and its
- * desktop said by this reader.
+ * The claims:
+ * - PF6: the door is read only while a mounted view's MANIFEST declares
+ *   `history`, over the fixed day — never otherwise, never after unmount.
+ * - Identity (v2 item 5): a re-read that brings nothing new (only `readAt`
+ *   moved) keeps the SAME object, so the view is not updated for it.
+ * - Re-reads (v2 item 8): a row leaving reads again within a second; a seam
+ *   moving or a row arriving, no sooner than the floor.
+ * - Honest states (v2 items 3, 9): absent before the first answer;
+ *   `unavailable` with words when nothing good was read; a failed re-read KEEPS
+ *   the last good past as `partial`; a desktop with no record lends nothing.
+ * - Ended lanes are coloured and receded by the window's rules (v2 item 11),
+ *   and a recording view (the SDK's own test view, never the timeline) receives
+ *   the past through MonitorViewHost.
  */
 
-import type { MonitorHistory, MonitorHistoryAsk, ViewReport } from "@vibecook/puppeteer-view-sdk";
-import { MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
+import type { MonitorHistory } from "@vibecook/puppeteer-view-sdk";
+import { MonitorViewHost, viewWantsHistory } from "@vibecook/puppeteer-view-sdk/host";
+import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
 import {
   agentViewsFixture,
   createFixtureReplica,
@@ -30,8 +37,10 @@ import { act, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  HISTORY_LEFT_DEBOUNCE_MS,
   HISTORY_REFRESH_MIN_MS,
   historyRowsKey,
+  KEPT_PAST_DETAIL,
   type RecordedLanesPort,
   useMonitorHistory,
 } from "../src/godview/monitor/monitor-history";
@@ -43,6 +52,7 @@ const DAY = 24 * HOUR;
 const NOW = Date.UTC(2026, 9, 9, 12);
 const HERE = "01JDESK";
 const PALETTE = fixturePalette("dark");
+const NEVER_RECEDES = (_lane: MonitorEndedRow): boolean => false;
 
 const ANSWER = AgentRecordedLanesResult.parse({
   sinceMs: NOW - DAY,
@@ -55,11 +65,13 @@ const ANSWER = AgentRecordedLanesResult.parse({
     {
       id: "past:claude:nat-today",
       provider: { id: "claude", label: "Claude Code" },
+      title: "Split the invoice writer",
+      profileSet: "work",
       project: { name: "billing-api", seq: 3 },
       device: { id: HERE, name: "Studio", os: "mac" },
       startedAt: NOW - 3 * HOUR,
       endedAt: NOW - 2 * HOUR,
-      spans: [{ kind: "active", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR }],
+      spans: [{ kind: "bounds", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR }],
     },
     {
       id: "past:claude:nat-peer",
@@ -67,29 +79,25 @@ const ANSWER = AgentRecordedLanesResult.parse({
       device: { id: "01JPEER", name: "Laptop", os: "an-os-this-build-has-no-mark-for" },
       startedAt: NOW - 2 * HOUR,
       endedAt: NOW - HOUR,
-      spans: [{ kind: "active", from: NOW - 2 * HOUR, to: NOW - HOUR }],
+      spans: [{ kind: "bounds", from: NOW - 2 * HOUR, to: NOW - HOUR }],
     },
   ],
 });
 
+/** A door whose answers the test settles one by one. */
 interface FakePort extends RecordedLanesPort {
   readonly asks: { sinceMs: number; untilMs: number }[];
-  /** settle the oldest pending read */
-  answer(result?: AgentRecordedLanesResult | Error): Promise<void>;
-  readonly pending: number;
+  answer(result?: AgentRecordedLanesResult | Error | Record<string, unknown>): Promise<void>;
 }
 
 function fakePort(): FakePort {
   const asks: { sinceMs: number; untilMs: number }[] = [];
   const waiting: Array<{
     resolve: (r: AgentRecordedLanesResult) => void;
-    reject: (e: Error) => void;
+    reject: (e: unknown) => void;
   }> = [];
   return {
     asks,
-    get pending() {
-      return waiting.length;
-    },
     read(window) {
       asks.push(window);
       return new Promise((resolve, reject) => waiting.push({ resolve, reject }));
@@ -98,38 +106,43 @@ function fakePort(): FakePort {
       const next = waiting.shift();
       if (next === undefined) throw new Error("no read is waiting");
       await act(async () => {
-        if (result instanceof Error) next.reject(result);
-        else next.resolve(result);
+        if (result instanceof Error || !("ended" in result)) next.reject(result);
+        else next.resolve(result as AgentRecordedLanesResult);
       });
     },
   };
 }
 
 type Rows = { id: string; kind: string; statusSince: number }[];
+interface ProbeProps {
+  port?: RecordedLanesPort;
+  wants: boolean;
+  rows: Rows;
+  receded?: (lane: MonitorEndedRow) => boolean;
+}
 
 let root: Root | undefined;
 let host: HTMLElement | undefined;
 let seen: Array<MonitorHistory | undefined> = [];
-let setProps:
-  | ((props: { port?: RecordedLanesPort; ask?: MonitorHistoryAsk; rows: Rows }) => void)
-  | undefined;
+let setProps: ((props: ProbeProps) => void) | undefined;
 
-function Probe(initial: { port?: RecordedLanesPort; ask?: MonitorHistoryAsk; rows: Rows }) {
+function Probe(initial: ProbeProps) {
   const [props, set] = useState(initial);
   setProps = set;
   const history = useMonitorHistory({
     port: props.port,
-    ask: props.ask,
+    wants: props.wants,
     rows: props.rows,
     here: HERE,
     palette: PALETTE,
+    receded: props.receded ?? NEVER_RECEDES,
     now: () => Date.now(),
   });
   seen.push(history);
   return null;
 }
 
-async function mount(props: { port?: RecordedLanesPort; ask?: MonitorHistoryAsk; rows: Rows }) {
+async function mount(props: ProbeProps) {
   host = document.createElement("div");
   document.body.append(host);
   root = createRoot(host);
@@ -137,6 +150,8 @@ async function mount(props: { port?: RecordedLanesPort; ask?: MonitorHistoryAsk;
 }
 
 const last = () => seen[seen.length - 1];
+const update = async (props: ProbeProps) => act(async () => setProps!(props));
+const advance = async (ms: number) => act(async () => vi.advanceTimersByTime(ms));
 
 beforeEach(() => {
   vi.useFakeTimers({ now: NOW, toFake: ["setTimeout", "clearTimeout", "Date"] });
@@ -157,101 +172,142 @@ const ROWS: Rows = [
   { id: "pty-9", kind: "terminal", statusSince: NOW - HOUR },
 ];
 
-describe("the window asks the backend's door only while a mounted view asks (PF6)", () => {
-  it("asks nothing before a view asks, then once, for the view's day ending now", async () => {
+describe("the window reads the backend's door only while a mounted view declares history (PF6)", () => {
+  it("reads nothing for a view that does not declare it; once, for the fixed day, for one that does", async () => {
     const port = fakePort();
-    await mount({ port, rows: ROWS });
+    await mount({ port, wants: false, rows: ROWS });
     expect(port.asks).toEqual([]);
     expect(last()).toBeUndefined();
-    await act(async () => setProps!({ port, ask: { sinceMs: NOW - 3 * DAY }, rows: ROWS }));
-    // clamped to the day (T2)
+    await update({ port, wants: true, rows: ROWS });
     expect(port.asks).toEqual([{ sinceMs: NOW - DAY, untilMs: NOW }]);
+    // absent until the first answer: the view draws today's floor
+    expect(last()).toBeUndefined();
     await port.answer();
     const history = last()!;
-    expect(history.fidelity).toBe("bounds");
     const colourFor = projectColourFor(PALETTE);
-    // `self` and the OS mark are said as the model's rows say them (`modelRowFrom`)
+    // colour, `self` and the OS mark as the model's rows say them
     expect(
-      history.ended.map((lane) => [lane.id, lane.colour, lane.device.self, lane.device.os]),
+      history.ended.map((lane) => [
+        lane.id,
+        lane.colour,
+        lane.device.self,
+        lane.device.os,
+        lane.receded,
+      ]),
     ).toEqual([
-      ["past:claude:nat-today", colourFor(3), true, "mac"],
-      ["past:claude:nat-peer", colourFor(undefined), false, undefined],
+      ["past:claude:nat-today", colourFor(3), true, "mac", false],
+      ["past:claude:nat-peer", colourFor(undefined), false, undefined, false],
     ]);
   });
 
-  it("a scrub back past what it holds (a new seq) reads again at once; the same ask does not", async () => {
+  it("the view goes (or stops declaring it): the past goes and nothing more is read", async () => {
     const port = fakePort();
-    await mount({ port, ask: { sinceMs: NOW - DAY }, rows: ROWS });
-    await port.answer();
-    await act(async () => setProps!({ port, ask: { sinceMs: NOW - DAY }, rows: ROWS }));
-    expect(port.asks).toHaveLength(1);
-    await act(async () => setProps!({ port, ask: { sinceMs: NOW - DAY, seq: 1 }, rows: ROWS }));
-    expect(port.asks).toHaveLength(2);
-  });
-
-  it("the rows' movement under the ask reads again, no sooner than the floor, once", async () => {
-    const port = fakePort();
-    await mount({ port, ask: { sinceMs: NOW - DAY }, rows: ROWS });
-    await port.answer();
-    // a terminal's status is no seam; a run's is
-    await act(async () =>
-      setProps!({
-        port,
-        ask: { sinceMs: NOW - DAY },
-        rows: [ROWS[0]!, { ...ROWS[1]!, statusSince: NOW - 1 }],
-      }),
-    );
-    await act(async () => vi.advanceTimersByTime(HISTORY_REFRESH_MIN_MS));
-    expect(port.asks).toHaveLength(1);
-    await act(async () =>
-      setProps!({ port, ask: { sinceMs: NOW - DAY }, rows: [{ ...ROWS[0]!, statusSince: NOW }] }),
-    );
-    await act(async () => vi.advanceTimersByTime(1_000));
-    expect(port.asks).toHaveLength(2);
-    // the run left the model: again, but not before the floor from that read
-    await act(async () => setProps!({ port, ask: { sinceMs: NOW - DAY }, rows: [] }));
-    await act(async () => vi.advanceTimersByTime(HISTORY_REFRESH_MIN_MS - 1));
-    expect(port.asks).toHaveLength(2);
-    await act(async () => vi.advanceTimersByTime(1));
-    expect(port.asks).toHaveLength(3);
-  });
-
-  it("the view stops asking (switched away): the past goes, and nothing more is read", async () => {
-    const port = fakePort();
-    await mount({ port, ask: { sinceMs: NOW - DAY }, rows: ROWS });
+    await mount({ port, wants: true, rows: ROWS });
     await port.answer();
     expect(last()).toBeDefined();
-    await act(async () => setProps!({ port, rows: ROWS }));
+    await update({ port, wants: false, rows: ROWS });
     expect(last()).toBeUndefined();
-    await act(async () => setProps!({ port, rows: [] }));
-    await act(async () => vi.advanceTimersByTime(10 * HISTORY_REFRESH_MIN_MS));
+    await update({ port, wants: false, rows: [] });
+    await advance(10 * HISTORY_REFRESH_MIN_MS);
     expect(port.asks).toHaveLength(1);
   });
 
   it("Godview closes mid-read: the late answer reaches nothing, and no timer outlives the stage", async () => {
     const port = fakePort();
-    await mount({ port, ask: { sinceMs: NOW - DAY }, rows: ROWS });
-    await act(async () => setProps!({ port, ask: { sinceMs: NOW - DAY }, rows: [] }));
+    await mount({ port, wants: true, rows: ROWS });
+    await update({ port, wants: true, rows: [] });
     const before = seen.length;
     await act(async () => root!.unmount());
     root = undefined;
     await port.answer();
     expect(seen.length).toBe(before);
-    await act(async () => vi.advanceTimersByTime(10 * HISTORY_REFRESH_MIN_MS));
+    await advance(10 * HISTORY_REFRESH_MIN_MS);
     expect(port.asks).toHaveLength(1);
     expect(vi.getTimerCount()).toBe(0);
   });
+});
 
-  it("a door that refuses is the past's honest unavailable, in words", async () => {
+describe("identity: built once per snapshot, kept while nothing moves (v2 item 5)", () => {
+  it("a re-read that only moves readAt keeps the SAME object; a re-read that moves the past makes a new one", async () => {
     const port = fakePort();
-    await mount({ port, ask: { sinceMs: NOW - DAY }, rows: ROWS });
-    await port.answer(new Error("UNAVAILABLE"));
-    expect(last()).toMatchObject({
-      state: "unavailable",
-      detail: "The record of past runs could not be read",
-      live: [],
-      ended: [],
+    await mount({ port, wants: true, rows: ROWS });
+    await port.answer();
+    const first = last()!;
+    // a publish that changes nothing the hook reads: the same object
+    await update({ port, wants: true, rows: [...ROWS] });
+    expect(last()).toBe(first);
+    // a row leaves → a re-read whose answer differs only in readAt
+    await update({ port, wants: true, rows: [ROWS[1]!] });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS);
+    expect(port.asks).toHaveLength(2);
+    await port.answer({ ...ANSWER, readAt: NOW + 1_000 });
+    expect(last()).toBe(first);
+    // a row arrives → after the floor, a re-read that moves the past
+    await update({
+      port,
+      wants: true,
+      rows: [ROWS[1]!, { id: "run-2", kind: "agent", statusSince: NOW }],
     });
+    await advance(HISTORY_REFRESH_MIN_MS);
+    expect(port.asks).toHaveLength(3);
+    await port.answer({ ...ANSWER, readAt: NOW + 2_000, ended: ANSWER.ended.slice(1) });
+    expect(last()).not.toBe(first);
+    expect(last()!.ended.map((lane) => lane.id)).toEqual(["past:claude:nat-peer"]);
+  });
+
+  it("a filter change rebuilds the lanes' receded from the same snapshot; an unknown profile recedes under a profile tab", async () => {
+    const port = fakePort();
+    const underWork = (lane: MonitorEndedRow): boolean =>
+      !(lane.device.self && lane.profileSet === "work");
+    await mount({ port, wants: true, rows: ROWS });
+    await port.answer();
+    const all = last()!;
+    await update({ port, wants: true, rows: ROWS, receded: underWork });
+    const work = last()!;
+    expect(work).not.toBe(all);
+    expect(work.ended.map((lane) => lane.receded)).toEqual([false, true]);
+    expect(port.asks).toHaveLength(1);
+  });
+});
+
+describe("re-reads follow the rows (v2 item 8)", () => {
+  it("a run leaving the model reads again within a second; a terminal's status moves nothing", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS });
+    await port.answer();
+    await update({ port, wants: true, rows: [ROWS[0]!, { ...ROWS[1]!, statusSince: NOW - 1 }] });
+    await advance(HISTORY_REFRESH_MIN_MS);
+    expect(port.asks).toHaveLength(1);
+    await update({ port, wants: true, rows: [ROWS[1]!] });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS - 1);
+    expect(port.asks).toHaveLength(1);
+    await advance(1);
+    expect(port.asks).toHaveLength(2);
+  });
+
+  it("a seam moving or a row arriving reads again no sooner than the floor", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS });
+    await port.answer({ ...ANSWER, live: [{ id: "run-1", seamAt: NOW - HOUR, spans: [] }] });
+    await update({
+      port,
+      wants: true,
+      rows: [{ ...ROWS[0]!, statusSince: NOW - 1_000 }, ROWS[1]!],
+    });
+    await advance(HISTORY_REFRESH_MIN_MS - 1);
+    expect(port.asks).toHaveLength(1);
+    await advance(1);
+    expect(port.asks).toHaveLength(2);
+    await port.answer();
+    await update({
+      port,
+      wants: true,
+      rows: [...ROWS, { id: "run-new", kind: "agent", statusSince: NOW }],
+    });
+    await advance(HISTORY_REFRESH_MIN_MS - 1);
+    expect(port.asks).toHaveLength(2);
+    await advance(1);
+    expect(port.asks).toHaveLength(3);
   });
 
   it("only agent rows' seams move a re-read", () => {
@@ -259,26 +315,92 @@ describe("the window asks the backend's door only while a mounted view asks (PF6
   });
 });
 
+describe("honest states (v2 items 3, 9)", () => {
+  it("nothing good read yet: the record's own unavailable, with its words", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS });
+    await port.answer({
+      ...ANSWER,
+      state: "unavailable",
+      detail: "The agent index is starting",
+      ended: [],
+    });
+    expect(last()).toMatchObject({
+      state: "unavailable",
+      detail: "The agent index is starting",
+      ended: [],
+    });
+  });
+
+  it("a failed re-read after a good one KEEPS the last past, marked partial, and never empties the lanes", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS });
+    await port.answer();
+    await update({ port, wants: true, rows: [ROWS[1]!] });
+    await advance(HISTORY_LEFT_DEBOUNCE_MS);
+    await port.answer(new Error("UNAVAILABLE"));
+    const kept = last()!;
+    expect(kept.state).toBe("partial");
+    expect(kept.detail).toBe(KEPT_PAST_DETAIL);
+    expect(kept.ended.map((lane) => lane.id)).toEqual([
+      "past:claude:nat-today",
+      "past:claude:nat-peer",
+    ]);
+    // the backend's own unavailable after a good read is kept the same way, and the object holds
+    await update({ port, wants: true, rows: [] });
+    await update({ port, wants: true, rows: [{ id: "run-3", kind: "agent", statusSince: NOW }] });
+    await advance(HISTORY_REFRESH_MIN_MS);
+    await port.answer({
+      ...ANSWER,
+      state: "unavailable",
+      detail: "The agent index is starting",
+      ended: [],
+    });
+    expect(last()).toBe(kept);
+  });
+
+  it("a door with no record lends nothing and is not asked again", async () => {
+    const port = fakePort();
+    await mount({ port, wants: true, rows: ROWS });
+    await port.answer({
+      rpc: {
+        data: { kind: "NOT_FOUND", details: { service: "agent.monitor", state: "no-record" } },
+      },
+    });
+    expect(last()).toBeUndefined();
+    await update({ port, wants: true, rows: [] });
+    await advance(10 * HISTORY_REFRESH_MIN_MS);
+    expect(port.asks).toHaveLength(1);
+  });
+
+  it("a door with no port lends nothing", async () => {
+    await mount({ wants: true, rows: ROWS });
+    expect(last()).toBeUndefined();
+  });
+});
+
 describe("the capability reaches a view's input", () => {
-  it("a test view reports an ask on mount, and its next input carries the past", async () => {
+  it("a test view that declares history receives the past, and the same object across a re-read that moved nothing", async () => {
     vi.useRealTimers();
     const port = fakePort();
     const frames = createFrameDriver();
     const replica = createFixtureReplica(agentViewsFixture(2));
     const recording = createRecordingView("past-reader", {
       manifest: { capabilities: { optional: ["history"] } },
-      onMount: (_root, _input, commands) => commands.report({ history: { sinceMs: NOW - DAY } }),
     });
     const commands = { select: vi.fn(), create: vi.fn(async () => ({ opened: true })) };
+    let rerender: ((n: number) => void) | undefined;
 
     function Stage() {
-      const [report, setReport] = useState<ViewReport>({});
+      const [rows, setRows] = useState<Rows>(ROWS);
+      rerender = (n) => setRows(n === 0 ? ROWS : [ROWS[1]!]);
       const history = useMonitorHistory({
         port,
-        ask: report.history,
-        rows: [],
+        wants: viewWantsHistory(recording.view),
+        rows,
         here: HERE,
         palette: PALETTE,
+        receded: NEVER_RECEDES,
         now: () => NOW,
       });
       return (
@@ -290,7 +412,6 @@ describe("the capability reaches a view's input", () => {
           parameters={{}}
           capabilities={history === undefined ? {} : { history }}
           commands={commands}
-          onReport={(next) => setReport(next)}
           scheduler={frames.scheduler}
         />
       );
@@ -302,16 +423,25 @@ describe("the capability reaches a view's input", () => {
     await act(async () => root!.render(<Stage />));
     expect(recording.mounts).toBe(1);
     expect(port.asks).toEqual([{ sinceMs: NOW - DAY, untilMs: NOW }]);
+    expect(recording.lastInput!.capabilities.history).toBeUndefined();
     await port.answer();
     await act(async () => frames.step());
     const history = recording.lastInput!.capabilities.history!;
-    expect(history.ended.map((lane) => lane.id)).toEqual([
-      "past:claude:nat-today",
-      "past:claude:nat-peer",
+    expect(history.ended.map((lane) => [lane.id, lane.title])).toEqual([
+      ["past:claude:nat-today", "Split the invoice writer"],
+      ["past:claude:nat-peer", undefined],
     ]);
     expect(history.ended[0]!.colour).toBe(projectColourFor(PALETTE)(3));
-    expect(history.ended[0]!.spans).toEqual([
-      { kind: "active", from: NOW - 3 * HOUR, to: NOW - 2 * HOUR },
-    ]);
+    // a run leaves; the re-read moves nothing but readAt: no update reaches the view
+    const updates = recording.updates;
+    await act(async () => rerender!(1));
+    await act(
+      async () => new Promise((resolve) => setTimeout(resolve, HISTORY_LEFT_DEBOUNCE_MS + 50)),
+    );
+    expect(port.asks).toHaveLength(2);
+    await port.answer({ ...ANSWER, readAt: NOW + 5_000 });
+    await act(async () => frames.step());
+    expect(recording.lastInput!.capabilities.history).toBe(history);
+    expect(recording.updates).toBe(updates);
   });
 });

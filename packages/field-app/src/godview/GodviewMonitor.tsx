@@ -4,7 +4,13 @@ import type {
   StageGeometry,
   ViewReport,
 } from "@vibecook/puppeteer-view-sdk";
-import { frameScheduler, keepStage, MonitorViewHost } from "@vibecook/puppeteer-view-sdk/host";
+import {
+  frameScheduler,
+  keepStage,
+  MonitorViewHost,
+  viewWantsHistory,
+} from "@vibecook/puppeteer-view-sdk/host";
+import type { MonitorEndedRow } from "@vibecook/puppeteer-view-sdk/model";
 import { ProfileGlyph } from "@vibecook/puppeteer-view-sdk/react";
 import {
   type AccountUsagePort,
@@ -446,16 +452,26 @@ export function GodviewMonitor({
     viewHoldsKeysRef.current = report.keysHeld === true;
     setViewReport(report);
   }, []);
-  // TL (docket v9; B-D6 (a)) — the record's past for the mounted view that
-  // asks (`ViewReport.history`), the backend's through this window's door,
-  // read only while that view is mounted and asking (PF6): the slot clears a
-  // view's report with the view, and this stage unmounts with Godview.
+  // TL (docket v9; B-D6 (a); TIMELINE SHAPES v2) — the record's past for the
+  // mounted view whose manifest declares `history`, the backend's through this
+  // window's door, read only while that view is mounted (PF6: this stage
+  // unmounts with Godview). An ended lane recedes by the rows' own rule over
+  // the profile tab and the desktop chip; under a profile tab, a run whose
+  // profile is unknown recedes.
+  const wantsHistory = viewWantsHistory(view.view);
+  const pastReceded = useCallback(
+    (lane: MonitorEndedRow): boolean =>
+      (chosenId !== undefined && !(lane.device.self && lane.profileSet === chosenId)) ||
+      (deviceChosen !== null && (lane.device.self ? here : lane.device.id) !== deviceChosen),
+    [chosenId, deviceChosen, here],
+  );
   const history = useMonitorHistory({
     port: door?.pastLanes,
-    ask: viewReport.history,
+    wants: wantsHistory,
     rows: agents,
     here,
     palette,
+    receded: pastReceded,
   });
   const viewCapabilities = useMemo<MonitorCapabilities>(
     () => (history === undefined ? capabilities : { ...capabilities, history }),

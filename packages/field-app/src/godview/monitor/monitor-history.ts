@@ -1,48 +1,63 @@
-import type { MonitorHistory, MonitorHistoryAsk } from "@vibecook/puppeteer-view-sdk";
-import { lendHistory } from "@vibecook/puppeteer-view-sdk/host";
-import type { MonitorPastSnapshot } from "@vibecook/puppeteer-view-sdk/model";
+import type { MonitorHistory } from "@vibecook/puppeteer-view-sdk";
+import { HISTORY_WINDOW_MS, keepPast, lendHistory } from "@vibecook/puppeteer-view-sdk/host";
+import type { MonitorEndedRow, MonitorPastSnapshot } from "@vibecook/puppeteer-view-sdk/model";
 import { projectColourFor } from "@vibecook/puppeteer-view-sdk/toolkit";
 import type { MonitorPalette } from "@vibecook/puppeteer-views";
 import type { AgentRecordedLanesResult } from "@vibefield/contracts";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { sdkOsMark } from "./model-board";
 
-// TL (docket v9, RULED 2026-10-09; B-D6 (a)) — THE RECORD'S PAST, LENT TO A
-// VIEW (capability `history`). The backend beside the runtime derives each
-// lane's past from rosettad's record (`agent.recordedLanes`); this window only
-// asks for it and colours it, as it colours the model's rows (L7).
+// TL (docket v9, RULED 2026-10-09; B-D6 (a); TIMELINE SHAPES v2) — THE
+// RECORD'S PAST, LENT TO A VIEW (capability `history`). The backend beside the
+// runtime derives each lane's past from rosettad's record (`agent.recordedLanes`);
+// this window only reads it, keeps it, and colours and recedes its ended lanes
+// as it does the model's rows (L7).
 //
-// When it asks (PF6): only while a view is MOUNTED and its report carries an
-// ask (`ViewReport.history`). The slot drops a view's report with the view, so
-// a switched-away timeline asks nothing more, and a closed Godview unmounts
-// this hook with the stage. A new ask (a new `sinceMs` or `seq`: a scrub back
-// past what it holds) reads at once. While the ask stands, a row leaving the
-// model or a row's status moving past its seam reads again, at most every
-// HISTORY_REFRESH_MIN_MS: the record catches up a little behind the runtime,
-// and between the seam and a newer status the view draws "not recorded"
-// until then. Nothing is kept here but the last answer.
+// When it reads (PF6): only while the mounted view's MANIFEST declares
+// `capabilities.optional: ['history']` — the view asks nothing itself — over the
+// fixed day `[now − 24 h, now]` (T2). A closed Godview unmounts this hook with
+// the stage; a switched-away view stops the reads.
+//
+// Identity (v2 item 5): the snapshot is kept as the SAME object while a re-read
+// brings nothing new (`keepPast`; a changed `readAt` alone is nothing new), and
+// the view's `MonitorHistory` is built from it once — never per publish — so
+// the capabilities memo, and the view's caches keyed on it, hold.
+//
+// Re-reads (v2 item 8): a row leaving the model reads again after
+// HISTORY_LEFT_DEBOUNCE_MS (its ended lane appears in a second, not thirty); a
+// row's status moving past its seam, or a new agent row, at most every
+// HISTORY_REFRESH_MIN_MS (the view draws "not recorded" between the seam and a
+// newer status until then).
+//
+// Honest states (v2 items 3, 9): before the first answer the capability is
+// absent (the view draws today's floor). A record that cannot be read now is
+// lent as `unavailable` with its words — unless a good past was read before,
+// which is KEPT, marked `partial` with one sentence, never emptied. A desktop
+// that keeps no record (the door's NOT_FOUND `no-record`) lends nothing, and is
+// not asked again.
 
-/** The floor between two reads the rows' movement asks for. */
+/** The floor between two reads the rows' seams ask for. */
 export const HISTORY_REFRESH_MIN_MS = 30_000;
+/** How long a row's leaving waits for others before the past is read again. */
+export const HISTORY_LEFT_DEBOUNCE_MS = 1_000;
 
-/** The widest window the record is read for: the view's day (T2). */
-const MAX_WINDOW_MS = 24 * 60 * 60_000;
+/** The sentence a kept past carries when the record could not be read again. */
+export const KEPT_PAST_DETAIL =
+  "The record could not be read again; this is the last of it that was read.";
 
 /** The backend's door, as the window reads it (`doors.ts` `recordedLanesPortOver`). */
 export interface RecordedLanesPort {
   read(window: { sinceMs: number; untilMs: number }): Promise<AgentRecordedLanesResult>;
 }
 
-/** The backend's answer as the view's capability: `device.self` said by this
+/** The backend's answer as the SDK's snapshot: `device.self` said by this
  * reader as it says it for the model's rows (`modelRowFrom`: it never travels),
- * the OS mark kept only when it is the SDK's word, each ended lane coloured with
- * the theme. */
-export function historyForView(
+ * the OS mark kept only when it is the SDK's word. */
+export function snapshotFrom(
   answer: AgentRecordedLanesResult,
   here: string | undefined,
-  colourFor: (seq: number | undefined) => string,
-): MonitorHistory {
-  const past: MonitorPastSnapshot = {
+): MonitorPastSnapshot {
+  return {
     ...answer,
     ended: answer.ended.map((lane) => ({
       ...lane,
@@ -53,25 +68,21 @@ export function historyForView(
         self: lane.device.id === here,
       },
     })),
-  };
-  return lendHistory(past, colourFor);
+  } as MonitorPastSnapshot;
 }
 
-/** The past when the backend's door did not answer: nothing, in words. */
-export function unreadHistory(window: { sinceMs: number; untilMs: number }): MonitorHistory {
-  return Object.freeze({
-    ...window,
-    readAt: window.untilMs,
-    fidelity: "bounds",
-    state: "unavailable",
-    detail: "The record of past runs could not be read",
-    live: Object.freeze([]),
-    ended: Object.freeze([]),
-  });
+/** A refusal the door means as "there is no record here", not "not now". */
+function isNoRecord(error: unknown): boolean {
+  const data = (error as { rpc?: { data?: { kind?: string; details?: { state?: string } } } })?.rpc
+    ?.data;
+  const direct = error as { kind?: string; details?: { state?: string } };
+  const kind = data?.kind ?? direct?.kind;
+  const state = data?.details?.state ?? direct?.details?.state;
+  return kind === "NOT_FOUND" && state === "no-record";
 }
 
-/** What moves a re-read: which rows the model holds, and when each one's
- * current status began (a seam that moved). */
+/** What moves a re-read: which agent rows the model holds, and when each one's
+ * current status began. */
 export function historyRowsKey(
   rows: readonly { readonly id: string; readonly kind: string; readonly statusSince: number }[],
 ): string {
@@ -81,11 +92,21 @@ export function historyRowsKey(
     .join("\n");
 }
 
+function parseRowsKey(key: string): Map<string, number> {
+  const rows = new Map<string, number>();
+  if (key === "") return rows;
+  for (const line of key.split("\n")) {
+    const at = line.lastIndexOf("@");
+    rows.set(line.slice(0, at), Number(line.slice(at + 1)));
+  }
+  return rows;
+}
+
 export interface MonitorHistoryOptions {
   /** absent: this door has no record (the catalog, an older fieldd) */
   readonly port: RecordedLanesPort | undefined;
-  /** the mounted view's ask; absent: nothing is read */
-  readonly ask: MonitorHistoryAsk | undefined;
+  /** the mounted view declares `history` (`viewWantsHistory`) */
+  readonly wants: boolean;
   readonly rows: readonly {
     readonly id: string;
     readonly kind: string;
@@ -94,76 +115,132 @@ export interface MonitorHistoryOptions {
   /** this desktop's id: the rows whose `device.self` is true */
   readonly here: string | undefined;
   readonly palette: Pick<MonitorPalette, "tint" | "neutral">;
+  /** the window's rule for a lane drawn faint, over its device and profile filters; keep it stable */
+  readonly receded: (lane: MonitorEndedRow) => boolean;
   /** test seam */
   readonly now?: (() => number) | undefined;
 }
 
-/** `capabilities.history` for the mounted view, read only while it asks. */
+/** `capabilities.history` for the mounted view, read only while it declares it. */
 export function useMonitorHistory(options: MonitorHistoryOptions): MonitorHistory | undefined {
-  const { port, ask, here, palette } = options;
+  const { port, wants, here, palette, receded } = options;
   const now = options.now ?? Date.now;
-  const askKey = ask === undefined ? undefined : `${ask.sinceMs}:${ask.seq ?? 0}`;
+  const asking = wants && port !== undefined;
   // nothing to watch while nothing asks: no view pays for a past it does not draw
-  const rowsKey = askKey === undefined || port === undefined ? "" : historyRowsKey(options.rows);
-  const [answer, setAnswer] = useState<
-    | { readonly key: string; readonly result: AgentRecordedLanesResult }
-    | { readonly key: string; readonly unread: MonitorHistory }
-    | undefined
-  >(undefined);
-  /** bumped by the rows' movement, after the floor: a re-read of the same ask */
+  const rowsKey = asking ? historyRowsKey(options.rows) : "";
+  /** the snapshot lent, kept as one object while nothing moves */
+  const [snapshot, setSnapshot] = useState<MonitorPastSnapshot | undefined>(undefined);
+  /** the door said there is no record here: lend nothing, ask no more */
+  const [noRecord, setNoRecord] = useState(false);
+  /** bumped to read again */
   const [generation, setGeneration] = useState(0);
   const lastRead = useRef(0);
+  const lastGood = useRef<MonitorPastSnapshot | undefined>(undefined);
   const nowRef = useRef(now);
   nowRef.current = now;
-  const askRef = useRef(ask);
-  askRef.current = ask;
+  const hereRef = useRef(here);
+  hereRef.current = here;
+  const seams = useRef<ReadonlyMap<string, number>>(new Map());
 
-  // read: at once for a new ask, again for each generation the rows asked for
+  // a new door forgets what the old one said
   useEffect(() => {
-    if (port === undefined || askKey === undefined) {
-      setAnswer(undefined);
+    setNoRecord(false);
+    setSnapshot(undefined);
+    lastGood.current = undefined;
+  }, [port]);
+
+  // read: at once while the view asks, again for each generation the rows asked for
+  useEffect(() => {
+    if (!asking || noRecord) {
+      if (!asking) {
+        setSnapshot(undefined);
+        lastGood.current = undefined;
+      }
       return;
     }
-    const asked = askRef.current!;
     const untilMs = nowRef.current();
-    const window = { sinceMs: Math.max(asked.sinceMs, untilMs - MAX_WINDOW_MS), untilMs };
-    if (window.sinceMs >= window.untilMs) return;
+    const window = { sinceMs: untilMs - HISTORY_WINDOW_MS, untilMs };
     let live = true;
     lastRead.current = untilMs;
-    port.read(window).then(
-      (result) => {
-        if (live) setAnswer({ key: askKey, result });
+    const keep = (next: MonitorPastSnapshot): void => {
+      setSnapshot((previous) => keepPast(previous, next));
+    };
+    // a record that cannot be read now: the last good past stays, said partial
+    const fail = (unavailable: MonitorPastSnapshot): void => {
+      const good = lastGood.current;
+      keep(
+        good === undefined ? unavailable : { ...good, state: "partial", detail: KEPT_PAST_DETAIL },
+      );
+    };
+    port!.read(window).then(
+      (answer) => {
+        if (!live) return;
+        const next = snapshotFrom(answer, hereRef.current);
+        if (next.state === "unavailable") {
+          fail(next);
+          return;
+        }
+        lastGood.current = next;
+        keep(next);
       },
-      () => {
-        if (live) setAnswer({ key: askKey, unread: unreadHistory(window) });
+      (error: unknown) => {
+        if (!live) return;
+        if (isNoRecord(error)) {
+          setNoRecord(true);
+          setSnapshot(undefined);
+          return;
+        }
+        fail({
+          ...window,
+          readAt: untilMs,
+          fidelity: "bounds",
+          state: "unavailable",
+          detail: "The record of past runs could not be read",
+          live: [],
+          ended: [],
+        });
       },
     );
     return () => {
       live = false;
     };
-  }, [port, askKey, generation]);
+  }, [port, asking, noRecord, generation]);
 
-  // the rows moved while the ask stands: read again, no sooner than the floor
-  // (a new ask reads at once above; only movement UNDER one asks again)
-  const watched = useRef<{ askKey: string | undefined; rowsKey: string } | undefined>(undefined);
+  // the seams the snapshot was read at, for the rows' movement below
+  useEffect(() => {
+    seams.current = new Map((snapshot?.live ?? []).map((lane) => [lane.id, lane.seamAt]));
+  }, [snapshot]);
+
+  // the rows moved while the view asks: a row left → read again within a
+  // second; a seam moved or a row arrived → no sooner than the floor
+  const watched = useRef<string | undefined>(undefined);
   useEffect(() => {
     const before = watched.current;
-    watched.current = { askKey, rowsKey };
-    if (port === undefined || askKey === undefined) return;
-    if (before === undefined || before.askKey !== askKey || before.rowsKey === rowsKey) return;
-    const wait = Math.max(0, lastRead.current + HISTORY_REFRESH_MIN_MS - nowRef.current());
+    watched.current = rowsKey;
+    if (!asking || noRecord || before === undefined || before === rowsKey) return;
+    const was = parseRowsKey(before);
+    const is = parseRowsKey(rowsKey);
+    const left = [...was.keys()].some((id) => !is.has(id));
+    const moved = [...is].some(([id, since]) => {
+      if (!was.has(id)) return true;
+      const seam = seams.current.get(id);
+      return seam !== undefined && since > seam;
+    });
+    if (!left && !moved) return;
+    const wait = left
+      ? HISTORY_LEFT_DEBOUNCE_MS
+      : Math.max(0, lastRead.current + HISTORY_REFRESH_MIN_MS - nowRef.current());
     const timer = setTimeout(() => setGeneration((value) => value + 1), wait);
     return () => clearTimeout(timer);
-  }, [rowsKey, port, askKey]);
+  }, [rowsKey, asking, noRecord]);
 
   const tintL = palette.tint.l;
   const tintC = palette.tint.c;
   const neutral = palette.neutral;
+  // built once per snapshot (and per theme or filter), never per publish
   return useMemo(() => {
-    if (answer === undefined || answer.key !== askKey) return undefined;
-    if ("unread" in answer) return answer.unread;
-    // a reader's colour function, as the replica's (L7)
+    if (!asking || noRecord || snapshot === undefined) return undefined;
     const colourFor = projectColourFor({ tint: { l: tintL, c: tintC }, neutral });
-    return historyForView(answer.result, here, colourFor);
-  }, [answer, askKey, here, tintL, tintC, neutral]);
+    return lendHistory(snapshot, { colourFor, receded });
+  }, [asking, noRecord, snapshot, tintL, tintC, neutral, receded]);
 }
