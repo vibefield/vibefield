@@ -25,7 +25,7 @@ import {
 export function HistoryPreview({ state = "room" }: { state?: HistoryState }): ReactElement {
   const [ports] = useState(() => historyFixturePorts(state));
   const [openAt] = useState<RoomTarget | null>(() =>
-    state === "chosen" ? { sessionId: FIXTURE_CHOSEN_SESSION } : null,
+    state === "chosen" || state === "projects" ? { sessionId: FIXTURE_CHOSEN_SESSION } : null,
   );
   return (
     <HistoryRoomView

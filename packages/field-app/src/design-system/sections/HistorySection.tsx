@@ -32,6 +32,15 @@ export function HistorySection(): ReactElement {
         </div>
       </Specimen>
       <Specimen
+        title="History by project — fieldd's projects, each session filed by its key (PJ-4)"
+        source="history/doors.ts"
+        bleed
+      >
+        <div className="vf-ds-history-plate" data-state="projects">
+          <HistoryPreview state="projects" />
+        </div>
+      </Specimen>
+      <Specimen
         title="A session chosen — the line's Resume, live for it"
         source="history/HistoryView.tsx"
         bleed

@@ -311,6 +311,8 @@ describe("design system page", { timeout: PAGE_BUDGET_MS }, () => {
     expect(history("room")?.querySelector(".ah-col--measure")?.textContent).toContain(
       "Pick a session, or search with ⌘F.",
     );
+    // PJ-4 — History by project's plate (its rows: history-projects-plate.test.tsx)
+    expect(history("projects")?.querySelector(".vf-history .ah-frame")).not.toBeNull();
     expect(
       [...(container?.querySelectorAll(".vf-ds-peek-plate") ?? [])].map((plate) =>
         plate.getAttribute("data-state"),
