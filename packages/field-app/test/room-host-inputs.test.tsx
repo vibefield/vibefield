@@ -21,7 +21,7 @@ import {
 import { createDemoPorts, createRoomDemo } from "@rosetta/room/fixtures";
 import { act, createRef, useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
-import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -861,5 +861,84 @@ describe("R7 — filter chips as buttons with popover rows", () => {
     }, "the sheet's selects");
     expect(selects.length).toBeGreaterThan(0);
     expect(document.querySelector("button.ah-chip")).toBeNull();
+  });
+});
+
+describe("R8 — a host that answers every project's figures at once", () => {
+  it("given, the room asks once for every project instead of once per project; a missing one stays unfigured", async () => {
+    const demo = createRoomDemo();
+    const ports = createDemoPorts(demo);
+    const single = vi.spyOn(ports.catalog, "projectStats");
+    const asked: (readonly string[])[] = [];
+    const catalog = {
+      ...ports.catalog,
+      projectStatsBatch: async (ids: readonly string[]) => {
+        asked.push(ids);
+        return new Map(ids.filter((id) => id !== "p5").map((id) => [id, demo.stats.get(id)!]));
+      },
+    };
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const el = host;
+    act(() => root?.render(<HistoryRoom {...ports} catalog={catalog} storage={null} />));
+    const figure = (id: string) =>
+      projectRow(el, id)?.querySelector(".ah-project-list-item__token-figure b")?.textContent;
+    await until(() => figure("p0") !== undefined && figure("p0") !== "—", "p0's figure");
+    expect(asked).toEqual([["p0", "p1", "p2", "p3", "p4", "p5"]]);
+    expect(single).not.toHaveBeenCalled();
+    expect(figure("p5")).toBe("—");
+  });
+
+  it("absent, the room asks each project's figures on its own", async () => {
+    const demo = createRoomDemo();
+    const ports = createDemoPorts(demo);
+    const single = vi.spyOn(ports.catalog, "projectStats");
+    host = document.createElement("div");
+    document.body.appendChild(host);
+    root = createRoot(host);
+    const el = host;
+    act(() => root?.render(<HistoryRoom {...ports} storage={null} />));
+    await until(() => single.mock.calls.length === 6, "six asks");
+    expect(single.mock.calls.map(([id]) => id).sort()).toEqual([
+      "p0",
+      "p1",
+      "p2",
+      "p3",
+      "p4",
+      "p5",
+    ]);
+    await until(() => projectRow(el, "p0"), "the ledger");
+  });
+});
+
+describe("R9 — the repository's address from the host", () => {
+  const repoAct = (el: HTMLElement) =>
+    head(el, 2)?.querySelector<HTMLButtonElement>("button[aria-label='Open the git repository']") ??
+    null;
+
+  it("given, ②'s repository act opens the host's address; null draws no act; undefined keeps the room's own", async () => {
+    const { el } = await room({
+      repositoryUrl: (id) =>
+        id === "p0" ? "https://git.example/vibe-field" : id === "p1" ? null : undefined,
+    });
+    act(() => projectRow(el, "p0")?.click());
+    await until(
+      () => repoAct(el)?.title === "Open https://git.example/vibe-field",
+      "p0's host address",
+    );
+    act(() => projectRow(el, "p1")?.click());
+    await until(
+      () => head(el, 2)?.querySelector(".ah-meta__acts") && repoAct(el) === null,
+      "no act for p1",
+    );
+    act(() => projectRow(el, "p2")?.click());
+    await until(() => repoAct(el)?.title === "Open github.com/demo/puppeteer", "p2's own address");
+  });
+
+  it("absent, the act reads the project's git_repo", async () => {
+    const { el } = await room();
+    act(() => projectRow(el, "p0")?.click());
+    await until(() => repoAct(el)?.title === "Open github.com/demo/vibe-field", "p0's own address");
   });
 });
