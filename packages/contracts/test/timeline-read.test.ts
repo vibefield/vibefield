@@ -12,6 +12,7 @@ import {
   AgentRecordedLanesResult,
   INDEX_ACTIVITY,
   IndexActivityParams,
+  IndexActivityResponse,
   IndexActivityResult,
   METHODS,
   MonitorPastSpan,
@@ -52,6 +53,25 @@ describe("the window is the view's day (T2)", () => {
 });
 
 describe("the record's words ride through; the past never says blocked or unseen", () => {
+  it("reads rosetta's own protocol-27 body: a root session, its turns and the gaps rosetta cut", () => {
+    const body = IndexActivityResponse.parse(fixture("index-activity-response.rosetta-27.json"));
+    expect(body.gap_ms).toBe(INDEX_ACTIVITY.SILENCE_MS);
+    const [entry] = body.sessions;
+    expect(entry?.session.parent_session_id).toBeNull();
+    expect(entry?.turns.map((turn) => [turn.kind, turn.gaps.length])).toEqual([
+      ["human_turn", 1],
+      ["agent_cycle", 0],
+    ]);
+    expect(entry?.turns_withheld).toBe(false);
+    // a newer group kind rides through the reader
+    expect(
+      IndexActivityResponse.safeParse({
+        ...body,
+        sessions: [{ ...entry, turns: [{ ...entry?.turns[0], kind: "a_newer_kind" }] }],
+      }).success,
+    ).toBe(true);
+  });
+
   it("carries a group kind and a field a newer side added", () => {
     const turns = IndexActivityResult.parse(fixture("index-activity.turns.json"));
     expect(turns.sessions[0]?.turns?.map((turn) => turn.kind)).toEqual([

@@ -1,0 +1,53 @@
+{
+  "//": "rosetta's activity body at protocol 27, transcribed VERBATIM (the `//` note apart) from the lane's rosetta checkout's committed golden crates/protocol/tests/golden/wire.json, key `activity`, at revision db6dd7e (branch vf/activity-route), sha256 c74884cf7a2179d7a24ddd75b6123d312674ed01740e9c4bd65660dd0398bbef. fieldd PARSES this body (IndexActivityResponse); a wire change upstream reds the contracts suite here.",
+  "gap_ms": 900000,
+  "sessions": [
+    {
+      "session": {
+        "activity": {
+          "first_at": 1791536400000,
+          "last_at": 1791545400000
+        },
+        "cwd": "/w/rosetta",
+        "delegation": null,
+        "id": "s1",
+        "native_session_id": "native-s1",
+        "parent_session_id": null,
+        "project_id": "p1",
+        "role": "main",
+        "root_session_id": "s1",
+        "runtime_id": "rt1",
+        "started_at": 10000,
+        "stream_state": "streaming",
+        "summary": "A summary",
+        "title": "Named",
+        "updated_at": 20000
+      },
+      "turns": [
+        {
+          "first_at": 1791536400000,
+          "gaps": [
+            {
+              "from_ms": 1791537000000,
+              "to_ms": 1791539400000
+            }
+          ],
+          "group_id": "g1",
+          "kind": "human_turn",
+          "last_at": 1791540000000
+        },
+        {
+          "first_at": 1791544000000,
+          "gaps": [],
+          "group_id": "g2",
+          "kind": "agent_cycle",
+          "last_at": 1791545400000
+        }
+      ],
+      "turns_withheld": false
+    }
+  ],
+  "since_ms": 1791460800000,
+  "truncated": false,
+  "until_ms": 1791547200000
+}

@@ -43,6 +43,7 @@ import {
   AgentsReleasesResult,
   AgentsUpdateResult,
   IndexActivityParams,
+  IndexActivityResponse,
   IndexActivityResult,
   IndexCatalogDelta,
   IndexCatalogOpen,
@@ -394,6 +395,9 @@ const SCHEMA_BY_PREFIX: Record<string, ZodTypeAny> = {
   // (turns with a silence, a group kind from a newer rosetta).
   "index-activity-params": IndexActivityParams,
   "index-activity": IndexActivityResult,
+  // T4 — rosetta's own body for `/api/activity` (protocol 27), transcribed
+  // from the checkout's wire golden, which fieldd parses
+  "index-activity-response": IndexActivityResponse,
   "agent-persona": AgentPersona,
   "agent-distribution": AgentDistributionRecord,
   "agents-installs": AgentsInstallsResult,

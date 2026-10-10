@@ -1474,6 +1474,53 @@ export const IndexActivityResult = z
   .passthrough();
 export type IndexActivityResult = z.infer<typeof IndexActivityResult>;
 
+// rosetta's `/api/activity` (protocol 27, the T4 route), as fieldd READS it —
+// snake_case, `.passthrough()` at every level, never what a door hands on:
+// fieldd answers `IndexActivityResult` in VibeField's spelling. The gaps are
+// rosetta's own cut (between activity instants, longer than the ask's
+// `gap_ms`), so fieldd reads no transcript to find a silence.
+
+/** rosetta `TurnGap` (protocol 27), as fieldd reads it. */
+export const IndexTurnGapRow = z
+  .object({ from_ms: z.number().finite(), to_ms: z.number().finite() })
+  .passthrough();
+export type IndexTurnGapRow = z.infer<typeof IndexTurnGapRow>;
+
+/** rosetta `TurnSpan`: one message group's activity in the window. `kind` is
+ * rosetta's `GroupKind`, read open (a newer kind rides through). */
+export const IndexTurnSpanRow = z
+  .object({
+    group_id: z.string(),
+    kind: z.string(),
+    first_at: z.number().finite(),
+    last_at: z.number().finite(),
+    gaps: z.array(IndexTurnGapRow),
+  })
+  .passthrough();
+export type IndexTurnSpanRow = z.infer<typeof IndexTurnSpanRow>;
+
+/** rosetta `ActivitySession`: the session's row and its tree's turns. */
+export const IndexActivitySessionRow = z
+  .object({
+    session: IndexSessionRow,
+    turns: z.array(IndexTurnSpanRow),
+    turns_withheld: z.boolean(),
+  })
+  .passthrough();
+export type IndexActivitySessionRow = z.infer<typeof IndexActivitySessionRow>;
+
+/** rosetta `ActivityResponse` — the body of `GET /api/activity` (protocol 27). */
+export const IndexActivityResponse = z
+  .object({
+    since_ms: z.number().finite(),
+    until_ms: z.number().finite(),
+    gap_ms: z.number().finite(),
+    sessions: z.array(IndexActivitySessionRow),
+    truncated: z.boolean(),
+  })
+  .passthrough();
+export type IndexActivityResponse = z.infer<typeof IndexActivityResponse>;
+
 // ── the direct plane (SP-3 — the ticket template's SECOND instance;
 // thinking-sync-planes.md §5.4, thinking-desktop-sync-plane.md §6.4; the
 // handler is DS-7's, at rosetta's pin move) ──
