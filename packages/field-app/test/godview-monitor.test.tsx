@@ -109,6 +109,22 @@ vi.mock("@vibecook/puppeteer-views", async (importOriginal) => {
   };
 });
 
+/** TL — every `capabilities` object the stage hands the view host, in render
+ * order; the host itself is the SDK's, passed through. The SDK's slot keeps a
+ * view's capabilities while their members are the same objects, so only the
+ * prop shows whether the STAGE rebuilt what it lends. */
+const viewHost = vi.hoisted(() => ({ handed: [] as unknown[] }));
+vi.mock("@vibecook/puppeteer-view-sdk/host", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@vibecook/puppeteer-view-sdk/host")>();
+  return {
+    ...actual,
+    MonitorViewHost: (props: Parameters<typeof actual.MonitorViewHost>[0]) => {
+      viewHost.handed.push(props.capabilities);
+      return <actual.MonitorViewHost {...props} />;
+    },
+  };
+});
+
 /**
  * §2.5 and record §02's tint, stamped onto the document — because the palette is
  * supposed to READ them, and a test with no tokens would prove only that the
@@ -277,6 +293,7 @@ let clearedIntervals: number[] = [];
 
 beforeEach(() => {
   markers = [];
+  viewHost.handed.length = 0;
   openedIntervals = [];
   clearedIntervals = [];
   localStorage.clear();
@@ -2174,6 +2191,58 @@ describe("the record's past on the stage (TL): what the marker says of it", () =
     }));
     await mountPastProbe(Object.assign(fakeDoor(), { pastLanes: inPart }));
     expect(latest()).toMatchObject({ history: "partial", endedLanes: 2 });
+  });
+});
+
+// ---- TL — one capabilities object across model publishes ------------------------
+//
+// The view redraws for a new `capabilities.history` (TIMELINE SHAPES v2 item 5),
+// so a host that rebuilt what it lends on each model publish would cost every
+// frame. The hook's own identity rows (`godview-monitor-history.test.tsx`: a
+// re-read that moves nothing, the narrowing memo) cannot see the stage's half:
+// `useMonitorAgents`' capabilities memo, which holds the spawn menu while the
+// rows under it move, and the stage's memo that joins the past to it. Read at
+// the prop the stage hands the view host (`viewHost.handed`), and again at the
+// view's own input.
+
+describe("the record's past on the stage (TL): one capabilities object across model publishes", () => {
+  it("hands the view host the SAME capabilities — the spawn menu and the past with it — across two publishes that move the rows and not the past", async () => {
+    const port = pastPort(async () => PAST);
+    const door = Object.assign(tabDoor(), { pastLanes: port });
+    await mountPastProbe(door);
+    const lent = viewHost.handed.at(-1) as MonitorViewInput["capabilities"];
+    // both halves are lent: the memo under test is not the empty object's
+    expect(lent.spawn?.devices[0]?.state).toBe("ready");
+    expect(lent.history?.ended).toHaveLength(2);
+    expect(pastProbeView.lastInput?.capabilities).toBe(lent);
+    const claudeSaying = (reply: string): AgentSessionSummary =>
+      managedSummary({
+        runtimeRunId: "run-claude",
+        kind: "claude",
+        label: "Claude",
+        status: "working",
+        profileSet: "work",
+        cwd: "/project/vibe-field",
+        lastAssistantText: reply,
+      });
+    const renders = viewHost.handed.length;
+    const updates = pastProbeView.updates;
+    const modelBefore = pastProbeView.lastInput?.model;
+    for (const reply of ["one", "two"]) {
+      await act(async () => door.push([claudeSaying(reply), ...TAB_ROWS.slice(1)]));
+      await settle();
+    }
+    // the publishes rendered the stage and reached the view, whose model moved…
+    const handed = viewHost.handed.slice(renders);
+    expect(handed.length).toBeGreaterThanOrEqual(2);
+    expect(pastProbeView.updates - updates).toBeGreaterThanOrEqual(2);
+    expect(pastProbeView.lastInput?.model).not.toBe(modelBefore);
+    // …and every render handed the host the object it had: nothing rebuilt
+    expect(handed.every((capabilities) => capabilities === lent)).toBe(true);
+    expect(pastProbeView.lastInput?.capabilities).toBe(lent);
+    expect(pastProbeView.lastInput?.capabilities.history).toBe(lent.history);
+    // and the door was read once: a publish is not an ask
+    expect(port.asks).toBe(1);
   });
 });
 
